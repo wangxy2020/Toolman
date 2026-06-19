@@ -1,0 +1,53 @@
+{
+  "name": "@toolman/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Toolman desktop AI client",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "build:p2p": "bash ../../scripts/build-p2p-native.sh",
+    "build:community-hub": "bash ../../scripts/build-community-hub.sh",
+    "predev": "pnpm build:p2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "pnpm typecheck",
+    "test": "vitest run",
+    "test:p2p-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@toolman/db": "workspace:*",
+    "@toolman/knowledge": "workspace:*",
+    "@toolman/model-gateway": "workspace:*",
+    "@toolman/shared": "workspace:*",
+    "better-sqlite3": "^11.10.0",
+    "chokidar": "^4.0.3",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
+    "loro-crdt": "^1.13.4",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "react-virtuoso": "^4.12.6",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/qrcode": "^1.5.5",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.5.2",
+    "electron": "^36.5.0",
+    "electron-vite": "^3.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}

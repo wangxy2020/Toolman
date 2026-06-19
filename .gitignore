@@ -1,0 +1,30 @@
+# 依赖与打包
+node_modules/
+dist/
+out/
+build/
+target/
+.turbo/
+
+# 环境变量与配置（注意：保留了不忽略 example 的规则）
+.env
+.env.*
+!.env.example
+*.local
+
+# 日志文件
+*.log
+logs/
+
+# 数据库文件
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+packages/db/.demo-toolman.db
+
+# 系统与测试
+.DS_Store
+coverage/

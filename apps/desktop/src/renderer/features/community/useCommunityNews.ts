@@ -1,0 +1,274 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import {
+  type CommunityNewsArticle,
+  type CommunityNewsListInput,
+} from '@toolman/shared'
+
+import {
+  favoriteCommunityNewsArticle,
+  dislikeCommunityNewsArticle,
+  fetchCommunityNewsSource,
+  getCommunityNewsArticle,
+  likeCommunityNewsArticle,
+  listCommunityNewsArticles,
+  listCommunityNewsSources,
+  listRecommendedCommunityNews,
+} from './community-api.client'
+import { formatNewsListError } from './community-news-utils'
+import {
+  COMMUNITY_UI_MOCK_ENABLED,
+  COMMUNITY_UI_MOCK_IDS,
+  getUiMockNewsArticle,
+  withUiMockItem,
+} from './community-ui-mock'
+import {
+  applyUiMockInteractionToNews,
+  toggleUiMockDislike,
+  toggleUiMockFavorite,
+  toggleUiMockLike,
+} from './community-ui-mock-interactions'
+
+export interface UseCommunityNewsOptions {
+  query?: CommunityNewsListInput
+  autoLoad?: boolean
+  loadRecommended?: boolean
+  autoLoadDetail?: boolean
+}
+
+export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
+  const { query, autoLoad = true, loadRecommended = false, autoLoadDetail = false } = options
+  const listInput = useMemo(() => ({ ...query }), [query])
+
+  const [items, setItems] = useState<CommunityNewsArticle[]>([])
+  const [recommended, setRecommended] = useState<CommunityNewsArticle[]>([])
+  const [detail, setDetail] = useState<CommunityNewsArticle | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [interactionId, setInteractionId] = useState<string | null>(null)
+  const [interactionAction, setInteractionAction] = useState<
+    'like' | 'dislike' | 'favorite' | null
+  >(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      let list = await listCommunityNewsArticles(listInput)
+
+      if (list.items.length === 0) {
+        const sources = await listCommunityNewsSources()
+        const needsFetch = sources.items.filter(
+          (source) => source.enabled && (!source.lastFetchedAt || source.lastError),
+        )
+        if (needsFetch.length > 0) {
+          await Promise.all(
+            needsFetch.map((source) =>
+              fetchCommunityNewsSource({ sourceId: source.id }).catch(() => undefined),
+            ),
+          )
+          list = await listCommunityNewsArticles(listInput)
+        }
+      }
+
+      const recommendedList = loadRecommended
+        ? (await listRecommendedCommunityNews()).items
+        : ([] as CommunityNewsArticle[])
+
+      setItems(
+        withUiMockItem(list.items, getUiMockNewsArticle()).map(applyUiMockInteractionToNews),
+      )
+      if (loadRecommended) {
+        setRecommended(recommendedList)
+      }
+      if (autoLoadDetail) {
+        setSelectedId((current) => {
+          if (current && list.items.some((item) => item.id === current)) return current
+          return list.items[0]?.id ?? null
+        })
+      }
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : '加载资讯失败'
+      setError(formatNewsListError(message))
+      setItems([])
+      if (loadRecommended) setRecommended([])
+    } finally {
+      setLoading(false)
+    }
+  }, [autoLoadDetail, listInput, loadRecommended])
+
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(true)
+    setError(null)
+    try {
+      const article = await getCommunityNewsArticle(id)
+      setDetail(article)
+      setSelectedId(id)
+      setItems((current) => current.map((item) => (item.id === id ? article : item)))
+      setRecommended((current) => current.map((item) => (item.id === id ? article : item)))
+      return article
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : '加载资讯详情失败'
+      setError(message)
+      setDetail(null)
+      throw loadError
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [])
+
+  const favorite = useCallback(async (articleId: string) => {
+    setInteractionId(articleId)
+    setInteractionAction('favorite')
+    setError(null)
+    try {
+      if (COMMUNITY_UI_MOCK_ENABLED && articleId === COMMUNITY_UI_MOCK_IDS.news) {
+        toggleUiMockFavorite(articleId)
+        setItems((current) =>
+          current.map((item) =>
+            item.id === articleId ? applyUiMockInteractionToNews(item) : item,
+          ),
+        )
+        return
+      }
+      const result = await favoriteCommunityNewsArticle(articleId)
+      setItems((current) =>
+        current.map((item): CommunityNewsArticle =>
+          item.id === articleId
+            ? {
+                ...item,
+                likeCount: result.likeCount ?? item.likeCount,
+                favoriteCount: result.favoriteCount ?? item.favoriteCount,
+                dislikeCount: result.dislikeCount ?? item.dislikeCount,
+                favoritedByMe: result.favorited ?? !item.favoritedByMe,
+              }
+            : item,
+        ),
+      )
+    } catch (interactionError) {
+      const message = interactionError instanceof Error ? interactionError.message : '收藏失败'
+      setError(message)
+      throw interactionError
+    } finally {
+      setInteractionId(null)
+      setInteractionAction(null)
+    }
+  }, [])
+
+  const like = useCallback(async (articleId: string) => {
+    setInteractionId(articleId)
+    setInteractionAction('like')
+    setError(null)
+    try {
+      if (COMMUNITY_UI_MOCK_ENABLED && articleId === COMMUNITY_UI_MOCK_IDS.news) {
+        toggleUiMockLike(articleId)
+        setItems((current) =>
+          current.map((item) =>
+            item.id === articleId ? applyUiMockInteractionToNews(item) : item,
+          ),
+        )
+        return
+      }
+      const result = await likeCommunityNewsArticle(articleId)
+      setItems((current) =>
+        current.map((item): CommunityNewsArticle => {
+          if (item.id !== articleId) return item
+          const wasLiked = item.likedByMe
+          return {
+            ...item,
+            likeCount: result.likeCount ?? item.likeCount,
+            favoriteCount: result.favoriteCount ?? item.favoriteCount,
+            dislikeCount: result.dislikeCount ?? item.dislikeCount,
+            likedByMe: !wasLiked,
+            dislikedByMe: wasLiked ? item.dislikedByMe : false,
+          }
+        }),
+      )
+    } catch (interactionError) {
+      const message = interactionError instanceof Error ? interactionError.message : '点赞失败'
+      setError(message)
+      throw interactionError
+    } finally {
+      setInteractionId(null)
+      setInteractionAction(null)
+    }
+  }, [])
+
+  const dislike = useCallback(async (articleId: string) => {
+    setInteractionId(articleId)
+    setInteractionAction('dislike')
+    setError(null)
+    try {
+      if (COMMUNITY_UI_MOCK_ENABLED && articleId === COMMUNITY_UI_MOCK_IDS.news) {
+        toggleUiMockDislike(articleId)
+        setItems((current) =>
+          current.map((item) =>
+            item.id === articleId ? applyUiMockInteractionToNews(item) : item,
+          ),
+        )
+        return
+      }
+      const result = await dislikeCommunityNewsArticle(articleId)
+      setItems((current) =>
+        current.map((item): CommunityNewsArticle => {
+          if (item.id !== articleId) return item
+          const wasDisliked = item.dislikedByMe
+          return {
+            ...item,
+            likeCount: result.likeCount ?? item.likeCount,
+            favoriteCount: result.favoriteCount ?? item.favoriteCount,
+            dislikeCount: result.dislikeCount ?? item.dislikeCount,
+            likedByMe: wasDisliked ? item.likedByMe : false,
+            dislikedByMe: !wasDisliked,
+          }
+        }),
+      )
+    } catch (interactionError) {
+      const message = interactionError instanceof Error ? interactionError.message : '点踩失败'
+      setError(message)
+      throw interactionError
+    } finally {
+      setInteractionId(null)
+      setInteractionAction(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!autoLoad) return
+    void load()
+  }, [autoLoad, load])
+
+  useEffect(() => {
+    if (!autoLoadDetail) return
+    if (!selectedId) {
+      setDetail(null)
+      return
+    }
+    void loadDetail(selectedId).catch(() => undefined)
+  }, [autoLoadDetail, selectedId, loadDetail])
+
+  const selected =
+    detail?.id === selectedId ? detail : items.find((item) => item.id === selectedId) ?? null
+
+  return {
+    items,
+    recommended,
+    detail,
+    selected,
+    selectedId,
+    setSelectedId,
+    loading,
+    detailLoading,
+    interactionId,
+    interactionAction,
+    error,
+    setError,
+    load,
+    loadDetail,
+    favorite,
+    like,
+    dislike,
+  }
+}

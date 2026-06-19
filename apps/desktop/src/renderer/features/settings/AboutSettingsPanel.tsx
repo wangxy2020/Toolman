@@ -1,0 +1,101 @@
+import { useState } from 'react'
+import { SettingsToggle } from './SettingsShared'
+
+const APP_VERSION = '0.1.0'
+
+const CHANGELOG = [
+  '[知识库] 修复知识库搜索在空索引时崩溃的问题。',
+  '[智能体] 优化多模型并行回复时的消息排序。',
+  '[模型] 改进流式输出中断后的状态恢复。',
+]
+
+const ABOUT_LINKS = [
+  { id: 'docs', label: '帮助文档', action: '查看' },
+  { id: 'changelog', label: '更新日志', action: '查看' },
+  { id: 'website', label: '官方网站', action: '查看' },
+  { id: 'feedback', label: '意见反馈', action: '反馈' },
+  { id: 'enterprise', label: '企业版', action: '查看' },
+  { id: 'email', label: '邮件联系', action: '邮件' },
+  { id: 'join', label: '加入我们', action: '查看' },
+] as const
+
+function LinkRowIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  )
+}
+
+function IconGithub({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.021C22 6.484 17.522 2 12 2z" />
+    </svg>
+  )
+}
+
+export function AboutSettingsPanel() {
+  const [autoUpdate, setAutoUpdate] = useState(true)
+
+  return (
+    <>
+      <div className="tm-about-card">
+        <div className="tm-about-card-header">
+          <h2 className="tm-about-card-title">关于我们</h2>
+          <button type="button" className="tm-about-icon-btn" title="GitHub" disabled>
+            <IconGithub />
+          </button>
+        </div>
+
+        <div className="tm-about-hero">
+          <div className="tm-about-logo">T</div>
+          <div className="tm-about-hero-text">
+            <h3 className="tm-about-name">Toolman</h3>
+            <p className="tm-about-tagline">一款为创造者而生的 AI 助手</p>
+            <span className="tm-about-version-badge">v{APP_VERSION}</span>
+          </div>
+          <button type="button" className="tm-about-outline-btn" disabled>
+            立即更新
+          </button>
+        </div>
+
+        <div className="tm-about-divider" />
+
+        <div className="tm-about-toggle-row">
+          <span>自动更新</span>
+          <SettingsToggle checked={autoUpdate} onChange={setAutoUpdate} />
+        </div>
+      </div>
+
+      <div className="tm-about-card">
+        <div className="tm-about-changelog-head">
+          <span className="tm-about-status-dot" aria-hidden="true" />
+          <span>发现新版本 {APP_VERSION}</span>
+        </div>
+        <ul className="tm-about-changelog-list">
+          {CHANGELOG.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="tm-about-card tm-about-links-card">
+        {ABOUT_LINKS.map((link) => (
+          <div key={link.id} className="tm-about-link-row">
+            <div className="tm-about-link-label">
+              <span className="tm-about-link-icon" aria-hidden="true">
+                <LinkRowIcon />
+              </span>
+              <span>{link.label}</span>
+            </div>
+            <button type="button" className="tm-about-outline-btn tm-about-outline-btn--sm" disabled>
+              {link.action}
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}

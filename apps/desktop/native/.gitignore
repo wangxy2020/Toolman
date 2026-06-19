@@ -1,0 +1,4 @@
+# Native N-API binaries (built via scripts/build-p2p-native.sh)
+*.node
+index.js
+index.d.ts

@@ -1,0 +1,11 @@
+{
+  "name": "toolman-p2p",
+  "version": "0.1.0",
+  "private": true,
+  "napi": {
+    "name": "toolman-p2p",
+    "triples": {
+      "defaults": true
+    }
+  }
+}

@@ -1,0 +1,65 @@
+import {
+  getWebhookPort,
+  listImChannelConfigsPublic,
+  migrateRendererChannelConfigs,
+  upsertImChannelConfig,
+} from './channel-config.service'
+import {
+  getChannelWebhookBaseUrl,
+  getChannelWebhookInfo,
+  listChannelRuntimeStatuses,
+  reloadChannelManager,
+  startChannelManager,
+  stopChannelManager,
+  testChannelConnection,
+} from './channels/channel-manager.service'
+
+export function bootstrapChannels(): void {
+  void startChannelManager().catch((error) => {
+    console.error('[channels] bootstrap failed:', error)
+  })
+}
+
+export function listImChannels() {
+  const configs = listImChannelConfigsPublic()
+  return {
+    webhookPort: configs.webhookPort,
+    webhookBaseUrl: getChannelWebhookBaseUrl(),
+    items: configs.items,
+  }
+}
+
+export async function saveImChannel(input: unknown) {
+  const saved = upsertImChannelConfig(input)
+  await reloadChannelManager()
+  return saved
+}
+
+export async function testImChannel(input: unknown) {
+  const { platform } = input as { platform: string }
+  return testChannelConnection(platform as never)
+}
+
+export function listImChannelStatuses() {
+  return { items: listChannelRuntimeStatuses() }
+}
+
+export function getImChannelWebhookInfo() {
+  return getChannelWebhookInfo()
+}
+
+export function migrateImChannelsFromRenderer(
+  items: Parameters<typeof migrateRendererChannelConfigs>[0],
+) {
+  const migrated = migrateRendererChannelConfigs(items)
+  if (migrated > 0) {
+    void reloadChannelManager()
+  }
+  return { migrated }
+}
+
+export async function shutdownChannels(): Promise<void> {
+  await stopChannelManager()
+}
+
+export { getWebhookPort }

@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm --filter @toolman/desktop^... build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: P2P schema smoke
+        run: pnpm --filter @toolman/db test:p2p-schema
+
+      - name: P2P desktop integration
+        run: pnpm --filter @toolman/desktop test:p2p-integration
+
+  p2p-native-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build P2P native (current arch)
+        run: pnpm build:p2p
+
+      - name: Rust unit tests (toolman-p2p)
+        run: cargo test -p toolman-p2p
+
+      - name: Verify ping
+        run: node -e "const m=require('./apps/desktop/native/toolman-p2p.darwin-arm64.node'); if(m.ping()!=='pong') process.exit(1)"

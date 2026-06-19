@@ -1,0 +1,27 @@
+{
+  "name": "toolman",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI productivity client — multi-model chat, knowledge, plugins, and more",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "build:p2p": "bash scripts/build-p2p-native.sh",
+    "build:p2p:macos": "bash scripts/build-p2p-macos.sh",
+    "build:community-hub": "bash scripts/build-community-hub.sh",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @toolman/db generate",
+    "db:migrate": "pnpm --filter @toolman/db migrate"
+  },
+  "devDependencies": {
+    "nanoid": "3.3.12",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  }
+}

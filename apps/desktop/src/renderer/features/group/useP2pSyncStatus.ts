@@ -1,0 +1,143 @@
+import { useCallback, useEffect, useState } from 'react'
+import {
+  IpcChannel,
+  type P2pSequencingMode,
+  type P2pSyncPeerStatus,
+  type P2pSyncStatus,
+} from '@toolman/shared'
+
+interface SyncStatusState {
+  status: P2pSyncStatus
+  error: string | null
+  sequencingMode: P2pSequencingMode
+  ownerOnline: boolean
+  lastEventSeq: number
+  lastSyncAt?: number
+  peers: P2pSyncPeerStatus[]
+  pendingFiles: number
+}
+
+const DEFAULT_STATE: SyncStatusState = {
+  status: 'idle',
+  error: null,
+  sequencingMode: 'owner_authoritative',
+  ownerOnline: true,
+  lastEventSeq: 0,
+  peers: [],
+  pendingFiles: 0,
+}
+
+export function useP2pSyncStatus(workspaceId: string | null) {
+  const [state, setState] = useState<SyncStatusState>(DEFAULT_STATE)
+
+  const refresh = useCallback(async () => {
+    if (!workspaceId) {
+      setState(DEFAULT_STATE)
+      return
+    }
+
+    const result = await window.api.invoke(IpcChannel.P2pSyncStatus, { workspaceId })
+    if (!result.ok) {
+      setState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: result.error.message,
+      }))
+      return
+    }
+
+    const data = result.data as {
+      status: P2pSyncStatus
+      error?: string
+      sequencingMode: P2pSequencingMode
+      ownerOnline: boolean
+      lastEventSeq: number
+      lastSyncAt?: number
+      peers: P2pSyncPeerStatus[]
+      pendingFiles: number
+    }
+
+    setState({
+      status: data.status,
+      error: data.error ?? null,
+      sequencingMode: data.sequencingMode,
+      ownerOnline: data.ownerOnline,
+      lastEventSeq: data.lastEventSeq,
+      lastSyncAt: data.lastSyncAt,
+      peers: data.peers,
+      pendingFiles: data.pendingFiles,
+    })
+  }, [workspaceId])
+
+  useEffect(() => {
+    setState(DEFAULT_STATE)
+  }, [workspaceId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    if (!workspaceId) return
+
+    const handleError = (payload: unknown) => {
+      const data = payload as { workspaceId?: string; message?: string }
+      if (data.workspaceId !== workspaceId) return
+      setState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: data.message ?? '同步失败',
+      }))
+    }
+
+    const handleCompleted = (payload: unknown) => {
+      const data = payload as { workspaceId?: string }
+      if (data.workspaceId !== workspaceId) return
+      void refresh()
+    }
+
+    const handleProgress = (payload: unknown) => {
+      const data = payload as { workspaceId?: string }
+      if (data.workspaceId !== workspaceId) return
+      setState((prev) => ({ ...prev, status: 'syncing', error: null }))
+    }
+
+    const unsubError = window.api.subscribe('p2p:sync:error', handleError)
+    const unsubCompleted = window.api.subscribe('p2p:sync:completed', handleCompleted)
+    const unsubProgress = window.api.subscribe('p2p:sync:progress', handleProgress)
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = (payload?: unknown) => {
+      const data = payload as { workspaceId?: string } | undefined
+      if (data?.workspaceId && data.workspaceId !== workspaceId) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        void refresh()
+      }, 300)
+    }
+
+    const unsubConnection = window.api.subscribe(
+      'p2p:connection:state-change',
+      scheduleRefresh,
+    )
+    const unsubOnline = window.api.subscribe('p2p:discovery:node-online', scheduleRefresh)
+    const unsubOffline = window.api.subscribe('p2p:discovery:node-offline', scheduleRefresh)
+
+    return () => {
+      unsubError()
+      unsubCompleted()
+      unsubProgress()
+      unsubConnection()
+      unsubOnline()
+      unsubOffline()
+      if (timer) clearTimeout(timer)
+    }
+  }, [workspaceId, refresh])
+
+  return {
+    ...state,
+    refresh,
+    isDegraded: state.sequencingMode === 'lamport_degraded',
+    isSyncing: state.status === 'syncing',
+  }
+}

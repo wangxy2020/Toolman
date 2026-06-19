@@ -1,0 +1,393 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Assistant, KnowledgeBase, P2pWorkspace, Session } from '@toolman/shared'
+import {
+  IconActivity,
+  IconAgent,
+  IconFolder,
+  IconKnowledge,
+  IconNotes,
+  IconSliders,
+  IconUsers,
+  IconWorkflow,
+} from '../../components/icons'
+import { GroupMemberChatPanel } from './GroupMemberChatPanel'
+import { GroupMembersMenu } from './GroupMembersMenu'
+import { GroupActivityLog } from './GroupActivityLog'
+import { GroupFilesPanel } from './GroupFilesPanel'
+import { GroupKnowledgePanel } from './GroupKnowledgePanel'
+import { GroupAgentsPanel } from './GroupAgentsPanel'
+import { GroupNotesPanel } from './GroupNotesPanel'
+import { GroupWorkflowPanel } from './GroupWorkflowPanel'
+import { GroupSettingsModal } from './GroupSettingsModal'
+import { useP2pWorkspace } from './useP2pWorkspace'
+import { useP2pEvents } from './useP2pEvents'
+import { useP2pSyncStatus } from './useP2pSyncStatus'
+import type { NoteItem, NotebookItem } from '../notes/notes-storage'
+import type {
+  OpenGroupKnowledgeMarkdownRequest,
+  OpenGroupNoteRequest,
+  SaveGroupNoteAsCopyRequest,
+} from './group-note-open'
+import type { OpenGroupAgentSessionRequest } from './group-agent-open'
+import type { MessageSettings } from '../chat/message-settings'
+
+interface HeaderAction {
+  key: string
+  icon: React.ReactNode
+  title: string
+}
+
+const DEFAULT_GROUP_ACTION = 'members'
+
+const GROUP_NESTED_SCROLL_ACTIONS = new Set([
+  'members',
+  'agents',
+  'knowledge',
+  'notes',
+  'workflow',
+  'files',
+])
+
+const HEADER_ACTIONS: HeaderAction[] = [
+  { key: 'members', icon: <IconUsers size={16} />, title: '群组成员' },
+  { key: 'agents', icon: <IconAgent size={16} />, title: '群组智能体' },
+  { key: 'knowledge', icon: <IconKnowledge size={16} />, title: '群组知识库' },
+  { key: 'notes', icon: <IconNotes size={16} />, title: '群组笔记' },
+  { key: 'workflow', icon: <IconWorkflow size={16} />, title: '群组工作流' },
+  { key: 'files', icon: <IconFolder size={16} />, title: '群组文件' },
+  { key: 'activity', icon: <IconActivity size={16} />, title: '群组活动记录' },
+]
+
+interface Props {
+  workspace: P2pWorkspace | null
+  sourceWorkspaceId: string | null
+  knowledgeBases: KnowledgeBase[]
+  assistants: Assistant[]
+  sessions: Session[]
+  notebooks: NotebookItem[]
+  notes: NoteItem[]
+  syncFolderPath?: string | null
+  onInvite?: () => void
+  onWorkspaceUpdated?: (workspace: P2pWorkspace) => void
+  onWorkspaceLeft?: () => void
+  onOpenNote?: (noteId: string) => boolean
+  onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
+  onOpenGroupKnowledgeMarkdown?: (
+    request: OpenGroupKnowledgeMarkdownRequest,
+  ) => void | Promise<void>
+  onSaveGroupNoteAsCopy?: (request: SaveGroupNoteAsCopyRequest) => void | Promise<void>
+  onOpenGroupAgentSession?: (request: OpenGroupAgentSessionRequest) => void | Promise<void>
+  messageSettings: MessageSettings
+  spellCheckEnabled?: boolean
+  defaultFilePath?: string | null
+}
+
+export function GroupPage({
+  workspace,
+  sourceWorkspaceId,
+  knowledgeBases,
+  assistants,
+  sessions,
+  notebooks,
+  notes,
+  syncFolderPath = null,
+  onInvite,
+  onWorkspaceUpdated,
+  onWorkspaceLeft,
+  onOpenNote,
+  onOpenGroupNote,
+  onOpenGroupKnowledgeMarkdown,
+  onSaveGroupNoteAsCopy,
+  onOpenGroupAgentSession,
+  messageSettings,
+  spellCheckEnabled = true,
+  defaultFilePath = null,
+}: Props) {
+  const [activeAction, setActiveAction] = useState<string | null>(DEFAULT_GROUP_ACTION)
+  const [showSettings, setShowSettings] = useState(false)
+  const [membersMenuOpen, setMembersMenuOpen] = useState(false)
+  const membersButtonRef = useRef<HTMLButtonElement>(null)
+
+  const effectiveAction = activeAction ?? DEFAULT_GROUP_ACTION
+
+  const detail = useP2pWorkspace({
+    workspaceId: workspace?.id ?? null,
+    onWorkspaceInvalid: onWorkspaceLeft,
+  })
+
+  const handleWorkspaceUpdated = useCallback(
+    (nextWorkspace: P2pWorkspace) => {
+      detail.applyWorkspace(nextWorkspace)
+      onWorkspaceUpdated?.(nextWorkspace)
+    },
+    [detail.applyWorkspace, onWorkspaceUpdated],
+  )
+
+  const activity = useP2pEvents({ workspaceId: workspace?.id ?? null })
+  const syncStatus = useP2pSyncStatus(workspace?.id ?? null)
+
+  useEffect(() => {
+    if (
+      effectiveAction === 'members' ||
+      effectiveAction === 'files' ||
+      effectiveAction === 'knowledge' ||
+      effectiveAction === 'agents' ||
+      effectiveAction === 'notes'
+    ) {
+      void detail.load()
+    }
+    if (effectiveAction === 'activity') {
+      void activity.load()
+    }
+  }, [effectiveAction, detail.load, activity.load])
+
+  useEffect(() => {
+    setActiveAction(DEFAULT_GROUP_ACTION)
+    setShowSettings(false)
+    setMembersMenuOpen(false)
+  }, [workspace?.id])
+
+  const displayWorkspace = detail.workspace ?? workspace
+  const workspaceName = displayWorkspace?.name ?? workspace?.name ?? '群组'
+
+  const renderPanel = () => {
+    if (!workspace) return null
+
+    switch (effectiveAction) {
+      case 'members':
+        return (
+          <GroupMemberChatPanel
+            workspaceId={workspace.id}
+            workspaceName={workspaceName}
+            selfMemberId={detail.selfMember?.id ?? null}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            messageSettings={messageSettings}
+            spellCheckEnabled={spellCheckEnabled}
+            defaultFilePath={defaultFilePath}
+          />
+        )
+      case 'activity':
+        return (
+          <GroupActivityLog
+            workspaceName={workspaceName}
+            events={activity.events}
+            loading={activity.loading}
+            error={activity.error}
+            onRefresh={() => void activity.load()}
+          />
+        )
+      case 'knowledge':
+        return (
+          <GroupKnowledgePanel
+            p2pWorkspaceId={workspace.id}
+            workspaceName={workspaceName}
+            sourceWorkspaceId={sourceWorkspaceId}
+            knowledgeBases={knowledgeBases}
+            canManageGroupResources={detail.canManageMembers}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            selfMemberId={detail.selfMember?.id ?? null}
+            onOpenNote={onOpenNote}
+            onOpenGroupNote={onOpenGroupNote}
+            onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
+            onSaveGroupNoteAsCopy={onSaveGroupNoteAsCopy}
+          />
+        )
+      case 'files':
+        return (
+          <GroupFilesPanel
+            workspaceId={workspace.id}
+            workspaceName={workspaceName}
+            canManageGroupFiles={detail.canManageMembers}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            selfMemberId={detail.selfMember?.id ?? null}
+            onOpenNote={onOpenNote}
+          />
+        )
+      case 'agents':
+        return (
+          <GroupAgentsPanel
+            p2pWorkspaceId={workspace.id}
+            workspaceName={workspaceName}
+            sourceWorkspaceId={sourceWorkspaceId}
+            assistants={assistants}
+            sessions={sessions}
+            canManageGroupResources={detail.canManageMembers}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            selfMemberId={detail.selfMember?.id ?? null}
+            onOpenGroupAgentSession={onOpenGroupAgentSession}
+          />
+        )
+      case 'notes':
+        return (
+          <GroupNotesPanel
+            p2pWorkspaceId={workspace.id}
+            workspaceName={workspaceName}
+            notebooks={notebooks}
+            notes={notes}
+            syncFolderPath={syncFolderPath}
+            canManageGroupResources={detail.canManageMembers}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            selfMemberId={detail.selfMember?.id ?? null}
+            selfMemberRole={detail.selfMember?.role ?? null}
+            onOpenGroupNote={onOpenGroupNote}
+            onSaveGroupNoteAsCopy={onSaveGroupNoteAsCopy}
+          />
+        )
+      case 'workflow':
+        return <GroupWorkflowPanel workspaceName={workspaceName} />
+      default:
+        return (
+          <GroupMemberChatPanel
+            workspaceId={workspace.id}
+            workspaceName={workspaceName}
+            selfMemberId={detail.selfMember?.id ?? null}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            messageSettings={messageSettings}
+            spellCheckEnabled={spellCheckEnabled}
+            defaultFilePath={defaultFilePath}
+          />
+        )
+    }
+  }
+
+  return (
+    <main className="tm-main">
+      <header className="tm-chat-header">
+        <div className="tm-chat-breadcrumb">
+          <span className="tm-model-pill tm-module-pill">群组</span>
+          <span className="tm-module-breadcrumb-group">
+            <span className="tm-chat-breadcrumb-sep">/</span>
+            <span className="tm-model-pill tm-module-pill tm-module-pill--secondary">
+              {displayWorkspace?.name ?? '选择群组'}
+            </span>
+          </span>
+        </div>
+
+        <div className="tm-chat-header-end">
+          {HEADER_ACTIONS.map((action) => (
+            <button
+              key={action.key}
+              ref={action.key === 'members' ? membersButtonRef : undefined}
+              type="button"
+              className={[
+                'tm-chat-header-settings-btn',
+                effectiveAction === action.key
+                  ? 'tm-chat-header-settings-btn--active'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              title={action.title}
+              aria-label={action.title}
+              aria-pressed={effectiveAction === action.key}
+              aria-expanded={action.key === 'members' ? membersMenuOpen : undefined}
+              onClick={() => {
+                if (!workspace) return
+                if (action.key === 'members') {
+                  setActiveAction('members')
+                  setMembersMenuOpen((current) => !current)
+                  return
+                }
+                setMembersMenuOpen(false)
+                setActiveAction((prev) => (prev === action.key ? null : action.key))
+              }}
+            >
+              {action.icon}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            className="tm-chat-header-settings-btn"
+            title="群组设置"
+            aria-label="群组设置"
+            disabled={!workspace}
+            onClick={() => {
+              if (!workspace) return
+              setShowSettings(true)
+            }}
+          >
+            <IconSliders size={16} />
+          </button>
+        </div>
+      </header>
+
+      {workspace ? (
+        <GroupMembersMenu
+          open={membersMenuOpen}
+          anchorRef={membersButtonRef}
+          workspaceName={workspaceName}
+          members={detail.members}
+          selfMemberId={detail.selfMember?.id ?? null}
+          selfMemberRole={detail.selfMember?.role ?? null}
+          canManageMembers={detail.canManageMembers}
+          loading={detail.loading}
+          onClose={() => setMembersMenuOpen(false)}
+          onInvite={onInvite}
+          onRemoveMember={detail.removeMember}
+          onUpdateMemberRole={detail.updateMemberRole}
+        />
+      ) : null}
+
+      <div
+        className={[
+          'tm-module-content',
+          GROUP_NESTED_SCROLL_ACTIONS.has(effectiveAction) ? 'tm-module-content--chat' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {!workspace ? (
+          <div className="tm-module-empty">
+            <h2 className="tm-module-empty-title">选择或创建群组</h2>
+            <p className="tm-module-empty-hint">在左侧创建群组，或通过邀请链接加入已有群组。</p>
+          </div>
+        ) : (
+          <>
+            {syncStatus.error && (
+              <div className="tm-error-bar" role="alert">
+                同步错误：{syncStatus.error}
+              </div>
+            )}
+            {!syncStatus.error && syncStatus.isDegraded && !detail.isOwner && (
+              <div className="tm-kb-file-dropzone-hint" style={{ margin: '0 0 12px' }}>
+                群主当前离线，事件序号已降级为 Lamport 时钟；群主上线后将自动强制同步合并。
+              </div>
+            )}
+            {!syncStatus.error && syncStatus.isSyncing && (
+              <div className="tm-kb-file-dropzone-hint" style={{ margin: '0 0 12px' }}>
+                正在同步群组数据…
+              </div>
+            )}
+            {renderPanel()}
+          </>
+        )}
+      </div>
+
+      {showSettings && workspace && displayWorkspace ? (
+        <GroupSettingsModal
+          workspace={displayWorkspace}
+          workspaceName={workspaceName}
+          isOwner={detail.isOwner}
+          syncStatus={{
+            status: syncStatus.status,
+            error: syncStatus.error,
+            sequencingMode: syncStatus.sequencingMode,
+            ownerOnline: syncStatus.ownerOnline,
+            lastEventSeq: syncStatus.lastEventSeq,
+            lastSyncAt: syncStatus.lastSyncAt,
+            peers: syncStatus.peers,
+            pendingFiles: syncStatus.pendingFiles,
+            onRefresh: () => void syncStatus.refresh(),
+          }}
+          onClose={() => setShowSettings(false)}
+          onWorkspaceUpdated={handleWorkspaceUpdated}
+          onWorkspaceLeft={() => {
+            setShowSettings(false)
+            onWorkspaceLeft?.()
+          }}
+        />
+      ) : null}
+    </main>
+  )
+}

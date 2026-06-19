@@ -1,0 +1,254 @@
+import { existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { app } from 'electron'
+import {
+  P2pMemberRepository,
+  P2pWorkspaceRepository,
+  hashWorkspaceKey,
+  identities,
+  type P2pWorkspaceRow,
+} from '@toolman/db'
+import type { P2pWorkspace, P2pWorkspaceListFilter } from '@toolman/shared'
+import {
+  P2pWorkspaceCreateInputSchema,
+  P2pWorkspaceUpdateInputSchema,
+} from '@toolman/shared'
+import { getDatabase } from '../../bootstrap/database'
+import { generateWorkspaceKey } from './p2p-crypto.service'
+import { createDefaultWorkspaceInvite } from './p2p-invite.service'
+import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import {
+  loadAllWorkspaceKeys,
+  removeWorkspaceKey,
+  saveWorkspaceKey,
+} from './p2p-workspace-key.store'
+import { appendP2pEvent } from './p2p-event.service'
+
+const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
+
+function getWorkspaceRepo(): P2pWorkspaceRepository {
+  return new P2pWorkspaceRepository(getDatabase())
+}
+
+function getMemberRepo(): P2pMemberRepository {
+  return new P2pMemberRepository(getDatabase())
+}
+
+function getIdentityDisplayName(): string {
+  const db = getDatabase()
+  const row = db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .get()
+  return row?.displayName ?? '本地用户'
+}
+
+function resolveP2pWorkspaceStoragePath(workspaceId: string): string {
+  return join(app.getPath('userData'), 'p2p', 'workspaces', workspaceId)
+}
+
+export function getP2pWorkspaceStoragePath(workspaceId: string): string {
+  assertWorkspaceAccess(workspaceId)
+  return resolveP2pWorkspaceStoragePath(workspaceId)
+}
+
+function ensureWorkspaceDir(workspaceId: string): void {
+  const dir = resolveP2pWorkspaceStoragePath(workspaceId)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+}
+
+function mapWorkspaceRow(row: P2pWorkspaceRow, memberCount: number): P2pWorkspace {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    ownerDeviceId: row.ownerDeviceId,
+    ownerIdentityId: row.ownerIdentityId,
+    maxMembers: row.maxMembers,
+    status: row.status,
+    memberCount,
+    lastEventSeq: row.lastEventSeq,
+    createdAt: row.createdAt.getTime(),
+    updatedAt: row.updatedAt.getTime(),
+  }
+}
+
+function toWorkspaceDto(row: P2pWorkspaceRow): P2pWorkspace {
+  const memberCount = getMemberRepo().countActiveByWorkspace(row.id)
+  return mapWorkspaceRow(row, memberCount)
+}
+
+function assertWorkspaceAccess(workspaceId: string): P2pWorkspaceRow {
+  const row = getWorkspaceRepo().findById(workspaceId)
+  if (!row) {
+    throw new Error('群组不存在')
+  }
+
+  const device = getP2pDeviceInfo()
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, device.deviceId)
+  if (!member || member.status !== 'active') {
+    throw new Error('无权访问该群组')
+  }
+
+  return row
+}
+
+function assertOwner(workspaceId: string): P2pWorkspaceRow {
+  const row = assertWorkspaceAccess(workspaceId)
+  const device = getP2pDeviceInfo()
+  if (row.ownerDeviceId !== device.deviceId) {
+    throw new Error('仅群主可执行此操作')
+  }
+  return row
+}
+
+export function bootstrapP2pWorkspaceKeys(): void {
+  loadAllWorkspaceKeys()
+}
+
+export async function createP2pWorkspace(rawInput: unknown): Promise<{
+  workspace: P2pWorkspace
+  inviteToken: string
+}> {
+  const input = P2pWorkspaceCreateInputSchema.parse(rawInput)
+  const device = getP2pDeviceInfo()
+  const workspaceKey = generateWorkspaceKey()
+  const workspaceKeyHash = hashWorkspaceKey(workspaceKey)
+
+  const row = getWorkspaceRepo().create({
+    name: input.name,
+    description: input.description,
+    maxMembers: input.maxMembers,
+    ownerDeviceId: device.deviceId,
+    ownerIdentityId: device.identityId,
+    workspaceKeyHash,
+  })
+
+  saveWorkspaceKey(row.id, workspaceKey)
+  ensureWorkspaceDir(row.id)
+
+  const now = new Date()
+  const ownerMember = getMemberRepo().create({
+    workspaceId: row.id,
+    identityId: device.identityId,
+    deviceId: device.deviceId,
+    displayName: getIdentityDisplayName(),
+    role: 'owner',
+    status: 'active',
+    joinedAt: now,
+  })
+
+  appendP2pEvent({
+    workspaceId: row.id,
+    resourceType: 'Workspace',
+    resourceId: row.id,
+    operatorId: ownerMember.id,
+    eventType: 'Created',
+    payload: {
+      name: row.name,
+      description: row.description ?? null,
+    },
+  })
+
+  const inviteToken = await createDefaultWorkspaceInvite(row.id)
+
+  return {
+    workspace: toWorkspaceDto(row),
+    inviteToken,
+  }
+}
+
+export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWorkspace[] {
+  const device = getP2pDeviceInfo()
+  const workspaceRepo = getWorkspaceRepo()
+  const memberRepo = getMemberRepo()
+
+  const owned = workspaceRepo.listByOwnerIdentity(device.identityId)
+  const memberships = memberRepo.listActiveMembershipsByDevice(device.deviceId)
+  const ownedIds = new Set(owned.map((row) => row.id))
+
+  const joined = memberships
+    .filter((member) => !ownedIds.has(member.workspaceId))
+    .map((member) => workspaceRepo.findById(member.workspaceId))
+    .filter((row): row is P2pWorkspaceRow => row !== null)
+
+  let rows: P2pWorkspaceRow[]
+  switch (filter) {
+    case 'mine':
+      rows = owned
+      break
+    case 'joined':
+      rows = joined
+      break
+    case 'all':
+    default: {
+      const byId = new Map<string, P2pWorkspaceRow>()
+      for (const row of [...owned, ...joined]) {
+        byId.set(row.id, row)
+      }
+      rows = [...byId.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      break
+    }
+  }
+
+  return rows.map((row) => toWorkspaceDto(row))
+}
+
+export function getP2pWorkspace(id: string): P2pWorkspace {
+  const row = assertWorkspaceAccess(id)
+  return toWorkspaceDto(row)
+}
+
+export function updateP2pWorkspace(rawInput: unknown): P2pWorkspace {
+  const input = P2pWorkspaceUpdateInputSchema.parse(rawInput)
+  assertOwner(input.id)
+
+  const settingsJson =
+    input.settings !== undefined ? JSON.stringify(input.settings) : undefined
+
+  const updated = getWorkspaceRepo().update({
+    id: input.id,
+    name: input.name,
+    description: input.description,
+    settingsJson,
+  })
+
+  if (!updated) {
+    throw new Error('群组不存在')
+  }
+
+  return toWorkspaceDto(updated)
+}
+
+export function deleteP2pWorkspace(id: string): void {
+  assertOwner(id)
+  const deleted = getWorkspaceRepo().softDelete(id)
+  if (!deleted) {
+    throw new Error('群组不存在')
+  }
+  removeWorkspaceKey(id)
+}
+
+export function leaveP2pWorkspace(id: string): void {
+  const row = assertWorkspaceAccess(id)
+  const device = getP2pDeviceInfo()
+
+  if (row.ownerDeviceId === device.deviceId) {
+    throw new Error('群主不能退出群组，请解散群组')
+  }
+
+  const member = getMemberRepo().findByWorkspaceAndDevice(id, device.deviceId)
+  if (!member) {
+    throw new Error('你不是该群组成员')
+  }
+
+  getMemberRepo().update({
+    id: member.id,
+    status: 'left',
+  })
+  removeWorkspaceKey(id)
+}
