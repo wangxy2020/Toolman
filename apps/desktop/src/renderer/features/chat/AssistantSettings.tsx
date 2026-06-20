@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { IpcChannel, type Assistant, type Provider, type Workspace } from '@toolman/shared'
-import { SettingsToggle } from '../settings/SettingsShared'
 import { buildModelOptions, modelNameFromId, providerNameFromModelId } from './model-utils'
 import { useSystemPaths } from './useSystemPaths'
 import { getWorkspaceFolderPath } from './workspace-utils'
@@ -18,16 +17,40 @@ interface Props {
   onSaved?: (assistant: Assistant) => void | Promise<void>
 }
 
-function HelpHint({ title }: { title: string }) {
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
   return (
-    <button type="button" className="tm-agent-help" title={title}>
-      i
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={`tm-agent-toggle ${checked ? 'tm-agent-toggle--on' : ''}`}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="tm-agent-toggle-thumb" />
     </button>
   )
 }
 
+function HelpHint({ title }: { title: string }) {
+  return (
+    <span className="tm-agent-help" title={title} aria-label={title}>
+      ⓘ
+    </span>
+  )
+}
+
 function RequiredMark() {
-  return <span className="tm-add-agent-required">*</span>
+  return (
+    <span className="tm-agent-required" aria-hidden="true">
+      *
+    </span>
+  )
 }
 
 export function AssistantSettings({ workspaceId, workspace, providers, onClose, onSaved }: Props) {
@@ -102,140 +125,180 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
   }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
-      <div className="tm-modal tm-add-agent-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="tm-modal-header">
-          <h2 className="tm-modal-title">添加智能体</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+    <div className="tm-modal-overlay tm-modal-overlay--agent-settings" onClick={onClose}>
+      <div
+        className="tm-agent-modal tm-agent-modal--create"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-agent-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="tm-agent-modal-header">
+          <h3 id="add-agent-title" className="tm-agent-modal-title">
+            <span className="tm-agent-modal-title-dot" aria-hidden="true" />
+            添加智能体
+          </h3>
+          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
-        </div>
-        <div className="tm-modal-body">
-          <div className="tm-form-field">
-            <label className="tm-form-label">
-              名称
-              <RequiredMark />
-            </label>
-            <input className="tm-form-input" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
+        </header>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">
-              模型
-              <RequiredMark />
-              <HelpHint title="选择智能体使用的默认模型" />
-            </label>
-            <div className="tm-agent-model-select-wrap">
-              <select
-                className="tm-agent-model-select tm-add-agent-model-select"
-                value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-              >
-                <option value="">{modelOptions.length === 0 ? '请先在模型服务中配置模型' : '选择模型'}</option>
-                {modelOptions.map((opt) => (
-                  <option key={opt.modelId} value={opt.modelId}>
-                    {modelNameFromId(opt.modelId)} | {providerNameFromModelId(opt.modelId, providers)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="tm-add-agent-row">
-            <label className="tm-form-label tm-add-agent-row-label">
-              自主模式
-              <HelpHint title="开启后智能体可自主执行更多操作" />
-            </label>
-            <SettingsToggle checked={autonomousMode} onChange={setAutonomousMode} />
-          </div>
-
-          <div className="tm-form-field">
-            <label className="tm-form-label">
-              权限模式
-              <RequiredMark />
-            </label>
-            <div className="tm-agent-model-select-wrap">
-              <select
-                className="tm-agent-model-select tm-add-agent-model-select"
-                value={permissionMode}
-                onChange={(e) => setPermissionMode(e.target.value as PermissionMode)}
-              >
-                {PERMISSION_MODES.map((mode) => (
-                  <option key={mode.id} value={mode.id}>
-                    {mode.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedPermission && (
-              <p className="tm-add-agent-hint">{selectedPermission.description}</p>
-            )}
-          </div>
-
-          <div className="tm-form-field">
-            <div className="tm-add-agent-label-row">
-              <label className="tm-form-label">工作目录</label>
-              <button
-                type="button"
-                className="tm-add-agent-dir-btn"
-                onClick={() => void handleSelectWorkingDirectory()}
-              >
-                添加目录
-              </button>
-            </div>
-            {workingDirectory ? (
-              <div className="tm-agent-workdir-row">
-                <span className="tm-agent-workdir-path" title={workingDirectory}>
-                  {workingDirectory}
-                </span>
-                <button
-                  type="button"
-                  className="tm-agent-workdir-delete"
-                  onClick={handleRemoveWorkingDirectory}
-                >
-                  删除
-                </button>
+        <div className="tm-agent-modal-body tm-agent-modal-body--single">
+          <div className="tm-agent-modal-content">
+            <div className="tm-agent-settings-form">
+              <div className="tm-agent-setting-row">
+                <label className="tm-agent-setting-label" htmlFor="add-agent-name">
+                  名称
+                  <RequiredMark />
+                </label>
+                <input
+                  id="add-agent-name"
+                  className="tm-agent-setting-input"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  autoFocus
+                />
               </div>
-            ) : (
-              <p className="tm-add-agent-hint">未指定时将自动创建默认工作目录。</p>
-            )}
-          </div>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">
-              环境变量
-              <HelpHint title="为智能体运行环境注入自定义变量" />
-            </label>
-            <textarea
-              className="tm-form-textarea tm-add-agent-env-textarea"
-              rows={4}
-              value={environmentVariables}
-              placeholder={'API_KEY=xxx\nDEBUG=true'}
-              onChange={(e) => setEnvironmentVariables(e.target.value)}
-            />
-            <p className="tm-add-agent-hint">输入自定义环境变量（每行一个，格式：KEY=value）</p>
-          </div>
+              <div className="tm-agent-setting-row">
+                <div className="tm-agent-setting-label-group">
+                  <label className="tm-agent-setting-label" htmlFor="add-agent-model">
+                    模型
+                  </label>
+                  <RequiredMark />
+                  <HelpHint title="选择智能体使用的默认模型" />
+                </div>
+                <select
+                  id="add-agent-model"
+                  className="tm-agent-model-select"
+                  value={modelId}
+                  onChange={(event) => setModelId(event.target.value)}
+                >
+                  <option value="">
+                    {modelOptions.length === 0 ? '请先在模型服务中配置模型' : '选择模型'}
+                  </option>
+                  {modelOptions.map((opt) => (
+                    <option key={opt.modelId} value={opt.modelId}>
+                      {`${modelNameFromId(opt.modelId)} | ${providerNameFromModelId(opt.modelId, providers)}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {message && (
-            <p className={`tm-form-msg ${message.includes('失败') || message.includes('请') ? 'tm-form-msg--error' : ''}`}>
-              {message}
-            </p>
-          )}
+              <div className="tm-agent-setting-row">
+                <div className="tm-agent-setting-label-group">
+                  <span className="tm-agent-setting-label">自主模式</span>
+                  <HelpHint title="开启后智能体可自主执行更多操作" />
+                </div>
+                <Toggle checked={autonomousMode} onChange={setAutonomousMode} />
+              </div>
 
-          <div className="tm-form-actions">
-            <button type="button" className="tm-btn" onClick={onClose}>
-              关闭
-            </button>
-            <button
-              type="button"
-              className="tm-btn tm-btn--primary"
-              disabled={busy}
-              onClick={() => void handleAdd()}
-            >
-              {busy ? '处理中…' : '添加'}
-            </button>
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <label className="tm-agent-setting-label" htmlFor="add-agent-permission">
+                  权限模式
+                  <RequiredMark />
+                </label>
+                <div className="tm-agent-setting-block">
+                  <select
+                    id="add-agent-permission"
+                    className="tm-agent-model-select"
+                    value={permissionMode}
+                    onChange={(event) => setPermissionMode(event.target.value as PermissionMode)}
+                  >
+                    {PERMISSION_MODES.map((mode) => (
+                      <option key={mode.id} value={mode.id}>
+                        {mode.title}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPermission ? (
+                    <p className="tm-agent-field-hint">{selectedPermission.description}</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <label className="tm-agent-setting-label">工作目录</label>
+                <div className="tm-agent-workdir-field">
+                  <div className="tm-agent-workdir-input-group">
+                    <input
+                      className="tm-agent-workdir-input"
+                      readOnly
+                      value={workingDirectory}
+                      placeholder="未指定时将自动创建默认工作目录"
+                      title={workingDirectory || undefined}
+                    />
+                    <button
+                      type="button"
+                      className="tm-agent-workdir-browse"
+                      onClick={() => void handleSelectWorkingDirectory()}
+                    >
+                      浏览
+                    </button>
+                  </div>
+                  {workingDirectory ? (
+                    <button
+                      type="button"
+                      className="tm-agent-workdir-reset"
+                      onClick={handleRemoveWorkingDirectory}
+                    >
+                      清除目录
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <div className="tm-agent-setting-label-group">
+                  <label className="tm-agent-setting-label" htmlFor="add-agent-env">
+                    环境变量
+                  </label>
+                  <HelpHint title="为智能体运行环境注入自定义变量" />
+                </div>
+                <div className="tm-agent-setting-block">
+                  <textarea
+                    id="add-agent-env"
+                    className="tm-agent-setting-textarea tm-agent-setting-textarea--mono"
+                    rows={4}
+                    value={environmentVariables}
+                    placeholder={'API_KEY=xxx\nDEBUG=true'}
+                    onChange={(event) => setEnvironmentVariables(event.target.value)}
+                  />
+                  <p className="tm-agent-field-hint">每行一个，格式：KEY=value</p>
+                </div>
+              </div>
+
+              {message ? <p className="tm-agent-form-error">{message}</p> : null}
+            </div>
           </div>
         </div>
+
+        <footer className="tm-agent-modal-footer">
+          <button
+            type="button"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--primary"
+            disabled={busy}
+            onClick={() => void handleAdd()}
+          >
+            {busy ? '处理中…' : '添加'}
+          </button>
+        </footer>
       </div>
     </div>
   )

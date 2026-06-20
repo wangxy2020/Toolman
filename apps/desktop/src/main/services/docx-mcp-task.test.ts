@@ -5,6 +5,7 @@ import {
   isDocxMcpEditToolName,
   isDocxMcpToolName,
   isDocxThoroughEditRequest,
+  requestsDocxParagraphRewrite,
   resolveDocxMcpShortToolName,
   shouldContinueDocxEditing,
 } from './docx-mcp-task.service'
@@ -32,6 +33,11 @@ describe('docx mcp task helpers', () => {
   it('detects thorough edit requests from user text', () => {
     expect(isDocxThoroughEditRequest('审查文件内容，修改错误，添加批注')).toBe(true)
     expect(isDocxThoroughEditRequest('hello')).toBe(false)
+  })
+
+  it('detects paragraph rewrite requests from user text', () => {
+    expect(requestsDocxParagraphRewrite('请将第二段整段重写为列表')).toBe(true)
+    expect(requestsDocxParagraphRewrite('审查并修正错别字')).toBe(false)
   })
 
   it('continues docx editing until minimum edits and idle rounds', () => {

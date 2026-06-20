@@ -111,7 +111,7 @@ function FileTypeSummary({
           </li>
         ))}
       </ul>
-      <p className="tm-form-hint">共 {total} 个文件</p>
+      <p className="tm-agent-field-hint">共 {total} 个文件</p>
     </div>
   )
 }
@@ -301,178 +301,222 @@ export function KnowledgeCreateModal({
   }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
-      <div className="tm-modal tm-modal--knowledge-create" onClick={(event) => event.stopPropagation()}>
-        <header className="tm-modal-header">
-          <h2 className="tm-modal-title">添加知识库</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+    <div className="tm-modal-overlay tm-modal-overlay--agent-settings" onClick={onClose}>
+      <div
+        className="tm-agent-modal tm-agent-modal--create"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-knowledge-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="tm-agent-modal-header">
+          <h3 id="add-knowledge-title" className="tm-agent-modal-title">
+            <span className="tm-agent-modal-title-dot" aria-hidden="true" />
+            添加知识库
+          </h3>
+          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </header>
 
-        <div className="tm-modal-body">
-          <div className="tm-knowledge-create-form">
-            <label className="tm-form-field">
-              <span className="tm-form-label">
-                名称<span className="tm-form-required" aria-hidden="true">*</span>
-              </span>
-              <input
-                className="tm-form-input"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={
-                  isNetwork
-                    ? '例如：产品文档（可选，填写网络地址时自动填充）'
-                    : '例如：产品文档（可选，选择文件夹/文件时自动填充）'
-                }
-                autoFocus
-              />
-            </label>
-
-            <div className="tm-form-field tm-form-field--inline">
-              <span className="tm-form-label">类型</span>
-              <div className="tm-kb-kind-radio-group" role="radiogroup" aria-label="知识库类型">
-                <label className="tm-kb-kind-radio">
-                  <input
-                    type="radio"
-                    name="kb-kind"
-                    checked={kind === 'local'}
-                    onChange={() => setKind('local')}
-                  />
-                  <span>本地知识库</span>
+        <div className="tm-agent-modal-body tm-agent-modal-body--single">
+          <div className="tm-agent-modal-content">
+            <div className="tm-agent-settings-form">
+              <div className="tm-agent-setting-row">
+                <label className="tm-agent-setting-label" htmlFor="kb-create-name">
+                  名称
+                  <span className="tm-agent-required" aria-hidden="true">
+                    *
+                  </span>
                 </label>
-                <label className="tm-kb-kind-radio">
-                  <input
-                    type="radio"
-                    name="kb-kind"
-                    checked={kind === 'network'}
-                    onChange={() => setKind('network')}
-                  />
-                  <span>网络知识库</span>
-                </label>
-                <label className="tm-kb-kind-radio">
-                  <input
-                    type="radio"
-                    name="kb-kind"
-                    checked={kind === 'local_files'}
-                    onChange={() => setKind('local_files')}
-                  />
-                  <span>本地文件</span>
-                </label>
-              </div>
-            </div>
-
-            <label className="tm-form-field">
-              <span className="tm-form-label">描述（可选）</span>
-              <textarea
-                className="tm-form-textarea"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="简要说明该知识库的用途"
-                rows={3}
-              />
-            </label>
-
-            <label className="tm-form-field">
-              <span className="tm-form-label">
-                {isLocalFiles ? '路径（默认在本地文件下新建文件夹）' : '路径（默认在知识库下新建文件夹）'}
-              </span>
-              <input
-                className="tm-form-input"
-                readOnly
-                value={displayPath}
-                placeholder={baseFolderPath ? '显示默认路径' : '未配置默认文件夹'}
-              />
-            </label>
-
-            {isNetwork ? (
-              <label className="tm-form-field">
-                <span className="tm-form-label">网络地址</span>
                 <input
-                  className="tm-form-input"
-                  type="url"
-                  value={networkUrl}
-                  onChange={(event) => handleNetworkUrlChange(event.target.value)}
-                  placeholder="https://example.com/docs"
-                  disabled={submitting}
+                  id="kb-create-name"
+                  className="tm-agent-setting-input"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={
+                    isNetwork
+                      ? '例如：产品文档（可选，填写网络地址时自动填充）'
+                      : '例如：产品文档（可选，选择文件夹/文件时自动填充）'
+                  }
+                  autoFocus
                 />
-                <p className="tm-form-hint">
-                  创建后将抓取该网页内容并建立索引，也可稍后在知识库中继续添加更多网页。
-                </p>
-              </label>
-            ) : (
-              <div className="tm-form-field">
-                <div className="tm-form-field--inline tm-form-field--inline-spread">
-                  <span className="tm-form-label">选择文件夹或文件</span>
-                  <div className="tm-form-picker-row">
-                    <button
-                      type="button"
-                      className="tm-btn"
-                      onClick={() => void handleSelectSources()}
+              </div>
+
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <span className="tm-agent-setting-label">类型</span>
+                <div className="tm-kb-kind-radio-group" role="radiogroup" aria-label="知识库类型">
+                  <label className="tm-kb-kind-radio">
+                    <input
+                      type="radio"
+                      name="kb-kind"
+                      checked={kind === 'local'}
+                      onChange={() => setKind('local')}
+                    />
+                    <span>本地知识库</span>
+                  </label>
+                  <label className="tm-kb-kind-radio">
+                    <input
+                      type="radio"
+                      name="kb-kind"
+                      checked={kind === 'network'}
+                      onChange={() => setKind('network')}
+                    />
+                    <span>网络知识库</span>
+                  </label>
+                  <label className="tm-kb-kind-radio">
+                    <input
+                      type="radio"
+                      name="kb-kind"
+                      checked={kind === 'local_files'}
+                      onChange={() => setKind('local_files')}
+                    />
+                    <span>本地文件</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <label className="tm-agent-setting-label" htmlFor="kb-create-description">
+                  描述
+                </label>
+                <textarea
+                  id="kb-create-description"
+                  className="tm-agent-setting-textarea"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="简要说明该知识库的用途（可选）"
+                  rows={3}
+                />
+              </div>
+
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <label className="tm-agent-setting-label" htmlFor="kb-create-path">
+                  路径
+                </label>
+                <div className="tm-agent-setting-block">
+                  <input
+                    id="kb-create-path"
+                    className="tm-agent-setting-input"
+                    readOnly
+                    value={displayPath}
+                    placeholder={baseFolderPath ? '显示默认路径' : '未配置默认文件夹'}
+                  />
+                  <p className="tm-agent-field-hint">
+                    {isLocalFiles
+                      ? '默认在本地文件目录下新建文件夹'
+                      : '默认在知识库目录下新建文件夹'}
+                  </p>
+                </div>
+              </div>
+
+              {isNetwork ? (
+                <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                  <label className="tm-agent-setting-label" htmlFor="kb-create-url">
+                    网络地址
+                  </label>
+                  <div className="tm-agent-setting-block">
+                    <input
+                      id="kb-create-url"
+                      className="tm-agent-setting-input"
+                      type="url"
+                      value={networkUrl}
+                      onChange={(event) => handleNetworkUrlChange(event.target.value)}
+                      placeholder="https://example.com/docs"
                       disabled={submitting}
-                    >
-                      选择文件或文件夹
-                    </button>
-                    {hasSelection ? (
+                    />
+                    <p className="tm-agent-field-hint">
+                      创建后将抓取该网页内容并建立索引，也可稍后在知识库中继续添加更多网页。
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                  <span className="tm-agent-setting-label">来源</span>
+                  <div className="tm-agent-setting-block">
+                    <div className="tm-agent-inline-actions">
                       <button
                         type="button"
-                        className="tm-btn tm-btn--ghost"
-                        onClick={handleClearSelections}
+                        className="tm-agent-action-btn"
+                        onClick={() => void handleSelectSources()}
                         disabled={submitting}
                       >
-                        清除
+                        选择文件或文件夹
                       </button>
+                      {hasSelection ? (
+                        <button
+                          type="button"
+                          className="tm-agent-action-btn tm-agent-action-btn--ghost"
+                          onClick={handleClearSelections}
+                          disabled={submitting}
+                        >
+                          清除
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {sourcePick.mode === 'folder-with-files' ? (
+                      <FileTypeSummary
+                        title={
+                          isLocalFiles
+                            ? '文件夹内文件将全部复制到本地文件目录'
+                            : '文件夹内文件将全部添加到知识库'
+                        }
+                        counts={sourcePick.fileCounts}
+                        total={sourcePick.totalFiles}
+                      />
+                    ) : null}
+
+                    {sourcePick.mode === 'files' ? (
+                      <FileTypeSummary
+                        title="已选择以下类型的文件"
+                        counts={sourcePick.fileCounts}
+                        total={sourcePick.totalFiles}
+                      />
+                    ) : null}
+
+                    {sourcePick.mode === 'folder-empty' ? (
+                      <p className="tm-agent-field-hint">
+                        所选文件夹中没有可导入的文件，将在知识库目录下创建新文件夹。
+                      </p>
+                    ) : null}
+
+                    {sourcePick.mode === 'none' ? (
+                      <p className="tm-agent-field-hint">
+                        {isLocalFiles
+                          ? '选中文件夹时将复制全部文件到本地文件目录，不进行向量化处理。'
+                          : '选中文件夹时将导入文件夹中的全部文件，选中文件时则导入选中的文件。支持 MD/TXT/PDF/DOCX/HTML 等格式。'}
+                      </p>
                     ) : null}
                   </div>
                 </div>
+              )}
 
-                {sourcePick.mode === 'folder-with-files' ? (
-                  <FileTypeSummary
-                    title={
-                      isLocalFiles
-                        ? '文件夹内文件将全部复制到本地文件目录'
-                        : '文件夹内文件将全部添加到知识库'
-                    }
-                    counts={sourcePick.fileCounts}
-                    total={sourcePick.totalFiles}
-                  />
-                ) : null}
-
-                {sourcePick.mode === 'files' ? (
-                  <FileTypeSummary
-                    title="已选择以下类型的文件"
-                    counts={sourcePick.fileCounts}
-                    total={sourcePick.totalFiles}
-                  />
-                ) : null}
-
-                {sourcePick.mode === 'folder-empty' ? (
-                  <p className="tm-form-hint">
-                    所选文件夹中没有可导入的文件，将在知识库目录下创建新文件夹。
-                  </p>
-                ) : null}
-
-                {sourcePick.mode === 'none' ? (
-                  <p className="tm-form-hint">
-                    {isLocalFiles
-                      ? '选中文件夹时将复制全部文件到本地文件目录，不进行向量化处理。'
-                      : '选中文件夹时将导入文件夹中的全部文件，选中文件时则导入选中的文件。支持MD/TXT/PDF/DOCX/HTML等格式。'}
-                  </p>
-                ) : null}
-              </div>
-            )}
+              {error ? <p className="tm-agent-form-error">{error}</p> : null}
+            </div>
           </div>
-
-          {error ? <p className="tm-form-error">{error}</p> : null}
         </div>
 
-        <footer className="tm-modal-footer">
-          <button type="button" className="tm-btn tm-btn--ghost" onClick={onClose} disabled={submitting}>
+        <footer className="tm-agent-modal-footer">
+          <button
+            type="button"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--secondary"
+            onClick={onClose}
+            disabled={submitting}
+          >
             取消
           </button>
           <button
             type="button"
-            className="tm-btn tm-btn--primary"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--primary"
             onClick={() => void handleSubmit()}
             disabled={submitting}
           >

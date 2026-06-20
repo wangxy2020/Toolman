@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildDocxAuditSystemPrompt,
   buildDocxAuditUserMessage,
   buildDocxFileLinksMarkdown,
   buildDocxReviewSummaryBlock,
@@ -205,5 +206,37 @@ describe('buildDocxAuditUserMessage', () => {
     })
     expect(message).toContain('审查并批注')
     expect(message).toContain('/tmp/修订版_a.docx')
+  })
+
+  it('discourages edit_paragraph when user did not request paragraph rewrite', () => {
+    const message = buildDocxAuditUserMessage({
+      userRequest: '审查并修正错别字',
+      workingPath: '/tmp/修订版_a.docx',
+      fileName: 'a.docx',
+    })
+    expect(message).toContain('不要使用 edit_paragraph')
+  })
+
+  it('allows edit_paragraph hint when user requests paragraph rewrite', () => {
+    const message = buildDocxAuditUserMessage({
+      userRequest: '将引言段整段重写为列表',
+      workingPath: '/tmp/修订版_a.docx',
+      fileName: 'a.docx',
+    })
+    expect(message).toContain('才使用 edit_paragraph')
+    expect(message).not.toContain('不要使用 edit_paragraph')
+  })
+})
+
+describe('buildDocxAuditSystemPrompt', () => {
+  it('disables edit_paragraph by default', () => {
+    const prompt = buildDocxAuditSystemPrompt({ userRequest: '全面审查文档' })
+    expect(prompt).toContain('edit_paragraph（默认禁用）')
+  })
+
+  it('allows cautious edit_paragraph when user requests rewrite', () => {
+    const prompt = buildDocxAuditSystemPrompt({ userRequest: '第二段整段替换为条目' })
+    expect(prompt).toContain('edit_paragraph（谨慎使用）')
+    expect(prompt).not.toContain('默认禁用')
   })
 })

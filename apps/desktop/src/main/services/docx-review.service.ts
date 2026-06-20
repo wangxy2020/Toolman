@@ -7,6 +7,7 @@ import type { ContentBlock } from '@toolman/shared'
 
 import {
   findDocxMcpToolName,
+  requestsDocxParagraphRewrite,
   type DocxWorkingCopy,
 } from './docx-mcp-task.service'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
@@ -80,7 +81,16 @@ const VALID_CATEGORIES = new Set<DocxReviewIssueCategory>([
   'other',
 ])
 
-export function buildDocxAuditSystemPrompt(): string {
+export function buildDocxAuditSystemPrompt(options?: { userRequest?: string }): string {
+  const allowParagraphRewrite = requestsDocxParagraphRewrite(options?.userRequest ?? '')
+  const paragraphRule = allowParagraphRewrite
+    ? [
+        '- **edit_paragraph（谨慎使用）**：仅当用户已明确要求整段重写/列表化/重组段落，且该段无法通过一条或多条 replace 完成时，才使用 read_document 的 paragraph_index + replacement 作为 new_text；仍须优先尝试 replace',
+      ]
+    : [
+        '- **edit_paragraph（默认禁用）**：用户未要求整段替换时**不要**使用 edit_paragraph。结构/润色/措辞类问题请拆成 replace 或 comment，不要整段覆盖',
+      ]
+
   return [
     '你是 Word 文档审查助手。根据对话中 read_document 的文档内容与用户要求，输出结构化审查 issue 列表。',
     '**只输出 JSON 数组**，不要 Markdown 代码块、不要解释、不要 tool_code、不要伪工具调用。',
@@ -95,13 +105,14 @@ export function buildDocxAuditSystemPrompt(): string {
     '  "comment": "批注说明（action=comment 时必填；replace/edit_paragraph 时可选，作为修改说明批注）",',
     '  "replacement": "替换文本（action=replace 或 edit_paragraph 时必填）"',
     '}',
-    'action 选择规则（重要）：',
-    '- **replace**：文中有一段可精确匹配的子串，且你有明确的 replacement（错别字、口语化措辞、语法错误等）→ 必须优先用 replace，不要只写 comment',
-    '- **edit_paragraph**：整段需要重写、列表化、重组结构时，使用 read_document 返回的 paragraph_index + replacement 作为 new_text',
-    '- **comment**：仅当无法给出具体 replacement（如需要人工判断、信息不足、多处关联改动）时才用 comment',
+    'action 选择规则（重要，按优先级）：',
+    '1. **replace（默认首选）**：只要能用精确 anchor_text + replacement 表达的改动（错别字、语法、措辞、术语、句内调整），一律用 replace；能拆成多条 replace 的不要合并为 edit_paragraph；不要只写 comment',
+    '2. **comment**：需要人工判断、信息不足、跨段关联、或仅建议不改正文时使用',
+    ...paragraphRule,
     '其他要求：',
     '- 覆盖用户指令中的所有审查维度（错误、措辞、结构、术语等）',
     '- 列出所有应处理的问题，不要只给一条',
+    '- replacement 应尽量短、贴近原文，避免无必要扩写',
     '- anchor_text 必须来自文档真实文本；edit_paragraph 时 anchor_text 填该段原文摘要（便于定位）',
     '- paragraph_index 必须来自 read_document 输出中的段落索引',
     '- 对 replace / edit_paragraph，若需说明修改理由，填写 comment（应用会自动写入 Word 批注）',
@@ -113,12 +124,17 @@ export function buildDocxAuditUserMessage(options: {
   workingPath: string
   fileName: string
 }): string {
+  const allowParagraphRewrite = requestsDocxParagraphRewrite(options.userRequest)
+  const actionHint = allowParagraphRewrite
+    ? '优先 replace；仅当用户要求整段重写/列表化/重组段落且 replace 不足时，才使用 edit_paragraph。'
+    : '优先 replace 与 comment；不要使用 edit_paragraph（用户未要求整段替换）。'
+
   return [
     '请审查以下 Word 文档并输出 JSON issue 数组。',
     `用户要求：${options.userRequest.trim() || '全面审查文档，修正错误并添加批注'}`,
     `修订版文件：${options.fileName}`,
     `修订版绝对路径（后续 apply 用）：${options.workingPath}`,
-    '文档正文见上方 read_document 工具输出（含 paragraph_index）。请基于该输出列出全部 issue；能自动改写的优先用 replace 或 edit_paragraph。',
+    `文档正文见上方 read_document 工具输出（含 paragraph_index）。请基于该输出列出全部 issue。${actionHint}`,
   ].join('\n')
 }
 
@@ -490,7 +506,7 @@ async function runDocxAuditPass(options: {
   signal?: AbortSignal
 }): Promise<{ issues: DocxReviewIssue[]; warnings: string[]; raw: string }> {
   const auditMessages: ChatMessage[] = [
-    { role: 'system', content: buildDocxAuditSystemPrompt() },
+    { role: 'system', content: buildDocxAuditSystemPrompt({ userRequest: options.userRequest }) },
     ...options.chatMessages,
     {
       role: 'user',
@@ -952,7 +968,7 @@ export async function runDocxStructuredReviewPipeline(options: {
           {
             role: 'user',
             content:
-              '上次输出无法解析。请仅输出 JSON 数组（不要 Markdown 代码块），每项包含 id、severity、category、action、anchor_text；comment 用于纯批注；replace 需 replacement；edit_paragraph 需 paragraph_index 与 replacement。',
+              '上次输出无法解析。请仅输出 JSON 数组（不要 Markdown 代码块），每项包含 id、severity、category、action、anchor_text；comment 用于纯批注；replace 需 replacement；edit_paragraph 需 paragraph_index 与 replacement，且仅在用户明确要求整段重写/列表化/重组段落时使用，否则优先 replace。',
           },
         ],
         providerConfig: options.providerConfig,
