@@ -7,6 +7,7 @@ const CONTENT_BLOCK_ORDER: Record<ContentBlock['type'], number> = {
   file: 3,
   image: 4,
   text: 5,
+  local_file_links: 6,
 }
 
 /** 与 MessageStreamBuffers 一致：思考过程在回答正文之前 */

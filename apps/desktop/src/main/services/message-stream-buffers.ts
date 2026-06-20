@@ -14,6 +14,7 @@ export class MessageStreamBuffers {
   private thinkingStartedAt: number | null = null
   private thinkingDurationSeconds: number | null = null
   private kbSources: KnowledgeCitation[] = []
+  private localFileLinks: string[] = []
   private readonly tools: ToolBuffer[] = []
 
   appendText(chunk: string): void {
@@ -37,8 +38,28 @@ export class MessageStreamBuffers {
     this.thinking += chunk
   }
 
+  clearThinking(): void {
+    this.thinking = ''
+    this.thinkingStartedAt = null
+    this.thinkingDurationSeconds = null
+  }
+
+  promoteThinkingToText(): boolean {
+    const answer = this.thinking.trim()
+    if (this.text.trim() || !answer) return false
+    this.text = answer
+    this.thinking = ''
+    this.thinkingStartedAt = null
+    this.thinkingDurationSeconds = null
+    return true
+  }
+
   setKbSources(sources: KnowledgeCitation[]): void {
     this.kbSources = sources
+  }
+
+  setLocalFileLinks(paths: string[]): void {
+    this.localFileLinks = [...new Set(paths.map((path) => path.trim()).filter(Boolean))]
   }
 
   upsertTool(update: {
@@ -114,6 +135,14 @@ export class MessageStreamBuffers {
 
     if (this.text || blocks.length === 0) {
       blocks.push({ type: 'text', text: this.text })
+    }
+
+    if (this.localFileLinks.length > 0) {
+      blocks.push({
+        type: 'local_file_links',
+        title: '修订版文件（点击打开）',
+        paths: this.localFileLinks,
+      })
     }
 
     return blocks

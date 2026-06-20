@@ -51,6 +51,9 @@ import {
   type CommunityModeratorUser,
   type CommunityUserSearchInput,
   type CommunityModerationUserBanInput,
+  type CommunityModerationUserUnbanInput,
+  type CommunityModerationDeviceBanInput,
+  type CommunityModerationDeviceUnbanInput,
   type IpcResult,
 } from '@toolman/shared'
 
@@ -283,6 +286,24 @@ export async function banCommunityModerationUser(
   input: CommunityModerationUserBanInput,
 ): Promise<{ banned: boolean }> {
   return invokeIpc(IpcChannel.CommunityModerationUserBan, input)
+}
+
+export async function unbanCommunityModerationUser(
+  input: CommunityModerationUserUnbanInput,
+): Promise<{ unbanned: boolean }> {
+  return invokeIpc(IpcChannel.CommunityModerationUserUnban, input)
+}
+
+export async function banCommunityModerationDevice(
+  input: CommunityModerationDeviceBanInput,
+): Promise<{ banned: boolean }> {
+  return invokeIpc(IpcChannel.CommunityModerationDeviceBan, input)
+}
+
+export async function unbanCommunityModerationDevice(
+  input: CommunityModerationDeviceUnbanInput,
+): Promise<{ unbanned: boolean }> {
+  return invokeIpc(IpcChannel.CommunityModerationDeviceUnban, input)
 }
 
 export async function listCommunityModerationLogs(

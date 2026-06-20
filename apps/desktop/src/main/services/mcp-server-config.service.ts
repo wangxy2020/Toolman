@@ -15,6 +15,7 @@ import {
   matchOfficialMcpPresetId,
   isDuplicateOfficialMcpPreset,
 } from '@toolman/shared'
+import { isPostgresMcpConfig } from './mcp-postgres-verify.service'
 
 const CONFIG_FILE = 'mcp-servers.json'
 
@@ -116,7 +117,7 @@ function defaultPythonPreset(): McpServerConfig {
     type: 'stdio',
     enabled: isDefaultEnabledMcpServer('python'),
     command: 'uvx',
-    args: ['mcp-server-python'],
+    args: ['mcp-python-interpreter'],
     env: {},
     packageSource: 'default',
     longRunning: true,
@@ -140,6 +141,23 @@ function defaultBraveSearchPreset(): McpServerConfig {
   }
 }
 
+function defaultDocxMcpServerPreset(): McpServerConfig {
+  return {
+    id: 'docx-mcp-server',
+    name: 'DOCX MCP Server',
+    description:
+      'Word (.docx) 读写、批注、高亮、修订与排版；本地 stdio（npx docx-mcp-server，需 Node.js 20+）',
+    type: 'stdio',
+    enabled: isDefaultEnabledMcpServer('docx-mcp-server'),
+    command: 'npx',
+    args: ['-y', 'docx-mcp-server'],
+    env: {},
+    packageSource: 'default',
+    longRunning: true,
+    timeoutSeconds: 120,
+  }
+}
+
 function defaultSystemMcpServers(): McpServerConfig[] {
   return [
     defaultLocalDbServer(),
@@ -147,6 +165,7 @@ function defaultSystemMcpServers(): McpServerConfig[] {
     defaultMemoryPreset(),
     defaultPythonPreset(),
     defaultBraveSearchPreset(),
+    defaultDocxMcpServerPreset(),
   ]
 }
 
@@ -202,6 +221,70 @@ function findDuplicatePreset(
   return undefined
 }
 
+function stripDbConnectionFields(config: McpServerConfig): McpServerConfig {
+  const { dbHost, dbPort, dbUser, dbPassword, dbName, ...rest } = config
+  return rest
+}
+
+function launchArgsPolluted(config: McpServerConfig): boolean {
+  return (config.args ?? []).some(
+    (arg) => arg.includes('server-postgres') || arg.startsWith('postgres://'),
+  )
+}
+
+function mergeSystemMcpServerPreset(system: McpServerConfig, source: McpServerConfig): McpServerConfig {
+  if (isPostgresMcpConfig(system)) {
+    return McpServerConfigSchema.parse({
+      ...system,
+      ...source,
+      id: system.id,
+      type: system.type,
+    })
+  }
+
+  const polluted = launchArgsPolluted(source)
+  const presetMatch = matchOfficialMcpPresetId(source) === system.id
+  const useSourceLaunch =
+    !polluted && presetMatch && Boolean(source.command?.trim()) && (source.args?.length ?? 0) > 0
+
+  let merged: McpServerConfig = {
+    ...system,
+    enabled: source.enabled,
+    env: source.env ?? system.env,
+    description: source.description ?? system.description,
+    name: source.name?.trim() ? source.name : system.name,
+    longRunning: source.longRunning ?? system.longRunning,
+    timeoutSeconds: source.timeoutSeconds ?? system.timeoutSeconds,
+    packageSource: source.packageSource ?? system.packageSource,
+    command: useSourceLaunch ? source.command : system.command,
+    args: useSourceLaunch ? source.args : system.args,
+    id: system.id,
+    type: system.type,
+  }
+
+  if (system.id === 'python') {
+    const args = merged.args ?? []
+    const pythonBroken =
+      args.includes('mcp-server-python') ||
+      launchArgsPolluted(merged) ||
+      merged.command !== 'uvx' ||
+      !args.includes('mcp-python-interpreter')
+    if (pythonBroken) {
+      merged = { ...merged, command: 'uvx', args: ['mcp-python-interpreter'] }
+    }
+  }
+
+  if (system.id === 'docx-mcp-server') {
+    const args = merged.args ?? []
+    const docxBroken = merged.command !== 'npx' || !args.includes('docx-mcp-server')
+    if (docxBroken) {
+      merged = { ...merged, command: 'npx', args: ['-y', 'docx-mcp-server'] }
+    }
+  }
+
+  return McpServerConfigSchema.parse(stripDbConnectionFields(merged))
+}
+
 function mergeWithDefaultServers(items: McpServerConfig[]): McpServerConfig[] {
   const byId = new Map(items.map((item) => [item.id, item]))
   const merged: McpServerConfig[] = []
@@ -220,12 +303,7 @@ function mergeWithDefaultServers(items: McpServerConfig[]): McpServerConfig[] {
       merged.push(system)
     } else if (source) {
       merged.push(
-        McpServerConfigSchema.parse({
-          ...system,
-          ...source,
-          id: system.id,
-          type: system.type,
-        }),
+        McpServerConfigSchema.parse(mergeSystemMcpServerPreset(system, source)),
       )
       if (duplicate) byId.delete(duplicate.id)
     } else {
@@ -235,17 +313,13 @@ function mergeWithDefaultServers(items: McpServerConfig[]): McpServerConfig[] {
   }
 
   for (const custom of byId.values()) {
+    if (custom.id === 'toolman-office') continue
     if (custom.type === 'builtin') continue
     if (isSystemDefaultMcpServer(custom.id)) {
       const fallback = defaultSystemMcpServers().find((server) => server.id === custom.id)
       if (fallback) {
         merged.push(
-          McpServerConfigSchema.parse({
-            ...fallback,
-            ...custom,
-            id: fallback.id,
-            type: fallback.type,
-          }),
+          McpServerConfigSchema.parse(mergeSystemMcpServerPreset(fallback, custom)),
         )
       }
       continue
@@ -260,9 +334,11 @@ function mergeWithDefaultServers(items: McpServerConfig[]): McpServerConfig[] {
 function shouldPersistMergedConfig(before: McpServerConfig[], after: McpServerConfig[]): boolean {
   if (before.length !== after.length) return true
 
-  const beforeIds = new Set(before.map((server) => server.id))
+  const beforeById = new Map(before.map((server) => [server.id, server]))
   for (const server of after) {
-    if (!beforeIds.has(server.id)) return true
+    const prev = beforeById.get(server.id)
+    if (!prev) return true
+    if (JSON.stringify(prev) !== JSON.stringify(server)) return true
   }
 
   return false
@@ -282,6 +358,11 @@ function getServers(): McpServerConfig[] {
 function refreshCache(): McpServerConfig[] {
   cache = loadRaw()
   return cache
+}
+
+/** 启动时合并系统预置 MCP，确保旧配置升级后可见 */
+export function bootstrapMcpPresets(): McpServerConfig[] {
+  return refreshCache()
 }
 
 export function listMcpServers(): McpServerConfig[] {

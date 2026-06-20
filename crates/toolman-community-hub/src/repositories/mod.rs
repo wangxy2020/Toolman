@@ -1,4 +1,5 @@
 pub mod comment_repository;
+pub mod device_blacklist_repository;
 pub mod device_presence_repository;
 pub mod dislike_repository;
 pub mod favorite_repository;
@@ -21,6 +22,9 @@ pub mod version_repository;
 
 pub use comment_repository::{
     CommentListFilter, CommentRepository, CommentRepositoryError, CreateCommentInput,
+};
+pub use device_blacklist_repository::{
+    BanDeviceInput, DeviceBlacklistRecord, DeviceBlacklistRepository, DeviceBlacklistRepositoryError,
 };
 pub use device_presence_repository::{
     DeviceKind, DevicePresenceRecord, DevicePresenceRepository, DevicePresenceRepositoryError,

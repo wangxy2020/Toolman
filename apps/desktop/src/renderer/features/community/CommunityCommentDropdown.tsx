@@ -89,6 +89,7 @@ export function CommunityCommentDropdown({
       const node = event.target as Node
       if (menuRef.current?.contains(node)) return
       if (anchorRef.current?.contains(node)) return
+      if ((event.target as Element).closest?.('.tm-emoji-picker')) return
       onClose()
     }
 

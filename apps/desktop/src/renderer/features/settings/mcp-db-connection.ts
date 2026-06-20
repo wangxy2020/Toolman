@@ -15,6 +15,15 @@ export function isPostgresMcpServer(config: McpServerConfig): boolean {
   return (config.args ?? []).some((arg) => arg.includes('server-postgres'))
 }
 
+export function shouldUsePostgresMcp(config: McpServerConfig): boolean {
+  return config.id === LOCAL_DB_MCP_SERVER_ID || isPostgresMcpServer(config)
+}
+
+export function stripDbConnectionFields(config: McpServerConfig): McpServerConfig {
+  const { dbHost, dbPort, dbUser, dbPassword, dbName, ...rest } = config
+  return rest
+}
+
 export function parsePostgresUrl(url: string): Partial<typeof DEFAULT_POSTGRES_CONNECTION> | null {
   try {
     const parsed = new URL(url)
@@ -67,12 +76,17 @@ export function buildPostgresArgs(config: McpServerConfig): string[] {
 export function withPostgresDefaults(config: McpServerConfig): McpServerConfig {
   if (config.type === 'builtin') return config
 
-  const db = resolveDbConnection(config)
-  const usePostgres =
-    config.id === LOCAL_DB_MCP_SERVER_ID ||
-    isPostgresMcpServer(config) ||
-    Boolean(config.dbHost || config.dbUser || config.dbName || config.dbPassword)
+  if (!shouldUsePostgresMcp(config)) {
+    return {
+      ...stripDbConnectionFields(config),
+      command: config.command?.trim() || 'npx',
+      packageSource: config.packageSource ?? 'default',
+      longRunning: config.longRunning ?? false,
+      timeoutSeconds: config.timeoutSeconds ?? 60,
+    }
+  }
 
+  const db = resolveDbConnection(config)
   return {
     ...config,
     ...db,
@@ -80,7 +94,7 @@ export function withPostgresDefaults(config: McpServerConfig): McpServerConfig {
     packageSource: config.packageSource ?? 'default',
     longRunning: config.longRunning ?? false,
     timeoutSeconds: config.timeoutSeconds ?? 60,
-    args: usePostgres ? buildPostgresArgs({ ...config, ...db }) : config.args,
+    args: buildPostgresArgs({ ...config, ...db }),
   }
 }
 

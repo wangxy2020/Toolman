@@ -48,12 +48,12 @@ export function CommunityListPanelShell({
           {showPublish ? (
             <button
               type="button"
-              className="tm-btn tm-btn--primary"
+              className="tm-community-publish-btn"
               disabled={publishDisabled || !onPublish}
               onClick={onPublish}
             >
-              <IconPlus size={14} />
-              {publishLabel}
+              <IconPlus size={18} />
+              <span>{publishLabel}</span>
             </button>
           ) : null}
           {headerExtra}

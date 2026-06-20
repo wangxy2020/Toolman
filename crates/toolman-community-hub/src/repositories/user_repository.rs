@@ -239,6 +239,47 @@ impl UserRepository {
             .ok_or_else(|| UserRepositoryError::NotFound(id.to_string()))
     }
 
+    pub async fn unban_user(&self, id: &str) -> Result<CommunityUser, UserRepositoryError> {
+        let now = chrono::Utc::now().timestamp_millis();
+        let rows = sqlx::query(
+            r#"
+            UPDATE community_users
+            SET is_banned = 0, banned_until = NULL, updated_at = ?1
+            WHERE id = ?2
+            "#,
+        )
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+
+        if rows == 0 {
+            return Err(UserRepositoryError::NotFound(id.to_string()));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| UserRepositoryError::NotFound(id.to_string()))
+    }
+
+    pub async fn list_banned(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<CommunityUser>, UserRepositoryError> {
+        let now = chrono::Utc::now().timestamp_millis();
+        let query = format!(
+            "{USER_SELECT} WHERE is_banned = 1 AND (banned_until IS NULL OR banned_until > ?1) ORDER BY updated_at DESC LIMIT ?2"
+        );
+        let records = sqlx::query_as::<_, UserRecord>(&query)
+            .bind(now)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?;
+
+        records.into_iter().map(TryInto::try_into).collect()
+    }
+
     pub async fn set_role(
         &self,
         id: &str,

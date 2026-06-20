@@ -11,6 +11,7 @@
     "predev": "pnpm build:p2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dist": "pnpm build && electron-builder --config electron-builder.yml",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "pnpm typecheck",

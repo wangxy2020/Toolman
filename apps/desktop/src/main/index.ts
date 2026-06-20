@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc/handlers'
 import { bootstrapDatabase } from './bootstrap/database'
 import { bootstrapSkills } from './services/skills-facade.service'
+import { bootstrapMcpPresets } from './services/mcp-server-config.service'
 import { bootstrapChannels, shutdownChannels } from './services/im-channel.facade.service'
 import { startHeartbeatScheduler } from './services/heartbeat.service'
 import { disconnectAllMcpServers } from './services/mcp-client-manager.service'
@@ -124,6 +125,7 @@ app.whenReady().then(() => {
   ensureP2pDeviceIdentity()
   bootstrapP2pEventStore()
   bootstrapP2pWorkspaceKeys()
+  bootstrapMcpPresets()
   bootstrapSkills()
   bootstrapChannels()
   registerIpcHandlers()

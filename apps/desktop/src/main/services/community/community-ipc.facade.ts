@@ -24,6 +24,9 @@ import {
   CommunityModerationResourceActionOutputSchema,
   CommunityModerationScanOutputSchema,
   CommunityModerationUserBanInputSchema,
+  CommunityModerationUserUnbanInputSchema,
+  CommunityModerationDeviceBanInputSchema,
+  CommunityModerationDeviceUnbanInputSchema,
   CommunityModeratorListOutputSchema,
   CommunityModeratorUserSchema,
   CommunityUserSearchInputSchema,
@@ -801,6 +804,38 @@ export async function banModerationUser(input: unknown) {
     }),
   )
   return { banned: true }
+}
+
+export async function unbanModerationUser(input: unknown) {
+  const parsed = CommunityModerationUserUnbanInputSchema.parse(input)
+  const client = requireClient()
+  await client.post<unknown>(`/api/v1/moderation/users/${parsed.userId}/unban`, {})
+  return { unbanned: true }
+}
+
+export async function banModerationDevice(input: unknown) {
+  const parsed = CommunityModerationDeviceBanInputSchema.parse(input)
+  const client = requireClient()
+  await client.post<unknown>(
+    `/api/v1/moderation/devices/${encodeURIComponent(parsed.deviceId)}/ban`,
+    toApiJson({
+      userId: parsed.userId,
+      deviceName: parsed.deviceName,
+      durationHours: parsed.durationHours,
+      reason: parsed.reason,
+    }),
+  )
+  return { banned: true }
+}
+
+export async function unbanModerationDevice(input: unknown) {
+  const parsed = CommunityModerationDeviceUnbanInputSchema.parse(input)
+  const client = requireClient()
+  await client.post<unknown>(
+    `/api/v1/moderation/devices/${encodeURIComponent(parsed.deviceId)}/unban`,
+    {},
+  )
+  return { unbanned: true }
 }
 
 export async function listModerationLogs(input: unknown) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { IpcChannel, type ContentBlock, type TranslationLanguage } from '@toolman/shared'
 import {
   IconClear,
@@ -33,6 +33,7 @@ import {
   getSystemVoiceInputHint,
   getSystemVoiceInputTitle,
 } from './system-voice-input'
+import { getLocalFilePaths } from '../knowledge/knowledge-file-paths'
 
 interface Props {
   disabled: boolean
@@ -50,6 +51,8 @@ interface Props {
   onToggleWebSearch?: () => void
   onToggleKb?: () => void
   prefillText?: string | null
+  prefillAttachments?: PendingAttachment[] | null
+  prefillRevision?: number
   onSend: (contentBlocks: ContentBlock[]) => void
   onAbort: () => void
   onError?: (message: string | null) => void
@@ -130,6 +133,8 @@ export function MessageInput({
   onToggleWebSearch,
   onToggleKb,
   prefillText,
+  prefillAttachments,
+  prefillRevision = 0,
   onSend,
   onAbort,
   onError,
@@ -272,6 +277,68 @@ export function MessageInput({
     }
   }
 
+  const stagePathsAsAttachments = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0) return
+
+      if (disabled) {
+        onError?.('请先选择或创建话题并配置模型后再上传文件')
+        return
+      }
+
+      onError?.(null)
+      try {
+        const stageResult = await window.api.invoke(IpcChannel.ChatStageAttachments, { paths })
+        if (!stageResult.ok) {
+          onError?.(stageResult.error.message)
+          return
+        }
+
+        const staged = stageResult.data as {
+          items: Array<{
+            path: string
+            name: string
+            blobHash: string
+            mimeType: string
+            kind: 'file' | 'image'
+          }>
+          errors?: Array<{ path: string; message: string }>
+        }
+
+        if (staged.errors?.length) {
+          onError?.(
+            staged.errors
+              .map((item) => `${item.path.split(/[/\\]/).pop() ?? item.path}：${item.message}`)
+              .join('\n'),
+          )
+        }
+        if (staged.items.length === 0) return
+
+        setPendingAttachments((prev) => {
+          const next = [...prev]
+          const existingPaths = new Set(prev.map((item) => item.path))
+
+          for (const item of staged.items) {
+            if (existingPaths.has(item.path)) continue
+            existingPaths.add(item.path)
+            next.push({
+              path: item.path,
+              name: item.name,
+              blobHash: item.blobHash,
+              mimeType: item.mimeType,
+              kind: item.kind,
+            })
+          }
+
+          return next
+        })
+      } catch (error) {
+        onError?.(error instanceof Error ? error.message : '上传文件失败')
+      }
+    },
+    [disabled, onError],
+  )
+
   const handleUploadFiles = async () => {
     onError?.(null)
     try {
@@ -285,61 +352,28 @@ export function MessageInput({
       }
 
       const { paths } = pickResult.data as { paths: string[] }
-      if (paths.length === 0) return
-
-      if (disabled) {
-        onError?.('请先选择或创建话题并配置模型后再上传文件')
-        return
-      }
-
-      const stageResult = await window.api.invoke(IpcChannel.ChatStageAttachments, { paths })
-      if (!stageResult.ok) {
-        onError?.(stageResult.error.message)
-        return
-      }
-
-      const staged = stageResult.data as {
-        items: Array<{
-          path: string
-          name: string
-          blobHash: string
-          mimeType: string
-          kind: 'file' | 'image'
-        }>
-        errors?: Array<{ path: string; message: string }>
-      }
-
-      if (staged.errors?.length) {
-        onError?.(
-          staged.errors
-            .map((item) => `${item.path.split(/[/\\]/).pop() ?? item.path}：${item.message}`)
-            .join('\n'),
-        )
-      }
-      if (staged.items.length === 0) return
-
-      setPendingAttachments((prev) => {
-        const next = [...prev]
-        const existingPaths = new Set(prev.map((item) => item.path))
-
-        for (const item of staged.items) {
-          if (existingPaths.has(item.path)) continue
-          existingPaths.add(item.path)
-          next.push({
-            path: item.path,
-            name: item.name,
-            blobHash: item.blobHash,
-            mimeType: item.mimeType,
-            kind: item.kind,
-          })
-        }
-
-        return next
-      })
+      await stagePathsAsAttachments(paths)
     } catch (error) {
       onError?.(error instanceof Error ? error.message : '上传文件失败')
     }
   }
+
+  const handleInputDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const handleInputDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!event.dataTransfer.types.includes('Files')) return
+      event.preventDefault()
+      event.stopPropagation()
+      const paths = getLocalFilePaths(event.dataTransfer.files, event.dataTransfer)
+      void stagePathsAsAttachments(paths)
+    },
+    [stagePathsAsAttachments],
+  )
 
   const runSlashCommand = useCallback(
     (item: SlashCommandItem) => {
@@ -456,6 +490,12 @@ export function MessageInput({
     textareaRef.current?.focus()
   }, [prefillText])
 
+  useEffect(() => {
+    if (!prefillAttachments?.length) return
+    setPendingAttachments(prefillAttachments)
+    textareaRef.current?.focus()
+  }, [prefillAttachments, prefillRevision])
+
   const placeholder = disabled
     ? toolbarMode === 'group'
       ? '只读成员无法发送消息'
@@ -468,7 +508,11 @@ export function MessageInput({
 
   return (
     <div className="tm-input-area">
-      <div className="tm-input-box">
+      <div
+        className="tm-input-box"
+        onDragOver={handleInputDragOver}
+        onDrop={handleInputDrop}
+      >
         <div className="tm-input-toolbar">
           {toolbarMode === 'agent' ? (
             <button

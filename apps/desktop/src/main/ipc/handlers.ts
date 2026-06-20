@@ -29,6 +29,7 @@ import {
   deleteKnowledgeFiles,
   getStorageStats,
   openPathInShell,
+  revealPathInShell,
   resetAppData,
   restoreAppData,
 } from '../services/app-storage.service'
@@ -195,6 +196,14 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcErr({ code: 'VALIDATION_ERROR', message: 'path is required', retryable: false })
     }
     return ipcOk(await openPathInShell(path))
+  },
+
+  [IpcChannel.AppShellRevealPath]: async (input) => {
+    const { path } = (input as { path: string }) ?? {}
+    if (!path) {
+      return ipcErr({ code: 'VALIDATION_ERROR', message: 'path is required', retryable: false })
+    }
+    return ipcOk(revealPathInShell(path))
   },
 
   [IpcChannel.AppGetStorageStats]: async () => ipcOk(getStorageStats()),

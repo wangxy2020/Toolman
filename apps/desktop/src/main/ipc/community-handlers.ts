@@ -10,6 +10,9 @@ import {
   approveModerationResource,
   appointCommunityAdmin,
   banModerationUser,
+  banModerationDevice,
+  unbanModerationUser,
+  unbanModerationDevice,
   cancelTask,
   completeInstall,
   createModerationReport,
@@ -219,6 +222,11 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     approveModerationResource(input),
   ),
   [IpcChannel.CommunityModerationUserBan]: communityHandler((input) => banModerationUser(input)),
+  [IpcChannel.CommunityModerationUserUnban]: communityHandler((input) => unbanModerationUser(input)),
+  [IpcChannel.CommunityModerationDeviceBan]: communityHandler((input) => banModerationDevice(input)),
+  [IpcChannel.CommunityModerationDeviceUnban]: communityHandler((input) =>
+    unbanModerationDevice(input),
+  ),
   [IpcChannel.CommunityModerationLogsList]: communityHandler((input) => listModerationLogs(input)),
   [IpcChannel.CommunityModerationScan]: communityHandler(() => scanModerationOnline()),
   [IpcChannel.CommunityPresenceHeartbeat]: communityHandler(() =>

@@ -7,6 +7,7 @@ import { ToolCallCard } from './ToolCallCard'
 import { StreamingPlaceholder } from './StreamingPlaceholder'
 import { ThinkingBlock } from './ThinkingBlock'
 import { KnowledgeSourcesBlock } from './KnowledgeSourcesBlock'
+import { LocalFileLinksBlock } from './LocalFileLinksBlock'
 import { hasStructuredBlocks } from './apply-stream-delta'
 import { getBlocksText, orderContentBlocks } from './message-utils'
 import { useThinkingMetrics } from './useThinkingMetrics'
@@ -26,7 +27,8 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
     orderedBlocks,
   )
   const hasVisibleContent =
-    text.trim().length > 0 || orderedBlocks.some((block) => block.type === 'image')
+    text.trim().length > 0 ||
+    orderedBlocks.some((block) => block.type === 'image' || block.type === 'local_file_links')
 
   if (!structured && !hasVisibleContent) {
     if (streaming) return <StreamingPlaceholder />
@@ -93,6 +95,16 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
                 key={`md-${index}`}
                 text={block.text}
                 settings={settings}
+                sanitizeAssistant
+              />
+            )
+          }
+
+          if (block.type === 'local_file_links') {
+            return (
+              <LocalFileLinksBlock
+                key={`local-file-links-${index}`}
+                paths={block.paths}
               />
             )
           }
@@ -130,6 +142,7 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
             key={`md-${index}`}
             text={segment.text}
             settings={settings}
+            sanitizeAssistant
           />
         )
       })}

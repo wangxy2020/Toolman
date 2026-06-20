@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import {
   type CommunityModerationReport,
   type CommunityModerationReportResolveInput,
+  type CommunityModerationScanDevice,
 } from '@toolman/shared'
 
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -15,7 +16,6 @@ import {
   MODERATION_TARGET_TYPE_LABELS,
   type ModerationTab,
 } from './community-moderation-utils'
-import { formatNewsPreview } from './community-news-utils'
 import {
   isCommunityFounder,
   isCommunityModerator,
@@ -42,6 +42,13 @@ type PendingAction =
       action: CommunityModerationReportResolveInput['action']
     }
   | {
+      kind: 'ban-device'
+      deviceId: string
+      userId: string
+      deviceName: string
+      userName: string
+    }
+  | {
       kind: 'delete-message'
       messageId: string
       preview: string
@@ -66,6 +73,32 @@ type PendingAction =
       userId: string
       label: string
     }
+  | {
+      kind: 'unban-user'
+      userId: string
+      label: string
+    }
+  | {
+      kind: 'unban-device'
+      deviceId: string
+      label: string
+    }
+
+type BlacklistEntry =
+  | {
+      kind: 'user'
+      key: string
+      userName: string
+      deviceId: string
+      userId: string
+    }
+  | {
+      kind: 'device'
+      key: string
+      userName: string
+      deviceId: string
+      deviceRecordId: string
+    }
 
 export function AdminModerationPanel() {
   const user = useCommunityUser()
@@ -77,7 +110,7 @@ export function AdminModerationPanel() {
     canManage: isFounder,
   })
   const tabs = useMemo<ModerationTab[]>(() => {
-    const base: ModerationTab[] = ['reports', 'resources', 'pending', 'messages', 'tasks']
+    const base: ModerationTab[] = ['reports', 'resources', 'pending', 'blacklist', 'devices', 'tasks']
     if (isModerator) base.push('adminList')
     if (isFounder) base.push('adminAppoint')
     base.push('logs')
@@ -86,8 +119,61 @@ export function AdminModerationPanel() {
   const [tab, setTab] = useState<ModerationTab>('reports')
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [adminSearch, setAdminSearch] = useState('')
+  const [deviceSearch, setDeviceSearch] = useState('')
 
   const scan = moderation.scan
+
+  const blacklistCount = useMemo(() => {
+    if (!scan) return 0
+    return scan.bannedUsers.length + scan.bannedDevices.length
+  }, [scan])
+
+  const blacklistEntries = useMemo<BlacklistEntry[]>(() => {
+    if (!scan) return []
+
+    const users: BlacklistEntry[] = scan.bannedUsers.map((entry) => ({
+      kind: 'user',
+      key: `user-${entry.userId}`,
+      userName: entry.displayName,
+      deviceId: '—',
+      userId: entry.userId,
+    }))
+
+    const devices: BlacklistEntry[] = scan.bannedDevices.map((entry) => ({
+      kind: 'device',
+      key: `device-${entry.deviceId}`,
+      userName: entry.userName,
+      deviceId: entry.deviceId,
+      deviceRecordId: entry.deviceId,
+    }))
+
+    return [...users, ...devices]
+  }, [scan])
+
+  const onlineDevices = useMemo<CommunityModerationScanDevice[]>(() => {
+    if (!scan) return []
+    return [...scan.onlineDesktopDevices, ...scan.onlineMobileDevices].sort(
+      (a, b) => b.lastSeenAt - a.lastSeenAt,
+    )
+  }, [scan])
+
+  const filteredOnlineDevices = useMemo(() => {
+    const query = deviceSearch.trim().toLowerCase()
+    if (!query) return onlineDevices
+
+    return onlineDevices.filter((device) => {
+      const haystack = [
+        device.deviceName,
+        device.userName,
+        device.deviceId,
+        device.userId,
+        device.deviceKind === 'mobile' ? '移动端' : '桌面端',
+      ]
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [deviceSearch, onlineDevices])
 
   const scannedAtLabel = useMemo(() => {
     if (!scan) return '尚未扫描'
@@ -123,6 +209,15 @@ export function AdminModerationPanel() {
         case 'ban-user':
           await moderation.banUser(pending.userId, '管理员封禁恶意用户', 168)
           break
+        case 'ban-device':
+          await moderation.banDevice({
+            deviceId: pending.deviceId,
+            userId: pending.userId,
+            deviceName: pending.deviceName,
+            reason: '管理员封禁设备',
+            durationHours: 168,
+          })
+          break
         case 'resolve-report':
           await moderation.resolveReport(pending.report.id, pending.action, '管理员处理举报')
           break
@@ -140,6 +235,12 @@ export function AdminModerationPanel() {
           break
         case 'revoke-admin':
           await adminManagement.revokeAdmin(pending.userId)
+          break
+        case 'unban-user':
+          await moderation.unbanUser(pending.userId)
+          break
+        case 'unban-device':
+          await moderation.unbanDevice(pending.deviceId)
           break
       }
       setPending(null)
@@ -189,7 +290,7 @@ export function AdminModerationPanel() {
         <div className="tm-community-moderation-stats">
           <ModerationStat value={scan.pendingReviewCount} label="待审核" />
           <ModerationStat value={scan.openReportCount} label="待处理举报" />
-          <ModerationStat value={scan.boardMessageCount} label="留言" />
+          <ModerationStat value={blacklistCount} label="黑名单" />
           <ModerationStat value={scan.onlineKnowledgeCount} label="知识库资源" />
           <ModerationStat value={scan.onlineMcpCount} label="MCP资源" />
           <ModerationStat value={scan.onlineSkillCount} label="Skills资源" />
@@ -370,20 +471,84 @@ export function AdminModerationPanel() {
           />
         ) : null}
 
-        {tab === 'messages' ? (
-          <ModerationList
-            empty="暂无留言"
-            items={scan?.recentMessages ?? []}
-            renderItem={(message) => (
-              <div key={message.id} className="tm-community-moderation-row">
-                <div className="tm-community-moderation-row-main">
-                  <div className="tm-community-moderation-row-title">{message.authorName}</div>
-                  <div className="tm-community-moderation-row-meta">
-                    {formatCommunityDate(message.createdAt)}
+        {tab === 'blacklist' ? (
+          blacklistEntries.length === 0 ? (
+            <div className="tm-community-moderation-empty">暂无黑名单记录</div>
+          ) : (
+            <div className="tm-community-moderation-table-wrap">
+              <div className="tm-community-moderation-table-head">
+                <span>序号</span>
+                <span>用户名</span>
+                <span>设备 ID</span>
+                <span>操作</span>
+              </div>
+              <div className="tm-community-moderation-table-body">
+                {blacklistEntries.map((entry, index) => (
+                  <div key={entry.key} className="tm-community-moderation-table-row">
+                    <span className="tm-community-moderation-table-index">{index + 1}</span>
+                    <span className="tm-community-moderation-table-user" title={entry.userName}>
+                      {entry.userName}
+                    </span>
+                    <span
+                      className="tm-community-moderation-table-device"
+                      title={entry.deviceId}
+                    >
+                      {entry.deviceId}
+                    </span>
+                    <div className="tm-community-moderation-table-actions">
+                      <button
+                        type="button"
+                        className="tm-btn tm-btn--ghost"
+                        disabled={moderation.acting}
+                        onClick={() =>
+                          setPending(
+                            entry.kind === 'user'
+                              ? {
+                                  kind: 'unban-user',
+                                  userId: entry.userId,
+                                  label: entry.userName,
+                                }
+                              : {
+                                  kind: 'unban-device',
+                                  deviceId: entry.deviceRecordId,
+                                  label: entry.deviceId,
+                                },
+                          )
+                        }
+                      >
+                        解禁
+                      </button>
+                    </div>
                   </div>
-                  <p className="tm-community-moderation-row-desc">
-                    {formatNewsPreview(message.body)}
-                  </p>
+                ))}
+              </div>
+            </div>
+          )
+        ) : null}
+
+        {tab === 'devices' ? (
+          <div className="tm-community-moderation-devices">
+            <div className="tm-community-moderation-admin-search">
+              <input
+                type="search"
+                className="tm-community-moderation-admin-search-input"
+                placeholder="搜索设备名称、设备 ID 或用户名"
+                value={deviceSearch}
+                onChange={(event) => setDeviceSearch(event.target.value)}
+              />
+            </div>
+            <ModerationList
+              empty={deviceSearch.trim() ? '未找到匹配设备或用户' : '暂无在线设备'}
+              items={filteredOnlineDevices}
+              renderItem={(device) => (
+              <div key={device.deviceId} className="tm-community-moderation-row">
+                <div className="tm-community-moderation-row-main">
+                  <div className="tm-community-moderation-row-title">{device.deviceName}</div>
+                  <div className="tm-community-moderation-row-meta">
+                    {device.deviceKind === 'mobile' ? '移动端' : '桌面端'} · {device.userName} ·{' '}
+                    最近活跃 {formatCommunityDate(device.lastSeenAt)}
+                  </div>
+                  <div className="tm-community-moderation-row-desc">设备 ID：{device.deviceId}</div>
                 </div>
                 <div className="tm-community-moderation-row-actions">
                   <button
@@ -392,32 +557,21 @@ export function AdminModerationPanel() {
                     disabled={moderation.acting}
                     onClick={() =>
                       setPending({
-                        kind: 'delete-message',
-                        messageId: message.id,
-                        preview: formatNewsPreview(message.body),
+                        kind: 'ban-device',
+                        deviceId: device.deviceId,
+                        userId: device.userId,
+                        deviceName: device.deviceName,
+                        userName: device.userName,
                       })
                     }
                   >
-                    删除
-                  </button>
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
-                    disabled={moderation.acting}
-                    onClick={() =>
-                      setPending({
-                        kind: 'ban-user',
-                        userId: message.userId,
-                        label: message.authorName,
-                      })
-                    }
-                  >
-                    封禁用户
+                    封禁设备
                   </button>
                 </div>
               </div>
             )}
           />
+          </div>
         ) : null}
 
         {tab === 'tasks' ? (
@@ -642,6 +796,17 @@ function buildConfirmDialog(
           onConfirm={() => void onConfirm()}
         />
       )
+    case 'ban-device':
+      return (
+        <ConfirmDialog
+          title="封禁设备"
+          message={`确定封禁设备「${pending.deviceName}」（${pending.userName}）7 天吗？该设备将无法继续上报在线状态。`}
+          confirmLabel="封禁"
+          danger
+          onCancel={onCancel}
+          onConfirm={() => void onConfirm()}
+        />
+      )
     case 'resolve-report':
       return (
         <ConfirmDialog
@@ -702,6 +867,26 @@ function buildConfirmDialog(
           message={`确定撤销「${pending.label}」的管理员权限吗？`}
           confirmLabel="撤销"
           danger
+          onCancel={onCancel}
+          onConfirm={() => void onConfirm()}
+        />
+      )
+    case 'unban-user':
+      return (
+        <ConfirmDialog
+          title="解禁用户"
+          message={`确定解除用户「${pending.label}」的封禁吗？`}
+          confirmLabel="解禁"
+          onCancel={onCancel}
+          onConfirm={() => void onConfirm()}
+        />
+      )
+    case 'unban-device':
+      return (
+        <ConfirmDialog
+          title="解禁设备"
+          message={`确定解除设备「${pending.label}」的封禁吗？`}
+          confirmLabel="解禁"
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
         />

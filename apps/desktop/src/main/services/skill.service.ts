@@ -13,6 +13,7 @@ import { app } from 'electron'
 import {
   BUILTIN_SKILLS,
   BUILTIN_SKILL_IDS,
+  REMOVED_SKILL_IDS,
   SkillDeleteInputSchema,
   SkillInfoSchema,
   SkillInstallInputSchema,
@@ -21,9 +22,9 @@ import {
 
 const SKILL_FILE = 'SKILL.md'
 
-const BUILTIN_SKILL_CONTENT: Record<(typeof BUILTIN_SKILL_IDS)[number], string> = {
+const BUILTIN_SKILL_CONTENT: Record<'find-skills' | 'skill-creator', string> = {
   'find-skills': `---
-name: 发现技能
+name: Find Skills
 description: 当用户询问「怎么做 X」「有没有能做 X 的技能」或想扩展智能体能力时，帮助发现并安装合适的技能。
 ---
 
@@ -37,7 +38,7 @@ description: 当用户询问「怎么做 X」「有没有能做 X 的技能」�
 4. 说明该技能能做什么，以及用户如何在 Toolman 设置中安装或启用。
 `,
   'skill-creator': `---
-name: 技能创建器
+name: Skill Creator
 description: 创建新技能、修改并改进现有技能。适用于用户想从零编写技能、编辑或更新已有技能的场景。
 ---
 
@@ -66,6 +67,33 @@ description: 何时使用本技能（第三人称，包含触发短语）。
 智能体按步骤执行的说明...
 \`\`\`
 `,
+}
+
+function resolveBuiltinSkillMarkdownPath(skillId: string): string | null {
+  const candidates = [
+    join(process.cwd(), 'skills', skillId, SKILL_FILE),
+    join(process.cwd(), '..', '..', 'skills', skillId, SKILL_FILE),
+    join(__dirname, '..', '..', '..', '..', '..', 'skills', skillId, SKILL_FILE),
+    join(__dirname, '..', '..', '..', '..', '..', '..', 'skills', skillId, SKILL_FILE),
+  ]
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+function getBuiltinSkillMarkdown(skillId: string): string {
+  const fromRepo = resolveBuiltinSkillMarkdownPath(skillId)
+  if (fromRepo) {
+    return readFileSync(fromRepo, 'utf8')
+  }
+  const embedded =
+    BUILTIN_SKILL_CONTENT[skillId as keyof typeof BUILTIN_SKILL_CONTENT]
+  if (embedded) {
+    return embedded
+  }
+  throw new Error(`Missing builtin skill content: ${skillId}`)
 }
 
 function skillsRoot(): string {
@@ -112,6 +140,22 @@ function readSkillFile(skillDir: string): { meta: Record<string, string>; body: 
   }
 }
 
+const REMOVED_SKILL_ID_SET = new Set<string>(REMOVED_SKILL_IDS)
+
+function isRemovedSkillId(id: string): boolean {
+  return REMOVED_SKILL_ID_SET.has(id)
+}
+
+function purgeRemovedSkillDirectories(): void {
+  const root = skillsRoot()
+  for (const skillId of REMOVED_SKILL_IDS) {
+    const dir = join(root, skillId)
+    if (existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+}
+
 function isBuiltinSkillId(id: string): boolean {
   return (BUILTIN_SKILL_IDS as readonly string[]).includes(id)
 }
@@ -139,11 +183,12 @@ function buildSkillInfo(id: string, skillDir: string): SkillInfo | null {
 
 export function ensureBuiltinSkills(): void {
   const root = skillsRoot()
+  purgeRemovedSkillDirectories()
   for (const skill of BUILTIN_SKILLS) {
     const dir = join(root, skill.id)
     const skillPath = join(dir, SKILL_FILE)
     mkdirSync(dir, { recursive: true })
-    writeFileSync(skillPath, BUILTIN_SKILL_CONTENT[skill.id], 'utf8')
+    writeFileSync(skillPath, getBuiltinSkillMarkdown(skill.id), 'utf8')
   }
 }
 
@@ -154,6 +199,7 @@ export function listSkills(): SkillInfo[] {
 
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
+    if (isRemovedSkillId(entry.name)) continue
     const info = buildSkillInfo(entry.name, join(root, entry.name))
     if (info) items.push(info)
   }
@@ -162,6 +208,7 @@ export function listSkills(): SkillInfo[] {
 }
 
 export function getSkillContent(skillId: string): string | null {
+  if (isRemovedSkillId(skillId)) return null
   ensureBuiltinSkills()
   const skillDir = join(skillsRoot(), skillId)
   const parsed = readSkillFile(skillDir)
@@ -170,6 +217,7 @@ export function getSkillContent(skillId: string): string | null {
 }
 
 export function getSkillInfo(skillId: string): SkillInfo | null {
+  if (isRemovedSkillId(skillId)) return null
   ensureBuiltinSkills()
   const skillDir = join(skillsRoot(), skillId)
   if (!existsSync(skillDir)) return null
@@ -228,5 +276,5 @@ export function deleteSkill(input: unknown): boolean {
 
 export function filterEnabledSkillIds(skillIds: string[]): string[] {
   const known = new Set(listSkills().map((skill) => skill.id))
-  return skillIds.filter((id) => known.has(id))
+  return skillIds.filter((id) => known.has(id) && !isRemovedSkillId(id))
 }

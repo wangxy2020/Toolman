@@ -21,7 +21,7 @@ export const SETTINGS_NAV_GROUPS: { id: SettingsSectionId; label: string }[][] =
     { id: 'data', label: '数据设置' },
   ],
   [
-    { id: 'mcp', label: 'MCP服务器' },
+    { id: 'mcp', label: 'MCP' },
     { id: 'skills', label: '技能' },
     { id: 'web-search', label: '网络搜索' },
     { id: 'memory', label: '记忆' },

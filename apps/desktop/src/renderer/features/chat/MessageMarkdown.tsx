@@ -12,6 +12,8 @@ import {
   MarkdownTableHeaderCell,
   MarkdownTableRow,
 } from './md-table-alignment'
+import { LocalFilePathLink } from './LocalFilePathLink'
+import { LOCAL_FILE_LINK_SCHEME, sanitizeAssistantMarkdown } from './sanitize-assistant-markdown'
 import type { CodeStyle, MessageSettings } from './message-settings'
 import 'katex/dist/katex.min.css'
 
@@ -23,6 +25,46 @@ const CODE_THEME_PATHS: Record<Exclude<CodeStyle, 'auto'>, () => Promise<unknown
 
 function resolveCodeStyle(codeStyle: CodeStyle): Exclude<CodeStyle, 'auto'> {
   return codeStyle === 'auto' ? 'github' : codeStyle
+}
+
+function resolveLocalDocxPath(href: string): string | null {
+  if (href.startsWith(LOCAL_FILE_LINK_SCHEME)) {
+    try {
+      return decodeURIComponent(href.slice(LOCAL_FILE_LINK_SCHEME.length))
+    } catch {
+      return href.slice(LOCAL_FILE_LINK_SCHEME.length)
+    }
+  }
+
+  if (href.startsWith('file://')) {
+    try {
+      return decodeURI(href.replace(/^file:\/\//i, ''))
+    } catch {
+      return null
+    }
+  }
+
+  const localhostMatch = href.match(
+    /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/(.+\.docx(?:[?#].*)?)$/i,
+  )
+  if (localhostMatch) {
+    try {
+      return decodeURIComponent(localhostMatch[1].replace(/[?#].*$/, ''))
+    } catch {
+      return localhostMatch[1].replace(/[?#].*$/, '')
+    }
+  }
+
+  let decoded = href
+  try {
+    decoded = decodeURIComponent(href)
+  } catch {
+    decoded = href
+  }
+
+  if (/^\/[^?\#]*\.docx$/i.test(decoded)) return decoded
+  if (/^[A-Za-z]:\\[^?\#]*\.docx$/i.test(decoded)) return decoded
+  return null
 }
 
 function CodeBlock({
@@ -90,11 +132,16 @@ function CodeBlock({
 interface Props {
   text: string
   settings: MessageSettings
+  sanitizeAssistant?: boolean
 }
 
-export function MessageMarkdown({ text, settings }: Props) {
+export function MessageMarkdown({ text, settings, sanitizeAssistant = false }: Props) {
   const [themeReady, setThemeReady] = useState(false)
   const codeStyle = resolveCodeStyle(settings.codeStyle)
+  const renderedText = useMemo(
+    () => (sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text),
+    [sanitizeAssistant, text],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -150,6 +197,17 @@ export function MessageMarkdown({ text, settings }: Props) {
         )
       },
       a({ href, children, ...props }) {
+        if (href) {
+          const localPath = resolveLocalDocxPath(href)
+          if (localPath) {
+            return <LocalFilePathLink path={localPath} action="open" />
+          }
+
+          if (/\.docx(?:[?#]|$)/i.test(href)) {
+            return <span className="tm-md-docx-filename">{children}</span>
+          }
+        }
+
         return (
           <a href={href} target="_blank" rel="noreferrer noopener" {...props}>
             {children}
@@ -186,7 +244,7 @@ export function MessageMarkdown({ text, settings }: Props) {
     ],
   )
 
-  if (!text.trim()) return null
+  if (!renderedText.trim()) return null
 
   return (
     <div
@@ -200,7 +258,7 @@ export function MessageMarkdown({ text, settings }: Props) {
         .join(' ')}
     >
       <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-        {text}
+        {renderedText}
       </ReactMarkdown>
     </div>
   )

@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { IpcChannel, type Assistant, type ContentBlock, type Message, type MessageStreamEvent, type Provider } from '@toolman/shared'
-import { contentBlocksHaveAttachments } from './chat-attachments'
+import { IpcChannel, type Assistant, type ContentBlock, type Message, type MessageStreamEvent, type Provider, resolveMcpServerIdsForSkills, shouldEnableToolsWithAttachments } from '@toolman/shared'
 import { getBlocksText } from './message-utils'
 import { applyStreamEventWithPendingQueue, flushPendingStreamEvents } from './stream-message-sync'
-import { getDefaultMcpServerIds } from './agent-settings-constants'
+import { getDefaultMcpServerIds, getDefaultSkillIds } from './agent-settings-constants'
 import { useSessionManager } from './useSessionManager'
 import { normalizeModelIds } from './model-utils'
 import type { AppSettings } from '../settings/app-settings'
+
+function getAssistantMcpServerIds(assistant?: Assistant | null): string[] {
+  const skillIds = assistant?.parameters.skillIds ?? getDefaultSkillIds()
+  const baseMcpServerIds = assistant?.parameters.mcpServerIds?.length
+    ? assistant.parameters.mcpServerIds
+    : getDefaultMcpServerIds()
+  return resolveMcpServerIdsForSkills(skillIds, baseMcpServerIds)
+}
+
+function resolveChatEnableTools(
+  mcpServerIds: string[],
+  _skillIds: string[],
+  contentBlocks: ContentBlock[],
+  override?: boolean,
+): boolean {
+  if (override === false) return false
+  if (override === true) return true
+  return shouldEnableToolsWithAttachments(mcpServerIds, contentBlocks)
+}
 
 export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
   const session = useSessionManager(workspaceId, {
@@ -195,13 +213,15 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         return assistants.find((assistant) => assistant.isPinned) ?? assistants[0] ?? null
       })()
 
-      const mcpServerIds = activeAssistant?.parameters.mcpServerIds?.length
-        ? activeAssistant.parameters.mcpServerIds
-        : getDefaultMcpServerIds()
+      const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
+      const skillIds = activeAssistant?.parameters.skillIds ?? getDefaultSkillIds()
 
-      const hasAttachments = contentBlocksHaveAttachments(contentBlocks)
-      const enableTools =
-        options?.enableTools ?? (mcpServerIds.length > 0 && !hasAttachments)
+      const enableTools = resolveChatEnableTools(
+        mcpServerIds,
+        skillIds,
+        contentBlocks,
+        options?.enableTools,
+      )
 
       const tempUserId = crypto.randomUUID() as Message['id']
       const tempAssistantIds = selectedModelIds.map(
@@ -450,14 +470,15 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         return assistants.find((assistant) => assistant.isPinned) ?? assistants[0] ?? null
       })()
 
-      const mcpServerIds = activeAssistant?.parameters.mcpServerIds?.length
-        ? activeAssistant.parameters.mcpServerIds
-        : getDefaultMcpServerIds()
-
-      const hasAttachments = contentBlocks ? contentBlocksHaveAttachments(contentBlocks) : false
+      const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
+      const skillIds = activeAssistant?.parameters.skillIds ?? getDefaultSkillIds()
 
       return {
-        enableTools: mcpServerIds.length > 0 && !hasAttachments,
+        enableTools: resolveChatEnableTools(
+          mcpServerIds,
+          skillIds,
+          contentBlocks ?? [],
+        ),
         webSearchEnabled: appSettings?.webSearchEnabled,
         webSearchProvider: appSettings?.webSearchProvider,
         kbEnabled: appSettings?.kbEnabled,

@@ -1,5 +1,8 @@
 [workspace]
-members = ["crates/toolman-p2p", "crates/toolman-community-hub"]
+members = [
+    "crates/toolman-p2p",
+    "crates/toolman-community-hub",
+]
 resolver = "2"
 
 [profile.release]

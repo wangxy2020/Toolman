@@ -78,9 +78,18 @@ export function CommunityCommentInput({
     void onSubmit()
   }, [disabled, onSubmit, submitting, value])
 
+  const canSend = value.trim().length > 0
+
   return (
     <div className="tm-community-comment-input-area">
-      <div className="tm-community-comment-input-box">
+      <div
+        className={[
+          'tm-community-comment-input-box',
+          canSend ? 'tm-community-comment-input-box--ready' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         <div className="tm-community-comment-input-toolbar-top">
           <span className="tm-community-comment-input-tool-anchor" ref={emojiAnchorRef}>
             <button
@@ -144,10 +153,15 @@ export function CommunityCommentInput({
           </button>
           <button
             type="button"
-            className="tm-community-comment-input-send"
+            className={[
+              'tm-community-comment-input-send',
+              canSend ? 'tm-community-comment-input-send--ready' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             title="发送"
             aria-label="发送评论"
-            disabled={disabled || submitting || !value.trim()}
+            disabled={disabled || submitting || !canSend}
             onClick={() => void handleSubmit()}
           >
             <IconSend size={16} />

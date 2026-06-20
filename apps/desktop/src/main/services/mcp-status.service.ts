@@ -221,6 +221,12 @@ export function buildToolSystemHint(context: ToolExecutionContext, mcpServerIds:
     hints.push('Hub MCP 提供 hub_list/hub_invoke，可统一发现并调用其他 MCP 工具。')
   }
 
+  if (mcpServerIds.includes('docx-mcp-server')) {
+    hints.push(
+      'DOCX MCP Server（docx-mcp-server）：Word 任务走结构化审查流水线（审查 prompt → issue JSON → add_comments/replace_text 批量写入修订版）。',
+    )
+  }
+
   if (mcpServerIds.includes('github')) {
     const env = parseEnvironmentVariables(context.environmentVariables)
     if (!env.GITHUB_TOKEN && !env.GH_TOKEN && !process.env.GITHUB_TOKEN) {

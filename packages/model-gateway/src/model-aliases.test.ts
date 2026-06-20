@@ -5,7 +5,9 @@ import {
   normalizeDeepSeekModelKey,
   providerSupportsOpenAiVision,
   resolveDeepSeekChatOptions,
+  resolveOllamaExtraBody,
   resolveOpenAiModelName,
+  shouldRouteThinkingAsAnswer,
 } from './model-aliases.js'
 
 describe('normalizeDeepSeekModelKey', () => {
@@ -71,5 +73,30 @@ describe('providerSupportsOpenAiVision', () => {
         'deepseek-v4-flash',
       ),
     ).toBe(false)
+  })
+})
+
+describe('resolveOllamaExtraBody', () => {
+  it('disables think mode for glm-ocr models', () => {
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'glm-ocr:latest'),
+    ).toEqual({ think: false })
+  })
+
+  it('leaves other ollama models unchanged', () => {
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'gemma4:26b'),
+    ).toBeUndefined()
+  })
+})
+
+describe('shouldRouteThinkingAsAnswer', () => {
+  it('routes glm-ocr thinking tokens to answer text', () => {
+    expect(
+      shouldRouteThinkingAsAnswer(
+        { type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' },
+        'glm-ocr:0.9b',
+      ),
+    ).toBe(true)
   })
 })

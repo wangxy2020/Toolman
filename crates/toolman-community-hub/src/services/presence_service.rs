@@ -4,7 +4,7 @@ use crate::domain::CommunityUser;
 use crate::repositories::device_presence_repository::{
     DeviceKind, DevicePresenceRecord, DevicePresenceRepository, UpsertDevicePresenceInput,
 };
-use crate::repositories::UserRepository;
+use crate::repositories::{DeviceBlacklistRepository, UserRepository};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DevicePresenceItem {
@@ -22,12 +22,16 @@ pub enum PresenceServiceError {
     MissingDeviceId,
     #[error("device name is required")]
     MissingDeviceName,
+    #[error("device is banned")]
+    DeviceBanned,
     #[error("{0}")]
     InvalidDeviceKind(String),
     #[error("user repository error: {0}")]
     UserRepository(#[from] crate::repositories::UserRepositoryError),
     #[error("device presence repository error: {0}")]
     DevicePresence(#[from] crate::repositories::DevicePresenceRepositoryError),
+    #[error("device blacklist repository error: {0}")]
+    DeviceBlacklist(#[from] crate::repositories::DeviceBlacklistRepositoryError),
 }
 
 pub struct PresenceService {
@@ -57,6 +61,14 @@ impl PresenceService {
 
         let device_kind = DeviceKind::parse(device_kind)
             .map_err(PresenceServiceError::InvalidDeviceKind)?;
+
+        let now = chrono::Utc::now().timestamp_millis();
+        if DeviceBlacklistRepository::new(self.pool.clone())
+            .is_active_ban(device_id, now)
+            .await?
+        {
+            return Err(PresenceServiceError::DeviceBanned);
+        }
 
         let record = DevicePresenceRepository::new(self.pool.clone())
             .upsert_heartbeat(UpsertDevicePresenceInput {

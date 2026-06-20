@@ -9,7 +9,35 @@ export type ParsedToolResult =
   | { type: 'fs_list'; entries: FsListEntry[] }
   | { type: 'glob'; summary: string; truncated: boolean; paths: string[] }
   | { type: 'line_list'; lines: string[] }
+  | { type: 'docx_file'; paths: string[]; lead?: string }
   | { type: 'text' }
+
+const DOCX_MCP_TOOLS = new Set([
+  'read_document',
+  'get_document_info',
+  'search_text',
+  'replace_text',
+  'edit_paragraph',
+  'edit_paragraphs',
+  'insert_paragraph',
+  'delete_paragraph',
+  'add_comment',
+  'add_comments',
+  'create_document',
+])
+
+const DOCX_PATH_KEYS = new Set([
+  'path',
+  'filePath',
+  'file_path',
+  'outputPath',
+  'output_path',
+  'savedPath',
+  'saved_path',
+  'file',
+  'documentPath',
+  'document_path',
+])
 
 function parseFsList(text: string): ParsedToolResult {
   const entries: FsListEntry[] = []
@@ -58,6 +86,69 @@ function parseLineList(text: string): ParsedToolResult | null {
   return { type: 'line_list', lines }
 }
 
+function isAbsoluteDocxPath(value: string): boolean {
+  const trimmed = value.trim()
+  if (!/\.docx$/i.test(trimmed)) return false
+  return trimmed.startsWith('/') || /^[A-Za-z]:[\\/]/.test(trimmed)
+}
+
+function collectDocxPathsFromValue(value: unknown, paths: Set<string>): void {
+  if (typeof value === 'string') {
+    if (isAbsoluteDocxPath(value)) paths.add(value.trim())
+    return
+  }
+
+  if (!value || typeof value !== 'object') return
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectDocxPathsFromValue(item, paths)
+    return
+  }
+
+  for (const [key, nested] of Object.entries(value)) {
+    if (DOCX_PATH_KEYS.has(key) && typeof nested === 'string' && isAbsoluteDocxPath(nested)) {
+      paths.add(nested.trim())
+      continue
+    }
+    collectDocxPathsFromValue(nested, paths)
+  }
+}
+
+function extractDocxPaths(text: string): string[] {
+  const paths = new Set<string>()
+
+  try {
+    collectDocxPathsFromValue(JSON.parse(text), paths)
+  } catch {
+    // Plain text tool output.
+  }
+
+  for (const match of text.matchAll(
+    /(?:^|\s|"|'|`|：)(\/[^\s"'`\n]+\.docx|[A-Za-z]:\\[^\s"'`\n]+\.docx)/gi,
+  )) {
+    const candidate = match[1]?.trim()
+    if (candidate && isAbsoluteDocxPath(candidate)) paths.add(candidate)
+  }
+
+  return [...paths]
+}
+
+function isDocxMcpTool(toolName: string, shortName: string): boolean {
+  return toolName.includes('docx-mcp') || DOCX_MCP_TOOLS.has(shortName)
+}
+
+function parseDocxMcpResult(text: string): ParsedToolResult | null {
+  const paths = extractDocxPaths(text)
+  if (paths.length === 0) return null
+
+  const saved = /saved|保存|written|写入/i.test(text)
+  return {
+    type: 'docx_file',
+    paths,
+    lead: saved ? 'Word 文档已保存：' : undefined,
+  }
+}
+
 export function parseToolResult(toolName: string, raw: string): ParsedToolResult {
   const text = raw.trim()
   if (!text) return { type: 'text' }
@@ -69,6 +160,11 @@ export function parseToolResult(toolName: string, raw: string): ParsedToolResult
   if (['fs_grep', 'grep', 'sql_list_tables', 'memory_list', 'agent_task_list'].includes(shortName)) {
     const list = parseLineList(text)
     if (list) return list
+  }
+
+  if (isDocxMcpTool(toolName, shortName)) {
+    const docx = parseDocxMcpResult(text)
+    if (docx) return docx
   }
 
   return { type: 'text' }
@@ -93,6 +189,13 @@ export function summarizeToolResult(parsed: ParsedToolResult, raw = ''): string 
 
   if (parsed.type === 'line_list') {
     return `共 ${parsed.lines.length} 项`
+  }
+
+  if (parsed.type === 'docx_file') {
+    if (parsed.paths.length === 1) {
+      return `已保存：${splitPathParts(parsed.paths[0]).name}`
+    }
+    return `${parsed.paths.length} 个 Word 文件`
   }
 
   const trimmed = raw.trim()

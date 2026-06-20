@@ -40,7 +40,7 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
     blobHash: z.string().default(''),
     mimeType: z.string().optional(),
     truncated: z.boolean().optional(),
-    delivery: z.enum(['text', 'vision']).optional(),
+    delivery: z.enum(['text', 'vision', 'docx_tool']).optional(),
     visionPages: z
       .array(
         z.object({
@@ -54,6 +54,11 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('kb_sources'),
     sources: z.array(KnowledgeCitationSchema),
+  }),
+  z.object({
+    type: z.literal('local_file_links'),
+    title: z.string().optional(),
+    paths: z.array(z.string().min(1)),
   }),
 ])
 
@@ -301,6 +306,7 @@ export const MessageStreamEventSchema = z.discriminatedUnion('type', [
     sessionId: UuidSchema,
     messageId: UuidSchema,
     tokenUsage: MessageSchema.shape.tokenUsage,
+    contentBlocks: z.array(ContentBlockSchema).optional(),
     timestamp: TimestampSchema,
   }),
   z.object({

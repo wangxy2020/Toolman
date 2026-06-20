@@ -4,6 +4,9 @@ import {
   buildModelTextFromUserBlocks,
   buildStoredUserContent,
   userBlocksHaveUnresolvedAttachments,
+  DOCX_MCP_SERVER_ID,
+  isDocxFileBlock,
+  shouldEnableToolsWithAttachments,
   ContentBlockSchema,
   MessageAbortInputSchema,
   MessageAbortSessionInputSchema,
@@ -15,6 +18,8 @@ import {
   MessageDiagnoseInputSchema,
   getDefaultSkillIds,
   getDefaultMcpServerIds,
+  resolveMcpServerIdsForSkills,
+  isOcrVisionModelId,
   type Message,
   type MessageStreamEvent,
   type ContentBlock,
@@ -36,13 +41,29 @@ import {
   resolveEffectivePermissionMode,
 } from './agent-runtime.service'
 import { evaluateToolPermission, type PermissionMode } from './permission.service'
-import { requestToolApproval } from './tool-approval.service'
+import { requestToolApproval, grantToolApprovalScope, clearToolApprovalScope } from './tool-approval.service'
 import { listRelevantMemories } from './memory.service'
 import { searchWeb } from './web-search.service'
 import { resolveToolDefinitions } from './tool-registry'
 import { filterEnabledMcpServerIds } from './mcp-server-config.service'
 import { filterEnabledSkillIds } from './skill.service'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
+import {
+  assertDocxMcpReady,
+  bootstrapDocxMcpRead,
+  buildDocxMcpApprovalScopeKey,
+  buildDocxMcpBatchApprovalArgs,
+  DOCX_MCP_BATCH_TOOL_NAME,
+  DocxMcpNotReadyError,
+  filterDocxMcpToolDefinitions,
+  prepareDocxWorkingCopies,
+  type DocxWorkingCopy,
+} from './docx-mcp-task.service'
+import {
+  buildDocxFinalSummaryPrompt,
+  formatDocxReviewReport,
+  runDocxStructuredReviewPipeline,
+} from './docx-review.service'
 import { getProviderConfig, parseModelId } from './provider.service'
 import { broadcastStreamEvent } from './stream-broadcast'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
@@ -56,13 +77,17 @@ import {
   searchKnowledgeForChat,
 } from './knowledge-document.service'
 import { extractMemoriesFromConversation } from './memory-extractor.service'
-import { stageUserContentBlocks } from './resolve-user-content-blocks.service'
+import { stageUserContentBlocks, resolveAttachmentReadPath } from './resolve-user-content-blocks.service'
 import {
   contentBlocksNeedModelPrepare,
   prepareChatAttachmentsForModel,
 } from './chat-attachment-prepare.service'
 import { isAbortError, throwIfAborted, withAbortSignal } from '../utils/abort-signal'
 import { isDocumentOcrEnabled } from './runtime-app-settings.service'
+
+function resolveRuntimeMcpServerIds(skillIds: string[], mcpServerIds: string[]): string[] {
+  return filterEnabledMcpServerIds(resolveMcpServerIdsForSkills(skillIds, mcpServerIds))
+}
 
 const gateway = createModelGateway()
 const abortControllers = new Map<string, AbortController>()
@@ -71,10 +96,14 @@ function emit(event: MessageStreamEvent) {
   broadcastStreamEvent(event)
 }
 
-function assertAttachmentContentResolved(blocks: ContentBlock[]): void {
-  if (!userBlocksHaveUnresolvedAttachments(blocks)) return
+function assertAttachmentContentResolved(
+  blocks: ContentBlock[],
+  mcpServerIds?: string[],
+): void {
+  if (!userBlocksHaveUnresolvedAttachments(blocks, { mcpServerIds })) return
 
   for (const block of blocks) {
+    if (block.type === 'file' && block.delivery === 'docx_tool') continue
     if (block.type === 'file' && !block.content?.trim() && !(block.visionPages && block.visionPages.length > 0)) {
       throw new Error(`附件「${block.name}」未能准备就绪，请重新发送`)
     }
@@ -227,16 +256,18 @@ function parseAssistantRuntime(
   const permissionMode = (params.permissionMode as PermissionMode | undefined) ?? 'normal'
   const autonomousMode = Boolean(params.autonomousMode)
   const workingDirectory = resolveAssistantWorkingDirectory(assistant, workspaceId)
+  const skillIds = filterEnabledSkillIds(
+    (params.skillIds as string[] | undefined) ?? getDefaultSkillIds(),
+  )
+  const baseMcpServerIds =
+    (params.mcpServerIds as string[] | undefined) ?? getDefaultMcpServerIds()
   return {
     permissionMode,
     autonomousMode,
     effectivePermissionMode: resolveEffectivePermissionMode(permissionMode, autonomousMode),
     toolStates: (params.toolStates as Record<string, boolean> | undefined) ?? {},
-    mcpServerIds:
-      (params.mcpServerIds as string[] | undefined) ?? getDefaultMcpServerIds(),
-    skillIds: filterEnabledSkillIds(
-      (params.skillIds as string[] | undefined) ?? getDefaultSkillIds(),
-    ),
+    mcpServerIds: resolveRuntimeMcpServerIds(skillIds, baseMcpServerIds),
+    skillIds,
     sessionRoundLimit: (params.sessionRoundLimit as number | undefined) ?? 100,
     temperature: params.temperature as number | undefined,
     maxTokens: params.maxTokens as number | undefined,
@@ -268,6 +299,7 @@ async function buildRuntimeSystemHints(options: {
     kbTopK?: number
     kbScoreThreshold?: number
   }
+  docxWorkingCopies?: DocxWorkingCopy[]
 }): Promise<{ hints: string[]; kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> }> {
   const hints: string[] = []
   let kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> = []
@@ -278,9 +310,52 @@ async function buildRuntimeSystemHints(options: {
       (block.type === 'image' && block.blobHash?.trim()),
   )
 
+  const docxBlocks =
+    options.userContentBlocks?.filter(
+      (block): block is Extract<ContentBlock, { type: 'file' }> =>
+        block.type === 'file' && isDocxFileBlock(block),
+    ) ?? []
+  const docxMcpEnabled =
+    options.enableTools &&
+    options.mcpServerIds.includes(DOCX_MCP_SERVER_ID) &&
+    docxBlocks.length > 0
+
+  if (docxMcpEnabled) {
+    const workdir = resolveWorkingDirectory(options.runtime.toolContext.workingDirectory)
+    const sourcePaths = docxBlocks
+      .map((block) => `- 源文件 ${block.name}: ${resolveAttachmentReadPath(block)}`)
+      .join('\n')
+    const workingPaths =
+      options.docxWorkingCopies
+        ?.map((copy) => `- 修订版 ${copy.fileName}: ${copy.workingPath}`)
+        .join('\n') ?? ''
+    hints.push(
+      [
+        '## Word 文档（DOCX MCP · 结构化审查流水线）',
+        '用户上传了 Word 文档并要求审查、修订并生成新文件。应用将按以下阶段自动执行：',
+        '1. **复制修订版**：将源文件复制到工作目录（不覆盖原文件）',
+        '2. **读取**：应用调用 read_document 读取修订版全文',
+        '3. **审查**：内置审查 prompt 生成结构化 issue JSON 列表（含 anchor_text、comment、replace）',
+        '4. **应用**：应用根据 issue 列表批量调用 add_comments / replace_text 写入修订版',
+        '5. **总结**：向你输出审查摘要与修订版绝对路径',
+        'docx-mcp-server **没有** save_document；编辑类工具直接写入 file_path。',
+        '**禁止**提及 Toolman Office Skills、office-audit、toolman-office、`apply_semantic_diff_overlay` 等已移除能力。',
+        sourcePaths,
+        workingPaths ? `修订版文件：\n${workingPaths}` : '',
+        `工作文件路径：${workdir}`,
+        '你无需再自行调用 DOCX 工具；若需补充说明，仅总结审查结果并给出修订版完整绝对路径（纯文本，不要 Markdown 链接）。',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
+
   if (
     options.userContentBlocks?.some(
-      (block) => block.type === 'file' && block.content?.trim(),
+      (block) =>
+        block.type === 'file' &&
+        block.content?.trim() &&
+        !(docxMcpEnabled && isDocxFileBlock(block)),
     )
   ) {
     hints.push(
@@ -415,12 +490,9 @@ function shouldEnableTools(
   if (options?.enableTools === false) return false
   if (options?.enableTools === true) return true
   if (!assistant) return false
-  if (userContentBlocks?.some((block) => block.type === 'file' || block.type === 'image')) {
-    return false
-  }
   const runtime = parseAssistantRuntime(assistant)
   const servers = mcpServerIds ?? runtime.mcpServerIds
-  return servers.length > 0
+  return shouldEnableToolsWithAttachments(servers, userContentBlocks ?? [])
 }
 
 function deriveSessionTitle(text: string): string {
@@ -477,7 +549,8 @@ export async function sendMessage(input: unknown) {
 
   const assistant = session.assistantId ? getAssistantRow(session.assistantId) : null
   const runtime = parseAssistantRuntime(assistant, session.workspaceId)
-  const mcpServerIds = filterEnabledMcpServerIds(
+  const mcpServerIds = resolveRuntimeMcpServerIds(
+    runtime.skillIds,
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
   const memoryEnabled = data.options?.memoryEnabled ?? false
@@ -627,7 +700,8 @@ export async function regenerateMessage(input: unknown) {
   }
   const assistant = session.assistantId ? getAssistantRow(session.assistantId) : null
   const runtime = parseAssistantRuntime(assistant, session.workspaceId)
-  const mcpServerIds = filterEnabledMcpServerIds(
+  const mcpServerIds = resolveRuntimeMcpServerIds(
+    runtime.skillIds,
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
   const memoryEnabled = data.options?.memoryEnabled ?? false
@@ -738,6 +812,7 @@ async function runGeneration(opts: {
   const messages = getMessageRepository()
   const controller = new AbortController()
   abortControllers.set(assistantMessageId, controller)
+  const docxApprovalScopeKey = buildDocxMcpApprovalScopeKey(assistantMessageId)
 
   const startedAt = Date.now()
   const buffers = new MessageStreamBuffers()
@@ -851,6 +926,7 @@ async function runGeneration(opts: {
             blocks: userContentBlocks,
             modelId,
             workspaceId,
+            mcpServerIds,
             documentOcrEnabled: sendOptions?.documentOcrEnabled,
             signal: controller.signal,
             onStatus: (message) => {
@@ -860,7 +936,7 @@ async function runGeneration(opts: {
           controller.signal,
         )
         throwIfAborted(controller.signal)
-        assertAttachmentContentResolved(generationBlocks)
+        assertAttachmentContentResolved(generationBlocks, mcpServerIds)
         generationText = buildStoredUserContent(generationBlocks)
         messages.update(userMessageId, {
           content: generationText,
@@ -904,6 +980,31 @@ async function runGeneration(opts: {
       : runtime.effectivePermissionMode
 
     appendStatus('正在准备回复…\n')
+
+    const docxBlocks = generationBlocks.filter(
+      (block): block is Extract<ContentBlock, { type: 'file' }> =>
+        block.type === 'file' && isDocxFileBlock(block),
+    )
+    const docxTaskActive =
+      enableTools &&
+      mcpServerIds.includes(DOCX_MCP_SERVER_ID) &&
+      docxBlocks.length > 0
+
+    let docxWorkingCopies: DocxWorkingCopy[] | undefined
+    if (docxTaskActive) {
+      appendStatus('正在连接 DOCX MCP Server…\n')
+      await assertDocxMcpReady()
+      const workdir = resolveWorkingDirectory(runtime.toolContext.workingDirectory)
+      docxWorkingCopies = await prepareDocxWorkingCopies({
+        workdir,
+        sourcePaths: docxBlocks.map((block) => ({
+          sourcePath: resolveAttachmentReadPath(block),
+          fileName: block.name,
+        })),
+      })
+      appendStatus('已复制修订版文档到工作目录…\n')
+    }
+
     const { hints: runtimeHints, kbResults } = await withAbortSignal(
       buildRuntimeSystemHints({
         assistant,
@@ -913,6 +1014,7 @@ async function runGeneration(opts: {
         enableTools,
         mcpServerIds,
         sendOptions,
+        docxWorkingCopies,
       }),
       controller.signal,
     )
@@ -955,7 +1057,7 @@ async function runGeneration(opts: {
       [assistantMessageId, userMessageId],
       toolHint,
     )
-    const tools = enableTools
+    let tools = enableTools
       ? await resolveToolDefinitions(mcpServerIds, {
           autonomousMode: runtime.autonomousMode,
           memoryEnabled: sendOptions?.memoryEnabled,
@@ -964,7 +1066,21 @@ async function runGeneration(opts: {
         })
       : []
 
+    if (docxTaskActive) {
+      const docxTools = filterDocxMcpToolDefinitions(tools)
+      if (docxTools.length === 0) {
+        throw new DocxMcpNotReadyError('DOCX MCP Server 已连接，但未加载 Word 编辑工具')
+      }
+      tools = docxTools
+    }
+
+    if (docxTaskActive && (!enableTools || tools.length === 0)) {
+      throw new DocxMcpNotReadyError('Word 文档任务需要 DOCX MCP 工具，但当前未启用任何工具')
+    }
+
     if (!enableTools || tools.length === 0) {
+      buffers.clearThinking()
+      persistBlocks(true)
       await streamPlainCompletion({
         sessionId,
         assistantMessageId,
@@ -982,6 +1098,80 @@ async function runGeneration(opts: {
         },
       })
     } else {
+      if (docxTaskActive && docxWorkingCopies?.length) {
+        appendStatus('正在读取 Word 文档…\n')
+        await bootstrapDocxMcpRead({
+          chatMessages,
+          tools,
+          workingCopies: docxWorkingCopies,
+          toolContext: runtime.toolContext,
+          emitToolUpdate,
+        })
+
+        if (effectivePermissionMode === 'normal') {
+          appendStatus('等待 Word 文档编辑授权…\n')
+          const batchApproval = await requestToolApproval({
+            toolName: DOCX_MCP_BATCH_TOOL_NAME,
+            arguments: buildDocxMcpBatchApprovalArgs(docxWorkingCopies),
+          })
+          if (!batchApproval.approved) {
+            throw new Error(
+              batchApproval.timedOut
+                ? 'Word 文档编辑授权超时，请在弹出的授权窗口中点击「允许本次全部」'
+                : '已取消 Word 文档编辑授权',
+            )
+          }
+          grantToolApprovalScope(docxApprovalScopeKey)
+        }
+
+        appendStatus('正在执行结构化审查流水线…\n')
+        const reviewResults = await runDocxStructuredReviewPipeline({
+          chatMessages,
+          tools,
+          workingCopies: docxWorkingCopies,
+          userRequest: generationText,
+          providerConfig,
+          model,
+          toolContext: runtime.toolContext,
+          temperature: runtime.temperature,
+          maxTokens: runtime.maxTokens,
+          signal: controller.signal,
+          onStatus: appendStatus,
+          emitToolUpdate,
+        })
+
+        for (const result of reviewResults) {
+          appendText(formatDocxReviewReport(result))
+        }
+        persistBlocks(true)
+
+        chatMessages.push({
+          role: 'user',
+          content: buildDocxFinalSummaryPrompt(reviewResults),
+        })
+
+        buffers.clearThinking()
+        persistBlocks(true)
+        await streamPlainCompletion({
+          sessionId,
+          assistantMessageId,
+          modelId,
+          providerConfig,
+          model,
+          chatMessages,
+          temperature: runtime.temperature,
+          maxTokens: runtime.maxTokens,
+          signal: controller.signal,
+          onText: appendText,
+          onThinking: appendThinking,
+          onUsage: (value) => {
+            usage = value
+          },
+        })
+
+        buffers.setLocalFileLinks(reviewResults.map((result) => result.workingPath))
+        persistBlocks(true)
+      } else {
       try {
         let round = 0
         let hitToolRoundLimit = false
@@ -1099,6 +1289,8 @@ async function runGeneration(opts: {
             continue
           }
 
+          buffers.clearThinking()
+          persistBlocks(true)
           await streamPlainCompletion({
             sessionId,
             assistantMessageId,
@@ -1125,6 +1317,8 @@ async function runGeneration(opts: {
         }
       } catch (toolError) {
         if (toolError instanceof ProviderError) {
+          buffers.clearThinking()
+          persistBlocks(true)
           await streamPlainCompletion({
             sessionId,
             assistantMessageId,
@@ -1145,6 +1339,19 @@ async function runGeneration(opts: {
           throw toolError
         }
       }
+      }
+    }
+
+    if (isOcrVisionModelId(model) && buffers.promoteThinkingToText()) {
+      persistBlocks(true)
+      emit({
+        type: 'message.delta',
+        sessionId,
+        messageId: assistantMessageId,
+        modelId,
+        delta: { type: 'text', text: buffers.plainText() },
+        timestamp: Date.now(),
+      })
     }
 
     if (!usage) {
@@ -1166,6 +1373,7 @@ async function runGeneration(opts: {
       sessionId,
       messageId: assistantMessageId,
       tokenUsage: usage,
+      contentBlocks: buffers.toContentBlocks(),
       timestamp: Date.now(),
     })
 
@@ -1214,6 +1422,7 @@ async function runGeneration(opts: {
       timestamp: startedAt,
     })
   } finally {
+    clearToolApprovalScope(docxApprovalScopeKey)
     abortControllers.delete(assistantMessageId)
   }
 }

@@ -1,0 +1,23 @@
+appId: dev.toolman.app
+productName: Toolman
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: bin/toolman-community-hub
+    to: bin/toolman-community-hub
+    filter:
+      - '**/*'
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage

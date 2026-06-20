@@ -4,6 +4,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { McpServerConfig } from '@toolman/shared'
 import { getMcpServer } from './mcp-server-config.service'
+import { resolveMcpServerRuntimeConfig } from './mcp-runtime-config.service'
 import {
   isPostgresMcpConfig,
   postgresMcpConfigFingerprint,
@@ -141,10 +142,11 @@ function isConnectableType(type: McpServerConfig['type'] | undefined): boolean {
 }
 
 export async function connectMcpServer(serverId: string): Promise<ActiveMcpClient> {
-  const config = getMcpServer(serverId)
-  if (!config) {
+  const rawConfig = getMcpServer(serverId)
+  if (!rawConfig) {
     throw new Error(`MCP 服务器 ${serverId} 不存在`)
   }
+  const config = await resolveMcpServerRuntimeConfig(rawConfig)
   if (!config.enabled) {
     throw new Error(`MCP 服务器 ${config.name} 未启用`)
   }

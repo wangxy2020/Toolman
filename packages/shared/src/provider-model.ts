@@ -12,8 +12,9 @@ export interface ModelTypeState {
 }
 
 const EMBEDDING_MODEL = /bge-m3|(?:^|[^a-z])embed(?!.*rerank)|nomic-embed|text-embedding/i
+const OCR_MODEL = /glm[-_]ocr/i
 const VISION_MODEL =
-  /vision|vl-|vl_|4o|gemini.*vision|llava|minicpm-v|qwen.*vl|gpt-4o|gpt-4-turbo|claude-3|glm-4v/i
+  /vision|vl-|vl_|4o|gemini.*vision|llava|minicpm-v|qwen.*vl|gpt-4o|gpt-4-turbo|claude-3|glm-4v|glm[-_]ocr/i
 const REASONING_MODEL =
   /o1|o3|reason|r1|think|deepseek-reasoner|qwen3|gemma|deepseek-r|o\d-/i
 const TOOL_MODEL = /gpt-|claude|gemma|qwen|deepseek|moonshot|glm|chat|instruct|sonnet|haiku|opus/i
@@ -43,6 +44,17 @@ export function getModelTypeSupport(modelId: string): ModelTypeState {
       tools: false,
       rerank: false,
       embedding: true,
+    }
+  }
+
+  if (OCR_MODEL.test(id)) {
+    return {
+      vision: true,
+      web: false,
+      reasoning: false,
+      tools: false,
+      rerank: false,
+      embedding: false,
     }
   }
 
@@ -92,6 +104,11 @@ export function getDefaultModelTypes(modelId: string): ModelTypeState {
 }
 
 export function normalizeModelTypes(modelId: string, types: Partial<ModelTypeState>): ModelTypeState {
+  const id = modelId.toLowerCase()
+  if (OCR_MODEL.test(id)) {
+    return getDefaultModelTypes(modelId)
+  }
+
   const support = getModelTypeSupport(modelId)
   const next: ModelTypeState = {
     vision: Boolean(types.vision) && support.vision,
@@ -163,4 +180,8 @@ export function isChatModelEntry(model: Pick<ProviderModel, 'id' | 'types'>): bo
 
 export function isEmbeddingModelId(modelId: string): boolean {
   return getModelTypeSupport(modelId).embedding
+}
+
+export function isOcrVisionModelId(modelId: string): boolean {
+  return OCR_MODEL.test(modelId.toLowerCase())
 }

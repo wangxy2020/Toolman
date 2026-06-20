@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+
 import { decodeMcpToolName } from './mcp-tool-utils'
 
 export type ToolCategory = 'read' | 'write' | 'exec'
@@ -78,6 +79,14 @@ export function resolveWorkingDirectory(path?: string): string {
 function inferMcpToolCategory(toolName: string): ToolCategory {
   const lower = toolName.toLowerCase()
   if (
+    lower.startsWith('read_') ||
+    lower.startsWith('get_') ||
+    lower.startsWith('search_') ||
+    lower.startsWith('list_')
+  ) {
+    return 'read'
+  }
+  if (
     lower.includes('bash') ||
     lower.includes('shell') ||
     lower.includes('exec') ||
@@ -92,9 +101,15 @@ function inferMcpToolCategory(toolName: string): ToolCategory {
     lower.includes('delete') ||
     lower.includes('create') ||
     lower.includes('update') ||
-    lower.includes('patch') ||
-    lower.includes('move') ||
-    lower.includes('mkdir')
+    lower.includes('replace') ||
+    lower.includes('save') ||
+    lower.includes('insert') ||
+    lower.includes('comment') ||
+    lower.includes('format') ||
+    lower.includes('highlight') ||
+    lower.includes('accept_') ||
+    lower.includes('reject_') ||
+    lower.includes('set_')
   ) {
     return 'write'
   }

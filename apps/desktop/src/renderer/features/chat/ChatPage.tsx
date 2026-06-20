@@ -61,6 +61,9 @@ import { NotesPage } from '../notes/NotesPage'
 import { NotesSidebar } from '../notes/NotesSidebar'
 import { NotesIngestToKbModal } from '../notes/NotesIngestToKbModal'
 import { buildChatWithNoteDraft } from '../notes/notes-chat-draft'
+import { buildChatWithKnowledgeFilesDraft } from '../knowledge/knowledge-chat-files'
+import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
+import type { PendingAttachment } from './chat-attachments'
 import { useNotes } from '../notes/useNotes'
 import { getMessageText } from './message-utils'
 import {
@@ -95,6 +98,10 @@ export function ChatPage() {
   )
   const communityUser = useCommunityUser()
   const [agentPrefillText, setAgentPrefillText] = useState<string | null>(null)
+  const [agentPrefillAttachments, setAgentPrefillAttachments] = useState<
+    PendingAttachment[] | null
+  >(null)
+  const [chatPrefillRevision, setChatPrefillRevision] = useState(0)
   const [notesIngestTarget, setNotesIngestTarget] = useState<{
     noteIds?: string[]
     notebookId?: string
@@ -297,13 +304,76 @@ export function ChatPage() {
     (noteId: string) => {
       const note = notes.notes.find((item) => item.id === noteId)
       if (!note) return
+      setAgentPrefillAttachments(null)
       setAgentPrefillText(buildChatWithNoteDraft(note))
+      setChatPrefillRevision((value) => value + 1)
       setActiveView('agent')
       if (!chat.activeSessionId) {
         void chat.createSession(activeAssistant?.id)
       }
     },
     [activeAssistant?.id, chat, notes.notes],
+  )
+
+  const handleChatWithKnowledgeFiles = useCallback(
+    async (items: KnowledgeFilePanelItem[]) => {
+      const paths = items
+        .map((item) => item.absolutePath?.trim())
+        .filter((path): path is string => Boolean(path))
+      if (paths.length === 0) {
+        chat.setError('所选知识库文件没有可用的本地路径')
+        return
+      }
+
+      try {
+        const stageResult = await window.api.invoke(IpcChannel.ChatStageAttachments, {
+          paths,
+        })
+        if (!stageResult.ok) {
+          chat.setError(stageResult.error.message)
+          return
+        }
+
+        const staged = stageResult.data as {
+          items: Array<{
+            path: string
+            name: string
+            blobHash: string
+            mimeType: string
+            kind: 'file' | 'image'
+          }>
+          errors?: Array<{ path: string; message: string }>
+        }
+
+        if (staged.errors?.length) {
+          chat.setError(
+            staged.errors
+              .map((item) => `${item.path.split(/[/\\]/).pop() ?? item.path}：${item.message}`)
+              .join('\n'),
+          )
+        }
+        if (staged.items.length === 0) return
+
+        setAgentPrefillAttachments(
+          staged.items.map((item) => ({
+            path: item.path,
+            name: item.name,
+            blobHash: item.blobHash,
+            mimeType: item.mimeType,
+            kind: item.kind,
+          })),
+        )
+        setAgentPrefillText(buildChatWithKnowledgeFilesDraft(items.map((item) => item.title)))
+        setChatPrefillRevision((value) => value + 1)
+        setActiveView('agent')
+        if (!chat.activeSessionId) {
+          void chat.createSession(activeAssistant?.id)
+        }
+      } catch (error) {
+        chat.setError(error instanceof Error ? error.message : '准备知识库附件失败')
+      }
+    },
+    [activeAssistant?.id, chat],
   )
 
   const handleOpenNote = useCallback(
@@ -642,6 +712,8 @@ export function ChatPage() {
             onCreateSession={() => void chat.createSession(activeAssistant?.id)}
             onClearSession={() => void chat.clearSessionMessages()}
             prefillText={agentPrefillText}
+            prefillAttachments={agentPrefillAttachments}
+            prefillRevision={chatPrefillRevision}
             onToggleWebSearch={() =>
               updateAppSettings({ webSearchEnabled: !appSettings.webSearchEnabled })
             }
@@ -677,6 +749,7 @@ export function ChatPage() {
             onLocalFilesFolderError={localFilesFolder.setError}
             systemPaths={systemPaths}
             onOpenNote={handleOpenNote}
+            onChatWithKnowledgeFiles={(items) => void handleChatWithKnowledgeFiles(items)}
           />
         ) : activeView === 'notes' ? (
           <NotesPage

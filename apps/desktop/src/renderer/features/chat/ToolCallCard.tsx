@@ -18,52 +18,77 @@ interface Props {
 
 function SimpleToolCard({
   name,
+  arguments: argsRaw,
   result,
   status,
   defaultCollapsed,
-}: Omit<Props, 'arguments'>) {
+}: Props) {
+  const meta = resolveToolDisplayMeta(name)
+  const args = parseToolArguments(argsRaw)
+  const parsed = parseToolResult(name, result)
+  const summary =
+    status === 'done' && result.trim() ? summarizeToolResult(parsed, result) : null
+  const detail = meta.buildCommand(args)
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false)
   const hasResult = result.trim().length > 0
 
   return (
-    <div
-      className={[
-        'tm-tool-card',
-        status === 'running' ? 'tm-tool-card--running' : '',
-        collapsed ? 'tm-tool-card--collapsed' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      <button
-        type="button"
-        className="tm-tool-card-head"
-        onClick={() => setCollapsed((value) => !value)}
-        aria-expanded={!collapsed}
+    <div className="tm-tool-exec">
+      <div
+        className={[
+          'tm-tool-card',
+          status === 'running' ? 'tm-tool-card--running' : '',
+          collapsed ? 'tm-tool-card--collapsed' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
-        <span className="tm-tool-card-chevron" aria-hidden="true">
-          {collapsed ? '▸' : '▾'}
-        </span>
-        <span className="tm-tool-card-icon" aria-hidden="true">
-          {status === 'running' ? '⏳' : '🔧'}
-        </span>
-        <span className="tm-tool-card-name">{name}</span>
-        <span className="tm-tool-card-status">
-          {status === 'running' ? '执行中…' : '已完成'}
-        </span>
-      </button>
+        <button
+          type="button"
+          className="tm-tool-card-head"
+          onClick={() => setCollapsed((value) => !value)}
+          aria-expanded={!collapsed}
+        >
+          <span className="tm-tool-card-chevron" aria-hidden="true">
+            {collapsed ? '▸' : '▾'}
+          </span>
+          <span className="tm-tool-card-icon" aria-hidden="true">
+            {status === 'running' ? '⏳' : '🔧'}
+          </span>
+          <div className="tm-tool-card-head-main">
+            <div className="tm-tool-card-title">{meta.title}</div>
+            <div className="tm-tool-card-desc">{meta.description}</div>
+          </div>
+          <span className="tm-tool-card-status">
+            {status === 'running' ? '执行中…' : '已完成'}
+          </span>
+        </button>
 
-      {!collapsed && (
-        <div className="tm-tool-card-body">
-          {hasResult ? (
-            <ToolResultView toolName={name} result={result} />
-          ) : (
-            <div className="tm-tool-card-empty">
-              {status === 'running' ? '等待工具返回…' : '无输出'}
+        {!collapsed && (
+          <div className="tm-tool-card-body">
+            {detail ? (
+              <div className="tm-tool-section">
+                <div className="tm-tool-section-label">操作</div>
+                <div className="tm-tool-section-detail">{detail}</div>
+              </div>
+            ) : null}
+            <div className="tm-tool-section">
+              <div className="tm-tool-section-label">输出</div>
+              <div className="tm-tool-section-output">
+                {hasResult ? (
+                  <ToolResultView toolName={name} result={result} />
+                ) : (
+                  <div className="tm-tool-card-empty">
+                    {status === 'running' ? '等待工具返回…' : '无输出'}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
+
+      {summary ? <p className="tm-tool-exec-summary">{summary}</p> : null}
     </div>
   )
 }

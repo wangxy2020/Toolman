@@ -102,6 +102,36 @@ export function providerSupportsOpenAiVision(config: ProviderConfig, model: stri
   return true
 }
 
+const OCR_VISION_MODEL = /glm[-_]ocr/i
+
+export function isOcrVisionModelId(model: string): boolean {
+  return OCR_VISION_MODEL.test(model.trim().toLowerCase())
+}
+
+/** Ollama 视觉/OCR 模型：关闭 think 并将输出写入 content，避免 thinking 字段独占 OCR 结果 */
+export function resolveOllamaExtraBody(
+  config: ProviderConfig,
+  model: string,
+): Record<string, unknown> | undefined {
+  if (config.type !== 'ollama') return undefined
+  if (!isOcrVisionModelId(model)) return undefined
+  return { think: false }
+}
+
+export function resolveOpenAiMaxTokens(
+  config: ProviderConfig,
+  model: string,
+  maxTokens?: number,
+): number | undefined {
+  if (maxTokens != null && maxTokens > 0) return maxTokens
+  if (config.type === 'ollama' && isOcrVisionModelId(model)) return 8192
+  return maxTokens
+}
+
+export function shouldRouteThinkingAsAnswer(config: ProviderConfig, model: string): boolean {
+  return config.type === 'ollama' && isOcrVisionModelId(model)
+}
+
 /** @deprecated 使用 normalizeDeepSeekModelKey */
 export function normalizeDeepSeekModelId(model: string): string {
   return normalizeDeepSeekModelKey(model)

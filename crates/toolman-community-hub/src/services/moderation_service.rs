@@ -16,6 +16,9 @@ use crate::repositories::resource_repository::{RepositoryError, ResourceReposito
 use crate::repositories::task_repository::TaskRepository;
 use crate::repositories::UserRepository;
 use crate::repositories::device_presence_repository::DeviceKind;
+use crate::repositories::{
+    BanDeviceInput, DeviceBlacklistRepository, DeviceBlacklistRepositoryError,
+};
 use crate::services::board_service::{BoardService, BOARD_MAIN_ID};
 use crate::services::presence_service::{DevicePresenceItem, PresenceService};
 use crate::repositories::{CommentListFilter, CommentRepository};
@@ -49,6 +52,14 @@ pub struct SuspendResourceRequest {
 
 #[derive(Debug, Clone)]
 pub struct BanUserRequest {
+    pub duration_hours: Option<i64>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BanDeviceRequest {
+    pub user_id: String,
+    pub device_name: String,
     pub duration_hours: Option<i64>,
     pub reason: Option<String>,
 }
@@ -116,6 +127,25 @@ pub struct ScanTaskItem {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ScanBannedUserItem {
+    pub user_id: String,
+    pub display_name: String,
+    pub banned_until: Option<i64>,
+    pub banned_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ScanBannedDeviceItem {
+    pub device_id: String,
+    pub device_name: String,
+    pub user_id: String,
+    pub user_name: String,
+    pub reason: Option<String>,
+    pub banned_at: i64,
+    pub banned_until: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ScanDeviceItem {
     pub device_id: String,
     pub device_name: String,
@@ -145,6 +175,8 @@ pub struct ModerationScanResult {
     pub pending_review: Vec<ScanResourceItem>,
     pub recent_messages: Vec<ScanMessageItem>,
     pub active_tasks: Vec<ScanTaskItem>,
+    pub banned_users: Vec<ScanBannedUserItem>,
+    pub banned_devices: Vec<ScanBannedDeviceItem>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -178,6 +210,8 @@ pub enum ModerationServiceError {
     ResourceRepository(#[from] RepositoryError),
     #[error("user repository error: {0}")]
     UserRepository(#[from] crate::repositories::UserRepositoryError),
+    #[error("device blacklist repository error: {0}")]
+    DeviceBlacklist(#[from] DeviceBlacklistRepositoryError),
 }
 
 pub struct ModerationService {
@@ -411,6 +445,111 @@ impl ModerationService {
         .await
     }
 
+    pub async fn ban_device(
+        &self,
+        actor: &CommunityUser,
+        device_id: &str,
+        input: BanDeviceRequest,
+    ) -> Result<(), ModerationServiceError> {
+        ensure_admin(actor)?;
+
+        let device_id = device_id.trim();
+        if device_id.is_empty() {
+            return Err(ModerationServiceError::Validation(
+                "device id is required".to_string(),
+            ));
+        }
+
+        let user_id = input.user_id.trim();
+        if user_id.is_empty() {
+            return Err(ModerationServiceError::Validation(
+                "user id is required".to_string(),
+            ));
+        }
+
+        let banned_until = input
+            .duration_hours
+            .map(|hours| chrono::Utc::now().timestamp_millis() + hours * 3_600_000);
+
+        DeviceBlacklistRepository::new(self.pool.clone())
+            .ban_device(BanDeviceInput {
+                device_id: device_id.to_string(),
+                user_id: user_id.to_string(),
+                device_name: input.device_name.trim().to_string(),
+                reason: input.reason.clone(),
+                banned_by: actor.id.clone(),
+                banned_until,
+            })
+            .await?;
+
+        self.write_log(
+            actor,
+            "ban_device",
+            "device",
+            device_id,
+            input.reason.as_deref(),
+            Some(serde_json::json!({
+                "user_id": user_id,
+                "device_name": input.device_name,
+                "duration_hours": input.duration_hours,
+            })),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn unban_user(&self, actor: &CommunityUser, user_id: &str) -> Result<(), ModerationServiceError> {
+        ensure_admin(actor)?;
+
+        UserRepository::new(self.pool.clone())
+            .unban_user(user_id)
+            .await?;
+
+        self.write_log(
+            actor,
+            "unban_user",
+            "user",
+            user_id,
+            Some("管理员解除用户封禁"),
+            None,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn unban_device(
+        &self,
+        actor: &CommunityUser,
+        device_id: &str,
+    ) -> Result<(), ModerationServiceError> {
+        ensure_admin(actor)?;
+
+        let device_id = device_id.trim();
+        if device_id.is_empty() {
+            return Err(ModerationServiceError::Validation(
+                "device id is required".to_string(),
+            ));
+        }
+
+        DeviceBlacklistRepository::new(self.pool.clone())
+            .unban_device(device_id)
+            .await?;
+
+        self.write_log(
+            actor,
+            "unban_device",
+            "device",
+            device_id,
+            Some("管理员解除设备封禁"),
+            None,
+        )
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn list_logs(
         &self,
         actor: &CommunityUser,
@@ -560,6 +699,39 @@ impl ModerationService {
         let online_desktop_device_count = online_desktop_devices.len() as i64;
         let online_mobile_device_count = online_mobile_devices.len() as i64;
 
+        let banned_user_records = users.list_banned(SCAN_LIMIT).await?;
+        let mut banned_users = Vec::with_capacity(banned_user_records.len());
+        for user in banned_user_records {
+            banned_users.push(ScanBannedUserItem {
+                user_id: user.id.clone(),
+                display_name: user.display_name,
+                banned_until: user.banned_until,
+                banned_at: user.updated_at,
+            });
+        }
+
+        let banned_device_records =
+            DeviceBlacklistRepository::new(self.pool.clone())
+                .list_active(SCAN_LIMIT)
+                .await?;
+        let mut banned_devices = Vec::with_capacity(banned_device_records.len());
+        for record in banned_device_records {
+            let user_name = users
+                .find_by_id(&record.user_id)
+                .await?
+                .map(|user| user.display_name)
+                .unwrap_or_else(|| "Unknown".to_string());
+            banned_devices.push(ScanBannedDeviceItem {
+                device_id: record.device_id,
+                device_name: record.device_name,
+                user_id: record.user_id,
+                user_name,
+                reason: record.reason,
+                banned_at: record.banned_at,
+                banned_until: record.banned_until,
+            });
+        }
+
         Ok(ModerationScanResult {
             scanned_at: chrono::Utc::now().timestamp_millis(),
             online_knowledge_count,
@@ -579,6 +751,8 @@ impl ModerationService {
             pending_review: pending_items,
             recent_messages,
             active_tasks,
+            banned_users,
+            banned_devices,
         })
     }
 

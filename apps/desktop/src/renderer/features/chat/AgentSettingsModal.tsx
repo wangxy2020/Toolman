@@ -506,11 +506,16 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
               <AgentSettingsSkillsTab
                 skillIds={skillIds}
                 onSkillToggle={(skillId, enabled) => {
-                  const next = enabled
+                  const nextSkills = enabled
                     ? [...new Set([...skillIds, skillId])]
                     : skillIds.filter((id) => id !== skillId)
-                  setSkillIds(next)
-                  void save({ parameters: { ...getParameters(), skillIds: next } })
+                  setSkillIds(nextSkills)
+                  void save({
+                    parameters: {
+                      ...getParameters(),
+                      skillIds: nextSkills,
+                    },
+                  })
                 }}
               />
             )}

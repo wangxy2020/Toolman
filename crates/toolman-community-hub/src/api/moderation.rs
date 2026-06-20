@@ -8,7 +8,7 @@ use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
 use crate::domain::{ReportReason, ReportStatus, ReportTargetType};
 use crate::services::moderation_service::{
-    BanUserRequest, CreateReportRequest, ModerationLogItem, ModerationLogListQuery,
+    BanDeviceRequest, BanUserRequest, CreateReportRequest, ModerationLogItem, ModerationLogListQuery,
     ModerationScanResult, ModerationService, ReportItem, ReportListQuery, ResolveReportRequest,
     ResourceModerationItem, SuspendResourceRequest,
 };
@@ -47,6 +47,14 @@ pub struct BanUserBody {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct BanDeviceBody {
+    pub user_id: String,
+    pub device_name: String,
+    pub duration_hours: Option<i64>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApproveResourceBody {
     pub note: Option<String>,
 }
@@ -64,6 +72,9 @@ pub fn router() -> Router<AppState> {
         .route("/moderation/resources/{id}/suspend", post(suspend_resource))
         .route("/moderation/resources/{id}/approve", post(approve_resource))
         .route("/moderation/users/{id}/ban", post(ban_user))
+        .route("/moderation/users/{id}/unban", post(unban_user))
+        .route("/moderation/devices/{id}/ban", post(ban_device))
+        .route("/moderation/devices/{id}/unban", post(unban_device))
         .route("/moderation/scan", get(scan_online_content))
         .route("/moderation/logs", get(list_logs))
 }
@@ -192,6 +203,46 @@ async fn ban_user(
         )
         .await?;
 
+    Ok(Json(ApiResponse::ok(serde_json::json!({ "ok": true }))))
+}
+
+async fn unban_user(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    service(&state).unban_user(&user, &id).await?;
+    Ok(Json(ApiResponse::ok(serde_json::json!({ "ok": true }))))
+}
+
+async fn ban_device(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<BanDeviceBody>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    service(&state)
+        .ban_device(
+            &user,
+            &id,
+            BanDeviceRequest {
+                user_id: body.user_id,
+                device_name: body.device_name,
+                duration_hours: body.duration_hours,
+                reason: body.reason,
+            },
+        )
+        .await?;
+
+    Ok(Json(ApiResponse::ok(serde_json::json!({ "ok": true }))))
+}
+
+async fn unban_device(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    service(&state).unban_device(&user, &id).await?;
     Ok(Json(ApiResponse::ok(serde_json::json!({ "ok": true }))))
 }
 

@@ -481,6 +481,9 @@ impl From<crate::services::ModerationServiceError> for ApiError {
                 repo_error.into()
             }
             crate::services::ModerationServiceError::UserRepository(error) => error.into(),
+            crate::services::ModerationServiceError::DeviceBlacklist(error) => {
+                Self::internal(error.to_string())
+            }
         }
     }
 }
@@ -504,8 +507,14 @@ impl From<crate::services::PresenceServiceError> for ApiError {
             | crate::services::PresenceServiceError::InvalidDeviceKind(_) => {
                 Self::validation(error.to_string())
             }
+            crate::services::PresenceServiceError::DeviceBanned => {
+                Self::forbidden("device is banned")
+            }
             crate::services::PresenceServiceError::UserRepository(error) => error.into(),
             crate::services::PresenceServiceError::DevicePresence(error) => {
+                Self::internal(error.to_string())
+            }
+            crate::services::PresenceServiceError::DeviceBlacklist(error) => {
                 Self::internal(error.to_string())
             }
         }

@@ -1,3 +1,7 @@
+import { DOCX_MCP_SERVER_ID } from './agent-constants.js'
+
+export { DOCX_MCP_SERVER_ID }
+
 export interface ChatFilePayload {
   path: string
   name: string
@@ -13,6 +17,49 @@ type UserBlock = {
   content?: string
   truncated?: boolean
   blobHash?: string
+  delivery?: string
+  mimeType?: string
+}
+
+export function isDocxFileBlock(block: UserBlock): boolean {
+  if (block.type !== 'file') return false
+  const name = (block.name ?? block.path ?? '').toLowerCase()
+  if (name.endsWith('.docx')) return true
+  const mime = (block.mimeType ?? '').toLowerCase()
+  return mime.includes('wordprocessingml.document')
+}
+
+export function contentBlocksHaveAttachments(blocks: UserBlock[]): boolean {
+  return blocks.some((block) => block.type === 'file' || block.type === 'image')
+}
+
+export function contentBlocksHaveDocxAttachments(blocks: UserBlock[]): boolean {
+  return blocks.some(isDocxFileBlock)
+}
+
+export function isDocxMcpAttachmentBlock(
+  block: UserBlock,
+  mcpServerIds?: readonly string[],
+): boolean {
+  if (!mcpServerIds?.includes(DOCX_MCP_SERVER_ID)) return false
+  if (!isDocxFileBlock(block)) return false
+  return Boolean(block.path?.trim() || block.blobHash?.trim())
+}
+
+export function shouldEnableToolsWithAttachments(
+  mcpServerIds: readonly string[],
+  blocks: UserBlock[],
+): boolean {
+  if (!contentBlocksHaveAttachments(blocks)) {
+    return mcpServerIds.length > 0
+  }
+  if (
+    mcpServerIds.includes(DOCX_MCP_SERVER_ID) &&
+    contentBlocksHaveDocxAttachments(blocks)
+  ) {
+    return true
+  }
+  return false
 }
 
 const DEFAULT_ATTACHMENT_PREFIX =
@@ -32,12 +79,29 @@ export function buildModelTextFromUserBlocks(
   const files = blocks.filter((block) => block.type === 'file')
   if (files.length === 0) return userText
 
-  const sections = files
-    .filter((file) => Boolean(file.content?.trim()))
-    .map((file) => {
-      const truncatedNote = file.truncated ? '\n\n（文件内容过长，已截断）' : ''
-      return `### 附件：${file.name}\n\n${file.content}${truncatedNote}`
-    })
+  const docxToolFiles = files.filter(
+    (file) => file.delivery === 'docx_tool' && file.path?.trim(),
+  )
+  const inlineFiles = files.filter((file) => Boolean(file.content?.trim()))
+
+  const sections: string[] = []
+
+  if (docxToolFiles.length > 0) {
+    const docxLines = docxToolFiles
+      .map((file) => `- ${file.name}: ${file.path}`)
+      .join('\n')
+    sections.push(
+      [
+        '用户上传了 Word 文档，请使用 DOCX MCP 的 read_document / add_comment / replace_text 等工具处理（参数 file_path 为绝对路径）：',
+        docxLines,
+      ].join('\n'),
+    )
+  }
+
+  for (const file of inlineFiles) {
+    const truncatedNote = file.truncated ? '\n\n（文件内容过长，已截断）' : ''
+    sections.push(`### 附件：${file.name}\n\n${file.content}${truncatedNote}`)
+  }
 
   if (sections.length === 0) return userText
 
@@ -45,13 +109,18 @@ export function buildModelTextFromUserBlocks(
   return `${header}\n\n${sections.join('\n\n')}`
 }
 
-export function userBlocksHaveUnresolvedAttachments(blocks: UserBlock[]): boolean {
+export function userBlocksHaveUnresolvedAttachments(
+  blocks: UserBlock[],
+  options?: { mcpServerIds?: readonly string[] },
+): boolean {
   return blocks.some((block) => {
     if (block.type === 'image') return !block.blobHash?.trim()
     if (block.type === 'file') {
+      if (isDocxMcpAttachmentBlock(block, options?.mcpServerIds)) return false
       const file = block as UserBlock & {
         visionPages?: Array<{ blobHash: string }>
       }
+      if (file.delivery === 'docx_tool') return false
       if (file.content?.trim()) return false
       if (file.visionPages && file.visionPages.length > 0) return false
       return true

@@ -49,6 +49,11 @@ export const MCP_SERVERS = [
   { id: 'memory', name: 'Memory', description: '官方知识图谱记忆 MCP（npx）' },
   { id: 'python', name: 'Python', description: '官方 Python 执行 MCP（uvx）' },
   { id: 'brave-search', name: 'Brave Search', description: 'Brave Search 官方 MCP（需 API Key）' },
+  {
+    id: 'docx-mcp-server',
+    name: 'DOCX MCP Server',
+    description: 'Word 文档读写、批注、修订与排版（npx）',
+  },
   { id: 'dify', name: 'Dify Knowledge', description: '检索 Dify 知识库' },
   { id: 'hub', name: 'Hub', description: '聚合所有 MCP 工具' },
   { id: 'local-db', name: 'Local-db', description: '访问本地 PostgreSQL 数据库' },

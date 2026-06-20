@@ -972,6 +972,20 @@ export const CommunityModerationUserBanInputSchema = z.object({
 })
 export type CommunityModerationUserBanInput = z.infer<typeof CommunityModerationUserBanInputSchema>
 
+export const CommunityModerationUserUnbanInputSchema = z.object({
+  userId: UuidSchema,
+})
+export type CommunityModerationUserUnbanInput = z.infer<
+  typeof CommunityModerationUserUnbanInputSchema
+>
+
+export const CommunityModerationDeviceUnbanInputSchema = z.object({
+  deviceId: z.string().min(1),
+})
+export type CommunityModerationDeviceUnbanInput = z.infer<
+  typeof CommunityModerationDeviceUnbanInputSchema
+>
+
 export const CommunityModerationLogSchema = z.object({
   id: UuidSchema,
   moderatorId: UuidSchema,
@@ -1044,6 +1058,40 @@ export const CommunityModerationScanDeviceSchema = z.object({
 })
 export type CommunityModerationScanDevice = z.infer<typeof CommunityModerationScanDeviceSchema>
 
+export const CommunityModerationScanBannedUserSchema = z.object({
+  userId: UuidSchema,
+  displayName: z.string(),
+  bannedUntil: TimestampSchema.nullable().optional(),
+  bannedAt: TimestampSchema,
+})
+export type CommunityModerationScanBannedUser = z.infer<
+  typeof CommunityModerationScanBannedUserSchema
+>
+
+export const CommunityModerationScanBannedDeviceSchema = z.object({
+  deviceId: z.string(),
+  deviceName: z.string(),
+  userId: UuidSchema,
+  userName: z.string(),
+  reason: z.string().nullable().optional(),
+  bannedAt: TimestampSchema,
+  bannedUntil: TimestampSchema.nullable().optional(),
+})
+export type CommunityModerationScanBannedDevice = z.infer<
+  typeof CommunityModerationScanBannedDeviceSchema
+>
+
+export const CommunityModerationDeviceBanInputSchema = z.object({
+  deviceId: z.string().min(1),
+  userId: UuidSchema,
+  deviceName: z.string(),
+  durationHours: z.number().int().positive().optional(),
+  reason: z.string().optional(),
+})
+export type CommunityModerationDeviceBanInput = z.infer<
+  typeof CommunityModerationDeviceBanInputSchema
+>
+
 export const CommunityModerationScanOutputSchema = z.object({
   scannedAt: TimestampSchema,
   onlineKnowledgeCount: z.number().int().nonnegative(),
@@ -1063,6 +1111,8 @@ export const CommunityModerationScanOutputSchema = z.object({
   pendingReview: z.array(CommunityModerationScanResourceSchema),
   recentMessages: z.array(CommunityModerationScanMessageSchema),
   activeTasks: z.array(CommunityModerationScanTaskSchema),
+  bannedUsers: z.array(CommunityModerationScanBannedUserSchema).default([]),
+  bannedDevices: z.array(CommunityModerationScanBannedDeviceSchema).default([]),
 })
 export type CommunityModerationScanOutput = z.infer<typeof CommunityModerationScanOutputSchema>
 

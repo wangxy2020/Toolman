@@ -9,7 +9,7 @@ import type {
   ToolCall,
 } from '../types.js'
 import { ProviderError } from '../types.js'
-import { resolveDeepSeekExtraBody, resolveOpenAiModelName, providerSupportsOpenAiVision } from '../model-aliases.js'
+import { resolveDeepSeekExtraBody, resolveOpenAiModelName, providerSupportsOpenAiVision, resolveOllamaExtraBody, resolveOpenAiMaxTokens, shouldRouteThinkingAsAnswer } from '../model-aliases.js'
 import { assertApiKey, readErrorBody, resolveOpenAiBaseUrl } from '../utils.js'
 
 function formatProviderHttpError(status: number, body: string): string {
@@ -122,6 +122,24 @@ async function pingOpenAiChat(config: ProviderConfig): Promise<void> {
   }
 }
 
+function mergeExtraBody(config: ProviderConfig, model: string): Record<string, unknown> {
+  return {
+    ...resolveDeepSeekExtraBody(config, model),
+    ...resolveOllamaExtraBody(config, model),
+  }
+}
+
+function yieldTextOrReasoning(
+  text: string,
+  routeThinkingAsAnswer: boolean,
+): StreamChunk[] {
+  if (!text) return []
+  if (routeThinkingAsAnswer) {
+    return [{ type: 'text-delta', text }]
+  }
+  return [{ type: 'reasoning-delta', text }]
+}
+
 export async function* streamOpenAiCompatible(
   config: ProviderConfig,
   params: ChatParams,
@@ -130,13 +148,14 @@ export async function* streamOpenAiCompatible(
 
   const baseUrl = resolveOpenAiBaseUrl(config)
   const apiModel = resolveOpenAiModelName(config, params.model)
+  const routeThinkingAsAnswer = shouldRouteThinkingAsAnswer(config, params.model)
   const body: Record<string, unknown> = {
     model: apiModel,
     messages: formatMessagesForOpenAi(params.messages, config, params.model),
     temperature: params.temperature ?? 0.7,
-    max_tokens: params.maxTokens,
+    max_tokens: resolveOpenAiMaxTokens(config, params.model, params.maxTokens),
     stream: true,
-    ...resolveDeepSeekExtraBody(config, params.model),
+    ...mergeExtraBody(config, params.model),
   }
 
   if (supportsUsageInStream(config)) {
@@ -185,14 +204,17 @@ export async function* streamOpenAiCompatible(
               content?: string
               reasoning_content?: string
               reasoning?: string
+              thinking?: string
             }
           }>
           usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
         }
 
         const delta = parsed.choices?.[0]?.delta
-        const reasoning = delta?.reasoning_content ?? delta?.reasoning
-        if (reasoning) yield { type: 'reasoning-delta', text: reasoning }
+        const reasoning = delta?.reasoning_content ?? delta?.reasoning ?? delta?.thinking
+        for (const chunk of yieldTextOrReasoning(reasoning ?? '', routeThinkingAsAnswer)) {
+          yield chunk
+        }
 
         const text = delta?.content
         if (text) yield { type: 'text-delta', text }
@@ -306,13 +328,14 @@ export async function chatCompleteOpenAiCompatible(
 
   const baseUrl = resolveOpenAiBaseUrl(config)
   const apiModel = resolveOpenAiModelName(config, params.model)
+  const routeThinkingAsAnswer = shouldRouteThinkingAsAnswer(config, params.model)
   const body: Record<string, unknown> = {
     model: apiModel,
     messages: formatMessagesForOpenAi(params.messages, config, params.model),
     temperature: params.temperature ?? 0.7,
-    max_tokens: params.maxTokens,
+    max_tokens: resolveOpenAiMaxTokens(config, params.model, params.maxTokens),
     stream: false,
-    ...resolveDeepSeekExtraBody(config, params.model),
+    ...mergeExtraBody(config, params.model),
   }
 
   if (params.tools?.length) {
@@ -335,6 +358,8 @@ export async function chatCompleteOpenAiCompatible(
     choices?: Array<{
       message?: {
         content?: string | null
+        reasoning_content?: string | null
+        thinking?: string | null
         tool_calls?: Array<{
           id: string
           function?: { name?: string; arguments?: string }
@@ -345,6 +370,11 @@ export async function chatCompleteOpenAiCompatible(
   }
 
   const message = data.choices?.[0]?.message
+  const mainContent = typeof message?.content === 'string' ? message.content : ''
+  const fallbackContent =
+    message?.reasoning_content?.trim() || message?.thinking?.trim() || ''
+  const content =
+    mainContent.trim() || (routeThinkingAsAnswer && fallbackContent ? fallbackContent : mainContent)
   const usage = data.usage
     ? {
         prompt: data.usage.prompt_tokens ?? 0,
@@ -354,7 +384,7 @@ export async function chatCompleteOpenAiCompatible(
     : undefined
 
   return {
-    content: typeof message?.content === 'string' ? message.content : '',
+    content,
     toolCalls: parseToolCalls(message ?? {}),
     usage,
   }

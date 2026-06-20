@@ -71,13 +71,21 @@ export function getStorageStats() {
 
 export async function openPathInShell(path: string) {
   if (!existsSync(path)) {
-    mkdirSync(path, { recursive: true })
+    return {
+      opened: false,
+      error: `文件不存在：${path}`,
+    }
   }
   const error = await shell.openPath(path)
   return {
     opened: !error,
     error: error || undefined,
   }
+}
+
+export function revealPathInShell(path: string) {
+  shell.showItemInFolder(path)
+  return { revealed: true }
 }
 
 export function clearAppCache() {

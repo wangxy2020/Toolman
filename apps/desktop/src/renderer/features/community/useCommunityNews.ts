@@ -36,6 +36,31 @@ export interface UseCommunityNewsOptions {
   autoLoadDetail?: boolean
 }
 
+export interface LoadCommunityNewsOptions {
+  /** 手动刷新时拉取所有已启用的 RSS 源后再更新列表 */
+  fetchFeeds?: boolean
+}
+
+async function fetchEnabledNewsSources(
+  mode: 'all-enabled' | 'needs-initial-fetch',
+): Promise<void> {
+  const sources = await listCommunityNewsSources()
+  const toFetch =
+    mode === 'all-enabled'
+      ? sources.items.filter((source) => source.enabled)
+      : sources.items.filter(
+          (source) => source.enabled && (!source.lastFetchedAt || source.lastError),
+        )
+
+  if (toFetch.length === 0) return
+
+  await Promise.all(
+    toFetch.map((source) =>
+      fetchCommunityNewsSource({ sourceId: source.id }).catch(() => undefined),
+    ),
+  )
+}
+
 export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
   const { query, autoLoad = true, loadRecommended = false, autoLoadDetail = false } = options
   const listInput = useMemo(() => ({ ...query }), [query])
@@ -52,25 +77,19 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
   >(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (loadOptions?: LoadCommunityNewsOptions) => {
     setLoading(true)
     setError(null)
     try {
+      if (loadOptions?.fetchFeeds) {
+        await fetchEnabledNewsSources('all-enabled')
+      }
+
       let list = await listCommunityNewsArticles(listInput)
 
-      if (list.items.length === 0) {
-        const sources = await listCommunityNewsSources()
-        const needsFetch = sources.items.filter(
-          (source) => source.enabled && (!source.lastFetchedAt || source.lastError),
-        )
-        if (needsFetch.length > 0) {
-          await Promise.all(
-            needsFetch.map((source) =>
-              fetchCommunityNewsSource({ sourceId: source.id }).catch(() => undefined),
-            ),
-          )
-          list = await listCommunityNewsArticles(listInput)
-        }
+      if (!loadOptions?.fetchFeeds && list.items.length === 0) {
+        await fetchEnabledNewsSources('needs-initial-fetch')
+        list = await listCommunityNewsArticles(listInput)
       }
 
       const recommendedList = loadRecommended

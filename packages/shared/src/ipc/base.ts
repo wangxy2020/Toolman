@@ -82,6 +82,14 @@ export const AppShellOpenPathOutputSchema = z.object({
   error: z.string().optional(),
 })
 
+export const AppShellRevealPathInputSchema = z.object({
+  path: z.string().min(1),
+})
+
+export const AppShellRevealPathOutputSchema = z.object({
+  revealed: z.boolean(),
+})
+
 export const AppGetStorageStatsOutputSchema = z.object({
   cacheBytes: z.number().int().nonnegative(),
   userData: z.string(),

@@ -49,7 +49,9 @@ export function applyStreamEventToMessages(
             ...message,
             status: 'completed',
             tokenUsage: event.tokenUsage,
-            contentBlocks: orderContentBlocks(message.contentBlocks),
+            contentBlocks: event.contentBlocks
+              ? orderContentBlocks(event.contentBlocks)
+              : orderContentBlocks(message.contentBlocks),
           }
         : message,
     )

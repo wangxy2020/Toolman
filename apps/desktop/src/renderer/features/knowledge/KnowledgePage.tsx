@@ -16,6 +16,7 @@ import {
 import {
   KnowledgeBaseFilePanel,
   knowledgeDocumentToPanelItem,
+  type KnowledgeFilePanelItem,
 } from './KnowledgeBaseFilePanel'
 import { KnowledgeAddUrlModal } from './KnowledgeAddUrlModal'
 import { KnowledgeFileDedupPanel, type DedupScanState } from './KnowledgeFileDedupPanel'
@@ -28,6 +29,10 @@ import {
   type KnowledgeFileSortField,
 } from './knowledge-file-sort'
 import { importFilesToKnowledgeStorage, resolveKnowledgeImportTarget, ensureDefaultFolderKb } from './knowledge-import-files'
+import {
+  buildChatWithKnowledgeFilesDraft,
+  resolveKnowledgeFilesForChat,
+} from './knowledge-chat-files'
 import { useDefaultFolderKnowledgeBase } from './useDefaultFolderKnowledgeBase'
 import { useKnowledgeDocuments } from './useKnowledgeDocuments'
 import type { SystemPaths } from '../chat/useSystemPaths'
@@ -62,6 +67,7 @@ interface Props {
   onNetworkKnowledgeFolderError?: (message: string | null) => void
   systemPaths?: SystemPaths | null
   onOpenNote?: (noteId: string) => boolean
+  onChatWithKnowledgeFiles?: (items: KnowledgeFilePanelItem[]) => void
 }
 
 export function KnowledgePage({
@@ -87,6 +93,7 @@ export function KnowledgePage({
   onNetworkKnowledgeFolderError: _onNetworkKnowledgeFolderError,
   systemPaths: _systemPaths,
   onOpenNote,
+  onChatWithKnowledgeFiles,
 }: Props) {
   const config = getModulePageConfig('knowledge')
   const [settingsTarget, setSettingsTarget] = useState<SettingsTarget>(null)
@@ -196,6 +203,24 @@ export function KnowledgePage({
     const items = documents.items.map(knowledgeDocumentToPanelItem)
     return sortKnowledgeFilePanelItems(items, sortField, sortAscending)
   }, [documents.items, sortField, sortAscending])
+
+  const chatAttachableFiles = useMemo(
+    () => resolveKnowledgeFilesForChat(panelDocuments, selectedIds),
+    [panelDocuments, selectedIds],
+  )
+
+  const handleChatWithFiles = () => {
+    const items = chatAttachableFiles
+    if (items.length === 0) {
+      documents.setError(
+        selectedIds.size > 0
+          ? '所选文件无法带到聊天（仅支持有本地路径的文件）'
+          : '当前列表没有可带到聊天的本地文件',
+      )
+      return
+    }
+    onChatWithKnowledgeFiles?.(items)
+  }
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -648,6 +673,10 @@ export function KnowledgePage({
               sortField={sortField}
               sortAscending={sortAscending}
               onSortFieldChange={handleSortFieldChange}
+              onChatWithFiles={
+                onChatWithKnowledgeFiles ? () => handleChatWithFiles() : undefined
+              }
+              chatDisabled={chatAttachableFiles.length === 0}
             />
           ) : null
         }

@@ -9,7 +9,7 @@ import {
   type SupportedFileKind,
 } from '@toolman/knowledge'
 import type { ContentBlock } from '@toolman/shared'
-import { getModelTypeSupport } from '@toolman/shared'
+import { getModelTypeSupport, isOcrVisionModelId, DOCX_MCP_SERVER_ID } from '@toolman/shared'
 import { parseModelId } from './provider.service'
 import { writeBlobFromBuffer } from './blob.service'
 import {
@@ -169,10 +169,20 @@ async function preparePdfBlock(
   options: {
     workspaceId?: string
     documentOcrEnabled?: boolean
+    ocrChatModel?: boolean
     signal?: AbortSignal
     onStatus?: (message: string) => void
   },
 ): Promise<ContentBlock> {
+  if (options.ocrChatModel && supportsVision) {
+    options.onStatus?.(`正在将「${fileName}」转为页面图片并发送给 OCR 模型…`)
+    const visionPages = await withAbortSignal(
+      renderPdfVisionPages(readPath, { signal: options.signal }),
+      options.signal,
+    )
+    return { ...block, delivery: 'vision', visionPages }
+  }
+
   options.onStatus?.(`正在提取「${fileName}」文本…`)
   let extractedText = ''
   try {
@@ -219,6 +229,8 @@ async function prepareFileBlock(
   options: {
     workspaceId?: string
     documentOcrEnabled?: boolean
+    ocrChatModel?: boolean
+    docxMcpEnabled?: boolean
     signal?: AbortSignal
     onStatus?: (message: string) => void
   },
@@ -233,6 +245,11 @@ async function prepareFileBlock(
 
   if (!kind) {
     throw new Error(`「${fileName}」暂不支持在聊天中直接处理该文件类型`)
+  }
+
+  if (kind === 'docx' && options.docxMcpEnabled) {
+    options.onStatus?.(`「${fileName}」将通过 DOCX MCP 工具处理…`)
+    return { ...block, content: '', delivery: 'docx_tool' }
   }
 
   if (isLikelyTextFile(fileName) && kind !== 'pdf') {
@@ -270,6 +287,7 @@ export async function prepareChatAttachmentsForModel(options: {
   blocks: ContentBlock[]
   modelId: string
   workspaceId?: string
+  mcpServerIds?: string[]
   documentOcrEnabled?: boolean
   signal?: AbortSignal
   onStatus?: (message: string) => void
@@ -277,6 +295,8 @@ export async function prepareChatAttachmentsForModel(options: {
   const staged = await stageUserContentBlocks(options.blocks)
   const { model } = parseModelId(options.modelId)
   const supportsVision = getModelTypeSupport(model).vision
+  const ocrChatModel = isOcrVisionModelId(model)
+  const docxMcpEnabled = options.mcpServerIds?.includes(DOCX_MCP_SERVER_ID) ?? false
   const prepared: ContentBlock[] = []
 
   for (const block of staged) {
@@ -304,6 +324,8 @@ export async function prepareChatAttachmentsForModel(options: {
       await prepareFileBlock(block, supportsVision, {
         workspaceId: options.workspaceId,
         documentOcrEnabled: options.documentOcrEnabled,
+        ocrChatModel,
+        docxMcpEnabled,
         signal: options.signal,
         onStatus: options.onStatus,
       }),

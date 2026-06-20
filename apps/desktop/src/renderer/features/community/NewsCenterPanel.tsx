@@ -54,7 +54,7 @@ export function NewsCenterPanel() {
         publishLabel="发布资讯"
         showPublish={false}
         loading={news.loading}
-        onRefresh={() => void news.load()}
+        onRefresh={() => void news.load({ fetchFeeds: true })}
         headerExtra={
           <button
             type="button"

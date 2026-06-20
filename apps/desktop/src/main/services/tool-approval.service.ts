@@ -8,6 +8,23 @@ export type ToolApprovalResult = {
 }
 
 const pending = new Map<string, (result: ToolApprovalResult) => void>()
+const grantedScopes = new Set<string>()
+
+export function grantToolApprovalScope(scopeKey: string): void {
+  if (scopeKey.trim()) grantedScopes.add(scopeKey.trim())
+}
+
+export function hasToolApprovalScope(scopeKey: string): boolean {
+  return grantedScopes.has(scopeKey.trim())
+}
+
+export function clearToolApprovalScope(scopeKey: string): void {
+  grantedScopes.delete(scopeKey.trim())
+}
+
+export function clearToolApprovalScopes(): void {
+  grantedScopes.clear()
+}
 
 function broadcastApprovalRequest(payload: {
   requestId: string

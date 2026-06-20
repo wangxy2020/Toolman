@@ -1,4 +1,5 @@
 import { IconFile, IconFolder } from '../../components/icons'
+import { LocalFilePathLink } from './LocalFilePathLink'
 import type { ParsedToolResult } from './parse-tool-result'
 import { parseToolResult, splitPathParts } from './parse-tool-result'
 
@@ -61,6 +62,17 @@ function LineListView({ lines }: { lines: string[] }) {
   )
 }
 
+function DocxFileResultView({ paths, lead }: { paths: string[]; lead?: string }) {
+  return (
+    <div className="tm-tool-office-result">
+      {lead ? <p className="tm-tool-office-result-lead">{lead}</p> : null}
+      {paths.map((path) => (
+        <LocalFilePathLink key={path} path={path} />
+      ))}
+    </div>
+  )
+}
+
 export function ToolResultView({ toolName, result }: Props) {
   const parsed = parseToolResult(toolName, result)
 
@@ -77,6 +89,10 @@ export function ToolResultView({ toolName, result }: Props) {
 
   if (parsed.type === 'line_list') {
     return <LineListView lines={parsed.lines} />
+  }
+
+  if (parsed.type === 'docx_file') {
+    return <DocxFileResultView paths={parsed.paths} lead={parsed.lead} />
   }
 
   return <pre className="tm-tool-output-raw">{result}</pre>

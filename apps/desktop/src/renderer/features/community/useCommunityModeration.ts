@@ -9,6 +9,9 @@ import {
 import {
   approveCommunityModerationResource,
   banCommunityModerationUser,
+  banCommunityModerationDevice,
+  unbanCommunityModerationUser,
+  unbanCommunityModerationDevice,
   cancelCommunityTask,
   deleteCommunityBoardMessage,
   listCommunityModerationLogs,
@@ -121,6 +124,33 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
     [runAction],
   )
 
+  const banDevice = useCallback(
+    async (input: {
+      deviceId: string
+      userId: string
+      deviceName: string
+      reason?: string
+      durationHours?: number
+    }) => {
+      await runAction(() => banCommunityModerationDevice(input))
+    },
+    [runAction],
+  )
+
+  const unbanUser = useCallback(
+    async (userId: string) => {
+      await runAction(() => unbanCommunityModerationUser({ userId }))
+    },
+    [runAction],
+  )
+
+  const unbanDevice = useCallback(
+    async (deviceId: string) => {
+      await runAction(() => unbanCommunityModerationDevice({ deviceId }))
+    },
+    [runAction],
+  )
+
   const resolveReport = useCallback(
     async (
       reportId: string,
@@ -170,6 +200,9 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
     suspendResource,
     approveResource,
     banUser,
+    banDevice,
+    unbanUser,
+    unbanDevice,
     resolveReport,
     deleteMessage,
     cancelTask,
