@@ -250,13 +250,24 @@ export function McpSettingsPanel() {
     setModalOpen(true)
   }
 
-  const closeModal = () => {
+  const cancelModal = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    setModalOpen(false)
+  }
+
+  const confirmModal = () => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
     if (canPersist(draft, creating)) {
-      void saveServer(finalizeConfig(draft))
+      void saveServer(finalizeConfig(draft)).then((ok) => {
+        if (ok) setModalOpen(false)
+      })
+      return
     }
     setModalOpen(false)
   }
@@ -377,7 +388,8 @@ export function McpSettingsPanel() {
           draft={draft}
           creating={creating}
           onChange={handleDraftChange}
-          onClose={closeModal}
+          onCancel={cancelModal}
+          onConfirm={confirmModal}
         />
       ) : null}
     </>

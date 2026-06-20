@@ -8,7 +8,6 @@ import {
   KNOWLEDGE_WATCH_SUPPORTED_TYPES_HINT,
   type KnowledgeBase,
 } from '@toolman/shared'
-import { IconHelp } from '../../components/icons'
 import {
   decodeModelRef,
   encodeModelRef,
@@ -43,11 +42,11 @@ function FormLabel({
   hint?: string
 }) {
   return (
-    <span className="tm-form-label">
+    <span className="tm-kb-settings-label tm-kb-settings-label--with-hint">
       {children}
       {hint ? (
-        <span className="tm-form-label-hint" title={hint}>
-          <IconHelp size={13} />
+        <span className="tm-kb-settings-help" title={hint} aria-label={hint}>
+          ⓘ
         </span>
       ) : null}
     </span>
@@ -156,21 +155,26 @@ function WatchStatusBadge({
   watching: boolean
 }) {
   if (loading) {
-    return <span className="tm-knowledge-settings-watch-status">检查中…</span>
+    return <span className="tm-kb-settings-watch-status">检查中…</span>
   }
 
   return (
     <span
       className={[
-        'tm-knowledge-settings-watch-status',
-        watching
-          ? 'tm-knowledge-settings-watch-status--active'
-          : 'tm-knowledge-settings-watch-status--inactive',
+        'tm-kb-settings-watch-status',
+        watching ? 'tm-kb-settings-watch-status--active' : 'tm-kb-settings-watch-status--inactive',
       ].join(' ')}
     >
-      {watching ? '监听中' : '未监听'}
+      {watching ? '● 监听中' : '● 未监听'}
     </span>
   )
+}
+
+type SettingsTab = 'basic' | 'watch' | 'memory' | 'advanced'
+
+function formatMemoryBadge(count: number): string | undefined {
+  if (count <= 0) return undefined
+  return count > 9 ? '9+' : String(count)
 }
 
 export function KnowledgeBaseSettingsModal({
@@ -237,6 +241,8 @@ export function KnowledgeBaseSettingsModal({
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
+  const [memoryCount, setMemoryCount] = useState(0)
   const footerErrorRef = useRef<HTMLParagraphElement>(null)
   const watchStatus = useKnowledgeWatchStatus(isLocalKb ? workspaceId : null, isLocalKb ? kb.id : null)
 
@@ -559,326 +565,398 @@ export function KnowledgeBaseSettingsModal({
       ? '本地知识库设置'
       : '网络知识库设置'
 
+  const settingsTabs = useMemo(() => {
+    const tabs: Array<{ id: SettingsTab; label: string; badge?: string }> = [
+      { id: 'basic', label: isLocalFilesKb ? '基础设置' : '基础与模型' },
+    ]
+    if (isLocalKb) tabs.push({ id: 'watch', label: '文件夹监听' })
+    if (isNetworkKb) tabs.push({ id: 'watch', label: '网页刷新' })
+    tabs.push({
+      id: 'memory',
+      label: '长期记忆',
+      badge: formatMemoryBadge(memoryCount),
+    })
+    if (isVectorizedKb) tabs.push({ id: 'advanced', label: '高级与调试' })
+    return tabs
+  }, [isLocalFilesKb, isLocalKb, isNetworkKb, isVectorizedKb, memoryCount])
+
+  useEffect(() => {
+    if (!settingsTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab('basic')
+    }
+  }, [activeTab, settingsTabs])
+
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
+    <div className="tm-modal-overlay tm-modal-overlay--kb-settings" onClick={onClose}>
       <div
-        className="tm-modal tm-modal--knowledge-create"
+        className="tm-kb-settings-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kb-settings-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="tm-modal-header">
-          <h2 className="tm-modal-title">{modalTitle}</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+        <header className="tm-kb-settings-modal-header">
+          <h3 id="kb-settings-title" className="tm-kb-settings-modal-title">
+            <span className="tm-kb-settings-modal-title-dot" aria-hidden="true" />
+            {modalTitle}
+          </h3>
+          <button type="button" className="tm-kb-settings-modal-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </header>
 
-        <div className="tm-modal-body tm-knowledge-settings-body">
-          <section className="tm-knowledge-settings-section">
-            <h3 className="tm-knowledge-settings-heading">基本信息</h3>
-            <label className="tm-form-field">
-              <FormLabel>名称</FormLabel>
-              <input
-                className="tm-form-input"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                readOnly={nameReadOnly}
-              />
-            </label>
-            <label className="tm-form-field">
-              <FormLabel>描述（可选）</FormLabel>
-              <textarea
-                className="tm-form-textarea"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={2}
-              />
-            </label>
-            {isNetworkKb ? (
-              <p className="tm-knowledge-detail-hint">
-                在主界面拖拽或添加 HTTP/HTTPS 网页链接，系统会抓取页面内容并建立索引。
-              </p>
-            ) : null}
-            {isLocalFilesKb ? (
-              <p className="tm-knowledge-detail-hint">
-                本地文件仅用于存储与管理文件，不会进行向量化或检索索引。
-              </p>
-            ) : null}
-            {isLocalFilesKb && kbStoragePath ? (
-              <>
-                <label className="tm-form-field">
-                  <FormLabel hint="此本地文件库的存储目录。">存储目录</FormLabel>
-                  <div className="tm-knowledge-folder-path">{kbStoragePath}</div>
-                </label>
-                <div className="tm-knowledge-folder-actions">
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--secondary"
-                    onClick={() => void handleOpenStorageInFinder(kbStoragePath)}
-                    disabled={submitting}
-                  >
-                    在 Finder 中打开
-                  </button>
-                </div>
-              </>
-            ) : null}
-            {isVectorizedKb ? (
-            <label className="tm-form-field">
-              <FormLabel hint="用于将文档内容转换为向量，修改后需重建索引。">嵌入模型</FormLabel>
-              <select
-                className="tm-form-input"
-                value={embeddingRef}
-                onChange={(event) => setEmbeddingRef(event.target.value)}
-                disabled={modelsLoading}
+        <div className="tm-kb-settings-modal-body">
+          <nav className="tm-kb-settings-modal-nav" aria-label="知识库设置分类">
+            {settingsTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={[
+                  'tm-kb-settings-modal-nav-item',
+                  activeTab === tab.id ? 'tm-kb-settings-modal-nav-item--active' : '',
+                  tab.badge ? 'tm-kb-settings-modal-nav-item--badge' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => setActiveTab(tab.id)}
               >
-                {embeddingOptions.length === 0 ? (
-                  <option value="">没有模型</option>
-                ) : (
-                  embeddingOptions.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
-            ) : null}
-            {isNetworkKb && !defaultFolderKind && kbStoragePath ? (
-              <>
-                <label className="tm-form-field">
-                  <FormLabel hint="此知识库的网页快照等文件存储目录。">存储目录</FormLabel>
-                  <div className="tm-knowledge-folder-path">{kbStoragePath}</div>
-                </label>
-                <div className="tm-knowledge-folder-actions">
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--secondary"
-                    onClick={() => void handleOpenStorageInFinder(kbStoragePath)}
-                    disabled={submitting}
-                  >
-                    在 Finder 中打开
-                  </button>
-                </div>
-              </>
-            ) : null}
-          </section>
+                <span>{tab.label}</span>
+                {tab.badge ? <span className="tm-kb-settings-nav-badge">{tab.badge}</span> : null}
+              </button>
+            ))}
+          </nav>
 
-          {isVectorizedKb ? (
-          <section className="tm-knowledge-settings-section">
-            <h3 className="tm-knowledge-settings-heading">高级设置</h3>
-            {isLocalKb ? (
-              <label className="tm-form-field">
-                <FormLabel hint="用于解析 PDF、Office 等复杂文档格式的服务商。">文档处理</FormLabel>
-                <select
-                  className="tm-form-input"
-                  value={docProcessorProviderId}
-                  onChange={(event) => setDocProcessorProviderId(event.target.value)}
-                  disabled={modelsLoading}
-                >
-                  <option value="">选择一个文档处理服务商</option>
-                  {docProcessorProviders.map((provider) => (
-                    <option key={provider.value} value={provider.value}>
-                      {provider.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <label className="tm-form-field">
-              <FormLabel hint="检索时对候选结果重新排序的模型。">重排模型</FormLabel>
-              <select
-                className="tm-form-input"
-                value={rerankRef}
-                onChange={(event) => setRerankRef(event.target.value)}
-                disabled={modelsLoading}
-              >
-                <option value="">没有模型</option>
-                {rerankModels.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="tm-form-field">
-              <FormLabel
-                hint={
-                  isNetworkKb
-                    ? '网页内容通常适合 Markdown 结构分块。'
-                    : 'fixed 按字符切分；markdown 保留标题结构；semantic 按语义边界切分（较慢）。'
-                }
-              >
-                分块策略
-              </FormLabel>
-              <select
-                className="tm-form-input"
-                value={chunkStrategy}
-                onChange={(event) =>
-                  setChunkStrategy(event.target.value as KnowledgeBase['chunkConfig']['strategy'])
-                }
-              >
-                <option value="markdown">Markdown 结构</option>
-                <option value="fixed">固定长度</option>
-                {isLocalKb ? <option value="semantic">语义分块</option> : null}
-              </select>
-            </label>
-            <label className="tm-form-field">
-              <FormLabel hint="每个文本分段的字符数，留空使用默认值。">分段大小</FormLabel>
-              <input
-                className="tm-form-input"
-                type="number"
-                min={64}
-                value={chunkSize}
-                onChange={(event) => setChunkSize(event.target.value)}
-                placeholder="默认值（不建议修改）"
-              />
-            </label>
-            <label className="tm-form-field">
-              <FormLabel hint="相邻分段之间的重叠字符数，留空使用默认值。">重叠大小</FormLabel>
-              <input
-                className="tm-form-input"
-                type="number"
-                min={0}
-                value={chunkOverlap}
-                onChange={(event) => setChunkOverlap(event.target.value)}
-                placeholder="默认值（不建议修改）"
-              />
-            </label>
-          </section>
-          ) : null}
+          <div className="tm-kb-settings-modal-content">
+            {activeTab === 'basic' ? (
+              <div className="tm-kb-settings-form">
+                <div className="tm-kb-settings-row">
+                  <label className="tm-kb-settings-label" htmlFor="kb-settings-name">
+                    名称
+                  </label>
+                  <input
+                    id="kb-settings-name"
+                    className="tm-kb-settings-input"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    readOnly={nameReadOnly}
+                  />
+                </div>
 
-          {isLocalKb ? (
-            <section className="tm-knowledge-settings-section">
-              <div className="tm-knowledge-settings-heading-row">
-                <h3 className="tm-knowledge-settings-heading">文件夹监听</h3>
-                <WatchStatusBadge
-                  loading={watchStatus.loading}
-                  watching={isWatchingStoragePath}
-                />
+                <div className="tm-kb-settings-row tm-kb-settings-row--top">
+                  <label className="tm-kb-settings-label" htmlFor="kb-settings-description">
+                    描述 (可选)
+                  </label>
+                  <textarea
+                    id="kb-settings-description"
+                    className="tm-kb-settings-textarea"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    rows={2}
+                  />
+                </div>
+
+                {isNetworkKb ? (
+                  <p className="tm-kb-settings-hint">
+                    在主界面拖拽或添加 HTTP/HTTPS 网页链接，系统会抓取页面内容并建立索引。
+                  </p>
+                ) : null}
+                {isLocalFilesKb ? (
+                  <p className="tm-kb-settings-hint">
+                    本地文件仅用于存储与管理文件，不会进行向量化或检索索引。
+                  </p>
+                ) : null}
+
+                {isLocalFilesKb && kbStoragePath ? (
+                  <>
+                    <div className="tm-kb-settings-row">
+                      <span className="tm-kb-settings-label">存储目录</span>
+                      <div className="tm-kb-settings-path">{kbStoragePath}</div>
+                    </div>
+                    <div className="tm-kb-settings-row-actions">
+                      <button
+                        type="button"
+                        className="tm-kb-settings-inline-btn"
+                        onClick={() => void handleOpenStorageInFinder(kbStoragePath)}
+                        disabled={submitting}
+                      >
+                        在 Finder 中打开
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {isVectorizedKb ? (
+                  <div className="tm-kb-settings-row">
+                    <FormLabel hint="用于将文档内容转换为向量，修改后需重建索引。">嵌入模型</FormLabel>
+                    <select
+                      id="kb-settings-embedding"
+                      className="tm-kb-settings-input"
+                      value={embeddingRef}
+                      onChange={(event) => setEmbeddingRef(event.target.value)}
+                      disabled={modelsLoading}
+                    >
+                      {embeddingOptions.length === 0 ? (
+                        <option value="">没有模型</option>
+                      ) : (
+                        embeddingOptions.map((model) => (
+                          <option key={model.value} value={model.value}>
+                            {model.label}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                ) : null}
+
+                {isNetworkKb && !defaultFolderKind && kbStoragePath ? (
+                  <>
+                    <div className="tm-kb-settings-row">
+                      <span className="tm-kb-settings-label">存储目录</span>
+                      <div className="tm-kb-settings-path">{kbStoragePath}</div>
+                    </div>
+                    <div className="tm-kb-settings-row-actions">
+                      <button
+                        type="button"
+                        className="tm-kb-settings-inline-btn"
+                        onClick={() => void handleOpenStorageInFinder(kbStoragePath)}
+                        disabled={submitting}
+                      >
+                        在 Finder 中打开
+                      </button>
+                    </div>
+                  </>
+                ) : null}
               </div>
-              <label className="tm-form-field">
-                <FormLabel hint="每行一个 glob 模式，用于匹配需要索引的文件。">包含规则</FormLabel>
+            ) : null}
+
+            {activeTab === 'watch' && isLocalKb ? (
+              <div className="tm-kb-settings-form">
+                <div className="tm-kb-settings-section-head">
+                  <span className="tm-kb-settings-section-title">包含规则</span>
+                  <WatchStatusBadge
+                    loading={watchStatus.loading}
+                    watching={isWatchingStoragePath}
+                  />
+                </div>
                 <textarea
-                  className="tm-form-textarea"
+                  className="tm-kb-settings-textarea tm-kb-settings-textarea--mono"
                   value={watchInclude}
                   onChange={(event) => setWatchInclude(event.target.value)}
                   placeholder={KNOWLEDGE_WATCH_INCLUDE_PLACEHOLDER}
                   rows={4}
                 />
-                <p className="tm-form-hint">{KNOWLEDGE_WATCH_SUPPORTED_TYPES_HINT}</p>
-              </label>
-              <label className="tm-form-field">
-                <FormLabel hint="每行一个 glob 模式，匹配到的文件将跳过索引。">排除规则</FormLabel>
-                <textarea
-                  className="tm-form-textarea"
-                  value={watchExclude}
-                  onChange={(event) => setWatchExclude(event.target.value)}
-                  placeholder={patternsToText(DEFAULT_KNOWLEDGE_WATCH_CONFIG.exclude)}
-                  rows={3}
-                />
-                <p className="tm-form-hint">{KNOWLEDGE_WATCH_OFFICE_TEMP_EXCLUDE_HINT}</p>
-              </label>
-              <label className="tm-form-field">
-                <FormLabel hint="文件变更后等待多久再触发重新索引（毫秒）。">防抖间隔</FormLabel>
-                <input
-                  className="tm-form-input"
-                  type="number"
-                  min={100}
-                  value={watchDebounceMs}
-                  onChange={(event) => setWatchDebounceMs(event.target.value)}
-                  placeholder={`默认 ${DEFAULT_KNOWLEDGE_WATCH_CONFIG.debounceMs}`}
-                />
-              </label>
-              {watchChanged ? (
-                <p className="tm-knowledge-detail-hint">监听规则变更后需保存，将对知识库目录内文件生效。</p>
-              ) : null}
-            </section>
-          ) : null}
+                <p className="tm-kb-settings-hint">{KNOWLEDGE_WATCH_SUPPORTED_TYPES_HINT}</p>
 
-          {isNetworkKb ? (
-            <section className="tm-knowledge-settings-section">
-              <h3 className="tm-knowledge-settings-heading">网页刷新</h3>
-              <label className="tm-form-field">
-                <FormLabel hint="定时重新抓取并索引知识库内全部网页，0 表示关闭。">
-                  刷新间隔（小时）
-                </FormLabel>
-                <input
-                  className="tm-form-input"
-                  type="number"
-                  min={0}
-                  value={urlRefreshIntervalHours}
-                  onChange={(event) => setUrlRefreshIntervalHours(event.target.value)}
-                  placeholder="0（关闭）"
-                />
-              </label>
-              {kb.watchConfig.lastUrlRefreshAt ? (
-                <p className="tm-knowledge-detail-hint">
-                  上次刷新：{new Date(kb.watchConfig.lastUrlRefreshAt).toLocaleString()}
-                </p>
-              ) : null}
-            </section>
-          ) : null}
+                <div className="tm-kb-settings-field-block">
+                  <FormLabel hint="每行一个 glob 模式，匹配到的文件将跳过索引。">排除规则</FormLabel>
+                  <textarea
+                    className="tm-kb-settings-textarea tm-kb-settings-textarea--mono"
+                    value={watchExclude}
+                    onChange={(event) => setWatchExclude(event.target.value)}
+                    placeholder={patternsToText(DEFAULT_KNOWLEDGE_WATCH_CONFIG.exclude)}
+                    rows={3}
+                  />
+                  <p className="tm-kb-settings-hint">{KNOWLEDGE_WATCH_OFFICE_TEMP_EXCLUDE_HINT}</p>
+                </div>
 
-          {isVectorizedKb ? (
-          <section className="tm-knowledge-settings-section">
-            <h3 className="tm-knowledge-settings-heading">检索设置</h3>
-            <label className="tm-form-field">
-              <FormLabel hint="检索时过滤低相关度结果的阈值（0–1），留空使用默认值。">
-                匹配度阈值
-              </FormLabel>
-              <input
-                className="tm-form-input"
-                type="number"
-                min={0}
-                max={1}
-                step={0.01}
-                value={scoreThreshold}
-                onChange={(event) => setScoreThreshold(event.target.value)}
-                placeholder="默认值（不建议修改）"
-              />
-            </label>
-            <label className="tm-form-field">
-              <FormLabel hint="file 为 JSON 文件向量；lance 使用 LanceDB，适合较大知识库。切换后建议重建索引。">
-                向量存储
-              </FormLabel>
-              <select
-                className="tm-form-input"
-                value={vectorBackend}
-                onChange={(event) => setVectorBackend(event.target.value as 'file' | 'lance')}
-              >
-                <option value="file">JSON 文件（默认）</option>
-                <option value="lance">LanceDB</option>
-              </select>
-            </label>
-          </section>
-          ) : null}
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="文件变更后等待多久再触发重新索引（毫秒）。">防抖间隔</FormLabel>
+                  <input
+                    className="tm-kb-settings-input"
+                    type="number"
+                    min={100}
+                    value={watchDebounceMs}
+                    onChange={(event) => setWatchDebounceMs(event.target.value)}
+                    placeholder={`默认 ${DEFAULT_KNOWLEDGE_WATCH_CONFIG.debounceMs}`}
+                  />
+                </div>
 
-          {isVectorizedKb ? (
-            <>
-          <KnowledgeSearchDebugPanel workspaceId={workspaceId} kbId={kb.id} />
-          <KnowledgeSourcesPanel workspaceId={workspaceId} onChanged={onSaved} />
-          <KnowledgeIngestJobPanel workspaceId={workspaceId} kbId={kb.id} />
-            </>
-          ) : null}
-          <MemoryEntryPanel workspaceId={workspaceId} />
+                {watchChanged ? (
+                  <p className="tm-kb-settings-hint">监听规则变更后需保存，将对知识库目录内文件生效。</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeTab === 'watch' && isNetworkKb ? (
+              <div className="tm-kb-settings-form">
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="定时重新抓取并索引知识库内全部网页，0 表示关闭。">
+                    刷新间隔（小时）
+                  </FormLabel>
+                  <input
+                    className="tm-kb-settings-input"
+                    type="number"
+                    min={0}
+                    value={urlRefreshIntervalHours}
+                    onChange={(event) => setUrlRefreshIntervalHours(event.target.value)}
+                    placeholder="0（关闭）"
+                  />
+                </div>
+                {kb.watchConfig.lastUrlRefreshAt ? (
+                  <p className="tm-kb-settings-hint">
+                    上次刷新：{new Date(kb.watchConfig.lastUrlRefreshAt).toLocaleString()}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeTab === 'memory' ? (
+              <MemoryEntryPanel workspaceId={workspaceId} onCountChange={setMemoryCount} />
+            ) : null}
+
+            {activeTab === 'advanced' && isVectorizedKb ? (
+              <div className="tm-kb-settings-form">
+                {isLocalKb ? (
+                  <div className="tm-kb-settings-row">
+                    <FormLabel hint="用于解析 PDF、Office 等复杂文档格式的服务商。">文档处理</FormLabel>
+                    <select
+                      className="tm-kb-settings-input"
+                      value={docProcessorProviderId}
+                      onChange={(event) => setDocProcessorProviderId(event.target.value)}
+                      disabled={modelsLoading}
+                    >
+                      <option value="">选择一个文档处理服务商</option>
+                      {docProcessorProviders.map((provider) => (
+                        <option key={provider.value} value={provider.value}>
+                          {provider.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="检索时对候选结果重新排序的模型。">重排模型</FormLabel>
+                  <select
+                    className="tm-kb-settings-input"
+                    value={rerankRef}
+                    onChange={(event) => setRerankRef(event.target.value)}
+                    disabled={modelsLoading}
+                  >
+                    <option value="">没有模型</option>
+                    {rerankModels.map((model) => (
+                      <option key={model.value} value={model.value}>
+                        {model.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="tm-kb-settings-row">
+                  <FormLabel
+                    hint={
+                      isNetworkKb
+                        ? '网页内容通常适合 Markdown 结构分块。'
+                        : 'fixed 按字符切分；markdown 保留标题结构；semantic 按语义边界切分（较慢）。'
+                    }
+                  >
+                    分块策略
+                  </FormLabel>
+                  <select
+                    className="tm-kb-settings-input"
+                    value={chunkStrategy}
+                    onChange={(event) =>
+                      setChunkStrategy(event.target.value as KnowledgeBase['chunkConfig']['strategy'])
+                    }
+                  >
+                    <option value="markdown">Markdown 结构</option>
+                    <option value="fixed">固定长度</option>
+                    {isLocalKb ? <option value="semantic">语义分块</option> : null}
+                  </select>
+                </div>
+
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="每个文本分段的字符数，留空使用默认值。">分段大小</FormLabel>
+                  <input
+                    className="tm-kb-settings-input"
+                    type="number"
+                    min={64}
+                    value={chunkSize}
+                    onChange={(event) => setChunkSize(event.target.value)}
+                    placeholder="默认值（不建议修改）"
+                  />
+                </div>
+
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="相邻分段之间的重叠字符数，留空使用默认值。">重叠大小</FormLabel>
+                  <input
+                    className="tm-kb-settings-input"
+                    type="number"
+                    min={0}
+                    value={chunkOverlap}
+                    onChange={(event) => setChunkOverlap(event.target.value)}
+                    placeholder="默认值（不建议修改）"
+                  />
+                </div>
+
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="检索时过滤低相关度结果的阈值（0–1），留空使用默认值。">
+                    匹配度阈值
+                  </FormLabel>
+                  <input
+                    className="tm-kb-settings-input"
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={scoreThreshold}
+                    onChange={(event) => setScoreThreshold(event.target.value)}
+                    placeholder="默认值（不建议修改）"
+                  />
+                </div>
+
+                <div className="tm-kb-settings-row">
+                  <FormLabel hint="file 为 JSON 文件向量；lance 使用 LanceDB，适合较大知识库。切换后建议重建索引。">
+                    向量存储
+                  </FormLabel>
+                  <select
+                    className="tm-kb-settings-input"
+                    value={vectorBackend}
+                    onChange={(event) => setVectorBackend(event.target.value as 'file' | 'lance')}
+                  >
+                    <option value="file">JSON 文件（默认）</option>
+                    <option value="lance">LanceDB</option>
+                  </select>
+                </div>
+
+                <KnowledgeSearchDebugPanel workspaceId={workspaceId} kbId={kb.id} />
+                <KnowledgeSourcesPanel workspaceId={workspaceId} onChanged={onSaved} />
+                <KnowledgeIngestJobPanel workspaceId={workspaceId} kbId={kb.id} />
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <footer className="tm-modal-footer tm-modal-footer--stacked">
+        <footer className="tm-kb-settings-modal-footer">
           {combinedError ? (
-            <p ref={footerErrorRef} className="tm-form-error tm-modal-footer-error">
+            <p ref={footerErrorRef} className="tm-form-error tm-kb-settings-modal-footer-error">
               {combinedError}
             </p>
           ) : null}
-          <div className="tm-modal-footer-actions">
-            <button type="button" className="tm-btn tm-btn--ghost" onClick={onClose} disabled={submitting}>
+          <div className="tm-kb-settings-modal-footer-actions">
+            <button
+              type="button"
+              className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--secondary"
+              onClick={onClose}
+              disabled={submitting}
+            >
               取消
             </button>
             <button
               type="button"
-              className="tm-btn tm-btn--primary"
+              className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--primary"
               onClick={() => void handleSubmit()}
               disabled={submitting}
             >
-              {submitting ? '保存中…' : '保存'}
+              {submitting ? '保存中…' : '保存配置'}
             </button>
           </div>
         </footer>

@@ -51,6 +51,7 @@ import { GroupInviteModal } from '../group/GroupInviteModal'
 import { useP2pWorkspaces } from '../group/useP2pWorkspaces'
 import { useP2pTrustPrompt } from '../group/useP2pTrustPrompt'
 import { GroupTrustDeviceModal } from '../group/GroupTrustDeviceModal'
+import { useRegistrationGate } from '../user/useRegistrationGate'
 import { KnowledgePage } from '../knowledge/KnowledgePage'
 import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
 import { KnowledgeCreateModal } from '../knowledge/KnowledgeCreateModal'
@@ -97,6 +98,7 @@ export function ChatPage() {
     COMMUNITY_SECTION_TO_ACTION[DEFAULT_COMMUNITY_SIDEBAR_SECTION],
   )
   const communityUser = useCommunityUser()
+  const registrationGate = useRegistrationGate()
   const [agentPrefillText, setAgentPrefillText] = useState<string | null>(null)
   const [agentPrefillAttachments, setAgentPrefillAttachments] = useState<
     PendingAttachment[] | null
@@ -111,7 +113,7 @@ export function ChatPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   const knowledge = useKnowledgeBases({ workspaceId })
-  const p2pWorkspaces = useP2pWorkspaces()
+  const p2pWorkspaces = useP2pWorkspaces({ enabled: registrationGate.canUseGroup })
   const p2pTrust = useP2pTrustPrompt()
   const knowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'local')
   const networkKnowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'network')
@@ -131,7 +133,8 @@ export function ChatPage() {
 
   const { settings: appSettings, updateSettings: updateAppSettings } = useAppSettings()
   const chat = useChat(workspaceId, appSettings)
-  const { settings: messageSettings, updateSettings: updateMessageSettings } = useMessageSettings()
+  const { settings: messageSettings, updateSettings: updateMessageSettings, resetSettings } =
+    useMessageSettings()
   const systemPaths = useSystemPaths()
 
   const activeAssistant = useMemo(() => {
@@ -299,6 +302,11 @@ export function ChatPage() {
   const isTopNav = appSettings.navBarPosition === 'top'
 
   const chromeSearchTitle = '全局搜索'
+
+  const handlePrefillConsumed = useCallback(() => {
+    setAgentPrefillText(null)
+    setAgentPrefillAttachments(null)
+  }, [])
 
   const handleChatWithNote = useCallback(
     (noteId: string) => {
@@ -617,8 +625,14 @@ export function ChatPage() {
             activeId={p2pWorkspaces.activeId}
             loading={p2pWorkspaces.loading}
             onSelect={p2pWorkspaces.setActiveId}
-            onCreate={() => setShowGroupCreate(true)}
-            onJoin={() => setShowGroupJoin(true)}
+            onCreate={() => {
+              if (!registrationGate.requireRegistration('group')) return
+              setShowGroupCreate(true)
+            }}
+            onJoin={() => {
+              if (!registrationGate.requireRegistration('group')) return
+              setShowGroupJoin(true)
+            }}
           />
         )}
 
@@ -714,6 +728,7 @@ export function ChatPage() {
             prefillText={agentPrefillText}
             prefillAttachments={agentPrefillAttachments}
             prefillRevision={chatPrefillRevision}
+            onPrefillConsumed={handlePrefillConsumed}
             onToggleWebSearch={() =>
               updateAppSettings({ webSearchEnabled: !appSettings.webSearchEnabled })
             }
@@ -774,29 +789,32 @@ export function ChatPage() {
             onImportAttachment={notes.addNoteAttachment}
           />
         ) : activeView === 'group' ? (
-          <GroupPage
-            workspace={p2pWorkspaces.active}
-            sourceWorkspaceId={workspaceId}
-            knowledgeBases={knowledge.items}
-            assistants={chat.assistants}
-            sessions={chat.sessions}
-            notebooks={notes.data.notebooks}
-            notes={notes.notes}
-            syncFolderPath={notes.data.syncFolderPath}
-            onInvite={
-              p2pWorkspaces.active ? () => setShowGroupInvite(true) : undefined
-            }
-            onWorkspaceUpdated={handleP2pWorkspaceUpdated}
-            onWorkspaceLeft={handleP2pWorkspaceLeft}
-            onOpenNote={handleOpenNote}
-            onOpenGroupNote={handleOpenGroupNote}
-            onOpenGroupKnowledgeMarkdown={handleOpenGroupKnowledgeMarkdown}
-            onSaveGroupNoteAsCopy={handleSaveGroupNoteAsCopy}
-            onOpenGroupAgentSession={handleOpenGroupAgentSession}
-            messageSettings={messageSettings}
-            spellCheckEnabled={appSettings.spellCheckEnabled}
-            defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
-          />
+          <>
+            <GroupPage
+              workspace={p2pWorkspaces.active}
+              sourceWorkspaceId={workspaceId}
+              knowledgeBases={knowledge.items}
+              assistants={chat.assistants}
+              sessions={chat.sessions}
+              notebooks={notes.data.notebooks}
+              notes={notes.notes}
+              syncFolderPath={notes.data.syncFolderPath}
+              onInvite={
+                p2pWorkspaces.active ? () => setShowGroupInvite(true) : undefined
+              }
+              onWorkspaceUpdated={handleP2pWorkspaceUpdated}
+              onWorkspaceLeft={handleP2pWorkspaceLeft}
+              onOpenNote={handleOpenNote}
+              onOpenGroupNote={handleOpenGroupNote}
+              onOpenGroupKnowledgeMarkdown={handleOpenGroupKnowledgeMarkdown}
+              onSaveGroupNoteAsCopy={handleSaveGroupNoteAsCopy}
+              onOpenGroupAgentSession={handleOpenGroupAgentSession}
+              messageSettings={messageSettings}
+              spellCheckEnabled={appSettings.spellCheckEnabled}
+              defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
+              requireRegistration={registrationGate.requireRegistration}
+            />
+          </>
         ) : activeView === 'community' ? (
           <CommunityPage
             activeAction={communityAction}
@@ -820,6 +838,7 @@ export function ChatPage() {
           <MessageSettingsPanel
             settings={messageSettings}
             onChange={updateMessageSettings}
+            onReset={resetSettings}
             onClose={() => setShowMessageSettings(false)}
           />
         )}
@@ -944,6 +963,7 @@ export function ChatPage() {
         />
       )}
       <ToolApprovalModal />
+      {registrationGate.modal}
     </div>
   )
 }

@@ -1078,6 +1078,7 @@ mod tests {
             port: 3721,
             host: "127.0.0.1",
             require_review,
+            jwt_secret: None,
             packages_dir: data_dir.join("packages"),
             covers_dir: data_dir.join("covers"),
             deliveries_dir: data_dir.join("deliveries"),

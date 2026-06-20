@@ -109,11 +109,12 @@ describe('docx MCP apply integration', () => {
       ctx.skip(skipReason)
     }
 
+    const activeHarness = harness!
     const workdir = await mkdtemp(join(tmpdir(), 'toolman-docx-smoke-'))
     const workingPath = join(workdir, 'smoke.docx')
 
     try {
-      const tools = filterDocxMcpToolDefinitions(harness.tools)
+      const tools = filterDocxMcpToolDefinitions(activeHarness.tools)
       expect(tools.length).toBeGreaterThan(0)
 
       const result = await runDocxMcpApplySmokeTest({

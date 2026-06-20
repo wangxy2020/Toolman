@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs'
 import { recoverStaleStreamingMessages } from '../services/agent.service'
 import { syncOllamaProviders, migratePlaintextApiKeys } from '../services/provider.service'
 import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
+import { initAuthSessionStore } from '../services/auth-session.service'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
 const DEFAULT_ASSISTANT_ID = '00000000-0000-0000-0000-000000000003'
@@ -33,6 +34,7 @@ export function bootstrapDatabase(): void {
   runMigrations(db, getMigrationsPath(packageRoot))
   seedDefaultData(db)
   ensureWorkspaceDefaults(db)
+  initAuthSessionStore()
   migratePlaintextApiKeys()
   recoverStaleStreamingMessages()
   ensureFtsIndexReady()

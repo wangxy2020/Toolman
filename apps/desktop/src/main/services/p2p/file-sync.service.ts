@@ -31,6 +31,10 @@ import {
   assertCanUploadFiles,
   assertWorkspaceMemberAccess,
 } from './p2p-permission.guard'
+import {
+  fetchBlobFromPeers,
+  pushBlobToPeers,
+} from './p2p-blob-transfer.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -169,9 +173,7 @@ export function uploadP2pFile(rawInput: unknown): {
     createdAt: now,
   })
 
-  void import('./p2p-blob-transfer.service').then((module) => {
-    void module.pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
-  })
+  void pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
 
   return {
     sharedResource: mapSharedResourceRow(resourceRow),
@@ -271,8 +273,7 @@ export async function downloadP2pFile(rawInput: unknown): Promise<{
   }
 
   if (!blobExists(versionRow.contentHash)) {
-    const blobTransfer = await import('./p2p-blob-transfer.service')
-    const fetched = await blobTransfer.fetchBlobFromPeers(
+    const fetched = await fetchBlobFromPeers(
       input.workspaceId,
       versionRow.contentHash,
       versionRow.mimeType ?? readMetadataMimeType(resource),

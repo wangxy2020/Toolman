@@ -9,7 +9,7 @@ import {
 } from '@toolman/shared'
 import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
-import { getMessageRepository } from '../../db/repos'
+import { getMessageRepository, getSessionRepository } from '../../db/repos'
 import { sendMessage } from '../agent.service'
 import { listMessages } from '../agent.service'
 import { broadcastStreamEvent, addStreamRelayListener } from '../stream-broadcast'
@@ -19,6 +19,7 @@ import { connectP2pPeer } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { readAgentShareMetadata } from './agent-share.service'
 import { assertPeerTrustedForSync } from './p2p-peer.service'
+import { registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 
 export const AGENT_RELAY_CHANNEL = 'agent-relay'
 
@@ -234,7 +235,7 @@ async function handleOwnerFetch(
       false,
     )
 
-    const sessionRepo = await import('../../db/repos').then((m) => m.getSessionRepository())
+    const sessionRepo = getSessionRepository()
     const session = sessionRepo.findRowById(message.sourceSessionId)
     if (!session) {
       throw new Error('话题不存在')
@@ -400,9 +401,9 @@ function handleMemberStream(message: Extract<AgentRelayMessage, { type: 'stream'
 
 export async function handleP2pAgentRelayMessage(
   peerDeviceId: string,
-  data: Buffer,
+  data: Buffer | Uint8Array,
 ): Promise<void> {
-  const message = parseRelayMessage(data)
+  const message = parseRelayMessage(Buffer.from(data))
 
   switch (message.type) {
     case 'fetch':
@@ -423,4 +424,10 @@ export async function handleP2pAgentRelayMessage(
     default:
       return
   }
+}
+
+export function bootstrapP2pAgentRelay(): void {
+  registerP2pSyncHandlers({
+    handleAgentRelayMessage: handleP2pAgentRelayMessage,
+  })
 }

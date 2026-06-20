@@ -8,6 +8,7 @@ pub const ENV_DATA_DIR: &str = "COMMUNITY_HUB_DATA_DIR";
 pub const ENV_PORT: &str = "COMMUNITY_HUB_PORT";
 pub const ENV_REQUIRE_REVIEW: &str = "COMMUNITY_HUB_REQUIRE_REVIEW";
 pub const ENV_CONFIG_FILE: &str = "COMMUNITY_HUB_CONFIG_FILE";
+pub const ENV_JWT_SECRET: &str = "COMMUNITY_HUB_JWT_SECRET";
 
 pub const DEFAULT_PORT: u16 = 3721;
 pub const DEFAULT_HOST: &str = "127.0.0.1";
@@ -38,6 +39,7 @@ pub struct HubConfig {
     pub port: u16,
     pub host: &'static str,
     pub require_review: bool,
+    pub jwt_secret: Option<String>,
     pub packages_dir: PathBuf,
     pub covers_dir: PathBuf,
     pub deliveries_dir: PathBuf,
@@ -68,6 +70,7 @@ impl HubConfig {
         let file_config = load_hub_config_file(&data_dir)?;
         let port = resolve_port(&file_config);
         let require_review = resolve_require_review(&file_config);
+        let jwt_secret = resolve_jwt_secret();
 
         let packages_dir = data_dir.join("packages");
         let covers_dir = data_dir.join("covers");
@@ -80,6 +83,7 @@ impl HubConfig {
             port,
             host: DEFAULT_HOST,
             require_review,
+            jwt_secret,
             packages_dir,
             covers_dir,
             deliveries_dir,
@@ -205,6 +209,13 @@ fn resolve_require_review(file_config: &HubConfigFile) -> bool {
     file_config.require_review
 }
 
+fn resolve_jwt_secret() -> Option<String> {
+    std::env::var(ENV_JWT_SECRET)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 pub fn default_rss_sources() -> Vec<RssSourceSeed> {
     vec![
         RssSourceSeed {
@@ -303,6 +314,7 @@ mod tests {
             port: DEFAULT_PORT,
             host: DEFAULT_HOST,
             require_review: false,
+            jwt_secret: None,
             packages_dir: base.join("packages"),
             covers_dir: base.join("covers"),
             deliveries_dir: base.join("deliveries"),

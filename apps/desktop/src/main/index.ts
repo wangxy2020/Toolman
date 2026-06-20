@@ -1,3 +1,7 @@
+import { loadWorkspaceEnvFiles } from './bootstrap/load-env'
+
+loadWorkspaceEnvFiles()
+
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -20,16 +24,25 @@ import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/
 import { stopP2pDiscovery } from './services/p2p/p2p-discovery.service'
 import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
 import { bootstrapP2pEventStore } from './services/p2p/p2p-event.service'
+import { bootstrapP2pSync } from './services/p2p/p2p-sync.service'
+import { bootstrapP2pAgentRelay } from './services/p2p/p2p-agent-relay.service'
 import {
   bootstrapCommunityHub,
   shutdownCommunityHub,
 } from './services/community/community-bridge.service'
+import { isAuthInAppNavigationUrl, isAuthOAuthPopupUrl } from './services/auth/auth-oauth-popup'
+
+const ELECTRON_CHROME_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 app.commandLine.appendSwitch('lang', 'zh-CN')
+app.userAgentFallback = ELECTRON_CHROME_USER_AGENT
 
 const isDev = !app.isPackaged
 
 function shouldBlockInAppNavigation(url: string): boolean {
+  if (isAuthInAppNavigationUrl(url)) return false
+
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     try {
       const target = new URL(url)
@@ -91,13 +104,50 @@ function createWindow(): void {
     },
   })
 
+  const showFallbackTimer = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn('[window] ready-to-show timeout; forcing show')
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }, 8_000)
+
   mainWindow.on('ready-to-show', () => {
+    clearTimeout(showFallbackTimer)
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(
+      `[window] failed to load ${validatedURL}: ${errorCode} ${errorDescription}`,
+    )
     mainWindow?.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    if (isAuthOAuthPopupUrl(details.url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 480,
+          height: 720,
+          autoHideMenuBar: true,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+          },
+        },
+      }
+    }
     shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('did-create-window', (childWindow, details) => {
+    if (!isAuthOAuthPopupUrl(details.url)) return
+    childWindow.webContents.setUserAgent(ELECTRON_CHROME_USER_AGENT)
   })
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -121,20 +171,29 @@ app.whenReady().then(() => {
     app.setAppUserModelId('dev.toolman.app')
   }
 
-  bootstrapDatabase()
-  ensureP2pDeviceIdentity()
-  bootstrapP2pEventStore()
-  bootstrapP2pWorkspaceKeys()
-  bootstrapMcpPresets()
-  bootstrapSkills()
-  bootstrapChannels()
-  registerIpcHandlers()
-  startP2pConnectionMonitor()
-  logP2pNativeStatus()
-  startHeartbeatScheduler()
-  bootstrapKnowledgeWatchers()
-  resumePendingIngestJobs()
-  startKnowledgeUrlRefreshScheduler()
+  createWindow()
+
+  try {
+    bootstrapDatabase()
+    ensureP2pDeviceIdentity()
+    bootstrapP2pEventStore()
+    bootstrapP2pWorkspaceKeys()
+    bootstrapMcpPresets()
+    bootstrapSkills()
+    bootstrapChannels()
+    registerIpcHandlers()
+    bootstrapP2pSync()
+    bootstrapP2pAgentRelay()
+    startP2pConnectionMonitor()
+    logP2pNativeStatus()
+    startHeartbeatScheduler()
+    bootstrapKnowledgeWatchers()
+    resumePendingIngestJobs()
+    startKnowledgeUrlRefreshScheduler()
+  } catch (error) {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error)
+    console.error(`[bootstrap] failed: ${message}`)
+  }
 
   void bootstrapCommunityHub().then((status) => {
     if (status.running) {
@@ -144,11 +203,17 @@ app.whenReady().then(() => {
     }
   })
 
-  createWindow()
-
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    } else {
+      mainWindow?.show()
+      mainWindow?.focus()
+    }
   })
+}).catch((error) => {
+  const message = error instanceof Error ? error.stack ?? error.message : String(error)
+  console.error(`[app] whenReady failed: ${message}`)
 })
 
 app.on('window-all-closed', () => {

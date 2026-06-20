@@ -1050,12 +1050,15 @@ mod tests {
         assert_eq!(second.articles_seen, 2);
 
         let articles = service
-            .list_articles(&NewsArticleQuery {
-                source_id: Some(source.id),
-                limit: 10,
-                offset: 0,
-                ..Default::default()
-            })
+            .list_articles(
+                &NewsArticleQuery {
+                    source_id: Some(source.id),
+                    limit: 10,
+                    offset: 0,
+                    ..Default::default()
+                },
+                None,
+            )
             .await
             .expect("list articles");
         assert_eq!(articles.len(), 2);
@@ -1091,12 +1094,15 @@ mod tests {
             .expect("ingest");
 
         let article = service
-            .list_articles(&NewsArticleQuery {
-                source_id: Some(source.id),
-                limit: 1,
-                offset: 0,
-                ..Default::default()
-            })
+            .list_articles(
+                &NewsArticleQuery {
+                    source_id: Some(source.id),
+                    limit: 1,
+                    offset: 0,
+                    ..Default::default()
+                },
+                None,
+            )
             .await
             .expect("list")[0]
             .clone();
@@ -1124,7 +1130,7 @@ mod tests {
         let duplicate_like = service.like_article(&user, &article.id).await.expect("unlike");
         assert_eq!(duplicate_like.like_count, 0);
 
-        let updated = service.get_article(&article.id).await.expect("get");
+        let updated = service.get_article(&article.id, None).await.expect("get");
         assert_eq!(updated.favorite_count, 1);
         assert_eq!(updated.like_count, 0);
 

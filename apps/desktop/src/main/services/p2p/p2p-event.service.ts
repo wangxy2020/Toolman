@@ -19,6 +19,7 @@ import {
   MAX_SEQ_CONFLICT_RETRIES,
   observeRemoteLamport,
 } from './p2p-sync-sequencing'
+import { notifyLocalP2pEventAppended } from './p2p-sync-lifecycle'
 import { getKnownP2pConnections } from './p2p-connection.service'
 
 let eventStoreReady = false
@@ -170,12 +171,7 @@ export function appendP2pEvent(input: AppendP2pEventInput): WorkspaceEvent {
       const event = mapEventRow(row)
       projectP2pEvent(event)
       broadcastP2pEventAppended(event)
-      void import('./p2p-sync.service').then((module) => {
-        module.onLocalP2pEventAppended(event)
-      })
-      void import('./p2p-snapshot.service').then((module) => {
-        module.maybeAutoSnapshot(event.workspaceId)
-      })
+      notifyLocalP2pEventAppended(event)
       return event
     } catch (error) {
       lastError = error

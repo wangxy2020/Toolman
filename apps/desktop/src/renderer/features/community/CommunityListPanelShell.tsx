@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react'
 
-import { IconPlus, IconRefresh } from '../../components/icons'
+import {
+  CommunityPanelHeader,
+  CommunityPanelPublishButton,
+  CommunityPanelRefreshButton,
+} from './CommunityPanelHeader'
 
 interface Props {
   title: string
@@ -39,36 +43,23 @@ export function CommunityListPanelShell({
 }: Props) {
   return (
     <div className="tm-community-market tm-community-list-panel">
-      <header className="tm-community-market-header">
-        <div>
-          <h2 className="tm-community-market-title">{title}</h2>
-          <p className="tm-community-market-subtitle">{subtitle}</p>
-        </div>
-        <div className="tm-community-news-header-actions">
-          {showPublish ? (
-            <button
-              type="button"
-              className="tm-community-publish-btn"
-              disabled={publishDisabled || !onPublish}
-              onClick={onPublish}
-            >
-              <IconPlus size={18} />
-              <span>{publishLabel}</span>
-            </button>
-          ) : null}
-          {headerExtra}
-          <button
-            type="button"
-            className="tm-btn"
-            title="刷新"
-            aria-label="刷新"
-            disabled={loading}
-            onClick={onRefresh}
-          >
-            <IconRefresh size={14} />
-          </button>
-        </div>
-      </header>
+      <CommunityPanelHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <>
+            {showPublish ? (
+              <CommunityPanelPublishButton
+                label={publishLabel}
+                disabled={publishDisabled}
+                onClick={onPublish}
+              />
+            ) : null}
+            {headerExtra}
+            <CommunityPanelRefreshButton loading={loading} disabled={loading} onClick={onRefresh} />
+          </>
+        }
+      />
 
       {banner}
       {error}

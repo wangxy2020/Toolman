@@ -53,6 +53,7 @@ interface Props {
   prefillText?: string | null
   prefillAttachments?: PendingAttachment[] | null
   prefillRevision?: number
+  onPrefillConsumed?: () => void
   onSend: (contentBlocks: ContentBlock[]) => void
   onAbort: () => void
   onError?: (message: string | null) => void
@@ -135,6 +136,7 @@ export function MessageInput({
   prefillText,
   prefillAttachments,
   prefillRevision = 0,
+  onPrefillConsumed,
   onSend,
   onAbort,
   onError,
@@ -222,6 +224,11 @@ export function MessageInput({
     },
     [focusTextarea, text],
   )
+
+  const clearInput = useCallback(() => {
+    setText('')
+    setPendingAttachments([])
+  }, [])
 
   const sendWithOptions = useCallback(
     (contentBlocks: ContentBlock[]) => {
@@ -380,7 +387,7 @@ export function MessageInput({
       setSlashMenuOpen(false)
 
       if (item.action === 'clear') {
-        setText('')
+        clearInput()
         onClearSession?.()
         return
       }
@@ -401,7 +408,7 @@ export function MessageInput({
         }
       }
     },
-    [applyTextInsertion, onClearSession, onCreateSession, onToggleWebSearch, sendWithOptions, text],
+    [applyTextInsertion, clearInput, onClearSession, onCreateSession, onToggleWebSearch, sendWithOptions, text],
   )
 
   const handleAddQuickPhrase = () => {
@@ -487,16 +494,18 @@ export function MessageInput({
   }, [addingPhrase, handleSelectQuickPhrase, phraseActiveIndex, phraseMenuItems.length, phraseMenuOpen])
 
   useEffect(() => {
-    if (prefillText == null) return
-    setText(prefillText)
-    textareaRef.current?.focus()
-  }, [prefillText])
+    if (prefillRevision <= 0) return
+    if (prefillText == null && !prefillAttachments?.length) return
 
-  useEffect(() => {
-    if (!prefillAttachments?.length) return
-    setPendingAttachments(prefillAttachments)
+    if (prefillText != null) {
+      setText(prefillText)
+    }
+    if (prefillAttachments?.length) {
+      setPendingAttachments(prefillAttachments)
+    }
     textareaRef.current?.focus()
-  }, [prefillAttachments, prefillRevision])
+    onPrefillConsumed?.()
+  }, [prefillAttachments, prefillRevision, prefillText, onPrefillConsumed])
 
   const placeholder = disabled
     ? toolbarMode === 'group'
@@ -633,7 +642,7 @@ export function MessageInput({
             className="tm-input-tool"
             disabled={disabled || !text.trim()}
             title="清空"
-            onClick={() => setText('')}
+            onClick={clearInput}
           >
             <IconClear />
           </button>

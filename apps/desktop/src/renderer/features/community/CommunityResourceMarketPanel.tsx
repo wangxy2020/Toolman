@@ -20,6 +20,7 @@ import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityResources } from './useCommunityResources'
 import { useCommunityUser } from './useCommunityUser'
+import { useRegistrationGate } from '../user/useRegistrationGate'
 
 export interface CommunityResourceMarketPanelProps {
   resourceType: CommunityResourceType
@@ -69,6 +70,7 @@ export function CommunityResourceMarketPanel({
     autoLoadDetail: false,
   })
   const user = useCommunityUser()
+  const { requireRegistration, modal } = useRegistrationGate()
 
   const hubOffline = market.hubStatus != null && !market.hubStatus.running
   const icon = RESOURCE_ICONS[resourceType] ?? <IconFile size={18} />
@@ -149,7 +151,10 @@ export function CommunityResourceMarketPanel({
         publishLabel={publishLabel}
         loading={market.loading}
         onRefresh={() => void market.load()}
-        onPublish={() => setShowPublish(true)}
+        onPublish={() => {
+          if (!requireRegistration('community_write')) return
+          setShowPublish(true)
+        }}
         publishDisabled={!canPublish}
         banner={
           hubOffline ? (
@@ -244,6 +249,7 @@ export function CommunityResourceMarketPanel({
           onConfirm={() => void handleConfirmDelete()}
         />
       ) : null}
+      {modal}
     </>
   )
 }

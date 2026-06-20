@@ -4,6 +4,7 @@ mod comments;
 mod error;
 mod health;
 mod install;
+mod jwt;
 mod marketplace;
 mod moderation;
 mod news;
@@ -15,15 +16,17 @@ mod tasks;
 mod users;
 
 use axum::Router;
+use axum::middleware::from_fn_with_state;
 use axum::routing::get;
 
 use crate::state::AppState;
 
 pub use auth::{
-    accept_task_guard, create_resource_guard, identity_id_from_headers, load_auth_user,
-    permission_middleware, publish_guard, require_permission, AuthUser,
-    HEADER_COMMUNITY_USER_ID,
+    accept_task_guard, create_resource_guard, guest_write_block_middleware,
+    identity_id_from_headers, load_auth_user, permission_middleware, publish_guard,
+    require_permission, AuthUser, HEADER_COMMUNITY_USER_ID,
 };
+pub use jwt::{bearer_token_from_headers, validate_hub_jwt, ResolvedIdentity};
 pub use error::{ApiError, ApiErrorCode};
 
 pub fn router(state: AppState) -> Router {
@@ -42,7 +45,8 @@ pub fn router(state: AppState) -> Router {
                 .merge(orders::router())
                 .merge(moderation::router())
                 .merge(presence::router())
-                .merge(install::router()),
+                .merge(install::router())
+                .layer(from_fn_with_state(state.clone(), guest_write_block_middleware)),
         )
         .with_state(state)
 }
@@ -76,6 +80,7 @@ mod tests {
             port: 3721,
             host: "127.0.0.1",
             require_review: false,
+            jwt_secret: None,
             packages_dir: data_dir.join("packages"),
             covers_dir: data_dir.join("covers"),
             deliveries_dir: data_dir.join("deliveries"),
@@ -84,6 +89,105 @@ mod tests {
         };
         let state = AppState::new(config, pool.clone());
         (router(state), pool, data_dir)
+    }
+
+    async fn test_app_with_jwt(secret: &str) -> (Router, sqlx::SqlitePool, PathBuf) {
+        let data_dir = temp_data_dir();
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let db_path = data_dir.join("community.db");
+        let pool = init_pool(&db_path).await.expect("init pool");
+        let config = HubConfig {
+            data_dir: data_dir.clone(),
+            port: 3721,
+            host: "127.0.0.1",
+            require_review: false,
+            jwt_secret: Some(secret.to_string()),
+            packages_dir: data_dir.join("packages"),
+            covers_dir: data_dir.join("covers"),
+            deliveries_dir: data_dir.join("deliveries"),
+            db_path,
+            rss_sources_path: data_dir.join("rss-sources.json"),
+        };
+        let state = AppState::new(config, pool.clone());
+        (router(state), pool, data_dir)
+    }
+
+    fn sign_test_hub_token(secret: &str, identity_id: &str, registration_status: &str) -> String {
+        use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+
+        #[derive(serde::Serialize)]
+        struct Claims {
+            sub: String,
+            iss: String,
+            aud: String,
+            exp: i64,
+            iat: i64,
+            registration_status: String,
+        }
+
+        let claims = Claims {
+            sub: identity_id.to_string(),
+            iss: "toolman-desktop".to_string(),
+            aud: "toolman-community-hub".to_string(),
+            exp: chrono::Utc::now().timestamp() + 3600,
+            iat: chrono::Utc::now().timestamp(),
+            registration_status: registration_status.to_string(),
+        };
+
+        encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .expect("sign token")
+    }
+
+    #[tokio::test]
+    async fn get_users_me_accepts_bearer_hub_token() {
+        let secret = "test-hub-jwt-secret";
+        let (app, pool, data_dir) = test_app_with_jwt(secret).await;
+        let token = sign_test_hub_token(secret, DEFAULT_IDENTITY_ID, "registered");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/users/me")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn guest_jwt_cannot_write() {
+        let secret = "test-hub-jwt-secret-guest";
+        let (app, pool, data_dir) = test_app_with_jwt(secret).await;
+        let token = sign_test_hub_token(secret, DEFAULT_IDENTITY_ID, "guest");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/v1/users/me")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"displayName":"Guest"}"#))
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
     }
 
     #[tokio::test]

@@ -6,14 +6,15 @@ export function isChatAttachableKnowledgeFile(item: KnowledgeFilePanelItem): boo
   return !/^https?:\/\//i.test(path)
 }
 
-/** 优先使用已选文件；若无选中则使用当前列表中可附加的本地文件 */
+/** 仅使用已选中的、可附加的本地文件 */
 export function resolveKnowledgeFilesForChat(
   items: KnowledgeFilePanelItem[],
   selectedIds: Set<string>,
 ): KnowledgeFilePanelItem[] {
-  const pool =
-    selectedIds.size > 0 ? items.filter((item) => selectedIds.has(item.id)) : items
-  return pool.filter(isChatAttachableKnowledgeFile)
+  if (selectedIds.size === 0) return []
+  return items
+    .filter((item) => selectedIds.has(item.id))
+    .filter(isChatAttachableKnowledgeFile)
 }
 
 export function buildChatWithKnowledgeFilesDraft(fileNames: string[]): string {

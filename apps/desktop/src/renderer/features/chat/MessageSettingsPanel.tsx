@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react'
-import { IconChevronRight } from '../../components/icons'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { IconChevronRight, IconSliders } from '../../components/icons'
 import {
   CODE_STYLE_OPTIONS,
   MESSAGE_STYLE_OPTIONS,
+  MATH_ENGINE_OPTIONS,
   SEND_SHORTCUT_OPTIONS,
   TARGET_LANGUAGE_OPTIONS,
+  messageFontSizePx,
   type MessageSettings,
 } from './message-settings'
 
 interface Props {
   settings: MessageSettings
   onChange: (patch: Partial<MessageSettings>) => void
+  onReset: () => void
   onClose: () => void
 }
 
@@ -44,19 +47,17 @@ function SettingSelect<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="tm-msg-select-wrap">
-      <select
-        className="tm-msg-select"
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
+    <select
+      className="tm-msg-select"
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -64,16 +65,16 @@ function SettingLabel({
   children,
   help,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   help?: string
 }) {
   return (
     <span className="tm-msg-setting-label">
       {children}
       {help ? (
-        <button type="button" className="tm-msg-help" title={help}>
-          ?
-        </button>
+        <span className="tm-msg-help" title={help} aria-label={help}>
+          ⓘ
+        </span>
       ) : null}
     </span>
   )
@@ -88,20 +89,20 @@ function CollapsibleSection({
   title: string
   open: boolean
   onToggle: () => void
-  children?: React.ReactNode
+  children?: ReactNode
 }) {
   return (
     <section className="tm-msg-settings-section">
       <button type="button" className="tm-msg-settings-section-head" onClick={onToggle}>
-        <IconChevronRight open={open} size={14} />
         <span>{title}</span>
+        <IconChevronRight open={open} size={12} />
       </button>
       {open && children ? <div className="tm-msg-settings-section-body">{children}</div> : null}
     </section>
   )
 }
 
-export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
+export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: Props) {
   const [messageOpen, setMessageOpen] = useState(true)
   const [mathOpen, setMathOpen] = useState(true)
   const [codeOpen, setCodeOpen] = useState(true)
@@ -115,12 +116,32 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  const fontSizePx = messageFontSizePx(settings.messageFontSize)
+  const sliderStyle = {
+    '--slider-progress': `${settings.messageFontSize}%`,
+  } as CSSProperties
+
   return (
     <div className="tm-message-settings-overlay" onClick={onClose}>
       <aside className="tm-message-settings-panel" onClick={(e) => e.stopPropagation()}>
+        <header className="tm-message-settings-header">
+          <div className="tm-message-settings-header-title">
+            <IconSliders size={16} />
+            <h3>系统偏好设置</h3>
+          </div>
+          <button
+            type="button"
+            className="tm-message-settings-close"
+            aria-label="关闭"
+            onClick={onClose}
+          >
+            <IconChevronRight size={16} />
+          </button>
+        </header>
+
         <div className="tm-message-settings-scroll">
           <CollapsibleSection
-            title="消息设置"
+            title="消息设置 (Messages)"
             open={messageOpen}
             onToggle={() => setMessageOpen((v) => !v)}
           >
@@ -141,7 +162,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>消息样式</SettingLabel>
+              <SettingLabel>消息显示样式</SettingLabel>
               <SettingSelect
                 value={settings.messageStyle}
                 options={MESSAGE_STYLE_OPTIONS}
@@ -149,40 +170,43 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
               />
             </div>
 
-            <div className="tm-msg-setting-block">
-              <SettingLabel>消息字体大小</SettingLabel>
-              <input
-                type="range"
-                className="tm-msg-font-slider"
-                min={0}
-                max={100}
-                value={settings.messageFontSize}
-                onChange={(e) => onChange({ messageFontSize: Number(e.target.value) })}
-              />
-              <div className="tm-msg-font-scale">
-                <span className="tm-msg-font-scale-sm">A</span>
-                <span className="tm-msg-font-scale-mid">默认</span>
-                <span className="tm-msg-font-scale-lg">A</span>
+            <div className="tm-msg-setting-block tm-msg-font-block">
+              <div className="tm-msg-font-block-head">
+                <span>消息字体大小</span>
+                <span className="tm-msg-font-block-value">{fontSizePx}px</span>
+              </div>
+              <div className="tm-msg-font-slider-row">
+                <span className="tm-msg-font-scale-sm">A⁻</span>
+                <input
+                  type="range"
+                  className="tm-msg-font-slider"
+                  style={sliderStyle}
+                  min={0}
+                  max={100}
+                  value={settings.messageFontSize}
+                  onChange={(e) => onChange({ messageFontSize: Number(e.target.value) })}
+                />
+                <span className="tm-msg-font-scale-lg">A⁺</span>
               </div>
             </div>
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="数学公式设置"
+            title="数学公式设置 (Math)"
             open={mathOpen}
             onToggle={() => setMathOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel help="当前仅支持 KaTeX 渲染">数学公式引擎</SettingLabel>
+              <SettingLabel>数学公式引擎</SettingLabel>
               <SettingSelect
-                value={settings.mathEngine === 'mathjax' ? 'katex' : settings.mathEngine}
-                options={[{ value: 'katex' as const, label: 'KaTeX' }]}
+                value={settings.mathEngine}
+                options={MATH_ENGINE_OPTIONS}
                 onChange={(mathEngine) => onChange({ mathEngine })}
               />
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel help="允许使用 $...$ 语法渲染行内数学公式">启用 $...$</SettingLabel>
+              <SettingLabel help="允许使用 $...$ 语法渲染行内数学公式">启用 $...$ 行内渲染</SettingLabel>
               <Toggle
                 checked={settings.enableInlineDollar}
                 onChange={(enableInlineDollar) => onChange({ enableInlineDollar })}
@@ -191,12 +215,12 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="代码块设置"
+            title="代码块设置 (Code Blocks)"
             open={codeOpen}
             onToggle={() => setCodeOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码风格</SettingLabel>
+              <SettingLabel>代码高亮风格</SettingLabel>
               <SettingSelect
                 value={settings.codeStyle}
                 options={CODE_STYLE_OPTIONS}
@@ -205,7 +229,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel help="为代码块启用更丰富的展示样式">花式代码块</SettingLabel>
+              <SettingLabel help="为代码块启用更丰富的展示样式">花式代码块主题</SettingLabel>
               <Toggle
                 checked={settings.fancyCodeBlocks}
                 onChange={(fancyCodeBlocks) => onChange({ fancyCodeBlocks })}
@@ -221,7 +245,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码显示行号</SettingLabel>
+              <SettingLabel>显示代码行号</SettingLabel>
               <Toggle
                 checked={settings.showLineNumbers}
                 onChange={(showLineNumbers) => onChange({ showLineNumbers })}
@@ -237,7 +261,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码块可换行</SettingLabel>
+              <SettingLabel>代码长文本自动换行</SettingLabel>
               <Toggle
                 checked={settings.wrapCodeBlocks}
                 onChange={(wrapCodeBlocks) => onChange({ wrapCodeBlocks })}
@@ -246,12 +270,12 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="输入设置"
+            title="输入设置 (Input)"
             open={inputOpen}
             onToggle={() => setInputOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel>长文本粘贴为文件</SettingLabel>
+              <SettingLabel>长文本自动粘贴为文件</SettingLabel>
               <Toggle
                 checked={settings.pasteLongTextAsFile}
                 onChange={(pasteLongTextAsFile) => onChange({ pasteLongTextAsFile })}
@@ -259,7 +283,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>Markdown 渲染输入消息</SettingLabel>
+              <SettingLabel>Markdown 实时渲染输入</SettingLabel>
               <Toggle
                 checked={settings.markdownRenderInput}
                 onChange={(markdownRenderInput) => onChange({ markdownRenderInput })}
@@ -267,7 +291,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>3 个空格快速翻译</SettingLabel>
+              <SettingLabel>连续 3 个空格触发快速翻译</SettingLabel>
               <Toggle
                 checked={settings.quickTranslateWithSpaces}
                 onChange={(quickTranslateWithSpaces) => onChange({ quickTranslateWithSpaces })}
@@ -275,7 +299,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>显示翻译确认对话框</SettingLabel>
+              <SettingLabel>激活时显示翻译确认框</SettingLabel>
               <Toggle
                 checked={settings.showTranslateConfirmDialog}
                 onChange={(showTranslateConfirmDialog) => onChange({ showTranslateConfirmDialog })}
@@ -283,7 +307,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>启用 / 和 @ 触发快捷菜单</SettingLabel>
+              <SettingLabel>启用 / 与 @ 智能菜单</SettingLabel>
               <Toggle
                 checked={settings.enableSlashAtShortcutMenu}
                 onChange={(enableSlashAtShortcutMenu) => onChange({ enableSlashAtShortcutMenu })}
@@ -291,7 +315,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>删除消息前确认</SettingLabel>
+              <SettingLabel>删除消息前二次确认</SettingLabel>
               <Toggle
                 checked={settings.confirmBeforeDeleteMessage}
                 onChange={(confirmBeforeDeleteMessage) => onChange({ confirmBeforeDeleteMessage })}
@@ -299,7 +323,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>重新生成消息前确认</SettingLabel>
+              <SettingLabel>重新生成消息前二次确认</SettingLabel>
               <Toggle
                 checked={settings.confirmBeforeRegenerateMessage}
                 onChange={(confirmBeforeRegenerateMessage) =>
@@ -309,7 +333,7 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>目标语言</SettingLabel>
+              <SettingLabel>翻译目标语言</SettingLabel>
               <SettingSelect
                 value={settings.targetLanguage}
                 options={TARGET_LANGUAGE_OPTIONS}
@@ -327,6 +351,12 @@ export function MessageSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
           </CollapsibleSection>
         </div>
+
+        <footer className="tm-message-settings-footer">
+          <button type="button" className="tm-message-settings-reset" onClick={onReset}>
+            恢复默认配置
+          </button>
+        </footer>
       </aside>
     </div>
   )

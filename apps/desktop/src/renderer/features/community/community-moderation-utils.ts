@@ -41,6 +41,56 @@ export const MODERATION_TAB_LABELS = {
 
 export type ModerationTab = keyof typeof MODERATION_TAB_LABELS
 
+export const MODERATION_CATEGORY_LABELS = {
+  resources: '资源',
+  review: '审核',
+  online: '在线',
+  admin: '管理',
+  logs: '处置日志',
+} as const
+
+export type ModerationCategory = keyof typeof MODERATION_CATEGORY_LABELS
+
+export const RESOURCE_SUB_TAB_LABELS = {
+  knowledge: '知识库',
+  mcp: 'MCP',
+  skill: 'Skills',
+  workflow: '工作流',
+  tasks: '任务',
+} as const
+
+export type ResourceSubTab = keyof typeof RESOURCE_SUB_TAB_LABELS
+
+export const ONLINE_SUB_TAB_LABELS = {
+  desktop: '在线桌面端',
+  mobile: '在线移动端',
+} as const
+
+export type OnlineSubTab = keyof typeof ONLINE_SUB_TAB_LABELS
+
+export const ADMIN_SUB_TAB_LABELS = {
+  registeredUsers: '注册用户',
+  admins: '管理员',
+  blacklist: '黑名单',
+} as const
+
+export type AdminSubTab = keyof typeof ADMIN_SUB_TAB_LABELS
+
+export const DEFAULT_SUB_TAB_BY_CATEGORY = {
+  resources: 'knowledge',
+  review: 'pending',
+  online: 'desktop',
+  admin: 'registeredUsers',
+  logs: 'logs',
+} as const satisfies Record<ModerationCategory, string>
+
+export type ModerationSubTab =
+  | ResourceSubTab
+  | 'pending'
+  | OnlineSubTab
+  | AdminSubTab
+  | 'logs'
+
 export function getDefaultReportResolveAction(
   targetType: CommunityReportTargetType,
 ): CommunityModerationReportResolveInput['action'] {

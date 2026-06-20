@@ -3,6 +3,7 @@ import {
   COMMUNITY_HUB_IDENTITY_ID,
   buildCommunityHubBaseUrl,
 } from './community-paths'
+import type { CommunityHubAuthContext } from './community-hub-auth.service'
 
 export interface CommunityApiResponse<T> {
   ok: boolean
@@ -41,17 +42,20 @@ export interface CommunityHttpClientOptions {
   host?: string
   identityId?: string
   fetchImpl?: typeof fetch
+  resolveAuth?: () => Promise<CommunityHubAuthContext> | CommunityHubAuthContext
 }
 
 export class CommunityHttpClient {
   private readonly baseUrl: string
   private readonly identityId: string
   private readonly fetchImpl: typeof fetch
+  private readonly resolveAuth?: () => Promise<CommunityHubAuthContext> | CommunityHubAuthContext
 
   constructor(options: CommunityHttpClientOptions) {
     this.baseUrl = buildCommunityHubBaseUrl(options.port, options.host)
     this.identityId = options.identityId ?? COMMUNITY_HUB_IDENTITY_ID
     this.fetchImpl = options.fetchImpl ?? fetch
+    this.resolveAuth = options.resolveAuth
   }
 
   get apiBaseUrl(): string {
@@ -143,7 +147,7 @@ export class CommunityHttpClient {
       headers.set('Content-Type', 'application/json')
     }
     if (init.authenticated !== false) {
-      headers.set(COMMUNITY_HUB_HEADER, this.identityId)
+      await this.applyAuthHeaders(headers)
     }
 
     const response = await this.fetchImpl(url, {
@@ -186,5 +190,18 @@ export class CommunityHttpClient {
     }
 
     return payload.data
+  }
+
+  private async applyAuthHeaders(headers: Headers): Promise<void> {
+    const auth = this.resolveAuth
+      ? await Promise.resolve(this.resolveAuth())
+      : { identityId: this.identityId }
+
+    if (auth.authorization) {
+      headers.set('Authorization', auth.authorization)
+      return
+    }
+
+    headers.set(COMMUNITY_HUB_HEADER, auth.identityId)
   }
 }

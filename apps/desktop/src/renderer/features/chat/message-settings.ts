@@ -103,14 +103,14 @@ export const MATH_ENGINE_OPTIONS: { value: MathEngine; label: string }[] = [
 ]
 
 export const CODE_STYLE_OPTIONS: { value: CodeStyle; label: string }[] = [
-  { value: 'auto', label: 'auto' },
-  { value: 'github', label: 'github' },
-  { value: 'monokai', label: 'monokai' },
-  { value: 'vs', label: 'vs' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'github', label: 'Github Dark' },
+  { value: 'monokai', label: 'Monokai' },
+  { value: 'vs', label: 'VS Code' },
 ]
 
 export const TARGET_LANGUAGE_OPTIONS: { value: InputTargetLanguage; label: string }[] = [
-  { value: 'en', label: '英文' },
+  { value: 'en', label: 'English' },
   { value: 'zh', label: '中文' },
 ]
 

@@ -328,7 +328,9 @@ News 不走 Resource 主表，使用 `community_news_articles` + `community_rss_
 | `can_accept_task` | true | 接受任务 |
 | `can_create_resource` | true | 创建资源草稿 |
 
-Enterprise / Admin 可覆盖；Guest 全 false。与本地 `identities` 表通过 `identity_id` 关联，V1 不实现云端 OAuth。
+Enterprise / Admin 可覆盖；Guest 全 false。与本地 `identities` 表通过 `identity_id` 关联。
+
+**Auth V2（已确认）**：统一账户体系 + Firebase（海外）/ 腾讯云（国内微信+手机）；访客可只读浏览社区；注册后可用社区写操作与群组。详见 [账户与权限规范](../auth/ACCOUNT_AUTH_SPEC.md)。Hub 本机与未来云端共用同一套 JWT 鉴权。
 
 ---
 

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type P2pWorkspace } from '@toolman/shared'
 
-export function useP2pWorkspaces() {
+interface UseP2pWorkspacesOptions {
+  enabled?: boolean
+}
+
+export function useP2pWorkspaces(options: UseP2pWorkspacesOptions = {}) {
+  const enabled = options.enabled ?? true
   const [myGroups, setMyGroups] = useState<P2pWorkspace[]>([])
   const [joinedGroups, setJoinedGroups] = useState<P2pWorkspace[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -9,6 +14,15 @@ export function useP2pWorkspaces() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!enabled) {
+      setMyGroups([])
+      setJoinedGroups([])
+      setActiveId(null)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -38,7 +52,7 @@ export function useP2pWorkspaces() {
       if (current && all.some((item) => item.id === current)) return current
       return mine[0]?.id ?? joined[0]?.id ?? null
     })
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
     void load()
@@ -46,6 +60,9 @@ export function useP2pWorkspaces() {
 
   const create = useCallback(
     async (input: { name: string; description?: string }) => {
+      if (!enabled) {
+        throw new Error('群组功能需要注册')
+      }
       setError(null)
       const result = await window.api.invoke(IpcChannel.P2pWorkspaceCreate, input)
 
@@ -59,11 +76,14 @@ export function useP2pWorkspaces() {
       setActiveId(data.workspace.id)
       return data.workspace
     },
-    [load],
+    [enabled, load],
   )
 
   const join = useCallback(
     async (input: { inviteToken: string; displayName?: string }) => {
+      if (!enabled) {
+        throw new Error('群组功能需要注册')
+      }
       setError(null)
       const result = await window.api.invoke(IpcChannel.P2pMemberJoin, input)
 
@@ -77,7 +97,7 @@ export function useP2pWorkspaces() {
       setActiveId(data.workspace.id)
       return data.workspace
     },
-    [load],
+    [enabled, load],
   )
 
   const updateWorkspace = useCallback((workspace: P2pWorkspace) => {

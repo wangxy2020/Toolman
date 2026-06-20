@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::extract::{FromRef, FromRequestParts, State};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, Request, StatusCode};
+use axum::http::{HeaderMap, Method, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
 
@@ -10,6 +10,9 @@ use crate::repositories::UserRepository;
 use crate::state::AppState;
 
 use super::error::ApiError;
+use super::jwt::{
+    bearer_token_from_headers, ensure_registered, validate_hub_jwt, ResolvedIdentity,
+};
 
 pub const HEADER_COMMUNITY_USER_ID: &str = "x-community-user-id";
 
@@ -34,6 +37,29 @@ pub fn identity_id_from_headers(headers: &HeaderMap) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
+pub fn resolve_identity_from_headers(
+    headers: &HeaderMap,
+    jwt_secret: Option<&str>,
+) -> Result<ResolvedIdentity, ApiError> {
+    if let Some(secret) = jwt_secret {
+        if let Some(token) = bearer_token_from_headers(headers) {
+            return validate_hub_jwt(token, secret);
+        }
+    }
+
+    if let Some(identity_id) = identity_id_from_headers(headers) {
+        return Ok(ResolvedIdentity {
+            identity_id: identity_id.to_string(),
+            registration_status: "registered".to_string(),
+            sku: None,
+        });
+    }
+
+    Err(ApiError::unauthorized(
+        "missing Authorization Bearer token or X-Community-User-Id",
+    ))
+}
+
 pub async fn load_auth_user(state: &AppState, identity_id: &str) -> Result<AuthUser, ApiError> {
     let repo = UserRepository::new(state.db.clone());
     let user = repo
@@ -46,15 +72,39 @@ pub fn require_permission(user: &CommunityUser, permission: UserPermission) -> R
     user.ensure_permission(permission).map_err(ApiError::from)
 }
 
+pub async fn guest_write_block_middleware(
+    State(state): State<AppState>,
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response, ApiError> {
+    let method = request.method().clone();
+    if matches!(
+        method,
+        Method::POST | Method::PUT | Method::PATCH | Method::DELETE
+    ) {
+        if let Ok(identity) = resolve_identity_from_headers(
+            request.headers(),
+            state.config.jwt_secret.as_deref(),
+        ) {
+            ensure_registered(&identity)?;
+        }
+    }
+
+    Ok(next.run(request).await)
+}
+
 pub async fn permission_middleware(
     State(state): State<AppState>,
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, ApiError> {
-    let identity_id = identity_id_from_headers(request.headers())
-        .ok_or_else(|| ApiError::unauthorized("missing X-Community-User-Id"))?;
+    let identity = resolve_identity_from_headers(
+        request.headers(),
+        state.config.jwt_secret.as_deref(),
+    )?;
 
-    let auth_user = load_auth_user(&state, identity_id).await?;
+    ensure_registered(&identity)?;
+    let auth_user = load_auth_user(&state, &identity.identity_id).await?;
     auth_user.user().ensure_permission(UserPermission::Publish)?;
 
     request.extensions_mut().insert(auth_user);
@@ -72,15 +122,15 @@ where
         parts: &mut Parts,
         state: &S,
     ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
-        let identity_id = identity_id_from_headers(&parts.headers).map(str::to_string);
         let state = AppState::from_ref(state);
 
         async move {
-            let identity_id = identity_id
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| ApiError::unauthorized("missing X-Community-User-Id"))?;
+            let identity = resolve_identity_from_headers(
+                &parts.headers,
+                state.config.jwt_secret.as_deref(),
+            )?;
 
-            load_auth_user(&state, &identity_id).await
+            load_auth_user(&state, &identity.identity_id).await
         }
     }
 }
@@ -104,9 +154,12 @@ pub async fn require_publish_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<StatusCode, ApiError> {
-    let identity_id = identity_id_from_headers(&headers)
-        .ok_or_else(|| ApiError::unauthorized("missing X-Community-User-Id"))?;
-    let auth_user = load_auth_user(&state, identity_id).await?;
+    let identity = resolve_identity_from_headers(
+        &headers,
+        state.config.jwt_secret.as_deref(),
+    )?;
+    ensure_registered(&identity)?;
+    let auth_user = load_auth_user(&state, &identity.identity_id).await?;
     require_permission(auth_user.user(), UserPermission::Publish)?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -1,4 +1,5 @@
 export * from './identity.js'
+export * from './auth.js'
 export * from './agent.js'
 export * from './session.js'
 export * from './knowledge.js'

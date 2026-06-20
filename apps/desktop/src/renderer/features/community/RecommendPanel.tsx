@@ -1,7 +1,10 @@
 import {
+  CommunityPanelHeader,
+  CommunityPanelRefreshButton,
+} from './CommunityPanelHeader'
+import {
   IconMcp,
   IconNews,
-  IconRefresh,
   IconSkill,
   IconWorkflow,
 } from '../../components/icons'
@@ -70,22 +73,17 @@ export function RecommendPanel() {
 
   return (
     <div className="tm-community-market tm-community-recommend">
-      <header className="tm-community-market-header">
-        <div>
-          <h2 className="tm-community-market-title">为你推荐</h2>
-          <p className="tm-community-market-subtitle">聚合热门 MCP、Skills、工作流与资讯</p>
-        </div>
-        <button
-          type="button"
-          className="tm-btn"
-          title="刷新"
-          aria-label="刷新"
-          disabled={recommend.loading}
-          onClick={() => void recommend.load()}
-        >
-          <IconRefresh size={14} />
-        </button>
-      </header>
+      <CommunityPanelHeader
+        title="为你推荐"
+        subtitle="聚合热门 MCP、Skills、工作流与资讯"
+        actions={
+          <CommunityPanelRefreshButton
+            loading={recommend.loading}
+            disabled={recommend.loading}
+            onClick={() => void recommend.load()}
+          />
+        }
+      />
 
       {hubOffline ? (
         <div className="tm-community-market-banner" role="status">

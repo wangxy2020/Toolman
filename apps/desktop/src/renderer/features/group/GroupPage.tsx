@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Assistant, KnowledgeBase, P2pWorkspace, Session } from '@toolman/shared'
+import type { AuthFeature, Assistant, KnowledgeBase, P2pWorkspace, Session } from '@toolman/shared'
 import {
   IconActivity,
   IconAgent,
@@ -80,6 +80,7 @@ interface Props {
   messageSettings: MessageSettings
   spellCheckEnabled?: boolean
   defaultFilePath?: string | null
+  requireRegistration?: (feature: AuthFeature) => boolean
 }
 
 export function GroupPage({
@@ -102,6 +103,7 @@ export function GroupPage({
   messageSettings,
   spellCheckEnabled = true,
   defaultFilePath = null,
+  requireRegistration,
 }: Props) {
   const [activeAction, setActiveAction] = useState<string | null>(DEFAULT_GROUP_ACTION)
   const [showSettings, setShowSettings] = useState(false)
@@ -149,6 +151,11 @@ export function GroupPage({
 
   const displayWorkspace = detail.workspace ?? workspace
   const workspaceName = displayWorkspace?.name ?? workspace?.name ?? '群组'
+
+  const guardGroupAccess = () => {
+    if (!requireRegistration) return true
+    return requireRegistration('group')
+  }
 
   const renderPanel = () => {
     if (!workspace) return null
@@ -282,6 +289,7 @@ export function GroupPage({
               aria-pressed={effectiveAction === action.key}
               aria-expanded={action.key === 'members' ? membersMenuOpen : undefined}
               onClick={() => {
+                if (!guardGroupAccess()) return
                 if (!workspace) return
                 if (action.key === 'members') {
                   setActiveAction('members')
@@ -303,6 +311,7 @@ export function GroupPage({
             aria-label="群组设置"
             disabled={!workspace}
             onClick={() => {
+              if (!guardGroupAccess()) return
               if (!workspace) return
               setShowSettings(true)
             }}

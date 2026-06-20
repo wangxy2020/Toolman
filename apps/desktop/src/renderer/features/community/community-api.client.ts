@@ -1,5 +1,6 @@
 import {
   IpcChannel,
+  type CommunityHubHealthOutput,
   type CommunityHubStatusOutput,
   type CommunityInstallHistoryInput,
   type CommunityInstallItem,
@@ -70,6 +71,10 @@ async function invokeIpc<T>(channel: IpcChannel, input?: unknown): Promise<T> {
 
 export async function getCommunityHubStatus(): Promise<CommunityHubStatusOutput> {
   return invokeIpc(IpcChannel.CommunityHubStatus)
+}
+
+export async function getCommunityHubHealth(): Promise<CommunityHubHealthOutput> {
+  return invokeIpc(IpcChannel.CommunityHubHealth)
 }
 
 export async function listCommunityResources(

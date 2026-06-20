@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { type CommunityTaskType } from '@toolman/shared'
 
 import { createCommunityTask, publishCommunityTask } from './community-api.client'
 import { parseTaskTags, TASK_TYPE_LABELS } from './community-task-utils'
+import {
+  CommunityPublishModalError,
+  CommunityPublishModalFooterActions,
+  CommunityPublishModalShell,
+} from './CommunityPublishModalShell'
 
 interface Props {
   onClose: () => void
@@ -22,14 +27,6 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
   const [tags, setTags] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -61,111 +58,105 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
-      <div className="tm-modal tm-modal--narrow tm-modal--form" onClick={(event) => event.stopPropagation()}>
-        <div className="tm-modal-header">
-          <h2 className="tm-modal-title">发布任务</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose} aria-label="关闭">
-            ×
-          </button>
-        </div>
+    <CommunityPublishModalShell
+      title="发布任务"
+      onClose={onClose}
+      footer={
+        <CommunityPublishModalFooterActions
+          onCancel={onClose}
+          cancelDisabled={submitting}
+          confirmLabel={submitting ? '发布中…' : '发布任务'}
+          confirmDisabled={submitting}
+          onConfirm={() => void handleSubmit()}
+        />
+      }
+    >
+      {error ? <CommunityPublishModalError message={error} /> : null}
 
-        <div className="tm-modal-body">
-          {error ? <div className="tm-error-bar">{error}</div> : null}
+      <label className="tm-community-publish-field">
+        <span className="tm-community-publish-label">
+          任务标题 <span className="tm-community-publish-required">*</span>
+        </span>
+        <input
+          type="text"
+          className="tm-community-publish-input"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="例如：开发 Toolman MCP 插件"
+        />
+      </label>
 
-          <label className="tm-form-field">
-            <span className="tm-form-label">标题</span>
-            <input
-              className="tm-form-input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="例如：开发 Toolman MCP 插件"
-            />
-          </label>
+      <label className="tm-community-publish-field">
+        <span className="tm-community-publish-label">任务描述</span>
+        <textarea
+          className="tm-community-publish-textarea"
+          rows={4}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="说明任务目标、交付要求与验收标准..."
+        />
+      </label>
 
-          <label className="tm-form-field">
-            <span className="tm-form-label">描述</span>
-            <textarea
-              className="tm-form-textarea"
-              rows={4}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="说明任务目标、交付要求与验收标准"
-            />
-          </label>
+      <label className="tm-community-publish-field">
+        <span className="tm-community-publish-label">任务类型</span>
+        <select
+          className="tm-community-publish-input tm-community-publish-input--select"
+          value={taskType}
+          onChange={(event) => setTaskType(event.target.value as CommunityTaskType)}
+        >
+          {TASK_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {TASK_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
+      </label>
 
-          <label className="tm-form-field">
-            <span className="tm-form-label">类型</span>
-            <select
-              className="tm-form-input"
-              value={taskType}
-              onChange={(event) => setTaskType(event.target.value as CommunityTaskType)}
-            >
-              {TASK_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {TASK_TYPE_LABELS[type]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="tm-community-task-form-row">
-            <label className="tm-form-field">
-              <span className="tm-form-label">预算</span>
-              <input
-                className="tm-form-input"
-                type="number"
-                min="0"
-                step="1"
-                value={budgetAmount}
-                onChange={(event) => setBudgetAmount(event.target.value)}
-              />
-            </label>
-            <label className="tm-form-field">
-              <span className="tm-form-label">币种</span>
-              <input
-                className="tm-form-input"
-                value={budgetCurrency}
-                onChange={(event) => setBudgetCurrency(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <label className="tm-form-field">
-            <span className="tm-form-label">截止日期</span>
-            <input
-              className="tm-form-input"
-              type="datetime-local"
-              value={deadlineAt}
-              onChange={(event) => setDeadlineAt(event.target.value)}
-            />
-          </label>
-
-          <label className="tm-form-field">
-            <span className="tm-form-label">标签</span>
-            <input
-              className="tm-form-input"
-              value={tags}
-              onChange={(event) => setTags(event.target.value)}
-              placeholder="用逗号分隔，例如：rust, electron"
-            />
-          </label>
-        </div>
-
-        <div className="tm-modal-footer">
-          <button type="button" className="tm-btn" onClick={onClose} disabled={submitting}>
-            取消
-          </button>
-          <button
-            type="button"
-            className="tm-btn tm-btn--primary"
-            disabled={submitting}
-            onClick={() => void handleSubmit()}
-          >
-            {submitting ? '发布中…' : '发布任务'}
-          </button>
-        </div>
+      <div className="tm-community-publish-grid">
+        <label className="tm-community-publish-field">
+          <span className="tm-community-publish-label">预算</span>
+          <input
+            type="number"
+            className="tm-community-publish-input"
+            min="0"
+            step="1"
+            value={budgetAmount}
+            onChange={(event) => setBudgetAmount(event.target.value)}
+          />
+        </label>
+        <label className="tm-community-publish-field">
+          <span className="tm-community-publish-label">币种</span>
+          <input
+            type="text"
+            className="tm-community-publish-input tm-community-publish-input--medium"
+            value={budgetCurrency}
+            onChange={(event) => setBudgetCurrency(event.target.value)}
+          />
+        </label>
       </div>
-    </div>
+
+      <label className="tm-community-publish-field">
+        <span className="tm-community-publish-label">
+          截止日期 <span className="tm-community-publish-label-optional">(可选)</span>
+        </span>
+        <input
+          type="datetime-local"
+          className="tm-community-publish-input"
+          value={deadlineAt}
+          onChange={(event) => setDeadlineAt(event.target.value)}
+        />
+      </label>
+
+      <label className="tm-community-publish-field">
+        <span className="tm-community-publish-label">标签</span>
+        <input
+          type="text"
+          className="tm-community-publish-input"
+          value={tags}
+          onChange={(event) => setTags(event.target.value)}
+          placeholder="用逗号分隔，例如：rust, electron"
+        />
+      </label>
+    </CommunityPublishModalShell>
   )
 }

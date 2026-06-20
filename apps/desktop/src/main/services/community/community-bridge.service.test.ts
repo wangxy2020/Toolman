@@ -83,4 +83,29 @@ describe('CommunityHttpClient', () => {
 
     await expect(client.get('/api/v1/users/me')).rejects.toThrow('missing')
   })
+
+  it('sends Authorization Bearer when resolveAuth provides a token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        ok: true,
+        data: { id: 'user-1' },
+      }),
+    )
+
+    const client = new CommunityHttpClient({
+      port: 3721,
+      fetchImpl,
+      resolveAuth: async () => ({
+        authorization: 'Bearer hub-token',
+        identityId: '00000000-0000-0000-0000-000000000001',
+      }),
+    })
+
+    await client.get('/api/v1/users/me')
+    const init = fetchImpl.mock.calls[0]?.[1]
+    expect(init?.headers).toBeInstanceOf(Headers)
+    const headers = init?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer hub-token')
+    expect(headers.get('x-community-user-id')).toBeNull()
+  })
 })

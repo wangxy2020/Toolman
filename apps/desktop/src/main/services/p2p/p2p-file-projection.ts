@@ -4,6 +4,7 @@ import {
 } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
+import { scheduleBlobFetch } from './p2p-blob-transfer.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -79,7 +80,5 @@ export function projectFileCreatedEvent(event: WorkspaceEvent): void {
     })
   }
 
-  void import('./p2p-blob-transfer.service').then((module) => {
-    module.scheduleBlobFetch(event.workspaceId, contentHash, mimeType)
-  })
+  scheduleBlobFetch(event.workspaceId, contentHash, mimeType)
 }

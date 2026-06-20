@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 
-import { IconNews, IconSliders } from '../../components/icons'
+import { IconSliders } from '../../components/icons'
+import { CommunityPanelSecondaryButton } from './CommunityPanelHeader'
 import { buildNewsCommentTarget } from './community-comment-utils'
+import { CommunityNewsListIcon } from './community-news-list-icon'
 import { sortCommunityListItems } from './community-list-sort'
 import {
   formatNewsArticleDescription,
@@ -56,16 +58,14 @@ export function NewsCenterPanel() {
         loading={news.loading}
         onRefresh={() => void news.load({ fetchFeeds: true })}
         headerExtra={
-          <button
-            type="button"
-            className="tm-btn"
+          <CommunityPanelSecondaryButton
             title="RSS 源管理"
-            aria-label="RSS 源管理"
+            ariaLabel="RSS 源管理"
             onClick={() => setShowSources(true)}
           >
-            <IconSliders size={14} />
-            RSS 源
-          </button>
+            <IconSliders size={16} />
+            <span>RSS 源</span>
+          </CommunityPanelSecondaryButton>
         }
         error={news.error ? <div className="tm-error-bar">{news.error}</div> : null}
         isEmpty={listItems.length === 0}
@@ -116,7 +116,7 @@ export function NewsCenterPanel() {
                     setSelectedId(article.id)
                     setDetailArticleId(article.id)
                   }}
-                  icon={<IconNews size={18} />}
+                  icon={<CommunityNewsListIcon articleId={article.id} />}
                 />
               </CommunityCommentListItemShell>
             )

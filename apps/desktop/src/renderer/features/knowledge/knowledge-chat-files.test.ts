@@ -27,8 +27,8 @@ describe('resolveKnowledgeFilesForChat', () => {
     expect(resolveKnowledgeFilesForChat(items, new Set(['1', '2']))).toEqual([items[0]])
   })
 
-  it('falls back to all attachable files when nothing selected', () => {
-    expect(resolveKnowledgeFilesForChat(items, new Set())).toEqual([items[0]])
+  it('returns empty list when nothing selected', () => {
+    expect(resolveKnowledgeFilesForChat(items, new Set())).toEqual([])
   })
 })
 

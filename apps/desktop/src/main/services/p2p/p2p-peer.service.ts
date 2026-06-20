@@ -10,6 +10,7 @@ import { getP2pDeviceId } from './p2p-device-identity.service'
 import { listP2pDiscoveredNodes } from './p2p-discovery.service'
 import { broadcastP2pPeerTrustRequired } from './p2p-peer-broadcast'
 import { P2pBridge } from './p2p-bridge'
+import { notifyP2pPeerConnected } from './p2p-sync-lifecycle'
 
 const promptedPeers = new Set<string>()
 
@@ -152,9 +153,7 @@ export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {
   const promptKey = peerPromptKey(input.workspaceId, input.peerDeviceId)
   if (input.trusted) {
     promptedPeers.delete(promptKey)
-    void import('./p2p-sync.service').then((module) => {
-      void module.handleP2pPeerConnected(input.workspaceId, input.peerDeviceId)
-    })
+    void notifyP2pPeerConnected(input.workspaceId, input.peerDeviceId)
   } else {
     void P2pBridge.connectionDisconnect(input.peerDeviceId)
     promptedPeers.delete(promptKey)

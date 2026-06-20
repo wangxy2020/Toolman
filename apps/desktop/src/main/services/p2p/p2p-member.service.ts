@@ -26,6 +26,7 @@ import { P2pBridge } from './p2p-bridge'
 import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
 import { applyP2pNetworkConfig } from './p2p-network.config'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { assertRegisteredForP2p } from './p2p-auth.guard'
 import {
   decodeInviteToken,
   parseInviteInput,
@@ -275,6 +276,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   workspace: P2pWorkspace
   member: P2pMember
 }> {
+  assertRegisteredForP2p()
   const input = P2pMemberJoinInputSchema.parse(rawInput)
   const { token: inviteToken, offerSdp } = parseInviteInput(input.inviteToken)
   const payload = decodeInviteToken(inviteToken)

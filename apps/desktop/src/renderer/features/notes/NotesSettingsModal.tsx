@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
-import { IconHelp } from '../../components/icons'
 import { useSystemPaths } from '../chat/useSystemPaths'
 import {
   NOTES_DEFAULT_EDIT_VIEW_OPTIONS,
@@ -22,24 +21,13 @@ interface Props {
   onImportBackup: (raw: string) => void
 }
 
-function FormLabel({
-  children,
-  hint,
-}: {
-  children: ReactNode
-  hint?: string
-}) {
-  return (
-    <span className="tm-form-label">
-      {children}
-      {hint ? (
-        <span className="tm-form-label-hint" title={hint}>
-          <IconHelp size={13} />
-        </span>
-      ) : null}
-    </span>
-  )
-}
+type SettingsTab = 'storage' | 'editor' | 'display'
+
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'storage', label: '存储与数据' },
+  { id: 'editor', label: '编辑器设置' },
+  { id: 'display', label: '显示与外观' },
+]
 
 function Toggle({
   checked,
@@ -53,10 +41,10 @@ function Toggle({
       type="button"
       role="switch"
       aria-checked={checked}
-      className={`tm-msg-toggle ${checked ? 'tm-msg-toggle--on' : ''}`}
+      className={`tm-agent-toggle ${checked ? 'tm-agent-toggle--on' : ''}`}
       onClick={() => onChange(!checked)}
     >
-      <span className="tm-msg-toggle-thumb" />
+      <span className="tm-agent-toggle-thumb" />
     </button>
   )
 }
@@ -73,6 +61,7 @@ export function NotesSettingsModal({
   const defaultWorkingDirectory = getDefaultNotesWorkingDirectory(systemPaths)
   const resolvedWorkingDirectory = resolveNotesWorkingDirectory(workingDirectory, systemPaths)
 
+  const [activeTab, setActiveTab] = useState<SettingsTab>('storage')
   const [draftSettings, setDraftSettings] = useState(settings)
   const [draftWorkingDirectory, setDraftWorkingDirectory] = useState(resolvedWorkingDirectory)
   const [directoryTouched, setDirectoryTouched] = useState(false)
@@ -136,153 +125,242 @@ export function NotesSettingsModal({
   }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
+    <div className="tm-modal-overlay tm-modal-overlay--notes-settings" onClick={onClose}>
       <div
-        className="tm-modal tm-modal--knowledge-create"
+        className="tm-notes-settings-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="notes-settings-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="tm-modal-header">
-          <h2 className="tm-modal-title">笔记设置</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose} aria-label="关闭">
-            ×
+        <header className="tm-notes-settings-modal-header">
+          <h3 id="notes-settings-title" className="tm-notes-settings-modal-title">
+            <span className="tm-notes-settings-modal-title-dot" aria-hidden="true" />
+            笔记设置
+          </h3>
+          <button type="button" className="tm-notes-settings-modal-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </header>
 
-        <div className="tm-modal-body tm-knowledge-settings-body">
-          <section className="tm-knowledge-settings-section">
-            <div className="tm-knowledge-settings-heading-row">
-              <h3 className="tm-knowledge-settings-heading">数据设置</h3>
+        <div className="tm-notes-settings-modal-body">
+          <nav className="tm-notes-settings-modal-nav" aria-label="笔记设置分类">
+            {SETTINGS_TABS.map((tab) => (
               <button
+                key={tab.id}
                 type="button"
-                className="tm-btn tm-btn--ghost tm-btn--sm"
-                onClick={handleResetDirectory}
+                className={[
+                  'tm-notes-settings-modal-nav-item',
+                  activeTab === tab.id ? 'tm-notes-settings-modal-nav-item--active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => setActiveTab(tab.id)}
               >
-                重置为默认
+                {tab.label}
               </button>
-            </div>
-            <label className="tm-form-field">
-              <FormLabel>当前工作目录</FormLabel>
-              <div className="tm-form-picker-row">
-                <input
-                  className="tm-form-input"
-                  value={draftWorkingDirectory}
-                  placeholder={defaultWorkingDirectory || '加载中…'}
-                  onChange={(event) => {
-                    setDirectoryTouched(true)
-                    setDraftWorkingDirectory(event.target.value)
-                  }}
-                />
-                <button type="button" className="tm-btn" onClick={() => void handlePickDirectory()}>
-                  选择
-                </button>
-              </div>
-              <p className="tm-form-hint">更改工作目录不会移动现有文件，请手动迁移文件。</p>
-            </label>
-            <div className="tm-notes-settings-actions">
-              <button type="button" className="tm-btn tm-btn--ghost tm-btn--sm" onClick={onExportBackup}>
-                导出笔记 JSON
-              </button>
-              <button type="button" className="tm-btn tm-btn--ghost tm-btn--sm" onClick={handleImportBackup}>
-                导入笔记 JSON
-              </button>
-            </div>
-            <p className="tm-form-hint">笔记保存在本机浏览器存储中，建议定期导出备份。</p>
-          </section>
+            ))}
+          </nav>
 
-          <section className="tm-knowledge-settings-section">
-            <h3 className="tm-knowledge-settings-heading">编辑器设置</h3>
-            <label className="tm-form-field">
-              <FormLabel hint="新笔记默认的视图模式">默认视图</FormLabel>
-              <select
-                className="tm-form-input"
-                value={draftSettings.defaultView}
-                onChange={(event) =>
-                  patchSettings({ defaultView: event.target.value as NotesEditorSettings['defaultView'] })
-                }
-              >
-                {NOTES_DEFAULT_VIEW_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="tm-form-field">
-              <FormLabel hint="在编辑视图下，新笔记默认采用的编辑模式">默认编辑视图</FormLabel>
-              <select
-                className="tm-form-input"
-                value={draftSettings.defaultEditView}
-                disabled={draftSettings.defaultView === 'preview'}
-                onChange={(event) =>
-                  patchSettings({
-                    defaultEditView: event.target.value as NotesEditorSettings['defaultEditView'],
-                  })
-                }
-              >
-                {NOTES_DEFAULT_EDIT_VIEW_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </section>
+          <div className="tm-notes-settings-modal-content">
+            {activeTab === 'storage' ? (
+              <div className="tm-notes-settings-form">
+                <div className="tm-notes-settings-section-head">
+                  <span className="tm-notes-settings-section-title">数据设置</span>
+                  <button
+                    type="button"
+                    className="tm-notes-settings-link-btn"
+                    onClick={handleResetDirectory}
+                  >
+                    重置为默认
+                  </button>
+                </div>
 
-          <section className="tm-knowledge-settings-section">
-            <h3 className="tm-knowledge-settings-heading">显示设置</h3>
-            <div className="tm-form-field">
-              <div className="tm-notes-settings-inline">
-                <FormLabel>显示大纲</FormLabel>
-                <Toggle
-                  checked={draftSettings.showOutline}
-                  onChange={(showOutline) => patchSettings({ showOutline })}
-                />
-              </div>
-              <p className="tm-form-hint">在笔记编辑区右侧显示标题大纲，点击可快速跳转</p>
-            </div>
+                <div className="tm-notes-settings-field-block">
+                  <label className="tm-notes-settings-label" htmlFor="notes-settings-directory">
+                    当前工作目录
+                  </label>
+                  <div className="tm-notes-settings-workdir-group">
+                    <input
+                      id="notes-settings-directory"
+                      className="tm-notes-settings-workdir-input"
+                      value={draftWorkingDirectory}
+                      placeholder={defaultWorkingDirectory || '加载中…'}
+                      title={draftWorkingDirectory}
+                      onChange={(event) => {
+                        setDirectoryTouched(true)
+                        setDraftWorkingDirectory(event.target.value)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="tm-notes-settings-workdir-browse"
+                      onClick={() => void handlePickDirectory()}
+                    >
+                      选择
+                    </button>
+                  </div>
+                  <p className="tm-notes-settings-hint">
+                    更改工作目录不会移动现有文件，请手动迁移文件。
+                  </p>
+                </div>
 
-            <div className="tm-form-field">
-              <div className="tm-notes-settings-inline">
-                <FormLabel>缩减栏宽</FormLabel>
-                <Toggle
-                  checked={draftSettings.narrowColumn}
-                  onChange={(narrowColumn) => patchSettings({ narrowColumn })}
-                />
+                <div className="tm-notes-settings-divider-block">
+                  <span className="tm-notes-settings-label">数据备份</span>
+                  <div className="tm-notes-settings-action-row">
+                    <button
+                      type="button"
+                      className="tm-notes-settings-inline-btn"
+                      onClick={onExportBackup}
+                    >
+                      导出笔记 JSON
+                    </button>
+                    <button
+                      type="button"
+                      className="tm-notes-settings-inline-btn"
+                      onClick={handleImportBackup}
+                    >
+                      导入笔记 JSON
+                    </button>
+                  </div>
+                  <p className="tm-notes-settings-hint">
+                    笔记保存在本机浏览器存储中，建议定期导出备份。
+                  </p>
+                </div>
               </div>
-              <p className="tm-form-hint">开启后将限制每行字数，使屏幕显示的内容减少</p>
-            </div>
+            ) : null}
 
-            <label className="tm-form-field">
-              <FormLabel hint="调整字体大小以获得更好的阅读体验（10-30px）">字体大小</FormLabel>
-              <div className="tm-notes-settings-slider-row">
-                <input
-                  type="range"
-                  className="tm-msg-font-slider"
-                  min={10}
-                  max={30}
-                  value={draftSettings.fontSize}
-                  onChange={(event) =>
-                    patchSettings({ fontSize: Number(event.target.value) })
-                  }
-                />
-                <span className="tm-notes-settings-slider-value">{draftSettings.fontSize}px</span>
+            {activeTab === 'editor' ? (
+              <div className="tm-notes-settings-form">
+                <div className="tm-notes-settings-row">
+                  <label className="tm-notes-settings-label" htmlFor="notes-settings-default-view">
+                    默认视图
+                  </label>
+                  <select
+                    id="notes-settings-default-view"
+                    className="tm-notes-settings-input"
+                    value={draftSettings.defaultView}
+                    onChange={(event) =>
+                      patchSettings({
+                        defaultView: event.target.value as NotesEditorSettings['defaultView'],
+                      })
+                    }
+                  >
+                    {NOTES_DEFAULT_VIEW_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="tm-notes-settings-hint">新笔记默认的视图模式</p>
+
+                <div className="tm-notes-settings-row">
+                  <label className="tm-notes-settings-label" htmlFor="notes-settings-default-edit-view">
+                    默认编辑视图
+                  </label>
+                  <select
+                    id="notes-settings-default-edit-view"
+                    className="tm-notes-settings-input"
+                    value={draftSettings.defaultEditView}
+                    disabled={draftSettings.defaultView === 'preview'}
+                    onChange={(event) =>
+                      patchSettings({
+                        defaultEditView: event.target.value as NotesEditorSettings['defaultEditView'],
+                      })
+                    }
+                  >
+                    {NOTES_DEFAULT_EDIT_VIEW_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="tm-notes-settings-hint">在编辑视图下，新笔记默认采用的编辑模式</p>
               </div>
-            </label>
-          </section>
+            ) : null}
+
+            {activeTab === 'display' ? (
+              <div className="tm-notes-settings-form">
+                <span className="tm-notes-settings-section-title">显示与外观</span>
+
+                <div className="tm-notes-settings-toggle-card">
+                  <div className="tm-notes-settings-toggle-item">
+                    <div className="tm-notes-settings-toggle-copy">
+                      <span className="tm-notes-settings-toggle-label">显示大纲</span>
+                      <p className="tm-notes-settings-hint">
+                        在笔记编辑区右侧显示标题大纲，点击可快速跳转
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={draftSettings.showOutline}
+                      onChange={(showOutline) => patchSettings({ showOutline })}
+                    />
+                  </div>
+
+                  <div className="tm-notes-settings-toggle-item tm-notes-settings-toggle-item--bordered">
+                    <div className="tm-notes-settings-toggle-copy">
+                      <span className="tm-notes-settings-toggle-label">缩减栏宽</span>
+                      <p className="tm-notes-settings-hint">
+                        开启后将限制每行字数，使屏幕显示的内容更聚焦
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={draftSettings.narrowColumn}
+                      onChange={(narrowColumn) => patchSettings({ narrowColumn })}
+                    />
+                  </div>
+                </div>
+
+                <div className="tm-notes-settings-slider-block">
+                  <div className="tm-notes-settings-slider-head">
+                    <label className="tm-notes-settings-label" htmlFor="notes-settings-font-size">
+                      字体大小
+                    </label>
+                    <span className="tm-notes-settings-slider-value">{draftSettings.fontSize}px</span>
+                  </div>
+                  <input
+                    id="notes-settings-font-size"
+                    type="range"
+                    className="tm-notes-settings-slider"
+                    min={10}
+                    max={30}
+                    value={draftSettings.fontSize}
+                    onChange={(event) => patchSettings({ fontSize: Number(event.target.value) })}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <footer className="tm-modal-footer">
-          <button type="button" className="tm-btn tm-btn--ghost" onClick={onClose}>
-            取消
-          </button>
-          <button
-            type="button"
-            className="tm-btn tm-btn--primary"
-            disabled={!dirty}
-            onClick={handleSave}
-          >
-            保存
-          </button>
+        <footer className="tm-notes-settings-modal-footer">
+          <div className="tm-notes-settings-modal-footer-actions">
+            <button
+              type="button"
+              className="tm-notes-settings-modal-footer-btn tm-notes-settings-modal-footer-btn--secondary"
+              onClick={onClose}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="tm-notes-settings-modal-footer-btn tm-notes-settings-modal-footer-btn--primary"
+              disabled={!dirty}
+              onClick={handleSave}
+            >
+              保存设置
+            </button>
+          </div>
         </footer>
       </div>
     </div>

@@ -19,7 +19,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "demo:chat": "bash scripts/run-with-electron-node.sh scripts/demo-chat-persistence.ts",
-    "test:p2p-schema": "bash scripts/run-with-electron-node.sh scripts/p2p-schema-smoke.ts"
+    "test:p2p-schema": "bash scripts/run-with-electron-node.sh scripts/p2p-schema-smoke.ts",
+    "test:auth-schema": "bash scripts/run-with-electron-node.sh scripts/auth-schema-smoke.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",

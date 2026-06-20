@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   DialogSelectFilesOutputSchema,
   IpcChannel,
+  isRegisteredAuthSession,
+  type AuthSession,
   type CommunityUserProfile,
   type IdentityProfile,
 } from '@toolman/shared'
@@ -13,12 +15,15 @@ import {
   touchCommunityPresenceHeartbeat,
   updateCommunityUserMe,
 } from '../community/community-api.client'
+import { deleteAuthAccount, logoutAuth } from './auth-api.client'
+import { useAuthSession } from './AuthSessionProvider'
 import { getIdentityProfile, updateIdentityProfile } from './identity-api.client'
 import { isCommunitySessionActive, setCommunitySessionActive } from './community-session'
 
 const DISPLAY_NAME_MAX_LENGTH = 10
 
 export function useUserAccount() {
+  const { session: authSession, refresh: refreshAuthSession } = useAuthSession()
   const [identity, setIdentity] = useState<IdentityProfile | null>(null)
   const [communityProfile, setCommunityProfile] = useState<CommunityUserProfile | null>(null)
   const [hubOnline, setHubOnline] = useState<boolean | null>(null)
@@ -26,23 +31,32 @@ export function useUserAccount() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isRegistered = isRegisteredAuthSession(authSession ?? { registrationStatus: 'guest' })
+  const isLoggedIn = Boolean(authSession?.isLoggedIn)
+
   const loadIdentity = useCallback(async () => {
     const profile = await getIdentityProfile()
     setIdentity(profile)
     return profile
   }, [])
 
-  const loadCommunity = useCallback(async () => {
+  const loadCommunity = useCallback(async (session: AuthSession | null) => {
     const status = await getCommunityHubStatus()
     setHubOnline(status.running)
     if (!status.running) {
       setCommunityProfile(null)
       return null
     }
-    if (!isCommunitySessionActive()) {
+
+    if (!isRegisteredAuthSession(session ?? { registrationStatus: 'guest' }) || !session?.isLoggedIn) {
       setCommunityProfile(null)
+      if (isCommunitySessionActive()) {
+        setCommunitySessionActive(false)
+      }
       return null
     }
+
+    setCommunitySessionActive(true)
     const profile = await getCommunityUserMe()
     setCommunityProfile(profile)
     return profile
@@ -52,8 +66,8 @@ export function useUserAccount() {
     setLoading(true)
     setError(null)
     try {
-      await loadIdentity()
-      await loadCommunity().catch(() => {
+      const [, session] = await Promise.all([loadIdentity(), refreshAuthSession()])
+      await loadCommunity(session).catch(() => {
         setCommunityProfile(null)
       })
     } catch (loadError) {
@@ -63,7 +77,7 @@ export function useUserAccount() {
     } finally {
       setLoading(false)
     }
-  }, [loadCommunity, loadIdentity])
+  }, [loadCommunity, loadIdentity, refreshAuthSession])
 
   const saveDisplayName = useCallback(
     async (displayName: string) => {
@@ -81,7 +95,7 @@ export function useUserAccount() {
         const updated = await updateIdentityProfile({ displayName: trimmed })
         setIdentity(updated)
 
-        if (hubOnline) {
+        if (hubOnline && isRegistered && isLoggedIn) {
           try {
             const community = await updateCommunityUserMe({ displayName: trimmed })
             setCommunityProfile(community)
@@ -98,7 +112,33 @@ export function useUserAccount() {
         setSaving(false)
       }
     },
-    [hubOnline],
+    [hubOnline, isLoggedIn, isRegistered],
+  )
+
+  const saveBio = useCallback(
+    async (bio: string) => {
+      if (!hubOnline || !isRegistered || !isLoggedIn) {
+        throw new Error('登录并启动社区 Hub 后才能编辑简介')
+      }
+
+      setSaving(true)
+      setError(null)
+      try {
+        const trimmed = bio.trim()
+        const community = await updateCommunityUserMe({
+          bio: trimmed.length > 0 ? trimmed : '',
+        })
+        setCommunityProfile(community)
+        return community
+      } catch (saveError) {
+        const message = saveError instanceof Error ? saveError.message : '保存简介失败'
+        setError(message)
+        throw saveError
+      } finally {
+        setSaving(false)
+      }
+    },
+    [hubOnline, isLoggedIn, isRegistered],
   )
 
   const pickAvatar = useCallback(async () => {
@@ -143,54 +183,71 @@ export function useUserAccount() {
     }
   }, [])
 
-  const loginCommunity = useCallback(async () => {
+  const logoutAccount = useCallback(async () => {
     setSaving(true)
     setError(null)
     try {
-      setCommunitySessionActive(true)
-      const profile = await loadCommunity()
-      if (!profile) {
-        setCommunitySessionActive(false)
-        throw new Error('社区服务未启动，无法登录')
-      }
-      void touchCommunityPresenceHeartbeat().catch(() => undefined)
-      if (identity?.displayName && profile.displayName !== identity.displayName) {
-        const synced = await updateCommunityUserMe({ displayName: identity.displayName })
-        setCommunityProfile(synced)
-        return synced
-      }
-      return profile
-    } catch (loginError) {
-      const message = loginError instanceof Error ? loginError.message : '社区登录失败'
+      await logoutAuth()
+      setCommunitySessionActive(false)
+      setCommunityProfile(null)
+      await refreshAuthSession()
+    } catch (logoutError) {
+      const message = logoutError instanceof Error ? logoutError.message : '退出登录失败'
       setError(message)
-      throw loginError
+      throw logoutError
     } finally {
       setSaving(false)
     }
-  }, [identity?.displayName, loadCommunity])
+  }, [refreshAuthSession])
 
-  const logoutCommunity = useCallback(() => {
-    setCommunitySessionActive(false)
-    setCommunityProfile(null)
+  const deleteAccount = useCallback(async (options?: { reauthToken?: string }) => {
+    setSaving(true)
     setError(null)
-  }, [])
+    try {
+      await deleteAuthAccount({
+        confirmation: 'DELETE',
+        reauthToken: options?.reauthToken,
+      })
+      setCommunitySessionActive(false)
+      setCommunityProfile(null)
+      await refreshAuthSession()
+      await loadIdentity()
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : '注销账户失败'
+      setError(message)
+      throw deleteError
+    } finally {
+      setSaving(false)
+    }
+  }, [loadIdentity, refreshAuthSession])
 
   useEffect(() => {
     void load().catch(() => undefined)
   }, [load])
 
+  useEffect(() => {
+    if (isRegistered && isLoggedIn) {
+      void touchCommunityPresenceHeartbeat().catch(() => undefined)
+    }
+  }, [isLoggedIn, isRegistered])
+
   return {
+    authSession,
     identity,
     communityProfile,
     hubOnline,
     loading,
     saving,
     error,
+    isRegistered,
+    isLoggedIn,
     load,
+    refreshAuthSession,
     saveDisplayName,
+    saveBio,
     pickAvatar,
     clearAvatar,
-    loginCommunity,
-    logoutCommunity,
+    logoutAccount,
+    deleteAccount,
   }
 }

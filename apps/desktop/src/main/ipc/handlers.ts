@@ -4,6 +4,15 @@ import {
   AppGetInfoOutputSchema,
   AppGetPathsOutputSchema,
   AssistantDeleteInputSchema,
+  AuthBindProviderInputSchema,
+  AuthDeleteAccountInputSchema,
+  AuthExchangeHubTokenInputSchema,
+  AuthLoginInputSchema,
+  AuthLogoutInputSchema,
+  AuthSendSmsCodeInputSchema,
+  AuthVerifyDeleteReauthInputSchema,
+  AUTH_ERROR_CODES,
+  AuthMergeRequiredDetailsSchema,
   ipcOk,
   ipcErr,
   type IpcResult,
@@ -20,6 +29,18 @@ import * as imChannelFacade from '../services/im-channel.facade.service'
 import * as providerService from '../services/provider.service'
 import * as workspaceService from '../services/workspace.service'
 import * as identityService from '../services/identity.service'
+import * as authSessionService from '../services/auth-session.service'
+import * as authLoginService from '../services/auth/auth-login.service'
+import {
+  deleteAuthAccountRemote,
+  verifyDeleteAccountReauth,
+} from '../services/auth/auth-delete-account.service'
+import { bindAuthProvider, AuthMergeRequiredError } from '../services/auth/tencent-wechat-auth.service'
+import { getFirebaseWebConfig } from '../services/auth/firebase-auth.config'
+import { getTencentWebConfig } from '../services/auth/tencent-auth.config'
+import { getAuthBuildProfile } from '../services/auth/auth-build-profile.service'
+import { AuthLoginError } from '../services/auth/auth-login.error'
+import { exchangeAuthHubToken } from '../services/auth/auth-hub-token.service'
 import * as memoryEntryService from '../services/memory-entry.service'
 import { getAppInfo, getAppPaths } from './app'
 import { syncRuntimeAppSettings } from '../services/runtime-app-settings.service'
@@ -52,6 +73,7 @@ import { ensureDefaultFolderKnowledgeBase } from '../services/knowledge-default-
 import * as knowledgeDedupService from '../services/knowledge-dedup.service'
 import * as knowledgeFileRegistryService from '../services/knowledge-file-registry.service'
 import * as knowledgeIngestJobService from '../services/knowledge-ingest-job.service'
+import { rebuildKnowledgeFtsIndex } from '../services/knowledge-fts.service'
 import { getBlobMeta, getBlobDataUrl, writeBlobFromPath } from '../services/blob.service'
 import {
   BlobGetDataUrlInputSchema,
@@ -179,6 +201,7 @@ import {
 import { P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { communityHandlers } from './community-handlers'
+import { wrapHandlerWithAuthGate, mapAuthGateError } from './auth-gate'
 
 type HandlerFn = (input: unknown) => Promise<IpcResult<unknown>>
 
@@ -313,7 +336,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
 
   [IpcChannel.KnowledgeFtsRebuild]: async () => {
     try {
-      const { rebuildKnowledgeFtsIndex } = await import('../services/knowledge-fts.service')
       return ipcOk(rebuildKnowledgeFtsIndex())
     } catch (error) {
       const message = error instanceof Error ? error.message : 'FTS rebuild failed'
@@ -586,6 +608,145 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(identityService.updateIdentityProfile(input))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update identity'
+      return ipcErr({ code: 'VALIDATION_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthGetSession]: async () => {
+    try {
+      return ipcOk(authSessionService.getAuthSession())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load auth session'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthLogin]: async (input) => {
+    try {
+      const session = await authLoginService.loginAuth(AuthLoginInputSchema.parse(input))
+      return ipcOk({ session })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed'
+      if (error instanceof AuthLoginError && message.includes('尚未实现')) {
+        return ipcErr({ code: AUTH_ERROR_CODES.NOT_IMPLEMENTED, message, retryable: false })
+      }
+      if (error instanceof AuthLoginError && message.includes('未配置')) {
+        return ipcErr({ code: AUTH_ERROR_CODES.NOT_CONFIGURED, message, retryable: false })
+      }
+      if (error instanceof AuthMergeRequiredError) {
+        return ipcErr({
+          code: AUTH_ERROR_CODES.MERGE_REQUIRED,
+          message,
+          details: AuthMergeRequiredDetailsSchema.parse({
+            mergeToken: error.mergeToken,
+            maskedPhone: error.maskedPhone,
+            wechatLabel: error.wechatLabel,
+          }),
+          retryable: false,
+        })
+      }
+      const code = message.includes('尚未实现') ? AUTH_ERROR_CODES.NOT_IMPLEMENTED : 'VALIDATION_ERROR'
+      return ipcErr({ code, message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthLogout]: async (input) => {
+    try {
+      AuthLogoutInputSchema.parse(input ?? {})
+      return ipcOk({ session: authSessionService.logoutAuthSession() })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Logout failed'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthDeleteAccount]: async (input) => {
+    try {
+      const session = await deleteAuthAccountRemote(AuthDeleteAccountInputSchema.parse(input))
+      return ipcOk({ session })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Delete account failed'
+      const code = message.includes('再次验证')
+        ? AUTH_ERROR_CODES.REAUTH_REQUIRED
+        : message.includes('尚未实现')
+          ? AUTH_ERROR_CODES.NOT_IMPLEMENTED
+          : 'VALIDATION_ERROR'
+      return ipcErr({ code, message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthVerifyDeleteReauth]: async (input) => {
+    try {
+      return ipcOk(await verifyDeleteAccountReauth(AuthVerifyDeleteReauthInputSchema.parse(input)))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Reauth verification failed'
+      const code = message.includes('未配置') ? AUTH_ERROR_CODES.NOT_CONFIGURED : 'VALIDATION_ERROR'
+      return ipcErr({ code, message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthGetFirebaseConfig]: async () => {
+    try {
+      return ipcOk(getFirebaseWebConfig())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load Firebase config'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthGetTencentConfig]: async () => {
+    try {
+      return ipcOk(getTencentWebConfig())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load Tencent config'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthGetBuildProfile]: async () => {
+    try {
+      return ipcOk(getAuthBuildProfile())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load auth build profile'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthSendSmsCode]: async (input) => {
+    try {
+      return ipcOk(await authLoginService.sendAuthSmsCode(AuthSendSmsCodeInputSchema.parse(input)))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to send SMS code'
+      const code =
+        error instanceof AuthLoginError && message.includes('未配置')
+          ? AUTH_ERROR_CODES.NOT_CONFIGURED
+          : 'VALIDATION_ERROR'
+      return ipcErr({ code, message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthBindProvider]: async (input) => {
+    try {
+      const session = await bindAuthProvider(AuthBindProviderInputSchema.parse(input))
+      return ipcOk({ session })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Bind provider failed'
+      const code = message.includes('未配置')
+        ? AUTH_ERROR_CODES.NOT_CONFIGURED
+        : message.includes('尚未实现')
+          ? AUTH_ERROR_CODES.NOT_IMPLEMENTED
+          : 'VALIDATION_ERROR'
+      return ipcErr({ code, message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthExchangeHubToken]: async (input) => {
+    try {
+      AuthExchangeHubTokenInputSchema.parse(input ?? {})
+      const token = await exchangeAuthHubToken()
+      return ipcOk(token)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Hub token exchange failed'
       return ipcErr({ code: 'VALIDATION_ERROR', message, retryable: false })
     }
   },
@@ -1528,9 +1689,10 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
 
 export function registerIpcHandlers(): void {
   for (const [channel, handler] of Object.entries(handlers) as [IpcChannel, HandlerFn][]) {
+    const guardedHandler = wrapHandlerWithAuthGate(channel, handler)
     ipcMain.handle(channel, async (_event, input) => {
       try {
-        return await handler(input)
+        return await guardedHandler(input)
       } catch (error) {
         if (error && typeof error === 'object' && 'issues' in error) {
           return ipcErr({
@@ -1540,6 +1702,8 @@ export function registerIpcHandlers(): void {
             retryable: false,
           })
         }
+        const gateError = mapAuthGateError(error)
+        if (gateError) return gateError
         const message = error instanceof Error ? error.message : 'Unknown error'
         return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
       }

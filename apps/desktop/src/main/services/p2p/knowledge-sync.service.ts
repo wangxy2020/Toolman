@@ -18,6 +18,7 @@ import { writeBlobFromPath } from '../blob.service'
 import { getWorkspaceKnowledgeDir } from '../knowledge.service'
 import { mapP2pAgentSharedResourceRow } from './agent-share.service'
 import { appendP2pEvent } from './p2p-event.service'
+import { pushBlobToPeers } from './p2p-blob-transfer.service'
 import {
   findSharedResourceInWorkspace,
   resolveSharedResourceId,
@@ -392,9 +393,7 @@ export function syncP2pKnowledgeDocument(rawInput: unknown): { event: WorkspaceE
 
   docRepo.update(input.documentId, input.knowledgeBaseId, { blobHash: blob.hash })
 
-  void import('./p2p-blob-transfer.service').then((module) => {
-    void module.pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
-  })
+  void pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
 
   return { event }
 }

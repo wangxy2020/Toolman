@@ -16,6 +16,7 @@ import {
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { generateWorkspaceKey } from './p2p-crypto.service'
+import { assertRegisteredForP2p } from './p2p-auth.guard'
 import { createDefaultWorkspaceInvite } from './p2p-invite.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import {
@@ -114,6 +115,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   workspace: P2pWorkspace
   inviteToken: string
 }> {
+  assertRegisteredForP2p()
   const input = P2pWorkspaceCreateInputSchema.parse(rawInput)
   const device = getP2pDeviceInfo()
   const workspaceKey = generateWorkspaceKey()

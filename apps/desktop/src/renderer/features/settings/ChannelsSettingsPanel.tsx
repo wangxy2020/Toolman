@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   CHANNEL_PLATFORMS,
   IpcChannel,
@@ -7,6 +7,7 @@ import {
   type ChannelRuntimeStatus,
   type ImChannelConfigPublic,
 } from '@toolman/shared'
+import { IconCopy } from '../../components/icons'
 import {
   SettingsInput,
   SettingsPageLayout,
@@ -30,6 +31,81 @@ interface ModalProps {
   onTest: (platform: ChannelPlatformId) => Promise<string | null>
 }
 
+function ChannelFormLabel({
+  children,
+  required,
+  htmlFor,
+}: {
+  children: ReactNode
+  required?: boolean
+  htmlFor?: string
+}) {
+  return (
+    <label className="tm-channel-config-label" htmlFor={htmlFor}>
+      {children}
+      {required ? <span className="tm-channel-config-required">*</span> : null}
+    </label>
+  )
+}
+
+function hasWebhookUrl(platform: ChannelPlatformId): boolean {
+  return platform === 'feishu' || platform === 'wechat'
+}
+
+function getEnableDescription(platform: ChannelPlatformId, platformName: string): string {
+  switch (platform) {
+    case 'feishu':
+      return '开启后智能体将可以通过飞书接收与回复消息'
+    case 'dingtalk':
+      return '开启后智能体将可以通过钉钉接收与回复消息'
+    case 'wechat':
+      return '开启后智能体将可以通过企业微信接收与回复消息'
+    case 'discord':
+      return '开启后智能体将可以通过 Discord 接收与回复消息'
+    default:
+      return `开启后智能体将可以通过${platformName}接收与回复消息`
+  }
+}
+
+function getConnectionHint(platform: ChannelPlatformId): string | null {
+  switch (platform) {
+    case 'discord':
+      return 'Discord 通过 Bot Gateway 长连接接收消息，将 Bot Token 填入「应用密钥」即可。'
+    case 'dingtalk':
+      return '钉钉通过 Stream 长连接接收消息。在开发者后台启用机器人并选择 Stream 模式，将 AppKey 填入「应用 ID」、AppSecret 填入「应用密钥」。'
+    case 'feishu':
+      return '请在飞书开发者后台 → 事件订阅中，将请求地址配置为上述 URL，并订阅「接收消息」事件。'
+    case 'wechat':
+      return '请在企业微信开发者后台配置回调 URL，填写 Token 与 EncodingAESKey，并在「域名」字段填写应用 AgentId。'
+    default:
+      return '该平台运行时适配即将推出，可先保存配置。'
+  }
+}
+
+function getAppSecretLabel(platform: ChannelPlatformId): string {
+  switch (platform) {
+    case 'discord':
+      return '应用密钥 (Bot Token)'
+    case 'dingtalk':
+      return '应用密钥 (App Secret)'
+    case 'wechat':
+      return '应用密钥 (CorpSecret)'
+    default:
+      return '应用密钥 (App Secret)'
+  }
+}
+
+function getDomainPlaceholder(platform: ChannelPlatformId): string {
+  switch (platform) {
+    case 'feishu':
+      return '飞书（中国）'
+    case 'wechat':
+      return '应用 AgentId（数字）'
+    default:
+      return '默认'
+  }
+}
+
 function ChannelConfigModal({
   config,
   assistants,
@@ -43,170 +119,213 @@ function ChannelConfigModal({
   const [encryptKey, setEncryptKey] = useState('')
   const [testing, setTesting] = useState(false)
   const [testMessage, setTestMessage] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     setDraft(config)
     setAppSecret('')
     setEncryptKey('')
     setTestMessage(null)
+    setCopied(false)
   }, [config])
 
   const platformName =
     CHANNEL_PLATFORMS.find((item) => item.id === draft.platform)?.name ?? draft.platform
+  const connectionHint = getConnectionHint(draft.platform)
+  const showWebhook = hasWebhookUrl(draft.platform)
+
+  const handleCopyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookPath)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setTestMessage('复制失败，请手动选择文本复制')
+    }
+  }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
-      <div className="tm-modal tm-channel-modal tm-settings-form-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="tm-modal-header">
-          <h2 className="tm-modal-title">{platformName} 频道配置</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+    <div className="tm-modal-overlay tm-modal-overlay--channel-config" onClick={onClose}>
+      <div
+        className="tm-channel-config-modal"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="tm-channel-config-header">
+          <h3 className="tm-channel-config-title">
+            <span className="tm-channel-config-title-dot" aria-hidden="true" />
+            {platformName} 频道配置
+          </h3>
+          <button type="button" className="tm-channel-config-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
-        </div>
-        <div className="tm-modal-body">
-          <div className="tm-form-field tm-channel-enable-row">
-            <label className="tm-form-label">启用频道</label>
-            <SettingsToggle
-              checked={draft.enabled}
-              onChange={(enabled) => setDraft((prev) => ({ ...prev, enabled }))}
-            />
-          </div>
+        </header>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">回调地址</label>
-            {draft.platform === 'discord' ? (
-              <p className="tm-add-agent-hint">
-                Discord 通过 Bot Gateway 长连接接收消息，将 Bot Token 填入「应用密钥」即可。
-              </p>
-            ) : draft.platform === 'dingtalk' ? (
-              <p className="tm-add-agent-hint">
-                钉钉通过 Stream 长连接接收消息。在开发者后台启用机器人并选择 Stream 模式，将 AppKey
-                填入「应用 ID」、AppSecret 填入「应用密钥」。
-              </p>
-            ) : draft.platform === 'feishu' ? (
-              <>
-                <SettingsInput value={webhookPath} disabled onChange={() => {}} />
-                <p className="tm-add-agent-hint">
-                  在飞书开发者后台 → 事件订阅，将请求地址配置为上述 URL，并订阅「接收消息」事件。
+        <div className="tm-channel-config-body">
+          <div className="tm-channel-config-card">
+            <div className="tm-channel-config-enable-row">
+              <div className="tm-channel-config-enable-copy">
+                <span className="tm-channel-config-enable-title">启用{platformName}频道</span>
+                <p className="tm-channel-config-enable-desc">
+                  {getEnableDescription(draft.platform, platformName)}
                 </p>
-              </>
-            ) : draft.platform === 'wechat' ? (
-              <>
-                <SettingsInput value={webhookPath} disabled onChange={() => {}} />
-                <p className="tm-add-agent-hint">
-                  在企业微信开发者后台配置回调 URL，填写 Token 与 EncodingAESKey，并在「域名」字段填写应用
-                  AgentId。
-                </p>
-              </>
-            ) : (
-              <p className="tm-add-agent-hint">该平台运行时适配即将推出，可先保存配置。</p>
-            )}
+              </div>
+              <SettingsToggle
+                checked={draft.enabled}
+                onChange={(enabled) => setDraft((prev) => ({ ...prev, enabled }))}
+              />
+            </div>
+
+            {showWebhook ? (
+              <div className="tm-channel-config-webhook">
+                <ChannelFormLabel>回调地址 (Webhook URL)</ChannelFormLabel>
+                <div className="tm-channel-config-webhook-input">
+                  <input
+                    className="tm-channel-config-webhook-value"
+                    type="text"
+                    readOnly
+                    value={webhookPath}
+                  />
+                  <button
+                    type="button"
+                    className="tm-channel-config-webhook-copy"
+                    onClick={() => void handleCopyWebhook()}
+                  >
+                    <IconCopy size={14} />
+                    {copied ? '已复制' : '复制'}
+                  </button>
+                </div>
+                {connectionHint ? (
+                  <p className="tm-channel-config-webhook-hint">{connectionHint}</p>
+                ) : null}
+              </div>
+            ) : connectionHint ? (
+              <p className="tm-channel-config-platform-hint">{connectionHint}</p>
+            ) : null}
           </div>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">频道名称</label>
-            <SettingsInput
-              value={draft.name}
-              onChange={(name) => setDraft((prev) => ({ ...prev, name }))}
-            />
+          <div className="tm-channel-config-grid-2">
+            <div className="tm-channel-config-field">
+              <ChannelFormLabel>频道名称</ChannelFormLabel>
+              <SettingsInput
+                value={draft.name}
+                onChange={(name) => setDraft((prev) => ({ ...prev, name }))}
+              />
+            </div>
+
+            <div className="tm-channel-config-field">
+              <ChannelFormLabel>绑定智能体</ChannelFormLabel>
+              <SettingsSelect
+                value={draft.assistantId || ''}
+                options={[
+                  { value: '', label: '请选择智能体...' },
+                  ...assistants.map((assistant) => ({
+                    value: assistant.id,
+                    label: assistant.name,
+                  })),
+                ]}
+                onChange={(assistantId) => setDraft((prev) => ({ ...prev, assistantId }))}
+              />
+            </div>
           </div>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">绑定智能体</label>
-            <SettingsSelect
-              value={draft.assistantId || ''}
-              options={[
-                { value: '', label: '请选择智能体' },
-                ...assistants.map((assistant) => ({
-                  value: assistant.id,
-                  label: assistant.name,
-                })),
-              ]}
-              onChange={(assistantId) => setDraft((prev) => ({ ...prev, assistantId }))}
-            />
+          <div className="tm-channel-config-section">
+            <span className="tm-channel-config-section-title">
+              {platformName} 凭证配置 (App Credentials)
+            </span>
+
+            <div className="tm-channel-config-card tm-channel-config-card--flat">
+              <div className="tm-channel-config-field">
+                <ChannelFormLabel required>应用 ID (App ID)</ChannelFormLabel>
+                <SettingsInput
+                  value={draft.appId}
+                  placeholder="cli_xxxxxxxxxxxxxxxx"
+                  onChange={(appId) => setDraft((prev) => ({ ...prev, appId }))}
+                />
+              </div>
+
+              <div className="tm-channel-config-field">
+                <ChannelFormLabel required>{getAppSecretLabel(draft.platform)}</ChannelFormLabel>
+                <SettingsInput
+                  type="password"
+                  value={appSecret}
+                  placeholder={draft.hasAppSecret ? '已保存，留空则不修改' : '••••••••••••••••••••••••••••••••'}
+                  onChange={setAppSecret}
+                />
+              </div>
+
+              <div className="tm-channel-config-grid-2">
+                <div className="tm-channel-config-field">
+                  <ChannelFormLabel>加密密钥 (Encrypt Key)</ChannelFormLabel>
+                  <SettingsInput
+                    type="password"
+                    value={encryptKey}
+                    placeholder={draft.hasEncryptKey ? '已保存，留空则不修改' : '选填'}
+                    onChange={setEncryptKey}
+                  />
+                </div>
+
+                <div className="tm-channel-config-field">
+                  <ChannelFormLabel>验证令牌 (Verification Token)</ChannelFormLabel>
+                  <SettingsInput
+                    type="password"
+                    value={draft.verificationToken}
+                    placeholder="选填"
+                    onChange={(verificationToken) => setDraft((prev) => ({ ...prev, verificationToken }))}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">应用 ID</label>
-            <SettingsInput
-              value={draft.appId}
-              onChange={(appId) => setDraft((prev) => ({ ...prev, appId }))}
-            />
+          <div className="tm-channel-config-grid-2">
+            <div className="tm-channel-config-field">
+              <ChannelFormLabel>域名</ChannelFormLabel>
+              <SettingsInput
+                value={draft.domain}
+                placeholder={getDomainPlaceholder(draft.platform)}
+                onChange={(domain) => setDraft((prev) => ({ ...prev, domain }))}
+              />
+            </div>
+
+            <div className="tm-channel-config-field">
+              <ChannelFormLabel>允许的聊天 ID</ChannelFormLabel>
+              <SettingsInput
+                value={draft.allowedChatIds}
+                placeholder="留空表示不限制"
+                onChange={(allowedChatIds) => setDraft((prev) => ({ ...prev, allowedChatIds }))}
+              />
+            </div>
           </div>
 
-          <div className="tm-form-field">
-            <label className="tm-form-label">
-              应用密钥
-              {draft.platform === 'discord'
-                ? '（Bot Token）'
-                : draft.platform === 'dingtalk'
-                  ? '（AppSecret）'
-                  : draft.platform === 'wechat'
-                    ? '（CorpSecret）'
-                    : ''}
-            </label>
-            <SettingsInput
-              type="password"
-              value={appSecret}
-              placeholder={draft.hasAppSecret ? '已保存，留空则不修改' : ''}
-              onChange={setAppSecret}
-            />
-          </div>
-
-          <div className="tm-form-field">
-            <label className="tm-form-label">加密密钥</label>
-            <SettingsInput
-              type="password"
-              value={encryptKey}
-              placeholder={draft.hasEncryptKey ? '已保存，留空则不修改' : ''}
-              onChange={setEncryptKey}
-            />
-          </div>
-
-          <div className="tm-form-field">
-            <label className="tm-form-label">验证令牌</label>
-            <SettingsInput
-              value={draft.verificationToken}
-              onChange={(verificationToken) => setDraft((prev) => ({ ...prev, verificationToken }))}
-            />
-          </div>
-
-          <div className="tm-form-field">
-            <label className="tm-form-label">域名</label>
-            <SettingsInput
-              value={draft.domain}
-              placeholder={
-                draft.platform === 'feishu'
-                  ? '飞书（中国）'
-                  : draft.platform === 'wechat'
-                    ? '应用 AgentId（数字）'
-                    : '默认'
-              }
-              onChange={(domain) => setDraft((prev) => ({ ...prev, domain }))}
-            />
-          </div>
-
-          <div className="tm-form-field">
-            <label className="tm-form-label">允许的聊天 ID</label>
-            <SettingsInput
-              value={draft.allowedChatIds}
-              placeholder="留空表示不限制，多个 ID 用逗号分隔"
-              onChange={(allowedChatIds) => setDraft((prev) => ({ ...prev, allowedChatIds }))}
-            />
-            <p className="tm-add-agent-hint">可填写群聊或单聊 ID，留空则响应所有会话。</p>
-          </div>
+          <p className="tm-channel-config-field-hint">
+            可填写群聊或单聊 ID，多个 ID 用逗号分隔；留空则响应所有会话。
+          </p>
 
           {testMessage ? <div className="tm-settings-error">{testMessage}</div> : null}
         </div>
 
-        <div className="tm-modal-footer">
-          <div className="tm-form-actions">
-            <button type="button" className="tm-btn" onClick={onClose}>
+        <footer className="tm-channel-config-footer">
+          <div className="tm-channel-config-footer-actions">
+            <button
+              type="button"
+              className="tm-channel-config-footer-btn tm-channel-config-footer-btn--secondary"
+              onClick={onClose}
+            >
               取消
             </button>
             <button
               type="button"
-              className="tm-btn"
+              className="tm-channel-config-footer-btn tm-channel-config-footer-btn--secondary"
               disabled={testing}
               onClick={() => {
                 setTesting(true)
@@ -222,7 +341,7 @@ function ChannelConfigModal({
             </button>
             <button
               type="button"
-              className="tm-btn tm-btn--primary"
+              className="tm-channel-config-footer-btn tm-channel-config-footer-btn--primary"
               onClick={() =>
                 onSave({
                   ...draft,
@@ -231,10 +350,10 @@ function ChannelConfigModal({
                 })
               }
             >
-              保存
+              保存配置
             </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   )

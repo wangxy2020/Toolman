@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type Assistant, type Provider, type Workspace } from '@toolman/shared'
-import { IconPlus } from '../../components/icons'
 import { AgentSettingsAdvancedTab } from './AgentSettingsAdvancedTab'
 import { AgentSettingsKnowledgeTab } from './AgentSettingsKnowledgeTab'
 import { AgentSettingsPermissionTab } from './AgentSettingsPermissionTab'
@@ -29,7 +28,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'basic', label: '基础设置' },
   { id: 'prompt', label: '提示词设置' },
   { id: 'permission', label: '权限模式' },
-  { id: 'tools', label: '工具' },
+  { id: 'tools', label: '工具集成' },
   { id: 'skills', label: '技能' },
   { id: 'knowledge', label: '知识库' },
   { id: 'advanced', label: '高级设置' },
@@ -55,19 +54,19 @@ function Toggle({
       type="button"
       role="switch"
       aria-checked={checked}
-      className={`tm-msg-toggle ${checked ? 'tm-msg-toggle--on' : ''}`}
+      className={`tm-agent-toggle ${checked ? 'tm-agent-toggle--on' : ''}`}
       onClick={() => onChange(!checked)}
     >
-      <span className="tm-msg-toggle-thumb" />
+      <span className="tm-agent-toggle-thumb" />
     </button>
   )
 }
 
 function HelpHint({ title }: { title: string }) {
   return (
-    <button type="button" className="tm-agent-help" title={title}>
-      i
-    </button>
+    <span className="tm-agent-help" title={title} aria-label={title}>
+      ⓘ
+    </span>
   )
 }
 
@@ -246,18 +245,46 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
     void save({ parameters: { ...getParameters(), translationLanguages: next } })
   }
 
+  const handleSaveAndClose = async () => {
+    await save({
+      name: name.trim() || assistant.name,
+      description: description || null,
+      systemPrompt,
+      modelId,
+      parameters: getParameters(),
+    })
+    onClose()
+  }
+
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
-      <div className="tm-agent-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="tm-agent-modal-header">
-          <h2 className="tm-agent-modal-title">{name}</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+    <div className="tm-modal-overlay tm-modal-overlay--agent-settings" onClick={onClose}>
+      <div
+        className="tm-agent-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-settings-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="tm-agent-modal-header">
+          <h3 id="agent-settings-title" className="tm-agent-modal-title">
+            <span className="tm-agent-modal-title-dot" aria-hidden="true" />
+            {name.trim() || assistant.name}设置
+          </h3>
+          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
-        </div>
+        </header>
 
         <div className="tm-agent-modal-body">
-          <nav className="tm-agent-modal-nav">
+          <nav className="tm-agent-modal-nav" aria-label="智能体设置分类">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -274,8 +301,11 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
             {activeTab === 'basic' && (
               <div className="tm-agent-settings-form">
                 <div className="tm-agent-setting-row">
-                  <label className="tm-agent-setting-label">名称</label>
+                  <label className="tm-agent-setting-label" htmlFor="agent-settings-name">
+                    名称
+                  </label>
                   <input
+                    id="agent-settings-name"
                     className="tm-agent-setting-input"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -286,99 +316,99 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
                 </div>
 
                 <div className="tm-agent-setting-row">
-                  <label className="tm-agent-setting-label">
-                    模型
-                    <HelpHint title="选择该智能体默认使用的大模型" />
-                  </label>
-                  <div className="tm-agent-model-select-wrap">
-                    <select
-                      className="tm-agent-model-select"
-                      value={modelId}
-                      onChange={(e) => {
-                        setModelId(e.target.value)
-                        void save({ modelId: e.target.value })
-                      }}
-                    >
-                      {modelOptions.map((opt) => (
-                        <option key={opt.modelId} value={opt.modelId}>
-                          {`${modelNameFromId(opt.modelId)} | ${providerNameFromModelId(opt.modelId, providers)}`}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="tm-agent-setting-label-group">
+                    <label className="tm-agent-setting-label" htmlFor="agent-settings-model">
+                      模型
+                    </label>
+                    <HelpHint title="选择运行此智能体的本地或云端大模型" />
                   </div>
+                  <select
+                    id="agent-settings-model"
+                    className="tm-agent-model-select"
+                    value={modelId}
+                    onChange={(e) => {
+                      setModelId(e.target.value)
+                      void save({ modelId: e.target.value })
+                    }}
+                  >
+                    {modelOptions.map((opt) => (
+                      <option key={opt.modelId} value={opt.modelId}>
+                        {`${modelNameFromId(opt.modelId)} | ${providerNameFromModelId(opt.modelId, providers)}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="tm-agent-setting-block">
-                  <div className="tm-agent-setting-row tm-agent-setting-row--top">
-                    <label className="tm-agent-setting-label">
-                      工作目录
+                <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                  <label className="tm-agent-setting-label" htmlFor="agent-settings-workdir">
+                    工作目录
+                  </label>
+                  <div className="tm-agent-workdir-field">
+                    <div className="tm-agent-workdir-input-group">
+                      <input
+                        id="agent-settings-workdir"
+                        className="tm-agent-workdir-input"
+                        readOnly
+                        value={effectiveWorkingDirectory}
+                        placeholder="未设置工作目录"
+                        title={effectiveWorkingDirectory}
+                      />
                       <button
                         type="button"
-                        className="tm-agent-inline-btn"
-                        title="选择工作目录"
+                        className="tm-agent-workdir-browse"
                         onClick={() => void handleSelectWorkingDirectory()}
                       >
-                        <IconPlus size={14} />
+                        浏览
                       </button>
-                    </label>
-                  </div>
-                  {effectiveWorkingDirectory ? (
-                    <div className="tm-agent-workdir-row">
-                      <span className="tm-agent-workdir-path" title={effectiveWorkingDirectory}>
-                        {effectiveWorkingDirectory}
-                      </span>
-                      {workingDirectory ? (
-                        <button
-                          type="button"
-                          className="tm-agent-workdir-delete"
-                          onClick={handleRemoveWorkingDirectory}
-                        >
-                          删除
-                        </button>
-                      ) : (
-                        <span className="tm-agent-workdir-tag">工作区默认</span>
-                      )}
                     </div>
-                  ) : (
-                    <div className="tm-agent-workdir-empty">未设置工作目录</div>
-                  )}
+                    {workingDirectory ? (
+                      <button
+                        type="button"
+                        className="tm-agent-workdir-reset"
+                        onClick={handleRemoveWorkingDirectory}
+                      >
+                        恢复工作区默认
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="tm-agent-toggle-card">
+                  <div className="tm-agent-toggle-card-item">
+                    <span className="tm-agent-toggle-card-label">
+                      自主模式
+                      <HelpHint title="开启后智能体可自主执行更多操作" />
+                    </span>
+                    <Toggle
+                      checked={autonomousMode}
+                      onChange={(value) => {
+                        setAutonomousMode(value)
+                        void save({ parameters: { ...getParameters(), autonomousMode: value } })
+                      }}
+                    />
+                  </div>
+                  <div className="tm-agent-toggle-card-item">
+                    <span className="tm-agent-toggle-card-label">
+                      启用心跳
+                      <HelpHint title="定期触发智能体后台检查任务" />
+                    </span>
+                    <Toggle
+                      checked={heartbeatEnabled}
+                      onChange={(value) => {
+                        setHeartbeatEnabled(value)
+                        void save({ parameters: { ...getParameters(), heartbeatEnabled: value } })
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="tm-agent-setting-row">
-                  <label className="tm-agent-setting-label">
-                    自主模式
-                    <HelpHint title="开启后智能体可自主执行更多操作" />
-                  </label>
-                  <Toggle
-                    checked={autonomousMode}
-                    onChange={(value) => {
-                      setAutonomousMode(value)
-                      void save({ parameters: { ...getParameters(), autonomousMode: value } })
-                    }}
-                  />
-                </div>
-
-                <div className="tm-agent-setting-row">
-                  <label className="tm-agent-setting-label">
-                    启用心跳
-                    <HelpHint title="定期触发智能体后台检查任务" />
-                  </label>
-                  <Toggle
-                    checked={heartbeatEnabled}
-                    onChange={(value) => {
-                      setHeartbeatEnabled(value)
-                      void save({ parameters: { ...getParameters(), heartbeatEnabled: value } })
-                    }}
-                  />
-                </div>
-
-                <div className="tm-agent-setting-row">
-                  <label className="tm-agent-setting-label">
+                  <label className="tm-agent-setting-label" htmlFor="agent-settings-heartbeat">
                     间隔 (分钟)
-                    <HelpHint title="心跳触发的时间间隔" />
                   </label>
                   <div className="tm-agent-interval-wrap">
                     <input
+                      id="agent-settings-heartbeat"
                       type="number"
                       className="tm-agent-interval-input"
                       min={1}
@@ -398,10 +428,10 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
                 </div>
 
                 <div className="tm-agent-setting-row">
-                  <label className="tm-agent-setting-label">
-                    翻译目标语言
+                  <div className="tm-agent-setting-label-group">
+                    <span className="tm-agent-setting-label">翻译目标语言</span>
                     <HelpHint title="点击翻译时，自动识别原文语言并翻译成另一种目标语言" />
-                  </label>
+                  </div>
                   <div className="tm-agent-translation-langs">
                     <select
                       className="tm-agent-model-select"
@@ -434,8 +464,11 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
                 </div>
 
                 <div className="tm-agent-setting-block">
-                  <label className="tm-agent-setting-label">描述</label>
+                  <label className="tm-agent-setting-label" htmlFor="agent-settings-description">
+                    描述
+                  </label>
                   <textarea
+                    id="agent-settings-description"
                     className="tm-agent-setting-textarea"
                     rows={4}
                     value={description}
@@ -622,9 +655,28 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
               />
             )}
 
-            {busy && <div className="tm-agent-saving">保存中…</div>}
+            {busy ? <div className="tm-agent-saving">保存中…</div> : null}
           </div>
         </div>
+
+        <footer className="tm-agent-modal-footer">
+          <button
+            type="button"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--primary"
+            disabled={busy}
+            onClick={() => void handleSaveAndClose()}
+          >
+            保存设置
+          </button>
+        </footer>
       </div>
     </div>
   )

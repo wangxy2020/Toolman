@@ -14,6 +14,8 @@ import {
   resolveCommunityHubBinaryPath,
 } from './community-paths'
 import { CommunityHttpClient } from './community-http.client'
+import { resolveCommunityHubAuth } from './community-hub-auth.service'
+import { getHubJwtSecret } from '../auth/hub-jwt-secret.service'
 
 export interface CommunityHubPortFile {
   host: string
@@ -198,12 +200,14 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
   const dataDir = getCommunityDataDir()
   await mkdir(dataDir, { recursive: true })
 
+  const jwtSecret = await getHubJwtSecret()
   const port = await allocateCommunityHubPort()
   const env = {
     ...process.env,
     COMMUNITY_HUB_DATA_DIR: dataDir,
     COMMUNITY_HUB_PORT: String(port),
     COMMUNITY_HUB_DEFAULT_IDENTITY_ID: COMMUNITY_HUB_IDENTITY_ID,
+    COMMUNITY_HUB_JWT_SECRET: jwtSecret,
     RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
   }
 
@@ -215,7 +219,11 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
   childProcess = processHandle
   attachProcessLogging(processHandle)
 
-  const client = new CommunityHttpClient({ port, host: COMMUNITY_HUB_HOST })
+  const client = new CommunityHttpClient({
+    port,
+    host: COMMUNITY_HUB_HOST,
+    resolveAuth: resolveCommunityHubAuth,
+  })
   try {
     await waitForHealth(client)
   } catch (error) {

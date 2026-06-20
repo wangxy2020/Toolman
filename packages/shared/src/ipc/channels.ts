@@ -63,6 +63,19 @@ export enum IpcChannel {
 
   IdentityGet = 'identity:get',
   IdentityUpdate = 'identity:update',
+
+  AuthGetSession = 'auth:session:get',
+  AuthLogin = 'auth:login',
+  AuthLogout = 'auth:logout',
+  AuthDeleteAccount = 'auth:account:delete',
+  AuthVerifyDeleteReauth = 'auth:account:verify-delete-reauth',
+  AuthBindProvider = 'auth:provider:bind',
+  AuthExchangeHubToken = 'auth:hub-token:exchange',
+  AuthGetFirebaseConfig = 'auth:firebase-config:get',
+  AuthGetTencentConfig = 'auth:tencent-config:get',
+  AuthGetBuildProfile = 'auth:build-profile:get',
+  AuthSendSmsCode = 'auth:sms:send',
+
   WorkspaceList = 'workspace:list',
   WorkspaceUpdate = 'workspace:update',
   WorkspaceGetDefault = 'workspace:get-default',

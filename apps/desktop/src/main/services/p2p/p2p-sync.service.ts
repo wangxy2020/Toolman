@@ -13,6 +13,7 @@ import {
   markP2pEventSynced,
 } from './p2p-event.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { assertRegisteredForP2p } from './p2p-auth.guard'
 import { connectP2pPeer, listP2pConnections } from './p2p-connection.service'
 import { assertPeerTrustedForSync, isPeerTrusted } from './p2p-peer.service'
 import {
@@ -21,6 +22,13 @@ import {
   broadcastP2pSyncEventApplied,
   broadcastP2pSyncProgress,
 } from './p2p-sync-broadcast'
+import {
+  handleP2pFileChannelMessage,
+  syncMissingWorkspaceBlobs,
+} from './p2p-blob-transfer.service'
+import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
+import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
+import { maybeAutoSnapshot } from './p2p-snapshot.service'
 import {
   encodeReplicationMessage,
   parseReplicationMessage,
@@ -352,12 +360,11 @@ async function handleReplicationMessage(
 
 export async function processP2pIncomingMessages(): Promise<void> {
   const messages = await P2pBridge.connectionDrainAllMessages()
-  const blobTransfer = await import('./p2p-blob-transfer.service')
 
   for (const item of messages) {
     if (item.channel === 'files') {
       try {
-        await blobTransfer.handleP2pFileChannelMessage(item.peerDeviceId, item.data)
+        await handleP2pFileChannelMessage(item.peerDeviceId, item.data)
       } catch (error) {
         const errMessage = error instanceof Error ? error.message : 'Failed to process file message'
         console.error(`[p2p] file channel message failed: ${errMessage}`)
@@ -367,8 +374,7 @@ export async function processP2pIncomingMessages(): Promise<void> {
 
     if (item.channel === 'agent-relay') {
       try {
-        const relay = await import('./p2p-agent-relay.service')
-        await relay.handleP2pAgentRelayMessage(item.peerDeviceId, item.data)
+        await dispatchP2pAgentRelayMessage(item.peerDeviceId, item.data)
       } catch (error) {
         const errMessage = error instanceof Error ? error.message : 'Failed to process agent relay message'
         console.error(`[p2p] agent relay message failed: ${errMessage}`)
@@ -378,8 +384,7 @@ export async function processP2pIncomingMessages(): Promise<void> {
 
     if (item.channel === 'group-chat') {
       try {
-        const groupChat = await import('./p2p-group-chat.service')
-        groupChat.handleP2pGroupChatChannelMessage(item.peerDeviceId, item.data)
+        handleP2pGroupChatChannelMessage(item.peerDeviceId, item.data)
       } catch (error) {
         const errMessage = error instanceof Error ? error.message : 'Failed to process group chat message'
         console.error(`[p2p] group chat message failed: ${errMessage}`)
@@ -398,6 +403,7 @@ export async function processP2pIncomingMessages(): Promise<void> {
 }
 
 export async function syncWithPeer(workspaceId: string, peerDeviceId: string): Promise<void> {
+  assertRegisteredForP2p()
   const device = getP2pDeviceInfo()
   if (peerDeviceId === device.deviceId) return
   if (!isPeerTrusted(workspaceId, peerDeviceId)) return
@@ -463,8 +469,7 @@ export async function recoverWorkspaceSyncAfterReconnect(
   setWorkspaceState(workspaceId, { status: 'syncing', error: undefined })
   try {
     const result = await forceP2pSync(workspaceId, peerDeviceId)
-    const blobTransfer = await import('./p2p-blob-transfer.service')
-    const filesFetched = await blobTransfer.syncMissingWorkspaceBlobs(workspaceId)
+    const filesFetched = await syncMissingWorkspaceBlobs(workspaceId)
     if (result.eventsApplied > 0 || filesFetched > 0) {
       broadcastP2pSyncCompleted({
         workspaceId,
@@ -523,6 +528,7 @@ export async function startP2pSync(workspaceId: string): Promise<{
   peersTotal: number
   peersConnected: number
 }> {
+  assertRegisteredForP2p()
   const workspace = getWorkspaceRepo().findById(workspaceId)
   if (!workspace) {
     throw new Error('群组不存在')
@@ -630,6 +636,7 @@ export async function requestSnapshotFromOwner(
   workspaceId: string,
   ownerDeviceId: string,
 ): Promise<void> {
+  assertRegisteredForP2p()
   const device = getP2pDeviceInfo()
   if (ownerDeviceId === device.deviceId) return
 
@@ -644,6 +651,7 @@ export async function forceP2pSync(
   workspaceId: string,
   peerDeviceId?: string,
 ): Promise<{ eventsApplied: number; filesFetched: number; snapshotUsed: boolean }> {
+  assertRegisteredForP2p()
   const device = getP2pDeviceInfo()
   const targets = (peerDeviceId ? [peerDeviceId] : listWorkspacePeerDeviceIds(workspaceId)).filter(
     (id) => id !== device.deviceId,
@@ -699,5 +707,14 @@ export async function forceP2pSync(
 }
 
 export function bootstrapP2pSync(): void {
-  // Reserved for future background schedulers.
+  registerP2pSyncHandlers({
+    onLocalEventAppended: onLocalP2pEventAppended,
+    onReconnect: recoverWorkspaceSyncAfterReconnect,
+    onPeerConnected: handleP2pPeerConnected,
+    onAutoSnapshot: (workspaceId) => {
+      maybeAutoSnapshot(workspaceId)
+    },
+    updateConnectionSnapshot: updateP2pSyncConnectionSnapshot,
+    processIncomingMessages: processP2pIncomingMessages,
+  })
 }

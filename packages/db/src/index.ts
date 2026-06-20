@@ -11,6 +11,7 @@ export * from './types/chat.js'
 export * from './types/rows.js'
 export * from './types/knowledge.js'
 export * from './types/p2p.js'
+export * from './types/auth.js'
 export * from './repositories/index.js'
 
 export type ToolmanDatabase = ReturnType<typeof createDatabase>

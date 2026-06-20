@@ -5,6 +5,7 @@ import {
   broadcastP2pConnectionStateChange,
 } from './p2p-connection-broadcast'
 import { handlePeerConnectionChange } from './p2p-peer.service'
+import { notifyP2pReconnect, applyP2pConnectionSnapshot, processP2pIncomingMessagesFromPoll } from './p2p-sync-lifecycle'
 
 const POLL_INTERVAL_MS = 2_000
 const KNOWN_STATES = new Set<P2pConnectionState>([
@@ -67,12 +68,7 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
           connection.state,
         )
         if (connection.state === 'connected') {
-          void import('./p2p-sync.service').then((module) => {
-            void module.recoverWorkspaceSyncAfterReconnect(
-              connection.workspaceId!,
-              peerDeviceId,
-            )
-          })
+          notifyP2pReconnect(connection.workspaceId!, peerDeviceId)
         }
       }
     }
@@ -97,10 +93,9 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
 async function pollConnections(): Promise<void> {
   try {
     const connections = (await P2pBridge.connectionList()).map(mapNativeConnection)
-    const sync = await import('./p2p-sync.service')
-    sync.updateP2pSyncConnectionSnapshot(connections)
+    applyP2pConnectionSnapshot(connections)
     syncConnectionEvents(connections)
-    await sync.processP2pIncomingMessages()
+    await processP2pIncomingMessagesFromPoll()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to poll P2P connections'
     console.error(`[p2p] connection poll failed: ${message}`)

@@ -57,6 +57,13 @@
       "when": 1781339000000,
       "tag": "0007_p2p_device_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781340000000,
+      "tag": "0008_auth_accounts",
+      "breakpoints": true
     }
   ]
 }

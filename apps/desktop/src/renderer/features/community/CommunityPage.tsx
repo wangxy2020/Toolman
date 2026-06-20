@@ -14,6 +14,8 @@ import {
 import { getModulePageConfig } from '../modules/module-config'
 import { communitySectionLabel, type CommunitySidebarSection } from './community-sidebar-types'
 import { AdminModerationPanel } from './AdminModerationPanel'
+import { CommunityModerationCategoryNav } from './CommunityModerationCategoryNav'
+import { CommunityModerationCategoryProvider } from './community-moderation-category-context'
 import { CommunityListSortProvider, useCommunityListSortContext } from './CommunityListSortContext'
 import { CommunityListSortToolbar } from './CommunityListSortToolbar'
 import { CommunityPlaceholderPanel } from './CommunityPlaceholderPanel'
@@ -91,7 +93,7 @@ const PANEL_CONFIG: Record<
     icon: <IconRecommend size={28} />,
   },
   management: {
-    title: '管理',
+    title: '社区管理',
     hint: '扫描在线资源、处理举报、任命管理员并封禁恶意用户。',
     icon: <IconFlag size={28} />,
   },
@@ -114,6 +116,7 @@ function CommunityPageHeaderEnd({ showSort }: { showSort: boolean }) {
           onSortFieldChange={sort.handleSortFieldChange}
         />
       ) : null}
+      <CommunityModerationCategoryNav />
       <button
         type="button"
         className="tm-chat-header-settings-btn"
@@ -140,8 +143,7 @@ export function CommunityPage({
   const panelTitle = panel?.title
   const showSort = SORTABLE_ACTIONS.has(effectiveAction)
 
-  return (
-    <CommunityListSortProvider>
+  const pageContent = (
       <main className="tm-main">
         <header className="tm-chat-header">
           <div className="tm-chat-breadcrumb">
@@ -198,6 +200,15 @@ export function CommunityPage({
         )}
         </div>
       </main>
+  )
+
+  return (
+    <CommunityListSortProvider>
+      {effectiveAction === 'management' ? (
+        <CommunityModerationCategoryProvider>{pageContent}</CommunityModerationCategoryProvider>
+      ) : (
+        pageContent
+      )}
     </CommunityListSortProvider>
   )
 }

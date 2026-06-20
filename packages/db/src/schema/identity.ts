@@ -6,6 +6,13 @@ export const identities = sqliteTable('identities', {
   displayName: text('display_name').notNull(),
   publicKey: text('public_key'),
   avatarHash: text('avatar_hash'),
+  registrationStatus: text('registration_status', { enum: ['guest', 'registered'] })
+    .notNull()
+    .default('guest'),
+  authRegion: text('auth_region', { enum: ['cn', 'intl'] }),
+  subscriptionSku: text('subscription_sku', { enum: ['community', 'pro'] }),
+  entitlementsJson: text('entitlements_json').notNull().default('[]'),
+  registeredAt: integer('registered_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })

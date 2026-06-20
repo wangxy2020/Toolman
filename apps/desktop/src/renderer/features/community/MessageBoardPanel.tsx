@@ -19,6 +19,7 @@ import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityMessageBoard } from './useCommunityMessageBoard'
 import { useCommunityUser } from './useCommunityUser'
+import { useRegistrationGate } from '../user/useRegistrationGate'
 
 export function MessageBoardPanel() {
   const [showPublish, setShowPublish] = useState(false)
@@ -29,6 +30,7 @@ export function MessageBoardPanel() {
   const comments = useCommunityCommentExpansion()
   const board = useCommunityMessageBoard()
   const user = useCommunityUser()
+  const { requireRegistration, modal } = useRegistrationGate()
 
   const sortedItems = useMemo(
     () =>
@@ -74,7 +76,10 @@ export function MessageBoardPanel() {
         publishLabel="发布留言"
         loading={board.loading}
         onRefresh={() => void board.load()}
-        onPublish={() => setShowPublish(true)}
+        onPublish={() => {
+          if (!requireRegistration('community_write')) return
+          setShowPublish(true)
+        }}
         error={
           <>
             {user.error ? <div className="tm-error-bar">{user.error}</div> : null}
@@ -158,6 +163,7 @@ export function MessageBoardPanel() {
           onConfirm={() => void handleConfirmDelete()}
         />
       ) : null}
+      {modal}
     </>
   )
 }

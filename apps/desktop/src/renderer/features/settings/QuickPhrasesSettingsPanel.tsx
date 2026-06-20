@@ -28,55 +28,78 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
     })
   }
 
+  const title = phrase ? '编辑快捷短语' : '添加快捷短语'
+
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
+    <div className="tm-modal-overlay tm-modal-overlay--channel-config" onClick={onClose}>
       <div
-        className="tm-modal tm-modal--narrow tm-settings-form-modal"
+        className="tm-channel-config-modal tm-channel-config-modal--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-phrase-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="tm-modal-header">
-          <h2 className="tm-modal-title">{phrase ? '编辑快捷短语' : '添加快捷短语'}</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+        <header className="tm-channel-config-header">
+          <h3 className="tm-channel-config-title" id="quick-phrase-modal-title">
+            <span className="tm-channel-config-title-dot" aria-hidden="true" />
+            {title}
+          </h3>
+          <button type="button" className="tm-channel-config-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
-        </div>
+        </header>
 
-        <div className="tm-modal-body">
-          <div className="tm-form-field">
-            <label className="tm-form-label">名称</label>
-            <SettingsInput
-              value={label}
-              placeholder="显示在菜单中的名称"
-              onChange={setLabel}
-            />
+        <div className="tm-channel-config-body">
+          <div className="tm-channel-config-field">
+            <label className="tm-channel-config-label">名称</label>
+            <SettingsInput value={label} placeholder="显示在菜单中的名称" onChange={setLabel} />
           </div>
-          <div className="tm-form-field">
-            <label className="tm-form-label">内容</label>
+
+          <div className="tm-channel-config-field">
+            <label className="tm-channel-config-label">
+              内容<span className="tm-channel-config-required">*</span>
+            </label>
             <textarea
-              className="tm-mcp-textarea"
-              rows={4}
+              className="tm-channel-config-textarea"
+              rows={5}
               value={text}
               placeholder="插入到输入框中的短语内容"
               onChange={(e) => setText(e.target.value)}
             />
           </div>
+
+          <p className="tm-channel-config-field-hint">
+            名称留空时将自动使用内容前缀；可在聊天输入框的快捷短语菜单中直接插入。
+          </p>
         </div>
 
-        <div className="tm-modal-footer">
-          <div className="tm-form-actions">
-            <button type="button" className="tm-btn" onClick={onClose}>
+        <footer className="tm-channel-config-footer">
+          <div className="tm-channel-config-footer-actions">
+            <button
+              type="button"
+              className="tm-channel-config-footer-btn tm-channel-config-footer-btn--secondary"
+              onClick={onClose}
+            >
               取消
             </button>
             <button
               type="button"
-              className="tm-btn tm-btn--primary"
+              className="tm-channel-config-footer-btn tm-channel-config-footer-btn--primary"
               disabled={!text.trim()}
               onClick={handleSave}
             >
               保存
             </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   )

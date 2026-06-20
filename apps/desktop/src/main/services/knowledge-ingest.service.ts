@@ -19,6 +19,7 @@ import { resolveChunkConfig, resolveEmbedConfig } from './knowledge-embed.servic
 import { buildKnowledgeParseOptions, knowledgeIngestSupportsFile } from './knowledge-parse-options.service'
 import { broadcastKnowledgeIngestEvent } from './knowledge-ingest-broadcast'
 import { removeDocumentFts, syncDocumentFts } from './knowledge-fts.service'
+import { maybeSyncSharedKnowledgeDocument } from './p2p/knowledge-sync.service'
 import { assertIngestNotCancelled, clearIngestCancel, isIngestCancelled } from './knowledge-ingest-manager.service'
 import { parseFileInWorker, shouldParseInWorker } from './parse-file-worker.service'
 import { withTimeout } from '../utils/async-timeout'
@@ -544,9 +545,7 @@ export async function ingestFileAtPath(
     })
 
     if (!skipP2pSync) {
-      void import('./p2p/knowledge-sync.service').then((module) => {
-        module.maybeSyncSharedKnowledgeDocument(workspaceId, kbId, docRow.id)
-      })
+      void maybeSyncSharedKnowledgeDocument(workspaceId, kbId, docRow.id)
     }
 
     return { outcome: 'ingested', path: filePath }

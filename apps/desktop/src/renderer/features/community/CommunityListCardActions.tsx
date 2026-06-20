@@ -16,6 +16,7 @@ import {
 } from '../../components/icons'
 import { formatCommunityCount } from './community-market-utils'
 import { CommunityReportModal } from './CommunityReportModal'
+import { useRegistrationGate } from '../user/useRegistrationGate'
 
 export interface CommunityCardActionCounts {
   likeCount?: number
@@ -122,8 +123,17 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
   ref,
 ) {
   const [showReport, setShowReport] = useState(false)
+  const { requireRegistration, modal } = useRegistrationGate()
   const actionsBusy =
     busyAction != null && busyAction !== 'report' && busyAction !== 'delete'
+
+  const guardWrite = (callback?: () => void) => {
+    if (!callback) return undefined
+    return () => {
+      if (!requireRegistration('community_write')) return
+      callback()
+    }
+  }
 
   return (
     <>
@@ -135,7 +145,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
               label="安装"
               count={counts.installCount}
               disabled={busyAction === 'install'}
-              onClick={onInstall}
+              onClick={guardWrite(onInstall)}
             >
               <IconDownload size={14} className="tm-community-card-action-svg" />
             </ActionButton>
@@ -145,7 +155,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
               kind="delete"
               label="删除"
               disabled={busyAction === 'delete'}
-              onClick={onDelete}
+              onClick={guardWrite(onDelete)}
             >
               <IconTrash size={14} className="tm-community-card-action-svg" />
             </ActionButton>
@@ -159,7 +169,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
             count={counts.likeCount}
             active={state.liked}
             disabled={actionsBusy}
-            onClick={onLike}
+            onClick={guardWrite(onLike)}
           >
             <IconThumbUp size={14} filled={state.liked} className="tm-community-card-action-svg" />
           </ActionButton>
@@ -170,7 +180,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
               count={counts.commentCount}
               active={commentsExpanded}
               disabled={actionsBusy}
-              onClick={onComment}
+              onClick={guardWrite(onComment)}
             >
               <IconComment size={14} className="tm-community-card-action-svg" />
             </ActionButton>
@@ -181,7 +191,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
             count={counts.dislikeCount}
             active={state.disliked}
             disabled={actionsBusy}
-            onClick={onDislike}
+            onClick={guardWrite(onDislike)}
           >
             <IconThumbDown
               size={14}
@@ -195,7 +205,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
             count={counts.favoriteCount}
             active={state.favorited}
             disabled={actionsBusy}
-            onClick={onFavorite}
+            onClick={guardWrite(onFavorite)}
           >
             <IconStar
               size={14}
@@ -218,7 +228,10 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
               kind="report"
               label="举报"
               disabled={busyAction === 'report'}
-              onClick={() => setShowReport(true)}
+              onClick={() => {
+                if (!requireRegistration('community_write')) return
+                setShowReport(true)
+              }}
             >
               <IconFlag size={14} className="tm-community-card-action-svg" />
             </ActionButton>
@@ -233,6 +246,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           onClose={() => setShowReport(false)}
         />
       ) : null}
+      {modal}
     </>
   )
 })

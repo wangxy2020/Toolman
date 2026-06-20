@@ -211,13 +211,13 @@ export function KnowledgePage({
   )
 
   const handleChatWithFiles = () => {
+    if (selectedIds.size === 0) {
+      documents.setError('请先选择要带到聊天的知识库文件')
+      return
+    }
     const items = chatAttachableFiles
     if (items.length === 0) {
-      documents.setError(
-        selectedIds.size > 0
-          ? '所选文件无法带到聊天（仅支持有本地路径的文件）'
-          : '当前列表没有可带到聊天的本地文件',
-      )
+      documents.setError('所选文件无法带到聊天（仅支持有本地路径的文件）')
       return
     }
     onChatWithKnowledgeFiles?.(items)
@@ -677,7 +677,7 @@ export function KnowledgePage({
               onChatWithFiles={
                 onChatWithKnowledgeFiles ? () => handleChatWithFiles() : undefined
               }
-              chatDisabled={chatAttachableFiles.length === 0}
+              chatDisabled={selectedIds.size === 0 || chatAttachableFiles.length === 0}
             />
           ) : null
         }
