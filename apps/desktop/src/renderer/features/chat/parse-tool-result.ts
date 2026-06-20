@@ -17,6 +17,7 @@ const DOCX_MCP_TOOLS = new Set([
   'get_document_info',
   'search_text',
   'replace_text',
+  'replace_texts',
   'edit_paragraph',
   'edit_paragraphs',
   'insert_paragraph',

@@ -60,6 +60,23 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
     title: z.string().optional(),
     paths: z.array(z.string().min(1)),
   }),
+  z.object({
+    type: z.literal('docx_review_summary'),
+    fileName: z.string(),
+    workingPath: z.string(),
+    issuesFound: z.number().int().nonnegative(),
+    commentsRequested: z.number().int().nonnegative(),
+    commentsApplied: z.number().int().nonnegative(),
+    commentsFailed: z.number().int().nonnegative(),
+    replacementsRequested: z.number().int().nonnegative(),
+    replacementsApplied: z.number().int().nonnegative(),
+    replacementsFailed: z.number().int().nonnegative(),
+    paragraphEditsRequested: z.number().int().nonnegative(),
+    paragraphEditsApplied: z.number().int().nonnegative(),
+    paragraphEditsFailed: z.number().int().nonnegative(),
+    errors: z.array(z.string()).optional(),
+    parseWarnings: z.array(z.string()).optional(),
+  }),
 ])
 
 export type ContentBlock = z.infer<typeof ContentBlockSchema>

@@ -56,47 +56,47 @@ export function GroupAgentPickerModal({
     [sharedResources],
   )
 
-  const groups = useMemo<GroupPickerGroup[]>(
-    () =>
-      assistants
-        .map((assistant) => {
-          const sharedSessionIds = sharedSessionMap.get(assistant.id)
-          if (sharedSessionIds === null) {
-            return null
-          }
+  const groups = useMemo<GroupPickerGroup[]>(() => {
+    const result: GroupPickerGroup[] = []
 
-          const assistantSessions = sessionsByAssistantId.get(assistant.id) ?? []
-          const availableSessions =
-            sharedSessionIds && sharedSessionIds.length > 0
-              ? assistantSessions.filter((session) => !sharedSessionIds.includes(session.id))
-              : assistantSessions
+    for (const assistant of assistants) {
+      const sharedSessionIds = sharedSessionMap.get(assistant.id)
+      if (sharedSessionIds === null) {
+        continue
+      }
 
-          if (sharedSessionIds && availableSessions.length === 0) {
-            return null
-          }
+      const assistantSessions = sessionsByAssistantId.get(assistant.id) ?? []
+      const availableSessions =
+        sharedSessionIds && sharedSessionIds.length > 0
+          ? assistantSessions.filter((session) => !sharedSessionIds.includes(session.id))
+          : assistantSessions
 
-          const modelLabel = assistant.modelId ? modelNameFromId(assistant.modelId) : null
-          const descriptionParts = [
-            `${availableSessions.length} 个可添加话题`,
-            assistant.description?.trim(),
-            modelLabel,
-          ].filter(Boolean)
+      if (sharedSessionIds && availableSessions.length === 0) {
+        continue
+      }
 
-          return {
-            id: assistant.id,
-            name: assistant.name,
-            description: descriptionParts.join(' · '),
-            groupSelectable: availableSessions.length === 0,
-            items: availableSessions.map((session) => ({
-              id: session.id,
-              name: session.title,
-              meta: formatKnowledgeDocTime(session.updatedAt ?? session.createdAt),
-            })),
-          }
-        })
-        .filter((group): group is GroupPickerGroup => group != null),
-    [assistants, sessionsByAssistantId, sharedSessionMap],
-  )
+      const modelLabel = assistant.modelId ? modelNameFromId(assistant.modelId) : null
+      const descriptionParts = [
+        `${availableSessions.length} 个可添加话题`,
+        assistant.description?.trim(),
+        modelLabel,
+      ].filter(Boolean)
+
+      result.push({
+        id: assistant.id,
+        name: assistant.name,
+        description: descriptionParts.join(' · '),
+        groupSelectable: availableSessions.length === 0,
+        items: availableSessions.map((session) => ({
+          id: session.id,
+          name: session.title,
+          meta: formatKnowledgeDocTime(session.updatedAt ?? session.createdAt),
+        })),
+      })
+    }
+
+    return result
+  }, [assistants, sessionsByAssistantId, sharedSessionMap])
 
   return (
     <GroupResourcePickerModal

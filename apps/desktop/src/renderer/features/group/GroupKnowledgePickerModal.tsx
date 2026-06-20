@@ -59,33 +59,29 @@ export function GroupKnowledgePickerModal({
     [knowledgeBases, sharedDocumentMap],
   )
 
-  const groups = useMemo<GroupPickerGroup[]>(
-    () =>
-      availableBases
-        .map((kb) => {
-          const sharedDocIds = sharedDocumentMap.get(kb.id)
-          const loadedItems = loadedDocs[kb.id]
-          const visibleItems = loadedItems ?? []
-          const remainingCount =
-            loadedItems != null
-              ? visibleItems.length
-              : sharedDocIds && sharedDocIds.length > 0
-                ? Math.max(kb.documentCount - sharedDocIds.length, 0)
-                : kb.documentCount
+  const groups = useMemo<GroupPickerGroup[]>(() => {
+    return availableBases.map((kb) => {
+      const sharedDocIds = sharedDocumentMap.get(kb.id)
+      const loadedItems = loadedDocs[kb.id]
+      const visibleItems = loadedItems ?? []
+      const remainingCount =
+        loadedItems != null
+          ? visibleItems.length
+          : sharedDocIds && sharedDocIds.length > 0
+            ? Math.max(kb.documentCount - sharedDocIds.length, 0)
+            : kb.documentCount
 
-          return {
-            id: kb.id,
-            name: kb.name,
-            description: `${remainingCount} 篇可添加文档${
-              kb.description?.trim() ? ` · ${kb.description.trim()}` : ''
-            }`,
-            groupSelectable: loadedItems == null && kb.documentCount > 0,
-            items: visibleItems,
-          }
-        })
-        .filter((group): group is GroupPickerGroup => group != null),
-    [availableBases, loadedDocs, sharedDocumentMap],
-  )
+      return {
+        id: kb.id,
+        name: kb.name,
+        description: `${remainingCount} 篇可添加文档${
+          kb.description?.trim() ? ` · ${kb.description.trim()}` : ''
+        }`,
+        groupSelectable: loadedItems == null && kb.documentCount > 0,
+        items: visibleItems,
+      }
+    })
+  }, [availableBases, loadedDocs, sharedDocumentMap])
 
   const loadDocuments = useCallback(
     async (knowledgeBaseId: string) => {
@@ -140,9 +136,12 @@ export function GroupKnowledgePickerModal({
 
   const handleConfirm = useCallback(
     async (selection: GroupPickerSelection[]) => {
-      const payload = selection.flatMap(({ groupId, itemIds }) => {
+      const payload: Array<{ knowledgeBaseId: string; documentIds?: string[] }> = []
+
+      for (const { groupId, itemIds } of selection) {
         if (itemIds.length === 0) {
-          return [{ knowledgeBaseId: groupId, documentIds: undefined }]
+          payload.push({ knowledgeBaseId: groupId, documentIds: undefined })
+          continue
         }
 
         const allReadyDocs = loadedDocs[groupId]?.filter((item) => !item.disabled) ?? []
@@ -152,11 +151,11 @@ export function GroupKnowledgePickerModal({
             : itemIds
 
         if (selectedIds.length === 0) {
-          return []
+          continue
         }
 
-        return [{ knowledgeBaseId: groupId, documentIds: selectedIds }]
-      })
+        payload.push({ knowledgeBaseId: groupId, documentIds: selectedIds })
+      }
 
       if (payload.length === 0) {
         throw new Error('没有可添加的文档，请勾选已就绪的文件或整个知识库')

@@ -475,7 +475,7 @@ export function useNotes() {
             : markdownToBlocks(sourceNote.content)
         copy.tags = [...sourceNote.tags]
         if (copy.editorMode === 'blocks') {
-          copy.content = blocksToMarkdown(copy)
+          copy.content = blocksToMarkdown(copy.blocks)
         }
       }
 

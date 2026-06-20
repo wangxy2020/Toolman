@@ -56,7 +56,6 @@ export function CommunityResourceMarketPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showPublish, setShowPublish] = useState(false)
   const [resourceToDelete, setResourceToDelete] = useState<CommunityResourceItem | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<
     'like' | 'dislike' | 'favorite' | 'install' | 'delete' | null
@@ -124,7 +123,6 @@ export function CommunityResourceMarketPanel({
     if (!resourceToDelete) return
 
     const resourceId = resourceToDelete.id
-    setDeletingId(resourceId)
     setBusyItemId(resourceId)
     setBusyAction('delete')
     try {
@@ -138,7 +136,6 @@ export function CommunityResourceMarketPanel({
       const message = deleteError instanceof Error ? deleteError.message : '删除资源失败'
       market.setError(message)
     } finally {
-      setDeletingId(null)
       setBusyItemId(null)
       setBusyAction(null)
     }

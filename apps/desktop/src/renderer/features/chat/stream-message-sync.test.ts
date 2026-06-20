@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 
+import type { Message } from '@toolman/shared'
+
 import { applyStreamEventToMessages } from './stream-message-sync'
 
 describe('applyStreamEventToMessages message.done', () => {
   it('replaces content blocks when message.done includes them', () => {
-    const messages = [
+    const messages: Message[] = [
       {
-        id: 'msg-1',
-        sessionId: 'session-1',
-        role: 'assistant' as const,
-        status: 'streaming' as const,
-        contentBlocks: [{ type: 'text' as const, text: 'summary only' }],
+        id: '00000000-0000-4000-8000-000000000001',
+        sessionId: '00000000-0000-4000-8000-000000000002',
+        parentMessageId: null,
+        role: 'assistant',
+        modelId: null,
+        status: 'streaming',
+        contentBlocks: [{ type: 'text', text: 'summary only' }],
+        error: null,
+        tokenUsage: null,
         createdAt: 1,
         updatedAt: 1,
       },
@@ -20,8 +26,8 @@ describe('applyStreamEventToMessages message.done', () => {
       messages,
       {
         type: 'message.done',
-        sessionId: 'session-1',
-        messageId: 'msg-1',
+        sessionId: '00000000-0000-4000-8000-000000000002',
+        messageId: '00000000-0000-4000-8000-000000000001',
         tokenUsage: null,
         contentBlocks: [
           { type: 'text', text: 'summary only' },

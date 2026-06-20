@@ -8,6 +8,7 @@ import { StreamingPlaceholder } from './StreamingPlaceholder'
 import { ThinkingBlock } from './ThinkingBlock'
 import { KnowledgeSourcesBlock } from './KnowledgeSourcesBlock'
 import { LocalFileLinksBlock } from './LocalFileLinksBlock'
+import { DocxReviewSummaryBlock } from './DocxReviewSummaryBlock'
 import { hasStructuredBlocks } from './apply-stream-delta'
 import { getBlocksText, orderContentBlocks } from './message-utils'
 import { useThinkingMetrics } from './useThinkingMetrics'
@@ -28,7 +29,12 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
   )
   const hasVisibleContent =
     text.trim().length > 0 ||
-    orderedBlocks.some((block) => block.type === 'image' || block.type === 'local_file_links')
+    orderedBlocks.some(
+      (block) =>
+        block.type === 'image' ||
+        block.type === 'local_file_links' ||
+        block.type === 'docx_review_summary',
+    )
 
   if (!structured && !hasVisibleContent) {
     if (streaming) return <StreamingPlaceholder />
@@ -97,6 +103,12 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
                 settings={settings}
                 sanitizeAssistant
               />
+            )
+          }
+
+          if (block.type === 'docx_review_summary') {
+            return (
+              <DocxReviewSummaryBlock key={`docx-review-summary-${index}`} summary={block} />
             )
           }
 

@@ -453,6 +453,8 @@ export const P2pGroupChatMessageSchema = z.object({
   createdAt: TimestampSchema,
 })
 
+export type P2pGroupChatMessage = z.infer<typeof P2pGroupChatMessageSchema>
+
 export const P2pGroupChatListInputSchema = z.object({
   workspaceId: UuidSchema,
   limit: z.number().int().min(1).max(500).optional(),

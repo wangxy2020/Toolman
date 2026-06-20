@@ -61,6 +61,7 @@ import {
 } from './docx-mcp-task.service'
 import {
   buildDocxFinalSummaryPrompt,
+  buildDocxReviewSummaryBlock,
   formatDocxReviewReport,
   runDocxStructuredReviewPipeline,
 } from './docx-review.service'
@@ -336,7 +337,7 @@ async function buildRuntimeSystemHints(options: {
         '1. **复制修订版**：将源文件复制到工作目录（不覆盖原文件）',
         '2. **读取**：应用调用 read_document 读取修订版全文',
         '3. **审查**：内置审查 prompt 生成结构化 issue JSON 列表（含 anchor_text、comment、replace）',
-        '4. **应用**：应用根据 issue 列表批量调用 add_comments / replace_text 写入修订版',
+        '4. **应用**：应用根据 issue 列表批量调用 replace_texts / edit_paragraphs / add_comments 写入修订版',
         '5. **总结**：向你输出审查摘要与修订版绝对路径',
         'docx-mcp-server **没有** save_document；编辑类工具直接写入 file_path。',
         '**禁止**提及 Toolman Office Skills、office-audit、toolman-office、`apply_semantic_diff_overlay` 等已移除能力。',
@@ -1143,6 +1144,7 @@ async function runGeneration(opts: {
         for (const result of reviewResults) {
           appendText(formatDocxReviewReport(result))
         }
+        buffers.setDocxReviewSummaries(reviewResults.map(buildDocxReviewSummaryBlock))
         persistBlocks(true)
 
         chatMessages.push({

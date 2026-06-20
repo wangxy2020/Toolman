@@ -12,7 +12,7 @@ import { useKnowledgeDocuments } from '../knowledge/useKnowledgeDocuments'
 import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { GroupKnowledgeFileList } from './GroupKnowledgeFileList'
 import { knowledgeSelectionKey } from './group-knowledge-selection'
-import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest, SaveGroupNoteAsCopyRequest } from './group-note-open'
+import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './group-note-open'
 import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
 
 interface Props {

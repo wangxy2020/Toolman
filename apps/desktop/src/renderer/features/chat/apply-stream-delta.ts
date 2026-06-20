@@ -95,6 +95,7 @@ export function hasStructuredBlocks(blocks: ContentBlock[]): boolean {
       block.type === 'thinking' ||
       block.type === 'kb_sources' ||
       block.type === 'image' ||
-      block.type === 'local_file_links',
+      block.type === 'local_file_links' ||
+      block.type === 'docx_review_summary',
   )
 }

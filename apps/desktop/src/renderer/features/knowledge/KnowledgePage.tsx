@@ -29,10 +29,7 @@ import {
   type KnowledgeFileSortField,
 } from './knowledge-file-sort'
 import { importFilesToKnowledgeStorage, resolveKnowledgeImportTarget, ensureDefaultFolderKb } from './knowledge-import-files'
-import {
-  buildChatWithKnowledgeFilesDraft,
-  resolveKnowledgeFilesForChat,
-} from './knowledge-chat-files'
+import { resolveKnowledgeFilesForChat } from './knowledge-chat-files'
 import { useDefaultFolderKnowledgeBase } from './useDefaultFolderKnowledgeBase'
 import { useKnowledgeDocuments } from './useKnowledgeDocuments'
 import type { SystemPaths } from '../chat/useSystemPaths'
@@ -65,6 +62,8 @@ interface Props {
   onKnowledgeFolderError?: (message: string | null) => void
   onNetworkKnowledgeFolderPathChanged?: (path: string) => void
   onNetworkKnowledgeFolderError?: (message: string | null) => void
+  onLocalFilesFolderPathChanged?: (path: string) => void
+  onLocalFilesFolderError?: (message: string | null) => void
   systemPaths?: SystemPaths | null
   onOpenNote?: (noteId: string) => boolean
   onChatWithKnowledgeFiles?: (items: KnowledgeFilePanelItem[]) => void
@@ -91,6 +90,8 @@ export function KnowledgePage({
   onKnowledgeFolderError: _onKnowledgeFolderError,
   onNetworkKnowledgeFolderPathChanged: _onNetworkKnowledgeFolderPathChanged,
   onNetworkKnowledgeFolderError: _onNetworkKnowledgeFolderError,
+  onLocalFilesFolderPathChanged: _onLocalFilesFolderPathChanged,
+  onLocalFilesFolderError: _onLocalFilesFolderError,
   systemPaths: _systemPaths,
   onOpenNote,
   onChatWithKnowledgeFiles,

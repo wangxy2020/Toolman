@@ -1,7 +1,6 @@
 import { forwardRef, useState, type ReactNode } from 'react'
 
 import {
-  type CommunityReportReason,
   type CommunityReportTargetType,
 } from '@toolman/shared'
 

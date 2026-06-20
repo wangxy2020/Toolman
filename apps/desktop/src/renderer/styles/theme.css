@@ -5793,6 +5793,84 @@ html.theme-dark .tm-dedup-error {
   gap: 8px;
 }
 
+.tm-docx-review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--tm-border);
+  border-radius: 10px;
+  background: var(--tm-surface-elevated, var(--tm-bg-subtle));
+}
+
+.tm-docx-review-summary-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tm-text);
+}
+
+.tm-docx-review-summary-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tm-text-muted);
+}
+
+.tm-docx-review-summary-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tm-docx-review-summary-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.tm-docx-review-summary-stat-label {
+  font-weight: 600;
+  color: var(--tm-text);
+}
+
+.tm-docx-review-summary-stat-value {
+  color: var(--tm-text-muted);
+}
+
+.tm-docx-review-summary-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tm-text-muted);
+}
+
+.tm-docx-review-summary-errors,
+.tm-docx-review-summary-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.tm-docx-review-summary-errors-label {
+  font-weight: 600;
+  color: var(--tm-danger, #c0392b);
+}
+
+.tm-docx-review-summary-warnings-label {
+  font-weight: 600;
+  color: var(--tm-warning, #b8860b);
+}
+
+.tm-docx-review-summary-errors ul,
+.tm-docx-review-summary-warnings ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .tm-md-docx-filename {
   font-weight: 600;
   color: var(--tm-text);

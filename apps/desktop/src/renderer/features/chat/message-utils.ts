@@ -7,6 +7,7 @@ const CONTENT_BLOCK_ORDER: Record<ContentBlock['type'], number> = {
   file: 3,
   image: 4,
   text: 5,
+  docx_review_summary: 5.5,
   local_file_links: 6,
 }
 

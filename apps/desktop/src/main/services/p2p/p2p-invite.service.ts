@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
   P2pInviteRepository,
-  P2pMemberRepository,
   P2pWorkspaceRepository,
   createP2pDeviceIdentityRepository,
   hashInviteToken,
@@ -44,10 +43,6 @@ function beginInviteHandshake(inviteId: string): void {
 
 function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
-}
-
-function getMemberRepo(): P2pMemberRepository {
-  return new P2pMemberRepository(getDatabase())
 }
 
 function getInviteRepo(): P2pInviteRepository {

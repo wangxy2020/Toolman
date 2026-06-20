@@ -206,7 +206,7 @@ export async function relayProxySendMessage(input: {
     memberSessionId: input.sessionId,
     memberUserMessageId: input.memberUserMessageId,
     memberAssistantMessageId: input.memberAssistantMessageId,
-    contentBlocks: input.contentBlocks as Array<Record<string, unknown>>,
+    contentBlocks: input.contentBlocks,
     modelIds: input.modelIds,
   })
 
@@ -343,11 +343,12 @@ function persistRelayStreamEvent(event: MessageStreamEvent): void {
   const messages = getMessageRepository()
 
   if (event.type === 'message.done') {
-    const buffer = relayStreamBuffers.get(event.messageId)
-    if (buffer) {
-      messages.updateStreamBlocks(event.messageId, buffer.toContentBlocks())
-      relayStreamBuffers.delete(event.messageId)
+    const blocks =
+      event.contentBlocks ?? relayStreamBuffers.get(event.messageId)?.toContentBlocks()
+    if (blocks) {
+      messages.updateStreamBlocks(event.messageId, blocks)
     }
+    relayStreamBuffers.delete(event.messageId)
     messages.update(event.messageId, {
       status: 'completed',
       tokenUsage: event.tokenUsage ?? undefined,

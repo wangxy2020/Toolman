@@ -228,14 +228,15 @@ export function packWanInviteBundle(token: string, offerSdp: string): string {
   const minified = minifyWanSdpEssentials(offerSdp)
   const candidateCount = listCandidateLines(minified).length
   let smallest = encodeWanBlob(
-    Buffer.from(JSON.stringify({ t: token, d: minified } satisfies WanInviteBundle, 'utf8')),
+    Buffer.from(JSON.stringify({ t: token, d: minified } satisfies WanInviteBundle), 'utf8'),
   )
 
   for (let maxCandidates = candidateCount - 1; maxCandidates >= 0; maxCandidates -= 1) {
     const trimmed = trimSdpCandidates(minified, maxCandidates)
     const encoded = encodeWanBlob(
       Buffer.from(
-        JSON.stringify({ t: token, d: trimmed } satisfies WanInviteBundle, 'utf8'),
+        JSON.stringify({ t: token, d: trimmed } satisfies WanInviteBundle),
+        'utf8',
       ),
     )
     if (Buffer.byteLength(encoded, 'utf8') < Buffer.byteLength(smallest, 'utf8')) {

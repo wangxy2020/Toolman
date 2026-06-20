@@ -433,7 +433,8 @@ export function MessageInput({
   useEffect(() => {
     if (!slashMenuOpen) return
 
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = (event: Event) => {
+      if (!(event instanceof KeyboardEvent)) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         setSlashActiveIndex((index) => Math.min(index + 1, SLASH_COMMANDS.length - 1))
@@ -460,7 +461,8 @@ export function MessageInput({
   useEffect(() => {
     if (!phraseMenuOpen || addingPhrase) return
 
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = (event: Event) => {
+      if (!(event instanceof KeyboardEvent)) return
       const maxIndex = phraseMenuItems.length - 1
       if (event.key === 'ArrowDown') {
         event.preventDefault()

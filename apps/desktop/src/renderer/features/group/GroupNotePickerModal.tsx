@@ -19,26 +19,28 @@ export function GroupNotePickerModal({
   onConfirm,
 }: Props) {
   const groups = useMemo<GroupPickerGroup[]>(() => {
-    return notebooks
-      .map((notebook) => {
-        const notebookNotes = notes.filter(
-          (note) => note.notebookId === notebook.id && !sharedNoteIds.has(note.id),
-        )
-        if (notebookNotes.length === 0) return null
+    const result: GroupPickerGroup[] = []
 
-          return {
-            id: notebook.id,
-            name: notebook.name,
-            description: `${notebookNotes.length} 篇笔记`,
-            groupSelectable: true,
-            items: notebookNotes.map((note) => ({
-            id: note.id,
-            name: note.title,
-            meta: note.tags.length > 0 ? note.tags.slice(0, 3).join(' · ') : undefined,
-          })),
-        }
+    for (const notebook of notebooks) {
+      const notebookNotes = notes.filter(
+        (note) => note.notebookId === notebook.id && !sharedNoteIds.has(note.id),
+      )
+      if (notebookNotes.length === 0) continue
+
+      result.push({
+        id: notebook.id,
+        name: notebook.name,
+        description: `${notebookNotes.length} 篇笔记`,
+        groupSelectable: true,
+        items: notebookNotes.map((note) => ({
+          id: note.id,
+          name: note.title,
+          meta: note.tags.length > 0 ? note.tags.slice(0, 3).join(' · ') : undefined,
+        })),
       })
-      .filter((item): item is GroupPickerGroup => item != null)
+    }
+
+    return result
   }, [notebooks, notes, sharedNoteIds])
 
   return (

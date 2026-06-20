@@ -1,5 +1,7 @@
 import type { ContentBlock, KnowledgeCitation, StreamDelta } from '@toolman/shared'
 
+type DocxReviewSummaryBlock = Extract<ContentBlock, { type: 'docx_review_summary' }>
+
 type ToolBuffer = {
   toolCallId: string
   name: string
@@ -14,6 +16,7 @@ export class MessageStreamBuffers {
   private thinkingStartedAt: number | null = null
   private thinkingDurationSeconds: number | null = null
   private kbSources: KnowledgeCitation[] = []
+  private docxReviewSummaries: DocxReviewSummaryBlock[] = []
   private localFileLinks: string[] = []
   private readonly tools: ToolBuffer[] = []
 
@@ -56,6 +59,10 @@ export class MessageStreamBuffers {
 
   setKbSources(sources: KnowledgeCitation[]): void {
     this.kbSources = sources
+  }
+
+  setDocxReviewSummaries(summaries: DocxReviewSummaryBlock[]): void {
+    this.docxReviewSummaries = summaries
   }
 
   setLocalFileLinks(paths: string[]): void {
@@ -135,6 +142,10 @@ export class MessageStreamBuffers {
 
     if (this.text || blocks.length === 0) {
       blocks.push({ type: 'text', text: this.text })
+    }
+
+    for (const summary of this.docxReviewSummaries) {
+      blocks.push(summary)
     }
 
     if (this.localFileLinks.length > 0) {
