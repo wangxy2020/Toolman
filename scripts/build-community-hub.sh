@@ -21,4 +21,10 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
 fi
 
 cp "$ROOT_DIR/target/release/$BIN_NAME" "$OUT_DIR/"
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # Re-sign after copy so macOS Gatekeeper accepts the sidecar when dev rebuilds it.
+  codesign --force --sign - "$OUT_DIR/$BIN_NAME" >/dev/null 2>&1 || true
+fi
+
 echo "Built $OUT_DIR/$BIN_NAME"

@@ -51,6 +51,17 @@ export class P2pWorkspaceRepository {
       .all()
   }
 
+  listByOwnerDevice(ownerDeviceId: string): P2pWorkspaceRow[] {
+    return this.db
+      .select()
+      .from(p2pWorkspaces)
+      .where(
+        and(eq(p2pWorkspaces.ownerDeviceId, ownerDeviceId), isNull(p2pWorkspaces.deletedAt)),
+      )
+      .orderBy(desc(p2pWorkspaces.updatedAt))
+      .all()
+  }
+
   listActive(): P2pWorkspaceRow[] {
     return this.db
       .select()

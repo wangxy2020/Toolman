@@ -80,6 +80,8 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
 
   const avatarFallback = getAvatarFallbackLabel({ avatarUrl: identity?.avatarUrl })
   const statusLabel = formatAccountStatusLabel(authSession)
+  const visibleBindings =
+    authSession?.isLoggedIn && authSession.bindings.length > 0 ? authSession.bindings : []
   const communityRoleLabel =
     community && isRegisteredAuthSession(authSession ?? { registrationStatus: 'guest' })
       ? USER_ROLE_LABELS[community.role]
@@ -135,9 +137,9 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
                 </span>
               </div>
             ) : null}
-            {authSession?.bindings.length ? (
+            {visibleBindings.length ? (
               <div className="tm-user-center-profile-bindings">
-                {authSession.bindings.map((binding) => (
+                {visibleBindings.map((binding) => (
                   <span
                     key={`${binding.provider}-${binding.subjectId}`}
                     className="tm-user-center-profile-binding"

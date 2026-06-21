@@ -3,7 +3,7 @@ import {
   P2pSyncCursorRepository,
   P2pWorkspaceRepository,
 } from '@toolman/db'
-import type { P2pConnectionInfo, P2pSyncStatus, WorkspaceEvent } from '@toolman/shared'
+import type { P2pConnectionInfo, P2pMember, P2pSyncStatus, WorkspaceEvent } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
 import {
@@ -15,7 +15,11 @@ import {
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
 import { connectP2pPeer, listP2pConnections } from './p2p-connection.service'
-import { assertPeerTrustedForSync, isPeerTrusted } from './p2p-peer.service'
+import {
+  assertPeerTrustedForSync,
+  ensureOwnerPeerTrustedForSync,
+  isPeerTrusted,
+} from './p2p-peer.service'
 import {
   broadcastP2pSyncCompleted,
   broadcastP2pSyncError,
@@ -27,6 +31,7 @@ import {
   syncMissingWorkspaceBlobs,
 } from './p2p-blob-transfer.service'
 import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
+import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse, reconcileOwnerWorkspaceMembers } from './p2p-member.service'
 import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 import { maybeAutoSnapshot } from './p2p-snapshot.service'
 import {
@@ -230,10 +235,13 @@ async function handleSnapshotResponse(
   const state = applyWorkspaceSnapshotWire(message.workspaceId, message.snapshot)
   getCursorRepo().updateReceivedSeq(message.workspaceId, peerDeviceId, state.snapshotSeq)
 
+  const localLatestSeq = getWorkspaceLatestSeq(message.workspaceId)
+  const sinceSeq = localLatestSeq === 0 ? 0 : state.snapshotSeq
+
   await sendReplicationMessage(peerDeviceId, {
     type: 'events.request',
     workspaceId: message.workspaceId,
-    sinceSeq: state.snapshotSeq,
+    sinceSeq,
   })
   return true
 }
@@ -352,6 +360,36 @@ async function handleReplicationMessage(
       break
     }
     case 'member.joined':
+      applyRemoteMemberJoin(
+        {
+          workspaceId: message.workspaceId,
+          member: {
+            id: message.member.id,
+            workspaceId: message.workspaceId,
+            identityId:
+              'identityId' in message.member && typeof message.member.identityId === 'string'
+                ? message.member.identityId
+                : '',
+            deviceId: message.member.deviceId,
+            displayName: message.member.displayName,
+            role: message.member.role as P2pMember['role'],
+            status: 'active',
+            online: false,
+          },
+          inviteId: message.inviteId,
+          peerDeviceId,
+        },
+        { requirePeerTrust: false },
+      )
+      break
+    case 'group-chat.message':
+      handleP2pGroupChatChannelMessage(peerDeviceId, payload)
+      break
+    case 'member.sync_request':
+      await handleMemberSyncRequest(peerDeviceId, message.workspaceId)
+      break
+    case 'member.sync_response':
+      handleMemberSyncResponse(peerDeviceId, message)
       break
     default:
       break
@@ -418,6 +456,26 @@ export async function syncWithPeer(workspaceId: string, peerDeviceId: string): P
   }
 
   await sendSyncHello(peerDeviceId, workspaceId)
+}
+
+export async function scheduleJoinerEventCatchUp(workspaceId: string): Promise<void> {
+  assertRegisteredForP2p()
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (!workspace) return
+
+  const device = getP2pDeviceInfo()
+  if (workspace.ownerDeviceId === device.deviceId) return
+
+  ensureOwnerPeerTrustedForSync(workspaceId, workspace.ownerDeviceId)
+
+  if (getWorkspaceLatestSeq(workspaceId) > 0) return
+
+  try {
+    await syncWithPeer(workspaceId, workspace.ownerDeviceId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'joiner event catch-up failed'
+    console.warn(`[p2p] joiner event catch-up failed: ${message}`)
+  }
 }
 
 export function onLocalP2pEventAppended(event: WorkspaceEvent): void {
@@ -595,6 +653,9 @@ export function getP2pSyncStatus(workspaceId: string): {
   sequencingMode: ReturnType<typeof getWorkspaceSequencingMode>
   ownerOnline: boolean
 } {
+  void ensureMemberConnectsToOwner(workspaceId)
+  void reconcileOwnerWorkspaceMembers(workspaceId)
+
   const state = getWorkspaceState(workspaceId)
   const connections = knownConnectionsSnapshot()
   const peerDeviceIds = listWorkspacePeerDeviceIds(workspaceId)
@@ -640,7 +701,14 @@ export async function requestSnapshotFromOwner(
   const device = getP2pDeviceInfo()
   if (ownerDeviceId === device.deviceId) return
 
-  await connectP2pPeer(ownerDeviceId, workspaceId)
+  try {
+    await connectP2pPeer(ownerDeviceId, workspaceId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'connect owner failed'
+    console.warn(`[p2p] snapshot connect to owner failed: ${message}`)
+    return
+  }
+
   await sendReplicationMessage(ownerDeviceId, {
     type: 'snapshot.request',
     workspaceId,

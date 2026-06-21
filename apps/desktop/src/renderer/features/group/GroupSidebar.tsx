@@ -16,6 +16,11 @@ function isGroupInList(groups: P2pWorkspace[], activeId: string | null) {
   return activeId != null && groups.some((group) => group.id === activeId)
 }
 
+function formatGroupLabel(name: string | null | undefined): string {
+  const trimmed = name?.trim()
+  return trimmed || '未命名群组'
+}
+
 export function GroupSidebar({
   myGroups,
   joinedGroups,
@@ -99,12 +104,12 @@ export function GroupSidebar({
                       .filter(Boolean)
                       .join(' ')}
                     onClick={() => onSelect(group.id)}
-                    title={group.name}
+                    title={formatGroupLabel(group.name)}
                   >
                     <span className="tm-session-item-icon" aria-hidden="true">
                       <IconFolder size={14} />
                     </span>
-                    <span className="tm-session-item-label">{group.name}</span>
+                    <span className="tm-session-item-label">{formatGroupLabel(group.name)}</span>
                   </button>
                 ))
               ))}
@@ -168,12 +173,12 @@ export function GroupSidebar({
                       .filter(Boolean)
                       .join(' ')}
                     onClick={() => onSelect(group.id)}
-                    title={group.name}
+                    title={formatGroupLabel(group.name)}
                   >
                     <span className="tm-session-item-icon" aria-hidden="true">
                       <IconFolder size={14} />
                     </span>
-                    <span className="tm-session-item-label">{group.name}</span>
+                    <span className="tm-session-item-label">{formatGroupLabel(group.name)}</span>
                   </button>
                 ))
               ))}

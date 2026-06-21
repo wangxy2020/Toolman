@@ -79,4 +79,19 @@ export class AuthBindingRepository {
     }
     return rows.length
   }
+
+  deleteByIdentityIdAndProvider(identityId: string, provider: AuthProvider): number {
+    const rows = this.listByIdentityId(identityId).filter((row) => row.provider === provider)
+    for (const row of rows) {
+      this.db.delete(authBindings).where(eq(authBindings.id, row.id)).run()
+    }
+    return rows.length
+  }
+
+  deleteById(id: string): boolean {
+    const existing = this.db.select().from(authBindings).where(eq(authBindings.id, id)).get()
+    if (!existing) return false
+    this.db.delete(authBindings).where(eq(authBindings.id, id)).run()
+    return true
+  }
 }

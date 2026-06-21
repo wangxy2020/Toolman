@@ -62,12 +62,13 @@ export function GroupMemberChatPanel({
           onError={chat.setError}
           getUserDisplayName={chat.getUserDisplayName}
           getUserAvatarInitial={chat.getUserAvatarInitial}
+          isOwnUserMessage={chat.isOwnUserMessage}
         />
       </div>
 
       <MessageInput
-        disabled={!canWriteWorkspace}
-        streaming={chat.sending}
+        disabled={!canWriteWorkspace || chat.sending}
+        streaming={false}
         modelCount={1}
         defaultModelId={null}
         defaultFilePath={defaultFilePath}

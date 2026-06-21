@@ -74,5 +74,6 @@ describe('packWanInviteBundle', () => {
     expect(unpacked.t).toBe('invite-token')
     expect(unpacked.d).toContain('m=application')
     expect(unpacked.d).not.toMatch(/^m=audio/m)
+    expect(unpacked.d).toMatch(/a=candidate:/)
   })
 })

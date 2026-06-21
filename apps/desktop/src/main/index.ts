@@ -20,6 +20,7 @@ import {
 } from './services/knowledge-url-refresh.service'
 import { P2pBridge } from './services/p2p/p2p-bridge'
 import { ensureP2pDeviceIdentity } from './services/p2p/p2p-device-identity.service'
+import { startP2pDiscovery } from './services/p2p/p2p-discovery.service'
 import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
 import { stopP2pDiscovery } from './services/p2p/p2p-discovery.service'
 import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
@@ -190,6 +191,12 @@ app.whenReady().then(() => {
   try {
     bootstrapDatabase()
     ensureP2pDeviceIdentity()
+    try {
+      startP2pDiscovery()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[p2p] discovery bootstrap failed: ${message}`)
+    }
     bootstrapP2pEventStore()
     bootstrapP2pWorkspaceKeys()
     bootstrapMcpPresets()

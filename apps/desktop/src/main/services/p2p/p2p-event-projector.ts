@@ -15,6 +15,11 @@ import {
   projectNoteDeletedEvent,
   projectNoteSharedEvent,
 } from './p2p-note-projection'
+import {
+  projectMemberJoinedEvent,
+  projectMemberLeftEvent,
+  syncWorkspaceNameFromJoinEvent,
+} from './p2p-member-projection'
 
 export function projectP2pEvent(event: WorkspaceEvent): void {
   switch (event.resourceType) {
@@ -55,7 +60,11 @@ function projectWorkspaceEvent(event: WorkspaceEvent): void {
 function projectMemberEvent(event: WorkspaceEvent): void {
   switch (event.eventType) {
     case 'Joined':
+      syncWorkspaceNameFromJoinEvent(event)
+      projectMemberJoinedEvent(event)
+      return
     case 'Left':
+      projectMemberLeftEvent(event)
       return
     default:
       return

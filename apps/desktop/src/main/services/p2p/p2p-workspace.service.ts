@@ -25,6 +25,9 @@ import {
   saveWorkspaceKey,
 } from './p2p-workspace-key.store'
 import { appendP2pEvent } from './p2p-event.service'
+import * as p2pConnectionService from './p2p-connection.service'
+import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
+import { applyP2pNetworkConfig } from './p2p-network.config'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -157,6 +160,11 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   })
 
   const inviteToken = await createDefaultWorkspaceInvite(row.id)
+  applyP2pNetworkConfig()
+  if (!isP2pDiscoveryRunning()) {
+    startP2pDiscovery()
+  }
+  p2pConnectionService.startP2pConnectionMonitor()
 
   return {
     workspace: toWorkspaceDto(row),
@@ -169,9 +177,11 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
   const workspaceRepo = getWorkspaceRepo()
   const memberRepo = getMemberRepo()
 
-  const owned = workspaceRepo.listByOwnerIdentity(device.identityId)
+  // 「我的群组」按本机 device 是否为群主判定；不能仅用 identityId（双实例/未分账户时共用默认 identity）。
+  const owned = workspaceRepo.listByOwnerDevice(device.deviceId)
   const memberships = memberRepo.listActiveMembershipsByDevice(device.deviceId)
   const ownedIds = new Set(owned.map((row) => row.id))
+  const activeMembershipIds = new Set(memberships.map((member) => member.workspaceId))
 
   const joined = memberships
     .filter((member) => !ownedIds.has(member.workspaceId))
@@ -197,7 +207,9 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
     }
   }
 
-  return rows.map((row) => toWorkspaceDto(row))
+  return rows
+    .filter((row) => activeMembershipIds.has(row.id))
+    .map((row) => toWorkspaceDto(row))
 }
 
 export function getP2pWorkspace(id: string): P2pWorkspace {

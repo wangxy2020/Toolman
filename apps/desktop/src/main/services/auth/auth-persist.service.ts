@@ -49,6 +49,9 @@ export function upsertAuthBinding(input: {
     throw new AuthLoginError('该登录方式已绑定到其他 Toolman 账户')
   }
 
+  // 同一 identity 下同 provider 仅保留当前登录账户（避免双实例测试切换账号后显示多个邮箱）
+  bindingRepo.deleteByIdentityIdAndProvider(identityId, input.provider)
+
   bindingRepo.upsert({
     identityId,
     provider: input.provider,

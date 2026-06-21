@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import {
   IconKnowledge,
   IconMessageBoard,
@@ -28,6 +30,7 @@ import { SkillsMarketPanel } from './SkillsMarketPanel'
 import { WorkflowMarketPanel } from './WorkflowMarketPanel'
 import { TaskMarketPanel } from './TaskMarketPanel'
 import { UserCenterPanel } from './UserCenterPanel'
+import { CommunitySettingsModal } from './CommunitySettingsModal'
 import { useCommunityPresence } from './useCommunityPresence'
 import { isCommunitySessionActive } from '../user/community-session'
 
@@ -104,7 +107,13 @@ interface Props {
   sidebarSection?: CommunitySidebarSection
 }
 
-function CommunityPageHeaderEnd({ showSort }: { showSort: boolean }) {
+function CommunityPageHeaderEnd({
+  showSort,
+  onOpenSettings,
+}: {
+  showSort: boolean
+  onOpenSettings: () => void
+}) {
   const sort = useCommunityListSortContext()
 
   return (
@@ -122,7 +131,7 @@ function CommunityPageHeaderEnd({ showSort }: { showSort: boolean }) {
         className="tm-chat-header-settings-btn"
         title="社区设置"
         aria-label="社区设置"
-        disabled
+        onClick={onOpenSettings}
       >
         <IconSliders size={16} />
       </button>
@@ -134,6 +143,7 @@ export function CommunityPage({
   activeAction = DEFAULT_COMMUNITY_ACTION,
   sidebarSection = 'news',
 }: Props) {
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   useCommunityPresence(isCommunitySessionActive())
   const config = getModulePageConfig('community')
 
@@ -165,7 +175,10 @@ export function CommunityPage({
           </div>
 
           <div className="tm-chat-header-end">
-            <CommunityPageHeaderEnd showSort={showSort} />
+            <CommunityPageHeaderEnd
+              showSort={showSort}
+              onOpenSettings={() => setShowSettingsModal(true)}
+            />
           </div>
         </header>
 
@@ -209,6 +222,9 @@ export function CommunityPage({
       ) : (
         pageContent
       )}
+      {showSettingsModal ? (
+        <CommunitySettingsModal onClose={() => setShowSettingsModal(false)} />
+      ) : null}
     </CommunityListSortProvider>
   )
 }

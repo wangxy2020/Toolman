@@ -57,6 +57,7 @@ interface Props {
   onError?: (message: string | null) => void
   getUserDisplayName?: (message: Message) => string
   getUserAvatarInitial?: (message: Message) => string
+  isOwnUserMessage?: (message: Message) => boolean
   sendShortcut?: SendShortcut
 }
 
@@ -153,6 +154,7 @@ function UserMessage({
   forking,
   editing,
   sending,
+  isOwn = false,
 }: {
   message: Message
   messageSettings: MessageSettings
@@ -168,12 +170,21 @@ function UserMessage({
   forking?: boolean
   editing?: boolean
   sending?: boolean
+  isOwn?: boolean
 }) {
   const text = getUserVisibleText(message.contentBlocks)
   const copyText = getUserMessageCopyText(message.contentBlocks)
 
   return (
-    <article className="tm-stream-message tm-stream-message--user">
+    <article
+      className={[
+        'tm-stream-message',
+        'tm-stream-message--user',
+        isOwn ? 'tm-stream-message--own' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="tm-stream-message-head">
         <div className="tm-stream-avatar tm-stream-avatar--user">{avatarInitial}</div>
         <div className="tm-stream-meta">
@@ -403,6 +414,7 @@ function MessageTurnView({
   copiedKey,
   getUserDisplayName,
   getUserAvatarInitial,
+  isOwnUserMessage,
   onRequestDeleteMessage,
   onRegenerateMessage,
   onEditUserMessage,
@@ -438,6 +450,7 @@ function MessageTurnView({
   editingUserMessageId?: string | null
   getUserDisplayName?: (message: Message) => string
   getUserAvatarInitial?: (message: Message) => string
+  isOwnUserMessage?: (message: Message) => boolean
 }) {
   if (turn.type === 'user') {
     const message = turn.message
@@ -460,6 +473,7 @@ function MessageTurnView({
         forking={isMessageActionPending(pendingMessageAction, 'fork', message.id)}
         editing={editingUserMessageId === message.id}
         sending={sending}
+        isOwn={isOwnUserMessage?.(message) ?? false}
       />
     )
   }
@@ -526,6 +540,7 @@ export function MessagePanel({
   editingUserMessageId = null,
   getUserDisplayName,
   getUserAvatarInitial,
+  isOwnUserMessage,
   sendShortcut = 'enter',
 }: Props) {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -697,6 +712,7 @@ export function MessagePanel({
     copiedKey,
     getUserDisplayName,
     getUserAvatarInitial,
+    isOwnUserMessage,
     onRequestDeleteMessage: handleRequestDeleteMessage,
     onRegenerateMessage,
     onEditUserMessage,

@@ -168,8 +168,9 @@ where
 {
     let mut best = encode_wan_blob(&build_payload(initial_candidates))?;
     let mut max_candidates = initial_candidates;
+    let min_candidates = if initial_candidates > 0 { 1 } else { 0 };
 
-    while max_candidates > 0 {
+    while max_candidates >= min_candidates {
         max_candidates -= 1;
         let encoded = encode_wan_blob(&build_payload(max_candidates))?;
         best = encoded;

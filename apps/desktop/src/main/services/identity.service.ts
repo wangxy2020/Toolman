@@ -11,6 +11,7 @@ import {
 import { getDatabase } from '../bootstrap/database'
 import { getBlobDataUrl, writeBlobFromPath } from './blob.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
+import { P2pMemberRepository } from '@toolman/db'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -52,6 +53,15 @@ export function getIdentityProfile(): IdentityProfile {
   return mapIdentityRow()
 }
 
+function syncLocalDisplayNameToP2pMembers(displayName: string): void {
+  const device = getP2pDeviceInfo()
+  const repo = new P2pMemberRepository(getDatabase())
+  for (const membership of repo.listActiveMembershipsByDevice(device.deviceId)) {
+    if (membership.displayName === displayName) continue
+    repo.update({ id: membership.id, displayName })
+  }
+}
+
 export function updateIdentityProfile(input: unknown): IdentityProfile {
   const parsed = IdentityUpdateInputSchema.parse(input)
   const db = getDatabase()
@@ -85,6 +95,10 @@ export function updateIdentityProfile(input: unknown): IdentityProfile {
     })
     .where(eq(identities.id, DEFAULT_IDENTITY_ID))
     .run()
+
+  if (nextDisplayName !== row.displayName) {
+    syncLocalDisplayNameToP2pMembers(nextDisplayName)
+  }
 
   return mapIdentityRow()
 }

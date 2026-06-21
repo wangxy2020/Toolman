@@ -5,6 +5,7 @@ import {
   IconAgent,
   IconFolder,
   IconKnowledge,
+  IconMessageBoard,
   IconNotes,
   IconSliders,
   IconUsers,
@@ -37,10 +38,10 @@ interface HeaderAction {
   title: string
 }
 
-const DEFAULT_GROUP_ACTION = 'members'
+const DEFAULT_GROUP_ACTION = 'messages'
 
 const GROUP_NESTED_SCROLL_ACTIONS = new Set([
-  'members',
+  'messages',
   'agents',
   'knowledge',
   'notes',
@@ -50,6 +51,7 @@ const GROUP_NESTED_SCROLL_ACTIONS = new Set([
 
 const HEADER_ACTIONS: HeaderAction[] = [
   { key: 'members', icon: <IconUsers size={16} />, title: '群组成员' },
+  { key: 'messages', icon: <IconMessageBoard size={16} />, title: '群组消息' },
   { key: 'agents', icon: <IconAgent size={16} />, title: '群组智能体' },
   { key: 'knowledge', icon: <IconKnowledge size={16} />, title: '群组知识库' },
   { key: 'notes', icon: <IconNotes size={16} />, title: '群组笔记' },
@@ -130,7 +132,7 @@ export function GroupPage({
 
   useEffect(() => {
     if (
-      effectiveAction === 'members' ||
+      effectiveAction === 'messages' ||
       effectiveAction === 'files' ||
       effectiveAction === 'knowledge' ||
       effectiveAction === 'agents' ||
@@ -161,7 +163,7 @@ export function GroupPage({
     if (!workspace) return null
 
     switch (effectiveAction) {
-      case 'members':
+      case 'messages':
         return (
           <GroupMemberChatPanel
             workspaceId={workspace.id}
@@ -243,17 +245,7 @@ export function GroupPage({
       case 'workflow':
         return <GroupWorkflowPanel workspaceName={workspaceName} />
       default:
-        return (
-          <GroupMemberChatPanel
-            workspaceId={workspace.id}
-            workspaceName={workspaceName}
-            selfMemberId={detail.selfMember?.id ?? null}
-            canWriteWorkspace={detail.canWriteWorkspace}
-            messageSettings={messageSettings}
-            spellCheckEnabled={spellCheckEnabled}
-            defaultFilePath={defaultFilePath}
-          />
-        )
+        return null
     }
   }
 
@@ -271,38 +263,42 @@ export function GroupPage({
         </div>
 
         <div className="tm-chat-header-end">
-          {HEADER_ACTIONS.map((action) => (
-            <button
-              key={action.key}
-              ref={action.key === 'members' ? membersButtonRef : undefined}
-              type="button"
-              className={[
-                'tm-chat-header-settings-btn',
-                effectiveAction === action.key
-                  ? 'tm-chat-header-settings-btn--active'
-                  : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              title={action.title}
-              aria-label={action.title}
-              aria-pressed={effectiveAction === action.key}
-              aria-expanded={action.key === 'members' ? membersMenuOpen : undefined}
-              onClick={() => {
-                if (!guardGroupAccess()) return
-                if (!workspace) return
-                if (action.key === 'members') {
-                  setActiveAction('members')
-                  setMembersMenuOpen((current) => !current)
-                  return
-                }
-                setMembersMenuOpen(false)
-                setActiveAction((prev) => (prev === action.key ? null : action.key))
-              }}
-            >
-              {action.icon}
-            </button>
-          ))}
+          {HEADER_ACTIONS.map((action) => {
+            const isMembersMenu = action.key === 'members'
+            const isActive = isMembersMenu
+              ? membersMenuOpen
+              : effectiveAction === action.key
+
+            return (
+              <button
+                key={action.key}
+                ref={isMembersMenu ? membersButtonRef : undefined}
+                type="button"
+                className={[
+                  'tm-chat-header-settings-btn',
+                  isActive ? 'tm-chat-header-settings-btn--active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                title={action.title}
+                aria-label={action.title}
+                aria-pressed={isActive}
+                aria-expanded={isMembersMenu ? membersMenuOpen : undefined}
+                onClick={() => {
+                  if (!guardGroupAccess()) return
+                  if (!workspace) return
+                  if (isMembersMenu) {
+                    setMembersMenuOpen((current) => !current)
+                    return
+                  }
+                  setMembersMenuOpen(false)
+                  setActiveAction((prev) => (prev === action.key ? null : action.key))
+                }}
+              >
+                {action.icon}
+              </button>
+            )
+          })}
 
           <button
             type="button"
@@ -360,7 +356,7 @@ export function GroupPage({
             )}
             {!syncStatus.error && syncStatus.isDegraded && !detail.isOwner && (
               <div className="tm-kb-file-dropzone-hint" style={{ margin: '0 0 12px' }}>
-                群主当前离线，事件序号已降级为 Lamport 时钟；群主上线后将自动强制同步合并。
+                群主 P2P 未连接，事件序号已降级为 Lamport 时钟；正在尝试连接并同步，连接成功后自动恢复。
               </div>
             )}
             {!syncStatus.error && syncStatus.isSyncing && (

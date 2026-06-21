@@ -8,18 +8,22 @@ import {
   P2pGroupChatListInputSchema,
   P2pGroupChatMessageSchema,
   P2pGroupChatSendInputSchema,
+  canWriteWorkspace,
   type P2pGroupChatMessage,
 } from '@toolman/shared'
-import { P2pMemberRepository } from '@toolman/db'
+import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
-import { listP2pConnections } from './p2p-connection.service'
+import { listP2pConnections, getKnownP2pConnections } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
-import { canWriteWorkspace } from '@toolman/shared'
+import { applyRemoteMemberJoin, ensureOwnerMemberRecord } from './p2p-member.service'
 import { broadcastP2pGroupChatMessage } from './p2p-group-chat-broadcast'
+import { encodeReplicationMessage } from './p2p-sync-protocol'
+import { getIdentityProfile } from '../identity.service'
 
 export const GROUP_CHAT_CHANNEL = 'group-chat'
+export const P2P_EVENTS_CHANNEL = 'events'
 
 type StoredChatFile = {
   messages: P2pGroupChatMessage[]
@@ -78,25 +82,36 @@ function appendMessage(workspaceId: string, message: P2pGroupChatMessage): void 
   writeChatFile(workspaceId, file)
 }
 
+function getWorkspaceRepo(): P2pWorkspaceRepository {
+  return new P2pWorkspaceRepository(getDatabase())
+}
+
 async function relayMessageToPeers(message: P2pGroupChatMessage): Promise<void> {
   const device = getP2pDeviceInfo()
-  const connections = await listP2pConnections()
-  const peers = connections.filter(
-    (item) =>
-      item.state === 'connected' &&
-      item.workspaceId === message.workspaceId &&
-      item.peerDeviceId !== device.deviceId,
+  const memberRepo = getMemberRepo()
+  const peerDeviceIds = new Set(
+    memberRepo
+      .listByWorkspace(message.workspaceId, 'active')
+      .filter((item) => item.deviceId !== device.deviceId)
+      .map((item) => item.deviceId),
   )
 
-  const payload = Buffer.from(
-    JSON.stringify({ v: 1, type: 'message', message }),
-    'utf8',
-  )
+  const connections = await listP2pConnections()
+  for (const item of connections) {
+    if (item.state !== 'connected' || item.peerDeviceId === device.deviceId) continue
+    if (item.workspaceId && item.workspaceId !== message.workspaceId) continue
+    peerDeviceIds.add(item.peerDeviceId)
+  }
+
+  const payload = encodeReplicationMessage({
+    type: 'group-chat.message',
+    message,
+  })
 
   await Promise.all(
-    peers.map(async (peer) => {
+    [...peerDeviceIds].map(async (peerDeviceId) => {
       try {
-        await P2pBridge.connectionSend(peer.peerDeviceId, GROUP_CHAT_CHANNEL, payload)
+        await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
       } catch {
         // ignore single peer failure
       }
@@ -126,14 +141,14 @@ export async function sendP2pGroupChatMessage(
     id: randomUUID(),
     workspaceId: input.workspaceId,
     senderMemberId: member.id,
-    senderName: member.displayName,
+    senderName: getIdentityProfile().displayName,
     contentBlocks,
     createdAt: Date.now(),
   })
 
   appendMessage(input.workspaceId, message)
   broadcastP2pGroupChatMessage(message)
-  await relayMessageToPeers(message)
+  void relayMessageToPeers(message)
 
   return { message }
 }
@@ -165,14 +180,51 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       type?: string
       message?: unknown
     }
-    if (parsed.v !== 1 || parsed.type !== 'message' || !parsed.message) {
+    const wireMessage =
+      parsed.type === 'group-chat.message' || parsed.type === 'message' ? parsed.message : null
+    if (!wireMessage) {
       return
     }
 
-    const message = P2pGroupChatMessageSchema.parse(parsed.message)
-    const member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
+    const message = P2pGroupChatMessageSchema.parse(wireMessage)
+    const connected = getKnownP2pConnections().some(
+      (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
+    )
+
+    let member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
     if (!member || member.status !== 'active') {
-      return
+      if (!connected) {
+        return
+      }
+
+      const workspace = getWorkspaceRepo().findById(message.workspaceId)
+      const localDeviceId = getP2pDeviceInfo().deviceId
+      if (workspace?.ownerDeviceId === localDeviceId) {
+        applyRemoteMemberJoin(
+          {
+            workspaceId: message.workspaceId,
+            member: {
+              id: message.senderMemberId,
+              workspaceId: message.workspaceId,
+              identityId: '',
+              deviceId: peerDeviceId,
+              displayName: message.senderName,
+              role: 'member',
+              status: 'active',
+              online: true,
+            },
+            peerDeviceId,
+          },
+          { requirePeerTrust: false },
+        )
+      } else if (workspace?.ownerDeviceId === peerDeviceId) {
+        ensureOwnerMemberRecord(message.workspaceId)
+      }
+
+      member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
+      if (!member && !connected) {
+        return
+      }
     }
 
     appendMessage(message.workspaceId, message)

@@ -30,6 +30,7 @@ function memberInitial(name: string): string {
 export function useGroupChat(workspaceId: string | null, selfMemberId: string | null) {
   const [messages, setMessages] = useState<Message[]>([])
   const [senderNames, setSenderNames] = useState<Record<string, string>>({})
+  const [senderMemberIds, setSenderMemberIds] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +39,9 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     setMessages(items.map(toPanelMessage))
     setSenderNames(
       Object.fromEntries(items.map((item) => [item.id, item.senderName])),
+    )
+    setSenderMemberIds(
+      Object.fromEntries(items.map((item) => [item.id, item.senderMemberId])),
     )
   }, [])
 
@@ -74,6 +78,10 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
         return [...current, toPanelMessage(message)]
       })
       setSenderNames((current) => ({ ...current, [message.id]: message.senderName }))
+      setSenderMemberIds((current) => ({
+        ...current,
+        [message.id]: message.senderMemberId,
+      }))
     })
 
     return unsubscribe
@@ -104,6 +112,10 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
         ...current,
         [data.message.id]: data.message.senderName,
       }))
+      setSenderMemberIds((current) => ({
+        ...current,
+        [data.message.id]: data.message.senderMemberId,
+      }))
     },
     [workspaceId],
   )
@@ -125,6 +137,11 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
         delete next[messageId]
         return next
       })
+      setSenderMemberIds((current) => {
+        const next = { ...current }
+        delete next[messageId]
+        return next
+      })
     },
     [workspaceId],
   )
@@ -139,6 +156,14 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     [senderNames],
   )
 
+  const isOwnUserMessage = useCallback(
+    (message: Message) => {
+      if (!selfMemberId) return false
+      return senderMemberIds[message.id] === selfMemberId
+    },
+    [selfMemberId, senderMemberIds],
+  )
+
   return {
     messages,
     loading,
@@ -149,6 +174,7 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     deleteMessage,
     getUserDisplayName,
     getUserAvatarInitial,
+    isOwnUserMessage,
     selfMemberId,
   }
 }

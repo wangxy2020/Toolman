@@ -1218,7 +1218,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pMemberList]: async (input) => {
     try {
       const parsed = P2pMemberListInputSchema.parse(input)
-      const members = p2pMemberService.listP2pMembers(parsed.workspaceId)
+      const members = await p2pMemberService.prepareP2pMemberList(parsed.workspaceId)
       return ipcOk(P2pMemberListOutputSchema.parse({ members }))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to list members'
@@ -1294,6 +1294,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pEventList]: async (input) => {
     try {
       const parsed = P2pEventListInputSchema.parse(input)
+      await p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pEventService.listP2pEvents(parsed)
       return ipcOk(P2pEventListOutputSchema.parse(result))
     } catch (error) {

@@ -72,6 +72,73 @@ export function assertPeerTrustedForSync(workspaceId: string, peerDeviceId: stri
   }
 }
 
+export function ensureOwnerPeerTrustedForSync(
+  workspaceId: string,
+  ownerDeviceId: string,
+  displayName = '群主',
+): void {
+  const localDeviceId = getP2pDeviceId()
+  if (ownerDeviceId === localDeviceId) return
+
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, ownerDeviceId)
+  const resolvedDisplayName =
+    displayName ?? member?.displayName ?? resolvePeerDisplayName(workspaceId, ownerDeviceId, '群主')
+
+  const node = resolveDiscoveredNode(ownerDeviceId)
+  if (node) {
+    getPeerRepo().upsert({
+      workspaceId,
+      deviceId: ownerDeviceId,
+      displayName: resolvedDisplayName,
+      deviceName: node.deviceName,
+      publicKey: resolvePeerPublicKey(ownerDeviceId, node.publicKeyFingerprint),
+      trusted: true,
+      online: node.online,
+      lastSeenAt: new Date(node.lastSeenAt),
+      connectionState: 'connected',
+    })
+    return
+  }
+
+  getPeerRepo().upsert({
+    workspaceId,
+    deviceId: ownerDeviceId,
+    displayName: resolvedDisplayName,
+    deviceName: ownerDeviceId.slice(0, 8),
+    publicKey: resolvePeerPublicKey(ownerDeviceId, ownerDeviceId),
+    trusted: true,
+    online: true,
+    connectionState: 'connected',
+  })
+}
+
+export function promptPeerTrustIfNeeded(
+  workspaceId: string,
+  peerDeviceId: string,
+  options?: { connected?: boolean },
+): void {
+  const localDeviceId = getP2pDeviceId()
+  if (peerDeviceId === localDeviceId) return
+  if (options?.connected === false) return
+  if (isPeerTrusted(workspaceId, peerDeviceId)) return
+
+  const promptKey = peerPromptKey(workspaceId, peerDeviceId)
+  if (promptedPeers.has(promptKey)) return
+  promptedPeers.add(promptKey)
+
+  const node = resolveDiscoveredNode(peerDeviceId)
+  const peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  if (!peer) return
+
+  broadcastP2pPeerTrustRequired({
+    workspaceId,
+    peerDeviceId,
+    displayName: peer.displayName,
+    deviceName: peer.deviceName,
+    publicKeyFingerprint: node?.publicKeyFingerprint ?? peer.publicKey.slice(0, 16),
+  })
+}
+
 export function handlePeerConnectionChange(
   workspaceId: string | undefined,
   peerDeviceId: string,
@@ -99,22 +166,7 @@ export function handlePeerConnectionChange(
 
   if (state !== 'connected') return
 
-  if (isPeerTrusted(workspaceId, peerDeviceId)) return
-
-  const promptKey = peerPromptKey(workspaceId, peerDeviceId)
-  if (promptedPeers.has(promptKey)) return
-  promptedPeers.add(promptKey)
-
-  const peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
-  if (!peer) return
-
-  broadcastP2pPeerTrustRequired({
-    workspaceId,
-    peerDeviceId,
-    displayName: peer.displayName,
-    deviceName: peer.deviceName,
-    publicKeyFingerprint: node?.publicKeyFingerprint ?? peer.publicKey.slice(0, 16),
-  })
+  promptPeerTrustIfNeeded(workspaceId, peerDeviceId, { connected: true })
 }
 
 export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {

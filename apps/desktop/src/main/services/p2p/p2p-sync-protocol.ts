@@ -78,6 +78,29 @@ export type ReplicationMessage =
         role: string
       }
     }
+  | {
+      type: 'group-chat.message'
+      v?: number
+      message: unknown
+    }
+  | {
+      type: 'member.sync_request'
+      v?: number
+      workspaceId: string
+    }
+  | {
+      type: 'member.sync_response'
+      v?: number
+      workspaceId: string
+      member: {
+        id: string
+        workspaceId: string
+        deviceId: string
+        displayName: string
+        role: string
+        identityId?: string
+      }
+    }
 
 export function encodeReplicationMessage(message: ReplicationMessage): Buffer {
   return Buffer.from(JSON.stringify({ v: P2P_REPLICATION_VERSION, ...message }), 'utf8')

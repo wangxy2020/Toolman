@@ -19,6 +19,7 @@ const KNOWN_STATES = new Set<P2pConnectionState>([
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 const knownConnections = new Map<string, P2pConnectionInfo>()
+const connectInFlight = new Map<string, Promise<P2pConnectionState>>()
 
 const KNOWN_MODES = new Set<P2pConnectionMode>(['lan', 'wan'])
 const peerConnectionModes = new Map<string, P2pConnectionMode>()
@@ -69,6 +70,12 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
         )
         if (connection.state === 'connected') {
           notifyP2pReconnect(connection.workspaceId!, peerDeviceId)
+          void import('./p2p-member.service').then((module) => {
+            module.flushPendingJoinNotification(peerDeviceId, connection.workspaceId ?? undefined)
+            if (connection.workspaceId) {
+              void module.reconcileOwnerWorkspaceMembers(connection.workspaceId)
+            }
+          })
         }
       }
     }
@@ -121,11 +128,19 @@ export function getKnownP2pConnections(): P2pConnectionInfo[] {
   return Array.from(knownConnections.values())
 }
 
-export async function connectP2pPeer(
+export function isPeerConnected(peerDeviceId: string): boolean {
+  return knownConnections.get(peerDeviceId)?.state === 'connected'
+}
+
+async function connectP2pPeerOnce(
   peerDeviceId: string,
   workspaceId?: string,
 ): Promise<P2pConnectionState> {
   startPolling()
+  if (isPeerConnected(peerDeviceId)) {
+    return 'connected'
+  }
+
   try {
     const result = await P2pBridge.connectionConnect(peerDeviceId, workspaceId)
     const state = KNOWN_STATES.has(result.state as P2pConnectionState)
@@ -148,6 +163,26 @@ export async function connectP2pPeer(
       message,
     })
     throw error
+  }
+}
+
+export async function connectP2pPeer(
+  peerDeviceId: string,
+  workspaceId?: string,
+): Promise<P2pConnectionState> {
+  const inFlight = connectInFlight.get(peerDeviceId)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const promise = connectP2pPeerOnce(peerDeviceId, workspaceId)
+  connectInFlight.set(peerDeviceId, promise)
+  try {
+    return await promise
+  } finally {
+    if (connectInFlight.get(peerDeviceId) === promise) {
+      connectInFlight.delete(peerDeviceId)
+    }
   }
 }
 

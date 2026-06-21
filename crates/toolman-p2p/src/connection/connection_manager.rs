@@ -4,6 +4,7 @@ use std::time::Duration;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::discovery::read_peer_beacon;
 use crate::signaling::{
     append_toolman_signal_port, clear_signaling_properties, deliver_answer_via_udp, parse_signal,
     publish_signal, listen_for_udp_answers_on_socket, SignalMessage,
@@ -17,6 +18,7 @@ use super::types::{ConnectionInfo, ConnectionMode, ConnectionState};
 use super::webrtc_session::{build_api, WebRtcSession};
 
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
+const CHANNEL_OPEN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const SIGNAL_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
 static WEBRTC_API: Lazy<Arc<webrtc::api::API>> = Lazy::new(|| {
@@ -62,9 +64,15 @@ impl ConnectionManager {
 
         let api = Arc::clone(&WEBRTC_API);
 
+        let lan_only = Self::peer_is_local_beacon(peer_device_id);
         let session = Arc::new(AsyncMutex::new(
-            WebRtcSession::new(peer_device_id.to_string(), workspace_id.clone(), api.as_ref())
-                .await?,
+            WebRtcSession::new(
+                peer_device_id.to_string(),
+                workspace_id.clone(),
+                api.as_ref(),
+                lan_only,
+            )
+            .await?,
         ));
         {
             let guard = session.lock().await;
@@ -199,6 +207,7 @@ impl ConnectionManager {
                 "invite-pending".to_string(),
                 workspace_id.clone(),
                 api.as_ref(),
+                false,
             )
             .await?,
         ));
@@ -311,11 +320,13 @@ impl ConnectionManager {
         }
 
         let api = Arc::clone(&WEBRTC_API);
+        let lan_only = Self::peer_is_local_beacon(owner_device_id);
         let session = Arc::new(AsyncMutex::new(
             WebRtcSession::new(
                 owner_device_id.to_string(),
                 workspace_id.clone(),
                 api.as_ref(),
+                lan_only,
             )
             .await?,
         ));
@@ -351,7 +362,7 @@ impl ConnectionManager {
             let guard = session.lock().await;
             guard.wait_until_connected(CONNECT_TIMEOUT).await?;
             guard
-                .wait_for_channels_open(std::time::Duration::from_secs(10))
+                .wait_for_channels_open(CHANNEL_OPEN_TIMEOUT)
                 .await?;
         }
         Self::init_session_ciphers(&session, &local_device_id).await?;
@@ -395,7 +406,7 @@ impl ConnectionManager {
             guard.apply_answer(answer_sdp).await?;
             guard.wait_until_connected(CONNECT_TIMEOUT).await?;
             guard
-                .wait_for_channels_open(std::time::Duration::from_secs(10))
+                .wait_for_channels_open(CHANNEL_OPEN_TIMEOUT)
                 .await?;
         }
 
@@ -478,7 +489,7 @@ impl ConnectionManager {
             guard.apply_answer(&answer.sdp).await?;
             guard.wait_until_connected(CONNECT_TIMEOUT).await?;
             guard
-                .wait_for_channels_open(std::time::Duration::from_secs(10))
+                .wait_for_channels_open(CHANNEL_OPEN_TIMEOUT)
                 .await?;
         }
         Self::init_session_ciphers(session, local_device_id).await?;
@@ -513,7 +524,7 @@ impl ConnectionManager {
             let guard = session.lock().await;
             guard.wait_until_connected(CONNECT_TIMEOUT).await?;
             guard
-                .wait_for_channels_open(std::time::Duration::from_secs(10))
+                .wait_for_channels_open(CHANNEL_OPEN_TIMEOUT)
                 .await?;
         }
         Self::init_session_ciphers(session, local_device_id).await?;
@@ -624,6 +635,16 @@ impl ConnectionManager {
             .lock()
             .map_err(|_| "discovery lock poisoned".to_string())?;
         discovery.update_service_properties(clear_signaling_properties())
+    }
+
+    fn peer_is_local_beacon(peer_device_id: &str) -> bool {
+        let Ok(discovery) = DISCOVERY.lock() else {
+            return false;
+        };
+        let Some(local_device_id) = discovery.local_device_id() else {
+            return false;
+        };
+        read_peer_beacon(&local_device_id, peer_device_id, crate::util::now_ms()).is_some()
     }
 
     fn local_device_id() -> Result<String, String> {

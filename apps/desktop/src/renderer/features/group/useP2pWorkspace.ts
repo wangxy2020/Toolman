@@ -111,12 +111,23 @@ export function useP2pWorkspace({
     )
     const unsubOnline = window.api.subscribe('p2p:discovery:node-online', scheduleRefresh)
     const unsubOffline = window.api.subscribe('p2p:discovery:node-offline', scheduleRefresh)
+    const unsubMember = window.api.subscribe('p2p:member:changed', scheduleRefresh)
+    const unsubSync = window.api.subscribe('p2p:sync:completed', scheduleRefresh)
+    const unsubEvent = window.api.subscribe('p2p:event:appended', (payload) => {
+      const data = payload as { resourceType?: string; workspaceId?: string } | undefined
+      if (data?.resourceType === 'Member') {
+        scheduleRefresh(payload)
+      }
+    })
 
     return () => {
       if (timer) clearTimeout(timer)
       unsubConnection()
       unsubOnline()
       unsubOffline()
+      unsubMember()
+      unsubSync()
+      unsubEvent()
     }
   }, [workspaceId, load])
 

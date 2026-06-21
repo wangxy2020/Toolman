@@ -7,6 +7,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 
+use super::local_beacon::{self, LocalBeaconRecord};
+
 pub const SERVICE_TYPE: &str = "_toolman-p2p._udp.local.";
 pub const SERVICE_PORT: u16 = 39271;
 pub const NODE_TTL_MS: u64 = 30_000;
@@ -40,6 +42,11 @@ struct RegistrationContext {
     instance_name: String,
     host_name: String,
     local_ip: IpAddr,
+    device_id: String,
+    device_name: String,
+    user_name: String,
+    public_key_fingerprint: String,
+    app_version: String,
     base_properties: HashMap<String, String>,
     extra_properties: HashMap<String, String>,
 }
@@ -48,10 +55,12 @@ pub struct NodeDiscoveryService {
     daemon: Option<ServiceDaemon>,
     browse_handle: Option<JoinHandle<()>>,
     prune_handle: Option<JoinHandle<()>>,
+    beacon_handle: Option<JoinHandle<()>>,
     prune_stop: Option<Arc<AtomicBool>>,
+    beacon_stop: Option<Arc<AtomicBool>>,
     nodes: Arc<Mutex<HashMap<String, NodeRecord>>>,
     local_device_id: Option<String>,
-    registration: Option<RegistrationContext>,
+    registration: Option<Arc<Mutex<RegistrationContext>>>,
 }
 
 impl NodeDiscoveryService {
@@ -60,7 +69,9 @@ impl NodeDiscoveryService {
             daemon: None,
             browse_handle: None,
             prune_handle: None,
+            beacon_handle: None,
             prune_stop: None,
+            beacon_stop: None,
             nodes: Arc::new(Mutex::new(HashMap::new())),
             local_device_id: None,
             registration: None,
@@ -76,6 +87,13 @@ impl NodeDiscoveryService {
     }
 
     pub fn get_peer_properties(&self, device_id: &str) -> Option<HashMap<String, String>> {
+        let now = now_ms();
+        if let Some(local_device_id) = self.local_device_id.as_deref() {
+            if let Some(record) = local_beacon::read_peer_beacon(local_device_id, device_id, now) {
+                return Some(record.properties);
+            }
+        }
+
         let map = self.nodes.lock().ok()?;
         map.get(device_id)
             .map(|record| record.properties.clone())
@@ -91,8 +109,11 @@ impl NodeDiscoveryService {
             .ok_or_else(|| "Discovery is not running".to_string())?;
         let registration = self
             .registration
-            .as_mut()
+            .as_ref()
             .ok_or_else(|| "Discovery registration unavailable".to_string())?;
+        let mut registration = registration
+            .lock()
+            .map_err(|_| "Discovery registration lock poisoned".to_string())?;
 
         registration.extra_properties = extra_properties;
         let mut properties = registration.base_properties.clone();
@@ -104,11 +125,12 @@ impl NodeDiscoveryService {
             &registration.host_name,
             registration.local_ip,
             SERVICE_PORT,
-            properties,
+            properties.clone(),
         )
         .map_err(|e| e.to_string())?;
 
-        daemon.register(service_info).map_err(|e| e.to_string())
+        daemon.register(service_info).map_err(|e| e.to_string())?;
+        publish_registration_beacon(&registration, &properties)
     }
 
     pub fn start(&mut self, config: DiscoveryConfig) -> Result<(), String> {
@@ -122,7 +144,7 @@ impl NodeDiscoveryService {
         })?;
 
         let instance_name = sanitize_instance_name(&config.device_name, &config.device_id);
-        let host_name = format!("{}.local.", sanitize_hostname(&config.device_name));
+        let host_name = unique_service_host_name(&config.device_id);
         let base_properties: HashMap<String, String> = HashMap::from([
             ("device_id".to_string(), config.device_id.clone()),
             ("user_name".to_string(), config.user_name.clone()),
@@ -145,6 +167,7 @@ impl NodeDiscoveryService {
         .map_err(|e| e.to_string())?;
 
         daemon.register(service_info).map_err(|e| e.to_string())?;
+        publish_registration_beacon_from_base(&config, &base_properties)?;
 
         let receiver = daemon.browse(SERVICE_TYPE).map_err(|e| e.to_string())?;
         let nodes = Arc::clone(&self.nodes);
@@ -220,22 +243,77 @@ impl NodeDiscoveryService {
             }
         });
 
-        self.local_device_id = Some(config.device_id);
-        self.registration = Some(RegistrationContext {
+        self.local_device_id = Some(config.device_id.clone());
+        let registration = Arc::new(Mutex::new(RegistrationContext {
             instance_name,
             host_name,
             local_ip: IpAddr::V4(local_ip),
+            device_id: config.device_id.clone(),
+            device_name: config.device_name.clone(),
+            user_name: config.user_name.clone(),
+            public_key_fingerprint: config.public_key_fingerprint.clone(),
+            app_version: config.app_version.clone(),
             base_properties,
             extra_properties: HashMap::new(),
+        }));
+        self.registration = Some(Arc::clone(&registration));
+
+        let nodes_for_beacon = Arc::clone(&self.nodes);
+        let local_device_id_for_beacon = config.device_id.clone();
+        let beacon_stop = Arc::new(AtomicBool::new(false));
+        let beacon_stop_flag = Arc::clone(&beacon_stop);
+        let beacon_handle = thread::spawn(move || {
+            while !beacon_stop_flag.load(Ordering::Relaxed) {
+                if let Ok(registration) = registration.lock() {
+                    let mut properties = registration.base_properties.clone();
+                    properties.extend(registration.extra_properties.clone());
+                    let _ = publish_registration_beacon(&registration, &properties);
+                }
+
+                let now = now_ms();
+                for record in local_beacon::scan_local_beacons(&local_device_id_for_beacon, now) {
+                    let node = DiscoveredNode {
+                        device_id: record.device_id.clone(),
+                        device_name: record.device_name.clone(),
+                        user_name: record.user_name.clone(),
+                        public_key_fingerprint: record.pubkey_fp.clone(),
+                        online: true,
+                        last_seen_at: record.updated_at,
+                    };
+                    let mut map = match nodes_for_beacon.lock() {
+                        Ok(map) => map,
+                        Err(_) => continue,
+                    };
+                    map.insert(
+                        record.device_id.clone(),
+                        NodeRecord {
+                            service_name: format!("local-beacon:{}", record.device_id),
+                            properties: record.properties,
+                            node,
+                        },
+                    );
+                }
+
+                thread::sleep(Duration::from_millis(500));
+            }
         });
+
         self.daemon = Some(daemon);
         self.browse_handle = Some(browse_handle);
         self.prune_stop = Some(prune_stop);
         self.prune_handle = Some(prune_handle);
+        self.beacon_stop = Some(beacon_stop);
+        self.beacon_handle = Some(beacon_handle);
         Ok(())
     }
 
     pub fn stop(&mut self) {
+        if let Some(device_id) = self.local_device_id.take() {
+            local_beacon::remove_local_beacon(&device_id);
+        }
+        if let Some(flag) = self.beacon_stop.take() {
+            flag.store(true, Ordering::Relaxed);
+        }
         if let Some(flag) = self.prune_stop.take() {
             flag.store(true, Ordering::Relaxed);
         }
@@ -245,13 +323,15 @@ impl NodeDiscoveryService {
         if let Some(handle) = self.browse_handle.take() {
             let _ = handle.join();
         }
+        if let Some(handle) = self.beacon_handle.take() {
+            let _ = handle.join();
+        }
         if let Some(handle) = self.prune_handle.take() {
             let _ = handle.join();
         }
         if let Ok(mut map) = self.nodes.lock() {
             map.clear();
         }
-        self.local_device_id = None;
         self.registration = None;
     }
 
@@ -288,6 +368,38 @@ impl Default for NodeDiscoveryService {
     }
 }
 
+fn publish_registration_beacon_from_base(
+    config: &DiscoveryConfig,
+    base_properties: &HashMap<String, String>,
+) -> Result<(), String> {
+    let record = LocalBeaconRecord {
+        device_id: config.device_id.clone(),
+        device_name: config.device_name.clone(),
+        user_name: config.user_name.clone(),
+        pubkey_fp: config.public_key_fingerprint.clone(),
+        app_version: config.app_version.clone(),
+        updated_at: now_ms(),
+        properties: base_properties.clone(),
+    };
+    local_beacon::write_local_beacon(&record)
+}
+
+fn publish_registration_beacon(
+    registration: &RegistrationContext,
+    properties: &HashMap<String, String>,
+) -> Result<(), String> {
+    let record = LocalBeaconRecord {
+        device_id: registration.device_id.clone(),
+        device_name: registration.device_name.clone(),
+        user_name: registration.user_name.clone(),
+        pubkey_fp: registration.public_key_fingerprint.clone(),
+        app_version: registration.app_version.clone(),
+        updated_at: now_ms(),
+        properties: properties.clone(),
+    };
+    local_beacon::write_local_beacon(&record)
+}
+
 fn collect_service_properties(info: &ServiceInfo) -> HashMap<String, String> {
     let mut properties = HashMap::new();
     for prop in info.get_properties().iter() {
@@ -318,29 +430,34 @@ fn pick_local_ipv4() -> Option<Ipv4Addr> {
     None
 }
 
+fn device_id_slug(device_id: &str, max_len: usize) -> String {
+    device_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(max_len)
+        .collect()
+}
+
 fn sanitize_instance_name(device_name: &str, device_id: &str) -> String {
     let base: String = device_name
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
         .collect();
-    let trimmed: String = base.trim_matches('-').chars().take(40).collect();
+    let trimmed: String = base.trim_matches('-').chars().take(24).collect();
+    let suffix = device_id_slug(device_id, 8);
     if trimmed.is_empty() {
-        format!("toolman-{}", &device_id[..8.min(device_id.len())])
+        format!("toolman-{suffix}")
     } else {
-        trimmed
+        format!("{trimmed}-{suffix}")
     }
 }
 
-fn sanitize_hostname(device_name: &str) -> String {
-    let base: String = device_name
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
-        .collect();
-    let trimmed: String = base.trim_matches('-').chars().take(63).collect();
-    if trimmed.is_empty() {
-        "toolman".to_string()
+fn unique_service_host_name(device_id: &str) -> String {
+    let slug = device_id_slug(device_id, 12);
+    if slug.is_empty() {
+        "toolman-p2p.local.".to_string()
     } else {
-        trimmed
+        format!("toolman-{slug}.local.")
     }
 }
 
@@ -377,5 +494,16 @@ mod tests {
     fn sanitize_instance_name_fallback() {
         let name = sanitize_instance_name("!!!", "abcdef01-2345-6789");
         assert!(name.starts_with("toolman-"));
+    }
+
+    #[test]
+    fn same_device_name_produces_distinct_service_names() {
+        let host_a = unique_service_host_name("11111111-2222-3333-4444-555555555555");
+        let host_b = unique_service_host_name("66666666-7777-8888-9999-000000000000");
+        assert_ne!(host_a, host_b);
+
+        let instance_a = sanitize_instance_name("WangxyMac", "11111111-2222-3333-4444-555555555555");
+        let instance_b = sanitize_instance_name("WangxyMac", "66666666-7777-8888-9999-000000000000");
+        assert_ne!(instance_a, instance_b);
     }
 }

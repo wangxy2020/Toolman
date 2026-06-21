@@ -11,6 +11,7 @@ import {
 import {
   AuthSessionSchema,
   type AuthBindingSummary,
+  type AuthProvider,
   type AuthSession,
   type ProductSku,
   type RegistrationStatus,
@@ -22,6 +23,47 @@ import { refreshP2pDeviceIdentityBinding } from './p2p/p2p-device-identity.servi
 import { getIdentityProfile } from './identity.service'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
+
+/** 同一 identity 下每种登录方式只保留一个账户（桌面端 V1 单用户） */
+const SINGLE_ACCOUNT_AUTH_PROVIDERS = new Set<AuthProvider>([
+  'tencent_phone',
+  'firebase_email',
+  'firebase_google',
+  'firebase_apple',
+  'tencent_wechat',
+  'tencent_douyin',
+])
+
+function dedupeExclusiveAuthBindings(
+  bindingRepo: AuthBindingRepository,
+  identityId: string,
+): AuthBindingSummary[] {
+  const rows = bindingRepo.listByIdentityId(identityId)
+  const keepRows: AuthBindingRow[] = []
+  const grouped = new Map<AuthProvider, AuthBindingRow[]>()
+
+  for (const row of rows) {
+    if (!SINGLE_ACCOUNT_AUTH_PROVIDERS.has(row.provider)) {
+      keepRows.push(row)
+      continue
+    }
+    const group = grouped.get(row.provider) ?? []
+    group.push(row)
+    grouped.set(row.provider, group)
+  }
+
+  for (const group of grouped.values()) {
+    const sorted = [...group].sort((a, b) => b.verifiedAt.getTime() - a.verifiedAt.getTime())
+    keepRows.push(sorted[0]!)
+    for (const duplicate of sorted.slice(1)) {
+      bindingRepo.deleteById(duplicate.id)
+    }
+  }
+
+  return keepRows
+    .sort((a, b) => b.verifiedAt.getTime() - a.verifiedAt.getTime())
+    .map(mapBindingRow)
+}
 
 function parseEntitlements(raw: string | null | undefined): string[] {
   if (!raw?.trim()) return []
@@ -91,7 +133,9 @@ function loadIdentityAuthFields(identityId: string) {
 export function initAuthSessionStore(): void {
   const db = getDatabase()
   const sessionRepo = new AuthSessionRepository(db)
+  const bindingRepo = new AuthBindingRepository(db)
   sessionRepo.ensureCurrent(DEFAULT_IDENTITY_ID)
+  dedupeExclusiveAuthBindings(bindingRepo, DEFAULT_IDENTITY_ID)
 }
 
 export function getAuthSession(): AuthSession {
@@ -102,7 +146,7 @@ export function getAuthSession(): AuthSession {
   const identityProfile = getIdentityProfile()
   const identityRow = loadIdentityAuthFields(identityProfile.id)
   const sessionRow = sessionRepo.ensureCurrent(identityProfile.id)
-  const bindings = bindingRepo.listByIdentityId(identityProfile.id).map(mapBindingRow)
+  const bindings = dedupeExclusiveAuthBindings(bindingRepo, identityProfile.id)
 
   return buildAuthSessionView({
     registrationStatus: identityRow.registrationStatus,

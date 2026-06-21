@@ -318,6 +318,7 @@ export const P2P_PUSH_CHANNELS = [
   'p2p:sync:error',
   'p2p:event:appended',
   'p2p:group-chat:message',
+  'p2p:member:changed',
 ] as const
 
 export type P2pPushChannel = (typeof P2P_PUSH_CHANNELS)[number]

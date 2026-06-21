@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -34,7 +34,8 @@ export interface CommunityHubStatus {
 }
 
 const HEALTH_POLL_INTERVAL_MS = 200
-const HEALTH_POLL_MAX_ATTEMPTS = 50
+const HEALTH_POLL_MAX_ATTEMPTS = 75
+const HUB_START_MAX_ATTEMPTS = 3
 
 let childProcess: ChildProcess | null = null
 let httpClient: CommunityHttpClient | null = null
@@ -146,6 +147,16 @@ async function waitForHealth(client: CommunityHttpClient): Promise<void> {
     : new Error('community hub health check timed out')
 }
 
+function ensureHubBinarySigned(binaryPath: string): void {
+  if (process.platform !== 'darwin') return
+  const result = spawnSync('codesign', ['--force', '--sign', '-', binaryPath], {
+    stdio: 'ignore',
+  })
+  if (result.status !== 0) {
+    log('failed to ad-hoc sign community hub binary; macOS may block launch')
+  }
+}
+
 function attachProcessLogging(process: ChildProcess): void {
   process.stdout?.on('data', (chunk: Buffer) => {
     const text = chunk.toString('utf8').trim()
@@ -200,65 +211,78 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
   const dataDir = getCommunityDataDir()
   await mkdir(dataDir, { recursive: true })
 
+  ensureHubBinarySigned(binaryPath)
+
   const jwtSecret = await getHubJwtSecret()
-  const port = await allocateCommunityHubPort()
-  const env = {
-    ...process.env,
-    COMMUNITY_HUB_DATA_DIR: dataDir,
-    COMMUNITY_HUB_PORT: String(port),
-    COMMUNITY_HUB_DEFAULT_IDENTITY_ID: COMMUNITY_HUB_IDENTITY_ID,
-    COMMUNITY_HUB_JWT_SECRET: jwtSecret,
-    RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
-  }
+  let lastError = 'community hub health check timed out'
 
-  const processHandle = spawn(binaryPath, [], {
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  })
-  childProcess = processHandle
-  attachProcessLogging(processHandle)
-
-  const client = new CommunityHttpClient({
-    port,
-    host: COMMUNITY_HUB_HOST,
-    resolveAuth: resolveCommunityHubAuth,
-  })
-  try {
-    await waitForHealth(client)
-  } catch (error) {
-    await stopCommunityHub(processHandle)
-    const message = error instanceof Error ? error.message : String(error)
-    currentStatus = {
-      running: false,
-      port: null,
-      host: COMMUNITY_HUB_HOST,
-      baseUrl: null,
-      binaryPath,
-      error: message,
+  for (let attempt = 0; attempt < HUB_START_MAX_ATTEMPTS; attempt += 1) {
+    const preferredPort = attempt === 0 ? COMMUNITY_HUB_DEFAULT_PORT : 0
+    const port = await allocateCommunityHubPort(preferredPort)
+    const env = {
+      ...process.env,
+      COMMUNITY_HUB_DATA_DIR: dataDir,
+      COMMUNITY_HUB_PORT: String(port),
+      COMMUNITY_HUB_DEFAULT_IDENTITY_ID: COMMUNITY_HUB_IDENTITY_ID,
+      COMMUNITY_HUB_JWT_SECRET: jwtSecret,
+      RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
     }
-    log('failed to start sidecar', error)
+
+    const processHandle = spawn(binaryPath, [], {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    childProcess = processHandle
+    attachProcessLogging(processHandle)
+
+    const client = new CommunityHttpClient({
+      port,
+      host: COMMUNITY_HUB_HOST,
+      resolveAuth: resolveCommunityHubAuth,
+    })
+
+    try {
+      await waitForHealth(client)
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+      log(
+        `failed to start sidecar on port ${port} (attempt ${attempt + 1}/${HUB_START_MAX_ATTEMPTS})`,
+        error,
+      )
+      await stopCommunityHub(processHandle)
+      continue
+    }
+
+    const portFile: CommunityHubPortFile = {
+      host: COMMUNITY_HUB_HOST,
+      port,
+      pid: processHandle.pid ?? -1,
+      startedAt: Date.now(),
+    }
+    await writeCommunityHubPortFile(portFile)
+
+    httpClient = client
+    currentStatus = {
+      running: true,
+      port,
+      host: COMMUNITY_HUB_HOST,
+      baseUrl: buildCommunityHubBaseUrl(port),
+      binaryPath,
+    }
+
+    log(`sidecar ready at ${currentStatus.baseUrl}`)
     return getCommunityHubStatus()
   }
 
-  const portFile: CommunityHubPortFile = {
-    host: COMMUNITY_HUB_HOST,
-    port,
-    pid: processHandle.pid ?? -1,
-    startedAt: Date.now(),
-  }
-  await writeCommunityHubPortFile(portFile)
-
-  httpClient = client
   currentStatus = {
-    running: true,
-    port,
+    running: false,
+    port: null,
     host: COMMUNITY_HUB_HOST,
-    baseUrl: buildCommunityHubBaseUrl(port),
+    baseUrl: null,
     binaryPath,
+    error: lastError,
   }
-
-  log(`sidecar ready at ${currentStatus.baseUrl}`)
   return getCommunityHubStatus()
 }
 
@@ -319,7 +343,7 @@ async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
     } catch {
       // sidecar may already be stopped
     }
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
   } catch (error) {
     log('failed to inspect community hub binary for restart', error)
   } finally {

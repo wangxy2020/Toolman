@@ -8,6 +8,7 @@ use tokio::time::{sleep, timeout};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
+use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
@@ -53,14 +54,19 @@ impl WebRtcSession {
         peer_device_id: String,
         workspace_id: Option<String>,
         api: &webrtc::api::API,
+        lan_only: bool,
     ) -> Result<Self, String> {
-        let ice_servers = configured_ice_servers()
-            .into_iter()
-            .map(|url| RTCIceServer {
-                urls: vec![url],
-                ..Default::default()
-            })
-            .collect();
+        let ice_servers = if lan_only {
+            Vec::new()
+        } else {
+            configured_ice_servers()
+                .into_iter()
+                .map(|url| RTCIceServer {
+                    urls: vec![url],
+                    ..Default::default()
+                })
+                .collect()
+        };
         let config = RTCConfiguration {
             ice_servers,
             ..Default::default()
@@ -242,8 +248,8 @@ impl WebRtcSession {
     pub async fn wait_for_channels_open(&self, wait_for: Duration) -> Result<(), String> {
         let deadline = tokio::time::Instant::now() + wait_for;
         loop {
-            let events_ready = self.events_channel.lock().await.is_some();
-            let files_ready = self.files_channel.lock().await.is_some();
+            let events_ready = Self::channel_is_open(self.events_channel.lock().await.as_ref()).await;
+            let files_ready = Self::channel_is_open(self.files_channel.lock().await.as_ref()).await;
             if events_ready && files_ready {
                 return Ok(());
             }
@@ -251,6 +257,13 @@ impl WebRtcSession {
                 return Err("Timed out waiting for data channels".to_string());
             }
             sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    async fn channel_is_open(channel: Option<&SharedDataChannel>) -> bool {
+        match channel {
+            Some(dc) => dc.ready_state() == RTCDataChannelState::Open,
+            None => false,
         }
     }
 

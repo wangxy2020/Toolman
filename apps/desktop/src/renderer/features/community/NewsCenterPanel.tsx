@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { IconSliders } from '../../components/icons'
 import { CommunityPanelSecondaryButton } from './CommunityPanelHeader'
@@ -17,6 +17,7 @@ import { CommunityListPanelShell } from './CommunityListPanelShell'
 import { NewsArticleDetailModal } from './NewsArticleDetailModal'
 import { NewsSourcesModal } from './NewsSourcesModal'
 import { copyCommunityShareText } from './community-share-utils'
+import { COMMUNITY_NEWS_SOURCES_CHANGED_EVENT } from './community-events'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityNews } from './useCommunityNews'
 
@@ -32,6 +33,14 @@ export function NewsCenterPanel() {
     query: NEWS_LIST_QUERY,
     autoLoadDetail: false,
   })
+
+  useEffect(() => {
+    const onSourcesChanged = () => {
+      void news.load()
+    }
+    window.addEventListener(COMMUNITY_NEWS_SOURCES_CHANGED_EVENT, onSourcesChanged)
+    return () => window.removeEventListener(COMMUNITY_NEWS_SOURCES_CHANGED_EVENT, onSourcesChanged)
+  }, [news.load])
 
   const listItems = useMemo(
     () =>

@@ -5,6 +5,7 @@ import { p2pWorkspaceMembers } from '../schema/p2p.js'
 import type { P2pMemberRole, P2pMemberStatus, P2pWorkspaceMemberRow } from '../types/p2p.js'
 
 export interface CreateP2pMemberInput {
+  id?: string
   workspaceId: string
   identityId: string
   deviceId: string
@@ -90,7 +91,7 @@ export class P2pMemberRepository {
 
   create(input: CreateP2pMemberInput): P2pWorkspaceMemberRow {
     const now = new Date()
-    const id = randomUUID()
+    const id = input.id ?? randomUUID()
 
     this.db
       .insert(p2pWorkspaceMembers)

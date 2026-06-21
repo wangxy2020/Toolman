@@ -112,6 +112,10 @@ function listCandidateLines(sdp: string): string[] {
   return sdp.split(/\r?\n/).filter((line) => line.trim().startsWith('a=candidate:'))
 }
 
+export function countWanSdpCandidates(sdp: string): number {
+  return listCandidateLines(sdp).length
+}
+
 function candidatePriority(line: string): number {
   const type = line.trim().split(/\s+/)[7] ?? ''
   if (type === 'srflx') return 0
@@ -178,7 +182,8 @@ function fitEncodedPayloadBudget(
 
   for (const stripOptional of [false, true]) {
     let maxCandidates = initialCandidates
-    while (maxCandidates >= 0) {
+    const minCandidates = initialCandidates > 0 ? 1 : 0
+    while (maxCandidates >= minCandidates) {
       const encoded = encodeWanBlob(buildPayload(maxCandidates, stripOptional))
       bestEncoded = encoded
       if (Buffer.byteLength(encoded, 'utf8') <= budgetBytes) {
@@ -231,7 +236,7 @@ export function packWanInviteBundle(token: string, offerSdp: string): string {
     Buffer.from(JSON.stringify({ t: token, d: minified } satisfies WanInviteBundle), 'utf8'),
   )
 
-  for (let maxCandidates = candidateCount - 1; maxCandidates >= 0; maxCandidates -= 1) {
+  for (let maxCandidates = candidateCount - 1; maxCandidates >= 1; maxCandidates -= 1) {
     const trimmed = trimSdpCandidates(minified, maxCandidates)
     const encoded = encodeWanBlob(
       Buffer.from(
