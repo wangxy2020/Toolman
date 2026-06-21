@@ -1,4 +1,6 @@
 import { join } from 'node:path'
+import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { app } from 'electron'
 import {
   embedTexts,
   FileVectorStore,
@@ -87,6 +89,20 @@ export function removeMemoryVector(workspaceId: string, entryId: string): void {
     ...current,
     records: current.records.filter((record) => record.documentId !== entryId),
   })
+}
+
+/** 删除各工作区下的长期记忆向量文件 */
+export function purgeAllMemoryVectors(): void {
+  const knowledgeRoot = join(app.getPath('userData'), 'knowledge')
+  if (!existsSync(knowledgeRoot)) return
+
+  for (const entry of readdirSync(knowledgeRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const memoryVectorPath = join(knowledgeRoot, entry.name, 'vectors', 'memory.vectors.json')
+    if (existsSync(memoryVectorPath)) {
+      rmSync(memoryVectorPath, { force: true })
+    }
+  }
 }
 
 export async function migrateJsonMemoriesToDb(options: {

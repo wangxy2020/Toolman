@@ -131,6 +131,8 @@ export const AppRestoreDataOutputSchema = z.object({
 
 export const AppResetDataOutputSchema = z.object({
   reset: z.boolean(),
+  cleared: z.array(z.string()).optional(),
+  memoryEntriesDeleted: z.number().optional(),
 })
 
 export const WorkspaceSchema = z.object({

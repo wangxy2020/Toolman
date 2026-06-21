@@ -31,7 +31,7 @@ export async function sendTencentSmsCode(
     SmsSdkAppId: config.smsSdkAppId,
     SignName: config.signName,
     TemplateId: config.templateId,
-    TemplateParamSet: [code, '5'],
+    TemplateParamSet: [code, '2'],
   })
 
   const headers = signTencentCloudRequest({

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import {
   SettingsPageLayout,
   SettingsRow,
@@ -36,6 +37,33 @@ function truncatePath(path: string, max = 34): string {
   return `${path.slice(0, max)}…`
 }
 
+type PendingConfirm =
+  | { kind: 'deleteKnowledge' }
+  | { kind: 'clearCache' }
+  | { kind: 'resetData' }
+
+const DELETE_KNOWLEDGE_MESSAGE =
+  '将删除知识库目录下的向量与索引文件，并清空数据库中的知识库文档记录。此操作不可撤销。'
+
+const CLEAR_CACHE_MESSAGE =
+  '将清除应用缓存（cache、GPUCache、Code Cache）。不影响智能体、对话、知识库、笔记与群组。'
+
+const RESET_DATA_MESSAGE = [
+  '将清除以下内容：',
+  '· 应用缓存（cache、GPUCache、Code Cache）',
+  '· 运行日志（logs/）',
+  '· 智能体 JSON 记忆文件（agent-memory/）',
+  '· 智能体任务清单（agent-tasks/）',
+  '· 长期记忆（memory_entries 表及向量索引）',
+  '',
+  '以下内容将保留：',
+  '· 智能体与对话话题',
+  '· 知识库及文件',
+  '· 笔记',
+  '· 群组',
+  '· 模型配置、账户与消息附件（toolman.db、storage/）',
+].join('\n')
+
 export function DataSettingsPanel() {
   const [stats, setStats] = useState<{
     cacheBytes: number
@@ -47,6 +75,7 @@ export function DataSettingsPanel() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true)
@@ -130,21 +159,7 @@ export function DataSettingsPanel() {
     setMessage(`${parts.join('、')}已恢复，请重启应用以确保数据库与知识库生效。`)
   }
 
-  const handleClearCache = async () => {
-    if (!window.confirm('确定清除缓存？')) return
-    setBusy(true)
-    const result = await window.api.invoke(IpcChannel.AppClearCache)
-    setBusy(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    await loadStats()
-    setMessage('缓存已清除')
-  }
-
   const handleDeleteKnowledge = async () => {
-    if (!window.confirm('确定删除知识库文件？此操作不可撤销。')) return
     setBusy(true)
     const result = await window.api.invoke(IpcChannel.AppDeleteKnowledge)
     setBusy(false)
@@ -156,8 +171,19 @@ export function DataSettingsPanel() {
     setMessage('知识库文件已删除')
   }
 
+  const handleClearCache = async () => {
+    setBusy(true)
+    const result = await window.api.invoke(IpcChannel.AppClearCache)
+    setBusy(false)
+    if (!result.ok) {
+      setMessage(result.error.message)
+      return
+    }
+    await loadStats()
+    setMessage('缓存已清除')
+  }
+
   const handleReset = async () => {
-    if (!window.confirm('重置将删除本地数据库与缓存，是否继续？')) return
     setBusy(true)
     const result = await window.api.invoke(IpcChannel.AppResetData)
     setBusy(false)
@@ -166,8 +192,56 @@ export function DataSettingsPanel() {
       return
     }
     await loadStats()
-    setMessage('数据已重置，请重启应用。')
+    const data = result.data as { cleared?: string[]; memoryEntriesDeleted?: number }
+    const memoryHint =
+      data.memoryEntriesDeleted && data.memoryEntriesDeleted > 0
+        ? `已清除 ${data.memoryEntriesDeleted} 条长期记忆。`
+        : '长期记忆已清空。'
+    const clearedHint =
+      data.cleared && data.cleared.length > 0
+        ? `已清除：${data.cleared.join('、')}。`
+        : '未发现需清除的临时目录。'
+    setMessage(`${memoryHint}${clearedHint}请重启应用以确保缓存完全生效。`)
   }
+
+  const handleConfirm = () => {
+    if (!pendingConfirm) return
+    const action = pendingConfirm
+    setPendingConfirm(null)
+
+    if (action.kind === 'deleteKnowledge') {
+      void handleDeleteKnowledge()
+      return
+    }
+    if (action.kind === 'clearCache') {
+      void handleClearCache()
+      return
+    }
+    void handleReset()
+  }
+
+  const confirmDialog = pendingConfirm
+    ? {
+        deleteKnowledge: {
+          title: '删除文件',
+          message: DELETE_KNOWLEDGE_MESSAGE,
+          confirmLabel: '删除',
+          danger: true,
+        },
+        clearCache: {
+          title: '清除缓存',
+          message: CLEAR_CACHE_MESSAGE,
+          confirmLabel: '清除',
+          danger: false,
+        },
+        resetData: {
+          title: '重置数据',
+          message: RESET_DATA_MESSAGE,
+          confirmLabel: '重置',
+          danger: true,
+        },
+      }[pendingConfirm.kind]
+    : null
 
   return (
     <SettingsPageLayout>
@@ -235,7 +309,7 @@ export function DataSettingsPanel() {
               type="button"
               className="tm-data-btn"
               disabled={busy || !stats}
-              onClick={() => void handleDeleteKnowledge()}
+              onClick={() => setPendingConfirm({ kind: 'deleteKnowledge' })}
             >
               删除文件
             </button>
@@ -248,7 +322,7 @@ export function DataSettingsPanel() {
               type="button"
               className="tm-data-btn"
               disabled={busy}
-              onClick={() => void handleClearCache()}
+              onClick={() => setPendingConfirm({ kind: 'clearCache' })}
             >
               清除缓存
             </button>
@@ -259,7 +333,7 @@ export function DataSettingsPanel() {
               type="button"
               className="tm-data-btn tm-data-btn--danger"
               disabled={busy}
-              onClick={() => void handleReset()}
+              onClick={() => setPendingConfirm({ kind: 'resetData' })}
             >
               重置数据
             </button>
@@ -269,6 +343,18 @@ export function DataSettingsPanel() {
         {error ? <div className="tm-settings-error">{error}</div> : null}
         {message ? <p className="tm-settings-msg">{message}</p> : null}
       </div>
+
+      {confirmDialog ? (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel="取消"
+          danger={confirmDialog.danger}
+          onCancel={() => setPendingConfirm(null)}
+          onConfirm={handleConfirm}
+        />
+      ) : null}
     </SettingsPageLayout>
   )
 }

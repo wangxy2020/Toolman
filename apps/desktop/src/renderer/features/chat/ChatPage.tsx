@@ -308,6 +308,17 @@ export function ChatPage() {
     setAgentPrefillAttachments(null)
   }, [])
 
+  const handleEditUserMessage = useCallback(
+    (messageId: string) => {
+      const prefill = chat.beginEditUserMessage(messageId)
+      if (!prefill) return
+      setAgentPrefillText(prefill.text)
+      setAgentPrefillAttachments(prefill.attachments.length > 0 ? prefill.attachments : null)
+      setChatPrefillRevision((value) => value + 1)
+    },
+    [chat.beginEditUserMessage],
+  )
+
   const handleChatWithNote = useCallback(
     (noteId: string) => {
       const note = notes.notes.find((item) => item.id === noteId)
@@ -696,6 +707,10 @@ export function ChatPage() {
             pendingMessageAction={chat.pendingMessageAction}
             onDeleteMessage={(id) => void chat.deleteMessage(id)}
             onRegenerateMessage={(id) => void chat.regenerateMessage(id)}
+            onEditUserMessage={
+              groupProxyReadOnly ? undefined : (id) => handleEditUserMessage(id)
+            }
+            editingUserMessageId={chat.editingUserMessageId}
             onForkFromMessage={(id) => void chat.forkFromMessage(id)}
             onSaveToNote={(messageId) => {
               const message = chat.messages.find((item) => item.id === messageId)

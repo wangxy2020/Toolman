@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { IpcChannel, type Assistant, type ContentBlock, type Message, type MessageStreamEvent, type Provider, resolveMcpServerIdsForSkills, shouldEnableToolsWithAttachments } from '@toolman/shared'
 import { getBlocksText } from './message-utils'
+import { contentBlocksToPendingAttachments, getUserVisibleText } from './chat-attachments'
 import { applyStreamEventWithPendingQueue, flushPendingStreamEvents } from './stream-message-sync'
 import { getDefaultMcpServerIds, getDefaultSkillIds } from './agent-settings-constants'
 import { useSessionManager } from './useSessionManager'
@@ -46,6 +47,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
   const suppressAbortError = useRef(false)
   const tempToRealIdRef = useRef(new Map<string, string>())
   const pendingStreamEventsRef = useRef<MessageStreamEvent[]>([])
+  const [editingUserMessageId, setEditingUserMessageId] = useState<string | null>(null)
 
   const abortSessionStreaming = useCallback(async (sessionId: string) => {
     suppressAbortError.current = true
@@ -194,6 +196,40 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     ],
   )
 
+  const buildSendOptions = useCallback(
+    (contentBlocks?: ContentBlock[]) => {
+      const activeAssistant = (() => {
+        const assistantId = session.activeSession?.assistantId
+        if (assistantId) {
+          return assistants.find((assistant) => assistant.id === assistantId) ?? null
+        }
+        return assistants.find((assistant) => assistant.isPinned) ?? assistants[0] ?? null
+      })()
+
+      const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
+      const skillIds = activeAssistant?.parameters.skillIds ?? getDefaultSkillIds()
+
+      return {
+        enableTools: resolveChatEnableTools(
+          mcpServerIds,
+          skillIds,
+          contentBlocks ?? [],
+        ),
+        webSearchEnabled: appSettings?.webSearchEnabled,
+        webSearchProvider: appSettings?.webSearchProvider,
+        kbEnabled: appSettings?.kbEnabled,
+        kbIds: activeAssistant?.parameters.kbIds,
+        kbTopK: activeAssistant?.parameters.kbTopK,
+        kbScoreThreshold: activeAssistant?.parameters.kbScoreThreshold,
+        memoryEnabled: appSettings?.memoryEnabled,
+        memoryRetentionDays: appSettings?.memoryRetentionDays,
+        mcpServerIds,
+        documentOcrEnabled: appSettings?.documentOcrEnabled,
+      }
+    },
+    [session.activeSession?.assistantId, assistants, appSettings],
+  )
+
   const sendMessage = useCallback(
     async (contentBlocks: ContentBlock[], options?: { enableTools?: boolean }) => {
       const text = getBlocksText(contentBlocks)
@@ -202,6 +238,135 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
       if (!session.activeSessionId || (!text.trim() && !hasImages && !hasFiles) || selectedModelIds.length === 0) {
         return
       }
+
+      const editingMessageId = editingUserMessageId
+      if (editingMessageId) {
+        const target = messages.find((message) => message.id === editingMessageId)
+        if (!target || target.role !== 'user') {
+          setEditingUserMessageId(null)
+          return
+        }
+
+        setSending(true)
+        setError(null)
+
+        const sendOptions = buildSendOptions(contentBlocks)
+        const cutoff = target.createdAt
+        const now = Date.now()
+        const tempAssistantIds = selectedModelIds.map(
+          () => crypto.randomUUID() as Message['id'],
+        )
+
+        tempToRealIdRef.current.clear()
+        pendingStreamEventsRef.current = []
+
+        const optimisticAssistantMsgs: Message[] = tempAssistantIds.map((id, index) => ({
+          id,
+          sessionId: session.activeSessionId!,
+          parentMessageId: editingMessageId,
+          role: 'assistant' as const,
+          modelId: selectedModelIds[index] ?? selectedModelIds[0] ?? null,
+          status: 'streaming' as const,
+          contentBlocks: [{ type: 'text', text: '' }],
+          error: null,
+          tokenUsage: null,
+          createdAt: now,
+          updatedAt: now,
+        }))
+
+        for (const id of tempAssistantIds) {
+          streamingIds.current.add(id)
+        }
+
+        setMessages((prev) => [
+          ...prev
+            .filter((message) => message.createdAt < cutoff || message.id === editingMessageId)
+            .map((message) =>
+              message.id === editingMessageId
+                ? { ...message, contentBlocks, updatedAt: now }
+                : message,
+            ),
+          ...optimisticAssistantMsgs,
+        ])
+
+        try {
+          const result = await window.api.invoke(IpcChannel.MessageEditUser, {
+            sessionId: session.activeSessionId,
+            messageId: editingMessageId,
+            contentBlocks,
+            modelIds: selectedModelIds,
+            options: sendOptions,
+          })
+
+          setEditingUserMessageId(null)
+
+          if (!result.ok) {
+            for (const id of tempAssistantIds) {
+              streamingIds.current.delete(id)
+            }
+            setError(result.error.message)
+            setSending(false)
+            void loadMessages(session.activeSessionId)
+            return
+          }
+
+          const data = result.data as {
+            userMessageId: string
+            assistantMessageIds: string[]
+            userContentBlocks?: ContentBlock[]
+          }
+
+          for (const id of tempAssistantIds) {
+            streamingIds.current.delete(id)
+          }
+          for (const id of data.assistantMessageIds) {
+            streamingIds.current.add(id)
+          }
+
+          tempToRealIdRef.current = new Map(
+            tempAssistantIds.map(
+              (tempId, index) => [tempId, data.assistantMessageIds[index]!] as const,
+            ),
+          )
+
+          const bufferedEvents = pendingStreamEventsRef.current.splice(0)
+
+          setMessages((prev) => {
+            const remapped = prev.map((message) => {
+              if (message.id === editingMessageId) {
+                return {
+                  ...message,
+                  contentBlocks: data.userContentBlocks ?? contentBlocks,
+                }
+              }
+              const assistantIndex = tempAssistantIds.indexOf(message.id)
+              if (assistantIndex >= 0) {
+                return {
+                  ...message,
+                  id: data.assistantMessageIds[assistantIndex]!,
+                  parentMessageId: data.userMessageId,
+                }
+              }
+              return message
+            })
+
+            const tempToReal = tempToRealIdRef.current
+            return flushPendingStreamEvents(remapped, bufferedEvents, tempToReal)
+          })
+          void session.loadSessions()
+        } catch (error) {
+          for (const id of tempAssistantIds) {
+            streamingIds.current.delete(id)
+          }
+          setEditingUserMessageId(null)
+          setError(error instanceof Error ? error.message : '编辑发送失败')
+          setSending(false)
+          void loadMessages(session.activeSessionId)
+        }
+
+        return
+      }
+
       setSending(true)
       setError(null)
 
@@ -355,7 +520,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         setSending(false)
       }
     },
-    [session, selectedModelIds, assistants, appSettings],
+    [session, selectedModelIds, assistants, appSettings, messages, buildSendOptions, loadMessages, editingUserMessageId],
   )
 
   const abortStreaming = useCallback(async () => {
@@ -383,6 +548,10 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     if (!session.initialized || !session.activeSessionId) return
     void loadMessages(session.activeSessionId)
   }, [session.initialized])
+
+  useEffect(() => {
+    setEditingUserMessageId(null)
+  }, [session.activeSessionId])
 
   useEffect(() => {
     const unsubscribe = window.api.subscribe(IpcChannel.MessageStream, (payload) => {
@@ -460,37 +629,18 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     [session.activeSessionId],
   )
 
-  const buildSendOptions = useCallback(
-    (contentBlocks?: ContentBlock[]) => {
-      const activeAssistant = (() => {
-        const assistantId = session.activeSession?.assistantId
-        if (assistantId) {
-          return assistants.find((assistant) => assistant.id === assistantId) ?? null
-        }
-        return assistants.find((assistant) => assistant.isPinned) ?? assistants[0] ?? null
-      })()
+  const beginEditUserMessage = useCallback(
+    (messageId: string) => {
+      const message = messages.find((item) => item.id === messageId && item.role === 'user')
+      if (!message) return null
 
-      const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
-      const skillIds = activeAssistant?.parameters.skillIds ?? getDefaultSkillIds()
-
+      setEditingUserMessageId(messageId)
       return {
-        enableTools: resolveChatEnableTools(
-          mcpServerIds,
-          skillIds,
-          contentBlocks ?? [],
-        ),
-        webSearchEnabled: appSettings?.webSearchEnabled,
-        webSearchProvider: appSettings?.webSearchProvider,
-        kbEnabled: appSettings?.kbEnabled,
-        kbIds: activeAssistant?.parameters.kbIds,
-        kbTopK: activeAssistant?.parameters.kbTopK,
-        kbScoreThreshold: activeAssistant?.parameters.kbScoreThreshold,
-        memoryEnabled: appSettings?.memoryEnabled,
-        memoryRetentionDays: appSettings?.memoryRetentionDays,
-        mcpServerIds,
+        text: getUserVisibleText(message.contentBlocks),
+        attachments: contentBlocksToPendingAttachments(message.contentBlocks),
       }
     },
-    [session.activeSession?.assistantId, assistants, appSettings],
+    [messages],
   )
 
   const regenerateMessage = useCallback(
@@ -627,6 +777,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     sending,
     error: combinedError,
     pendingMessageAction,
+    editingUserMessageId,
     setError: (msg: string | null) => {
       setError(msg)
       session.setError(msg)
@@ -640,6 +791,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     abortStreaming,
     deleteMessage,
     regenerateMessage,
+    beginEditUserMessage,
     forkFromMessage,
     clearSessionMessages,
     loadSessions: session.loadSessions,

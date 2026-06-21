@@ -20,11 +20,16 @@
     "test:docx-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/docx-review.integration.test.ts"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@mui/icons-material": "^9.1.1",
+    "@mui/material": "^9.1.1",
     "@toolman/db": "workspace:*",
     "@toolman/knowledge": "workspace:*",
     "@toolman/model-gateway": "workspace:*",
     "@toolman/shared": "workspace:*",
+    "authing-js-sdk": "^4.23.55",
     "better-sqlite3": "^11.10.0",
     "chokidar": "^4.0.3",
     "firebase": "^11.10.0",

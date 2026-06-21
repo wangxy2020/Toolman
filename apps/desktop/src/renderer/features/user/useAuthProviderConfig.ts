@@ -35,6 +35,7 @@ export function useAuthProviderConfig() {
   const firebaseConfigured = firebase?.configured === true
   const wechatConfigured = tencent?.configured === true && tencent.wechatConfigured
   const phoneConfigured = tencent?.configured === true && tencent.phoneConfigured
+  const douyinConfigured = tencent?.configured === true && tencent.douyinConfigured
 
   return {
     loading,
@@ -43,5 +44,6 @@ export function useAuthProviderConfig() {
     firebaseConfigured,
     wechatConfigured,
     phoneConfigured,
+    douyinConfigured,
   }
 }

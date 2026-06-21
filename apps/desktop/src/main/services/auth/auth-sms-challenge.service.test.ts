@@ -33,4 +33,14 @@ describe('auth-sms-challenge.service', () => {
     vi.advanceTimersByTime(60_000)
     expect(() => issueSmsChallenge('+8613800138000')).not.toThrow()
   })
+
+  it('expires codes after two minutes', () => {
+    issueSmsChallenge('+8613800138000')
+    vi.advanceTimersByTime(2 * 60_000 - 1)
+    expect(() => verifySmsChallenge('+8613800138000', '123456')).not.toThrow()
+    resetSmsChallengesForTests()
+    issueSmsChallenge('+8613800138000')
+    vi.advanceTimersByTime(2 * 60_000 + 1)
+    expect(() => verifySmsChallenge('+8613800138000', '123456')).toThrow('验证码已过期')
+  })
 })

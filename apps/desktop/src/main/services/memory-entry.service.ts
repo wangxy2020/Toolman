@@ -4,8 +4,10 @@ import {
   MemoryEntrySchema,
   type MemoryEntry,
 } from '@toolman/shared'
+import { memoryEntries } from '@toolman/db'
 import { getMemoryEntryRepository } from '../db/repos'
-import { removeMemoryVector } from './memory-vector.service'
+import { getDatabase } from '../bootstrap/database'
+import { purgeAllMemoryVectors, removeMemoryVector } from './memory-vector.service'
 
 export function listMemoryEntries(input: unknown): MemoryEntry[] {
   const data = MemoryEntryListInputSchema.parse(input)
@@ -34,4 +36,13 @@ export function deleteMemoryEntry(input: unknown): boolean {
     removeMemoryVector(data.workspaceId, data.entryId)
   }
   return deleted
+}
+
+/** 清空全部长期记忆（DB 记录 + 向量索引），供「重置数据」使用 */
+export function purgeAllMemoryData(): number {
+  const db = getDatabase()
+  const count = db.select({ id: memoryEntries.id }).from(memoryEntries).all().length
+  db.delete(memoryEntries).run()
+  purgeAllMemoryVectors()
+  return count
 }

@@ -27,7 +27,7 @@ export function buildModelOptions(providers: Provider[]) {
           {
             modelId: formatModelId(
               provider.id,
-              provider.type === 'ollama' ? 'gemma4:26b' : 'gpt-4o-mini',
+              provider.type === 'ollama' ? 'gemma4:latest' : 'gpt-4o-mini',
             ),
             label: `${provider.name}（默认）`,
           },
@@ -42,7 +42,7 @@ function isChatModel(modelId: string): boolean {
 export function pickDefaultModelId(
   assistants: Assistant[],
   providers: Provider[],
-  preferredModel = 'gemma4:26b',
+  preferredModel = 'gemma4:latest',
 ): string | null {
   const fromAssistant = assistants[0]?.modelId
   if (fromAssistant) return fromAssistant

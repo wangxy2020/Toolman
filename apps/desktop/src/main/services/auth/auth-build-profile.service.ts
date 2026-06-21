@@ -54,7 +54,7 @@ export function assertAuthLoginAllowed(region: AuthRegion, method: AuthProvider)
   }
 
   if (region === 'cn' && !getTencentWebConfig().configured) {
-    throw new AuthLoginError('国内登录未配置，请设置 TOOLMAN_TENCENT_* 或 TOOLMAN_WECHAT_* 环境变量')
+    throw new AuthLoginError('国内登录未配置，请设置 TOOLMAN_AUTHING_* 或 TOOLMAN_TENCENT_* / TOOLMAN_WECHAT_* 环境变量')
   }
 
   if (region === 'intl' && !getFirebaseAuthConfig()) {
@@ -65,7 +65,7 @@ export function assertAuthLoginAllowed(region: AuthRegion, method: AuthProvider)
 }
 
 export function assertAuthBindAllowed(provider: AuthProvider): void {
-  if (provider === 'tencent_phone' || provider === 'tencent_wechat') {
+  if (provider === 'tencent_phone' || provider === 'tencent_wechat' || provider === 'tencent_douyin') {
     assertAuthLoginAllowed('cn', provider)
     return
   }

@@ -5,7 +5,6 @@ import {
   OAuthProvider,
   getRedirectResult,
   signInWithPopup,
-  signInWithRedirect,
   type Auth,
 } from 'firebase/auth'
 
@@ -127,13 +126,6 @@ export async function signInWithFirebaseOAuth(provider: AuthProvider): Promise<s
 
   const auth = await ensureFirebaseAuth()
   const credentialProvider = buildCredentialProvider(provider)
-
-  if (isElectronRenderer()) {
-    sessionStorage.setItem(OAUTH_PROVIDER_STORAGE_KEY, provider)
-    await signInWithRedirect(auth, credentialProvider)
-    throw new Error('正在跳转到授权页面…')
-  }
-
   const result = await signInWithPopup(auth, credentialProvider)
   return result.user.getIdToken()
 }

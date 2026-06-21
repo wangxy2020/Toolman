@@ -75,6 +75,8 @@ export enum IpcChannel {
   AuthGetTencentConfig = 'auth:tencent-config:get',
   AuthGetBuildProfile = 'auth:build-profile:get',
   AuthSendSmsCode = 'auth:sms:send',
+  AuthResetPassword = 'auth:password:reset',
+  AuthChangePassword = 'auth:password:change',
 
   WorkspaceList = 'workspace:list',
   WorkspaceUpdate = 'workspace:update',
@@ -121,6 +123,7 @@ export enum IpcChannel {
   MessageDelete = 'agent:message:delete',
   MessageSend = 'agent:message:send',
   MessageRegenerate = 'agent:message:regenerate',
+  MessageEditUser = 'agent:message:edit-user',
   MessageTranslate = 'agent:message:translate',
   MessageDiagnose = 'agent:message:diagnose',
   MessageAbort = 'agent:message:abort',

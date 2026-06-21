@@ -9,6 +9,8 @@ import {
   AuthExchangeHubTokenInputSchema,
   AuthLoginInputSchema,
   AuthLogoutInputSchema,
+  AuthChangePasswordInputSchema,
+  AuthResetPasswordInputSchema,
   AuthSendSmsCodeInputSchema,
   AuthVerifyDeleteReauthInputSchema,
   AUTH_ERROR_CODES,
@@ -39,7 +41,7 @@ import { bindAuthProvider, AuthMergeRequiredError } from '../services/auth/tence
 import { getFirebaseWebConfig } from '../services/auth/firebase-auth.config'
 import { getTencentWebConfig } from '../services/auth/tencent-auth.config'
 import { getAuthBuildProfile } from '../services/auth/auth-build-profile.service'
-import { AuthLoginError } from '../services/auth/auth-login.error'
+import { AuthLoginError, readAuthServiceErrorMessage } from '../services/auth/auth-login.error'
 import { exchangeAuthHubToken } from '../services/auth/auth-hub-token.service'
 import * as memoryEntryService from '../services/memory-entry.service'
 import { getAppInfo, getAppPaths } from './app'
@@ -716,12 +718,31 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await authLoginService.sendAuthSmsCode(AuthSendSmsCodeInputSchema.parse(input)))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to send SMS code'
+      const message =
+        readAuthServiceErrorMessage(error) ?? '验证码发送失败，请稍后重试'
       const code =
         error instanceof AuthLoginError && message.includes('未配置')
           ? AUTH_ERROR_CODES.NOT_CONFIGURED
           : 'VALIDATION_ERROR'
       return ipcErr({ code, message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthResetPassword]: async (input) => {
+    try {
+      return ipcOk(await authLoginService.resetAuthPassword(AuthResetPasswordInputSchema.parse(input)))
+    } catch (error) {
+      const message = readAuthServiceErrorMessage(error) ?? '重置密码失败，请稍后重试'
+      return ipcErr({ code: 'VALIDATION_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.AuthChangePassword]: async (input) => {
+    try {
+      return ipcOk(await authLoginService.changeAuthPassword(AuthChangePasswordInputSchema.parse(input)))
+    } catch (error) {
+      const message = readAuthServiceErrorMessage(error) ?? '修改密码失败，请稍后重试'
+      return ipcErr({ code: 'VALIDATION_ERROR', message, retryable: false })
     }
   },
 
@@ -826,6 +847,14 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(await agentService.regenerateMessage(input))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Regenerate failed'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+  [IpcChannel.MessageEditUser]: async (input) => {
+    try {
+      return ipcOk(await agentService.editUserMessage(input))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Edit message failed'
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { formatAuthDevSmsLog, type AuthSendSmsCodeInput, type AuthSendSmsCodeOutput } from '@toolman/shared'
 
+import { OTP_CODE_TTL_SECONDS } from './auth-otp.constants.js'
 import { AuthLoginError } from './auth-login.error.js'
 import {
   getDevSmsHint,
@@ -32,7 +33,7 @@ export async function sendPhoneSmsCode(input: AuthSendSmsCodeInput): Promise<Aut
     throw new AuthLoginError('腾讯云短信未配置，请设置 TOOLMAN_TENCENT_* 环境变量')
   }
 
-  const phone = normalizeCnPhone(input.phone)
+  const phone = normalizeCnPhone(input.phone ?? input.account ?? '')
   const { code, retryAfterSeconds } = issueSmsChallenge(phone)
 
   const smsConfig = getTencentSmsConfig()
@@ -43,9 +44,13 @@ export async function sendPhoneSmsCode(input: AuthSendSmsCodeInput): Promise<Aut
   }
 
   return {
+    account: phone,
+    channel: 'phone' as const,
+    maskedAccount: maskPhone(phone),
     phone,
     maskedPhone: maskPhone(phone),
     retryAfterSeconds,
+    expiresInSeconds: OTP_CODE_TTL_SECONDS,
     devHint: getDevSmsHint(),
   }
 }

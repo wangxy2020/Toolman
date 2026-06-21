@@ -3,6 +3,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import type { Message, TranslationLanguage } from '@toolman/shared'
 import {
   IconCopy,
+  IconEdit,
   IconGitFork,
   IconRefresh,
   IconSaveNote,
@@ -49,7 +50,9 @@ interface Props {
   pendingMessageAction?: PendingMessageAction | null
   onDeleteMessage: (messageId: string) => void
   onRegenerateMessage?: (messageId: string) => void
+  onEditUserMessage?: (messageId: string) => void
   onForkFromMessage?: (messageId: string) => void
+  editingUserMessageId?: string | null
   onSaveToNote?: (messageId: string) => void
   onError?: (message: string | null) => void
   getUserDisplayName?: (message: Message) => string
@@ -142,11 +145,14 @@ function UserMessage({
   avatarInitial,
   onDelete,
   onCopy,
+  onEdit,
   onFork,
   onSaveToNote,
   copied,
   deleting,
   forking,
+  editing,
+  sending,
 }: {
   message: Message
   messageSettings: MessageSettings
@@ -154,11 +160,14 @@ function UserMessage({
   avatarInitial: string
   onDelete: (id: string, anchor: HTMLElement) => void
   onCopy: () => void
+  onEdit?: () => void
   onFork?: () => void
   onSaveToNote?: () => void
   copied: boolean
   deleting?: boolean
   forking?: boolean
+  editing?: boolean
+  sending?: boolean
 }) {
   const text = getUserVisibleText(message.contentBlocks)
   const copyText = getUserMessageCopyText(message.contentBlocks)
@@ -189,6 +198,16 @@ function UserMessage({
             >
               <IconCopy size={15} />
             </MessageActionButton>
+            {onEdit ? (
+              <MessageActionButton
+                title="编辑"
+                active={editing}
+                disabled={sending}
+                onClick={onEdit}
+              >
+                <IconEdit size={15} />
+              </MessageActionButton>
+            ) : null}
             {onFork ? (
               <MessageActionButton
                 title="从此处分叉"
@@ -386,6 +405,7 @@ function MessageTurnView({
   getUserAvatarInitial,
   onRequestDeleteMessage,
   onRegenerateMessage,
+  onEditUserMessage,
   onForkFromMessage,
   onSaveToNote,
   onCopy,
@@ -395,6 +415,7 @@ function MessageTurnView({
   visibleTranslationIds,
   translatingIds,
   pendingMessageAction,
+  editingUserMessageId,
 }: {
   turn: MessageTurn
   messageSettings: MessageSettings
@@ -404,6 +425,7 @@ function MessageTurnView({
   copiedKey: string | null
   onRequestDeleteMessage: (messageId: string, anchor: HTMLElement) => void
   onRegenerateMessage?: (messageId: string) => void
+  onEditUserMessage?: (messageId: string) => void
   onForkFromMessage?: (messageId: string) => void
   onSaveToNote?: (messageId: string) => void
   onCopy: (key: string, text: string) => void
@@ -413,6 +435,7 @@ function MessageTurnView({
   visibleTranslationIds: Set<string>
   translatingIds: Set<string>
   pendingMessageAction?: PendingMessageAction | null
+  editingUserMessageId?: string | null
   getUserDisplayName?: (message: Message) => string
   getUserAvatarInitial?: (message: Message) => string
 }) {
@@ -430,10 +453,13 @@ function MessageTurnView({
         onDelete={onRequestDeleteMessage}
         copied={copiedKey === copyKey}
         onCopy={() => void onCopy(copyKey, text)}
+        onEdit={onEditUserMessage ? () => onEditUserMessage(message.id) : undefined}
         onFork={onForkFromMessage ? () => onForkFromMessage(message.id) : undefined}
         onSaveToNote={onSaveToNote ? () => onSaveToNote(message.id) : undefined}
         deleting={isMessageActionPending(pendingMessageAction, 'delete', message.id)}
         forking={isMessageActionPending(pendingMessageAction, 'fork', message.id)}
+        editing={editingUserMessageId === message.id}
+        sending={sending}
       />
     )
   }
@@ -492,10 +518,12 @@ export function MessagePanel({
   sending = false,
   onDeleteMessage,
   onRegenerateMessage,
+  onEditUserMessage,
   onForkFromMessage,
   onSaveToNote,
   onError,
   pendingMessageAction = null,
+  editingUserMessageId = null,
   getUserDisplayName,
   getUserAvatarInitial,
   sendShortcut = 'enter',
@@ -671,6 +699,7 @@ export function MessagePanel({
     getUserAvatarInitial,
     onRequestDeleteMessage: handleRequestDeleteMessage,
     onRegenerateMessage,
+    onEditUserMessage,
     onForkFromMessage,
     onSaveToNote,
     onCopy: copy,
@@ -680,6 +709,7 @@ export function MessagePanel({
     visibleTranslationIds,
     translatingIds,
     pendingMessageAction,
+    editingUserMessageId,
   }
 
   if (loading) {

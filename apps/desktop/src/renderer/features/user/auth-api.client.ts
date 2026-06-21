@@ -13,10 +13,14 @@ import {
   type AuthGetBuildProfileOutput,
   type AuthGetSessionOutput,
   type AuthGetTencentConfigOutput,
+  type AuthChangePasswordInput,
+  type AuthChangePasswordOutput,
   type AuthLoginInput,
   type AuthLoginOutput,
   type AuthLogoutInput,
   type AuthLogoutOutput,
+  type AuthResetPasswordInput,
+  type AuthResetPasswordOutput,
   type AuthSendSmsCodeInput,
   type AuthSendSmsCodeOutput,
   type AuthVerifyDeleteReauthInput,
@@ -79,6 +83,18 @@ export async function getAuthBuildProfile(): Promise<AuthGetBuildProfileOutput> 
 export async function sendAuthSmsCode(input: AuthSendSmsCodeInput): Promise<AuthSendSmsCodeOutput> {
   return unwrap(
     (await window.api.invoke(IpcChannel.AuthSendSmsCode, input)) as IpcResult<AuthSendSmsCodeOutput>,
+  )
+}
+
+export async function resetAuthPassword(input: AuthResetPasswordInput): Promise<AuthResetPasswordOutput> {
+  return unwrap(
+    (await window.api.invoke(IpcChannel.AuthResetPassword, input)) as IpcResult<AuthResetPasswordOutput>,
+  )
+}
+
+export async function changeAuthPassword(input: AuthChangePasswordInput): Promise<AuthChangePasswordOutput> {
+  return unwrap(
+    (await window.api.invoke(IpcChannel.AuthChangePassword, input)) as IpcResult<AuthChangePasswordOutput>,
   )
 }
 

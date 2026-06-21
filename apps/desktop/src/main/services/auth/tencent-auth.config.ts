@@ -1,4 +1,5 @@
 import { getWechatOpenConfig, isWechatAuthAvailable, isWechatDevMode } from './wechat-auth.config.js'
+import { getAuthingWebConfig, isAuthingConfigured } from './authing-auth.config.js'
 
 export interface TencentSmsConfig {
   secretId: string
@@ -63,10 +64,26 @@ export function getTencentWebConfig():
       wechatDevMode: boolean
       wechatConfigured: boolean
       phoneConfigured: boolean
+      douyinConfigured: boolean
+      authingEnabled: boolean
     }
   | { configured: false } {
+  const authing = getAuthingWebConfig()
   const smsAvailable = Boolean(getTencentSmsConfig() || isTencentSmsDevMode())
   const wechatAvailable = isWechatAuthAvailable()
+
+  if (authing.configured) {
+    return {
+      configured: true,
+      smsDevMode: authing.devMode || !getTencentSmsConfig(),
+      wechatDevMode: authing.devMode || !getWechatOpenConfig(),
+      wechatConfigured: authing.wechatConfigured || wechatAvailable,
+      phoneConfigured: authing.otpConfigured || smsAvailable,
+      douyinConfigured: authing.douyinConfigured,
+      authingEnabled: true,
+    }
+  }
+
   if (smsAvailable || wechatAvailable) {
     return {
       configured: true,
@@ -74,9 +91,15 @@ export function getTencentWebConfig():
       wechatDevMode: isWechatDevMode() || !getWechatOpenConfig(),
       wechatConfigured: wechatAvailable,
       phoneConfigured: smsAvailable,
+      douyinConfigured: false,
+      authingEnabled: false,
     }
   }
   return { configured: false }
+}
+
+export function isCnAuthAvailable(): boolean {
+  return isAuthingConfigured() || isTencentPhoneAuthAvailable() || isWechatAuthAvailable()
 }
 
 export function isTencentPhoneAuthAvailable(): boolean {

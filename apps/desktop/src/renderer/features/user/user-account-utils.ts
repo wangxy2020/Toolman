@@ -11,6 +11,7 @@ export const AUTH_PROVIDER_LABELS: Record<AuthProvider, string> = {
   firebase_apple: 'Apple',
   tencent_phone: '手机号',
   tencent_wechat: '微信',
+  tencent_douyin: '抖音',
 }
 
 export function inferDefaultAuthRegion(

@@ -257,6 +257,16 @@ export const MessageRegenerateInputSchema = z.object({
 
 export const MessageRegenerateOutputSchema = MessageSendOutputSchema
 
+export const MessageEditUserInputSchema = z.object({
+  sessionId: UuidSchema,
+  messageId: UuidSchema,
+  contentBlocks: z.array(ContentBlockSchema).min(1),
+  modelIds: z.array(ModelIdSchema).min(1).max(4).optional(),
+  options: messageSendOptionsSchema.optional(),
+})
+
+export const MessageEditUserOutputSchema = MessageSendOutputSchema
+
 export const TranslationLanguageSchema = z.enum(['zh', 'en'])
 export type TranslationLanguage = z.infer<typeof TranslationLanguageSchema>
 

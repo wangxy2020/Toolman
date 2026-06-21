@@ -23,7 +23,3 @@ export function isAuthOAuthPopupUrl(url: string): boolean {
     return false
   }
 }
-
-export function isAuthInAppNavigationUrl(url: string): boolean {
-  return isAuthOAuthPopupUrl(url)
-}

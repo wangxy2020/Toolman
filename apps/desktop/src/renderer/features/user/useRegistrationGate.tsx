@@ -8,12 +8,14 @@ import {
   type AuthFeature,
 } from '@toolman/shared'
 
-import { AuthEntryModal } from './AuthEntryModal'
+import { UserCenterModal } from '../../components/user-center'
+import { useUserAccount } from './useUserAccount'
 import { RegistrationRequiredModal } from './RegistrationRequiredModal'
 import { useAuthSession } from './AuthSessionProvider'
 
 export function useRegistrationGate() {
   const { session, loading, refresh } = useAuthSession()
+  const account = useUserAccount()
   const [modalOpen, setModalOpen] = useState(false)
   const [authEntryOpen, setAuthEntryOpen] = useState(false)
   const [modalFeature, setModalFeature] = useState<AuthFeature>('community_write')
@@ -45,13 +47,15 @@ export function useRegistrationGate() {
         onClose={() => setModalOpen(false)}
         onRegister={openRegister}
       />
-      <AuthEntryModal
+      <UserCenterModal
         open={authEntryOpen}
-        mode="register"
+        initialView="register"
         onClose={() => setAuthEntryOpen(false)}
         onSuccess={() => {
           void refresh()
         }}
+        successBehavior="close"
+        account={account}
       />
     </>
   )

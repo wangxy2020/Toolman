@@ -7,7 +7,11 @@ export type AuthBuildRegion = z.infer<typeof AuthBuildRegionSchema>
 
 const AuthRegionSchema = z.enum(['cn', 'intl'])
 
-export const AUTH_BUILD_CN_PROVIDERS = ['tencent_phone', 'tencent_wechat'] as const satisfies readonly AuthProvider[]
+export const AUTH_BUILD_CN_PROVIDERS = [
+  'tencent_phone',
+  'tencent_wechat',
+  'tencent_douyin',
+] as const satisfies readonly AuthProvider[]
 export const AUTH_BUILD_INTL_PROVIDERS = [
   'firebase_email',
   'firebase_google',

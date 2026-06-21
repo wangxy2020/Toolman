@@ -2,6 +2,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { join } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import { purgeAllKnowledgeStorageData } from './knowledge.service'
+import { purgeAllMemoryData } from './memory-entry.service'
 
 const BACKUP_MANIFEST_VERSION = 1
 
@@ -217,22 +218,34 @@ export async function restoreAppData(input: { backupPath: string; restoreKnowled
   return { restored: true, includesKnowledge, notesDataJson }
 }
 
+/** Sidecar dirs removed by「重置数据」（minimal reset） */
+export const RESET_DATA_TARGET_DIRS = ['cache', 'GPUCache', 'Code Cache', 'logs', 'agent-memory', 'agent-tasks'] as const
+
+function removeDirIfExists(userData: string, name: string): boolean {
+  const path = join(userData, name)
+  if (!existsSync(path)) return false
+  rmSync(path, { recursive: true, force: true })
+  return true
+}
+
 export function resetAppData() {
   const userData = app.getPath('userData')
-  const dbPath = join(userData, 'toolman.db')
-  if (existsSync(dbPath)) {
-    rmSync(dbPath, { force: true })
-  }
+  const cleared: string[] = []
 
-  const sidecars = ['agent-memory', 'agent-tasks', 'knowledge', 'logs', 'storage', 'cache']
-  for (const name of sidecars) {
-    const path = join(userData, name)
-    if (existsSync(path)) {
-      rmSync(path, { recursive: true, force: true })
+  for (const name of RESET_DATA_TARGET_DIRS) {
+    if (removeDirIfExists(userData, name)) {
+      cleared.push(name)
     }
   }
 
-  return { reset: true }
+  const memoryDeleted = purgeAllMemoryData()
+  if (memoryDeleted > 0) {
+    cleared.push(`memory_entries(${memoryDeleted})`)
+  } else {
+    cleared.push('memory_entries')
+  }
+
+  return { reset: true, cleared, memoryEntriesDeleted: memoryDeleted }
 }
 
 export { isBackupBundle }

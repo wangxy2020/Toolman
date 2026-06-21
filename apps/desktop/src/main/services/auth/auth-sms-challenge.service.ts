@@ -1,10 +1,10 @@
 import { createHash, randomInt } from 'node:crypto'
 
 import { AuthLoginError } from './auth-login.error.js'
+import { OTP_CODE_TTL_MS, OTP_RESEND_COOLDOWN_SECONDS } from './auth-otp.constants.js'
 import { isTencentSmsDevMode } from './tencent-auth.config.js'
 
-const CODE_TTL_MS = 5 * 60 * 1000
-const RESEND_INTERVAL_MS = 60 * 1000
+const RESEND_INTERVAL_MS = OTP_RESEND_COOLDOWN_SECONDS * 1000
 const MAX_SENDS_PER_HOUR = 5
 const DEV_CODE = '123456'
 
@@ -50,7 +50,7 @@ export function issueSmsChallenge(phone: string): { code: string; retryAfterSeco
     challenges.set(phone, {
       phone,
       codeHash: hashCode(code, phone),
-      expiresAt: now + CODE_TTL_MS,
+      expiresAt: now + OTP_CODE_TTL_MS,
       lastSentAt: now,
       sendCount,
       windowStartedAt: windowExpired ? now : existing.windowStartedAt,
@@ -62,7 +62,7 @@ export function issueSmsChallenge(phone: string): { code: string; retryAfterSeco
   challenges.set(phone, {
     phone,
     codeHash: hashCode(code, phone),
-    expiresAt: now + CODE_TTL_MS,
+    expiresAt: now + OTP_CODE_TTL_MS,
     lastSentAt: now,
     sendCount: 1,
     windowStartedAt: now,

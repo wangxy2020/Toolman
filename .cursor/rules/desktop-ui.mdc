@@ -1,0 +1,56 @@
+---
+description: Toolman Desktop 渲染层 UI 规范（MUI 优先 + CSS 变量）
+globs: apps/desktop/src/renderer/**/*.{tsx,css}
+alwaysApply: false
+---
+
+# Desktop UI 视觉规范
+
+## 技术栈（红线）
+
+- **优先**使用 **Material UI（`@mui/material`）** 构建表单、按钮、弹窗、列表、提示等交互组件。
+- **禁止**引入 Tailwind / utility 类名堆叠，除非用户明确要求并完成构建链。
+- 与 MUI 并存时：全局布局/遗留区块仍可用 `theme.css` 的 `tm-*` 类；**新 UI 优先 MUI + `sx`/`styled`**，勿再手写大段表单 CSS。
+- 主题：`apps/desktop/src/renderer/theme/mui-theme.ts` + 根级 `MuiProvider`；主色对齐 `var(--tm-auth-primary)`（`#00a962`）。
+- 暗色模式：跟随 `html.theme-dark`（由 `apply-display-settings.ts` 切换），MUI `palette.mode` 与之同步。
+
+## 设计令牌（MUI theme 与 CSS 共用）
+
+```css
+var(--tm-auth-primary)    /* #00a962 — MUI primary.main */
+var(--tm-accent)
+var(--tm-text) / var(--tm-text-secondary) / var(--tm-text-muted)
+var(--tm-border) / var(--tm-bg) / var(--tm-hover)
+var(--tm-radius) / var(--tm-radius-lg)
+```
+
+## 清晰度
+
+- 遮罩层可用半透明 + 轻 blur；**内容卡片用实色背景**，避免多层半透明叠灰。
+- 弹窗内容区须可滚动：`max-height` + `overflow-y: auto`，**禁止**用固定 `height` + `overflow: hidden` 裁切子面板。
+- 表单优先 `TextField`、`Button variant="contained|outlined"`，不自定义渐变主按钮。
+
+## MUI 用法要点
+
+```tsx
+// ✅ 账户/设置类面板
+<Stack spacing={2}>
+  <Alert severity="success">你已登录…</Alert>
+  <Button variant="contained" color="primary">主操作</Button>
+  <Button variant="outlined">次操作</Button>
+</Stack>
+
+// ❌ 避免
+<button className="tm-auth-entry-submit-btn">…</button>  // 新代码勿用 legacy 认证按钮类
+```
+
+- 列表型操作：`List` + `ListItemButton` 或 `Stack` + `Button fullWidth`
+- 错误/成功：`Alert`；加载：`CircularProgress` / `Button loading`
+- `Dialog` / `DialogTitle` / `DialogContent` 用于新弹窗（若未复用既有 UserCenter 壳）
+
+## 自检清单
+
+- [ ] 新交互是否已用 MUI 组件而非裸 `<button>`/`<input>`
+- [ ] 弹窗/分栏内容完整可见（左右栏独立滚动）
+- [ ] 暗色下 MUI 与 `html.theme-dark` 一致
+- [ ] 未引入 Tailwind

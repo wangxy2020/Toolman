@@ -8912,9 +8912,26 @@ html.theme-light .tm-input-tool--active {
   text-align: center;
 }
 
+.tm-auth-entry-config-hint-slot {
+  min-height: 0;
+}
+
+.tm-auth-entry-config-hint-slot:not(:empty) {
+  min-height: 48px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.tm-auth-entry-config-hint-slot .tm-auth-entry-dev-hint {
+  margin: 0;
+  width: 100%;
+}
+
 .tm-auth-entry-body {
   display: flex;
   flex-direction: column;
+  min-height: 320px;
 }
 
 .tm-auth-entry-form {
@@ -8923,11 +8940,21 @@ html.theme-light .tm-input-tool--active {
   gap: 16px;
 }
 
+.tm-auth-entry-otp-hint-slot {
+  min-height: 20px;
+  margin: -8px 0 -4px;
+}
+
+.tm-auth-entry-section-desc--inline {
+  margin: 0;
+}
+
 .tm-auth-entry-phone-field,
 .tm-auth-entry-input-shell {
   display: flex;
   align-items: stretch;
   overflow: hidden;
+  min-height: 42px;
   border: 1px solid var(--tm-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--tm-hover) 45%, var(--tm-bg));
@@ -8960,13 +8987,16 @@ html.theme-light .tm-input-tool--active {
 
 .tm-auth-entry-input {
   width: 100%;
+  min-height: 42px;
   padding: 10px 12px;
   border: none;
   background: transparent;
   color: var(--tm-text);
   font-size: 14px;
+  line-height: 1.4;
   outline: none;
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 .tm-auth-entry-input--plain {
@@ -9133,7 +9163,26 @@ html.theme-light .tm-input-tool--active {
   color: #10b981;
 }
 
-.tm-auth-entry-wechat-icon {
+.tm-auth-entry-provider-btn--douyin .tm-auth-entry-douyin-icon {
+  color: #111111;
+}
+
+.tm-auth-entry-provider-btn--unavailable,
+.tm-auth-entry-provider-btn--unavailable:disabled {
+  border-color: var(--tm-border-light);
+  background: color-mix(in srgb, var(--tm-hover) 55%, var(--tm-bg));
+  color: var(--tm-text-muted);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.tm-auth-entry-provider-btn--unavailable .tm-auth-entry-wechat-icon,
+.tm-auth-entry-provider-btn--unavailable .tm-auth-entry-douyin-icon {
+  color: var(--tm-text-muted);
+}
+
+.tm-auth-entry-wechat-icon,
+.tm-auth-entry-douyin-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -9157,6 +9206,26 @@ html.theme-light .tm-input-tool--active {
 }
 
 .tm-auth-entry-cancel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tm-auth-entry-link-btn {
+  align-self: center;
+  border: none;
+  background: transparent;
+  color: var(--tm-accent);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 0;
+}
+
+.tm-auth-entry-link-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.tm-auth-entry-link-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -9601,6 +9670,7 @@ html.theme-dark .tm-auth-guard-btn--primary:hover:not(:disabled) {
   font-size: 14px;
   line-height: 1.6;
   color: var(--tm-text-secondary);
+  white-space: pre-line;
 }
 
 .tm-confirm-dialog-actions {

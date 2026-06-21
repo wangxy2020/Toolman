@@ -11,6 +11,7 @@ export const AuthProviderSchema = z.enum([
   'firebase_apple',
   'tencent_phone',
   'tencent_wechat',
+  'tencent_douyin',
 ])
 export type AuthProvider = z.infer<typeof AuthProviderSchema>
 
@@ -133,20 +134,59 @@ export const AuthGetFirebaseConfigOutputSchema = z.discriminatedUnion('configure
 ])
 export type AuthGetFirebaseConfigOutput = z.infer<typeof AuthGetFirebaseConfigOutputSchema>
 
-export const AuthSendSmsCodeInputSchema = z.object({
-  phone: z.string().min(1),
-  region: AuthRegionSchema.default('cn'),
-  intent: z.enum(['login', 'register']).optional(),
-})
+export const AuthSendSmsCodeInputSchema = z
+  .object({
+    account: z.string().min(1).optional(),
+    phone: z.string().min(1).optional(),
+    region: AuthRegionSchema.default('cn'),
+    intent: z.enum(['login', 'register', 'reset']).optional(),
+  })
+  .refine((value) => Boolean(value.account?.trim() || value.phone?.trim()), {
+    message: 'account or phone is required',
+  })
 export type AuthSendSmsCodeInput = z.infer<typeof AuthSendSmsCodeInputSchema>
 
+export const AuthOtpChannelSchema = z.enum(['phone', 'email'])
+export type AuthOtpChannel = z.infer<typeof AuthOtpChannelSchema>
+
 export const AuthSendSmsCodeOutputSchema = z.object({
-  phone: z.string().min(1),
-  maskedPhone: z.string().min(1),
+  account: z.string().min(1),
+  channel: AuthOtpChannelSchema,
+  maskedAccount: z.string().min(1),
+  phone: z.string().min(1).optional(),
+  maskedPhone: z.string().min(1).optional(),
   retryAfterSeconds: z.number().int().nonnegative(),
+  expiresInSeconds: z.number().int().positive().optional(),
   devHint: z.string().optional(),
 })
 export type AuthSendSmsCodeOutput = z.infer<typeof AuthSendSmsCodeOutputSchema>
+
+export const AuthResetPasswordInputSchema = z.object({
+  region: AuthRegionSchema.default('cn'),
+  account: z.string().min(1),
+  code: z.string().min(4),
+  password: z.string().min(6),
+  confirmPassword: z.string().min(6),
+})
+export type AuthResetPasswordInput = z.infer<typeof AuthResetPasswordInputSchema>
+
+export const AuthResetPasswordOutputSchema = z.object({
+  ok: z.literal(true),
+})
+export type AuthResetPasswordOutput = z.infer<typeof AuthResetPasswordOutputSchema>
+
+export const AuthChangePasswordInputSchema = z.object({
+  region: AuthRegionSchema.default('cn'),
+  oldPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+  confirmPassword: z.string().min(6),
+})
+export type AuthChangePasswordInput = z.infer<typeof AuthChangePasswordInputSchema>
+
+export const AuthChangePasswordOutputSchema = z.object({
+  ok: z.literal(true),
+})
+export type AuthChangePasswordOutput = z.infer<typeof AuthChangePasswordOutputSchema>
 
 export const AuthGetTencentConfigOutputSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(false) }),
@@ -156,6 +196,8 @@ export const AuthGetTencentConfigOutputSchema = z.discriminatedUnion('configured
     wechatDevMode: z.boolean(),
     wechatConfigured: z.boolean(),
     phoneConfigured: z.boolean(),
+    douyinConfigured: z.boolean(),
+    authingEnabled: z.boolean(),
   }),
 ])
 export type AuthGetTencentConfigOutput = z.infer<typeof AuthGetTencentConfigOutputSchema>

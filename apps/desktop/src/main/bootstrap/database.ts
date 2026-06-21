@@ -135,6 +135,18 @@ function ensureWorkspaceDefaults(database: ToolmanDatabase) {
       })
       .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
       .run()
+  } else if (
+    assistant &&
+    assistant.modelId === `${DEFAULT_PROVIDER_ID}:gemma4:26b`
+  ) {
+    database
+      .update(assistants)
+      .set({
+        modelId: defaultModelId,
+        updatedAt: now,
+      })
+      .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
+      .run()
   }
 
   if (assistant?.name === '通用助手') {

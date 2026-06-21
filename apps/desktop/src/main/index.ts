@@ -30,7 +30,7 @@ import {
   bootstrapCommunityHub,
   shutdownCommunityHub,
 } from './services/community/community-bridge.service'
-import { isAuthInAppNavigationUrl, isAuthOAuthPopupUrl } from './services/auth/auth-oauth-popup'
+import { isAuthOAuthPopupUrl } from './services/auth/auth-oauth-popup'
 
 const ELECTRON_CHROME_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -41,7 +41,8 @@ app.userAgentFallback = ELECTRON_CHROME_USER_AGENT
 const isDev = !app.isPackaged
 
 function shouldBlockInAppNavigation(url: string): boolean {
-  if (isAuthInAppNavigationUrl(url)) return false
+  // OAuth 授权页只允许在独立弹窗中打开，禁止替换主窗口内容。
+  if (isAuthOAuthPopupUrl(url)) return true
 
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     try {
@@ -125,11 +126,24 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    const url = mainWindow?.webContents.getURL()
+    if (!url || !isAuthOAuthPopupUrl(url)) return
+
+    console.warn('[auth] OAuth page loaded in main window; restoring app shell')
+    if (isDev && process.env['ELECTRON_RENDERER_URL']) {
+      void mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL'])
+      return
+    }
+    void mainWindow?.loadFile(join(__dirname, '../renderer/index.html'))
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     if (isAuthOAuthPopupUrl(details.url)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
+          parent: mainWindow ?? undefined,
           width: 480,
           height: 720,
           autoHideMenuBar: true,

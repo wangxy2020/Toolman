@@ -64,6 +64,35 @@ export function getUserMessageCopyText(blocks: ContentBlock[]): string {
   return lines.join('\n')
 }
 
+export function contentBlocksToPendingAttachments(blocks: ContentBlock[]): PendingAttachment[] {
+  const attachments: PendingAttachment[] = []
+
+  for (const block of blocks) {
+    if (block.type === 'file' && block.path) {
+      attachments.push({
+        path: block.path,
+        name: block.name,
+        blobHash: block.blobHash,
+        mimeType: block.mimeType,
+        kind: 'file',
+      })
+      continue
+    }
+
+    if (block.type === 'image' && block.path) {
+      attachments.push({
+        path: block.path,
+        name: block.alt?.trim() || block.path.split(/[/\\]/).pop() || 'image',
+        blobHash: block.blobHash,
+        mimeType: block.mimeType,
+        kind: 'image',
+      })
+    }
+  }
+
+  return attachments
+}
+
 export function getUserVisibleText(blocks: ContentBlock[]): string {
   return blocks
     .filter((block) => block.type === 'text')

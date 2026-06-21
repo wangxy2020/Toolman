@@ -34,56 +34,91 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
   }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
-      <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="tm-modal-header">
-          <h2 className="tm-modal-title">创建群组</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
-            ×
+    <div className="tm-modal-overlay tm-modal-overlay--agent-settings" onClick={onClose}>
+      <div
+        className="tm-agent-modal tm-agent-modal--create"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-group-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="tm-agent-modal-header">
+          <h3 id="create-group-title" className="tm-agent-modal-title">
+            <span className="tm-agent-modal-title-dot" aria-hidden="true" />
+            创建群组
+          </h3>
+          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
+        </header>
+
+        <div className="tm-agent-modal-body tm-agent-modal-body--single">
+          <div className="tm-agent-modal-content">
+            <div className="tm-agent-settings-form">
+              <div className="tm-agent-setting-row">
+                <label className="tm-agent-setting-label" htmlFor="group-create-name">
+                  名称
+                  <span className="tm-agent-required" aria-hidden="true">
+                    *
+                  </span>
+                </label>
+                <input
+                  id="group-create-name"
+                  className="tm-agent-setting-input"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="例如：产品讨论组"
+                  maxLength={100}
+                  autoFocus
+                />
+              </div>
+
+              <div className="tm-agent-setting-row tm-agent-setting-row--top">
+                <label className="tm-agent-setting-label" htmlFor="group-create-description">
+                  描述
+                </label>
+                <textarea
+                  id="group-create-description"
+                  className="tm-agent-setting-textarea"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="简要说明群组用途（可选）"
+                  maxLength={500}
+                  rows={3}
+                />
+              </div>
+
+              {error ? <p className="tm-agent-form-error">{error}</p> : null}
+            </div>
+          </div>
         </div>
 
-        <div className="tm-modal-body">
-          {error && <div className="tm-error-bar">{error}</div>}
-
-          <label className="tm-model-form-field">
-            <span className="tm-model-form-label">群组名称</span>
-            <input
-              className="tm-model-form-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="输入群组名称"
-              maxLength={100}
-              autoFocus
-            />
-          </label>
-
-          <label className="tm-model-form-field">
-            <span className="tm-model-form-label">描述（可选）</span>
-            <textarea
-              className="tm-model-form-input"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="简要描述群组用途"
-              maxLength={500}
-              rows={3}
-            />
-          </label>
-        </div>
-
-        <div className="tm-modal-footer">
-          <button type="button" className="tm-btn tm-btn--secondary" onClick={onClose} disabled={submitting}>
+        <footer className="tm-agent-modal-footer">
+          <button
+            type="button"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--secondary"
+            onClick={onClose}
+            disabled={submitting}
+          >
             取消
           </button>
           <button
             type="button"
-            className="tm-btn tm-btn--primary"
+            className="tm-agent-modal-footer-btn tm-agent-modal-footer-btn--primary"
             onClick={() => void handleSubmit()}
             disabled={submitting}
           >
             {submitting ? '创建中…' : '创建'}
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   )
