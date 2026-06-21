@@ -4,6 +4,7 @@ export type SupportedFileKind =
   | 'pdf'
   | 'doc'
   | 'docx'
+  | 'wps'
   | 'xls'
   | 'xlsx'
   | 'csv'

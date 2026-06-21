@@ -442,4 +442,91 @@ mod tests {
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);
     }
+
+    #[tokio::test]
+    async fn list_news_articles_returns_liked_by_me_with_bearer_token() {
+        let secret = "test-hub-jwt-secret";
+        let (app, pool, data_dir) = test_app_with_jwt(secret).await;
+        let token = sign_test_hub_token(secret, DEFAULT_IDENTITY_ID, "registered");
+        let news_service = crate::services::NewsService::new(pool.clone());
+
+        let source = news_service
+            .create_source(crate::domain::CreateRssSourceInput {
+                id: Some("like-viewer-source".into()),
+                title: "Like Viewer Feed".into(),
+                feed_url: format!("https://example.com/feed/{}", Uuid::new_v4()),
+                site_url: None,
+                category: Some("ai".into()),
+                language: None,
+                enabled: Some(true),
+                fetch_interval_minutes: None,
+            })
+            .await
+            .expect("create source");
+
+        const SAMPLE_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Feed</title><item>
+<title>Like Test Story</title><link>https://example.com/like-test</link><guid>like-test-1</guid>
+<description>Story</description></item></channel></rss>"#;
+
+        news_service
+            .ingest_feed_bytes(&source.id, SAMPLE_RSS.as_bytes())
+            .await
+            .expect("ingest");
+
+        let articles = news_service
+            .list_articles(
+                &crate::services::news_service::NewsArticleQuery {
+                    source_id: Some(source.id.clone()),
+                    limit: 1,
+                    offset: 0,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .expect("list articles");
+        let article_id = articles[0].id.clone();
+
+        let like_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/news/articles/{article_id}/like"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("like response");
+        assert_eq!(like_response.status(), StatusCode::OK);
+
+        let list_response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/api/v1/news/articles?source_id={}&limit=10",
+                        source.id
+                    ))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("list response");
+        assert_eq!(list_response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(list_response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        let liked_by_me = payload["data"][0]["liked_by_me"]
+            .as_bool()
+            .expect("liked_by_me boolean");
+        assert!(liked_by_me);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
 }

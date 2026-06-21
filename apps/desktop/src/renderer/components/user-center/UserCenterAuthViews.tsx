@@ -73,8 +73,11 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
     setMergeState,
     authBusy,
     cnAccountIsEmail,
+    devHint,
     firebaseConfigHint,
     cnConfigHint,
+    region,
+    setRegion,
     showIntlAuth,
     showCnAuth,
     sendVerificationCode,
@@ -166,41 +169,71 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
       <p className="tm-auth-entry-dev-hint">{firebaseConfigHint}</p>
     ) : null
 
-    const isRegister = view === 'register'
+    if (view === 'forgot_password') {
+      body = (
+        <div className="tm-auth-entry-form">
+          <TextInput
+            type="email"
+            autoComplete="email"
+            placeholder="请输入注册邮箱"
+            value={email}
+            disabled={authBusy || !firebaseConfigured}
+            onChange={setEmail}
+          />
+          {devHint ? (
+            <p className="tm-auth-entry-section-desc tm-auth-entry-section-desc--inline">{devHint}</p>
+          ) : (
+            <p className="tm-auth-entry-section-desc">
+              我们将向该邮箱发送 Firebase 密码重置链接，请在邮件中完成重置。
+            </p>
+          )}
+          <button
+            type="button"
+            className="tm-auth-entry-submit-btn"
+            disabled={authBusy || !firebaseConfigured || !email.trim()}
+            onClick={() => void submitResetPassword()}
+          >
+            发送重置邮件
+          </button>
+        </div>
+      )
+    } else {
+      const isRegister = view === 'register'
 
-    body = renderAuthPrimary(
-      <>
-        <TextInput
-          type="email"
-          autoComplete="email"
-          placeholder="请输入邮箱"
-          value={email}
-          disabled={authBusy || !firebaseConfigured}
-          onChange={setEmail}
-        />
-        {renderPasswordFields({ includeConfirm: isRegister })}
-      </>,
-      <button
-        type="button"
-        className="tm-auth-entry-submit-btn"
-        disabled={
-          authBusy ||
-          !firebaseConfigured ||
-          !email.trim() ||
-          !password.trim() ||
-          (isRegister && !confirmPassword.trim())
-        }
-        onClick={() => {
-          if (isRegister && password !== confirmPassword) {
-            auth.setError('两次输入的密码不一致')
-            return
+      body = renderAuthPrimary(
+        <>
+          <TextInput
+            type="email"
+            autoComplete="email"
+            placeholder="请输入邮箱"
+            value={email}
+            disabled={authBusy || !firebaseConfigured}
+            onChange={setEmail}
+          />
+          {renderPasswordFields({ includeConfirm: isRegister })}
+        </>,
+        <button
+          type="button"
+          className="tm-auth-entry-submit-btn"
+          disabled={
+            authBusy ||
+            !firebaseConfigured ||
+            !email.trim() ||
+            !password.trim() ||
+            (isRegister && !confirmPassword.trim())
           }
-          void submit('firebase_email')
-        }}
-      >
-        {isRegister ? '邮箱注册' : '邮箱登录'}
-      </button>,
-    )
+          onClick={() => {
+            if (isRegister && password !== confirmPassword) {
+              auth.setError('两次输入的密码不一致')
+              return
+            }
+            void submit('firebase_email')
+          }}
+        >
+          {isRegister ? '邮箱注册' : '邮箱登录'}
+        </button>,
+      )
+    }
   } else if (showCnAuth && mergeState) {
     body = (
       <>
@@ -398,18 +431,20 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
               className="tm-user-center-footer-link"
               disabled={authBusy}
               onClick={() => {
+                setRegion('cn')
                 resetFormFields()
                 onSwitchView('forgot_password')
               }}
             >
               忘记密码？
             </button>
-          ) : showIntlAuth ? (
+          ) : showIntlAuth || region === 'intl' ? (
             <button
               type="button"
               className="tm-user-center-footer-link"
               disabled={authBusy}
               onClick={() => {
+                setRegion('intl')
                 resetFormFields()
                 onSwitchView('forgot_password')
               }}

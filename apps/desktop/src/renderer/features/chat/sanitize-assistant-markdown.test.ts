@@ -58,8 +58,23 @@ describe('linkifyLocalDocxPaths', () => {
     expect(sanitized).toBe('修订版_a.docx')
   })
 
+  it('removes localhost root links that open a blank dev page', () => {
+    const sanitized = sanitizeAssistantMarkdown('[修订版_a.docx](http://localhost:5173)')
+    expect(sanitized).toBe('修订版_a.docx')
+    expect(sanitized).not.toContain('localhost')
+  })
+
   it('replaces revision file inline markdown links', () => {
     const sanitized = sanitizeAssistantMarkdown('修订版文件：[修订版_a.docx](修订版_a.docx)')
     expect(sanitized).toBe('修订版文件：见下方链接')
+  })
+
+  it('replaces bold revision file inline markdown links', () => {
+    const sanitized = sanitizeAssistantMarkdown(
+      '**修订版文件：** [修订版_a.docx](http://localhost:5173)',
+    )
+    expect(sanitized).toBe('**修订版文件：** 修订版_a.docx')
+    expect(sanitized).not.toContain('localhost')
+    expect(sanitized).not.toContain('](')
   })
 })

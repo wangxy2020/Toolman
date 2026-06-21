@@ -5,9 +5,16 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::domain::{
-    CommunityResource, CommunityUser, CreateResourceInput, ResourceStatus, ResourceType,
-    ResourceVisibility, UpdateResourceInput, UserPermission, UserRole,
+    CommunityResource, CommunityUser, CreateResourceInput, InteractionTargetType,
+    ResourceStatus, ResourceType, ResourceVisibility, UpdateResourceInput, UserPermission,
+    UserRole,
 };
+use crate::repositories::dislike_repository::DislikeRepository;
+use crate::repositories::favorite_repository::FavoriteRepository;
+use crate::repositories::like_repository::LikeRepository;
+use crate::repositories::dislike_repository::DislikeRepositoryError;
+use crate::repositories::favorite_repository::FavoriteRepositoryError;
+use crate::repositories::like_repository::LikeRepositoryError;
 use crate::repositories::resource_repository::{RepositoryError, ResourceRepository};
 use crate::repositories::user_repository::UserRepositoryError;
 use crate::repositories::version_repository::VersionRepositoryError;
@@ -79,6 +86,12 @@ pub struct MarketplaceResourceItem {
     pub resource_size: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub liked_by_me: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favorited_by_me: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disliked_by_me: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,6 +140,12 @@ pub enum MarketplaceError {
     UserRepository(#[from] UserRepositoryError),
     #[error("search error: {0}")]
     Search(#[from] crate::services::SearchError),
+    #[error("like error: {0}")]
+    Like(#[from] LikeRepositoryError),
+    #[error("dislike error: {0}")]
+    Dislike(#[from] DislikeRepositoryError),
+    #[error("favorite error: {0}")]
+    Favorite(#[from] FavoriteRepositoryError),
 }
 
 pub struct MarketplaceService {
@@ -141,6 +160,7 @@ impl MarketplaceService {
     pub async fn list_resources(
         &self,
         query: &MarketplaceListQuery,
+        viewer: Option<&CommunityUser>,
     ) -> Result<Vec<MarketplaceResourceItem>, MarketplaceError> {
         let q = query.q.clone().unwrap_or_default();
         let search = SearchService::new(self.pool.clone());
@@ -169,14 +189,18 @@ impl MarketplaceService {
 
         let mut items = Vec::with_capacity(resources.len());
         for resource in resources {
-            items.push(self.to_list_item(resource).await?);
+            items.push(self.to_list_item(resource, viewer).await?);
         }
         Ok(items)
     }
 
-    pub async fn get_resource(&self, id: &str) -> Result<MarketplaceResourceDetail, MarketplaceError> {
+    pub async fn get_resource(
+        &self,
+        id: &str,
+        viewer: Option<&CommunityUser>,
+    ) -> Result<MarketplaceResourceDetail, MarketplaceError> {
         let resource = self.require_visible_resource(id).await?;
-        let item = self.to_list_item(resource.clone()).await?;
+        let item = self.to_list_item(resource.clone(), viewer).await?;
         let versions = VersionRepository::new(self.pool.clone())
             .list_for_resource(id)
             .await?
@@ -276,7 +300,7 @@ impl MarketplaceService {
             })
             .await?;
 
-        self.to_list_item(resource).await
+        self.to_list_item(resource, None).await
     }
 
     pub async fn update_resource(
@@ -305,7 +329,7 @@ impl MarketplaceService {
             )
             .await?;
 
-        self.to_list_item(resource).await
+        self.to_list_item(resource, Some(actor)).await
     }
 
     pub async fn delete_resource(&self, actor: &CommunityUser, id: &str) -> Result<(), MarketplaceError> {
@@ -350,11 +374,35 @@ impl MarketplaceService {
     async fn to_list_item(
         &self,
         resource: CommunityResource,
+        viewer: Option<&CommunityUser>,
     ) -> Result<MarketplaceResourceItem, MarketplaceError> {
         let author = UserRepository::new(self.pool.clone())
             .find_by_id(&resource.author_id)
             .await?
             .ok_or_else(|| MarketplaceError::NotFound(resource.author_id.clone()))?;
+
+        let (liked_by_me, favorited_by_me, disliked_by_me) = if let Some(viewer) = viewer {
+            let likes = LikeRepository::new(self.pool.clone());
+            let dislikes = DislikeRepository::new(self.pool.clone());
+            let favorites = FavoriteRepository::new(self.pool.clone());
+
+            let liked = likes
+                .find_by_user_and_target(&viewer.id, InteractionTargetType::Resource, &resource.id)
+                .await?
+                .is_some();
+            let disliked = dislikes
+                .find_by_user_and_target(&viewer.id, InteractionTargetType::Resource, &resource.id)
+                .await?
+                .is_some();
+            let favorited = favorites
+                .find_by_user_and_target(&viewer.id, InteractionTargetType::Resource, &resource.id)
+                .await?
+                .is_some();
+
+            (Some(liked), Some(favorited), Some(disliked))
+        } else {
+            (None, None, None)
+        };
 
         Ok(MarketplaceResourceItem {
             id: resource.id,
@@ -382,6 +430,9 @@ impl MarketplaceService {
             resource_size: resource.resource_size,
             created_at: resource.created_at,
             updated_at: resource.updated_at,
+            liked_by_me,
+            favorited_by_me,
+            disliked_by_me,
         })
     }
 }
@@ -538,14 +589,17 @@ mod tests {
             .expect("rate high");
 
         let items = service
-            .list_resources(&MarketplaceListQuery {
-                resource_type: Some(ResourceType::Mcp),
-                tags: Some(vec!["browser".to_string()]),
-                sort: SearchSort::Rating,
-                limit: 20,
-                offset: 0,
-                ..Default::default()
-            })
+            .list_resources(
+                &MarketplaceListQuery {
+                    resource_type: Some(ResourceType::Mcp),
+                    tags: Some(vec!["browser".to_string()]),
+                    sort: SearchSort::Rating,
+                    limit: 20,
+                    offset: 0,
+                    ..Default::default()
+                },
+                None,
+            )
             .await
             .expect("list");
 

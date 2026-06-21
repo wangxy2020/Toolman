@@ -29,11 +29,14 @@ function resolveCodeStyle(codeStyle: CodeStyle): Exclude<CodeStyle, 'auto'> {
 
 function resolveLocalDocxPath(href: string): string | null {
   if (href.startsWith(LOCAL_FILE_LINK_SCHEME)) {
+    const raw = href.slice(LOCAL_FILE_LINK_SCHEME.length)
     try {
-      return decodeURIComponent(href.slice(LOCAL_FILE_LINK_SCHEME.length))
+      const decoded = decodeURIComponent(raw)
+      if (decoded.trim()) return decoded
     } catch {
-      return href.slice(LOCAL_FILE_LINK_SCHEME.length)
+      // fall through
     }
+    if (raw.trim()) return raw
   }
 
   if (href.startsWith('file://')) {
@@ -64,7 +67,20 @@ function resolveLocalDocxPath(href: string): string | null {
 
   if (/^\/[^?\#]*\.docx$/i.test(decoded)) return decoded
   if (/^[A-Za-z]:\\[^?\#]*\.docx$/i.test(decoded)) return decoded
+
+  // 相对路径如「修订版_xxx.docx」——无法唯一定位，不当作可打开路径
   return null
+}
+
+function isLocalhostDevServerHref(href: string): boolean {
+  return /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$|\?|#)/i.test(href)
+}
+
+function isNonNavigableDocxHref(href: string, label: string): boolean {
+  if (isLocalhostDevServerHref(href)) return true
+  if (/^[^/\\]+\.docx$/i.test(href.trim())) return true
+  if (/^[^/\\]+\.docx$/i.test(label.trim()) && !/^https?:\/\//i.test(href)) return true
+  return false
 }
 
 function CodeBlock({
@@ -203,13 +219,32 @@ export function MessageMarkdown({ text, settings, sanitizeAssistant = false }: P
             return <LocalFilePathLink path={localPath} action="open" />
           }
 
+          const label = String(children ?? '')
+          if (isNonNavigableDocxHref(href, label)) {
+            return (
+              <span className="tm-md-docx-filename" title="请使用消息下方「用 Word 打开」">
+                {children}
+              </span>
+            )
+          }
+
           if (/\.docx(?:[?#]|$)/i.test(href)) {
             return <span className="tm-md-docx-filename">{children}</span>
           }
         }
 
         return (
-          <a href={href} target="_blank" rel="noreferrer noopener" {...props}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            {...props}
+            onClick={(event) => {
+              if (href && isLocalhostDevServerHref(href)) {
+                event.preventDefault()
+              }
+            }}
+          >
             {children}
           </a>
         )

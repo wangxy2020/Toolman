@@ -4,6 +4,7 @@ import {
   type CommunityHubStatusOutput,
   type CommunityInstallInput,
   type CommunityResourceDetail,
+  type CommunityResourceInteractionOutput,
   type CommunityResourceItem,
   type CommunityResourceListInput,
   type CommunityResourceType,
@@ -18,6 +19,8 @@ import {
   likeCommunityResource,
   listCommunityResources,
 } from './community-api.client'
+import { notifyCommunityUserDataChanged } from './community-events'
+import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
   COMMUNITY_UI_MOCK_IDS,
@@ -26,18 +29,32 @@ import {
 } from './community-ui-mock'
 import {
   applyUiMockInteractionToResource,
-  getUiMockResourceItemState,
   toggleUiMockDislike,
   toggleUiMockFavorite,
   toggleUiMockLike,
 } from './community-ui-mock-interactions'
-import type { CommunityCardActionState } from './CommunityListCardActions'
 
 export interface UseCommunityResourcesOptions {
   resourceType?: CommunityResourceType
   query?: Omit<CommunityResourceListInput, 'resourceType'>
   autoLoad?: boolean
   autoLoadDetail?: boolean
+}
+
+function applyResourceInteractionResult(
+  item: CommunityResourceItem,
+  result: CommunityResourceInteractionOutput,
+): CommunityResourceItem {
+  return {
+    ...item,
+    likeCount: result.likeCount,
+    dislikeCount: result.dislikeCount,
+    favoriteCount: result.favoriteCount,
+    likedByMe: result.liked ?? item.likedByMe,
+    dislikedByMe:
+      result.disliked ?? (result.liked === true ? false : item.dislikedByMe),
+    favoritedByMe: result.favorited ?? item.favoritedByMe,
+  }
 }
 
 export function useCommunityResources(options: UseCommunityResourcesOptions = {}) {
@@ -61,7 +78,6 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
   const [interactionAction, setInteractionAction] = useState<
     'like' | 'dislike' | 'favorite' | null
   >(null)
-  const [itemStates, setItemStates] = useState<Record<string, CommunityCardActionState>>({})
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -98,7 +114,7 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     } finally {
       setLoading(false)
     }
-  }, [autoLoadDetail, listInput])
+  }, [autoLoadDetail, listInput, resourceType])
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true)
@@ -107,6 +123,7 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
       const resource = await getCommunityResource(id)
       setDetail(resource)
       setSelectedId(id)
+      setItems((current) => current.map((item) => (item.id === id ? resource : item)))
       return resource
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : '加载资源详情失败'
@@ -128,6 +145,7 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         if (selectedId === input.resourceId) {
           await loadDetail(input.resourceId)
         }
+        notifyCommunityUserDataChanged()
         return result
       } catch (installError) {
         const message = installError instanceof Error ? installError.message : '安装失败'
@@ -140,47 +158,17 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     [load, loadDetail, selectedId],
   )
 
-  const updateItemCounts = useCallback(
-    (
-      resourceId: string,
-      counts: {
-        likeCount: number
-        dislikeCount: number
-        favoriteCount: number
-      },
-    ) => {
-      setItems((current) =>
-        current.map((item) =>
-          item.id === resourceId
-            ? {
-                ...item,
-                likeCount: counts.likeCount,
-                dislikeCount: counts.dislikeCount,
-                favoriteCount: counts.favoriteCount,
-              }
-            : item,
-        ),
-      )
-    },
-    [],
-  )
-
-  const updateItemState = useCallback(
-    (resourceId: string, patch: CommunityCardActionState) => {
-      setItemStates((current) => ({
-        ...current,
-        [resourceId]: {
-          ...current[resourceId],
-          ...patch,
-        },
-      }))
-    },
-    [],
-  )
-
   const syncMockResource = useCallback((resourceId: string) => {
-    setItems((items) =>
-      items.map((item) => (item.id === resourceId ? applyUiMockInteractionToResource(item) : item)),
+    setItems((current) =>
+      current.map((item) => (item.id === resourceId ? applyUiMockInteractionToResource(item) : item)),
+    )
+  }, [])
+
+  const applyInteractionResult = useCallback((resourceId: string, result: CommunityResourceInteractionOutput) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === resourceId ? applyResourceInteractionResult(item, result) : item,
+      ),
     )
   }, [])
 
@@ -193,16 +181,12 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         if (COMMUNITY_UI_MOCK_ENABLED && resourceId === COMMUNITY_UI_MOCK_IDS.resource) {
           toggleUiMockLike(resourceId)
           syncMockResource(resourceId)
+          notifyCommunityUserDataChanged()
           return
         }
-        const current = itemStates[resourceId]
-        const wasLiked = current?.liked ?? false
         const result = await likeCommunityResource(resourceId)
-        updateItemCounts(resourceId, result)
-        updateItemState(resourceId, {
-          liked: !wasLiked,
-          disliked: wasLiked ? current?.disliked : false,
-        })
+        applyInteractionResult(resourceId, result)
+        notifyCommunityUserDataChanged()
       } catch (interactionError) {
         const message = interactionError instanceof Error ? interactionError.message : '点赞失败'
         setError(message)
@@ -212,7 +196,7 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         setInteractionAction(null)
       }
     },
-    [itemStates, syncMockResource, updateItemCounts, updateItemState],
+    [applyInteractionResult, syncMockResource],
   )
 
   const dislike = useCallback(
@@ -224,16 +208,15 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         if (COMMUNITY_UI_MOCK_ENABLED && resourceId === COMMUNITY_UI_MOCK_IDS.resource) {
           toggleUiMockDislike(resourceId)
           syncMockResource(resourceId)
+          notifyCommunityUserDataChanged()
           return
         }
-        const current = itemStates[resourceId]
-        const wasDisliked = current?.disliked ?? false
         const result = await dislikeCommunityResource(resourceId)
-        updateItemCounts(resourceId, result)
-        updateItemState(resourceId, {
-          liked: wasDisliked ? current?.liked : false,
-          disliked: !wasDisliked,
+        applyInteractionResult(resourceId, {
+          ...result,
+          liked: result.liked ?? (result.disliked === true ? false : undefined),
         })
+        notifyCommunityUserDataChanged()
       } catch (interactionError) {
         const message = interactionError instanceof Error ? interactionError.message : '点踩失败'
         setError(message)
@@ -243,7 +226,7 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         setInteractionAction(null)
       }
     },
-    [itemStates, syncMockResource, updateItemCounts, updateItemState],
+    [applyInteractionResult, syncMockResource],
   )
 
   const favorite = useCallback(
@@ -255,12 +238,12 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         if (COMMUNITY_UI_MOCK_ENABLED && resourceId === COMMUNITY_UI_MOCK_IDS.resource) {
           toggleUiMockFavorite(resourceId)
           syncMockResource(resourceId)
+          notifyCommunityUserDataChanged()
           return
         }
         const result = await favoriteCommunityResource(resourceId)
-        updateItemCounts(resourceId, result)
-        const current = itemStates[resourceId]
-        updateItemState(resourceId, { favorited: !current?.favorited })
+        applyInteractionResult(resourceId, result)
+        notifyCommunityUserDataChanged()
       } catch (interactionError) {
         const message = interactionError instanceof Error ? interactionError.message : '收藏失败'
         setError(message)
@@ -270,12 +253,21 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         setInteractionAction(null)
       }
     },
-    [itemStates, syncMockResource, updateItemCounts, updateItemState],
+    [applyInteractionResult, syncMockResource],
   )
 
   useEffect(() => {
     if (!autoLoad) return
     void load()
+  }, [autoLoad, load])
+
+  useEffect(() => {
+    if (!autoLoad) return
+    const reload = () => {
+      void load()
+    }
+    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
+    return () => window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
   }, [autoLoad, load])
 
   useEffect(() => {
@@ -302,12 +294,6 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     installingId,
     interactionId,
     interactionAction,
-    getItemState: (resourceId: string) => {
-      if (resourceId === COMMUNITY_UI_MOCK_IDS.resource) {
-        return getUiMockResourceItemState(resourceId)
-      }
-      return itemStates[resourceId] ?? {}
-    },
     error,
     setError,
     load,

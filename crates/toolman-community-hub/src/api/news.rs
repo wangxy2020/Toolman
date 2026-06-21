@@ -4,8 +4,7 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 
-use crate::api::auth::{identity_id_from_headers, load_auth_user, AuthUser};
-use crate::domain::CommunityUser;
+use crate::api::auth::{load_optional_viewer, AuthUser};
 use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
 use crate::domain::{CreateRssSourceInput, NewsArticleSort};
@@ -13,7 +12,6 @@ use crate::services::news_service::{
     CreateNewsCommentRequest, FetchSourceResult, NewsArticleItem, NewsArticleQuery,
     NewsCommentItem, NewsInteractionResult, NewsService, RssSourceItem,
 };
-use crate::repositories::UserRepository;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -123,16 +121,6 @@ async fn fetch_source(
     Ok(Json(ApiResponse::ok(result)))
 }
 
-async fn load_optional_viewer(
-    state: &AppState,
-    headers: &HeaderMap,
-) -> Result<Option<CommunityUser>, ApiError> {
-    let Some(identity_id) = identity_id_from_headers(headers) else {
-        return Ok(None);
-    };
-    Ok(Some(load_auth_user(state, identity_id).await?.into_user()))
-}
-
 async fn list_articles(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -168,18 +156,9 @@ async fn recommended_articles(
     headers: HeaderMap,
     Query(params): Query<RecommendedParams>,
 ) -> Result<Json<ApiResponse<Vec<NewsArticleItem>>>, ApiError> {
-    let user_id = if let Some(identity) = identity_id_from_headers(&headers) {
-        UserRepository::new(state.db.clone())
-            .find_or_create_by_identity_id(identity, None)
-            .await
-            .ok()
-            .map(|user| user.id)
-    } else {
-        None
-    };
-
-    let items = service(&state)
-        .recommended_articles(user_id.as_deref(), params.limit.unwrap_or(10).clamp(1, 50))
+    let viewer = load_optional_viewer(&state, &headers).await?;
+        let items = service(&state)
+        .recommended_articles(viewer.as_ref(), params.limit.unwrap_or(10).clamp(1, 50))
         .await?;
 
     Ok(Json(ApiResponse::ok(items)))

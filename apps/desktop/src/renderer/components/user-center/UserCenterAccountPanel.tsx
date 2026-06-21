@@ -192,6 +192,11 @@ export function UserCenterAccountPanel({
   const registered = isRegisteredUser(authSession)
   const hasPhoneBinding = authSession?.bindings.some((b) => b.provider === 'tencent_phone')
   const hasWechatBinding = authSession?.bindings.some((b) => b.provider === 'tencent_wechat')
+  const hasEmailPasswordBinding = authSession?.bindings.some((b) => b.provider === 'firebase_email')
+  const passwordChangeRegion = authSession?.authRegion === 'intl' ? 'intl' : 'cn'
+  const canChangePassword =
+    (authBuildProfile?.cnAuthEnabled && authSession?.authRegion === 'cn') ||
+    (hasEmailPasswordBinding && authSession?.authRegion === 'intl')
 
   const [bindPhone, setBindPhone] = useState('')
   const [bindCode, setBindCode] = useState('')
@@ -262,11 +267,16 @@ export function UserCenterAccountPanel({
   }
 
   const submitChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      setPasswordError('两次输入的密码不一致')
+      return
+    }
+
     setPasswordBusy(true)
     setPasswordError(null)
     try {
       await changeAuthPassword({
-        region: 'cn',
+        region: passwordChangeRegion,
         oldPassword,
         newPassword,
         confirmPassword,
@@ -524,7 +534,7 @@ export function UserCenterAccountPanel({
       onClick: () => onSubViewChange('bind_wechat'),
     })
   }
-  if (authBuildProfile?.cnAuthEnabled) {
+  if (canChangePassword) {
     securityItems.push({
       key: 'password',
       icon: <LockIcon />,

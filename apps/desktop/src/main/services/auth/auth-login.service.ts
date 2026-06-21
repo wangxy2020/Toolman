@@ -18,14 +18,17 @@ import {
 
 import { assertAuthLoginAllowed } from './auth-build-profile.service.js'
 import { AuthLoginError } from './auth-login.error.js'
-import { persistAuthLogin } from './auth-persist.service.js'
+import { persistAuthLogin, refreshAuthSessionTokens } from './auth-persist.service.js'
 import { getFirebaseAuthConfig } from './firebase-auth.config'
 import {
+  firebaseChangeEmailPassword,
   firebaseLookupIdToken,
+  firebaseSendPasswordResetEmail,
   firebaseSignInWithEmail,
   mapFirebaseProviderIds,
   type FirebaseAuthResult,
 } from './firebase-auth.service'
+import { assertMatchingPasswords, assertValidPasswordLength } from './authing-password-utils.js'
 import { sendCnVerificationCode, verifyCnVerificationLogin } from './authing-otp-auth.service.js'
 import { verifyCnEmailPasswordLogin } from './authing-password-auth.service.js'
 import { registerCnAccountWithOtp } from './authing-register.service.js'
@@ -264,9 +267,21 @@ export async function sendAuthSmsCode(input: AuthSendSmsCodeInput): Promise<Auth
 
 export async function resetAuthPassword(input: AuthResetPasswordInput): Promise<AuthResetPasswordOutput> {
   const parsed = AuthResetPasswordInputSchema.parse(input)
-  if (parsed.region !== 'cn') {
-    throw new AuthLoginError('当前仅支持国内账号重置密码')
+
+  if (parsed.region === 'intl') {
+    assertAuthLoginAllowed('intl', 'firebase_email')
+    const config = getFirebaseAuthConfig()
+    if (!config) {
+      throw new AuthLoginError('Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+    }
+
+    await firebaseSendPasswordResetEmail(config, parsed.account)
+    return {
+      ok: true as const,
+      message: '密码重置邮件已发送，请查收邮箱并完成重置。',
+    }
   }
+
   assertAuthLoginAllowed(parsed.region, 'tencent_phone')
 
   if (!isCnAuthAvailable()) {
@@ -282,15 +297,56 @@ export async function resetAuthPassword(input: AuthResetPasswordInput): Promise<
   return { ok: true as const }
 }
 
+function resolveFirebaseEmailFromSession(session: AuthSession): string {
+  const emailBinding = session.bindings.find((binding) => binding.provider === 'firebase_email')
+  if (!emailBinding) {
+    throw new AuthLoginError('当前账户未使用邮箱密码登录，无法修改密码')
+  }
+
+  if (emailBinding.label?.includes('@')) {
+    return emailBinding.label
+  }
+
+  throw new AuthLoginError('无法识别当前绑定的邮箱地址')
+}
+
 export async function changeAuthPassword(input: AuthChangePasswordInput): Promise<AuthChangePasswordOutput> {
   const parsed = AuthChangePasswordInputSchema.parse(input)
-  if (parsed.region !== 'cn') {
-    throw new AuthLoginError('当前仅支持国内账号修改密码')
-  }
+  assertValidPasswordLength(parsed.newPassword)
+  assertMatchingPasswords(parsed.newPassword, parsed.confirmPassword)
 
   const session = getAuthSession()
   if (!session.isLoggedIn) {
     throw new AuthLoginError('请先登录后再修改密码')
+  }
+
+  if (parsed.region === 'intl') {
+    assertAuthLoginAllowed('intl', 'firebase_email')
+    const config = getFirebaseAuthConfig()
+    if (!config) {
+      throw new AuthLoginError('Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+    }
+
+    const email = resolveFirebaseEmailFromSession(session)
+    const result = await firebaseChangeEmailPassword(
+      config,
+      email,
+      parsed.oldPassword,
+      parsed.newPassword,
+    )
+
+    const emailBinding = session.bindings.find((binding) => binding.provider === 'firebase_email')
+    if (emailBinding && result.localId !== emailBinding.subjectId) {
+      throw new AuthLoginError('邮箱或密码错误')
+    }
+
+    const expiresInSeconds = Number.parseInt(result.expiresIn, 10)
+    refreshAuthSessionTokens({
+      accessToken: result.idToken,
+      refreshToken: result.refreshToken,
+      expiresInSeconds: Number.isFinite(expiresInSeconds) ? expiresInSeconds : undefined,
+    })
+    return { ok: true as const }
   }
 
   const currentSession = new AuthSessionRepository(getDatabase()).getCurrent()

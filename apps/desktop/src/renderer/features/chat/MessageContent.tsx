@@ -73,7 +73,13 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
                 name={block.name}
                 arguments={block.arguments}
                 result={block.result ?? ''}
-                status={block.status === 'running' ? 'running' : 'done'}
+                status={
+                  block.status === 'running'
+                    ? 'running'
+                    : block.status === 'failed'
+                      ? 'failed'
+                      : 'done'
+                }
                 defaultCollapsed={block.status !== 'running'}
               />
             )

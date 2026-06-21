@@ -20,7 +20,7 @@ import {
   suspendCommunityModerationResource,
   touchCommunityPresenceHeartbeat,
 } from './community-api.client'
-import { notifyCommunityBoardChanged } from './community-events'
+import { notifyCommunityBoardChanged, COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'
 import { isCommunitySessionActive } from '../user/community-session'
 
 const AUTO_SCAN_INTERVAL_MS = 60_000
@@ -188,6 +188,15 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
     }, AUTO_SCAN_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [autoScan, enabled, refresh])
+
+  useEffect(() => {
+    if (!enabled) return
+    const onUserDataChanged = () => {
+      void refresh()
+    }
+    window.addEventListener(COMMUNITY_USER_DATA_CHANGED_EVENT, onUserDataChanged)
+    return () => window.removeEventListener(COMMUNITY_USER_DATA_CHANGED_EVENT, onUserDataChanged)
+  }, [enabled, refresh])
 
   return {
     scan,

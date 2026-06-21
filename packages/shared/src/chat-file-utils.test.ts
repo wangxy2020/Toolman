@@ -3,6 +3,8 @@ import {
   buildModelTextFromUserBlocks,
   contentBlocksHaveDocxAttachments,
   isDocxFileBlock,
+  isDocxMcpSourceFileBlock,
+  isLegacyWordFileBlock,
   shouldEnableToolsWithAttachments,
   userBlocksHaveUnresolvedAttachments,
 } from './chat-file-utils.js'
@@ -20,6 +22,24 @@ describe('isDocxFileBlock', () => {
       }),
     ).toBe(true)
     expect(isDocxFileBlock({ type: 'file', name: 'notes.pdf' })).toBe(false)
+    expect(isDocxFileBlock({ type: 'file', name: 'notes.doc' })).toBe(false)
+  })
+})
+
+describe('isLegacyWordFileBlock', () => {
+  it('detects doc and wps attachments', () => {
+    expect(isLegacyWordFileBlock({ type: 'file', name: 'notes.doc' })).toBe(true)
+    expect(isLegacyWordFileBlock({ type: 'file', name: 'notes.wps' })).toBe(true)
+    expect(isLegacyWordFileBlock({ type: 'file', name: 'notes.docx' })).toBe(false)
+  })
+})
+
+describe('isDocxMcpSourceFileBlock', () => {
+  it('includes docx, doc, and wps', () => {
+    expect(isDocxMcpSourceFileBlock({ type: 'file', name: 'a.docx' })).toBe(true)
+    expect(isDocxMcpSourceFileBlock({ type: 'file', name: 'a.doc' })).toBe(true)
+    expect(isDocxMcpSourceFileBlock({ type: 'file', name: 'a.wps' })).toBe(true)
+    expect(isDocxMcpSourceFileBlock({ type: 'file', name: 'a.pdf' })).toBe(false)
   })
 })
 
@@ -29,6 +49,19 @@ describe('shouldEnableToolsWithAttachments', () => {
       shouldEnableToolsWithAttachments(['docx-mcp-server', 'filesystem'], [
         { type: 'file', name: 'a.docx', path: '/tmp/a.docx' },
         { type: 'text', text: '请批注' },
+      ]),
+    ).toBe(true)
+  })
+
+  it('enables tools for legacy word uploads when docx-mcp-server is mounted', () => {
+    expect(
+      shouldEnableToolsWithAttachments(['docx-mcp-server'], [
+        { type: 'file', name: 'a.doc', path: '/tmp/a.doc' },
+      ]),
+    ).toBe(true)
+    expect(
+      shouldEnableToolsWithAttachments(['docx-mcp-server'], [
+        { type: 'file', name: 'a.wps', path: '/tmp/a.wps' },
       ]),
     ).toBe(true)
   })
@@ -50,6 +83,12 @@ describe('userBlocksHaveUnresolvedAttachments', () => {
         { mcpServerIds: ['docx-mcp-server'] },
       ),
     ).toBe(false)
+    expect(
+      userBlocksHaveUnresolvedAttachments(
+        [{ type: 'file', name: 'a.doc', path: '/tmp/a.doc', delivery: 'docx_tool' }],
+        { mcpServerIds: ['docx-mcp-server'] },
+      ),
+    ).toBe(false)
   })
 
   it('requires inline content for docx when docx mcp is not mounted', () => {
@@ -60,11 +99,11 @@ describe('userBlocksHaveUnresolvedAttachments', () => {
 })
 
 describe('contentBlocksHaveDocxAttachments', () => {
-  it('returns true when any block is docx', () => {
+  it('returns true when any block is docx mcp source', () => {
     expect(
       contentBlocksHaveDocxAttachments([
         { type: 'text', text: 'hi' },
-        { type: 'file', name: 'x.docx', path: '/x.docx' },
+        { type: 'file', name: 'x.doc', path: '/x.doc' },
       ]),
     ).toBe(true)
   })

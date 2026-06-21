@@ -12,7 +12,7 @@ interface Props {
   name: string
   arguments?: string
   result: string
-  status: 'done' | 'running'
+  status: 'done' | 'running' | 'failed'
   defaultCollapsed?: boolean
 }
 
@@ -59,8 +59,16 @@ function SimpleToolCard({
             <div className="tm-tool-card-title">{meta.title}</div>
             <div className="tm-tool-card-desc">{meta.description}</div>
           </div>
-          <span className="tm-tool-card-status">
-            {status === 'running' ? '执行中…' : '已完成'}
+          <span
+            className={[
+              'tm-tool-card-status',
+              status === 'done' ? 'tm-tool-card-status--done' : '',
+              status === 'failed' ? 'tm-tool-card-status--failed' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {status === 'running' ? '执行中…' : status === 'failed' ? '未生效' : '已完成'}
           </span>
         </button>
 
@@ -93,17 +101,17 @@ function SimpleToolCard({
   )
 }
 
-function CommandStatus({ status }: { status: 'done' | 'running' }) {
+function CommandStatus({ status }: { status: 'done' | 'running' | 'failed' }) {
+  if (status === 'running') {
+    return <span className="tm-tool-card-status">执行中…</span>
+  }
+  if (status === 'failed') {
+    return <span className="tm-tool-card-status tm-tool-card-status--failed">未生效</span>
+  }
   return (
     <span className="tm-tool-card-status tm-tool-card-status--done">
-      {status === 'running' ? (
-        '执行中…'
-      ) : (
-        <>
-          <span>已完成</span>
-          <IconCheck size={14} className="tm-tool-card-check" />
-        </>
-      )}
+      <span>已完成</span>
+      <IconCheck size={14} className="tm-tool-card-check" />
     </span>
   )
 }
@@ -116,7 +124,7 @@ function CommandHeader({
 }: {
   title: string
   description: string
-  status: 'done' | 'running'
+  status: 'done' | 'running' | 'failed'
   collapsed: boolean
 }) {
   return (

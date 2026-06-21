@@ -204,6 +204,9 @@ impl From<crate::services::MarketplaceError> for ApiError {
             }
             crate::services::MarketplaceError::UserRepository(error) => error.into(),
             crate::services::MarketplaceError::Search(error) => Self::validation(error.to_string()),
+            crate::services::MarketplaceError::Like(error) => Self::internal(error.to_string()),
+            crate::services::MarketplaceError::Dislike(error) => Self::internal(error.to_string()),
+            crate::services::MarketplaceError::Favorite(error) => Self::internal(error.to_string()),
         }
     }
 }

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  firebaseChangeEmailPassword,
   firebaseLookupIdToken,
+  firebaseSendPasswordResetEmail,
   firebaseSignInWithEmail,
   mapFirebaseProviderIds,
 } from './firebase-auth.service'
@@ -78,5 +80,53 @@ describe('firebase-auth.service', () => {
     await expect(
       firebaseSignInWithEmail(config, 'user@example.com', 'secret123', 'register'),
     ).rejects.toThrow('该邮箱已注册，请直接登录')
+  })
+
+  it('sends password reset email via Identity Toolkit', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(init?.method).toBe('POST')
+      const body = JSON.parse(String(init?.body)) as Record<string, string>
+      expect(body.requestType).toBe('PASSWORD_RESET')
+      expect(body.email).toBe('user@example.com')
+      return Response.json({ email: 'user@example.com' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await firebaseSendPasswordResetEmail(config, 'user@example.com')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('changes email password after verifying the old password', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      if (String(_url).includes('signInWithPassword')) {
+        return Response.json({
+          localId: 'uid-email',
+          email: 'user@example.com',
+          idToken: 'old-id-token',
+          refreshToken: 'refresh-token',
+          expiresIn: '3600',
+        })
+      }
+      expect(body.idToken).toBe('old-id-token')
+      expect(body.password).toBe('new-secret')
+      return Response.json({
+        localId: 'uid-email',
+        email: 'user@example.com',
+        idToken: 'new-id-token',
+        refreshToken: 'refresh-token',
+        expiresIn: '3600',
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await firebaseChangeEmailPassword(
+      config,
+      'user@example.com',
+      'old-secret',
+      'new-secret',
+    )
+    expect(result.idToken).toBe('new-id-token')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

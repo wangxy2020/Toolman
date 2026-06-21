@@ -16,6 +16,8 @@ import {
   listRecommendedCommunityNews,
 } from './community-api.client'
 import { formatNewsListError } from './community-news-utils'
+import { notifyCommunityUserDataChanged } from './community-events'
+import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
   COMMUNITY_UI_MOCK_IDS,
@@ -150,6 +152,7 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
             item.id === articleId ? applyUiMockInteractionToNews(item) : item,
           ),
         )
+        notifyCommunityUserDataChanged()
         return
       }
       const result = await favoriteCommunityNewsArticle(articleId)
@@ -161,11 +164,12 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
                 likeCount: result.likeCount ?? item.likeCount,
                 favoriteCount: result.favoriteCount ?? item.favoriteCount,
                 dislikeCount: result.dislikeCount ?? item.dislikeCount,
-                favoritedByMe: result.favorited ?? !item.favoritedByMe,
+                favoritedByMe: result.favorited ?? item.favoritedByMe,
               }
             : item,
         ),
       )
+      notifyCommunityUserDataChanged()
     } catch (interactionError) {
       const message = interactionError instanceof Error ? interactionError.message : '收藏失败'
       setError(message)
@@ -188,23 +192,24 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
             item.id === articleId ? applyUiMockInteractionToNews(item) : item,
           ),
         )
+        notifyCommunityUserDataChanged()
         return
       }
       const result = await likeCommunityNewsArticle(articleId)
       setItems((current) =>
         current.map((item): CommunityNewsArticle => {
           if (item.id !== articleId) return item
-          const wasLiked = item.likedByMe
           return {
             ...item,
             likeCount: result.likeCount ?? item.likeCount,
             favoriteCount: result.favoriteCount ?? item.favoriteCount,
             dislikeCount: result.dislikeCount ?? item.dislikeCount,
-            likedByMe: !wasLiked,
-            dislikedByMe: wasLiked ? item.dislikedByMe : false,
+            likedByMe: result.liked ?? item.likedByMe,
+            dislikedByMe: result.disliked ?? (result.liked === true ? false : item.dislikedByMe),
           }
         }),
       )
+      notifyCommunityUserDataChanged()
     } catch (interactionError) {
       const message = interactionError instanceof Error ? interactionError.message : '点赞失败'
       setError(message)
@@ -227,23 +232,24 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
             item.id === articleId ? applyUiMockInteractionToNews(item) : item,
           ),
         )
+        notifyCommunityUserDataChanged()
         return
       }
       const result = await dislikeCommunityNewsArticle(articleId)
       setItems((current) =>
         current.map((item): CommunityNewsArticle => {
           if (item.id !== articleId) return item
-          const wasDisliked = item.dislikedByMe
           return {
             ...item,
             likeCount: result.likeCount ?? item.likeCount,
             favoriteCount: result.favoriteCount ?? item.favoriteCount,
             dislikeCount: result.dislikeCount ?? item.dislikeCount,
-            likedByMe: wasDisliked ? item.likedByMe : false,
-            dislikedByMe: !wasDisliked,
+            likedByMe: result.liked ?? (result.disliked === true ? false : item.likedByMe),
+            dislikedByMe: result.disliked ?? item.dislikedByMe,
           }
         }),
       )
+      notifyCommunityUserDataChanged()
     } catch (interactionError) {
       const message = interactionError instanceof Error ? interactionError.message : '点踩失败'
       setError(message)
@@ -257,6 +263,15 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
   useEffect(() => {
     if (!autoLoad) return
     void load()
+  }, [autoLoad, load])
+
+  useEffect(() => {
+    if (!autoLoad) return
+    const reload = () => {
+      void load()
+    }
+    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
+    return () => window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
   }, [autoLoad, load])
 
   useEffect(() => {

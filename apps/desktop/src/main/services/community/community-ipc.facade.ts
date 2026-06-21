@@ -54,6 +54,7 @@ import {
   CommunityBoardMessageSchema,
   CommunityNewsListInputSchema,
   CommunityNewsListOutputSchema,
+  CommunityNewsArticleSchema,
   CommunityNewsGetInputSchema,
   CommunityNewsRecommendedOutputSchema,
   CommunityNewsSourceCreateInputSchema,
@@ -204,7 +205,7 @@ export async function listResources(input: unknown) {
   })
   const data = await client.get<unknown[]>(`/api/v1/marketplace/resources${query}`)
   return CommunityResourceListOutputSchema.parse({
-    items: asItems(data).map((item) => CommunityResourceItemSchema.parse(item)),
+    items: asItems(data).map((item) => CommunityResourceItemSchema.parse(fromApiJson(item))),
   })
 }
 
@@ -413,24 +414,24 @@ export async function listNewsArticles(input: unknown) {
     offset: parsed.offset,
   })
   const data = await client.get<unknown[]>(`/api/v1/news/articles${query}`)
-  return CommunityNewsListOutputSchema.parse({ items: asItems(data) })
+  return CommunityNewsListOutputSchema.parse({
+    items: asItems(data).map((item) => CommunityNewsArticleSchema.parse(fromApiJson(item))),
+  })
 }
 
 export async function getNewsArticle(input: unknown) {
   const parsed = CommunityNewsGetInputSchema.parse(input)
   const client = requireClient()
-  const data = await client.get<unknown>(`/api/v1/news/articles/${parsed.id}`, {
-    authenticated: false,
-  })
-  return fromApiJson(data)
+  const data = await client.get<unknown>(`/api/v1/news/articles/${parsed.id}`)
+  return CommunityNewsArticleSchema.parse(fromApiJson(data))
 }
 
 export async function listRecommendedNews() {
   const client = requireClient()
-  const data = await client.get<unknown[]>('/api/v1/news/articles/recommended', {
-    authenticated: false,
+  const data = await client.get<unknown[]>('/api/v1/news/articles/recommended')
+  return CommunityNewsRecommendedOutputSchema.parse({
+    items: asItems(data).map((item) => CommunityNewsArticleSchema.parse(fromApiJson(item))),
   })
-  return CommunityNewsRecommendedOutputSchema.parse({ items: asItems(data) })
 }
 
 export async function favoriteNewsArticle(input: unknown) {

@@ -31,6 +31,7 @@ function guessMimeType(filePath: string): string {
   const lower = filePath.toLowerCase()
   if (lower.endsWith('.pdf')) return 'application/pdf'
   if (lower.endsWith('.doc')) return 'application/msword'
+  if (lower.endsWith('.wps')) return 'application/wps-office.doc'
   if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   if (lower.endsWith('.xls')) return 'application/vnd.ms-excel'
   if (lower.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

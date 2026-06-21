@@ -79,6 +79,8 @@ export async function parseFile(filePath: string, options?: ParseFileOptions): P
       if (!plainText) throw new Error('DOC 未提取到文本内容')
       return { title, plainText, mimeType, kind }
     }
+    case 'wps':
+      throw new Error('WPS 文字 (.wps) 需先转换为 docx 后再解析正文')
     case 'docx': {
       if (options?.enhanced) {
         const htmlResult = await mammoth.convertToHtml({ path: filePath })

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use sqlx::SqlitePool;
 
-use crate::domain::{CommunityUser, InteractionTargetType};
+use crate::domain::{CommunityUser, InteractionTargetType, ResourceCounter};
 use crate::repositories::dislike_repository::{
     CreateDislikeInput, DislikeRepository, DislikeRepositoryError,
 };
@@ -10,7 +10,6 @@ use crate::repositories::favorite_repository::{
 };
 use crate::repositories::like_repository::{CreateLikeInput, LikeRepository, LikeRepositoryError};
 use crate::repositories::resource_repository::{RepositoryError, ResourceRepository};
-use crate::domain::ResourceCounter;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ResourceInteractionResult {
@@ -18,6 +17,12 @@ pub struct ResourceInteractionResult {
     pub like_count: i64,
     pub dislike_count: i64,
     pub favorite_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub liked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favorited: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disliked: Option<bool>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -82,7 +87,7 @@ impl ResourceSocialService {
                 .decrement_counter(resource_id, ResourceCounter::Like)
                 .await?;
 
-            return self.build_result(resource_id).await;
+            return self.build_result(resource_id, actor).await;
         }
 
         let dislikes = DislikeRepository::new(self.pool.clone());
@@ -111,7 +116,7 @@ impl ResourceSocialService {
             .increment_counter(resource_id, ResourceCounter::Like, 1)
             .await?;
 
-        self.build_result(resource_id).await
+        self.build_result(resource_id, actor).await
     }
 
     pub async fn dislike_resource(
@@ -144,7 +149,7 @@ impl ResourceSocialService {
                 .decrement_counter(resource_id, ResourceCounter::Dislike)
                 .await?;
 
-            return self.build_result(resource_id).await;
+            return self.build_result(resource_id, actor).await;
         }
 
         let likes = LikeRepository::new(self.pool.clone());
@@ -173,7 +178,7 @@ impl ResourceSocialService {
             .increment_counter(resource_id, ResourceCounter::Dislike, 1)
             .await?;
 
-        self.build_result(resource_id).await
+        self.build_result(resource_id, actor).await
     }
 
     pub async fn favorite_resource(
@@ -184,7 +189,38 @@ impl ResourceSocialService {
         ensure_active(actor)?;
         self.require_resource(resource_id).await?;
 
-        FavoriteRepository::new(self.pool.clone())
+        let favorites = FavoriteRepository::new(self.pool.clone());
+        if favorites
+            .find_by_user_and_target(
+                &actor.id,
+                InteractionTargetType::Resource,
+                resource_id,
+            )
+            .await?
+            .is_some()
+        {
+            favorites
+                .delete_by_user_and_target(
+                    &actor.id,
+                    InteractionTargetType::Resource,
+                    resource_id,
+                )
+                .await
+                .map_err(|error| match error {
+                    FavoriteRepositoryError::NotFound(_) => {
+                        ResourceSocialError::NotFound(resource_id.to_string())
+                    }
+                    other => ResourceSocialError::Favorite(other),
+                })?;
+
+            ResourceRepository::new(self.pool.clone())
+                .decrement_counter(resource_id, ResourceCounter::Favorite)
+                .await?;
+
+            return self.build_result(resource_id, actor).await;
+        }
+
+        favorites
             .create(CreateFavoriteInput {
                 user_id: actor.id.clone(),
                 target_type: InteractionTargetType::Resource,
@@ -200,7 +236,7 @@ impl ResourceSocialService {
             .increment_counter(resource_id, ResourceCounter::Favorite, 1)
             .await?;
 
-        self.build_result(resource_id).await
+        self.build_result(resource_id, actor).await
     }
 
     async fn require_resource(&self, id: &str) -> Result<(), ResourceSocialError> {
@@ -219,17 +255,38 @@ impl ResourceSocialService {
     async fn build_result(
         &self,
         resource_id: &str,
+        actor: &CommunityUser,
     ) -> Result<ResourceInteractionResult, ResourceSocialError> {
         let resource = ResourceRepository::new(self.pool.clone())
             .find_by_id(resource_id)
             .await?
             .ok_or_else(|| ResourceSocialError::NotFound(resource_id.to_string()))?;
 
+        let likes = LikeRepository::new(self.pool.clone());
+        let dislikes = DislikeRepository::new(self.pool.clone());
+        let favorites = FavoriteRepository::new(self.pool.clone());
+
+        let liked = likes
+            .find_by_user_and_target(&actor.id, InteractionTargetType::Resource, resource_id)
+            .await?
+            .is_some();
+        let disliked = dislikes
+            .find_by_user_and_target(&actor.id, InteractionTargetType::Resource, resource_id)
+            .await?
+            .is_some();
+        let favorited = favorites
+            .find_by_user_and_target(&actor.id, InteractionTargetType::Resource, resource_id)
+            .await?
+            .is_some();
+
         Ok(ResourceInteractionResult {
             resource_id: resource.id,
             like_count: resource.like_count,
             dislike_count: resource.dislike_count,
             favorite_count: resource.favorite_count,
+            liked: Some(liked),
+            favorited: Some(favorited),
+            disliked: Some(disliked),
         })
     }
 }

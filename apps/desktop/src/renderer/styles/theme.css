@@ -7466,6 +7466,10 @@ html.theme-dark .tm-dedup-error {
   color: #16a34a;
 }
 
+.tm-tool-card-status--failed {
+  color: #dc2626;
+}
+
 .tm-tool-card-check {
   color: #16a34a;
 }

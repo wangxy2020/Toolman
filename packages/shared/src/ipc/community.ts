@@ -205,6 +205,9 @@ export const CommunityResourceItemSchema = z.object({
   resourceSize: z.number().int().nonnegative(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
+  likedByMe: z.boolean().optional(),
+  favoritedByMe: z.boolean().optional(),
+  dislikedByMe: z.boolean().optional(),
 })
 export type CommunityResourceItem = z.infer<typeof CommunityResourceItemSchema>
 
@@ -256,6 +259,9 @@ export const CommunityResourceInteractionOutputSchema = z.object({
   likeCount: z.number().int().nonnegative(),
   dislikeCount: z.number().int().nonnegative(),
   favoriteCount: z.number().int().nonnegative(),
+  liked: z.boolean().optional(),
+  favorited: z.boolean().optional(),
+  disliked: z.boolean().optional(),
 })
 export type CommunityResourceInteractionOutput = z.infer<
   typeof CommunityResourceInteractionOutputSchema
@@ -510,6 +516,7 @@ export const CommunityNewsInteractionOutputSchema = z.object({
   dislikeCount: z.number().int().nonnegative().optional(),
   liked: z.boolean().optional(),
   favorited: z.boolean().optional(),
+  disliked: z.boolean().optional(),
 })
 export type CommunityNewsInteractionOutput = z.infer<typeof CommunityNewsInteractionOutputSchema>
 

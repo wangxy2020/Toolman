@@ -161,17 +161,24 @@ export const AuthSendSmsCodeOutputSchema = z.object({
 })
 export type AuthSendSmsCodeOutput = z.infer<typeof AuthSendSmsCodeOutputSchema>
 
-export const AuthResetPasswordInputSchema = z.object({
-  region: AuthRegionSchema.default('cn'),
-  account: z.string().min(1),
-  code: z.string().min(4),
-  password: z.string().min(6),
-  confirmPassword: z.string().min(6),
-})
+export const AuthResetPasswordInputSchema = z.discriminatedUnion('region', [
+  z.object({
+    region: z.literal('cn'),
+    account: z.string().min(1),
+    code: z.string().min(4),
+    password: z.string().min(6),
+    confirmPassword: z.string().min(6),
+  }),
+  z.object({
+    region: z.literal('intl'),
+    account: z.string().email(),
+  }),
+])
 export type AuthResetPasswordInput = z.infer<typeof AuthResetPasswordInputSchema>
 
 export const AuthResetPasswordOutputSchema = z.object({
   ok: z.literal(true),
+  message: z.string().optional(),
 })
 export type AuthResetPasswordOutput = z.infer<typeof AuthResetPasswordOutputSchema>
 

@@ -190,7 +190,11 @@ export function toggleUiMockFavorite(
 }
 
 export function applyUiMockInteractionToResource(item: CommunityResourceItem): CommunityResourceItem {
-  const snapshot = readUiMockInteraction(item.id, {}, {
+  const snapshot = readUiMockInteraction(item.id, {
+    liked: item.likedByMe,
+    disliked: item.dislikedByMe,
+    favorited: item.favoritedByMe,
+  }, {
     likeCount: item.likeCount,
     dislikeCount: item.dislikeCount,
     favoriteCount: item.favoriteCount,
@@ -202,6 +206,9 @@ export function applyUiMockInteractionToResource(item: CommunityResourceItem): C
     likeCount: snapshot.counts.likeCount,
     dislikeCount: snapshot.counts.dislikeCount,
     favoriteCount: snapshot.counts.favoriteCount,
+    likedByMe: snapshot.state.liked,
+    dislikedByMe: snapshot.state.disliked,
+    favoritedByMe: snapshot.state.favorited,
   }
 }
 

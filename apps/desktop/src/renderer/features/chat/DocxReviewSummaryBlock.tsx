@@ -30,16 +30,33 @@ function StatRow({
   )
 }
 
+function conversionMethodLabel(method: SummaryBlock['conversionMethod']): string | null {
+  switch (method) {
+    case 'microsoft-word':
+      return 'Microsoft Word 转换（保留格式）'
+    case 'libreoffice':
+      return 'LibreOffice 转换（保留格式）'
+    case 'plaintext':
+      return '纯文本转换（目录/格式/大纲已丢失；建议安装 LibreOffice 或上传 .docx）'
+    default:
+      return null
+  }
+}
+
 export function DocxReviewSummaryBlock({ summary }: Props) {
   const hasStats =
     summary.commentsRequested > 0 ||
     summary.replacementsRequested > 0 ||
     summary.paragraphEditsRequested > 0
+  const conversionLabel = conversionMethodLabel(summary.conversionMethod)
 
   return (
     <section className="tm-docx-review-summary" aria-label="修订执行统计">
       <h3 className="tm-docx-review-summary-title">修订执行统计 · {summary.fileName}</h3>
       <p className="tm-docx-review-summary-meta">识别 {summary.issuesFound} 项问题</p>
+      {conversionLabel ? (
+        <p className="tm-docx-review-summary-meta">{conversionLabel}</p>
+      ) : null}
 
       {hasStats ? (
         <div className="tm-docx-review-summary-stats">

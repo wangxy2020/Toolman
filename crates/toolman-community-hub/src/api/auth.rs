@@ -68,6 +68,25 @@ pub async fn load_auth_user(state: &AppState, identity_id: &str) -> Result<AuthU
     Ok(AuthUser(user))
 }
 
+pub async fn load_optional_viewer(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<Option<CommunityUser>, ApiError> {
+    let identity = match resolve_identity_from_headers(
+        headers,
+        state.config.jwt_secret.as_deref(),
+    ) {
+        Ok(identity) => identity,
+        Err(_) => return Ok(None),
+    };
+
+    Ok(Some(
+        load_auth_user(state, &identity.identity_id)
+            .await?
+            .into_user(),
+    ))
+}
+
 pub fn require_permission(user: &CommunityUser, permission: UserPermission) -> Result<(), ApiError> {
     user.ensure_permission(permission).map_err(ApiError::from)
 }

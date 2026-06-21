@@ -102,6 +102,8 @@ pub struct NewsInteractionResult {
     pub liked: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub favorited: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disliked: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -395,7 +397,7 @@ impl NewsService {
 
     pub async fn recommended_articles(
         &self,
-        user_id: Option<&str>,
+        viewer: Option<&CommunityUser>,
         limit: i64,
     ) -> Result<Vec<NewsArticleItem>, NewsServiceError> {
         let fetch_each = limit.clamp(1, 50).saturating_add(5);
@@ -419,8 +421,8 @@ impl NewsService {
             .await?;
 
         let mut preferred_tags = Vec::new();
-        if let Some(user_id) = user_id {
-            preferred_tags = self.collect_user_preferred_tags(user_id).await?;
+        if let Some(viewer) = viewer {
+            preferred_tags = self.collect_user_preferred_tags(&viewer.id).await?;
         }
 
         let tag_matched = if preferred_tags.is_empty() {
@@ -467,7 +469,7 @@ impl NewsService {
 
         let mut items = Vec::with_capacity(merged.len());
         for article in merged.into_iter().take(limit as usize) {
-            items.push(self.to_article_item(article, None).await?);
+            items.push(self.to_article_item(article, viewer).await?);
         }
         Ok(items)
     }
@@ -526,6 +528,7 @@ impl NewsService {
             dislike_count: article.dislike_count,
             liked: None,
             favorited: Some(favorited),
+            disliked: None,
         })
     }
 
@@ -560,6 +563,7 @@ impl NewsService {
                 dislike_count: article.dislike_count,
                 liked: Some(false),
                 favorited: None,
+                disliked: None,
             });
         }
 
@@ -594,6 +598,7 @@ impl NewsService {
             dislike_count: article.dislike_count,
             liked: Some(true),
             favorited: None,
+            disliked: Some(false),
         })
     }
 
@@ -628,6 +633,7 @@ impl NewsService {
                 dislike_count: article.dislike_count,
                 liked: None,
                 favorited: None,
+                disliked: Some(false),
             });
         }
 
@@ -660,8 +666,9 @@ impl NewsService {
             like_count: article.like_count,
             favorite_count: article.favorite_count,
             dislike_count: article.dislike_count,
-            liked: None,
+            liked: Some(false),
             favorited: None,
+            disliked: Some(true),
         })
     }
 

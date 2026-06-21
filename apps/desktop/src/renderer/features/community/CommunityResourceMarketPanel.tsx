@@ -185,7 +185,11 @@ export function CommunityResourceMarketPanel({
                   favoriteCount: item.favoriteCount,
                   installCount: item.installCount,
                 }}
-                state={market.getItemState(item.id)}
+                state={{
+                  liked: item.likedByMe,
+                  disliked: item.dislikedByMe,
+                  favorited: item.favoritedByMe,
+                }}
                 showInstall={resourceType !== 'task'}
                 busyAction={busyItemId === item.id ? busyAction : null}
                 reportTarget={{ targetType: 'resource', targetId: item.id }}

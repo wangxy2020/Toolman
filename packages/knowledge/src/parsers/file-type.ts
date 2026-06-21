@@ -8,6 +8,7 @@ const EXT_MAP: Record<string, SupportedFileKind> = {
   '.pdf': 'pdf',
   '.doc': 'doc',
   '.docx': 'docx',
+  '.wps': 'wps',
   '.xls': 'xls',
   '.xlsx': 'xlsx',
   '.csv': 'csv',
@@ -37,6 +38,7 @@ export const KNOWLEDGE_SUPPORTED_EXTENSIONS = [
   'pdf',
   'doc',
   'docx',
+  'wps',
   'xls',
   'xlsx',
   'csv',
@@ -74,6 +76,9 @@ export function kindFromMimeType(mimeType: string | undefined): SupportedFileKin
       return 'doc'
     case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
       return 'docx'
+    case 'application/wps-office.doc':
+    case 'application/vnd.ms-works':
+      return 'wps'
     case 'application/vnd.ms-excel':
       return 'xls'
     case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
@@ -168,6 +173,8 @@ export function mimeTypeForKind(kind: SupportedFileKind, filePath?: string): str
       return 'application/msword'
     case 'docx':
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    case 'wps':
+      return 'application/wps-office.doc'
     case 'xls':
       return 'application/vnd.ms-excel'
     case 'xlsx':

@@ -111,6 +111,22 @@ export function persistAuthLogin(input: PersistAuthLoginInput): AuthSession {
   return getAuthSession()
 }
 
+export function refreshAuthSessionTokens(input: {
+  accessToken: string
+  refreshToken?: string | null
+  expiresInSeconds?: number
+}): void {
+  const sessionRepo = new AuthSessionRepository(getDatabase())
+  sessionRepo.updateCurrent({
+    accessTokenRef: encryptSecret(input.accessToken),
+    refreshTokenRef: input.refreshToken ? encryptSecret(input.refreshToken) : null,
+    idTokenRef: encryptSecret(input.accessToken),
+    hubTokenRef: null,
+    tokenExpiresAt: computeTokenExpiresAt(input.expiresInSeconds),
+  })
+  invalidateHubTokenCache()
+}
+
 export function resetIdentityToGuest(identityId: string = DEFAULT_IDENTITY_ID): void {
   const db = getDatabase()
   const now = new Date()

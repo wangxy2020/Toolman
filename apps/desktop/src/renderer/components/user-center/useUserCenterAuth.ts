@@ -42,12 +42,14 @@ export function viewTitle(view: ViewMode): string {
   }
 }
 
-export function viewSubtitle(view: ViewMode): string {
+export function viewSubtitle(view: ViewMode, region: AuthRegion = 'cn'): string {
   switch (view) {
     case 'register':
       return '使用手机号或邮箱注册，验证码验证后即可完成。'
     case 'forgot_password':
-      return '通过注册手机号或邮箱接收验证码，设置新密码。'
+      return region === 'intl'
+        ? '输入注册邮箱，我们将发送密码重置链接。'
+        : '通过注册手机号或邮箱接收验证码，设置新密码。'
     case 'profile':
       return '管理个人资料、安全绑定与账户设置。'
     default:
@@ -146,12 +148,18 @@ export function useUserCenterAuth(options: {
 
   const showCnAuth =
     view !== 'profile' &&
-    (view === 'forgot_password' ||
-      (profile ? profile.cnAuthEnabled : region === 'cn'))
+    (view === 'forgot_password'
+      ? region === 'cn' && (profile ? profile.cnAuthEnabled : true)
+      : profile
+        ? profile.cnAuthEnabled
+        : region === 'cn')
   const showIntlAuth =
     view !== 'profile' &&
-    view !== 'forgot_password' &&
-    (profile ? profile.intlAuthEnabled && !profile.cnAuthEnabled : region === 'intl')
+    (view === 'forgot_password'
+      ? region === 'intl' && (profile ? profile.intlAuthEnabled : true)
+      : profile
+        ? profile.intlAuthEnabled && !profile.cnAuthEnabled
+        : region === 'intl')
   const authBusy = busy || profileLoading || providerConfigLoading
   const cnAccountIsEmail = isCnEmailAccountInput(account)
 
@@ -200,6 +208,16 @@ export function useUserCenterAuth(options: {
     setBusy(true)
     setError(null)
     try {
+      if (region === 'intl') {
+        const result = await resetAuthPassword({
+          region: 'intl',
+          account: email.trim(),
+        })
+        resetFormFields()
+        setDevHint(result.message ?? '密码重置邮件已发送，请查收邮箱并完成重置。')
+        return
+      }
+
       await resetAuthPassword({
         region: 'cn',
         account: account.trim(),

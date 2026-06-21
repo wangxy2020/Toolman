@@ -6,10 +6,9 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
 
-use crate::api::auth::{identity_id_from_headers, load_auth_user, AuthUser};
+use crate::api::auth::{load_optional_viewer, AuthUser};
 use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
-use crate::domain::CommunityUser;
 use crate::services::board_service::{BoardMessageItem, BoardService, CreateBoardMessageRequest};
 use crate::state::AppState;
 
@@ -38,16 +37,6 @@ pub fn router() -> Router<AppState> {
 
 fn service(state: &AppState) -> BoardService {
     BoardService::new(state.db.clone())
-}
-
-async fn load_optional_viewer(
-    state: &AppState,
-    headers: &HeaderMap,
-) -> Result<Option<CommunityUser>, ApiError> {
-    let Some(identity_id) = identity_id_from_headers(headers) else {
-        return Ok(None);
-    };
-    Ok(Some(load_auth_user(state, identity_id).await?.into_user()))
 }
 
 async fn list_messages(

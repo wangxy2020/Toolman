@@ -31,8 +31,8 @@ function authPanelTitle(view: ViewMode): string {
   return viewTitle(view)
 }
 
-function authPanelSubtitle(view: ViewMode): string {
-  return viewSubtitle(view)
+function authPanelSubtitle(view: ViewMode, region?: Parameters<typeof viewSubtitle>[1]): string {
+  return viewSubtitle(view, region)
 }
 
 export function UserCenterModal({
@@ -85,7 +85,7 @@ export function UserCenterModal({
     : authPanelTitle(view)
   const rightSubtitle = showAccountPanel
     ? accountPanelSubtitle(profileSubView)
-    : authPanelSubtitle(view)
+    : authPanelSubtitle(view, auth.region)
 
   return (
     <Dialog

@@ -10,6 +10,7 @@ import {
   createCommunityResource,
   publishCommunityResource,
 } from './community-api.client'
+import { notifyCommunityUserDataChanged } from './community-events'
 import {
   CommunityPublishModalError,
   CommunityPublishModalFooterActions,
@@ -86,6 +87,7 @@ export function CommunityResourcePublishModal({
         changelog: changelog.trim() || undefined,
         packagePath,
       })
+      notifyCommunityUserDataChanged()
       onPublished?.()
       onClose()
     } catch (submitError) {

@@ -1,12 +1,18 @@
-import { copyFile, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
 import { DOCX_MCP_SERVER_ID } from '@toolman/shared'
 
 import { ensureMcpServersConnected, getMcpClientState } from './mcp-client-manager.service'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
+import {
+  buildLegacyWordConversionStatusMessage,
+  docxWorkingStem,
+  materializeDocxForMcp,
+  type OfficeToDocxMethod,
+} from './office-to-docx.service'
 
 export const DOCX_MCP_BATCH_TOOL_NAME = '__docx_mcp_batch__'
 
@@ -31,6 +37,8 @@ export interface DocxWorkingCopy {
   sourcePath: string
   workingPath: string
   fileName: string
+  /** 源文件非 .docx 时，记录转换方式 */
+  conversionMethod?: Exclude<OfficeToDocxMethod, 'copy'>
 }
 
 export async function assertDocxMcpReady(): Promise<number> {
@@ -208,20 +216,40 @@ export function findDocxMcpToolName(
 export async function prepareDocxWorkingCopies(options: {
   sourcePaths: Array<{ sourcePath: string; fileName: string }>
   workdir: string
+  onStatus?: (message: string) => void
 }): Promise<DocxWorkingCopy[]> {
   const copies: DocxWorkingCopy[] = []
 
   for (const item of options.sourcePaths) {
-    const stem = basename(item.fileName).replace(/\.docx$/i, '')
-    const safeStem = stem.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').slice(0, 80) || 'document'
+    const safeStem = docxWorkingStem(item.fileName)
     const workingName = `修订版_${safeStem}.docx`
     const workingPath = join(options.workdir, workingName)
     await mkdir(dirname(workingPath), { recursive: true })
-    await copyFile(item.sourcePath, workingPath)
+
+    const { method, capabilities } = await materializeDocxForMcp({
+      sourcePath: item.sourcePath,
+      fileName: item.fileName,
+      targetDocxPath: workingPath,
+    })
+
+    if (method === 'copy') {
+      options.onStatus?.(`已复制修订版：${workingName}`)
+    } else {
+      options.onStatus?.(
+        buildLegacyWordConversionStatusMessage({
+          fileName: item.fileName,
+          workingName,
+          method,
+          capabilities,
+        }),
+      )
+    }
+
     copies.push({
       sourcePath: item.sourcePath,
       workingPath,
       fileName: item.fileName,
+      conversionMethod: method === 'copy' ? undefined : method,
     })
   }
 

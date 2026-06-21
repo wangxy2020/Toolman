@@ -29,12 +29,27 @@ export function isDocxFileBlock(block: UserBlock): boolean {
   return mime.includes('wordprocessingml.document')
 }
 
+/** 旧版 Word (.doc) 或 WPS 文字 (.wps)，需先转为 docx 再走 MCP */
+export function isLegacyWordFileBlock(block: UserBlock): boolean {
+  if (block.type !== 'file') return false
+  const name = (block.name ?? block.path ?? '').toLowerCase()
+  if (name.endsWith('.doc') && !name.endsWith('.docx')) return true
+  if (name.endsWith('.wps')) return true
+  const mime = (block.mimeType ?? '').toLowerCase()
+  return mime === 'application/msword' || mime === 'application/wps-office.doc'
+}
+
+/** 可进入 DOCX MCP 审查流水线的 Word 附件（含 .docx / .doc / .wps） */
+export function isDocxMcpSourceFileBlock(block: UserBlock): boolean {
+  return isDocxFileBlock(block) || isLegacyWordFileBlock(block)
+}
+
 export function contentBlocksHaveAttachments(blocks: UserBlock[]): boolean {
   return blocks.some((block) => block.type === 'file' || block.type === 'image')
 }
 
 export function contentBlocksHaveDocxAttachments(blocks: UserBlock[]): boolean {
-  return blocks.some(isDocxFileBlock)
+  return blocks.some(isDocxMcpSourceFileBlock)
 }
 
 export function isDocxMcpAttachmentBlock(
@@ -42,7 +57,7 @@ export function isDocxMcpAttachmentBlock(
   mcpServerIds?: readonly string[],
 ): boolean {
   if (!mcpServerIds?.includes(DOCX_MCP_SERVER_ID)) return false
-  if (!isDocxFileBlock(block)) return false
+  if (!isDocxMcpSourceFileBlock(block)) return false
   return Boolean(block.path?.trim() || block.blobHash?.trim())
 }
 

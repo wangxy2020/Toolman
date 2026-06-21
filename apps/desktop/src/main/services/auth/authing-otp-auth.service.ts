@@ -89,7 +89,7 @@ export type AuthingOtpIntent = 'login' | 'register' | 'reset'
 
 export function resolveAuthingEmailScene(intent?: AuthingOtpIntent): EmailScene {
   if (intent === 'register') return EmailScene.REGISTER_VERIFY_CODE
-  if (intent === 'reset') return EmailScene.RESET_PASSWORD
+  if (intent === 'reset') return EmailScene.ResetPassword
   return EmailScene.LOGIN_VERIFY_CODE
 }
 

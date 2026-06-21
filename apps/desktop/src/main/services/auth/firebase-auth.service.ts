@@ -36,6 +36,8 @@ function mapFirebaseErrorMessage(message: string): string {
   if (message.includes('WEAK_PASSWORD')) return '密码强度不足，请至少 6 位'
   if (message.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) return '尝试次数过多，请稍后再试'
   if (message.includes('INVALID_ID_TOKEN')) return '登录凭证无效或已过期，请重试'
+  if (message.includes('INVALID_EMAIL')) return '邮箱格式不正确'
+  if (message.includes('MISSING_EMAIL')) return '请输入邮箱'
   return message
 }
 
@@ -136,4 +138,44 @@ export async function firebaseLookupIdToken(
 
 export async function firebaseDeleteUser(config: FirebaseAuthConfig, idToken: string): Promise<void> {
   await postIdentityToolkit(config, 'accounts:delete', { idToken })
+}
+
+export async function firebaseSendPasswordResetEmail(
+  config: FirebaseAuthConfig,
+  email: string,
+): Promise<void> {
+  await postIdentityToolkit(config, 'accounts:sendOobCode', {
+    requestType: 'PASSWORD_RESET',
+    email: email.trim(),
+  })
+}
+
+export async function firebaseChangeEmailPassword(
+  config: FirebaseAuthConfig,
+  email: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<FirebaseAuthResult> {
+  const signIn = await firebaseSignInWithEmail(config, email.trim(), oldPassword, 'login')
+  const data = await postIdentityToolkit<{
+    localId: string
+    email?: string
+    idToken: string
+    refreshToken?: string
+    expiresIn: string
+  }>(config, 'accounts:update', {
+    idToken: signIn.idToken,
+    password: newPassword,
+    returnSecureToken: true,
+  })
+
+  return {
+    localId: data.localId,
+    email: data.email ?? email.trim(),
+    displayName: signIn.displayName,
+    idToken: data.idToken,
+    refreshToken: data.refreshToken ?? signIn.refreshToken,
+    expiresIn: data.expiresIn,
+    providerIds: ['password'],
+  }
 }

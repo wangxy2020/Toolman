@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { type CommunityTaskType } from '@toolman/shared'
 
 import { createCommunityTask, publishCommunityTask } from './community-api.client'
+import { notifyCommunityUserDataChanged } from './community-events'
 import { parseTaskTags, TASK_TYPE_LABELS } from './community-task-utils'
 import {
   CommunityPublishModalError,
@@ -47,6 +48,7 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
         tags: parseTaskTags(tags),
       })
       await publishCommunityTask(created.id)
+      notifyCommunityUserDataChanged()
       onCreated?.()
       onClose()
     } catch (submitError) {

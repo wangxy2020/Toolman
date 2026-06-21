@@ -41,7 +41,7 @@ const TEXT_EXTENSIONS = new Set([
   '.htm',
 ])
 
-/** 通过 parseFile 提取正文的类型（与知识库解析器共用） */
+/** 通过 parseFile 提取正文的类型（与知识库解析器共用；doc/wps 在 DOCX MCP 路径下不经过此处） */
 const PARSE_TEXT_KINDS = new Set<SupportedFileKind>([
   'doc',
   'docx',
@@ -54,6 +54,8 @@ const PARSE_TEXT_KINDS = new Set<SupportedFileKind>([
   'text',
   'csv',
 ])
+
+const DOCX_MCP_SOURCE_KINDS = new Set<SupportedFileKind>(['docx', 'doc', 'wps'])
 
 function isLikelyTextFile(name: string): boolean {
   const lower = name.toLowerCase()
@@ -247,7 +249,7 @@ async function prepareFileBlock(
     throw new Error(`「${fileName}」暂不支持在聊天中直接处理该文件类型`)
   }
 
-  if (kind === 'docx' && options.docxMcpEnabled) {
+  if (DOCX_MCP_SOURCE_KINDS.has(kind) && options.docxMcpEnabled) {
     options.onStatus?.(`「${fileName}」将通过 DOCX MCP 工具处理…`)
     return { ...block, content: '', delivery: 'docx_tool' }
   }

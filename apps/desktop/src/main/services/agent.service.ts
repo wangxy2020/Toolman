@@ -5,7 +5,7 @@ import {
   buildStoredUserContent,
   userBlocksHaveUnresolvedAttachments,
   DOCX_MCP_SERVER_ID,
-  isDocxFileBlock,
+  isDocxMcpSourceFileBlock,
   shouldEnableToolsWithAttachments,
   ContentBlockSchema,
   MessageAbortInputSchema,
@@ -315,7 +315,7 @@ async function buildRuntimeSystemHints(options: {
   const docxBlocks =
     options.userContentBlocks?.filter(
       (block): block is Extract<ContentBlock, { type: 'file' }> =>
-        block.type === 'file' && isDocxFileBlock(block),
+        block.type === 'file' && isDocxMcpSourceFileBlock(block),
     ) ?? []
   const docxMcpEnabled =
     options.enableTools &&
@@ -335,7 +335,7 @@ async function buildRuntimeSystemHints(options: {
       [
         '## Word 文档（DOCX MCP · 结构化审查流水线）',
         '用户上传了 Word 文档并要求审查、修订并生成新文件。应用将按以下阶段自动执行：',
-        '1. **复制修订版**：将源文件复制到工作目录（不覆盖原文件）',
+        '1. **准备修订版**：`.docx` 复制为工作目录副本；`.doc`/`.wps` 通过 LibreOffice 或 Microsoft Word 转换为 docx（不使用 textutil，以免破坏目录域）；纯文本兜底会丢失目录与格式',
         '2. **读取**：应用调用 read_document 读取修订版全文',
         '3. **审查**：内置审查 prompt 生成结构化 issue JSON 列表（含 anchor_text、comment、replace）',
         '4. **应用**：应用根据 issue 列表批量调用 replace_texts / edit_paragraphs / add_comments 写入修订版',
@@ -357,7 +357,7 @@ async function buildRuntimeSystemHints(options: {
       (block) =>
         block.type === 'file' &&
         block.content?.trim() &&
-        !(docxMcpEnabled && isDocxFileBlock(block)),
+        !(docxMcpEnabled && isDocxMcpSourceFileBlock(block)),
     )
   ) {
     hints.push(
@@ -1094,7 +1094,7 @@ async function runGeneration(opts: {
 
     const docxBlocks = generationBlocks.filter(
       (block): block is Extract<ContentBlock, { type: 'file' }> =>
-        block.type === 'file' && isDocxFileBlock(block),
+        block.type === 'file' && isDocxMcpSourceFileBlock(block),
     )
     const docxTaskActive =
       enableTools &&
@@ -1112,8 +1112,9 @@ async function runGeneration(opts: {
           sourcePath: resolveAttachmentReadPath(block),
           fileName: block.name,
         })),
+        onStatus: (message) => appendStatus(`${message}\n`),
       })
-      appendStatus('已复制修订版文档到工作目录…\n')
+      appendStatus('修订版文档已就绪…\n')
     }
 
     const { hints: runtimeHints, kbResults } = await withAbortSignal(

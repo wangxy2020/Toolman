@@ -1,9 +1,10 @@
 use axum::extract::{Path, Query, State};
+use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 
-use crate::api::auth::{require_permission, AuthUser};
+use crate::api::auth::{load_optional_viewer, require_permission, AuthUser};
 use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
 use crate::domain::{ResourceStatus, ResourceType, ResourceVisibility, UserPermission};
@@ -86,8 +87,10 @@ fn social_service(state: &AppState) -> ResourceSocialService {
 
 async fn list_resources(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(params): Query<ResourceListParams>,
 ) -> Result<Json<ApiResponse<Vec<MarketplaceResourceItem>>>, ApiError> {
+    let viewer = load_optional_viewer(&state, &headers).await?;
     let resource_type = params
         .resource_type
         .as_deref()
@@ -111,17 +114,20 @@ async fn list_resources(
     let sort = parse_sort(params.sort.as_deref(), has_query)?;
 
     let items = service(&state)
-        .list_resources(&MarketplaceListQuery {
-            resource_type,
-            category: params.category,
-            tags,
-            q: params.q,
-            sort,
-            visibility,
-            status,
-            limit: params.limit.unwrap_or(20).clamp(1, 100),
-            offset: params.offset.unwrap_or(0).max(0),
-        })
+        .list_resources(
+            &MarketplaceListQuery {
+                resource_type,
+                category: params.category,
+                tags,
+                q: params.q,
+                sort,
+                visibility,
+                status,
+                limit: params.limit.unwrap_or(20).clamp(1, 100),
+                offset: params.offset.unwrap_or(0).max(0),
+            },
+            viewer.as_ref(),
+        )
         .await?;
 
     Ok(Json(ApiResponse::ok(items)))
@@ -129,9 +135,11 @@ async fn list_resources(
 
 async fn get_resource(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<MarketplaceResourceDetail>>, ApiError> {
-    let detail = service(&state).get_resource(&id).await?;
+    let viewer = load_optional_viewer(&state, &headers).await?;
+    let detail = service(&state).get_resource(&id, viewer.as_ref()).await?;
     Ok(Json(ApiResponse::ok(detail)))
 }
 

@@ -1,9 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 
+import { type CommunityResourceType } from '@toolman/shared'
+
 import { CommunityPanelHeader, CommunityPanelRefreshButton } from './CommunityPanelHeader'
 import { TASK_STATUS_LABELS, TASK_TYPE_LABELS } from './community-task-utils'
 import { INSTALL_STATUS_LABELS, USER_ROLE_LABELS } from './community-user-utils'
 import {
+  groupUserCenterResources,
   useCommunityUserCenter,
   type UserCenterSection,
 } from './useCommunityUserCenter'
@@ -12,10 +15,18 @@ const SECTIONS: Array<{ key: UserCenterSection; label: string }> = [
   { key: 'publishes', label: '发布' },
   { key: 'messages', label: '我的留言' },
   { key: 'installs', label: '安装' },
-  { key: 'likes', label: '喜欢' },
+  { key: 'likes', label: '点赞' },
   { key: 'favorites', label: '收藏' },
   { key: 'tasks', label: '任务' },
 ]
+
+const USER_CENTER_RESOURCE_LABELS: Record<CommunityResourceType, string> = {
+  knowledge: '知识库',
+  mcp: 'MCP',
+  skill: 'Skills',
+  workflow: '工作流',
+  task: '任务',
+}
 
 type FeedStat = {
   kind: 'like' | 'favorite' | 'reply'
@@ -229,8 +240,9 @@ export function UserCenterPanel() {
 
     if (section === 'likes') {
       if (center.likeCount === 0) {
-        return <div className="tm-user-center-empty">暂无喜欢内容</div>
+        return <div className="tm-user-center-empty">暂无点赞内容</div>
       }
+      const likedResourceGroups = groupUserCenterResources(center.likes.resources)
       return (
         <div className="tm-user-center-feed-groups">
           {center.likes.news.length > 0 ? (
@@ -263,6 +275,23 @@ export function UserCenterPanel() {
               ))}
             </UserCenterFeedGroup>
           ) : null}
+          {Object.entries(likedResourceGroups).map(([resourceType, items]) => (
+            <UserCenterFeedGroup
+              key={`likes-${resourceType}`}
+              label={USER_CENTER_RESOURCE_LABELS[resourceType as CommunityResourceType]}
+            >
+              {items.map((item) => (
+                <UserCenterFeedCard
+                  key={`resource-${item.id}`}
+                  tag={USER_CENTER_RESOURCE_LABELS[item.resourceType]}
+                  date={formatUserCenterDateTime(item.updatedAt)}
+                  title={item.title}
+                  description={item.description}
+                  stats={[{ kind: 'like', label: `${item.likeCount} 赞` }]}
+                />
+              ))}
+            </UserCenterFeedGroup>
+          ))}
         </div>
       )
     }
@@ -271,6 +300,7 @@ export function UserCenterPanel() {
       if (center.favoriteCount === 0) {
         return <div className="tm-user-center-empty">暂无收藏内容</div>
       }
+      const favoriteResourceGroups = groupUserCenterResources(center.favorites.resources)
       return (
         <div className="tm-user-center-feed-groups">
           {center.favorites.news.length > 0 ? (
@@ -300,6 +330,23 @@ export function UserCenterPanel() {
               ))}
             </UserCenterFeedGroup>
           ) : null}
+          {Object.entries(favoriteResourceGroups).map(([resourceType, items]) => (
+            <UserCenterFeedGroup
+              key={`favorites-${resourceType}`}
+              label={USER_CENTER_RESOURCE_LABELS[resourceType as CommunityResourceType]}
+            >
+              {items.map((item) => (
+                <UserCenterFeedCard
+                  key={`resource-${item.id}`}
+                  tag={USER_CENTER_RESOURCE_LABELS[item.resourceType]}
+                  date={formatUserCenterDateTime(item.updatedAt)}
+                  title={item.title}
+                  description={item.description}
+                  stats={[{ kind: 'favorite', label: `${item.favoriteCount} 收藏` }]}
+                />
+              ))}
+            </UserCenterFeedGroup>
+          ))}
         </div>
       )
     }

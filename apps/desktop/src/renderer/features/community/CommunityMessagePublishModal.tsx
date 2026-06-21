@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { createCommunityBoardMessage } from './community-api.client'
+import { notifyCommunityUserDataChanged } from './community-events'
 import {
   CommunityPublishModalError,
   CommunityPublishModalFooterActions,
@@ -37,6 +38,7 @@ export function CommunityMessagePublishModal({ onClose, onCreated }: Props) {
     setError(null)
     try {
       await createCommunityBoardMessage({ body: messageBody })
+      notifyCommunityUserDataChanged()
       onCreated?.()
       onClose()
     } catch (submitError) {

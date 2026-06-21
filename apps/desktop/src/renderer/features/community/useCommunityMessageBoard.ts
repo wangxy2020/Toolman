@@ -9,7 +9,8 @@ import {
   likeCommunityBoardMessage,
   listCommunityBoardMessages,
 } from './community-api.client'
-import { notifyCommunityBoardChanged } from './community-events'
+import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
+import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
   COMMUNITY_UI_MOCK_IDS,
@@ -167,10 +168,12 @@ export function useCommunityMessageBoard() {
           setItems((current) =>
             current.map((item) => (item.id === messageId ? applyMockMessage(item) : item)),
           )
+          notifyCommunityUserDataChanged()
           return
         }
         const updated = await likeCommunityBoardMessage(messageId)
         replaceMessage(updated)
+        notifyCommunityUserDataChanged()
       } catch (interactionError) {
         const message = interactionError instanceof Error ? interactionError.message : '点赞失败'
         setError(message)
@@ -193,10 +196,12 @@ export function useCommunityMessageBoard() {
           setItems((current) =>
             current.map((item) => (item.id === messageId ? applyMockMessage(item) : item)),
           )
+          notifyCommunityUserDataChanged()
           return
         }
         const updated = await dislikeCommunityBoardMessage(messageId)
         replaceMessage(updated)
+        notifyCommunityUserDataChanged()
       } catch (interactionError) {
         const message = interactionError instanceof Error ? interactionError.message : '点踩失败'
         setError(message)
@@ -219,10 +224,12 @@ export function useCommunityMessageBoard() {
           setItems((current) =>
             current.map((item) => (item.id === messageId ? applyMockMessage(item) : item)),
           )
+          notifyCommunityUserDataChanged()
           return
         }
         const updated = await favoriteCommunityBoardMessage(messageId)
         replaceMessage(updated)
+        notifyCommunityUserDataChanged()
       } catch (interactionError) {
         const message = interactionError instanceof Error ? interactionError.message : '收藏失败'
         setError(message)
@@ -236,6 +243,14 @@ export function useCommunityMessageBoard() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  useEffect(() => {
+    const reload = () => {
+      void load()
+    }
+    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
+    return () => window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
   }, [load])
 
   return {

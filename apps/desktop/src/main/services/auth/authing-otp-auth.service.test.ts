@@ -12,7 +12,7 @@ describe('resolveAuthingEmailScene', () => {
   })
 
   it('uses reset scene for password reset', () => {
-    expect(resolveAuthingEmailScene('reset')).toBe(EmailScene.RESET_PASSWORD)
+    expect(resolveAuthingEmailScene('reset')).toBe(EmailScene.ResetPassword)
   })
 
   it('uses login scene for login', () => {

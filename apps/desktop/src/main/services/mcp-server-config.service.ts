@@ -146,7 +146,7 @@ function defaultDocxMcpServerPreset(): McpServerConfig {
     id: 'docx-mcp-server',
     name: 'DOCX MCP Server',
     description:
-      'Word (.docx) 读写、批注、高亮、修订与排版；本地 stdio（npx docx-mcp-server，需 Node.js 20+）',
+      'Word (.docx/.doc/.wps) 读写、批注、高亮、修订与排版；本地 stdio（npx docx-mcp-server，需 Node.js 20+）',
     type: 'stdio',
     enabled: isDefaultEnabledMcpServer('docx-mcp-server'),
     command: 'npx',

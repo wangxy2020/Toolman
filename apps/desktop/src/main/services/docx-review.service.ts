@@ -5,6 +5,7 @@ import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
 import { createModelGateway, type ProviderConfig } from '@toolman/model-gateway'
 import type { ContentBlock } from '@toolman/shared'
 
+import type { OfficeToDocxMethod } from './office-to-docx.service'
 import {
   findDocxMcpToolName,
   requestsDocxParagraphRewrite,
@@ -65,11 +66,16 @@ export interface DocxReviewApplyResult {
   paragraphEditsRequested: number
   paragraphEditsApplied: number
   paragraphEditsFailed: number
+  conversionMethod?: Exclude<OfficeToDocxMethod, 'copy'>
   errors: string[]
 }
 
 const gateway = createModelGateway()
 const ADD_COMMENTS_BATCH_SIZE = 20
+/** 单条批注最多尝试的锚点候选数，避免模型锚点偏差时刷屏式重试 */
+const MAX_COMMENT_ANCHOR_ATTEMPTS = 10
+/** search_text 反查锚点时使用的 seed 上限（按长度优先） */
+const MAX_COMMENT_SEARCH_SEEDS = 24
 
 const VALID_ACTIONS = new Set<DocxReviewIssueAction>(['comment', 'replace', 'edit_paragraph'])
 const VALID_SEVERITIES = new Set<DocxReviewIssueSeverity>(['high', 'medium', 'low'])
@@ -113,9 +119,13 @@ export function buildDocxAuditSystemPrompt(options?: { userRequest?: string }): 
     '- 覆盖用户指令中的所有审查维度（错误、措辞、结构、术语等）',
     '- 列出所有应处理的问题，不要只给一条',
     '- replacement 应尽量短、贴近原文，避免无必要扩写',
-    '- anchor_text 必须来自文档真实文本；edit_paragraph 时 anchor_text 填该段原文摘要（便于定位）',
+    '- **定位规则（重要）**：每项 issue 必须填写 paragraph_index（read_document 的 block 索引），系统据此锁定段落',
+    '- anchor_text 必须是该 paragraph_index 对应段落内的**原样连续子串**（建议 8～48 字、含足够区分度的关键词），禁止省略号「…」「...」、禁止概括（文档是「发包人」不要写「甲方」）',
+    '- 不要用整段超长文字作 anchor_text；不要用「甲乙双方经友好协商，就…」这类截断概括',
+    '- comment 批注应挂在**与批注主题同一 paragraph_index 的段落**上（如工期问题用工期条款的 index，不要用承包范围段落的 index）',
+    '- edit_paragraph 时 anchor_text 可填该段简短摘要；replace/comment 仍须用可精确匹配的子串',
     '- paragraph_index 必须来自 read_document 输出中的段落索引',
-    '- 对 replace / edit_paragraph，若需说明修改理由，填写 comment（应用会自动写入 Word 批注）',
+    '- 对 replace / edit_paragraph，若需说明修改理由，填写 comment（会在替换前写入 Word 批注，锚点为 anchor_text 原文）',
   ].join('\n')
 }
 
@@ -203,6 +213,17 @@ export function formatDocxReviewReport(result: DocxReviewApplyResult): string {
 export function buildDocxReviewSummaryBlock(
   result: DocxReviewApplyResult,
 ): Extract<ContentBlock, { type: 'docx_review_summary' }> {
+  const conversionWarnings =
+    result.conversionMethod === 'plaintext'
+      ? [
+          '源文件以纯文本方式转换，目录、大纲级别与原有格式已丢失。本机未安装 Word 时可安装 LibreOffice 保留格式，或在 Word/WPS 中另存为 .docx 后重新上传。',
+        ]
+      : undefined
+  const parseWarnings = [
+    ...(result.parseWarnings ?? []),
+    ...(conversionWarnings ?? []),
+  ]
+
   return {
     type: 'docx_review_summary',
     fileName: result.fileName,
@@ -217,8 +238,9 @@ export function buildDocxReviewSummaryBlock(
     paragraphEditsRequested: result.paragraphEditsRequested,
     paragraphEditsApplied: result.paragraphEditsApplied,
     paragraphEditsFailed: result.paragraphEditsFailed,
+    conversionMethod: result.conversionMethod,
     errors: result.errors.length > 0 ? result.errors : undefined,
-    parseWarnings: result.parseWarnings.length > 0 ? result.parseWarnings : undefined,
+    parseWarnings: parseWarnings.length > 0 ? parseWarnings : undefined,
   }
 }
 
@@ -336,6 +358,16 @@ export function parseDocxCommentsBatchResult(result: string, requested: number):
     return { applied: 0, failed: requested }
   }
 
+  const summaryMatch = result.match(/(\d+)\s+added,\s*(\d+)\s+failed/i)
+  if (summaryMatch) {
+    const applied = Number.parseInt(summaryMatch[1] ?? '0', 10)
+    const failed = Number.parseInt(summaryMatch[2] ?? '0', 10)
+    return {
+      applied: Math.max(0, Math.min(requested, applied)),
+      failed: Math.max(0, Math.min(requested, failed)),
+    }
+  }
+
   try {
     const parsed = JSON.parse(result) as Record<string, unknown>
     const succeeded = Number(
@@ -379,7 +411,11 @@ export function parseDocxCommentsBatchResult(result: string, requested: number):
 
 export function parseDocxSingleReplaceResult(result: string): boolean {
   if (isDocxToolHardFailure(result)) return false
-  if (/0\s*replacement|未找到|not found|no match/i.test(result)) return false
+  if (
+    /0\s*replacement|未找到|not found|no match|no occurrences|0\s*occurrences/i.test(result)
+  ) {
+    return false
+  }
   return true
 }
 
@@ -472,16 +508,759 @@ export function parseDocxEditParagraphsBatchResult(
   return { applied: requested, failed: 0 }
 }
 
-function buildCommentAnchorForEditedIssue(issue: DocxReviewIssue): string {
-  if (issue.action === 'replace') {
-    return issue.replacement?.trim() || issue.anchorText
-  }
-  const replacement = issue.replacement?.trim() ?? ''
-  const firstLine = replacement.split('\n').map((line) => line.trim()).find(Boolean)
-  return firstLine || issue.anchorText
+function normalizeAnchorText(text: string): string {
+  return text.trim().replace(/\s+/g, ' ')
 }
 
-function collectExplanationCommentIssues(issues: DocxReviewIssue[]): DocxReviewIssue[] {
+function dedupeAnchorTexts(values: Iterable<string>): string[] {
+  const seen = new Set<string>()
+  const ordered: string[] = []
+  for (const value of values) {
+    const normalized = normalizeAnchorText(value)
+    if (normalized.length < 2 || seen.has(normalized)) continue
+    seen.add(normalized)
+    ordered.push(normalized)
+  }
+  return ordered
+}
+
+export function isCommentAnchorNotFoundFailure(result: string): boolean {
+  return /ANCHOR_NOT_FOUND|未找到|not found|Anchor text not found/i.test(result)
+}
+
+export function buildCommentAnchorCandidates(anchorText: string): string[] {
+  const seeds = new Set<string>()
+  const normalized = normalizeAnchorText(anchorText)
+  if (normalized) seeds.add(normalized)
+
+  for (const part of anchorText.split(/\n+/)) {
+    const line = normalizeAnchorText(part)
+    if (line.length >= 2) seeds.add(line)
+  }
+
+  const candidates: string[] = []
+  for (const seed of seeds) {
+    candidates.push(seed)
+    if (seed.length > 60) candidates.push(seed.slice(0, 60))
+    if (seed.length > 40) candidates.push(seed.slice(0, 40))
+    if (seed.length > 24) candidates.push(seed.slice(0, 24))
+    if (seed.length > 12) candidates.push(seed.slice(0, 12))
+    if (seed.length > 8) candidates.push(seed.slice(0, 8))
+    if (seed.length > 6) candidates.push(seed.slice(0, 6))
+    if (seed.length > 4) candidates.push(seed.slice(0, 4))
+  }
+
+  return [...new Set(candidates.filter((candidate) => candidate.length >= 2))]
+}
+
+/** 当模型 anchor 在文档中不存在时，用子串 / 分词 seed 通过 search_text 反查真实锚点 */
+export function buildCommentSearchSeeds(anchorText: string): string[] {
+  const seeds = new Set<string>()
+
+  for (const candidate of buildCommentAnchorCandidates(anchorText)) {
+    seeds.add(candidate)
+  }
+
+  const normalized = normalizeAnchorText(anchorText)
+  for (const part of normalized.split(/[，。；：、！？（）()\[\]《》""''\s]+/)) {
+    const clause = part.trim()
+    if (clause.length < 2) continue
+    seeds.add(clause)
+    for (const len of [16, 12, 8, 6, 4, 3, 2]) {
+      if (clause.length >= len) seeds.add(clause.slice(0, len))
+    }
+  }
+
+  const han = normalized.replace(/[^\u4e00-\u9fff]/g, '')
+  for (const len of [6, 5, 4, 3, 2]) {
+    for (let i = 0; i <= han.length - len; i++) {
+      seeds.add(han.slice(i, i + len))
+    }
+  }
+
+  return [...seeds].sort((a, b) => b.length - a.length || a.localeCompare(b, 'zh-CN'))
+}
+
+export function parseFailedBatchCommentAnchors(result: string): string[] {
+  const failed: string[] = []
+  for (const match of result.matchAll(/\[FAIL\]\s+"([^"]+)"/g)) {
+    if (match[1]) failed.push(match[1])
+  }
+  return failed
+}
+
+function extractSearchTextPayload(result: string): {
+  matches?: Array<{ blockIndex?: number; fullText?: string; context?: string }>
+} | null {
+  const jsonMatch = result.match(/<json>\s*([\s\S]*?)\s*<\/json>/i)
+  if (!jsonMatch?.[1]) return null
+  try {
+    return JSON.parse(jsonMatch[1]) as {
+      matches?: Array<{ blockIndex?: number; fullText?: string; context?: string }>
+    }
+  } catch {
+    return null
+  }
+}
+
+function stripContextEllipsis(context: string): string {
+  return normalizeAnchorText(context.replace(/^\.\.\./, '').replace(/\.\.\.$/, ''))
+}
+
+export function parseReadDocumentBlockLine(line: string): { blockIndex: number; text: string } | null {
+  const trimmed = line.trim()
+  const match = trimmed.match(/^\[(\d+)\]\s*(?:\([^)]*\)\s*)*(?:\[[^\]]*\]\s*)*(.*)$/)
+  if (!match?.[1]) return null
+  const text = normalizeAnchorText(match[2] ?? '')
+  if (!text) return null
+  return { blockIndex: Number.parseInt(match[1], 10), text }
+}
+
+function collectAnchorsFromBlockText(fullText: string, query: string): string[] {
+  const anchors = new Set<string>()
+  const segments = new Set<string>([fullText])
+
+  for (const line of fullText.split(/\n+/)) {
+    segments.add(line)
+    for (const cell of line.split(/\|/)) {
+      segments.add(cell)
+    }
+  }
+
+  for (const segment of segments) {
+    const normalizedSegment = normalizeAnchorText(segment)
+    if (normalizedSegment.length < 2) continue
+
+    for (const lineAnchor of pickLineAnchorsFromBlockText(normalizedSegment, query)) {
+      anchors.add(lineAnchor)
+    }
+
+    for (const snippet of buildAnchorSnippetsFromBlock(normalizedSegment, query)) {
+      anchors.add(snippet)
+    }
+
+    const picked =
+      pickAnchorFromDocumentText(normalizedSegment, query) ??
+      pickAnchorFromDocumentText(normalizedSegment, normalizeAnchorText(query))
+    if (picked) anchors.add(picked)
+
+    if (normalizedSegment.length <= 48) {
+      anchors.add(normalizedSegment)
+    }
+  }
+
+  return [...anchors].filter((anchor) => anchor.length >= 2)
+}
+
+function orderCommentAnchorCandidates(
+  candidates: Iterable<string>,
+  preferredFirst: readonly string[] = [],
+): string[] {
+  const seen = new Set<string>()
+  const ordered: string[] = []
+
+  for (const preferred of preferredFirst) {
+    const normalized = normalizeAnchorText(preferred)
+    if (normalized.length >= 2 && !seen.has(normalized)) {
+      seen.add(normalized)
+      ordered.push(normalized)
+    }
+  }
+
+  const rest = [...new Set([...candidates].map((item) => normalizeAnchorText(item)).filter(Boolean))]
+    .filter((candidate) => candidate.length >= 2 && !seen.has(candidate))
+    .sort((a, b) => a.length - b.length || a.localeCompare(b, 'zh-CN'))
+
+  for (const candidate of rest) {
+    seen.add(candidate)
+    ordered.push(candidate)
+  }
+
+  return ordered
+}
+
+function orderVerifiedCommentAnchors(
+  candidates: Iterable<string>,
+  preferredFirst: readonly string[] = [],
+): string[] {
+  const seen = new Set<string>()
+  const ordered: string[] = []
+
+  for (const preferred of preferredFirst) {
+    const normalized = normalizeAnchorText(preferred)
+    if (normalized.length >= 2 && !seen.has(normalized)) {
+      seen.add(normalized)
+      ordered.push(normalized)
+    }
+  }
+
+  const rest = [...new Set([...candidates].map((item) => normalizeAnchorText(item)).filter(Boolean))]
+    .filter((candidate) => candidate.length >= 2 && !seen.has(candidate))
+    .sort((a, b) => b.length - a.length || a.localeCompare(b, 'zh-CN'))
+
+  for (const candidate of rest) {
+    seen.add(candidate)
+    ordered.push(candidate)
+  }
+
+  return ordered
+}
+
+async function readDocumentBlockText(options: {
+  workingPath: string
+  blockIndex: number
+  tools: ToolDefinition[]
+  toolContext: ToolExecutionContext
+}): Promise<string | null> {
+  const readTool = findDocxMcpToolName(options.tools, 'read_document')
+  if (!readTool) return null
+
+  try {
+    const result = await executeToolCall(
+      readTool,
+      JSON.stringify({
+        file_path: options.workingPath,
+        start_paragraph: options.blockIndex,
+        end_paragraph: options.blockIndex + 1,
+      }),
+      options.toolContext,
+    )
+
+    for (const line of result.split('\n')) {
+      const parsed = parseReadDocumentBlockLine(line)
+      if (parsed?.blockIndex === options.blockIndex) {
+        return parsed.text
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+async function collectVerifiedCommentAnchors(options: {
+  workingPath: string
+  searchQueries: readonly string[]
+  paragraphIndex?: number
+  tools: ToolDefinition[]
+  toolContext: ToolExecutionContext
+}): Promise<Set<string>> {
+  const verified = new Set<string>()
+  const searchTool = findDocxMcpToolName(options.tools, 'search_text')
+  if (!searchTool) return verified
+
+  if (options.paragraphIndex != null && options.paragraphIndex >= 0) {
+    const blockText = await readDocumentBlockText({
+      workingPath: options.workingPath,
+      blockIndex: options.paragraphIndex,
+      tools: options.tools,
+      toolContext: options.toolContext,
+    })
+    if (blockText) {
+      for (const query of options.searchQueries) {
+        for (const anchor of collectAnchorsFromBlockText(blockText, query)) {
+          verified.add(anchor)
+        }
+      }
+    }
+  }
+
+  for (const query of options.searchQueries) {
+    if (query.length < 2) continue
+
+    try {
+      const result = await executeToolCall(
+        searchTool,
+        JSON.stringify({
+          file_path: options.workingPath,
+          query,
+          case_sensitive: false,
+        }),
+        options.toolContext,
+      )
+      if (/no matches found/i.test(result)) continue
+
+      const payload = extractSearchTextPayload(result)
+      const matches = payload?.matches ?? []
+
+      for (const match of matches.slice(0, 3)) {
+        if (match.context) {
+          const context = stripContextEllipsis(match.context)
+          for (const anchor of collectAnchorsFromBlockText(context, query)) {
+            verified.add(anchor)
+          }
+        }
+
+        if (match.fullText) {
+          for (const anchor of collectAnchorsFromBlockText(match.fullText, query)) {
+            verified.add(anchor)
+          }
+        }
+
+        if (match.blockIndex != null) {
+          const blockText = await readDocumentBlockText({
+            workingPath: options.workingPath,
+            blockIndex: match.blockIndex,
+            tools: options.tools,
+            toolContext: options.toolContext,
+          })
+          if (blockText) {
+            for (const anchor of collectAnchorsFromBlockText(blockText, query)) {
+              verified.add(anchor)
+            }
+          }
+        }
+      }
+    } catch {
+      // try next query seed
+    }
+  }
+
+  return verified
+}
+
+/** 决定 add_comment 的锚点尝试顺序：已通过 search_text 验证的候选优先，未验证截断放最后 */
+export function buildCommentAnchorAttemptOrder(options: {
+  anchorText: string
+  strictCandidates: readonly string[]
+  verifiedAnchors: Iterable<string>
+}): string[] {
+  const verified = new Set<string>()
+  for (const anchor of options.verifiedAnchors) {
+    const normalized = normalizeAnchorText(anchor)
+    if (normalized.length >= 2) verified.add(normalized)
+  }
+
+  const strict = dedupeAnchorTexts(options.strictCandidates)
+  const normalizedOriginal = normalizeAnchorText(options.anchorText)
+
+  if (verified.size === 0) {
+    return dedupeAnchorTexts([normalizedOriginal, ...strict]).slice(0, MAX_COMMENT_ANCHOR_ATTEMPTS)
+  }
+
+  const strictVerified = strict.filter((anchor) => verified.has(anchor))
+  const strictUnverified = strict.filter((anchor) => !verified.has(anchor))
+
+  const preferred: string[] = [...strictVerified]
+  if (normalizedOriginal.length >= 2 && verified.has(normalizedOriginal)) {
+    if (!preferred.includes(normalizedOriginal)) preferred.push(normalizedOriginal)
+  }
+
+  const verifiedOrdered = orderVerifiedCommentAnchors(verified, preferred)
+  const fallbacks = orderCommentAnchorCandidates(
+    strictUnverified,
+    normalizedOriginal.length >= 2 && !verified.has(normalizedOriginal) ? [normalizedOriginal] : [],
+  ).slice(0, 6)
+
+  return dedupeAnchorTexts([...verifiedOrdered, ...fallbacks]).slice(0, MAX_COMMENT_ANCHOR_ATTEMPTS)
+}
+
+export async function resolveCommentAnchorCandidates(options: {
+  workingPath: string
+  anchorText: string
+  paragraphIndex?: number
+  tools: ToolDefinition[]
+  toolContext: ToolExecutionContext
+}): Promise<string[]> {
+  const strict = buildCommentAnchorCandidates(options.anchorText)
+  const searchSeeds = buildCommentSearchSeeds(options.anchorText).slice(0, MAX_COMMENT_SEARCH_SEEDS)
+
+  const verified = await collectVerifiedCommentAnchors({
+    workingPath: options.workingPath,
+    searchQueries: searchSeeds,
+    paragraphIndex: options.paragraphIndex,
+    tools: options.tools,
+    toolContext: options.toolContext,
+  })
+
+  return buildCommentAnchorAttemptOrder({
+    anchorText: options.anchorText,
+    strictCandidates: strict,
+    verifiedAnchors: verified,
+  })
+}
+
+export async function resolveCommentAnchorText(options: {
+  workingPath: string
+  anchorText: string
+  paragraphIndex?: number
+  tools: ToolDefinition[]
+  toolContext: ToolExecutionContext
+}): Promise<string> {
+  const candidates = await resolveCommentAnchorCandidates(options)
+  return candidates[0] ?? options.anchorText
+}
+
+function pickAnchorFromDocumentText(fullText: string, query: string): string | null {
+  const normalizedFull = normalizeAnchorText(fullText)
+  const normalizedQuery = normalizeAnchorText(query)
+  if (!normalizedQuery) return null
+
+  const directIdx = normalizedFull.indexOf(normalizedQuery)
+  if (directIdx >= 0) {
+    return normalizedFull.slice(directIdx, directIdx + normalizedQuery.length)
+  }
+
+  const lowerFull = normalizedFull.toLowerCase()
+  const lowerQuery = normalizedQuery.toLowerCase()
+  const idx = lowerFull.indexOf(lowerQuery)
+  if (idx < 0) return null
+
+  return normalizedFull.slice(idx, idx + normalizedQuery.length)
+}
+
+function buildAnchorSnippetsFromBlock(fullText: string, query: string): string[] {
+  const normalizedFull = normalizeAnchorText(fullText)
+  const normalizedQuery = normalizeAnchorText(query)
+  if (!normalizedQuery) return []
+
+  const lowerFull = normalizedFull.toLowerCase()
+  const idx = lowerFull.indexOf(normalizedQuery.toLowerCase())
+  if (idx < 0) return []
+
+  const snippets = new Set<string>()
+  for (const len of [normalizedQuery.length, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2]) {
+    if (len < 2 || len > normalizedFull.length) continue
+    const end = Math.min(normalizedFull.length, idx + len)
+    snippets.add(normalizedFull.slice(idx, end))
+  }
+
+  return [...snippets].filter((snippet) => snippet.length >= 2)
+}
+
+function pickLineAnchorsFromBlockText(fullText: string, query: string): string[] {
+  const normalizedQuery = normalizeAnchorText(query)
+  if (!normalizedQuery) return []
+
+  const lines = fullText
+    .split(/\n+/)
+    .map((line) => normalizeAnchorText(line))
+    .filter((line) => line.length >= 2)
+
+  const lowerQuery = normalizedQuery.toLowerCase()
+  const matchingLines = lines.filter((line) => line.toLowerCase().includes(lowerQuery))
+  const seeds = matchingLines.length > 0 ? matchingLines : lines
+
+  const anchors = new Set<string>()
+  for (const line of seeds) {
+    anchors.add(line)
+    for (const snippet of buildAnchorSnippetsFromBlock(line, normalizedQuery)) {
+      anchors.add(snippet)
+    }
+  }
+
+  return [...anchors]
+}
+
+function summarizeCommentAnchorRetries(retryNotes: readonly string[]): string {
+  if (retryNotes.length === 0) return ''
+  const preview = retryNotes.slice(0, 3).join('；')
+  const suffix = retryNotes.length > 3 ? ` 等 ${retryNotes.length} 个` : ''
+  return `前 ${retryNotes.length} 个锚点未命中（${preview}${suffix}），已自动换锚重试。`
+}
+
+function summarizeReplaceSearchRetries(retryNotes: readonly string[]): string {
+  if (retryNotes.length === 0) return ''
+  const preview = retryNotes.slice(0, 3).join('；')
+  const suffix = retryNotes.length > 3 ? ` 等 ${retryNotes.length} 个` : ''
+  return `前 ${retryNotes.length} 个 search 未命中（${preview}${suffix}），已自动换定位重试。`
+}
+
+function buildReplaceToolArgs(options: {
+  workingPath: string
+  search: string
+  replace: string
+  toolName: string
+}): string {
+  if (options.toolName.includes('replace_texts')) {
+    return JSON.stringify({
+      file_path: options.workingPath,
+      items: [{ search: options.search, replace: options.replace }],
+      track_changes: true,
+      author: 'Toolman',
+    })
+  }
+
+  return JSON.stringify({
+    file_path: options.workingPath,
+    search: options.search,
+    replace: options.replace,
+    track_changes: true,
+    author: 'Toolman',
+  })
+}
+
+function replaceToolCallSucceeded(result: string, toolName: string): boolean {
+  if (toolName.includes('replace_texts')) {
+    return parseDocxReplaceTextsBatchResult(result, 1).applied > 0
+  }
+  return parseDocxSingleReplaceResult(result)
+}
+
+async function applySingleReplaceWithCandidates(options: {
+  issue: DocxReviewIssue
+  workingPath: string
+  tools: ToolDefinition[]
+  toolContext: ToolExecutionContext
+  toolName: string
+  emitToolUpdate: (update: {
+    toolCallId: string
+    name: string
+    arguments?: string
+    result?: string
+    status: 'running' | 'done' | 'failed'
+  }) => void
+  idPrefix: string
+}): Promise<boolean> {
+  const searchCandidates = await resolveCommentAnchorCandidates({
+    workingPath: options.workingPath,
+    anchorText: options.issue.anchorText,
+    paragraphIndex: options.issue.paragraphIndex,
+    tools: options.tools,
+    toolContext: options.toolContext,
+  })
+  if (searchCandidates.length === 0) return false
+
+  const toolName =
+    findDocxMcpToolName(options.tools, 'replace_text') ??
+    findDocxMcpToolName(options.tools, 'replace_texts') ??
+    options.toolName
+
+  const callId = `${options.idPrefix}-${randomUUID()}`
+  const retryNotes: string[] = []
+  let lastResult = ''
+
+  options.emitToolUpdate({
+    toolCallId: callId,
+    name: toolName,
+    arguments: buildReplaceToolArgs({
+      workingPath: options.workingPath,
+      search: options.issue.anchorText,
+      replace: options.issue.replacement ?? '',
+      toolName,
+    }),
+    status: 'running',
+  })
+
+  for (const search of searchCandidates) {
+    const args = buildReplaceToolArgs({
+      workingPath: options.workingPath,
+      search,
+      replace: options.issue.replacement ?? '',
+      toolName,
+    })
+
+    try {
+      const result = await executeToolCall(toolName, args, options.toolContext)
+      lastResult = result
+      if (replaceToolCallSucceeded(result, toolName)) {
+        const retrySummary = summarizeReplaceSearchRetries(retryNotes)
+        options.emitToolUpdate({
+          toolCallId: callId,
+          name: toolName,
+          arguments: args,
+          result: retrySummary ? `${retrySummary}\n${result.slice(0, 600)}` : result.slice(0, 800),
+          status: 'done',
+        })
+        return true
+      }
+      if (isCommentAnchorNotFoundFailure(result)) {
+        retryNotes.push(search.length > 48 ? `${search.slice(0, 48)}…` : search)
+        continue
+      }
+
+      options.emitToolUpdate({
+        toolCallId: callId,
+        name: toolName,
+        arguments: args,
+        result: result.slice(0, 800),
+        status: 'failed',
+      })
+      return false
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'replace_text 失败'
+      lastResult = `Error: ${message}`
+      if (isCommentAnchorNotFoundFailure(lastResult)) {
+        retryNotes.push(search.length > 48 ? `${search.slice(0, 48)}…` : search)
+        continue
+      }
+
+      options.emitToolUpdate({
+        toolCallId: callId,
+        name: toolName,
+        arguments: args,
+        result: lastResult,
+        status: 'failed',
+      })
+      return false
+    }
+  }
+
+  options.emitToolUpdate({
+    toolCallId: callId,
+    name: toolName,
+    result:
+      lastResult.slice(0, 800) ||
+      `未找到可替换文本（已尝试 ${searchCandidates.length} 个 search 候选）`,
+    status: 'failed',
+  })
+  return false
+}
+
+async function applySingleCommentWithCandidates(options: {
+  issue: DocxReviewIssue
+  workingPath: string
+  tools: ToolDefinition[]
+  toolContext: ToolExecutionContext
+  toolName: string
+  emitToolUpdate: (update: {
+    toolCallId: string
+    name: string
+    arguments?: string
+    result?: string
+    status: 'running' | 'done' | 'failed'
+  }) => void
+  idPrefix: string
+}): Promise<boolean> {
+  const anchorCandidates = await resolveCommentAnchorCandidates({
+    workingPath: options.workingPath,
+    anchorText: options.issue.anchorText,
+    paragraphIndex: options.issue.paragraphIndex,
+    tools: options.tools,
+    toolContext: options.toolContext,
+  })
+  if (anchorCandidates.length === 0) return false
+
+  const toolName =
+    findDocxMcpToolName(options.tools, 'add_comment') ??
+    findDocxMcpToolName(options.tools, 'add_comments') ??
+    options.toolName
+
+  const callId = `${options.idPrefix}-${randomUUID()}`
+  const retryNotes: string[] = []
+  let lastResult = ''
+
+  options.emitToolUpdate({
+    toolCallId: callId,
+    name: toolName,
+    arguments: buildCommentToolArgs({
+      workingPath: options.workingPath,
+      anchorText: options.issue.anchorText,
+      commentText: options.issue.comment ?? '',
+      toolName,
+    }),
+    status: 'running',
+  })
+
+  for (const anchorText of anchorCandidates) {
+    const args = buildCommentToolArgs({
+      workingPath: options.workingPath,
+      anchorText,
+      commentText: options.issue.comment ?? '',
+      toolName,
+    })
+
+    try {
+      const result = await executeToolCall(toolName, args, options.toolContext)
+      lastResult = result
+      const itemFailed = commentToolCallFailed(result, toolName)
+      if (!itemFailed) {
+        const retrySummary = summarizeCommentAnchorRetries(retryNotes)
+        options.emitToolUpdate({
+          toolCallId: callId,
+          name: toolName,
+          arguments: args,
+          result: retrySummary ? `${retrySummary}\n${result.slice(0, 600)}` : result.slice(0, 800),
+          status: 'done',
+        })
+        return true
+      }
+      if (isCommentAnchorNotFoundFailure(result)) {
+        retryNotes.push(anchorText.length > 48 ? `${anchorText.slice(0, 48)}…` : anchorText)
+        continue
+      }
+
+      options.emitToolUpdate({
+        toolCallId: callId,
+        name: toolName,
+        arguments: args,
+        result: result.slice(0, 800),
+        status: 'failed',
+      })
+      return false
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'add_comment 失败'
+      lastResult = `Error: ${message}`
+      if (isCommentAnchorNotFoundFailure(lastResult)) {
+        retryNotes.push(anchorText.length > 48 ? `${anchorText.slice(0, 48)}…` : anchorText)
+        continue
+      }
+
+      options.emitToolUpdate({
+        toolCallId: callId,
+        name: toolName,
+        arguments: args,
+        result: lastResult,
+        status: 'failed',
+      })
+      return false
+    }
+  }
+
+  options.emitToolUpdate({
+    toolCallId: callId,
+    name: toolName,
+    result:
+      lastResult.slice(0, 800) ||
+      `未找到可用锚点（已尝试 ${anchorCandidates.length} 个候选）`,
+    status: 'failed',
+  })
+  return false
+}
+
+function buildCommentToolArgs(options: {
+  workingPath: string
+  anchorText: string
+  commentText: string
+  toolName: string
+}): string {
+  if (options.toolName.includes('add_comments')) {
+    return JSON.stringify({
+      file_path: options.workingPath,
+      comments: [
+        {
+          anchor_text: options.anchorText,
+          comment_text: options.commentText,
+          author: 'Toolman',
+        },
+      ],
+      default_author: 'Toolman',
+    })
+  }
+
+  return JSON.stringify({
+    file_path: options.workingPath,
+    anchor_text: options.anchorText,
+    comment_text: options.commentText,
+    author: 'Toolman',
+  })
+}
+
+function commentToolCallFailed(result: string, toolName: string): boolean {
+  if (isDocxToolHardFailure(result) && !isCommentAnchorNotFoundFailure(result)) return true
+  if (isCommentAnchorNotFoundFailure(result)) return true
+  if (toolName.includes('add_comments')) {
+    return parseDocxCommentsBatchResult(result, 1).applied === 0
+  }
+  return false
+}
+
+function buildCommentAnchorForEditedIssue(issue: DocxReviewIssue): string {
+  return issue.anchorText
+}
+
+export function collectExplanationCommentIssues(issues: DocxReviewIssue[]): DocxReviewIssue[] {
   return issues
     .filter(
       (issue) =>
@@ -544,111 +1323,32 @@ async function applyCommentIssueBatches(options: {
   }) => void
   idPrefix: string
 }): Promise<DocxToolBatchStats> {
-  const addCommentsTool = findDocxMcpToolName(options.tools, 'add_comments')
-  const addCommentTool = findDocxMcpToolName(options.tools, 'add_comment')
   const requested = options.issues.length
   if (requested === 0) return { applied: 0, failed: 0 }
 
+  const commentTool =
+    findDocxMcpToolName(options.tools, 'add_comment') ??
+    findDocxMcpToolName(options.tools, 'add_comments')
+  if (!commentTool) return { applied: 0, failed: requested }
+
   let applied = 0
   let failed = 0
-  const batches = chunkReviewCommentIssues(options.issues)
 
-  if (addCommentsTool) {
-    for (const batch of batches) {
-      const callId = `${options.idPrefix}-${randomUUID()}`
-      const args = JSON.stringify({
-        file_path: options.workingPath,
-        comments: batch.map((issue) => ({
-          anchor_text: issue.anchorText,
-          comment_text: issue.comment ?? '',
-          author: 'Toolman',
-        })),
-        default_author: 'Toolman',
-      })
-
-      options.emitToolUpdate({
-        toolCallId: callId,
-        name: addCommentsTool,
-        arguments: args,
-        status: 'running',
-      })
-
-      try {
-        const result = await executeToolCall(addCommentsTool, args, options.toolContext)
-        const stats = parseDocxCommentsBatchResult(result, batch.length)
-        applied += stats.applied
-        failed += stats.failed
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: addCommentsTool,
-          arguments: args,
-          result: result.slice(0, 800),
-          status: stats.failed === batch.length ? 'failed' : 'done',
-        })
-      } catch (error) {
-        failed += batch.length
-        const message = error instanceof Error ? error.message : 'add_comments 失败'
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: addCommentsTool,
-          arguments: args,
-          result: `Error: ${message}`,
-          status: 'failed',
-        })
-      }
-    }
-    return { applied, failed }
+  for (const issue of options.issues) {
+    const ok = await applySingleCommentWithCandidates({
+      issue,
+      workingPath: options.workingPath,
+      tools: options.tools,
+      toolName: commentTool,
+      toolContext: options.toolContext,
+      emitToolUpdate: options.emitToolUpdate,
+      idPrefix: options.idPrefix,
+    })
+    if (ok) applied += 1
+    else failed += 1
   }
 
-  if (addCommentTool) {
-    for (const issue of options.issues) {
-      const callId = `${options.idPrefix}-${randomUUID()}`
-      const args = JSON.stringify({
-        file_path: options.workingPath,
-        anchor_text: issue.anchorText,
-        comment_text: issue.comment ?? '',
-        author: 'Toolman',
-      })
-
-      options.emitToolUpdate({
-        toolCallId: callId,
-        name: addCommentTool,
-        arguments: args,
-        status: 'running',
-      })
-
-      try {
-        const result = await executeToolCall(addCommentTool, args, options.toolContext)
-        const itemFailed =
-          isDocxToolHardFailure(result) || /未找到|not found/i.test(result)
-        if (itemFailed) {
-          failed += 1
-        } else {
-          applied += 1
-        }
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: addCommentTool,
-          arguments: args,
-          result: result.slice(0, 800),
-          status: itemFailed ? 'failed' : 'done',
-        })
-      } catch (error) {
-        failed += 1
-        const message = error instanceof Error ? error.message : 'add_comment 失败'
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: addCommentTool,
-          arguments: args,
-          result: `Error: ${message}`,
-          status: 'failed',
-        })
-      }
-    }
-    return { applied, failed }
-  }
-
-  return { applied: 0, failed: requested }
+  return { applied, failed }
 }
 
 export async function applyDocxReviewIssues(options: {
@@ -688,6 +1388,25 @@ export async function applyDocxReviewIssues(options: {
   const paragraphIssues = options.issues.filter((issue) => issue.action === 'edit_paragraph')
   const commentOnlyIssues = options.issues.filter((issue) => issue.action === 'comment')
   const explanationIssues = collectExplanationCommentIssues(options.issues)
+  const preReplaceCommentIssues = [...commentOnlyIssues, ...explanationIssues]
+
+  let commentsRequested = 0
+  let commentsApplied = 0
+  let commentsFailed = 0
+
+  if (preReplaceCommentIssues.length > 0) {
+    const stats = await applyCommentIssueBatches({
+      issues: preReplaceCommentIssues,
+      workingPath: options.workingCopy.workingPath,
+      tools: options.tools,
+      toolContext: options.toolContext,
+      emitToolUpdate: options.emitToolUpdate,
+      idPrefix: 'docx-review-comments',
+    })
+    commentsRequested += preReplaceCommentIssues.length
+    commentsApplied += stats.applied
+    commentsFailed += stats.failed
+  }
 
   let replacementsRequested = replaceIssues.length
   let replacementsApplied = 0
@@ -700,94 +1419,22 @@ export async function applyDocxReviewIssues(options: {
     if (!replaceTextsTool) {
       replacementsFailed = replacementsRequested
       errors.push('未找到 replace_texts / replace_text 工具')
-    } else if (replaceTextsTool.includes('replace_texts')) {
-      const callId = `docx-review-replace-batch-${randomUUID()}`
-      const args = JSON.stringify({
-        file_path: options.workingCopy.workingPath,
-        items: replaceIssues.map((issue) => ({
-          search: issue.anchorText,
-          replace: issue.replacement ?? '',
-        })),
-        track_changes: true,
-        author: 'Toolman',
-      })
-
-      options.emitToolUpdate({
-        toolCallId: callId,
-        name: replaceTextsTool,
-        arguments: args,
-        status: 'running',
-      })
-
-      try {
-        const result = await executeToolCall(replaceTextsTool, args, options.toolContext)
-        const stats = parseDocxReplaceTextsBatchResult(result, replaceIssues.length)
-        replacementsApplied = stats.applied
-        replacementsFailed = stats.failed
-        if (stats.failed > 0) errors.push(`replace_texts 部分失败：${result.slice(0, 200)}`)
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: replaceTextsTool,
-          arguments: args,
-          result: result.slice(0, 800),
-          status: stats.failed === replaceIssues.length ? 'failed' : 'done',
-        })
-      } catch (error) {
-        replacementsFailed = replacementsRequested
-        const message = error instanceof Error ? error.message : 'replace_texts 失败'
-        errors.push(message)
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: replaceTextsTool,
-          arguments: args,
-          result: `Error: ${message}`,
-          status: 'failed',
-        })
-      }
     } else {
       for (const issue of replaceIssues) {
-        const callId = `docx-review-replace-${randomUUID()}`
-        const args = JSON.stringify({
-          file_path: options.workingCopy.workingPath,
-          search: issue.anchorText,
-          replace: issue.replacement ?? '',
-          track_changes: true,
-          author: 'Toolman',
+        const ok = await applySingleReplaceWithCandidates({
+          issue,
+          workingPath: options.workingCopy.workingPath,
+          tools: options.tools,
+          toolContext: options.toolContext,
+          toolName: replaceTextsTool,
+          emitToolUpdate: options.emitToolUpdate,
+          idPrefix: 'docx-review-replace',
         })
-
-        options.emitToolUpdate({
-          toolCallId: callId,
-          name: replaceTextsTool,
-          arguments: args,
-          status: 'running',
-        })
-
-        try {
-          const result = await executeToolCall(replaceTextsTool, args, options.toolContext)
-          if (parseDocxSingleReplaceResult(result)) {
-            replacementsApplied += 1
-          } else {
-            replacementsFailed += 1
-            errors.push(`替换失败(${issue.id})：${result.slice(0, 120)}`)
-          }
-          options.emitToolUpdate({
-            toolCallId: callId,
-            name: replaceTextsTool,
-            arguments: args,
-            result: result.slice(0, 800),
-            status: parseDocxSingleReplaceResult(result) ? 'done' : 'failed',
-          })
-        } catch (error) {
+        if (ok) {
+          replacementsApplied += 1
+        } else {
           replacementsFailed += 1
-          const message = error instanceof Error ? error.message : 'replace_text 失败'
-          errors.push(message)
-          options.emitToolUpdate({
-            toolCallId: callId,
-            name: replaceTextsTool,
-            arguments: args,
-            result: `Error: ${message}`,
-            status: 'failed',
-          })
+          errors.push(`替换失败(${issue.id})：${issue.anchorText.slice(0, 40)}`)
         }
       }
     }
@@ -888,25 +1535,10 @@ export async function applyDocxReviewIssues(options: {
     }
   }
 
-  const allCommentIssues = [...commentOnlyIssues, ...explanationIssues]
-  const commentsRequested = allCommentIssues.length
-  let commentsApplied = 0
-  let commentsFailed = 0
-
-  if (allCommentIssues.length > 0) {
-    const stats = await applyCommentIssueBatches({
-      issues: allCommentIssues,
-      workingPath: options.workingCopy.workingPath,
-      tools: options.tools,
-      toolContext: options.toolContext,
-      emitToolUpdate: options.emitToolUpdate,
-      idPrefix: 'docx-review-comments',
-    })
-    commentsApplied = stats.applied
-    commentsFailed = stats.failed
-    if (stats.failed > 0 && stats.applied === 0) {
-      errors.push('add_comments / add_comment 全部失败')
-    }
+  if (commentsFailed > 0 && commentsApplied === 0 && commentsRequested > 0) {
+    errors.push('add_comments / add_comment 全部失败')
+  } else if (commentsFailed > 0) {
+    errors.push(`add_comments 部分失败（${commentsFailed}/${commentsRequested}）`)
   }
 
   return {
@@ -998,6 +1630,7 @@ export async function runDocxStructuredReviewPipeline(options: {
       workingPath: workingCopy.workingPath,
       issues: audit.issues,
       parseWarnings: audit.warnings,
+      conversionMethod: workingCopy.conversionMethod,
       ...applied,
     })
   }

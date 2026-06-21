@@ -26,9 +26,11 @@ const PLACEHOLDER_FILE_LINK_RE = /\[可点击(?:的)?(?:带批注)?文件链接\
 const PLACEHOLDER_FILE_LINK_LINE_RE = /文件链接：?\s*(?:\[可点击[^\]]*\]|（[^）]*）)?/g
 const RELATIVE_DOCX_LINK_RE =
   /\[([^\]]+\.docx)\]\((?!toolman-local:|\/|[A-Za-z]:|https?:|file:)[^)]+\)/gi
+/** 模型常把修订版链到 dev server（含无路径的 http://localhost:5173），须剥掉以免点开空白页 */
 const LOCALHOST_DOCX_LINK_RE =
-  /\[([^\]]+\.docx)\]\((https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/[^)]+)\)/gi
-const REVISION_FILE_INLINE_LINK_RE = /(修订版文件[：:]\s*)\[[^\]]+\]\([^)]+\)/g
+  /\[([^\]]+\.docx)\]\((https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/[^)]*)?)\)/gi
+const REVISION_FILE_INLINE_LINK_RE =
+  /(\*{0,2}修订版文件\*{0,2}[：:]\s*)\[[^\]]+\]\([^)]+\)/g
 
 const UNIX_DOCX_PATH_RE = /(?<![[(<])(\/(?:[^\s[\]()<>,"']+\/)*[^\s[\]()<>,"']+\.docx)(?![\])>])/gi
 const WIN_DOCX_PATH_RE =

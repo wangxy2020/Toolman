@@ -4,13 +4,28 @@
 
 ## 1. 整体流程
 
-用户上传 `.docx` 且智能体挂载 `docx-mcp-server` 后，应用自动执行：
+用户上传 **`.docx`、`.doc` 或 `.wps`** 且智能体挂载 `docx-mcp-server` 后，应用自动执行：
 
-1. **复制修订版**：源文件 → `修订版_<文件名>.docx`（不覆盖原件）
+1. **准备修订版**（工作目录，不覆盖用户原文件）：
+   - **`.docx`**：复制为 `修订版_<文件名>.docx`
+   - **`.doc` / `.wps`**：转换为 docx 后直接写入 `修订版_<文件名>.docx`（不产生第二个中间副本）
 2. **读取**：`read_document` 读取修订版全文（含 `paragraph_index`）
 3. **审查**：内置审查 prompt 让模型输出 **JSON issue 列表**
 4. **应用**：按 issue 批量调用 MCP 工具写入修订版
 5. **总结**：输出审查摘要与修订版绝对路径
+
+转换优先级（`.doc`/`.wps`）：
+
+| 本机环境 | 尝试顺序 | 说明 |
+|----------|----------|------|
+| **任意** | LibreOffice | 跨平台，保留格式（推荐无 Word 时安装） |
+| **macOS** | Microsoft Word | AppleScript 另存为 docx |
+| **Windows** | Microsoft Word | COM 自动化另存为 docx |
+| **未装 Word** | 纯文本 docx（仅 `.doc`） | 会丢失目录/格式/大纲；状态栏与统计卡片会明确提示 |
+
+**已安装 Word 但自动化失败**：不会静默降级为纯文本，需授权自动化（macOS）或手动另存为 `.docx`。
+
+**不要使用 macOS textutil**：对含目录域、交叉引用的合同类文档会产生乱码域代码并损坏 docx 结构。
 
 相关代码：`docx-review.service.ts`、`docx-mcp-task.service.ts`、`agent.service.ts`。
 
@@ -119,7 +134,9 @@
 | `replace_text` / `replace_texts` | 编辑 | 轻～中 |
 | `edit_paragraph` / `edit_paragraphs` | 编辑 | **重** |
 
-应用顺序：**replace → edit_paragraph → comment**（含修改说明批注）。
+应用顺序：**批注（含 replace 的修改说明）→ replace → edit_paragraph**。
+
+说明：replace / edit_paragraph 的 `comment` 会在**替换前**锚定到 `anchor_text` 原文写入批注，再执行正文替换；避免替换后用 `replacement` 作锚点导致批注失败。
 
 ---
 
@@ -128,7 +145,7 @@
 1. **`edit_paragraph` 是整段替换**，不是 diff；模型常输出完整新段而非最小改动。
 2. **深度审查模式**会推动至少 3 次编辑，整体改动偏多。
 3. **修订跟踪**（`track_changes: true`）在 Word 中同时显示删除与插入。
-4. **说明批注**：`replace` / `edit_paragraph` 若带 `comment`，会在新文本上再挂批注。
+4. **说明批注**：`replace` / `edit_paragraph` 若带 `comment`，在替换前写入批注（锚点为原文 `anchor_text`）。
 5. **`replace` 全局匹配**：锚点重复时多处替换，视觉上改动变多。
 
 当前 prompt 策略（2026-03）：默认禁止 `edit_paragraph`，强制优先 `replace`，并要求 `replacement` 尽量短、贴近原文。
