@@ -20,6 +20,7 @@ import {
   P2pInvitableMemberRoleSchema,
   P2pMemberRoleSchema,
   P2pAgentSessionPermissionSchema,
+  P2pKnowledgeDocumentPermissionSchema,
   P2pSequencingModeSchema,
   P2pSharedResourceStatusSchema,
   P2pSortOrderSchema,
@@ -278,6 +279,14 @@ export const P2pSyncForceOutputSchema = z.object({
   snapshotUsed: z.boolean(),
 })
 
+export const P2pSyncCatchUpInputSchema = z.object({
+  workspaceId: UuidSchema,
+})
+
+export const P2pSyncCatchUpOutputSchema = z.object({
+  caughtUp: z.boolean(),
+})
+
 // --- Resource ---
 
 export const P2pResourceUnshareInputSchema = z.object({
@@ -514,6 +523,38 @@ export const P2pKnowledgeRemoveDocumentsInputSchema = z.object({
 
 export const P2pKnowledgeRemoveDocumentsOutputSchema = z.object({
   sharedResource: P2pSharedResourceSchema.nullable(),
+})
+
+export const P2pKnowledgeSetDocumentPermissionInputSchema = z.object({
+  workspaceId: UuidSchema,
+  resourceId: P2pSharedResourceIdSchema,
+  documentId: z.string().min(1),
+  permission: P2pKnowledgeDocumentPermissionSchema,
+})
+
+export const P2pKnowledgeSetDocumentPermissionOutputSchema = z.object({
+  sharedResource: P2pSharedResourceSchema,
+})
+
+export const P2pKnowledgeEnsureDocumentSavedInputSchema = z.object({
+  workspaceId: UuidSchema,
+  resourceId: P2pSharedResourceIdSchema,
+  documentId: z.string().min(1),
+})
+
+export const P2pKnowledgeEnsureDocumentSavedOutputSchema = z.object({
+  absolutePath: z.string().min(1),
+  savedDocumentId: z.string().min(1),
+})
+
+export const P2pKnowledgeMaterializeDocumentInputSchema = z.object({
+  workspaceId: UuidSchema,
+  resourceId: P2pSharedResourceIdSchema,
+  documentId: z.string().min(1),
+})
+
+export const P2pKnowledgeMaterializeDocumentOutputSchema = z.object({
+  absolutePath: z.string().min(1),
 })
 
 // --- Note ---

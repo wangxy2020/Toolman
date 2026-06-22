@@ -160,7 +160,9 @@ interface ContextMenuProps {
   x: number
   y: number
   selectedCount: number
+  enabled?: boolean
   canDelete: boolean
+  deleteLabel?: string
   onClose: () => void
   onSelectAll: () => void
   onClearSelection: () => void
@@ -171,7 +173,9 @@ export function GroupFileContextMenu({
   x,
   y,
   selectedCount,
+  enabled = true,
   canDelete,
+  deleteLabel = '移除已勾选',
   onClose,
   onSelectAll,
   onClearSelection,
@@ -185,7 +189,7 @@ export function GroupFileContextMenu({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
-  if (!canDelete) return null
+  if (!enabled) return null
 
   return createPortal(
     <>
@@ -242,7 +246,8 @@ export function GroupFileContextMenu({
             onClose()
           }}
         >
-          移除已勾选{selectedCount > 0 ? ` (${selectedCount})` : ''}
+          {deleteLabel}
+          {selectedCount > 0 ? ` (${selectedCount})` : ''}
         </button>
       </div>
     </>,

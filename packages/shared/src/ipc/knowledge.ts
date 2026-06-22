@@ -7,7 +7,7 @@ import {
 
 export const KnowledgeBaseStatusSchema = z.enum(['idle', 'indexing', 'reindexing', 'error'])
 
-export const KnowledgeBaseKindSchema = z.enum(['local', 'network', 'local_files'])
+export const KnowledgeBaseKindSchema = z.enum(['local', 'network', 'local_files', 'shared'])
 export type KnowledgeBaseKind = z.infer<typeof KnowledgeBaseKindSchema>
 
 export const KnowledgeEmbedConfigSchema = z.object({

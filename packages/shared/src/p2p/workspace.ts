@@ -7,6 +7,7 @@ import {
   P2pMemberStatusSchema,
   P2pSharedResourcePermissionSchema,
   P2pAgentSessionPermissionSchema,
+  P2pKnowledgeDocumentPermissionSchema,
   P2pSharedResourceStatusSchema,
   P2pShareableResourceTypeSchema,
   P2pWorkspaceStatusSchema,
@@ -59,6 +60,9 @@ export const P2pSharedResourceSchema = z.object({
   sharedSessionIds: z.array(z.string().min(1)).optional(),
   sharedSessionTitles: z.record(z.string().min(1), z.string()).optional(),
   sharedSessionPermissions: z.record(z.string().min(1), P2pAgentSessionPermissionSchema).optional(),
+  sharedDocumentPermissions: z
+    .record(z.string().min(1), P2pKnowledgeDocumentPermissionSchema)
+    .optional(),
   sharedModelId: z.string().min(1).optional(),
   sourceWorkspaceId: UuidSchema.optional(),
   createdAt: TimestampSchema,

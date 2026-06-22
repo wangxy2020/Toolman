@@ -80,8 +80,8 @@ export function GroupAgentSessionList({
               <button
                 type="button"
                 className="tm-kb-file-card-action"
-                title="话题操作"
-                aria-label="话题操作"
+                title="话题权限"
+                aria-label="话题权限"
                 onClick={(event) => {
                   event.stopPropagation()
                   const rect = event.currentTarget.getBoundingClientRect()

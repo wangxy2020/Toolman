@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
+import { useRegisterGroupPanelError } from './group-page-status'
 
 interface Props {
   workspaceName: string
@@ -12,6 +13,8 @@ export function GroupWorkflowPanel({ workspaceName }: Props) {
   const [error, setError] = useState<string | null>(null)
   const sharedCount = 0
 
+  useRegisterGroupPanelError('workflow', error, () => setError(null))
+
   return (
     <div className="tm-group-member-panel tm-group-resource-panel">
       <GroupPanelHeader
@@ -19,8 +22,6 @@ export function GroupWorkflowPanel({ workspaceName }: Props) {
         subtitle={`${workspaceName} · ${sharedCount} 个工作流`}
         actions={<GroupPanelRefreshButton onRefresh={() => {}} />}
       />
-
-      {error ? <div className="tm-error-bar">{error}</div> : null}
 
       <div className="tm-kb-file-panel">
         <button

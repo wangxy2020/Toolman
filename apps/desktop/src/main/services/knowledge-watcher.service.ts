@@ -159,6 +159,10 @@ export function restartKnowledgeWatchersForKb(workspaceId: string, kbId: string)
   const kb = getKnowledgeBaseRepository().findRowById(kbId, workspaceId)
   if (!kb) return
 
+  // P2P mirror knowledge bases are managed by projection/sync — folder watching
+  // would re-ingest projected files and push spurious group sync events.
+  if (kb.kind === 'shared') return
+
   purgeIgnoredKnowledgeDocuments(workspaceId, kbId)
 
   const storagePath = resolveKnowledgeBaseStoragePath(kb, { ensure: true })

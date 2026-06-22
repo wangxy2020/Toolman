@@ -187,6 +187,25 @@ function ensureIngestDocument(
       return byId
     }
 
+    const existingAny = repo.findAnyById(documentId, kbId)
+    if (existingAny) {
+      const active =
+        existingAny.deletedAt != null
+          ? repo.restoreDocument(documentId, kbId)
+          : existingAny
+      if (active) {
+        updateDocumentStage(repo, {
+          workspaceId,
+          kbId,
+          documentId: active.id,
+          stage: 'parsing',
+          errorMessage: null,
+          patch: { title, contentHash, absolutePath: filePath },
+        })
+        return active
+      }
+    }
+
     const created = repo.create({
       id: documentId,
       kbId,
@@ -362,6 +381,9 @@ export async function ingestFileAtPath(
   const kb = getKnowledgeBaseRepository().findRowById(kbId, workspaceId)
   if (kb?.kind === 'local_files') {
     return registerStorageOnlyFileAtPath(options)
+  }
+  if (kb?.kind === 'shared' && !skipP2pSync) {
+    return { outcome: 'skipped', path: filePath }
   }
 
   const repo = getDocumentRepository()

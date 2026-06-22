@@ -55,3 +55,36 @@ export function resolveP2pSharedKnowledgeDocumentKbId(input: {
   }
   return buildP2pSharedKnowledgeMirrorKbId(input.p2pWorkspaceId, input.sourceKbId)
 }
+
+/** Candidate local KB ids when resolving projected shared documents (source + mirror). */
+export function listP2pSharedKnowledgeLocalKbIds(input: {
+  p2pWorkspaceId: string
+  sourceKbId: string
+}): string[] {
+  const mirrorKbId = buildP2pSharedKnowledgeMirrorKbId(input.p2pWorkspaceId, input.sourceKbId)
+  if (mirrorKbId === input.sourceKbId) {
+    return [input.sourceKbId]
+  }
+  return [input.sourceKbId, mirrorKbId]
+}
+
+/** Strip a group prefix so group UI shows the original knowledge base name. */
+export function stripP2pGroupPrefixedResourceName(
+  groupName: string | null | undefined,
+  resourceName: string,
+): string {
+  const trimmedGroup = groupName?.trim()
+  if (trimmedGroup) {
+    const bracketPrefix = `[${trimmedGroup}] `
+    if (resourceName.startsWith(bracketPrefix)) {
+      return resourceName.slice(bracketPrefix.length)
+    }
+    if (resourceName.startsWith(`${trimmedGroup} `)) {
+      return resourceName.slice(trimmedGroup.length + 1)
+    }
+  }
+  if (resourceName.startsWith('[群组] ')) {
+    return resourceName.slice('[群组] '.length)
+  }
+  return resourceName
+}

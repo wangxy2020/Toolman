@@ -1,42 +1,51 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IpcChannel, type P2pSharedResource, type Workspace } from '@toolman/shared'
+import { stripP2pGroupPrefixedResourceName, type P2pSharedResource } from '@toolman/shared'
 import { IconChevronRight, IconTrash } from '../../components/icons'
-import {
-  knowledgeDocumentToPanelItem,
-} from '../knowledge/KnowledgeBaseFilePanel'
-import {
-  sortKnowledgeFilePanelItems,
-  type KnowledgeFileSortField,
-} from '../knowledge/knowledge-file-sort'
-import { useKnowledgeDocuments } from '../knowledge/useKnowledgeDocuments'
 import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { GroupKnowledgeFileList } from './GroupKnowledgeFileList'
 import { knowledgeSelectionKey } from './group-knowledge-selection'
 import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './group-note-open'
-import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
+import { useSharedKnowledgePanelDocuments } from './useSharedKnowledgePanelDocuments'
+import { materializeGroupKnowledgeDocument } from './group-knowledge-file-save'
+
+export interface GroupKnowledgeSavedDocumentRegistry {
+  workspaceId: string
+  savedKbId: string
+  savedByP2pDocumentId: Record<string, string>
+}
 
 interface Props {
   p2pWorkspaceId: string
   sourceWorkspaceId: string | null
   workspaceName: string
   resource: P2pSharedResource
+  isResourceOwner: boolean
+  savedDocumentOverrides?: Record<string, { savedDocumentId: string; absolutePath: string }>
   selectedKeys: Set<string>
-  canDelete: boolean
+  canRemoveFromGroup: boolean
+  canRemoveSaved: boolean
+  canSelect: boolean
   removingKb?: boolean
   removingDocumentId?: string | null
   onToggleSelect: (selectionKey: string) => void
   onToggleSelectSection: (selectionKeys: string[]) => void
-  onRemoveKb: () => void
-  onRemoveDocument: (documentId: string) => void
+  onRemoveFromGroupKb: () => void
+  onRemoveFromGroupDocument: (documentId: string) => void
+  onRequestRemoveSavedDocuments: (documentIds: string[]) => void
+  onRequestRemoveSavedSection: () => void
+  onSavedDocumentRegistryChange?: (
+    resourceId: string,
+    registry: GroupKnowledgeSavedDocumentRegistry | null,
+  ) => void
   onOpenNote?: (noteId: string) => boolean
   onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
   onOpenGroupKnowledgeMarkdown?: (
     request: OpenGroupKnowledgeMarkdownRequest,
   ) => void | Promise<void>
-  onOpenFileMenu?: (
-    doc: KnowledgeFilePanelItem,
-    anchor: { x: number; y: number; align: 'bottom-start' },
-  ) => void
+  onEnsureDocumentSaved?: (
+    documentId: string,
+    currentPath?: string | null,
+  ) => Promise<{ absolutePath: string; savedDocumentId: string } | null>
   onOpenError?: (message: string) => void
   onContextMenu?: (event: React.MouseEvent) => void
   onSectionKeysChange?: (resourceId: string, keys: string[]) => void
@@ -47,113 +56,112 @@ export function GroupSharedKnowledgeSection({
   sourceWorkspaceId: _sourceWorkspaceId,
   workspaceName,
   resource,
+  isResourceOwner,
+  savedDocumentOverrides,
   selectedKeys,
-  canDelete,
+  canRemoveFromGroup,
+  canRemoveSaved,
+  canSelect,
   removingKb,
   removingDocumentId,
   onToggleSelect,
   onToggleSelectSection,
-  onRemoveKb,
-  onRemoveDocument,
+  onRemoveFromGroupKb,
+  onRemoveFromGroupDocument,
+  onRequestRemoveSavedDocuments,
+  onRequestRemoveSavedSection,
+  onSavedDocumentRegistryChange,
   onOpenNote,
   onOpenGroupNote,
   onOpenGroupKnowledgeMarkdown,
-  onOpenFileMenu,
+  onEnsureDocumentSaved,
   onOpenError,
   onContextMenu,
   onSectionKeysChange,
 }: Props) {
   const [expanded, setExpanded] = useState(true)
-  const [localWorkspaceId, setLocalWorkspaceId] = useState<string | null>(null)
   const kbId = resource.localResourceId ?? resource.id
-  const documentWorkspaceId = localWorkspaceId
-  const documents = useKnowledgeDocuments(documentWorkspaceId, kbId)
-  const sortField: KnowledgeFileSortField = 'createdAt'
-
-  useEffect(() => {
-    void window.api.invoke(IpcChannel.WorkspaceGetDefault).then((result) => {
-      if (result.ok) {
-        setLocalWorkspaceId((result.data as Workspace).id)
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    void window.api.invoke(IpcChannel.P2pSyncForce, { workspaceId: p2pWorkspaceId })
-  }, [p2pWorkspaceId])
-
-  useEffect(() => {
-    if (!documentWorkspaceId) return
-    void documents.load()
-  }, [documentWorkspaceId, documents.load, resource.updatedAt])
-
-  useEffect(() => {
-    const handleKnowledgeEvent = (payload: unknown) => {
-      const event = payload as {
-        workspaceId?: string
-        resourceType?: string
-        payload?: Record<string, unknown>
-      }
-      if (event.workspaceId !== p2pWorkspaceId || event.resourceType !== 'Knowledge') return
-      const eventKbId = event.payload?.kb_id
-      if (typeof eventKbId === 'string' && eventKbId !== kbId) return
-      void documents.load()
-    }
-
-    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleKnowledgeEvent)
-    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleKnowledgeEvent)
-    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
-      const event = payload as { workspaceId?: string }
-      if (event.workspaceId !== p2pWorkspaceId) return
-      void documents.load()
+  const displayName = useMemo(
+    () => stripP2pGroupPrefixedResourceName(workspaceName, resource.name),
+    [resource.name, workspaceName],
+  )
+  const { localWorkspaceId, savedGroupKbId, panelDocuments, loading, refresh } =
+    useSharedKnowledgePanelDocuments({
+      p2pWorkspaceId,
+      workspaceName,
+      sharedFolderName: displayName,
+      kbId,
+      sharedDocumentIds: resource.sharedDocumentIds,
+      isResourceOwner,
+      savedDocumentOverrides,
     })
 
-    return () => {
-      unsubscribeAppended()
-      unsubscribeSynced()
-      unsubscribeCompleted()
-    }
-  }, [documents.load, kbId, p2pWorkspaceId])
+  const savedDocumentIds = useMemo(
+    () =>
+      panelDocuments
+        .map((doc) => doc.savedDocumentId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    [panelDocuments],
+  )
 
-  const panelDocuments = useMemo(() => {
-    let items = documents.items.map(knowledgeDocumentToPanelItem)
-    const sharedDocIds = resource.sharedDocumentIds
-    if (sharedDocIds && sharedDocIds.length > 0) {
-      const allowed = new Set(sharedDocIds)
-      items = items.filter((item) => allowed.has(item.id))
+  useEffect(() => {
+    if (!onSavedDocumentRegistryChange) return
+    if (!localWorkspaceId || !savedGroupKbId) {
+      onSavedDocumentRegistryChange(resource.id, null)
+      return
     }
-    return sortKnowledgeFilePanelItems(items, sortField, false)
-  }, [documents.items, resource.sharedDocumentIds, sortField])
+
+    const savedByP2pDocumentId: Record<string, string> = {}
+    for (const doc of panelDocuments) {
+      if (doc.savedDocumentId) {
+        savedByP2pDocumentId[doc.id] = doc.savedDocumentId
+      }
+    }
+
+    onSavedDocumentRegistryChange(resource.id, {
+      workspaceId: localWorkspaceId,
+      savedKbId: savedGroupKbId,
+      savedByP2pDocumentId,
+    })
+  }, [
+    localWorkspaceId,
+    onSavedDocumentRegistryChange,
+    panelDocuments,
+    resource.id,
+    savedGroupKbId,
+  ])
+
+  const handleEnsureDocumentSaved = useCallback(
+    async (
+      documentId: string,
+      currentPath?: string | null,
+    ): Promise<{ absolutePath: string; savedDocumentId: string } | null> => {
+      const result = await onEnsureDocumentSaved?.(documentId, currentPath)
+      if (!result) {
+        return null
+      }
+      await refresh()
+      return result
+    },
+    [onEnsureDocumentSaved, refresh],
+  )
 
   const resolveDocumentPath = useCallback(
     async (documentId: string, currentPath?: string | null): Promise<string | null> => {
       if (currentPath) return currentPath
-      if (!documentWorkspaceId) return null
 
-      const syncResult = await window.api.invoke(IpcChannel.P2pKnowledgeSyncDocument, {
-        workspaceId: p2pWorkspaceId,
-        knowledgeBaseId: kbId,
+      const result = await materializeGroupKnowledgeDocument(
+        p2pWorkspaceId,
+        resource.id,
         documentId,
-      })
-      if (!syncResult.ok) {
-        onOpenError?.(syncResult.error.message)
+      )
+      if ('error' in result) {
+        onOpenError?.(result.error)
         return null
       }
-
-      const listResult = await window.api.invoke(IpcChannel.KnowledgeDocumentList, {
-        workspaceId: documentWorkspaceId,
-        kbId,
-      })
-      if (!listResult.ok) {
-        onOpenError?.(listResult.error.message)
-        return null
-      }
-
-      const data = listResult.data as { items: Array<{ id: string; absolutePath?: string | null }> }
-      const doc = data.items.find((item) => item.id === documentId)
-      return doc?.absolutePath ?? null
+      return result.absolutePath
     },
-    [documentWorkspaceId, kbId, onOpenError, p2pWorkspaceId],
+    [onOpenError, p2pWorkspaceId, resource.id],
   )
 
   const handleOpenGroupKnowledgeMarkdown = useCallback(
@@ -199,6 +207,26 @@ export function GroupSharedKnowledgeSection({
   const sectionPartiallySelected =
     sectionSelectedCount > 0 && sectionSelectedCount < sectionSelectionKeys.length
 
+  const showSectionActions = canRemoveFromGroup || canRemoveSaved || canSelect
+  const sectionRemoveTitle = canRemoveFromGroup
+    ? '从群组移除知识库'
+    : savedDocumentIds.length > 0
+      ? '移除全部已保存副本'
+      : '暂无可移除的已保存文件'
+  const sectionRemoveDisabled = canRemoveFromGroup
+    ? removingKb
+    : savedDocumentIds.length === 0
+
+  const handleSectionRemove = () => {
+    if (canRemoveFromGroup) {
+      onRemoveFromGroupKb()
+      return
+    }
+    if (canRemoveSaved && savedDocumentIds.length > 0) {
+      onRequestRemoveSavedSection()
+    }
+  }
+
   return (
     <section className="tm-group-kb-section">
       <header className="tm-group-kb-section-header">
@@ -216,56 +244,61 @@ export function GroupSharedKnowledgeSection({
           className="tm-group-kb-section-heading"
           onClick={() => setExpanded((current) => !current)}
         >
-          <h3 className="tm-group-kb-section-title">{resource.name}</h3>
+          <h3 className="tm-group-kb-section-title">{displayName}</h3>
           <p className="tm-group-kb-section-meta">{panelDocuments.length} 篇文档</p>
         </button>
 
-        {canDelete ? (
+        {showSectionActions ? (
           <div className="tm-group-kb-section-actions">
-            <button
-              type="button"
-              className="tm-kb-file-card-action tm-kb-file-card-action--danger"
-              title="从群组移除知识库"
-              disabled={removingKb}
-              onClick={onRemoveKb}
-            >
-              <IconTrash size={16} />
-            </button>
-            <GroupFileSelectCheckbox
-              checked={sectionFullySelected}
-              title={sectionPartiallySelected ? '部分选中' : '选择知识库内全部文件'}
-              onChange={() => onToggleSelectSection(sectionSelectionKeys)}
-            />
+            {(canRemoveFromGroup || canRemoveSaved) ? (
+              <button
+                type="button"
+                className="tm-kb-file-card-action tm-kb-file-card-action--danger"
+                title={sectionRemoveTitle}
+                disabled={sectionRemoveDisabled}
+                onClick={handleSectionRemove}
+              >
+                <IconTrash size={16} />
+              </button>
+            ) : null}
+            {canSelect ? (
+              <GroupFileSelectCheckbox
+                checked={sectionFullySelected}
+                title={sectionPartiallySelected ? '部分选中' : '选择知识库内全部文件'}
+                onChange={() => onToggleSelectSection(sectionSelectionKeys)}
+              />
+            ) : null}
           </div>
         ) : null}
       </header>
 
       {expanded ? (
-        !documentWorkspaceId ? (
+        !localWorkspaceId ? (
           <p className="tm-kb-file-panel-empty">工作区未就绪</p>
-        ) : documents.loading && panelDocuments.length === 0 ? (
+        ) : loading ? (
           <p className="tm-kb-file-panel-empty">加载文件中…</p>
         ) : panelDocuments.length === 0 ? (
-          <p className="tm-kb-file-panel-empty">
-            {documents.error ? documents.error : '暂无共享文档，正在同步…'}
-          </p>
+          <p className="tm-kb-file-panel-empty">暂无共享文档</p>
         ) : (
           <GroupKnowledgeFileList
             resourceId={resource.id}
             p2pWorkspaceId={p2pWorkspaceId}
             workspaceName={workspaceName}
+            isResourceOwner={isResourceOwner}
             documents={panelDocuments}
             selectedKeys={selectedKeys}
-            canDelete={canDelete}
-            ingesting={documents.ingesting}
+            canRemoveFromGroup={canRemoveFromGroup}
+            canRemoveSaved={canRemoveSaved}
+            canSelect={canSelect}
             removingDocumentId={removingDocumentId}
             onToggleSelect={onToggleSelect}
-            onRemoveDocument={onRemoveDocument}
-            onReindexDocument={(documentId) => void documents.reindex(documentId)}
+            onRemoveFromGroup={onRemoveFromGroupDocument}
+            onRemoveSaved={(documentId) => onRequestRemoveSavedDocuments([documentId])}
             onOpenNote={onOpenNote}
             onOpenGroupNote={handleOpenGroupNote}
             onOpenGroupKnowledgeMarkdown={handleOpenGroupKnowledgeMarkdown}
-            onOpenFileMenu={onOpenFileMenu}
+            onMaterializeDocument={isResourceOwner ? resolveDocumentPath : undefined}
+            onEnsureDocumentSaved={handleEnsureDocumentSaved}
             onOpenError={onOpenError}
             onContextMenu={onContextMenu}
           />

@@ -14,6 +14,9 @@ import { recoverStaleStreamingMessages } from '../services/agent.service'
 import { syncOllamaProviders, migratePlaintextApiKeys } from '../services/provider.service'
 import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
 import { initAuthSessionStore } from '../services/auth-session.service'
+import { cleanupMisplacedP2pMirrorKnowledgeBases } from '../services/p2p/p2p-knowledge-cleanup.service'
+import { migrateAllLegacyGroupSavedKnowledgeBases } from '../services/p2p/p2p-group-saved-knowledge-migration.service'
+import { bootstrapToolmanUserDocumentLayout } from '../services/knowledge-folder.service'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
 const DEFAULT_ASSISTANT_ID = '00000000-0000-0000-0000-000000000003'
@@ -39,6 +42,38 @@ export function bootstrapDatabase(): void {
   recoverStaleStreamingMessages()
   ensureFtsIndexReady()
   void syncOllamaProviders(DEFAULT_WORKSPACE_ID)
+  try {
+    const { migratedWorkspaces, userRoot } = bootstrapToolmanUserDocumentLayout()
+    if (migratedWorkspaces > 0) {
+      console.info(
+        `[knowledge] migrated Toolman folders to user-scoped layout for ${migratedWorkspaces} workspace(s)`,
+      )
+    }
+    console.info(`[knowledge] user document root ready at ${userRoot}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[knowledge] folder bootstrap failed: ${message}`)
+  }
+  void cleanupMisplacedP2pMirrorKnowledgeBases().then((result) => {
+    const { purgedKbCount, restoredKbCount, removedDocCount } = result
+    if (purgedKbCount > 0 || restoredKbCount > 0 || removedDocCount > 0) {
+      console.info(
+        `[p2p] cleaned misplaced mirror knowledge bases: purged=${purgedKbCount} restored=${restoredKbCount} docs=${removedDocCount}`,
+      )
+    }
+  })
+  void migrateAllLegacyGroupSavedKnowledgeBases()
+    .then((result) => {
+      if (result.migratedKbCount > 0) {
+        console.info(
+          `[p2p] migrated legacy group saved knowledge bases: count=${result.migratedKbCount}`,
+        )
+      }
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[p2p] legacy group saved knowledge migration failed: ${message}`)
+    })
 }
 
 function ensureWorkspaceDefaults(database: ToolmanDatabase) {

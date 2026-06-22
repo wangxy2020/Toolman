@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { IpcChannel, type P2pSharedResource } from '@toolman/shared'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { IpcChannel, type P2pKnowledgeDocumentPermission, type P2pSharedResource } from '@toolman/shared'
+import { useDebouncedCallback } from '../../utils/debounce'
+import { GROUP_P2P_UI_TIMING } from './group-p2p-ui-timing'
+import { subscribeKnowledgeResourceListEvents } from './group-p2p-sync-policy'
 
 interface UseP2pKnowledgeOptions {
   workspaceId: string | null
@@ -10,15 +13,20 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
   const [loading, setLoading] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const hasResourcesRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!workspaceId) {
       setSharedResources([])
       setError(null)
+      hasResourcesRef.current = false
       return
     }
 
-    setLoading(true)
+    const showLoading = !hasResourcesRef.current
+    if (showLoading) {
+      setLoading(true)
+    }
     setError(null)
 
     const result = await window.api.invoke(IpcChannel.P2pResourceList, {
@@ -27,7 +35,9 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
       status: 'active',
     })
 
-    setLoading(false)
+    if (showLoading) {
+      setLoading(false)
+    }
 
     if (!result.ok) {
       setError(result.error.message)
@@ -35,8 +45,11 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
     }
 
     const data = result.data as { resources: P2pSharedResource[] }
+    hasResourcesRef.current = data.resources.length > 0
     setSharedResources(data.resources)
   }, [workspaceId])
+
+  const debouncedLoad = useDebouncedCallback(load, GROUP_P2P_UI_TIMING.dataRefreshDebounceMs)
 
   const shareKnowledgeBase = useCallback(
     async (
@@ -64,6 +77,7 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
       }
 
       const data = result.data as { sharedResource: P2pSharedResource }
+      hasResourcesRef.current = true
       setSharedResources((current) => {
         const next = current.filter((item) => item.localResourceId !== knowledgeBaseId)
         return [data.sharedResource, ...next]
@@ -92,7 +106,11 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
         return false
       }
 
-      setSharedResources((current) => current.filter((item) => item.id !== resourceId))
+      setSharedResources((current) => {
+        const next = current.filter((item) => item.id !== resourceId)
+        hasResourcesRef.current = next.length > 0
+        return next
+      })
       return true
     },
     [workspaceId],
@@ -120,12 +138,49 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
 
       const data = result.data as { sharedResource: P2pSharedResource | null }
       if (!data.sharedResource) {
-        setSharedResources((current) => current.filter((item) => item.id !== resourceId))
+        setSharedResources((current) => {
+          const next = current.filter((item) => item.id !== resourceId)
+          hasResourcesRef.current = next.length > 0
+          return next
+        })
       } else {
+        hasResourcesRef.current = true
         setSharedResources((current) =>
           current.map((item) => (item.id === resourceId ? data.sharedResource! : item)),
         )
       }
+      return true
+    },
+    [workspaceId],
+  )
+
+  const setDocumentPermission = useCallback(
+    async (
+      resourceId: string,
+      documentId: string,
+      permission: P2pKnowledgeDocumentPermission,
+    ) => {
+      if (!workspaceId) return false
+
+      setError(null)
+
+      const result = await window.api.invoke(IpcChannel.P2pKnowledgeSetDocumentPermission, {
+        workspaceId,
+        resourceId,
+        documentId,
+        permission,
+      })
+
+      if (!result.ok) {
+        setError(result.error.message)
+        return false
+      }
+
+      const data = result.data as { sharedResource: P2pSharedResource }
+      hasResourcesRef.current = true
+      setSharedResources((current) =>
+        current.map((item) => (item.id === resourceId ? data.sharedResource : item)),
+      )
       return true
     },
     [workspaceId],
@@ -147,31 +202,8 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
 
   useEffect(() => {
     if (!workspaceId) return
-
-    const unsubscribeEvent = window.api.subscribe('p2p:event:appended', (payload) => {
-      const event = payload as { workspaceId?: string; resourceType?: string }
-      if (event.workspaceId !== workspaceId || event.resourceType !== 'Knowledge') return
-      void load()
-    })
-
-    const unsubscribeSync = window.api.subscribe('p2p:sync:event-applied', (payload) => {
-      const event = payload as { workspaceId?: string; resourceType?: string }
-      if (event.workspaceId !== workspaceId || event.resourceType !== 'Knowledge') return
-      void load()
-    })
-
-    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
-      const event = payload as { workspaceId?: string }
-      if (event.workspaceId !== workspaceId) return
-      void load()
-    })
-
-    return () => {
-      unsubscribeEvent()
-      unsubscribeSync()
-      unsubscribeCompleted()
-    }
-  }, [load, workspaceId])
+    return subscribeKnowledgeResourceListEvents(workspaceId, debouncedLoad)
+  }, [debouncedLoad, workspaceId])
 
   return {
     sharedResources,
@@ -183,6 +215,7 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
     shareKnowledgeBase,
     unshareKnowledgeBase,
     removeDocuments,
+    setDocumentPermission,
     isShared,
   }
 }

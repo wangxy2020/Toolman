@@ -185,6 +185,7 @@ export enum IpcChannel {
   P2pSyncStop = 'p2p:sync:stop',
   P2pSyncStatus = 'p2p:sync:status',
   P2pSyncForce = 'p2p:sync:force',
+  P2pSyncCatchUp = 'p2p:sync:catch-up',
 
   P2pResourceUnshare = 'p2p:resource:unshare',
   P2pResourceList = 'p2p:resource:list',
@@ -211,6 +212,9 @@ export enum IpcChannel {
   P2pKnowledgeShare = 'p2p:knowledge:share',
   P2pKnowledgeSyncDocument = 'p2p:knowledge:sync-document',
   P2pKnowledgeRemoveDocuments = 'p2p:knowledge:remove-documents',
+  P2pKnowledgeSetDocumentPermission = 'p2p:knowledge:set-document-permission',
+  P2pKnowledgeEnsureDocumentSaved = 'p2p:knowledge:ensure-document-saved',
+  P2pKnowledgeMaterializeDocument = 'p2p:knowledge:materialize-document',
 
   P2pNoteShare = 'p2p:note:share',
   P2pNotePushUpdate = 'p2p:note:push-update',

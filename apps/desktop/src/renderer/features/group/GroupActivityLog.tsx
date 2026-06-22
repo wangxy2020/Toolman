@@ -9,6 +9,7 @@ import {
 } from './formatP2pEventMessage'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
+import { useRegisterGroupPanelError } from './group-page-status'
 
 interface Props {
   workspaceName: string
@@ -25,6 +26,8 @@ export function GroupActivityLog({
   error,
   onRefresh,
 }: Props) {
+  useRegisterGroupPanelError('activity', error)
+
   return (
     <div className="tm-group-activity-panel">
       <GroupPanelHeader
@@ -36,8 +39,6 @@ export function GroupActivityLog({
           ) : null
         }
       />
-
-      {error && <div className="tm-error-bar">{error}</div>}
 
       {loading && events.length === 0 ? (
         <div className="tm-session-empty">加载活动记录中…</div>

@@ -1,5 +1,4 @@
 import { eq, isNull } from 'drizzle-orm'
-import { app } from 'electron'
 import {
   WorkspaceGetInputSchema,
   WorkspaceSchema,
@@ -9,6 +8,7 @@ import {
 } from '@toolman/shared'
 import { workspaces } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
+import { getDefaultWorkspaceFolderPath } from './toolman-user-documents.service'
 
 function toWorkspace(row: typeof workspaces.$inferSelect): Workspace {
   const settings = WorkspaceSettingsSchema.parse(JSON.parse(row.settingsJson))
@@ -46,7 +46,7 @@ export function getDefaultWorkspace(): Workspace | null {
 
   return updateWorkspace({
     id: workspace.id,
-    settings: { folderPath: app.getPath('documents') },
+    settings: { folderPath: getDefaultWorkspaceFolderPath() },
   })
 }
 

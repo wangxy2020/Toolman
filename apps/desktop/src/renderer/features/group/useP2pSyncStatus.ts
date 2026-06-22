@@ -6,6 +6,9 @@ import {
   type P2pSyncStatus,
 } from '@toolman/shared'
 
+import { GROUP_P2P_UI_TIMING } from './group-p2p-ui-timing'
+import { useStableSyncIndicator } from './useStableSyncIndicator'
+
 interface SyncStatusState {
   status: P2pSyncStatus
   error: string | null
@@ -99,7 +102,11 @@ export function useP2pSyncStatus(workspaceId: string | null) {
     const handleProgress = (payload: unknown) => {
       const data = payload as { workspaceId?: string }
       if (data.workspaceId !== workspaceId) return
-      setState((prev) => ({ ...prev, status: 'syncing', error: null }))
+      setState((prev) =>
+        prev.status === 'syncing' && prev.error === null
+          ? prev
+          : { ...prev, status: 'syncing', error: null },
+      )
     }
 
     const unsubError = window.api.subscribe('p2p:sync:error', handleError)
@@ -113,7 +120,7 @@ export function useP2pSyncStatus(workspaceId: string | null) {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         void refresh()
-      }, 300)
+      }, GROUP_P2P_UI_TIMING.syncStatusRefreshDebounceMs)
     }
 
     const unsubConnection = window.api.subscribe(
@@ -134,10 +141,13 @@ export function useP2pSyncStatus(workspaceId: string | null) {
     }
   }, [workspaceId, refresh])
 
+  const showSyncIndicator = useStableSyncIndicator(state.status === 'syncing')
+
   return {
     ...state,
     refresh,
     isDegraded: state.sequencingMode === 'lamport_degraded',
     isSyncing: state.status === 'syncing',
+    showSyncIndicator,
   }
 }

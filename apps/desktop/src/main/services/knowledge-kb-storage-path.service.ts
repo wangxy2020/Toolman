@@ -1,15 +1,16 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { KnowledgeBaseRow } from '@toolman/db'
-import type { KnowledgeFolderKind } from '@toolman/shared'
-import { isSystemKnowledgeBase } from './knowledge-default-folder-kb.service'
+import { parseP2pGroupSavedKnowledgeMeta, type KnowledgeFolderKind } from '@toolman/shared'
 import {
   ensureWorkspaceKnowledgeFolder,
   ensureWorkspaceLocalFilesFolder,
   ensureWorkspaceNetworkKnowledgeFolder,
+  ensureWorkspaceSharedKnowledgeFolder,
   getWorkspaceKnowledgeFolderPath,
   getWorkspaceLocalFilesFolderPath,
   getWorkspaceNetworkKnowledgeFolderPath,
+  getWorkspaceSharedKnowledgeFolderPath,
 } from './knowledge-folder.service'
 
 function sanitizeKnowledgeBaseFolderName(name: string): string {
@@ -37,6 +38,16 @@ function resolveWorkspaceRootFolder(
     )
   }
 
+  if (kind === 'shared') {
+    if (ensure) {
+      return ensureWorkspaceSharedKnowledgeFolder({ workspaceId })
+    }
+    return (
+      getWorkspaceSharedKnowledgeFolderPath({ workspaceId }) ??
+      ensureWorkspaceSharedKnowledgeFolder({ workspaceId })
+    )
+  }
+
   if (kind === 'local_files') {
     if (ensure) {
       return ensureWorkspaceLocalFilesFolder({ workspaceId })
@@ -60,12 +71,13 @@ function resolveKnowledgeStorageKind(
   kind: string,
 ): KnowledgeFolderKind {
   if (kind === 'network') return 'network'
+  if (kind === 'shared') return 'shared'
   if (kind === 'local_files') return 'local_files'
   return 'local'
 }
 
 export function resolveKnowledgeBaseStoragePath(
-  kb: Pick<KnowledgeBaseRow, 'workspaceId' | 'name' | 'kind'>,
+  kb: Pick<KnowledgeBaseRow, 'workspaceId' | 'name' | 'kind' | 'description'>,
   options?: { ensure?: boolean },
 ): string | null {
   const ensure = options?.ensure ?? false
@@ -73,8 +85,16 @@ export function resolveKnowledgeBaseStoragePath(
   const baseFolder = resolveWorkspaceRootFolder(kb.workspaceId, kind, ensure)
   if (!baseFolder) return null
 
-  if (isSystemKnowledgeBase(kb)) {
-    return baseFolder
+  const groupSaved = parseP2pGroupSavedKnowledgeMeta(kb.description)
+  if (groupSaved && kind === 'shared') {
+    const groupDir = sanitizeKnowledgeBaseFolderName(groupSaved.groupName)
+    if (!groupDir) return null
+
+    const storagePath = join(baseFolder, groupDir)
+    if (ensure && !existsSync(storagePath)) {
+      mkdirSync(storagePath, { recursive: true })
+    }
+    return storagePath
   }
 
   const folderName = sanitizeKnowledgeBaseFolderName(kb.name)

@@ -1,0 +1,15 @@
+export {
+  type P2pEventLike,
+  type GroupSharedResourceType,
+  type GroupActivitySyncKind,
+  bootstrapGroupWorkspace,
+  ensureGroupWorkspaceBootstrapped,
+  bootstrapGroupWorkspaceAfterJoin,
+  createGroupPanelRefreshHandler,
+  classifyGroupResourceActivity,
+  isKnowledgeDocumentContentEvent,
+  isKnowledgeResourceListEvent,
+  subscribeGroupResourceActivity,
+  subscribeKnowledgeResourceListEvents,
+  subscribeKnowledgeDocumentContentEvents,
+} from './group-p2p-sync-policy'

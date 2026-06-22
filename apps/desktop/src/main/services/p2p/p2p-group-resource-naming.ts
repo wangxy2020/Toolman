@@ -1,4 +1,5 @@
 import { P2pWorkspaceRepository } from '@toolman/db'
+import { stripP2pGroupPrefixedResourceName } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getDefaultWorkspace } from '../workspace.service'
 
@@ -12,12 +13,15 @@ export function resolveP2pWorkspaceName(p2pWorkspaceId: string): string | null {
   return name || null
 }
 
+export function stripGroupPrefixedName(p2pWorkspaceId: string, resourceName: string): string {
+  return stripP2pGroupPrefixedResourceName(resolveP2pWorkspaceName(p2pWorkspaceId), resourceName)
+}
+
 export function buildGroupPrefixedName(p2pWorkspaceId: string, resourceName: string): string {
+  const plainName = stripGroupPrefixedName(p2pWorkspaceId, resourceName)
   const groupName = resolveP2pWorkspaceName(p2pWorkspaceId)?.trim()
   const prefix = groupName ? `[${groupName}] ` : '[群组] '
-  if (resourceName.startsWith(prefix)) return resourceName
-  if (groupName && resourceName.startsWith(groupName)) return resourceName
-  return `${prefix}${resourceName}`
+  return `${prefix}${plainName}`
 }
 
 export function buildGroupVirtualAgentName(

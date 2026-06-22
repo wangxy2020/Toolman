@@ -184,16 +184,10 @@ export function useP2pFiles({ workspaceId }: UseP2pFilesOptions) {
 
     const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleEvent)
     const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleEvent)
-    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
-      const event = payload as { workspaceId?: string }
-      if (event.workspaceId !== workspaceId) return
-      void load()
-    })
 
     return () => {
       unsubscribeAppended()
       unsubscribeSynced()
-      unsubscribeCompleted()
     }
   }, [load, workspaceId])
 

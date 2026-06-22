@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IconChevronRight } from '../../components/icons'
+import { computeGroupPickerSelectionCount } from './group-resource-picker-count'
 import type { GroupPickerGroup, GroupPickerSelection } from './group-resource-picker-types'
 
 function itemKey(groupId: string, itemId: string) {
@@ -212,38 +213,15 @@ export function GroupResourcePickerModal({
     })
   }, [getSelectableItems, groups, selectableGroups, selectedGroupIds])
 
-  const selectionCount = useMemo(() => {
-    const countedGroups = new Set<string>()
-    let count = 0
-
-    for (const groupId of selectedGroupIds) {
-      countedGroups.add(groupId)
-      count += 1
-    }
-
-    for (const group of selectableGroups) {
-      const items = getSelectableItems(group)
-      if (items.length === 0) continue
-
-      const selectedItemCount = items.filter((item) =>
-        selectedKeys.has(itemKey(group.id, item.id)),
-      ).length
-
-      if (selectedItemCount === 0) continue
-
-      if (selectedItemCount === items.length && !countedGroups.has(group.id)) {
-        countedGroups.add(group.id)
-        count += 1
-        continue
-      }
-
-      if (selectedItemCount < items.length) {
-        count += selectedItemCount
-      }
-    }
-
-    return count
-  }, [getSelectableItems, selectableGroups, selectedGroupIds, selectedKeys])
+  const selectionCount = useMemo(
+    () =>
+      computeGroupPickerSelectionCount({
+        groups: selectableGroups,
+        selectedGroupIds,
+        selectedKeys,
+      }),
+    [selectableGroups, selectedGroupIds, selectedKeys],
+  )
 
   const buildSelection = useCallback((): GroupPickerSelection[] => {
     const result: GroupPickerSelection[] = []
@@ -371,8 +349,9 @@ export function GroupResourcePickerModal({
                         disabled={
                           group.disabled ||
                           (selectableItems.length === 0 &&
-                            group.items.length > 0 &&
-                            !group.groupSelectable)
+                            (group.items.length > 0
+                              ? !group.groupSelectable
+                              : !group.groupSelectable || (group.selectableCount ?? 0) === 0))
                         }
                         onChange={() => toggleGroup(group)}
                       />

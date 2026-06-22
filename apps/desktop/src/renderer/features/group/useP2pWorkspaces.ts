@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type P2pWorkspace } from '@toolman/shared'
+import { bootstrapGroupWorkspaceAfterJoin } from './group-p2p-sync-policy'
 
 export class P2pJoinError extends Error {
   readonly code: string
@@ -108,6 +109,7 @@ export function useP2pWorkspaces(options: UseP2pWorkspacesOptions = {}) {
       const data = result.data as { workspace: P2pWorkspace }
       await load()
       setActiveId(data.workspace.id)
+      await bootstrapGroupWorkspaceAfterJoin(data.workspace.id)
       return data.workspace
     },
     [enabled, load],

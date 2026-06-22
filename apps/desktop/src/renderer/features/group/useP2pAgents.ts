@@ -1,24 +1,39 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { IpcChannel, type P2pAgentSessionPermission, type P2pSharedResource } from '@toolman/shared'
+import { useDebouncedCallback } from '../../utils/debounce'
+import { GROUP_P2P_UI_TIMING } from './group-p2p-ui-timing'
+import { subscribeGroupResourceActivity } from './group-p2p-sync-policy'
 
 interface UseP2pAgentsOptions {
   workspaceId: string | null
+  /** 智能体包体更新后（Shared / package_json Updated）刷新本地 mirror */
+  onContentActivity?: () => void | Promise<void>
 }
 
-export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
+export function useP2pAgents({ workspaceId, onContentActivity }: UseP2pAgentsOptions) {
   const [sharedResources, setSharedResources] = useState<P2pSharedResource[]>([])
   const [loading, setLoading] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const hasResourcesRef = useRef(false)
+  const onContentActivityRef = useRef(onContentActivity)
+
+  useEffect(() => {
+    onContentActivityRef.current = onContentActivity
+  }, [onContentActivity])
 
   const load = useCallback(async () => {
     if (!workspaceId) {
       setSharedResources([])
       setError(null)
+      hasResourcesRef.current = false
       return
     }
 
-    setLoading(true)
+    const showLoading = !hasResourcesRef.current
+    if (showLoading) {
+      setLoading(true)
+    }
     setError(null)
 
     const result = await window.api.invoke(IpcChannel.P2pResourceList, {
@@ -27,7 +42,9 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
       status: 'active',
     })
 
-    setLoading(false)
+    if (showLoading) {
+      setLoading(false)
+    }
 
     if (!result.ok) {
       setError(result.error.message)
@@ -35,8 +52,11 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
     }
 
     const data = result.data as { resources: P2pSharedResource[] }
+    hasResourcesRef.current = data.resources.length > 0
     setSharedResources(data.resources)
   }, [workspaceId])
+
+  const debouncedLoad = useDebouncedCallback(load, GROUP_P2P_UI_TIMING.dataRefreshDebounceMs)
 
   const shareAgent = useCallback(
     async (assistantId: string, sourceWorkspaceId?: string, sessionIds?: string[]) => {
@@ -60,6 +80,7 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
       }
 
       const data = result.data as { sharedResource: P2pSharedResource }
+      hasResourcesRef.current = true
       setSharedResources((current) => {
         const next = current.filter(
           (item) =>
@@ -136,7 +157,6 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
     async (resourceId: string, sessionId: string, permission: P2pAgentSessionPermission) => {
       if (!workspaceId) return false
 
-      setSharing(true)
       setError(null)
 
       const result = await window.api.invoke(IpcChannel.P2pAgentSetSessionPermission, {
@@ -145,8 +165,6 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
         sessionId,
         permission,
       })
-
-      setSharing(false)
 
       if (!result.ok) {
         setError(result.error.message)
@@ -157,10 +175,9 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
       setSharedResources((current) =>
         current.map((item) => (item.id === resourceId ? data.sharedResource : item)),
       )
-      await load()
       return true
     },
-    [load, workspaceId],
+    [workspaceId],
   )
 
   useEffect(() => {
@@ -169,27 +186,14 @@ export function useP2pAgents({ workspaceId }: UseP2pAgentsOptions) {
 
   useEffect(() => {
     if (!workspaceId) return
-
-    const handleEvent = (payload: unknown) => {
-      const event = payload as { workspaceId?: string; resourceType?: string }
-      if (event.workspaceId !== workspaceId || event.resourceType !== 'Agent') return
-      void load()
-    }
-
-    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleEvent)
-    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleEvent)
-    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
-      const event = payload as { workspaceId?: string }
-      if (event.workspaceId !== workspaceId) return
-      void load()
+    return subscribeGroupResourceActivity(workspaceId, 'Agent', {
+      onMetadata: debouncedLoad,
+      onContent: () => {
+        debouncedLoad()
+        void onContentActivityRef.current?.()
+      },
     })
-
-    return () => {
-      unsubscribeAppended()
-      unsubscribeSynced()
-      unsubscribeCompleted()
-    }
-  }, [load, workspaceId])
+  }, [debouncedLoad, workspaceId])
 
   return {
     sharedResources,

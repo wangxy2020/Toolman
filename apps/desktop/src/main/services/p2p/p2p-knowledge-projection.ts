@@ -1,18 +1,24 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { extname, join, sep } from 'node:path'
+import { existsSync } from 'node:fs'
+import { sep } from 'node:path'
 import { hashFileBytes } from '@toolman/knowledge'
-import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
+import { P2pSharedResourceRepository } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
+import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
-import { blobExists, readBlobBytes, writeBlobFromPath } from '../blob.service'
-import { getWorkspaceKnowledgeDir } from '../knowledge.service'
-import { ingestFileAtPath } from '../knowledge-ingest.service'
-import { fetchBlobFromPeers } from './p2p-blob-transfer.service'
-import { listWorkspaceEventsSince } from './p2p-event.service'
+import { blobExists, writeBlobFromPath } from '../blob.service'
+import { isSystemKnowledgeBase } from '../knowledge-default-folder-kb.service'
+import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source.service'
+import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 import {
-  buildGroupPrefixedName,
+  ensureP2pKnowledgeBlobCached,
+  isP2pKnowledgeBlobCached,
+} from './p2p-knowledge-blob-cache.service'
+import { listWorkspaceEventsSince } from './p2p-event.service'
+import { parseKnowledgeDocumentPermissionsFromPayload } from './p2p-knowledge-share-metadata'
+import {
   resolvePersonalStorageWorkspaceId,
+  stripGroupPrefixedName,
 } from './p2p-group-resource-naming'
 import { getActiveWorkspaceMember } from './p2p-permission.guard'
 
@@ -20,76 +26,122 @@ function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
 }
 
-function getMemberRepo(): P2pMemberRepository {
-  return new P2pMemberRepository(getDatabase())
-}
-
 function readPayloadString(payload: Record<string, unknown>, key: string): string | undefined {
   const value = payload[key]
   return typeof value === 'string' ? value : undefined
 }
 
-function ensureKnowledgeBase(
+function readSharedKnowledgeSourceWorkspaceId(metadataJson: string | null | undefined): string | null {
+  if (!metadataJson) return null
+  try {
+    const parsed = JSON.parse(metadataJson) as { sourceWorkspaceId?: string }
+    return typeof parsed.sourceWorkspaceId === 'string' ? parsed.sourceWorkspaceId : null
+  } catch {
+    return null
+  }
+}
+
+function isLocalKnowledgeSharer(p2pWorkspaceId: string, sharedBy: string | null | undefined): boolean {
+  if (!sharedBy) return false
+  try {
+    return getActiveWorkspaceMember(p2pWorkspaceId).id === sharedBy
+  } catch {
+    return false
+  }
+}
+
+/** Keep the sharer's original local KB row out of P2P mirror/projection state. */
+export function protectOwnerSourceKnowledgeBase(
+  p2pWorkspaceId: string,
+  sourceKbId: string,
+  sourceWorkspaceId: string,
+  originalName?: string,
+): void {
+  const kbRepo = getKnowledgeBaseRepository()
+  const row = kbRepo.findRowById(sourceKbId, sourceWorkspaceId)
+  if (!row) return
+
+  const plainName = stripGroupPrefixedName(p2pWorkspaceId, originalName ?? row.name)
+  const targetName = isSystemKnowledgeBase(row)
+    ? row.name
+    : isSystemKnowledgeBase({ name: plainName })
+      ? plainName
+      : plainName
+
+  const mirrorDescription = isP2pSharedKnowledgeMirrorDescription(row.description)
+  const needsRestore =
+    row.kind !== 'local' ||
+    row.name !== targetName ||
+    mirrorDescription
+
+  if (!needsRestore) return
+
+  const description = mirrorDescription
+    ? isSystemKnowledgeBase({ name: targetName })
+      ? '默认文件夹知识库'
+      : null
+    : row.description
+
+  kbRepo.update({
+    id: sourceKbId,
+    workspaceId: sourceWorkspaceId,
+    name: targetName,
+    kind: 'local',
+    description,
+  })
+
+  const updated = kbRepo.findRowById(sourceKbId, sourceWorkspaceId)
+  if (!updated) return
+
+  const storagePath = resolveKnowledgeBaseStoragePath(updated, { ensure: true })
+  if (storagePath) {
+    ensureKnowledgeBaseStorageSource(sourceWorkspaceId, sourceKbId, storagePath)
+  }
+}
+
+function findSharedKnowledgeResource(
+  sharedRepo: ReturnType<typeof getSharedResourceRepo>,
   p2pWorkspaceId: string,
   kbId: string,
-  name: string,
-  description?: string | null,
-): string | null {
-  const storageWorkspaceId = resolvePersonalStorageWorkspaceId()
-  if (!storageWorkspaceId) return null
+) {
+  return (
+    sharedRepo.findByWorkspaceAndLocalResource(p2pWorkspaceId, kbId, 'Knowledge') ??
+    sharedRepo.findById(kbId)
+  )
+}
 
-  const kbRepo = getKnowledgeBaseRepository()
-  const displayName = buildGroupPrefixedName(p2pWorkspaceId, name)
+export function reconcileKnowledgeSharedResources(workspaceId: string): void {
+  const terminalByKb = new Map<string, WorkspaceEvent>()
 
-  const syncDisplayName = (workspaceId: string) => {
-    const row = kbRepo.findRowById(kbId, workspaceId)
-    if (row && row.name !== displayName) {
-      kbRepo.update({
-        id: kbId,
-        workspaceId,
-        name: displayName,
-      })
-    }
-  }
+  let sinceSeq = 0
+  while (true) {
+    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
+    if (batch.length === 0) break
 
-  const existingInStorage = kbRepo.findRowById(kbId, storageWorkspaceId)
-  if (existingInStorage) {
-    syncDisplayName(storageWorkspaceId)
-    return storageWorkspaceId
-  }
-
-  const existingAnywhere = kbRepo.findRowByIdAny(kbId)
-  if (existingAnywhere) {
-    if (existingAnywhere.workspaceId === storageWorkspaceId) {
-      if (existingAnywhere.deletedAt) {
-        kbRepo.restore(kbId, storageWorkspaceId)
+    for (const event of batch) {
+      sinceSeq = event.seq
+      if (event.resourceType !== 'Knowledge') continue
+      if (
+        event.eventType !== 'Shared' &&
+        event.eventType !== 'Created' &&
+        event.eventType !== 'Deleted'
+      ) {
+        continue
       }
-      syncDisplayName(storageWorkspaceId)
-      return storageWorkspaceId
+
+      const kbId = readPayloadString(event.payload, 'kb_id') ?? event.resourceId
+      terminalByKb.set(kbId, event)
     }
-    return existingAnywhere.workspaceId
+
+    if (batch.length < 200) break
   }
 
-  getWorkspaceKnowledgeDir(storageWorkspaceId)
-  try {
-    kbRepo.create({
-      id: kbId,
-      workspaceId: storageWorkspaceId,
-      name: displayName,
-      description: description ?? undefined,
-      kind: 'network',
-    })
-    return storageWorkspaceId
-  } catch (error) {
-    const raced = kbRepo.findRowByIdAny(kbId)
-    if (raced) {
-      if (raced.workspaceId === storageWorkspaceId && raced.deletedAt) {
-        kbRepo.restore(kbId, storageWorkspaceId)
-      }
-      syncDisplayName(raced.workspaceId)
-      return raced.workspaceId
+  for (const event of terminalByKb.values()) {
+    if (event.eventType === 'Deleted') {
+      projectKnowledgeDeletedEvent(event)
+      continue
     }
-    throw error
+    projectKnowledgeSharedEvent(event)
   }
 }
 
@@ -102,22 +154,47 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
   }
 
   const kbId = readPayloadString(event.payload, 'kb_id') ?? event.resourceId
-  const name = readPayloadString(event.payload, 'name') ?? '共享知识库'
+  const name = stripGroupPrefixedName(
+    event.workspaceId,
+    readPayloadString(event.payload, 'name') ?? '共享知识库',
+  )
   const description = readPayloadString(event.payload, 'description') ?? null
   const sourceWorkspaceId = readPayloadString(event.payload, 'source_workspace_id')
   const documentIdsRaw = event.payload.document_ids
   const documentIds = Array.isArray(documentIdsRaw)
     ? documentIdsRaw.filter((id): id is string => typeof id === 'string' && id.length > 0)
     : undefined
+  const documentPermissions = parseKnowledgeDocumentPermissionsFromPayload(event.payload)
+
+  const sharedRepo = getSharedResourceRepo()
+  const existing = findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId)
+  const existingMetadata = existing?.metadataJson
+    ? (() => {
+        try {
+          return JSON.parse(existing.metadataJson) as {
+            documentPermissions?: Record<string, string>
+          }
+        } catch {
+          return {}
+        }
+      })()
+    : {}
 
   const metadataJson = JSON.stringify({
     description,
     ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
     ...(documentIds && documentIds.length > 0 ? { documentIds } : {}),
+    ...(documentPermissions || existingMetadata.documentPermissions
+      ? {
+          documentPermissions: {
+            ...(existingMetadata.documentPermissions ?? {}),
+            ...(documentPermissions ?? {}),
+          },
+        }
+      : {}),
   })
 
-  const sharedRepo = getSharedResourceRepo()
-  const existing = sharedRepo.findById(kbId)
+  const resourceId = existing?.id ?? kbId
   if (!existing) {
     sharedRepo.create({
       id: kbId,
@@ -131,17 +208,26 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
       createdAt: new Date(event.timestamp),
       updatedAt: new Date(event.timestamp),
     })
-  } else {
-    sharedRepo.update({ id: kbId, name, metadataJson })
+  } else if (
+    existing.name !== name ||
+    existing.metadataJson !== metadataJson ||
+    existing.status !== 'active'
+  ) {
+    sharedRepo.update({
+      id: resourceId,
+      name,
+      metadataJson,
+      status: 'active',
+    })
   }
 
   try {
     const localMember = getActiveWorkspaceMember(event.workspaceId)
-    if (event.operatorId !== localMember.id) {
-      ensureKnowledgeBase(event.workspaceId, kbId, name, description)
+    if (event.operatorId === localMember.id && sourceWorkspaceId) {
+      protectOwnerSourceKnowledgeBase(event.workspaceId, kbId, sourceWorkspaceId, name)
     }
   } catch {
-    ensureKnowledgeBase(event.workspaceId, kbId, name, description)
+    // viewer is not a member of this workspace yet
   }
 }
 
@@ -152,19 +238,10 @@ export function projectKnowledgeDeletedEvent(event: WorkspaceEvent): void {
 
   const kbId = readPayloadString(event.payload, 'kb_id') ?? event.resourceId
   const sharedRepo = getSharedResourceRepo()
-  const resource = sharedRepo.findById(kbId)
+  const resource = findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId)
   if (resource) {
-    sharedRepo.update({ id: kbId, status: 'unshared' })
+    sharedRepo.update({ id: resource.id, status: 'unshared' })
   }
-}
-
-function extensionForTitle(title: string, mimeType: string): string {
-  const fromTitle = extname(title)
-  if (fromTitle) return fromTitle
-  if (mimeType === 'application/pdf') return '.pdf'
-  if (mimeType === 'text/plain') return '.txt'
-  if (mimeType === 'text/markdown') return '.md'
-  return ''
 }
 
 function isP2pSyncedKnowledgePath(absolutePath: string): boolean {
@@ -192,27 +269,6 @@ function documentMatchesContentHash(
   } catch {
     return false
   }
-}
-
-function shouldSkipOwnerReingest(input: {
-  p2pWorkspaceId: string
-  kbId: string
-  docId: string
-  contentHash: string
-  sharedBy: string | null | undefined
-}): boolean {
-  const member = getActiveWorkspaceMember(input.p2pWorkspaceId)
-  if (!input.sharedBy || input.sharedBy !== member.id) {
-    return false
-  }
-
-  const docRepo = getDocumentRepository()
-  const existing = docRepo.findById(input.docId, input.kbId)
-  if (!existing || existing.status !== 'ready') {
-    return false
-  }
-
-  return documentMatchesContentHash(existing, input.contentHash)
 }
 
 function ensureLocalBlobFromDocument(
@@ -245,6 +301,43 @@ export async function applyKnowledgeUpdatedEvent(event: WorkspaceEvent): Promise
 
   const kbId = readPayloadString(event.payload, 'kb_id')
   const docId = readPayloadString(event.payload, 'doc_id')
+  const documentPermissions = parseKnowledgeDocumentPermissionsFromPayload(event.payload)
+  const documentPermission = readPayloadString(event.payload, 'document_permission')
+
+  if (documentPermissions || documentPermission) {
+    const sharedRepo = getSharedResourceRepo()
+    const shared = kbId ? findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId) : null
+    if (shared) {
+      let existingMetadata: {
+        description?: string | null
+        sourceWorkspaceId?: string
+        documentIds?: string[]
+        documentPermissions?: Record<string, string>
+      } = {}
+      try {
+        existingMetadata = JSON.parse(shared.metadataJson)
+      } catch {
+        existingMetadata = {}
+      }
+      const nextPermissions = {
+        ...(existingMetadata.documentPermissions ?? {}),
+        ...(documentPermissions ?? {}),
+        ...(documentPermission && docId ? { [docId]: documentPermission } : {}),
+      }
+      const metadataJson = JSON.stringify({
+        ...existingMetadata,
+        documentPermissions: nextPermissions,
+      })
+      sharedRepo.update({
+        id: shared.id,
+        metadataJson,
+      })
+    }
+    if (!docId || !readPayloadString(event.payload, 'content_hash')) {
+      return
+    }
+  }
+
   const title = readPayloadString(event.payload, 'title') ?? '文档'
   const contentHash = readPayloadString(event.payload, 'content_hash')
   const mimeType = readPayloadString(event.payload, 'mime_type') ?? 'application/octet-stream'
@@ -254,81 +347,61 @@ export async function applyKnowledgeUpdatedEvent(event: WorkspaceEvent): Promise
   }
 
   const sharedRepo = getSharedResourceRepo()
-  const shared = sharedRepo.findById(kbId)
-  const storageWorkspaceId = ensureKnowledgeBase(
-    event.workspaceId,
-    kbId,
-    shared?.name ?? title,
-  )
+  const shared = findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId)
+  const sharedBy = shared?.sharedBy
+  const isLocalSharer = isLocalKnowledgeSharer(event.workspaceId, sharedBy)
+  const mirrorName = stripGroupPrefixedName(event.workspaceId, shared?.name ?? title)
+
+  const storageWorkspaceId = isLocalSharer
+    ? readSharedKnowledgeSourceWorkspaceId(shared?.metadataJson) ??
+      readPayloadString(event.payload, 'source_workspace_id') ??
+      resolvePersonalStorageWorkspaceId()
+    : resolvePersonalStorageWorkspaceId()
   if (!storageWorkspaceId) {
     return
   }
 
   const docRepo = getDocumentRepository()
-  if (
-    shouldSkipOwnerReingest({
-      p2pWorkspaceId: event.workspaceId,
-      kbId,
-      docId,
-      contentHash,
-      sharedBy: shared?.sharedBy,
-    })
-  ) {
-    docRepo.update(docId, kbId, { blobHash: contentHash })
-    return
-  }
 
-  const existing = docRepo.findById(docId, kbId)
-  if (existing && documentMatchesContentHash(existing, contentHash)) {
-    if (!blobExists(contentHash)) {
-      ensureLocalBlobFromDocument(existing, contentHash)
+  if (isLocalSharer) {
+    protectOwnerSourceKnowledgeBase(event.workspaceId, kbId, storageWorkspaceId, mirrorName)
+    const existing = docRepo.findById(docId, kbId)
+    if (existing?.status === 'ready') {
+      if (!blobExists(contentHash)) {
+        ensureLocalBlobFromDocument(existing, contentHash)
+      }
+      docRepo.update(docId, kbId, { blobHash: contentHash, contentHash })
     }
     return
   }
 
-  if (ensureLocalBlobFromDocument(existing, contentHash)) {
-    // fall through to ingest below
-  } else {
-    const sharer = shared?.sharedBy ? getMemberRepo().findById(shared.sharedBy) : null
-    const fetched = await fetchBlobFromPeers(
-      event.workspaceId,
-      contentHash,
-      mimeType,
-      sharer?.deviceId,
-    )
-    if (!fetched) {
-      console.warn(`[p2p] knowledge blob ${contentHash} not available for doc ${docId}`)
-      return
-    }
+  const cachedPath = await ensureP2pKnowledgeBlobCached({
+    p2pWorkspaceId: event.workspaceId,
+    storageWorkspaceId,
+    kbId,
+    docId,
+    title,
+    contentHash,
+    mimeType,
+    sharedBy,
+  })
+  if (!cachedPath) {
+    console.warn(`[p2p] knowledge blob ${contentHash} not available for doc ${docId}`)
+    return
   }
-
-  const syncDir = join(getWorkspaceKnowledgeDir(storageWorkspaceId), 'p2p-sync', kbId)
-  mkdirSync(syncDir, { recursive: true })
-  const filePath = join(syncDir, `${docId}${extensionForTitle(title, mimeType)}`)
-  writeFileSync(filePath, readBlobBytes(contentHash))
 
   if (shared) {
     sharedRepo.update({
-      id: kbId,
+      id: shared.id,
       contentHash,
       version: (shared.version ?? 1) + 1,
     })
   }
-
-  const result = await ingestFileAtPath({
-    workspaceId: storageWorkspaceId,
-    kbId,
-    filePath,
-    documentId: docId,
-    skipP2pSync: true,
-  })
-
-  if (result.outcome === 'ingested' || result.outcome === 'skipped') {
-    docRepo.update(docId, kbId, { blobHash: contentHash })
-  }
 }
 
 export async function syncMissingSharedKnowledgeDocuments(workspaceId: string): Promise<number> {
+  reconcileKnowledgeSharedResources(workspaceId)
+
   const sharedRepo = getSharedResourceRepo()
   const activeKbIds = new Set(
     sharedRepo
@@ -341,36 +414,54 @@ export async function syncMissingSharedKnowledgeDocuments(workspaceId: string): 
     return 0
   }
 
-  const docRepo = getDocumentRepository()
   let synced = 0
 
-  for (const event of listWorkspaceEventsSince(workspaceId, 0)) {
-    if (event.resourceType !== 'Knowledge' || event.eventType !== 'Updated') {
-      continue
+  let sinceSeq = 0
+  while (true) {
+    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
+    if (batch.length === 0) break
+
+    for (const event of batch) {
+      sinceSeq = event.seq
+      if (event.resourceType !== 'Knowledge' || event.eventType !== 'Updated') {
+        continue
+      }
+
+      const kbId = readPayloadString(event.payload, 'kb_id')
+      const docId = readPayloadString(event.payload, 'doc_id')
+      const contentHash = readPayloadString(event.payload, 'content_hash')
+      if (!kbId || !docId || !contentHash || !activeKbIds.has(kbId)) {
+        continue
+      }
+
+      const title = readPayloadString(event.payload, 'title') ?? '文档'
+      const mimeType = readPayloadString(event.payload, 'mime_type') ?? 'application/octet-stream'
+      const storageWorkspaceId = resolvePersonalStorageWorkspaceId()
+      if (
+        storageWorkspaceId &&
+        isP2pKnowledgeBlobCached({
+          storageWorkspaceId,
+          p2pWorkspaceId: workspaceId,
+          kbId,
+          docId,
+          title,
+          contentHash,
+          mimeType,
+        })
+      ) {
+        continue
+      }
+
+      try {
+        await applyKnowledgeUpdatedEvent(event)
+        synced += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[p2p] replay knowledge doc ${docId} failed: ${message}`)
+      }
     }
 
-    const kbId = readPayloadString(event.payload, 'kb_id')
-    const docId = readPayloadString(event.payload, 'doc_id')
-    if (!kbId || !docId || !activeKbIds.has(kbId)) {
-      continue
-    }
-
-    const existing = docRepo.findById(docId, kbId)
-    if (
-      existing?.status === 'ready' &&
-      existing.absolutePath &&
-      existsSync(existing.absolutePath)
-    ) {
-      continue
-    }
-
-    try {
-      await applyKnowledgeUpdatedEvent(event)
-      synced += 1
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn(`[p2p] replay knowledge doc ${docId} failed: ${message}`)
-    }
+    if (batch.length < 200) break
   }
 
   return synced

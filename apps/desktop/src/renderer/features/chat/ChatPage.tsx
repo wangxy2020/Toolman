@@ -78,7 +78,7 @@ import {
   knowledgeSectionForKind,
   type KnowledgeSidebarSection,
 } from '../knowledge/knowledge-sidebar-types'
-import { useAllP2pSharedKnowledge } from '../knowledge/useAllP2pSharedKnowledge'
+import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 
 export function ChatPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -117,11 +117,6 @@ export function ChatPage() {
 
   const knowledge = useKnowledgeBases({ workspaceId })
   const p2pWorkspaces = useP2pWorkspaces({ enabled: registrationGate.canUseGroup })
-  const sharedKnowledge = useAllP2pSharedKnowledge({ enabled: registrationGate.canUseGroup })
-  const activeSharedKnowledgeEntry = useMemo(
-    () => sharedKnowledge.entries.find((item) => item.id === knowledge.activeId) ?? null,
-    [knowledge.activeId, sharedKnowledge.entries],
-  )
   const p2pTrust = useP2pTrustPrompt()
   const knowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'local')
   const networkKnowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'network')
@@ -576,18 +571,12 @@ export function ChatPage() {
             activeId={knowledge.activeId}
             activeSection={knowledgeSection}
             loading={knowledge.loading}
-            sharedEntries={sharedKnowledge.entries}
-            sharedLoading={sharedKnowledge.loading}
             onSelect={(id) => {
               const item = knowledge.items.find((kb) => kb.id === id)
               knowledge.setActiveId(id)
               if (item) {
                 setKnowledgeSection(knowledgeSectionForKind(item.kind))
               }
-            }}
-            onSelectShared={(id) => {
-              knowledge.setActiveId(id)
-              setKnowledgeSection('shared')
             }}
             onSelectDefaultFolder={() => {
               knowledge.setActiveId(DEFAULT_KNOWLEDGE_FOLDER_ID)
@@ -614,9 +603,13 @@ export function ChatPage() {
               if (section === 'network') {
                 knowledge.setActiveId(DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID)
               } else if (section === 'shared') {
-                const firstShared = sharedKnowledge.entries[0]
-                if (firstShared) {
-                  knowledge.setActiveId(firstShared.id)
+                const firstSaved = knowledge.items.find(
+                  (item) =>
+                    item.kind === 'shared' &&
+                    !isP2pSharedKnowledgeMirrorDescription(item.description),
+                )
+                if (firstSaved) {
+                  knowledge.setActiveId(firstSaved.id)
                 }
               } else if (section === 'local-files') {
                 knowledge.setActiveId(DEFAULT_LOCAL_FILES_FOLDER_ID)
@@ -810,9 +803,6 @@ export function ChatPage() {
             section={knowledgeSection}
             activeId={knowledge.activeId}
             active={knowledge.active}
-            sharedEntry={activeSharedKnowledgeEntry}
-            sharedLoading={sharedKnowledge.loading}
-            sharedError={sharedKnowledge.error}
             knowledgeFolderPath={knowledgeFolder.path}
             knowledgeFolderLoading={knowledgeFolder.loading}
             knowledgeFolderError={knowledgeFolder.error}
@@ -877,6 +867,7 @@ export function ChatPage() {
               onOpenGroupNote={handleOpenGroupNote}
               onSyncGroupNoteLock={handleSyncGroupNoteLock}
               onOpenGroupKnowledgeMarkdown={handleOpenGroupKnowledgeMarkdown}
+              onKnowledgeBasesChanged={() => void knowledge.load()}
               onSaveGroupNoteAsCopy={handleSaveGroupNoteAsCopy}
               onOpenGroupAgentSession={handleOpenGroupAgentSession}
               onReloadAssistants={handleReloadAssistants}

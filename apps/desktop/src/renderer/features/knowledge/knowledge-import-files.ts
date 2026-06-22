@@ -235,6 +235,16 @@ export function resolveKnowledgeImportTarget(options: {
     }
   }
 
+  if (section === 'shared' && activeKbId && activeKbKind === 'shared') {
+    return {
+      kbId: activeKbId,
+      storagePath: null,
+      defaultImportPath: null,
+      ready: true,
+      vectorized: true,
+    }
+  }
+
   if (activeKbId && activeKbName) {
     const baseFolder =
       section === 'network'

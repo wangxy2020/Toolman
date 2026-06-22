@@ -11,7 +11,7 @@ export const knowledgeBases = sqliteTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
-    kind: text('kind', { enum: ['local', 'network', 'local_files'] }).notNull().default('local'),
+    kind: text('kind', { enum: ['local', 'network', 'local_files', 'shared'] }).notNull().default('local'),
     embedConfigJson: text('embed_config_json').notNull().default('{}'),
     chunkConfigJson: text('chunk_config_json').notNull().default('{}'),
     watchConfigJson: text('watch_config_json').notNull().default('{}'),

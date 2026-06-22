@@ -136,6 +136,8 @@ import {
   P2pSyncStatusOutputSchema,
   P2pSyncForceInputSchema,
   P2pSyncForceOutputSchema,
+  P2pSyncCatchUpInputSchema,
+  P2pSyncCatchUpOutputSchema,
   P2pFileUploadInputSchema,
   P2pFileUploadOutputSchema,
   P2pFileListInputSchema,
@@ -146,6 +148,12 @@ import {
   P2pFileDownloadOutputSchema,
   P2pKnowledgeRemoveDocumentsInputSchema,
   P2pKnowledgeRemoveDocumentsOutputSchema,
+  P2pKnowledgeSetDocumentPermissionInputSchema,
+  P2pKnowledgeSetDocumentPermissionOutputSchema,
+  P2pKnowledgeEnsureDocumentSavedInputSchema,
+  P2pKnowledgeEnsureDocumentSavedOutputSchema,
+  P2pKnowledgeMaterializeDocumentInputSchema,
+  P2pKnowledgeMaterializeDocumentOutputSchema,
   P2pKnowledgeShareInputSchema,
   P2pKnowledgeShareOutputSchema,
   P2pKnowledgeSyncDocumentInputSchema,
@@ -1314,7 +1322,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pEventList]: async (input) => {
     try {
       const parsed = P2pEventListInputSchema.parse(input)
-      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pEventService.listP2pEvents(parsed)
       return ipcOk(P2pEventListOutputSchema.parse(result))
     } catch (error) {
@@ -1388,6 +1395,17 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     }
   },
 
+  [IpcChannel.P2pSyncCatchUp]: async (input) => {
+    try {
+      const parsed = P2pSyncCatchUpInputSchema.parse(input)
+      await p2pSyncService.awaitJoinerEventCatchUp(parsed.workspaceId)
+      return ipcOk(P2pSyncCatchUpOutputSchema.parse({ caughtUp: true }))
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to catch up events'
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
+    }
+  },
+
   [IpcChannel.P2pFileUpload]: async (input) => {
     try {
       const parsed = P2pFileUploadInputSchema.parse(input)
@@ -1409,7 +1427,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pFileList]: async (input) => {
     try {
       const parsed = P2pFileListInputSchema.parse(input)
-      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pFileSyncService.listP2pFiles(parsed)
       return ipcOk(P2pFileListOutputSchema.parse(result))
     } catch (error) {
@@ -1438,7 +1455,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pFileDownload]: async (input) => {
     try {
       const parsed = P2pFileDownloadInputSchema.parse(input)
-      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = await p2pFileSyncService.downloadP2pFile(parsed)
       return ipcOk(P2pFileDownloadOutputSchema.parse(result))
     } catch (error) {
@@ -1498,6 +1514,56 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
           ? 'NOT_FOUND'
           : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pKnowledgeSetDocumentPermission]: async (input) => {
+    try {
+      const parsed = P2pKnowledgeSetDocumentPermissionInputSchema.parse(input)
+      const result = await p2pKnowledgeSyncService.setP2pKnowledgeDocumentPermission(parsed)
+      return ipcOk(P2pKnowledgeSetDocumentPermissionOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage =
+        error instanceof Error ? error.message : 'Failed to set knowledge document permission'
+      const code = errMessage.includes('无权') || errMessage.includes('只读')
+        ? 'P2P_FORBIDDEN'
+        : errMessage.includes('不存在') || errMessage.includes('未共享')
+          ? 'NOT_FOUND'
+          : 'INTERNAL_ERROR'
+      return ipcErr({ code, message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pKnowledgeEnsureDocumentSaved]: async (input) => {
+    try {
+      const parsed = P2pKnowledgeEnsureDocumentSavedInputSchema.parse(input)
+      const result = await p2pKnowledgeSyncService.ensureP2pKnowledgeDocumentSaved(parsed)
+      return ipcOk(P2pKnowledgeEnsureDocumentSavedOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage =
+        error instanceof Error ? error.message : 'Failed to save shared knowledge document'
+      const code = errMessage.includes('无权') || errMessage.includes('未开放')
+        ? 'P2P_FORBIDDEN'
+        : errMessage.includes('不存在') || errMessage.includes('未就绪') || errMessage.includes('尚未同步')
+          ? 'NOT_FOUND'
+          : 'INTERNAL_ERROR'
+      return ipcErr({ code, message: errMessage, retryable: true })
+    }
+  },
+
+  [IpcChannel.P2pKnowledgeMaterializeDocument]: async (input) => {
+    try {
+      const parsed = P2pKnowledgeMaterializeDocumentInputSchema.parse(input)
+      const result = await p2pKnowledgeSyncService.materializeP2pKnowledgeDocumentForOpen(parsed)
+      return ipcOk(P2pKnowledgeMaterializeDocumentOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage =
+        error instanceof Error ? error.message : 'Failed to materialize shared knowledge document'
+      const code =
+        errMessage.includes('不存在') || errMessage.includes('未就绪') || errMessage.includes('尚未同步')
+          ? 'NOT_FOUND'
+          : 'INTERNAL_ERROR'
+      return ipcErr({ code, message: errMessage, retryable: true })
     }
   },
 
@@ -1582,7 +1648,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pAgentOpenSession]: async (input) => {
     try {
       const parsed = P2pAgentOpenSessionInputSchema.parse(input)
-      p2pSyncService.scheduleJoinerEventCatchUp(parsed.p2pWorkspaceId)
       const result = await p2pGroupAgentProxyService.openP2pGroupAgentSession(parsed)
       return ipcOk(P2pAgentOpenSessionOutputSchema.parse(result))
     } catch (error) {
@@ -1728,7 +1793,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pResourceList]: async (input) => {
     try {
       const parsed = P2pResourceListInputSchema.parse(input)
-      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pKnowledgeSyncService.listP2pSharedResources(parsed)
       return ipcOk(P2pResourceListOutputSchema.parse(result))
     } catch (error) {

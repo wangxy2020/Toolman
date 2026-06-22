@@ -186,8 +186,6 @@ app.whenReady().then(() => {
     app.setAppUserModelId('dev.toolman.app')
   }
 
-  createWindow()
-
   try {
     bootstrapDatabase()
     ensureP2pDeviceIdentity()
@@ -215,6 +213,8 @@ app.whenReady().then(() => {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
     console.error(`[bootstrap] failed: ${message}`)
   }
+
+  createWindow()
 
   void bootstrapCommunityHub().then((status) => {
     if (status.running) {

@@ -33,7 +33,7 @@ import {
 } from './p2p-blob-transfer.service'
 import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
 import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
-import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse, reconcileOwnerWorkspaceMembers } from './p2p-member.service'
+import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse } from './p2p-member.service'
 import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 import { maybeAutoSnapshot } from './p2p-snapshot.service'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
@@ -79,6 +79,8 @@ interface WorkspaceSyncState {
 const workspaceStates = new Map<string, WorkspaceSyncState>()
 const syncingWorkspaces = new Set<string>()
 const reconnectRecoveryInFlight = new Set<string>()
+const reconnectRecoveryLastRunAt = new Map<string, number>()
+const RECONNECT_RECOVERY_COOLDOWN_MS = 30_000
 
 function getCursorRepo(): P2pSyncCursorRepository {
   return new P2pSyncCursorRepository(getDatabase())
@@ -497,6 +499,8 @@ export async function syncWithPeer(workspaceId: string, peerDeviceId: string): P
 }
 
 const joinerCatchUpInFlight = new Map<string, Promise<void>>()
+const joinerCatchUpScheduled = new Map<string, ReturnType<typeof setTimeout>>()
+const JOINER_CATCH_UP_DEBOUNCE_MS = 1500
 
 async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string): Promise<void> {
   ensureOwnerPeerTrustedForSync(workspaceId, ownerDeviceId)
@@ -520,17 +524,31 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
   const device = getP2pDeviceInfo()
   if (workspace.ownerDeviceId === device.deviceId) return
 
-  const inFlight = joinerCatchUpInFlight.get(workspaceId)
-  if (inFlight) return
+  if (joinerCatchUpInFlight.has(workspaceId)) return
 
-  const promise = runJoinerEventCatchUp(workspaceId, workspace.ownerDeviceId).catch((error) => {
-    const message = error instanceof Error ? error.message : 'joiner event catch-up failed'
-    console.warn(`[p2p] joiner event catch-up failed: ${message}`)
-  }).finally(() => {
-    joinerCatchUpInFlight.delete(workspaceId)
-  })
+  const pending = joinerCatchUpScheduled.get(workspaceId)
+  if (pending) {
+    clearTimeout(pending)
+  }
 
-  joinerCatchUpInFlight.set(workspaceId, promise)
+  joinerCatchUpScheduled.set(
+    workspaceId,
+    setTimeout(() => {
+      joinerCatchUpScheduled.delete(workspaceId)
+      if (joinerCatchUpInFlight.has(workspaceId)) return
+
+      const promise = runJoinerEventCatchUp(workspaceId, workspace.ownerDeviceId)
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : 'joiner event catch-up failed'
+          console.warn(`[p2p] joiner event catch-up failed: ${message}`)
+        })
+        .finally(() => {
+          joinerCatchUpInFlight.delete(workspaceId)
+        })
+
+      joinerCatchUpInFlight.set(workspaceId, promise)
+    }, JOINER_CATCH_UP_DEBOUNCE_MS),
+  )
 }
 
 export async function awaitJoinerEventCatchUp(workspaceId: string): Promise<void> {
@@ -595,27 +613,24 @@ export async function recoverWorkspaceSyncAfterReconnect(
   if (!workspaceId) return
   const recoveryKey = `${workspaceId}:${peerDeviceId ?? 'all'}`
   if (reconnectRecoveryInFlight.has(recoveryKey)) return
-  reconnectRecoveryInFlight.add(recoveryKey)
 
-  setWorkspaceState(workspaceId, { status: 'syncing', error: undefined })
+  const lastRun = reconnectRecoveryLastRunAt.get(recoveryKey) ?? 0
+  if (Date.now() - lastRun < RECONNECT_RECOVERY_COOLDOWN_MS) return
+  reconnectRecoveryLastRunAt.set(recoveryKey, Date.now())
+
+  reconnectRecoveryInFlight.add(recoveryKey)
   try {
-    const result = await forceP2pSync(workspaceId, peerDeviceId)
-    const filesFetched = await syncMissingWorkspaceBlobs(workspaceId)
-    if (result.eventsApplied > 0 || filesFetched > 0) {
-      broadcastP2pSyncCompleted({
-        workspaceId,
-        eventsApplied: result.eventsApplied,
-        filesFetched,
-      })
+    const device = getP2pDeviceInfo()
+    const targets = (peerDeviceId ? [peerDeviceId] : listWorkspacePeerDeviceIds(workspaceId)).filter(
+      (id) => id !== device.deviceId,
+    )
+    for (const peer of targets) {
+      if (!isPeerTrusted(workspaceId, peer)) continue
+      await syncWithPeer(workspaceId, peer)
     }
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : '重连后同步失败'
-    setWorkspaceState(workspaceId, { status: 'error', error: errMessage })
-    broadcastP2pSyncError({
-      workspaceId,
-      code: 'P2P_SYNC_FAILED',
-      message: errMessage,
-    })
+    console.warn(`[p2p] reconnect catch-up failed for ${workspaceId}: ${errMessage}`)
   } finally {
     reconnectRecoveryInFlight.delete(recoveryKey)
   }
@@ -727,9 +742,6 @@ export function getP2pSyncStatus(workspaceId: string): {
   sequencingMode: ReturnType<typeof getWorkspaceSequencingMode>
   ownerOnline: boolean
 } {
-  void ensureMemberConnectsToOwner(workspaceId)
-  void reconcileOwnerWorkspaceMembers(workspaceId)
-
   const state = getWorkspaceState(workspaceId)
   const connections = knownConnectionsSnapshot()
   const peerDeviceIds = listWorkspacePeerDeviceIds(workspaceId)

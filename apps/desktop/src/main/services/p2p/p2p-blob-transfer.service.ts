@@ -488,6 +488,8 @@ export async function fetchBlobFromPeers(
   }
 }
 
+const BLOB_PUSH_PEER_TIMEOUT_MS = 15_000
+
 export async function pushBlobToPeers(
   workspaceId: string,
   contentHash: string,
@@ -510,23 +512,38 @@ export async function pushBlobToPeers(
     peers.map(async (peer) => {
       if (!isPeerTrusted(workspaceId, peer.peerDeviceId)) return
       try {
-        await ensurePeerReadyForWorkspace(peer.peerDeviceId, workspaceId)
-        const pushId = randomUUID()
-        await sendBlobToPeer(
-          peer.peerDeviceId,
-          workspaceId,
-          contentHash,
-          data,
-          mimeType ?? 'application/octet-stream',
-          pushId,
-          'push',
-        )
+        await Promise.race([
+          (async () => {
+            await ensurePeerReadyForWorkspace(peer.peerDeviceId, workspaceId)
+            const pushId = randomUUID()
+            await sendBlobToPeer(
+              peer.peerDeviceId,
+              workspaceId,
+              contentHash,
+              data,
+              mimeType ?? 'application/octet-stream',
+              pushId,
+              'push',
+            )
+          })(),
+          sleep(BLOB_PUSH_PEER_TIMEOUT_MS).then(() => {
+            throw new Error('blob push timed out')
+          }),
+        ])
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         console.warn(`[p2p] blob push to ${peer.peerDeviceId} failed: ${message}`)
       }
     }),
   )
+
+  if (peers.length > 0) {
+    broadcastP2pSyncCompleted({
+      workspaceId,
+      eventsApplied: 0,
+      filesFetched: peers.length,
+    })
+  }
 }
 
 export function scheduleBlobFetch(

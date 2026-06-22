@@ -17,10 +17,21 @@
 本地数据目录（macOS）：
 
 ```
+~/Documents/Toolman/{用户名}/
+├── 工作区/           # 智能体默认工作目录
+├── 本地知识库/
+├── 网络知识库/
+├── 共享知识库/
+└── 本地文件/
+```
+
+`{用户名}` 取自应用内 **显示名称**（设置 → 个人资料）。P2P 群组 blob 仍位于：
+
+```
 ~/Library/Application Support/toolman/p2p/workspaces/<workspace-id>/
-├── events.wal.jsonl    # Rust 事件 WAL
-├── blobs/              # 群组文件
-└── snapshots/          # 周期性快照
+├── events.wal.jsonl
+├── blobs/
+└── snapshots/
 ```
 
 ---
@@ -40,6 +51,14 @@
 pnpm install
 pnpm build:p2p          # 编译 toolman-p2p → apps/desktop/native/*.node
 pnpm --filter @toolman/desktop dev
+```
+
+**单机双开 P2P 测试**（独立 user-data 与本地知识库目录）见 [DUAL_INSTANCE_DEV.md](./DUAL_INSTANCE_DEV.md)：
+
+```bash
+./scripts/p2p-dual-instance-init.sh   # 首次：创建目录并配置 knowledgeFolderPath
+pnpm dev:p2p:a                      # 终端 1：用户 A（群主）
+pnpm dev:p2p:b                      # 终端 2：用户 B（成员）
 ```
 
 若邀请或连接报错「P2P 未就绪」，请**完全退出**应用后重新 `dev`（主进程需加载最新 `.node`）。
@@ -139,6 +158,7 @@ cargo test -p toolman-p2p
 
 | 文档 | 内容 |
 |------|------|
+| [DUAL_INSTANCE_DEV.md](./DUAL_INSTANCE_DEV.md) | 单机双开 P2P 测试（隔离 user-data 与知识库目录） |
 | [P2P_ARCHITECTURE.md](./P2P_ARCHITECTURE.md) | 系统架构与设计决策 |
 | [API_SPEC.md](./API_SPEC.md) | IPC / 事件 / 同步协议 |
 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | `p2p_*` 表结构 |

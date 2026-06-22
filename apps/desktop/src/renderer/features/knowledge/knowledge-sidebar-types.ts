@@ -69,6 +69,7 @@ export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{
 ]
 
 export function knowledgeSectionForKind(kind: KnowledgeBaseKind): KnowledgeSidebarSection {
+  if (kind === 'shared') return 'shared'
   if (kind === 'network') return 'network'
   if (kind === 'local_files') return 'local-files'
   return 'local'

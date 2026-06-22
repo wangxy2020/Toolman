@@ -55,6 +55,13 @@ export function formatP2pEventMessage(event: WorkspaceEvent): string {
   }
 
   if (event.resourceType === 'Knowledge' && event.eventType === 'Updated') {
+    if (payload.document_permission || payload.document_permissions) {
+      const permission = payload.document_permission === 'savable' ? '可保存' : '仅阅读'
+      const docTitle = readString(payload, 'title', '')
+      return docTitle
+        ? `更新了知识库文件权限「${docTitle}」为${permission}`
+        : `更新了知识库文件权限为${permission}`
+    }
     return `同步了知识库文档「${readString(payload, 'title', '未命名文档')}」`
   }
 

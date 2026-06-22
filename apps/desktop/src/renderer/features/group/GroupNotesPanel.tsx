@@ -11,6 +11,7 @@ import {
   type GroupNoteListItem,
 } from './GroupSharedNotebookSection'
 import { useP2pNotes } from './useP2pNotes'
+import { useRegisterGroupPanelError } from './group-page-status'
 import type { NoteItem, NotebookItem } from '../notes/notes-storage'
 
 interface Props {
@@ -64,6 +65,8 @@ export function GroupNotesPanel({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [sectionKeysMap, setSectionKeysMap] = useState<Record<string, string[]>>({})
   const p2pNotes = useP2pNotes({ workspaceId: p2pWorkspaceId })
+
+  useRegisterGroupPanelError('notes', p2pNotes.error, () => p2pNotes.setError(null))
 
   const notesById = useMemo(() => new Map(notes.map((item) => [item.id, item])), [notes])
 
@@ -401,8 +404,6 @@ export function GroupNotesPanel({
         title="群组笔记"
         subtitle={`${workspaceName} · ${p2pNotes.sharedResources.length} 篇笔记`}
       />
-
-      {p2pNotes.error ? <div className="tm-error-bar">{p2pNotes.error}</div> : null}
 
       <div className="tm-kb-file-panel" onContextMenu={handleContextMenu}>
         <button

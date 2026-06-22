@@ -6,21 +6,7 @@ import {
 } from '../knowledge/knowledge-file-display'
 import type { GroupPickerGroup, GroupPickerSelection } from './group-resource-picker-types'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
-
-/** `undefined` = not shared; `null` = whole knowledge base shared; `string[]` = partially shared document ids */
-type SharedDocumentState = string[] | null | undefined
-
-function buildSharedDocumentMap(
-  sharedResources: P2pSharedResource[],
-): Map<string, SharedDocumentState> {
-  const map = new Map<string, SharedDocumentState>()
-  for (const resource of sharedResources) {
-    if (resource.resourceType !== 'Knowledge') continue
-    const kbId = resource.localResourceId ?? resource.id
-    map.set(kbId, resource.sharedDocumentIds ?? null)
-  }
-  return map
-}
+import { listShareableKnowledgeBases, buildSharedDocumentMap } from './group-knowledge-picker-utils'
 
 interface Props {
   knowledgeBases: KnowledgeBase[]
@@ -49,14 +35,8 @@ export function GroupKnowledgePickerModal({
   )
 
   const availableBases = useMemo(
-    () =>
-      knowledgeBases.filter((item) => {
-        const shared = sharedDocumentMap.get(item.id)
-        if (shared === undefined) return true
-        if (shared === null) return false
-        return item.documentCount > shared.length
-      }),
-    [knowledgeBases, sharedDocumentMap],
+    () => listShareableKnowledgeBases(knowledgeBases, sharedResources),
+    [knowledgeBases, sharedResources],
   )
 
   const groups = useMemo<GroupPickerGroup[]>(() => {
@@ -77,7 +57,8 @@ export function GroupKnowledgePickerModal({
         description: `${remainingCount} 篇可添加文档${
           kb.description?.trim() ? ` · ${kb.description.trim()}` : ''
         }`,
-        groupSelectable: loadedItems == null && kb.documentCount > 0,
+        groupSelectable: loadedItems == null && remainingCount > 0,
+        selectableCount: remainingCount,
         items: visibleItems,
       }
     })

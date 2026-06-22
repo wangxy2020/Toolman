@@ -1,40 +1,49 @@
+import { useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
-import { IconAccess, IconCheck, IconFile, IconGlobe, IconRefresh, IconTrash } from '../../components/icons'
+import { IconDownload, IconFile, IconGlobe, IconTrash } from '../../components/icons'
 import {
   formatKnowledgeDocTime,
   formatKnowledgeFileSize,
   getKnowledgeDocExtension,
-  getKnowledgeDocStatusLabel,
   isKnowledgeDocProcessing,
   isMarkdownKnowledgeDocument,
 } from '../knowledge/knowledge-file-display'
 import { resolveNoteIdFromKnowledgeDocument } from '../knowledge/knowledge-note-link'
-import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
 import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './group-note-open'
 import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { knowledgeSelectionKey } from './group-knowledge-selection'
+import {
+  getGroupKnowledgeStatusLabel,
+  type GroupKnowledgePanelItem,
+} from './group-knowledge-panel-item'
 
 interface Props {
   resourceId: string
   p2pWorkspaceId: string
   workspaceName: string
-  documents: KnowledgeFilePanelItem[]
+  isResourceOwner: boolean
+  documents: GroupKnowledgePanelItem[]
   selectedKeys: Set<string>
-  canDelete: boolean
-  ingesting?: boolean
+  canRemoveFromGroup: boolean
+  canRemoveSaved: boolean
+  canSelect: boolean
   removingDocumentId?: string | null
   onToggleSelect: (selectionKey: string) => void
-  onRemoveDocument: (documentId: string) => void
-  onReindexDocument?: (documentId: string) => void
+  onRemoveFromGroup: (documentId: string) => void
+  onRemoveSaved: (documentId: string) => void
   onOpenNote?: (noteId: string) => boolean
   onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
   onOpenGroupKnowledgeMarkdown?: (
     request: OpenGroupKnowledgeMarkdownRequest,
   ) => void | Promise<void>
-  onOpenFileMenu?: (
-    doc: KnowledgeFilePanelItem,
-    anchor: { x: number; y: number; align: 'bottom-start' },
-  ) => void
+  onMaterializeDocument?: (
+    documentId: string,
+    currentPath?: string | null,
+  ) => Promise<string | null>
+  onEnsureDocumentSaved?: (
+    documentId: string,
+    currentPath?: string | null,
+  ) => Promise<{ absolutePath: string; savedDocumentId: string } | null>
   onOpenError?: (message: string) => void
   onContextMenu?: (event: React.MouseEvent) => void
 }
@@ -55,21 +64,27 @@ export function GroupKnowledgeFileList({
   resourceId,
   p2pWorkspaceId,
   workspaceName,
+  isResourceOwner,
   documents,
   selectedKeys,
-  canDelete,
-  ingesting = false,
+  canRemoveFromGroup,
+  canRemoveSaved,
+  canSelect,
   removingDocumentId,
   onToggleSelect,
-  onRemoveDocument,
-  onReindexDocument,
+  onRemoveFromGroup,
+  onRemoveSaved,
   onOpenNote,
   onOpenGroupNote,
   onOpenGroupKnowledgeMarkdown,
-  onOpenFileMenu,
+  onMaterializeDocument,
+  onEnsureDocumentSaved,
   onOpenError,
   onContextMenu,
 }: Props) {
+  const [savingDocumentId, setSavingDocumentId] = useState<string | null>(null)
+  const [materializingDocumentId, setMaterializingDocumentId] = useState<string | null>(null)
+
   return (
     <ul className="tm-kb-file-list" onContextMenu={onContextMenu}>
       {documents.map((doc) => {
@@ -79,19 +94,61 @@ export function GroupKnowledgeFileList({
         const pageUrl = isUrlDoc ? doc.absolutePath : null
         const status = doc.status ?? 'ready'
         const processing = isKnowledgeDocProcessing(status)
-        const statusLabel = getKnowledgeDocStatusLabel(status)
-        const canOpen = Boolean(
-          noteId ||
-            isMarkdown ||
-            processing ||
-            (isUrlDoc ? pageUrl : isOpenableLocalPath(doc.absolutePath)),
-        )
+        const savedToSharedKb = Boolean(doc.savedDocumentId)
+        const saved = Boolean(savedToSharedKb && isOpenableLocalPath(doc.absolutePath))
+        const removing = removingDocumentId === doc.id
+        const saving = savingDocumentId === doc.id
+        const materializing = materializingDocumentId === doc.id
+        const statusLabel = saving
+          ? '正在保存…'
+          : getGroupKnowledgeStatusLabel(doc, isResourceOwner)
+        const canOpen = isResourceOwner
+          ? Boolean(
+              noteId ||
+                isMarkdown ||
+                isUrlDoc ||
+                onMaterializeDocument ||
+                isOpenableLocalPath(doc.absolutePath),
+            )
+          : Boolean(
+              saved &&
+                (noteId ||
+                  isMarkdown ||
+                  isUrlDoc ||
+                  isOpenableLocalPath(doc.absolutePath)),
+            )
         const selectionKey = knowledgeSelectionKey(resourceId, doc.id)
         const selected = selectedKeys.has(selectionKey)
-        const removing = removingDocumentId === doc.id
         const extension = getKnowledgeDocExtension(doc.title, doc.mimeType)
+        const showRemove = canRemoveFromGroup || canRemoveSaved
+        const removeTitle = canRemoveFromGroup
+          ? '从群组移除'
+          : savedToSharedKb
+            ? '移除已保存副本'
+            : '仅可移除已保存的文件'
+        const removeDisabled = canRemoveFromGroup ? removing : !savedToSharedKb || removing
 
-        const handleOpen = () => {
+        const resolveOpenPath = async (): Promise<string | null> => {
+          if (isOpenableLocalPath(doc.absolutePath)) {
+            return doc.absolutePath
+          }
+          if (!isResourceOwner || !onMaterializeDocument) return null
+          setMaterializingDocumentId(doc.id)
+          try {
+            return await onMaterializeDocument(doc.id, doc.absolutePath)
+          } finally {
+            setMaterializingDocumentId(null)
+          }
+        }
+
+        const handleOpen = async () => {
+          if (!isResourceOwner && !saved) {
+            onOpenError?.('请先保存至共享知识库后再打开')
+            return
+          }
+
+          const absolutePath = await resolveOpenPath()
+
           if (noteId) {
             if (onOpenGroupNote) {
               void onOpenGroupNote({
@@ -105,12 +162,20 @@ export function GroupKnowledgeFileList({
             if (onOpenNote?.(noteId)) return
           }
           if (isMarkdown && onOpenGroupKnowledgeMarkdown) {
+            if (!absolutePath) {
+              onOpenError?.(
+                isResourceOwner
+                  ? '文档尚未同步到本地，请稍后重试'
+                  : '请先保存至共享知识库后再打开',
+              )
+              return
+            }
             void onOpenGroupKnowledgeMarkdown({
               documentId: doc.id,
               workspaceId: p2pWorkspaceId,
               workspaceName,
               title: doc.title,
-              absolutePath: doc.absolutePath ?? '',
+              absolutePath,
             })
             return
           }
@@ -118,8 +183,40 @@ export function GroupKnowledgeFileList({
             window.open(pageUrl, '_blank', 'noopener,noreferrer')
             return
           }
-          if (isOpenableLocalPath(doc.absolutePath)) {
-            void openLocalFile(doc.absolutePath, onOpenError)
+          if (isOpenableLocalPath(absolutePath)) {
+            void openLocalFile(absolutePath, onOpenError)
+          } else if (!materializing) {
+            onOpenError?.(
+              isResourceOwner
+                ? '文档尚未同步到本地，请稍后重试'
+                : '请先保存至共享知识库后再打开',
+            )
+          }
+        }
+
+        const handleSave = async () => {
+          if (!onEnsureDocumentSaved || savedToSharedKb) return
+          setSavingDocumentId(doc.id)
+          try {
+            const result = await onEnsureDocumentSaved(doc.id, doc.absolutePath)
+            if (!result) {
+              onOpenError?.('保存失败，请查看页面底部错误提示')
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : '保存失败'
+            onOpenError?.(message)
+          } finally {
+            setSavingDocumentId(null)
+          }
+        }
+
+        const handleRemove = () => {
+          if (canRemoveFromGroup) {
+            onRemoveFromGroup(doc.id)
+            return
+          }
+          if (canRemoveSaved && savedToSharedKb) {
+            onRemoveSaved(doc.id)
           }
         }
 
@@ -152,8 +249,9 @@ export function GroupKnowledgeFileList({
                 <button
                   type="button"
                   className="tm-kb-file-card-title tm-kb-file-card-title--openable"
-                  title={isUrlDoc ? pageUrl ?? doc.title : doc.absolutePath ?? doc.title}
-                  onClick={handleOpen}
+                  title={isUrlDoc ? pageUrl ?? doc.title : doc.title}
+                  disabled={materializing}
+                  onClick={() => void handleOpen()}
                 >
                   {doc.title}
                 </button>
@@ -165,16 +263,13 @@ export function GroupKnowledgeFileList({
               <div className="tm-kb-file-card-meta">
                 {formatKnowledgeDocTime(doc.updatedAt)}
                 {doc.sizeBytes != null ? ` · ${formatKnowledgeFileSize(doc.sizeBytes)}` : ''}
-                {status === 'ready' && doc.chunkCount != null && doc.chunkCount > 0
-                  ? ` · ${doc.chunkCount} 块`
-                  : ''}
               </div>
               <div
                 className={[
                   'tm-kb-file-card-status-text',
+                  savedToSharedKb && !isResourceOwner ? 'tm-kb-file-card-status-text--ready' : '',
                   processing ? 'tm-kb-file-card-status-text--processing' : '',
                   status === 'failed' ? 'tm-kb-file-card-status-text--failed' : '',
-                  status === 'ready' ? 'tm-kb-file-card-status-text--ready' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -187,74 +282,43 @@ export function GroupKnowledgeFileList({
             </div>
 
             <div className="tm-kb-file-card-actions">
-              {onReindexDocument ? (
+              {!isResourceOwner && onEnsureDocumentSaved ? (
                 <button
                   type="button"
                   className="tm-kb-file-card-action"
-                  title={isUrlDoc ? '刷新网页' : '重新向量化'}
-                  disabled={ingesting || processing}
+                  title={savedToSharedKb ? '已保存到共享知识库' : '保存到共享知识库'}
+                  aria-label={savedToSharedKb ? '已保存到共享知识库' : '保存到共享知识库'}
+                  disabled={savedToSharedKb || saving}
                   onClick={(event) => {
                     event.stopPropagation()
-                    onReindexDocument(doc.id)
+                    void handleSave()
                   }}
                 >
-                  <IconRefresh
-                    size={16}
-                    className={processing ? 'tm-kb-file-card-action--spin' : undefined}
-                  />
+                  <IconDownload size={16} />
                 </button>
               ) : null}
-              <span
-                className={[
-                  'tm-kb-file-card-status',
-                  status === 'ready'
-                    ? 'tm-kb-file-card-status--ready'
-                    : status === 'failed'
-                      ? 'tm-kb-file-card-status--failed'
-                      : 'tm-kb-file-card-status--pending',
-                ].join(' ')}
-                title={statusLabel}
-              >
-                {status === 'ready' ? <IconCheck size={14} /> : null}
-                {processing ? (
-                  <IconRefresh size={14} className="tm-kb-file-card-action--spin" />
-                ) : null}
-              </span>
-              <button
-                type="button"
-                className="tm-kb-file-card-action"
-                title="文件操作"
-                aria-label="文件操作"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  onOpenFileMenu?.(doc, {
-                    x: rect.left,
-                    y: rect.bottom + 4,
-                    align: 'bottom-start',
-                  })
-                }}
-              >
-                <IconAccess size={16} />
-              </button>
-              {canDelete ? (
+              {showRemove || canSelect ? (
                 <>
-                  <button
-                    type="button"
-                    className="tm-kb-file-card-action tm-kb-file-card-action--danger"
-                    title="从群组移除"
-                    disabled={removing}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onRemoveDocument(doc.id)
-                    }}
-                  >
-                    <IconTrash size={16} />
-                  </button>
-                  <GroupFileSelectCheckbox
-                    checked={selected}
-                    onChange={() => onToggleSelect(selectionKey)}
-                  />
+                  {showRemove ? (
+                    <button
+                      type="button"
+                      className="tm-kb-file-card-action tm-kb-file-card-action--danger"
+                      title={removeTitle}
+                      disabled={removeDisabled}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleRemove()
+                      }}
+                    >
+                      <IconTrash size={16} />
+                    </button>
+                  ) : null}
+                  {canSelect ? (
+                    <GroupFileSelectCheckbox
+                      checked={selected}
+                      onChange={() => onToggleSelect(selectionKey)}
+                    />
+                  ) : null}
                 </>
               ) : null}
             </div>

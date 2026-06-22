@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { IpcChannel, type P2pSharedResource } from '@toolman/shared'
+import { useDebouncedCallback } from '../../utils/debounce'
+import { GROUP_P2P_UI_TIMING } from './group-p2p-ui-timing'
+import { subscribeGroupResourceActivity } from './group-p2p-sync-policy'
 
 interface UseP2pNotesOptions {
   workspaceId: string | null
@@ -10,15 +13,20 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
   const [loading, setLoading] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const hasResourcesRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!workspaceId) {
       setSharedResources([])
       setError(null)
+      hasResourcesRef.current = false
       return
     }
 
-    setLoading(true)
+    const showLoading = !hasResourcesRef.current
+    if (showLoading) {
+      setLoading(true)
+    }
     setError(null)
 
     const result = await window.api.invoke(IpcChannel.P2pResourceList, {
@@ -27,7 +35,9 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
       status: 'active',
     })
 
-    setLoading(false)
+    if (showLoading) {
+      setLoading(false)
+    }
 
     if (!result.ok) {
       setError(result.error.message)
@@ -35,8 +45,11 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
     }
 
     const data = result.data as { resources: P2pSharedResource[] }
+    hasResourcesRef.current = data.resources.length > 0
     setSharedResources(data.resources)
   }, [workspaceId])
+
+  const debouncedLoad = useDebouncedCallback(load, GROUP_P2P_UI_TIMING.dataRefreshDebounceMs)
 
   const shareNote = useCallback(
     async (noteId: string) => {
@@ -58,6 +71,7 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
       }
 
       const data = result.data as { sharedResource: P2pSharedResource }
+      hasResourcesRef.current = true
       setSharedResources((current) => {
         const next = current.filter(
           (item) => item.localResourceId !== noteId && item.id !== noteId,
@@ -98,7 +112,6 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
     async (resourceId: string, permission: 'read' | 'write') => {
       if (!workspaceId) return false
 
-      setSharing(true)
       setError(null)
 
       const result = await window.api.invoke(IpcChannel.P2pNoteSetPermission, {
@@ -106,8 +119,6 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
         resourceId,
         permission,
       })
-
-      setSharing(false)
 
       if (!result.ok) {
         setError(result.error.message)
@@ -118,10 +129,9 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
       setSharedResources((current) =>
         current.map((item) => (item.id === resourceId ? data.sharedResource : item)),
       )
-      await load()
       return true
     },
-    [load, workspaceId],
+    [workspaceId],
   )
 
   useEffect(() => {
@@ -130,21 +140,11 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
 
   useEffect(() => {
     if (!workspaceId) return
-
-    const handleEvent = (payload: unknown) => {
-      const event = payload as { workspaceId?: string; resourceType?: string }
-      if (event.workspaceId !== workspaceId || event.resourceType !== 'Note') return
-      void load()
-    }
-
-    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleEvent)
-    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleEvent)
-
-    return () => {
-      unsubscribeAppended()
-      unsubscribeSynced()
-    }
-  }, [load, workspaceId])
+    return subscribeGroupResourceActivity(workspaceId, 'Note', {
+      onMetadata: debouncedLoad,
+      onContent: debouncedLoad,
+    })
+  }, [debouncedLoad, workspaceId])
 
   return {
     sharedResources,

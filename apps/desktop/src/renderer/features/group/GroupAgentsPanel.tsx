@@ -14,6 +14,8 @@ import { agentSelectionKey, parseAgentSelectionKey } from './group-agent-selecti
 import { getAgentSessionPermission, isShareableGroupAgentSource } from './group-agent-utils'
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 import { useP2pAgents } from './useP2pAgents'
+import { useRegisterGroupPanelError } from './group-page-status'
+import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
 
 interface Props {
   p2pWorkspaceId: string
@@ -60,35 +62,17 @@ export function GroupAgentsPanel({
     align: 'bottom-start'
   } | null>(null)
   const [sectionKeysMap, setSectionKeysMap] = useState<Record<string, string[]>>({})
-  const p2pAgents = useP2pAgents({ workspaceId: p2pWorkspaceId })
+  const p2pAgents = useP2pAgents({
+    workspaceId: p2pWorkspaceId,
+    onContentActivity: onReloadAssistants,
+  })
 
-  useEffect(() => {
-    void onReloadAssistants?.()
-  }, [onReloadAssistants, p2pAgents.sharedResources])
+  useRegisterGroupPanelError('agents', p2pAgents.error, () => p2pAgents.setError(null))
 
-  useEffect(() => {
-    if (!p2pWorkspaceId) return
-
-    const handleAgentEvent = (payload: unknown) => {
-      const event = payload as { workspaceId?: string; resourceType?: string }
-      if (event.workspaceId !== p2pWorkspaceId || event.resourceType !== 'Agent') return
-      void onReloadAssistants?.()
-    }
-
-    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleAgentEvent)
-    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleAgentEvent)
-    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
-      const event = payload as { workspaceId?: string }
-      if (event.workspaceId !== p2pWorkspaceId) return
-      void onReloadAssistants?.()
-    })
-
-    return () => {
-      unsubscribeAppended()
-      unsubscribeSynced()
-      unsubscribeCompleted()
-    }
-  }, [onReloadAssistants, p2pWorkspaceId])
+  const handleRefresh = useMemo(
+    () => createGroupPanelRefreshHandler(p2pWorkspaceId, () => p2pAgents.load()),
+    [p2pAgents.load, p2pWorkspaceId],
+  )
 
   const assistantsById = useMemo(
     () => new Map(assistants.map((item) => [item.id, item])),
@@ -406,12 +390,10 @@ export function GroupAgentsPanel({
         actions={
           <GroupPanelRefreshButton
             loading={p2pAgents.loading}
-            onRefresh={() => void p2pAgents.load()}
+            onRefresh={() => void handleRefresh()}
           />
         }
       />
-
-      {p2pAgents.error ? <div className="tm-error-bar">{p2pAgents.error}</div> : null}
 
       <div className="tm-kb-file-panel" onContextMenu={handleContextMenu}>
         <button

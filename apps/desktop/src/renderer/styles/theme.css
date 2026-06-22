@@ -1642,6 +1642,70 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   max-width: 100%;
 }
 
+.tm-group-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--tm-titlebar-height);
+  min-height: var(--tm-titlebar-height);
+  padding: 0 16px;
+  border-top: 1px solid var(--tm-border);
+  background: var(--tm-surface-raised);
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.tm-group-statusbar-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-group-statusbar-message--error {
+  color: #b91c1c;
+}
+
+.tm-group-statusbar-message--warning {
+  color: var(--tm-text-secondary);
+}
+
+.tm-group-statusbar-message--info {
+  color: var(--tm-text-secondary);
+}
+
+.tm-group-statusbar-message--muted {
+  color: var(--tm-text-tertiary);
+}
+
+.tm-group-statusbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tm-group-statusbar-meta {
+  color: var(--tm-text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tm-group-statusbar-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--tm-text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.tm-group-statusbar-dismiss:hover {
+  color: var(--tm-text-primary);
+}
+
 .tm-chat-breadcrumb > .tm-module-pill:first-child {
   flex-shrink: 0;
 }

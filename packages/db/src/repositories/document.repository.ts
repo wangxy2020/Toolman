@@ -53,6 +53,15 @@ export class DocumentRepository {
     return row
   }
 
+  findAnyById(id: string, kbId: string): DocumentRow | null {
+    const row = this.db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.kbId, kbId)))
+      .get()
+    return row ?? null
+  }
+
   findByPath(kbId: string, absolutePath: string): DocumentRow | null {
     const row = this.db
       .select()

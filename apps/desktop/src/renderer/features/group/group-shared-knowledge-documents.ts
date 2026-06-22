@@ -4,6 +4,7 @@ import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel
 export interface SharedKnowledgeDocMeta {
   id: string
   title: string
+  contentHash?: string | null
   sizeBytes?: number | null
   mimeType?: string | null
   updatedAt: number
@@ -45,7 +46,16 @@ export function buildSharedKnowledgeDocMetaFromEvents(
     const docId = event.payload?.doc_id
     if (typeof docId !== 'string') continue
 
-    const title = typeof event.payload?.title === 'string' ? event.payload.title : '文档'
+    const contentHash = event.payload?.content_hash
+    if (typeof contentHash !== 'string' || contentHash.length === 0) {
+      continue
+    }
+
+    const previous = meta.get(docId)
+    const title =
+      typeof event.payload?.title === 'string'
+        ? event.payload.title
+        : (previous?.title ?? '文档')
     const sizeBytes =
       typeof event.payload?.size_bytes === 'number' ? event.payload.size_bytes : null
     const mimeType =
@@ -54,6 +64,7 @@ export function buildSharedKnowledgeDocMetaFromEvents(
     meta.set(docId, {
       id: docId,
       title,
+      contentHash,
       sizeBytes,
       mimeType,
       updatedAt: event.timestamp,
@@ -66,6 +77,26 @@ export function buildSharedKnowledgeDocMetaFromEvents(
 /** @deprecated Use buildSharedKnowledgeDocMetaFromEvents */
 export const parseSharedKnowledgeDocMetaFromEvents = buildSharedKnowledgeDocMetaFromEvents
 
+const UUID_DOCUMENT_TITLE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[^./\\]+)?$/i
+
+function isUuidDerivedDocumentTitle(title: string): boolean {
+  return UUID_DOCUMENT_TITLE.test(title.trim())
+}
+
+function preferSharedKnowledgeDocumentTitle(
+  localTitle: string,
+  eventTitle: string | undefined,
+): string {
+  if (!eventTitle || eventTitle === '共享文档' || eventTitle === '文档') {
+    return localTitle
+  }
+  if (isUuidDerivedDocumentTitle(localTitle)) {
+    return eventTitle
+  }
+  return localTitle
+}
+
 export function mergeSharedKnowledgePanelDocuments(
   localItems: KnowledgeFilePanelItem[],
   sharedDocIds: string[] | undefined,
@@ -75,7 +106,13 @@ export function mergeSharedKnowledgePanelDocuments(
   const orderedIds =
     sharedDocIds && sharedDocIds.length > 0
       ? sharedDocIds
-      : [...new Set([...localById.keys(), ...eventMeta.keys()])]
+      : [...new Set([...localById.keys(), ...eventMeta.keys()])].sort((leftId, rightId) => {
+          const leftTitle =
+            localById.get(leftId)?.title ?? eventMeta.get(leftId)?.title ?? leftId
+          const rightTitle =
+            localById.get(rightId)?.title ?? eventMeta.get(rightId)?.title ?? rightId
+          return leftTitle.localeCompare(rightTitle, 'zh-CN', { sensitivity: 'base' })
+        })
 
   if (orderedIds.length === 0) {
     return []
@@ -83,9 +120,13 @@ export function mergeSharedKnowledgePanelDocuments(
 
   return orderedIds.map((id) => {
     const local = localById.get(id)
-    if (local) return local
-
     const remote = eventMeta.get(id)
+
+    if (local) {
+      const title = preferSharedKnowledgeDocumentTitle(local.title, remote?.title)
+      return title === local.title ? local : { ...local, title }
+    }
+
     if (!remote) {
       return {
         id,

@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { KnowledgeBase } from '@toolman/shared'
+import type { KnowledgeBase, P2pSharedResource } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupKnowledgePickerModal } from './GroupKnowledgePickerModal'
 import { GroupFileContextMenu } from './GroupFileList'
-import { GroupKnowledgeFileActionMenu } from './GroupKnowledgeFileActionMenu'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
-import { GroupSharedKnowledgeSection } from './GroupSharedKnowledgeSection'
-import { saveGroupKnowledgeFileAsCopy } from './group-knowledge-file-save'
+import { useRegisterGroupPanelError } from './group-page-status'
+import { GroupSharedKnowledgeSection, type GroupKnowledgeSavedDocumentRegistry } from './GroupSharedKnowledgeSection'
+import {
+  ensureGroupKnowledgeDocumentSaved,
+  removeGroupKnowledgeSavedDocuments,
+} from './group-knowledge-file-save'
 import {
   knowledgeSelectionKey,
   parseKnowledgeSelectionKey,
 } from './group-knowledge-selection'
-import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest, SaveGroupNoteAsCopyRequest } from './group-note-open'
-import { resolveNoteIdFromKnowledgeDocument } from '../knowledge/knowledge-note-link'
-import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
+import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './group-note-open'
 import { useP2pKnowledge } from './useP2pKnowledge'
+import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
+import { hasShareableKnowledgeBases } from './group-knowledge-picker-utils'
 
 interface Props {
   p2pWorkspaceId: string
@@ -30,20 +33,19 @@ interface Props {
   onOpenGroupKnowledgeMarkdown?: (
     request: OpenGroupKnowledgeMarkdownRequest,
   ) => void | Promise<void>
-  onSaveGroupNoteAsCopy?: (request: SaveGroupNoteAsCopyRequest) => void | Promise<void>
+  onKnowledgeBasesChanged?: () => void | Promise<void>
 }
 
 interface PendingDelete {
-  kind: 'kb' | 'documents'
+  kind: 'kb' | 'documents' | 'saved-documents' | 'saved-section'
   groups: Array<{ resourceId: string; documentIds: string[] }>
+  savedGroups?: Array<{
+    resourceId: string
+    workspaceId: string
+    savedKbId: string
+    savedDocumentIds: string[]
+  }>
   message: string
-}
-
-interface FileActionMenuState {
-  x: number
-  y: number
-  align: 'bottom-start'
-  doc: KnowledgeFilePanelItem
 }
 
 export function GroupKnowledgePanel({
@@ -57,7 +59,7 @@ export function GroupKnowledgePanel({
   onOpenNote,
   onOpenGroupNote,
   onOpenGroupKnowledgeMarkdown,
-  onSaveGroupNoteAsCopy,
+  onKnowledgeBasesChanged,
 }: Props) {
   const [showPicker, setShowPicker] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
@@ -65,40 +67,24 @@ export function GroupKnowledgePanel({
   const [removingDocumentId, setRemovingDocumentId] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const [fileActionMenu, setFileActionMenu] = useState<FileActionMenuState | null>(null)
   const [sectionKeysMap, setSectionKeysMap] = useState<Record<string, string[]>>({})
+  const [savedDocRegistry, setSavedDocRegistry] = useState<
+    Record<string, GroupKnowledgeSavedDocumentRegistry>
+  >({})
+  const [savedDocumentOverrides, setSavedDocumentOverrides] = useState<
+    Record<string, Record<string, { savedDocumentId: string; absolutePath: string }>>
+  >({})
   const p2pKnowledge = useP2pKnowledge({ workspaceId: p2pWorkspaceId })
 
-  useEffect(() => {
-    void p2pKnowledge.load()
-  }, [p2pKnowledge.load])
+  useRegisterGroupPanelError('knowledge', p2pKnowledge.error, () => p2pKnowledge.setError(null))
 
-  useEffect(() => {
-    const handleKnowledgeEvent = (payload: unknown) => {
-      const event = payload as { workspaceId?: string; resourceType?: string }
-      if (event.workspaceId !== p2pWorkspaceId || event.resourceType !== 'Knowledge') return
-      void p2pKnowledge.load()
-    }
-
-    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleKnowledgeEvent)
-    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleKnowledgeEvent)
-
-    return () => {
-      unsubscribeAppended()
-      unsubscribeSynced()
-    }
-  }, [p2pKnowledge.load, p2pWorkspaceId])
+  const handleRefresh = useMemo(
+    () => createGroupPanelRefreshHandler(p2pWorkspaceId, () => p2pKnowledge.load()),
+    [p2pKnowledge.load, p2pWorkspaceId],
+  )
 
   const hasShareableKnowledge = useMemo(
-    () =>
-      knowledgeBases.some((kb) => {
-        const resource = p2pKnowledge.sharedResources.find(
-          (item) => (item.localResourceId ?? item.id) === kb.id,
-        )
-        if (!resource) return true
-        if (!resource.sharedDocumentIds) return false
-        return kb.documentCount > resource.sharedDocumentIds.length
-      }),
+    () => hasShareableKnowledgeBases(knowledgeBases, p2pKnowledge.sharedResources),
     [knowledgeBases, p2pKnowledge.sharedResources],
   )
 
@@ -108,14 +94,6 @@ export function GroupKnowledgePanel({
       (canManageGroupResources ||
         (selfMemberId != null && resource.sharedBy === selfMemberId)),
     [canManageGroupResources, canWriteWorkspace, selfMemberId],
-  )
-
-  const canManageKnowledge = useMemo(
-    () =>
-      canWriteWorkspace &&
-      (canManageGroupResources ||
-        p2pKnowledge.sharedResources.some((resource) => canDeleteResource(resource))),
-    [canDeleteResource, canManageGroupResources, canWriteWorkspace, p2pKnowledge.sharedResources],
   )
 
   const handleAddKnowledgeBases = useCallback(
@@ -210,6 +188,99 @@ export function GroupKnowledgePanel({
     [canDeleteResource, p2pKnowledge],
   )
 
+  const handleSavedDocumentRegistryChange = useCallback(
+    (resourceId: string, registry: GroupKnowledgeSavedDocumentRegistry | null) => {
+      setSavedDocRegistry((current) => {
+        const next = { ...current }
+        if (registry) {
+          next[resourceId] = registry
+        } else {
+          delete next[resourceId]
+        }
+        return next
+      })
+    },
+    [],
+  )
+
+  const resolveSavedDocumentIds = useCallback(
+    (resourceId: string, p2pDocumentIds: string[]): string[] => {
+      const registry = savedDocRegistry[resourceId]
+      if (!registry) return []
+      return p2pDocumentIds
+        .map((documentId) => registry.savedByP2pDocumentId[documentId])
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    },
+    [savedDocRegistry],
+  )
+
+  const requestRemoveSavedDocuments = useCallback(
+    (resourceId: string, p2pDocumentIds: string[]) => {
+      const registry = savedDocRegistry[resourceId]
+      if (!registry) {
+        p2pKnowledge.setError('暂无可移除的已保存文件')
+        return
+      }
+
+      const savedDocumentIds = resolveSavedDocumentIds(resourceId, p2pDocumentIds)
+      if (savedDocumentIds.length === 0) {
+        p2pKnowledge.setError('所选文件尚未保存至共享知识库')
+        return
+      }
+
+      const preview =
+        savedDocumentIds.length > 2
+          ? `${savedDocumentIds.length} 个已保存文件`
+          : `${savedDocumentIds.length} 个已保存文件`
+
+      setPendingDelete({
+        kind: 'saved-documents',
+        groups: [{ resourceId, documentIds: p2pDocumentIds }],
+        savedGroups: [
+          {
+            resourceId,
+            workspaceId: registry.workspaceId,
+            savedKbId: registry.savedKbId,
+            savedDocumentIds,
+          },
+        ],
+        message: `确定从共享知识库中移除${preview}吗？群组中的共享列表不会受影响。`,
+      })
+    },
+    [p2pKnowledge, resolveSavedDocumentIds, savedDocRegistry],
+  )
+
+  const requestRemoveSavedSection = useCallback(
+    (resourceId: string) => {
+      const registry = savedDocRegistry[resourceId]
+      if (!registry) {
+        p2pKnowledge.setError('暂无可移除的已保存文件')
+        return
+      }
+
+      const savedDocumentIds = Object.values(registry.savedByP2pDocumentId)
+      if (savedDocumentIds.length === 0) {
+        p2pKnowledge.setError('该知识库下暂无已保存文件')
+        return
+      }
+
+      setPendingDelete({
+        kind: 'saved-section',
+        groups: [{ resourceId, documentIds: [] }],
+        savedGroups: [
+          {
+            resourceId,
+            workspaceId: registry.workspaceId,
+            savedKbId: registry.savedKbId,
+            savedDocumentIds,
+          },
+        ],
+        message: `确定从共享知识库中移除该文件夹下全部 ${savedDocumentIds.length} 个已保存文件吗？群组中的共享列表不会受影响。`,
+      })
+    },
+    [p2pKnowledge, savedDocRegistry],
+  )
+
   const handleRemoveDocument = useCallback(
     (resourceId: string, documentId: string) => {
       requestRemoveDocuments(resourceId, [documentId])
@@ -238,6 +309,51 @@ export function GroupKnowledgePanel({
         return next
       })
       await p2pKnowledge.load()
+      return
+    }
+
+    if (current.kind === 'saved-documents' || current.kind === 'saved-section') {
+      setRemovingDocumentId(current.groups[0]?.documentIds[0] ?? null)
+      p2pKnowledge.setError(null)
+
+      for (const group of current.savedGroups ?? []) {
+        const result = await removeGroupKnowledgeSavedDocuments(
+          group.workspaceId,
+          group.savedKbId,
+          group.savedDocumentIds,
+        )
+        if (result.error) {
+          p2pKnowledge.setError(result.error)
+          setRemovingDocumentId(null)
+          return
+        }
+      }
+
+      setRemovingDocumentId(null)
+      setSavedDocumentOverrides((current) => {
+        const next = { ...current }
+        for (const group of current.groups) {
+          const resourceOverrides = { ...next[group.resourceId] }
+          for (const documentId of group.documentIds) {
+            delete resourceOverrides[documentId]
+          }
+          if (Object.keys(resourceOverrides).length === 0) {
+            delete next[group.resourceId]
+          } else {
+            next[group.resourceId] = resourceOverrides
+          }
+        }
+        return next
+      })
+      setSelectedKeys((keys) => {
+        const next = new Set(keys)
+        for (const group of current.groups) {
+          for (const documentId of group.documentIds) {
+            next.delete(knowledgeSelectionKey(group.resourceId, documentId))
+          }
+        }
+        return next
+      })
       return
     }
 
@@ -294,55 +410,124 @@ export function GroupKnowledgePanel({
 
     if (grouped.size === 0) return
 
-    if (grouped.size === 1) {
-      const [resourceId, documentIds] = [...grouped.entries()][0]!
-      requestRemoveDocuments(resourceId, documentIds)
+    const groupRemoveEntries: Array<{ resourceId: string; documentIds: string[] }> = []
+    const savedRemoveEntries: Array<{ resourceId: string; documentIds: string[] }> = []
+
+    for (const [resourceId, documentIds] of grouped.entries()) {
+      const resource = p2pKnowledge.sharedResources.find((item) => item.id === resourceId)
+      if (resource && canDeleteResource(resource)) {
+        groupRemoveEntries.push({ resourceId, documentIds })
+      } else {
+        savedRemoveEntries.push({ resourceId, documentIds })
+      }
+    }
+
+    if (groupRemoveEntries.length > 0 && savedRemoveEntries.length > 0) {
+      p2pKnowledge.setError('请分别操作群组移除与已保存副本移除')
       return
     }
 
-    const total = [...grouped.values()].reduce((sum, ids) => sum + ids.length, 0)
+    if (savedRemoveEntries.length > 0) {
+      if (savedRemoveEntries.length === 1) {
+        const [entry] = savedRemoveEntries
+        requestRemoveSavedDocuments(entry!.resourceId, entry!.documentIds)
+        return
+      }
+
+      const savedGroups = savedRemoveEntries.flatMap((entry) => {
+        const registry = savedDocRegistry[entry.resourceId]
+        if (!registry) return []
+        const savedDocumentIds = resolveSavedDocumentIds(entry.resourceId, entry.documentIds)
+        if (savedDocumentIds.length === 0) return []
+        return [
+          {
+            resourceId: entry.resourceId,
+            workspaceId: registry.workspaceId,
+            savedKbId: registry.savedKbId,
+            savedDocumentIds,
+          },
+        ]
+      })
+
+      if (savedGroups.length === 0) {
+        p2pKnowledge.setError('所选文件尚未保存至共享知识库')
+        return
+      }
+
+      const total = savedGroups.reduce((sum, group) => sum + group.savedDocumentIds.length, 0)
+      setPendingDelete({
+        kind: 'saved-documents',
+        groups: savedRemoveEntries,
+        savedGroups,
+        message: `确定从共享知识库中移除已勾选的 ${total} 个已保存文件吗？群组中的共享列表不会受影响。`,
+      })
+      return
+    }
+
+    if (groupRemoveEntries.length === 1) {
+      const [entry] = groupRemoveEntries
+      requestRemoveDocuments(entry!.resourceId, entry!.documentIds)
+      return
+    }
+
+    const total = groupRemoveEntries.reduce((sum, entry) => sum + entry.documentIds.length, 0)
     setPendingDelete({
       kind: 'documents',
-      groups: [...grouped.entries()].map(([resourceId, documentIds]) => ({
-        resourceId,
-        documentIds,
-      })),
+      groups: groupRemoveEntries,
       message: `确定从群组中移除已勾选的 ${total} 个文件吗？`,
     })
-  }, [requestRemoveDocuments, selectedKeys])
+  }, [
+    canDeleteResource,
+    p2pKnowledge,
+    requestRemoveDocuments,
+    requestRemoveSavedDocuments,
+    resolveSavedDocumentIds,
+    savedDocRegistry,
+    selectedKeys,
+  ])
+
+  const deleteSelectedLabel = useMemo(() => {
+    const hasGroupDelete = p2pKnowledge.sharedResources.some((resource) =>
+      canDeleteResource(resource),
+    )
+    return hasGroupDelete ? '移除已勾选' : '移除已保存'
+  }, [canDeleteResource, p2pKnowledge.sharedResources])
 
   const handleContextMenu = useCallback(
     (event: React.MouseEvent) => {
-      if (!canManageKnowledge) return
+      if (!canWriteWorkspace) return
       event.preventDefault()
       setContextMenu({ x: event.clientX, y: event.clientY })
     },
-    [canManageKnowledge],
+    [canWriteWorkspace],
   )
 
-  const handleSaveFileAsCopy = useCallback(
-    async (doc: KnowledgeFilePanelItem) => {
-      const isUrlDoc = doc.sourceKind === 'url'
-      const noteId = !isUrlDoc ? resolveNoteIdFromKnowledgeDocument(doc) : null
-
-      if (noteId) {
-        await onSaveGroupNoteAsCopy?.({ noteId, title: doc.title })
-        return
+  const handleEnsureDocumentSaved = useCallback(
+    async (resource: P2pSharedResource, documentId: string) => {
+      const result = await ensureGroupKnowledgeDocumentSaved(
+        p2pWorkspaceId,
+        resource.id,
+        documentId,
+      )
+      if ('error' in result) {
+        p2pKnowledge.setError(result.error)
+        return null
       }
 
-      if (isUrlDoc && doc.absolutePath) {
-        window.open(doc.absolutePath, '_blank', 'noopener,noreferrer')
-        return
-      }
-
-      if (doc.absolutePath && !/^https?:\/\//i.test(doc.absolutePath)) {
-        await saveGroupKnowledgeFileAsCopy(doc.absolutePath, doc.title)
-        return
-      }
-
-      p2pKnowledge.setError('无法另存为该文件')
+      setSavedDocumentOverrides((current) => ({
+        ...current,
+        [resource.id]: {
+          ...current[resource.id],
+          [documentId]: {
+            savedDocumentId: result.savedDocumentId,
+            absolutePath: result.absolutePath,
+          },
+        },
+      }))
+      await onKnowledgeBasesChanged?.()
+      return result
     },
-    [onSaveGroupNoteAsCopy, p2pKnowledge],
+    [onKnowledgeBasesChanged, p2pKnowledge, p2pWorkspaceId],
   )
 
   return (
@@ -353,12 +538,10 @@ export function GroupKnowledgePanel({
         actions={
           <GroupPanelRefreshButton
             loading={p2pKnowledge.loading}
-            onRefresh={() => void p2pKnowledge.load()}
+            onRefresh={() => void handleRefresh()}
           />
         }
       />
-
-      {p2pKnowledge.error ? <div className="tm-error-bar">{p2pKnowledge.error}</div> : null}
 
       <div className="tm-kb-file-panel" onContextMenu={handleContextMenu}>
         <button
@@ -390,30 +573,46 @@ export function GroupKnowledgePanel({
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">
-            {p2pKnowledge.sharedResources.map((resource) => (
+            {p2pKnowledge.sharedResources.map((resource) => {
+              const isResourceOwner =
+                selfMemberId != null && resource.sharedBy === selfMemberId
+              return (
               <GroupSharedKnowledgeSection
                 key={resource.id}
                 p2pWorkspaceId={p2pWorkspaceId}
                 sourceWorkspaceId={sourceWorkspaceId}
                 workspaceName={workspaceName}
                 resource={resource}
+                isResourceOwner={isResourceOwner}
+                savedDocumentOverrides={savedDocumentOverrides[resource.id]}
                 selectedKeys={selectedKeys}
-                canDelete={canDeleteResource(resource)}
+                canRemoveFromGroup={canDeleteResource(resource)}
+                canRemoveSaved={canWriteWorkspace && !isResourceOwner}
+                canSelect={canWriteWorkspace}
                 removingKb={removingKbId === resource.id}
                 removingDocumentId={removingDocumentId}
                 onToggleSelect={handleToggleSelect}
                 onToggleSelectSection={handleToggleSelectSection}
-                onRemoveKb={() => requestRemoveKb(resource.id)}
-                onRemoveDocument={(documentId) => handleRemoveDocument(resource.id, documentId)}
+                onRemoveFromGroupKb={() => requestRemoveKb(resource.id)}
+                onRemoveFromGroupDocument={(documentId) =>
+                  handleRemoveDocument(resource.id, documentId)
+                }
+                onRequestRemoveSavedDocuments={(documentIds) =>
+                  requestRemoveSavedDocuments(resource.id, documentIds)
+                }
+                onRequestRemoveSavedSection={() => requestRemoveSavedSection(resource.id)}
+                onSavedDocumentRegistryChange={handleSavedDocumentRegistryChange}
                 onOpenNote={onOpenNote}
                 onOpenGroupNote={onOpenGroupNote}
                 onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
-                onOpenFileMenu={(doc, anchor) => setFileActionMenu({ ...anchor, doc })}
+                onEnsureDocumentSaved={(documentId) =>
+                  handleEnsureDocumentSaved(resource, documentId)
+                }
                 onOpenError={(message) => p2pKnowledge.setError(message)}
                 onContextMenu={handleContextMenu}
                 onSectionKeysChange={handleSectionKeysChange}
               />
-            ))}
+            )})}
           </div>
         )}
       </div>
@@ -423,7 +622,9 @@ export function GroupKnowledgePanel({
           x={contextMenu.x}
           y={contextMenu.y}
           selectedCount={selectedKeys.size}
-          canDelete={canManageKnowledge}
+          enabled={canWriteWorkspace}
+          canDelete={selectedKeys.size > 0}
+          deleteLabel={deleteSelectedLabel}
           onClose={() => setContextMenu(null)}
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
@@ -433,7 +634,14 @@ export function GroupKnowledgePanel({
 
       {pendingDelete ? (
         <ConfirmDialog
-          title={pendingDelete.kind === 'kb' ? '移除知识库' : '移除共享文件'}
+          title={
+            pendingDelete.kind === 'kb'
+              ? '移除知识库'
+              : pendingDelete.kind === 'saved-documents' ||
+                  pendingDelete.kind === 'saved-section'
+                ? '移除已保存副本'
+                : '移除共享文件'
+          }
           message={pendingDelete.message}
           confirmLabel="移除"
           danger
@@ -449,16 +657,6 @@ export function GroupKnowledgePanel({
           sourceWorkspaceId={sourceWorkspaceId}
           onClose={() => setShowPicker(false)}
           onConfirm={handleAddKnowledgeBases}
-        />
-      ) : null}
-
-      {fileActionMenu ? (
-        <GroupKnowledgeFileActionMenu
-          x={fileActionMenu.x}
-          y={fileActionMenu.y}
-          align={fileActionMenu.align}
-          onClose={() => setFileActionMenu(null)}
-          onSaveAs={() => void handleSaveFileAsCopy(fileActionMenu.doc)}
         />
       ) : null}
     </div>

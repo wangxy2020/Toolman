@@ -14,6 +14,8 @@ import {
   DEFAULT_KNOWLEDGE_CHUNK_CONFIG,
   DEFAULT_KNOWLEDGE_EMBED_CONFIG,
   DEFAULT_KNOWLEDGE_WATCH_CONFIG,
+  isP2pGroupSavedKnowledgeDescription,
+  isP2pSharedKnowledgeMirrorDescription,
   type KnowledgeBase,
 } from '@toolman/shared'
 import { removeKbVectors } from '@toolman/knowledge'
@@ -62,10 +64,31 @@ function toKnowledgeBase(row: KnowledgeBaseRow): KnowledgeBase {
   })
 }
 
+function shouldListKnowledgeBase(row: KnowledgeBaseRow): boolean {
+  if (isP2pSharedKnowledgeMirrorDescription(row.description)) {
+    return false
+  }
+
+  if (!/^\[[^\]]+\]\s/.test(row.name)) {
+    return true
+  }
+
+  if (row.kind === 'local') {
+    return true
+  }
+
+  // User-saved group copies live under 共享知识库/{群名}/ with a bracket display name.
+  if (row.kind === 'shared' && isP2pGroupSavedKnowledgeDescription(row.description)) {
+    return true
+  }
+
+  return false
+}
+
 export function listKnowledgeBases(input: unknown): KnowledgeBase[] {
   const data = KnowledgeBaseListInputSchema.parse(input)
   const rows = getKnowledgeBaseRepository().listByWorkspace(data.workspaceId)
-  return rows.map(toKnowledgeBase)
+  return rows.filter(shouldListKnowledgeBase).map(toKnowledgeBase)
 }
 
 export function getKnowledgeBase(input: unknown): KnowledgeBase | null {

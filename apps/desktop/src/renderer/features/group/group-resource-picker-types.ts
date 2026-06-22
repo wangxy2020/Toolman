@@ -15,6 +15,8 @@ export interface GroupPickerGroup {
   disabled?: boolean
   /** Allow selecting the group row when child items are display-only (e.g. agent topics). */
   groupSelectable?: boolean
+  /** Item count when the group is selected before child rows are loaded. */
+  selectableCount?: number
 }
 
 export interface GroupPickerSelection {

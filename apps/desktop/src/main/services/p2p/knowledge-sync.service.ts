@@ -1,12 +1,17 @@
-import { existsSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, statSync } from 'node:fs'
+import { extname, join } from 'node:path'
+import { P2pSharedResourceRepository, P2pWorkspaceRepository, type KnowledgeBaseRow, type P2pSharedResourceRow } from '@toolman/db'
+import type { P2pSharedResource, P2pKnowledgeDocumentPermission, WorkspaceEvent } from '@toolman/shared'
+import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 import {
-  P2pSharedResourceRepository,
-  type KnowledgeBaseRow,
-  type P2pSharedResourceRow,
-} from '@toolman/db'
-import type { P2pSharedResource, WorkspaceEvent } from '@toolman/shared'
-import {
+  buildP2pGroupSavedKnowledgeDescription,
+  buildP2pGroupSavedKnowledgeDisplayName,
+  normalizeP2pGroupSavedKnowledgeMeta,
+  parseP2pGroupSavedKnowledgeMeta,
+  P2pKnowledgeEnsureDocumentSavedInputSchema,
+  P2pKnowledgeMaterializeDocumentInputSchema,
   P2pKnowledgeRemoveDocumentsInputSchema,
+  P2pKnowledgeSetDocumentPermissionInputSchema,
   P2pKnowledgeShareInputSchema,
   P2pKnowledgeSyncDocumentInputSchema,
   P2pResourceListInputSchema,
@@ -17,11 +22,15 @@ import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repo
 import { writeBlobFromPath } from '../blob.service'
 import { mapP2pAgentSharedResourceRow } from './agent-share.service'
 import { appendP2pEvent } from './p2p-event.service'
+import { protectOwnerSourceKnowledgeBase } from './p2p-knowledge-projection'
+import { findLatestKnowledgeDocumentContentEvent } from './p2p-knowledge-share-metadata'
+import { ensureP2pKnowledgeBlobCached } from './p2p-knowledge-blob-cache.service'
 import { pushBlobToPeers } from './p2p-blob-transfer.service'
 import {
   findSharedResourceInWorkspace,
   resolveSharedResourceId,
 } from './p2p-shared-resource-id'
+import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
 import {
   assertCanEditSharedResource,
   assertCanManageSharedResource,
@@ -29,6 +38,11 @@ import {
   assertWorkspaceMemberAccess,
 } from './p2p-permission.guard'
 import { getDefaultWorkspace } from '../workspace.service'
+import { stripGroupPrefixedName, resolvePersonalStorageWorkspaceId } from './p2p-group-resource-naming'
+import { ingestFileAtPath } from '../knowledge-ingest.service'
+import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
+import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source.service'
+import { restartKnowledgeWatchersForKb } from '../knowledge-watcher.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -38,11 +52,24 @@ interface KnowledgeShareMetadata {
   description?: string | null
   sourceWorkspaceId?: string
   documentIds?: string[]
+  documentPermissions?: Record<string, P2pKnowledgeDocumentPermission>
 }
+
+export { parseKnowledgeDocumentPermissionsFromPayload } from './p2p-knowledge-share-metadata'
 
 function readKnowledgeShareMetadata(metadataJson: string): KnowledgeShareMetadata {
   try {
-    const parsed = JSON.parse(metadataJson) as KnowledgeShareMetadata
+    const parsed = JSON.parse(metadataJson) as KnowledgeShareMetadata & {
+      documentPermissions?: Record<string, unknown>
+    }
+    const documentPermissions: Record<string, P2pKnowledgeDocumentPermission> = {}
+    if (parsed.documentPermissions && typeof parsed.documentPermissions === 'object') {
+      for (const [documentId, permission] of Object.entries(parsed.documentPermissions)) {
+        if (permission === 'read' || permission === 'savable') {
+          documentPermissions[documentId] = permission
+        }
+      }
+    }
     return {
       description: parsed.description ?? null,
       sourceWorkspaceId:
@@ -50,6 +77,8 @@ function readKnowledgeShareMetadata(metadataJson: string): KnowledgeShareMetadat
       documentIds: Array.isArray(parsed.documentIds)
         ? parsed.documentIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
         : undefined,
+      documentPermissions:
+        Object.keys(documentPermissions).length > 0 ? documentPermissions : undefined,
     }
   } catch {
     return {}
@@ -63,6 +92,9 @@ function buildKnowledgeShareMetadata(parts: KnowledgeShareMetadata): string {
   }
   if (parts.documentIds && parts.documentIds.length > 0) {
     payload.documentIds = parts.documentIds
+  }
+  if (parts.documentPermissions && Object.keys(parts.documentPermissions).length > 0) {
+    payload.documentPermissions = parts.documentPermissions
   }
   return JSON.stringify(payload)
 }
@@ -105,6 +137,7 @@ function mapSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResource {
   return {
     ...base,
     sharedDocumentIds: metadata.documentIds,
+    sharedDocumentPermissions: metadata.documentPermissions,
     sourceWorkspaceId: metadata.sourceWorkspaceId,
   }
 }
@@ -128,6 +161,13 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
     throw new Error('知识库不存在')
   }
 
+  protectOwnerSourceKnowledgeBase(
+    input.workspaceId,
+    kb.id,
+    sourceWorkspaceId,
+    stripGroupPrefixedName(input.workspaceId, kb.name),
+  )
+
   if (sourceWorkspaceId !== input.workspaceId) {
     ensureKnowledgeBaseMirrored(input.workspaceId, kb)
   }
@@ -140,6 +180,7 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
     'Knowledge',
   )
 
+  const shareDisplayName = stripGroupPrefixedName(input.workspaceId, kb.name)
   const existingMetadata = resource ? readKnowledgeShareMetadata(resource.metadataJson) : {}
   const shareWholeKnowledgeBase = !input.documentIds || input.documentIds.length === 0
   const sharedDocumentIds = shareWholeKnowledgeBase
@@ -149,49 +190,7 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
     description: kb.description,
     sourceWorkspaceId,
     documentIds: sharedDocumentIds,
-  })
-
-  if (!resource) {
-    resource = sharedRepo.create({
-      id: resolveSharedResourceId(sharedRepo, kb.id, input.workspaceId),
-      workspaceId: input.workspaceId,
-      resourceType: 'Knowledge',
-      localResourceId: kb.id,
-      name: kb.name,
-      sharedBy: member.id,
-      permission: input.permission ?? 'read',
-      metadataJson,
-    })
-  } else if (resource.status !== 'active') {
-    resource =
-      sharedRepo.update({
-        id: resource.id,
-        name: kb.name,
-        status: 'active',
-        metadataJson,
-      }) ?? resource
-  } else {
-    resource =
-      sharedRepo.update({
-        id: resource.id,
-        name: kb.name,
-        metadataJson,
-      }) ?? resource
-  }
-
-  await appendP2pEvent({
-    workspaceId: input.workspaceId,
-    resourceType: 'Knowledge',
-    resourceId: kb.id,
-    operatorId: member.id,
-    eventType: 'Shared',
-    payload: {
-      kb_id: kb.id,
-      name: kb.name,
-      description: kb.description,
-      source_workspace_id: sourceWorkspaceId,
-      ...(sharedDocumentIds ? { document_ids: sharedDocumentIds } : {}),
-    },
+    documentPermissions: existingMetadata.documentPermissions,
   })
 
   const docRepo = getDocumentRepository()
@@ -204,6 +203,56 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
       : shareWholeKnowledgeBase
         ? docs
         : []
+
+  if (!resource) {
+    resource = sharedRepo.create({
+      id: resolveSharedResourceId(sharedRepo, kb.id, input.workspaceId),
+      workspaceId: input.workspaceId,
+      resourceType: 'Knowledge',
+      localResourceId: kb.id,
+      name: shareDisplayName,
+      sharedBy: member.id,
+      permission: input.permission ?? 'read',
+      metadataJson,
+    })
+  } else if (resource.status !== 'active') {
+    resource =
+      sharedRepo.update({
+        id: resource.id,
+        name: shareDisplayName,
+        status: 'active',
+        metadataJson,
+      }) ?? resource
+  } else {
+    resource =
+      sharedRepo.update({
+        id: resource.id,
+        name: shareDisplayName,
+        metadataJson,
+      }) ?? resource
+  }
+
+  const documentIdsForEvent =
+    sharedDocumentIds ??
+    (docsToSync.length > 0 ? docsToSync.map((doc) => doc.id) : undefined)
+
+  await appendP2pEvent({
+    workspaceId: input.workspaceId,
+    resourceType: 'Knowledge',
+    resourceId: kb.id,
+    operatorId: member.id,
+    eventType: 'Shared',
+    payload: {
+      kb_id: kb.id,
+      name: shareDisplayName,
+      description: kb.description,
+      source_workspace_id: sourceWorkspaceId,
+      ...(documentIdsForEvent && documentIdsForEvent.length > 0
+        ? { document_ids: documentIdsForEvent }
+        : {}),
+    },
+  })
+
   for (const doc of docsToSync) {
     try {
       await syncP2pKnowledgeDocument({
@@ -214,14 +263,6 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.warn(`[p2p] failed to sync knowledge document ${doc.id}: ${message}`)
-    }
-  }
-
-  for (const doc of docsToSync) {
-    const synced = docRepo.findById(doc.id, kb.id)
-    const hash = synced?.blobHash ?? synced?.contentHash
-    if (hash) {
-      await pushBlobToPeers(input.workspaceId, hash, undefined)
     }
   }
 
@@ -274,6 +315,11 @@ export async function removeP2pKnowledgeDocuments(
     description: metadata.description,
     sourceWorkspaceId: metadata.sourceWorkspaceId,
     documentIds: nextIds,
+    documentPermissions: metadata.documentPermissions
+      ? Object.fromEntries(
+          Object.entries(metadata.documentPermissions).filter(([id]) => !removeSet.has(id)),
+        )
+      : undefined,
   })
   const updated =
     sharedRepo.update({
@@ -289,7 +335,7 @@ export async function removeP2pKnowledgeDocuments(
     eventType: 'Shared',
     payload: {
       kb_id: kbId,
-      name: updated.name,
+      name: stripGroupPrefixedName(input.workspaceId, updated.name),
       description: metadata.description,
       ...(metadata.sourceWorkspaceId ? { source_workspace_id: metadata.sourceWorkspaceId } : {}),
       document_ids: nextIds,
@@ -382,7 +428,7 @@ export async function syncP2pKnowledgeDocument(rawInput: unknown): Promise<{ eve
     contentHash: blob.hash,
   })
 
-  void pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
+  await pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
 
   return { event }
 }
@@ -406,10 +452,15 @@ export function listP2pSharedResources(rawInput: unknown): { resources: P2pShare
 }
 
 export async function maybeSyncSharedKnowledgeDocument(
-  _sourceWorkspaceId: string,
+  sourceWorkspaceId: string,
   kbId: string,
   documentId: string,
 ): Promise<void> {
+  const kb = getKnowledgeBaseRepository().findRowById(kbId, sourceWorkspaceId)
+  if (kb?.kind === 'shared') {
+    return
+  }
+
   const sharedRepo = getSharedResourceRepo()
   const shares = sharedRepo.listActiveByLocalResource(kbId, 'Knowledge')
 
@@ -425,4 +476,330 @@ export async function maybeSyncSharedKnowledgeDocument(
       console.warn(`[p2p] auto knowledge sync failed for ${documentId}: ${message}`)
     }
   }
+}
+
+function sanitizeKnowledgeDocumentFileName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return '文档'
+  return trimmed.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim()
+}
+
+function sanitizeGroupFolderName(name: string): string {
+  const sanitized = sanitizeKnowledgeDocumentFileName(name)
+  return sanitized || '群组'
+}
+
+function resolveKnowledgeDocumentPermission(
+  metadata: KnowledgeShareMetadata,
+  documentId: string,
+): P2pKnowledgeDocumentPermission {
+  return metadata.documentPermissions?.[documentId] ?? 'read'
+}
+
+export async function setP2pKnowledgeDocumentPermission(rawInput: unknown): Promise<{
+  sharedResource: P2pSharedResource
+}> {
+  const input = P2pKnowledgeSetDocumentPermissionInputSchema.parse(rawInput)
+  const sharedRepo = getSharedResourceRepo()
+  const resource = sharedRepo.findById(input.resourceId)
+  if (!resource || resource.workspaceId !== input.workspaceId) {
+    throw new Error('共享资源不存在')
+  }
+  if (resource.resourceType !== 'Knowledge' || resource.status !== 'active') {
+    throw new Error('共享资源不存在')
+  }
+
+  const member = assertCanManageSharedResource(input.workspaceId, resource.sharedBy)
+  const metadata = readKnowledgeShareMetadata(resource.metadataJson)
+  const kbId = resource.localResourceId ?? resource.id
+  const allReadyDocIds = getDocumentRepository()
+    .listByKb(kbId)
+    .filter((doc) => doc.status === 'ready' && doc.absolutePath)
+    .map((doc) => doc.id)
+  const sharedDocumentIds = metadata.documentIds ?? allReadyDocIds
+  if (!sharedDocumentIds.includes(input.documentId)) {
+    throw new Error('文件未共享到群组')
+  }
+
+  const documentPermissions = {
+    ...(metadata.documentPermissions ?? {}),
+    [input.documentId]: input.permission,
+  }
+  const metadataJson = buildKnowledgeShareMetadata({
+    description: metadata.description,
+    sourceWorkspaceId: metadata.sourceWorkspaceId,
+    documentIds: metadata.documentIds,
+    documentPermissions,
+  })
+
+  const updated =
+    sharedRepo.update({
+      id: resource.id,
+      metadataJson,
+    }) ?? resource
+
+  await appendP2pEvent({
+    workspaceId: input.workspaceId,
+    resourceType: 'Knowledge',
+    resourceId: kbId,
+    operatorId: member.id,
+    eventType: 'Updated',
+    payload: {
+      kb_id: kbId,
+      doc_id: input.documentId,
+      document_permission: input.permission,
+    },
+  })
+
+  return { sharedResource: mapSharedResourceRow(updated) }
+}
+
+function ensureUserSavedGroupKnowledgeBase(
+  storageWorkspaceId: string,
+  groupName: string,
+  sharedFolderName: string,
+): { kbId: string; storagePath: string } {
+  const kbRepo = getKnowledgeBaseRepository()
+  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, sharedFolderName)
+  const displayName = buildP2pGroupSavedKnowledgeDisplayName(
+    savedMeta.groupName,
+    savedMeta.sharedFolderName,
+  )
+  const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
+
+  const existingByMeta = kbRepo
+    .listByWorkspace(storageWorkspaceId)
+    .find((row) => {
+      if (row.kind !== 'shared' || isP2pSharedKnowledgeMirrorDescription(row.description)) {
+        return false
+      }
+      const meta = parseP2pGroupSavedKnowledgeMeta(row.description)
+      return (
+        meta != null &&
+        meta.groupName === savedMeta.groupName &&
+        meta.sharedFolderName === savedMeta.sharedFolderName
+      )
+    })
+
+  const legacyFlat = existingByMeta
+    ? null
+    : kbRepo.listByWorkspace(storageWorkspaceId).find((row) => {
+        if (row.kind !== 'shared' || isP2pSharedKnowledgeMirrorDescription(row.description)) {
+          return false
+        }
+        if (parseP2pGroupSavedKnowledgeMeta(row.description)) return false
+        return row.name === savedMeta.groupName || row.name === displayName
+      })
+
+  let kbRow = existingByMeta
+  if (!kbRow && legacyFlat) {
+    kbRepo.update({
+      id: legacyFlat.id,
+      workspaceId: storageWorkspaceId,
+      name: displayName,
+      description,
+    })
+    kbRow = kbRepo.findRowById(legacyFlat.id, storageWorkspaceId) ?? legacyFlat
+  }
+
+  kbRow =
+    kbRow ??
+    kbRepo.create({
+      workspaceId: storageWorkspaceId,
+      name: displayName,
+      kind: 'shared',
+      description,
+    })
+
+  const kbForPath = {
+    workspaceId: storageWorkspaceId,
+    name: kbRow.name,
+    kind: kbRow.kind,
+    description: kbRow.description ?? description,
+  }
+  const storagePath = resolveKnowledgeBaseStoragePath(kbForPath, { ensure: true })
+  if (!storagePath) {
+    throw new Error('无法创建共享知识库文件夹')
+  }
+
+  ensureKnowledgeBaseStorageSource(storageWorkspaceId, kbRow.id, storagePath)
+  restartKnowledgeWatchersForKb(storageWorkspaceId, kbRow.id)
+
+  return { kbId: kbRow.id, storagePath }
+}
+
+async function resolveSharedKnowledgeDocumentContent(input: {
+  workspaceId: string
+  resourceId: string
+  documentId: string
+}): Promise<{
+  sourceKbId: string
+  title: string
+  contentHash: string
+  mimeType: string
+  sharedBy: string
+  contentEvent: WorkspaceEvent
+}> {
+  const sharedRepo = getSharedResourceRepo()
+  const resource = sharedRepo.findById(input.resourceId)
+  if (!resource || resource.workspaceId !== input.workspaceId) {
+    throw new Error('共享资源不存在')
+  }
+  if (resource.resourceType !== 'Knowledge' || resource.status !== 'active') {
+    throw new Error('共享资源不存在')
+  }
+
+  assertWorkspaceMemberAccess(input.workspaceId)
+
+  const sourceKbId = resource.localResourceId ?? resource.id
+  const contentEvent = findLatestKnowledgeDocumentContentEvent(
+    input.workspaceId,
+    sourceKbId,
+    input.documentId,
+  )
+  if (!contentEvent) {
+    throw new Error('文档内容尚未同步到群组，请稍后重试')
+  }
+
+  const title =
+    typeof contentEvent.payload?.title === 'string'
+      ? contentEvent.payload.title.trim() || '文档'
+      : '文档'
+  const contentHash =
+    typeof contentEvent.payload?.content_hash === 'string'
+      ? contentEvent.payload.content_hash
+      : ''
+  const mimeType =
+    typeof contentEvent.payload?.mime_type === 'string'
+      ? contentEvent.payload.mime_type
+      : 'application/octet-stream'
+
+  if (!contentHash) {
+    throw new Error('文档内容尚未同步到群组，请稍后重试')
+  }
+
+  return {
+    sourceKbId,
+    title,
+    contentHash,
+    mimeType,
+    sharedBy: resource.sharedBy,
+    contentEvent,
+  }
+}
+
+export async function materializeP2pKnowledgeDocumentForOpen(rawInput: unknown): Promise<{
+  absolutePath: string
+}> {
+  const input = P2pKnowledgeMaterializeDocumentInputSchema.parse(rawInput)
+  const content = await resolveSharedKnowledgeDocumentContent(input)
+  const storageWorkspaceId =
+    resolvePersonalStorageWorkspaceId() ?? getDefaultWorkspace()?.id
+  if (!storageWorkspaceId) {
+    throw new Error('工作区未就绪')
+  }
+
+  const cachedPath = await ensureP2pKnowledgeBlobCached({
+    p2pWorkspaceId: input.workspaceId,
+    storageWorkspaceId,
+    kbId: content.sourceKbId,
+    docId: input.documentId,
+    title: content.title,
+    contentHash: content.contentHash,
+    mimeType: content.mimeType,
+    sharedBy: content.sharedBy,
+  })
+  if (!cachedPath) {
+    throw new Error('文档内容尚未同步到群组，请稍后重试')
+  }
+
+  return { absolutePath: cachedPath }
+}
+
+export async function ensureP2pKnowledgeDocumentSaved(rawInput: unknown): Promise<{
+  absolutePath: string
+  savedDocumentId: string
+}> {
+  const input = P2pKnowledgeEnsureDocumentSavedInputSchema.parse(rawInput)
+  const content = await resolveSharedKnowledgeDocumentContent(input)
+  const storageWorkspaceId =
+    resolvePersonalStorageWorkspaceId() ?? getDefaultWorkspace()?.id
+  if (!storageWorkspaceId) {
+    throw new Error('工作区未就绪')
+  }
+
+  let cachedPath = await ensureP2pKnowledgeBlobCached({
+    p2pWorkspaceId: input.workspaceId,
+    storageWorkspaceId,
+    kbId: content.sourceKbId,
+    docId: input.documentId,
+    title: content.title,
+    contentHash: content.contentHash,
+    mimeType: content.mimeType,
+    sharedBy: content.sharedBy,
+  })
+  if (!cachedPath) {
+    await syncMissingSharedKnowledgeDocuments(input.workspaceId)
+    cachedPath = await ensureP2pKnowledgeBlobCached({
+      p2pWorkspaceId: input.workspaceId,
+      storageWorkspaceId,
+      kbId: content.sourceKbId,
+      docId: input.documentId,
+      title: content.title,
+      contentHash: content.contentHash,
+      mimeType: content.mimeType,
+      sharedBy: content.sharedBy,
+    })
+  }
+  if (!cachedPath) {
+    throw new Error('文档内容尚未同步到群组，请稍后重试')
+  }
+
+  const p2pWorkspace = new P2pWorkspaceRepository(getDatabase()).findById(input.workspaceId)
+  if (!p2pWorkspace) {
+    throw new Error('群组不存在')
+  }
+
+  const sharedRepo = getSharedResourceRepo()
+  const resource = sharedRepo.findById(input.resourceId)
+  const sharedFolderName = resource
+    ? stripGroupPrefixedName(input.workspaceId, resource.name)
+    : '共享文件夹'
+
+  const { kbId, storagePath } = ensureUserSavedGroupKnowledgeBase(
+    storageWorkspaceId,
+    p2pWorkspace.name,
+    sharedFolderName,
+  )
+
+  const fileExt = extname(cachedPath) || extname(content.title)
+  const titledName = sanitizeKnowledgeDocumentFileName(
+    content.title.replace(/\.[^./\\]+$/i, '') || content.title,
+  )
+  const fileName =
+    fileExt && !titledName.toLowerCase().endsWith(fileExt.toLowerCase())
+      ? `${titledName}${fileExt}`
+      : titledName
+  const destinationPath = join(storagePath, fileName)
+
+  if (!existsSync(destinationPath)) {
+    copyFileSync(cachedPath, destinationPath)
+  }
+
+  const result = await ingestFileAtPath({
+    workspaceId: storageWorkspaceId,
+    kbId,
+    filePath: destinationPath,
+    skipP2pSync: true,
+  })
+  if (result.outcome === 'failed') {
+    throw new Error(result.message ?? '保存文档失败')
+  }
+
+  const savedDoc = getDocumentRepository().findByPath(kbId, destinationPath)
+  if (!savedDoc) {
+    throw new Error('保存文档失败')
+  }
+
+  return { absolutePath: destinationPath, savedDocumentId: savedDoc.id }
 }

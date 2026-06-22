@@ -78,7 +78,10 @@ function projectKnowledgeEvent(event: WorkspaceEvent): void {
       projectKnowledgeSharedEvent(event)
       return
     case 'Updated':
-      void applyKnowledgeUpdatedEvent(event)
+      void applyKnowledgeUpdatedEvent(event).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[p2p] apply knowledge updated event failed: ${message}`)
+      })
       return
     case 'Deleted':
       projectKnowledgeDeletedEvent(event)

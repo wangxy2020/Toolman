@@ -61,6 +61,9 @@ export type P2pSharedResourcePermission = z.infer<typeof P2pSharedResourcePermis
 export const P2pAgentSessionPermissionSchema = z.enum(['read', 'callable'])
 export type P2pAgentSessionPermission = z.infer<typeof P2pAgentSessionPermissionSchema>
 
+export const P2pKnowledgeDocumentPermissionSchema = z.enum(['read', 'savable'])
+export type P2pKnowledgeDocumentPermission = z.infer<typeof P2pKnowledgeDocumentPermissionSchema>
+
 export const P2pSharedResourceStatusSchema = z.enum(['active', 'unshared', 'deleted'])
 export type P2pSharedResourceStatus = z.infer<typeof P2pSharedResourceStatusSchema>
 

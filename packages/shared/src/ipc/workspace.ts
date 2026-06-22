@@ -8,6 +8,7 @@ export const WorkspaceSettingsSchema = z
     folderPath: z.string().optional(),
     knowledgeFolderPath: z.string().optional(),
     networkKnowledgeFolderPath: z.string().optional(),
+    sharedKnowledgeFolderPath: z.string().optional(),
     localFilesFolderPath: z.string().optional(),
     codeEditor: z.string().optional(),
   })

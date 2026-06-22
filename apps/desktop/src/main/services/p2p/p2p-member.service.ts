@@ -43,7 +43,7 @@ import {
 } from './p2p-peer.service'
 import { appendP2pEvent } from './p2p-event.service'
 import { assertCanManageMembers as assertCanManageMembersGuard } from './p2p-permission.guard'
-import { requestSnapshotFromOwner, syncWithPeer } from './p2p-sync.service'
+import { requestSnapshotFromOwner, syncWithPeer, awaitJoinerEventCatchUp } from './p2p-sync.service'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
@@ -843,6 +843,7 @@ function scheduleJoinPeerSync(
     if (payload.ownerDeviceId !== getP2pDeviceInfo().deviceId) {
       try {
         await syncWithPeer(payload.workspaceId, payload.ownerDeviceId)
+        await awaitJoinerEventCatchUp(payload.workspaceId)
         await reconcileWorkspaceMemberMesh(payload.workspaceId)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'post-join sync failed'

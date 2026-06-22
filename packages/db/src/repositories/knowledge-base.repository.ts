@@ -9,7 +9,7 @@ export interface CreateKnowledgeBaseInput {
   workspaceId: string
   name: string
   description?: string
-  kind?: 'local' | 'network' | 'local_files'
+  kind?: 'local' | 'network' | 'local_files' | 'shared'
   embedConfigJson?: string
   chunkConfigJson?: string
   watchConfigJson?: string
@@ -20,6 +20,7 @@ export interface UpdateKnowledgeBaseInput {
   workspaceId: string
   name?: string
   description?: string | null
+  kind?: KnowledgeBaseRow['kind']
   embedConfigJson?: string
   chunkConfigJson?: string
   watchConfigJson?: string
@@ -122,6 +123,7 @@ export class KnowledgeBaseRepository {
       .set({
         name: input.name ?? existing.name,
         description: input.description !== undefined ? input.description : existing.description,
+        kind: input.kind ?? existing.kind,
         embedConfigJson: input.embedConfigJson ?? existing.embedConfigJson,
         chunkConfigJson: input.chunkConfigJson ?? existing.chunkConfigJson,
         watchConfigJson: input.watchConfigJson ?? existing.watchConfigJson,

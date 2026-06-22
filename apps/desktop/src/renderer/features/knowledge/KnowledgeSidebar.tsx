@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { KnowledgeBase } from '@toolman/shared'
-import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconGroup, IconPlus } from '../../components/icons'
+import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
+import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconPlus } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { getModulePageConfig } from '../modules/module-config'
 import {
@@ -15,17 +16,13 @@ import {
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
 import { KnowledgeSidebarMenuItem } from './KnowledgeSidebarMenuItem'
-import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
 interface Props {
   items: KnowledgeBase[]
   activeId: string | null
   activeSection: KnowledgeSidebarSection
   loading?: boolean
-  sharedEntries?: SharedKnowledgeEntry[]
-  sharedLoading?: boolean
   onSelect: (id: string) => void
-  onSelectShared: (id: string) => void
   onSelectDefaultFolder: () => void
   onSelectDefaultNetworkFolder: () => void
   onSelectDefaultLocalFilesFolder: () => void
@@ -41,10 +38,7 @@ export function KnowledgeSidebar({
   activeId,
   activeSection,
   loading,
-  sharedEntries = [],
-  sharedLoading = false,
   onSelect,
-  onSelectShared,
   onSelectDefaultFolder,
   onSelectDefaultNetworkFolder,
   onSelectDefaultLocalFilesFolder,
@@ -63,6 +57,10 @@ export function KnowledgeSidebar({
   )
   const localFilesItems = items.filter(
     (item) => item.kind === 'local_files' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
+  )
+  const savedSharedItems = items.filter(
+    (item) =>
+      item.kind === 'shared' && !isP2pSharedKnowledgeMirrorDescription(item.description),
   )
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
     () => new Set(['local', 'network', 'shared', 'local-files']),
@@ -217,20 +215,26 @@ export function KnowledgeSidebar({
 
                 {isOpen && section.id === 'shared' ? (
                   <>
-                    {sharedLoading && sharedEntries.length === 0 ? (
+                    {loading && savedSharedItems.length === 0 ? (
                       <div className="tm-session-empty">加载中…</div>
                     ) : null}
-                    {!sharedLoading && sharedEntries.length === 0 ? (
-                      <div className="tm-session-empty">暂无共享知识库</div>
+                    {!loading && savedSharedItems.length === 0 ? (
+                      <div className="tm-session-empty">暂无已保存的共享文件夹</div>
                     ) : null}
-                    {sharedEntries.map((entry) => (
+                    {savedSharedItems.map((item) => (
                       <KnowledgeSidebarMenuItem
-                        key={entry.id}
-                        icon={<IconGroup size={14} />}
-                        label={`[${entry.workspaceName}] ${entry.resource.name}`}
-                        active={entry.id === activeId && activeSection === 'shared'}
-                        title={`${entry.workspaceName} · ${entry.resource.name}`}
-                        onClick={() => onSelectShared(entry.id)}
+                        key={item.id}
+                        icon={<IconFolder size={14} />}
+                        label={item.name}
+                        active={item.id === activeId && activeSection === 'shared'}
+                        title={`${item.name} · ${item.documentCount} 文档 · 从群组保存到本地`}
+                        onClick={() => onSelect(item.id)}
+                        deletable={isDeletableKnowledgeBase(item.name)}
+                        onRequestDelete={
+                          isDeletableKnowledgeBase(item.name)
+                            ? () => setDeleteTarget(item)
+                            : undefined
+                        }
                       />
                     ))}
                   </>

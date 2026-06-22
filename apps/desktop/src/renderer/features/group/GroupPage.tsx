@@ -18,9 +18,12 @@ import { GroupAgentsPanel } from './GroupAgentsPanel'
 import { GroupNotesPanel } from './GroupNotesPanel'
 import { GroupWorkflowPanel } from './GroupWorkflowPanel'
 import { GroupSettingsModal } from './GroupSettingsModal'
+import { GroupPageStatusBar } from './GroupPageStatusBar'
+import { GroupPageStatusProvider } from './group-page-status'
 import { useP2pWorkspace } from './useP2pWorkspace'
 import { useP2pEvents } from './useP2pEvents'
 import { useP2pSyncStatus } from './useP2pSyncStatus'
+import { useGroupWorkspaceBootstrap } from './useGroupWorkspaceBootstrap'
 import type { NoteItem, NotebookItem } from '../notes/notes-storage'
 import type {
   OpenGroupKnowledgeMarkdownRequest,
@@ -73,6 +76,7 @@ interface Props {
   onOpenGroupKnowledgeMarkdown?: (
     request: OpenGroupKnowledgeMarkdownRequest,
   ) => void | Promise<void>
+  onKnowledgeBasesChanged?: () => void | Promise<void>
   onSaveGroupNoteAsCopy?: (request: SaveGroupNoteAsCopyRequest) => void | Promise<void>
   onOpenGroupAgentSession?: (request: OpenGroupAgentSessionRequest) => void | Promise<void>
   onReloadAssistants?: () => void | Promise<void>
@@ -98,6 +102,7 @@ export function GroupPage({
   onOpenNote,
   onOpenGroupNote,
   onOpenGroupKnowledgeMarkdown,
+  onKnowledgeBasesChanged,
   onSaveGroupNoteAsCopy,
   onOpenGroupAgentSession,
   onReloadAssistants,
@@ -129,6 +134,7 @@ export function GroupPage({
 
   const activity = useP2pEvents({ workspaceId: workspace?.id ?? null })
   const syncStatus = useP2pSyncStatus(workspace?.id ?? null)
+  useGroupWorkspaceBootstrap(workspace?.id ?? null)
 
   useEffect(() => {
     if (
@@ -197,7 +203,7 @@ export function GroupPage({
             onOpenNote={onOpenNote}
             onOpenGroupNote={onOpenGroupNote}
             onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
-            onSaveGroupNoteAsCopy={onSaveGroupNoteAsCopy}
+            onKnowledgeBasesChanged={onKnowledgeBasesChanged}
           />
         )
       case 'agents':
@@ -324,40 +330,34 @@ export function GroupPage({
         />
       ) : null}
 
-      <div
-        className={[
-          'tm-module-content',
-          GROUP_NESTED_SCROLL_ACTIONS.has(effectiveAction) ? 'tm-module-content--chat' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        {!workspace ? (
-          <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">选择或创建群组</h2>
-            <p className="tm-module-empty-hint">在左侧创建群组，或通过邀请链接加入已有群组。</p>
-          </div>
-        ) : (
-          <>
-            {syncStatus.error && (
-              <div className="tm-error-bar" role="alert">
-                同步错误：{syncStatus.error}
-              </div>
-            )}
-            {!syncStatus.error && syncStatus.isDegraded && !detail.isOwner && (
-              <div className="tm-kb-file-dropzone-hint" style={{ margin: '0 0 12px' }}>
-                群主 P2P 未连接，事件序号已降级为 Lamport 时钟；正在尝试连接并同步，连接成功后自动恢复。
-              </div>
-            )}
-            {!syncStatus.error && syncStatus.isSyncing && (
-              <div className="tm-kb-file-dropzone-hint" style={{ margin: '0 0 12px' }}>
-                正在同步群组数据…
-              </div>
-            )}
-            {renderPanel()}
-          </>
-        )}
-      </div>
+      <GroupPageStatusProvider>
+        <div
+          className={[
+            'tm-module-content',
+            GROUP_NESTED_SCROLL_ACTIONS.has(effectiveAction) ? 'tm-module-content--chat' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {!workspace ? (
+            <div className="tm-module-empty">
+              <h2 className="tm-module-empty-title">选择或创建群组</h2>
+              <p className="tm-module-empty-hint">在左侧创建群组，或通过邀请链接加入已有群组。</p>
+            </div>
+          ) : (
+            renderPanel()
+          )}
+        </div>
+
+        {workspace && effectiveAction !== 'messages' ? (
+          <GroupPageStatusBar
+            syncError={syncStatus.error}
+            showSyncIndicator={syncStatus.showSyncIndicator}
+            showDegraded={syncStatus.isDegraded && !detail.isOwner && !syncStatus.error}
+            lastSyncAt={syncStatus.lastSyncAt}
+          />
+        ) : null}
+      </GroupPageStatusProvider>
 
       {showSettings && workspace && displayWorkspace ? (
         <GroupSettingsModal
