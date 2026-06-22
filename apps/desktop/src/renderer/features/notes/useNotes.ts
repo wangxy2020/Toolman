@@ -291,7 +291,7 @@ export function useNotes() {
 
   const openGroupSharedNote = useCallback(
     async (request: OpenGroupNoteRequest): Promise<boolean> => {
-      const { noteId, workspaceId, workspaceName, title, editable } = request
+      const { noteId, workspaceId, workspaceName, title, editable = false } = request
       const locked = !editable
       const existing = data.notes.find((item) => item.id === noteId)
 
@@ -713,6 +713,19 @@ export function useNotes() {
     }
   }, [activeNoteId, data.notes])
 
+  const syncGroupNoteLock = useCallback((noteId: string, locked: boolean) => {
+    setData((prev) => {
+      const note = prev.notes.find((item) => item.id === noteId)
+      if (!note || note.locked === locked) return prev
+      return {
+        ...prev,
+        notes: prev.notes.map((item) =>
+          item.id === noteId ? { ...item, locked, updatedAt: Date.now() } : item,
+        ),
+      }
+    })
+  }, [])
+
   return {
     data,
     notebooks: data.notebooks,
@@ -732,6 +745,7 @@ export function useNotes() {
     createNoteFromMessage,
     selectNote,
     openGroupSharedNote,
+    syncGroupNoteLock,
     openGroupKnowledgeMarkdown,
     saveGroupNoteAsCopy,
     ensureDefaultSelection,

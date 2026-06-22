@@ -82,7 +82,6 @@ export function GroupNoteList({
                     permission: resource.permission,
                     sharedBy: resource.sharedBy,
                     title,
-                    editable: false,
                   })
                 }
               >

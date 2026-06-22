@@ -147,7 +147,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
     joinedAt: now,
   })
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: row.id,
     resourceType: 'Workspace',
     resourceId: row.id,
@@ -156,6 +156,22 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
     payload: {
       name: row.name,
       description: row.description ?? null,
+    },
+  })
+
+  await appendP2pEvent({
+    workspaceId: row.id,
+    resourceType: 'Member',
+    resourceId: ownerMember.id,
+    operatorId: ownerMember.id,
+    eventType: 'Joined',
+    payload: {
+      member_id: ownerMember.id,
+      device_id: device.deviceId,
+      identity_id: device.identityId,
+      display_name: getIdentityDisplayName(),
+      role: 'owner',
+      workspace_name: row.name,
     },
   })
 
@@ -170,6 +186,23 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
     workspace: toWorkspaceDto(row),
     inviteToken,
   }
+}
+
+export async function ensureDefaultOwnedP2pWorkspace(): Promise<P2pWorkspace | null> {
+  try {
+    assertRegisteredForP2p()
+  } catch {
+    return null
+  }
+
+  const device = getP2pDeviceInfo()
+  const owned = getWorkspaceRepo().listByOwnerDevice(device.deviceId)
+  if (owned.some((row) => row.name === '默认群组')) {
+    return null
+  }
+
+  const { workspace } = await createP2pWorkspace({ name: '默认群组' })
+  return workspace
 }
 
 export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWorkspace[] {
@@ -191,7 +224,11 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
   let rows: P2pWorkspaceRow[]
   switch (filter) {
     case 'mine':
-      rows = owned
+      rows = [...owned].sort((a, b) => {
+        if (a.name === '默认群组' && b.name !== '默认群组') return -1
+        if (b.name === '默认群组' && a.name !== '默认群组') return 1
+        return b.updatedAt.getTime() - a.updatedAt.getTime()
+      })
       break
     case 'joined':
       rows = joined

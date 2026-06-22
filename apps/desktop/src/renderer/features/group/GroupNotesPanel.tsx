@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { canEditSharedResource, IpcChannel, type P2pMemberRole, type P2pSharedResource } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupNotePickerModal } from './GroupNotePickerModal'
@@ -25,6 +25,7 @@ interface Props {
   selfMemberRole: P2pMemberRole | null
   onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
   onSaveGroupNoteAsCopy?: (request: SaveGroupNoteAsCopyRequest) => void | Promise<void>
+  onSyncGroupNoteLock?: (noteId: string, locked: boolean) => void
 }
 
 interface PendingDelete {
@@ -46,6 +47,7 @@ export function GroupNotesPanel({
   selfMemberRole,
   onOpenGroupNote,
   onSaveGroupNoteAsCopy,
+  onSyncGroupNoteLock,
 }: Props) {
   const [showPicker, setShowPicker] = useState(false)
   const [noteActionMenu, setNoteActionMenu] = useState<{
@@ -108,21 +110,27 @@ export function GroupNotesPanel({
       const resource = p2pNotes.sharedResources.find(
         (item) => (item.localResourceId ?? item.id) === request.noteId,
       )
+      const editable = resource ? resolveEditable(resource) : false
       return onOpenGroupNote?.({
         ...request,
         workspaceId: p2pWorkspaceId,
         workspaceName,
         permission: resource?.permission ?? request.permission,
         sharedBy: resource?.sharedBy ?? request.sharedBy,
-        editable: request.editable
-          ? resource
-            ? resolveEditable(resource)
-            : false
-          : false,
+        editable,
       })
     },
     [onOpenGroupNote, p2pNotes.sharedResources, p2pWorkspaceId, resolveEditable, workspaceName],
   )
+
+  useEffect(() => {
+    if (!onSyncGroupNoteLock) return
+    for (const resource of p2pNotes.sharedResources) {
+      const noteId = resource.localResourceId ?? resource.id
+      if (!notesById.has(noteId)) continue
+      onSyncGroupNoteLock(noteId, !resolveEditable(resource))
+    }
+  }, [notesById, onSyncGroupNoteLock, p2pNotes.sharedResources, resolveEditable])
 
   const handleNoteAction = useCallback(
     async (action: GroupNoteAction) => {

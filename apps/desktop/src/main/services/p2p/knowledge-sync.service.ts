@@ -15,7 +15,6 @@ import {
 import { getDatabase } from '../../bootstrap/database'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
 import { writeBlobFromPath } from '../blob.service'
-import { getWorkspaceKnowledgeDir } from '../knowledge.service'
 import { mapP2pAgentSharedResourceRow } from './agent-share.service'
 import { appendP2pEvent } from './p2p-event.service'
 import { pushBlobToPeers } from './p2p-blob-transfer.service'
@@ -29,6 +28,7 @@ import {
   assertCanShareResource,
   assertWorkspaceMemberAccess,
 } from './p2p-permission.guard'
+import { getDefaultWorkspace } from '../workspace.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -70,11 +70,7 @@ function buildKnowledgeShareMetadata(parts: KnowledgeShareMetadata): string {
 function mergeSharedDocumentIds(
   existing: string[] | undefined,
   incoming: string[] | undefined,
-  shareWholeKnowledgeBase: boolean,
 ): string[] | undefined {
-  if (shareWholeKnowledgeBase) {
-    return undefined
-  }
   if (!incoming || incoming.length === 0) {
     return existing
   }
@@ -114,36 +110,19 @@ function mapSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResource {
 }
 
 function ensureKnowledgeBaseMirrored(
-  p2pWorkspaceId: string,
-  sourceKb: KnowledgeBaseRow,
+  _p2pWorkspaceId: string,
+  _sourceKb: KnowledgeBaseRow,
 ): void {
-  const kbRepo = getKnowledgeBaseRepository()
-  if (kbRepo.findRowById(sourceKb.id, p2pWorkspaceId)) {
-    return
-  }
-
-  // knowledge_bases.id is globally unique — reuse the source row when it already exists.
-  if (kbRepo.findRowByIdOnly(sourceKb.id)) {
-    return
-  }
-
-  getWorkspaceKnowledgeDir(p2pWorkspaceId)
-  kbRepo.create({
-    id: sourceKb.id,
-    workspaceId: p2pWorkspaceId,
-    name: sourceKb.name,
-    description: sourceKb.description ?? undefined,
-    kind: 'network',
-    embedConfigJson: sourceKb.embedConfigJson,
-    chunkConfigJson: sourceKb.chunkConfigJson,
-    watchConfigJson: sourceKb.watchConfigJson,
-  })
+  // Knowledge bases live in the personal workspace; P2P tracks shared resources only.
 }
 
-export function shareP2pKnowledge(rawInput: unknown): { sharedResource: P2pSharedResource } {
+export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedResource: P2pSharedResource }> {
   const input = P2pKnowledgeShareInputSchema.parse(rawInput)
   const member = assertCanShareResource(input.workspaceId)
-  const sourceWorkspaceId = input.sourceWorkspaceId ?? input.workspaceId
+  const sourceWorkspaceId = input.sourceWorkspaceId ?? getDefaultWorkspace()?.id
+  if (!sourceWorkspaceId) {
+    throw new Error('工作区未就绪')
+  }
   const kb = getKnowledgeBaseRepository().findRowById(input.knowledgeBaseId, sourceWorkspaceId)
   if (!kb) {
     throw new Error('知识库不存在')
@@ -163,11 +142,9 @@ export function shareP2pKnowledge(rawInput: unknown): { sharedResource: P2pShare
 
   const existingMetadata = resource ? readKnowledgeShareMetadata(resource.metadataJson) : {}
   const shareWholeKnowledgeBase = !input.documentIds || input.documentIds.length === 0
-  const sharedDocumentIds = mergeSharedDocumentIds(
-    existingMetadata.documentIds,
-    input.documentIds,
-    shareWholeKnowledgeBase,
-  )
+  const sharedDocumentIds = shareWholeKnowledgeBase
+    ? undefined
+    : mergeSharedDocumentIds(existingMetadata.documentIds, input.documentIds)
   const metadataJson = buildKnowledgeShareMetadata({
     description: kb.description,
     sourceWorkspaceId,
@@ -202,7 +179,7 @@ export function shareP2pKnowledge(rawInput: unknown): { sharedResource: P2pShare
       }) ?? resource
   }
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Knowledge',
     resourceId: kb.id,
@@ -217,7 +194,8 @@ export function shareP2pKnowledge(rawInput: unknown): { sharedResource: P2pShare
     },
   })
 
-  const docs = getDocumentRepository()
+  const docRepo = getDocumentRepository()
+  const docs = docRepo
     .listByKb(kb.id)
     .filter((doc) => doc.status === 'ready' && doc.absolutePath)
   const docsToSync =
@@ -228,7 +206,7 @@ export function shareP2pKnowledge(rawInput: unknown): { sharedResource: P2pShare
         : []
   for (const doc of docsToSync) {
     try {
-      syncP2pKnowledgeDocument({
+      await syncP2pKnowledgeDocument({
         workspaceId: input.workspaceId,
         knowledgeBaseId: kb.id,
         documentId: doc.id,
@@ -239,12 +217,20 @@ export function shareP2pKnowledge(rawInput: unknown): { sharedResource: P2pShare
     }
   }
 
+  for (const doc of docsToSync) {
+    const synced = docRepo.findById(doc.id, kb.id)
+    const hash = synced?.blobHash ?? synced?.contentHash
+    if (hash) {
+      await pushBlobToPeers(input.workspaceId, hash, undefined)
+    }
+  }
+
   return { sharedResource: mapSharedResourceRow(resource) }
 }
 
-export function removeP2pKnowledgeDocuments(
+export async function removeP2pKnowledgeDocuments(
   rawInput: unknown,
-): { sharedResource: P2pSharedResource | null } {
+): Promise<{ sharedResource: P2pSharedResource | null }> {
   const input = P2pKnowledgeRemoveDocumentsInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -273,7 +259,7 @@ export function removeP2pKnowledgeDocuments(
 
   if (nextIds.length === 0) {
     sharedRepo.update({ id: resource.id, status: 'unshared' })
-    appendP2pEvent({
+    await appendP2pEvent({
       workspaceId: input.workspaceId,
       resourceType: 'Knowledge',
       resourceId: kbId,
@@ -295,7 +281,7 @@ export function removeP2pKnowledgeDocuments(
       metadataJson,
     }) ?? resource
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Knowledge',
     resourceId: kbId,
@@ -313,7 +299,7 @@ export function removeP2pKnowledgeDocuments(
   return { sharedResource: mapSharedResourceRow(updated) }
 }
 
-export function unshareP2pKnowledge(rawInput: unknown): { unshared: true } {
+export async function unshareP2pKnowledge(rawInput: unknown): Promise<{ unshared: true }> {
   const input = P2pResourceUnshareInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -327,7 +313,7 @@ export function unshareP2pKnowledge(rawInput: unknown): { unshared: true } {
 
   sharedRepo.update({ id: resource.id, status: 'unshared' })
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Knowledge',
     resourceId: resource.localResourceId ?? resource.id,
@@ -341,7 +327,7 @@ export function unshareP2pKnowledge(rawInput: unknown): { unshared: true } {
   return { unshared: true }
 }
 
-export function syncP2pKnowledgeDocument(rawInput: unknown): { event: WorkspaceEvent } {
+export async function syncP2pKnowledgeDocument(rawInput: unknown): Promise<{ event: WorkspaceEvent }> {
   const input = P2pKnowledgeSyncDocumentInputSchema.parse(rawInput)
   const member = assertWorkspaceMemberAccess(input.workspaceId)
   const docRepo = getDocumentRepository()
@@ -369,7 +355,7 @@ export function syncP2pKnowledgeDocument(rawInput: unknown): { event: WorkspaceE
   const blob = writeBlobFromPath(doc.absolutePath)
   const stat = statSync(doc.absolutePath)
 
-  const event = appendP2pEvent({
+  const event = await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Knowledge',
     resourceId: input.documentId,
@@ -391,7 +377,10 @@ export function syncP2pKnowledgeDocument(rawInput: unknown): { event: WorkspaceE
     version: (shared.version ?? 1) + 1,
   })
 
-  docRepo.update(input.documentId, input.knowledgeBaseId, { blobHash: blob.hash })
+  docRepo.update(input.documentId, input.knowledgeBaseId, {
+    blobHash: blob.hash,
+    contentHash: blob.hash,
+  })
 
   void pushBlobToPeers(input.workspaceId, blob.hash, blob.mimeType)
 
@@ -416,17 +405,17 @@ export function listP2pSharedResources(rawInput: unknown): { resources: P2pShare
   return { resources }
 }
 
-export function maybeSyncSharedKnowledgeDocument(
+export async function maybeSyncSharedKnowledgeDocument(
   _sourceWorkspaceId: string,
   kbId: string,
   documentId: string,
-): void {
+): Promise<void> {
   const sharedRepo = getSharedResourceRepo()
   const shares = sharedRepo.listActiveByLocalResource(kbId, 'Knowledge')
 
   for (const shared of shares) {
     try {
-      syncP2pKnowledgeDocument({
+      await syncP2pKnowledgeDocument({
         workspaceId: shared.workspaceId,
         knowledgeBaseId: kbId,
         documentId,

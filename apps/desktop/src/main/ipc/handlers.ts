@@ -950,7 +950,20 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.ImChannelStatusList]: async () => ipcOk(imChannelFacade.listImChannelStatuses()),
   [IpcChannel.ImChannelWebhookInfo]: async () => ipcOk(imChannelFacade.getImChannelWebhookInfo()),
 
-  [IpcChannel.AssistantList]: async (input) => ipcOk(assistantService.listAssistants(input)),
+  [IpcChannel.AssistantList]: async (input) => {
+    const workspaceId =
+      typeof input === 'object' &&
+      input != null &&
+      'workspaceId' in input &&
+      typeof (input as { workspaceId?: unknown }).workspaceId === 'string'
+        ? (input as { workspaceId: string }).workspaceId
+        : null
+    if (workspaceId) {
+      p2pAgentShareService.sanitizeOwnerSourceAgentMirrorFlags(workspaceId)
+      p2pGroupAgentProxyService.syncGroupProxyAssistantModels(workspaceId)
+    }
+    return ipcOk(assistantService.listAssistants(input))
+  },
   [IpcChannel.AssistantCreate]: async (input) => ipcOk(assistantService.createAssistant(input)),
   [IpcChannel.AssistantUpdate]: async (input) => {
     const assistant = assistantService.updateAssistant(input)
@@ -1148,7 +1161,11 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pWorkspaceList]: async (input) => {
     try {
       const parsed = P2pWorkspaceListInputSchema.parse(input ?? {})
-      const workspaces = p2pWorkspaceService.listP2pWorkspaces(parsed.filter ?? 'all')
+      const filter = parsed.filter ?? 'all'
+      if (filter === 'mine' || filter === 'all') {
+        await p2pWorkspaceService.ensureDefaultOwnedP2pWorkspace()
+      }
+      const workspaces = p2pWorkspaceService.listP2pWorkspaces(filter)
       return ipcOk(P2pWorkspaceListOutputSchema.parse({ workspaces }))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to list workspaces'
@@ -1245,6 +1262,9 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pMemberService.joinP2pWorkspace(parsed)
       return ipcOk(P2pMemberJoinOutputSchema.parse(result))
     } catch (error) {
+      if (error instanceof p2pMemberService.P2pMemberLimitError) {
+        return ipcErr({ code: 'P2P_MEMBER_LIMIT', message: error.message, retryable: false })
+      }
       const errMessage = error instanceof Error ? error.message : 'Failed to join workspace'
       let code: 'P2P_INVITE_EXPIRED' | 'P2P_FORBIDDEN' | 'P2P_MEMBER_LIMIT' | 'INTERNAL_ERROR' =
         'INTERNAL_ERROR'
@@ -1294,7 +1314,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pEventList]: async (input) => {
     try {
       const parsed = P2pEventListInputSchema.parse(input)
-      await p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
+      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pEventService.listP2pEvents(parsed)
       return ipcOk(P2pEventListOutputSchema.parse(result))
     } catch (error) {
@@ -1371,7 +1391,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pFileUpload]: async (input) => {
     try {
       const parsed = P2pFileUploadInputSchema.parse(input)
-      const result = p2pFileSyncService.uploadP2pFile(parsed)
+      const result = await p2pFileSyncService.uploadP2pFile(parsed)
       return ipcOk(P2pFileUploadOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to upload file'
@@ -1389,6 +1409,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pFileList]: async (input) => {
     try {
       const parsed = P2pFileListInputSchema.parse(input)
+      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pFileSyncService.listP2pFiles(parsed)
       return ipcOk(P2pFileListOutputSchema.parse(result))
     } catch (error) {
@@ -1417,6 +1438,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pFileDownload]: async (input) => {
     try {
       const parsed = P2pFileDownloadInputSchema.parse(input)
+      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = await p2pFileSyncService.downloadP2pFile(parsed)
       return ipcOk(P2pFileDownloadOutputSchema.parse(result))
     } catch (error) {
@@ -1433,7 +1455,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pKnowledgeShare]: async (input) => {
     try {
       const parsed = P2pKnowledgeShareInputSchema.parse(input)
-      const result = p2pKnowledgeSyncService.shareP2pKnowledge(parsed)
+      const result = await p2pKnowledgeSyncService.shareP2pKnowledge(parsed)
       return ipcOk(P2pKnowledgeShareOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to share knowledge base'
@@ -1449,7 +1471,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pKnowledgeSyncDocument]: async (input) => {
     try {
       const parsed = P2pKnowledgeSyncDocumentInputSchema.parse(input)
-      const result = p2pKnowledgeSyncService.syncP2pKnowledgeDocument(parsed)
+      const result = await p2pKnowledgeSyncService.syncP2pKnowledgeDocument(parsed)
       return ipcOk(P2pKnowledgeSyncDocumentOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to sync knowledge document'
@@ -1465,7 +1487,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pKnowledgeRemoveDocuments]: async (input) => {
     try {
       const parsed = P2pKnowledgeRemoveDocumentsInputSchema.parse(input)
-      const result = p2pKnowledgeSyncService.removeP2pKnowledgeDocuments(parsed)
+      const result = await p2pKnowledgeSyncService.removeP2pKnowledgeDocuments(parsed)
       return ipcOk(P2pKnowledgeRemoveDocumentsOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
@@ -1510,7 +1532,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pAgentShare]: async (input) => {
     try {
       const parsed = P2pAgentShareInputSchema.parse(input)
-      const result = p2pAgentShareService.shareP2pAgent(parsed)
+      const result = await p2pAgentShareService.shareP2pAgent(parsed)
       return ipcOk(P2pAgentShareOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to share agent'
@@ -1526,7 +1548,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pAgentRemoveSessions]: async (input) => {
     try {
       const parsed = P2pAgentRemoveSessionsInputSchema.parse(input)
-      const result = p2pAgentShareService.removeP2pAgentSessions(parsed)
+      const result = await p2pAgentShareService.removeP2pAgentSessions(parsed)
       return ipcOk(P2pAgentRemoveSessionsOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
@@ -1543,7 +1565,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pAgentSetSessionPermission]: async (input) => {
     try {
       const parsed = P2pAgentSetSessionPermissionInputSchema.parse(input)
-      const result = p2pAgentShareService.setP2pAgentSessionPermission(parsed)
+      const result = await p2pAgentShareService.setP2pAgentSessionPermission(parsed)
       return ipcOk(P2pAgentSetSessionPermissionOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
@@ -1560,6 +1582,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pAgentOpenSession]: async (input) => {
     try {
       const parsed = P2pAgentOpenSessionInputSchema.parse(input)
+      p2pSyncService.scheduleJoinerEventCatchUp(parsed.p2pWorkspaceId)
       const result = await p2pGroupAgentProxyService.openP2pGroupAgentSession(parsed)
       return ipcOk(P2pAgentOpenSessionOutputSchema.parse(result))
     } catch (error) {
@@ -1615,7 +1638,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pNoteShare]: async (input) => {
     try {
       const parsed = P2pNoteShareInputSchema.parse(input)
-      const result = p2pNoteSyncService.shareP2pNote(parsed)
+      const result = await p2pNoteSyncService.shareP2pNote(parsed)
       return ipcOk(
         P2pNoteShareOutputSchema.parse({ sharedResource: result.sharedResource }),
       )
@@ -1633,7 +1656,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pNotePushUpdate]: async (input) => {
     try {
       const parsed = P2pNotePushUpdateInputSchema.parse(input)
-      const result = p2pNoteSyncService.pushP2pNoteUpdate(parsed)
+      const result = await p2pNoteSyncService.pushP2pNoteUpdate(parsed)
       return ipcOk(P2pNotePushUpdateOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to push note update'
@@ -1660,7 +1683,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pNoteSetPermission]: async (input) => {
     try {
       const parsed = P2pNoteSetPermissionInputSchema.parse(input)
-      const result = p2pNoteSyncService.setP2pNotePermission(parsed)
+      const result = await p2pNoteSyncService.setP2pNotePermission(parsed)
       return ipcOk(
         P2pNoteSetPermissionOutputSchema.parse({ sharedResource: result.sharedResource }),
       )
@@ -1684,12 +1707,12 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       }
       const result =
         resource.resourceType === 'File'
-          ? p2pFileSyncService.deleteP2pFile(parsed)
+          ? await p2pFileSyncService.deleteP2pFile(parsed)
           : resource.resourceType === 'Note'
-            ? p2pNoteSyncService.unshareP2pNote(parsed)
+            ? await p2pNoteSyncService.unshareP2pNote(parsed)
             : resource.resourceType === 'Agent'
-              ? p2pAgentShareService.unshareP2pAgent(parsed)
-              : p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
+              ? await p2pAgentShareService.unshareP2pAgent(parsed)
+              : await p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
       return ipcOk(P2pResourceUnshareOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to unshare resource'
@@ -1705,6 +1728,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pResourceList]: async (input) => {
     try {
       const parsed = P2pResourceListInputSchema.parse(input)
+      p2pSyncService.scheduleJoinerEventCatchUp(parsed.workspaceId)
       const result = p2pKnowledgeSyncService.listP2pSharedResources(parsed)
       return ipcOk(P2pResourceListOutputSchema.parse(result))
     } catch (error) {

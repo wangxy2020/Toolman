@@ -15,13 +15,15 @@ import { listMessages } from '../agent.service'
 import { broadcastStreamEvent, addStreamRelayListener } from '../stream-broadcast'
 import { MessageStreamBuffers } from '../message-stream-buffers'
 import { P2pBridge } from './p2p-bridge'
-import { connectP2pPeer } from './p2p-connection.service'
+import { ensurePeerReadyForWorkspace } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { readAgentShareMetadata } from './agent-share.service'
 import { assertPeerTrustedForSync } from './p2p-peer.service'
 import { registerP2pSyncHandlers } from './p2p-sync-lifecycle'
+import { encodeReplicationMessage } from './p2p-sync-protocol'
 
 export const AGENT_RELAY_CHANNEL = 'agent-relay'
+const P2P_EVENTS_CHANNEL = 'events'
 
 const RELAY_TIMEOUT_MS = 120_000
 
@@ -52,10 +54,6 @@ function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
 }
 
-function encodeRelayMessage(message: AgentRelayMessage): Buffer {
-  return Buffer.from(JSON.stringify(message), 'utf8')
-}
-
 function parseRelayMessage(data: Buffer): AgentRelayMessage {
   return AgentRelayMessageSchema.parse(JSON.parse(data.toString('utf8')))
 }
@@ -64,11 +62,18 @@ async function sendRelayMessage(
   peerDeviceId: string,
   message: AgentRelayMessage,
 ): Promise<void> {
-  await P2pBridge.connectionSend(peerDeviceId, AGENT_RELAY_CHANNEL, encodeRelayMessage(message))
+  await P2pBridge.connectionSend(
+    peerDeviceId,
+    P2P_EVENTS_CHANNEL,
+    encodeReplicationMessage({
+      type: 'agent-relay.message',
+      relay: message,
+    }),
+  )
 }
 
 async function ensurePeerConnected(peerDeviceId: string, p2pWorkspaceId: string): Promise<void> {
-  await connectP2pPeer(peerDeviceId, p2pWorkspaceId)
+  await ensurePeerReadyForWorkspace(peerDeviceId, p2pWorkspaceId)
 }
 
 function waitForRelayResponse(requestId: string): Promise<AgentRelayMessage> {
@@ -281,21 +286,10 @@ async function handleOwnerSend(
     activeOwnerRelays.get(message.requestId)?.unsubscribe()
     activeOwnerRelays.delete(message.requestId)
 
-    const result = await sendMessage({
-      sessionId: message.sourceSessionId,
-      contentBlocks: message.contentBlocks,
-      modelIds: message.modelIds,
-    })
+    let ownerAssistantMessageId: string | null = null
+    const bufferedEvents: MessageStreamEvent[] = []
 
-    const ownerAssistantMessageId = result.assistantMessageIds[0]
-    if (!ownerAssistantMessageId) {
-      throw new Error('生成回复失败')
-    }
-
-    const relayUnsubscribe = addStreamRelayListener((event) => {
-      if (event.sessionId !== message.sourceSessionId) return
-      if (event.messageId !== ownerAssistantMessageId) return
-
+    const forwardStream = (event: MessageStreamEvent) => {
       const remapped = remapStreamEventForMember(event, {
         sessionId: message.memberSessionId,
         messageId: message.memberAssistantMessageId,
@@ -312,6 +306,24 @@ async function handleOwnerSend(
         activeOwnerRelays.get(message.requestId)?.unsubscribe()
         activeOwnerRelays.delete(message.requestId)
       }
+    }
+
+    const relayUnsubscribe = addStreamRelayListener((event) => {
+      if (event.sessionId !== message.sourceSessionId) return
+
+      if (!ownerAssistantMessageId) {
+        if (
+          event.type === 'message.delta' ||
+          event.type === 'message.done' ||
+          event.type === 'message.error'
+        ) {
+          bufferedEvents.push(event)
+        }
+        return
+      }
+
+      if (event.messageId !== ownerAssistantMessageId) return
+      forwardStream(event)
     })
 
     activeOwnerRelays.set(message.requestId, {
@@ -322,12 +334,34 @@ async function handleOwnerSend(
       unsubscribe: relayUnsubscribe,
     })
 
+    const result = await sendMessage({
+      __p2pAgentRelayExecution: true,
+      sessionId: message.sourceSessionId,
+      contentBlocks: message.contentBlocks,
+      modelIds: message.modelIds,
+    })
+
+    ownerAssistantMessageId = result.assistantMessageIds[0] ?? null
+    if (!ownerAssistantMessageId) {
+      relayUnsubscribe()
+      activeOwnerRelays.delete(message.requestId)
+      throw new Error('生成回复失败')
+    }
+
+    for (const event of bufferedEvents) {
+      if (event.messageId === ownerAssistantMessageId) {
+        forwardStream(event)
+      }
+    }
+
     await sendRelayMessage(peerDeviceId, {
       v: 1,
       type: 'send_ok',
       requestId: message.requestId,
     })
   } catch (error) {
+    activeOwnerRelays.get(message.requestId)?.unsubscribe()
+    activeOwnerRelays.delete(message.requestId)
     const errMessage = error instanceof Error ? error.message : '发送消息失败'
     await sendRelayMessage(peerDeviceId, {
       v: 1,

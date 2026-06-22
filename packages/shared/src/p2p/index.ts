@@ -1,6 +1,7 @@
 export * from './types.js'
 export * from './events.js'
 export * from './workspace.js'
+export * from './messages.js'
 export * from './agent-package.js'
 export * from './permissions.js'
 export * from './group-agent-proxy.js'

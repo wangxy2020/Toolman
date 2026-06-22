@@ -72,18 +72,8 @@ export function GroupSidebar({
                   .join(' ')}
                 onClick={() => setMyGroupsOpen((v) => !v)}
               >
-                我的群组
+                我创建的群组
               </button>
-              <div className="tm-assistant-actions">
-                <button
-                  type="button"
-                  className="tm-assistant-action-btn"
-                  title="创建群组"
-                  onClick={onCreate}
-                >
-                  <IconPlus size={14} />
-                </button>
-              </div>
             </div>
 
             {myGroupsOpen &&

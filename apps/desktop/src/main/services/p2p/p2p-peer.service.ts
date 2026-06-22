@@ -1,6 +1,7 @@
 import {
   P2pMemberRepository,
   P2pPeerRepository,
+  P2pWorkspaceRepository,
   createP2pDeviceIdentityRepository,
 } from '@toolman/db'
 import type { DiscoveredNode, P2pConnectionState } from '@toolman/shared'
@@ -24,6 +25,10 @@ function getPeerRepo(): P2pPeerRepository {
 
 function getMemberRepo(): P2pMemberRepository {
   return new P2pMemberRepository(getDatabase())
+}
+
+function getWorkspaceRepo(): P2pWorkspaceRepository {
+  return new P2pWorkspaceRepository(getDatabase())
 }
 
 function resolveDiscoveredNode(deviceId: string): DiscoveredNode | null {
@@ -77,21 +82,29 @@ export function ensureOwnerPeerTrustedForSync(
   ownerDeviceId: string,
   displayName = '群主',
 ): void {
+  trustPeerSilentlyForWorkspaceMesh(workspaceId, ownerDeviceId, displayName)
+}
+
+export function trustPeerSilentlyForWorkspaceMesh(
+  workspaceId: string,
+  peerDeviceId: string,
+  displayName?: string,
+): void {
   const localDeviceId = getP2pDeviceId()
-  if (ownerDeviceId === localDeviceId) return
+  if (peerDeviceId === localDeviceId) return
 
-  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, ownerDeviceId)
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
   const resolvedDisplayName =
-    displayName ?? member?.displayName ?? resolvePeerDisplayName(workspaceId, ownerDeviceId, '群主')
+    displayName ?? member?.displayName ?? resolvePeerDisplayName(workspaceId, peerDeviceId, '成员')
 
-  const node = resolveDiscoveredNode(ownerDeviceId)
+  const node = resolveDiscoveredNode(peerDeviceId)
   if (node) {
     getPeerRepo().upsert({
       workspaceId,
-      deviceId: ownerDeviceId,
+      deviceId: peerDeviceId,
       displayName: resolvedDisplayName,
       deviceName: node.deviceName,
-      publicKey: resolvePeerPublicKey(ownerDeviceId, node.publicKeyFingerprint),
+      publicKey: resolvePeerPublicKey(peerDeviceId, node.publicKeyFingerprint),
       trusted: true,
       online: node.online,
       lastSeenAt: new Date(node.lastSeenAt),
@@ -102,10 +115,10 @@ export function ensureOwnerPeerTrustedForSync(
 
   getPeerRepo().upsert({
     workspaceId,
-    deviceId: ownerDeviceId,
+    deviceId: peerDeviceId,
     displayName: resolvedDisplayName,
-    deviceName: ownerDeviceId.slice(0, 8),
-    publicKey: resolvePeerPublicKey(ownerDeviceId, ownerDeviceId),
+    deviceName: peerDeviceId.slice(0, 8),
+    publicKey: resolvePeerPublicKey(peerDeviceId, peerDeviceId),
     trusted: true,
     online: true,
     connectionState: 'connected',
@@ -121,6 +134,11 @@ export function promptPeerTrustIfNeeded(
   if (peerDeviceId === localDeviceId) return
   if (options?.connected === false) return
   if (isPeerTrusted(workspaceId, peerDeviceId)) return
+
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (!workspace || workspace.ownerDeviceId !== localDeviceId) {
+    return
+  }
 
   const promptKey = peerPromptKey(workspaceId, peerDeviceId)
   if (promptedPeers.has(promptKey)) return
@@ -166,6 +184,15 @@ export function handlePeerConnectionChange(
 
   if (state !== 'connected') return
 
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  const isOwner = workspace?.ownerDeviceId === localDeviceId
+
+  if (!isOwner && member?.status === 'active') {
+    trustPeerSilentlyForWorkspaceMesh(workspaceId, peerDeviceId, member.displayName)
+    return
+  }
+
   promptPeerTrustIfNeeded(workspaceId, peerDeviceId, { connected: true })
 }
 
@@ -206,6 +233,9 @@ export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {
   if (input.trusted) {
     promptedPeers.delete(promptKey)
     void notifyP2pPeerConnected(input.workspaceId, input.peerDeviceId)
+    void import('./p2p-member-mesh.service').then((module) => {
+      void module.reconcileWorkspaceMemberMesh(input.workspaceId)
+    })
   } else {
     void P2pBridge.connectionDisconnect(input.peerDeviceId)
     promptedPeers.delete(promptKey)

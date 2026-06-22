@@ -216,18 +216,30 @@ export function applyWorkspaceSnapshotState(
   })
 
   for (const member of state.members) {
-    const existing = memberRepo.findByWorkspaceAndDevice(workspaceId, member.deviceId)
-    if (existing) {
+    const existingByDevice = memberRepo.findByWorkspaceAndDevice(workspaceId, member.deviceId)
+    if (existingByDevice) {
       memberRepo.update({
-        id: existing.id,
+        id: existingByDevice.id,
         displayName: member.displayName,
-        role: member.role as typeof existing.role,
-        status: member.status as typeof existing.status,
+        role: member.role as typeof existingByDevice.role,
+        status: member.status as typeof existingByDevice.status,
+      })
+      continue
+    }
+
+    const existingById = memberRepo.findById(member.id)
+    if (existingById) {
+      memberRepo.update({
+        id: existingById.id,
+        displayName: member.displayName,
+        role: member.role as typeof existingById.role,
+        status: member.status as typeof existingById.status,
       })
       continue
     }
 
     memberRepo.create({
+      id: member.id,
       workspaceId,
       identityId: member.identityId,
       deviceId: member.deviceId,

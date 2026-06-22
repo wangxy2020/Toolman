@@ -106,12 +106,12 @@ function sortFiles(
   })
 }
 
-export function uploadP2pFile(rawInput: unknown): {
+export async function uploadP2pFile(rawInput: unknown): Promise<{
   sharedResource: P2pSharedResource
   version: number
   contentHash: string
   event: WorkspaceEvent
-} {
+}> {
   const input = P2pFileUploadInputSchema.parse(rawInput)
   const member = assertCanUploadFiles(input.workspaceId)
   const blob = writeBlobFromPath(input.filePath)
@@ -144,7 +144,7 @@ export function uploadP2pFile(rawInput: unknown): {
     updatedAt: now,
   })
 
-  const event = appendP2pEvent({
+  const event = await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'File',
     resourceId: resourceRow.id,
@@ -301,7 +301,7 @@ export async function downloadP2pFile(rawInput: unknown): Promise<{
   }
 }
 
-export function deleteP2pFile(rawInput: unknown): { unshared: true } {
+export async function deleteP2pFile(rawInput: unknown): Promise<{ unshared: true }> {
   const input = P2pResourceUnshareInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -317,7 +317,7 @@ export function deleteP2pFile(rawInput: unknown): { unshared: true } {
 
   sharedRepo.update({ id: resource.id, status: 'unshared' })
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'File',
     resourceId: resource.id,

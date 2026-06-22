@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { Assistant, P2pSharedResource, Session } from '@toolman/shared'
 import { modelNameFromId } from '../chat/model-utils'
 import { formatKnowledgeDocTime } from '../knowledge/knowledge-file-display'
+import { isShareableGroupAgentSource } from './group-agent-utils'
 import type { GroupPickerGroup } from './group-resource-picker-types'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
 
@@ -60,6 +61,7 @@ export function GroupAgentPickerModal({
     const result: GroupPickerGroup[] = []
 
     for (const assistant of assistants) {
+      if (!isShareableGroupAgentSource(assistant)) continue
       const sharedSessionIds = sharedSessionMap.get(assistant.id)
       if (sharedSessionIds === null) {
         continue

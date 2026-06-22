@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { P2pSharedResource } from '@toolman/shared'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { IpcChannel, type P2pSharedResource, type Workspace } from '@toolman/shared'
 import { IconChevronRight, IconTrash } from '../../components/icons'
 import {
   knowledgeDocumentToPanelItem,
@@ -44,7 +44,7 @@ interface Props {
 
 export function GroupSharedKnowledgeSection({
   p2pWorkspaceId,
-  sourceWorkspaceId,
+  sourceWorkspaceId: _sourceWorkspaceId,
   workspaceName,
   resource,
   selectedKeys,
@@ -64,14 +64,28 @@ export function GroupSharedKnowledgeSection({
   onSectionKeysChange,
 }: Props) {
   const [expanded, setExpanded] = useState(true)
+  const [localWorkspaceId, setLocalWorkspaceId] = useState<string | null>(null)
   const kbId = resource.localResourceId ?? resource.id
-  const documentWorkspaceId = resource.sourceWorkspaceId ?? sourceWorkspaceId ?? p2pWorkspaceId
+  const documentWorkspaceId = localWorkspaceId
   const documents = useKnowledgeDocuments(documentWorkspaceId, kbId)
   const sortField: KnowledgeFileSortField = 'createdAt'
 
   useEffect(() => {
+    void window.api.invoke(IpcChannel.WorkspaceGetDefault).then((result) => {
+      if (result.ok) {
+        setLocalWorkspaceId((result.data as Workspace).id)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    void window.api.invoke(IpcChannel.P2pSyncForce, { workspaceId: p2pWorkspaceId })
+  }, [p2pWorkspaceId])
+
+  useEffect(() => {
+    if (!documentWorkspaceId) return
     void documents.load()
-  }, [documents.load, resource.updatedAt])
+  }, [documentWorkspaceId, documents.load, resource.updatedAt])
 
   useEffect(() => {
     const handleKnowledgeEvent = (payload: unknown) => {
@@ -88,21 +102,87 @@ export function GroupSharedKnowledgeSection({
 
     const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleKnowledgeEvent)
     const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleKnowledgeEvent)
+    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
+      const event = payload as { workspaceId?: string }
+      if (event.workspaceId !== p2pWorkspaceId) return
+      void documents.load()
+    })
 
     return () => {
       unsubscribeAppended()
       unsubscribeSynced()
+      unsubscribeCompleted()
     }
   }, [documents.load, kbId, p2pWorkspaceId])
 
   const panelDocuments = useMemo(() => {
     let items = documents.items.map(knowledgeDocumentToPanelItem)
-    if (resource.sharedDocumentIds && resource.sharedDocumentIds.length > 0) {
-      const allowed = new Set(resource.sharedDocumentIds)
+    const sharedDocIds = resource.sharedDocumentIds
+    if (sharedDocIds && sharedDocIds.length > 0) {
+      const allowed = new Set(sharedDocIds)
       items = items.filter((item) => allowed.has(item.id))
     }
     return sortKnowledgeFilePanelItems(items, sortField, false)
   }, [documents.items, resource.sharedDocumentIds, sortField])
+
+  const resolveDocumentPath = useCallback(
+    async (documentId: string, currentPath?: string | null): Promise<string | null> => {
+      if (currentPath) return currentPath
+      if (!documentWorkspaceId) return null
+
+      const syncResult = await window.api.invoke(IpcChannel.P2pKnowledgeSyncDocument, {
+        workspaceId: p2pWorkspaceId,
+        knowledgeBaseId: kbId,
+        documentId,
+      })
+      if (!syncResult.ok) {
+        onOpenError?.(syncResult.error.message)
+        return null
+      }
+
+      const listResult = await window.api.invoke(IpcChannel.KnowledgeDocumentList, {
+        workspaceId: documentWorkspaceId,
+        kbId,
+      })
+      if (!listResult.ok) {
+        onOpenError?.(listResult.error.message)
+        return null
+      }
+
+      const data = listResult.data as { items: Array<{ id: string; absolutePath?: string | null }> }
+      const doc = data.items.find((item) => item.id === documentId)
+      return doc?.absolutePath ?? null
+    },
+    [documentWorkspaceId, kbId, onOpenError, p2pWorkspaceId],
+  )
+
+  const handleOpenGroupKnowledgeMarkdown = useCallback(
+    async (request: OpenGroupKnowledgeMarkdownRequest) => {
+      const absolutePath =
+        request.absolutePath ??
+        (await resolveDocumentPath(request.documentId))
+      if (!absolutePath) {
+        onOpenError?.('文档尚未同步到本地，请稍后重试')
+        return
+      }
+      await onOpenGroupKnowledgeMarkdown?.({
+        ...request,
+        absolutePath,
+      })
+    },
+    [onOpenGroupKnowledgeMarkdown, onOpenError, resolveDocumentPath],
+  )
+
+  const handleOpenGroupNote = useCallback(
+    async (request: OpenGroupNoteRequest) => {
+      await onOpenGroupNote?.({
+        ...request,
+        workspaceId: p2pWorkspaceId,
+        workspaceName,
+      })
+    },
+    [onOpenGroupNote, p2pWorkspaceId, workspaceName],
+  )
 
   const sectionSelectionKeys = useMemo(
     () => panelDocuments.map((doc) => knowledgeSelectionKey(resource.id, doc.id)),
@@ -161,10 +241,14 @@ export function GroupSharedKnowledgeSection({
       </header>
 
       {expanded ? (
-        documents.loading && panelDocuments.length === 0 ? (
+        !documentWorkspaceId ? (
+          <p className="tm-kb-file-panel-empty">工作区未就绪</p>
+        ) : documents.loading && panelDocuments.length === 0 ? (
           <p className="tm-kb-file-panel-empty">加载文件中…</p>
         ) : panelDocuments.length === 0 ? (
-          <p className="tm-kb-file-panel-empty">暂无共享文档</p>
+          <p className="tm-kb-file-panel-empty">
+            {documents.error ? documents.error : '暂无共享文档，正在同步…'}
+          </p>
         ) : (
           <GroupKnowledgeFileList
             resourceId={resource.id}
@@ -179,8 +263,8 @@ export function GroupSharedKnowledgeSection({
             onRemoveDocument={onRemoveDocument}
             onReindexDocument={(documentId) => void documents.reindex(documentId)}
             onOpenNote={onOpenNote}
-            onOpenGroupNote={onOpenGroupNote}
-            onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
+            onOpenGroupNote={handleOpenGroupNote}
+            onOpenGroupKnowledgeMarkdown={handleOpenGroupKnowledgeMarkdown}
             onOpenFileMenu={onOpenFileMenu}
             onOpenError={onOpenError}
             onContextMenu={onContextMenu}

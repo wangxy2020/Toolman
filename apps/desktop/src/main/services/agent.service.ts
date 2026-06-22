@@ -69,7 +69,7 @@ import {
 import { getProviderConfig, parseModelId } from './provider.service'
 import { broadcastStreamEvent } from './stream-broadcast'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
-import { readP2pGroupAgentFromSessionRow } from './p2p/p2p-group-agent-proxy.service'
+import { persistRepairedSessionProxyMetadata, resolveProxyMetaForSend } from './p2p/p2p-group-agent-proxy.service'
 import { relayProxySendMessage } from './p2p/p2p-agent-relay.service'
 import { getWorkspace } from './workspace.service'
 import { resolveWorkingDirectory } from './permission.service'
@@ -533,6 +533,8 @@ export function listMessages(input: unknown) {
 }
 
 export async function sendMessage(input: unknown) {
+  const raw = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
+  const isRelayExecution = raw.__p2pAgentRelayExecution === true
   const data = MessageSendInputSchema.parse(input)
   const sessions = getSessionRepository()
 
@@ -541,15 +543,27 @@ export async function sendMessage(input: unknown) {
     throw new Error('Session not found')
   }
 
-  const proxyMeta = readP2pGroupAgentFromSessionRow(session.metadataJson)
-  const isRemoteProxy =
-    proxyMeta && proxyMeta.ownerDeviceId !== getP2pDeviceInfo().deviceId
+  let proxyMeta: Awaited<ReturnType<typeof resolveProxyMetaForSend>> = null
+  const assistant = session.assistantId ? getAssistantRow(session.assistantId) : null
 
-  if (isRemoteProxy && proxyMeta.permission === 'read') {
-    throw new Error('该话题为只读')
+  if (!isRelayExecution) {
+    proxyMeta = resolveProxyMetaForSend(session.metadataJson, assistant)
+    if (proxyMeta) {
+      persistRepairedSessionProxyMetadata(session.id, session.metadataJson, proxyMeta)
+    }
   }
 
-  const assistant = session.assistantId ? getAssistantRow(session.assistantId) : null
+  const isRemoteProxy =
+    !isRelayExecution &&
+    proxyMeta &&
+    proxyMeta.ownerDeviceId !== getP2pDeviceInfo().deviceId
+
+  if (isRemoteProxy) {
+    if (proxyMeta!.permission === 'read') {
+      throw new Error('该话题为只读')
+    }
+  }
+
   const runtime = parseAssistantRuntime(assistant, session.workspaceId)
   const mcpServerIds = resolveRuntimeMcpServerIds(
     runtime.skillIds,
@@ -558,7 +572,13 @@ export async function sendMessage(input: unknown) {
   const memoryEnabled = data.options?.memoryEnabled ?? false
   const kbEnabled = data.options?.kbEnabled ?? true
 
-  const modelIds = data.modelIds ?? (assistant ? [assistant.modelId] : [])
+  const modelIds =
+    data.modelIds ??
+    (isRemoteProxy && proxyMeta?.referencedModelId
+      ? [proxyMeta.referencedModelId]
+      : assistant
+        ? [assistant.modelId]
+        : [])
   if (modelIds.length === 0) {
     throw new Error('No model configured for this session')
   }
@@ -604,14 +624,33 @@ export async function sendMessage(input: unknown) {
     sessions.touch(data.sessionId, 1 + modelIds.length)
   })
 
-  if (isRemoteProxy) {
+  if (isRemoteProxy && proxyMeta) {
+    const assistantMessageId = assistantMessageIds[0]!
     void relayProxySendMessage({
       proxy: proxyMeta,
       sessionId: data.sessionId,
       contentBlocks: stagedBlocks,
       modelIds,
       memberUserMessageId: userMessageId,
-      memberAssistantMessageId: assistantMessageIds[0]!,
+      memberAssistantMessageId: assistantMessageId,
+    }).catch((error) => {
+      const errMessage = error instanceof Error ? error.message : '发送消息失败'
+      const ipcError = {
+        code: 'INTERNAL_ERROR' as const,
+        message: errMessage,
+        retryable: true,
+      }
+      getMessageRepository().update(assistantMessageId, {
+        status: 'failed',
+        error: ipcError,
+      })
+      broadcastStreamEvent({
+        type: 'message.error',
+        sessionId: data.sessionId,
+        messageId: assistantMessageId,
+        error: ipcError,
+        timestamp: Date.now(),
+      })
     })
     return { userMessageId, assistantMessageIds, userContentBlocks: stagedBlocks }
   }

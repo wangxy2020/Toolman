@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Assistant, P2pSharedResource, Session } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupAgentPickerModal } from './GroupAgentPickerModal'
@@ -10,7 +10,7 @@ import { GroupFileContextMenu } from './GroupFileList'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupSharedAgentSection } from './GroupSharedAgentSection'
 import { agentSelectionKey, parseAgentSelectionKey } from './group-agent-selection'
-import { getAgentSessionPermission } from './group-agent-utils'
+import { getAgentSessionPermission, isShareableGroupAgentSource } from './group-agent-utils'
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 import { useP2pAgents } from './useP2pAgents'
 
@@ -24,6 +24,7 @@ interface Props {
   canWriteWorkspace: boolean
   selfMemberId: string | null
   onOpenGroupAgentSession?: (request: OpenGroupAgentSessionRequest) => void | Promise<void>
+  onReloadAssistants?: () => void | Promise<void>
 }
 
 interface PendingDelete {
@@ -42,6 +43,7 @@ export function GroupAgentsPanel({
   canWriteWorkspace,
   selfMemberId,
   onOpenGroupAgentSession,
+  onReloadAssistants,
 }: Props) {
   const [showPicker, setShowPicker] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
@@ -59,14 +61,59 @@ export function GroupAgentsPanel({
   const [sectionKeysMap, setSectionKeysMap] = useState<Record<string, string[]>>({})
   const p2pAgents = useP2pAgents({ workspaceId: p2pWorkspaceId })
 
+  useEffect(() => {
+    void onReloadAssistants?.()
+  }, [onReloadAssistants, p2pAgents.sharedResources])
+
+  useEffect(() => {
+    if (!p2pWorkspaceId) return
+
+    const handleAgentEvent = (payload: unknown) => {
+      const event = payload as { workspaceId?: string; resourceType?: string }
+      if (event.workspaceId !== p2pWorkspaceId || event.resourceType !== 'Agent') return
+      void onReloadAssistants?.()
+    }
+
+    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleAgentEvent)
+    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleAgentEvent)
+    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
+      const event = payload as { workspaceId?: string }
+      if (event.workspaceId !== p2pWorkspaceId) return
+      void onReloadAssistants?.()
+    })
+
+    return () => {
+      unsubscribeAppended()
+      unsubscribeSynced()
+      unsubscribeCompleted()
+    }
+  }, [onReloadAssistants, p2pWorkspaceId])
+
   const assistantsById = useMemo(
     () => new Map(assistants.map((item) => [item.id, item])),
     [assistants],
   )
 
+  const shareableAssistants = useMemo(
+    () => assistants.filter((assistant) => isShareableGroupAgentSource(assistant)),
+    [assistants],
+  )
+
+  const resolveResourceAssistant = useCallback(
+    (resource: P2pSharedResource): Assistant | null => {
+      const preferredId = resource.localResourceId ?? resource.id
+      const direct = assistantsById.get(preferredId) ?? null
+      if (direct && isShareableGroupAgentSource(direct)) {
+        return direct
+      }
+      return shareableAssistants.find((item) => item.id === preferredId) ?? null
+    },
+    [assistantsById, shareableAssistants],
+  )
+
   const hasShareableAgents = useMemo(
     () =>
-      assistants.some((assistant) => {
+      shareableAssistants.some((assistant) => {
         const resource = p2pAgents.sharedResources.find(
           (item) => (item.localResourceId ?? item.id) === assistant.id,
         )
@@ -75,7 +122,7 @@ export function GroupAgentsPanel({
         const assistantSessions = sessions.filter((item) => item.assistantId === assistant.id)
         return assistantSessions.some((session) => !resource.sharedSessionIds!.includes(session.id))
       }),
-    [assistants, p2pAgents.sharedResources, sessions],
+    [p2pAgents.sharedResources, sessions, shareableAssistants],
   )
 
   const canDeleteResource = useCallback(
@@ -338,11 +385,11 @@ export function GroupAgentsPanel({
         sourceSessionId: session.id,
         sessionTitle: session.title,
         groupName: workspaceName,
-        sharedAgentName: assistant?.name ?? resource.name,
+        sharedAgentName: resource.name,
         permission: getAgentSessionPermission(resource, session.id),
         ownerMemberId: resource.sharedBy,
-        sourceAssistantId: resource.localResourceId ?? resource.id,
-        referencedModelId: assistant?.modelId ?? 'openai/gpt-4o-mini',
+        sourceAssistantId: resource.id,
+        referencedModelId: resource.sharedModelId ?? assistant?.modelId ?? 'openai/gpt-4o-mini',
         isOwner,
         localSessionId: isOwner ? session.id : undefined,
       } satisfies OpenGroupAgentSessionRequest
@@ -388,12 +435,12 @@ export function GroupAgentsPanel({
         ) : (
           <div className="tm-group-shared-knowledge-list">
             {p2pAgents.sharedResources.map((resource) => {
-              const assistantId = resource.localResourceId ?? resource.id
-              const assistant = assistantsById.get(assistantId) ?? null
+              const assistant = resolveResourceAssistant(resource)
               return (
                 <GroupSharedAgentSection
                   key={resource.id}
                   resource={resource}
+                  workspaceName={workspaceName}
                   assistant={assistant}
                   sessions={sessions}
                   selectedKeys={selectedKeys}
@@ -450,7 +497,7 @@ export function GroupAgentsPanel({
 
       {showPicker ? (
         <GroupAgentPickerModal
-          assistants={assistants}
+          assistants={shareableAssistants}
           sessions={sessions}
           sharedResources={p2pAgents.sharedResources}
           onClose={() => setShowPicker(false)}

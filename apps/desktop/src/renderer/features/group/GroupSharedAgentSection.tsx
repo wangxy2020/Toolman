@@ -5,11 +5,12 @@ import { modelNameFromId } from '../chat/model-utils'
 import { GroupAgentSessionList } from './GroupAgentSessionList'
 import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { agentSelectionKey } from './group-agent-selection'
-import { resolveSharedAgentSessions } from './group-agent-utils'
+import { resolveSharedAgentSessions, resolveGroupAgentPanelTitle } from './group-agent-utils'
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 
 interface Props {
   resource: P2pSharedResource
+  workspaceName: string
   assistant: Assistant | null
   sessions: Session[]
   selectedKeys: Set<string>
@@ -41,6 +42,7 @@ function buildMeta(assistant: Assistant | null, sessionCount: number): string {
 
 export function GroupSharedAgentSection({
   resource,
+  workspaceName: _workspaceName,
   assistant,
   sessions,
   selectedKeys,
@@ -59,7 +61,7 @@ export function GroupSharedAgentSection({
 }: Props) {
   const [expanded, setExpanded] = useState(true)
   const assistantId = resource.localResourceId ?? resource.id
-  const title = assistant?.name ?? resource.name
+  const title = resolveGroupAgentPanelTitle(resource, assistant)
 
   const panelSessions = useMemo(
     () => resolveSharedAgentSessions(resource, assistantId, sessions),

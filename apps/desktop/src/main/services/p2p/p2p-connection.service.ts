@@ -6,6 +6,8 @@ import {
 } from './p2p-connection-broadcast'
 import { handlePeerConnectionChange } from './p2p-peer.service'
 import { notifyP2pReconnect, applyP2pConnectionSnapshot, processP2pIncomingMessagesFromPoll } from './p2p-sync-lifecycle'
+import { loadWorkspaceKey } from './p2p-workspace-key.store'
+import { rotateWorkspaceKey, setWorkspaceKey } from './p2p-crypto.service'
 
 const POLL_INTERVAL_MS = 2_000
 const KNOWN_STATES = new Set<P2pConnectionState>([
@@ -132,12 +134,38 @@ export function isPeerConnected(peerDeviceId: string): boolean {
   return knownConnections.get(peerDeviceId)?.state === 'connected'
 }
 
+export async function ensurePeerReadyForWorkspace(
+  peerDeviceId: string,
+  workspaceId: string,
+): Promise<void> {
+  const workspaceKey = loadWorkspaceKey(workspaceId)
+  if (!workspaceKey) {
+    throw new Error('群组密钥不存在')
+  }
+
+  setWorkspaceKey(workspaceId, workspaceKey, 1)
+
+  if (isPeerConnected(peerDeviceId)) {
+    await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
+    return
+  }
+
+  await connectP2pPeerOnce(peerDeviceId, workspaceId)
+}
+
 async function connectP2pPeerOnce(
   peerDeviceId: string,
   workspaceId?: string,
 ): Promise<P2pConnectionState> {
   startPolling()
   if (isPeerConnected(peerDeviceId)) {
+    if (workspaceId) {
+      const workspaceKey = loadWorkspaceKey(workspaceId)
+      if (workspaceKey) {
+        setWorkspaceKey(workspaceId, workspaceKey, 1)
+        await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
+      }
+    }
     return 'connected'
   }
 

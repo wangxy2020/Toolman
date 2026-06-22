@@ -31,6 +31,8 @@ import type { OpenGroupAgentSessionRequest } from '../group/group-agent-open'
 import {
   isGroupProxyReadOnlySession,
   isGroupProxySession,
+  isGroupSharedMirrorAssistant,
+  resolveGroupProxyAssistantModelId,
 } from '../group/group-agent-utils'
 import { isModuleView, type AppView } from '../../types/app-view'
 import { GroupSidebar } from '../group/GroupSidebar'
@@ -76,6 +78,7 @@ import {
   knowledgeSectionForKind,
   type KnowledgeSidebarSection,
 } from '../knowledge/knowledge-sidebar-types'
+import { useAllP2pSharedKnowledge } from '../knowledge/useAllP2pSharedKnowledge'
 
 export function ChatPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -114,6 +117,11 @@ export function ChatPage() {
 
   const knowledge = useKnowledgeBases({ workspaceId })
   const p2pWorkspaces = useP2pWorkspaces({ enabled: registrationGate.canUseGroup })
+  const sharedKnowledge = useAllP2pSharedKnowledge({ enabled: registrationGate.canUseGroup })
+  const activeSharedKnowledgeEntry = useMemo(
+    () => sharedKnowledge.entries.find((item) => item.id === knowledge.activeId) ?? null,
+    [knowledge.activeId, sharedKnowledge.entries],
+  )
   const p2pTrust = useP2pTrustPrompt()
   const knowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'local')
   const networkKnowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'network')
@@ -145,6 +153,11 @@ export function ChatPage() {
     return chat.assistants.find((a) => a.isPinned) ?? chat.assistants[0] ?? null
   }, [chat.activeSession, chat.assistants])
 
+  const sidebarAssistants = useMemo(
+    () => chat.assistants.filter((assistant) => !isGroupSharedMirrorAssistant(assistant)),
+    [chat.assistants],
+  )
+
   const groupProxyMode = useMemo(
     () => isGroupProxySession(chat.activeSession),
     [chat.activeSession],
@@ -155,7 +168,21 @@ export function ChatPage() {
     [chat.activeSession],
   )
 
-  const defaultModelId = chat.selectedModelIds[0] ?? activeAssistant?.modelId ?? null
+  const activeAssistantModelId = useMemo(() => {
+    if (!activeAssistant) return null
+    return resolveGroupProxyAssistantModelId(activeAssistant, chat.activeSession)
+  }, [activeAssistant, chat.activeSession])
+
+  const headerModelIds = useMemo(() => {
+    if (groupProxyMode && activeAssistantModelId) {
+      return [activeAssistantModelId]
+    }
+    return chat.selectedModelIds
+  }, [activeAssistantModelId, chat.selectedModelIds, groupProxyMode])
+
+  const defaultModelId = groupProxyMode
+    ? activeAssistantModelId
+    : (chat.selectedModelIds[0] ?? activeAssistantModelId ?? null)
 
   const translationLanguages = activeAssistant?.parameters.translationLanguages
 
@@ -183,6 +210,7 @@ export function ChatPage() {
 
   const handleModelChange = useCallback(
     (modelIds: string[]) => {
+      if (groupProxyMode) return
       chat.setSelectedModelIds(modelIds)
       const primaryModelId = modelIds[0]
       if (!activeAssistant || !primaryModelId || activeAssistant.modelId === primaryModelId) {
@@ -200,16 +228,16 @@ export function ChatPage() {
         await chat.loadAssistants()
       })()
     },
-    [activeAssistant, chat],
+    [activeAssistant, chat, groupProxyMode],
   )
 
   useEffect(() => {
-    if (!activeAssistant?.modelId) return
+    if (!activeAssistantModelId) return
     chat.setSelectedModelIds((prev) => {
-      if (prev.length === 1 && prev[0] === activeAssistant.modelId) return prev
-      return [activeAssistant.modelId]
+      if (prev.length === 1 && prev[0] === activeAssistantModelId) return prev
+      return [activeAssistantModelId]
     })
-  }, [activeAssistant?.id, activeAssistant?.modelId, chat.setSelectedModelIds])
+  }, [activeAssistant?.id, activeAssistantModelId, chat.setSelectedModelIds])
 
   useEffect(() => {
     if (activeView === 'notes' && prevActiveViewRef.current !== 'notes') {
@@ -415,6 +443,18 @@ export function ChatPage() {
     [notes],
   )
 
+  const handleSyncGroupNoteLock = useCallback(
+    (noteId: string, locked: boolean) => {
+      notes.syncGroupNoteLock(noteId, locked)
+    },
+    [notes],
+  )
+
+  const handleReloadAssistants = useCallback(async () => {
+    await chat.loadAssistants()
+    await chat.loadSessions()
+  }, [chat])
+
   const handleOpenGroupAgentSession = useCallback(
     async (request: OpenGroupAgentSessionRequest) => {
       if (request.isOwner && request.localSessionId) {
@@ -517,7 +557,7 @@ export function ChatPage() {
         <div className="tm-body-main">
         {showContentSidebar && activeView === 'agent' && (
           <MiddleSidebar
-            assistants={chat.assistants}
+            assistants={sidebarAssistants}
             sessions={chat.sessions}
             activeSessionId={chat.activeSessionId}
             sessionsLoading={chat.sessionsLoading}
@@ -536,12 +576,18 @@ export function ChatPage() {
             activeId={knowledge.activeId}
             activeSection={knowledgeSection}
             loading={knowledge.loading}
+            sharedEntries={sharedKnowledge.entries}
+            sharedLoading={sharedKnowledge.loading}
             onSelect={(id) => {
               const item = knowledge.items.find((kb) => kb.id === id)
               knowledge.setActiveId(id)
               if (item) {
                 setKnowledgeSection(knowledgeSectionForKind(item.kind))
               }
+            }}
+            onSelectShared={(id) => {
+              knowledge.setActiveId(id)
+              setKnowledgeSection('shared')
             }}
             onSelectDefaultFolder={() => {
               knowledge.setActiveId(DEFAULT_KNOWLEDGE_FOLDER_ID)
@@ -567,6 +613,11 @@ export function ChatPage() {
               setKnowledgeSection(section)
               if (section === 'network') {
                 knowledge.setActiveId(DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID)
+              } else if (section === 'shared') {
+                const firstShared = sharedKnowledge.entries[0]
+                if (firstShared) {
+                  knowledge.setActiveId(firstShared.id)
+                }
               } else if (section === 'local-files') {
                 knowledge.setActiveId(DEFAULT_LOCAL_FILES_FOLDER_ID)
               } else if (section === 'file-tools') {
@@ -661,7 +712,7 @@ export function ChatPage() {
               assistant={activeAssistant}
               workspace={workspace}
               providers={chat.providers}
-              selectedModelIds={chat.selectedModelIds}
+              selectedModelIds={headerModelIds}
               onModelChange={handleModelChange}
               onSelectWorkspaceFolder={() => void handleSelectWorkspaceFolder()}
               onCodeEditorChange={(editorId) => void handleCodeEditorChange(editorId)}
@@ -726,11 +777,11 @@ export function ChatPage() {
           <MessageInput
             disabled={
               !chat.activeSessionId ||
-              chat.selectedModelIds.length === 0 ||
+              chat.effectiveModelIds.length === 0 ||
               groupProxyReadOnly
             }
             streaming={chat.sending}
-            modelCount={chat.selectedModelIds.length}
+            modelCount={chat.effectiveModelIds.length}
             defaultModelId={defaultModelId}
             defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
             translationLanguages={translationLanguages}
@@ -759,6 +810,9 @@ export function ChatPage() {
             section={knowledgeSection}
             activeId={knowledge.activeId}
             active={knowledge.active}
+            sharedEntry={activeSharedKnowledgeEntry}
+            sharedLoading={sharedKnowledge.loading}
+            sharedError={sharedKnowledge.error}
             knowledgeFolderPath={knowledgeFolder.path}
             knowledgeFolderLoading={knowledgeFolder.loading}
             knowledgeFolderError={knowledgeFolder.error}
@@ -821,9 +875,11 @@ export function ChatPage() {
               onWorkspaceLeft={handleP2pWorkspaceLeft}
               onOpenNote={handleOpenNote}
               onOpenGroupNote={handleOpenGroupNote}
+              onSyncGroupNoteLock={handleSyncGroupNoteLock}
               onOpenGroupKnowledgeMarkdown={handleOpenGroupKnowledgeMarkdown}
               onSaveGroupNoteAsCopy={handleSaveGroupNoteAsCopy}
               onOpenGroupAgentSession={handleOpenGroupAgentSession}
+              onReloadAssistants={handleReloadAssistants}
               messageSettings={messageSettings}
               spellCheckEnabled={appSettings.spellCheckEnabled}
               defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
@@ -902,6 +958,7 @@ export function ChatPage() {
           assistant={activeAssistant}
           workspace={workspace}
           providers={chat.providers}
+          activeSession={chat.activeSession}
           onClose={() => setShowAgentSettings(false)}
           onSaved={() => void chat.loadAssistants()}
         />
@@ -956,6 +1013,7 @@ export function ChatPage() {
             await p2pWorkspaces.join(input)
             setActiveView('group')
           }}
+          onUpgradeMembership={() => registrationGate.openRegister()}
         />
       )}
       {showGroupInvite && p2pWorkspaces.active && (

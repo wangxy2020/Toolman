@@ -83,6 +83,7 @@ export function GroupKnowledgeFileList({
         const canOpen = Boolean(
           noteId ||
             isMarkdown ||
+            processing ||
             (isUrlDoc ? pageUrl : isOpenableLocalPath(doc.absolutePath)),
         )
         const selectionKey = knowledgeSelectionKey(resourceId, doc.id)
@@ -97,26 +98,19 @@ export function GroupKnowledgeFileList({
                 noteId,
                 workspaceId: p2pWorkspaceId,
                 workspaceName,
-                permission: 'read',
-                sharedBy: '',
                 title: doc.title,
-                editable: false,
               })
               return
             }
             if (onOpenNote?.(noteId)) return
           }
-          if (
-            isMarkdown &&
-            doc.absolutePath &&
-            onOpenGroupKnowledgeMarkdown
-          ) {
+          if (isMarkdown && onOpenGroupKnowledgeMarkdown) {
             void onOpenGroupKnowledgeMarkdown({
               documentId: doc.id,
               workspaceId: p2pWorkspaceId,
               workspaceName,
               title: doc.title,
-              absolutePath: doc.absolutePath,
+              absolutePath: doc.absolutePath ?? '',
             })
             return
           }

@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type P2pWorkspace } from '@toolman/shared'
 
+export class P2pJoinError extends Error {
+  readonly code: string
+
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'P2pJoinError'
+    this.code = code
+  }
+}
+
 interface UseP2pWorkspacesOptions {
   enabled?: boolean
 }
@@ -89,6 +99,9 @@ export function useP2pWorkspaces(options: UseP2pWorkspacesOptions = {}) {
 
       if (!result.ok) {
         setError(result.error.message)
+        if (result.error.code === 'P2P_MEMBER_LIMIT') {
+          throw new P2pJoinError(result.error.code, result.error.message)
+        }
         throw new Error(result.error.message)
       }
 

@@ -1,15 +1,19 @@
 import { useState } from 'react'
+import { GroupMemberLimitModal } from './GroupMemberLimitModal'
+import { P2pJoinError } from './useP2pWorkspaces'
 
 interface Props {
   onClose: () => void
   onSubmit: (input: { inviteToken: string; displayName?: string }) => Promise<void>
+  onUpgradeMembership?: () => void
 }
 
-export function GroupJoinModal({ onClose, onSubmit }: Props) {
+export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props) {
   const [inviteInput, setInviteInput] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [memberLimitOpen, setMemberLimitOpen] = useState(false)
 
   const handleSubmit = async () => {
     const trimmed = inviteInput.trim()
@@ -27,6 +31,11 @@ export function GroupJoinModal({ onClose, onSubmit }: Props) {
       })
       onClose()
     } catch (err) {
+      if (err instanceof P2pJoinError && err.code === 'P2P_MEMBER_LIMIT') {
+        setMemberLimitOpen(true)
+        setError(null)
+        return
+      }
       setError(err instanceof Error ? err.message : '加入失败')
     } finally {
       setSubmitting(false)
@@ -34,7 +43,8 @@ export function GroupJoinModal({ onClose, onSubmit }: Props) {
   }
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
+    <>
+      <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
         <div className="tm-modal-header">
           <h2 className="tm-modal-title">加入群组</h2>
@@ -84,6 +94,13 @@ export function GroupJoinModal({ onClose, onSubmit }: Props) {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+
+      <GroupMemberLimitModal
+        open={memberLimitOpen}
+        onClose={() => setMemberLimitOpen(false)}
+        onUpgrade={onUpgradeMembership}
+      />
+    </>
   )
 }

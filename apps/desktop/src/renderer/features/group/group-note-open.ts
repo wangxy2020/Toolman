@@ -7,7 +7,7 @@ export interface OpenGroupNoteRequest {
   permission: P2pSharedResourcePermission
   sharedBy: string
   title: string
-  editable: boolean
+  editable?: boolean
 }
 
 export interface SaveGroupNoteAsCopyRequest {

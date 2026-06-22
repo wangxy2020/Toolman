@@ -62,6 +62,9 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
       status: 'active',
       joinedAt: new Date(event.timestamp),
     })
+    void import('./p2p-member-mesh.service').then((module) => {
+      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
+    })
     return
   }
 
@@ -76,6 +79,9 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
         joinedAt: new Date(event.timestamp),
       })
     }
+    void import('./p2p-member-mesh.service').then((module) => {
+      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
+    })
     return
   }
 
@@ -93,6 +99,10 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
     role,
     status: 'active',
     joinedAt: new Date(event.timestamp),
+  })
+
+  void import('./p2p-member-mesh.service').then((module) => {
+    void module.reconcileWorkspaceMemberMesh(event.workspaceId)
   })
 }
 

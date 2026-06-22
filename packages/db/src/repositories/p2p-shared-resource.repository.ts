@@ -22,6 +22,7 @@ export interface CreateP2pSharedResourceInput {
 
 export interface UpdateP2pSharedResourceInput {
   id: string
+  localResourceId?: string | null
   name?: string
   permission?: P2pSharedResourceRow['permission']
   contentHash?: string | null
@@ -144,6 +145,8 @@ export class P2pSharedResourceRepository {
     this.db
       .update(p2pSharedResources)
       .set({
+        localResourceId:
+          input.localResourceId === undefined ? existing.localResourceId : input.localResourceId,
         name: input.name ?? existing.name,
         permission: input.permission ?? existing.permission,
         contentHash: input.contentHash === undefined ? existing.contentHash : input.contentHash,

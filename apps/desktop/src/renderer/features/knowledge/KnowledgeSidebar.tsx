@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { KnowledgeBase } from '@toolman/shared'
-import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconPlus } from '../../components/icons'
+import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconGroup, IconPlus } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { getModulePageConfig } from '../modules/module-config'
 import {
@@ -15,13 +15,17 @@ import {
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
 import { KnowledgeSidebarMenuItem } from './KnowledgeSidebarMenuItem'
+import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
 interface Props {
   items: KnowledgeBase[]
   activeId: string | null
   activeSection: KnowledgeSidebarSection
   loading?: boolean
+  sharedEntries?: SharedKnowledgeEntry[]
+  sharedLoading?: boolean
   onSelect: (id: string) => void
+  onSelectShared: (id: string) => void
   onSelectDefaultFolder: () => void
   onSelectDefaultNetworkFolder: () => void
   onSelectDefaultLocalFilesFolder: () => void
@@ -37,7 +41,10 @@ export function KnowledgeSidebar({
   activeId,
   activeSection,
   loading,
+  sharedEntries = [],
+  sharedLoading = false,
   onSelect,
+  onSelectShared,
   onSelectDefaultFolder,
   onSelectDefaultNetworkFolder,
   onSelectDefaultLocalFilesFolder,
@@ -58,7 +65,7 @@ export function KnowledgeSidebar({
     (item) => item.kind === 'local_files' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
   )
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
-    () => new Set(['local', 'network', 'local-files']),
+    () => new Set(['local', 'network', 'shared', 'local-files']),
   )
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeBase | null>(null)
 
@@ -203,6 +210,27 @@ export function KnowledgeSidebar({
                             ? () => setDeleteTarget(item)
                             : undefined
                         }
+                      />
+                    ))}
+                  </>
+                ) : null}
+
+                {isOpen && section.id === 'shared' ? (
+                  <>
+                    {sharedLoading && sharedEntries.length === 0 ? (
+                      <div className="tm-session-empty">加载中…</div>
+                    ) : null}
+                    {!sharedLoading && sharedEntries.length === 0 ? (
+                      <div className="tm-session-empty">暂无共享知识库</div>
+                    ) : null}
+                    {sharedEntries.map((entry) => (
+                      <KnowledgeSidebarMenuItem
+                        key={entry.id}
+                        icon={<IconGroup size={14} />}
+                        label={`[${entry.workspaceName}] ${entry.resource.name}`}
+                        active={entry.id === activeId && activeSection === 'shared'}
+                        title={`${entry.workspaceName} · ${entry.resource.name}`}
+                        onClick={() => onSelectShared(entry.id)}
                       />
                     ))}
                   </>

@@ -1,7 +1,9 @@
 import {
   P2pSharedResourceRepository,
+  assistants,
   type P2pSharedResourceRow,
 } from '@toolman/db'
+import { eq } from 'drizzle-orm'
 import {
   AgentPackageSchema,
   P2pAgentExportPackageInputSchema,
@@ -19,7 +21,9 @@ import { getDatabase } from '../../bootstrap/database'
 import { getSessionRepository } from '../../db/repos'
 import {
   createAssistant,
+  getAssistantRowIncludingDeleted,
   listAssistants,
+  restoreAssistantIfDeleted,
   updateAssistant,
 } from '../assistant.service'
 import { getDefaultWorkspace } from '../workspace.service'
@@ -37,9 +41,34 @@ function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
 }
 
+export const DEFAULT_GROUP_AGENT_MODEL_ID = 'openai/gpt-4o-mini'
+
+export function normalizeAssistantModelId(modelId: string | null | undefined): string {
+  const trimmed = modelId?.trim()
+  if (!trimmed) return DEFAULT_GROUP_AGENT_MODEL_ID
+  const sep = trimmed.indexOf(':')
+  if (sep > 0 && sep < trimmed.length - 1) {
+    return trimmed
+  }
+  return DEFAULT_GROUP_AGENT_MODEL_ID
+}
+
+export function readSharedAgentModelId(
+  metadata: ReturnType<typeof readAgentShareMetadata>,
+): string | undefined {
+  if (!metadata.packageJson) return undefined
+  try {
+    const pkg = AgentPackageSchema.parse(JSON.parse(metadata.packageJson))
+    return normalizeAssistantModelId(pkg.assistant.modelId)
+  } catch {
+    return undefined
+  }
+}
+
 export function readAgentShareMetadata(metadataJson: string | null | undefined): {
   sourceWorkspaceId?: string
   sessionIds?: string[]
+  sessionTitles?: Record<string, string>
   packageJson?: string
   sessionPermissions?: Record<string, P2pAgentSessionPermission>
 } {
@@ -48,6 +77,7 @@ export function readAgentShareMetadata(metadataJson: string | null | undefined):
     const parsed = JSON.parse(metadataJson) as {
       sourceWorkspaceId?: string
       sessionIds?: string[]
+      sessionTitles?: Record<string, unknown>
       packageJson?: string
       sessionPermissions?: Record<string, unknown>
     }
@@ -59,12 +89,21 @@ export function readAgentShareMetadata(metadataJson: string | null | undefined):
         }
       }
     }
+    const sessionTitles: Record<string, string> = {}
+    if (parsed.sessionTitles && typeof parsed.sessionTitles === 'object') {
+      for (const [sessionId, title] of Object.entries(parsed.sessionTitles)) {
+        if (typeof title === 'string' && title.trim()) {
+          sessionTitles[sessionId] = title
+        }
+      }
+    }
     return {
       sourceWorkspaceId: parsed.sourceWorkspaceId,
       packageJson: parsed.packageJson,
       sessionIds: Array.isArray(parsed.sessionIds)
         ? parsed.sessionIds.filter((item): item is string => typeof item === 'string')
         : undefined,
+      sessionTitles: Object.keys(sessionTitles).length > 0 ? sessionTitles : undefined,
       sessionPermissions:
         Object.keys(sessionPermissions).length > 0 ? sessionPermissions : undefined,
     }
@@ -76,6 +115,7 @@ export function readAgentShareMetadata(metadataJson: string | null | undefined):
 export function serializeAgentShareMetadata(metadata: {
   sourceWorkspaceId?: string
   sessionIds?: string[]
+  sessionTitles?: Record<string, string>
   packageJson?: string
   sessionPermissions?: Record<string, P2pAgentSessionPermission>
 }): string {
@@ -83,10 +123,27 @@ export function serializeAgentShareMetadata(metadata: {
     ...(metadata.sourceWorkspaceId ? { sourceWorkspaceId: metadata.sourceWorkspaceId } : {}),
     ...(metadata.packageJson ? { packageJson: metadata.packageJson } : {}),
     ...(metadata.sessionIds ? { sessionIds: metadata.sessionIds } : {}),
+    ...(metadata.sessionTitles && Object.keys(metadata.sessionTitles).length > 0
+      ? { sessionTitles: metadata.sessionTitles }
+      : {}),
     ...(metadata.sessionPermissions && Object.keys(metadata.sessionPermissions).length > 0
       ? { sessionPermissions: metadata.sessionPermissions }
       : {}),
   })
+}
+
+export function parseAgentSessionTitlesFromPayload(
+  payload: Record<string, unknown>,
+): Record<string, string> | undefined {
+  const raw = payload.session_titles
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const sessionTitles: Record<string, string> = {}
+  for (const [sessionId, title] of Object.entries(raw)) {
+    if (typeof title === 'string' && title.trim()) {
+      sessionTitles[sessionId] = title
+    }
+  }
+  return Object.keys(sessionTitles).length > 0 ? sessionTitles : undefined
 }
 
 export function parseAgentSessionPermissionsFromPayload(
@@ -107,6 +164,36 @@ function listAssistantSessionIds(workspaceId: string, assistantId: string): stri
   return getSessionRepository()
     .listRows({ workspaceId, assistantId, limit: 10_000 })
     .map((row) => row.id)
+}
+
+function listAssistantSessionTitles(
+  workspaceId: string,
+  assistantId: string,
+  sessionIds?: string[],
+): Record<string, string> {
+  const allowed = sessionIds ? new Set(sessionIds) : null
+  const titles: Record<string, string> = {}
+  for (const row of getSessionRepository().listRows({ workspaceId, assistantId, limit: 10_000 })) {
+    if (allowed && !allowed.has(row.id)) continue
+    titles[row.id] = row.title
+  }
+  return titles
+}
+
+function mergeSessionTitles(
+  existing: Record<string, string> | undefined,
+  incoming: Record<string, string>,
+  sessionIds?: string[],
+): Record<string, string> | undefined {
+  const merged = { ...(existing ?? {}), ...incoming }
+  if (sessionIds) {
+    for (const key of Object.keys(merged)) {
+      if (!sessionIds.includes(key)) {
+        delete merged[key]
+      }
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined
 }
 
 export function mapP2pAgentSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResource {
@@ -130,12 +217,39 @@ export function mapP2pAgentSharedResourceRow(row: P2pSharedResourceRow): P2pShar
   }
 
   const metadata = readAgentShareMetadata(row.metadataJson)
+  const sessionIds = metadata.sessionIds
+  const sessionTitles = metadata.sessionTitles ?? {}
+  const sharedSessionTitles =
+    sessionIds && sessionIds.length > 0
+      ? Object.fromEntries(
+          sessionIds.map((sessionId) => [sessionId, sessionTitles[sessionId] ?? '未命名话题']),
+        )
+      : Object.keys(sessionTitles).length > 0
+        ? sessionTitles
+        : undefined
+
   return {
     ...base,
-    sharedSessionIds: metadata.sessionIds,
+    sharedSessionIds: sessionIds,
+    sharedSessionTitles,
     sharedSessionPermissions: metadata.sessionPermissions,
+    sharedModelId: readSharedAgentModelId(metadata),
     sourceWorkspaceId: metadata.sourceWorkspaceId,
   }
+}
+
+export function clearGroupMirrorFlagFromSourceAssistant(assistantId: string): void {
+  const existing = getAssistantRowIncludingDeleted(assistantId)
+  if (!existing) return
+
+  const params = JSON.parse(existing.parametersJson) as Record<string, unknown>
+  if (!params.p2pGroupSharedMirror) return
+
+  const { p2pGroupSharedMirror: _mirror, ...rest } = params
+  updateAssistant({
+    id: assistantId,
+    parameters: rest,
+  })
 }
 
 function getAssistantInWorkspace(assistantId: string, workspaceId: string): Assistant | null {
@@ -194,24 +308,24 @@ export function importAgentPackageToWorkspace(
   const parameters = packageToAssistantParameters(parsed.assistant)
 
   if (existingAssistantId) {
+    restoreAssistantIfDeleted(existingAssistantId)
     const updated = updateAssistant({
       id: existingAssistantId,
       name: parsed.assistant.name,
       systemPrompt: parsed.assistant.systemPrompt,
-      modelId: parsed.assistant.modelId,
+      modelId: normalizeAssistantModelId(parsed.assistant.modelId),
       parameters,
     })
-    if (!updated) {
-      throw new Error('更新智能体失败')
+    if (updated) {
+      return { assistantId: updated.id }
     }
-    return { assistantId: updated.id }
   }
 
   const created = createAssistant({
     workspaceId: targetWorkspaceId,
     name: parsed.assistant.name,
     systemPrompt: parsed.assistant.systemPrompt,
-    modelId: parsed.assistant.modelId ?? 'openai/gpt-4o-mini',
+    modelId: normalizeAssistantModelId(parsed.assistant.modelId),
     parameters,
     isPinned: false,
   })
@@ -252,18 +366,14 @@ export function importP2pAgentPackage(rawInput: unknown): {
 function mergeSharedSessionIds(
   existing: string[] | undefined,
   incoming: string[] | undefined,
-  shareWholeAgent: boolean,
 ): string[] | undefined {
-  if (shareWholeAgent) {
-    return undefined
-  }
   if (!incoming || incoming.length === 0) {
     return existing
   }
   return [...new Set([...(existing ?? []), ...incoming])]
 }
 
-export function shareP2pAgent(rawInput: unknown): { sharedResource: P2pSharedResource } {
+export async function shareP2pAgent(rawInput: unknown): Promise<{ sharedResource: P2pSharedResource }> {
   const input = P2pAgentShareInputSchema.parse(rawInput)
   const member = assertCanShareResource(input.workspaceId)
   const sourceWorkspaceId = input.sourceWorkspaceId ?? getDefaultWorkspace()?.id
@@ -275,6 +385,11 @@ export function shareP2pAgent(rawInput: unknown): { sharedResource: P2pSharedRes
   if (!assistant) {
     throw new Error('智能体不存在')
   }
+  if (assistant.parameters?.p2pGroupProxy) {
+    throw new Error('不能共享群组虚拟智能体')
+  }
+
+  clearGroupMirrorFlagFromSourceAssistant(assistant.id)
 
   const agentPackage = buildAgentPackageFromAssistant(assistant)
   const packageJson = JSON.stringify(agentPackage)
@@ -288,16 +403,21 @@ export function shareP2pAgent(rawInput: unknown): { sharedResource: P2pSharedRes
   )
 
   const existingMetadata = resource ? readAgentShareMetadata(resource.metadataJson) : {}
-  const sessionIds = mergeSharedSessionIds(
-    existingMetadata.sessionIds,
-    input.sessionIds,
-    shareWholeAgent,
+  const allSessionIds = listAssistantSessionIds(sourceWorkspaceId, assistant.id)
+  const sessionIds = shareWholeAgent
+    ? allSessionIds
+    : mergeSharedSessionIds(existingMetadata.sessionIds, input.sessionIds)
+  const sessionTitles = mergeSessionTitles(
+    existingMetadata.sessionTitles,
+    listAssistantSessionTitles(sourceWorkspaceId, assistant.id, sessionIds),
+    sessionIds,
   )
 
   const metadataJson = serializeAgentShareMetadata({
     sourceWorkspaceId,
     packageJson,
     sessionIds,
+    sessionTitles,
     sessionPermissions: existingMetadata.sessionPermissions,
   })
 
@@ -329,7 +449,7 @@ export function shareP2pAgent(rawInput: unknown): { sharedResource: P2pSharedRes
       }) ?? resource
   }
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
     resourceId: assistant.id,
@@ -342,6 +462,7 @@ export function shareP2pAgent(rawInput: unknown): { sharedResource: P2pSharedRes
       source_workspace_id: sourceWorkspaceId,
       permission: input.permission ?? 'read',
       ...(sessionIds ? { session_ids: sessionIds } : {}),
+      ...(sessionTitles ? { session_titles: sessionTitles } : {}),
       ...(existingMetadata.sessionPermissions
         ? { session_permissions: existingMetadata.sessionPermissions }
         : {}),
@@ -351,9 +472,9 @@ export function shareP2pAgent(rawInput: unknown): { sharedResource: P2pSharedRes
   return { sharedResource: mapP2pAgentSharedResourceRow(resource) }
 }
 
-export function removeP2pAgentSessions(
+export async function removeP2pAgentSessions(
   rawInput: unknown,
-): { sharedResource: P2pSharedResource | null } {
+): Promise<{ sharedResource: P2pSharedResource | null }> {
   const input = P2pAgentRemoveSessionsInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -383,7 +504,7 @@ export function removeP2pAgentSessions(
 
   if (nextIds.length === 0) {
     sharedRepo.update({ id: resource.id, status: 'unshared' })
-    appendP2pEvent({
+    await appendP2pEvent({
       workspaceId: input.workspaceId,
       resourceType: 'Agent',
       resourceId: assistantId,
@@ -400,10 +521,12 @@ export function removeP2pAgentSessions(
     throw new Error('智能体共享元数据不完整')
   }
 
+  const nextTitles = mergeSessionTitles(metadata.sessionTitles, {}, nextIds)
   const metadataJson = serializeAgentShareMetadata({
     sourceWorkspaceId,
     packageJson: metadata.packageJson,
     sessionIds: nextIds,
+    sessionTitles: nextTitles,
     sessionPermissions: Object.fromEntries(
       Object.entries(metadata.sessionPermissions ?? {}).filter(([id]) => !removeSet.has(id)),
     ),
@@ -414,7 +537,7 @@ export function removeP2pAgentSessions(
       metadataJson,
     }) ?? resource
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
     resourceId: assistantId,
@@ -426,6 +549,7 @@ export function removeP2pAgentSessions(
       package_json: metadata.packageJson,
       source_workspace_id: sourceWorkspaceId,
       session_ids: nextIds,
+      ...(nextTitles ? { session_titles: nextTitles } : {}),
       ...(metadata.sessionPermissions
         ? {
             session_permissions: Object.fromEntries(
@@ -439,9 +563,9 @@ export function removeP2pAgentSessions(
   return { sharedResource: mapP2pAgentSharedResourceRow(updated) }
 }
 
-export function setP2pAgentSessionPermission(rawInput: unknown): {
+export async function setP2pAgentSessionPermission(rawInput: unknown): Promise<{
   sharedResource: P2pSharedResource
-} {
+}> {
   const input = P2pAgentSetSessionPermissionInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -474,6 +598,7 @@ export function setP2pAgentSessionPermission(rawInput: unknown): {
     sourceWorkspaceId,
     packageJson: metadata.packageJson,
     sessionIds: metadata.sessionIds,
+    sessionTitles: metadata.sessionTitles,
     sessionPermissions,
   })
 
@@ -483,7 +608,7 @@ export function setP2pAgentSessionPermission(rawInput: unknown): {
       metadataJson,
     }) ?? resource
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
     resourceId: assistantId,
@@ -500,7 +625,7 @@ export function setP2pAgentSessionPermission(rawInput: unknown): {
   return { sharedResource: mapP2pAgentSharedResourceRow(updated) }
 }
 
-export function unshareP2pAgent(rawInput: unknown): { unshared: true } {
+export async function unshareP2pAgent(rawInput: unknown): Promise<{ unshared: true }> {
   const input = P2pResourceUnshareInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -514,7 +639,7 @@ export function unshareP2pAgent(rawInput: unknown): { unshared: true } {
   const member = assertCanManageSharedResource(input.workspaceId, resource.sharedBy)
   sharedRepo.update({ id: resource.id, status: 'unshared' })
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
     resourceId: resource.localResourceId ?? resource.id,
@@ -530,4 +655,32 @@ export function unshareP2pAgent(rawInput: unknown): { unshared: true } {
 
 export function resolveAgentImportWorkspaceId(): string | null {
   return getDefaultWorkspace()?.id ?? null
+}
+
+/** Owner's source assistants must never carry the joiner-only mirror flag. */
+export function sanitizeOwnerSourceAgentMirrorFlags(workspaceId: string): void {
+  const db = getDatabase()
+  const sharedRepo = new P2pSharedResourceRepository(db)
+  const rows = db
+    .select()
+    .from(assistants)
+    .where(eq(assistants.workspaceId, workspaceId))
+    .all()
+
+  for (const row of rows) {
+    if (row.deletedAt) continue
+
+    const params = JSON.parse(row.parametersJson) as Record<string, unknown>
+    if (!params.p2pGroupSharedMirror) continue
+
+    const activeShares = sharedRepo.listActiveByLocalResource(row.id, 'Agent')
+    const isOwnerSource = activeShares.some((share) => {
+      const metadata = readAgentShareMetadata(share.metadataJson)
+      return metadata.sourceWorkspaceId === workspaceId
+    })
+
+    if (isOwnerSource) {
+      clearGroupMirrorFlagFromSourceAssistant(row.id)
+    }
+  }
 }

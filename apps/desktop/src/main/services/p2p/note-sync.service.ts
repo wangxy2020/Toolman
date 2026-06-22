@@ -87,7 +87,7 @@ function syncLoroTextToNotesData(
   })
 }
 
-export function shareP2pNote(rawInput: unknown): { sharedResource: P2pSharedResource; event: WorkspaceEvent } {
+export async function shareP2pNote(rawInput: unknown): Promise<{ sharedResource: P2pSharedResource; event: WorkspaceEvent }> {
   const input = P2pNoteShareInputSchema.parse(rawInput)
   const member = assertCanShareResource(input.workspaceId)
   const note = getNoteById(input.noteId)
@@ -133,7 +133,7 @@ export function shareP2pNote(rawInput: unknown): { sharedResource: P2pSharedReso
   const text = noteBodyText(note)
   initLoroDocFromText(input.workspaceId, note.id, text)
 
-  const sharedEvent = appendP2pEvent({
+  const sharedEvent = await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Note',
     resourceId: note.id,
@@ -149,7 +149,7 @@ export function shareP2pNote(rawInput: unknown): { sharedResource: P2pSharedReso
 
   const doc = getLoroDoc(input.workspaceId, note.id)
   const oplogBase64 = exportLoroOplogBase64(doc)
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Note',
     resourceId: note.id,
@@ -166,7 +166,7 @@ export function shareP2pNote(rawInput: unknown): { sharedResource: P2pSharedReso
   return { sharedResource: mapSharedResourceRow(resource), event: sharedEvent }
 }
 
-export function pushP2pNoteUpdate(rawInput: unknown): { event: WorkspaceEvent } {
+export async function pushP2pNoteUpdate(rawInput: unknown): Promise<{ event: WorkspaceEvent }> {
   const input = P2pNotePushUpdateInputSchema.parse(rawInput)
   const member = assertWorkspaceMemberAccess(input.workspaceId)
 
@@ -196,7 +196,7 @@ export function pushP2pNoteUpdate(rawInput: unknown): { event: WorkspaceEvent } 
     notebookId: readMetadataNotebookId(shared),
   })
 
-  const event = appendP2pEvent({
+  const event = await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Note',
     resourceId: input.noteId,
@@ -218,10 +218,10 @@ export function pushP2pNoteUpdate(rawInput: unknown): { event: WorkspaceEvent } 
   return { event }
 }
 
-export function setP2pNotePermission(rawInput: unknown): {
+export async function setP2pNotePermission(rawInput: unknown): Promise<{
   sharedResource: P2pSharedResource
   event: WorkspaceEvent
-} {
+}> {
   const input = P2pNoteSetPermissionInputSchema.parse(rawInput)
   const member = assertWorkspaceMemberAccess(input.workspaceId)
   const sharedRepo = getSharedResourceRepo()
@@ -242,7 +242,7 @@ export function setP2pNotePermission(rawInput: unknown): {
     }) ?? resource
 
   const noteId = resource.localResourceId ?? resource.id
-  const event = appendP2pEvent({
+  const event = await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Note',
     resourceId: noteId,
@@ -266,7 +266,7 @@ function readMetadataNotebookId(resource: P2pSharedResourceRow): string | undefi
   }
 }
 
-export function unshareP2pNote(rawInput: unknown): { unshared: true } {
+export async function unshareP2pNote(rawInput: unknown): Promise<{ unshared: true }> {
   const input = P2pResourceUnshareInputSchema.parse(rawInput)
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(input.resourceId)
@@ -280,7 +280,7 @@ export function unshareP2pNote(rawInput: unknown): { unshared: true } {
 
   sharedRepo.update({ id: resource.id, status: 'unshared' })
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Note',
     resourceId: resource.localResourceId ?? resource.id,

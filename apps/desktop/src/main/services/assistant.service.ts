@@ -54,6 +54,12 @@ function mergeParameters(
           sharedAgentName: string
         }
       | undefined,
+    p2pGroupSharedMirror: next.p2pGroupSharedMirror as
+      | {
+          p2pWorkspaceId: string
+          resourceId: string
+        }
+      | undefined,
   }
 }
 
@@ -93,10 +99,27 @@ function toAssistant(row: typeof assistants.$inferSelect): Assistant {
 }
 
 export function getAssistantRow(id: string) {
-  const db = getDatabase()
-  const row = db.select().from(assistants).where(eq(assistants.id, id)).get()
+  const row = getAssistantRowIncludingDeleted(id)
   if (!row || row.deletedAt) return null
   return row
+}
+
+export function getAssistantRowIncludingDeleted(id: string) {
+  const db = getDatabase()
+  return db.select().from(assistants).where(eq(assistants.id, id)).get() ?? null
+}
+
+export function restoreAssistantIfDeleted(id: string): boolean {
+  const row = getAssistantRowIncludingDeleted(id)
+  if (!row) return false
+  if (!row.deletedAt) return true
+
+  const db = getDatabase()
+  db.update(assistants)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(eq(assistants.id, id))
+    .run()
+  return true
 }
 
 export function listAssistants(input: unknown): Assistant[] {
@@ -183,6 +206,11 @@ export function deleteAssistant(input: unknown): {
 
   if (existing.isBuiltin) {
     throw new Error('内置助手不可删除')
+  }
+
+  const params = JSON.parse(existing.parametersJson) as Record<string, unknown>
+  if (params.p2pGroupSharedMirror) {
+    throw new Error('群组共享镜像智能体不可直接删除，请先从群组移除')
   }
 
   const deletedSessionIds = getSessionRepository().deleteByAssistantId(data.id)

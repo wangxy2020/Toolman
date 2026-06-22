@@ -3,6 +3,7 @@ import type { Assistant, Session } from '@toolman/shared'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { IconChevronRight, IconPlus, IconTopic } from '../icons'
 import { SidebarRenameInput } from '../../features/notes/SidebarRenameInput'
+import { isGroupProxyAssistant } from '../../features/group/group-agent-utils'
 
 interface Props {
   assistants: Assistant[]
@@ -246,7 +247,11 @@ export function MiddleSidebar({
       {deleteAssistantTarget && (
         <ConfirmDialog
           title="删除智能体"
-          message={`确定删除「${deleteAssistantTarget.name}」？该智能体下的所有话题将一并删除，且无法恢复。`}
+          message={
+            isGroupProxyAssistant(deleteAssistantTarget)
+              ? `确定删除「${deleteAssistantTarget.name}」？该智能体下的本地话题将一并删除；之后仍可通过群组智能体重新打开。`
+              : `确定删除「${deleteAssistantTarget.name}」？该智能体下的所有话题将一并删除，且无法恢复。`
+          }
           confirmLabel="删除"
           cancelLabel="取消"
           danger

@@ -14,7 +14,7 @@ import {
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
-import { listP2pConnections, getKnownP2pConnections } from './p2p-connection.service'
+import { listP2pConnections, getKnownP2pConnections, ensurePeerReadyForWorkspace } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { applyRemoteMemberJoin, ensureOwnerMemberRecord } from './p2p-member.service'
@@ -99,7 +99,6 @@ async function relayMessageToPeers(message: P2pGroupChatMessage): Promise<void> 
   const connections = await listP2pConnections()
   for (const item of connections) {
     if (item.state !== 'connected' || item.peerDeviceId === device.deviceId) continue
-    if (item.workspaceId && item.workspaceId !== message.workspaceId) continue
     peerDeviceIds.add(item.peerDeviceId)
   }
 
@@ -111,6 +110,7 @@ async function relayMessageToPeers(message: P2pGroupChatMessage): Promise<void> 
   await Promise.all(
     [...peerDeviceIds].map(async (peerDeviceId) => {
       try {
+        await ensurePeerReadyForWorkspace(peerDeviceId, message.workspaceId)
         await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
       } catch {
         // ignore single peer failure
@@ -200,7 +200,7 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       const workspace = getWorkspaceRepo().findById(message.workspaceId)
       const localDeviceId = getP2pDeviceInfo().deviceId
       if (workspace?.ownerDeviceId === localDeviceId) {
-        applyRemoteMemberJoin(
+        void applyRemoteMemberJoin(
           {
             workspaceId: message.workspaceId,
             member: {

@@ -37,12 +37,14 @@ import { saveWorkspaceKey } from './p2p-workspace-key.store'
 import {
   assertPeerTrustedForSync,
   ensureOwnerPeerTrustedForSync,
+  isPeerTrusted,
   promptPeerTrustIfNeeded,
   upsertPeerFromDiscovery,
 } from './p2p-peer.service'
 import { appendP2pEvent } from './p2p-event.service'
 import { assertCanManageMembers as assertCanManageMembersGuard } from './p2p-permission.guard'
 import { requestSnapshotFromOwner, syncWithPeer } from './p2p-sync.service'
+import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
 import { countWanSdpCandidates } from './wan-transport'
@@ -51,6 +53,15 @@ const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 const MEMBER_JOIN_MESSAGE_TYPE = 'member.joined'
 const JOIN_NOTIFY_MAX_ATTEMPTS = 30
 const JOIN_NOTIFY_INTERVAL_MS = 2_000
+
+export class P2pMemberLimitError extends Error {
+  readonly code = 'P2P_MEMBER_LIMIT' as const
+
+  constructor(message = '社区版群组人数已达上限（10 人）。请开通会员服务以提升群组成员上限。') {
+    super(message)
+    this.name = 'P2pMemberLimitError'
+  }
+}
 
 const pendingJoinNotifications = new Map<
   string,
@@ -252,14 +263,9 @@ async function connectToOwnerPeer(
   workspaceId: string,
   context: string,
 ): Promise<boolean> {
-  if (await isOwnerPeerConnected(ownerDeviceId)) {
-    return true
-  }
-
   try {
-    const state = await p2pConnectionService.connectP2pPeer(ownerDeviceId, workspaceId)
-    if (state === 'connected') return true
-    return isOwnerPeerConnected(ownerDeviceId)
+    await p2pConnectionService.ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
+    return p2pConnectionService.isPeerConnected(ownerDeviceId)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'connect owner failed'
     console.warn(`[p2p] ${context}: ${message}`)
@@ -567,10 +573,6 @@ export async function ensureMemberConnectsToOwner(workspaceId: string): Promise<
   const device = getP2pDeviceInfo()
   if (workspace.ownerDeviceId === device.deviceId) return
 
-  if (p2pConnectionService.isPeerConnected(workspace.ownerDeviceId)) {
-    return
-  }
-
   const inFlight = ownerConnectInFlight.get(workspaceId)
   if (inFlight) {
     await inFlight
@@ -604,16 +606,21 @@ const reconcileInFlight = new Map<string, Promise<void>>()
 const reconcileLastRunAt = new Map<string, number>()
 const RECONCILE_COOLDOWN_MS = 8_000
 
-export async function reconcileOwnerWorkspaceMembers(workspaceId: string): Promise<void> {
+export async function reconcileOwnerWorkspaceMembers(
+  workspaceId: string,
+  options?: { immediate?: boolean },
+): Promise<void> {
   const inFlight = reconcileInFlight.get(workspaceId)
   if (inFlight) {
     await inFlight
     return
   }
 
-  const lastRun = reconcileLastRunAt.get(workspaceId) ?? 0
-  if (Date.now() - lastRun < RECONCILE_COOLDOWN_MS) {
-    return
+  if (!options?.immediate) {
+    const lastRun = reconcileLastRunAt.get(workspaceId) ?? 0
+    if (Date.now() - lastRun < RECONCILE_COOLDOWN_MS) {
+      return
+    }
   }
 
   const promise = reconcileOwnerWorkspaceMembersNow(workspaceId).finally(() => {
@@ -622,6 +629,19 @@ export async function reconcileOwnerWorkspaceMembers(workspaceId: string): Promi
   })
   reconcileInFlight.set(workspaceId, promise)
   await promise
+}
+
+export async function runOwnerPeerReconcileTick(): Promise<void> {
+  const device = getP2pDeviceInfo()
+  const workspaces = getWorkspaceRepo().listByOwnerDevice(device.deviceId)
+  for (const workspace of workspaces) {
+    try {
+      await reconcileOwnerWorkspaceMembersNow(workspace.id)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'owner reconcile tick failed'
+      console.warn(`[p2p] owner reconcile tick failed for ${workspace.id}: ${message}`)
+    }
+  }
 }
 
 async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<void> {
@@ -643,6 +663,17 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
       .map((item) => item.deviceId),
   )
 
+  for (const member of getMemberRepo().listByWorkspace(workspaceId, 'active')) {
+    if (member.deviceId === device.deviceId) continue
+    if (!shouldInitiatePeerConnection(device.deviceId, member.deviceId)) continue
+    try {
+      await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'connect active member failed'
+      console.warn(`[p2p] owner connect to member ${member.deviceId} failed: ${message}`)
+    }
+  }
+
   for (const node of listP2pDiscoveredNodes(true)) {
     if (node.deviceId === device.deviceId || activeMemberDeviceIds.has(node.deviceId)) {
       continue
@@ -654,7 +685,7 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
       continue
     }
     try {
-      await p2pConnectionService.connectP2pPeer(node.deviceId, workspaceId)
+      await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspaceId)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'connect peer failed'
       console.warn(`[p2p] owner reconcile connect failed for ${node.deviceId}: ${message}`)
@@ -722,7 +753,7 @@ export function handleMemberSyncResponse(
     }
   },
 ): void {
-  applyRemoteMemberJoin(
+  void applyRemoteMemberJoin(
     {
       workspaceId: message.workspaceId,
       member: {
@@ -812,6 +843,7 @@ function scheduleJoinPeerSync(
     if (payload.ownerDeviceId !== getP2pDeviceInfo().deviceId) {
       try {
         await syncWithPeer(payload.workspaceId, payload.ownerDeviceId)
+        await reconcileWorkspaceMemberMesh(payload.workspaceId)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'post-join sync failed'
         console.warn(`[p2p] post-join event sync failed: ${message}`)
@@ -842,7 +874,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
 
   const activeCount = memberRepo.countActiveByWorkspace(workspace.id)
   if (activeCount >= workspace.maxMembers) {
-    throw new Error('群组成员已达上限')
+    throw new P2pMemberLimitError()
   }
 
   saveWorkspaceKey(workspace.id, payload.workspaceKeyB64)
@@ -954,7 +986,7 @@ function registerJoiningPeerForTrust(
   })
 }
 
-export function applyRemoteMemberJoin(
+export async function applyRemoteMemberJoin(
   payload: {
     workspaceId: string
     member: P2pMember
@@ -962,7 +994,7 @@ export function applyRemoteMemberJoin(
     peerDeviceId?: string
   },
   options?: { requirePeerTrust?: boolean },
-): void {
+): Promise<void> {
   const peerDeviceId = payload.peerDeviceId ?? payload.member.deviceId
   if (options?.requirePeerTrust ?? true) {
     assertPeerTrustedForSync(payload.workspaceId, peerDeviceId)
@@ -981,11 +1013,6 @@ export function applyRemoteMemberJoin(
     payload.member.deviceId,
   )
   if (existing) {
-    registerJoiningPeerForTrust(
-      payload.workspaceId,
-      peerDeviceId,
-      payload.member.displayName,
-    )
     if (existing.status !== 'active') {
       getMemberRepo().update({
         id: existing.id,
@@ -995,12 +1022,18 @@ export function applyRemoteMemberJoin(
         joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
       })
       broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
-    } else {
-      broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
     }
-    if (p2pConnectionService.isPeerConnected(peerDeviceId)) {
-      promptPeerTrustIfNeeded(payload.workspaceId, peerDeviceId, { connected: true })
+    if (!isPeerTrusted(payload.workspaceId, peerDeviceId)) {
+      registerJoiningPeerForTrust(
+        payload.workspaceId,
+        peerDeviceId,
+        payload.member.displayName,
+      )
+      if (p2pConnectionService.isPeerConnected(peerDeviceId)) {
+        promptPeerTrustIfNeeded(payload.workspaceId, peerDeviceId, { connected: true })
+      }
     }
+    void reconcileOwnerWorkspaceMembers(payload.workspaceId, { immediate: true })
     return
   }
 
@@ -1021,7 +1054,7 @@ export function applyRemoteMemberJoin(
     joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
   })
 
-  appendP2pEvent({
+  await appendP2pEvent({
     workspaceId: payload.workspaceId,
     resourceType: 'Member',
     resourceId: payload.member.id,
@@ -1048,4 +1081,6 @@ export function applyRemoteMemberJoin(
       getInviteRepo().incrementUseCount(invite.id)
     }
   }
+
+  void reconcileOwnerWorkspaceMembers(payload.workspaceId, { immediate: true })
 }

@@ -217,6 +217,13 @@ export class P2pEventRepository {
     this.db.update(p2pEvents).set({ synced: true }).where(eq(p2pEvents.id, id)).run()
     return this.findById(id)
   }
+
+  deleteById(id: string): boolean {
+    const existing = this.findById(id)
+    if (!existing) return false
+    this.db.delete(p2pEvents).where(eq(p2pEvents.id, id)).run()
+    return true
+  }
 }
 
 export function hashEventPayload(payloadJson: string): string {

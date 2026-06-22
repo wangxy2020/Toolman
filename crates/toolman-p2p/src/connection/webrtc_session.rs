@@ -319,12 +319,6 @@ impl WebRtcSession {
             return Ok(());
         };
 
-        let matches_workspace = self.workspace_id.as_deref() == Some(workspace_id)
-            || ciphers.scope_id == workspace_id;
-        if !matches_workspace {
-            return Ok(());
-        }
-
         ciphers.workspace_key = workspace_key;
         ciphers.scope_id = workspace_id.to_string();
         ciphers.events.rotate(

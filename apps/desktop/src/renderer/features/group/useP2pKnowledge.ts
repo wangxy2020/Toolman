@@ -160,9 +160,16 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
       void load()
     })
 
+    const unsubscribeCompleted = window.api.subscribe('p2p:sync:completed', (payload) => {
+      const event = payload as { workspaceId?: string }
+      if (event.workspaceId !== workspaceId) return
+      void load()
+    })
+
     return () => {
       unsubscribeEvent()
       unsubscribeSync()
+      unsubscribeCompleted()
     }
   }, [load, workspaceId])
 

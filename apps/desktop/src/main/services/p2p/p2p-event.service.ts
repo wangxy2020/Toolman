@@ -15,12 +15,16 @@ import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import {
   applySequencingToAppend,
   extractLamportFromPayload,
+  getWorkspaceOwnerDeviceId,
+  isLocalWorkspaceOwner,
+  isOwnerPeerConnected,
   isSeqConflictError,
   MAX_SEQ_CONFLICT_RETRIES,
   observeRemoteLamport,
 } from './p2p-sync-sequencing'
 import { notifyLocalP2pEventAppended } from './p2p-sync-lifecycle'
 import { getKnownP2pConnections } from './p2p-connection.service'
+import { proposeP2pEventToOwner } from './p2p-event-proposal.service'
 
 let eventStoreReady = false
 
@@ -147,7 +151,19 @@ export function bootstrapP2pEventStore(): void {
   }
 }
 
-export function appendP2pEvent(input: AppendP2pEventInput): WorkspaceEvent {
+export async function appendP2pEvent(input: AppendP2pEventInput): Promise<WorkspaceEvent> {
+  assertWorkspaceMemberAccess(input.workspaceId)
+  const connections = getKnownP2pConnections()
+  if (
+    !isLocalWorkspaceOwner(input.workspaceId) &&
+    isOwnerPeerConnected(input.workspaceId, connections)
+  ) {
+    return proposeP2pEventToOwner(input)
+  }
+  return appendP2pEventLocally(input)
+}
+
+export function appendP2pEventLocally(input: AppendP2pEventInput): WorkspaceEvent {
   assertWorkspaceMemberAccess(input.workspaceId)
   const device = getP2pDeviceInfo()
   const connections = getKnownP2pConnections()
@@ -270,6 +286,33 @@ export interface RemoteP2pEventInput {
   sourceDeviceId: string
 }
 
+function resolveSeqSlotConflict(
+  existingBySeq: P2pEventRow,
+  input: RemoteP2pEventInput,
+): 'skip' | 'replace' | 'reject' {
+  const ownerDeviceId = getWorkspaceOwnerDeviceId(input.workspaceId)
+  const localDeviceId = getP2pDeviceInfo().deviceId
+
+  if (
+    ownerDeviceId &&
+    ownerDeviceId === localDeviceId &&
+    existingBySeq.sourceDeviceId === localDeviceId &&
+    input.sourceDeviceId !== ownerDeviceId
+  ) {
+    return 'skip'
+  }
+
+  if (ownerDeviceId && input.sourceDeviceId === ownerDeviceId) {
+    return 'replace'
+  }
+
+  if (!existingBySeq.synced && existingBySeq.sourceDeviceId === localDeviceId) {
+    return 'replace'
+  }
+
+  return 'reject'
+}
+
 export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent | null {
   assertWorkspaceMemberAccess(input.workspaceId)
   const repo = getEventRepo()
@@ -285,7 +328,15 @@ export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent 
     if (existingBySeq.id === input.eventId) {
       return null
     }
-    throw new Error('序号冲突：远端事件与本地序号槽位不一致')
+    const resolution = resolveSeqSlotConflict(existingBySeq, input)
+    if (resolution === 'skip') {
+      return null
+    }
+    if (resolution === 'replace') {
+      repo.deleteById(existingBySeq.id)
+    } else {
+      throw new Error('序号冲突：远端事件与本地序号槽位不一致')
+    }
   }
 
   const lamport = extractLamportFromPayload(input.payload)

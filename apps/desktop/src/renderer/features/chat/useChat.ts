@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type Assistant, type ContentBlock, type Message, type MessageStreamEvent, type Provider, resolveMcpServerIdsForSkills, shouldEnableToolsWithAttachments } from '@toolman/shared'
 import { getBlocksText } from './message-utils'
 import { contentBlocksToPendingAttachments, getUserVisibleText } from './chat-attachments'
@@ -6,6 +6,10 @@ import { applyStreamEventWithPendingQueue, flushPendingStreamEvents } from './st
 import { getDefaultMcpServerIds, getDefaultSkillIds } from './agent-settings-constants'
 import { useSessionManager } from './useSessionManager'
 import { normalizeModelIds } from './model-utils'
+import {
+  isGroupProxySession,
+  resolveGroupProxyAssistantModelId,
+} from '../group/group-agent-utils'
 import type { AppSettings } from '../settings/app-settings'
 
 function getAssistantMcpServerIds(assistant?: Assistant | null): string[] {
@@ -230,12 +234,37 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     [session.activeSession?.assistantId, assistants, appSettings],
   )
 
+  const activeAssistant = useMemo(() => {
+    const assistantId = session.activeSession?.assistantId
+    if (assistantId) {
+      return assistants.find((assistant) => assistant.id === assistantId) ?? null
+    }
+    return assistants.find((assistant) => assistant.isPinned) ?? assistants[0] ?? null
+  }, [assistants, session.activeSession?.assistantId])
+
+  const groupProxyMode = useMemo(
+    () => isGroupProxySession(session.activeSession),
+    [session.activeSession],
+  )
+
+  const effectiveModelIds = useMemo(() => {
+    if (groupProxyMode && activeAssistant) {
+      const modelId = resolveGroupProxyAssistantModelId(activeAssistant, session.activeSession)
+      return modelId ? [modelId] : selectedModelIds
+    }
+    return selectedModelIds
+  }, [activeAssistant, groupProxyMode, selectedModelIds, session.activeSession])
+
   const sendMessage = useCallback(
     async (contentBlocks: ContentBlock[], options?: { enableTools?: boolean }) => {
       const text = getBlocksText(contentBlocks)
       const hasImages = contentBlocks.some((block) => block.type === 'image')
       const hasFiles = contentBlocks.some((block) => block.type === 'file')
-      if (!session.activeSessionId || (!text.trim() && !hasImages && !hasFiles) || selectedModelIds.length === 0) {
+      if (
+        !session.activeSessionId ||
+        (!text.trim() && !hasImages && !hasFiles) ||
+        effectiveModelIds.length === 0
+      ) {
         return
       }
 
@@ -253,7 +282,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         const sendOptions = buildSendOptions(contentBlocks)
         const cutoff = target.createdAt
         const now = Date.now()
-        const tempAssistantIds = selectedModelIds.map(
+        const tempAssistantIds = effectiveModelIds.map(
           () => crypto.randomUUID() as Message['id'],
         )
 
@@ -265,7 +294,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
           sessionId: session.activeSessionId!,
           parentMessageId: editingMessageId,
           role: 'assistant' as const,
-          modelId: selectedModelIds[index] ?? selectedModelIds[0] ?? null,
+          modelId: effectiveModelIds[index] ?? effectiveModelIds[0] ?? null,
           status: 'streaming' as const,
           contentBlocks: [{ type: 'text', text: '' }],
           error: null,
@@ -294,7 +323,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
             sessionId: session.activeSessionId,
             messageId: editingMessageId,
             contentBlocks,
-            modelIds: selectedModelIds,
+            modelIds: effectiveModelIds,
             options: sendOptions,
           })
 
@@ -389,7 +418,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
       )
 
       const tempUserId = crypto.randomUUID() as Message['id']
-      const tempAssistantIds = selectedModelIds.map(
+      const tempAssistantIds = effectiveModelIds.map(
         () => crypto.randomUUID() as Message['id'],
       )
       const tempAssistantIdSet = new Set<Message['id']>(tempAssistantIds)
@@ -417,7 +446,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         sessionId: session.activeSessionId!,
         parentMessageId: tempUserId,
         role: 'assistant' as const,
-        modelId: selectedModelIds[index] ?? selectedModelIds[0] ?? null,
+        modelId: effectiveModelIds[index] ?? effectiveModelIds[0] ?? null,
         status: 'streaming' as const,
         contentBlocks: [{ type: 'text', text: '' }],
         error: null,
@@ -435,7 +464,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         const result = await window.api.invoke(IpcChannel.MessageSend, {
           sessionId: session.activeSessionId,
           contentBlocks,
-          modelIds: selectedModelIds,
+          modelIds: effectiveModelIds,
           options: {
             enableTools,
             webSearchEnabled: appSettings?.webSearchEnabled,
@@ -520,7 +549,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         setSending(false)
       }
     },
-    [session, selectedModelIds, assistants, appSettings, messages, buildSendOptions, loadMessages, editingUserMessageId],
+    [session, effectiveModelIds, assistants, appSettings, messages, buildSendOptions, loadMessages, editingUserMessageId],
   )
 
   const abortStreaming = useCallback(async () => {
@@ -650,7 +679,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
       const target = messages.find((m) => m.id === messageId)
       if (!target || target.role !== 'assistant') return
 
-      const modelIds = target.modelId ? [target.modelId] : selectedModelIds
+      const modelIds = target.modelId ? [target.modelId] : effectiveModelIds
       if (modelIds.length === 0) return
 
       setPendingMessageAction({ kind: 'regenerate', messageId })
@@ -708,7 +737,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         )
       }
     },
-    [session, messages, selectedModelIds, buildSendOptions],
+    [session, messages, effectiveModelIds, buildSendOptions],
   )
 
   const forkFromMessage = useCallback(
@@ -771,6 +800,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     assistants,
     providers,
     selectedModelIds,
+    effectiveModelIds,
     setSelectedModelIds,
     loading: messagesLoading,
     sessionsLoading: session.loading,

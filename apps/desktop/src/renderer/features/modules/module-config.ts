@@ -37,7 +37,7 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
   group: {
     title: '群组',
     addLabel: '创建群组',
-    headerSegments: ['我的群组'],
+    headerSegments: ['我创建的群组'],
     sidebarEmptyHint: '暂无群组，点击上方创建',
     contentEmptyTitle: '群组',
     contentEmptyHint: '在此协作与群组对话，功能开发中。',

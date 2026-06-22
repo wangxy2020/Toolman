@@ -22,6 +22,7 @@ import {
   type NotesEditorSettings,
 } from './notes-editor-settings'
 import type { NoteItem } from './notes-storage'
+import { isGroupNotebookId } from '../group/group-note-utils'
 import { NotesTagsEditor } from './NotesTagsEditor'
 import { useNoteEditorActions } from './useNoteEditorActions'
 
@@ -107,11 +108,17 @@ export function NotesEditor({
   })
 
   useEffect(() => {
-    setPreviewMode(resolveInitialPreviewMode(editorSettings))
+    if (locked) {
+      setPreviewMode('preview')
+    } else if (isGroupNotebookId(note.notebookId)) {
+      setPreviewMode('edit')
+    } else {
+      setPreviewMode(resolveInitialPreviewMode(editorSettings))
+    }
     setPast([])
     setFuture([])
     setSlashMenuOpen(false)
-  }, [note.id, editorSettings])
+  }, [note.id, editorSettings, locked, note.notebookId])
 
   const syncTitleHeight = useCallback(() => {
     const title = titleRef.current

@@ -50,6 +50,25 @@ export class KnowledgeBaseRepository {
     return row ?? null
   }
 
+  findRowByIdAny(id: string): KnowledgeBaseRow | null {
+    const row = this.db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id)).get()
+    return row ?? null
+  }
+
+  restore(id: string, workspaceId: string): KnowledgeBaseRow | null {
+    const existing = this.findRowByIdAny(id)
+    if (!existing || existing.workspaceId !== workspaceId) return null
+
+    const now = new Date()
+    this.db
+      .update(knowledgeBases)
+      .set({ deletedAt: null, updatedAt: now })
+      .where(and(eq(knowledgeBases.id, id), eq(knowledgeBases.workspaceId, workspaceId)))
+      .run()
+
+    return this.findRowById(id, workspaceId)
+  }
+
   listByWorkspace(workspaceId: string): KnowledgeBaseRow[] {
     return this.db
       .select()

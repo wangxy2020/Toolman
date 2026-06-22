@@ -390,6 +390,13 @@ export const AssistantSchema = z.object({
         sourceAssistantId: z.string().min(1),
         groupName: z.string(),
         sharedAgentName: z.string(),
+        referencedModelId: z.string().min(1).optional(),
+      })
+      .optional(),
+    p2pGroupSharedMirror: z
+      .object({
+        p2pWorkspaceId: UuidSchema,
+        resourceId: z.string().min(1),
       })
       .optional(),
   }),

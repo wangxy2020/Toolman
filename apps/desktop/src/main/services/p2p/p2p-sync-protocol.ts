@@ -84,6 +84,38 @@ export type ReplicationMessage =
       message: unknown
     }
   | {
+      type: 'agent-relay.message'
+      v?: number
+      relay: unknown
+    }
+  | {
+      type: 'events.propose'
+      v?: number
+      workspaceId: string
+      proposalId: string
+      resourceType: P2pResourceType
+      resourceId: string
+      operatorId: string
+      eventType: P2pEventType
+      payloadJson: string
+      sourceDeviceId: string
+      timestamp: number
+    }
+  | {
+      type: 'events.proposed'
+      v?: number
+      workspaceId: string
+      proposalId: string
+      event: RemoteWorkspaceEventWire
+    }
+  | {
+      type: 'events.propose_rejected'
+      v?: number
+      workspaceId: string
+      proposalId: string
+      reason: string
+    }
+  | {
       type: 'member.sync_request'
       v?: number
       workspaceId: string

@@ -1,14 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { P2pSharedResourceRepository } from '@toolman/db'
+import { existsSync } from 'node:fs'
+import { hashFileBytes } from '@toolman/knowledge'
+import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
 import {
   blobExists,
   getBlobMeta,
   readBlobBytes,
   writeBlobFromBuffer,
+  writeBlobFromPath,
 } from '../blob.service'
 import { getDatabase } from '../../bootstrap/database'
+import { getDocumentRepository } from '../../db/repos'
 import { P2pBridge } from './p2p-bridge'
-import { connectP2pPeer, listP2pConnections } from './p2p-connection.service'
+import { ensurePeerReadyForWorkspace, listP2pConnections } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertPeerTrustedForSync, isPeerTrusted } from './p2p-peer.service'
 import {
@@ -43,6 +47,29 @@ const inFlightFetches = new Set<string>()
 
 function sha256Hex(data: Buffer): string {
   return createHash('sha256').update(data).digest('hex')
+}
+
+function listActiveWorkspacePeerIds(workspaceId: string): string[] {
+  const device = getP2pDeviceInfo()
+  return new P2pMemberRepository(getDatabase())
+    .listByWorkspace(workspaceId, 'active')
+    .filter((member) => member.deviceId !== device.deviceId)
+    .map((member) => member.deviceId)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+async function waitForBlob(contentHash: string, maxWaitMs = 60_000): Promise<boolean> {
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    if (blobExists(contentHash)) return true
+    await sleep(250)
+  }
+  return blobExists(contentHash)
 }
 
 async function sendFileMessage(peerDeviceId: string, message: FileChannelMessage): Promise<void> {
@@ -207,11 +234,43 @@ function finalizeReceiveSession(session: BlobReceiveSession): boolean {
   return true
 }
 
+async function tryRecoverBlobFromSharedKnowledge(
+  workspaceId: string,
+  contentHash: string,
+): Promise<boolean> {
+  if (blobExists(contentHash)) return true
+
+  const sharedRepo = new P2pSharedResourceRepository(getDatabase())
+  const docRepo = getDocumentRepository()
+
+  for (const resource of sharedRepo.listByWorkspace(workspaceId)) {
+    if (resource.resourceType !== 'Knowledge' || resource.status !== 'active') continue
+    const kbId = resource.localResourceId ?? resource.id
+    for (const doc of docRepo.listByKb(kbId)) {
+      if (doc.blobHash !== contentHash && doc.contentHash !== contentHash) continue
+      if (!doc.absolutePath || !existsSync(doc.absolutePath)) continue
+      try {
+        if (hashFileBytes(doc.absolutePath) !== contentHash) continue
+        writeBlobFromPath(doc.absolutePath)
+        return blobExists(contentHash)
+      } catch {
+        continue
+      }
+    }
+  }
+
+  return false
+}
+
 async function handleBlobRequest(
   peerDeviceId: string,
   message: Extract<FileChannelMessage, { type: 'blob.request' }>,
 ): Promise<void> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
+
+  if (!blobExists(message.contentHash)) {
+    await tryRecoverBlobFromSharedKnowledge(message.workspaceId, message.contentHash)
+  }
 
   if (!blobExists(message.contentHash)) {
     await sendFileMessage(peerDeviceId, {
@@ -332,7 +391,7 @@ async function requestBlobFromPeer(
     (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
   )
   if (!connected) {
-    await connectP2pPeer(peerDeviceId, workspaceId)
+    await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
   }
 
   const requestId = randomUUID()
@@ -376,6 +435,7 @@ export async function fetchBlobFromPeers(
   workspaceId: string,
   contentHash: string,
   mimeType?: string,
+  preferredPeerDeviceId?: string,
 ): Promise<boolean> {
   if (!contentHash || blobExists(contentHash)) {
     return true
@@ -383,24 +443,30 @@ export async function fetchBlobFromPeers(
 
   const fetchKey = `${workspaceId}:${contentHash}`
   if (inFlightFetches.has(fetchKey)) {
-    return false
+    return waitForBlob(contentHash)
   }
   inFlightFetches.add(fetchKey)
 
   try {
     const device = getP2pDeviceInfo()
+    const memberPeerIds = new Set(listActiveWorkspacePeerIds(workspaceId))
     const connections = await listP2pConnections()
     const peers = connections
       .filter(
         (item) =>
           item.state === 'connected' &&
-          item.workspaceId === workspaceId &&
-          item.peerDeviceId !== device.deviceId,
+          item.peerDeviceId !== device.deviceId &&
+          memberPeerIds.has(item.peerDeviceId),
       )
       .map((item) => item.peerDeviceId)
 
-    for (const peerDeviceId of peers) {
+    const peerOrder = preferredPeerDeviceId
+      ? [preferredPeerDeviceId, ...peers.filter((peer) => peer !== preferredPeerDeviceId)]
+      : peers
+
+    for (const peerDeviceId of peerOrder) {
       try {
+        await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
         const ok = await requestBlobFromPeer(
           workspaceId,
           peerDeviceId,
@@ -430,19 +496,21 @@ export async function pushBlobToPeers(
   if (!blobExists(contentHash)) return
 
   const device = getP2pDeviceInfo()
+  const memberPeerIds = new Set(listActiveWorkspacePeerIds(workspaceId))
   const data = readBlobBytes(contentHash)
   const connections = await listP2pConnections()
   const peers = connections.filter(
     (item) =>
       item.state === 'connected' &&
-      item.workspaceId === workspaceId &&
-      item.peerDeviceId !== device.deviceId,
+      item.peerDeviceId !== device.deviceId &&
+      memberPeerIds.has(item.peerDeviceId),
   )
 
   await Promise.all(
     peers.map(async (peer) => {
       if (!isPeerTrusted(workspaceId, peer.peerDeviceId)) return
       try {
+        await ensurePeerReadyForWorkspace(peer.peerDeviceId, workspaceId)
         const pushId = randomUUID()
         await sendBlobToPeer(
           peer.peerDeviceId,

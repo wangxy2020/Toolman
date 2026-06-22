@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IpcChannel, type Assistant, type Provider, type Workspace } from '@toolman/shared'
+import { IpcChannel, type Assistant, type Provider, type Session, type Workspace } from '@toolman/shared'
+import {
+  isGroupProxyAssistant,
+  resolveGroupProxyAssistantModelId,
+} from '../group/group-agent-utils'
 import { AgentSettingsAdvancedTab } from './AgentSettingsAdvancedTab'
 import { AgentSettingsKnowledgeTab } from './AgentSettingsKnowledgeTab'
 import { AgentSettingsPermissionTab } from './AgentSettingsPermissionTab'
@@ -38,6 +42,7 @@ interface Props {
   assistant: Assistant
   workspace: Workspace | null
   providers: Provider[]
+  activeSession?: Session | null
   onClose: () => void
   onSaved?: () => void
 }
@@ -70,13 +75,25 @@ function HelpHint({ title }: { title: string }) {
   )
 }
 
-export function AgentSettingsModal({ assistant, workspace, providers, onClose, onSaved }: Props) {
+export function AgentSettingsModal({
+  assistant,
+  workspace,
+  providers,
+  activeSession = null,
+  onClose,
+  onSaved,
+}: Props) {
   const systemPaths = useSystemPaths()
+  const groupProxyMode = isGroupProxyAssistant(assistant)
+  const displayModelId = useMemo(
+    () => resolveGroupProxyAssistantModelId(assistant, activeSession),
+    [assistant, activeSession],
+  )
   const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
   const [name, setName] = useState(assistant.name)
   const [description, setDescription] = useState(assistant.description ?? '')
   const [systemPrompt, setSystemPrompt] = useState(assistant.systemPrompt)
-  const [modelId, setModelId] = useState(assistant.modelId)
+  const [modelId, setModelId] = useState(displayModelId)
   const [workingDirectory, setWorkingDirectory] = useState(
     assistant.parameters.workingDirectory ?? '',
   )
@@ -128,6 +145,11 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
   const [busy, setBusy] = useState(false)
 
   const modelOptions = useMemo(() => buildModelOptions(providers), [providers])
+  const sharedModelLabel = useMemo(
+    () =>
+      `${modelNameFromId(displayModelId)} | ${providerNameFromModelId(displayModelId, providers)}`,
+    [displayModelId, providers],
+  )
 
   const getParameters = useCallback(
     (): Assistant['parameters'] => ({
@@ -178,7 +200,7 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
     setName(assistant.name)
     setDescription(assistant.description ?? '')
     setSystemPrompt(assistant.systemPrompt)
-    setModelId(assistant.modelId)
+    setModelId(displayModelId)
     setWorkingDirectory(assistant.parameters.workingDirectory ?? '')
     setAutonomousMode(assistant.parameters.autonomousMode ?? false)
     setHeartbeatEnabled(assistant.parameters.heartbeatEnabled ?? false)
@@ -198,7 +220,7 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
     setTranslationLanguages(
       normalizeTranslationLanguages(assistant.parameters.translationLanguages),
     )
-  }, [assistant, workspace])
+  }, [assistant, workspace, displayModelId])
 
   const save = useCallback(
     async (patch: {
@@ -250,7 +272,7 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
       name: name.trim() || assistant.name,
       description: description || null,
       systemPrompt,
-      modelId,
+      ...(groupProxyMode ? {} : { modelId }),
       parameters: getParameters(),
     })
     onClose()
@@ -322,21 +344,31 @@ export function AgentSettingsModal({ assistant, workspace, providers, onClose, o
                     </label>
                     <HelpHint title="选择运行此智能体的本地或云端大模型" />
                   </div>
-                  <select
-                    id="agent-settings-model"
-                    className="tm-agent-model-select"
-                    value={modelId}
-                    onChange={(e) => {
-                      setModelId(e.target.value)
-                      void save({ modelId: e.target.value })
-                    }}
-                  >
-                    {modelOptions.map((opt) => (
-                      <option key={opt.modelId} value={opt.modelId}>
-                        {`${modelNameFromId(opt.modelId)} | ${providerNameFromModelId(opt.modelId, providers)}`}
-                      </option>
-                    ))}
-                  </select>
+                  {groupProxyMode ? (
+                    <input
+                      id="agent-settings-model"
+                      className="tm-agent-setting-input"
+                      readOnly
+                      value={sharedModelLabel}
+                      title="群组共享智能体的模型由共享者决定"
+                    />
+                  ) : (
+                    <select
+                      id="agent-settings-model"
+                      className="tm-agent-model-select"
+                      value={modelId}
+                      onChange={(e) => {
+                        setModelId(e.target.value)
+                        void save({ modelId: e.target.value })
+                      }}
+                    >
+                      {modelOptions.map((opt) => (
+                        <option key={opt.modelId} value={opt.modelId}>
+                          {`${modelNameFromId(opt.modelId)} | ${providerNameFromModelId(opt.modelId, providers)}`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div className="tm-agent-setting-row tm-agent-setting-row--top">

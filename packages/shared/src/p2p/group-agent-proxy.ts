@@ -25,6 +25,7 @@ export const P2pGroupAgentAssistantProxySchema = z.object({
   sourceAssistantId: z.string().min(1),
   groupName: z.string(),
   sharedAgentName: z.string(),
+  referencedModelId: z.string().min(1).optional(),
 })
 
 export type P2pGroupAgentAssistantProxy = z.infer<typeof P2pGroupAgentAssistantProxySchema>

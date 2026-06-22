@@ -33,6 +33,8 @@ import { resolveKnowledgeFilesForChat } from './knowledge-chat-files'
 import { useDefaultFolderKnowledgeBase } from './useDefaultFolderKnowledgeBase'
 import { useKnowledgeDocuments } from './useKnowledgeDocuments'
 import type { SystemPaths } from '../chat/useSystemPaths'
+import { SharedKnowledgePanel } from './SharedKnowledgePanel'
+import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
 type SettingsTarget = 'kb' | null
 
@@ -67,6 +69,9 @@ interface Props {
   systemPaths?: SystemPaths | null
   onOpenNote?: (noteId: string) => boolean
   onChatWithKnowledgeFiles?: (items: KnowledgeFilePanelItem[]) => void
+  sharedEntry?: SharedKnowledgeEntry | null
+  sharedLoading?: boolean
+  sharedError?: string | null
 }
 
 export function KnowledgePage({
@@ -95,6 +100,9 @@ export function KnowledgePage({
   systemPaths: _systemPaths,
   onOpenNote,
   onChatWithKnowledgeFiles,
+  sharedEntry = null,
+  sharedLoading = false,
+  sharedError = null,
 }: Props) {
   const config = getModulePageConfig('knowledge')
   const [settingsTarget, setSettingsTarget] = useState<SettingsTarget>(null)
@@ -474,6 +482,10 @@ export function KnowledgePage({
           ? activeId === DEFAULT_LOCAL_FILES_FOLDER_ID
             ? '默认本地文件'
             : active?.name
+          : section === 'shared'
+            ? sharedEntry
+              ? `[${sharedEntry.workspaceName}] ${sharedEntry.resource.name}`
+              : undefined
           : section === 'file-tools'
             ? activeId === FILE_REGISTRY_TOOL_ID
               ? '文件注册表'
@@ -659,7 +671,9 @@ export function KnowledgePage({
     <main className="tm-main">
       <KnowledgePageHeader
         sectionLabel={sectionLabel}
-        kbName={isFileDedupView ? undefined : breadcrumbItemName}
+        kbName={
+          section === 'shared' || isFileDedupView ? undefined : breadcrumbItemName
+        }
         settingsEnabled={settingsEnabled}
         onOpenSettings={handleOpenSettings}
         dedupMode={isFileDedupView}
@@ -698,6 +712,27 @@ export function KnowledgePage({
           </div>
         ) : section === 'local' || section === 'network' || section === 'local-files' ? (
           renderKnowledgeSectionContent()
+        ) : section === 'shared' ? (
+          sharedLoading && !sharedEntry ? (
+            <div className="tm-module-empty">
+              <h2 className="tm-module-empty-title">共享知识库</h2>
+              <p className="tm-module-empty-hint">加载中…</p>
+            </div>
+          ) : sharedError ? (
+            <div className="tm-error-bar" role="alert">
+              {sharedError}
+            </div>
+          ) : sharedEntry ? (
+            <SharedKnowledgePanel
+              entry={sharedEntry}
+              onOpenError={(message) => documents.setError(message)}
+            />
+          ) : (
+            <div className="tm-module-empty">
+              <h2 className="tm-module-empty-title">共享知识库</h2>
+              <p className="tm-module-empty-hint">请从左侧选择一个群组共享的知识库</p>
+            </div>
+          )
         ) : section === 'file-tools' ? (
           workspaceId ? (
             isFileRegistryView ? (

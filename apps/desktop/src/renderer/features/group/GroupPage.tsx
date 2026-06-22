@@ -79,6 +79,8 @@ interface Props {
   ) => void | Promise<void>
   onSaveGroupNoteAsCopy?: (request: SaveGroupNoteAsCopyRequest) => void | Promise<void>
   onOpenGroupAgentSession?: (request: OpenGroupAgentSessionRequest) => void | Promise<void>
+  onReloadAssistants?: () => void | Promise<void>
+  onSyncGroupNoteLock?: (noteId: string, locked: boolean) => void
   messageSettings: MessageSettings
   spellCheckEnabled?: boolean
   defaultFilePath?: string | null
@@ -102,6 +104,8 @@ export function GroupPage({
   onOpenGroupKnowledgeMarkdown,
   onSaveGroupNoteAsCopy,
   onOpenGroupAgentSession,
+  onReloadAssistants,
+  onSyncGroupNoteLock,
   messageSettings,
   spellCheckEnabled = true,
   defaultFilePath = null,
@@ -224,6 +228,7 @@ export function GroupPage({
             canWriteWorkspace={detail.canWriteWorkspace}
             selfMemberId={detail.selfMember?.id ?? null}
             onOpenGroupAgentSession={onOpenGroupAgentSession}
+            onReloadAssistants={onReloadAssistants}
           />
         )
       case 'notes':
@@ -240,6 +245,7 @@ export function GroupPage({
             selfMemberRole={detail.selfMember?.role ?? null}
             onOpenGroupNote={onOpenGroupNote}
             onSaveGroupNoteAsCopy={onSaveGroupNoteAsCopy}
+            onSyncGroupNoteLock={onSyncGroupNoteLock}
           />
         )
       case 'workflow':

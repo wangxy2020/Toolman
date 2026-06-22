@@ -1,5 +1,6 @@
 export const P2P_FILE_PROTOCOL_VERSION = 1
-export const P2P_BLOB_CHUNK_SIZE = 256 * 1024
+/** Raw bytes per chunk; base64 + JSON + encryption must stay under WebRTC SCTP max (~64KB). */
+export const P2P_BLOB_CHUNK_SIZE = 48 * 1024
 
 export type FileChannelMessage =
   | {

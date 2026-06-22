@@ -19,6 +19,8 @@ const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 const POLL_INTERVAL_MS = 2_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let ownerReconcileTimer: ReturnType<typeof setInterval> | null = null
+const OWNER_RECONCILE_INTERVAL_MS = 6_000
 const knownNodes = new Map<string, DiscoveredNode>()
 
 function getLocalUserName(): string {
@@ -78,6 +80,20 @@ function pollDiscoveredNodes(): void {
   syncPushEvents(nodes)
 }
 
+function stopOwnerReconcileLoop(): void {
+  if (ownerReconcileTimer) {
+    clearInterval(ownerReconcileTimer)
+    ownerReconcileTimer = null
+  }
+}
+
+function startOwnerReconcileLoop(): void {
+  if (ownerReconcileTimer) return
+  ownerReconcileTimer = setInterval(() => {
+    void import('./p2p-member.service').then((module) => module.runOwnerPeerReconcileTick())
+  }, OWNER_RECONCILE_INTERVAL_MS)
+}
+
 function startPolling(): void {
   stopPolling()
   pollDiscoveredNodes()
@@ -103,10 +119,12 @@ export function startP2pDiscovery(): void {
     appVersion: version,
   })
   startPolling()
+  startOwnerReconcileLoop()
 }
 
 export function stopP2pDiscovery(): void {
   stopPolling()
+  stopOwnerReconcileLoop()
   P2pBridge.discoveryStop()
 }
 
