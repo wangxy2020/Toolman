@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { GroupPanelHeader } from './GroupPanelHeader'
+import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
 
 interface Props {
@@ -16,6 +17,7 @@ export function GroupWorkflowPanel({ workspaceName }: Props) {
       <GroupPanelHeader
         title="群组工作流"
         subtitle={`${workspaceName} · ${sharedCount} 个工作流`}
+        actions={<GroupPanelRefreshButton onRefresh={() => {}} />}
       />
 
       {error ? <div className="tm-error-bar">{error}</div> : null}

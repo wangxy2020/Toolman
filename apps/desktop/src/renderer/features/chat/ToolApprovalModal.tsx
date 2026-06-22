@@ -102,7 +102,7 @@ export function ToolApprovalModal() {
           ) : (
             <>
               <p className="tm-knowledge-detail-hint">
-                当前权限模式下，写入或执行类工具需要您确认。普通模式下读取类工具会自动放行。
+                当前权限模式下，写入或执行类工具需要您确认。普通模式下读取类工具会自动放行；点击「允许」后，本次会话内后续写入/执行类工具将自动执行。
               </p>
               {meta ? <p className="tm-tool-approval-tool-name">{meta.title}</p> : null}
               {meta?.description ? (

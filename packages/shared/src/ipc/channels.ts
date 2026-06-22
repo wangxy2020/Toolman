@@ -129,6 +129,7 @@ export enum IpcChannel {
   MessageAbort = 'agent:message:abort',
   MessageAbortSession = 'agent:message:abort-session',
   MessageStream = 'agent:message:stream',
+  MessageSessionReload = 'agent:message:session-reload',
   AgentToolApprovalRequest = 'agent:tool-approval:request',
   AgentToolApprovalRespond = 'agent:tool-approval:respond',
 
@@ -325,6 +326,7 @@ export type P2pPushChannel = (typeof P2P_PUSH_CHANNELS)[number]
 
 export const SUBSCRIBE_CHANNELS = [
   IpcChannel.MessageStream,
+  IpcChannel.MessageSessionReload,
   IpcChannel.KnowledgeIngestStream,
 ] as const
 

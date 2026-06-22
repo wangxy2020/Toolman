@@ -10,20 +10,28 @@ import {
 import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { getMessageRepository, getSessionRepository } from '../../db/repos'
+import { blobExists } from '../blob.service'
 import { sendMessage } from '../agent.service'
 import { listMessages } from '../agent.service'
-import { broadcastStreamEvent, addStreamRelayListener } from '../stream-broadcast'
+import {
+  broadcastSessionMessagesReload,
+  broadcastStreamEvent,
+  addStreamRelayListener,
+} from '../stream-broadcast'
 import { MessageStreamBuffers } from '../message-stream-buffers'
-import { P2pBridge } from './p2p-bridge'
 import { ensurePeerReadyForWorkspace } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { readAgentShareMetadata } from './agent-share.service'
 import { assertPeerTrustedForSync } from './p2p-peer.service'
+import { fetchBlobFromPeers } from './p2p-blob-transfer.service'
 import { registerP2pSyncHandlers } from './p2p-sync-lifecycle'
-import { encodeReplicationMessage } from './p2p-sync-protocol'
+import {
+  measureAgentRelayEnvelopeBytes,
+  P2P_EVENTS_SAFE_PAYLOAD_BYTES,
+  sendAgentRelayOnEventsChannel,
+} from './p2p-events-channel'
 
 export const AGENT_RELAY_CHANNEL = 'agent-relay'
-const P2P_EVENTS_CHANNEL = 'events'
 
 const RELAY_TIMEOUT_MS = 120_000
 
@@ -33,6 +41,14 @@ type PendingResolver = {
 }
 
 const pendingRequests = new Map<string, PendingResolver>()
+
+type FetchOkAssembly = {
+  partCount: number
+  title: string
+  parts: Map<number, Message[]>
+}
+
+const fetchOkAssemblies = new Map<string, FetchOkAssembly>()
 
 type ActiveOwnerRelay = {
   memberDeviceId: string
@@ -62,14 +78,108 @@ async function sendRelayMessage(
   peerDeviceId: string,
   message: AgentRelayMessage,
 ): Promise<void> {
-  await P2pBridge.connectionSend(
-    peerDeviceId,
-    P2P_EVENTS_CHANNEL,
-    encodeReplicationMessage({
-      type: 'agent-relay.message',
-      relay: message,
-    }),
+  await sendAgentRelayOnEventsChannel(peerDeviceId, message)
+}
+
+function slimStreamEventForRelay(
+  event: MessageStreamEvent,
+  requestId: string,
+): MessageStreamEvent {
+  const bytes = measureAgentRelayEnvelopeBytes({
+    v: 1,
+    type: 'stream',
+    requestId,
+    event,
+  })
+  if (bytes <= P2P_EVENTS_SAFE_PAYLOAD_BYTES) return event
+
+  if (event.type === 'message.done' && event.contentBlocks) {
+    console.warn(
+      `[p2p] agent relay stream trimmed: event=message.done bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`,
+    )
+    return { ...event, contentBlocks: undefined }
+  }
+
+  console.warn(
+    `[p2p] agent relay stream oversize: event=${event.type} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`,
   )
+  return event
+}
+
+function splitFetchOkParts(
+  requestId: string,
+  title: string,
+  messages: Message[],
+): Extract<AgentRelayMessage, { type: 'fetch_ok_part' }>[] {
+  const chunks: Message[][] = []
+  let current: Message[] = []
+
+  for (const message of messages) {
+    const candidate = [...current, message]
+    const probe: AgentRelayMessage = {
+      v: 1,
+      type: 'fetch_ok_part',
+      requestId,
+      partIndex: chunks.length,
+      partCount: 1,
+      title: chunks.length === 0 ? title : undefined,
+      messages: candidate,
+    }
+    if (
+      current.length > 0 &&
+      measureAgentRelayEnvelopeBytes(probe) > P2P_EVENTS_SAFE_PAYLOAD_BYTES
+    ) {
+      chunks.push(current)
+      current = [message]
+    } else {
+      current = candidate
+    }
+  }
+
+  if (current.length > 0) {
+    chunks.push(current)
+  }
+  if (chunks.length === 0) {
+    chunks.push([])
+  }
+
+  const partCount = chunks.length
+  return chunks.map((chunk, index) => ({
+    v: 1,
+    type: 'fetch_ok_part' as const,
+    requestId,
+    partIndex: index,
+    partCount,
+    title: index === 0 ? title : undefined,
+    messages: chunk,
+  }))
+}
+
+async function sendFetchOkResponse(
+  peerDeviceId: string,
+  requestId: string,
+  title: string,
+  messages: Message[],
+): Promise<void> {
+  const single: AgentRelayMessage = {
+    v: 1,
+    type: 'fetch_ok',
+    requestId,
+    title,
+    messages,
+  }
+  if (measureAgentRelayEnvelopeBytes(single) <= P2P_EVENTS_SAFE_PAYLOAD_BYTES) {
+    await sendRelayMessage(peerDeviceId, single)
+    return
+  }
+
+  const parts = splitFetchOkParts(requestId, title, messages)
+  console.warn(
+    `[p2p] agent relay fetch_ok chunked: requestId=${requestId} messages=${messages.length} parts=${parts.length}`,
+  )
+  for (const part of parts) {
+    await sendRelayMessage(peerDeviceId, part)
+  }
 }
 
 async function ensurePeerConnected(peerDeviceId: string, p2pWorkspaceId: string): Promise<void> {
@@ -80,6 +190,7 @@ function waitForRelayResponse(requestId: string): Promise<AgentRelayMessage> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId)
+      fetchOkAssemblies.delete(requestId)
       reject(new Error('群组智能体请求超时'))
     }, RELAY_TIMEOUT_MS)
 
@@ -87,11 +198,13 @@ function waitForRelayResponse(requestId: string): Promise<AgentRelayMessage> {
       resolve: (message) => {
         clearTimeout(timer)
         pendingRequests.delete(requestId)
+        fetchOkAssemblies.delete(requestId)
         resolve(message)
       },
       reject: (error) => {
         clearTimeout(timer)
         pendingRequests.delete(requestId)
+        fetchOkAssemblies.delete(requestId)
         reject(error)
       },
     })
@@ -99,6 +212,42 @@ function waitForRelayResponse(requestId: string): Promise<AgentRelayMessage> {
 }
 
 function dispatchPendingResponse(message: AgentRelayMessage): void {
+  if (message.type === 'fetch_ok_part') {
+    const pending = pendingRequests.get(message.requestId)
+    if (!pending) return
+
+    let assembly = fetchOkAssemblies.get(message.requestId)
+    if (!assembly) {
+      assembly = {
+        partCount: message.partCount,
+        title: message.title ?? '',
+        parts: new Map(),
+      }
+      fetchOkAssemblies.set(message.requestId, assembly)
+    }
+
+    assembly.parts.set(message.partIndex, message.messages)
+    if (message.title) {
+      assembly.title = message.title
+    }
+
+    if (assembly.parts.size < message.partCount) return
+
+    const merged: Message[] = []
+    for (let index = 0; index < message.partCount; index += 1) {
+      merged.push(...(assembly.parts.get(index) ?? []))
+    }
+
+    pending.resolve({
+      v: 1,
+      type: 'fetch_ok',
+      requestId: message.requestId,
+      title: assembly.title,
+      messages: merged,
+    })
+    return
+  }
+
   const pending = pendingRequests.get(message.requestId)
   if (!pending) return
   if (message.type === 'fetch_err' || message.type === 'send_err') {
@@ -155,6 +304,28 @@ function remapStreamEventForMember(
   }
 }
 
+async function ensureRelayContentBlobs(
+  peerDeviceId: string,
+  p2pWorkspaceId: string,
+  contentBlocks: ContentBlock[],
+): Promise<void> {
+  for (const block of contentBlocks) {
+    if (block.type !== 'file' && block.type !== 'image') continue
+
+    const hash = block.blobHash?.trim()
+    if (!hash || blobExists(hash)) continue
+
+    const label = block.type === 'file' ? block.name || '附件' : '图片'
+    console.log(
+      `[p2p] agent relay fetching blob: hash=${hash.slice(0, 12)}… peer=${peerDeviceId}`,
+    )
+    const ok = await fetchBlobFromPeers(p2pWorkspaceId, hash, block.mimeType, peerDeviceId)
+    if (!ok) {
+      throw new Error(`附件「${label}」未能从群组成员同步，请让对方重新发送`)
+    }
+  }
+}
+
 export async function fetchRemoteSessionHistory(input: {
   ownerDeviceId: string
   p2pWorkspaceId: string
@@ -198,6 +369,10 @@ export async function relayProxySendMessage(input: {
 
   await assertPeerTrustedForSync(input.proxy.p2pWorkspaceId, input.proxy.ownerDeviceId)
   await ensurePeerConnected(input.proxy.ownerDeviceId, input.proxy.p2pWorkspaceId)
+
+  console.log(
+    `[p2p] agent relay send start: ownerDeviceId=${input.proxy.ownerDeviceId} sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`,
+  )
 
   const requestId = randomUUID()
   const responsePromise = waitForRelayResponse(requestId)
@@ -252,13 +427,7 @@ async function handleOwnerFetch(
       status: item.status === 'streaming' ? 'completed' : item.status,
     })) as Message[]
 
-    await sendRelayMessage(peerDeviceId, {
-      v: 1,
-      type: 'fetch_ok',
-      requestId: message.requestId,
-      title: session.title,
-      messages,
-    })
+    await sendFetchOkResponse(peerDeviceId, message.requestId, session.title, messages)
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : '拉取话题历史失败'
     await sendRelayMessage(peerDeviceId, {
@@ -274,6 +443,9 @@ async function handleOwnerSend(
   peerDeviceId: string,
   message: Extract<AgentRelayMessage, { type: 'send' }>,
 ): Promise<void> {
+  console.log(
+    `[p2p] agent relay send received: peer=${peerDeviceId} sourceSessionId=${message.sourceSessionId}`,
+  )
   try {
     assertRelayAccess(
       message.p2pWorkspaceId,
@@ -283,6 +455,8 @@ async function handleOwnerSend(
       true,
     )
 
+    await ensureRelayContentBlobs(peerDeviceId, message.p2pWorkspaceId, message.contentBlocks)
+
     activeOwnerRelays.get(message.requestId)?.unsubscribe()
     activeOwnerRelays.delete(message.requestId)
 
@@ -290,7 +464,8 @@ async function handleOwnerSend(
     const bufferedEvents: MessageStreamEvent[] = []
 
     const forwardStream = (event: MessageStreamEvent) => {
-      const remapped = remapStreamEventForMember(event, {
+      const relayEvent = slimStreamEventForRelay(event, message.requestId)
+      const remapped = remapStreamEventForMember(relayEvent, {
         sessionId: message.memberSessionId,
         messageId: message.memberAssistantMessageId,
       })
@@ -300,7 +475,12 @@ async function handleOwnerSend(
         type: 'stream',
         requestId: message.requestId,
         event: remapped,
-      }).catch(() => undefined)
+      }).catch((error) => {
+        const errMessage = error instanceof Error ? error.message : String(error)
+        console.error(
+          `[p2p] agent relay stream forward failed: requestId=${message.requestId} event=${event.type} error=${errMessage}`,
+        )
+      })
 
       if (event.type === 'message.done' || event.type === 'message.error') {
         activeOwnerRelays.get(message.requestId)?.unsubscribe()
@@ -348,6 +528,11 @@ async function handleOwnerSend(
       throw new Error('生成回复失败')
     }
 
+    console.log(
+      `[p2p] agent relay owner send ok: sourceSessionId=${message.sourceSessionId} userMessageId=${result.userMessageId} assistantMessageId=${ownerAssistantMessageId}`,
+    )
+    broadcastSessionMessagesReload(message.sourceSessionId)
+
     for (const event of bufferedEvents) {
       if (event.messageId === ownerAssistantMessageId) {
         forwardStream(event)
@@ -363,6 +548,9 @@ async function handleOwnerSend(
     activeOwnerRelays.get(message.requestId)?.unsubscribe()
     activeOwnerRelays.delete(message.requestId)
     const errMessage = error instanceof Error ? error.message : '发送消息失败'
+    console.error(
+      `[p2p] agent relay owner send failed: sourceSessionId=${message.sourceSessionId} error=${errMessage}`,
+    )
     await sendRelayMessage(peerDeviceId, {
       v: 1,
       type: 'send_err',
@@ -447,6 +635,7 @@ export async function handleP2pAgentRelayMessage(
       await handleOwnerSend(peerDeviceId, message)
       return
     case 'fetch_ok':
+    case 'fetch_ok_part':
     case 'fetch_err':
     case 'send_ok':
     case 'send_err':

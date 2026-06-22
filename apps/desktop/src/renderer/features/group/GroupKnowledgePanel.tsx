@@ -5,6 +5,7 @@ import { GroupKnowledgePickerModal } from './GroupKnowledgePickerModal'
 import { GroupFileContextMenu } from './GroupFileList'
 import { GroupKnowledgeFileActionMenu } from './GroupKnowledgeFileActionMenu'
 import { GroupPanelHeader } from './GroupPanelHeader'
+import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupSharedKnowledgeSection } from './GroupSharedKnowledgeSection'
 import { saveGroupKnowledgeFileAsCopy } from './group-knowledge-file-save'
 import {
@@ -349,6 +350,12 @@ export function GroupKnowledgePanel({
       <GroupPanelHeader
         title="群组知识库"
         subtitle={`${workspaceName} · ${p2pKnowledge.sharedResources.length} 个知识库`}
+        actions={
+          <GroupPanelRefreshButton
+            loading={p2pKnowledge.loading}
+            onRefresh={() => void p2pKnowledge.load()}
+          />
+        }
       />
 
       {p2pKnowledge.error ? <div className="tm-error-bar">{p2pKnowledge.error}</div> : null}

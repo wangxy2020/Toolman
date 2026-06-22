@@ -3,7 +3,6 @@ import type { AuthFeature, Assistant, KnowledgeBase, P2pWorkspace, Session } fro
 import {
   IconActivity,
   IconAgent,
-  IconFolder,
   IconKnowledge,
   IconMessageBoard,
   IconNotes,
@@ -14,7 +13,6 @@ import {
 import { GroupMemberChatPanel } from './GroupMemberChatPanel'
 import { GroupMembersMenu } from './GroupMembersMenu'
 import { GroupActivityLog } from './GroupActivityLog'
-import { GroupFilesPanel } from './GroupFilesPanel'
 import { GroupKnowledgePanel } from './GroupKnowledgePanel'
 import { GroupAgentsPanel } from './GroupAgentsPanel'
 import { GroupNotesPanel } from './GroupNotesPanel'
@@ -46,7 +44,6 @@ const GROUP_NESTED_SCROLL_ACTIONS = new Set([
   'knowledge',
   'notes',
   'workflow',
-  'files',
 ])
 
 const HEADER_ACTIONS: HeaderAction[] = [
@@ -56,7 +53,6 @@ const HEADER_ACTIONS: HeaderAction[] = [
   { key: 'knowledge', icon: <IconKnowledge size={16} />, title: '群组知识库' },
   { key: 'notes', icon: <IconNotes size={16} />, title: '群组笔记' },
   { key: 'workflow', icon: <IconWorkflow size={16} />, title: '群组工作流' },
-  { key: 'files', icon: <IconFolder size={16} />, title: '群组文件' },
   { key: 'activity', icon: <IconActivity size={16} />, title: '群组活动记录' },
 ]
 
@@ -137,7 +133,6 @@ export function GroupPage({
   useEffect(() => {
     if (
       effectiveAction === 'messages' ||
-      effectiveAction === 'files' ||
       effectiveAction === 'knowledge' ||
       effectiveAction === 'agents' ||
       effectiveAction === 'notes'
@@ -203,17 +198,6 @@ export function GroupPage({
             onOpenGroupNote={onOpenGroupNote}
             onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
             onSaveGroupNoteAsCopy={onSaveGroupNoteAsCopy}
-          />
-        )
-      case 'files':
-        return (
-          <GroupFilesPanel
-            workspaceId={workspace.id}
-            workspaceName={workspaceName}
-            canManageGroupFiles={detail.canManageMembers}
-            canWriteWorkspace={detail.canWriteWorkspace}
-            selfMemberId={detail.selfMember?.id ?? null}
-            onOpenNote={onOpenNote}
           />
         )
       case 'agents':

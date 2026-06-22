@@ -583,6 +583,16 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
   }, [session.activeSessionId])
 
   useEffect(() => {
+    const unsubscribe = window.api.subscribe(IpcChannel.MessageSessionReload, (payload) => {
+      const event = payload as { sessionId?: string }
+      if (!event.sessionId || event.sessionId !== session.activeSessionId) return
+      void loadMessages(event.sessionId)
+      void session.loadSessions()
+    })
+    return unsubscribe
+  }, [session.activeSessionId, session.loadSessions, loadMessages])
+
+  useEffect(() => {
     const unsubscribe = window.api.subscribe(IpcChannel.MessageStream, (payload) => {
       const event = payload as MessageStreamEvent
       if (session.activeSessionId && event.sessionId !== session.activeSessionId) return

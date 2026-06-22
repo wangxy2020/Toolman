@@ -17,7 +17,7 @@ import {
   getDefaultToolStates,
   type PermissionMode,
 } from './agent-settings-constants'
-import { buildModelOptions, modelNameFromId, providerNameFromModelId } from './model-utils'
+import { buildModelOptions, formatModelDisplayLabel } from './model-utils'
 import { getEffectiveWorkingDirectory, getWorkspaceFolderPath } from './workspace-utils'
 import { useSystemPaths } from './useSystemPaths'
 import {
@@ -146,8 +146,7 @@ export function AgentSettingsModal({
 
   const modelOptions = useMemo(() => buildModelOptions(providers), [providers])
   const sharedModelLabel = useMemo(
-    () =>
-      `${modelNameFromId(displayModelId)} | ${providerNameFromModelId(displayModelId, providers)}`,
+    () => formatModelDisplayLabel(displayModelId, providers),
     [displayModelId, providers],
   )
 
@@ -364,7 +363,7 @@ export function AgentSettingsModal({
                     >
                       {modelOptions.map((opt) => (
                         <option key={opt.modelId} value={opt.modelId}>
-                          {`${modelNameFromId(opt.modelId)} | ${providerNameFromModelId(opt.modelId, providers)}`}
+                          {formatModelDisplayLabel(opt.modelId, providers)}
                         </option>
                       ))}
                     </select>

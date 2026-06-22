@@ -38,6 +38,11 @@ import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-syn
 import { maybeAutoSnapshot } from './p2p-snapshot.service'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
 import {
+  describeReplicationMessage,
+  sendEventsBatchChunked,
+  sendReplicationMessageOnEventsChannel,
+} from './p2p-events-channel'
+import {
   encodeReplicationMessage,
   parseReplicationMessage,
   wireToRemoteInput,
@@ -100,7 +105,7 @@ async function sendReplicationMessage(
   peerDeviceId: string,
   message: Parameters<typeof encodeReplicationMessage>[0],
 ): Promise<void> {
-  await P2pBridge.connectionSend(peerDeviceId, 'events', encodeReplicationMessage(message))
+  await sendReplicationMessageOnEventsChannel(peerDeviceId, message)
 }
 
 async function sendEventsBatch(
@@ -111,11 +116,8 @@ async function sendEventsBatch(
   const events = listWorkspaceEventsSince(workspaceId, sinceSeq)
   if (events.length === 0) return 0
 
-  await sendReplicationMessage(peerDeviceId, {
-    type: 'events.batch',
-    workspaceId,
-    events: events.map(workspaceEventToWire),
-  })
+  const wireEvents = events.map(workspaceEventToWire)
+  await sendEventsBatchChunked(peerDeviceId, workspaceId, wireEvents)
 
   const lastSeq = events[events.length - 1]?.seq ?? sinceSeq
   getCursorRepo().updateSentSeq(workspaceId, peerDeviceId, lastSeq)
@@ -468,8 +470,10 @@ export async function processP2pIncomingMessages(): Promise<void> {
     try {
       await handleReplicationMessage(item.peerDeviceId, item.data)
     } catch (error) {
+      const parsed = parseReplicationMessage(item.data)
+      const label = parsed ? describeReplicationMessage(parsed) : 'unknown'
       const errMessage = error instanceof Error ? error.message : 'Failed to process replication message'
-      console.error(`[p2p] replication message failed: ${errMessage}`)
+      console.error(`[p2p] replication message failed: ${label} error=${errMessage}`)
     }
   }
 }
@@ -567,18 +571,13 @@ export async function replicateLocalP2pEvent(event: WorkspaceEvent): Promise<voi
 
   if (peers.length === 0) return
 
-  const message = encodeReplicationMessage({
-    type: 'events.batch',
-    workspaceId: event.workspaceId,
-    events: [workspaceEventToWire(event)],
-  })
-
+  const wireEvent = workspaceEventToWire(event)
   await Promise.all(
     peers.map(async (peer) => {
       if (!isPeerTrusted(event.workspaceId, peer.peerDeviceId)) return
       try {
         await ensurePeerReadyForWorkspace(peer.peerDeviceId, event.workspaceId)
-        await P2pBridge.connectionSend(peer.peerDeviceId, 'events', message)
+        await sendEventsBatchChunked(peer.peerDeviceId, event.workspaceId, [wireEvent])
         getCursorRepo().updateSentSeq(event.workspaceId, peer.peerDeviceId, event.seq)
         markP2pEventSynced(event.eventId)
       } catch (error) {

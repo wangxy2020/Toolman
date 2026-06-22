@@ -89,6 +89,16 @@ export function providerNameFromModelId(modelId: string, providers: Provider[]):
   return providers.find((p) => p.id === providerId)?.name ?? ''
 }
 
+export function formatModelDisplayLabel(
+  modelId: string | null | undefined,
+  providers: Provider[],
+): string {
+  const modelName = modelNameFromId(modelId)
+  if (!modelName) return ''
+  const providerName = modelId ? providerNameFromModelId(modelId, providers) : ''
+  return providerName ? `${modelName} | ${providerName}` : modelName
+}
+
 export function normalizeModelIds(
   modelIds: string[],
   providers: Provider[],

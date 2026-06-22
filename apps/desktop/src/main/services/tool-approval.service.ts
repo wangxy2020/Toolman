@@ -26,6 +26,10 @@ export function clearToolApprovalScopes(): void {
   grantedScopes.clear()
 }
 
+export function buildSessionToolApprovalScopeKey(sessionId: string): string {
+  return `session-tools:${sessionId}`
+}
+
 function broadcastApprovalRequest(payload: {
   requestId: string
   toolName: string

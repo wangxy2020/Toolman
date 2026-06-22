@@ -47,6 +47,16 @@ export const AgentRelayFetchOkMessageSchema = z.object({
   messages: z.array(MessageSchema),
 })
 
+export const AgentRelayFetchOkPartMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal('fetch_ok_part'),
+  requestId: z.string().min(1),
+  partIndex: z.number().int().nonnegative(),
+  partCount: z.number().int().positive(),
+  title: z.string().optional(),
+  messages: z.array(MessageSchema),
+})
+
 export const AgentRelayFetchErrMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal('fetch_err'),
@@ -91,6 +101,7 @@ export const AgentRelayStreamMessageSchema = z.object({
 export const AgentRelayMessageSchema = z.discriminatedUnion('type', [
   AgentRelayFetchMessageSchema,
   AgentRelayFetchOkMessageSchema,
+  AgentRelayFetchOkPartMessageSchema,
   AgentRelayFetchErrMessageSchema,
   AgentRelaySendMessageSchema,
   AgentRelaySendOkMessageSchema,

@@ -126,7 +126,7 @@ export function MessageInput({
   defaultFilePath,
   translationLanguages,
   webSearchEnabled = false,
-  kbEnabled = true,
+  kbEnabled = false,
   spellCheckEnabled = true,
   sendShortcut = 'enter',
   onCreateSession,

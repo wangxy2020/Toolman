@@ -1,5 +1,5 @@
 import type { WorkspaceEvent } from '@toolman/shared'
-import { IconActivity, IconRefresh } from '../../components/icons'
+import { IconActivity } from '../../components/icons'
 import {
   formatAbsoluteTime,
   formatP2pEventMessage,
@@ -7,6 +7,8 @@ import {
   P2P_RESOURCE_LABELS,
   shortDeviceId,
 } from './formatP2pEventMessage'
+import { GroupPanelHeader } from './GroupPanelHeader'
+import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 
 interface Props {
   workspaceName: string
@@ -25,26 +27,15 @@ export function GroupActivityLog({
 }: Props) {
   return (
     <div className="tm-group-activity-panel">
-      <div className="tm-group-member-panel-header">
-        <div>
-          <h2 className="tm-group-member-panel-title">群组活动记录</h2>
-          <p className="tm-group-member-panel-subtitle">
-            {workspaceName} · {events.length} 条记录
-          </p>
-        </div>
-        {onRefresh && (
-          <button
-            type="button"
-            className="tm-btn tm-btn--secondary"
-            onClick={onRefresh}
-            disabled={loading}
-            title="刷新活动记录"
-          >
-            <IconRefresh size={14} />
-            刷新
-          </button>
-        )}
-      </div>
+      <GroupPanelHeader
+        title="群组活动记录"
+        subtitle={`${workspaceName} · ${events.length} 条记录`}
+        actions={
+          onRefresh ? (
+            <GroupPanelRefreshButton loading={loading} onRefresh={onRefresh} />
+          ) : null
+        }
+      />
 
       {error && <div className="tm-error-bar">{error}</div>}
 

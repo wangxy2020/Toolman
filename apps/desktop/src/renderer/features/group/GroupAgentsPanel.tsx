@@ -8,6 +8,7 @@ import {
 } from './GroupAgentSessionActionMenu'
 import { GroupFileContextMenu } from './GroupFileList'
 import { GroupPanelHeader } from './GroupPanelHeader'
+import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupSharedAgentSection } from './GroupSharedAgentSection'
 import { agentSelectionKey, parseAgentSelectionKey } from './group-agent-selection'
 import { getAgentSessionPermission, isShareableGroupAgentSource } from './group-agent-utils'
@@ -388,7 +389,7 @@ export function GroupAgentsPanel({
         sharedAgentName: resource.name,
         permission: getAgentSessionPermission(resource, session.id),
         ownerMemberId: resource.sharedBy,
-        sourceAssistantId: resource.id,
+        sourceAssistantId: assistant?.id ?? resource.localResourceId ?? resource.id,
         referencedModelId: resource.sharedModelId ?? assistant?.modelId ?? 'openai/gpt-4o-mini',
         isOwner,
         localSessionId: isOwner ? session.id : undefined,
@@ -402,6 +403,12 @@ export function GroupAgentsPanel({
       <GroupPanelHeader
         title="群组智能体"
         subtitle={`${workspaceName} · ${p2pAgents.sharedResources.length} 个智能体`}
+        actions={
+          <GroupPanelRefreshButton
+            loading={p2pAgents.loading}
+            onRefresh={() => void p2pAgents.load()}
+          />
+        }
       />
 
       {p2pAgents.error ? <div className="tm-error-bar">{p2pAgents.error}</div> : null}

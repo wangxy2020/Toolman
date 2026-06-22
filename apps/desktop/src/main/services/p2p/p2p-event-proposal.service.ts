@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceEvent } from '@toolman/shared'
-import { P2pBridge } from './p2p-bridge'
 import { ensurePeerReadyForWorkspace } from './p2p-connection.service'
 import type { AppendP2pEventInput } from './p2p-event.service'
 import {
@@ -9,11 +8,8 @@ import {
 } from './p2p-sync-sequencing'
 import { getKnownP2pConnections } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
-import {
-  encodeReplicationMessage,
-  workspaceEventToWire,
-  type ReplicationMessage,
-} from './p2p-sync-protocol'
+import { sendReplicationMessageOnEventsChannel } from './p2p-events-channel'
+import { workspaceEventToWire, type ReplicationMessage } from './p2p-sync-protocol'
 
 const PROPOSAL_TIMEOUT_MS = 20_000
 
@@ -21,7 +17,7 @@ async function sendReplicationMessage(
   peerDeviceId: string,
   message: ReplicationMessage,
 ): Promise<void> {
-  await P2pBridge.connectionSend(peerDeviceId, 'events', encodeReplicationMessage(message))
+  await sendReplicationMessageOnEventsChannel(peerDeviceId, message)
 }
 
 interface PendingProposal {

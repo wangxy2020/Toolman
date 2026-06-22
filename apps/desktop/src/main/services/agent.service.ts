@@ -41,8 +41,14 @@ import {
   loadSoulMd,
   resolveEffectivePermissionMode,
 } from './agent-runtime.service'
-import { evaluateToolPermission, type PermissionMode } from './permission.service'
-import { requestToolApproval, grantToolApprovalScope, clearToolApprovalScope } from './tool-approval.service'
+import { evaluateToolPermission, isDeleteTool, type PermissionMode } from './permission.service'
+import {
+  requestToolApproval,
+  grantToolApprovalScope,
+  clearToolApprovalScope,
+  hasToolApprovalScope,
+  buildSessionToolApprovalScopeKey,
+} from './tool-approval.service'
 import { listRelevantMemories } from './memory.service'
 import { searchWeb } from './web-search.service'
 import { resolveToolDefinitions } from './tool-registry'
@@ -440,7 +446,7 @@ async function buildRuntimeSystemHints(options: {
     }
   }
 
-  if (!hasInlineAttachment && options.sendOptions?.kbEnabled !== false && options.runtime.workspaceId) {
+  if (!hasInlineAttachment && options.sendOptions?.kbEnabled === true && options.runtime.workspaceId) {
     const kbIds = resolveEffectiveKbIds({
       workspaceId: options.runtime.workspaceId,
       assistant: options.assistant,
@@ -550,18 +556,32 @@ export async function sendMessage(input: unknown) {
     proxyMeta = resolveProxyMetaForSend(session.metadataJson, assistant)
     if (proxyMeta) {
       persistRepairedSessionProxyMetadata(session.id, session.metadataJson, proxyMeta)
+    } else if (assistant?.parameters?.p2pGroupProxy) {
+      console.warn(
+        `[p2p] group proxy assistant without relay metadata: sessionId=${session.id} assistantId=${assistant.id}`,
+      )
     }
   }
 
+  const localDeviceId = getP2pDeviceInfo().deviceId
   const isRemoteProxy =
     !isRelayExecution &&
     proxyMeta &&
-    proxyMeta.ownerDeviceId !== getP2pDeviceInfo().deviceId
+    proxyMeta.ownerDeviceId !== localDeviceId
+
+  if (assistant?.parameters?.p2pGroupProxy && !isRelayExecution && !isRemoteProxy) {
+    console.warn(
+      `[p2p] group proxy falling back to local send: sessionId=${session.id} ownerDeviceId=${proxyMeta?.ownerDeviceId ?? 'none'} localDeviceId=${localDeviceId}`,
+    )
+  }
 
   if (isRemoteProxy) {
     if (proxyMeta!.permission === 'read') {
       throw new Error('该话题为只读')
     }
+    console.log(
+      `[p2p] group proxy remote send: sessionId=${data.sessionId} ownerDeviceId=${proxyMeta!.ownerDeviceId} sourceSessionId=${proxyMeta!.sourceSessionId}`,
+    )
   }
 
   const runtime = parseAssistantRuntime(assistant, session.workspaceId)
@@ -570,7 +590,7 @@ export async function sendMessage(input: unknown) {
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
   const memoryEnabled = data.options?.memoryEnabled ?? false
-  const kbEnabled = data.options?.kbEnabled ?? true
+  const kbEnabled = data.options?.kbEnabled ?? false
 
   const modelIds =
     data.modelIds ??
@@ -746,7 +766,7 @@ export async function regenerateMessage(input: unknown) {
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
   const memoryEnabled = data.options?.memoryEnabled ?? false
-  const kbEnabled = data.options?.kbEnabled ?? true
+  const kbEnabled = data.options?.kbEnabled ?? false
 
   const modelIds =
     data.modelIds ??
@@ -847,7 +867,7 @@ export async function editUserMessage(input: unknown) {
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
   const memoryEnabled = data.options?.memoryEnabled ?? false
-  const kbEnabled = data.options?.kbEnabled ?? true
+  const kbEnabled = data.options?.kbEnabled ?? false
 
   const modelIds =
     data.modelIds ?? (assistant ? [assistant.modelId] : [])
@@ -963,6 +983,7 @@ async function runGeneration(opts: {
   const controller = new AbortController()
   abortControllers.set(assistantMessageId, controller)
   const docxApprovalScopeKey = buildDocxMcpApprovalScopeKey(assistantMessageId)
+  const sessionApprovalScopeKey = buildSessionToolApprovalScopeKey(sessionId)
 
   const startedAt = Date.now()
   const buffers = new MessageStreamBuffers()
@@ -1212,7 +1233,7 @@ async function runGeneration(opts: {
       ? await resolveToolDefinitions(mcpServerIds, {
           autonomousMode: runtime.autonomousMode,
           memoryEnabled: sendOptions?.memoryEnabled,
-          localKnowledgeEnabled: sendOptions?.kbEnabled !== false,
+          localKnowledgeEnabled: sendOptions?.kbEnabled === true,
           notesEnabled: true,
         })
       : []
@@ -1370,26 +1391,42 @@ async function runGeneration(opts: {
 
               const permission = evaluateToolPermission({
                 toolName: call.name,
-                permissionMode: effectivePermissionMode,
+                permissionMode: runtime.permissionMode,
                 toolStates: runtime.toolStates,
                 sqlStatement,
+                autonomousMode: runtime.autonomousMode,
               })
 
               let result: string
               if (!permission.allowed && permission.requiresApproval) {
-                const approval = await requestToolApproval({
-                  toolName: call.name,
-                  arguments: call.arguments,
-                })
-                if (!approval.approved) {
-                  result = approval.timedOut
-                    ? 'Error: 工具调用授权超时，请在弹出的「工具调用授权」窗口中点击允许'
-                    : 'Error: 用户拒绝了工具调用'
-                } else {
+                const skipApproval =
+                  hasToolApprovalScope(sessionApprovalScopeKey) &&
+                  !(runtime.autonomousMode && isDeleteTool(call.name))
+
+                if (skipApproval) {
                   try {
                     result = await executeToolCall(call.name, call.arguments, runtime.toolContext)
                   } catch (error) {
                     result = `Error: ${error instanceof Error ? error.message : '工具执行失败'}`
+                  }
+                } else {
+                  const approval = await requestToolApproval({
+                    toolName: call.name,
+                    arguments: call.arguments,
+                  })
+                  if (!approval.approved) {
+                    result = approval.timedOut
+                      ? 'Error: 工具调用授权超时，请在弹出的「工具调用授权」窗口中点击允许'
+                      : 'Error: 用户拒绝了工具调用'
+                  } else {
+                    if (!runtime.autonomousMode || !isDeleteTool(call.name)) {
+                      grantToolApprovalScope(sessionApprovalScopeKey)
+                    }
+                    try {
+                      result = await executeToolCall(call.name, call.arguments, runtime.toolContext)
+                    } catch (error) {
+                      result = `Error: ${error instanceof Error ? error.message : '工具执行失败'}`
+                    }
                   }
                 }
               } else if (!permission.allowed) {

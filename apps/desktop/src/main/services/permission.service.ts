@@ -123,6 +123,19 @@ function resolveToolCategory(toolName: string): ToolCategory {
   return 'read'
 }
 
+export function isDeleteTool(toolName: string): boolean {
+  if (toolName === 'fs_delete') return true
+  const decoded = decodeMcpToolName(toolName)
+  const name = (decoded?.toolName ?? toolName).toLowerCase()
+  return (
+    name.includes('delete') ||
+    name.includes('remove') ||
+    name.includes('unlink') ||
+    name.startsWith('rm_') ||
+    name === 'rm'
+  )
+}
+
 export function evaluateToolPermission(options: {
   toolName: string
   permissionMode: PermissionMode
@@ -130,9 +143,20 @@ export function evaluateToolPermission(options: {
   sqlStatement?: string
   autonomousMode?: boolean
 }): ToolPermissionResult {
-  const permissionMode = options.autonomousMode ? 'full-auto' : options.permissionMode
-  const { toolName, toolStates, sqlStatement } = options
+  const { toolName, toolStates, sqlStatement, autonomousMode } = options
+  const permissionMode = options.permissionMode
   const category = resolveToolCategory(toolName)
+
+  if (autonomousMode) {
+    if (isDeleteTool(toolName)) {
+      return {
+        allowed: false,
+        reason: `删除工具 ${toolName} 需要人工授权`,
+        requiresApproval: true,
+      }
+    }
+    return { allowed: true }
+  }
 
   if (permissionMode === 'plan' && category !== 'read') {
     return { allowed: false, reason: '计划模式不允许编辑或执行命令', requiresApproval: false }

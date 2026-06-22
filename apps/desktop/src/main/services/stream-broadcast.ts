@@ -23,3 +23,11 @@ export function broadcastStreamEvent(event: MessageStreamEvent): void {
     }
   }
 }
+
+export function broadcastSessionMessagesReload(sessionId: string): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(IpcChannel.MessageSessionReload, { sessionId })
+    }
+  }
+}

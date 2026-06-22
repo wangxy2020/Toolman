@@ -75,7 +75,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   sendWithEnter: true,
   webSearchEnabled: false,
   webSearchProvider: 'duckduckgo',
-  kbEnabled: true,
+  kbEnabled: false,
   memoryEnabled: true,
   memoryRetentionDays: 30,
   documentOcrEnabled: true,

@@ -60,7 +60,13 @@ function readSessionProxyMetadata(metadataJson: string): P2pGroupAgentProxy | nu
     if (!raw || typeof raw !== 'object') return null
 
     const direct = P2pGroupAgentProxySchema.safeParse(raw)
-    if (direct.success) return direct.data
+    if (direct.success) {
+      try {
+        return normalizeP2pGroupAgentProxyOwnerDevice(direct.data)
+      } catch {
+        return null
+      }
+    }
 
     const partial = raw as Record<string, unknown>
     const p2pWorkspaceId = typeof partial.p2pWorkspaceId === 'string' ? partial.p2pWorkspaceId : null
@@ -99,7 +105,7 @@ function readSessionProxyMetadata(metadataJson: string): P2pGroupAgentProxy | nu
       sharedAgentName: typeof partial.sharedAgentName === 'string' ? partial.sharedAgentName : '',
       referencedModelId,
     })
-    return repaired.success ? repaired.data : null
+    return repaired.success ? normalizeP2pGroupAgentProxyOwnerDevice(repaired.data) : null
   } catch {
     return null
   }
@@ -219,16 +225,13 @@ function resolveOwnerDeviceId(ownerMemberId: string, p2pWorkspaceId: string): st
     return workspace.ownerDeviceId
   }
 
-  if (member?.deviceId) {
-    return member.deviceId
-  }
-
   throw new Error('共享者不存在')
 }
 
 export function normalizeP2pGroupAgentProxyOwnerDevice(
   proxy: P2pGroupAgentProxy,
 ): P2pGroupAgentProxy {
+  const localDeviceId = getP2pDeviceInfo().deviceId
   try {
     const ownerDeviceId = resolveOwnerDeviceId(proxy.ownerMemberId, proxy.p2pWorkspaceId)
     if (ownerDeviceId === proxy.ownerDeviceId) {
@@ -236,7 +239,14 @@ export function normalizeP2pGroupAgentProxyOwnerDevice(
     }
     return { ...proxy, ownerDeviceId }
   } catch {
-    return proxy
+    const workspace = getWorkspaceRepo().findById(proxy.p2pWorkspaceId)
+    if (workspace?.ownerDeviceId && workspace.ownerDeviceId !== localDeviceId) {
+      return { ...proxy, ownerDeviceId: workspace.ownerDeviceId }
+    }
+    if (proxy.ownerDeviceId !== localDeviceId) {
+      return proxy
+    }
+    throw new Error('无法解析群组智能体所有者设备')
   }
 }
 
@@ -277,7 +287,7 @@ export function readP2pGroupAgentFromSessionRow(
   metadataJson: string,
 ): P2pGroupAgentProxy | null {
   const proxy = readSessionProxyMetadata(metadataJson)
-  return proxy ? normalizeP2pGroupAgentProxyOwnerDevice(proxy) : null
+  return proxy
 }
 
 export function persistRepairedSessionProxyMetadata(
@@ -305,6 +315,21 @@ export function persistRepairedSessionProxyMetadata(
   }
 }
 
+function findSiblingProxyMeta(
+  workspaceId: string,
+  resourceId: string,
+  p2pWorkspaceId: string,
+): P2pGroupAgentProxy | null {
+  const rows = getSessionRepository().listRows({ workspaceId, limit: 10_000 })
+  for (const row of rows) {
+    const proxy = readSessionProxyMetadata(row.metadataJson)
+    if (proxy?.resourceId === resourceId && proxy.p2pWorkspaceId === p2pWorkspaceId) {
+      return proxy
+    }
+  }
+  return null
+}
+
 export function resolveProxyMetaForSend(
   metadataJson: string,
   assistant: ReturnType<typeof getAssistantRow>,
@@ -324,17 +349,30 @@ export function resolveProxyMetaForSend(
     const parsed = JSON.parse(metadataJson) as { p2pGroupAgent?: Record<string, unknown> }
     partial = parsed.p2pGroupAgent ?? {}
   } catch {
-    return null
+    partial = {}
   }
 
-  const sourceSessionId =
+  let sourceSessionId =
     typeof partial.sourceSessionId === 'string' ? partial.sourceSessionId : null
-  if (!sourceSessionId) {
-    return null
-  }
 
   const resource = getSharedResourceRepo().findById(proxyParams.resourceId)
   if (!resource?.sharedBy) {
+    return null
+  }
+
+  if (!sourceSessionId && assistant?.workspaceId) {
+    const sibling = findSiblingProxyMeta(
+      assistant.workspaceId,
+      proxyParams.resourceId,
+      proxyParams.p2pWorkspaceId,
+    )
+    if (sibling) {
+      return sibling
+    }
+    return null
+  }
+
+  if (!sourceSessionId) {
     return null
   }
 
