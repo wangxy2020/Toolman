@@ -195,7 +195,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
 
               <div className="tm-agent-setting-row">
                 <div className="tm-agent-setting-label-group">
-                  <span className="tm-agent-setting-label">自主模式</span>
+                  <span className="tm-agent-setting-label">自动编辑模式</span>
                   <HelpHint title="开启后智能体可自主执行更多操作" />
                 </div>
                 <Toggle checked={autonomousMode} onChange={setAutonomousMode} />

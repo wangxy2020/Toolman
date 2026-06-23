@@ -20,6 +20,12 @@ async function persistSecret(secret: string): Promise<void> {
 }
 
 export async function getHubJwtSecret(): Promise<string> {
+  const envSecret = process.env.TOOLMAN_COMMUNITY_JWT_SECRET?.trim()
+  if (envSecret) {
+    cachedSecret = envSecret
+    return envSecret
+  }
+
   if (cachedSecret) {
     return cachedSecret
   }

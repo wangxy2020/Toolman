@@ -189,8 +189,9 @@ export function CommunitySettingsModal({ onClose }: Props) {
                 ) : null}
 
                 <p className="tm-group-settings-hint">
-                  每个 Toolman 实例拥有独立的 Community Hub 与社区数据库。双实例测试时，实例 A 与实例 B
-                  的社区数据互不共享。
+                  社区数据保存在本机 Community Hub（SQLite）。使用{' '}
+                  <code>pnpm dev:p2p:a</code> / <code>pnpm dev:p2p:b</code>{' '}
+                  双开测试时，两个实例会共享同一 Hub 与数据库，留言与市场内容可互相可见。
                 </p>
               </div>
             ) : (

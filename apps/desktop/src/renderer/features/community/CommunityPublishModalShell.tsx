@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 
 import { IconX } from '../../components/icons'
 
@@ -10,7 +10,6 @@ interface ShellProps {
   children: ReactNode
   footer: ReactNode
   modalClassName?: string
-  onOverlayClick?: () => void
   stacked?: boolean
 }
 
@@ -22,17 +21,8 @@ export function CommunityPublishModalShell({
   children,
   footer,
   modalClassName,
-  onOverlayClick,
   stacked = false,
 }: ShellProps) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
   return (
     <div
       className={[
@@ -42,7 +32,6 @@ export function CommunityPublishModalShell({
       ]
         .filter(Boolean)
         .join(' ')}
-      onClick={onOverlayClick ?? onClose}
     >
       <div
         className={['tm-community-publish-modal', modalClassName].filter(Boolean).join(' ')}

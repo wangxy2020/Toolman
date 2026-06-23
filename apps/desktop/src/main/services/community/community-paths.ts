@@ -11,6 +11,10 @@ const BINARY_NAME =
   process.platform === 'win32' ? 'toolman-community-hub.exe' : 'toolman-community-hub'
 
 export function getCommunityDataDir(): string {
+  const override = process.env.TOOLMAN_COMMUNITY_DATA_DIR?.trim()
+  if (override) {
+    return override
+  }
   return join(app.getPath('userData'), 'community')
 }
 

@@ -1,5 +1,10 @@
 import type { IpcChannel, IpcResult } from '@toolman/shared'
 
+declare module '*.png' {
+  const src: string
+  export default src
+}
+
 declare global {
   interface Window {
     api: {

@@ -9,6 +9,7 @@
 | 类型 | 是否应共用 | 说明 |
 |------|------------|------|
 | 应用数据 `--user-data-dir` | **否** | 数据库、登录、P2P 设备 ID、群组状态必须独立 |
+| Community Hub 社区数据 | **是（双开脚本）** | `pnpm dev:p2p:a/b` 共用 `/tmp/toolman-community-shared`，留言与市场内容可互见 |
 | `~/Documents/Toolman/{用户名}/本地知识库/` | **否（测试时）** | 共用会导致双文件监听、无法区分「P2P 同步」与「本地已有文件」 |
 
 推荐布局（用户名 = 应用内显示名称，如「用户1」「用户2」）：
@@ -32,9 +33,10 @@
 ```
 /tmp/toolman-node-b/          ← 用户 A 应用数据
 /tmp/toolman-p2p-b/           ← 用户 B 应用数据
+/tmp/toolman-community-shared/ ← 双开时共用的社区 Hub 数据库（留言、市场资源等）
 ```
 
-（应用数据与 `~/Documents/Toolman/` 下的用户目录相互独立。）
+（应用数据与 `~/Documents/Toolman/` 下的用户目录相互独立；社区 Hub 通过 `scripts/p2p-community-env.sh` 在双开时共享。）
 
 ---
 

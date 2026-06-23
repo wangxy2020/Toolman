@@ -407,7 +407,7 @@ export function AgentSettingsModal({
                 <div className="tm-agent-toggle-card">
                   <div className="tm-agent-toggle-card-item">
                     <span className="tm-agent-toggle-card-label">
-                      自主模式
+                      自动编辑模式
                       <HelpHint title="开启后智能体可自主执行更多操作" />
                     </span>
                     <Toggle

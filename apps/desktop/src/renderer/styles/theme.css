@@ -10696,7 +10696,7 @@ html.theme-dark .tm-msg-select {
 
 .tm-agent-setting-row {
   display: grid;
-  grid-template-columns: 90px 1fr;
+  grid-template-columns: 120px 1fr;
   align-items: center;
   gap: 16px;
 }
@@ -10715,6 +10715,7 @@ html.theme-dark .tm-msg-select {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .tm-agent-setting-label {
@@ -11745,6 +11746,16 @@ html.theme-dark .tm-agent-workdir-browse {
   cursor: pointer;
 }
 
+.tm-about-icon-btn--github {
+  width: 40px;
+  height: 40px;
+  color: #111111;
+}
+
+.tm-about-icon-btn--github:hover {
+  background: var(--tm-hover);
+}
+
 .tm-about-icon-btn:hover:not(:disabled) {
   background: var(--tm-hover);
 }
@@ -11820,6 +11831,18 @@ html.theme-dark .tm-agent-workdir-browse {
 .tm-about-outline-btn--sm {
   padding: 4px 12px;
   font-size: 12px;
+}
+
+.tm-about-outline-btn--accent {
+  border-color: var(--tm-accent);
+  background: var(--tm-accent);
+  color: #ffffff;
+}
+
+.tm-about-outline-btn--accent:hover:not(:disabled) {
+  background: var(--tm-accent-hover);
+  border-color: var(--tm-accent-hover);
+  color: #ffffff;
 }
 
 .tm-about-outline-btn:hover:not(:disabled) {
@@ -11912,6 +11935,34 @@ html.theme-dark .tm-agent-workdir-browse {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.tm-modal--about-join .tm-modal-body {
+  text-align: center;
+}
+
+.tm-about-join-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.tm-about-join-qr-image {
+  display: block;
+  width: auto;
+  max-width: min(280px, 100%);
+  height: auto;
+  max-height: min(420px, 52vh);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--tm-text) 8%, transparent);
+}
+
+.tm-about-join-welcome {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--tm-text-secondary);
+  text-align: center;
 }
 
 /* Display settings */

@@ -187,7 +187,57 @@ async function markStopped(): Promise<void> {
   await removeCommunityHubPortFile()
 }
 
+async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null> {
+  const binaryPath = resolveCommunityHubBinaryPath()
+  const portCandidates = new Set<number>()
+
+  const portFile = await readCommunityHubPortFile()
+  if (portFile?.port) {
+    portCandidates.add(portFile.port)
+  }
+  portCandidates.add(COMMUNITY_HUB_DEFAULT_PORT)
+
+  for (const port of portCandidates) {
+    const client = new CommunityHttpClient({
+      port,
+      host: COMMUNITY_HUB_HOST,
+      resolveAuth: resolveCommunityHubAuth,
+    })
+
+    try {
+      const health = await client.health()
+      if (health.status !== 'healthy') {
+        continue
+      }
+
+      httpClient = client
+      currentStatus = {
+        running: true,
+        port,
+        host: COMMUNITY_HUB_HOST,
+        baseUrl: buildCommunityHubBaseUrl(port),
+        binaryPath,
+      }
+      log(`attached to existing sidecar at ${currentStatus.baseUrl}`)
+      return getCommunityHubStatus()
+    } catch {
+      // try next candidate port
+    }
+  }
+
+  return null
+}
+
 export async function startCommunityHub(): Promise<CommunityHubStatus> {
+  if (currentStatus.running && httpClient && currentStatus.port !== null) {
+    return getCommunityHubStatus()
+  }
+
+  const attached = await tryAttachRunningCommunityHub()
+  if (attached) {
+    return attached
+  }
+
   if (currentStatus.running && childProcess && currentStatus.port !== null) {
     return getCommunityHubStatus()
   }

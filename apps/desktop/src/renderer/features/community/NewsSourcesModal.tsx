@@ -1,5 +1,3 @@
-import { useEffect } from 'react'
-
 import {
   CommunityPublishModalShell,
 } from './CommunityPublishModalShell'
@@ -11,14 +9,6 @@ interface Props {
 }
 
 export function NewsSourcesModal({ onClose, onFetched }: Props) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
   return (
     <CommunityPublishModalShell
       title="RSS 源管理"
