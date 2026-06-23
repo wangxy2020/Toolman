@@ -73,6 +73,9 @@ export type P2pSyncStatus = z.infer<typeof P2pSyncStatusSchema>
 export const P2pSequencingModeSchema = z.enum(['owner_authoritative', 'lamport_degraded'])
 export type P2pSequencingMode = z.infer<typeof P2pSequencingModeSchema>
 
+export const P2pReplicationTopologySchema = z.enum(['owner_star', 'member_mesh', 'offline'])
+export type P2pReplicationTopology = z.infer<typeof P2pReplicationTopologySchema>
+
 export const P2pWorkspaceListFilterSchema = z.enum(['mine', 'joined', 'all'])
 export type P2pWorkspaceListFilter = z.infer<typeof P2pWorkspaceListFilterSchema>
 

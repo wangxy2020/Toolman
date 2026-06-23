@@ -576,10 +576,7 @@ impl ConnectionManager {
                 let discovery = DISCOVERY
                     .lock()
                     .map_err(|_| "discovery lock poisoned".to_string())?;
-                discovery
-                    .list_nodes(true)
-                    .into_iter()
-                    .any(|node| node.device_id == peer_device_id)
+                discovery.is_peer_online(peer_device_id)
             };
             if online {
                 return Ok(());

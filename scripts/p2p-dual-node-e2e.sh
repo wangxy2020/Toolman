@@ -25,14 +25,7 @@ section() { printf '\n## %s\n' "$1"; }
 
 if $AUTOMATED; then
   echo "Running automated smoke tests..."
-  pnpm --filter @toolman/shared build
-  pnpm --filter @toolman/db test:p2p-schema
-  pnpm --filter @toolman/desktop test:p2p-integration
-  if command -v cargo >/dev/null 2>&1; then
-    cargo test -p toolman-p2p
-  else
-    echo "cargo not found; skipping Rust unit tests"
-  fi
+  bash "$ROOT_DIR/scripts/smoke-critical-paths.sh"
   echo "Automated smoke passed."
 fi
 
@@ -79,7 +72,13 @@ pass "Node A：设置页可打开本地存储目录"
 pass "Node B：设置 → 退出群组，侧栏移除该群"
 pass "Node A：对新成员重新邀请后可再次加入"
 
-section "7. 解散群组"
+section "7. 社区 Hub（单机 smoke）"
+pass "侧栏「社区」可打开，顶栏各 Tab 可切换"
+pass "设置 → 系统诊断：Community Hub 显示「运行中」且健康检查为 healthy"
+pass "市场列表可加载；任选资源可打开详情页"
+pass "资讯 Tab 可加载源列表与文章列表"
+
+section "8. 解散群组"
 pass "Node A：设置 → 解散群组并确认"
 pass "Node B：群组从列表消失或无法继续同步"
 

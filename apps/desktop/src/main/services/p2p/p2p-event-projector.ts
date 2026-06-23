@@ -19,6 +19,7 @@ import {
   projectMemberLeftEvent,
   syncWorkspaceNameFromJoinEvent,
 } from './p2p-member-projection'
+import { projectWorkspaceUpdatedFromEvent } from './p2p-workspace-vip-pool.service'
 
 export function projectP2pEvent(event: WorkspaceEvent): void {
   switch (event.resourceType) {
@@ -44,8 +45,10 @@ export function projectP2pEvent(event: WorkspaceEvent): void {
 
 function projectWorkspaceEvent(event: WorkspaceEvent): void {
   switch (event.eventType) {
-    case 'Created':
     case 'Updated':
+      projectWorkspaceUpdatedFromEvent(event)
+      return
+    case 'Created':
     case 'Deleted':
       return
     default:

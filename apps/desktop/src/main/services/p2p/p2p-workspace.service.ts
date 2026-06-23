@@ -13,10 +13,16 @@ import type { P2pWorkspace, P2pWorkspaceListFilter } from '@toolman/shared'
 import {
   P2pWorkspaceCreateInputSchema,
   P2pWorkspaceUpdateInputSchema,
+  isWorkspaceVipPoolEnabled,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { generateWorkspaceKey } from './p2p-crypto.service'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
+import { resolveWorkspaceMaxMembers } from '../auth/entitlement.service'
+import {
+  maybeActivateWorkspaceVipPool,
+  refreshOwnedWorkspaceVipPools,
+} from './p2p-workspace-vip-pool.service'
 import { createDefaultWorkspaceInvite } from './p2p-invite.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import {
@@ -73,6 +79,7 @@ function mapWorkspaceRow(row: P2pWorkspaceRow, memberCount: number): P2pWorkspac
     ownerDeviceId: row.ownerDeviceId,
     ownerIdentityId: row.ownerIdentityId,
     maxMembers: row.maxMembers,
+    vipPoolEnabled: isWorkspaceVipPoolEnabled(row.settingsJson),
     status: row.status,
     memberCount,
     lastEventSeq: row.lastEventSeq,
@@ -127,7 +134,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   const row = getWorkspaceRepo().create({
     name: input.name,
     description: input.description,
-    maxMembers: input.maxMembers,
+    maxMembers: resolveWorkspaceMaxMembers(input.maxMembers),
     ownerDeviceId: device.deviceId,
     ownerIdentityId: device.identityId,
     workspaceKeyHash,
@@ -206,6 +213,7 @@ export async function ensureDefaultOwnedP2pWorkspace(): Promise<P2pWorkspace | n
 }
 
 export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWorkspace[] {
+  refreshOwnedWorkspaceVipPools()
   const device = getP2pDeviceInfo()
   const workspaceRepo = getWorkspaceRepo()
   const memberRepo = getMemberRepo()
@@ -250,6 +258,7 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
 }
 
 export function getP2pWorkspace(id: string): P2pWorkspace {
+  maybeActivateWorkspaceVipPool(id)
   const row = assertWorkspaceAccess(id)
   return toWorkspaceDto(row)
 }

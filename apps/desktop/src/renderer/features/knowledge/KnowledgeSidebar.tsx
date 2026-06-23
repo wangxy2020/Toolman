@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { KnowledgeBase } from '@toolman/shared'
-import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
+import { isP2pSharedKnowledgeMirrorDescription, resolveGroupSavedKnowledgeSidebarLabel } from '@toolman/shared'
 import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconPlus } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { getModulePageConfig } from '../modules/module-config'
@@ -61,7 +61,9 @@ export function KnowledgeSidebar({
   )
   const savedSharedItems = items.filter(
     (item) =>
-      item.kind === 'shared' && !isP2pSharedKnowledgeMirrorDescription(item.description),
+      item.kind === 'shared' &&
+      !isP2pSharedKnowledgeMirrorDescription(item.description) &&
+      item.documentCount > 0,
   )
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
     () => new Set(['local', 'network', 'shared', 'local-files']),
@@ -220,15 +222,15 @@ export function KnowledgeSidebar({
                       <div className="tm-session-empty">加载中…</div>
                     ) : null}
                     {!loading && savedSharedItems.length === 0 ? (
-                      <div className="tm-session-empty">暂无已保存的共享文件夹</div>
+                      <div className="tm-session-empty">暂无文件夹</div>
                     ) : null}
                     {savedSharedItems.map((item) => (
                       <KnowledgeSidebarMenuItem
                         key={item.id}
                         icon={<IconFolder size={14} />}
-                        label={item.name}
+                        label={resolveGroupSavedKnowledgeSidebarLabel(item)}
                         active={item.id === activeId && activeSection === 'shared'}
-                        title={`${item.name} · ${item.documentCount} 文档 · 从群组保存到本地`}
+                        title={`${resolveGroupSavedKnowledgeSidebarLabel(item)} · ${item.documentCount} 文档 · 其他成员分享到群组后保存到本地`}
                         onClick={() => onSelect(item.id)}
                         deletable={isDeletableKnowledgeBase(item.name)}
                         onRequestDelete={

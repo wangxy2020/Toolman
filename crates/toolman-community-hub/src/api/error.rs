@@ -16,6 +16,8 @@ pub enum ApiErrorCode {
     Forbidden,
     NotFound,
     Conflict,
+    TooManyRequests,
+    NotImplemented,
     InternalError,
 }
 
@@ -37,6 +39,7 @@ pub struct ApiError {
     pub status: StatusCode,
     pub code: ApiErrorCode,
     pub message: String,
+    pub retryable: bool,
 }
 
 impl ApiError {
@@ -45,6 +48,7 @@ impl ApiError {
             status: StatusCode::UNAUTHORIZED,
             code: ApiErrorCode::Unauthorized,
             message: message.into(),
+            retryable: false,
         }
     }
 
@@ -53,6 +57,7 @@ impl ApiError {
             status: StatusCode::FORBIDDEN,
             code: ApiErrorCode::Forbidden,
             message: message.into(),
+            retryable: false,
         }
     }
 
@@ -61,6 +66,7 @@ impl ApiError {
             status: StatusCode::NOT_FOUND,
             code: ApiErrorCode::NotFound,
             message: message.into(),
+            retryable: false,
         }
     }
 
@@ -69,6 +75,7 @@ impl ApiError {
             status: StatusCode::BAD_REQUEST,
             code: ApiErrorCode::ValidationError,
             message: message.into(),
+            retryable: false,
         }
     }
 
@@ -77,6 +84,25 @@ impl ApiError {
             status: StatusCode::CONFLICT,
             code: ApiErrorCode::Conflict,
             message: message.into(),
+            retryable: false,
+        }
+    }
+
+    pub fn too_many_requests(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            code: ApiErrorCode::TooManyRequests,
+            message: message.into(),
+            retryable: true,
+        }
+    }
+
+    pub fn not_implemented(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::NOT_IMPLEMENTED,
+            code: ApiErrorCode::NotImplemented,
+            message: message.into(),
+            retryable: false,
         }
     }
 
@@ -85,6 +111,7 @@ impl ApiError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             code: ApiErrorCode::InternalError,
             message: message.into(),
+            retryable: false,
         }
     }
 }
@@ -617,7 +644,7 @@ impl IntoResponse for ApiError {
             error: ApiErrorBody {
                 code: self.code,
                 message: self.message,
-                retryable: false,
+                retryable: self.retryable,
             },
         };
 

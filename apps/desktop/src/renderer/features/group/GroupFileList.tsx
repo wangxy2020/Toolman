@@ -79,12 +79,12 @@ export function GroupFileContextMenu({
           className={[
             'tm-group-context-menu-item',
             'tm-group-context-menu-item--danger',
-            selectedCount === 0 ? 'tm-group-context-menu-item--disabled' : '',
+            selectedCount === 0 || !canDelete ? 'tm-group-context-menu-item--disabled' : '',
           ]
             .filter(Boolean)
             .join(' ')}
           role="menuitem"
-          disabled={selectedCount === 0}
+          disabled={selectedCount === 0 || !canDelete}
           onClick={() => {
             if (selectedCount === 0) return
             onDeleteSelected()

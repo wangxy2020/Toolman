@@ -632,18 +632,7 @@ mod tests {
     }
 
     fn hub_config(data_dir: &PathBuf) -> Arc<HubConfig> {
-        Arc::new(HubConfig {
-            data_dir: data_dir.clone(),
-            port: 3721,
-            host: "127.0.0.1",
-            require_review: false,
-            jwt_secret: None,
-            packages_dir: data_dir.join("packages"),
-            covers_dir: data_dir.join("covers"),
-            deliveries_dir: data_dir.join("deliveries"),
-            db_path: data_dir.join("community.db"),
-            rss_sources_path: data_dir.join("rss-sources.json"),
-        })
+        Arc::new(HubConfig::with_data_dir(data_dir.clone()))
     }
 
     async fn test_service() -> (SkillMarketService, CommunityUser, PathBuf) {

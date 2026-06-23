@@ -12,9 +12,10 @@ pub fn strip_html_tags(input: &str) -> String {
     }
 
     decode_basic_entities(&output)
-        .split_whitespace()
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
         .collect::<Vec<_>>()
-        .join(" ")
+        .join("\n")
 }
 
 pub fn normalize_summary(raw: &str, title: &str) -> String {

@@ -26,6 +26,7 @@ describe('buildSharedKnowledgeDocMetaFromEvents', () => {
             title: '报告.pdf',
             size_bytes: 1024,
             mime_type: 'application/pdf',
+            content_hash: 'abc123hash',
           },
         },
       ],

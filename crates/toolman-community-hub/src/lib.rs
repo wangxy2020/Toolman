@@ -2,6 +2,7 @@ pub mod api;
 pub mod config;
 pub mod db;
 pub mod domain;
+pub mod rate_limit;
 pub mod repositories;
 pub mod rss;
 pub mod services;

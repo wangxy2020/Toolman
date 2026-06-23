@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   IpcChannel,
+  type P2pReplicationTopology,
   type P2pSequencingMode,
   type P2pSyncPeerStatus,
   type P2pSyncStatus,
@@ -14,6 +15,8 @@ interface SyncStatusState {
   error: string | null
   sequencingMode: P2pSequencingMode
   ownerOnline: boolean
+  replicationTopology: P2pReplicationTopology
+  meshPeersConnected: number
   lastEventSeq: number
   lastSyncAt?: number
   peers: P2pSyncPeerStatus[]
@@ -25,6 +28,8 @@ const DEFAULT_STATE: SyncStatusState = {
   error: null,
   sequencingMode: 'owner_authoritative',
   ownerOnline: true,
+  replicationTopology: 'owner_star',
+  meshPeersConnected: 0,
   lastEventSeq: 0,
   peers: [],
   pendingFiles: 0,
@@ -54,6 +59,8 @@ export function useP2pSyncStatus(workspaceId: string | null) {
       error?: string
       sequencingMode: P2pSequencingMode
       ownerOnline: boolean
+      replicationTopology: P2pReplicationTopology
+      meshPeersConnected: number
       lastEventSeq: number
       lastSyncAt?: number
       peers: P2pSyncPeerStatus[]
@@ -65,6 +72,8 @@ export function useP2pSyncStatus(workspaceId: string | null) {
       error: data.error ?? null,
       sequencingMode: data.sequencingMode,
       ownerOnline: data.ownerOnline,
+      replicationTopology: data.replicationTopology,
+      meshPeersConnected: data.meshPeersConnected,
       lastEventSeq: data.lastEventSeq,
       lastSyncAt: data.lastSyncAt,
       peers: data.peers,
@@ -147,6 +156,7 @@ export function useP2pSyncStatus(workspaceId: string | null) {
     ...state,
     refresh,
     isDegraded: state.sequencingMode === 'lamport_degraded',
+    isMeshReplication: state.replicationTopology === 'member_mesh',
     isSyncing: state.status === 'syncing',
     showSyncIndicator,
   }

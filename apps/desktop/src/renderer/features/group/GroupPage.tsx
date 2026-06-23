@@ -18,6 +18,8 @@ import { GroupAgentsPanel } from './GroupAgentsPanel'
 import { GroupNotesPanel } from './GroupNotesPanel'
 import { GroupWorkflowPanel } from './GroupWorkflowPanel'
 import { GroupSettingsModal } from './GroupSettingsModal'
+import { GroupMemberLimitWarningModal } from './GroupMemberLimitWarningModal'
+import { useGroupMemberLimitWarning } from './useGroupMemberLimitWarning'
 import { GroupPageStatusBar } from './GroupPageStatusBar'
 import { GroupPageStatusProvider } from './group-page-status'
 import { useP2pWorkspace } from './useP2pWorkspace'
@@ -32,6 +34,7 @@ import type {
 } from './group-note-open'
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 import type { MessageSettings } from '../chat/message-settings'
+import { useAuthSession } from '../user/AuthSessionProvider'
 
 interface HeaderAction {
   key: string
@@ -85,6 +88,7 @@ interface Props {
   spellCheckEnabled?: boolean
   defaultFilePath?: string | null
   requireRegistration?: (feature: AuthFeature) => boolean
+  onUpgradeMembership?: () => void
 }
 
 export function GroupPage({
@@ -111,11 +115,13 @@ export function GroupPage({
   spellCheckEnabled = true,
   defaultFilePath = null,
   requireRegistration,
+  onUpgradeMembership,
 }: Props) {
   const [activeAction, setActiveAction] = useState<string | null>(DEFAULT_GROUP_ACTION)
   const [showSettings, setShowSettings] = useState(false)
   const [membersMenuOpen, setMembersMenuOpen] = useState(false)
   const membersButtonRef = useRef<HTMLButtonElement>(null)
+  const { session } = useAuthSession()
 
   const effectiveAction = activeAction ?? DEFAULT_GROUP_ACTION
 
@@ -158,6 +164,11 @@ export function GroupPage({
 
   const displayWorkspace = detail.workspace ?? workspace
   const workspaceName = displayWorkspace?.name ?? workspace?.name ?? '群组'
+  const memberLimitWarning = useGroupMemberLimitWarning({
+    workspace: displayWorkspace,
+    memberCount: displayWorkspace?.memberCount ?? detail.members.length,
+    session,
+  })
 
   const guardGroupAccess = () => {
     if (!requireRegistration) return true
@@ -370,6 +381,8 @@ export function GroupPage({
             error: syncStatus.error,
             sequencingMode: syncStatus.sequencingMode,
             ownerOnline: syncStatus.ownerOnline,
+            replicationTopology: syncStatus.replicationTopology,
+            meshPeersConnected: syncStatus.meshPeersConnected,
             lastEventSeq: syncStatus.lastEventSeq,
             lastSyncAt: syncStatus.lastSyncAt,
             peers: syncStatus.peers,
@@ -382,6 +395,16 @@ export function GroupPage({
             setShowSettings(false)
             onWorkspaceLeft?.()
           }}
+        />
+      ) : null}
+
+      {displayWorkspace ? (
+        <GroupMemberLimitWarningModal
+          open={memberLimitWarning.open}
+          activeCount={displayWorkspace.memberCount}
+          maxMembers={displayWorkspace.maxMembers}
+          onClose={memberLimitWarning.dismiss}
+          onUpgrade={onUpgradeMembership}
         />
       ) : null}
     </main>

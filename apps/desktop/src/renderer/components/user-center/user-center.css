@@ -1087,7 +1087,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
+  gap: 24px;
   width: 100%;
   margin: 0;
 }
@@ -1104,12 +1104,6 @@
   gap: 8px;
   width: 100%;
   max-width: 300px;
-}
-
-.tm-user-center-account-section--footer {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid color-mix(in srgb, var(--tm-border-light) 70%, transparent);
 }
 
 .tm-user-center-account-section-label {
@@ -1131,7 +1125,7 @@
   width: 100%;
   max-width: 300px;
   padding: 10px 14px;
-  margin-bottom: 16px;
+  margin: 0;
   border-radius: 10px;
   font-size: 13px;
   line-height: 1.45;
@@ -1176,6 +1170,11 @@
   align-items: center;
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+.tm-user-center-account-action-box--membership .tm-user-center-account-action-icon,
+.tm-user-center-account-action-box--membership .tm-user-center-account-action-primary {
+  color: var(--tm-auth-primary);
 }
 
 .tm-user-center-account-action-box:hover:not(:disabled) {
@@ -1340,6 +1339,133 @@
   color: var(--tm-text-secondary);
 }
 
+.tm-user-center-membership-form {
+  gap: 12px;
+}
+
+.tm-user-center-membership-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tm-text-secondary);
+  text-align: center;
+}
+
+.tm-user-center-membership-plan {
+  padding: 12px 14px;
+  border: 1px solid var(--tm-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tm-auth-primary) 6%, var(--tm-bg));
+}
+
+.tm-user-center-membership-plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tm-user-center-membership-plan-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tm-text);
+}
+
+.tm-user-center-membership-plan-price {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tm-auth-primary);
+  white-space: nowrap;
+}
+
+.tm-user-center-membership-plan-price small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--tm-text-secondary);
+}
+
+.tm-user-center-membership-plan-desc,
+.tm-user-center-membership-qr-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tm-text-secondary);
+}
+
+.tm-user-center-membership-plan-features {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tm-text-secondary);
+}
+
+.tm-user-center-membership-channel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 160px;
+}
+
+.tm-user-center-membership-channel-link {
+  align-self: auto;
+  padding: 0;
+  color: var(--tm-text-muted);
+}
+
+.tm-user-center-membership-channel-link:hover:not(:disabled) {
+  color: var(--tm-accent);
+}
+
+.tm-user-center-membership-channel-link--active {
+  color: var(--tm-accent);
+  font-weight: 500;
+}
+
+.tm-user-center-membership-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: calc(8px + 13px * 1.5);
+}
+
+.tm-user-center-membership-qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 160px;
+  height: 160px;
+  border: 1px dashed var(--tm-border);
+  border-radius: 10px;
+  background: var(--tm-bg);
+  color: var(--tm-text-secondary);
+  font-size: 13px;
+}
+
+.tm-user-center-membership-qr-image {
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.tm-user-center-membership-qr-hint {
+  margin: 0;
+  text-align: center;
+}
+
+html.theme-dark .tm-user-center-membership-plan {
+  background: color-mix(in srgb, var(--tm-auth-primary) 10%, var(--tm-input-bg));
+}
+
+html.theme-dark .tm-user-center-membership-qr-placeholder {
+  background: var(--tm-input-bg);
+}
+
 /* ── Responsive ── */
 @media (max-width: 760px) {
   .tm-user-center-dialog-paper.MuiPaper-root {
@@ -1450,10 +1576,6 @@ html.theme-dark .tm-user-center-account-action-box:hover:not(:disabled) {
   background: var(--tm-bg);
   border-color: var(--tm-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tm-accent) 14%, transparent);
-}
-
-html.theme-dark .tm-user-center-account-section--footer {
-  border-top-color: var(--tm-border);
 }
 
 html.theme-dark .tm-user-center-display-name-input-wrap {

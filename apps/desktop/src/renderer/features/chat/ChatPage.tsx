@@ -54,6 +54,7 @@ import { useP2pWorkspaces } from '../group/useP2pWorkspaces'
 import { useP2pTrustPrompt } from '../group/useP2pTrustPrompt'
 import { GroupTrustDeviceModal } from '../group/GroupTrustDeviceModal'
 import { useRegistrationGate } from '../user/useRegistrationGate'
+import { MembershipUpgradeModal } from '../user/MembershipUpgradeModal'
 import { KnowledgePage } from '../knowledge/KnowledgePage'
 import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
 import { KnowledgeCreateModal } from '../knowledge/KnowledgeCreateModal'
@@ -94,6 +95,7 @@ export function ChatPage() {
   const [showGroupCreate, setShowGroupCreate] = useState(false)
   const [showGroupJoin, setShowGroupJoin] = useState(false)
   const [showGroupInvite, setShowGroupInvite] = useState(false)
+  const [showMembershipUpgrade, setShowMembershipUpgrade] = useState(false)
   const [knowledgeSection, setKnowledgeSection] = useState<KnowledgeSidebarSection>('local')
   const [communitySidebarSection, setCommunitySidebarSection] =
     useState<CommunitySidebarSection>(DEFAULT_COMMUNITY_SIDEBAR_SECTION)
@@ -875,6 +877,7 @@ export function ChatPage() {
               spellCheckEnabled={appSettings.spellCheckEnabled}
               defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
               requireRegistration={registrationGate.requireRegistration}
+              onUpgradeMembership={() => setShowMembershipUpgrade(true)}
             />
           </>
         ) : activeView === 'community' ? (
@@ -1004,9 +1007,13 @@ export function ChatPage() {
             await p2pWorkspaces.join(input)
             setActiveView('group')
           }}
-          onUpgradeMembership={() => registrationGate.openRegister()}
+          onUpgradeMembership={() => setShowMembershipUpgrade(true)}
         />
       )}
+      <MembershipUpgradeModal
+        open={showMembershipUpgrade}
+        onClose={() => setShowMembershipUpgrade(false)}
+      />
       {showGroupInvite && p2pWorkspaces.active && (
         <GroupInviteModal
           workspaceId={p2pWorkspaces.active.id}

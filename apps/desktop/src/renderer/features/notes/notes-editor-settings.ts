@@ -43,15 +43,19 @@ export function loadNotesEditorSettings(): NotesEditorSettings {
       showOutline?: boolean
     }
 
-    const rawDefaultEditView =
+    const rawDefaultEditView: string | undefined =
       parsed.defaultEditView ??
       (parsed.previewByDefault === true
         ? 'preview'
         : parsed.previewByDefault === false
           ? 'edit'
           : DEFAULT_NOTES_EDITOR_SETTINGS.defaultEditView)
-    const defaultEditView =
-      rawDefaultEditView === 'split' ? 'edit' : rawDefaultEditView
+    const defaultEditView: NotesDefaultEditView =
+      rawDefaultEditView === 'split'
+        ? 'edit'
+        : rawDefaultEditView === 'preview' || rawDefaultEditView === 'edit'
+          ? rawDefaultEditView
+          : DEFAULT_NOTES_EDITOR_SETTINGS.defaultEditView
 
     return {
       defaultView:

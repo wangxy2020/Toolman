@@ -335,6 +335,26 @@ impl NodeDiscoveryService {
         self.registration = None;
     }
 
+    pub fn is_peer_online(&self, peer_device_id: &str) -> bool {
+        let now = now_ms();
+        if let Some(local_device_id) = self.local_device_id.as_deref() {
+            if local_beacon::read_peer_beacon(local_device_id, peer_device_id, now).is_some() {
+                return true;
+            }
+        }
+
+        let map = match self.nodes.lock() {
+            Ok(map) => map,
+            Err(_) => return false,
+        };
+        map.get(peer_device_id)
+            .map(|record| {
+                let fresh = now.saturating_sub(record.node.last_seen_at) <= NODE_TTL_MS;
+                record.node.online && fresh
+            })
+            .unwrap_or(false)
+    }
+
     pub fn list_nodes(&self, online_only: bool) -> Vec<DiscoveredNode> {
         let now = now_ms();
         let map = match self.nodes.lock() {
@@ -342,7 +362,8 @@ impl NodeDiscoveryService {
             Err(_) => return Vec::new(),
         };
 
-        map.values()
+        let mut nodes: Vec<DiscoveredNode> = map
+            .values()
             .map(|record| record.node.clone())
             .filter(|node| {
                 let fresh = now.saturating_sub(node.last_seen_at) <= NODE_TTL_MS;
@@ -358,7 +379,31 @@ impl NodeDiscoveryService {
                 node.online = node.online && fresh;
                 node
             })
-            .collect()
+            .collect();
+
+        if online_only {
+            if let Some(local_device_id) = self.local_device_id.as_deref() {
+                for record in local_beacon::scan_local_beacons(local_device_id, now) {
+                    if nodes
+                        .iter()
+                        .any(|node| node.device_id == record.device_id && node.online)
+                    {
+                        continue;
+                    }
+                    nodes.retain(|node| node.device_id != record.device_id);
+                    nodes.push(DiscoveredNode {
+                        device_id: record.device_id.clone(),
+                        device_name: record.device_name.clone(),
+                        user_name: record.user_name.clone(),
+                        public_key_fingerprint: record.pubkey_fp.clone(),
+                        online: true,
+                        last_seen_at: record.updated_at,
+                    });
+                }
+            }
+        }
+
+        nodes
     }
 }
 

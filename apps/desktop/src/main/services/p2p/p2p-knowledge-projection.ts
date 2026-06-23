@@ -248,29 +248,6 @@ function isP2pSyncedKnowledgePath(absolutePath: string): boolean {
   return absolutePath.includes(`${sep}p2p-sync${sep}`)
 }
 
-function documentMatchesContentHash(
-  doc: {
-    contentHash?: string | null
-    blobHash?: string | null
-    absolutePath?: string | null
-    status?: string
-  },
-  contentHash: string,
-): boolean {
-  if (doc.contentHash === contentHash || doc.blobHash === contentHash) {
-    return true
-  }
-  const path = doc.absolutePath
-  if (!path || !existsSync(path) || isP2pSyncedKnowledgePath(path)) {
-    return false
-  }
-  try {
-    return hashFileBytes(path) === contentHash
-  } catch {
-    return false
-  }
-}
-
 function ensureLocalBlobFromDocument(
   doc: {
     absolutePath?: string | null

@@ -20,6 +20,8 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -37,6 +39,9 @@ jobs:
 
       - name: P2P desktop integration
         run: pnpm --filter @toolman/desktop test:p2p-integration
+
+      - name: Community hub Rust tests
+        run: cargo test -p toolman-community-hub
 
   p2p-native-macos:
     runs-on: macos-latest

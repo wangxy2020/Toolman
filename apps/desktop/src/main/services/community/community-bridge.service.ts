@@ -4,6 +4,8 @@ import { createServer } from 'node:net'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+import { recordDiagnosticEvent } from '../diagnostics-log'
+
 import {
   COMMUNITY_HUB_DEFAULT_PORT,
   COMMUNITY_HUB_HOST,
@@ -50,6 +52,8 @@ let currentStatus: CommunityHubStatus = {
 function log(message: string, error?: unknown): void {
   if (error !== undefined) {
     console.error(`[community-hub] ${message}`, error)
+    const errMessage = error instanceof Error ? error.message : String(error)
+    recordDiagnosticEvent('community-hub', 'error', `${message}: ${errMessage}`)
     return
   }
   console.log(`[community-hub] ${message}`)

@@ -112,8 +112,20 @@ export function resolveFileKind(hints: {
   return kindFromMimeType(hints.mimeType)
 }
 
+/** macOS / Windows 系统自动生成的目录元数据，不参与索引 */
+export const KNOWLEDGE_SYSTEM_JUNK_FILENAMES = [
+  '.DS_Store',
+  '.localized',
+  'Thumbs.db',
+  'desktop.ini',
+] as const
+
 /** Office / LibreOffice 打开文档时产生的锁文件与临时文件，不参与监控与向量化 */
 export const KNOWLEDGE_IGNORED_INGEST_GLOB_PATTERNS = [
+  '**/.DS_Store',
+  '**/.localized',
+  '**/Thumbs.db',
+  '**/desktop.ini',
   '**/~$*',
   '**/~*.xlsx',
   '**/~*.xls',
@@ -128,9 +140,12 @@ export const KNOWLEDGE_IGNORED_INGEST_GLOB_PATTERNS = [
 
 const OFFICE_LOCK_EXTENSION = /\.(docx?|xlsx?|pptx?|ppt|csv|tmp|wbk|xlk)$/i
 
+const SYSTEM_JUNK_FILENAMES = new Set<string>(KNOWLEDGE_SYSTEM_JUNK_FILENAMES)
+
 export function isIgnoredKnowledgeIngestFile(filePath: string): boolean {
   const name = basename(filePath).normalize('NFC')
   if (!name) return true
+  if (SYSTEM_JUNK_FILENAMES.has(name)) return true
   // Word / Excel 锁文件，如 ~$报告.docx、~$报表.xlsx
   if (name.startsWith('~$')) return true
   // 全角/变体 ~$ 锁文件

@@ -14,15 +14,19 @@ import {
   type P2pWorkspaceMemberRow,
   type P2pWorkspaceRow,
 } from '@toolman/db'
-import type { P2pMember, P2pMemberRole, P2pWorkspace } from '@toolman/shared'
 import {
+  formatGroupMemberLimitMessage,
   P2pMemberJoinInputSchema,
   P2pMemberRemoveInputSchema,
   P2pMemberUpdateRoleInputSchema,
+  type P2pMember,
+  type P2pMemberRole,
+  type P2pWorkspace,
+  type ProductSku,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import * as p2pConnectionService from './p2p-connection.service'
-import { listP2pDiscoveredNodes } from './p2p-discovery.service'
+import { listP2pDiscoveredNodes, isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
 import { P2pBridge } from './p2p-bridge'
 import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
 import { applyP2pNetworkConfig } from './p2p-network.config'
@@ -45,6 +49,14 @@ import { appendP2pEvent } from './p2p-event.service'
 import { assertCanManageMembers as assertCanManageMembersGuard } from './p2p-permission.guard'
 import { requestSnapshotFromOwner, syncWithPeer, awaitJoinerEventCatchUp } from './p2p-sync.service'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
+import {
+  assertJoinerEligibleForWorkspace,
+  assertRemoteJoinerEligibleForWorkspace,
+  buildMemberCertSnapshot,
+  entitlementContextFromJoinerSku,
+  maybeActivateWorkspaceVipPool,
+} from './p2p-workspace-vip-pool.service'
+import { getEntitlementContext } from '../auth/entitlement.service'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
 import { countWanSdpCandidates } from './wan-transport'
@@ -54,10 +66,12 @@ const MEMBER_JOIN_MESSAGE_TYPE = 'member.joined'
 const JOIN_NOTIFY_MAX_ATTEMPTS = 30
 const JOIN_NOTIFY_INTERVAL_MS = 2_000
 
+export { P2pMemberVipRequiredError } from './p2p-workspace-vip-pool.service'
+
 export class P2pMemberLimitError extends Error {
   readonly code = 'P2P_MEMBER_LIMIT' as const
 
-  constructor(message = '社区版群组人数已达上限（10 人）。请开通会员服务以提升群组成员上限。') {
+  constructor(maxMembers = 10, message = formatGroupMemberLimitMessage(maxMembers)) {
     super(message)
     this.name = 'P2pMemberLimitError'
   }
@@ -176,20 +190,19 @@ function toWorkspaceDto(row: P2pWorkspaceRow): P2pWorkspace {
   return mapWorkspaceRow(row, memberCount)
 }
 
-function resolveMemberOnline(row: P2pWorkspaceMemberRow, workspaceId: string): boolean {
+function resolveMemberOnline(row: P2pWorkspaceMemberRow, _workspaceId: string): boolean {
   const localDeviceId = getP2pDeviceInfo().deviceId
   if (row.deviceId === localDeviceId) return true
 
-  const discovered = listP2pDiscoveredNodes(false).find(
-    (node) => node.deviceId === row.deviceId,
-  )
-  if (discovered) {
-    return discovered.online
+  if (
+    p2pConnectionService
+      .getKnownP2pConnections()
+      .some((item) => item.peerDeviceId === row.deviceId && item.state === 'connected')
+  ) {
+    return true
   }
 
-  return p2pConnectionService
-    .getKnownP2pConnections()
-    .some((item) => item.peerDeviceId === row.deviceId && item.state === 'connected')
+  return isP2pPeerDiscoverableOnline(row.deviceId)
 }
 
 function ensureLocalMemberDisplayNameForWorkspace(workspaceId: string): void {
@@ -270,6 +283,9 @@ async function connectToOwnerPeer(
   workspaceId: string,
   context: string,
 ): Promise<boolean> {
+  if (!isP2pPeerDiscoverableOnline(ownerDeviceId)) {
+    return false
+  }
   try {
     await p2pConnectionService.ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
     return p2pConnectionService.isPeerConnected(ownerDeviceId)
@@ -371,9 +387,11 @@ async function notifyOwnerOfJoinOnce(
       member: {
         id: member.id,
         workspaceId: payload.workspaceId,
+        identityId: member.identityId,
         deviceId: member.deviceId,
         displayName: member.displayName,
         role: member.role,
+        subscriptionSku: getEntitlementContext().subscriptionSku ?? 'community',
       },
     })
     await P2pBridge.connectionSend(payload.ownerDeviceId, 'events', envelope)
@@ -679,6 +697,7 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
   for (const member of getMemberRepo().listByWorkspace(workspaceId, 'active')) {
     if (member.deviceId === device.deviceId) continue
     if (!shouldInitiatePeerConnection(device.deviceId, member.deviceId)) continue
+    if (!isP2pPeerDiscoverableOnline(member.deviceId)) continue
     try {
       await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
     } catch (error) {
@@ -697,6 +716,7 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
     if (!shouldInitiatePeerConnection(device.deviceId, node.deviceId)) {
       continue
     }
+    if (!isP2pPeerDiscoverableOnline(node.deviceId)) continue
     try {
       await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspaceId)
     } catch (error) {
@@ -886,10 +906,14 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   ensureOwnerMemberFromInvite(payload, workspace.id)
   ensureOwnerPeerTrustedForSync(workspace.id, payload.ownerDeviceId)
 
+  assertJoinerEligibleForWorkspace(workspace)
+
   const activeCount = memberRepo.countActiveByWorkspace(workspace.id)
   if (activeCount >= workspace.maxMembers) {
-    throw new P2pMemberLimitError()
+    throw new P2pMemberLimitError(workspace.maxMembers)
   }
+
+  const memberCertJson = buildMemberCertSnapshot()
 
   saveWorkspaceKey(workspace.id, payload.workspaceKeyB64)
   ensureWorkspaceDir(workspace.id)
@@ -919,6 +943,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
         role: payload.role,
         status: 'active',
         joinedAt: new Date(),
+        certJson: memberCertJson,
       }) ?? existing
   } else {
     memberRow = memberRepo.create({
@@ -929,6 +954,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
       role: payload.role,
       status: 'active',
       joinedAt: new Date(),
+      certJson: memberCertJson,
     })
   }
 
@@ -937,8 +963,12 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
 
   scheduleJoinPeerSync(payload, offerSdp, member)
 
+  if (payload.ownerDeviceId === device.deviceId) {
+    maybeActivateWorkspaceVipPool(workspace.id)
+  }
+
   return {
-    workspace: toWorkspaceDto(workspace),
+    workspace: toWorkspaceDto(getWorkspaceRepo().findById(workspace.id) ?? workspace),
     member,
   }
 }
@@ -1006,6 +1036,7 @@ export async function applyRemoteMemberJoin(
     member: P2pMember
     inviteId?: string
     peerDeviceId?: string
+    subscriptionSku?: ProductSku | null
   },
   options?: { requirePeerTrust?: boolean },
 ): Promise<void> {
@@ -1026,17 +1057,8 @@ export async function applyRemoteMemberJoin(
     payload.workspaceId,
     payload.member.deviceId,
   )
-  if (existing) {
-    if (existing.status !== 'active') {
-      getMemberRepo().update({
-        id: existing.id,
-        status: 'active',
-        role: payload.member.role,
-        displayName: payload.member.displayName,
-        joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
-      })
-      broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
-    } else if (
+  if (existing?.status === 'active') {
+    if (
       payload.member.displayName.trim() &&
       existing.displayName !== payload.member.displayName
     ) {
@@ -1060,6 +1082,43 @@ export async function applyRemoteMemberJoin(
     return
   }
 
+  const joinerContext = entitlementContextFromJoinerSku(payload.subscriptionSku)
+  assertRemoteJoinerEligibleForWorkspace(workspace, joinerContext)
+
+  const memberCertJson = buildMemberCertSnapshot(joinerContext)
+
+  const activeCount = getMemberRepo().countActiveByWorkspace(payload.workspaceId)
+  if (activeCount >= workspace.maxMembers) {
+    throw new P2pMemberLimitError(workspace.maxMembers)
+  }
+
+  if (existing) {
+    if (existing.status !== 'active') {
+      getMemberRepo().update({
+        id: existing.id,
+        status: 'active',
+        role: payload.member.role,
+        displayName: payload.member.displayName,
+        joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
+        certJson: memberCertJson,
+      })
+      broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
+    }
+    if (!isPeerTrusted(payload.workspaceId, peerDeviceId)) {
+      registerJoiningPeerForTrust(
+        payload.workspaceId,
+        peerDeviceId,
+        payload.member.displayName,
+      )
+      if (p2pConnectionService.isPeerConnected(peerDeviceId)) {
+        promptPeerTrustIfNeeded(payload.workspaceId, peerDeviceId, { connected: true })
+      }
+    }
+    void reconcileOwnerWorkspaceMembers(payload.workspaceId, { immediate: true })
+    maybeActivateWorkspaceVipPool(payload.workspaceId)
+    return
+  }
+
   registerJoiningPeerForTrust(
     payload.workspaceId,
     peerDeviceId,
@@ -1075,6 +1134,7 @@ export async function applyRemoteMemberJoin(
     role: payload.member.role,
     status: 'active',
     joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
+    certJson: memberCertJson,
   })
 
   await appendP2pEvent({
@@ -1106,4 +1166,5 @@ export async function applyRemoteMemberJoin(
   }
 
   void reconcileOwnerWorkspaceMembers(payload.workspaceId, { immediate: true })
+  maybeActivateWorkspaceVipPool(payload.workspaceId)
 }

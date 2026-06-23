@@ -37,6 +37,7 @@ import {
   assertCanManageSharedResource,
   assertCanShareResource,
   assertWorkspaceMemberAccess,
+  getActiveWorkspaceMember,
 } from './p2p-permission.guard'
 import { getDefaultWorkspace } from '../workspace.service'
 import { stripGroupPrefixedName, resolvePersonalStorageWorkspaceId } from './p2p-group-resource-naming'
@@ -485,18 +486,6 @@ function sanitizeKnowledgeDocumentFileName(name: string): string {
   return trimmed.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim()
 }
 
-function sanitizeGroupFolderName(name: string): string {
-  const sanitized = sanitizeKnowledgeDocumentFileName(name)
-  return sanitized || '群组'
-}
-
-function resolveKnowledgeDocumentPermission(
-  metadata: KnowledgeShareMetadata,
-  documentId: string,
-): P2pKnowledgeDocumentPermission {
-  return metadata.documentPermissions?.[documentId] ?? 'read'
-}
-
 export async function setP2pKnowledgeDocumentPermission(rawInput: unknown): Promise<{
   sharedResource: P2pSharedResource
 }> {
@@ -559,18 +548,10 @@ function ensureUserSavedGroupKnowledgeBase(
   storageWorkspaceId: string,
   p2pWorkspaceId: string,
   groupName: string,
-  sharedFolderName: string,
 ): { kbId: string; storagePath: string } {
   const kbRepo = getKnowledgeBaseRepository()
-  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(
-    groupName,
-    sharedFolderName,
-    p2pWorkspaceId,
-  )
-  const displayName = buildP2pGroupSavedKnowledgeDisplayName(
-    savedMeta.groupName,
-    savedMeta.sharedFolderName,
-  )
+  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, undefined, p2pWorkspaceId)
+  const displayName = buildP2pGroupSavedKnowledgeDisplayName(savedMeta.groupName)
   const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
 
   const workspaceRows = kbRepo.listByWorkspace(storageWorkspaceId)
@@ -579,7 +560,6 @@ function ensureUserSavedGroupKnowledgeBase(
     {
       p2pWorkspaceId,
       groupName,
-      sharedFolderName,
     },
     { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
   )
@@ -753,17 +733,15 @@ export async function ensureP2pKnowledgeDocumentSaved(rawInput: unknown): Promis
     throw new Error('群组不存在')
   }
 
-  const sharedRepo = getSharedResourceRepo()
-  const resource = sharedRepo.findById(input.resourceId)
-  const sharedFolderName = resource
-    ? stripGroupPrefixedName(input.workspaceId, resource.name)
-    : '共享文件夹'
+  const member = getActiveWorkspaceMember(input.workspaceId)
+  if (content.sharedBy === member.id) {
+    throw new Error('自己的共享文件请保存在本地知识库，不会写入共享知识库')
+  }
 
   const { kbId, storagePath } = ensureUserSavedGroupKnowledgeBase(
     storageWorkspaceId,
     input.workspaceId,
     p2pWorkspace.name,
-    sharedFolderName,
   )
 
   const fileExt = extname(cachedPath) || extname(content.title)

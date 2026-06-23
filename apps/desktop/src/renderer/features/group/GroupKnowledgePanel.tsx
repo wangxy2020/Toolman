@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { KnowledgeBase, P2pSharedResource } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupKnowledgePickerModal } from './GroupKnowledgePickerModal'
@@ -330,11 +330,11 @@ export function GroupKnowledgePanel({
       }
 
       setRemovingDocumentId(null)
-      setSavedDocumentOverrides((current) => {
-        const next = { ...current }
-        for (const group of current.groups) {
+      setSavedDocumentOverrides((overrides) => {
+        const next = { ...overrides }
+        for (const group of current.savedGroups ?? []) {
           const resourceOverrides = { ...next[group.resourceId] }
-          for (const documentId of group.documentIds) {
+          for (const documentId of group.savedDocumentIds) {
             delete resourceOverrides[documentId]
           }
           if (Object.keys(resourceOverrides).length === 0) {

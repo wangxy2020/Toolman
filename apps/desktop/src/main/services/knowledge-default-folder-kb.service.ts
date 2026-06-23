@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import {
   KnowledgeDefaultFolderEnsureKbInputSchema,
@@ -13,13 +13,19 @@ import {
   ensureWorkspaceKnowledgeFolder,
   ensureWorkspaceLocalFilesFolder,
   ensureWorkspaceNetworkKnowledgeFolder,
+  getWorkspaceKnowledgeFolderPath,
+  getWorkspaceLocalFilesFolderPath,
+  getWorkspaceNetworkKnowledgeFolderPath,
   renameKnowledgeStorageFolder,
 } from './knowledge-folder.service'
 import { listWorkspaces } from './workspace.service'
-import { normalizeFolderPath } from './toolman-user-documents.service'
+import {
+  getToolmanUserFolderName,
+  normalizeFolderPath,
+} from './toolman-user-documents.service'
 import { ensureKnowledgeBaseStorageSource } from './knowledge-kb-storage-source.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
-import { restartKnowledgeWatchersForKb } from './knowledge-watcher.service'
+import { restartKnowledgeWatchersForKb, stopKnowledgeWatchersForKb } from './knowledge-watcher.service'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 
 const DEFAULT_FOLDER_KB_NAME = '默认文件夹'
@@ -65,29 +71,63 @@ function mergeFolderContents(sourceDir: string, destinationDir: string): void {
   }
 }
 
-function renameDefaultFolderOnDisk(
+function purgeLegacyDefaultDiskFolder(
   workspaceId: string,
   baseFolder: string,
-  legacyName: string,
-  nextName: string,
+  legacyFolderName: string,
 ): void {
-  if (legacyName === nextName) return
+  const legacyPath = join(baseFolder, legacyFolderName)
+  const canonicalPath = join(baseFolder, DEFAULT_FOLDER_KB_NAME)
+  if (!existsSync(legacyPath)) return
 
-  const legacyPath = join(baseFolder, legacyName)
-  const nextPath = join(baseFolder, nextName)
+  mkdirSync(canonicalPath, { recursive: true })
+  mergeFolderContents(legacyPath, canonicalPath)
+  renameKnowledgeStorageFolder(workspaceId, legacyPath, canonicalPath)
 
-  if (existsSync(legacyPath) && existsSync(nextPath)) {
-    mergeFolderContents(legacyPath, nextPath)
+  if (existsSync(legacyPath)) {
     try {
-      if (readdirSync(legacyPath).length === 0) {
-        rmdirSync(legacyPath)
-      }
+      rmRecursiveIfInside(baseFolder, legacyPath)
     } catch {
       // ignore cleanup failure
     }
   }
+}
 
-  renameKnowledgeStorageFolder(workspaceId, legacyPath, nextPath)
+function purgeLegacyDefaultDiskFoldersForKind(
+  workspaceId: string,
+  baseFolder: string,
+  kind: keyof typeof DEFAULT_FOLDER_KB_NAMES,
+): void {
+  if (kind === 'local') return
+  purgeLegacyDefaultDiskFolder(workspaceId, baseFolder, LEGACY_DEFAULT_FOLDER_KB_NAMES[kind])
+}
+
+function removeLegacyKnowledgeBaseRows(
+  workspaceId: string,
+  kind: keyof typeof DEFAULT_FOLDER_KB_NAMES,
+): void {
+  if (kind === 'local') return
+
+  const legacyName = LEGACY_DEFAULT_FOLDER_KB_NAMES[kind]
+  const kbRepo = getKnowledgeBaseRepository()
+  const rows = kbRepo.listByWorkspace(workspaceId).filter((row) => row.kind === kind)
+  const canonical = rows.find((row) => row.name === DEFAULT_FOLDER_KB_NAME)
+  const legacyRows = rows.filter((row) => row.name === legacyName)
+
+  for (const legacy of legacyRows) {
+    if (canonical && legacy.id !== canonical.id) {
+      stopKnowledgeWatchersForKb(workspaceId, legacy.id)
+      kbRepo.softDelete(legacy.id, workspaceId)
+      continue
+    }
+    if (!canonical) {
+      kbRepo.update({
+        id: legacy.id,
+        workspaceId,
+        name: DEFAULT_FOLDER_KB_NAME,
+      })
+    }
+  }
 }
 
 function migrateSystemKnowledgeBaseStorageLayout(
@@ -187,11 +227,68 @@ function resolveDefaultFolderKnowledgeBase(
   return existing
 }
 
+function rmRecursiveIfInside(allowedRoot: string, target: string): void {
+  const normalizedRoot = normalizeFolderPath(allowedRoot)
+  const normalizedTarget = normalizeFolderPath(target)
+  if (!normalizedTarget.startsWith(`${normalizedRoot}/`) && normalizedTarget !== normalizedRoot) {
+    return
+  }
+  if (!existsSync(target)) return
+  for (const entry of readdirSync(target)) {
+    const entryPath = join(target, entry)
+    if (statSync(entryPath).isDirectory()) {
+      rmRecursiveIfInside(allowedRoot, entryPath)
+    } else {
+      unlinkSync(entryPath)
+    }
+  }
+  rmdirSync(target)
+}
+
+/** Remove mistaken nested ~/ToolmanData/... mirrors under a knowledge root. */
+function cleanupNestedToolmanDocumentsMirror(root: string): number {
+  const nestedRoot = join(root, 'ToolmanData')
+  if (!existsSync(nestedRoot)) return 0
+
+  const userName = getToolmanUserFolderName()
+  const nestedUserKnowledge = join(nestedRoot, userName, '本地知识库', DEFAULT_FOLDER_KB_NAME)
+  const defaultFolder = join(root, DEFAULT_FOLDER_KB_NAME)
+  mkdirSync(defaultFolder, { recursive: true })
+  if (existsSync(nestedUserKnowledge)) {
+    mergeFolderContents(nestedUserKnowledge, defaultFolder)
+  }
+
+  try {
+    rmRecursiveIfInside(root, nestedRoot)
+  } catch {
+    // ignore cleanup failure
+  }
+
+  return 1
+}
+
+export function cleanupErroneousKnowledgeDiskPaths(): number {
+  let cleaned = 0
+  for (const workspace of listWorkspaces()) {
+    const roots: Array<{ root: string | null; kind: keyof typeof DEFAULT_FOLDER_KB_NAMES }> = [
+      { root: getWorkspaceKnowledgeFolderPath({ workspaceId: workspace.id }), kind: 'local' },
+      { root: getWorkspaceNetworkKnowledgeFolderPath({ workspaceId: workspace.id }), kind: 'network' },
+      { root: getWorkspaceLocalFilesFolderPath({ workspaceId: workspace.id }), kind: 'local_files' },
+    ]
+    for (const { root, kind } of roots) {
+      if (!root) continue
+      cleaned += cleanupNestedToolmanDocumentsMirror(root)
+      purgeLegacyDefaultDiskFoldersForKind(workspace.id, root, kind)
+      removeLegacyKnowledgeBaseRows(workspace.id, kind)
+      cleaned += 1
+    }
+  }
+  return cleaned
+}
+
 export function ensureDefaultFolderKnowledgeBase(input: unknown) {
   const data = KnowledgeDefaultFolderEnsureKbInputSchema.parse(input)
   const name = DEFAULT_FOLDER_KB_NAMES[data.kind]
-  const legacyName =
-    data.kind === 'local' ? null : LEGACY_DEFAULT_FOLDER_KB_NAMES[data.kind]
   const folderPath =
     data.kind === 'network'
       ? ensureWorkspaceNetworkKnowledgeFolder({ workspaceId: data.workspaceId })
@@ -207,9 +304,8 @@ export function ensureDefaultFolderKnowledgeBase(input: unknown) {
     kind: data.kind,
   })
 
-  if (legacyName) {
-    renameDefaultFolderOnDisk(data.workspaceId, folderPath, legacyName, name)
-  }
+  purgeLegacyDefaultDiskFoldersForKind(data.workspaceId, folderPath, data.kind)
+  removeLegacyKnowledgeBaseRows(data.workspaceId, data.kind)
 
   migrateSystemKnowledgeBaseStorageLayout(data.workspaceId, kb.id, folderPath, name)
 
@@ -252,5 +348,6 @@ export function migrateAllDefaultFolderKnowledgeBases(): {
     }
   }
 
+  cleanupErroneousKnowledgeDiskPaths()
   return { workspaceCount, migratedKinds }
 }

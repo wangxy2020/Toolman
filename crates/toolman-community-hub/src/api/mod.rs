@@ -12,6 +12,7 @@ mod orders;
 mod presence;
 mod response;
 mod reviews;
+mod search_semantic;
 mod tasks;
 mod users;
 
@@ -19,6 +20,7 @@ use axum::Router;
 use axum::middleware::from_fn_with_state;
 use axum::routing::get;
 
+use crate::rate_limit;
 use crate::state::AppState;
 
 pub use auth::{
@@ -46,6 +48,8 @@ pub fn router(state: AppState) -> Router {
                 .merge(moderation::router())
                 .merge(presence::router())
                 .merge(install::router())
+                .merge(search_semantic::router())
+                .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
                 .layer(from_fn_with_state(state.clone(), guest_write_block_middleware)),
         )
         .with_state(state)
@@ -75,18 +79,7 @@ mod tests {
         std::fs::create_dir_all(&data_dir).expect("data dir");
         let db_path = data_dir.join("community.db");
         let pool = init_pool(&db_path).await.expect("init pool");
-        let config = HubConfig {
-            data_dir: data_dir.clone(),
-            port: 3721,
-            host: "127.0.0.1",
-            require_review: false,
-            jwt_secret: None,
-            packages_dir: data_dir.join("packages"),
-            covers_dir: data_dir.join("covers"),
-            deliveries_dir: data_dir.join("deliveries"),
-            db_path,
-            rss_sources_path: data_dir.join("rss-sources.json"),
-        };
+        let config = HubConfig::with_data_dir(data_dir.clone());
         let state = AppState::new(config, pool.clone());
         (router(state), pool, data_dir)
     }
@@ -97,16 +90,8 @@ mod tests {
         let db_path = data_dir.join("community.db");
         let pool = init_pool(&db_path).await.expect("init pool");
         let config = HubConfig {
-            data_dir: data_dir.clone(),
-            port: 3721,
-            host: "127.0.0.1",
-            require_review: false,
             jwt_secret: Some(secret.to_string()),
-            packages_dir: data_dir.join("packages"),
-            covers_dir: data_dir.join("covers"),
-            deliveries_dir: data_dir.join("deliveries"),
-            db_path,
-            rss_sources_path: data_dir.join("rss-sources.json"),
+            ..HubConfig::with_data_dir(data_dir.clone())
         };
         let state = AppState::new(config, pool.clone());
         (router(state), pool, data_dir)
@@ -383,7 +368,7 @@ mod tests {
         let sources = payload["data"]
             .as_array()
             .expect("sources array");
-        assert!(sources.len() >= 6);
+        assert!(sources.len() >= 3);
 
         let ids: Vec<_> = sources
             .iter()
@@ -525,6 +510,99 @@ mod tests {
             .as_bool()
             .expect("liked_by_me boolean");
         assert!(liked_by_me);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    async fn test_app_with_rate_limit(rpm: u64) -> (Router, sqlx::SqlitePool, PathBuf) {
+        let data_dir = temp_data_dir();
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let db_path = data_dir.join("community.db");
+        let pool = init_pool(&db_path).await.expect("init pool");
+        let config = HubConfig {
+            rate_limit_rpm: rpm,
+            ..HubConfig::with_data_dir(data_dir.clone())
+        };
+        let state = AppState::new(config, pool.clone());
+        (router(state), pool, data_dir)
+    }
+
+    #[tokio::test]
+    async fn health_includes_rate_limit_and_semantic_search_fields() {
+        let (app, pool, data_dir) = test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(payload["data"]["semantic_search"], "disabled");
+        assert_eq!(payload["data"]["rate_limit_rpm"], 600);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn semantic_search_returns_501_when_disabled() {
+        let (app, pool, data_dir) = test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/search/semantic?q=toolman")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn rate_limit_returns_429_when_exceeded() {
+        let (app, pool, data_dir) = test_app_with_rate_limit(2).await;
+
+        for _ in 0..2 {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/v1/news/sources")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        let limited = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/news/sources")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+        assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);

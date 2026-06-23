@@ -10,7 +10,7 @@ import { P2pMemberTrustDeviceInputSchema } from '@toolman/shared'
 import { eq } from 'drizzle-orm'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceId } from './p2p-device-identity.service'
-import { listP2pDiscoveredNodes } from './p2p-discovery.service'
+import { isP2pPeerDiscoverableOnline, listP2pDiscoveredNodes } from './p2p-discovery.service'
 import { broadcastP2pPeerTrustRequired } from './p2p-peer-broadcast'
 import { P2pBridge } from './p2p-bridge'
 import { notifyP2pPeerConnected } from './p2p-sync-lifecycle'
@@ -162,6 +162,7 @@ export function promptPeerTrustIfNeeded(
 export function handlePeerDiscoveryOffline(peerDeviceId: string): void {
   const localDeviceId = getP2pDeviceId()
   if (peerDeviceId === localDeviceId) return
+  if (isP2pPeerDiscoverableOnline(peerDeviceId)) return
 
   const peerRepo = getPeerRepo()
   const rows = getDatabase()

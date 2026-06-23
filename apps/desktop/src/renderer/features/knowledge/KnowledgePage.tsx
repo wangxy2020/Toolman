@@ -718,9 +718,7 @@ export function KnowledgePage({
           ) : (
             <div className="tm-module-empty">
               <h2 className="tm-module-empty-title">共享知识库</h2>
-              <p className="tm-module-empty-hint">
-                暂无已保存的共享文件夹。请在群组知识库中保存文件后，会在此显示可管理的本地副本。
-              </p>
+              <p className="tm-module-empty-hint">暂无文件夹</p>
             </div>
           )
         ) : section === 'file-tools' ? (

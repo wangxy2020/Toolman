@@ -32,7 +32,8 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
     headerSegments: ['全部自动化'],
     sidebarEmptyHint: '暂无自动化，点击上方新建',
     contentEmptyTitle: '自动化',
-    contentEmptyHint: '在此配置自动化任务与工作流，功能开发中。',
+    contentEmptyHint:
+      '自动化与工作流功能即将上线。可在 设置 → 显示 → 隐藏的图标 中预先启用导航入口。',
   },
   group: {
     title: '群组',
@@ -40,7 +41,8 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
     headerSegments: ['我创建的群组'],
     sidebarEmptyHint: '暂无群组，点击上方创建',
     contentEmptyTitle: '群组',
-    contentEmptyHint: '在此协作与群组对话，功能开发中。',
+    contentEmptyHint:
+      '创建或加入群组，与成员协作共享知识库、笔记与智能体，支持局域网与广域网 P2P 同步。',
   },
   community: {
     title: '社区',
@@ -48,7 +50,8 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
     headerSegments: ['发现'],
     sidebarEmptyHint: '暂无订阅，点击上方探索',
     contentEmptyTitle: '社区',
-    contentEmptyHint: '在此浏览与分享智能体，功能开发中。',
+    contentEmptyHint:
+      '浏览与安装 MCP、技能、工作流与知识资源，参与社区任务、资讯与留言互动。',
   },
 }
 

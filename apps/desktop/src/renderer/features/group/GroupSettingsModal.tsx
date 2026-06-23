@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   IpcChannel,
+  replicationTopologyLabel,
+  type P2pReplicationTopology,
   type P2pSequencingMode,
   type P2pSyncPeerStatus,
   type P2pSyncStatus,
@@ -13,6 +15,8 @@ interface SyncStatusProps {
   error: string | null
   sequencingMode: P2pSequencingMode
   ownerOnline: boolean
+  replicationTopology: P2pReplicationTopology
+  meshPeersConnected: number
   lastEventSeq: number
   lastSyncAt?: number
   peers: P2pSyncPeerStatus[]
@@ -226,6 +230,11 @@ export function GroupSettingsModal({
   const sequencingLabel =
     formatSequencingMode(syncStatus.sequencingMode) +
     (!isOwner && !syncStatus.ownerOnline ? '（群主离线）' : '')
+  const replicationLabel = replicationTopologyLabel(syncStatus.replicationTopology)
+  const meshDetail =
+    syncStatus.replicationTopology === 'member_mesh'
+      ? ` · ${syncStatus.meshPeersConnected} 个成员节点`
+      : ''
 
   return (
     <div className="tm-modal-overlay tm-modal-overlay--group-settings" onClick={onClose}>
@@ -368,6 +377,13 @@ export function GroupSettingsModal({
                   <div className="tm-group-settings-stat-card">
                     <span className="tm-group-settings-stat-label">序号模式</span>
                     <span className="tm-group-settings-stat-value">{sequencingLabel}</span>
+                  </div>
+                  <div className="tm-group-settings-stat-card">
+                    <span className="tm-group-settings-stat-label">复制拓扑</span>
+                    <span className="tm-group-settings-stat-value">
+                      {replicationLabel}
+                      {meshDetail}
+                    </span>
                   </div>
                   <div className="tm-group-settings-stat-card">
                     <span className="tm-group-settings-stat-label">最新事件序号</span>

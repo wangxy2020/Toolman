@@ -4,6 +4,11 @@ import {
   P2pWorkspaceRepository,
 } from '@toolman/db'
 import type { P2pConnectionInfo, P2pMember, P2pSyncStatus, WorkspaceEvent } from '@toolman/shared'
+import {
+  orderMeshCatchUpPeers,
+  resolveReplicationTopology,
+  type MeshPeerSyncCandidate,
+} from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
 import {
@@ -399,10 +404,7 @@ async function handleReplicationMessage(
           member: {
             id: message.member.id,
             workspaceId: message.workspaceId,
-            identityId:
-              'identityId' in message.member && typeof message.member.identityId === 'string'
-                ? message.member.identityId
-                : '',
+            identityId: message.member.identityId ?? '',
             deviceId: message.member.deviceId,
             displayName: message.member.displayName,
             role: message.member.role as P2pMember['role'],
@@ -411,6 +413,7 @@ async function handleReplicationMessage(
           },
           inviteId: message.inviteId,
           peerDeviceId,
+          subscriptionSku: message.member.subscriptionSku,
         },
         { requirePeerTrust: false },
       )
@@ -506,16 +509,65 @@ const joinerCatchUpInFlight = new Map<string, Promise<void>>()
 const joinerCatchUpScheduled = new Map<string, ReturnType<typeof setTimeout>>()
 const JOINER_CATCH_UP_DEBOUNCE_MS = 1500
 
-async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string): Promise<void> {
-  ensureOwnerPeerTrustedForSync(workspaceId, ownerDeviceId)
+async function catchUpFromMeshPeers(workspaceId: string): Promise<number> {
+  await reconcileWorkspaceMemberMesh(workspaceId, { immediate: true })
 
-  if (isPeerConnected(ownerDeviceId)) {
-    await ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
-  } else {
-    await ensureMemberConnectsToOwner(workspaceId)
+  const localLatestSeq = getWorkspaceLatestSeq(workspaceId)
+  const connections = await listP2pConnections()
+  const peerDeviceIds = listWorkspacePeerDeviceIds(workspaceId)
+  const ownerDeviceId = getWorkspaceOwnerDeviceId(workspaceId)
+
+  const candidates: MeshPeerSyncCandidate[] = peerDeviceIds
+    .filter((deviceId) => deviceId !== ownerDeviceId)
+    .map((deviceId) => {
+      const cursor = getCursorRepo().findByWorkspaceAndPeer(workspaceId, deviceId)
+      const connection = connections.find((item) => item.peerDeviceId === deviceId)
+      return {
+        deviceId,
+        connected: connection?.state === 'connected',
+        lastReceivedSeq: cursor?.lastReceivedSeq ?? 0,
+        lastSentSeq: cursor?.lastSentSeq ?? 0,
+      }
+    })
+
+  const orderedPeerIds = orderMeshCatchUpPeers(localLatestSeq, candidates)
+  let syncedPeers = 0
+
+  for (const peerDeviceId of orderedPeerIds) {
+    if (!isPeerTrusted(workspaceId, peerDeviceId)) continue
+    try {
+      await syncWithPeer(workspaceId, peerDeviceId)
+      syncedPeers += 1
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'mesh catch-up failed'
+      console.warn(`[p2p] mesh catch-up with ${peerDeviceId} failed: ${message}`)
+    }
   }
 
-  await syncWithPeer(workspaceId, ownerDeviceId)
+  return syncedPeers
+}
+
+async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string): Promise<void> {
+  const connections = await listP2pConnections()
+  const ownerOnline = isOwnerPeerConnected(workspaceId, connections)
+
+  if (ownerOnline) {
+    ensureOwnerPeerTrustedForSync(workspaceId, ownerDeviceId)
+
+    if (isPeerConnected(ownerDeviceId)) {
+      await ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
+    } else {
+      await ensureMemberConnectsToOwner(workspaceId)
+    }
+
+    await syncWithPeer(workspaceId, ownerDeviceId)
+  } else {
+    const syncedPeers = await catchUpFromMeshPeers(workspaceId)
+    if (syncedPeers === 0) {
+      console.warn(`[p2p] owner offline and no mesh peers available for ${workspaceId}`)
+    }
+  }
+
   await syncMissingWorkspaceBlobs(workspaceId)
   reconcileAgentSharedResources(workspaceId)
   await syncMissingSharedKnowledgeDocuments(workspaceId)
@@ -747,6 +799,8 @@ export function getP2pSyncStatus(workspaceId: string): {
   error?: string
   sequencingMode: ReturnType<typeof getWorkspaceSequencingMode>
   ownerOnline: boolean
+  replicationTopology: ReturnType<typeof resolveReplicationTopology>
+  meshPeersConnected: number
 } {
   const state = getWorkspaceState(workspaceId)
   const connections = knownConnectionsSnapshot()
@@ -756,6 +810,14 @@ export function getP2pSyncStatus(workspaceId: string): {
     getWorkspaceLatestSeq(workspaceId),
     workspaceRow?.lastEventSeq ?? 0,
   )
+  const ownerOnline = isOwnerPeerConnected(workspaceId, connections)
+  const ownerDeviceId = workspaceRow?.ownerDeviceId
+  const meshPeersConnected = peerDeviceIds.filter((peerDeviceId) => {
+    if (peerDeviceId === ownerDeviceId) return false
+    return connections.some(
+      (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
+    )
+  }).length
 
   return {
     status: syncingWorkspaces.has(workspaceId) ? 'syncing' : state.status,
@@ -771,7 +833,9 @@ export function getP2pSyncStatus(workspaceId: string): {
     pendingFiles: 0,
     error: state.error,
     sequencingMode: getWorkspaceSequencingMode(workspaceId, connections),
-    ownerOnline: isOwnerPeerConnected(workspaceId, connections),
+    ownerOnline,
+    replicationTopology: resolveReplicationTopology({ ownerOnline, meshPeersConnected }),
+    meshPeersConnected,
   }
 }
 

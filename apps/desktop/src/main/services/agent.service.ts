@@ -580,10 +580,8 @@ export async function sendMessage(input: unknown) {
   const localDeviceId = getP2pDeviceInfo().deviceId
   const isGroupProxyClient =
     !isRelayExecution && proxyMeta && proxyMeta.permission === 'callable'
-  const isRemoteProxy =
-    isGroupProxyClient && proxyMeta.ownerDeviceId !== localDeviceId
 
-  if (isGroupProxyClient) {
+  if (isGroupProxyClient && proxyMeta) {
     console.log(
       `[p2p] group proxy send: sessionId=${data.sessionId} ownerDeviceId=${proxyMeta.ownerDeviceId} sourceSessionId=${proxyMeta.sourceSessionId} local=${proxyMeta.ownerDeviceId === localDeviceId}`,
     )

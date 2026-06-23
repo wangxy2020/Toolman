@@ -263,7 +263,12 @@ export async function ingestNotesToKnowledgeBase(input: unknown) {
   }
 
   const storagePath = resolveKnowledgeBaseStoragePath(
-    { workspaceId: data.workspaceId, name: kb.name, kind: kb.kind as 'local' | 'network' },
+    {
+      workspaceId: data.workspaceId,
+      name: kb.name,
+      kind: kb.kind as 'local' | 'network',
+      description: kb.description,
+    },
     { ensure: true },
   )
   if (!storagePath) {

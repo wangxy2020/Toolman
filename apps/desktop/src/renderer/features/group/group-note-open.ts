@@ -4,8 +4,8 @@ export interface OpenGroupNoteRequest {
   noteId: string
   workspaceId: string
   workspaceName: string
-  permission: P2pSharedResourcePermission
-  sharedBy: string
+  permission?: P2pSharedResourcePermission
+  sharedBy?: string
   title: string
   notebookId?: string
   notebookName?: string

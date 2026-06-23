@@ -18,6 +18,7 @@ pub mod storage_service;
 pub mod task_market_service;
 pub mod task_review_service;
 pub mod workflow_market_service;
+pub mod embedding_service;
 
 pub use admin_management_service::{
     AdminManagementError, AdminManagementService, ModeratorUserItem,
@@ -83,6 +84,7 @@ pub use search_service::{
     SearchHit, SearchService, SearchSort, SearchTargetType, UnifiedSearchQuery,
     ResourceSearchFilter,
 };
+pub use embedding_service::EmbeddingService;
 pub use storage_service::{
     max_package_bytes, manifest_filename, package_extension, StorageError, StorageService,
     StorePackageInput, StoredPackage,

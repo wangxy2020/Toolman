@@ -1,4 +1,4 @@
-import type { P2pEventType, P2pResourceType, WorkspaceEvent } from '@toolman/shared'
+import type { P2pEventType, P2pResourceType, ProductSku, WorkspaceEvent } from '@toolman/shared'
 
 export const P2P_REPLICATION_VERSION = 1
 
@@ -76,6 +76,8 @@ export type ReplicationMessage =
         deviceId: string
         displayName: string
         role: string
+        identityId?: string
+        subscriptionSku?: ProductSku
       }
     }
   | {

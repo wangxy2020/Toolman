@@ -19,6 +19,7 @@ import {
 } from './SettingsShared'
 import type { SettingsSectionId } from './settings-nav'
 import { QuickPhrasesSettingsPanel } from './QuickPhrasesSettingsPanel'
+import { DiagnosticsSettingsPanel } from './DiagnosticsSettingsPanel'
 
 interface Props {
   section: SettingsSectionId
@@ -177,6 +178,9 @@ export function SettingsPanelContent({
           ))}
         </SettingsSection>
       )
+
+    case 'diagnostics':
+      return <DiagnosticsSettingsPanel />
 
     case 'about':
       return <AboutSettingsPanel />

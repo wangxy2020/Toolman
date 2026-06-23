@@ -11,6 +11,7 @@ export type SettingsSectionId =
   | 'documents'
   | 'quick-phrases'
   | 'shortcuts'
+  | 'diagnostics'
   | 'about'
 
 export const SETTINGS_NAV_GROUPS: { id: SettingsSectionId; label: string }[][] = [
@@ -29,6 +30,7 @@ export const SETTINGS_NAV_GROUPS: { id: SettingsSectionId; label: string }[][] =
     { id: 'documents', label: '文档处理' },
     { id: 'quick-phrases', label: '快捷短语' },
     { id: 'shortcuts', label: '快捷键' },
+    { id: 'diagnostics', label: '系统诊断' },
   ],
   [{ id: 'about', label: '关于我们' }],
 ]

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { KnowledgeBase, KnowledgeFolderKind } from '@toolman/shared'
-import { ensureDefaultFolderKb } from './knowledge-import-files'
+import type { KnowledgeBase } from '@toolman/shared'
+import { ensureDefaultFolderKb, type DefaultFolderKnowledgeKind } from './knowledge-import-files'
 
 export function useDefaultFolderKnowledgeBase(
   workspaceId: string | null,
-  kind: KnowledgeFolderKind,
+  kind: DefaultFolderKnowledgeKind,
   enabled: boolean,
 ) {
   const [kb, setKb] = useState<KnowledgeBase | null>(null)

@@ -1128,17 +1128,15 @@ mod tests {
         let like = service.like_article(&user, &article.id).await.expect("like");
         assert_eq!(like.like_count, 1);
 
-        let duplicate_favorite = service.favorite_article(&user, &article.id).await;
-        assert!(matches!(
-            duplicate_favorite,
-            Err(NewsServiceError::FavoriteConflict)
-        ));
+        let duplicate_favorite = service.favorite_article(&user, &article.id).await.expect("unfavorite");
+        assert_eq!(duplicate_favorite.favorite_count, 0);
+        assert_eq!(duplicate_favorite.favorited, Some(false));
 
         let duplicate_like = service.like_article(&user, &article.id).await.expect("unlike");
         assert_eq!(duplicate_like.like_count, 0);
 
         let updated = service.get_article(&article.id, None).await.expect("get");
-        assert_eq!(updated.favorite_count, 1);
+        assert_eq!(updated.favorite_count, 0);
         assert_eq!(updated.like_count, 0);
 
         pool.close().await;

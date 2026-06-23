@@ -19,6 +19,7 @@ import {
   P2pAgentSessionPermissionSchema,
   P2pKnowledgeDocumentPermissionSchema,
   P2pSequencingModeSchema,
+  P2pReplicationTopologySchema,
   P2pSharedResourceStatusSchema,
   P2pResourceTypeSchema,
   P2pSyncStatusSchema,
@@ -105,7 +106,7 @@ export const P2pConnectionListOutputSchema = z.object({
 export const P2pWorkspaceCreateInputSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  maxMembers: z.number().int().min(1).max(10).optional(),
+  maxMembers: z.number().int().min(1).max(50).optional(),
 })
 
 export const P2pWorkspaceCreateOutputSchema = z.object({
@@ -262,6 +263,8 @@ export const P2pSyncStatusOutputSchema = z.object({
   error: z.string().optional(),
   sequencingMode: P2pSequencingModeSchema,
   ownerOnline: z.boolean(),
+  replicationTopology: P2pReplicationTopologySchema,
+  meshPeersConnected: z.number().int().nonnegative(),
 })
 
 export const P2pSyncForceInputSchema = z.object({

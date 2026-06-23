@@ -9,9 +9,13 @@ pub const ENV_PORT: &str = "COMMUNITY_HUB_PORT";
 pub const ENV_REQUIRE_REVIEW: &str = "COMMUNITY_HUB_REQUIRE_REVIEW";
 pub const ENV_CONFIG_FILE: &str = "COMMUNITY_HUB_CONFIG_FILE";
 pub const ENV_JWT_SECRET: &str = "COMMUNITY_HUB_JWT_SECRET";
+pub const ENV_RATE_LIMIT_RPM: &str = "COMMUNITY_HUB_RATE_LIMIT_RPM";
+pub const ENV_SEMANTIC_SEARCH: &str = "COMMUNITY_HUB_SEMANTIC_SEARCH";
+pub const ENV_EMBEDDING_URL: &str = "COMMUNITY_HUB_EMBEDDING_URL";
 
 pub const DEFAULT_PORT: u16 = 3721;
 pub const DEFAULT_HOST: &str = "127.0.0.1";
+pub const DEFAULT_RATE_LIMIT_RPM: u64 = 600;
 
 const HUB_CONFIG_FILE: &str = "hub.json";
 const RSS_SOURCES_FILE: &str = "rss-sources.json";
@@ -45,6 +49,10 @@ pub struct HubConfig {
     pub deliveries_dir: PathBuf,
     pub db_path: PathBuf,
     pub rss_sources_path: PathBuf,
+    /// Requests per minute for `/api/v1/*`. `0` disables rate limiting.
+    pub rate_limit_rpm: u64,
+    pub semantic_search_enabled: bool,
+    pub embedding_provider_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +79,9 @@ impl HubConfig {
         let port = resolve_port(&file_config);
         let require_review = resolve_require_review(&file_config);
         let jwt_secret = resolve_jwt_secret();
+        let rate_limit_rpm = resolve_rate_limit_rpm();
+        let semantic_search_enabled = resolve_semantic_search_enabled();
+        let embedding_provider_url = resolve_embedding_provider_url();
 
         let packages_dir = data_dir.join("packages");
         let covers_dir = data_dir.join("covers");
@@ -89,7 +100,28 @@ impl HubConfig {
             deliveries_dir,
             db_path,
             rss_sources_path,
+            rate_limit_rpm,
+            semantic_search_enabled,
+            embedding_provider_url,
         })
+    }
+
+    pub fn with_data_dir(data_dir: PathBuf) -> Self {
+        Self {
+            data_dir: data_dir.clone(),
+            port: DEFAULT_PORT,
+            host: DEFAULT_HOST,
+            require_review: false,
+            jwt_secret: None,
+            packages_dir: data_dir.join("packages"),
+            covers_dir: data_dir.join("covers"),
+            deliveries_dir: data_dir.join("deliveries"),
+            db_path: data_dir.join("community.db"),
+            rss_sources_path: data_dir.join(RSS_SOURCES_FILE),
+            rate_limit_rpm: DEFAULT_RATE_LIMIT_RPM,
+            semantic_search_enabled: false,
+            embedding_provider_url: None,
+        }
     }
 
     pub fn bootstrap(&self) -> Result<(), ConfigError> {
@@ -216,6 +248,30 @@ fn resolve_jwt_secret() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+fn resolve_rate_limit_rpm() -> u64 {
+    if let Ok(value) = std::env::var(ENV_RATE_LIMIT_RPM) {
+        if let Ok(parsed) = value.trim().parse::<u64>() {
+            return parsed;
+        }
+        warn!(value = %value, "invalid {ENV_RATE_LIMIT_RPM}, using default");
+    }
+    DEFAULT_RATE_LIMIT_RPM
+}
+
+fn resolve_semantic_search_enabled() -> bool {
+    std::env::var(ENV_SEMANTIC_SEARCH)
+        .ok()
+        .map(|value| matches!(value.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+fn resolve_embedding_provider_url() -> Option<String> {
+    std::env::var(ENV_EMBEDDING_URL)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 pub fn default_rss_sources() -> Vec<RssSourceSeed> {
     vec![
         RssSourceSeed {
@@ -309,18 +365,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
 
-        let config = HubConfig {
-            data_dir: base.clone(),
-            port: DEFAULT_PORT,
-            host: DEFAULT_HOST,
-            require_review: false,
-            jwt_secret: None,
-            packages_dir: base.join("packages"),
-            covers_dir: base.join("covers"),
-            deliveries_dir: base.join("deliveries"),
-            db_path: base.join("community.db"),
-            rss_sources_path: base.join(RSS_SOURCES_FILE),
-        };
+        let config = HubConfig::with_data_dir(base.clone());
 
         config.bootstrap().expect("bootstrap");
 
@@ -349,5 +394,21 @@ mod tests {
         assert!(resolve_require_review(&file_config));
         std::env::remove_var(ENV_PORT);
         std::env::remove_var(ENV_REQUIRE_REVIEW);
+    }
+
+    #[test]
+    fn env_overrides_rate_limit_and_semantic_search() {
+        std::env::set_var(ENV_RATE_LIMIT_RPM, "120");
+        std::env::set_var(ENV_SEMANTIC_SEARCH, "true");
+        std::env::set_var(ENV_EMBEDDING_URL, "http://127.0.0.1:11434/v1");
+        assert_eq!(resolve_rate_limit_rpm(), 120);
+        assert!(resolve_semantic_search_enabled());
+        assert_eq!(
+            resolve_embedding_provider_url().as_deref(),
+            Some("http://127.0.0.1:11434/v1")
+        );
+        std::env::remove_var(ENV_RATE_LIMIT_RPM);
+        std::env::remove_var(ENV_SEMANTIC_SEARCH);
+        std::env::remove_var(ENV_EMBEDDING_URL);
     }
 }

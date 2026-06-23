@@ -4,6 +4,12 @@ export enum IpcChannel {
   AppShellOpenPath = 'app:shell:open-path',
   AppShellRevealPath = 'app:shell:reveal-path',
   AppGetStorageStats = 'app:storage:stats',
+  AppGetDiagnostics = 'app:diagnostics:get',
+
+  BillingListPlans = 'billing:plans:list',
+  BillingCreateOrder = 'billing:order:create',
+  BillingGetOrderStatus = 'billing:order:status',
+  BillingMockPay = 'billing:order:mock-pay',
   AppClearCache = 'app:storage:clear-cache',
   AppBackupData = 'app:storage:backup',
   AppRestoreData = 'app:storage:restore',

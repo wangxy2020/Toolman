@@ -8,13 +8,17 @@ import {
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
 
-const DEFAULT_FOLDER_KB_NAMES: Record<KnowledgeFolderKind, string> = {
+type DefaultFolderKnowledgeKind = Exclude<KnowledgeFolderKind, 'shared'>
+
+export type { DefaultFolderKnowledgeKind }
+
+const DEFAULT_FOLDER_KB_NAMES: Record<DefaultFolderKnowledgeKind, string> = {
   local: SYSTEM_DEFAULT_FOLDER_KB_NAME,
   network: SYSTEM_DEFAULT_FOLDER_KB_NAME,
   local_files: SYSTEM_DEFAULT_FOLDER_KB_NAME,
 }
 
-const ENSURE_FOLDER_CHANNELS: Record<KnowledgeFolderKind, IpcChannel> = {
+const ENSURE_FOLDER_CHANNELS: Record<DefaultFolderKnowledgeKind, IpcChannel> = {
   local: IpcChannel.KnowledgeFolderEnsure,
   network: IpcChannel.KnowledgeNetworkFolderEnsure,
   local_files: IpcChannel.KnowledgeLocalFilesFolderEnsure,
@@ -32,7 +36,7 @@ async function invokeIpc<T>(channel: IpcChannel, input: unknown): Promise<T | nu
 
 async function ensureDefaultFolderPath(
   workspaceId: string,
-  kind: KnowledgeFolderKind,
+  kind: DefaultFolderKnowledgeKind,
 ): Promise<string | null> {
   const data = await invokeIpc<{ path: string }>(ENSURE_FOLDER_CHANNELS[kind], { workspaceId })
   return data?.path ?? null
@@ -40,7 +44,7 @@ async function ensureDefaultFolderPath(
 
 async function findOrCreateDefaultFolderKb(
   workspaceId: string,
-  kind: KnowledgeFolderKind,
+  kind: DefaultFolderKnowledgeKind,
 ): Promise<KnowledgeBase | null> {
   const listData = await invokeIpc<{ items: KnowledgeBase[] }>(IpcChannel.KnowledgeBaseList, {
     workspaceId,
@@ -53,7 +57,7 @@ async function findOrCreateDefaultFolderKb(
     listData.items.find((item) => item.name === name)
   if (existing) return existing
 
-  const descriptions: Record<KnowledgeFolderKind, string> = {
+  const descriptions: Record<DefaultFolderKnowledgeKind, string> = {
     local: '默认文件夹知识库',
     network: '默认文件夹知识库',
     local_files: '默认文件夹存储',
@@ -78,7 +82,7 @@ interface ImportTarget {
 
 export async function ensureDefaultFolderKb(
   workspaceId: string,
-  kind: KnowledgeFolderKind,
+  kind: DefaultFolderKnowledgeKind,
 ): Promise<{ kb: KnowledgeBase; folderPath: string } | null> {
   try {
     const data = await invokeIpc<{ kb: KnowledgeBase; folderPath: string }>(

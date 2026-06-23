@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type KnowledgeFolderKind } from '@toolman/shared'
 
-const ENSURE_CHANNELS: Record<KnowledgeFolderKind, IpcChannel> = {
+type DefaultFolderKnowledgeKind = Exclude<KnowledgeFolderKind, 'shared'>
+
+const ENSURE_CHANNELS: Record<DefaultFolderKnowledgeKind, IpcChannel> = {
   local: IpcChannel.KnowledgeFolderEnsure,
   network: IpcChannel.KnowledgeNetworkFolderEnsure,
   local_files: IpcChannel.KnowledgeLocalFilesFolderEnsure,
 }
 
 const SETTINGS_KEYS: Record<
-  KnowledgeFolderKind,
+  DefaultFolderKnowledgeKind,
   'knowledgeFolderPath' | 'networkKnowledgeFolderPath' | 'localFilesFolderPath'
 > = {
   local: 'knowledgeFolderPath',
@@ -16,7 +18,10 @@ const SETTINGS_KEYS: Record<
   local_files: 'localFilesFolderPath',
 }
 
-export function useKnowledgeDefaultFolder(workspaceId: string | null, kind: KnowledgeFolderKind) {
+export function useKnowledgeDefaultFolder(
+  workspaceId: string | null,
+  kind: DefaultFolderKnowledgeKind,
+) {
   const [path, setPath] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

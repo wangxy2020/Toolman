@@ -137,6 +137,10 @@ export function listP2pDiscoveredNodes(onlineOnly = false): DiscoveredNode[] {
   return P2pBridge.discoveryListNodes(onlineOnly).map(mapNativeNode)
 }
 
+export function isP2pPeerDiscoverableOnline(peerDeviceId: string): boolean {
+  return listP2pDiscoveredNodes(true).some((node) => node.deviceId === peerDeviceId)
+}
+
 export function isP2pDiscoveryRunning(): boolean {
   return P2pBridge.discoveryIsRunning()
 }

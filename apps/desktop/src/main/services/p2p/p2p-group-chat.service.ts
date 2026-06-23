@@ -15,7 +15,8 @@ import {
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
-import { listP2pConnections, getKnownP2pConnections, ensurePeerReadyForWorkspace } from './p2p-connection.service'
+import { listP2pConnections, getKnownP2pConnections, ensurePeerReadyForWorkspace, isPeerConnected } from './p2p-connection.service'
+import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { applyRemoteMemberJoin, ensureOwnerMemberRecord } from './p2p-member.service'
@@ -25,6 +26,11 @@ import {
 } from './p2p-group-chat-broadcast'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { getIdentityProfile } from '../identity.service'
+import { isOwnerPeerConnected } from './p2p-sync-sequencing'
+import {
+  buildGroupChatRelayExcludeDeviceIds,
+  shouldRelayGroupChatAfterReceive,
+} from './p2p-group-chat-relay'
 
 export const GROUP_CHAT_CHANNEL = 'group-chat'
 export const P2P_EVENTS_CHANNEL = 'events'
@@ -118,6 +124,12 @@ async function relayMessageToPeers(
     [...peerDeviceIds]
       .filter((peerDeviceId) => !excludeDeviceIds.has(peerDeviceId))
       .map(async (peerDeviceId) => {
+        if (
+          !isP2pPeerDiscoverableOnline(peerDeviceId) &&
+          !isPeerConnected(peerDeviceId)
+        ) {
+          return
+        }
         try {
           await ensurePeerReadyForWorkspace(peerDeviceId, message.workspaceId)
           await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
@@ -193,6 +205,12 @@ async function relayClearToPeers(workspaceId: string): Promise<void> {
 
   await Promise.all(
     [...peerDeviceIds].map(async (peerDeviceId) => {
+      if (
+        !isP2pPeerDiscoverableOnline(peerDeviceId) &&
+        !isPeerConnected(peerDeviceId)
+      ) {
+        return
+      }
       try {
         await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
         await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
@@ -239,13 +257,32 @@ export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean
   return { deleted: true }
 }
 
-function maybeRelayGroupChatAsOwner(peerDeviceId: string, message: P2pGroupChatMessage): void {
+async function maybeRelayGroupChatAfterReceive(
+  senderDeviceId: string,
+  message: P2pGroupChatMessage,
+): Promise<void> {
   const workspace = getWorkspaceRepo().findById(message.workspaceId)
-  const localDeviceId = getP2pDeviceInfo().deviceId
-  if (!workspace || workspace.ownerDeviceId !== localDeviceId) return
-  if (peerDeviceId === localDeviceId) return
+  if (!workspace) return
 
-  void relayMessageToPeers(message, new Set([localDeviceId, peerDeviceId]))
+  const localDeviceId = getP2pDeviceInfo().deviceId
+  const connections = await listP2pConnections()
+  const ownerPeerConnected = isOwnerPeerConnected(message.workspaceId, connections)
+
+  if (
+    !shouldRelayGroupChatAfterReceive({
+      localDeviceId,
+      ownerDeviceId: workspace.ownerDeviceId,
+      senderDeviceId,
+      ownerPeerConnected,
+    })
+  ) {
+    return
+  }
+
+  void relayMessageToPeers(
+    message,
+    buildGroupChatRelayExcludeDeviceIds(localDeviceId, senderDeviceId),
+  )
 }
 
 export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buffer): void {
@@ -364,5 +401,5 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
 
   appendMessage(message.workspaceId, message)
   broadcastP2pGroupChatMessage(message)
-  maybeRelayGroupChatAsOwner(peerDeviceId, message)
+  void maybeRelayGroupChatAfterReceive(peerDeviceId, message)
 }

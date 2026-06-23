@@ -1,20 +1,29 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { requiresDeleteReauth } from '@toolman/shared'
+import { requiresDeleteReauth, resolveGroupMaxMembers } from '@toolman/shared'
 
 import { ConfirmDialog } from '../ConfirmDialog'
 import { bindAuthProvider, changeAuthPassword, sendAuthSmsCode } from '../../features/user/auth-api.client'
 import { DeleteAccountReauthModal } from '../../features/user/DeleteAccountReauthModal'
 import type { useUserAccount } from '../../features/user/useUserAccount'
 import { useAuthBuildProfile } from '../../features/user/useAuthBuildProfile'
-import { isRegisteredUser } from '../../features/user/user-account-utils'
+import { isRegisteredUser, formatSkuLabel } from '../../features/user/user-account-utils'
 import type { ProfileSubView } from './types'
+import { UserCenterMembershipPanel } from './UserCenterMembershipPanel'
 
 interface UserCenterAccountPanelProps {
   account: ReturnType<typeof useUserAccount>
   subView: ProfileSubView
   onSubViewChange: (view: ProfileSubView) => void
   onSwitchToLogin: () => void
+}
+
+function StarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.8 7.2 17.9l.9-5.4L4.2 8.7l5.4-.8L12 3z" />
+    </svg>
+  )
 }
 
 function ChevronRightIcon() {
@@ -87,23 +96,31 @@ function AccountActionBox({
   label,
   secondary,
   danger,
+  highlight,
   disabled,
+  interactive = true,
   onClick,
 }: {
   icon: ReactNode
   label: string
   secondary?: string
   danger?: boolean
+  highlight?: boolean
   disabled?: boolean
-  onClick: () => void
+  interactive?: boolean
+  onClick?: () => void
 }) {
-  return (
-    <button
-      type="button"
-      className={`tm-user-center-account-action-box${danger ? ' tm-user-center-account-action-box--danger' : ''}${secondary ? ' tm-user-center-account-action-box--multiline' : ''}`}
-      disabled={disabled}
-      onClick={onClick}
-    >
+  const className = [
+    'tm-user-center-account-action-box',
+    danger ? 'tm-user-center-account-action-box--danger' : '',
+    highlight ? 'tm-user-center-account-action-box--membership' : '',
+    secondary ? 'tm-user-center-account-action-box--multiline' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const content = (
+    <>
       <span className="tm-user-center-account-action-icon">{icon}</span>
       <span className="tm-user-center-account-action-label">
         <span className="tm-user-center-account-action-primary">{label}</span>
@@ -114,6 +131,16 @@ function AccountActionBox({
       <span className="tm-user-center-account-action-chevron">
         <ChevronRightIcon />
       </span>
+    </>
+  )
+
+  if (!interactive) {
+    return <div className={className}>{content}</div>
+  }
+
+  return (
+    <button type="button" className={className} disabled={disabled} onClick={onClick}>
+      {content}
     </button>
   )
 }
@@ -423,6 +450,18 @@ export function UserCenterAccountPanel({
     )
   }
 
+  if (subView === 'upgrade_membership') {
+    return (
+      <>
+        <UserCenterMembershipPanel
+          active
+          onBack={() => onSubViewChange('main')}
+        />
+        {deleteDialogs}
+      </>
+    )
+  }
+
   if (subView === 'change_password') {
     return (
       <>
@@ -559,9 +598,27 @@ export function UserCenterAccountPanel({
     },
   ]
 
+  const membershipLabel = formatSkuLabel(authSession) ?? '社区版'
+  const groupMaxMembers = resolveGroupMaxMembers({
+    subscriptionSku: authSession?.subscriptionSku,
+    entitlements: authSession?.entitlements,
+  })
+
   return (
     <>
       <div className="tm-user-center-account-panel tm-user-center-account-panel--centered">
+        <div className="tm-user-center-account-section">
+          <span className="tm-user-center-account-section-label">会员套餐</span>
+          <div className="tm-user-center-account-stack">
+            <AccountActionBox
+              icon={<StarIcon />}
+              label={`${membershipLabel}（群组人数上限 ${groupMaxMembers} 人）`}
+              highlight
+              onClick={() => onSubViewChange('upgrade_membership')}
+            />
+          </div>
+        </div>
+
         {hasPhoneBinding && hasWechatBinding ? (
           <div className="tm-user-center-account-alert tm-user-center-account-alert--success">
             账户已就绪，安全绑定已完成。
@@ -589,7 +646,7 @@ export function UserCenterAccountPanel({
           <p className="tm-user-center-account-empty">安全项已全部完成</p>
         )}
 
-        <div className="tm-user-center-account-section tm-user-center-account-section--footer">
+        <div className="tm-user-center-account-section">
           <span className="tm-user-center-account-section-label">账户操作</span>
           <div className="tm-user-center-account-stack">
             {accountActionItems.map((item) => (
@@ -619,6 +676,8 @@ function accountPanelTitle(subView: ProfileSubView): string {
       return '绑定微信'
     case 'change_password':
       return '修改密码'
+    case 'upgrade_membership':
+      return '升级会员'
     default:
       return '账户与安全'
   }
@@ -629,6 +688,7 @@ export function accountPanelSubtitle(subView: ProfileSubView): string {
     case 'bind_phone':
     case 'bind_wechat':
     case 'change_password':
+    case 'upgrade_membership':
       return '完成操作后点击返回。'
     default:
       return '管理绑定、密码与账户操作。'

@@ -1,6 +1,7 @@
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { ensurePeerReadyForWorkspace, isPeerConnected } from './p2p-connection.service'
+import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { isPeerTrusted, trustPeerSilentlyForWorkspaceMesh } from './p2p-peer.service'
 
@@ -59,6 +60,10 @@ async function reconcileWorkspaceMemberMeshNow(
       if (!isPeerTrusted(workspaceId, member.deviceId)) continue
     } else {
       trustPeerSilentlyForWorkspaceMesh(workspaceId, member.deviceId, member.displayName)
+    }
+
+    if (!isP2pPeerDiscoverableOnline(member.deviceId)) {
+      continue
     }
 
     if (isPeerConnected(member.deviceId)) {

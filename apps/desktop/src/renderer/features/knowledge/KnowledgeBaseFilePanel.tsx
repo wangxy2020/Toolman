@@ -19,7 +19,7 @@ export interface KnowledgeFilePanelItem {
   updatedAt: number
   sizeBytes?: number | null
   mimeType?: string | null
-  status?: KnowledgeDocument['status']
+  status?: KnowledgeDocument['status'] | 'pending'
   chunkCount?: number
   errorMessage?: string | null
   absolutePath?: string | null

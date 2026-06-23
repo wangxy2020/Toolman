@@ -68,7 +68,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '自动化',
     icon: IconWorkflow,
     view: 'workflow',
-    available: true,
+    available: false,
     closable: true,
   },
   group: {
@@ -121,12 +121,12 @@ export const MENU_VISIBLE_POOL: NavModuleId[] = [
   'agent',
   'knowledge',
   'notes',
-  'workflow',
   'group',
   'community',
 ]
 
 export const MENU_HIDDEN_POOL: NavModuleId[] = [
+  'workflow',
   'translate',
   'assistant-lib',
   'code-tools',
@@ -160,6 +160,12 @@ export function normalizeNavModules(
 
   const visibleSet = new Set<NavModuleId>(visibleInput)
   visibleSet.add(LOCKED_NAV_MODULE)
+
+  for (const id of ALL_MENU_MODULES_ORDERED) {
+    if (id !== LOCKED_NAV_MODULE && !NAV_MODULE_DEFS[id].available) {
+      visibleSet.delete(id)
+    }
+  }
 
   // 若显式传入 hidden，则把其中仍标记为隐藏的模块从可见列表移除
   if (hidden) {

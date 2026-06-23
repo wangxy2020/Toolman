@@ -45,15 +45,18 @@ interface Options {
 function resolveSavedGroupKnowledgeBaseId(
   knowledgeBases: KnowledgeBase[],
   workspaceName: string,
-  sharedFolderName: string,
   p2pWorkspaceId: string,
 ): string | null {
   return findGroupSavedKnowledgeBaseId(
-    knowledgeBases,
+    knowledgeBases.map((kb) => ({
+      id: kb.id,
+      kind: kb.kind,
+      name: kb.name,
+      description: kb.description ?? null,
+    })),
     {
       p2pWorkspaceId,
       groupName: workspaceName,
-      sharedFolderName,
     },
     { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
   )
@@ -62,7 +65,6 @@ function resolveSavedGroupKnowledgeBaseId(
 export function useSharedKnowledgePanelDocuments({
   p2pWorkspaceId,
   workspaceName,
-  sharedFolderName,
   kbId,
   sharedDocumentIds,
   isResourceOwner = false,
@@ -102,11 +104,10 @@ export function useSharedKnowledgePanelDocuments({
       resolveSavedGroupKnowledgeBaseId(
         data.items,
         workspaceName,
-        sharedFolderName,
         p2pWorkspaceId,
       ),
     )
-  }, [localWorkspaceId, p2pWorkspaceId, sharedFolderName, workspaceName])
+  }, [localWorkspaceId, p2pWorkspaceId, workspaceName])
 
   useEffect(() => {
     void loadSavedGroupKbId()

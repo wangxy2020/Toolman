@@ -6,6 +6,7 @@ import type {
   P2pResourceType,
   WorkspaceEvent,
 } from '@toolman/shared'
+import { resolveSeqSlotConflict } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
 import { broadcastP2pEventAppended } from './p2p-event-broadcast'
@@ -286,31 +287,19 @@ export interface RemoteP2pEventInput {
   sourceDeviceId: string
 }
 
-function resolveSeqSlotConflict(
+function resolveSeqSlotConflictLocal(
   existingBySeq: P2pEventRow,
   input: RemoteP2pEventInput,
 ): 'skip' | 'replace' | 'reject' {
-  const ownerDeviceId = getWorkspaceOwnerDeviceId(input.workspaceId)
-  const localDeviceId = getP2pDeviceInfo().deviceId
-
-  if (
-    ownerDeviceId &&
-    ownerDeviceId === localDeviceId &&
-    existingBySeq.sourceDeviceId === localDeviceId &&
-    input.sourceDeviceId !== ownerDeviceId
-  ) {
-    return 'skip'
-  }
-
-  if (ownerDeviceId && input.sourceDeviceId === ownerDeviceId) {
-    return 'replace'
-  }
-
-  if (!existingBySeq.synced && existingBySeq.sourceDeviceId === localDeviceId) {
-    return 'replace'
-  }
-
-  return 'reject'
+  return resolveSeqSlotConflict({
+    ownerDeviceId: getWorkspaceOwnerDeviceId(input.workspaceId),
+    localDeviceId: getP2pDeviceInfo().deviceId,
+    existingSourceDeviceId: existingBySeq.sourceDeviceId,
+    incomingSourceDeviceId: input.sourceDeviceId,
+    existingPayload: JSON.parse(existingBySeq.payloadJson) as Record<string, unknown>,
+    incomingPayload: input.payload,
+    existingSynced: existingBySeq.synced,
+  })
 }
 
 export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent | null {
@@ -328,7 +317,7 @@ export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent 
     if (existingBySeq.id === input.eventId) {
       return null
     }
-    const resolution = resolveSeqSlotConflict(existingBySeq, input)
+    const resolution = resolveSeqSlotConflictLocal(existingBySeq, input)
     if (resolution === 'skip') {
       return null
     }

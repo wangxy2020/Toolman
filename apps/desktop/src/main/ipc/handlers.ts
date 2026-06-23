@@ -210,6 +210,56 @@ type HandlerFn = (input: unknown) => Promise<IpcResult<unknown>>
 
 const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.AppGetInfo]: async () => ipcOk(AppGetInfoOutputSchema.parse(getAppInfo())),
+  [IpcChannel.AppGetDiagnostics]: async () => {
+    try {
+      const { getAppDiagnostics } = await import('../services/app-diagnostics.service')
+      return ipcOk(await getAppDiagnostics())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to collect diagnostics'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
+    }
+  },
+
+  [IpcChannel.BillingListPlans]: async () => {
+    try {
+      const { listBillingPlans } = await import('../services/billing/billing.service')
+      return ipcOk(listBillingPlans())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to list billing plans'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.BillingCreateOrder]: async (input) => {
+    try {
+      const { createBillingOrder } = await import('../services/billing/billing.service')
+      return ipcOk(createBillingOrder(input))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create billing order'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.BillingGetOrderStatus]: async (input) => {
+    try {
+      const { getBillingOrderStatus } = await import('../services/billing/billing.service')
+      return ipcOk(getBillingOrderStatus(input))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get billing order status'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
+    }
+  },
+
+  [IpcChannel.BillingMockPay]: async (input) => {
+    try {
+      const { mockPayBillingOrder } = await import('../services/billing/billing.service')
+      const result = mockPayBillingOrder(input)
+      return ipcOk(result)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to mock pay billing order'
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
   [IpcChannel.AppRuntimeSettingsSync]: async (input) => {
     const patch = input as { documentOcrEnabled?: boolean }
     return ipcOk(syncRuntimeAppSettings(patch))
@@ -1265,6 +1315,9 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     } catch (error) {
       if (error instanceof p2pMemberService.P2pMemberLimitError) {
         return ipcErr({ code: 'P2P_MEMBER_LIMIT', message: error.message, retryable: false })
+      }
+      if (error instanceof p2pMemberService.P2pMemberVipRequiredError) {
+        return ipcErr({ code: 'P2P_MEMBER_VIP_REQUIRED', message: error.message, retryable: false })
       }
       const errMessage = error instanceof Error ? error.message : 'Failed to join workspace'
       let code: 'P2P_INVITE_EXPIRED' | 'P2P_FORBIDDEN' | 'P2P_MEMBER_LIMIT' | 'INTERNAL_ERROR' =

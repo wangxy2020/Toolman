@@ -1,5 +1,7 @@
 import type { KnowledgeDocument } from '@toolman/shared'
 
+export type KnowledgeDocumentDisplayStatus = KnowledgeDocument['status'] | 'pending'
+
 export function formatKnowledgeFileSize(sizeBytes: number | null | undefined): string {
   if (sizeBytes == null || sizeBytes < 0) return '—'
   if (sizeBytes < 1024) return `${sizeBytes} B`
@@ -58,8 +60,9 @@ export function getKnowledgeDocExtension(
   }
 }
 
-export function isKnowledgeDocProcessing(status: KnowledgeDocument['status']): boolean {
+export function isKnowledgeDocProcessing(status: KnowledgeDocumentDisplayStatus): boolean {
   return (
+    status === 'pending' ||
     status === 'queued' ||
     status === 'parsing' ||
     status === 'chunking' ||
@@ -68,8 +71,10 @@ export function isKnowledgeDocProcessing(status: KnowledgeDocument['status']): b
   )
 }
 
-export function getKnowledgeDocStatusLabel(status: KnowledgeDocument['status']): string {
+export function getKnowledgeDocStatusLabel(status: KnowledgeDocumentDisplayStatus): string {
   switch (status) {
+    case 'pending':
+      return '等待同步'
     case 'queued':
       return '排队中'
     case 'parsing':

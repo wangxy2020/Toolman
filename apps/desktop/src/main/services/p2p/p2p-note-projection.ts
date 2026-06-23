@@ -1,3 +1,4 @@
+import type { WorkspaceEvent } from '@toolman/shared'
 import { P2pSharedResourceRepository } from '@toolman/db'
 import { buildP2pNoteShareMetadata } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'

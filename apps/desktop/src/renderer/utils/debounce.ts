@@ -26,14 +26,14 @@ export function useDebouncedCallback<T extends (...args: unknown[]) => void>(
   const debouncedRef = useRef<((...args: Parameters<T>) => void) | null>(null)
 
   if (!debouncedRef.current) {
-    debouncedRef.current = debounce((...args: Parameters<T>) => {
-      fnRef.current(...args)
+    debouncedRef.current = debounce((...args: unknown[]) => {
+      fnRef.current(...(args as Parameters<T>))
     }, delayMs)
   }
 
   useEffect(() => {
-    debouncedRef.current = debounce((...args: Parameters<T>) => {
-      fnRef.current(...args)
+    debouncedRef.current = debounce((...args: unknown[]) => {
+      fnRef.current(...(args as Parameters<T>))
     }, delayMs)
   }, [delayMs])
 

@@ -40,7 +40,15 @@ export function buildDefaultKnowledgeWatchIncludePatterns(): string[] {
 }
 
 export function buildDefaultKnowledgeWatchExcludePatterns(): string[] {
-  return ['**/node_modules/**', '**/.git/**', ...KNOWLEDGE_OFFICE_TEMP_EXCLUDE_PATTERNS]
+  return [
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/.DS_Store',
+    '**/.localized',
+    '**/Thumbs.db',
+    '**/desktop.ini',
+    ...KNOWLEDGE_OFFICE_TEMP_EXCLUDE_PATTERNS,
+  ]
 }
 
 export function effectiveKnowledgeWatchInclude(include: string[]): string[] {
