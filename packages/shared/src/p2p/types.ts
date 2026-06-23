@@ -76,8 +76,5 @@ export type P2pSequencingMode = z.infer<typeof P2pSequencingModeSchema>
 export const P2pWorkspaceListFilterSchema = z.enum(['mine', 'joined', 'all'])
 export type P2pWorkspaceListFilter = z.infer<typeof P2pWorkspaceListFilterSchema>
 
-export const P2pFileListSortBySchema = z.enum(['name', 'updated_at', 'size'])
-export type P2pFileListSortBy = z.infer<typeof P2pFileListSortBySchema>
-
 export const P2pSortOrderSchema = z.enum(['asc', 'desc'])
 export type P2pSortOrder = z.infer<typeof P2pSortOrderSchema>

@@ -1,5 +1,4 @@
 import type { WorkspaceEvent } from '@toolman/shared'
-import { projectFileCreatedEvent, projectFileDeletedEvent } from './p2p-file-projection'
 import {
   applyKnowledgeUpdatedEvent,
   projectKnowledgeDeletedEvent,
@@ -37,9 +36,6 @@ export function projectP2pEvent(event: WorkspaceEvent): void {
       break
     case 'Agent':
       projectAgentEvent(event)
-      break
-    case 'File':
-      projectFileEvent(event)
       break
     default:
       break
@@ -119,19 +115,6 @@ function projectAgentEvent(event: WorkspaceEvent): void {
       return
     case 'Deleted':
       projectAgentDeletedEvent(event)
-      return
-    default:
-      return
-  }
-}
-
-function projectFileEvent(event: WorkspaceEvent): void {
-  switch (event.eventType) {
-    case 'Created':
-      projectFileCreatedEvent(event)
-      return
-    case 'Deleted':
-      projectFileDeletedEvent(event)
       return
     default:
       return

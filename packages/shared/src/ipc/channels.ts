@@ -190,11 +190,6 @@ export enum IpcChannel {
   P2pResourceUnshare = 'p2p:resource:unshare',
   P2pResourceList = 'p2p:resource:list',
 
-  P2pFileUpload = 'p2p:file:upload',
-  P2pFileDownload = 'p2p:file:download',
-  P2pFileListVersions = 'p2p:file:list-versions',
-  P2pFileList = 'p2p:file:list',
-
   P2pEventList = 'p2p:event:list',
   P2pEventGet = 'p2p:event:get',
 

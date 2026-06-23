@@ -122,27 +122,3 @@ export const P2pSyncPeerStatusSchema = z.object({
 })
 
 export type P2pSyncPeerStatus = z.infer<typeof P2pSyncPeerStatusSchema>
-
-export const P2pFileListItemSchema = z.object({
-  resourceId: UuidSchema,
-  name: z.string(),
-  mimeType: z.string().optional(),
-  sizeBytes: z.number().int().nonnegative(),
-  contentHash: z.string().min(1),
-  version: z.number().int().positive(),
-  uploadedBy: z.string().min(1),
-  sharedBy: z.string().min(1),
-  updatedAt: TimestampSchema,
-})
-
-export type P2pFileListItem = z.infer<typeof P2pFileListItemSchema>
-
-export const P2pFileVersionSchema = z.object({
-  version: z.number().int().positive(),
-  contentHash: z.string().min(1),
-  sizeBytes: z.number().int().nonnegative(),
-  uploadedBy: z.string().min(1),
-  createdAt: TimestampSchema,
-})
-
-export type P2pFileVersion = z.infer<typeof P2pFileVersionSchema>

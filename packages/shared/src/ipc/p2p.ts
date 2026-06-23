@@ -7,8 +7,6 @@ import { WorkspaceEventSchema } from '../p2p/events.js'
 import {
   DiscoveredNodeSchema,
   P2pConnectionInfoSchema,
-  P2pFileListItemSchema,
-  P2pFileVersionSchema,
   P2pMemberSchema,
   P2pSharedResourceSchema,
   P2pSyncPeerStatusSchema,
@@ -16,14 +14,12 @@ import {
 } from '../p2p/workspace.js'
 import {
   P2pConnectionStateSchema,
-  P2pFileListSortBySchema,
   P2pInvitableMemberRoleSchema,
   P2pMemberRoleSchema,
   P2pAgentSessionPermissionSchema,
   P2pKnowledgeDocumentPermissionSchema,
   P2pSequencingModeSchema,
   P2pSharedResourceStatusSchema,
-  P2pSortOrderSchema,
   P2pResourceTypeSchema,
   P2pSyncStatusSchema,
   P2pWorkspaceListFilterSchema,
@@ -306,53 +302,6 @@ export const P2pResourceListInputSchema = z.object({
 
 export const P2pResourceListOutputSchema = z.object({
   resources: z.array(P2pSharedResourceSchema),
-})
-
-// --- File ---
-
-export const P2pFileUploadInputSchema = z.object({
-  workspaceId: UuidSchema,
-  filePath: z.string().min(1),
-  name: z.string().min(1).max(200).optional(),
-})
-
-export const P2pFileUploadOutputSchema = z.object({
-  sharedResource: P2pSharedResourceSchema,
-  version: z.number().int().positive(),
-  contentHash: z.string().min(1),
-  event: WorkspaceEventSchema,
-})
-
-export const P2pFileDownloadInputSchema = z.object({
-  workspaceId: UuidSchema,
-  resourceId: UuidSchema,
-  version: z.number().int().positive().optional(),
-  destPath: z.string().min(1).optional(),
-})
-
-export const P2pFileDownloadOutputSchema = z.object({
-  path: z.string().min(1),
-  contentHash: z.string().min(1),
-  sizeBytes: z.number().int().nonnegative(),
-})
-
-export const P2pFileListVersionsInputSchema = z.object({
-  workspaceId: UuidSchema,
-  resourceId: UuidSchema,
-})
-
-export const P2pFileListVersionsOutputSchema = z.object({
-  versions: z.array(P2pFileVersionSchema),
-})
-
-export const P2pFileListInputSchema = z.object({
-  workspaceId: UuidSchema,
-  sortBy: P2pFileListSortBySchema.optional(),
-  order: P2pSortOrderSchema.optional(),
-})
-
-export const P2pFileListOutputSchema = z.object({
-  files: z.array(P2pFileListItemSchema),
 })
 
 // --- Event ---

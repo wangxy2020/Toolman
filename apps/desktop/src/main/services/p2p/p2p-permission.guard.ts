@@ -41,7 +41,6 @@ export function assertCanWriteWorkspace(workspaceId: string): P2pWorkspaceMember
 }
 
 export const assertCanShareResource = assertCanWriteWorkspace
-export const assertCanUploadFiles = assertCanWriteWorkspace
 
 export function assertCanInvite(workspaceId: string): P2pWorkspaceMemberRow {
   const member = assertWorkspaceMemberAccess(workspaceId)
@@ -99,14 +98,6 @@ export function assertCanManageSharedResource(
     return member
   }
   throw new P2pPermissionError('无权修改该共享资源')
-}
-
-export function assertCanDeleteFile(
-  workspaceId: string,
-  sharedBy: string,
-  latestUploadedBy?: string,
-): P2pWorkspaceMemberRow {
-  return assertCanManageSharedResource(workspaceId, sharedBy, { latestUploadedBy })
 }
 
 export function assertCanEditSharedResource(

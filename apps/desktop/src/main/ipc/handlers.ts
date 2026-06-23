@@ -138,14 +138,6 @@ import {
   P2pSyncForceOutputSchema,
   P2pSyncCatchUpInputSchema,
   P2pSyncCatchUpOutputSchema,
-  P2pFileUploadInputSchema,
-  P2pFileUploadOutputSchema,
-  P2pFileListInputSchema,
-  P2pFileListOutputSchema,
-  P2pFileListVersionsInputSchema,
-  P2pFileListVersionsOutputSchema,
-  P2pFileDownloadInputSchema,
-  P2pFileDownloadOutputSchema,
   P2pKnowledgeRemoveDocumentsInputSchema,
   P2pKnowledgeRemoveDocumentsOutputSchema,
   P2pKnowledgeSetDocumentPermissionInputSchema,
@@ -199,7 +191,6 @@ import * as p2pMemberService from '../services/p2p/p2p-member.service'
 import * as p2pPeerService from '../services/p2p/p2p-peer.service'
 import * as p2pEventService from '../services/p2p/p2p-event.service'
 import * as p2pSyncService from '../services/p2p/p2p-sync.service'
-import * as p2pFileSyncService from '../services/p2p/file-sync.service'
 import * as p2pKnowledgeSyncService from '../services/p2p/knowledge-sync.service'
 import * as p2pNoteSyncService from '../services/p2p/note-sync.service'
 import * as p2pAgentShareService from '../services/p2p/agent-share.service'
@@ -1408,68 +1399,6 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     }
   },
 
-  [IpcChannel.P2pFileUpload]: async (input) => {
-    try {
-      const parsed = P2pFileUploadInputSchema.parse(input)
-      const result = await p2pFileSyncService.uploadP2pFile(parsed)
-      return ipcOk(P2pFileUploadOutputSchema.parse(result))
-    } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to upload file'
-      const code = errMessage.includes('无权') || errMessage.includes('只读') || errMessage.includes('群主')
-        ? 'P2P_FORBIDDEN'
-        : errMessage.includes('已存在')
-          ? 'CONFLICT'
-          : errMessage.includes('不存在')
-            ? 'NOT_FOUND'
-            : 'INTERNAL_ERROR'
-      return ipcErr({ code, message: errMessage, retryable: false })
-    }
-  },
-
-  [IpcChannel.P2pFileList]: async (input) => {
-    try {
-      const parsed = P2pFileListInputSchema.parse(input)
-      const result = p2pFileSyncService.listP2pFiles(parsed)
-      return ipcOk(P2pFileListOutputSchema.parse(result))
-    } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list files'
-      const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
-      return ipcErr({ code, message: errMessage, retryable: false })
-    }
-  },
-
-  [IpcChannel.P2pFileListVersions]: async (input) => {
-    try {
-      const parsed = P2pFileListVersionsInputSchema.parse(input)
-      const result = p2pFileSyncService.listP2pFileVersions(parsed)
-      return ipcOk(P2pFileListVersionsOutputSchema.parse(result))
-    } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list file versions'
-      const code = errMessage.includes('不存在')
-        ? 'NOT_FOUND'
-        : errMessage.includes('无权')
-          ? 'P2P_FORBIDDEN'
-          : 'INTERNAL_ERROR'
-      return ipcErr({ code, message: errMessage, retryable: false })
-    }
-  },
-
-  [IpcChannel.P2pFileDownload]: async (input) => {
-    try {
-      const parsed = P2pFileDownloadInputSchema.parse(input)
-      const result = await p2pFileSyncService.downloadP2pFile(parsed)
-      return ipcOk(P2pFileDownloadOutputSchema.parse(result))
-    } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to download file'
-      const code = errMessage.includes('不存在') || errMessage.includes('不可下载')
-        ? 'NOT_FOUND'
-        : errMessage.includes('无权')
-          ? 'P2P_FORBIDDEN'
-          : 'INTERNAL_ERROR'
-      return ipcErr({ code, message: errMessage, retryable: true })
-    }
-  },
-
   [IpcChannel.P2pKnowledgeShare]: async (input) => {
     try {
       const parsed = P2pKnowledgeShareInputSchema.parse(input)
@@ -1786,14 +1715,19 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       if (!resource || resource.workspaceId !== parsed.workspaceId) {
         return ipcErr({ code: 'NOT_FOUND', message: '共享资源不存在', retryable: false })
       }
+      if (resource.resourceType === 'File') {
+        return ipcErr({
+          code: 'NOT_FOUND',
+          message: '群组独立文件共享已移除',
+          retryable: false,
+        })
+      }
       const result =
-        resource.resourceType === 'File'
-          ? await p2pFileSyncService.deleteP2pFile(parsed)
-          : resource.resourceType === 'Note'
-            ? await p2pNoteSyncService.unshareP2pNote(parsed)
-            : resource.resourceType === 'Agent'
-              ? await p2pAgentShareService.unshareP2pAgent(parsed)
-              : await p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
+        resource.resourceType === 'Note'
+          ? await p2pNoteSyncService.unshareP2pNote(parsed)
+          : resource.resourceType === 'Agent'
+            ? await p2pAgentShareService.unshareP2pAgent(parsed)
+            : await p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
       return ipcOk(P2pResourceUnshareOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to unshare resource'
