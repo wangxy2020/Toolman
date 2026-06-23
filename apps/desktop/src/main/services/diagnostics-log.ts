@@ -1,4 +1,5 @@
 import type { DiagnosticLogEntry, DiagnosticLogLevel } from '@toolman/shared'
+import { appendPersistentDiagnosticLine } from './local-operations.service'
 
 const MAX_ENTRIES = 80
 
@@ -21,6 +22,7 @@ export function recordDiagnosticEvent(
   }
 
   const payload = JSON.stringify({ type: 'toolman.diagnostic', ...entry })
+  appendPersistentDiagnosticLine(payload)
   if (level === 'error') {
     console.error(payload)
   } else if (level === 'warn') {

@@ -51,12 +51,30 @@ export const AppDiagnosticsP2pSchema = z.object({
   error: z.string().optional(),
 })
 
+export const AppDiagnosticsUpdateSchema = z.object({
+  channel: z.string(),
+  currentVersion: z.string(),
+  latestVersion: z.string().nullable(),
+  updateAvailable: z.boolean(),
+  manifestPath: z.string(),
+  notes: z.string().nullable().optional(),
+})
+
+export const AppDiagnosticsOperationsSchema = z.object({
+  appVersion: z.string(),
+  logFilePath: z.string(),
+  crashReportDir: z.string(),
+  crashReportCount: z.number().int().nonnegative(),
+  update: AppDiagnosticsUpdateSchema,
+})
+
 export const AppGetDiagnosticsOutputSchema = z.object({
   collectedAt: z.number().int().positive(),
   database: AppDiagnosticsDatabaseSchema,
   ingest: AppDiagnosticsIngestSchema,
   communityHub: AppDiagnosticsCommunityHubSchema,
   p2p: AppDiagnosticsP2pSchema,
+  operations: AppDiagnosticsOperationsSchema,
   recentEvents: z.array(DiagnosticLogEntrySchema),
 })
 export type AppGetDiagnosticsOutput = z.infer<typeof AppGetDiagnosticsOutputSchema>

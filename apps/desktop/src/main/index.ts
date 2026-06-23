@@ -32,6 +32,14 @@ import {
   shutdownCommunityHub,
 } from './services/community/community-bridge.service'
 import { isAuthOAuthPopupUrl } from './services/auth/auth-oauth-popup'
+import {
+  attachRendererCrashHandler,
+  bootstrapLocalOperations,
+  registerProcessCrashHandlers,
+} from './services/local-operations.service'
+import { recordDiagnosticEvent } from './services/diagnostics-log'
+
+registerProcessCrashHandlers()
 
 const ELECTRON_CHROME_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -120,10 +128,13 @@ function createWindow(): void {
     mainWindow?.focus()
   })
 
+  attachRendererCrashHandler(mainWindow.webContents)
+
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     console.error(
       `[window] failed to load ${validatedURL}: ${errorCode} ${errorDescription}`,
     )
+    recordDiagnosticEvent('window', 'error', `load failed ${validatedURL}: ${errorCode} ${errorDescription}`)
     mainWindow?.show()
   })
 
@@ -182,6 +193,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  bootstrapLocalOperations()
+
   if (process.platform === 'win32') {
     app.setAppUserModelId('dev.toolman.app')
   }

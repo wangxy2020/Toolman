@@ -163,6 +163,36 @@ export function DiagnosticsSettingsPanel() {
             {snapshot.p2p.error ? <p className="tm-settings-error">{snapshot.p2p.error}</p> : null}
           </SettingsSection>
 
+          <SettingsSection title="运维与更新">
+            <SettingsRow label="应用版本">
+              <span className="tm-settings-static">{snapshot.operations.appVersion}</span>
+            </SettingsRow>
+            <SettingsRow label="诊断日志">
+              <span className="tm-settings-static">{snapshot.operations.logFilePath}</span>
+            </SettingsRow>
+            <SettingsRow label="崩溃报告">
+              <span className="tm-settings-static">
+                {snapshot.operations.crashReportCount} 份 · {snapshot.operations.crashReportDir}
+              </span>
+            </SettingsRow>
+            <SettingsRow label="更新通道">
+              <span className="tm-settings-static">{snapshot.operations.update.channel}</span>
+            </SettingsRow>
+            <SettingsRow label="最新版本">
+              {statusBadge(
+                !snapshot.operations.update.updateAvailable,
+                snapshot.operations.update.latestVersion ?? snapshot.operations.update.currentVersion,
+                `可更新至 ${snapshot.operations.update.latestVersion}`,
+              )}
+            </SettingsRow>
+            <SettingsRow label="Manifest 路径">
+              <span className="tm-settings-static">{snapshot.operations.update.manifestPath}</span>
+            </SettingsRow>
+            {snapshot.operations.update.notes ? (
+              <p className="tm-settings-row-hint">{snapshot.operations.update.notes}</p>
+            ) : null}
+          </SettingsSection>
+
           {snapshot.recentEvents.length > 0 ? (
             <SettingsSection title="最近诊断事件">
               <ul className="tm-diagnostics-event-list">

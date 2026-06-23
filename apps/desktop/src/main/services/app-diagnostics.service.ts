@@ -11,6 +11,7 @@ import { getDatabase } from '../bootstrap/database'
 import { getCommunityHubStatus } from './community/community-bridge.service'
 import { getHubHealth } from './community/community-ipc.facade'
 import { listDiagnosticEvents, recordDiagnosticEvent } from './diagnostics-log'
+import { getOperationsDiagnostics } from './local-operations.service'
 import { P2pBridge } from './p2p/p2p-bridge'
 import { listP2pConnections } from './p2p/p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
@@ -160,6 +161,7 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
     ingest: getIngestDiagnostics(),
     communityHub,
     p2p,
+    operations: getOperationsDiagnostics(),
     recentEvents: listDiagnosticEvents(30),
   }
 
