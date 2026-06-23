@@ -87,6 +87,20 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     return unsubscribe
   }, [workspaceId])
 
+  useEffect(() => {
+    if (!workspaceId) return
+
+    const unsubscribe = window.api.subscribe('p2p:group-chat:cleared', (payload) => {
+      const data = payload as { workspaceId: string }
+      if (data.workspaceId !== workspaceId) return
+      setMessages([])
+      setSenderNames({})
+      setSenderMemberIds({})
+    })
+
+    return unsubscribe
+  }, [workspaceId])
+
   const sendMessage = useCallback(
     async (contentBlocks: ContentBlock[]) => {
       if (!workspaceId) return
@@ -119,6 +133,20 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     },
     [workspaceId],
   )
+
+  const clearMessages = useCallback(async () => {
+    if (!workspaceId) return
+    const result = await window.api.invoke(IpcChannel.P2pGroupChatClear, {
+      workspaceId,
+    })
+    if (!result.ok) {
+      setError(result.error.message)
+      return
+    }
+    setMessages([])
+    setSenderNames({})
+    setSenderMemberIds({})
+  }, [workspaceId])
 
   const deleteMessage = useCallback(
     async (messageId: string) => {
@@ -171,6 +199,7 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     error,
     setError,
     sendMessage,
+    clearMessages,
     deleteMessage,
     getUserDisplayName,
     getUserAvatarInitial,

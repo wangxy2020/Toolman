@@ -33,7 +33,7 @@ import {
 } from './p2p-blob-transfer.service'
 import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
 import { reconcileAgentSharedResources } from './p2p-agent-projection'
-import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
+import { handleP2pGroupChatChannelMessage, handleP2pGroupChatClearFromPeer } from './p2p-group-chat.service'
 import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse } from './p2p-member.service'
 import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 import { maybeAutoSnapshot } from './p2p-snapshot.service'
@@ -417,6 +417,9 @@ async function handleReplicationMessage(
       break
     case 'group-chat.message':
       handleP2pGroupChatChannelMessage(peerDeviceId, payload)
+      break
+    case 'group-chat.clear':
+      handleP2pGroupChatClearFromPeer(peerDeviceId, message.workspaceId)
       break
     case 'agent-relay.message':
       await dispatchP2pAgentRelayMessage(

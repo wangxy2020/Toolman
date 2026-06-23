@@ -491,6 +491,14 @@ export const P2pGroupChatDeleteOutputSchema = z.object({
   deleted: z.boolean(),
 })
 
+export const P2pGroupChatClearInputSchema = z.object({
+  workspaceId: UuidSchema,
+})
+
+export const P2pGroupChatClearOutputSchema = z.object({
+  cleared: z.boolean(),
+})
+
 // --- Knowledge ---
 
 export const P2pKnowledgeShareInputSchema = z.object({

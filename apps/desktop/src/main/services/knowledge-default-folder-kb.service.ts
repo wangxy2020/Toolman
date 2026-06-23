@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync } from 'node:fs'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import {
   KnowledgeDefaultFolderEnsureKbInputSchema,
@@ -13,7 +13,9 @@ import {
   ensureWorkspaceKnowledgeFolder,
   ensureWorkspaceLocalFilesFolder,
   ensureWorkspaceNetworkKnowledgeFolder,
+  renameKnowledgeStorageFolder,
 } from './knowledge-folder.service'
+import { listWorkspaces } from './workspace.service'
 import { normalizeFolderPath } from './toolman-user-documents.service'
 import { ensureKnowledgeBaseStorageSource } from './knowledge-kb-storage-source.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
@@ -64,33 +66,28 @@ function mergeFolderContents(sourceDir: string, destinationDir: string): void {
 }
 
 function renameDefaultFolderOnDisk(
+  workspaceId: string,
   baseFolder: string,
   legacyName: string,
   nextName: string,
-  kbId: string,
 ): void {
   if (legacyName === nextName) return
 
   const legacyPath = join(baseFolder, legacyName)
   const nextPath = join(baseFolder, nextName)
-  if (existsSync(legacyPath)) {
-    if (!existsSync(nextPath)) {
-      renameSync(legacyPath, nextPath)
-    } else {
-      mergeFolderContents(legacyPath, nextPath)
+
+  if (existsSync(legacyPath) && existsSync(nextPath)) {
+    mergeFolderContents(legacyPath, nextPath)
+    try {
+      if (readdirSync(legacyPath).length === 0) {
+        rmdirSync(legacyPath)
+      }
+    } catch {
+      // ignore cleanup failure
     }
   }
 
-  const docRepo = getDocumentRepository()
-  for (const doc of docRepo.listByKb(kbId)) {
-    if (!doc.absolutePath) continue
-    const resolved = resolve(doc.absolutePath)
-    if (!resolved.includes(legacyName)) continue
-    const updated = resolved.replace(legacyName, nextName)
-    if (updated !== resolved && existsSync(updated)) {
-      docRepo.update(doc.id, kbId, { absolutePath: updated })
-    }
-  }
+  renameKnowledgeStorageFolder(workspaceId, legacyPath, nextPath)
 }
 
 function migrateSystemKnowledgeBaseStorageLayout(
@@ -211,7 +208,7 @@ export function ensureDefaultFolderKnowledgeBase(input: unknown) {
   })
 
   if (legacyName) {
-    renameDefaultFolderOnDisk(folderPath, legacyName, name, kb.id)
+    renameDefaultFolderOnDisk(data.workspaceId, folderPath, legacyName, name)
   }
 
   migrateSystemKnowledgeBaseStorageLayout(data.workspaceId, kb.id, folderPath, name)
@@ -229,4 +226,31 @@ export function ensureDefaultFolderKnowledgeBase(input: unknown) {
     kb,
     folderPath: storagePath ?? join(folderPath, name),
   })
+}
+
+const DEFAULT_FOLDER_KINDS = ['local', 'network', 'local_files'] as const
+
+export function migrateAllDefaultFolderKnowledgeBases(): {
+  workspaceCount: number
+  migratedKinds: number
+} {
+  let workspaceCount = 0
+  let migratedKinds = 0
+
+  for (const workspace of listWorkspaces()) {
+    workspaceCount += 1
+    for (const kind of DEFAULT_FOLDER_KINDS) {
+      try {
+        ensureDefaultFolderKnowledgeBase({ workspaceId: workspace.id, kind })
+        migratedKinds += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(
+          `[knowledge] default folder migration failed for workspace ${workspace.id} (${kind}): ${message}`,
+        )
+      }
+    }
+  }
+
+  return { workspaceCount, migratedKinds }
 }

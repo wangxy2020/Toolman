@@ -174,6 +174,7 @@ export function GroupPage({
             workspaceId={workspace.id}
             workspaceName={workspaceName}
             selfMemberId={detail.selfMember?.id ?? null}
+            isOwner={detail.isOwner}
             canWriteWorkspace={detail.canWriteWorkspace}
             messageSettings={messageSettings}
             spellCheckEnabled={spellCheckEnabled}

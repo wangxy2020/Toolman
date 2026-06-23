@@ -24,6 +24,8 @@ import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { resolveDefaultDocProcessorProviderId } from './provider.service'
 import { ensureKnowledgeBaseStorageSource } from './knowledge-kb-storage-source.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
+import { renameKnowledgeStorageFolder } from './knowledge-folder.service'
+import { normalizeFolderPath } from './toolman-user-documents.service'
 import { removeKbFts } from './knowledge-fts.service'
 import { restartKnowledgeWatchersForKb, stopKnowledgeWatchersForKb } from './knowledge-watcher.service'
 
@@ -173,6 +175,18 @@ export function updateKnowledgeBase(input: unknown): KnowledgeBase | null {
       ? JSON.stringify(KnowledgeWatchConfigSchema.parse({ ...currentWatch, ...data.watchConfig }))
       : undefined,
   })
+
+  if (row && data.name && data.name !== existing.name) {
+    const oldStoragePath = resolveKnowledgeBaseStoragePath(existing, { ensure: false })
+    const newStoragePath = resolveKnowledgeBaseStoragePath(row, { ensure: false })
+    if (
+      oldStoragePath &&
+      newStoragePath &&
+      normalizeFolderPath(oldStoragePath) !== normalizeFolderPath(newStoragePath)
+    ) {
+      renameKnowledgeStorageFolder(data.workspaceId, oldStoragePath, newStoragePath)
+    }
+  }
 
   if (row && data.watchConfig) {
     restartKnowledgeWatchersForKb(data.workspaceId, data.id)

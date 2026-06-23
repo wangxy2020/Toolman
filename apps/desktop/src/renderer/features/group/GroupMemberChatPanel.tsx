@@ -9,6 +9,7 @@ interface Props {
   workspaceId: string
   workspaceName: string
   selfMemberId: string | null
+  isOwner: boolean
   canWriteWorkspace: boolean
   messageSettings: MessageSettings
   spellCheckEnabled?: boolean
@@ -19,6 +20,7 @@ export function GroupMemberChatPanel({
   workspaceId,
   workspaceName,
   selfMemberId,
+  isOwner,
   canWriteWorkspace,
   messageSettings,
   spellCheckEnabled = true,
@@ -75,7 +77,9 @@ export function GroupMemberChatPanel({
         spellCheckEnabled={spellCheckEnabled}
         sendShortcut={messageSettings.sendShortcut}
         toolbarMode="group"
+        groupIsOwner={isOwner}
         onSend={(contentBlocks) => void chat.sendMessage(contentBlocks)}
+        onClearSession={isOwner ? () => void chat.clearMessages() : undefined}
         onAbort={() => undefined}
         onError={chat.setError}
       />

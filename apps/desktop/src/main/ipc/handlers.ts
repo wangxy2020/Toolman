@@ -188,6 +188,8 @@ import {
   P2pGroupChatSendOutputSchema,
   P2pGroupChatDeleteInputSchema,
   P2pGroupChatDeleteOutputSchema,
+  P2pGroupChatClearInputSchema,
+  P2pGroupChatClearOutputSchema,
 } from '@toolman/shared'
 import * as p2pConnectionService from '../services/p2p/p2p-connection.service'
 import * as p2pDeviceIdentityService from '../services/p2p/p2p-device-identity.service'
@@ -1696,6 +1698,20 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to delete group chat message'
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
+      return ipcErr({ code, message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pGroupChatClear]: async (input) => {
+    try {
+      const parsed = P2pGroupChatClearInputSchema.parse(input)
+      const result = p2pGroupChatService.clearP2pGroupChatMessages(parsed)
+      return ipcOk(P2pGroupChatClearOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to clear group chat messages'
+      const code = errMessage.includes('无权') || errMessage.includes('只读') || errMessage.includes('群主')
+        ? 'P2P_FORBIDDEN'
+        : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
   },

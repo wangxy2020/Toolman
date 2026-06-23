@@ -142,12 +142,12 @@ export function KnowledgePage({
   const localDefaultKb = useDefaultFolderKnowledgeBase(
     workspaceId,
     'local',
-    showingDefaultFolder,
+    section === 'local',
   )
   const networkDefaultKb = useDefaultFolderKnowledgeBase(
     workspaceId,
     'network',
-    showingDefaultNetworkFolder,
+    section === 'network',
   )
   const localFilesDefaultKb = useDefaultFolderKnowledgeBase(
     workspaceId,

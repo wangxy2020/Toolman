@@ -17,3 +17,16 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
   { id: 'fix', command: '/fix', description: '找出并修复代码问题', insert: '请找出并修复代码中的问题。' },
   { id: 'search', command: '/search', description: '开启或关闭联网搜索', action: 'toggle-web-search' },
 ]
+
+/** Human group chat: text insertion + owner-only clear (no agent session / web search). */
+export const GROUP_SLASH_COMMANDS: SlashCommandItem[] = [
+  { id: 'clear', command: '/clear', description: '清空群组消息', action: 'clear' },
+  { id: 'summarize', command: '/summarize', description: '总结以上对话内容', insert: '请总结以上对话内容。' },
+  { id: 'explain', command: '/explain', description: '详细解释以上内容', insert: '请详细解释以上内容。' },
+  { id: 'translate', command: '/translate', description: '翻译以上内容', insert: '请将以上内容翻译成中文。' },
+]
+
+export function getGroupSlashCommands(isOwner: boolean): SlashCommandItem[] {
+  if (isOwner) return GROUP_SLASH_COMMANDS
+  return GROUP_SLASH_COMMANDS.filter((item) => item.action !== 'clear')
+}

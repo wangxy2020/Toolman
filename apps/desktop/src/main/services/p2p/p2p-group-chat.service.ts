@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import {
   ContentBlockSchema,
+  P2pGroupChatClearInputSchema,
   P2pGroupChatDeleteInputSchema,
   P2pGroupChatListInputSchema,
   P2pGroupChatMessageSchema,
@@ -18,7 +19,10 @@ import { listP2pConnections, getKnownP2pConnections, ensurePeerReadyForWorkspace
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { applyRemoteMemberJoin, ensureOwnerMemberRecord } from './p2p-member.service'
-import { broadcastP2pGroupChatMessage } from './p2p-group-chat-broadcast'
+import {
+  broadcastP2pGroupChatCleared,
+  broadcastP2pGroupChatMessage,
+} from './p2p-group-chat-broadcast'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { getIdentityProfile } from '../identity.service'
 
@@ -166,6 +170,55 @@ export async function sendP2pGroupChatMessage(
   return { message }
 }
 
+async function relayClearToPeers(workspaceId: string): Promise<void> {
+  const device = getP2pDeviceInfo()
+  const memberRepo = getMemberRepo()
+  const peerDeviceIds = new Set(
+    memberRepo
+      .listByWorkspace(workspaceId, 'active')
+      .filter((item) => item.deviceId !== device.deviceId)
+      .map((item) => item.deviceId),
+  )
+
+  const connections = await listP2pConnections()
+  for (const item of connections) {
+    if (item.state !== 'connected' || item.peerDeviceId === device.deviceId) continue
+    peerDeviceIds.add(item.peerDeviceId)
+  }
+
+  const payload = encodeReplicationMessage({
+    type: 'group-chat.clear',
+    workspaceId,
+  })
+
+  await Promise.all(
+    [...peerDeviceIds].map(async (peerDeviceId) => {
+      try {
+        await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
+        await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
+      } catch (error) {
+        const errMessage = error instanceof Error ? error.message : 'relay failed'
+        console.warn(
+          `[p2p] group chat clear relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`,
+        )
+      }
+    }),
+  )
+}
+
+export function clearP2pGroupChatMessages(rawInput: unknown): { cleared: boolean } {
+  const input = P2pGroupChatClearInputSchema.parse(rawInput)
+  const member = assertWorkspaceMemberAccess(input.workspaceId)
+  if (member.role !== 'owner') {
+    throw new Error('只有群主可以清空群组消息')
+  }
+
+  writeChatFile(input.workspaceId, { messages: [] })
+  broadcastP2pGroupChatCleared(input.workspaceId)
+  void relayClearToPeers(input.workspaceId)
+  return { cleared: true }
+}
+
 export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean } {
   const input = P2pGroupChatDeleteInputSchema.parse(rawInput)
   const member = assertWorkspaceMemberAccess(input.workspaceId)
@@ -201,6 +254,11 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       v?: number
       type?: string
       message?: unknown
+      workspaceId?: string
+    }
+    if (parsed.type === 'group-chat.clear' && typeof parsed.workspaceId === 'string') {
+      handleIncomingP2pGroupChatClear(peerDeviceId, parsed.workspaceId)
+      return
     }
     const wireMessage =
       parsed.type === 'group-chat.message' || parsed.type === 'message' ? parsed.message : null
@@ -213,6 +271,34 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
     const errMessage = error instanceof Error ? error.message : 'parse failed'
     console.warn(`[p2p] group chat payload rejected from ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
   }
+}
+
+function handleIncomingP2pGroupChatClear(peerDeviceId: string, workspaceId: string): void {
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (!workspace || workspace.ownerDeviceId !== peerDeviceId) {
+    return
+  }
+
+  const connected = getKnownP2pConnections().some(
+    (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
+  )
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  if (!member && !connected) {
+    return
+  }
+
+  try {
+    assertWorkspaceMemberAccess(workspaceId)
+  } catch {
+    return
+  }
+
+  writeChatFile(workspaceId, { messages: [] })
+  broadcastP2pGroupChatCleared(workspaceId)
+}
+
+export function handleP2pGroupChatClearFromPeer(peerDeviceId: string, workspaceId: string): void {
+  handleIncomingP2pGroupChatClear(peerDeviceId, workspaceId)
 }
 
 function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: unknown): void {

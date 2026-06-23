@@ -208,6 +208,7 @@ export enum IpcChannel {
   P2pGroupChatList = 'p2p:group-chat:list',
   P2pGroupChatSend = 'p2p:group-chat:send',
   P2pGroupChatDelete = 'p2p:group-chat:delete',
+  P2pGroupChatClear = 'p2p:group-chat:clear',
 
   P2pKnowledgeShare = 'p2p:knowledge:share',
   P2pKnowledgeSyncDocument = 'p2p:knowledge:sync-document',
@@ -323,6 +324,7 @@ export const P2P_PUSH_CHANNELS = [
   'p2p:sync:error',
   'p2p:event:appended',
   'p2p:group-chat:message',
+  'p2p:group-chat:cleared',
   'p2p:member:changed',
 ] as const
 

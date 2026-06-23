@@ -8,3 +8,11 @@ export function broadcastP2pGroupChatMessage(message: P2pGroupChatMessage): void
     }
   }
 }
+
+export function broadcastP2pGroupChatCleared(workspaceId: string): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('p2p:group-chat:cleared', { workspaceId })
+    }
+  }
+}

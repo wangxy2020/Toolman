@@ -16,6 +16,7 @@ import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
 import { initAuthSessionStore } from '../services/auth-session.service'
 import { cleanupMisplacedP2pMirrorKnowledgeBases } from '../services/p2p/p2p-knowledge-cleanup.service'
 import { migrateAllLegacyGroupSavedKnowledgeBases } from '../services/p2p/p2p-group-saved-knowledge-migration.service'
+import { migrateAllDefaultFolderKnowledgeBases } from '../services/knowledge-default-folder-kb.service'
 import { bootstrapToolmanUserDocumentLayout } from '../services/knowledge-folder.service'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
@@ -50,6 +51,12 @@ export function bootstrapDatabase(): void {
       )
     }
     console.info(`[knowledge] user document root ready at ${userRoot}`)
+    const defaultFolderMigration = migrateAllDefaultFolderKnowledgeBases()
+    if (defaultFolderMigration.migratedKinds > 0) {
+      console.info(
+        `[knowledge] default folder KB layout ready for ${defaultFolderMigration.workspaceCount} workspace(s)`,
+      )
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`[knowledge] folder bootstrap failed: ${message}`)

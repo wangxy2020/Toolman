@@ -24,7 +24,7 @@ import {
   type InputPopupMenuItemData,
 } from './InputPopupMenu'
 import { addQuickPhrase, loadQuickPhrases, type QuickPhrase } from './quick-phrases'
-import { SLASH_COMMANDS, type SlashCommandItem } from './slash-commands'
+import { getGroupSlashCommands, SLASH_COMMANDS, type SlashCommandItem } from './slash-commands'
 import { EmojiPickerPopup } from './EmojiPickerPopup'
 import { useTranslate } from './useTranslate'
 import { normalizeTranslationLanguages } from './translation-utils'
@@ -58,6 +58,7 @@ interface Props {
   onAbort: () => void
   onError?: (message: string | null) => void
   toolbarMode?: 'agent' | 'group'
+  groupIsOwner?: boolean
 }
 
 const INPUT_MIN_HEIGHT = 66
@@ -141,6 +142,7 @@ export function MessageInput({
   onAbort,
   onError,
   toolbarMode = 'agent',
+  groupIsOwner = false,
 }: Props) {
   const [text, setText] = useState('')
   const [fieldHeight, setFieldHeight] = useState(INPUT_MIN_HEIGHT)
@@ -161,6 +163,11 @@ export function MessageInput({
   const { translate, translating } = useTranslate()
   const languages = normalizeTranslationLanguages(translationLanguages)
   const [voiceHint, setVoiceHint] = useState<string | null>(null)
+
+  const slashCommands = useMemo(
+    () => (toolbarMode === 'group' ? getGroupSlashCommands(groupIsOwner) : SLASH_COMMANDS),
+    [groupIsOwner, toolbarMode],
+  )
 
   const phraseMenuItems = useMemo<InputPopupMenuItemData[]>(
     () => [
@@ -444,17 +451,17 @@ export function MessageInput({
       if (!(event instanceof KeyboardEvent)) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setSlashActiveIndex((index) => Math.min(index + 1, SLASH_COMMANDS.length - 1))
+        setSlashActiveIndex((index) => Math.min(index + 1, slashCommands.length - 1))
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         setSlashActiveIndex((index) => Math.max(index - 1, 0))
       } else if (event.key === 'Enter') {
         event.preventDefault()
-        const item = SLASH_COMMANDS[slashActiveIndex]
+        const item = slashCommands[slashActiveIndex]
         if (item) runSlashCommand(item)
       } else if (event.metaKey && event.key === 'ArrowDown') {
         event.preventDefault()
-        setSlashActiveIndex((index) => Math.min(index + 5, SLASH_COMMANDS.length - 1))
+        setSlashActiveIndex((index) => Math.min(index + 5, slashCommands.length - 1))
       } else if (event.metaKey && event.key === 'ArrowUp') {
         event.preventDefault()
         setSlashActiveIndex((index) => Math.max(index - 5, 0))
@@ -463,7 +470,7 @@ export function MessageInput({
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [runSlashCommand, slashActiveIndex, slashMenuOpen])
+  }, [runSlashCommand, slashActiveIndex, slashCommands, slashMenuOpen])
 
   useEffect(() => {
     if (!phraseMenuOpen || addingPhrase) return
@@ -514,7 +521,7 @@ export function MessageInput({
     : modelCount > 1
       ? `在这里输入消息，将同时发送给 ${modelCount} 个模型`
       : toolbarMode === 'group'
-        ? `在这里输入消息，按 ${sendShortcutPlaceholder(sendShortcut)}`
+        ? `在这里输入消息，按 ${sendShortcutPlaceholder(sendShortcut)} · / 选择命令`
         : `在这里输入消息，按 ${sendShortcutPlaceholder(sendShortcut)} · @ 选择路径，/ 选择命令`
 
   return (
@@ -655,7 +662,7 @@ export function MessageInput({
           onClose={() => setSlashMenuOpen(false)}
         >
           <InputPopupMenuList
-            items={SLASH_COMMANDS.map((item) => ({
+            items={slashCommands.map((item) => ({
               id: item.id,
               command: item.command,
               description: item.description,
@@ -663,7 +670,7 @@ export function MessageInput({
             activeIndex={slashActiveIndex}
             onActiveIndexChange={setSlashActiveIndex}
             onSelect={(index) => {
-              const item = SLASH_COMMANDS[index]
+              const item = slashCommands[index]
               if (item) runSlashCommand(item)
             }}
           />

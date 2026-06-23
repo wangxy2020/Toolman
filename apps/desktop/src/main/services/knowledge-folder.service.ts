@@ -210,6 +210,16 @@ function migrateKnowledgePathReferences(
   }
 }
 
+export function renameKnowledgeStorageFolder(
+  workspaceId: string,
+  oldPath: string,
+  newPath: string,
+): void {
+  if (normalizeFolderPath(oldPath) === normalizeFolderPath(newPath)) return
+  moveFolderIfNeeded(oldPath, newPath)
+  migrateKnowledgePathReferences(workspaceId, oldPath, newPath)
+}
+
 function moveFolderIfNeeded(oldPath: string, newPath: string): void {
   if (normalizeFolderPath(oldPath) === normalizeFolderPath(newPath)) return
   if (isNonMigratableFolderPath(oldPath)) {

@@ -84,6 +84,11 @@ export type ReplicationMessage =
       message: unknown
     }
   | {
+      type: 'group-chat.clear'
+      v?: number
+      workspaceId: string
+    }
+  | {
       type: 'agent-relay.message'
       v?: number
       relay: unknown
