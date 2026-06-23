@@ -65,6 +65,8 @@ export const P2pSharedResourceSchema = z.object({
     .optional(),
   sharedModelId: z.string().min(1).optional(),
   sourceWorkspaceId: UuidSchema.optional(),
+  notebookId: z.string().min(1).optional(),
+  notebookName: z.string().min(1).optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 })

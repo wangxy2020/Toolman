@@ -367,17 +367,9 @@ export async function relayProxySendMessage(input: {
     throw new Error('该话题为只读')
   }
 
-  await assertPeerTrustedForSync(input.proxy.p2pWorkspaceId, input.proxy.ownerDeviceId)
-  await ensurePeerConnected(input.proxy.ownerDeviceId, input.proxy.p2pWorkspaceId)
-
-  console.log(
-    `[p2p] agent relay send start: ownerDeviceId=${input.proxy.ownerDeviceId} sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`,
-  )
-
+  const localDeviceId = getP2pDeviceInfo().deviceId
   const requestId = randomUUID()
-  const responsePromise = waitForRelayResponse(requestId)
-
-  await sendRelayMessage(input.proxy.ownerDeviceId, {
+  const relayMessage: Extract<AgentRelayMessage, { type: 'send' }> = {
     v: 1,
     type: 'send',
     requestId,
@@ -389,7 +381,29 @@ export async function relayProxySendMessage(input: {
     memberAssistantMessageId: input.memberAssistantMessageId,
     contentBlocks: input.contentBlocks,
     modelIds: input.modelIds,
-  })
+  }
+
+  if (input.proxy.ownerDeviceId === localDeviceId) {
+    console.log(
+      `[p2p] agent relay send start (local): sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`,
+    )
+    await runOwnerRelaySend(localDeviceId, relayMessage, { deliverStreamLocally: true })
+    return {
+      userMessageId: input.memberUserMessageId,
+      assistantMessageIds: [input.memberAssistantMessageId],
+    }
+  }
+
+  await assertPeerTrustedForSync(input.proxy.p2pWorkspaceId, input.proxy.ownerDeviceId)
+  await ensurePeerConnected(input.proxy.ownerDeviceId, input.proxy.p2pWorkspaceId)
+
+  console.log(
+    `[p2p] agent relay send start: ownerDeviceId=${input.proxy.ownerDeviceId} sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`,
+  )
+
+  const responsePromise = waitForRelayResponse(requestId)
+
+  await sendRelayMessage(input.proxy.ownerDeviceId, relayMessage)
 
   const response = await responsePromise
   if (response.type !== 'send_ok') {
@@ -443,8 +457,16 @@ async function handleOwnerSend(
   peerDeviceId: string,
   message: Extract<AgentRelayMessage, { type: 'send' }>,
 ): Promise<void> {
+  await runOwnerRelaySend(peerDeviceId, message)
+}
+
+async function runOwnerRelaySend(
+  peerDeviceId: string,
+  message: Extract<AgentRelayMessage, { type: 'send' }>,
+  options: { deliverStreamLocally?: boolean } = {},
+): Promise<void> {
   console.log(
-    `[p2p] agent relay send received: peer=${peerDeviceId} sourceSessionId=${message.sourceSessionId}`,
+    `[p2p] agent relay send received: peer=${peerDeviceId} sourceSessionId=${message.sourceSessionId} local=${options.deliverStreamLocally === true}`,
   )
   try {
     assertRelayAccess(
@@ -470,17 +492,26 @@ async function handleOwnerSend(
         messageId: message.memberAssistantMessageId,
       })
 
-      void sendRelayMessage(peerDeviceId, {
-        v: 1,
-        type: 'stream',
-        requestId: message.requestId,
-        event: remapped,
-      }).catch((error) => {
-        const errMessage = error instanceof Error ? error.message : String(error)
-        console.error(
-          `[p2p] agent relay stream forward failed: requestId=${message.requestId} event=${event.type} error=${errMessage}`,
-        )
-      })
+      if (options.deliverStreamLocally) {
+        handleMemberStream({
+          v: 1,
+          type: 'stream',
+          requestId: message.requestId,
+          event: remapped,
+        })
+      } else {
+        void sendRelayMessage(peerDeviceId, {
+          v: 1,
+          type: 'stream',
+          requestId: message.requestId,
+          event: remapped,
+        }).catch((error) => {
+          const errMessage = error instanceof Error ? error.message : String(error)
+          console.error(
+            `[p2p] agent relay stream forward failed: requestId=${message.requestId} event=${event.type} error=${errMessage}`,
+          )
+        })
+      }
 
       if (event.type === 'message.done' || event.type === 'message.error') {
         activeOwnerRelays.get(message.requestId)?.unsubscribe()
@@ -539,11 +570,13 @@ async function handleOwnerSend(
       }
     }
 
-    await sendRelayMessage(peerDeviceId, {
-      v: 1,
-      type: 'send_ok',
-      requestId: message.requestId,
-    })
+    if (!options.deliverStreamLocally) {
+      await sendRelayMessage(peerDeviceId, {
+        v: 1,
+        type: 'send_ok',
+        requestId: message.requestId,
+      })
+    }
   } catch (error) {
     activeOwnerRelays.get(message.requestId)?.unsubscribe()
     activeOwnerRelays.delete(message.requestId)
@@ -551,6 +584,9 @@ async function handleOwnerSend(
     console.error(
       `[p2p] agent relay owner send failed: sourceSessionId=${message.sourceSessionId} error=${errMessage}`,
     )
+    if (options.deliverStreamLocally) {
+      throw error
+    }
     await sendRelayMessage(peerDeviceId, {
       v: 1,
       type: 'send_err',

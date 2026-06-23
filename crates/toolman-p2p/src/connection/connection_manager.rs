@@ -58,7 +58,11 @@ impl ConnectionManager {
         if let Some(entry) = self.sessions.get(peer_device_id) {
             let session = entry.session.lock().await;
             if session.current_state().await == ConnectionState::Connected {
-                return Ok(ConnectionState::Connected);
+                if session.is_transport_ready().await {
+                    return Ok(ConnectionState::Connected);
+                }
+                drop(session);
+                self.disconnect(peer_device_id).await?;
             }
         }
 
@@ -315,7 +319,11 @@ impl ConnectionManager {
         if let Some(entry) = self.sessions.get(owner_device_id) {
             let session = entry.session.lock().await;
             if session.current_state().await == ConnectionState::Connected {
-                return Ok((ConnectionState::Connected, String::new()));
+                if session.is_transport_ready().await {
+                    return Ok((ConnectionState::Connected, String::new()));
+                }
+                drop(session);
+                self.disconnect(owner_device_id).await?;
             }
         }
 

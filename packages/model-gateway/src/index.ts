@@ -15,6 +15,10 @@ import {
   testOpenAiConnection,
 } from './providers/openai.js'
 import {
+  shouldUseOllamaNativeChat,
+  streamOllamaNativeChat,
+} from './providers/ollama-native.js'
+import {
   fetchAnthropicModels,
   streamAnthropic,
   chatCompleteAnthropic,
@@ -53,6 +57,16 @@ export class DefaultModelGateway implements ModelGateway {
     }
 
     if (OPENAI_COMPAT_TYPES.includes(config.type)) {
+      if (shouldUseOllamaNativeChat(config, params)) {
+        let content = ''
+        let toolCalls: ChatCompletionResult['toolCalls'] = []
+        let usage: ChatCompletionResult['usage']
+        for await (const chunk of streamOllamaNativeChat(config, params)) {
+          if (chunk.type === 'text-delta' && chunk.text) content += chunk.text
+          if (chunk.type === 'done' && chunk.usage) usage = chunk.usage
+        }
+        return { content, toolCalls, usage }
+      }
       return chatCompleteOpenAiCompatible(config, params)
     }
 
@@ -73,6 +87,7 @@ export class DefaultModelGateway implements ModelGateway {
 
   private resolveStream(config: ProviderConfig, params: ChatParams) {
     if (config.type === 'anthropic') return streamAnthropic(config, params)
+    if (shouldUseOllamaNativeChat(config, params)) return streamOllamaNativeChat(config, params)
     if (OPENAI_COMPAT_TYPES.includes(config.type)) return streamOpenAiCompatible(config, params)
     throw new Error(`Unsupported provider type: ${config.type}`)
   }

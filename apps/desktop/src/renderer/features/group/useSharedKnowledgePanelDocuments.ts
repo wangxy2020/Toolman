@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   IpcChannel,
+  findGroupSavedKnowledgeBaseId,
   isP2pSharedKnowledgeMirrorDescription,
-  parseP2pGroupSavedKnowledgeMeta,
-  normalizeP2pGroupSavedKnowledgeMeta,
   type KnowledgeBase,
   type Workspace,
 } from '@toolman/shared'
@@ -47,24 +46,17 @@ function resolveSavedGroupKnowledgeBaseId(
   knowledgeBases: KnowledgeBase[],
   workspaceName: string,
   sharedFolderName: string,
+  p2pWorkspaceId: string,
 ): string | null {
-  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(workspaceName, sharedFolderName)
-  if (!savedMeta.groupName || !savedMeta.sharedFolderName) return null
-
-  const match = knowledgeBases.find((item) => {
-    if (item.kind !== 'shared' || isP2pSharedKnowledgeMirrorDescription(item.description)) {
-      return false
-    }
-    const meta = parseP2pGroupSavedKnowledgeMeta(item.description)
-    if (meta) {
-      return (
-        meta.groupName === savedMeta.groupName &&
-        meta.sharedFolderName === savedMeta.sharedFolderName
-      )
-    }
-    return false
-  })
-  return match?.id ?? null
+  return findGroupSavedKnowledgeBaseId(
+    knowledgeBases,
+    {
+      p2pWorkspaceId,
+      groupName: workspaceName,
+      sharedFolderName,
+    },
+    { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
+  )
 }
 
 export function useSharedKnowledgePanelDocuments({
@@ -107,9 +99,14 @@ export function useSharedKnowledgePanelDocuments({
 
     const data = result.data as { items: KnowledgeBase[] }
     setSavedGroupKbId(
-      resolveSavedGroupKnowledgeBaseId(data.items, workspaceName, sharedFolderName),
+      resolveSavedGroupKnowledgeBaseId(
+        data.items,
+        workspaceName,
+        sharedFolderName,
+        p2pWorkspaceId,
+      ),
     )
-  }, [localWorkspaceId, sharedFolderName, workspaceName])
+  }, [localWorkspaceId, p2pWorkspaceId, sharedFolderName, workspaceName])
 
   useEffect(() => {
     void loadSavedGroupKbId()

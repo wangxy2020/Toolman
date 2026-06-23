@@ -245,6 +245,23 @@ impl WebRtcSession {
         }
     }
 
+    pub async fn is_transport_ready(&self) -> bool {
+        if self
+            .manual_close
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return false;
+        }
+        if self.pc.connection_state() != RTCPeerConnectionState::Connected {
+            return false;
+        }
+        let events_ready =
+            Self::channel_is_open(self.events_channel.lock().await.as_ref()).await;
+        let files_ready =
+            Self::channel_is_open(self.files_channel.lock().await.as_ref()).await;
+        events_ready && files_ready
+    }
+
     pub async fn wait_for_channels_open(&self, wait_for: Duration) -> Result<(), String> {
         let deadline = tokio::time::Instant::now() + wait_for;
         loop {

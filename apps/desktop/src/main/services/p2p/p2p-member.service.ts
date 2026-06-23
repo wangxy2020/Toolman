@@ -180,18 +180,25 @@ function resolveMemberOnline(row: P2pWorkspaceMemberRow, workspaceId: string): b
   const localDeviceId = getP2pDeviceInfo().deviceId
   if (row.deviceId === localDeviceId) return true
 
-  const peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, row.deviceId)
-  if (peer?.online) return true
-
-  const connected = p2pConnectionService
-    .getKnownP2pConnections()
-    .some((item) => item.peerDeviceId === row.deviceId && item.state === 'connected')
-  if (connected) return true
-
   const discovered = listP2pDiscoveredNodes(false).find(
     (node) => node.deviceId === row.deviceId,
   )
-  return discovered?.online ?? false
+  if (discovered) {
+    return discovered.online
+  }
+
+  return p2pConnectionService
+    .getKnownP2pConnections()
+    .some((item) => item.peerDeviceId === row.deviceId && item.state === 'connected')
+}
+
+function ensureLocalMemberDisplayNameForWorkspace(workspaceId: string): void {
+  const localDeviceId = getP2pDeviceInfo().deviceId
+  const identityName = getIdentityDisplayName()
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, localDeviceId)
+  if (member && member.displayName !== identityName) {
+    getMemberRepo().update({ id: member.id, displayName: identityName })
+  }
 }
 
 function mapMemberRow(row: P2pWorkspaceMemberRow, workspaceId: string): P2pMember {
@@ -537,6 +544,7 @@ export function ensureOwnerMemberRecord(workspaceId: string): void {
 export function listP2pMembers(workspaceId: string): P2pMember[] {
   assertWorkspaceMemberAccess(workspaceId)
   ensureOwnerMemberRecord(workspaceId)
+  ensureLocalMemberDisplayNameForWorkspace(workspaceId)
   return getMemberRepo()
     .listByWorkspace(workspaceId)
     .filter((row) => row.status === 'active' || row.status === 'invited')
@@ -566,7 +574,10 @@ const ownerConnectInFlight = new Map<string, Promise<void>>()
 const ownerConnectLastRunAt = new Map<string, number>()
 const OWNER_CONNECT_COOLDOWN_MS = 10_000
 
-export async function ensureMemberConnectsToOwner(workspaceId: string): Promise<void> {
+export async function ensureMemberConnectsToOwner(
+  workspaceId: string,
+  options?: { immediate?: boolean },
+): Promise<void> {
   const workspace = getWorkspaceRepo().findById(workspaceId)
   if (!workspace) return
 
@@ -579,9 +590,11 @@ export async function ensureMemberConnectsToOwner(workspaceId: string): Promise<
     return
   }
 
-  const lastRun = ownerConnectLastRunAt.get(workspaceId) ?? 0
-  if (Date.now() - lastRun < OWNER_CONNECT_COOLDOWN_MS) {
-    return
+  if (!options?.immediate) {
+    const lastRun = ownerConnectLastRunAt.get(workspaceId) ?? 0
+    if (Date.now() - lastRun < OWNER_CONNECT_COOLDOWN_MS) {
+      return
+    }
   }
 
   applyP2pNetworkConfig()
@@ -1021,6 +1034,15 @@ export async function applyRemoteMemberJoin(
         role: payload.member.role,
         displayName: payload.member.displayName,
         joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
+      })
+      broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
+    } else if (
+      payload.member.displayName.trim() &&
+      existing.displayName !== payload.member.displayName
+    ) {
+      getMemberRepo().update({
+        id: existing.id,
+        displayName: payload.member.displayName,
       })
       broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
     }

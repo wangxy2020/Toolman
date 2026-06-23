@@ -2,7 +2,7 @@ import { listKnowledgeBases } from './knowledge.service'
 import { resolveDocProcessorConfig } from './knowledge-embed.service'
 import { resolveDefaultDocProcessorProviderId } from './provider.service'
 
-const SYSTEM_KB_NAMES = new Set(['默认文件夹', '默认网络文件夹'])
+const SYSTEM_KB_NAMES = new Set(['默认文件夹', '默认网络文件夹', '默认本地文件'])
 
 export interface WorkspaceDocProcessorContext {
   enhanced: boolean

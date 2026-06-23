@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'toolman:notes-editor-settings'
 
 export type NotesDefaultView = 'edit' | 'preview'
-export type NotesDefaultEditView = 'edit' | 'preview' | 'split'
+export type NotesDefaultEditView = 'edit' | 'preview'
 
 export interface NotesEditorSettings {
   defaultView: NotesDefaultView
@@ -27,7 +27,6 @@ export const NOTES_DEFAULT_VIEW_OPTIONS: { value: NotesDefaultView; label: strin
 export const NOTES_DEFAULT_EDIT_VIEW_OPTIONS: { value: NotesDefaultEditView; label: string }[] = [
   { value: 'edit', label: '仅编辑' },
   { value: 'preview', label: '实时预览' },
-  { value: 'split', label: '分屏预览' },
 ]
 
 export function resolveInitialPreviewMode(settings: NotesEditorSettings): NotesDefaultEditView {
@@ -44,13 +43,15 @@ export function loadNotesEditorSettings(): NotesEditorSettings {
       showOutline?: boolean
     }
 
-    const defaultEditView =
+    const rawDefaultEditView =
       parsed.defaultEditView ??
       (parsed.previewByDefault === true
         ? 'preview'
         : parsed.previewByDefault === false
           ? 'edit'
           : DEFAULT_NOTES_EDITOR_SETTINGS.defaultEditView)
+    const defaultEditView =
+      rawDefaultEditView === 'split' ? 'edit' : rawDefaultEditView
 
     return {
       defaultView:
@@ -58,7 +59,7 @@ export function loadNotesEditorSettings(): NotesEditorSettings {
           ? parsed.defaultView
           : DEFAULT_NOTES_EDITOR_SETTINGS.defaultView,
       defaultEditView:
-        defaultEditView === 'edit' || defaultEditView === 'preview' || defaultEditView === 'split'
+        defaultEditView === 'edit' || defaultEditView === 'preview'
           ? defaultEditView
           : DEFAULT_NOTES_EDITOR_SETTINGS.defaultEditView,
       narrowColumn: Boolean(parsed.narrowColumn),

@@ -64,8 +64,8 @@ export function GroupSharedAgentSection({
   const title = resolveGroupAgentPanelTitle(resource, assistant)
 
   const panelSessions = useMemo(
-    () => resolveSharedAgentSessions(resource, assistantId, sessions),
-    [assistantId, resource, sessions],
+    () => resolveSharedAgentSessions(resource, assistantId, sessions, assistant),
+    [assistant, assistantId, resource, sessions],
   )
 
   const sectionSelectionKeys = useMemo(

@@ -12,8 +12,14 @@ import {
 } from '../group/group-agent-utils'
 import type { AppSettings } from '../settings/app-settings'
 
+function getAssistantSkillIds(assistant?: Assistant | null): string[] {
+  if (assistant?.parameters.p2pGroupProxy) return []
+  return assistant?.parameters.skillIds ?? getDefaultSkillIds()
+}
+
 function getAssistantMcpServerIds(assistant?: Assistant | null): string[] {
-  const skillIds = assistant?.parameters.skillIds ?? getDefaultSkillIds()
+  if (assistant?.parameters.p2pGroupProxy) return []
+  const skillIds = getAssistantSkillIds(assistant)
   const baseMcpServerIds = assistant?.parameters.mcpServerIds?.length
     ? assistant.parameters.mcpServerIds
     : getDefaultMcpServerIds()
@@ -211,7 +217,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
       })()
 
       const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
-      const skillIds = activeAssistant?.parameters.skillIds ?? getDefaultSkillIds()
+      const skillIds = getAssistantSkillIds(activeAssistant)
 
       return {
         enableTools: resolveChatEnableTools(
@@ -408,7 +414,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
       })()
 
       const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
-      const skillIds = activeAssistant?.parameters.skillIds ?? getDefaultSkillIds()
+      const skillIds = getAssistantSkillIds(activeAssistant)
 
       const enableTools = resolveChatEnableTools(
         mcpServerIds,

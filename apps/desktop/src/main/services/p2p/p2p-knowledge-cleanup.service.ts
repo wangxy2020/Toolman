@@ -3,6 +3,7 @@ import { P2pSharedResourceRepository } from '@toolman/db'
 import {
   parseP2pSharedKnowledgeMirrorMeta,
   isP2pSharedKnowledgeMirrorDescription,
+  isP2pGroupSavedKnowledgeDescription,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
@@ -84,6 +85,9 @@ function isPollutedP2pProjectedKnowledgeBase(row: {
   }
   if (isP2pSharedKnowledgeMirrorDescription(row.description)) {
     return true
+  }
+  if (isP2pGroupSavedKnowledgeDescription(row.description)) {
+    return false
   }
   if (isGroupPrefixedKnowledgeBaseName(row.name) && row.kind !== 'local') {
     return true

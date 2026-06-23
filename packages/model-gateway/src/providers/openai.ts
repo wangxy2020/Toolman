@@ -10,7 +10,7 @@ import type {
 } from '../types.js'
 import { ProviderError } from '../types.js'
 import { resolveDeepSeekExtraBody, resolveOpenAiModelName, providerSupportsOpenAiVision, resolveOllamaExtraBody, resolveOpenAiMaxTokens, shouldRouteThinkingAsAnswer } from '../model-aliases.js'
-import { assertApiKey, readErrorBody, resolveOpenAiBaseUrl } from '../utils.js'
+import { assertApiKey, providerFetch, readErrorBody, resolveOpenAiBaseUrl } from '../utils.js'
 
 function formatProviderHttpError(status: number, body: string): string {
   try {
@@ -50,7 +50,7 @@ function supportsUsageInStream(config: ProviderConfig): boolean {
 export async function fetchOpenAiModels(config: ProviderConfig): Promise<ModelInfo[]> {
   assertApiKey(config)
   const baseUrl = resolveOpenAiBaseUrl(config)
-  const response = await fetch(`${baseUrl}/models`, {
+  const response = await providerFetch(config, `${baseUrl}/models`, {
     headers: buildHeaders(config),
   })
 
@@ -103,7 +103,7 @@ function resolvePingModel(config: ProviderConfig): string {
 async function pingOpenAiChat(config: ProviderConfig): Promise<void> {
   assertApiKey(config)
   const baseUrl = resolveOpenAiBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await providerFetch(config, `${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: buildHeaders(config),
     body: JSON.stringify({
@@ -162,7 +162,7 @@ export async function* streamOpenAiCompatible(
     body.stream_options = { include_usage: true }
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await providerFetch(config, `${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: buildHeaders(config),
     body: JSON.stringify(body),
@@ -343,7 +343,7 @@ export async function chatCompleteOpenAiCompatible(
     body.tool_choice = 'auto'
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await providerFetch(config, `${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: buildHeaders(config),
     body: JSON.stringify(body),

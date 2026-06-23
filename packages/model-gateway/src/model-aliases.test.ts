@@ -83,9 +83,24 @@ describe('resolveOllamaExtraBody', () => {
     ).toEqual({ think: false })
   })
 
-  it('leaves other ollama models unchanged', () => {
+  it('disables think mode for gemma 3/4 models', () => {
     expect(
       resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'gemma4:26b'),
+    ).toEqual({ think: false })
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'gemma3:12b'),
+    ).toEqual({ think: false })
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'gemma:latest'),
+    ).toEqual({ think: false })
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'gemma4:latest'),
+    ).toEqual({ think: false })
+  })
+
+  it('leaves unrelated ollama models unchanged', () => {
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'llama3.2:latest'),
     ).toBeUndefined()
   })
 })
@@ -96,6 +111,15 @@ describe('shouldRouteThinkingAsAnswer', () => {
       shouldRouteThinkingAsAnswer(
         { type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' },
         'glm-ocr:0.9b',
+      ),
+    ).toBe(true)
+  })
+
+  it('routes gemma 3/4 reasoning tokens to answer text', () => {
+    expect(
+      shouldRouteThinkingAsAnswer(
+        { type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' },
+        'gemma4:26b',
       ),
     ).toBe(true)
   })

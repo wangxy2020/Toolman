@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import QRCode from 'qrcode'
 import { createStyledInviteQrDataUrl } from './invite-qr-code'
 import { IpcChannel } from '@toolman/shared'
@@ -9,6 +10,8 @@ interface Props {
   onClose: () => void
 }
 
+const INVITE_QR_DISPLAY_SIZE = 176
+
 export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -16,7 +19,22 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
   const [inviteToken, setInviteToken] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [expiresAt, setExpiresAt] = useState<number | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'url' | 'token' | null>(null)
+
+  const handleClose = useCallback(() => {
+    onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handleClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleClose])
 
   useEffect(() => {
     let cancelled = false
@@ -56,13 +74,21 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
 
         try {
           const url = await createStyledInviteQrDataUrl(data.qrData, {
-            size: 220,
+            size: INVITE_QR_DISPLAY_SIZE,
+            renderScale: 3,
+            marginModules: 4,
+            moduleScale: 0.74,
+            darkColor: '#00a962',
             centerLabel: '群',
           })
           if (!cancelled) setQrDataUrl(url)
         } catch {
           try {
-            const url = await QRCode.toDataURL(data.qrData, { margin: 2, width: 200 })
+            const url = await QRCode.toDataURL(data.qrData, {
+              margin: 3,
+              width: INVITE_QR_DISPLAY_SIZE * 3,
+              color: { dark: '#00a962', light: '#ffffff' },
+            })
             if (!cancelled) setQrDataUrl(url)
           } catch {
             if (!cancelled) setQrDataUrl('')
@@ -89,11 +115,11 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
     }
   }, [workspaceId])
 
-  const handleCopy = async (text: string) => {
+  const handleCopy = async (text: string, kind: 'url' | 'token') => {
     try {
       await navigator.clipboard.writeText(text)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      setCopied(kind)
+      window.setTimeout(() => setCopied(null), 2000)
     } catch {
       setError('复制失败，请手动选择文本复制')
     }
@@ -112,21 +138,35 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
 
   const ready = !loading && !error && Boolean(inviteUrl)
 
-  return (
-    <div className="tm-modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div
+      className="tm-modal-overlay tm-modal-overlay--invite"
+      onClick={handleClose}
+      role="presentation"
+    >
       <div
-        className="tm-modal tm-modal--narrow tm-modal--invite"
-        onClick={(e) => e.stopPropagation()}
+        className="tm-modal tm-modal--invite"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="group-invite-title"
       >
         <div className="tm-modal-header">
-          <h2 className="tm-modal-title">邀请加入「{workspaceName}」</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose}>
+          <h2 id="group-invite-title" className="tm-modal-title">
+            邀请加入「{workspaceName}」
+          </h2>
+          <button
+            type="button"
+            className="tm-modal-close"
+            onClick={handleClose}
+            aria-label="关闭"
+          >
             ×
           </button>
         </div>
 
         <div className="tm-modal-body">
-          {error && <div className="tm-error-bar">{error}</div>}
+          {error ? <div className="tm-error-bar">{error}</div> : null}
 
           <div className="tm-invite-qr-wrap">
             <div className="tm-invite-qr-card">
@@ -140,19 +180,19 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
             </div>
           </div>
 
-          <p className="tm-kb-file-dropzone-hint tm-invite-hint">
+          <p className="tm-invite-hint">
             {loading
               ? '正在生成邀请链接与二维码…'
               : ready
-                ? `扫描二维码或复制邀请链接，发送给其他成员。链接内已包含广域网连接信息（SDP），不同网络也可尝试加入。有效期至 ${expiresLabel}。`
+                ? `扫描二维码或复制邀请链接发送给其他成员。链接内已包含广域网连接信息（SDP），不同网络也可尝试加入。有效期至 ${expiresLabel}。`
                 : '邀请生成失败，请关闭后重试。'}
           </p>
 
-          <label className="tm-model-form-field tm-invite-url-field">
-            <span className="tm-model-form-label">邀请链接</span>
+          <label className="tm-invite-url-field">
+            <span className="tm-invite-url-label">邀请链接</span>
             <input
               type="text"
-              className="tm-model-form-input tm-invite-url-preview"
+              className="tm-invite-url-preview"
               value={inviteUrl}
               readOnly
               placeholder={loading ? '生成中…' : ''}
@@ -164,29 +204,24 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
           <div className="tm-invite-actions">
             <button
               type="button"
-              className="tm-btn tm-btn--secondary"
+              className="tm-invite-action-btn"
               disabled={!ready}
-              onClick={() => void handleCopy(inviteUrl)}
+              onClick={() => void handleCopy(inviteUrl, 'url')}
             >
-              {copied ? '已复制' : '复制链接'}
+              {copied === 'url' ? '已复制' : '复制链接'}
             </button>
             <button
               type="button"
-              className="tm-btn tm-btn--secondary"
+              className="tm-invite-action-btn"
               disabled={!ready}
-              onClick={() => void handleCopy(inviteToken)}
+              onClick={() => void handleCopy(inviteToken, 'token')}
             >
-              复制邀请码
+              {copied === 'token' ? '已复制' : '复制邀请码'}
             </button>
           </div>
         </div>
-
-        <div className="tm-modal-footer">
-          <button type="button" className="tm-btn tm-btn--primary" onClick={onClose}>
-            完成
-          </button>
-        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

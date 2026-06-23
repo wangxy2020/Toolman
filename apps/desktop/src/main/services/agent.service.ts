@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { createModelGateway, ProviderError, type ChatContentPart, type ChatMessage, providerSupportsOpenAiVision } from '@toolman/model-gateway'
+import { createModelGateway, ProviderError, type ChatContentPart, type ChatMessage, providerSupportsOpenAiVision, isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
 import {
   buildModelTextFromUserBlocks,
   buildStoredUserContent,
@@ -261,14 +261,18 @@ function parseAssistantRuntime(
   workspaceId?: string,
 ) {
   const params = assistant ? (JSON.parse(assistant.parametersJson) as Record<string, unknown>) : {}
+  const isGroupProxyShell = Boolean(params.p2pGroupProxy)
   const permissionMode = (params.permissionMode as PermissionMode | undefined) ?? 'normal'
   const autonomousMode = Boolean(params.autonomousMode)
   const workingDirectory = resolveAssistantWorkingDirectory(assistant, workspaceId)
   const skillIds = filterEnabledSkillIds(
-    (params.skillIds as string[] | undefined) ?? getDefaultSkillIds(),
+    isGroupProxyShell
+      ? ((params.skillIds as string[] | undefined) ?? [])
+      : ((params.skillIds as string[] | undefined) ?? getDefaultSkillIds()),
   )
-  const baseMcpServerIds =
-    (params.mcpServerIds as string[] | undefined) ?? getDefaultMcpServerIds()
+  const baseMcpServerIds = isGroupProxyShell
+    ? ((params.mcpServerIds as string[] | undefined) ?? [])
+    : ((params.mcpServerIds as string[] | undefined) ?? getDefaultMcpServerIds())
   return {
     permissionMode,
     autonomousMode,
@@ -308,6 +312,7 @@ async function buildRuntimeSystemHints(options: {
     kbScoreThreshold?: number
   }
   docxWorkingCopies?: DocxWorkingCopy[]
+  modelId?: string
 }): Promise<{ hints: string[]; kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> }> {
   const hints: string[] = []
   let kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> = []
@@ -411,7 +416,16 @@ async function buildRuntimeSystemHints(options: {
     )
   }
 
-  const skillsHint = buildSkillsSystemHint(options.runtime.skillIds)
+  const compactSystemHints = (() => {
+    if (!options.modelId) return false
+    const { providerId, model } = parseModelId(options.modelId)
+    if (providerId !== 'ollama') return false
+    return isGemmaThinkingOllamaModelId(model)
+  })()
+
+  const skillsHint = buildSkillsSystemHint(options.runtime.skillIds, {
+    compact: compactSystemHints,
+  })
   if (skillsHint) hints.push(skillsHint)
 
   const soul = loadSoulMd(options.runtime.toolContext.workingDirectory)
@@ -564,23 +578,14 @@ export async function sendMessage(input: unknown) {
   }
 
   const localDeviceId = getP2pDeviceInfo().deviceId
+  const isGroupProxyClient =
+    !isRelayExecution && proxyMeta && proxyMeta.permission === 'callable'
   const isRemoteProxy =
-    !isRelayExecution &&
-    proxyMeta &&
-    proxyMeta.ownerDeviceId !== localDeviceId
+    isGroupProxyClient && proxyMeta.ownerDeviceId !== localDeviceId
 
-  if (assistant?.parameters?.p2pGroupProxy && !isRelayExecution && !isRemoteProxy) {
-    console.warn(
-      `[p2p] group proxy falling back to local send: sessionId=${session.id} ownerDeviceId=${proxyMeta?.ownerDeviceId ?? 'none'} localDeviceId=${localDeviceId}`,
-    )
-  }
-
-  if (isRemoteProxy) {
-    if (proxyMeta!.permission === 'read') {
-      throw new Error('该话题为只读')
-    }
+  if (isGroupProxyClient) {
     console.log(
-      `[p2p] group proxy remote send: sessionId=${data.sessionId} ownerDeviceId=${proxyMeta!.ownerDeviceId} sourceSessionId=${proxyMeta!.sourceSessionId}`,
+      `[p2p] group proxy send: sessionId=${data.sessionId} ownerDeviceId=${proxyMeta.ownerDeviceId} sourceSessionId=${proxyMeta.sourceSessionId} local=${proxyMeta.ownerDeviceId === localDeviceId}`,
     )
   }
 
@@ -594,7 +599,7 @@ export async function sendMessage(input: unknown) {
 
   const modelIds =
     data.modelIds ??
-    (isRemoteProxy && proxyMeta?.referencedModelId
+    (isGroupProxyClient && proxyMeta?.referencedModelId
       ? [proxyMeta.referencedModelId]
       : assistant
         ? [assistant.modelId]
@@ -644,7 +649,7 @@ export async function sendMessage(input: unknown) {
     sessions.touch(data.sessionId, 1 + modelIds.length)
   })
 
-  if (isRemoteProxy && proxyMeta) {
+  if (isGroupProxyClient && proxyMeta) {
     const assistantMessageId = assistantMessageIds[0]!
     void relayProxySendMessage({
       proxy: proxyMeta,
@@ -1187,6 +1192,7 @@ async function runGeneration(opts: {
         mcpServerIds,
         sendOptions,
         docxWorkingCopies,
+        modelId,
       }),
       controller.signal,
     )
@@ -1250,7 +1256,10 @@ async function runGeneration(opts: {
       throw new DocxMcpNotReadyError('Word 文档任务需要 DOCX MCP 工具，但当前未启用任何工具')
     }
 
-    if (!enableTools || tools.length === 0) {
+    const preferGemmaOllamaStreamOnly =
+      providerConfig.type === 'ollama' && isGemmaThinkingOllamaModelId(model) && !docxTaskActive
+
+    if (!enableTools || tools.length === 0 || preferGemmaOllamaStreamOnly) {
       buffers.clearThinking()
       persistBlocks(true)
       await streamPlainCompletion({

@@ -42,10 +42,6 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
   const localDeviceId = getP2pDeviceInfo().deviceId
   const memberRepo = getMemberRepo()
   const existingByDevice = memberRepo.findByWorkspaceAndDevice(event.workspaceId, deviceId)
-  if (existingByDevice?.status === 'active') {
-    return
-  }
-
   const displayName =
     typeof event.payload.display_name === 'string' ? event.payload.display_name : '成员'
   const role = parseMemberRole(event.payload.role)
@@ -53,6 +49,17 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
     deviceId,
     typeof event.payload.identity_id === 'string' ? event.payload.identity_id : undefined,
   )
+
+  if (existingByDevice?.status === 'active') {
+    if (displayName && existingByDevice.displayName !== displayName) {
+      memberRepo.update({
+        id: existingByDevice.id,
+        displayName,
+        role,
+      })
+    }
+    return
+  }
 
   if (existingByDevice) {
     memberRepo.update({

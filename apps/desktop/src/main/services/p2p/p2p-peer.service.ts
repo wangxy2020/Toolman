@@ -3,9 +3,11 @@ import {
   P2pPeerRepository,
   P2pWorkspaceRepository,
   createP2pDeviceIdentityRepository,
+  p2pPeerNodes,
 } from '@toolman/db'
 import type { DiscoveredNode, P2pConnectionState } from '@toolman/shared'
 import { P2pMemberTrustDeviceInputSchema } from '@toolman/shared'
+import { eq } from 'drizzle-orm'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceId } from './p2p-device-identity.service'
 import { listP2pDiscoveredNodes } from './p2p-discovery.service'
@@ -57,7 +59,7 @@ export function upsertPeerFromDiscovery(
     displayName: resolvePeerDisplayName(workspaceId, node.deviceId, node.userName),
     deviceName: node.deviceName,
     publicKey: resolvePeerPublicKey(node.deviceId, node.publicKeyFingerprint),
-    online: node.online,
+    online: connectionState ? connectionState === 'connected' && node.online : node.online,
     lastSeenAt: new Date(node.lastSeenAt),
     connectionState,
   })
@@ -155,6 +157,64 @@ export function promptPeerTrustIfNeeded(
     deviceName: peer.deviceName,
     publicKeyFingerprint: node?.publicKeyFingerprint ?? peer.publicKey.slice(0, 16),
   })
+}
+
+export function handlePeerDiscoveryOffline(peerDeviceId: string): void {
+  const localDeviceId = getP2pDeviceId()
+  if (peerDeviceId === localDeviceId) return
+
+  const peerRepo = getPeerRepo()
+  const rows = getDatabase()
+    .select({ workspaceId: p2pPeerNodes.workspaceId })
+    .from(p2pPeerNodes)
+    .where(eq(p2pPeerNodes.deviceId, peerDeviceId))
+    .all()
+
+  for (const row of rows) {
+    peerRepo.updateConnectionState(row.workspaceId, peerDeviceId, 'closed', false)
+  }
+
+  void import('./p2p-connection.service').then((module) => {
+    void module.disconnectP2pPeer(peerDeviceId).catch(() => undefined)
+  })
+}
+
+export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
+  const localDeviceId = getP2pDeviceId()
+  if (peerDeviceId === localDeviceId) return
+
+  const memberRepo = getMemberRepo()
+  const workspaceRepo = getWorkspaceRepo()
+  const memberships = memberRepo.listActiveMembershipsByDevice(localDeviceId)
+
+  void (async () => {
+    for (const membership of memberships) {
+      const workspace = workspaceRepo.findById(membership.workspaceId)
+      if (!workspace) continue
+
+      const peerIsMember = memberRepo.findByWorkspaceAndDevice(membership.workspaceId, peerDeviceId)
+      const peerIsOwner = workspace.ownerDeviceId === peerDeviceId
+      if (!peerIsMember && !peerIsOwner) continue
+
+      try {
+        if (workspace.ownerDeviceId === localDeviceId) {
+          const module = await import('./p2p-member.service')
+          await module.reconcileOwnerWorkspaceMembers(workspace.id, { immediate: true })
+        } else if (peerIsOwner) {
+          const module = await import('./p2p-member.service')
+          await module.ensureMemberConnectsToOwner(workspace.id, { immediate: true })
+        } else {
+          const module = await import('./p2p-member-mesh.service')
+          await module.reconcileWorkspaceMemberMesh(workspace.id, { immediate: true })
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'discovery online reconnect failed'
+        console.warn(
+          `[p2p] discovery online reconnect failed for ${peerDeviceId.slice(0, 8)} in ${workspace.id}: ${message}`,
+        )
+      }
+    }
+  })()
 }
 
 export function handlePeerConnectionChange(

@@ -7,6 +7,8 @@ export interface OpenGroupNoteRequest {
   permission: P2pSharedResourcePermission
   sharedBy: string
   title: string
+  notebookId?: string
+  notebookName?: string
   editable?: boolean
 }
 

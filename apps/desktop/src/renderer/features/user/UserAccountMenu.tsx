@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 
 import { UserCenterModal } from '../../components/user-center'
 import { useUserAccount } from './useUserAccount'
-import { getAvatarFallbackLabel } from './user-avatar-utils'
+import { getAvatarFallbackLabel, getDisplayInitial } from './user-avatar-utils'
 import { isRegisteredUser } from './user-account-utils'
 
 interface UserAccountMenuProps {
@@ -15,9 +15,9 @@ export function UserAccountMenu({ className }: UserAccountMenuProps) {
   const account = useUserAccount()
 
   const identity = account.identity
-  const avatarFallback = getAvatarFallbackLabel({
-    avatarUrl: identity?.avatarUrl,
-  })
+  const avatarFallback =
+    getAvatarFallbackLabel({ avatarUrl: identity?.avatarUrl }) ||
+    getDisplayInitial(identity?.displayName ?? '')
 
   const initialView =
     isRegisteredUser(account.authSession) && account.isLoggedIn ? 'profile' : 'login'

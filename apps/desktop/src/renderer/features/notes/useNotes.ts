@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type WorkspaceEvent } from '@toolman/shared'
-import { buildGroupKnowledgeNoteId, buildGroupNotebookId } from '../group/group-note-utils'
+import { buildGroupKnowledgeNoteId, buildGroupNotebookId, isGroupNotebookId } from '../group/group-note-utils'
 import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from '../group/group-note-open'
 import type { SaveGroupNoteAsCopyRequest } from '../group/group-note-open'
 import { loadSystemPaths } from '../chat/useSystemPaths'
 import { blocksToMarkdown, markdownToBlocks } from './notes-blocks'
-import { readNoteUpdatedContent, readNoteUpdatedNoteId } from './p2p-note-events'
+import { readNoteUpdatedContent, readNoteUpdatedNoteId, readNoteUpdatedPermission } from './p2p-note-events'
 import {
   importMarkdownFiles,
   importNotesDataFromJson,
@@ -55,13 +55,33 @@ export function useNotes() {
   }, [activeNoteId])
 
   useEffect(() => {
-    const handleP2pNoteUpdated = (payload: unknown) => {
+    const handleP2pNoteEvent = (payload: unknown) => {
       const event = payload as WorkspaceEvent
       if (event.resourceType !== 'Note' || event.eventType !== 'Updated') return
 
       const noteId = readNoteUpdatedNoteId(event)
+      if (!noteId) return
+
+      const permission = readNoteUpdatedPermission(event)
+      if (permission) {
+        const locked = permission === 'read'
+        setData((prev) => {
+          const target = prev.notes.find((item) => item.id === noteId)
+          if (!target || !isGroupNotebookId(target.notebookId) || target.locked === locked) {
+            return prev
+          }
+          return {
+            ...prev,
+            notes: prev.notes.map((item) =>
+              item.id === noteId ? { ...item, locked, updatedAt: Date.now() } : item,
+            ),
+          }
+        })
+        return
+      }
+
       const merged = readNoteUpdatedContent(event)
-      if (!noteId || merged == null) return
+      if (merged == null) return
       if (noteId === activeNoteIdRef.current) return
 
       setData((prev) => {
@@ -86,8 +106,8 @@ export function useNotes() {
       })
     }
 
-    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleP2pNoteUpdated)
-    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleP2pNoteUpdated)
+    const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleP2pNoteEvent)
+    const unsubscribeSynced = window.api.subscribe('p2p:sync:event-applied', handleP2pNoteEvent)
 
     return () => {
       unsubscribeAppended()
@@ -293,21 +313,39 @@ export function useNotes() {
     async (request: OpenGroupNoteRequest): Promise<boolean> => {
       const { noteId, workspaceId, workspaceName, title, editable = false } = request
       const locked = !editable
+      const groupNotebookId = buildGroupNotebookId(workspaceId)
+      const groupNotebookName = workspaceName.trim() || '群组笔记'
       const existing = data.notes.find((item) => item.id === noteId)
+
+      const ensureGroupNotebook = (notebooks: NotebookItem[]) =>
+        notebooks.some((item) => item.id === groupNotebookId)
+          ? notebooks.map((item) =>
+              item.id === groupNotebookId
+                ? { ...item, name: groupNotebookName }
+                : item,
+            )
+          : [...notebooks, { id: groupNotebookId, name: groupNotebookName }]
 
       if (existing) {
         setData((prev) => ({
           ...prev,
+          notebooks: ensureGroupNotebook(prev.notebooks),
           notes: prev.notes.map((item) =>
-            item.id === noteId ? { ...item, locked, updatedAt: Date.now() } : item,
+            item.id === noteId
+              ? {
+                  ...item,
+                  notebookId: groupNotebookId,
+                  locked,
+                  updatedAt: Date.now(),
+                }
+              : item,
           ),
         }))
-        setExpanded(existing.notebookId, true)
+        setExpanded(groupNotebookId, true)
         setActiveNoteId(noteId)
         return true
       }
 
-      const notebookId = buildGroupNotebookId(workspaceId)
       let sourceNote: NoteItem | null = null
 
       const result = await window.api.invoke(IpcChannel.NotesGetById, { noteId })
@@ -317,7 +355,7 @@ export function useNotes() {
           try {
             sourceNote = normalizeNote(
               JSON.parse(payload.noteJson) as Partial<NoteItem>,
-              notebookId,
+              groupNotebookId,
             )
           } catch {
             sourceNote = null
@@ -334,37 +372,31 @@ export function useNotes() {
             content: '',
             locked,
           },
-          notebookId,
+          groupNotebookId,
         )
 
       const nextNote = normalizeNote(
         {
           ...baseNote,
           id: noteId,
-          notebookId,
+          notebookId: groupNotebookId,
           title: title || baseNote.title,
           locked,
         },
-        notebookId,
+        groupNotebookId,
       )
 
       setData((prev) => {
-        const notebooks = prev.notebooks.some((item) => item.id === notebookId)
-          ? prev.notebooks.map((item) =>
-              item.id === notebookId ? { ...item, name: workspaceName } : item,
-            )
-          : [...prev.notebooks, { id: notebookId, name: workspaceName }]
-
         const notes = [nextNote, ...prev.notes.filter((item) => item.id !== noteId)]
 
         return normalizeData({
           ...prev,
-          notebooks,
+          notebooks: ensureGroupNotebook(prev.notebooks),
           notes,
         })
       })
 
-      setExpanded(notebookId, true)
+      setExpanded(groupNotebookId, true)
       setActiveNoteId(noteId)
       return true
     },
@@ -495,9 +527,17 @@ export function useNotes() {
   )
 
   const ensureDefaultSelection = useCallback(() => {
-    setExpanded(DEFAULT_NOTEBOOK_ID, true)
-    const first = getFirstNoteInNotebook(data.notes, DEFAULT_NOTEBOOK_ID)
-    setActiveNoteId(first?.id ?? null)
+    setActiveNoteId((prev) => {
+      if (prev && data.notes.some((item) => item.id === prev)) {
+        const note = data.notes.find((item) => item.id === prev)
+        if (note) {
+          setExpanded(note.notebookId, true)
+        }
+        return prev
+      }
+      setExpanded(DEFAULT_NOTEBOOK_ID, true)
+      return getFirstNoteInNotebook(data.notes, DEFAULT_NOTEBOOK_ID)?.id ?? null
+    })
   }, [data.notes, setExpanded])
 
   const renameNotebook = useCallback((notebookId: string, name: string) => {

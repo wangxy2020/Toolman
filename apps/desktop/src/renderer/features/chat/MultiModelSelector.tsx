@@ -39,13 +39,20 @@ export function MultiModelSelector({ providers, selectedModelIds, onChange, read
   const modelLabel = modelNameFromId(primaryModelId)
   const providerLabel = providerNameFromModelId(primaryModelId, providers)
   const extraCount = selectedModelIds.length - 1
+  const displayLabel = [
+    modelLabel,
+    providerLabel ? ` | ${providerLabel}` : '',
+    extraCount > 0 ? ` +${extraCount}` : '',
+  ].join('')
 
   if (readOnly) {
     return (
-      <span className="tm-model-pill tm-model-pill--static" title={modelLabel}>
-        {modelLabel}
-        {providerLabel && <span className="tm-model-pill-provider">| {providerLabel}</span>}
-        {extraCount > 0 && <span className="tm-model-pill-extra">+{extraCount}</span>}
+      <span className="tm-model-pill tm-model-select-pill tm-model-pill--static" title={displayLabel}>
+        <span className="tm-model-select-pill-label">
+          {modelLabel}
+          {providerLabel && <span className="tm-model-pill-provider">| {providerLabel}</span>}
+          {extraCount > 0 && <span className="tm-model-pill-extra">+{extraCount}</span>}
+        </span>
       </span>
     )
   }
@@ -54,13 +61,15 @@ export function MultiModelSelector({ providers, selectedModelIds, onChange, read
     <div className="tm-model-selector" ref={wrapRef}>
       <button
         type="button"
-        className="tm-model-pill"
+        className="tm-model-pill tm-model-select-pill"
         onClick={() => setOpen((v) => !v)}
-        title="选择模型"
+        title={displayLabel}
       >
-        {modelLabel}
-        {providerLabel && <span className="tm-model-pill-provider">| {providerLabel}</span>}
-        {extraCount > 0 && <span className="tm-model-pill-extra">+{extraCount}</span>}
+        <span className="tm-model-select-pill-label">
+          {modelLabel}
+          {providerLabel && <span className="tm-model-pill-provider">| {providerLabel}</span>}
+          {extraCount > 0 && <span className="tm-model-pill-extra">+{extraCount}</span>}
+        </span>
         <IconChevronDown />
       </button>
 

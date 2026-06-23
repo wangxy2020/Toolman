@@ -11,13 +11,18 @@ export const FILE_REGISTRY_TOOL_ID = '__file_registry_tool__'
 export const FILE_DEDUP_TOOL_ID = '__file_dedup_tool__'
 
 export const SYSTEM_DEFAULT_FOLDER_KB_NAME = '默认文件夹'
-export const SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME = '默认网络文件夹'
-export const SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME = '默认本地文件'
+/** @deprecated legacy KB row / folder name — migrated to {@link SYSTEM_DEFAULT_FOLDER_KB_NAME} */
+export const LEGACY_SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME = '默认网络文件夹'
+/** @deprecated legacy KB row / folder name — migrated to {@link SYSTEM_DEFAULT_FOLDER_KB_NAME} */
+export const LEGACY_SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME = '默认本地文件'
+
+export const SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME = SYSTEM_DEFAULT_FOLDER_KB_NAME
+export const SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME = SYSTEM_DEFAULT_FOLDER_KB_NAME
 
 export const SYSTEM_DEFAULT_FOLDER_KB_NAMES = new Set([
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
-  SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME,
-  SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME,
+  LEGACY_SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME,
+  LEGACY_SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME,
 ])
 
 export const KNOWLEDGE_VIRTUAL_FOLDER_IDS = new Set([

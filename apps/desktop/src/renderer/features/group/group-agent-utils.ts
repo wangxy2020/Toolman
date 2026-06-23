@@ -41,10 +41,14 @@ export function resolveSharedAgentSessions(
   resource: P2pSharedResource,
   assistantId: string,
   sessions: Session[],
+  assistant?: Assistant | null,
 ): Session[] {
   const assistantSessions = sessions.filter((item) => item.assistantId === assistantId)
   const sharedIds = resource.sharedSessionIds
   if (!sharedIds || sharedIds.length === 0) {
+    if (assistant && isGroupSharedMirrorAssistant(assistant)) {
+      return []
+    }
     return assistantSessions.sort(
       (a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt),
     )

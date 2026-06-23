@@ -26,8 +26,33 @@ export function loadSoulMd(workingDirectory?: string): string | null {
   }
 }
 
-export function buildSkillsSystemHint(skillIds: string[]): string | null {
+export function buildSkillsSystemHint(
+  skillIds: string[],
+  options?: { compact?: boolean },
+): string | null {
   if (skillIds.length === 0) return null
+
+  const toSummaryLines = () => {
+    const lines: string[] = []
+    for (const skillId of skillIds) {
+      const meta = getSkillInfo(skillId)
+      if (meta) {
+        lines.push(`- **${meta.name}**: ${meta.description}`)
+        continue
+      }
+      const builtin = BUILTIN_SKILLS.find((skill) => skill.id === skillId)
+      if (builtin) {
+        lines.push(`- **${builtin.name}**: ${builtin.description}`)
+      }
+    }
+    return lines
+  }
+
+  if (options?.compact) {
+    const lines = toSummaryLines()
+    if (lines.length === 0) return null
+    return ['## 已挂载技能', '可在合适场景运用以下技能（详情见设置）：', ...lines].join('\n')
+  }
 
   const sections: string[] = []
   for (const skillId of skillIds) {
@@ -38,9 +63,7 @@ export function buildSkillsSystemHint(skillIds: string[]): string | null {
   }
 
   if (sections.length === 0) {
-    const lines = BUILTIN_SKILLS.filter((skill) => skillIds.includes(skill.id)).map(
-      (skill) => `- **${skill.name}**: ${skill.description}`,
-    )
+    const lines = toSummaryLines()
     if (lines.length === 0) return null
     return [
       '## 已挂载技能',

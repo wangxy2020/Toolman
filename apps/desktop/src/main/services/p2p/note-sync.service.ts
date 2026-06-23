@@ -9,9 +9,11 @@ import {
   P2pNoteShareInputSchema,
   P2pResourceListInputSchema,
   P2pResourceUnshareInputSchema,
+  buildP2pNoteShareMetadata,
+  parseP2pNoteShareMetadata,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
-import { getNoteById, noteToMarkdown, upsertNoteItem } from '../notes-data.service'
+import { getNoteById, getNotesData, noteToMarkdown, upsertNoteItem } from '../notes-data.service'
 import { appendP2pEvent } from './p2p-event.service'
 import {
   findSharedResourceInWorkspace,
@@ -37,7 +39,7 @@ function getSharedResourceRepo(): P2pSharedResourceRepository {
 }
 
 function mapSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResource {
-  return {
+  const base: P2pSharedResource = {
     id: row.id,
     workspaceId: row.workspaceId,
     resourceType: row.resourceType,
@@ -51,6 +53,26 @@ function mapSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResource {
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   }
+
+  if (row.resourceType !== 'Note') {
+    return base
+  }
+
+  const meta = parseP2pNoteShareMetadata(row.metadataJson)
+  if (!meta) {
+    return base
+  }
+
+  return {
+    ...base,
+    notebookId: meta.notebookId,
+    notebookName: meta.notebookName,
+  }
+}
+
+function resolveNotebookName(notebookId: string): string {
+  const notebook = getNotesData().notebooks.find((item) => item.id === notebookId)
+  return notebook?.name?.trim() || '笔记本'
 }
 
 function noteBodyText(note: NonNullable<ReturnType<typeof getNoteById>>): string {
@@ -103,11 +125,12 @@ export async function shareP2pNote(rawInput: unknown): Promise<{ sharedResource:
     'Note',
   )
 
-  const metadata = {
+  const metadata = buildP2pNoteShareMetadata({
     notebookId: note.notebookId,
+    notebookName: resolveNotebookName(note.notebookId),
     title: note.title,
     editorMode: note.editorMode,
-  }
+  })
 
   if (!resource) {
     resource = sharedRepo.create({
@@ -118,7 +141,7 @@ export async function shareP2pNote(rawInput: unknown): Promise<{ sharedResource:
       name: note.title,
       sharedBy: member.id,
       permission: input.permission ?? 'read',
-      metadataJson: JSON.stringify(metadata),
+      metadataJson: metadata,
     })
   } else if (resource.status !== 'active') {
     resource =
@@ -126,7 +149,14 @@ export async function shareP2pNote(rawInput: unknown): Promise<{ sharedResource:
         id: resource.id,
         name: note.title,
         status: 'active',
-        metadataJson: JSON.stringify(metadata),
+        metadataJson: metadata,
+      }) ?? resource
+  } else {
+    resource =
+      sharedRepo.update({
+        id: resource.id,
+        name: note.title,
+        metadataJson: metadata,
       }) ?? resource
   }
 
@@ -142,6 +172,7 @@ export async function shareP2pNote(rawInput: unknown): Promise<{ sharedResource:
     payload: {
       note_id: note.id,
       notebook_id: note.notebookId,
+      notebook_name: resolveNotebookName(note.notebookId),
       title: note.title,
       permission: input.permission ?? 'read',
     },

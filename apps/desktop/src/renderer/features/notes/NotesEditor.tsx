@@ -26,7 +26,7 @@ import { isGroupNotebookId } from '../group/group-note-utils'
 import { NotesTagsEditor } from './NotesTagsEditor'
 import { useNoteEditorActions } from './useNoteEditorActions'
 
-type PreviewMode = 'edit' | 'preview' | 'split'
+type PreviewMode = 'edit' | 'preview'
 
 type EditorSnapshot = {
   title: string
@@ -36,7 +36,6 @@ type EditorSnapshot = {
 const PREVIEW_MODE_LABELS: Record<PreviewMode, string> = {
   edit: '仅编辑',
   preview: '实时预览',
-  split: '分屏预览',
 }
 
 interface Props {
@@ -415,8 +414,8 @@ export function NotesEditor({
     [],
   )
 
-  const showEditor = previewMode === 'edit' || previewMode === 'split'
-  const showPreview = previewMode === 'preview' || previewMode === 'split'
+  const showEditor = previewMode === 'edit'
+  const showPreview = previewMode === 'preview'
 
   return (
     <div
@@ -438,14 +437,7 @@ export function NotesEditor({
       />
 
       <div className="tm-notes-editor-layout">
-        <div
-          className={[
-            'tm-notes-editor-main',
-            previewMode === 'split' ? 'tm-notes-editor-main--split' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
+        <div className="tm-notes-editor-main">
         {showEditor ? (
           <div
             ref={editPaneRef}

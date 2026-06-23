@@ -10,6 +10,10 @@ import {
   GroupSharedNotebookSection,
   type GroupNoteListItem,
 } from './GroupSharedNotebookSection'
+import {
+  resolveSharedNoteNotebookKey,
+  resolveSharedNoteNotebookName,
+} from './group-note-utils'
 import { useP2pNotes } from './useP2pNotes'
 import { useRegisterGroupPanelError } from './group-page-status'
 import type { NoteItem, NotebookItem } from '../notes/notes-storage'
@@ -123,7 +127,13 @@ export function GroupNotesPanel({
         editable,
       })
     },
-    [onOpenGroupNote, p2pNotes.sharedResources, p2pWorkspaceId, resolveEditable, workspaceName],
+    [
+      onOpenGroupNote,
+      p2pNotes.sharedResources,
+      p2pWorkspaceId,
+      resolveEditable,
+      workspaceName,
+    ],
   )
 
   useEffect(() => {
@@ -185,7 +195,8 @@ export function GroupNotesPanel({
     for (const resource of p2pNotes.sharedResources) {
       const noteId = resource.localResourceId ?? resource.id
       const note = notesById.get(noteId) ?? null
-      const notebookId = note?.notebookId ?? UNKNOWN_NOTEBOOK_ID
+      const notebookId =
+        resolveSharedNoteNotebookKey(resource, note) || UNKNOWN_NOTEBOOK_ID
       const bucket = groups.get(notebookId) ?? []
       bucket.push({ resource, note })
       groups.set(notebookId, bucket)
@@ -204,7 +215,11 @@ export function GroupNotesPanel({
         const name =
           notebookId === UNKNOWN_NOTEBOOK_ID
             ? '未知笔记本'
-            : (notebooksById.get(notebookId)?.name ?? '笔记本')
+            : resolveSharedNoteNotebookName(
+                items[0]?.resource ?? { notebookId, notebookName: undefined },
+                notebookId,
+                notebooksById,
+              )
 
         return {
           notebookId,
@@ -307,10 +322,19 @@ export function GroupNotesPanel({
 
   const requestRemoveNotebook = useCallback(
     (notebookId: string, resourceIds: string[]) => {
+      const sampleResource = p2pNotes.sharedResources.find((resource) => {
+        const noteId = resource.localResourceId ?? resource.id
+        const note = notesById.get(noteId) ?? null
+        return (resolveSharedNoteNotebookKey(resource, note) || UNKNOWN_NOTEBOOK_ID) === notebookId
+      })
       const notebookName =
         notebookId === UNKNOWN_NOTEBOOK_ID
           ? '未知笔记本'
-          : (notebooksById.get(notebookId)?.name ?? '笔记本')
+          : resolveSharedNoteNotebookName(
+              sampleResource ?? { notebookId, notebookName: undefined },
+              notebookId,
+              notebooksById,
+            )
       const deletableCount = resourceIds.filter((id) => {
         const resource = p2pNotes.sharedResources.find((item) => item.id === id)
         return resource ? canDeleteResource(resource) : false
@@ -326,7 +350,7 @@ export function GroupNotesPanel({
         `确定从群组中移除笔记本「${notebookName}」下的 ${deletableCount} 篇笔记吗？`,
       )
     },
-    [canDeleteResource, notebooksById, p2pNotes, requestDelete],
+    [canDeleteResource, notebooksById, notesById, p2pNotes, requestDelete],
   )
 
   const confirmDelete = useCallback(async () => {

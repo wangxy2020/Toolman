@@ -62,6 +62,16 @@ function syncLocalDisplayNameToP2pMembers(displayName: string): void {
   }
 }
 
+export function ensureLocalDisplayNameSyncedToP2pMembers(): void {
+  const row = getDatabase()
+    .select({ displayName: identities.displayName })
+    .from(identities)
+    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .get()
+  if (!row?.displayName) return
+  syncLocalDisplayNameToP2pMembers(row.displayName)
+}
+
 export function updateIdentityProfile(input: unknown): IdentityProfile {
   const parsed = IdentityUpdateInputSchema.parse(input)
   const db = getDatabase()

@@ -461,7 +461,7 @@ export async function shareP2pAgent(rawInput: unknown): Promise<{ sharedResource
       package_json: packageJson,
       source_workspace_id: sourceWorkspaceId,
       permission: input.permission ?? 'read',
-      ...(sessionIds ? { session_ids: sessionIds } : {}),
+      session_ids: sessionIds ?? [],
       ...(sessionTitles ? { session_titles: sessionTitles } : {}),
       ...(existingMetadata.sessionPermissions
         ? { session_permissions: existingMetadata.sessionPermissions }
@@ -503,7 +503,11 @@ export async function removeP2pAgentSessions(
   }
 
   if (nextIds.length === 0) {
-    sharedRepo.update({ id: resource.id, status: 'unshared' })
+    const metadataJson = serializeAgentShareMetadata({
+      sourceWorkspaceId,
+      packageJson: metadata.packageJson,
+    })
+    sharedRepo.update({ id: resource.id, status: 'unshared', metadataJson })
     await appendP2pEvent({
       workspaceId: input.workspaceId,
       resourceType: 'Agent',
@@ -637,7 +641,12 @@ export async function unshareP2pAgent(rawInput: unknown): Promise<{ unshared: tr
   }
 
   const member = assertCanManageSharedResource(input.workspaceId, resource.sharedBy)
-  sharedRepo.update({ id: resource.id, status: 'unshared' })
+  const metadata = readAgentShareMetadata(resource.metadataJson)
+  const metadataJson = serializeAgentShareMetadata({
+    sourceWorkspaceId: metadata.sourceWorkspaceId,
+    packageJson: metadata.packageJson,
+  })
+  sharedRepo.update({ id: resource.id, status: 'unshared', metadataJson })
 
   await appendP2pEvent({
     workspaceId: input.workspaceId,

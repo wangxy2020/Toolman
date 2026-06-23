@@ -20,7 +20,7 @@ import { getDatabase } from '../../bootstrap/database'
 import { getSessionRepository } from '../../db/repos'
 import { toIpcSession } from '../../mappers/chat'
 import { createAssistant, getAssistantRow, listAssistants, restoreAssistantIfDeleted, updateAssistant } from '../assistant.service'
-import { clearSessionMessages, createSession } from '../session.service'
+import { clearSessionMessages, createSession, deleteSession } from '../session.service'
 import { getDefaultWorkspace } from '../workspace.service'
 import {
   normalizeAssistantModelId,
@@ -558,6 +558,8 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
       modelId: proxyModelId,
       parameters: {
         temperature: 0.7,
+        skillIds: [],
+        mcpServerIds: [],
         p2pGroupProxy: {
           p2pWorkspaceId: input.p2pWorkspaceId,
           resourceId: input.resourceId,
@@ -713,6 +715,26 @@ export function syncGroupProxyAssistantModels(workspaceId: string): void {
         modelId: expectedModelId,
       })
     }
+  }
+}
+
+export function cleanupLocalProxySessionsForResource(
+  resourceId: string,
+  allowedSourceSessionIds?: ReadonlySet<string>,
+): void {
+  const personalWorkspace = getDefaultWorkspace()
+  if (!personalWorkspace) return
+
+  const rows = getSessionRepository().listRows({
+    workspaceId: personalWorkspace.id,
+    limit: 10_000,
+  })
+
+  for (const row of rows) {
+    const proxy = readSessionProxyMetadata(row.metadataJson)
+    if (!proxy || proxy.resourceId !== resourceId) continue
+    if (allowedSourceSessionIds?.has(proxy.sourceSessionId)) continue
+    deleteSession({ id: row.id })
   }
 }
 

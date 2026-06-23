@@ -11,6 +11,7 @@ import {
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
   KNOWLEDGE_SIDEBAR_SECTIONS,
+  SYSTEM_DEFAULT_FOLDER_KB_NAME,
   SYSTEM_DEFAULT_FOLDER_KB_NAMES,
   isDeletableKnowledgeBase,
   type KnowledgeSidebarSection,
@@ -185,8 +186,8 @@ export function KnowledgeSidebar({
                 {isOpen && section.id === 'network' ? (
                   <>
                     <KnowledgeSidebarMenuItem
-                      icon={<IconGlobe size={14} />}
-                      label="默认网络文件夹"
+                      icon={<IconFolder size={14} />}
+                      label={SYSTEM_DEFAULT_FOLDER_KB_NAME}
                       active={
                         activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID &&
                         activeSection === 'network'
@@ -243,8 +244,8 @@ export function KnowledgeSidebar({
                 {isOpen && section.id === 'local-files' ? (
                   <>
                     <KnowledgeSidebarMenuItem
-                      icon={<IconFile size={14} />}
-                      label="默认本地文件"
+                      icon={<IconFolder size={14} />}
+                      label={SYSTEM_DEFAULT_FOLDER_KB_NAME}
                       active={
                         activeId === DEFAULT_LOCAL_FILES_FOLDER_ID &&
                         activeSection === 'local-files'

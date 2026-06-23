@@ -1793,7 +1793,10 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pResourceList]: async (input) => {
     try {
       const parsed = P2pResourceListInputSchema.parse(input)
-      const result = p2pKnowledgeSyncService.listP2pSharedResources(parsed)
+      const result =
+        parsed.resourceType === 'Note'
+          ? p2pNoteSyncService.listP2pSharedNotes(parsed)
+          : p2pKnowledgeSyncService.listP2pSharedResources(parsed)
       return ipcOk(P2pResourceListOutputSchema.parse(result))
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to list shared resources'

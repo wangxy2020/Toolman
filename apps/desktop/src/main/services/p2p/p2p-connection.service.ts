@@ -90,6 +90,10 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
         state: 'closed',
         workspaceId: previous.workspaceId,
       })
+      if (previous.workspaceId) {
+        handlePeerConnectionChange(previous.workspaceId, peerDeviceId, 'closed')
+      }
+      void P2pBridge.connectionDisconnect(peerDeviceId).catch(() => undefined)
     }
   }
 
@@ -144,13 +148,19 @@ export async function ensurePeerReadyForWorkspace(
   }
 
   setWorkspaceKey(workspaceId, workspaceKey, 1)
-
-  if (isPeerConnected(peerDeviceId)) {
-    await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
-    return
+  const state = await connectP2pPeer(peerDeviceId, workspaceId)
+  if (state !== 'connected') {
+    throw new Error(`对端未连接 (${state})`)
   }
 
-  await connectP2pPeerOnce(peerDeviceId, workspaceId)
+  try {
+    await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
+  } catch (error) {
+    const errMessage = error instanceof Error ? error.message : 'rotate failed'
+    console.warn(
+      `[p2p] workspace key rotate skipped for ${peerDeviceId.slice(0, 8)}: ${errMessage}`,
+    )
+  }
 }
 
 async function connectP2pPeerOnce(
@@ -158,15 +168,12 @@ async function connectP2pPeerOnce(
   workspaceId?: string,
 ): Promise<P2pConnectionState> {
   startPolling()
-  if (isPeerConnected(peerDeviceId)) {
-    if (workspaceId) {
-      const workspaceKey = loadWorkspaceKey(workspaceId)
-      if (workspaceKey) {
-        setWorkspaceKey(workspaceId, workspaceKey, 1)
-        await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
-      }
+
+  if (workspaceId) {
+    const workspaceKey = loadWorkspaceKey(workspaceId)
+    if (workspaceKey) {
+      setWorkspaceKey(workspaceId, workspaceKey, 1)
     }
-    return 'connected'
   }
 
   try {
@@ -216,6 +223,8 @@ export async function connectP2pPeer(
 
 export async function disconnectP2pPeer(peerDeviceId: string): Promise<void> {
   await P2pBridge.connectionDisconnect(peerDeviceId)
+  knownConnections.delete(peerDeviceId)
+  peerConnectionModes.delete(peerDeviceId)
   broadcastP2pConnectionStateChange({
     peerDeviceId,
     state: 'closed',

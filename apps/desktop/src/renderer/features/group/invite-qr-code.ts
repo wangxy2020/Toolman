@@ -1,9 +1,12 @@
 import QRCode from 'qrcode'
 
 interface StyledInviteQrOptions {
+  /** CSS display size; canvas renders at size × renderScale for sharpness */
   size?: number
+  renderScale?: number
   marginModules?: number
-  dotScale?: number
+  /** Data module edge length as a fraction of cell size (0–1) */
+  moduleScale?: number
   darkColor?: string
   lightColor?: string
   centerLabel?: string
@@ -48,15 +51,22 @@ function drawFinderPattern(
   const outerSize = cellSize * 7
   const innerOffset = cellSize * 2
   const innerSize = cellSize * 3
-  const outerRadius = cellSize * 1.35
-  const innerRadius = cellSize * 0.85
+  const outerRadius = cellSize * 1.2
+  const innerRadius = cellSize * 0.75
 
   ctx.fillStyle = darkColor
   roundRect(ctx, x, y, outerSize, outerSize, outerRadius)
   ctx.fill()
 
   ctx.fillStyle = lightColor
-  roundRect(ctx, x + cellSize, y + cellSize, outerSize - cellSize * 2, outerSize - cellSize * 2, outerRadius * 0.72)
+  roundRect(
+    ctx,
+    x + cellSize,
+    y + cellSize,
+    outerSize - cellSize * 2,
+    outerSize - cellSize * 2,
+    outerRadius * 0.7,
+  )
   ctx.fill()
 
   ctx.fillStyle = darkColor
@@ -71,9 +81,9 @@ function drawCenterBadge(
   lightColor: string,
   label: string,
 ) {
-  const badgeSize = size * 0.19
+  const badgeSize = size * 0.17
   const center = size / 2
-  const pad = badgeSize * 0.22
+  const pad = badgeSize * 0.24
 
   ctx.fillStyle = lightColor
   roundRect(
@@ -82,12 +92,12 @@ function drawCenterBadge(
     center - badgeSize / 2 - pad,
     badgeSize + pad * 2,
     badgeSize + pad * 2,
-    badgeSize * 0.28,
+    badgeSize * 0.3,
   )
   ctx.fill()
 
   ctx.fillStyle = darkColor
-  roundRect(ctx, center - badgeSize / 2, center - badgeSize / 2, badgeSize, badgeSize, badgeSize * 0.24)
+  roundRect(ctx, center - badgeSize / 2, center - badgeSize / 2, badgeSize, badgeSize, badgeSize * 0.26)
   ctx.fill()
 
   ctx.fillStyle = lightColor
@@ -101,10 +111,12 @@ export async function createStyledInviteQrDataUrl(
   text: string,
   options: StyledInviteQrOptions = {},
 ): Promise<string> {
-  const size = options.size ?? 220
-  const marginModules = options.marginModules ?? 2
-  const dotScale = options.dotScale ?? 0.38
-  const darkColor = options.darkColor ?? '#151515'
+  const displaySize = options.size ?? 220
+  const renderScale = options.renderScale ?? 3
+  const size = Math.round(displaySize * renderScale)
+  const marginModules = options.marginModules ?? 4
+  const moduleScale = options.moduleScale ?? 0.74
+  const darkColor = options.darkColor ?? '#00a962'
   const lightColor = options.lightColor ?? '#ffffff'
   const centerLabel = options.centerLabel ?? '群'
 
@@ -121,7 +133,8 @@ export async function createStyledInviteQrDataUrl(
   const totalModules = matrixSize + marginModules * 2
   const cellSize = size / totalModules
   const margin = marginModules * cellSize
-  const dotRadius = cellSize * dotScale
+  const moduleInset = (cellSize * (1 - moduleScale)) / 2
+  const moduleRadius = cellSize * 0.24
 
   ctx.fillStyle = lightColor
   ctx.fillRect(0, 0, size, size)
@@ -136,10 +149,10 @@ export async function createStyledInviteQrDataUrl(
       if (isInFinderPattern(row, col, matrixSize)) continue
       if (!qr.modules.get(row, col)) continue
 
-      const x = margin + col * cellSize + cellSize / 2
-      const y = margin + row * cellSize + cellSize / 2
-      ctx.beginPath()
-      ctx.arc(x, y, dotRadius, 0, Math.PI * 2)
+      const x = margin + col * cellSize + moduleInset
+      const y = margin + row * cellSize + moduleInset
+      const moduleSize = cellSize * moduleScale
+      roundRect(ctx, x, y, moduleSize, moduleSize, moduleRadius)
       ctx.fill()
     }
   }

@@ -6,6 +6,7 @@ import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 import {
   buildP2pGroupSavedKnowledgeDescription,
   buildP2pGroupSavedKnowledgeDisplayName,
+  findGroupSavedKnowledgeBaseId,
   normalizeP2pGroupSavedKnowledgeMeta,
   parseP2pGroupSavedKnowledgeMeta,
   P2pKnowledgeEnsureDocumentSavedInputSchema,
@@ -556,50 +557,42 @@ export async function setP2pKnowledgeDocumentPermission(rawInput: unknown): Prom
 
 function ensureUserSavedGroupKnowledgeBase(
   storageWorkspaceId: string,
+  p2pWorkspaceId: string,
   groupName: string,
   sharedFolderName: string,
 ): { kbId: string; storagePath: string } {
   const kbRepo = getKnowledgeBaseRepository()
-  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, sharedFolderName)
+  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(
+    groupName,
+    sharedFolderName,
+    p2pWorkspaceId,
+  )
   const displayName = buildP2pGroupSavedKnowledgeDisplayName(
     savedMeta.groupName,
     savedMeta.sharedFolderName,
   )
   const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
 
-  const existingByMeta = kbRepo
-    .listByWorkspace(storageWorkspaceId)
-    .find((row) => {
-      if (row.kind !== 'shared' || isP2pSharedKnowledgeMirrorDescription(row.description)) {
-        return false
-      }
-      const meta = parseP2pGroupSavedKnowledgeMeta(row.description)
-      return (
-        meta != null &&
-        meta.groupName === savedMeta.groupName &&
-        meta.sharedFolderName === savedMeta.sharedFolderName
-      )
-    })
+  const workspaceRows = kbRepo.listByWorkspace(storageWorkspaceId)
+  const existingId = findGroupSavedKnowledgeBaseId(
+    workspaceRows,
+    {
+      p2pWorkspaceId,
+      groupName,
+      sharedFolderName,
+    },
+    { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
+  )
 
-  const legacyFlat = existingByMeta
-    ? null
-    : kbRepo.listByWorkspace(storageWorkspaceId).find((row) => {
-        if (row.kind !== 'shared' || isP2pSharedKnowledgeMirrorDescription(row.description)) {
-          return false
-        }
-        if (parseP2pGroupSavedKnowledgeMeta(row.description)) return false
-        return row.name === savedMeta.groupName || row.name === displayName
-      })
-
-  let kbRow = existingByMeta
-  if (!kbRow && legacyFlat) {
+  let kbRow = existingId ? kbRepo.findRowById(existingId, storageWorkspaceId) : null
+  if (kbRow && !parseP2pGroupSavedKnowledgeMeta(kbRow.description)?.p2pWorkspaceId) {
     kbRepo.update({
-      id: legacyFlat.id,
+      id: kbRow.id,
       workspaceId: storageWorkspaceId,
       name: displayName,
       description,
     })
-    kbRow = kbRepo.findRowById(legacyFlat.id, storageWorkspaceId) ?? legacyFlat
+    kbRow = kbRepo.findRowById(kbRow.id, storageWorkspaceId) ?? kbRow
   }
 
   kbRow =
@@ -768,6 +761,7 @@ export async function ensureP2pKnowledgeDocumentSaved(rawInput: unknown): Promis
 
   const { kbId, storagePath } = ensureUserSavedGroupKnowledgeBase(
     storageWorkspaceId,
+    input.workspaceId,
     p2pWorkspace.name,
     sharedFolderName,
   )

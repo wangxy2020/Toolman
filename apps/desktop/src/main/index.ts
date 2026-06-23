@@ -20,9 +20,9 @@ import {
 } from './services/knowledge-url-refresh.service'
 import { P2pBridge } from './services/p2p/p2p-bridge'
 import { ensureP2pDeviceIdentity } from './services/p2p/p2p-device-identity.service'
-import { startP2pDiscovery } from './services/p2p/p2p-discovery.service'
+import { ensureLocalDisplayNameSyncedToP2pMembers } from './services/identity.service'
+import { startP2pDiscovery, stopP2pDiscovery } from './services/p2p/p2p-discovery.service'
 import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
-import { stopP2pDiscovery } from './services/p2p/p2p-discovery.service'
 import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
 import { bootstrapP2pEventStore } from './services/p2p/p2p-event.service'
 import { bootstrapP2pSync } from './services/p2p/p2p-sync.service'
@@ -189,6 +189,7 @@ app.whenReady().then(() => {
   try {
     bootstrapDatabase()
     ensureP2pDeviceIdentity()
+    ensureLocalDisplayNameSyncedToP2pMembers()
     try {
       startP2pDiscovery()
     } catch (error) {

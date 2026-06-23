@@ -1,5 +1,5 @@
 import { P2pSharedResourceRepository } from '@toolman/db'
-import type { WorkspaceEvent } from '@toolman/shared'
+import { buildP2pNoteShareMetadata } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getNoteById, upsertNoteItem } from '../notes-data.service'
 import {
@@ -28,11 +28,13 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
   const noteId = readPayloadString(event.payload, 'note_id') ?? event.resourceId
   const title = readPayloadString(event.payload, 'title') ?? '共享笔记'
   const notebookId = readPayloadString(event.payload, 'notebook_id') ?? 'notebook-default'
+  const notebookName = readPayloadString(event.payload, 'notebook_name') ?? '笔记本'
   const permission =
     readPayloadString(event.payload, 'permission') === 'write' ? 'write' : 'read'
 
   const sharedRepo = getSharedResourceRepo()
   const existing = sharedRepo.findById(noteId)
+  const metadataJson = buildP2pNoteShareMetadata({ notebookId, notebookName, title })
   if (!existing) {
     sharedRepo.create({
       id: noteId,
@@ -42,7 +44,7 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
       name: title,
       sharedBy: event.operatorId,
       permission,
-      metadataJson: JSON.stringify({ notebookId, title }),
+      metadataJson,
       createdAt: new Date(event.timestamp),
       updatedAt: new Date(event.timestamp),
     })
@@ -51,7 +53,7 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
       id: noteId,
       name: title,
       permission,
-      metadataJson: JSON.stringify({ notebookId, title }),
+      metadataJson,
     })
   }
 

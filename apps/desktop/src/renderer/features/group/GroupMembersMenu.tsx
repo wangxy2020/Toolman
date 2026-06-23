@@ -61,6 +61,12 @@ export function GroupMembersMenu({
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!open) {
+      setContextMenu(null)
+      setRemoveTarget(null)
+    }
+  }, [open])
   const activeMembers = members.filter((member) => member.status === 'active')
   const canManage = Boolean(onRemoveMember && onUpdateMemberRole)
 
@@ -86,6 +92,27 @@ export function GroupMembersMenu({
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [anchorRef, onClose, open])
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (target instanceof Element) {
+        if (target.closest('.tm-group-context-menu')) return
+        if (target.classList.contains('tm-group-context-menu-backdrop')) return
+      }
+      setContextMenu(null)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setContextMenu(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [contextMenu])
 
   const openManageMenu = useCallback(
     (event: React.MouseEvent, member: P2pMember) => {

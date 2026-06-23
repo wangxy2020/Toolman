@@ -12,6 +12,7 @@ import {
   FILE_REGISTRY_TOOL_ID,
   isSharedKnowledgeId,
   KNOWLEDGE_SIDEBAR_SECTIONS,
+  SYSTEM_DEFAULT_FOLDER_KB_NAME,
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
 import {
@@ -470,15 +471,15 @@ export function KnowledgePage({
   const breadcrumbItemName =
     section === 'local'
       ? activeId === DEFAULT_KNOWLEDGE_FOLDER_ID
-        ? '默认文件夹'
+        ? SYSTEM_DEFAULT_FOLDER_KB_NAME
         : active?.name
       : section === 'network'
         ? activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID
-          ? '默认网络文件夹'
+          ? SYSTEM_DEFAULT_FOLDER_KB_NAME
           : active?.name
         : section === 'local-files'
           ? activeId === DEFAULT_LOCAL_FILES_FOLDER_ID
-            ? '默认本地文件'
+            ? SYSTEM_DEFAULT_FOLDER_KB_NAME
             : active?.name
           : section === 'shared'
             ? active?.name

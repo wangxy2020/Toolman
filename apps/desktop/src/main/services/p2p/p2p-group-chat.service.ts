@@ -86,7 +86,10 @@ function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
 }
 
-async function relayMessageToPeers(message: P2pGroupChatMessage): Promise<void> {
+async function relayMessageToPeers(
+  message: P2pGroupChatMessage,
+  excludeDeviceIds: ReadonlySet<string> = new Set(),
+): Promise<void> {
   const device = getP2pDeviceInfo()
   const memberRepo = getMemberRepo()
   const peerDeviceIds = new Set(
@@ -108,14 +111,19 @@ async function relayMessageToPeers(message: P2pGroupChatMessage): Promise<void> 
   })
 
   await Promise.all(
-    [...peerDeviceIds].map(async (peerDeviceId) => {
-      try {
-        await ensurePeerReadyForWorkspace(peerDeviceId, message.workspaceId)
-        await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
-      } catch {
-        // ignore single peer failure
-      }
-    }),
+    [...peerDeviceIds]
+      .filter((peerDeviceId) => !excludeDeviceIds.has(peerDeviceId))
+      .map(async (peerDeviceId) => {
+        try {
+          await ensurePeerReadyForWorkspace(peerDeviceId, message.workspaceId)
+          await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
+        } catch (error) {
+          const errMessage = error instanceof Error ? error.message : 'relay failed'
+          console.warn(
+            `[p2p] group chat relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`,
+          )
+        }
+      }),
   )
 }
 
@@ -137,14 +145,19 @@ export async function sendP2pGroupChatMessage(
   }
 
   const contentBlocks = input.contentBlocks.map((block) => ContentBlockSchema.parse(block))
+  const identityName = getIdentityProfile().displayName
   const message = P2pGroupChatMessageSchema.parse({
     id: randomUUID(),
     workspaceId: input.workspaceId,
     senderMemberId: member.id,
-    senderName: getIdentityProfile().displayName,
+    senderName: identityName,
     contentBlocks,
     createdAt: Date.now(),
   })
+
+  if (member.displayName !== identityName) {
+    getMemberRepo().update({ id: member.id, displayName: identityName })
+  }
 
   appendMessage(input.workspaceId, message)
   broadcastP2pGroupChatMessage(message)
@@ -173,6 +186,15 @@ export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean
   return { deleted: true }
 }
 
+function maybeRelayGroupChatAsOwner(peerDeviceId: string, message: P2pGroupChatMessage): void {
+  const workspace = getWorkspaceRepo().findById(message.workspaceId)
+  const localDeviceId = getP2pDeviceInfo().deviceId
+  if (!workspace || workspace.ownerDeviceId !== localDeviceId) return
+  if (peerDeviceId === localDeviceId) return
+
+  void relayMessageToPeers(message, new Set([localDeviceId, peerDeviceId]))
+}
+
 export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buffer): void {
   try {
     const parsed = JSON.parse(data.toString('utf8')) as {
@@ -186,50 +208,75 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       return
     }
 
-    const message = P2pGroupChatMessageSchema.parse(wireMessage)
-    const connected = getKnownP2pConnections().some(
-      (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
-    )
+    handleIncomingP2pGroupChatMessage(peerDeviceId, wireMessage)
+  } catch (error) {
+    const errMessage = error instanceof Error ? error.message : 'parse failed'
+    console.warn(`[p2p] group chat payload rejected from ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
+  }
+}
 
-    let member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
-    if (!member || member.status !== 'active') {
-      if (!connected) {
-        return
-      }
+function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: unknown): void {
+  const message = P2pGroupChatMessageSchema.parse(wireMessage)
+  const connected = getKnownP2pConnections().some(
+    (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
+  )
 
-      const workspace = getWorkspaceRepo().findById(message.workspaceId)
-      const localDeviceId = getP2pDeviceInfo().deviceId
-      if (workspace?.ownerDeviceId === localDeviceId) {
-        void applyRemoteMemberJoin(
-          {
-            workspaceId: message.workspaceId,
-            member: {
-              id: message.senderMemberId,
-              workspaceId: message.workspaceId,
-              identityId: '',
-              deviceId: peerDeviceId,
-              displayName: message.senderName,
-              role: 'member',
-              status: 'active',
-              online: true,
-            },
-            peerDeviceId,
-          },
-          { requirePeerTrust: false },
-        )
-      } else if (workspace?.ownerDeviceId === peerDeviceId) {
-        ensureOwnerMemberRecord(message.workspaceId)
-      }
-
-      member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
-      if (!member && !connected) {
-        return
-      }
+  let member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
+  if (!member || member.status !== 'active') {
+    if (!connected) {
+      console.warn(
+        `[p2p] dropped group chat ${message.id.slice(0, 8)}: sender ${peerDeviceId.slice(0, 8)} not connected`,
+      )
+      return
     }
 
-    appendMessage(message.workspaceId, message)
-    broadcastP2pGroupChatMessage(message)
-  } catch {
-    // ignore malformed payloads
+    const workspace = getWorkspaceRepo().findById(message.workspaceId)
+    const localDeviceId = getP2pDeviceInfo().deviceId
+    if (workspace?.ownerDeviceId === localDeviceId) {
+      void applyRemoteMemberJoin(
+        {
+          workspaceId: message.workspaceId,
+          member: {
+            id: message.senderMemberId,
+            workspaceId: message.workspaceId,
+            identityId: '',
+            deviceId: peerDeviceId,
+            displayName: message.senderName,
+            role: 'member',
+            status: 'active',
+            online: true,
+          },
+          peerDeviceId,
+        },
+        { requirePeerTrust: false },
+      )
+    } else if (workspace?.ownerDeviceId === peerDeviceId) {
+      ensureOwnerMemberRecord(message.workspaceId)
+    }
+
+    member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
+  } else if (
+    member &&
+    message.senderName.trim() &&
+    member.displayName !== message.senderName &&
+    member.deviceId === peerDeviceId
+  ) {
+    getMemberRepo().update({ id: member.id, displayName: message.senderName })
   }
+
+  if (!member && !connected) {
+    console.warn(
+      `[p2p] dropped group chat ${message.id.slice(0, 8)}: unknown sender ${peerDeviceId.slice(0, 8)}`,
+    )
+    return
+  }
+
+  const file = readChatFile(message.workspaceId)
+  if (file.messages.some((item) => item.id === message.id)) {
+    return
+  }
+
+  appendMessage(message.workspaceId, message)
+  broadcastP2pGroupChatMessage(message)
+  maybeRelayGroupChatAsOwner(peerDeviceId, message)
 }

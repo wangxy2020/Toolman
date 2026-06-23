@@ -88,6 +88,20 @@ conn.execute(
     (user_name,),
 )
 
+device_row = conn.execute(
+    "SELECT device_id FROM p2p_device_identity ORDER BY created_at ASC LIMIT 1"
+).fetchone()
+if device_row:
+    conn.execute(
+        """
+        UPDATE p2p_workspace_members
+        SET display_name = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE device_id = ? AND status = 'active'
+        """,
+        (user_name, device_row["device_id"]),
+    )
+    print(f"  synced p2p member display_name for device {device_row['device_id'][:8]}…")
+
 rows = conn.execute(
     "SELECT id, settings_json FROM workspaces WHERE deleted_at IS NULL"
 ).fetchall()

@@ -5,15 +5,13 @@ import {
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
-  SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME,
-  SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME,
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
 
 const DEFAULT_FOLDER_KB_NAMES: Record<KnowledgeFolderKind, string> = {
   local: SYSTEM_DEFAULT_FOLDER_KB_NAME,
-  network: SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME,
-  local_files: SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME,
+  network: SYSTEM_DEFAULT_FOLDER_KB_NAME,
+  local_files: SYSTEM_DEFAULT_FOLDER_KB_NAME,
 }
 
 const ENSURE_FOLDER_CHANNELS: Record<KnowledgeFolderKind, IpcChannel> = {
@@ -57,8 +55,8 @@ async function findOrCreateDefaultFolderKb(
 
   const descriptions: Record<KnowledgeFolderKind, string> = {
     local: '默认文件夹知识库',
-    network: '默认网络文件夹知识库',
-    local_files: '默认本地文件存储',
+    network: '默认文件夹知识库',
+    local_files: '默认文件夹存储',
   }
 
   const created = await invokeIpc<KnowledgeBase>(IpcChannel.KnowledgeBaseCreate, {

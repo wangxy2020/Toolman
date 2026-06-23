@@ -104,17 +104,33 @@ export function providerSupportsOpenAiVision(config: ProviderConfig, model: stri
 
 const OCR_VISION_MODEL = /glm[-_]ocr/i
 
+/** Gemma 3/4 via Ollama /v1 streaming puts all tokens in reasoning with empty content (ollama#15288). */
+const GEMMA_THINKING_OLLAMA_MODEL = /gemma[-_]?(?:3|4)/i
+
 export function isOcrVisionModelId(model: string): boolean {
   return OCR_VISION_MODEL.test(model.trim().toLowerCase())
 }
 
-/** Ollama 视觉/OCR 模型：关闭 think 并将输出写入 content，避免 thinking 字段独占 OCR 结果 */
+export function isGemmaThinkingOllamaModelId(model: string): boolean {
+  const key = model.trim().toLowerCase()
+  if (GEMMA_THINKING_OLLAMA_MODEL.test(key)) return true
+  if (/^gemma4:latest(?:@[\w.-]+)?$/.test(key)) return true
+  // Ollama 常用标签 gemma:latest 指向 Gemma 4 系列
+  if (/^gemma:latest(?:@[\w.-]+)?$/.test(key)) return true
+  return false
+}
+
+function ollamaRoutesReasoningAsAnswer(model: string): boolean {
+  return isOcrVisionModelId(model) || isGemmaThinkingOllamaModelId(model)
+}
+
+/** Ollama 视觉/OCR 与 Gemma 3/4：关闭 think；Gemma 仍会在 /v1 流式里走 reasoning 字段，由 shouldRouteThinkingAsAnswer 兜底 */
 export function resolveOllamaExtraBody(
   config: ProviderConfig,
   model: string,
 ): Record<string, unknown> | undefined {
   if (config.type !== 'ollama') return undefined
-  if (!isOcrVisionModelId(model)) return undefined
+  if (!ollamaRoutesReasoningAsAnswer(model)) return undefined
   return { think: false }
 }
 
@@ -125,11 +141,12 @@ export function resolveOpenAiMaxTokens(
 ): number | undefined {
   if (maxTokens != null && maxTokens > 0) return maxTokens
   if (config.type === 'ollama' && isOcrVisionModelId(model)) return 8192
+  if (config.type === 'ollama' && isGemmaThinkingOllamaModelId(model)) return 4096
   return maxTokens
 }
 
 export function shouldRouteThinkingAsAnswer(config: ProviderConfig, model: string): boolean {
-  return config.type === 'ollama' && isOcrVisionModelId(model)
+  return config.type === 'ollama' && ollamaRoutesReasoningAsAnswer(model)
 }
 
 /** @deprecated 使用 normalizeDeepSeekModelKey */

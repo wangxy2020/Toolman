@@ -1,8 +1,9 @@
 import { P2pSharedResourceRepository } from '@toolman/db'
-import type { WorkspaceEvent } from '@toolman/shared'
+import type { P2pAgentSessionPermission, WorkspaceEvent } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getDefaultWorkspace } from '../workspace.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { listWorkspaceEventsSince } from './p2p-event.service'
 import {
   importAgentPackageToWorkspace,
   parseAgentSessionPermissionsFromPayload,
@@ -15,7 +16,10 @@ import {
   restoreAssistantIfDeleted,
   updateAssistant,
 } from '../assistant.service'
-import { syncLocalProxySessionPermissions } from './p2p-group-agent-proxy.service'
+import {
+  cleanupLocalProxySessionsForResource,
+  syncLocalProxySessionPermissions,
+} from './p2p-group-agent-proxy.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -128,17 +132,38 @@ export function projectAgentSharedEvent(event: WorkspaceEvent): void {
   const sharedRepo = getSharedResourceRepo()
   const existing = sharedRepo.findById(sourceAssistantId)
 
-  const sessionIds = event.payload.session_ids
+  const payloadHasSessionIds = Object.prototype.hasOwnProperty.call(event.payload, 'session_ids')
+  const sessionIds = resolveAuthoritativeSessionIds(
+    existing ? readAgentShareMetadata(existing.metadataJson).sessionIds : undefined,
+    event.payload,
+  )
   const sessionPermissions = parseAgentSessionPermissionsFromPayload(event.payload)
   const sessionTitles = parseAgentSessionTitlesFromPayload(event.payload)
   const existingMetadata = existing ? readAgentShareMetadata(existing.metadataJson) : {}
   const metadataJson = serializeAgentShareMetadata({
     sourceWorkspaceId,
     packageJson,
-    sessionIds: mergeSessionIds(existingMetadata.sessionIds, sessionIds),
-    sessionTitles: mergeSessionTitleMaps(existingMetadata.sessionTitles, sessionTitles),
-    sessionPermissions: sessionPermissions ?? existingMetadata.sessionPermissions,
+    sessionIds,
+    sessionTitles: resolveProjectedSessionTitles(
+      existingMetadata.sessionTitles,
+      sessionTitles,
+      sessionIds,
+      payloadHasSessionIds,
+    ),
+    sessionPermissions: resolveProjectedSessionPermissions(
+      existingMetadata.sessionPermissions,
+      sessionPermissions,
+      sessionIds,
+      payloadHasSessionIds,
+    ),
   })
+
+  if (payloadHasSessionIds) {
+    cleanupLocalProxySessionsForResource(
+      sourceAssistantId,
+      sessionIds ? new Set(sessionIds) : undefined,
+    )
+  }
 
   const projectMirrorImport = shouldProjectAgentMirrorImport(event, existing)
 
@@ -282,21 +307,107 @@ export function projectAgentDeletedEvent(event: WorkspaceEvent): void {
   const sharedRepo = getSharedResourceRepo()
   const resource = sharedRepo.findById(assistantId)
   if (resource) {
-    sharedRepo.update({ id: assistantId, status: 'unshared' })
+    const metadata = readAgentShareMetadata(resource.metadataJson)
+    const metadataJson = serializeAgentShareMetadata({
+      sourceWorkspaceId: metadata.sourceWorkspaceId,
+      packageJson: metadata.packageJson,
+    })
+    sharedRepo.update({ id: assistantId, status: 'unshared', metadataJson })
+    cleanupLocalProxySessionsForResource(assistantId)
   }
 }
 
-function mergeSessionIds(
+export function reconcileAgentSharedResources(workspaceId: string): void {
+  const terminalByAgent = new Map<string, WorkspaceEvent>()
+
+  let sinceSeq = 0
+  while (true) {
+    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
+    if (batch.length === 0) break
+
+    for (const event of batch) {
+      sinceSeq = event.seq
+      if (event.resourceType !== 'Agent') continue
+      if (
+        event.eventType !== 'Shared' &&
+        event.eventType !== 'Created' &&
+        event.eventType !== 'Deleted'
+      ) {
+        continue
+      }
+
+      const assistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
+      terminalByAgent.set(assistantId, event)
+    }
+
+    if (batch.length < 200) break
+  }
+
+  for (const event of terminalByAgent.values()) {
+    if (event.eventType === 'Deleted') {
+      projectAgentDeletedEvent(event)
+      continue
+    }
+    projectAgentSharedEvent(event)
+  }
+}
+
+export function resolveAuthoritativeSessionIds(
   existing: string[] | undefined,
-  incoming: unknown,
+  payload: Record<string, unknown>,
 ): string[] | undefined {
-  const next = Array.isArray(incoming)
-    ? incoming.filter((item): item is string => typeof item === 'string')
-    : []
-  if (next.length === 0) {
+  if (!Object.prototype.hasOwnProperty.call(payload, 'session_ids')) {
     return existing
   }
-  return [...new Set([...(existing ?? []), ...next])]
+  if (!Array.isArray(payload.session_ids)) {
+    return undefined
+  }
+  const next = [
+    ...new Set(
+      payload.session_ids.filter((item): item is string => typeof item === 'string'),
+    ),
+  ]
+  return next.length > 0 ? next : undefined
+}
+
+function resolveProjectedSessionTitles(
+  existing: Record<string, string> | undefined,
+  incoming: Record<string, string> | undefined,
+  sessionIds: string[] | undefined,
+  payloadHasSessionIds: boolean,
+): Record<string, string> | undefined {
+  if (!payloadHasSessionIds) {
+    return mergeSessionTitleMaps(existing, incoming)
+  }
+  const merged = { ...(existing ?? {}), ...(incoming ?? {}) }
+  if (!sessionIds || sessionIds.length === 0) {
+    return undefined
+  }
+  const allowed = new Set(sessionIds)
+  const pruned = Object.fromEntries(
+    Object.entries(merged).filter(([sessionId]) => allowed.has(sessionId)),
+  )
+  return Object.keys(pruned).length > 0 ? pruned : undefined
+}
+
+function resolveProjectedSessionPermissions(
+  existing: Record<string, P2pAgentSessionPermission> | undefined,
+  incoming: Record<string, P2pAgentSessionPermission> | undefined,
+  sessionIds: string[] | undefined,
+  payloadHasSessionIds: boolean,
+): Record<string, P2pAgentSessionPermission> | undefined {
+  if (!payloadHasSessionIds) {
+    return incoming ?? existing
+  }
+  const merged = { ...(existing ?? {}), ...(incoming ?? {}) }
+  if (!sessionIds || sessionIds.length === 0) {
+    return undefined
+  }
+  const allowed = new Set(sessionIds)
+  const pruned = Object.fromEntries(
+    Object.entries(merged).filter(([sessionId]) => allowed.has(sessionId)),
+  )
+  return Object.keys(pruned).length > 0 ? pruned : undefined
 }
 
 function mergeSessionTitleMaps(

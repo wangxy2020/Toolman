@@ -14,6 +14,7 @@ import {
   broadcastP2pDiscoveryNodeOffline,
   broadcastP2pDiscoveryNodeOnline,
 } from './p2p-discovery-broadcast'
+import { handlePeerDiscoveryOffline, handlePeerDiscoveryOnline } from './p2p-peer.service'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 const POLL_INTERVAL_MS = 2_000
@@ -50,10 +51,12 @@ function syncPushEvents(nodes: DiscoveredNode[]): void {
     const previous = knownNodes.get(deviceId)
     if (!previous) {
       broadcastP2pDiscoveryNodeOnline(node)
+      void handlePeerDiscoveryOnline(deviceId)
       continue
     }
     if (!previous.online && node.online) {
       broadcastP2pDiscoveryNodeOnline(node)
+      void handlePeerDiscoveryOnline(deviceId)
     }
   }
 
@@ -61,10 +64,12 @@ function syncPushEvents(nodes: DiscoveredNode[]): void {
     const next = nextById.get(deviceId)
     if (!next) {
       broadcastP2pDiscoveryNodeOffline(deviceId)
+      void handlePeerDiscoveryOffline(deviceId)
       continue
     }
     if (previous.online && !next.online) {
       broadcastP2pDiscoveryNodeOffline(deviceId)
+      void handlePeerDiscoveryOffline(deviceId)
     }
   }
 

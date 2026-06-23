@@ -1,4 +1,4 @@
-import type { P2pSharedResourcePermission } from '@toolman/shared'
+import type { P2pSharedResource, P2pSharedResourcePermission } from '@toolman/shared'
 
 export const GROUP_NOTEBOOK_ID_PREFIX = 'group-notebook:'
 export const GROUP_KB_NOTE_ID_PREFIX = 'group-kb:'
@@ -49,4 +49,26 @@ export function formatNotePermissionLabel(permission: P2pSharedResourcePermissio
 
 export function isNoteEditablePermission(permission: P2pSharedResourcePermission): boolean {
   return permission !== 'read'
+}
+
+export function resolveSharedNoteNotebookKey(
+  resource: Pick<P2pSharedResource, 'notebookId'>,
+  note: { notebookId: string } | null,
+): string {
+  if (resource.notebookId) return resource.notebookId
+  if (note?.notebookId && !isGroupNotebookId(note.notebookId)) {
+    return note.notebookId
+  }
+  return ''
+}
+
+export function resolveSharedNoteNotebookName(
+  resource: Pick<P2pSharedResource, 'notebookId' | 'notebookName'>,
+  notebookId: string,
+  notebooksByName: Map<string, { name: string }>,
+  fallback = '笔记本',
+): string {
+  if (resource.notebookName) return resource.notebookName
+  if (!notebookId) return fallback
+  return notebooksByName.get(notebookId)?.name ?? fallback
 }

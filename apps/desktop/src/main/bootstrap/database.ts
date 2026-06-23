@@ -54,25 +54,26 @@ export function bootstrapDatabase(): void {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`[knowledge] folder bootstrap failed: ${message}`)
   }
-  void cleanupMisplacedP2pMirrorKnowledgeBases().then((result) => {
-    const { purgedKbCount, restoredKbCount, removedDocCount } = result
-    if (purgedKbCount > 0 || restoredKbCount > 0 || removedDocCount > 0) {
-      console.info(
-        `[p2p] cleaned misplaced mirror knowledge bases: purged=${purgedKbCount} restored=${restoredKbCount} docs=${removedDocCount}`,
-      )
-    }
-  })
   void migrateAllLegacyGroupSavedKnowledgeBases()
     .then((result) => {
-      if (result.migratedKbCount > 0) {
+      if (result.migratedKbCount > 0 || result.upgradedKbCount > 0 || result.recoveredDocCount > 0) {
         console.info(
-          `[p2p] migrated legacy group saved knowledge bases: count=${result.migratedKbCount}`,
+          `[p2p] group saved knowledge bootstrap: migrated=${result.migratedKbCount} upgraded=${result.upgradedKbCount} recoveredDocs=${result.recoveredDocCount}`,
+        )
+      }
+      return cleanupMisplacedP2pMirrorKnowledgeBases()
+    })
+    .then((result) => {
+      const { purgedKbCount, restoredKbCount, removedDocCount } = result
+      if (purgedKbCount > 0 || restoredKbCount > 0 || removedDocCount > 0) {
+        console.info(
+          `[p2p] cleaned misplaced mirror knowledge bases: purged=${purgedKbCount} restored=${restoredKbCount} docs=${removedDocCount}`,
         )
       }
     })
     .catch((error) => {
       const message = error instanceof Error ? error.message : String(error)
-      console.error(`[p2p] legacy group saved knowledge migration failed: ${message}`)
+      console.error(`[p2p] group saved knowledge bootstrap failed: ${message}`)
     })
 }
 

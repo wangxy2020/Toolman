@@ -16,7 +16,10 @@ function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
 }
 
-export async function reconcileWorkspaceMemberMesh(workspaceId: string): Promise<void> {
+export async function reconcileWorkspaceMemberMesh(
+  workspaceId: string,
+  options?: { immediate?: boolean },
+): Promise<void> {
   const workspace = getWorkspaceRepo().findById(workspaceId)
   if (!workspace) return
 
@@ -26,9 +29,11 @@ export async function reconcileWorkspaceMemberMesh(workspaceId: string): Promise
     return
   }
 
-  const lastRun = meshReconcileLastRunAt.get(workspaceId) ?? 0
-  if (Date.now() - lastRun < MESH_RECONCILE_COOLDOWN_MS) {
-    return
+  if (!options?.immediate) {
+    const lastRun = meshReconcileLastRunAt.get(workspaceId) ?? 0
+    if (Date.now() - lastRun < MESH_RECONCILE_COOLDOWN_MS) {
+      return
+    }
   }
 
   const promise = reconcileWorkspaceMemberMeshNow(workspaceId, workspace.ownerDeviceId).finally(() => {

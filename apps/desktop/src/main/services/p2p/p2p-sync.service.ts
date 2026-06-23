@@ -32,6 +32,7 @@ import {
   syncMissingWorkspaceBlobs,
 } from './p2p-blob-transfer.service'
 import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
+import { reconcileAgentSharedResources } from './p2p-agent-projection'
 import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
 import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse } from './p2p-member.service'
 import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
@@ -513,7 +514,9 @@ async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string)
 
   await syncWithPeer(workspaceId, ownerDeviceId)
   await syncMissingWorkspaceBlobs(workspaceId)
+  reconcileAgentSharedResources(workspaceId)
   await syncMissingSharedKnowledgeDocuments(workspaceId)
+  await reconcileWorkspaceMemberMesh(workspaceId)
 }
 
 export function scheduleJoinerEventCatchUp(workspaceId: string): void {
