@@ -1,0 +1,11 @@
+{
+  "name": "toolman-libp2p",
+  "version": "0.1.0",
+  "private": true,
+  "napi": {
+    "name": "toolman-libp2p",
+    "triples": {
+      "defaults": true
+    }
+  }
+}

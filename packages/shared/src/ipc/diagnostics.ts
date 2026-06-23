@@ -48,6 +48,20 @@ export const AppDiagnosticsP2pSchema = z.object({
   workspaceCount: z.number().int().nonnegative(),
   connectedPeers: z.number().int().nonnegative(),
   connections: z.array(AppDiagnosticsP2pConnectionSchema),
+  libp2pAvailable: z.boolean(),
+  libp2pVersion: z.string().nullable(),
+  libp2pRunning: z.boolean(),
+  libp2pPeerId: z.string().nullable(),
+  libp2pPeerCount: z.number().int().nonnegative(),
+  libp2pPeers: z.array(
+    z.object({
+      peerId: z.string(),
+      transport: z.string(),
+      connectedAt: z.number().int().nonnegative().optional(),
+    }),
+  ),
+  dhtMode: z.enum(['off', 'client', 'server']).nullable(),
+  dhtReady: z.boolean().nullable(),
   error: z.string().optional(),
 })
 
@@ -68,11 +82,39 @@ export const AppDiagnosticsOperationsSchema = z.object({
   update: AppDiagnosticsUpdateSchema,
 })
 
+export const AppDiagnosticsCommunityYjsSchema = z.object({
+  enabled: z.boolean(),
+  running: z.boolean(),
+  localDid: z.string().nullable(),
+  localPeerId: z.string().nullable(),
+  requireSignedUpdates: z.boolean(),
+  acceptedSignedUpdates: z.number().int().nonnegative(),
+  rejectedUnsignedUpdates: z.number().int().nonnegative(),
+  verifyFailures: z.number().int().nonnegative(),
+  blockedDidCount: z.number().int().nonnegative(),
+  lastError: z.string().nullable().optional(),
+})
+
+export const AppDiagnosticsCommunityCidSchema = z.object({
+  enabled: z.boolean(),
+  running: z.boolean(),
+  indexedPackages: z.number().int().nonnegative(),
+  indexedChunks: z.number().int().nonnegative(),
+  providedRootCids: z.number().int().nonnegative(),
+  dhtProvides: z.number().int().nonnegative(),
+  dhtProviderLookups: z.number().int().nonnegative(),
+  fetchedPackages: z.number().int().nonnegative(),
+  verifyFailures: z.number().int().nonnegative(),
+  lastError: z.string().nullable().optional(),
+})
+
 export const AppGetDiagnosticsOutputSchema = z.object({
   collectedAt: z.number().int().positive(),
   database: AppDiagnosticsDatabaseSchema,
   ingest: AppDiagnosticsIngestSchema,
   communityHub: AppDiagnosticsCommunityHubSchema,
+  communityYjs: AppDiagnosticsCommunityYjsSchema,
+  communityCid: AppDiagnosticsCommunityCidSchema,
   p2p: AppDiagnosticsP2pSchema,
   operations: AppDiagnosticsOperationsSchema,
   recentEvents: z.array(DiagnosticLogEntrySchema),

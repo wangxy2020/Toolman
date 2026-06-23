@@ -1154,3 +1154,13 @@ export const CommunityAdminRevokeInputSchema = z.object({
   userId: UuidSchema,
 })
 export type CommunityAdminRevokeInput = z.infer<typeof CommunityAdminRevokeInputSchema>
+
+export const CommunityYjsSetEnabledInputSchema = z.object({
+  enabled: z.boolean(),
+})
+export type CommunityYjsSetEnabledInput = z.infer<typeof CommunityYjsSetEnabledInputSchema>
+
+export const CommunityCidSetEnabledInputSchema = z.object({
+  enabled: z.boolean(),
+})
+export type CommunityCidSetEnabledInput = z.infer<typeof CommunityCidSetEnabledInputSchema>

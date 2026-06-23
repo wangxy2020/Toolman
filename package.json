@@ -7,6 +7,7 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "build:p2p": "bash scripts/build-p2p-native.sh",
+    "build:libp2p": "bash scripts/build-libp2p-native.sh",
     "build:p2p:macos": "bash scripts/build-p2p-macos.sh",
     "build:community-hub": "bash scripts/build-community-hub.sh",
     "p2p:dual-init": "bash scripts/p2p-dual-instance-init.sh",

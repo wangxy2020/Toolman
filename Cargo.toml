@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/toolman-p2p",
+    "crates/toolman-libp2p",
     "crates/toolman-community-hub",
 ]
 resolver = "2"

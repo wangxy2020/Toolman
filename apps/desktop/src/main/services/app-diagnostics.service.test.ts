@@ -33,6 +33,37 @@ vi.mock('./community/community-ipc.facade', () => ({
   getHubHealth: vi.fn(),
 }))
 
+vi.mock('./community/community-yjs-bridge.service', () => ({
+  getCommunityYjsStatus: () => ({
+    enabled: false,
+    running: false,
+    localDid: null,
+    localPeerId: null,
+    requireSignedUpdates: true,
+    acceptedSignedUpdates: 0,
+    rejectedUnsignedUpdates: 0,
+    verifyFailures: 0,
+    blockedDidCount: 0,
+    subscribedDomains: [],
+    lastError: null,
+  }),
+}))
+
+vi.mock('./community/community-cid-provider.service', () => ({
+  getCommunityCidProviderStatus: () => ({
+    enabled: false,
+    running: false,
+    indexedPackages: 0,
+    indexedChunks: 0,
+    providedRootCids: 0,
+    dhtProvides: 0,
+    dhtProviderLookups: 0,
+    fetchedPackages: 0,
+    verifyFailures: 0,
+    lastError: null,
+  }),
+}))
+
 vi.mock('./p2p/p2p-bridge', () => ({
   P2pBridge: {
     ping: () => 'pong',

@@ -7,6 +7,7 @@ export const IdentityDeviceSummarySchema = z.object({
   identityId: UuidSchema,
   deviceName: z.string(),
   publicKeyFingerprint: z.string(),
+  did: z.string().optional(),
 })
 export type IdentityDeviceSummary = z.infer<typeof IdentityDeviceSummarySchema>
 

@@ -171,6 +171,7 @@ export enum IpcChannel {
 
   P2pNetworkGetConfig = 'p2p:network:get-config',
   P2pNetworkSetStunServers = 'p2p:network:set-stun-servers',
+  P2pNetworkGetSnapshot = 'p2p:network:snapshot',
 
   P2pWorkspaceCreate = 'p2p:workspace:create',
   P2pWorkspaceList = 'p2p:workspace:list',
@@ -228,6 +229,12 @@ export enum IpcChannel {
 
   CommunityUserMe = 'community:user:me',
   CommunityUserMeUpdate = 'community:user:me:update',
+
+  CommunityYjsGetStatus = 'community:yjs:status',
+  CommunityYjsSetEnabled = 'community:yjs:set-enabled',
+
+  CommunityCidGetStatus = 'community:cid:status',
+  CommunityCidSetEnabled = 'community:cid:set-enabled',
 
   CommunityResourceList = 'community:resource:list',
   CommunityResourceGet = 'community:resource:get',

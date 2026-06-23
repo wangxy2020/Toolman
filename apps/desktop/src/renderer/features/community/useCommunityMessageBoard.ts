@@ -23,6 +23,7 @@ import {
   toggleUiMockFavorite,
   toggleUiMockLike,
 } from './community-ui-mock-interactions'
+import { useCommunityYjsBoardUpdates } from './useCommunityYjsUpdates'
 
 function applyMockMessage(message: CommunityBoardMessage): CommunityBoardMessage {
   return applyUiMockInteractionToMessage(message)
@@ -45,6 +46,8 @@ export function useCommunityMessageBoard() {
   const [interactionAction, setInteractionAction] = useState<'like' | 'dislike' | 'favorite' | null>(
     null,
   )
+
+  useCommunityYjsBoardUpdates(setItems)
 
   const load = useCallback(async () => {
     setLoading(true)

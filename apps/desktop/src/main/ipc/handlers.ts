@@ -96,6 +96,7 @@ import {
   P2pConnectionDisconnectOutputSchema,
   P2pConnectionListOutputSchema,
   P2pNetworkGetConfigOutputSchema,
+  P2pNetworkGetSnapshotOutputSchema,
   P2pNetworkSetStunServersInputSchema,
   P2pNetworkSetStunServersOutputSchema,
   P2pDeviceGetInfoOutputSchema,
@@ -201,6 +202,7 @@ import {
   getP2pStunServers,
   setP2pStunServers,
 } from '../services/p2p/p2p-network.config'
+import { getP2pNetworkSnapshot } from '../services/p2p/p2p-network-manager.service'
 import { P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { communityHandlers } from './community-handlers'
@@ -1195,6 +1197,16 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to update STUN servers'
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pNetworkGetSnapshot]: async () => {
+    try {
+      const snapshot = await getP2pNetworkSnapshot()
+      return ipcOk(P2pNetworkGetSnapshotOutputSchema.parse(snapshot))
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to read network snapshot'
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
 

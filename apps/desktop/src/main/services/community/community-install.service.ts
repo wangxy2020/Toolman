@@ -9,6 +9,9 @@ import {
   hasCommunityPackageBundles,
   resolveBundleAwareLocalRef,
 } from './community-bundle.service'
+import { isCommunityCidDistributionEnabled } from './community-cid.config'
+import { fetchCommunityPackageViaP2p } from './community-cid-fetch.service'
+import { findLocalCommunityPackagePath } from './community-cid-index.service'
 import { completeInstall, getResource, startInstall } from './community-ipc.facade'
 
 async function reportInstallFailure(installId: string, message: string): Promise<void> {
@@ -55,6 +58,23 @@ async function runTypedInstall(
 
 export async function installCommunityResource(input: unknown) {
   const parsed = CommunityInstallInputSchema.parse(input)
+
+  if (isCommunityCidDistributionEnabled()) {
+    const version = parsed.version ?? '1.0.0'
+    const localPath = findLocalCommunityPackagePath(parsed.resourceId, version)
+    if (!localPath) {
+      try {
+        await fetchCommunityPackageViaP2p({
+          resourceType: parsed.resourceType,
+          resourceId: parsed.resourceId,
+          version,
+        })
+      } catch {
+        // Fall back to Hub HTTP install when P2P fetch is unavailable.
+      }
+    }
+  }
+
   const started = await startInstall(input)
 
   if (parsed.resourceType === 'mcp') {

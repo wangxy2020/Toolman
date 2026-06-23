@@ -64,6 +64,13 @@
       "when": 1781340000000,
       "tag": "0008_auth_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781341000000,
+      "tag": "0009_p2p_cid_index",
+      "breakpoints": true
     }
   ]
 }

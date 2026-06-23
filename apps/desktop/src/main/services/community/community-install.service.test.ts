@@ -36,6 +36,18 @@ vi.mock('./adapters/workflow-market.adapter', () => ({
   installWorkflowFromMarketPackage: (...args: unknown[]) => installWorkflowFromMarketPackage(...args),
 }))
 
+vi.mock('./community-cid.config', () => ({
+  isCommunityCidDistributionEnabled: () => false,
+}))
+
+vi.mock('./community-cid-fetch.service', () => ({
+  fetchCommunityPackageViaP2p: vi.fn(async () => null),
+}))
+
+vi.mock('./community-cid-index.service', () => ({
+  findLocalCommunityPackagePath: () => null,
+}))
+
 describe('community-install.service', () => {
   beforeEach(() => {
     startInstall.mockReset()

@@ -57,15 +57,19 @@ export function SettingsRow({
 export function SettingsToggle({
   checked,
   onChange,
+  disabled,
 }: {
   checked: boolean
   onChange: (checked: boolean) => void
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-disabled={disabled}
+      disabled={disabled}
       className={`tm-msg-toggle ${checked ? 'tm-msg-toggle--on' : ''}`}
       onClick={() => onChange(!checked)}
     >

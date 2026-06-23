@@ -7,8 +7,9 @@
   "scripts": {
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "build:p2p": "bash ../../scripts/build-p2p-native.sh",
+    "build:libp2p": "bash ../../scripts/build-libp2p-native.sh",
     "build:community-hub": "bash ../../scripts/build-community-hub.sh",
-    "predev": "pnpm build:p2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
+    "predev": "pnpm build:p2p && pnpm build:libp2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "dist": "pnpm build && electron-builder --config electron-builder.yml",
@@ -42,6 +43,7 @@
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "react-virtuoso": "^4.12.6",
+    "yjs": "^13.6.27",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",

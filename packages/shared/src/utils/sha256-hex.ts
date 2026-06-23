@@ -19,8 +19,7 @@ function toHex(value: number): string {
   return value.toString(16).padStart(8, '0')
 }
 
-export function sha256Hex(message: string): string {
-  const bytes = new TextEncoder().encode(message)
+export function sha256HexFromBytes(bytes: Uint8Array): string {
   const bitLength = bytes.length * 8
   const withPaddingLength = (((bytes.length + 9 + 63) >> 6) << 6)
   const padded = new Uint8Array(withPaddingLength)
@@ -87,4 +86,8 @@ export function sha256Hex(message: string): string {
   }
 
   return [h0, h1, h2, h3, h4, h5, h6, h7].map(toHex).join('')
+}
+
+export function sha256Hex(message: string): string {
+  return sha256HexFromBytes(new TextEncoder().encode(message))
 }

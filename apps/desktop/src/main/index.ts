@@ -22,6 +22,19 @@ import { P2pBridge } from './services/p2p/p2p-bridge'
 import { ensureP2pDeviceIdentity } from './services/p2p/p2p-device-identity.service'
 import { ensureLocalDisplayNameSyncedToP2pMembers } from './services/identity.service'
 import { startP2pDiscovery, stopP2pDiscovery } from './services/p2p/p2p-discovery.service'
+import {
+  startP2pNetworkManager,
+  stopP2pNetworkManager,
+} from './services/p2p/p2p-network-manager.service'
+import {
+  startCommunityYjsBridge,
+} from './services/community/community-yjs-bridge.service'
+import { stopCommunityYjsProvider } from './services/community/community-yjs-provider'
+import {
+  startCommunityCidProvider,
+  stopCommunityCidProvider,
+} from './services/community/community-cid-provider.service'
+import { Libp2pBridge } from './services/p2p/libp2p-bridge'
 import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
 import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
 import { bootstrapP2pEventStore } from './services/p2p/p2p-event.service'
@@ -70,6 +83,17 @@ function shouldBlockInAppNavigation(url: string): boolean {
 }
 
 let mainWindow: BrowserWindow | null = null
+
+function logLibp2pNativeStatus(): void {
+  try {
+    const message = Libp2pBridge.ping()
+    const version = Libp2pBridge.version()
+    console.log(`[libp2p] native module ready (${version}): ${message}`)
+  } catch (error) {
+    const errMessage = error instanceof Error ? error.message : String(error)
+    console.warn(`[libp2p] native module unavailable: ${errMessage}`)
+  }
+}
 
 function logP2pNativeStatus(): void {
   try {
@@ -209,6 +233,20 @@ app.whenReady().then(() => {
       const message = error instanceof Error ? error.message : String(error)
       console.warn(`[p2p] discovery bootstrap failed: ${message}`)
     }
+    try {
+      startP2pNetworkManager()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[libp2p] network bootstrap failed: ${message}`)
+    }
+    void startCommunityYjsBridge().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[community-yjs] bootstrap failed: ${message}`)
+    })
+    void startCommunityCidProvider().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[community-cid] bootstrap failed: ${message}`)
+    })
     bootstrapP2pEventStore()
     bootstrapP2pWorkspaceKeys()
     bootstrapMcpPresets()
@@ -219,6 +257,7 @@ app.whenReady().then(() => {
     bootstrapP2pAgentRelay()
     startP2pConnectionMonitor()
     logP2pNativeStatus()
+    logLibp2pNativeStatus()
     startHeartbeatScheduler()
     bootstrapKnowledgeWatchers()
     resumePendingIngestJobs()
@@ -259,6 +298,9 @@ app.on('before-quit', () => {
   stopAllKnowledgeWatchers()
   stopKnowledgeUrlRefreshScheduler()
   stopP2pDiscovery()
+  stopP2pNetworkManager()
+  stopCommunityYjsProvider()
+  stopCommunityCidProvider()
   stopP2pConnectionMonitor()
   void shutdownCommunityHub()
   void disconnectAllMcpServers()

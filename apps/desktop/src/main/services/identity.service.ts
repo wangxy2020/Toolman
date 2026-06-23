@@ -6,6 +6,7 @@ import { identities } from '@toolman/db'
 import {
   IdentityProfileSchema,
   IdentityUpdateInputSchema,
+  deriveDidFromPublicKeyB64,
   type IdentityProfile,
 } from '@toolman/shared'
 import { getDatabase } from '../bootstrap/database'
@@ -43,6 +44,7 @@ function mapIdentityRow(): IdentityProfile {
       identityId: device.identityId,
       deviceName: os.hostname(),
       publicKeyFingerprint: device.publicKeyFingerprint,
+      did: deriveDidFromPublicKeyB64(device.publicKey),
     },
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),

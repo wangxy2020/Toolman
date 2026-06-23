@@ -1,7 +1,13 @@
-import { IpcChannel, ipcErr, ipcOk, type IpcError, type IpcResult } from '@toolman/shared'
+import { IpcChannel, CommunityCidSetEnabledInputSchema, CommunityYjsSetEnabledInputSchema, ipcErr, ipcOk, type IpcError, type IpcResult } from '@toolman/shared'
 
 import { CommunityHttpError } from '../services/community/community-http.client'
 import { installCommunityResource } from '../services/community/community-install.service'
+import {
+  syncCommunityBoardMessageToYjs,
+  syncCommunityProfileToYjs,
+} from '../services/community/community-yjs-provider'
+import { getCommunityYjsStatus, setCommunityYjsEnabled } from '../services/community/community-yjs-bridge.service'
+import { getCommunityCidProviderStatus, setCommunityCidDistributionEnabled } from '../services/community/community-cid-provider.service'
 import {
   CommunityHubUnavailableError,
   acceptTaskApplication,
@@ -132,7 +138,11 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityHubStatus]: communityHandler(async () => getHubStatus()),
 
   [IpcChannel.CommunityUserMe]: communityHandler(() => getUserMe()),
-  [IpcChannel.CommunityUserMeUpdate]: communityHandler((input) => updateUserMe(input)),
+  [IpcChannel.CommunityUserMeUpdate]: communityHandler(async (input) => {
+    const profile = await updateUserMe(input)
+    syncCommunityProfileToYjs(profile)
+    return profile
+  }),
 
   [IpcChannel.CommunityResourceList]: communityHandler((input) => listResources(input)),
   [IpcChannel.CommunityResourceGet]: communityHandler((input) => getResource(input)),
@@ -173,7 +183,11 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityCommentCount]: communityHandler((input) => countComments(input)),
 
   [IpcChannel.CommunityBoardMessageList]: communityHandler((input) => listBoardMessages(input)),
-  [IpcChannel.CommunityBoardMessageCreate]: communityHandler((input) => createBoardMessage(input)),
+  [IpcChannel.CommunityBoardMessageCreate]: communityHandler(async (input) => {
+    const message = await createBoardMessage(input)
+    syncCommunityBoardMessageToYjs(message)
+    return message
+  }),
   [IpcChannel.CommunityBoardMessageLike]: communityHandler((input) => likeBoardMessage(input)),
   [IpcChannel.CommunityBoardMessageDislike]: communityHandler((input) => dislikeBoardMessage(input)),
   [IpcChannel.CommunityBoardMessageFavorite]: communityHandler((input) =>
@@ -237,4 +251,32 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityAdminSearch]: communityHandler((input) => searchCommunityUsers(input)),
   [IpcChannel.CommunityAdminAppoint]: communityHandler((input) => appointCommunityAdmin(input)),
   [IpcChannel.CommunityAdminRevoke]: communityHandler((input) => revokeCommunityAdmin(input)),
+
+  [IpcChannel.CommunityYjsGetStatus]: async () => {
+    try {
+      return ipcOk(getCommunityYjsStatus())
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to read Yjs status'
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
+    }
+  },
+
+  [IpcChannel.CommunityYjsSetEnabled]: communityHandler(async (input) => {
+    const parsed = CommunityYjsSetEnabledInputSchema.parse(input)
+    return setCommunityYjsEnabled(parsed.enabled)
+  }),
+
+  [IpcChannel.CommunityCidGetStatus]: async () => {
+    try {
+      return ipcOk(getCommunityCidProviderStatus())
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to read CID status'
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
+    }
+  },
+
+  [IpcChannel.CommunityCidSetEnabled]: communityHandler(async (input) => {
+    const parsed = CommunityCidSetEnabledInputSchema.parse(input)
+    return setCommunityCidDistributionEnabled(parsed.enabled)
+  }),
 }

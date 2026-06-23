@@ -226,3 +226,24 @@ export const p2pDeviceIdentity = sqliteTable('p2p_device_identity', {
   privateKeyRef: text('private_key_ref').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
+
+export const p2pCidIndex = sqliteTable(
+  'p2p_cid_index',
+  {
+    cid: text('cid').primaryKey(),
+    rootCid: text('root_cid').notNull(),
+    packageId: text('package_id'),
+    resourceId: text('resource_id'),
+    resourceType: text('resource_type'),
+    version: text('version'),
+    localPath: text('local_path').notNull(),
+    chunkIndex: integer('chunk_index').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('idx_p2p_cid_index_root').on(t.rootCid),
+    index('idx_p2p_cid_index_resource').on(t.resourceId, t.version),
+  ],
+)

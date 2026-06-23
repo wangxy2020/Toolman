@@ -4,6 +4,7 @@ import {
   SettingsPageLayout,
   SettingsRow,
   SettingsSection,
+  SettingsToggle,
 } from './SettingsShared'
 
 function formatBytes(bytes: number): string {
@@ -30,6 +31,9 @@ export function DiagnosticsSettingsPanel() {
   const [snapshot, setSnapshot] = useState<AppGetDiagnosticsOutput | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [yjsToggling, setYjsToggling] = useState(false)
+  const [cidToggling, setCidToggling] = useState(false)
+  const [toggleError, setToggleError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -46,6 +50,30 @@ export function DiagnosticsSettingsPanel() {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  const setCommunityYjsEnabled = async (enabled: boolean) => {
+    setYjsToggling(true)
+    setToggleError(null)
+    const result = await window.api.invoke(IpcChannel.CommunityYjsSetEnabled, { enabled })
+    setYjsToggling(false)
+    if (!result.ok) {
+      setToggleError(result.error.message)
+      return
+    }
+    await refresh()
+  }
+
+  const setCommunityCidEnabled = async (enabled: boolean) => {
+    setCidToggling(true)
+    setToggleError(null)
+    const result = await window.api.invoke(IpcChannel.CommunityCidSetEnabled, { enabled })
+    setCidToggling(false)
+    if (!result.ok) {
+      setToggleError(result.error.message)
+      return
+    }
+    await refresh()
+  }
 
   return (
     <SettingsPageLayout>
@@ -64,6 +92,7 @@ export function DiagnosticsSettingsPanel() {
         }
       >
         {error ? <p className="tm-settings-error">{error}</p> : null}
+        {toggleError ? <p className="tm-settings-error">{toggleError}</p> : null}
         {snapshot ? (
           <p className="tm-settings-row-hint">采集时间：{formatTime(snapshot.collectedAt)}</p>
         ) : null}
@@ -127,6 +156,77 @@ export function DiagnosticsSettingsPanel() {
             ) : null}
           </SettingsSection>
 
+          <SettingsSection title="社区 Yjs">
+            <SettingsRow
+              label="功能开关"
+              hint="开启后立即生效，用于双机 P2P 留言同步测试；测试完可关闭"
+            >
+              <SettingsToggle
+                checked={snapshot.communityYjs.enabled}
+                disabled={yjsToggling || loading}
+                onChange={(enabled) => void setCommunityYjsEnabled(enabled)}
+              />
+            </SettingsRow>
+            <SettingsRow label="Provider">
+              {statusBadge(snapshot.communityYjs.running, '运行中', '未运行')}
+            </SettingsRow>
+            <SettingsRow label="本地 DID">
+              <span className="tm-settings-static">{snapshot.communityYjs.localDid ?? '—'}</span>
+            </SettingsRow>
+            <SettingsRow label="签名策略">
+              <span className="tm-settings-static">
+                {snapshot.communityYjs.requireSignedUpdates ? '仅接受 v2 签名更新' : '允许 v1 未签名'}
+              </span>
+            </SettingsRow>
+            <SettingsRow label="验签统计">
+              <span className="tm-settings-static">
+                接受 {snapshot.communityYjs.acceptedSignedUpdates} · 拒绝未签名{' '}
+                {snapshot.communityYjs.rejectedUnsignedUpdates} · 验签失败{' '}
+                {snapshot.communityYjs.verifyFailures}
+              </span>
+            </SettingsRow>
+            <SettingsRow label="屏蔽 DID">
+              <span className="tm-settings-static">{snapshot.communityYjs.blockedDidCount}</span>
+            </SettingsRow>
+            {snapshot.communityYjs.lastError ? (
+              <p className="tm-settings-error">{snapshot.communityYjs.lastError}</p>
+            ) : null}
+          </SettingsSection>
+
+          <SettingsSection title="社区 CID 分发">
+            <SettingsRow
+              label="功能开关"
+              hint="开启后立即生效，用于资源包 P2P 分发测试；测试完可关闭"
+            >
+              <SettingsToggle
+                checked={snapshot.communityCid.enabled}
+                disabled={cidToggling || loading}
+                onChange={(enabled) => void setCommunityCidEnabled(enabled)}
+              />
+            </SettingsRow>
+            <SettingsRow label="Provider">
+              {statusBadge(snapshot.communityCid.running, '运行中', '未运行')}
+            </SettingsRow>
+            <SettingsRow label="索引包 / 分块">
+              <span className="tm-settings-static">
+                {snapshot.communityCid.indexedPackages} 包 · {snapshot.communityCid.indexedChunks} 块
+              </span>
+            </SettingsRow>
+            <SettingsRow label="DHT provide / 查询">
+              <span className="tm-settings-static">
+                {snapshot.communityCid.dhtProvides} / {snapshot.communityCid.dhtProviderLookups}
+              </span>
+            </SettingsRow>
+            <SettingsRow label="P2P 拉取 / 验签失败">
+              <span className="tm-settings-static">
+                {snapshot.communityCid.fetchedPackages} / {snapshot.communityCid.verifyFailures}
+              </span>
+            </SettingsRow>
+            {snapshot.communityCid.lastError ? (
+              <p className="tm-settings-error">{snapshot.communityCid.lastError}</p>
+            ) : null}
+          </SettingsSection>
+
           <SettingsSection title="P2P 群组">
             <SettingsRow label="原生模块">
               {statusBadge(snapshot.p2p.nativeAvailable, '可用', '不可用')}
@@ -161,6 +261,45 @@ export function DiagnosticsSettingsPanel() {
               <p className="tm-settings-row-hint">当前没有已记录的 P2P 连接。</p>
             )}
             {snapshot.p2p.error ? <p className="tm-settings-error">{snapshot.p2p.error}</p> : null}
+          </SettingsSection>
+
+          <SettingsSection title="libp2p 网络">
+            <SettingsRow label="原生模块">
+              {statusBadge(snapshot.p2p.libp2pAvailable, '可用', '不可用')}
+            </SettingsRow>
+            <SettingsRow label="运行状态">
+              {statusBadge(snapshot.p2p.libp2pRunning, '运行中', '未运行')}
+            </SettingsRow>
+            <SettingsRow label="本地 PeerId">
+              <span className="tm-settings-static">{snapshot.p2p.libp2pPeerId ?? '—'}</span>
+            </SettingsRow>
+            <SettingsRow label="libp2p / WebRTC 连接">
+              <span className="tm-settings-static">
+                {snapshot.p2p.libp2pPeerCount} / {snapshot.p2p.connectedPeers}
+              </span>
+            </SettingsRow>
+            <SettingsRow label="Kademlia DHT">
+              <span className="tm-settings-static">
+                {snapshot.p2p.dhtMode ?? '—'} ·{' '}
+                {snapshot.p2p.dhtReady == null
+                  ? '—'
+                  : snapshot.p2p.dhtReady
+                    ? '就绪'
+                    : '未就绪'}
+              </span>
+            </SettingsRow>
+            {snapshot.p2p.libp2pPeers.length > 0 ? (
+              <div className="tm-diagnostics-connection-list">
+                {snapshot.p2p.libp2pPeers.map((peer) => (
+                  <div key={peer.peerId} className="tm-diagnostics-connection-item">
+                    <span className="tm-diagnostics-connection-id">{peer.peerId}</span>
+                    <span className="tm-diagnostics-connection-state">{peer.transport}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="tm-settings-row-hint">当前没有 libp2p 对等连接。</p>
+            )}
           </SettingsSection>
 
           <SettingsSection title="运维与更新">

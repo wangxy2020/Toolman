@@ -10,6 +10,8 @@ import {
 import { getDatabase } from '../bootstrap/database'
 import { getCommunityHubStatus } from './community/community-bridge.service'
 import { getHubHealth } from './community/community-ipc.facade'
+import { getCommunityYjsStatus } from './community/community-yjs-bridge.service'
+import { getCommunityCidProviderStatus } from './community/community-cid-provider.service'
 import { listDiagnosticEvents, recordDiagnosticEvent } from './diagnostics-log'
 import { getOperationsDiagnostics } from './local-operations.service'
 import { P2pBridge } from './p2p/p2p-bridge'
@@ -18,6 +20,8 @@ import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { isP2pDiscoveryRunning } from './p2p/p2p-discovery.service'
 import { getIdentityProfile } from './identity.service'
 import { listP2pWorkspaces } from './p2p/p2p-workspace.service'
+import { Libp2pBridge } from './p2p/libp2p-bridge'
+import { readLibp2pConfig } from './p2p/p2p-libp2p.config'
 
 const INGEST_PENDING_STAGES = [
   'queued',
@@ -145,6 +149,55 @@ async function getP2pDiagnostics(): Promise<AppGetDiagnosticsOutput['p2p']> {
     workspaceCount: listP2pWorkspaces('all').length,
     connectedPeers: connections.filter((row) => row.state === 'connected').length,
     connections,
+    libp2pAvailable: Libp2pBridge.isAvailable(),
+    libp2pVersion: (() => {
+      try {
+        return Libp2pBridge.isAvailable() ? Libp2pBridge.version() : null
+      } catch {
+        return null
+      }
+    })(),
+    libp2pRunning: (() => {
+      try {
+        return Libp2pBridge.isAvailable() ? Libp2pBridge.networkIsRunning() : false
+      } catch {
+        return false
+      }
+    })(),
+    libp2pPeerId: (() => {
+      try {
+        return Libp2pBridge.isAvailable() ? Libp2pBridge.networkLocalPeerId() : null
+      } catch {
+        return null
+      }
+    })(),
+    libp2pPeerCount: (() => {
+      try {
+        return Libp2pBridge.isAvailable() ? Libp2pBridge.networkPeerCount() : 0
+      } catch {
+        return 0
+      }
+    })(),
+    libp2pPeers: (() => {
+      try {
+        if (!Libp2pBridge.isAvailable()) return []
+        return Libp2pBridge.networkListPeers().map((peer) => ({
+          peerId: peer.peerId,
+          transport: peer.transport,
+          connectedAt: peer.connectedAt,
+        }))
+      } catch {
+        return []
+      }
+    })(),
+    dhtMode: readLibp2pConfig().dhtMode,
+    dhtReady: (() => {
+      try {
+        return Libp2pBridge.isAvailable() ? Libp2pBridge.networkDhtHealth().ready : null
+      } catch {
+        return null
+      }
+    })(),
     error: nativeError,
   }
 }
@@ -155,11 +208,16 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
     getP2pDiagnostics(),
   ])
 
+  const communityYjs = getCommunityYjsStatus()
+  const communityCid = getCommunityCidProviderStatus()
+
   const snapshot = {
     collectedAt: Date.now(),
     database: getDatabaseDiagnostics(),
     ingest: getIngestDiagnostics(),
     communityHub,
+    communityYjs,
+    communityCid,
     p2p,
     operations: getOperationsDiagnostics(),
     recentEvents: listDiagnosticEvents(30),
