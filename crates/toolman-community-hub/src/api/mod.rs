@@ -3,6 +3,7 @@ mod board;
 mod comments;
 mod diagnostics;
 mod error;
+mod federation;
 mod health;
 mod install;
 mod jwt;
@@ -51,6 +52,7 @@ pub fn router(state: AppState) -> Router {
                 .merge(install::router())
                 .merge(diagnostics::router())
                 .merge(search_semantic::router())
+                .merge(federation::router())
                 .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
                 .layer(from_fn_with_state(state.clone(), guest_write_block_middleware)),
         )
@@ -552,6 +554,7 @@ mod tests {
         let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
         assert_eq!(payload["data"]["semantic_search"], "disabled");
         assert_eq!(payload["data"]["rate_limit_rpm"], 600);
+        assert_eq!(payload["data"]["federation_peering"], true);
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);

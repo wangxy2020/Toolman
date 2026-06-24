@@ -11,6 +11,7 @@ import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
 import { getWorkspaceLatestSeq } from './p2p-event.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 
 export const P2P_SNAPSHOT_INTERVAL = 500
 export const P2P_SNAPSHOT_RETAIN = 3
@@ -237,6 +238,8 @@ export function applyWorkspaceSnapshotState(
       })
       continue
     }
+
+    ensureLinkedIdentityRow(member.identityId, member.displayName)
 
     memberRepo.create({
       id: member.id,

@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -9,8 +8,10 @@ import {
   type CommunityHubMode,
 } from '@toolman/shared'
 
+import { getCommunityDataDir } from './community-paths'
+
 function getHubConfigPath(): string {
-  const dir = join(app.getPath('userData'), 'community')
+  const dir = getCommunityDataDir()
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -18,13 +19,10 @@ function getHubConfigPath(): string {
 }
 
 function defaultHubConfig(): CommunityHubConfig {
-  if (app.isPackaged) {
-    return {
-      mode: 'remote',
-      baseUrl: OFFICIAL_TOOLMAN_HUB_URL,
-    }
+  return {
+    mode: 'local',
+    federation: { enabled: true },
   }
-  return { mode: 'local' }
 }
 
 function resolveEnvHubConfig(): CommunityHubConfig | null {
@@ -87,4 +85,8 @@ export function getCommunityHubMode(): CommunityHubMode {
 export function resolveCommunityHubBaseUrl(config = readCommunityHubConfig()): string | null {
   if (config.mode !== 'remote') return null
   return normalizeCommunityHubBaseUrl(config.baseUrl ?? OFFICIAL_TOOLMAN_HUB_URL)
+}
+
+export function isCommunityHubConfigEditable(): boolean {
+  return resolveEnvHubConfig() === null
 }

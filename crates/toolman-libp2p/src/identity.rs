@@ -25,6 +25,20 @@ fn keypair_from_signing_key(signing_key: &ed25519_dalek::SigningKey) -> Result<K
 }
 
 fn load_device_pkcs8(data_dir: &Path) -> Result<Vec<u8>, String> {
+    if identity_storage_is_file_only() {
+        let fallback_path = data_dir.join(DEVICE_PKCS8_FILE);
+        if fallback_path.exists() {
+            let encoded = fs::read_to_string(&fallback_path)
+                .map_err(|error| format!("read device pkcs8 fallback failed: {error}"))?;
+            return STANDARD
+                .decode(encoded.trim())
+                .map_err(|error| format!("decode device pkcs8 fallback failed: {error}"));
+        }
+        return Err(
+            "Device private key unavailable in file-only mode. Start the app once so toolman-p2p initializes identity.".to_string(),
+        );
+    }
+
     if let Ok(pkcs8) = load_pkcs8_from_keychain() {
         return Ok(pkcs8);
     }
@@ -53,6 +67,16 @@ fn load_pkcs8_from_keychain() -> Result<Vec<u8>, String> {
     STANDARD
         .decode(encoded.trim())
         .map_err(|error| format!("keychain pkcs8 decode failed: {error}"))
+}
+
+fn identity_storage_is_file_only() -> bool {
+    matches!(
+        std::env::var("TOOLMAN_P2P_IDENTITY_STORAGE")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("file")
+    )
 }
 
 #[cfg(test)]

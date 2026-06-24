@@ -12,6 +12,7 @@ import {
 } from './community-cid-index.service'
 import { getCommunityCidFetchStats, handleCidWireMessage } from './community-cid-fetch.service'
 import { getCommunityCidSigningStats, signCidWireAnnounce, verifyCidWireAnnounce } from './community-cid-signing.service'
+import { handleCommunityFederationPubsubMessage } from './community-federation-provider.service'
 
 const CID_TOPICS = [
   cidWireTopic('announce'),
@@ -57,9 +58,12 @@ function pollCidInbox(): void {
   try {
     const messages = Libp2pBridge.pubsubDrainMessages()
     for (const message of messages) {
+      const data = Buffer.from(message.data)
+      handleCommunityFederationPubsubMessage(message.topic, data)
+
       if (message.topic === cidWireTopic('announce')) {
         try {
-          const parsed = JSON.parse(message.data.toString('utf8'))
+          const parsed = JSON.parse(data.toString('utf8'))
           if (verifyCidWireAnnounce(parsed)) {
             Libp2pBridge.dhtGetProviders(parsed.manifest.rootCid)
             dhtProviderLookups += 1
@@ -69,7 +73,7 @@ function pollCidInbox(): void {
         }
       }
 
-      handleCidWireMessage(message.topic, Buffer.from(message.data))
+      handleCidWireMessage(message.topic, data)
     }
 
     for (const result of Libp2pBridge.dhtDrainProviderResults()) {
@@ -110,6 +114,18 @@ export async function resubscribeCommunityCidPubsub(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
     lastError = message
     recordDiagnosticEvent('community-cid', 'warn', `resubscribe failed: ${message}`)
+  }
+}
+
+export async function republishCommunityCidAnnouncements(): Promise<void> {
+  if (!Libp2pBridge.isAvailable() || !Libp2pBridge.networkIsRunning()) return
+  try {
+    const indexed = await scanCommunityPackagesForCidIndex()
+    publishAnnouncements(indexed)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    lastError = message
+    recordDiagnosticEvent('community-cid', 'warn', `republish failed: ${message}`)
   }
 }
 

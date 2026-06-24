@@ -4,6 +4,8 @@ import { basename } from 'node:path'
 import {
   CommunityHubHealthOutputSchema,
   CommunityHubStatusOutputSchema,
+  CommunityHubConfigUpdateInputSchema,
+  CommunityFederationStatusOutputSchema,
   CommunityInstallCompleteInputSchema,
   CommunityInstallCompleteOutputSchema,
   CommunityInstallHistoryInputSchema,
@@ -108,11 +110,41 @@ import {
 
 import { buildApiQuery, fromApiJson, toApiJson } from './community-case'
 import {
+  buildFederatedCatalogEntryFromResource,
+  getFederatedCatalogStats,
+  listFederatedCatalogResources,
+  mergeHubAndFederatedResourceLists,
+} from './community-federated-catalog.service'
+import { isCommunityFederationEnabled, readCommunityFederationConfig } from './community-federation.config'
+import {
+  getCommunityHubPeeringSyncState,
+  runCommunityHubPeeringSync,
+  startCommunityHubPeeringSync,
+  stopCommunityHubPeeringSync,
+} from './community-hub-peering.service'
+import { syncLibp2pBootstrapFromPeerHubs } from './community-libp2p-bootstrap-sync.service'
+import {
+  isCommunityHubConfigEditable,
+  readCommunityHubConfig,
+  writeCommunityHubConfig,
+} from './community-hub.config'
+import { readLibp2pConfig } from '../p2p/p2p-libp2p.config'
+import { publishFederatedCatalogWireMessage } from './community-federation-provider.service'
+import { getManifestFromIndexByResource, scanCommunityPackagesForCidIndex } from './community-cid-index.service'
+import { republishCommunityCidAnnouncements } from './community-cid-provider.service'
+import {
   getCommunityHubStatus,
   getCommunityHttpClient,
+  clearCommunityHubOfflineReadOnly,
   markCommunityHubOfflineReadOnly,
+  recoverCommunityHubConnection,
+  refreshCommunityHubClientIfNeeded,
 } from './community-bridge.service'
-import type { CommunityHttpClient } from './community-http.client'
+import {
+  CommunityHttpError,
+  isCommunityFetchNetworkError,
+  type CommunityHttpClient,
+} from './community-http.client'
 import { readCommunityHubCache, writeCommunityHubCache } from './community-hub-cache.service'
 
 export class CommunityHubUnavailableError extends Error {
@@ -128,6 +160,33 @@ function requireClient(): CommunityHttpClient {
     throw new CommunityHubUnavailableError()
   }
   return client
+}
+
+async function withRefreshedHubClient<T>(
+  operation: (client: CommunityHttpClient) => Promise<T>,
+): Promise<T> {
+  const run = async () => {
+    await refreshCommunityHubClientIfNeeded()
+    return operation(requireClient())
+  }
+
+  try {
+    return await run()
+  } catch (error) {
+    const connectionFailure =
+      isCommunityFetchNetworkError(error) ||
+      (error instanceof CommunityHttpError && error.code === 'HUB_CONNECTION_FAILED')
+    if (!connectionFailure) {
+      throw error
+    }
+    await refreshCommunityHubClientIfNeeded()
+    return run()
+  }
+}
+
+function isTransientHubError(error: unknown): boolean {
+  if (!(error instanceof CommunityHttpError)) return false
+  return error.status === 429 || error.code === 'RATE_LIMITED'
 }
 
 async function fetchWithHubCache<T>(
@@ -146,10 +205,11 @@ async function fetchWithHubCache<T>(
   try {
     const data = await fetch(client)
     writeCommunityHubCache(cacheKey, data)
+    clearCommunityHubOfflineReadOnly()
     return data
   } catch (error) {
     const cached = readCommunityHubCache<T>(cacheKey)
-    if (cached != null) {
+    if (cached != null && !isTransientHubError(error)) {
       markCommunityHubOfflineReadOnly(error instanceof Error ? error.message : String(error))
       return cached
     }
@@ -187,7 +247,25 @@ function marketplacePublishSegment(resourceType: string): string {
   }
 }
 
-export function getHubStatus() {
+function resolveCommunityPackageFilename(resourceType: string, packagePath: string): string {
+  const base = basename(packagePath)
+  const extensions: Record<string, string> = {
+    mcp: '.toolman-mcp',
+    skill: '.toolman-skill',
+    workflow: '.toolman-workflow',
+    knowledge: '.zip',
+    task: '.zip',
+  }
+  const expected = extensions[resourceType] ?? '.zip'
+  if (base.toLowerCase().endsWith(expected)) {
+    return base
+  }
+  const stem = base.replace(/\.[^.]+$/, '') || 'package'
+  return `${stem}${expected}`
+}
+
+export async function getHubStatus() {
+  await recoverCommunityHubConnection()
   return CommunityHubStatusOutputSchema.parse(getCommunityHubStatus())
 }
 
@@ -202,7 +280,41 @@ export async function getHubHealth() {
     requireReview: data.require_review,
     userCount: data.user_count,
     resourceCount: data.resource_count,
+    federationPeering: data.federation_peering,
   })
+}
+
+export function getHubConfig() {
+  return readCommunityHubConfig()
+}
+
+export function updateHubConfig(input: unknown) {
+  const parsed = CommunityHubConfigUpdateInputSchema.parse(input)
+  const saved = writeCommunityHubConfig(parsed)
+  stopCommunityHubPeeringSync()
+  startCommunityHubPeeringSync()
+  return saved
+}
+
+export function getFederationStatus() {
+  return CommunityFederationStatusOutputSchema.parse({
+    hubConfigEditable: isCommunityHubConfigEditable(),
+    hubConfig: readCommunityHubConfig(),
+    federationConfig: readCommunityFederationConfig(),
+    syncState: getCommunityHubPeeringSyncState(),
+    federatedCatalogEntryCount: getFederatedCatalogStats().entryCount,
+    libp2pBootstrapCount: readLibp2pConfig().bootstrapMultiaddrs?.length ?? 0,
+  })
+}
+
+export async function syncHubPeering() {
+  await runCommunityHubPeeringSync()
+  const added = await syncLibp2pBootstrapFromPeerHubs()
+  return {
+    syncState: getCommunityHubPeeringSyncState(),
+    federatedCatalogEntryCount: getFederatedCatalogStats().entryCount,
+    libp2pBootstrapAdded: added,
+  }
 }
 
 export async function getUserMe() {
@@ -228,16 +340,31 @@ export async function listResources(input: unknown) {
     sort: parsed.sort,
     visibility: parsed.visibility,
     status: parsed.status,
+    author_id: parsed.authorId,
     limit: parsed.limit,
     offset: parsed.offset,
   })
   const cacheKey = `marketplace-resources${query}`
-  const data = await fetchWithHubCache(cacheKey, (client) =>
-    client.get<unknown[]>(`/api/v1/marketplace/resources${query}`),
-  )
-  return CommunityResourceListOutputSchema.parse({
-    items: asItems(data).map((item) => CommunityResourceItemSchema.parse(fromApiJson(item))),
-  })
+
+  let hubItems: ReturnType<typeof CommunityResourceItemSchema.parse>[] = []
+  try {
+    const data = await fetchWithHubCache(cacheKey, (client) =>
+      client.get<unknown[]>(`/api/v1/marketplace/resources${query}`),
+    )
+    hubItems = asItems(data).map((item) => CommunityResourceItemSchema.parse(fromApiJson(item)))
+  } catch (error) {
+    if (!isCommunityFederationEnabled()) {
+      throw error
+    }
+  }
+
+  if (parsed.authorId || !isCommunityFederationEnabled()) {
+    return CommunityResourceListOutputSchema.parse({ items: hubItems })
+  }
+
+  const federatedItems = listFederatedCatalogResources(parsed)
+  const items = mergeHubAndFederatedResourceLists(hubItems, federatedItems)
+  return CommunityResourceListOutputSchema.parse({ items })
 }
 
 export async function getResource(input: unknown) {
@@ -256,25 +383,58 @@ export async function createResource(input: unknown) {
 
 export async function publishResource(input: unknown) {
   const parsed = CommunityResourcePublishInputSchema.parse(input)
-  const client = requireClient()
-  const resource = await client.get<{ resource_type: string }>(
-    `/api/v1/marketplace/resources/${parsed.id}`,
-  )
-  const segment = marketplacePublishSegment(resource.resource_type)
-  const packageBytes = await readFile(parsed.packagePath)
-  const data = await client.postMultipart<unknown>(
-    `/api/v1/marketplace/${segment}/${parsed.id}/publish`,
-    [
-      { name: 'version', value: parsed.version },
-      ...(parsed.changelog ? [{ name: 'changelog', value: parsed.changelog }] : []),
-      {
-        name: 'package',
-        value: packageBytes,
-        filename: parsed.originalFilename ?? basename(parsed.packagePath),
-      },
-    ],
-  )
-  return CommunityResourceItemSchema.parse(fromApiJson(data))
+
+  return withRefreshedHubClient(async (client) => {
+    let resourceType = parsed.resourceType
+    if (!resourceType) {
+      const resourceDetail = await client.get<Record<string, unknown>>(
+        `/api/v1/marketplace/resources/${parsed.id}`,
+      )
+      const resolvedType = String(
+        resourceDetail.resource_type ?? resourceDetail.resourceType ?? '',
+      )
+      if (resolvedType) {
+        resourceType = resolvedType as NonNullable<typeof parsed.resourceType>
+      }
+    }
+    if (!resourceType) {
+      throw new CommunityHttpError('无法识别资源类型', 400, 'VALIDATION_ERROR')
+    }
+    const segment = marketplacePublishSegment(resourceType)
+    const packageBytes = await readFile(parsed.packagePath)
+    const uploadName =
+      parsed.originalFilename ??
+      resolveCommunityPackageFilename(resourceType, parsed.packagePath)
+    const data = await client.postMultipart<unknown>(
+      `/api/v1/marketplace/${segment}/${parsed.id}/publish`,
+      [
+        { name: 'version', value: parsed.version },
+        ...(parsed.changelog ? [{ name: 'changelog', value: parsed.changelog }] : []),
+        {
+          name: 'package',
+          value: packageBytes,
+          filename: uploadName,
+        },
+      ],
+    )
+    const published = fromApiJson(data) as Record<string, unknown>
+    const item = CommunityResourceItemSchema.parse({
+      ...published,
+      resourceType,
+    })
+
+    if (isCommunityFederationEnabled() && item.status === 'published') {
+      await scanCommunityPackagesForCidIndex()
+      const manifest = getManifestFromIndexByResource(item.id, item.version)
+      if (manifest) {
+        const entry = buildFederatedCatalogEntryFromResource(item, manifest.rootCid)
+        publishFederatedCatalogWireMessage(entry)
+      }
+      await republishCommunityCidAnnouncements()
+    }
+
+    return item
+  })
 }
 
 export async function patchResource(input: unknown) {
@@ -629,6 +789,7 @@ export async function listTasks(input: unknown) {
   const query = buildApiQuery({
     task_type: parsed.taskType,
     status: parsed.status,
+    publisher_id: parsed.publisherId,
     q: parsed.q,
     limit: parsed.limit,
     offset: parsed.offset,
@@ -825,6 +986,23 @@ export async function approveModerationResource(input: unknown) {
     toApiJson({ note: parsed.note }),
   )
   return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+}
+
+export async function approveModerationTask(input: unknown) {
+  const parsed = CommunityModerationResourceActionInputSchema.parse(input)
+  const client = requireClient()
+  const data = await client.post<unknown>(
+    `/api/v1/moderation/tasks/${parsed.resourceId}/approve`,
+    toApiJson({ note: parsed.note }),
+  )
+  return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+}
+
+export async function exportCommunityKnowledgeBundle(input: unknown) {
+  const { exportCommunityKnowledgeBundle: exportBundle } = await import(
+    './community-knowledge-bundle-export.service'
+  )
+  return exportBundle(input)
 }
 
 export async function banModerationUser(input: unknown) {

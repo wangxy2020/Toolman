@@ -1,3 +1,4 @@
+pub mod dev_test_user_role;
 pub mod admin_management_service;
 pub mod comment_service;
 pub mod board_service;
@@ -19,6 +20,7 @@ pub mod task_market_service;
 pub mod task_review_service;
 pub mod workflow_market_service;
 pub mod embedding_service;
+pub mod federation_service;
 
 pub use admin_management_service::{
     AdminManagementError, AdminManagementService, ModeratorUserItem,

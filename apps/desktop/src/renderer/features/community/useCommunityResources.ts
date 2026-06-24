@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
-  type CommunityHubStatusOutput,
   type CommunityInstallInput,
   type CommunityResourceDetail,
   type CommunityResourceInteractionOutput,
@@ -13,13 +12,13 @@ import {
 import {
   dislikeCommunityResource,
   favoriteCommunityResource,
-  getCommunityHubStatus,
   getCommunityResource,
   installCommunityResource,
   likeCommunityResource,
   listCommunityResources,
 } from './community-api.client'
 import { notifyCommunityUserDataChanged } from './community-events'
+import { useCommunityFederatedCatalogUpdates } from './useCommunityFederatedCatalogUpdates'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
@@ -70,7 +69,6 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
   const [items, setItems] = useState<CommunityResourceItem[]>([])
   const [detail, setDetail] = useState<CommunityResourceDetail | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [hubStatus, setHubStatus] = useState<CommunityHubStatusOutput | null>(null)
   const [loading, setLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [installingId, setInstallingId] = useState<string | null>(null)
@@ -84,11 +82,7 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     setLoading(true)
     setError(null)
     try {
-      const [status, list] = await Promise.all([
-        getCommunityHubStatus(),
-        listCommunityResources(listInput),
-      ])
-      setHubStatus(status)
+      const list = await listCommunityResources(listInput)
       const mockType = resourceType ?? 'mcp'
       setItems(
         withUiMockItem(list.items, getUiMockResource(mockType)).map(applyUiMockInteractionToResource),
@@ -261,6 +255,14 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     void load()
   }, [autoLoad, load])
 
+  useCommunityFederatedCatalogUpdates(resourceType, (item) => {
+    setItems((current) => {
+      const next = current.filter((entry) => entry.id !== item.id)
+      next.unshift(item)
+      return next
+    })
+  })
+
   useEffect(() => {
     if (!autoLoad) return
     const reload = () => {
@@ -288,7 +290,6 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     selected,
     selectedId,
     setSelectedId,
-    hubStatus,
     loading,
     detailLoading,
     installingId,

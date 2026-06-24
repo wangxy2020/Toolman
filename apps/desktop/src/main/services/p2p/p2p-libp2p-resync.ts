@@ -1,5 +1,6 @@
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { resubscribeCommunityCidPubsub } from '../community/community-cid-provider.service'
+import { resubscribeCommunityFederationPubsub } from '../community/community-federation-provider.service'
 import { resubscribeCommunityYjsPubsub } from '../community/community-yjs-provider'
 import { registerLibp2pRestartListener } from './p2p-libp2p-restart'
 
@@ -11,6 +12,7 @@ export function ensureLibp2pDependentPubsubResync(): void {
 
   registerLibp2pRestartListener(async () => {
     resubscribeCommunityYjsPubsub()
+    await resubscribeCommunityFederationPubsub()
     await resubscribeCommunityCidPubsub()
     recordDiagnosticEvent('libp2p', 'info', 'resynced community pubsub subscriptions')
   })

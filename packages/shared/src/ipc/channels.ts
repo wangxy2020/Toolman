@@ -237,6 +237,10 @@ export enum IpcChannel {
 
   CommunityHubHealth = 'community:hub:health',
   CommunityHubStatus = 'community:hub:status',
+  CommunityHubConfigGet = 'community:hub:config:get',
+  CommunityHubConfigUpdate = 'community:hub:config:update',
+  CommunityFederationStatusGet = 'community:federation:status',
+  CommunityHubPeeringSync = 'community:hub:peering:sync',
 
   CommunityUserMe = 'community:user:me',
   CommunityUserMeUpdate = 'community:user:me:update',
@@ -251,6 +255,7 @@ export enum IpcChannel {
   CommunityResourceGet = 'community:resource:get',
   CommunityResourceCreate = 'community:resource:create',
   CommunityResourcePublish = 'community:resource:publish',
+  CommunityKnowledgeBundleExport = 'community:knowledge-bundle:export',
   CommunityResourcePatch = 'community:resource:patch',
   CommunityResourceDelete = 'community:resource:delete',
   CommunityResourceLike = 'community:resource:like',
@@ -316,6 +321,7 @@ export enum IpcChannel {
   CommunityModerationReportResolve = 'community:moderation:report:resolve',
   CommunityModerationResourceSuspend = 'community:moderation:resource:suspend',
   CommunityModerationResourceApprove = 'community:moderation:resource:approve',
+  CommunityModerationTaskApprove = 'community:moderation:task:approve',
   CommunityModerationUserBan = 'community:moderation:user:ban',
   CommunityModerationUserUnban = 'community:moderation:user:unban',
   CommunityModerationDeviceBan = 'community:moderation:device:ban',

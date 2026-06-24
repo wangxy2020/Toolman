@@ -1,3 +1,6 @@
 export * from './yjs.js'
 export * from './signed-update.js'
 export * from './hub-config.js'
+export * from './federation-config.js'
+export * from './federated-catalog.js'
+export * from './federation-sync.js'

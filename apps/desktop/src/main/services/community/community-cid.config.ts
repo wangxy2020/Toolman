@@ -10,7 +10,7 @@ const CommunityCidConfigSchema = z.object({
 export type CommunityCidConfig = z.infer<typeof CommunityCidConfigSchema>
 
 const DEFAULT_CONFIG: CommunityCidConfig = {
-  cidDistributionEnabled: app.isPackaged,
+  cidDistributionEnabled: true,
 }
 
 function getConfigPath(): string {

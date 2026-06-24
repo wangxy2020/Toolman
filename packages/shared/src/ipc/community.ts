@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { CommunityHubModeSchema } from '../community/hub-config.js'
+import {
+  CommunityHubConfigSchema,
+  CommunityHubModeSchema,
+} from '../community/hub-config.js'
+import { CommunityFederationConfigSchema } from '../community/federation-config.js'
+import { FederationSyncStateStoreSchema } from '../community/federation-sync.js'
 import { TimestampSchema, UuidSchema } from './base.js'
 
 // --- Shared enums ---
@@ -33,6 +38,7 @@ export type CommunityTaskType = z.infer<typeof CommunityTaskTypeSchema>
 
 export const CommunityTaskStatusSchema = z.enum([
   'draft',
+  'pending_review',
   'open',
   'assigned',
   'in_progress',
@@ -126,6 +132,7 @@ export const CommunityHubHealthOutputSchema = z.object({
   requireReview: z.boolean().optional(),
   userCount: z.number().int().nonnegative().optional(),
   resourceCount: z.number().int().nonnegative().optional(),
+  federationPeering: z.boolean().optional(),
 })
 export type CommunityHubHealthOutput = z.infer<typeof CommunityHubHealthOutputSchema>
 
@@ -140,6 +147,19 @@ export const CommunityHubStatusOutputSchema = z.object({
   error: z.string().optional(),
 })
 export type CommunityHubStatusOutput = z.infer<typeof CommunityHubStatusOutputSchema>
+
+export const CommunityHubConfigUpdateInputSchema = CommunityHubConfigSchema
+export type CommunityHubConfigUpdateInput = z.infer<typeof CommunityHubConfigUpdateInputSchema>
+
+export const CommunityFederationStatusOutputSchema = z.object({
+  hubConfigEditable: z.boolean(),
+  hubConfig: CommunityHubConfigSchema,
+  federationConfig: CommunityFederationConfigSchema,
+  syncState: FederationSyncStateStoreSchema,
+  federatedCatalogEntryCount: z.number().int().nonnegative(),
+  libp2pBootstrapCount: z.number().int().nonnegative(),
+})
+export type CommunityFederationStatusOutput = z.infer<typeof CommunityFederationStatusOutputSchema>
 
 // --- User ---
 
@@ -179,6 +199,7 @@ export const CommunityResourceListInputSchema = z.object({
   sort: CommunityMarketplaceSortSchema.optional(),
   visibility: CommunityResourceVisibilitySchema.optional(),
   status: CommunityResourceStatusSchema.optional(),
+  authorId: UuidSchema.optional(),
   limit: z.number().int().min(1).max(100).optional(),
   offset: z.number().int().min(0).optional(),
 })
@@ -211,6 +232,8 @@ export const CommunityResourceItemSchema = z.object({
   likedByMe: z.boolean().optional(),
   favoritedByMe: z.boolean().optional(),
   dislikedByMe: z.boolean().optional(),
+  /** `p2p` = discovered via federation; `hub` = local/remote Community Hub HTTP */
+  federationSource: z.enum(['hub', 'p2p', 'hub-peer']).optional(),
 })
 export type CommunityResourceItem = z.infer<typeof CommunityResourceItemSchema>
 
@@ -244,6 +267,8 @@ export type CommunityResourceCreateInput = z.infer<typeof CommunityResourceCreat
 
 export const CommunityResourcePublishInputSchema = z.object({
   id: UuidSchema,
+  /** When known from create step, skips an extra hub round-trip before upload. */
+  resourceType: CommunityResourceTypeSchema.optional(),
   version: z.string().min(1).max(64),
   changelog: z.string().max(2000).optional(),
   /** Absolute path to package file readable by Main process */
@@ -714,6 +739,7 @@ export type CommunityTaskItem = z.infer<typeof CommunityTaskItemSchema>
 export const CommunityTaskListInputSchema = z.object({
   taskType: CommunityTaskTypeSchema.optional(),
   status: CommunityTaskStatusSchema.optional(),
+  publisherId: UuidSchema.optional(),
   q: z.string().optional(),
   limit: z.number().int().min(1).max(100).optional(),
   offset: z.number().int().min(0).optional(),
@@ -1119,6 +1145,7 @@ export const CommunityModerationScanOutputSchema = z.object({
   onlineMobileDevices: z.array(CommunityModerationScanDeviceSchema),
   openReports: z.array(CommunityModerationReportSchema),
   pendingReview: z.array(CommunityModerationScanResourceSchema),
+  pendingReviewTasks: z.array(CommunityModerationScanTaskSchema).default([]),
   recentMessages: z.array(CommunityModerationScanMessageSchema),
   activeTasks: z.array(CommunityModerationScanTaskSchema),
   bannedUsers: z.array(CommunityModerationScanBannedUserSchema).default([]),

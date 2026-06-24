@@ -39,6 +39,14 @@ import {
   startCommunityCidProvider,
   stopCommunityCidProvider,
 } from './services/community/community-cid-provider.service'
+import {
+  startCommunityFederationProvider,
+  stopCommunityFederationProvider,
+} from './services/community/community-federation-provider.service'
+import {
+  startCommunityHubPeeringSync,
+  stopCommunityHubPeeringSync,
+} from './services/community/community-hub-peering.service'
 import { Libp2pBridge } from './services/p2p/libp2p-bridge'
 import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
 import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
@@ -250,6 +258,11 @@ app.whenReady().then(() => {
       const message = error instanceof Error ? error.message : String(error)
       console.warn(`[community-yjs] bootstrap failed: ${message}`)
     })
+    void startCommunityFederationProvider().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[community-federation] bootstrap failed: ${message}`)
+    })
+    startCommunityHubPeeringSync()
     void startCommunityCidProvider().catch((error) => {
       const message = error instanceof Error ? error.message : String(error)
       console.warn(`[community-cid] bootstrap failed: ${message}`)
@@ -312,6 +325,8 @@ app.on('before-quit', () => {
   stopP2pDiscovery()
   stopP2pNetworkManager()
   stopCommunityYjsProvider()
+  stopCommunityFederationProvider()
+  stopCommunityHubPeeringSync()
   stopCommunityCidProvider()
   stopP2pConnectionMonitor()
   void shutdownCommunityHub()

@@ -60,6 +60,7 @@ import { getEntitlementContext } from '../auth/entitlement.service'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
 import { countWanSdpCandidates } from './wan-transport'
+import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 const MEMBER_JOIN_MESSAGE_TYPE = 'member.joined'
@@ -443,6 +444,8 @@ function ensureOwnerMemberFromInvite(
   )
   const displayName = discovered?.userName ?? '群主'
 
+  ensureLinkedIdentityRow(payload.ownerIdentityId, displayName)
+
   if (existing) {
     if (existing.status !== 'active' || existing.role !== 'owner') {
       memberRepo.update({
@@ -506,6 +509,8 @@ function recordJoinOnOwnerSide(
     return
   }
 
+  ensureLinkedIdentityRow(member.identityId, member.displayName)
+
   getMemberRepo().create({
     workspaceId: payload.workspaceId,
     identityId: member.identityId,
@@ -536,6 +541,8 @@ export function ensureOwnerMemberRecord(workspaceId: string): void {
     (node) => node.deviceId === workspace.ownerDeviceId,
   )
   const displayName = discovered?.userName ?? '群主'
+
+  ensureLinkedIdentityRow(workspace.ownerIdentityId, displayName)
 
   if (existing) {
     memberRepo.update({
@@ -808,6 +815,11 @@ export function handleMemberSyncResponse(
 function ensureWorkspaceFromInvite(
   payload: ReturnType<typeof decodeInviteToken>,
 ): P2pWorkspaceRow {
+  const discovered = listP2pDiscoveredNodes(false).find(
+    (node) => node.deviceId === payload.ownerDeviceId,
+  )
+  ensureLinkedIdentityRow(payload.ownerIdentityId, discovered?.userName ?? '群主')
+
   const workspaceRepo = getWorkspaceRepo()
   let workspace = workspaceRepo.findById(payload.workspaceId)
   if (!workspace) {
@@ -1125,10 +1137,13 @@ export async function applyRemoteMemberJoin(
     payload.member.displayName,
   )
 
+  const remoteIdentityId = resolveRemoteMemberIdentityId(payload.member)
+  ensureLinkedIdentityRow(remoteIdentityId, payload.member.displayName)
+
   const memberRow = getMemberRepo().create({
     id: payload.member.id,
     workspaceId: payload.workspaceId,
-    identityId: resolveRemoteMemberIdentityId(payload.member),
+    identityId: remoteIdentityId,
     deviceId: payload.member.deviceId,
     displayName: payload.member.displayName,
     role: payload.member.role,
