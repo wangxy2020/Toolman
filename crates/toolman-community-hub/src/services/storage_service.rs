@@ -310,6 +310,9 @@ pub fn max_package_bytes(resource_type: ResourceType) -> u64 {
     }
 }
 
+/// Axum `Multipart` defaults to 2MB; match the largest allowed package size.
+pub const HUB_MAX_REQUEST_BODY_BYTES: usize = 100 * 1024 * 1024;
+
 fn sanitize_version(version: &str) -> Result<String, StorageError> {
     let trimmed = version.trim();
     if trimmed.is_empty() || trimmed.contains("..") {

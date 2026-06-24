@@ -13,7 +13,7 @@ export interface NotesEditorSettings {
 
 export const DEFAULT_NOTES_EDITOR_SETTINGS: NotesEditorSettings = {
   defaultView: 'edit',
-  defaultEditView: 'preview',
+  defaultEditView: 'edit',
   narrowColumn: false,
   fontSize: 16,
   showOutline: true,
@@ -28,6 +28,34 @@ export const NOTES_DEFAULT_EDIT_VIEW_OPTIONS: { value: NotesDefaultEditView; lab
   { value: 'edit', label: '仅编辑' },
   { value: 'preview', label: '实时预览' },
 ]
+
+/** Unified open mode shown in settings (maps to defaultView + defaultEditView). */
+export type NotesOpenMode = 'edit-only' | 'live-preview' | 'preview-only'
+
+export const NOTES_OPEN_MODE_OPTIONS: { value: NotesOpenMode; label: string }[] = [
+  { value: 'edit-only', label: '仅编辑' },
+  { value: 'live-preview', label: '实时预览' },
+  { value: 'preview-only', label: '预览模式' },
+]
+
+export function notesOpenModeFromSettings(settings: NotesEditorSettings): NotesOpenMode {
+  if (settings.defaultView === 'preview') return 'preview-only'
+  if (settings.defaultEditView === 'preview') return 'live-preview'
+  return 'edit-only'
+}
+
+export function settingsPatchFromNotesOpenMode(
+  mode: NotesOpenMode,
+): Pick<NotesEditorSettings, 'defaultView' | 'defaultEditView'> {
+  switch (mode) {
+    case 'preview-only':
+      return { defaultView: 'preview', defaultEditView: 'preview' }
+    case 'live-preview':
+      return { defaultView: 'edit', defaultEditView: 'preview' }
+    case 'edit-only':
+      return { defaultView: 'edit', defaultEditView: 'edit' }
+  }
+}
 
 export function resolveInitialPreviewMode(settings: NotesEditorSettings): NotesDefaultEditView {
   if (settings.defaultView === 'preview') return 'preview'

@@ -9,6 +9,7 @@ import {
 import {
   approveCommunityModerationResource,
   approveCommunityModerationTask,
+  rejectCommunityModerationTask,
   banCommunityModerationUser,
   banCommunityModerationDevice,
   unbanCommunityModerationUser,
@@ -21,7 +22,7 @@ import {
   suspendCommunityModerationResource,
   touchCommunityPresenceHeartbeat,
 } from './community-api.client'
-import { notifyCommunityBoardChanged, COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'
+import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged, COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'
 import { isCommunitySessionActive } from '../user/community-session'
 
 const AUTO_SCAN_INTERVAL_MS = 60_000
@@ -86,6 +87,7 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
       setError(null)
       try {
         await runner()
+        notifyCommunityUserDataChanged()
         await refresh()
       } catch (actionError) {
         const message = actionError instanceof Error ? actionError.message : '操作失败'
@@ -115,6 +117,13 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
   const approveTask = useCallback(
     async (taskId: string, note?: string) => {
       await runAction(() => approveCommunityModerationTask({ resourceId: taskId, note }))
+    },
+    [runAction],
+  )
+
+  const rejectTask = useCallback(
+    async (taskId: string, note?: string) => {
+      await runAction(() => rejectCommunityModerationTask({ resourceId: taskId, note }))
     },
     [runAction],
   )
@@ -217,6 +226,7 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
     suspendResource,
     approveResource,
     approveTask,
+    rejectTask,
     banUser,
     banDevice,
     unbanUser,

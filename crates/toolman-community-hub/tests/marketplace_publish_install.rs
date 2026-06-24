@@ -88,3 +88,49 @@ async fn mcp_publish_install_and_history_main_path() {
 
     harness.teardown().await;
 }
+
+#[tokio::test]
+async fn mcp_publish_accepts_multipart_larger_than_default_axum_limit() {
+    let harness = TestHarness::setup().await;
+
+    let (status, draft_resp) = harness
+        .post_json(
+            "/api/v1/marketplace/mcp",
+            ADMIN,
+            json!({ "title": "Large package MCP" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let resource_id = data_field(&draft_resp)["id"]
+        .as_str()
+        .expect("resource id")
+        .to_string();
+
+    let padding = vec![b'x'; 3 * 1024 * 1024];
+    let package_bytes = build_test_package(
+        ResourceType::Mcp,
+        &sample_mcp_manifest_json(),
+        &[("padding.bin", &padding)],
+    );
+    assert!(package_bytes.len() > 2 * 1024 * 1024);
+
+    let boundary = "toolman-it-large-boundary";
+    let publish_body = multipart_body(
+        boundary,
+        &[("version", "1.0.0")],
+        &[("package", "large.toolman-mcp", &package_bytes)],
+    );
+
+    let (status, published_resp) = harness
+        .post_multipart(
+            &format!("/api/v1/marketplace/mcp/{resource_id}/publish"),
+            ADMIN,
+            publish_body,
+            boundary,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "response: {published_resp:?}");
+    assert_eq!(data_field(&published_resp)["status"], "published");
+
+    harness.teardown().await;
+}

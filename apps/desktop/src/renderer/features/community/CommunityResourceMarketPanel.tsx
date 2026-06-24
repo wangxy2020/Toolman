@@ -15,7 +15,10 @@ import { CommunityFederationSourceBadge } from './CommunityFederationSourceBadge
 import { CommunityListPanelShell } from './CommunityListPanelShell'
 import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
 import { copyCommunityShareText } from './community-share-utils'
-import { deleteCommunityResource } from './community-api.client'
+import { canDeleteCommunityResource } from './community-user-utils'
+import { deleteCommunityResource, listCommunityResources } from './community-api.client'
+import { isResourceRejectedLike } from './community-user-center-status'
+import { notifyCommunityUserDataChanged } from './community-events'
 import { isUiMockCommunityId } from './community-ui-mock'
 import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
@@ -60,6 +63,7 @@ export function CommunityResourceMarketPanel({
 }: CommunityResourceMarketPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showPublish, setShowPublish] = useState(false)
+  const [resumePublish, setResumePublish] = useState<CommunityResourceItem | null>(null)
   const [publishNotice, setPublishNotice] = useState<string | null>(null)
   const [resourceToDelete, setResourceToDelete] = useState<CommunityResourceItem | null>(null)
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
@@ -178,7 +182,36 @@ export function CommunityResourceMarketPanel({
         onRefresh={() => void market.load()}
         onPublish={() => {
           if (!requireRegistration('community_write')) return
-          setShowPublish(true)
+          void (async () => {
+            setPublishNotice(null)
+            const profile = user.profile
+            if (!profile?.id) {
+              setResumePublish(null)
+              setShowPublish(true)
+              return
+            }
+            try {
+              const mine = await listCommunityResources({
+                resourceType,
+                authorId: profile.id,
+                limit: 50,
+              })
+              const pending = mine.items.find((item) => item.status === 'pending_review')
+              if (pending) {
+                setPublishNotice(
+                  `「${pending.title}」已在审核中，请等待管理员处理。可在「我的 → 发布」查看进度。`,
+                )
+                return
+              }
+              const draft = mine.items.find((item) => item.status === 'draft')
+              const rejected = mine.items.find((item) => isResourceRejectedLike(item))
+              setResumePublish(rejected ?? draft ?? null)
+              setShowPublish(true)
+            } catch {
+              setResumePublish(null)
+              setShowPublish(true)
+            }
+          })()
         }}
         publishDisabled={publishDisabled}
         isEmpty={sortedItems.length === 0}
@@ -186,7 +219,7 @@ export function CommunityResourceMarketPanel({
       >
         <ul className="tm-kb-file-list">
           {sortedItems.map((item) => {
-            const isOwner = user.profile?.id === item.author.id
+            const canDelete = canDeleteCommunityResource(item.author.id, user.profile)
             const commentTarget = buildResourceCommentTarget(item.id)
             const icon = RESOURCE_ICONS[resourceType]
 
@@ -210,7 +243,7 @@ export function CommunityResourceMarketPanel({
                 showInstall={resourceType !== 'task'}
                 busyAction={busyItemId === item.id ? busyAction : null}
                 reportTarget={{ targetType: 'resource', targetId: item.id }}
-                onDelete={isOwner ? () => setResourceToDelete(item) : undefined}
+                onDelete={canDelete ? () => setResourceToDelete(item) : undefined}
                 onLike={() => void runInteraction(item.id, 'like', () => market.like(item.id))}
                 onDislike={() =>
                   void runInteraction(item.id, 'dislike', () => market.dislike(item.id))
@@ -256,11 +289,18 @@ export function CommunityResourceMarketPanel({
         <CommunityResourcePublishModal
           resourceType={resourceType}
           resourceLabel={RESOURCE_LABELS[resourceType]}
-          onClose={() => setShowPublish(false)}
+          resumeResource={resumePublish}
+          onClose={() => {
+            setShowPublish(false)
+            setResumePublish(null)
+          }}
           onPublished={(message) => {
             setPublishNotice(message)
+            setResumePublish(null)
+            setShowPublish(false)
             market.setError(null)
             void market.load()
+            notifyCommunityUserDataChanged()
           }}
         />
       ) : null}

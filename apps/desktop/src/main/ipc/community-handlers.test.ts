@@ -19,6 +19,8 @@ vi.mock('../services/community/community-ipc.facade', () => ({
     baseUrl: 'http://127.0.0.1:3721',
     binaryPath: '/tmp/toolman-community-hub',
   })),
+  cancelTask: vi.fn(),
+  deleteTask: vi.fn(async () => ({ deleted: true })),
   listResources: vi.fn(async () => ({
     items: [
       {
@@ -70,5 +72,9 @@ describe('community IPC handlers', () => {
   it('exposes community:board:messages:list handler for renderer invoke', () => {
     expect(communityHandlers[IpcChannel.CommunityBoardMessageList]).toBeTypeOf('function')
     expect(communityHandlers[IpcChannel.CommunityBoardMessageCreate]).toBeTypeOf('function')
+  })
+
+  it('exposes community:task:delete handler for renderer invoke', () => {
+    expect(communityHandlers[IpcChannel.CommunityTaskDelete]).toBeTypeOf('function')
   })
 })

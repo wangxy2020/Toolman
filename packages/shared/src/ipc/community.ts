@@ -19,6 +19,7 @@ export const CommunityResourceStatusSchema = z.enum([
   'draft',
   'pending_review',
   'published',
+  'rejected',
   'suspended',
   'archived',
 ])
@@ -44,6 +45,7 @@ export const CommunityTaskStatusSchema = z.enum([
   'in_progress',
   'delivered',
   'completed',
+  'rejected',
   'cancelled',
   'disputed',
 ])
@@ -277,6 +279,38 @@ export const CommunityResourcePublishInputSchema = z.object({
 })
 export type CommunityResourcePublishInput = z.infer<typeof CommunityResourcePublishInputSchema>
 
+export const CommunityMcpPackageExportInputSchema = z.object({
+  mcpServerId: z.string().min(1).max(64),
+})
+export type CommunityMcpPackageExportInput = z.infer<typeof CommunityMcpPackageExportInputSchema>
+
+export const CommunityMcpPackagePrepareInputSchema = z.object({
+  packagePath: z.string().min(1),
+  title: z.string().max(128).optional(),
+})
+export type CommunityMcpPackagePrepareInput = z.infer<typeof CommunityMcpPackagePrepareInputSchema>
+
+export const CommunityMcpPackagePrepareOutputSchema = z.object({
+  packagePath: z.string().min(1),
+  normalized: z.boolean(),
+  message: z.string().optional(),
+})
+export type CommunityMcpPackagePrepareOutput = z.infer<typeof CommunityMcpPackagePrepareOutputSchema>
+
+export const CommunitySkillPackagePrepareInputSchema = CommunityMcpPackagePrepareInputSchema
+export type CommunitySkillPackagePrepareInput = z.infer<typeof CommunitySkillPackagePrepareInputSchema>
+export const CommunitySkillPackagePrepareOutputSchema = CommunityMcpPackagePrepareOutputSchema
+export type CommunitySkillPackagePrepareOutput = z.infer<typeof CommunitySkillPackagePrepareOutputSchema>
+
+export const CommunityWorkflowPackagePrepareInputSchema = CommunityMcpPackagePrepareInputSchema
+export type CommunityWorkflowPackagePrepareInput = z.infer<
+  typeof CommunityWorkflowPackagePrepareInputSchema
+>
+export const CommunityWorkflowPackagePrepareOutputSchema = CommunityMcpPackagePrepareOutputSchema
+export type CommunityWorkflowPackagePrepareOutput = z.infer<
+  typeof CommunityWorkflowPackagePrepareOutputSchema
+>
+
 export const CommunityResourceInteractionInputSchema = z.object({
   resourceId: UuidSchema,
 })
@@ -315,6 +349,29 @@ export const CommunityResourceDeleteOutputSchema = z.object({
   deleted: z.boolean(),
 })
 export type CommunityResourceDeleteOutput = z.infer<typeof CommunityResourceDeleteOutputSchema>
+
+export const CommunityResourcePackageReviewInputSchema = z.object({
+  resourceId: UuidSchema,
+})
+export type CommunityResourcePackageReviewInput = z.infer<
+  typeof CommunityResourcePackageReviewInputSchema
+>
+
+export const CommunityResourcePackageReviewOpenOutputSchema = z.object({
+  opened: z.boolean(),
+  error: z.string().optional(),
+})
+export type CommunityResourcePackageReviewOpenOutput = z.infer<
+  typeof CommunityResourcePackageReviewOpenOutputSchema
+>
+
+export const CommunityResourcePackageReviewDownloadOutputSchema = z.object({
+  saved: z.boolean(),
+  path: z.string().nullable(),
+})
+export type CommunityResourcePackageReviewDownloadOutput = z.infer<
+  typeof CommunityResourcePackageReviewDownloadOutputSchema
+>
 
 // --- Install ---
 
@@ -785,6 +842,11 @@ export const CommunityTaskIdInputSchema = z.object({
   id: UuidSchema,
 })
 export type CommunityTaskIdInput = z.infer<typeof CommunityTaskIdInputSchema>
+
+export const CommunityTaskDeleteOutputSchema = z.object({
+  deleted: z.boolean(),
+})
+export type CommunityTaskDeleteOutput = z.infer<typeof CommunityTaskDeleteOutputSchema>
 
 export const CommunityTaskApplyInputSchema = z.object({
   taskId: UuidSchema,

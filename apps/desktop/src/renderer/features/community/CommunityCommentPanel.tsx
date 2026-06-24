@@ -5,7 +5,7 @@ import { formatCommunityDate } from './community-market-utils'
 import { CommunityCommentInput } from './CommunityCommentInput'
 import type { CommunityCommentTarget } from './community-comment-utils'
 import { useCommunityInlineComments } from './useCommunityInlineComments'
-import { isCommunityModerator } from './community-user-utils'
+import { canDeleteCommunityComment } from './community-user-utils'
 import { useCommunityUser } from './useCommunityUser'
 
 interface Props {
@@ -13,9 +13,10 @@ interface Props {
   open: boolean
   onCountChange?: (count: number) => void
   onClose?: () => void
+  emptyHint?: string
 }
 
-export function CommunityCommentPanel({ target, open, onCountChange, onClose }: Props) {
+export function CommunityCommentPanel({ target, open, onCountChange, onClose, emptyHint }: Props) {
   const user = useCommunityUser()
   const comments = useCommunityInlineComments(target, open)
   const onCountChangeRef = useRef(onCountChange)
@@ -26,11 +27,8 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose }: 
     onCountChangeRef.current?.(comments.items.length)
   }, [comments.items.length, open])
 
-  const canDeleteComment = (authorId: string) => {
-    const profile = user.profile
-    if (!profile) return false
-    return profile.id === authorId || isCommunityModerator(profile.role)
-  }
+  const canDeleteComment = (authorId: string) =>
+    canDeleteCommunityComment(authorId, user.profile)
 
   return (
     <section className="tm-community-inline-comments" aria-label="评论区">
@@ -55,7 +53,9 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose }: 
         {comments.loading ? (
           <div className="tm-community-inline-comments-empty">加载评论中…</div>
         ) : comments.items.length === 0 ? (
-          <div className="tm-community-inline-comments-empty">暂无评论，来发表第一条吧</div>
+          <div className="tm-community-inline-comments-empty">
+            {emptyHint ?? '暂无评论，来发表第一条吧'}
+          </div>
         ) : (
           <ul className="tm-community-inline-comments-list">
             {comments.items.map((item) => (

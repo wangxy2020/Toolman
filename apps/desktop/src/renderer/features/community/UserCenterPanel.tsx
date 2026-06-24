@@ -1,14 +1,25 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { type CommunityResourceItem, type CommunityResourceType } from '@toolman/shared'
+import { type CommunityResourceItem, type CommunityResourceType, type CommunityTaskItem } from '@toolman/shared'
 
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { CommunityPanelHeader, CommunityPanelRefreshButton } from './CommunityPanelHeader'
+import { CommunityCommentDropdown } from './CommunityCommentDropdown'
 import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
-import { deleteCommunityResource } from './community-api.client'
+import { TaskCreateModal } from './TaskCreateModal'
+import { cancelCommunityTask, deleteCommunityResource, deleteCommunityTask } from './community-api.client'
 import { notifyCommunityUserDataChanged } from './community-events'
+import { buildResourceCommentTarget, buildTaskCommentTarget, type CommunityCommentTarget } from './community-comment-utils'
 import { TASK_STATUS_LABELS, TASK_TYPE_LABELS } from './community-task-utils'
-import { getResourceUserCenterStatusLabel } from './community-resource-status'
+import {
+  canDeleteCommunityResourceFromUserCenter,
+  canDeleteCommunityTaskFromUserCenter,
+  canModerationResubmitResource,
+  canModerationResubmitTask,
+  canWithdrawCommunityTask,
+  getResourceUserCenterDisplayStatusLabel,
+  getTaskUserCenterStatusLabel,
+} from './community-user-center-status'
 import { INSTALL_STATUS_LABELS, USER_ROLE_LABELS } from './community-user-utils'
 import {
   groupUserCenterResources,
@@ -16,6 +27,7 @@ import {
   type UserCenterSection,
 } from './useCommunityUserCenter'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
+import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 
 const SECTIONS: Array<{ key: UserCenterSection; label: string }> = [
   { key: 'publishes', label: '发布' },
@@ -106,12 +118,42 @@ function FeedStatIcon({ kind }: { kind: FeedStat['kind'] }) {
   )
 }
 
+function UserCenterActionLink({
+  children,
+  onClick,
+  disabled,
+  tone = 'default',
+}: {
+  children: ReactNode
+  onClick: () => void
+  disabled?: boolean
+  tone?: 'default' | 'primary' | 'danger'
+}) {
+  return (
+    <button
+      type="button"
+      className={[
+        'tm-user-center-text-btn',
+        tone === 'primary' ? 'tm-user-center-text-btn--primary' : '',
+        tone === 'danger' ? 'tm-user-center-text-btn--danger' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  )
+}
+
 function UserCenterFeedCard({
   tag,
   date,
   title,
   description,
   stats,
+  footerStats,
   actions,
 }: {
   tag: string
@@ -119,6 +161,7 @@ function UserCenterFeedCard({
   title: string
   description?: string | null
   stats?: FeedStat[]
+  footerStats?: ReactNode
   actions?: ReactNode
 }) {
   return (
@@ -132,26 +175,76 @@ function UserCenterFeedCard({
       </div>
       <h4 className="tm-user-center-feed-title">{title}</h4>
       {description ? <p className="tm-user-center-feed-desc">{description}</p> : null}
-      {stats && stats.length > 0 ? (
-        <div className="tm-user-center-feed-stats">
-          {stats.map((stat) => (
-            <span
-              key={`${stat.kind}-${stat.label}`}
-              className={[
-                'tm-user-center-feed-stat',
-                stat.accent ? 'tm-user-center-feed-stat--accent' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              <FeedStatIcon kind={stat.kind} />
-              {stat.label}
-            </span>
-          ))}
+      {footerStats || stats?.length || actions ? (
+        <div className="tm-user-center-feed-footer">
+          {footerStats ? (
+            <div className="tm-user-center-feed-stats">{footerStats}</div>
+          ) : stats && stats.length > 0 ? (
+            <div className="tm-user-center-feed-stats">
+              {stats.map((stat) => (
+                <span
+                  key={`${stat.kind}-${stat.label}`}
+                  className={[
+                    'tm-user-center-feed-stat',
+                    stat.accent ? 'tm-user-center-feed-stat--accent' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <FeedStatIcon kind={stat.kind} />
+                  {stat.label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="tm-user-center-feed-stats" aria-hidden="true" />
+          )}
+          {actions ? <div className="tm-user-center-feed-actions">{actions}</div> : null}
         </div>
       ) : null}
-      {actions ? <div className="tm-user-center-feed-actions">{actions}</div> : null}
     </article>
+  )
+}
+
+function UserCenterRejectedFeedbackStat({
+  target,
+  comments,
+}: {
+  target: CommunityCommentTarget
+  comments: ReturnType<typeof useCommunityCommentExpansion>
+}) {
+  const statRef = useRef<HTMLButtonElement>(null)
+  const open = comments.isExpanded(target)
+  const commentCount = comments.getCount(target)
+
+  return (
+    <>
+      <button
+        ref={statRef}
+        type="button"
+        className={[
+          'tm-user-center-feed-stat',
+          'tm-user-center-feed-stat--clickable',
+          commentCount > 0 ? 'tm-user-center-feed-stat--accent' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        title="查看审核批注"
+        aria-expanded={open}
+        onClick={() => comments.toggleExpanded(target)}
+      >
+        <FeedStatIcon kind="reply" />
+        已拒绝
+      </button>
+      <CommunityCommentDropdown
+        anchorRef={statRef}
+        target={target}
+        open={open}
+        onClose={() => comments.toggleExpanded(target)}
+        onCountChange={(count) => comments.setCount(target, count)}
+        emptyHint="暂无审核批注"
+      />
+    </>
   )
 }
 
@@ -168,10 +261,16 @@ export function UserCenterPanel() {
   const [section, setSection] = useState<UserCenterSection>('publishes')
   const [resourceToWithdraw, setResourceToWithdraw] = useState<CommunityResourceItem | null>(null)
   const [resumePublish, setResumePublish] = useState<CommunityResourceItem | null>(null)
+  const [editPublish, setEditPublish] = useState<CommunityResourceItem | null>(null)
+  const [resumeTask, setResumeTask] = useState<CommunityTaskItem | null>(null)
+  const [editTask, setEditTask] = useState<CommunityTaskItem | null>(null)
+  const [taskToDelete, setTaskToDelete] = useState<CommunityTaskItem | null>(null)
+  const [taskToWithdraw, setTaskToWithdraw] = useState<CommunityTaskItem | null>(null)
   const [publishNotice, setPublishNotice] = useState<string | null>(null)
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
   const center = useCommunityUserCenter()
+  const comments = useCommunityCommentExpansion()
   const profile = center.profile
   const activeCount = useMemo(() => getSectionCount(section, center), [section, center])
 
@@ -184,11 +283,53 @@ export function UserCenterPanel() {
       setResourceToWithdraw(null)
       await center.load()
     } catch (withdrawError) {
+      const message = withdrawError instanceof Error ? withdrawError.message : '删除失败'
+      setWithdrawError(message)
+    } finally {
+      setWithdrawingId(null)
+    }
+  }
+
+  const handleConfirmWithdrawTask = async () => {
+    if (!taskToWithdraw) return
+    setWithdrawingId(taskToWithdraw.id)
+    try {
+      await cancelCommunityTask(taskToWithdraw.id)
+      notifyCommunityUserDataChanged()
+      setTaskToWithdraw(null)
+      await center.load()
+    } catch (withdrawError) {
       const message = withdrawError instanceof Error ? withdrawError.message : '撤回失败'
       setWithdrawError(message)
     } finally {
       setWithdrawingId(null)
     }
+  }
+
+  const handleConfirmDeleteTask = async () => {
+    if (!taskToDelete) return
+    setWithdrawingId(taskToDelete.id)
+    try {
+      await deleteCommunityTask(taskToDelete.id)
+      notifyCommunityUserDataChanged()
+      setTaskToDelete(null)
+      await center.load()
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : '删除任务失败'
+      setWithdrawError(message)
+    } finally {
+      setWithdrawingId(null)
+    }
+  }
+
+  const closePublishModal = () => {
+    setResumePublish(null)
+    setEditPublish(null)
+  }
+
+  const closeTaskModal = () => {
+    setResumeTask(null)
+    setEditTask(null)
   }
 
   const canWithdrawResource = (item: CommunityResourceItem) =>
@@ -229,46 +370,88 @@ export function UserCenterPanel() {
               date={formatUserCenterDateTime(item.updatedAt)}
               title={item.title}
               description={item.description}
-              stats={[
-                { kind: 'like', label: `${item.likeCount} 赞` },
-                {
-                  kind: 'favorite',
-                  label: `${getResourceUserCenterStatusLabel(item.status)} · v${item.version}`,
-                },
-              ]}
+              stats={
+                canModerationResubmitResource(item)
+                  ? undefined
+                  : [
+                      { kind: 'like', label: `${item.likeCount} 赞` },
+                      {
+                        kind: 'favorite',
+                        label: `${getResourceUserCenterDisplayStatusLabel(item)} · v${item.version}`,
+                      },
+                    ]
+              }
+              footerStats={
+                canModerationResubmitResource(item) ? (
+                  <UserCenterRejectedFeedbackStat
+                    target={buildResourceCommentTarget(item.id)}
+                    comments={comments}
+                  />
+                ) : undefined
+              }
               actions={
                 <>
                   {item.status === 'draft' ? (
-                    <button
-                      type="button"
-                      className="tm-btn tm-btn--secondary"
+                    <UserCenterActionLink
+                      tone="primary"
                       onClick={() => {
                         setPublishNotice(null)
+                        setEditPublish(null)
                         setResumePublish(item)
                       }}
                     >
                       提交审核
-                    </button>
+                    </UserCenterActionLink>
                   ) : null}
-                  {canWithdrawResource(item) ? (
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
-                    disabled={withdrawingId === item.id}
-                    onClick={() => setResourceToWithdraw(item)}
-                  >
-                    {withdrawingId === item.id ? '撤回中…' : '撤回'}
-                  </button>
-                ) : item.status === 'published' ? (
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
-                    disabled={withdrawingId === item.id}
-                    onClick={() => setResourceToWithdraw(item)}
-                  >
-                    {withdrawingId === item.id ? '删除中…' : '删除'}
-                  </button>
-                ) : null}
+                  {canModerationResubmitResource(item) ? (
+                    <>
+                      <UserCenterActionLink
+                        onClick={() => {
+                          setPublishNotice(null)
+                          setResumePublish(null)
+                          setEditPublish(item)
+                        }}
+                      >
+                        修改
+                      </UserCenterActionLink>
+                      <UserCenterActionLink
+                        tone="primary"
+                        onClick={() => {
+                          setPublishNotice(null)
+                          setEditPublish(null)
+                          setResumePublish(item)
+                        }}
+                      >
+                        重新提交
+                      </UserCenterActionLink>
+                      <UserCenterActionLink
+                        tone="danger"
+                        disabled={withdrawingId === item.id}
+                        onClick={() => setResourceToWithdraw(item)}
+                      >
+                        {withdrawingId === item.id ? '删除中…' : '删除'}
+                      </UserCenterActionLink>
+                    </>
+                  ) : null}
+                  {canWithdrawResource(item) && item.status === 'pending_review' ? (
+                    <UserCenterActionLink
+                      tone="danger"
+                      disabled={withdrawingId === item.id}
+                      onClick={() => setResourceToWithdraw(item)}
+                    >
+                      {withdrawingId === item.id ? '撤回中…' : '撤回'}
+                    </UserCenterActionLink>
+                  ) : canDeleteCommunityResourceFromUserCenter(item) &&
+                    !canModerationResubmitResource(item) &&
+                    item.status !== 'pending_review' ? (
+                    <UserCenterActionLink
+                      tone="danger"
+                      disabled={withdrawingId === item.id}
+                      onClick={() => setResourceToWithdraw(item)}
+                    >
+                      {withdrawingId === item.id ? '删除中…' : '删除'}
+                    </UserCenterActionLink>
+                  ) : null}
                 </>
               }
             />
@@ -450,7 +633,85 @@ export function UserCenterPanel() {
                 tag={TASK_TYPE_LABELS[task.taskType]}
                 date={formatUserCenterDateTime(task.updatedAt)}
                 title={task.title}
-                stats={[{ kind: 'reply', label: TASK_STATUS_LABELS[task.status] }]}
+                stats={
+                  canModerationResubmitTask(task)
+                    ? undefined
+                    : [{ kind: 'reply', label: getTaskUserCenterStatusLabel(task) }]
+                }
+                footerStats={
+                  canModerationResubmitTask(task) ? (
+                    <UserCenterRejectedFeedbackStat
+                      target={buildTaskCommentTarget(task.id)}
+                      comments={comments}
+                    />
+                  ) : undefined
+                }
+                actions={
+                  <>
+                    {task.status === 'draft' ? (
+                      <UserCenterActionLink
+                        tone="primary"
+                        onClick={() => {
+                          setPublishNotice(null)
+                          setEditTask(null)
+                          setResumeTask(task)
+                        }}
+                      >
+                        提交审核
+                      </UserCenterActionLink>
+                    ) : null}
+                    {canModerationResubmitTask(task) ? (
+                      <>
+                        <UserCenterActionLink
+                          onClick={() => {
+                            setPublishNotice(null)
+                            setResumeTask(null)
+                            setEditTask(task)
+                          }}
+                        >
+                          修改
+                        </UserCenterActionLink>
+                        <UserCenterActionLink
+                          tone="primary"
+                          onClick={() => {
+                            setPublishNotice(null)
+                            setEditTask(null)
+                            setResumeTask(task)
+                          }}
+                        >
+                          重新提交
+                        </UserCenterActionLink>
+                        <UserCenterActionLink
+                          tone="danger"
+                          disabled={withdrawingId === task.id}
+                          onClick={() => setTaskToDelete(task)}
+                        >
+                          {withdrawingId === task.id ? '删除中…' : '删除'}
+                        </UserCenterActionLink>
+                      </>
+                    ) : null}
+                    {canWithdrawCommunityTask(task) ? (
+                      <UserCenterActionLink
+                        tone="danger"
+                        disabled={withdrawingId === task.id}
+                        onClick={() => setTaskToWithdraw(task)}
+                      >
+                        {withdrawingId === task.id ? '撤回中…' : '撤回'}
+                      </UserCenterActionLink>
+                    ) : null}
+                    {canDeleteCommunityTaskFromUserCenter(task) &&
+                    !canModerationResubmitTask(task) &&
+                    !canWithdrawCommunityTask(task) ? (
+                      <UserCenterActionLink
+                        tone="danger"
+                        disabled={withdrawingId === task.id}
+                        onClick={() => setTaskToDelete(task)}
+                      >
+                        {withdrawingId === task.id ? '删除中…' : '删除'}
+                      </UserCenterActionLink>
+                    ) : null}
+                  </>
+                }
               />
             ))}
           </UserCenterFeedGroup>
@@ -545,33 +806,72 @@ export function UserCenterPanel() {
 
       {resourceToWithdraw ? (
         <ConfirmDialog
-          title={canWithdrawResource(resourceToWithdraw) ? '撤回提交' : '删除资源'}
-          message={
-            canWithdrawResource(resourceToWithdraw)
-              ? `确定撤回「${resourceToWithdraw.title}」吗？撤回后将从审核队列移除。`
-              : `确定删除「${resourceToWithdraw.title}」吗？删除后将从市场下架。`
+          title={
+            resourceToWithdraw.status === 'pending_review' ? '撤回提交' : '删除资源'
           }
-          confirmLabel={canWithdrawResource(resourceToWithdraw) ? '撤回' : '删除'}
+          message={
+            resourceToWithdraw.status === 'pending_review'
+              ? `确定撤回「${resourceToWithdraw.title}」吗？撤回后将从审核队列移除。`
+              : `确定删除「${resourceToWithdraw.title}」吗？删除后将从列表移除。`
+          }
+          confirmLabel={resourceToWithdraw.status === 'pending_review' ? '撤回' : '删除'}
           danger
           onCancel={() => setResourceToWithdraw(null)}
           onConfirm={() => void handleConfirmWithdraw()}
         />
       ) : null}
 
-      {resumePublish ? (
+      {resumePublish || editPublish ? (
         <CommunityResourcePublishModal
-          resourceType={resumePublish.resourceType}
+          resourceType={(editPublish ?? resumePublish)!.resourceType}
           resourceLabel={
-            USER_CENTER_RESOURCE_LABELS[resumePublish.resourceType] ?? resumePublish.resourceType
+            USER_CENTER_RESOURCE_LABELS[(editPublish ?? resumePublish)!.resourceType] ??
+            (editPublish ?? resumePublish)!.resourceType
           }
-          resumeResource={resumePublish}
-          onClose={() => setResumePublish(null)}
+          resumeResource={editPublish ?? resumePublish}
+          editOnly={Boolean(editPublish)}
+          onClose={closePublishModal}
           onPublished={(message) => {
             setPublishNotice(message)
-            setResumePublish(null)
+            closePublishModal()
             notifyCommunityUserDataChanged()
             void center.load()
           }}
+        />
+      ) : null}
+
+      {resumeTask || editTask ? (
+        <TaskCreateModal
+          resumeTask={editTask ?? resumeTask}
+          editOnly={Boolean(editTask)}
+          onClose={closeTaskModal}
+          onCreated={(message) => {
+            setPublishNotice(message)
+            closeTaskModal()
+            void center.load()
+          }}
+        />
+      ) : null}
+
+      {taskToWithdraw ? (
+        <ConfirmDialog
+          title="撤回提交"
+          message={`确定撤回任务「${taskToWithdraw.title}」吗？撤回后将回到草稿状态。`}
+          confirmLabel="撤回"
+          danger
+          onCancel={() => setTaskToWithdraw(null)}
+          onConfirm={() => void handleConfirmWithdrawTask()}
+        />
+      ) : null}
+
+      {taskToDelete ? (
+        <ConfirmDialog
+          title="删除任务"
+          message={`确定删除任务「${taskToDelete.title}」吗？`}
+          confirmLabel="删除"
+          danger
+          onCancel={() => setTaskToDelete(null)}
+          onConfirm={() => void handleConfirmDeleteTask()}
         />
       ) : null}
     </div>

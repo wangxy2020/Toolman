@@ -88,7 +88,8 @@ pub use search_service::{
 };
 pub use embedding_service::EmbeddingService;
 pub use storage_service::{
-    max_package_bytes, manifest_filename, package_extension, StorageError, StorageService,
+    max_package_bytes, manifest_filename, package_extension, HUB_MAX_REQUEST_BODY_BYTES,
+    StorageError, StorageService,
     StorePackageInput, StoredPackage,
 };
 pub use task_market_service::{

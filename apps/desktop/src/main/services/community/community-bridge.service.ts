@@ -212,7 +212,7 @@ async function markStopped(): Promise<void> {
 export function markCommunityHubOfflineReadOnly(error?: string): void {
   currentStatus = {
     ...currentStatus,
-    running: false,
+    running: httpClient != null,
     offlineReadOnly: hasAnyCommunityHubCache(),
     error: error ?? currentStatus.error ?? '官方 Hub 暂不可达，已切换为本地缓存只读',
   }
@@ -574,11 +574,31 @@ async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
   const portFile = await readCommunityHubPortFile()
   if (!portFile?.pid) return
 
+  if (portFile.port) {
+    const client = new CommunityHttpClient({
+      port: portFile.port,
+      host: COMMUNITY_HUB_HOST,
+      resolveAuth: resolveCommunityHubAuth,
+    })
+    try {
+      const health = await client.health()
+      if (health.status === 'healthy') {
+        return
+      }
+    } catch {
+      // Hub not responding — only restart if this process owns the sidecar.
+    }
+  }
+
+  if (childProcess?.pid !== portFile.pid) {
+    return
+  }
+
   try {
     const binaryStat = await stat(binaryPath)
     if (binaryStat.mtimeMs <= portFile.startedAt) return
 
-    log('detected newer community hub binary, restarting sidecar')
+    log('detected newer community hub binary, restarting owned sidecar')
     try {
       process.kill(portFile.pid, 'SIGTERM')
     } catch {
@@ -588,6 +608,8 @@ async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
   } catch (error) {
     log('failed to inspect community hub binary for restart', error)
   } finally {
-    await removeCommunityHubPortFile()
+    if (childProcess?.pid === portFile.pid) {
+      await removeCommunityHubPortFile()
+    }
   }
 }

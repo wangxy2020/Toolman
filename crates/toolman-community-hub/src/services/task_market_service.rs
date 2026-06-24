@@ -239,6 +239,14 @@ impl TaskMarketService {
         let current = self.require_task(id).await?;
         ensure_publisher_or_admin(actor, &current.publisher_id)?;
 
+        let can_publish = matches!(current.status, TaskStatus::Draft | TaskStatus::Rejected)
+            || (current.status == TaskStatus::Cancelled && current.assignee_id.is_none());
+        if !can_publish {
+            return Err(TaskMarketError::Validation(
+                "task can only be published from draft, rejected, or cancelled status".into(),
+            ));
+        }
+
         let next_status = if self.config.require_review {
             TaskStatus::PendingReview
         } else {
@@ -261,12 +269,44 @@ impl TaskMarketService {
         let current = self.require_task(id).await?;
         ensure_publisher_or_admin(actor, &current.publisher_id)?;
 
+        let next_status = if current.status == TaskStatus::PendingReview {
+            TaskStatus::Draft
+        } else {
+            TaskStatus::Cancelled
+        };
+
         let task = TaskRepository::new(self.pool.clone())
-            .transition_status(id, TaskStatus::Cancelled)
+            .transition_status(id, next_status)
             .await
             .map_err(map_repo_error)?;
 
         self.to_item(task).await
+    }
+
+    pub async fn delete_task(
+        &self,
+        actor: &CommunityUser,
+        id: &str,
+    ) -> Result<(), TaskMarketError> {
+        let current = self.require_task(id).await?;
+        ensure_publisher_or_admin(actor, &current.publisher_id)?;
+
+        if !is_deletable_task(&current) {
+            return Err(TaskMarketError::Validation(
+                "当前状态的任务不可删除".to_string(),
+            ));
+        }
+
+        let deleted = TaskRepository::new(self.pool.clone())
+            .delete(id)
+            .await
+            .map_err(map_repo_error)?;
+
+        if deleted {
+            Ok(())
+        } else {
+            Err(TaskMarketError::NotFound(id.to_string()))
+        }
     }
 
     pub async fn apply_task(
@@ -524,6 +564,14 @@ fn ensure_publisher_or_admin(actor: &CommunityUser, publisher_id: &str) -> Resul
     }
 }
 
+fn is_deletable_task(task: &CommunityTask) -> bool {
+    use TaskStatus::*;
+    matches!(
+        task.status,
+        Draft | PendingReview | Rejected | Cancelled
+    ) || (task.status == Open && task.assignee_id.is_none())
+}
+
 fn map_repo_error(error: TaskRepositoryError) -> TaskMarketError {
     match error {
         TaskRepositoryError::NotFound(value) => TaskMarketError::NotFound(value),
@@ -665,7 +713,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_illegal_publish_transition() {
+    async fn rejects_publish_when_already_open() {
         let data_dir = temp_data_dir();
         std::fs::create_dir_all(&data_dir).expect("data dir");
         let db_path = data_dir.join("community.db");
@@ -677,7 +725,7 @@ mod tests {
             .create_task(
                 &admin,
                 CreateTaskRequest {
-                    title: "Cancelled task".to_string(),
+                    title: "Open task".to_string(),
                     description: None,
                     task_type: TaskType::Other,
                     budget_amount: None,
@@ -691,13 +739,9 @@ mod tests {
             .expect("create");
 
         service.publish_task(&admin, &draft.id).await.expect("publish");
-        service.cancel_task(&admin, &draft.id).await.expect("cancel");
 
         let error = service.publish_task(&admin, &draft.id).await;
-        assert!(matches!(
-            error,
-            Err(TaskMarketError::InvalidTransition { .. })
-        ));
+        assert!(matches!(error, Err(TaskMarketError::Validation(_))));
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);

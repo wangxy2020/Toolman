@@ -1,6 +1,6 @@
 use axum::extract::{Multipart, Path, Query, State};
 use axum::http::HeaderMap;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -77,7 +77,7 @@ pub fn router() -> Router<AppState> {
         .route("/tasks", get(list_tasks).post(create_task))
         .route(
             "/tasks/{id}",
-            get(get_task).patch(patch_task),
+            get(get_task).patch(patch_task).delete(delete_task),
         )
         .route("/tasks/{id}/publish", post(publish_task))
         .route("/tasks/{id}/cancel", post(cancel_task))
@@ -226,6 +226,15 @@ async fn cancel_task(
 ) -> Result<Json<ApiResponse<TaskMarketItem>>, ApiError> {
     let item = service(&state).cancel_task(&user, &id).await?;
     Ok(Json(ApiResponse::ok(item)))
+}
+
+async fn delete_task(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    service(&state).delete_task(&user, &id).await?;
+    Ok(Json(ApiResponse::ok(serde_json::json!({ "deleted": true }))))
 }
 
 async fn apply_task(

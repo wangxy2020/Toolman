@@ -22,6 +22,9 @@ import {
   type CommunityResourceCreateInput,
   type CommunityResourceInteractionOutput,
   type CommunityResourceItem,
+  type CommunityResourcePatchInput,
+  type CommunityResourcePackageReviewDownloadOutput,
+  type CommunityResourcePackageReviewOpenOutput,
   type CommunityResourcePublishInput,
   type CommunityResourceListInput,
   type CommunityResourceListOutput,
@@ -35,6 +38,7 @@ import {
   type CommunityTaskItem,
   type CommunityTaskListInput,
   type CommunityTaskListOutput,
+  type CommunityTaskPatchInput,
   type CommunityTaskRejectDeliveryInput,
   type CommunityTaskReviewCreateInput,
   type CommunityTaskReviewItem,
@@ -146,8 +150,53 @@ export async function exportCommunityKnowledgeBundle(
   return invokeIpc(IpcChannel.CommunityKnowledgeBundleExport, { kbId })
 }
 
+export async function exportCommunityMcpPackage(
+  mcpServerId: string,
+): Promise<{ packagePath: string }> {
+  return invokeIpc(IpcChannel.CommunityMcpPackageExport, { mcpServerId })
+}
+
+export async function prepareCommunityMcpPackage(
+  packagePath: string,
+  title?: string,
+): Promise<{ packagePath: string; normalized: boolean; message?: string }> {
+  return invokeIpc(IpcChannel.CommunityMcpPackagePrepare, { packagePath, title })
+}
+
+export async function prepareCommunitySkillPackage(
+  packagePath: string,
+  title?: string,
+): Promise<{ packagePath: string; normalized: boolean; message?: string }> {
+  return invokeIpc(IpcChannel.CommunitySkillPackagePrepare, { packagePath, title })
+}
+
+export async function prepareCommunityWorkflowPackage(
+  packagePath: string,
+  title?: string,
+): Promise<{ packagePath: string; normalized: boolean; message?: string }> {
+  return invokeIpc(IpcChannel.CommunityWorkflowPackagePrepare, { packagePath, title })
+}
+
 export async function deleteCommunityResource(id: string): Promise<{ deleted: boolean }> {
   return invokeIpc(IpcChannel.CommunityResourceDelete, { id })
+}
+
+export async function patchCommunityResource(
+  input: CommunityResourcePatchInput,
+): Promise<CommunityResourceItem> {
+  return invokeIpc(IpcChannel.CommunityResourcePatch, input)
+}
+
+export async function openCommunityResourcePackageForReview(
+  resourceId: string,
+): Promise<CommunityResourcePackageReviewOpenOutput> {
+  return invokeIpc(IpcChannel.CommunityResourcePackageReviewOpen, { resourceId })
+}
+
+export async function downloadCommunityResourcePackageForReview(
+  resourceId: string,
+): Promise<CommunityResourcePackageReviewDownloadOutput> {
+  return invokeIpc(IpcChannel.CommunityResourcePackageReviewDownload, { resourceId })
 }
 
 export async function likeCommunityResource(
@@ -340,6 +389,12 @@ export async function approveCommunityModerationTask(
   return invokeIpc(IpcChannel.CommunityModerationTaskApprove, input)
 }
 
+export async function rejectCommunityModerationTask(
+  input: CommunityModerationResourceActionInput,
+): Promise<{ id: string; title: string; status: string }> {
+  return invokeIpc(IpcChannel.CommunityModerationTaskReject, input)
+}
+
 export async function banCommunityModerationUser(
   input: CommunityModerationUserBanInput,
 ): Promise<{ banned: boolean }> {
@@ -426,12 +481,22 @@ export async function createCommunityTask(
   return invokeIpc(IpcChannel.CommunityTaskCreate, input)
 }
 
+export async function patchCommunityTask(
+  input: CommunityTaskPatchInput,
+): Promise<CommunityTaskItem> {
+  return invokeIpc(IpcChannel.CommunityTaskPatch, input)
+}
+
 export async function publishCommunityTask(id: string): Promise<CommunityTaskItem> {
   return invokeIpc(IpcChannel.CommunityTaskPublish, { id })
 }
 
 export async function cancelCommunityTask(id: string): Promise<CommunityTaskItem> {
   return invokeIpc(IpcChannel.CommunityTaskCancel, { id })
+}
+
+export async function deleteCommunityTask(id: string): Promise<{ deleted: boolean }> {
+  return invokeIpc(IpcChannel.CommunityTaskDelete, { id })
 }
 
 export async function applyCommunityTask(

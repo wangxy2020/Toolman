@@ -1,10 +1,13 @@
 use std::net::SocketAddr;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
+use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use toolman_community_hub::{api, init_pool, services::news_service::NewsService, AppState, HubConfig};
+use toolman_community_hub::services::HUB_MAX_REQUEST_BODY_BYTES;
 
 #[tokio::main]
 async fn main() {
@@ -53,6 +56,8 @@ async fn main() {
 
     let app = Router::new()
         .merge(api::router(state))
+        .layer(DefaultBodyLimit::max(HUB_MAX_REQUEST_BODY_BYTES))
+        .layer(RequestBodyLimitLayer::new(HUB_MAX_REQUEST_BODY_BYTES))
         .layer(TraceLayer::new_for_http());
 
     tracing::info!(

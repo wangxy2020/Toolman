@@ -10,6 +10,7 @@ interface Props {
   open: boolean
   onClose: () => void
   onCountChange?: (count: number) => void
+  emptyHint?: string
 }
 
 const DROPDOWN_GAP = 6
@@ -52,6 +53,7 @@ export function CommunityCommentDropdown({
   open,
   onClose,
   onCountChange,
+  emptyHint,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<{
@@ -129,6 +131,7 @@ export function CommunityCommentDropdown({
         open={open}
         onClose={onClose}
         onCountChange={onCountChange}
+        emptyHint={emptyHint}
       />
     </div>,
     document.body,

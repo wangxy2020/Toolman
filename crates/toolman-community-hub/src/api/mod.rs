@@ -19,10 +19,13 @@ mod tasks;
 mod users;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::middleware::from_fn_with_state;
 use axum::routing::get;
+use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::rate_limit;
+use crate::services::HUB_MAX_REQUEST_BODY_BYTES;
 use crate::state::AppState;
 
 pub use auth::{
@@ -56,6 +59,8 @@ pub fn router(state: AppState) -> Router {
                 .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
                 .layer(from_fn_with_state(state.clone(), guest_write_block_middleware)),
         )
+        .layer(DefaultBodyLimit::max(HUB_MAX_REQUEST_BODY_BYTES))
+        .layer(RequestBodyLimitLayer::new(HUB_MAX_REQUEST_BODY_BYTES))
         .with_state(state)
 }
 

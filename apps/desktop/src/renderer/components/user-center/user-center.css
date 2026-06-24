@@ -534,6 +534,33 @@
   cursor: not-allowed;
 }
 
+.tm-user-center-text-btn--primary {
+  color: var(--tm-auth-primary);
+}
+
+.tm-user-center-text-btn--primary:hover:not(:disabled) {
+  color: var(--tm-auth-primary);
+  background: color-mix(in srgb, var(--tm-auth-primary) 8%, transparent);
+}
+
+.tm-user-center-text-btn--danger {
+  color: #dc2626;
+}
+
+.tm-user-center-text-btn--danger:hover:not(:disabled) {
+  color: #b91c1c;
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+}
+
+html.theme-dark .tm-user-center-text-btn--danger {
+  color: #f87171;
+}
+
+html.theme-dark .tm-user-center-text-btn--danger:hover:not(:disabled) {
+  color: #fca5a5;
+  background: color-mix(in srgb, #f87171 12%, transparent);
+}
+
 /* Device accordion */
 .tm-user-center-device {
   border: 1px solid var(--tm-border-light);

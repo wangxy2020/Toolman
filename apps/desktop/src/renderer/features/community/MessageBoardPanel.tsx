@@ -14,6 +14,7 @@ import { CommunityListFileCard } from './CommunityListFileCard'
 import { CommunityListPanelShell } from './CommunityListPanelShell'
 import { CommunityMessagePublishModal } from './CommunityMessagePublishModal'
 import { copyCommunityShareText } from './community-share-utils'
+import { canDeleteCommunityResource } from './community-user-utils'
 import { isUiMockCommunityId } from './community-ui-mock'
 import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
@@ -95,7 +96,7 @@ export function MessageBoardPanel() {
       >
         <ul className="tm-kb-file-list">
           {sortedItems.map((message) => {
-            const isOwner = user.profile?.id === message.author.id
+            const canDelete = canDeleteCommunityResource(message.author.id, user.profile)
             const commentTarget = buildBoardReplyTarget(message.id)
 
             return (
@@ -122,7 +123,7 @@ export function MessageBoardPanel() {
                       ? board.interactionAction
                       : null
                 }
-                onDelete={isOwner ? () => setMessageToDelete(message) : undefined}
+                onDelete={canDelete ? () => setMessageToDelete(message) : undefined}
                 onLike={() => void board.like(message.id)}
                 onDislike={() => void board.dislike(message.id)}
                 onFavorite={() => void board.favorite(message.id)}

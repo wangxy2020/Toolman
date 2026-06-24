@@ -21,6 +21,12 @@ export const FederatedResourceCatalogEntrySchema = z.object({
 })
 export type FederatedResourceCatalogEntry = z.infer<typeof FederatedResourceCatalogEntrySchema>
 
+export const FederationCatalogPageSchema = z.object({
+  items: z.array(FederatedResourceCatalogEntrySchema),
+  latestUpdatedAt: z.number().int().nonnegative().optional(),
+})
+export type FederationCatalogPage = z.infer<typeof FederationCatalogPageSchema>
+
 export const FederatedCatalogWireMessageSchema = z.object({
   v: z.literal(1),
   entry: FederatedResourceCatalogEntrySchema,

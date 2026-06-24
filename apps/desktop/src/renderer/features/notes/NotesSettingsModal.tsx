@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
 import { useSystemPaths } from '../chat/useSystemPaths'
 import {
-  NOTES_DEFAULT_EDIT_VIEW_OPTIONS,
-  NOTES_DEFAULT_VIEW_OPTIONS,
+  NOTES_OPEN_MODE_OPTIONS,
+  notesOpenModeFromSettings,
+  settingsPatchFromNotesOpenMode,
   type NotesEditorSettings,
+  type NotesOpenMode,
 } from './notes-editor-settings'
 import {
   getDefaultNotesWorkingDirectory,
@@ -240,52 +242,30 @@ export function NotesSettingsModal({
 
             {activeTab === 'editor' ? (
               <div className="tm-notes-settings-form">
-                <div className="tm-notes-settings-row">
-                  <label className="tm-notes-settings-label" htmlFor="notes-settings-default-view">
-                    默认视图
+                <div className="tm-notes-settings-row tm-notes-settings-row--inline">
+                  <label className="tm-notes-settings-label" htmlFor="notes-settings-open-mode">
+                    默认打开模式
                   </label>
                   <select
-                    id="notes-settings-default-view"
-                    className="tm-notes-settings-input"
-                    value={draftSettings.defaultView}
+                    id="notes-settings-open-mode"
+                    className="tm-notes-settings-input tm-notes-settings-input--compact"
+                    value={notesOpenModeFromSettings(draftSettings)}
                     onChange={(event) =>
-                      patchSettings({
-                        defaultView: event.target.value as NotesEditorSettings['defaultView'],
-                      })
+                      patchSettings(
+                        settingsPatchFromNotesOpenMode(event.target.value as NotesOpenMode),
+                      )
                     }
                   >
-                    {NOTES_DEFAULT_VIEW_OPTIONS.map((option) => (
+                    {NOTES_OPEN_MODE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
                 </div>
-                <p className="tm-notes-settings-hint">新笔记默认的视图模式</p>
-
-                <div className="tm-notes-settings-row">
-                  <label className="tm-notes-settings-label" htmlFor="notes-settings-default-edit-view">
-                    默认编辑视图
-                  </label>
-                  <select
-                    id="notes-settings-default-edit-view"
-                    className="tm-notes-settings-input"
-                    value={draftSettings.defaultEditView}
-                    disabled={draftSettings.defaultView === 'preview'}
-                    onChange={(event) =>
-                      patchSettings({
-                        defaultEditView: event.target.value as NotesEditorSettings['defaultEditView'],
-                      })
-                    }
-                  >
-                    {NOTES_DEFAULT_EDIT_VIEW_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="tm-notes-settings-hint">在编辑视图下，新笔记默认采用的编辑模式</p>
+                <p className="tm-notes-settings-hint">
+                  打开笔记时的默认视图：仅编辑、左右实时预览，或纯预览模式。
+                </p>
               </div>
             ) : null}
 

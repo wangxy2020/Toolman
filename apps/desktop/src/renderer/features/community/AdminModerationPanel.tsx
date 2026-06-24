@@ -13,15 +13,22 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { CommunityPanelHeader, CommunityPanelRefreshButton } from './CommunityPanelHeader'
 import { getCommunityHubHealth } from './community-api.client'
 import { formatCommunityDate } from './community-market-utils'
+import { formatBoardMessageTitle, formatNewsPreview } from './community-news-utils'
 import {
   ADMIN_SUB_TAB_LABELS,
   MODERATION_CATEGORY_LABELS,
+  MODERATION_REPORT_REASON_LABELS,
+  MODERATION_REPORT_RESOLVE_ACTION_LABELS,
+  MODERATION_TARGET_TYPE_LABELS,
   ONLINE_SUB_TAB_LABELS,
   RESOURCE_SUB_TAB_LABELS,
+  REVIEW_SUB_TAB_LABELS,
+  getDefaultReportResolveAction,
   type AdminSubTab,
   type ModerationSubTab,
   type OnlineSubTab,
   type ResourceSubTab,
+  type ReviewSubTab,
 } from './community-moderation-utils'
 import {
   isCommunityFounder,
@@ -32,6 +39,7 @@ import { useCommunityModerationCategory } from './community-moderation-category-
 import { useCommunityAdminManagement } from './useCommunityAdminManagement'
 import { useCommunityModeration } from './useCommunityModeration'
 import { useCommunityUser } from './useCommunityUser'
+import { ModerationReviewQueue } from './ModerationReviewQueue'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 
 type PendingAction =
@@ -39,6 +47,7 @@ type PendingAction =
       kind: 'suspend-resource'
       resourceId: string
       title: string
+      reviewReject?: boolean
     }
   | {
       kind: 'ban-user'
@@ -66,6 +75,7 @@ type PendingAction =
       kind: 'cancel-task'
       taskId: string
       title: string
+      reviewReject?: boolean
     }
   | {
       kind: 'approve-resource'
@@ -114,6 +124,10 @@ type BlacklistEntry =
       deviceRecordId: string
     }
 
+function isReviewSubTab(subTab: ModerationSubTab): subTab is ReviewSubTab {
+  return subTab in REVIEW_SUB_TAB_LABELS
+}
+
 function isResourceSubTab(subTab: ModerationSubTab): subTab is ResourceSubTab {
   return subTab in RESOURCE_SUB_TAB_LABELS
 }
@@ -142,9 +156,9 @@ export function AdminModerationPanel() {
     canViewList: isModerator,
     canManage: isFounder,
   })
-  const { category, subTab, setSubTab, handleCategoryChange, setPendingReviewCount } =
-    useCommunityModerationCategory()
+  const { category, subTab, setSubTab, setPendingReviewCount } = useCommunityModerationCategory()
   const [hubHealth, setHubHealth] = useState<CommunityHubHealthOutput | null>(null)
+  const [hubHealthError, setHubHealthError] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [adminSearch, setAdminSearch] = useState('')
   const [deviceSearch, setDeviceSearch] = useState('')
@@ -153,8 +167,10 @@ export function AdminModerationPanel() {
     try {
       const health = await getCommunityHubHealth()
       setHubHealth(health)
-    } catch {
+      setHubHealthError(null)
+    } catch (error) {
       setHubHealth(null)
+      setHubHealthError(error instanceof Error ? error.message : 'Hub 健康检查失败')
     }
   }, [])
 
@@ -175,13 +191,8 @@ export function AdminModerationPanel() {
   const scan = moderation.scan
 
   useEffect(() => {
-    const count =
-      (scan?.pendingReviewCount ?? 0) + (scan?.pendingReviewTasks?.length ?? 0)
-    setPendingReviewCount(count)
-    if (count > 0 && category === 'resources') {
-      handleCategoryChange('review')
-    }
-  }, [category, handleCategoryChange, scan, setPendingReviewCount])
+    setPendingReviewCount(scan?.pendingReviewCount ?? 0)
+  }, [scan, setPendingReviewCount])
 
   const blacklistCount = useMemo(() => {
     if (!scan) return 0
@@ -246,6 +257,7 @@ export function AdminModerationPanel() {
     switch (category) {
       case 'resources':
         return [
+          { key: 'messages' as const, label: RESOURCE_SUB_TAB_LABELS.messages, count: scan?.boardMessageCount ?? 0 },
           { key: 'knowledge' as const, label: RESOURCE_SUB_TAB_LABELS.knowledge, count: scan?.onlineKnowledgeCount ?? 0 },
           { key: 'mcp' as const, label: RESOURCE_SUB_TAB_LABELS.mcp, count: scan?.onlineMcpCount ?? 0 },
           { key: 'skill' as const, label: RESOURCE_SUB_TAB_LABELS.skill, count: scan?.onlineSkillCount ?? 0 },
@@ -253,7 +265,10 @@ export function AdminModerationPanel() {
           { key: 'tasks' as const, label: RESOURCE_SUB_TAB_LABELS.tasks, count: scan?.activeTaskCount ?? 0 },
         ]
       case 'review':
-        return [{ key: 'pending' as const, label: '待审核', count: scan?.pendingReviewCount ?? 0 }]
+        return [
+          { key: 'pending' as const, label: REVIEW_SUB_TAB_LABELS.pending, count: scan?.pendingReviewCount ?? 0 },
+          { key: 'reports' as const, label: REVIEW_SUB_TAB_LABELS.reports, count: scan?.openReportCount ?? 0 },
+        ]
       case 'online':
         return [
           { key: 'desktop' as const, label: ONLINE_SUB_TAB_LABELS.desktop, count: scan?.onlineDesktopDeviceCount ?? 0 },
@@ -292,9 +307,15 @@ export function AdminModerationPanel() {
   const activeListCount = useMemo(() => {
     if (category === 'resources' && isResourceSubTab(subTab)) {
       if (subTab === 'tasks') return scan?.activeTasks.length ?? 0
+      if (subTab === 'messages') return scan?.recentMessages.length ?? 0
       return filterResourcesByType(scan?.onlineResources ?? [], subTab).length
     }
-    if (category === 'review' && subTab === 'pending') return scan?.pendingReview.length ?? 0
+    if (category === 'review' && isReviewSubTab(subTab)) {
+      if (subTab === 'pending') {
+        return (scan?.pendingReview.length ?? 0) + (scan?.pendingReviewTasks.length ?? 0)
+      }
+      return scan?.openReports.length ?? 0
+    }
     if (category === 'online' && isOnlineSubTab(subTab)) return filteredDevicesByKind.length
     if (category === 'admin' && isAdminSubTab(subTab)) {
       if (subTab === 'registeredUsers') return hubHealth?.userCount ?? 0
@@ -326,11 +347,14 @@ export function AdminModerationPanel() {
   }, [scan])
 
   const errorMessages = useMemo(() => {
-    const messages = [moderation.error, moderation.scanError, adminManagement.error].filter(
-      (message): message is string => Boolean(message),
-    )
+    const messages = [
+      moderation.error,
+      moderation.scanError,
+      adminManagement.error,
+      hubHealthError,
+    ].filter((message): message is string => Boolean(message))
     return [...new Set(messages)]
-  }, [adminManagement.error, moderation.error, moderation.scanError])
+  }, [adminManagement.error, hubHealthError, moderation.error, moderation.scanError])
 
   useRegisterModulePanelError('community-moderation', errorMessages[0] ?? null)
   useRegisterModulePanelStatus(
@@ -362,7 +386,7 @@ export function AdminModerationPanel() {
     try {
       switch (pending.kind) {
         case 'suspend-resource':
-          await moderation.suspendResource(pending.resourceId, '管理员下架违规资源')
+          await moderation.suspendResource(pending.resourceId, '管理员审核拒绝')
           break
         case 'ban-user':
           await moderation.banUser(pending.userId, '管理员封禁恶意用户', 168)
@@ -383,7 +407,11 @@ export function AdminModerationPanel() {
           await moderation.deleteMessage(pending.messageId)
           break
         case 'cancel-task':
-          await moderation.cancelTask(pending.taskId)
+          if (pending.reviewReject) {
+            await moderation.rejectTask(pending.taskId, '管理员审核拒绝')
+          } else {
+            await moderation.cancelTask(pending.taskId)
+          }
           break
         case 'approve-resource':
           await moderation.approveResource(pending.resourceId, '管理员审核通过')
@@ -475,7 +503,57 @@ export function AdminModerationPanel() {
         </div>
 
         <div className="tm-user-center-feed-body">
-        {category === 'resources' && isResourceSubTab(subTab) && subTab !== 'tasks' ? (
+        {category === 'resources' && subTab === 'messages' ? (
+          <ModerationList
+            empty="暂无留言"
+            items={scan?.recentMessages ?? []}
+            renderItem={(message) => (
+              <div key={message.id} className="tm-community-moderation-row">
+                <div className="tm-community-moderation-row-main">
+                  <div className="tm-community-moderation-row-title">
+                    {formatBoardMessageTitle(message.body)}
+                  </div>
+                  <div className="tm-community-moderation-row-meta">
+                    {message.authorName} · {formatCommunityDate(message.createdAt)}
+                  </div>
+                  <div className="tm-community-moderation-row-desc">{formatNewsPreview(message.body)}</div>
+                </div>
+                <div className="tm-community-moderation-row-actions">
+                  <button
+                    type="button"
+                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                    disabled={moderation.acting}
+                    onClick={() =>
+                      setPending({
+                        kind: 'delete-message',
+                        messageId: message.id,
+                        preview: formatBoardMessageTitle(message.body),
+                      })
+                    }
+                  >
+                    删除
+                  </button>
+                  <button
+                    type="button"
+                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                    disabled={moderation.acting}
+                    onClick={() =>
+                      setPending({
+                        kind: 'ban-user',
+                        userId: message.userId,
+                        label: message.authorName,
+                      })
+                    }
+                  >
+                    封禁发布者
+                  </button>
+                </div>
+              </div>
+            )}
+          />
+        ) : null}
+
+        {category === 'resources' && isResourceSubTab(subTab) && subTab !== 'tasks' && subTab !== 'messages' ? (
           <ModerationList
             empty={`暂无在线${RESOURCE_SUB_TAB_LABELS[subTab]}`}
             items={filterResourcesByType(scan?.onlineResources ?? [], subTab)}
@@ -524,103 +602,97 @@ export function AdminModerationPanel() {
         ) : null}
 
         {category === 'review' && subTab === 'pending' ? (
-          <>
-            <ModerationList
-              empty={
-                <>
-                  <div>暂无待审核资源</div>
-                  <p className="tm-community-moderation-empty-hint">
-                    仅状态为「待审核」的资源会出现在此列表。若发布者在「我的」中看到「草稿（未提交审核）」，需点击「提交审核」并完成资源包上传后才会进入审核队列。
-                  </p>
-                </>
-              }
-              items={scan?.pendingReview ?? []}
-              renderItem={(resource) => (
-                <div key={resource.id} className="tm-community-moderation-row">
+          <ModerationReviewQueue
+            resources={scan?.pendingReview ?? []}
+            tasks={scan?.pendingReviewTasks ?? []}
+            acting={moderation.acting}
+            onApproveResource={(resource) =>
+              setPending({
+                kind: 'approve-resource',
+                resourceId: resource.id,
+                title: resource.title,
+              })
+            }
+            onRejectResource={(resource) =>
+              setPending({
+                kind: 'suspend-resource',
+                resourceId: resource.id,
+                title: resource.title,
+                reviewReject: true,
+              })
+            }
+            onApproveTask={(task) =>
+              setPending({
+                kind: 'approve-task',
+                taskId: task.id,
+                title: task.title,
+              })
+            }
+            onRejectTask={(task) =>
+              setPending({
+                kind: 'cancel-task',
+                taskId: task.id,
+                title: task.title,
+                reviewReject: true,
+              })
+            }
+          />
+        ) : null}
+
+        {category === 'review' && subTab === 'reports' ? (
+          <ModerationList
+            empty="暂无待处理举报"
+            items={scan?.openReports ?? []}
+            renderItem={(report) => {
+              const defaultAction = getDefaultReportResolveAction(report.targetType)
+              return (
+                <div key={report.id} className="tm-community-moderation-row">
                   <div className="tm-community-moderation-row-main">
-                    <div className="tm-community-moderation-row-title">{resource.title}</div>
-                    <div className="tm-community-moderation-row-meta">
-                      {resource.resourceType} · {resource.authorName}
+                    <div className="tm-community-moderation-row-title">
+                      {MODERATION_TARGET_TYPE_LABELS[report.targetType]} ·{' '}
+                      {MODERATION_REPORT_REASON_LABELS[report.reason]}
                     </div>
+                    <div className="tm-community-moderation-row-meta">
+                      目标 ID {report.targetId} · {formatCommunityDate(report.createdAt)}
+                    </div>
+                    {report.description.trim() ? (
+                      <div className="tm-community-moderation-row-meta">{report.description}</div>
+                    ) : null}
                   </div>
                   <div className="tm-community-moderation-row-actions">
-                    <button
-                      type="button"
-                      className="tm-btn tm-btn--primary"
-                      disabled={moderation.acting}
-                      onClick={() =>
-                        setPending({
-                          kind: 'approve-resource',
-                          resourceId: resource.id,
-                          title: resource.title,
-                        })
-                      }
-                    >
-                      通过
-                    </button>
                     <button
                       type="button"
                       className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
                       disabled={moderation.acting}
                       onClick={() =>
                         setPending({
-                          kind: 'suspend-resource',
-                          resourceId: resource.id,
-                          title: resource.title,
+                          kind: 'resolve-report',
+                          report,
+                          action: defaultAction,
                         })
                       }
                     >
-                      拒绝
-                    </button>
-                  </div>
-                </div>
-              )}
-            />
-            <ModerationList
-              empty=""
-              items={scan?.pendingReviewTasks ?? []}
-              renderItem={(task) => (
-                <div key={task.id} className="tm-community-moderation-row">
-                  <div className="tm-community-moderation-row-main">
-                    <div className="tm-community-moderation-row-title">{task.title}</div>
-                    <div className="tm-community-moderation-row-meta">
-                      任务 · {task.publisherName}
-                    </div>
-                  </div>
-                  <div className="tm-community-moderation-row-actions">
-                    <button
-                      type="button"
-                      className="tm-btn tm-btn--primary"
-                      disabled={moderation.acting}
-                      onClick={() =>
-                        setPending({
-                          kind: 'approve-task',
-                          taskId: task.id,
-                          title: task.title,
-                        })
-                      }
-                    >
-                      通过
+                      {MODERATION_REPORT_RESOLVE_ACTION_LABELS[defaultAction]}
                     </button>
                     <button
                       type="button"
-                      className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                      className="tm-btn tm-btn--ghost"
                       disabled={moderation.acting}
                       onClick={() =>
                         setPending({
-                          kind: 'cancel-task',
-                          taskId: task.id,
-                          title: task.title,
+                          kind: 'resolve-report',
+                          report,
+                          action: 'dismiss_report',
                         })
                       }
                     >
-                      拒绝
+                      驳回
                     </button>
                   </div>
                 </div>
-              )}
-            />
-          </>
+              )
+            }}
+          />
         ) : null}
 
         {category === 'resources' && subTab === 'tasks' ? (
@@ -781,7 +853,9 @@ export function AdminModerationPanel() {
 
         {category === 'admin' && subTab === 'registeredUsers' ? (
           <div className="tm-user-center-empty">
-            社区共有 {hubHealth?.userCount ?? '—'} 位注册用户
+            {hubHealthError
+              ? `无法加载注册用户统计：${hubHealthError}`
+              : `社区共有 ${hubHealth?.userCount ?? '—'} 位注册用户`}
           </div>
         ) : null}
 
@@ -942,9 +1016,13 @@ function buildConfirmDialog(
     case 'suspend-resource':
       return (
         <ConfirmDialog
-          title="下架资源"
-          message={`确定下架「${pending.title}」吗？资源将从市场移除。`}
-          confirmLabel="下架"
+          title={pending.reviewReject ? '拒绝审核' : '下架资源'}
+          message={
+            pending.reviewReject
+              ? `确定拒绝「${pending.title}」的审核申请吗？发布者可在「我的」中修改后重新提交。`
+              : `确定下架「${pending.title}」吗？资源将从市场移除。`
+          }
+          confirmLabel={pending.reviewReject ? '拒绝' : '下架'}
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -976,7 +1054,7 @@ function buildConfirmDialog(
       return (
         <ConfirmDialog
           title="处理举报"
-          message={`确定按「${pending.action}」处理该举报吗？`}
+          message={`确定按「${MODERATION_REPORT_RESOLVE_ACTION_LABELS[pending.action]}」处理该举报吗？`}
           confirmLabel="确认"
           danger={pending.action !== 'dismiss_report'}
           onCancel={onCancel}
@@ -997,9 +1075,13 @@ function buildConfirmDialog(
     case 'cancel-task':
       return (
         <ConfirmDialog
-          title="取消任务"
-          message={`确定取消任务「${pending.title}」吗？`}
-          confirmLabel="取消任务"
+          title={pending.reviewReject ? '拒绝审核' : '取消任务'}
+          message={
+            pending.reviewReject
+              ? `确定拒绝任务「${pending.title}」的审核申请吗？发布者可在「我的」中修改后重新提交。`
+              : `确定取消任务「${pending.title}」吗？`
+          }
+          confirmLabel={pending.reviewReject ? '拒绝' : '取消任务'}
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}

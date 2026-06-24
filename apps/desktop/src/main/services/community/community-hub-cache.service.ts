@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 function cacheDir(): string {
@@ -44,5 +44,21 @@ export function hasAnyCommunityHubCache(): boolean {
     return readdirSync(dir).some((name) => name.endsWith('.json'))
   } catch {
     return false
+  }
+}
+
+/** Drop cached hub list responses after writes so author/moderation views stay fresh. */
+export function invalidateCommunityHubCache(prefix = ''): void {
+  try {
+    const dir = cacheDir()
+    const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]+/g, '_')
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.json')) continue
+      const key = name.slice(0, -'.json'.length)
+      if (safePrefix && !key.startsWith(safePrefix)) continue
+      unlinkSync(join(dir, name))
+    }
+  } catch {
+    // cache failures must not break hub requests
   }
 }

@@ -96,6 +96,7 @@ import {
   CommunityTaskDeliverySchema,
   CommunityTaskGetInputSchema,
   CommunityTaskIdInputSchema,
+  CommunityTaskDeleteOutputSchema,
   CommunityTaskItemSchema,
   CommunityTaskListInputSchema,
   CommunityTaskListOutputSchema,
@@ -145,7 +146,11 @@ import {
   isCommunityFetchNetworkError,
   type CommunityHttpClient,
 } from './community-http.client'
-import { readCommunityHubCache, writeCommunityHubCache } from './community-hub-cache.service'
+import {
+  invalidateCommunityHubCache,
+  readCommunityHubCache,
+  writeCommunityHubCache,
+} from './community-hub-cache.service'
 
 export class CommunityHubUnavailableError extends Error {
   constructor() {
@@ -270,17 +275,18 @@ export async function getHubStatus() {
 }
 
 export async function getHubHealth() {
-  const client = requireClient()
-  const data = await client.health()
-  return CommunityHubHealthOutputSchema.parse({
-    status: data.status,
-    version: data.version,
-    db: data.db,
-    dataDir: data.data_dir,
-    requireReview: data.require_review,
-    userCount: data.user_count,
-    resourceCount: data.resource_count,
-    federationPeering: data.federation_peering,
+  return withRefreshedHubClient(async (client) => {
+    const data = await client.health()
+    return CommunityHubHealthOutputSchema.parse({
+      status: data.status,
+      version: data.version,
+      db: data.db,
+      dataDir: data.data_dir,
+      requireReview: data.require_review,
+      userCount: data.user_count,
+      resourceCount: data.resource_count,
+      federationPeering: data.federation_peering,
+    })
   })
 }
 
@@ -369,15 +375,17 @@ export async function listResources(input: unknown) {
 
 export async function getResource(input: unknown) {
   const parsed = CommunityResourceGetInputSchema.parse(input)
-  const client = requireClient()
-  const data = await client.get<unknown>(`/api/v1/marketplace/resources/${parsed.id}`)
-  return CommunityResourceDetailSchema.parse(fromApiJson(data))
+  return withRefreshedHubClient(async (client) => {
+    const data = await client.get<unknown>(`/api/v1/marketplace/resources/${parsed.id}`)
+    return CommunityResourceDetailSchema.parse(fromApiJson(data))
+  })
 }
 
 export async function createResource(input: unknown) {
   const parsed = CommunityResourceCreateInputSchema.parse(input)
   const client = requireClient()
   const data = await client.post<unknown>('/api/v1/marketplace/resources', toApiJson(parsed))
+  invalidateCommunityHubCache('marketplace-resources')
   return CommunityResourceItemSchema.parse(fromApiJson(data))
 }
 
@@ -401,10 +409,40 @@ export async function publishResource(input: unknown) {
       throw new CommunityHttpError('无法识别资源类型', 400, 'VALIDATION_ERROR')
     }
     const segment = marketplacePublishSegment(resourceType)
-    const packageBytes = await readFile(parsed.packagePath)
+    let packagePath = parsed.packagePath
+    const prepareTitle = parsed.originalFilename
+    if (resourceType === 'mcp') {
+      const { prepareCommunityMcpPackage: preparePackage } = await import(
+        './community-mcp-package-import.service'
+      )
+      const prepared = await preparePackage({
+        packagePath: parsed.packagePath,
+        title: prepareTitle,
+      })
+      packagePath = prepared.packagePath
+    } else if (resourceType === 'skill') {
+      const { prepareCommunitySkillPackage: preparePackage } = await import(
+        './community-skill-package-import.service'
+      )
+      const prepared = await preparePackage({
+        packagePath: parsed.packagePath,
+        title: prepareTitle,
+      })
+      packagePath = prepared.packagePath
+    } else if (resourceType === 'workflow') {
+      const { prepareCommunityWorkflowPackage: preparePackage } = await import(
+        './community-workflow-package-import.service'
+      )
+      const prepared = await preparePackage({
+        packagePath: parsed.packagePath,
+        title: prepareTitle,
+      })
+      packagePath = prepared.packagePath
+    }
+    const packageBytes = await readFile(packagePath)
     const uploadName =
       parsed.originalFilename ??
-      resolveCommunityPackageFilename(resourceType, parsed.packagePath)
+      resolveCommunityPackageFilename(resourceType, packagePath)
     const data = await client.postMultipart<unknown>(
       `/api/v1/marketplace/${segment}/${parsed.id}/publish`,
       [
@@ -433,6 +471,7 @@ export async function publishResource(input: unknown) {
       await republishCommunityCidAnnouncements()
     }
 
+    invalidateCommunityHubCache('marketplace-resources')
     return item
   })
 }
@@ -450,8 +489,10 @@ export async function patchResource(input: unknown) {
 
 export async function deleteResource(input: unknown) {
   const parsed = CommunityResourceDeleteInputSchema.parse(input)
-  const client = requireClient()
-  await client.delete<unknown>(`/api/v1/marketplace/resources/${parsed.id}`)
+  await withRefreshedHubClient((client) =>
+    client.delete<unknown>(`/api/v1/marketplace/resources/${parsed.id}`),
+  )
+  invalidateCommunityHubCache('marketplace-resources')
   return CommunityResourceDeleteOutputSchema.parse({ deleted: true })
 }
 
@@ -836,6 +877,14 @@ export async function cancelTask(input: unknown) {
   return parseTaskItem(data)
 }
 
+export async function deleteTask(input: unknown) {
+  const parsed = CommunityTaskIdInputSchema.parse(input)
+  await withRefreshedHubClient((client) =>
+    client.delete<unknown>(`/api/v1/tasks/${parsed.id}`),
+  )
+  return CommunityTaskDeleteOutputSchema.parse({ deleted: true })
+}
+
 export async function applyTask(input: unknown) {
   const parsed = CommunityTaskApplyInputSchema.parse(input)
   const client = requireClient()
@@ -941,61 +990,84 @@ export async function updateOrderStatus(input: unknown) {
 
 export async function createModerationReport(input: unknown) {
   const parsed = CommunityModerationReportCreateInputSchema.parse(input)
-  const client = requireClient()
-  const data = await client.post<unknown>('/api/v1/moderation/reports', toApiJson(parsed))
-  return CommunityModerationReportSchema.parse(fromApiJson(data))
+  return withRefreshedHubClient(async (client) => {
+    const data = await client.post<unknown>('/api/v1/moderation/reports', toApiJson(parsed))
+    return CommunityModerationReportSchema.parse(fromApiJson(data))
+  })
 }
 
 export async function listModerationReports(input: unknown) {
   const parsed = CommunityModerationReportListInputSchema.parse(input ?? {})
-  const client = requireClient()
-  const query = buildApiQuery({
-    status: parsed.status,
-    limit: parsed.limit,
-    offset: parsed.offset,
+  return withRefreshedHubClient(async (client) => {
+    const query = buildApiQuery({
+      status: parsed.status,
+      limit: parsed.limit,
+      offset: parsed.offset,
+    })
+    const data = await client.get<unknown[]>(`/api/v1/moderation/reports${query}`)
+    return CommunityModerationReportListOutputSchema.parse({ items: asItems(data) })
   })
-  const data = await client.get<unknown[]>(`/api/v1/moderation/reports${query}`)
-  return CommunityModerationReportListOutputSchema.parse({ items: asItems(data) })
 }
 
 export async function resolveModerationReport(input: unknown) {
   const parsed = CommunityModerationReportResolveInputSchema.parse(input)
-  const client = requireClient()
-  const data = await client.post<unknown>(
-    `/api/v1/moderation/reports/${parsed.reportId}/resolve`,
-    toApiJson({ action: parsed.action, note: parsed.note }),
-  )
-  return CommunityModerationReportSchema.parse(fromApiJson(data))
+  return withRefreshedHubClient(async (client) => {
+    const data = await client.post<unknown>(
+      `/api/v1/moderation/reports/${parsed.reportId}/resolve`,
+      toApiJson({ action: parsed.action, note: parsed.note }),
+    )
+    return CommunityModerationReportSchema.parse(fromApiJson(data))
+  })
 }
 
 export async function suspendModerationResource(input: unknown) {
   const parsed = CommunityModerationResourceActionInputSchema.parse(input)
-  const client = requireClient()
-  const data = await client.post<unknown>(
-    `/api/v1/moderation/resources/${parsed.resourceId}/suspend`,
-    toApiJson({ reason: parsed.reason }),
-  )
-  return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  const result = await withRefreshedHubClient(async (client) => {
+    const data = await client.post<unknown>(
+      `/api/v1/moderation/resources/${parsed.resourceId}/suspend`,
+      toApiJson({ reason: parsed.reason }),
+    )
+    return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  })
+  invalidateCommunityHubCache('marketplace-resources')
+  return result
 }
 
 export async function approveModerationResource(input: unknown) {
   const parsed = CommunityModerationResourceActionInputSchema.parse(input)
-  const client = requireClient()
-  const data = await client.post<unknown>(
-    `/api/v1/moderation/resources/${parsed.resourceId}/approve`,
-    toApiJson({ note: parsed.note }),
-  )
-  return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  const result = await withRefreshedHubClient(async (client) => {
+    const data = await client.post<unknown>(
+      `/api/v1/moderation/resources/${parsed.resourceId}/approve`,
+      toApiJson({ note: parsed.note }),
+    )
+    return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  })
+  invalidateCommunityHubCache('marketplace-resources')
+  return result
 }
 
 export async function approveModerationTask(input: unknown) {
   const parsed = CommunityModerationResourceActionInputSchema.parse(input)
-  const client = requireClient()
-  const data = await client.post<unknown>(
-    `/api/v1/moderation/tasks/${parsed.resourceId}/approve`,
-    toApiJson({ note: parsed.note }),
-  )
-  return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  return withRefreshedHubClient(async (client) => {
+    const data = await client.post<unknown>(
+      `/api/v1/moderation/tasks/${parsed.resourceId}/approve`,
+      toApiJson({ note: parsed.note }),
+    )
+    return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  })
+}
+
+export async function rejectModerationTask(input: unknown) {
+  const parsed = CommunityModerationResourceActionInputSchema.parse(input)
+  const result = await withRefreshedHubClient(async (client) => {
+    const data = await client.post<unknown>(
+      `/api/v1/moderation/tasks/${parsed.resourceId}/reject`,
+      toApiJson({ note: parsed.note }),
+    )
+    return CommunityModerationResourceActionOutputSchema.parse(fromApiJson(data))
+  })
+  invalidateCommunityHubCache('marketplace-resources')
+  return result
 }
 
 export async function exportCommunityKnowledgeBundle(input: unknown) {
@@ -1005,66 +1077,106 @@ export async function exportCommunityKnowledgeBundle(input: unknown) {
   return exportBundle(input)
 }
 
+export async function exportCommunityMcpPackage(input: unknown) {
+  const { exportCommunityMcpPackage: exportPackage } = await import(
+    './community-mcp-package-export.service'
+  )
+  return exportPackage(input)
+}
+
+export async function prepareCommunityMcpPackage(input: unknown) {
+  const { prepareCommunityMcpPackage: preparePackage } = await import(
+    './community-mcp-package-import.service'
+  )
+  return preparePackage(input)
+}
+
+export async function prepareCommunitySkillPackage(input: unknown) {
+  const { prepareCommunitySkillPackage: preparePackage } = await import(
+    './community-skill-package-import.service'
+  )
+  return preparePackage(input)
+}
+
+export async function prepareCommunityWorkflowPackage(input: unknown) {
+  const { prepareCommunityWorkflowPackage: preparePackage } = await import(
+    './community-workflow-package-import.service'
+  )
+  return preparePackage(input)
+}
+
 export async function banModerationUser(input: unknown) {
   const parsed = CommunityModerationUserBanInputSchema.parse(input)
-  const client = requireClient()
-  await client.post<unknown>(
-    `/api/v1/moderation/users/${parsed.userId}/ban`,
-    toApiJson({
-      durationHours: parsed.durationHours,
-      reason: parsed.reason,
-    }),
-  )
+  await withRefreshedHubClient(async (client) => {
+    await client.post<unknown>(
+      `/api/v1/moderation/users/${parsed.userId}/ban`,
+      toApiJson({
+        durationHours: parsed.durationHours,
+        reason: parsed.reason,
+      }),
+    )
+  })
   return { banned: true }
 }
 
 export async function unbanModerationUser(input: unknown) {
   const parsed = CommunityModerationUserUnbanInputSchema.parse(input)
-  const client = requireClient()
-  await client.post<unknown>(`/api/v1/moderation/users/${parsed.userId}/unban`, {})
+  await withRefreshedHubClient(async (client) => {
+    await client.post<unknown>(`/api/v1/moderation/users/${parsed.userId}/unban`, {})
+  })
   return { unbanned: true }
 }
 
 export async function banModerationDevice(input: unknown) {
   const parsed = CommunityModerationDeviceBanInputSchema.parse(input)
-  const client = requireClient()
-  await client.post<unknown>(
-    `/api/v1/moderation/devices/${encodeURIComponent(parsed.deviceId)}/ban`,
-    toApiJson({
-      userId: parsed.userId,
-      deviceName: parsed.deviceName,
-      durationHours: parsed.durationHours,
-      reason: parsed.reason,
-    }),
-  )
+  await withRefreshedHubClient(async (client) => {
+    await client.post<unknown>(
+      `/api/v1/moderation/devices/${encodeURIComponent(parsed.deviceId)}/ban`,
+      toApiJson({
+        userId: parsed.userId,
+        deviceName: parsed.deviceName,
+        durationHours: parsed.durationHours,
+        reason: parsed.reason,
+      }),
+    )
+  })
   return { banned: true }
 }
 
 export async function unbanModerationDevice(input: unknown) {
   const parsed = CommunityModerationDeviceUnbanInputSchema.parse(input)
-  const client = requireClient()
-  await client.post<unknown>(
-    `/api/v1/moderation/devices/${encodeURIComponent(parsed.deviceId)}/unban`,
-    {},
-  )
+  await withRefreshedHubClient(async (client) => {
+    await client.post<unknown>(
+      `/api/v1/moderation/devices/${encodeURIComponent(parsed.deviceId)}/unban`,
+      {},
+    )
+  })
   return { unbanned: true }
 }
 
 export async function listModerationLogs(input: unknown) {
   const parsed = CommunityModerationLogsListInputSchema.parse(input ?? {})
-  const client = requireClient()
-  const query = buildApiQuery({
-    limit: parsed.limit,
-    offset: parsed.offset,
+  return withRefreshedHubClient(async (client) => {
+    const query = buildApiQuery({
+      limit: parsed.limit,
+      offset: parsed.offset,
+    })
+    const data = await client.get<unknown[]>(`/api/v1/moderation/logs${query}`)
+    return CommunityModerationLogsListOutputSchema.parse({ items: asItems(data) })
   })
-  const data = await client.get<unknown[]>(`/api/v1/moderation/logs${query}`)
-  return CommunityModerationLogsListOutputSchema.parse({ items: asItems(data) })
 }
 
 export async function scanModerationOnline() {
-  const client = requireClient()
-  const data = await client.get<unknown>('/api/v1/moderation/scan')
-  return CommunityModerationScanOutputSchema.parse(fromApiJson(data))
+  return withRefreshedHubClient(async (client) => {
+    const data = await client.get<unknown>('/api/v1/moderation/scan')
+    return CommunityModerationScanOutputSchema.parse(fromApiJson(data))
+  })
+}
+
+export async function downloadModerationResourcePackage(resourceId: string): Promise<Buffer> {
+  return withRefreshedHubClient((client) =>
+    client.downloadBinary(`/api/v1/moderation/resources/${resourceId}/package`),
+  )
 }
 
 export async function touchCommunityPresenceHeartbeat() {

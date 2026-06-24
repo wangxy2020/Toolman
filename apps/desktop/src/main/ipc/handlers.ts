@@ -1908,6 +1908,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
 export function registerIpcHandlers(): void {
   for (const [channel, handler] of Object.entries(handlers) as [IpcChannel, HandlerFn][]) {
     const guardedHandler = wrapHandlerWithAuthGate(channel, handler)
+    ipcMain.removeHandler(channel)
     ipcMain.handle(channel, async (_event, input) => {
       try {
         return await guardedHandler(input)

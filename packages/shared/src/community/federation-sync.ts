@@ -1,13 +1,5 @@
 import { z } from 'zod'
 
-import { FederatedResourceCatalogEntrySchema } from './federated-catalog.js'
-
-export const FederationCatalogPageSchema = z.object({
-  items: z.array(FederatedResourceCatalogEntrySchema),
-  latestUpdatedAt: z.number().int().nonnegative().optional(),
-})
-export type FederationCatalogPage = z.infer<typeof FederationCatalogPageSchema>
-
 export const FederationPeeringInfoSchema = z.object({
   baseUrl: z.string().url(),
   version: z.string(),

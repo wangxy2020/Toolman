@@ -2917,9 +2917,23 @@ html.theme-dark .tm-kb-settings-textarea--mono {
 
 .tm-notes-settings-row {
   display: grid;
-  grid-template-columns: 90px 1fr;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+}
+
+.tm-notes-settings-row--inline {
+  grid-template-columns: auto minmax(120px, 1fr);
+}
+
+.tm-notes-settings-row--inline .tm-notes-settings-label {
+  white-space: nowrap;
+}
+
+.tm-notes-settings-input--compact {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tm-notes-settings-input {
@@ -17760,8 +17774,8 @@ html.theme-dark .tm-community-publish-interval-input {
 .tm-user-center-feed-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px 16px;
   border: 1px solid var(--tm-border);
   border-radius: 12px;
   background: var(--tm-bg);
@@ -17836,10 +17850,29 @@ html.theme-dark .tm-community-publish-interval-input {
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
-  padding-top: 4px;
+  min-width: 0;
   font-size: 12px;
   font-weight: 400;
   color: var(--tm-text-muted);
+}
+
+.tm-user-center-feed-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.tm-user-center-feed-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 0;
+  flex-shrink: 0;
+  max-width: 100%;
 }
 
 .tm-user-center-feed-stat {
@@ -17866,13 +17899,6 @@ html.theme-dark .tm-community-publish-interval-input {
   color: var(--tm-auth-primary);
 }
 
-.tm-user-center-feed-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
-}
-
 .tm-user-center-empty {
   padding: 32px 16px;
   border: 1px dashed var(--tm-border);
@@ -17890,6 +17916,150 @@ html.theme-dark .tm-community-publish-interval-input {
   line-height: 1.5;
   color: var(--tm-text-muted);
   text-align: left;
+}
+
+.tm-community-moderation-review-list {
+  gap: 12px;
+}
+
+.tm-community-moderation-review-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tm-text-muted);
+}
+
+.tm-community-card-action--review .tm-community-card-action-label {
+  font-size: 12px;
+}
+
+.tm-user-center-feed-stat--clickable {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tm-user-center-feed-stat--clickable:hover {
+  color: var(--tm-auth-primary);
+}
+
+.tm-community-moderation-review-item {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--tm-border);
+  border-radius: 12px;
+  background: var(--tm-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.tm-community-moderation-review-item:hover {
+  border-color: color-mix(in srgb, var(--tm-auth-primary) 40%, var(--tm-border));
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  background: color-mix(in srgb, var(--tm-hover) 35%, var(--tm-bg));
+}
+
+.tm-community-moderation-review-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 10px;
+}
+
+.tm-community-moderation-review-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--tm-hover);
+  color: var(--tm-text-secondary);
+}
+
+.tm-community-moderation-review-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.tm-community-moderation-review-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  margin-top: 0;
+}
+
+.tm-community-moderation-review-actions .tm-community-moderation-review-decisions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tm-community-moderation-review-actions .tm-community-moderation-review-decisions .tm-btn {
+  min-height: 28px;
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.tm-community-moderation-review-error {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: 12px;
+  color: var(--tm-danger, #dc2626);
+}
+
+.tm-community-task-review-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tm-community-task-review-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tm-community-task-review-detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tm-community-task-review-detail-label {
+  flex-shrink: 0;
+  min-width: 64px;
+  color: var(--tm-text-muted);
+  font-size: 13px;
+}
+
+.tm-community-task-review-detail-value {
+  color: var(--tm-text);
+  min-width: 0;
+}
+
+.tm-community-task-review-description {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--tm-text-secondary);
+  font-size: 13px;
 }
 
 html.theme-dark .tm-user-center-feed-card {

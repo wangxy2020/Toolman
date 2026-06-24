@@ -44,6 +44,7 @@ pub enum TaskStatus {
     InProgress,
     Delivered,
     Completed,
+    Rejected,
     Cancelled,
     Disputed,
 }
@@ -58,6 +59,7 @@ impl TaskStatus {
             Self::InProgress => "in_progress",
             Self::Delivered => "delivered",
             Self::Completed => "completed",
+            Self::Rejected => "rejected",
             Self::Cancelled => "cancelled",
             Self::Disputed => "disputed",
         }
@@ -72,6 +74,7 @@ impl TaskStatus {
             "in_progress" => Ok(Self::InProgress),
             "delivered" => Ok(Self::Delivered),
             "completed" => Ok(Self::Completed),
+            "rejected" => Ok(Self::Rejected),
             "cancelled" => Ok(Self::Cancelled),
             "disputed" => Ok(Self::Disputed),
             other => Err(TaskError::InvalidStatus(other.to_string())),
@@ -86,7 +89,14 @@ impl TaskStatus {
                 | (Draft, PendingReview)
                 | (Draft, Cancelled)
                 | (PendingReview, Open)
+                | (PendingReview, Draft)
+                | (PendingReview, Rejected)
                 | (PendingReview, Cancelled)
+                | (Rejected, PendingReview)
+                | (Rejected, Open)
+                | (Rejected, Cancelled)
+                | (Cancelled, PendingReview)
+                | (Cancelled, Open)
                 | (Open, Cancelled)
                 | (Open, Assigned)
                 | (Assigned, InProgress)

@@ -33,7 +33,7 @@ export function getAppUpdateConfig(): AppUpdateConfig {
   const autoUpdaterFeedUrl = feedBaseUrl
     ? buildAutoUpdaterFeedUrl(feedBaseUrl, channel, platform, process.arch)
     : ''
-  const enabled = app.isPackaged && feedBaseUrl.length > 0
+  const enabled = Boolean(app?.isPackaged) && feedBaseUrl.length > 0
 
   return {
     channel,

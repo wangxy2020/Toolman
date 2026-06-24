@@ -1,3 +1,8 @@
+import { randomBytes } from 'node:crypto'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { URL } from 'node:url'
+
 import {
   COMMUNITY_HUB_HEADER,
   COMMUNITY_HUB_IDENTITY_ID,
@@ -43,17 +48,22 @@ export function isCommunityFetchNetworkError(error: unknown): boolean {
   const message = error.message.toLowerCase()
   const cause = (error as Error & { cause?: { code?: string } }).cause
   const causeCode = cause?.code?.toLowerCase() ?? ''
+  const nodeCode = (error as NodeJS.ErrnoException).code?.toLowerCase() ?? ''
   return (
-    error.name === 'TypeError' &&
-    (message.includes('fetch failed') ||
-      message.includes('econnrefused') ||
-      message.includes('enotfound') ||
-      message.includes('etimedout') ||
-      message.includes('econnreset') ||
-      causeCode.includes('econnrefused') ||
-      causeCode.includes('enotfound') ||
-      causeCode.includes('etimedout') ||
-      causeCode.includes('econnreset'))
+    nodeCode === 'econnreset' ||
+    nodeCode === 'epipe' ||
+    nodeCode === 'etimedout' ||
+    nodeCode === 'econnrefused' ||
+    (error.name === 'TypeError' &&
+      (message.includes('fetch failed') ||
+        message.includes('econnrefused') ||
+        message.includes('enotfound') ||
+        message.includes('etimedout') ||
+        message.includes('econnreset') ||
+        causeCode.includes('econnrefused') ||
+        causeCode.includes('enotfound') ||
+        causeCode.includes('etimedout') ||
+        causeCode.includes('econnreset')))
   )
 }
 
@@ -110,6 +120,45 @@ export class CommunityHttpClient {
     return this.request<T>(path, { method: 'GET', authenticated: options?.authenticated })
   }
 
+  async downloadBinary(path: string, options?: { authenticated?: boolean }): Promise<Buffer> {
+    const url = this.resolveUrl(path)
+    const headers = new Headers()
+    if (options?.authenticated !== false) {
+      await this.applyAuthHeaders(headers)
+    }
+
+    const response = await this.fetchImpl(url, { method: 'GET', headers }).catch(
+      (error: unknown) => {
+        if (isCommunityFetchNetworkError(error)) {
+          throw new CommunityHttpError(
+            humanizeCommunityFetchError(error),
+            0,
+            'HUB_CONNECTION_FAILED',
+          )
+        }
+        throw error
+      },
+    )
+
+    if (!response.ok) {
+      const text = await response.text()
+      let message = `Community API request failed: ${response.status}`
+      try {
+        const payload = JSON.parse(text) as CommunityApiResponse<unknown>
+        if (payload.error?.message) {
+          message = payload.error.message
+        }
+      } catch {
+        if (text.trim()) {
+          message = text.trim()
+        }
+      }
+      throw new CommunityHttpError(message, response.status, 'DOWNLOAD_FAILED')
+    }
+
+    return Buffer.from(await response.arrayBuffer())
+  }
+
   async post<T>(
     path: string,
     body?: unknown,
@@ -143,20 +192,29 @@ export class CommunityHttpClient {
     fields: Array<{ name: string; value: string | Buffer; filename?: string }>,
     options?: { authenticated?: boolean },
   ): Promise<T> {
-    const form = new FormData()
-    for (const field of fields) {
-      if (typeof field.value === 'string') {
-        form.append(field.name, field.value)
-      } else {
-        form.append(field.name, new Blob([new Uint8Array(field.value)]), field.filename ?? 'upload.bin')
-      }
+    const { body, contentType } = buildMultipartBody(fields)
+    const url = this.resolveUrl(path)
+
+    const headers = new Headers({
+      Accept: 'application/json',
+      'Content-Type': contentType,
+      'Content-Length': String(body.length),
+    })
+    if (options?.authenticated !== false) {
+      await this.applyAuthHeaders(headers)
     }
 
-    return this.request<T>(path, {
-      method: 'POST',
-      body: form,
-      authenticated: options?.authenticated,
+    const { status, text } = await postBuffer(url, headers, body).catch((error: unknown) => {
+      if (isCommunityFetchNetworkError(error)) {
+        throw new CommunityHttpError(
+          humanizeCommunityFetchError(error),
+          0,
+          'HUB_CONNECTION_FAILED',
+        )
+      }
+      throw error
     })
+    return parseCommunityApiResponse<T>(text, status)
   }
 
   private resolveUrl(path: string): string {
@@ -171,7 +229,8 @@ export class CommunityHttpClient {
     path: string,
     init: {
       method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
-      body?: string | FormData
+      body?: string | Buffer | FormData
+      contentType?: string
       authenticated?: boolean
     } = { method: 'GET' },
   ): Promise<T> {
@@ -201,7 +260,8 @@ export class CommunityHttpClient {
     path: string,
     init: {
       method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
-      body?: string | FormData
+      body?: string | Buffer | FormData
+      contentType?: string
       authenticated?: boolean
     } = { method: 'GET' },
   ): Promise<T> {
@@ -210,7 +270,12 @@ export class CommunityHttpClient {
     const headers = new Headers({
       Accept: 'application/json',
     })
-    if (init.body !== undefined && !(init.body instanceof FormData)) {
+    if (init.contentType) {
+      headers.set('Content-Type', init.contentType)
+      if (init.body instanceof Buffer) {
+        headers.set('Content-Length', String(init.body.length))
+      }
+    } else if (init.body !== undefined && !(init.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json')
     }
     if (init.authenticated !== false) {
@@ -220,7 +285,7 @@ export class CommunityHttpClient {
     const response = await this.fetchImpl(url, {
       method: init.method,
       headers,
-      body: init.body,
+      body: init.body instanceof Buffer ? new Uint8Array(init.body) : init.body,
     }).catch((error: unknown) => {
       if (isCommunityFetchNetworkError(error)) {
         throw new CommunityHttpError(
@@ -233,39 +298,7 @@ export class CommunityHttpClient {
     })
 
     const text = await response.text()
-    let payload: CommunityApiResponse<T>
-    if (text) {
-      try {
-        payload = JSON.parse(text) as CommunityApiResponse<T>
-      } catch {
-        throw new CommunityHttpError(
-          `Community API returned invalid JSON (${response.status})`,
-          response.status,
-          'INVALID_JSON',
-        )
-      }
-    } else if (!response.ok) {
-      const hint =
-        response.status === 404
-          ? '接口不存在，请重新构建并重启 Community Hub（pnpm build:community-hub 后重启应用）'
-          : `Community API request failed (${response.status})`
-      throw new CommunityHttpError(hint, response.status, 'EMPTY_RESPONSE')
-    } else {
-      payload = {
-        ok: false,
-        data: null as T,
-        error: { code: 'EMPTY_RESPONSE', message: 'Empty response body' },
-      }
-    }
-    if (!response.ok || !payload.ok) {
-      throw new CommunityHttpError(
-        payload.error?.message ?? `Community API request failed: ${response.status}`,
-        response.status,
-        payload.error?.code,
-      )
-    }
-
-    return payload.data
+    return parseCommunityApiResponse<T>(text, response.status)
   }
 
   private async applyAuthHeaders(headers: Headers): Promise<void> {
@@ -286,4 +319,109 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
+}
+
+function parseCommunityApiResponse<T>(text: string, status: number): T {
+  let payload: CommunityApiResponse<T>
+  if (text) {
+    try {
+      payload = JSON.parse(text) as CommunityApiResponse<T>
+    } catch {
+      throw new CommunityHttpError(
+        `Community API returned invalid JSON (${status})`,
+        status,
+        'INVALID_JSON',
+      )
+    }
+  } else if (status < 200 || status >= 300) {
+    const hint =
+      status === 404
+        ? '接口不存在，请重新构建并重启 Community Hub（pnpm build:community-hub 后重启应用）'
+        : `Community API request failed (${status})`
+    throw new CommunityHttpError(hint, status, 'EMPTY_RESPONSE')
+  } else {
+    payload = {
+      ok: false,
+      data: null as T,
+      error: { code: 'EMPTY_RESPONSE', message: 'Empty response body' },
+    }
+  }
+  if (status < 200 || status >= 300 || !payload.ok) {
+    throw new CommunityHttpError(
+      payload.error?.message ?? `Community API request failed: ${status}`,
+      status,
+      payload.error?.code,
+    )
+  }
+
+  return payload.data
+}
+
+/** node:http upload avoids Electron fetch multipart parsing issues with Axum. */
+async function postBuffer(
+  url: string,
+  headers: Headers,
+  body: Buffer,
+): Promise<{ status: number; text: string }> {
+  const parsed = new URL(url)
+  const requestFn = parsed.protocol === 'https:' ? httpsRequest : httpRequest
+  const headerRecord = Object.fromEntries(headers.entries())
+
+  return await new Promise((resolve, reject) => {
+    const req = requestFn(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: `${parsed.pathname}${parsed.search}`,
+        method: 'POST',
+        headers: headerRecord,
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => chunks.push(chunk))
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            text: Buffer.concat(chunks).toString('utf8'),
+          })
+        })
+      },
+    )
+    req.on('error', reject)
+    req.end(body)
+  })
+}
+
+/** Manual multipart builder — Node/Electron fetch + FormData often breaks Axum parsing. */
+export function buildMultipartBody(
+  fields: Array<{ name: string; value: string | Buffer; filename?: string }>,
+): { body: Buffer; contentType: string } {
+  const boundary = `toolman-${randomBytes(16).toString('hex')}`
+  const chunks: Buffer[] = []
+
+  for (const field of fields) {
+    chunks.push(Buffer.from(`--${boundary}\r\n`))
+    if (typeof field.value === 'string') {
+      chunks.push(Buffer.from(`Content-Disposition: form-data; name="${field.name}"\r\n\r\n`))
+      chunks.push(Buffer.from(field.value))
+      chunks.push(Buffer.from('\r\n'))
+      continue
+    }
+
+    const filename = field.filename ?? 'upload.bin'
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="${field.name}"; filename="${filename}"\r\n`,
+      ),
+    )
+    chunks.push(Buffer.from('Content-Type: application/octet-stream\r\n\r\n'))
+    chunks.push(field.value)
+    chunks.push(Buffer.from('\r\n'))
+  }
+
+  chunks.push(Buffer.from(`--${boundary}--\r\n`))
+  return {
+    body: Buffer.concat(chunks),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  }
 }

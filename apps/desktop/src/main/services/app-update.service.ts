@@ -21,7 +21,14 @@ interface UpdatePreferences {
   autoUpdate: boolean
 }
 
-let status: AppUpdateStatus = buildInitialStatus()
+let status: AppUpdateStatus | null = null
+
+function ensureStatus(): AppUpdateStatus {
+  if (!status) {
+    status = buildInitialStatus()
+  }
+  return status
+}
 let autoUpdaterReady = false
 let remoteManifest: AppUpdateManifest | null = null
 
@@ -63,7 +70,7 @@ function buildInitialStatus(): AppUpdateStatus {
 }
 
 function publishStatus(patch: Partial<AppUpdateStatus>): AppUpdateStatus {
-  status = AppUpdateStatusSchema.parse({ ...status, ...patch })
+  status = AppUpdateStatusSchema.parse({ ...ensureStatus(), ...patch })
   broadcastAppUpdateStatus(status)
   return status
 }
@@ -136,7 +143,7 @@ function ensureAutoUpdaterConfigured(): void {
   autoUpdater.on('update-available', (info) => {
     publishStatus({
       phase: 'available',
-      latestVersion: info.version ?? status.latestVersion,
+      latestVersion: info.version ?? ensureStatus().latestVersion,
       updateAvailable: true,
       error: null,
     })
@@ -161,7 +168,7 @@ function ensureAutoUpdaterConfigured(): void {
   autoUpdater.on('update-downloaded', (info) => {
     publishStatus({
       phase: 'downloaded',
-      latestVersion: info.version ?? status.latestVersion,
+      latestVersion: info.version ?? ensureStatus().latestVersion,
       downloadProgress: 100,
       updateAvailable: true,
       error: null,
@@ -178,7 +185,7 @@ function ensureAutoUpdaterConfigured(): void {
 }
 
 export function getAppUpdateStatus(): AppUpdateStatus {
-  return status
+  return ensureStatus()
 }
 
 export function setAppUpdateAutoEnabled(autoUpdate: boolean): AppUpdateStatus {
@@ -215,12 +222,12 @@ export async function checkForAppUpdate(): Promise<AppUpdateStatus> {
     })
 
     if (!updateAvailable) {
-      return status
+      return ensureStatus()
     }
 
     ensureAutoUpdaterConfigured()
     await autoUpdater.checkForUpdates()
-    return status
+    return ensureStatus()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     recordDiagnosticEvent('update', 'error', message)
@@ -245,7 +252,7 @@ export async function downloadAppUpdate(): Promise<AppUpdateStatus> {
     }
     publishStatus({ phase: 'downloading', downloadProgress: 0, error: null })
     await autoUpdater.downloadUpdate()
-    return status
+    return ensureStatus()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     recordDiagnosticEvent('update', 'error', message)
@@ -254,7 +261,8 @@ export async function downloadAppUpdate(): Promise<AppUpdateStatus> {
 }
 
 export function installAppUpdate(): AppUpdateStatus {
-  if (status.phase !== 'downloaded') {
+  const current = ensureStatus()
+  if (current.phase !== 'downloaded') {
     return publishStatus({
       phase: 'error',
       error: '更新尚未下载完成',
@@ -262,14 +270,14 @@ export function installAppUpdate(): AppUpdateStatus {
   }
 
   autoUpdater.quitAndInstall()
-  return status
+  return ensureStatus()
 }
 
 export function bootstrapAppUpdateService(): void {
   status = buildInitialStatus()
 
   const config = getAppUpdateConfig()
-  if (!config.enabled || !status.autoUpdate) {
+  if (!config.enabled || !ensureStatus().autoUpdate) {
     return
   }
 

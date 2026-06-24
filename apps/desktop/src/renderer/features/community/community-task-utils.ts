@@ -19,6 +19,7 @@ export const TASK_STATUS_LABELS: Record<CommunityTaskStatus, string> = {
   in_progress: '进行中',
   delivered: '已交付',
   completed: '已完成',
+  rejected: '已拒绝',
   cancelled: '已取消',
   disputed: '争议中',
 }

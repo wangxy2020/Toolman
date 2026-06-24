@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CommunityTaskStatusSchema } from '@toolman/shared'
+
 import { formatTaskBudget, parseTaskTags, TASK_STATUS_LABELS } from './community-task-utils'
 
 describe('community-task-utils', () => {
@@ -13,6 +15,10 @@ describe('community-task-utils', () => {
   })
 
   it('labels all task statuses', () => {
-    expect(Object.keys(TASK_STATUS_LABELS)).toHaveLength(8)
+    const statuses = CommunityTaskStatusSchema.options
+    for (const status of statuses) {
+      expect(TASK_STATUS_LABELS[status]).toBeTruthy()
+    }
+    expect(Object.keys(TASK_STATUS_LABELS)).toHaveLength(statuses.length)
   })
 })

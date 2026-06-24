@@ -4,7 +4,8 @@ import { type CommunityTaskItem } from '@toolman/shared'
 
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconTaskList } from '../../components/icons'
-import { cancelCommunityTask } from './community-api.client'
+import { deleteCommunityTask, listCommunityTasks } from './community-api.client'
+import { notifyCommunityUserDataChanged } from './community-events'
 import { isUiMockCommunityId } from './community-ui-mock'
 import { getUiMockInteractionDefaults } from './community-ui-mock-interactions'
 import { buildTaskCommentTarget } from './community-comment-utils'
@@ -15,6 +16,7 @@ import {
   TASK_STATUS_LABELS,
   TASK_TYPE_LABELS,
 } from './community-task-utils'
+import { canDeleteCommunityResource } from './community-user-utils'
 import { CommunityCommentListItemShell } from './CommunityCommentListItemShell'
 import { CommunityListFileCard } from './CommunityListFileCard'
 import { CommunityListPanelShell } from './CommunityListPanelShell'
@@ -27,9 +29,13 @@ import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useCommunityTasks } from './useCommunityTasks'
 import { useCommunityUser } from './useCommunityUser'
 import { useCommunityPanelStatus } from './community-panel-status'
+import { useRegisterModulePanelStatus } from '../../components/module-page-status'
+import { useRegistrationGate } from '../user/useRegistrationGate'
 
 export function TaskMarketPanel() {
   const [showCreate, setShowCreate] = useState(false)
+  const [resumeTask, setResumeTask] = useState<CommunityTaskItem | null>(null)
+  const [publishNotice, setPublishNotice] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<CommunityTaskItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -40,6 +46,10 @@ export function TaskMarketPanel() {
   const tasks = useCommunityTasks({ query: useMemo(() => ({}), []) })
   const { status: hubStatus } = useCommunityHubConnection()
   const user = useCommunityUser()
+  const { requireRegistration } = useRegistrationGate()
+
+  const hubWriteBlocked = hubStatus?.offlineReadOnly === true
+  const publishDisabled = hubWriteBlocked || user.profile?.canPublish === false
 
   useCommunityPanelStatus('community-tasks', {
     loading: tasks.loading,
@@ -49,6 +59,17 @@ export function TaskMarketPanel() {
   useCommunityPanelStatus('community-tasks-user', {
     error: user.error,
   })
+  useRegisterModulePanelStatus(
+    'community-tasks-publish',
+    publishNotice
+      ? {
+          tone: 'info',
+          message: publishNotice,
+          onDismiss: () => setPublishNotice(null),
+        }
+      : null,
+    () => setPublishNotice(null),
+  )
 
   const sortedItems = useMemo(
     () =>
@@ -76,7 +97,8 @@ export function TaskMarketPanel() {
     setDeletingId(taskId)
     try {
       if (!isUiMockCommunityId(taskId)) {
-        await cancelCommunityTask(taskId)
+        await deleteCommunityTask(taskId)
+        notifyCommunityUserDataChanged()
       }
       setTaskToDelete(null)
       if (selectedId === taskId) setSelectedId(null)
@@ -97,8 +119,36 @@ export function TaskMarketPanel() {
         publishLabel="发布任务"
         loading={tasks.loading}
         onRefresh={() => void tasks.load()}
-        onPublish={() => setShowCreate(true)}
-        publishDisabled={hubStatus?.offlineReadOnly === true || user.profile?.canPublish === false}
+        onPublish={() => {
+          if (!requireRegistration('community_write')) return
+          void (async () => {
+            setPublishNotice(null)
+            const profile = user.profile
+            if (!profile?.id) {
+              setResumeTask(null)
+              setShowCreate(true)
+              return
+            }
+            try {
+              const mine = await listCommunityTasks({ publisherId: profile.id, limit: 50 })
+              const pending = mine.items.find((item) => item.status === 'pending_review')
+              if (pending) {
+                setPublishNotice(
+                  `「${pending.title}」已在审核中，请等待管理员处理。可在「我的 → 任务」查看进度。`,
+                )
+                return
+              }
+              const draft = mine.items.find((item) => item.status === 'draft')
+              const rejected = mine.items.find((item) => item.status === 'rejected')
+              setResumeTask(rejected ?? draft ?? null)
+              setShowCreate(true)
+            } catch {
+              setResumeTask(null)
+              setShowCreate(true)
+            }
+          })()
+        }}
+        publishDisabled={publishDisabled}
         isEmpty={sortedItems.length === 0}
         emptyHint="暂无任务，点击右上角发布任务"
       >
@@ -112,9 +162,10 @@ export function TaskMarketPanel() {
               mockDefaults?.state,
               mockDefaults?.counts,
             )
-            const isOwner = user.profile?.id === task.publisher.id
             const canDelete =
-              isOwner && task.status !== 'cancelled' && task.status !== 'completed'
+              canDeleteCommunityResource(task.publisher.id, user.profile) &&
+              task.status !== 'cancelled' &&
+              task.status !== 'completed'
             const commentTarget = buildTaskCommentTarget(task.id)
 
             return (
@@ -156,8 +207,17 @@ export function TaskMarketPanel() {
 
       {showCreate ? (
         <TaskCreateModal
-          onClose={() => setShowCreate(false)}
-          onCreated={() => void handleChanged()}
+          resumeTask={resumeTask}
+          onClose={() => {
+            setShowCreate(false)
+            setResumeTask(null)
+          }}
+          onCreated={(message) => {
+            setPublishNotice(message)
+            setResumeTask(null)
+            setShowCreate(false)
+            void handleChanged()
+          }}
         />
       ) : null}
 

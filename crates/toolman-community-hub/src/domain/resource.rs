@@ -68,6 +68,7 @@ pub enum ResourceStatus {
     Draft,
     PendingReview,
     Published,
+    Rejected,
     Suspended,
     Archived,
 }
@@ -78,6 +79,7 @@ impl ResourceStatus {
             Self::Draft => "draft",
             Self::PendingReview => "pending_review",
             Self::Published => "published",
+            Self::Rejected => "rejected",
             Self::Suspended => "suspended",
             Self::Archived => "archived",
         }
@@ -88,6 +90,7 @@ impl ResourceStatus {
             "draft" => Ok(Self::Draft),
             "pending_review" => Ok(Self::PendingReview),
             "published" => Ok(Self::Published),
+            "rejected" => Ok(Self::Rejected),
             "suspended" => Ok(Self::Suspended),
             "archived" => Ok(Self::Archived),
             other => Err(ResourceError::InvalidStatus(other.to_string())),

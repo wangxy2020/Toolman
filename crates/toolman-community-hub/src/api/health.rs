@@ -2,6 +2,7 @@ use axum::extract::State;
 use axum::Json;
 
 use crate::services::EmbeddingService;
+use crate::services::HUB_MAX_REQUEST_BODY_BYTES;
 use crate::state::AppState;
 
 use super::response::ApiResponse;
@@ -20,6 +21,7 @@ pub struct HealthData {
     pub crash_report_count: i64,
     /// F1 peering API surface is available on this Hub build (catalog sync lands in PR2).
     pub federation_peering: bool,
+    pub max_upload_bytes: usize,
 }
 
 pub async fn health(State(state): State<AppState>) -> Json<ApiResponse<HealthData>> {
@@ -53,5 +55,6 @@ pub async fn health(State(state): State<AppState>) -> Json<ApiResponse<HealthDat
         resource_count: resource_count.0,
         crash_report_count: crash_report_count.0,
         federation_peering: true,
+        max_upload_bytes: HUB_MAX_REQUEST_BODY_BYTES,
     }))
 }

@@ -469,6 +469,40 @@ impl ModerationService {
         })
     }
 
+    pub async fn reject_task(
+        &self,
+        actor: &CommunityUser,
+        task_id: &str,
+        note: Option<String>,
+    ) -> Result<ResourceModerationItem, ModerationServiceError> {
+        ensure_admin(actor)?;
+
+        let task = TaskRepository::new(self.pool.clone())
+            .find_by_id(task_id)
+            .await
+            .map_err(|error| ModerationServiceError::Validation(error.to_string()))?
+            .ok_or_else(|| ModerationServiceError::Validation(format!("task not found: {task_id}")))?;
+
+        if task.status != TaskStatus::PendingReview {
+            return Err(ModerationServiceError::NotPendingReview);
+        }
+
+        self.cancel_task_internal(actor, task_id, note.as_deref(), None)
+            .await?;
+
+        let updated = TaskRepository::new(self.pool.clone())
+            .find_by_id(task_id)
+            .await
+            .map_err(|error| ModerationServiceError::Validation(error.to_string()))?
+            .ok_or_else(|| ModerationServiceError::Validation(format!("task not found: {task_id}")))?;
+
+        Ok(ResourceModerationItem {
+            id: updated.id,
+            title: updated.title,
+            status: updated.status.as_str().to_string(),
+        })
+    }
+
     pub async fn ban_user(
         &self,
         actor: &CommunityUser,
@@ -864,11 +898,22 @@ impl ModerationService {
             .await?
             .ok_or_else(|| ModerationServiceError::ResourceNotFound(resource_id.to_string()))?;
 
+        let next_status = if resource.status == ResourceStatus::PendingReview {
+            ResourceStatus::Rejected
+        } else {
+            ResourceStatus::Suspended
+        };
+        let action = if next_status == ResourceStatus::Rejected {
+            "reject_resource"
+        } else {
+            "suspend_resource"
+        };
+
         let updated = ResourceRepository::new(self.pool.clone())
             .update(
                 resource_id,
                 UpdateResourceInput {
-                    status: Some(ResourceStatus::Suspended),
+                    status: Some(next_status),
                     ..Default::default()
                 },
             )
@@ -876,7 +921,7 @@ impl ModerationService {
 
         self.write_log(
             actor,
-            "suspend_resource",
+            action,
             "resource",
             resource_id,
             reason,
@@ -954,14 +999,31 @@ impl ModerationService {
         reason: Option<&str>,
         report_id: Option<&str>,
     ) -> Result<(), ModerationServiceError> {
+        let task = TaskRepository::new(self.pool.clone())
+            .find_by_id(task_id)
+            .await
+            .map_err(|error| ModerationServiceError::Validation(error.to_string()))?
+            .ok_or_else(|| ModerationServiceError::Validation(format!("task not found: {task_id}")))?;
+
+        let next_status = if task.status == TaskStatus::PendingReview && actor.is_moderator() {
+            TaskStatus::Rejected
+        } else {
+            TaskStatus::Cancelled
+        };
+        let action = if next_status == TaskStatus::Rejected {
+            "reject_task"
+        } else {
+            "cancel_task"
+        };
+
         TaskRepository::new(self.pool.clone())
-            .transition_status(task_id, TaskStatus::Cancelled)
+            .transition_status(task_id, next_status)
             .await
             .map_err(|error| ModerationServiceError::Validation(error.to_string()))?;
 
         self.write_log(
             actor,
-            "cancel_task",
+            action,
             "task",
             task_id,
             reason,

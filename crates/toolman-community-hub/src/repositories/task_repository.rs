@@ -184,7 +184,9 @@ impl TaskRepository {
             .await?
             .ok_or_else(|| TaskRepositoryError::NotFound(id.to_string()))?;
 
-        if current.status != TaskStatus::Draft {
+        let editable = matches!(current.status, TaskStatus::Draft | TaskStatus::Rejected)
+            || (current.status == TaskStatus::Cancelled && current.assignee_id.is_none());
+        if !editable {
             return Err(TaskRepositoryError::Validation(TaskError::NotEditable));
         }
 
@@ -328,6 +330,16 @@ impl TaskRepository {
         self.find_by_id(id)
             .await?
             .ok_or_else(|| TaskRepositoryError::NotFound(id.to_string()))
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<bool, TaskRepositoryError> {
+        let rows = sqlx::query("DELETE FROM community_tasks WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected();
+
+        Ok(rows > 0)
     }
 }
 

@@ -25,6 +25,7 @@ import {
   applyTask,
   approveModerationResource,
   approveModerationTask,
+  rejectModerationTask,
   appointCommunityAdmin,
   banModerationUser,
   banModerationDevice,
@@ -39,6 +40,7 @@ import {
   createTask,
   createTaskReview,
   deleteResource,
+  deleteTask,
   deleteReview,
   deliverTask,
   favoriteNewsArticle,
@@ -89,6 +91,10 @@ import {
   patchReview,
   patchTask,
   exportCommunityKnowledgeBundle,
+  exportCommunityMcpPackage,
+  prepareCommunityMcpPackage,
+  prepareCommunitySkillPackage,
+  prepareCommunityWorkflowPackage,
   publishResource,
   publishTask,
   rejectTaskDelivery,
@@ -102,6 +108,10 @@ import {
   updateOrderStatus,
   updateUserMe,
 } from '../services/community/community-ipc.facade'
+import {
+  downloadCommunityResourcePackageForReview,
+  openCommunityResourcePackageForReview,
+} from '../services/community/community-resource-package-review.service'
 
 type HandlerFn = (input: unknown) => Promise<IpcResult<unknown>>
 
@@ -173,7 +183,25 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityKnowledgeBundleExport]: communityHandler((input) =>
     exportCommunityKnowledgeBundle(input),
   ),
+  [IpcChannel.CommunityMcpPackageExport]: communityHandler((input) =>
+    exportCommunityMcpPackage(input),
+  ),
+  [IpcChannel.CommunityMcpPackagePrepare]: communityHandler((input) =>
+    prepareCommunityMcpPackage(input),
+  ),
+  [IpcChannel.CommunitySkillPackagePrepare]: communityHandler((input) =>
+    prepareCommunitySkillPackage(input),
+  ),
+  [IpcChannel.CommunityWorkflowPackagePrepare]: communityHandler((input) =>
+    prepareCommunityWorkflowPackage(input),
+  ),
   [IpcChannel.CommunityResourcePatch]: communityHandler((input) => patchResource(input)),
+  [IpcChannel.CommunityResourcePackageReviewOpen]: communityHandler((input) =>
+    openCommunityResourcePackageForReview(input),
+  ),
+  [IpcChannel.CommunityResourcePackageReviewDownload]: communityHandler((input) =>
+    downloadCommunityResourcePackageForReview(input),
+  ),
   [IpcChannel.CommunityResourceDelete]: communityHandler((input) => deleteResource(input)),
   [IpcChannel.CommunityResourceLike]: communityHandler((input) => likeResource(input)),
   [IpcChannel.CommunityResourceDislike]: communityHandler((input) => dislikeResource(input)),
@@ -231,6 +259,7 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityTaskPatch]: communityHandler((input) => patchTask(input)),
   [IpcChannel.CommunityTaskPublish]: communityHandler((input) => publishTask(input)),
   [IpcChannel.CommunityTaskCancel]: communityHandler((input) => cancelTask(input)),
+  [IpcChannel.CommunityTaskDelete]: communityHandler((input) => deleteTask(input)),
   [IpcChannel.CommunityTaskApply]: communityHandler((input) => applyTask(input)),
   [IpcChannel.CommunityTaskApplicationsList]: communityHandler((input) =>
     listTaskApplications(input),
@@ -267,6 +296,9 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   ),
   [IpcChannel.CommunityModerationTaskApprove]: communityHandler((input) =>
     approveModerationTask(input),
+  ),
+  [IpcChannel.CommunityModerationTaskReject]: communityHandler((input) =>
+    rejectModerationTask(input),
   ),
   [IpcChannel.CommunityModerationUserBan]: communityHandler((input) => banModerationUser(input)),
   [IpcChannel.CommunityModerationUserUnban]: communityHandler((input) => unbanModerationUser(input)),
