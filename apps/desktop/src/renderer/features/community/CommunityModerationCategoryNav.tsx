@@ -34,7 +34,7 @@ export function CommunityModerationCategoryNav() {
 
   if (!isModerator || !moderationCategory) return null
 
-  const { category, handleCategoryChange } = moderationCategory
+  const { category, handleCategoryChange, pendingReviewCount } = moderationCategory
 
   return (
     <div
@@ -61,6 +61,11 @@ export function CommunityModerationCategoryNav() {
             onClick={() => handleCategoryChange(item.key)}
           >
             {item.icon}
+            {item.key === 'review' && pendingReviewCount > 0 ? (
+              <span className="tm-community-moderation-header-nav-badge" aria-hidden="true">
+                {pendingReviewCount > 99 ? '99+' : pendingReviewCount}
+              </span>
+            ) : null}
           </button>
         )
       })}

@@ -1,11 +1,11 @@
 import { type CommunityUserRole } from '@toolman/shared'
 
 export const USER_ROLE_LABELS: Record<CommunityUserRole, string> = {
-  guest: '访客',
-  user: '用户',
-  enterprise: '企业',
+  guest: '未注册',
+  user: '普通用户',
+  enterprise: 'VIP会员',
   admin: '管理员',
-  founder: '创始人',
+  founder: '超级管理员',
 }
 
 export function isCommunityModerator(role?: CommunityUserRole | null): boolean {

@@ -9,8 +9,10 @@ import {
 type CommunityModerationCategoryContextValue = {
   category: ModerationCategory
   subTab: ModerationSubTab
+  pendingReviewCount: number
   setSubTab: (subTab: ModerationSubTab) => void
   handleCategoryChange: (category: ModerationCategory) => void
+  setPendingReviewCount: (count: number) => void
 }
 
 const CommunityModerationCategoryContext =
@@ -19,6 +21,7 @@ const CommunityModerationCategoryContext =
 export function CommunityModerationCategoryProvider({ children }: { children: ReactNode }) {
   const [category, setCategory] = useState<ModerationCategory>('resources')
   const [subTab, setSubTab] = useState<ModerationSubTab>(DEFAULT_SUB_TAB_BY_CATEGORY.resources)
+  const [pendingReviewCount, setPendingReviewCount] = useState(0)
 
   const handleCategoryChange = useCallback((nextCategory: ModerationCategory) => {
     setCategory(nextCategory)
@@ -29,10 +32,12 @@ export function CommunityModerationCategoryProvider({ children }: { children: Re
     () => ({
       category,
       subTab,
+      pendingReviewCount,
       setSubTab,
       handleCategoryChange,
+      setPendingReviewCount,
     }),
-    [category, handleCategoryChange, subTab],
+    [category, handleCategoryChange, pendingReviewCount, subTab],
   )
 
   return (

@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { type CommunityTaskType } from '@toolman/shared'
 
-import { createCommunityTask, publishCommunityTask } from './community-api.client'
+import {
+  createCommunityTask,
+  getCommunityHubHealth,
+  publishCommunityTask,
+} from './community-api.client'
 import { notifyCommunityUserDataChanged } from './community-events'
+import { buildTaskPublishSuccessMessage } from './community-resource-status'
 import { parseTaskTags, TASK_TYPE_LABELS } from './community-task-utils'
 import {
   CommunityPublishModalError,
   CommunityPublishModalFooterActions,
+  CommunityPublishModalNotice,
   CommunityPublishModalShell,
 } from './CommunityPublishModalShell'
 
@@ -28,6 +34,16 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
   const [tags, setTags] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [requireReview, setRequireReview] = useState(true)
+
+  useEffect(() => {
+    void getCommunityHubHealth()
+      .then((health) => setRequireReview(health.requireReview ?? false))
+      .catch(() => setRequireReview(true))
+  }, [])
+
+  const submitLabel = requireReview ? '提交审核' : '发布任务'
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -37,6 +53,7 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
 
     setSubmitting(true)
     setError(null)
+    setSuccess(null)
     try {
       const created = await createCommunityTask({
         title: title.trim(),
@@ -47,10 +64,10 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
         deadlineAt: deadlineAt ? new Date(deadlineAt).getTime() : undefined,
         tags: parseTaskTags(tags),
       })
-      await publishCommunityTask(created.id)
+      const published = await publishCommunityTask(created.id)
       notifyCommunityUserDataChanged()
       onCreated?.()
-      onClose()
+      setSuccess(buildTaskPublishSuccessMessage(published.status, requireReview))
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : '发布任务失败'
       setError(message)
@@ -59,21 +76,27 @@ export function TaskCreateModal({ onClose, onCreated }: Props) {
     }
   }
 
+  const handleClose = () => {
+    if (submitting) return
+    onClose()
+  }
+
   return (
     <CommunityPublishModalShell
-      title="发布任务"
-      onClose={onClose}
+      title={requireReview ? '提交任务审核' : '发布任务'}
+      onClose={handleClose}
       footer={
         <CommunityPublishModalFooterActions
-          onCancel={onClose}
+          onCancel={handleClose}
           cancelDisabled={submitting}
-          confirmLabel={submitting ? '发布中…' : '发布任务'}
+          confirmLabel={submitting ? '提交中…' : success ? '关闭' : submitLabel}
           confirmDisabled={submitting}
-          onConfirm={() => void handleSubmit()}
+          onConfirm={() => (success ? handleClose() : void handleSubmit())}
         />
       }
     >
       {error ? <CommunityPublishModalError message={error} /> : null}
+      {success ? <CommunityPublishModalNotice message={success} /> : null}
 
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">

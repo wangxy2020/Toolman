@@ -111,12 +111,12 @@ export function useCommunityUserCenter() {
     const [resources, installHistory, news, taskList, myMessages, boardFeed] = await Promise.all([
         Promise.all(
           USER_CENTER_RESOURCE_TYPES.map((resourceType) =>
-            listCommunityResources({ resourceType, limit: 100 }),
+            listCommunityResources({ resourceType, authorId: userId, limit: 100 }),
           ),
         ).then((lists) => ({ items: lists.flatMap((list) => list.items) })),
         listCommunityInstallHistory({ limit: 100 }),
         listCommunityNewsArticles({ limit: 100 }),
-        listCommunityTasks({ limit: 100 }),
+        listCommunityTasks({ publisherId: userId, limit: 100 }),
         listCommunityBoardMessages({ userId, limit: 100 }),
         listCommunityBoardMessages({ limit: 100 }),
       ])

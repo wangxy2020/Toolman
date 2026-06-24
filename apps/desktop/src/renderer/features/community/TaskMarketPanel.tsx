@@ -23,6 +23,7 @@ import { TaskCreateModal } from './TaskCreateModal'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityLocalInteractions } from './useCommunityLocalInteractions'
+import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useCommunityTasks } from './useCommunityTasks'
 import { useCommunityUser } from './useCommunityUser'
 import { useCommunityPanelStatus } from './community-panel-status'
@@ -37,6 +38,7 @@ export function TaskMarketPanel() {
   const localInteractions = useCommunityLocalInteractions()
 
   const tasks = useCommunityTasks({ query: useMemo(() => ({}), []) })
+  const { status: hubStatus } = useCommunityHubConnection()
   const user = useCommunityUser()
 
   useCommunityPanelStatus('community-tasks', {
@@ -96,7 +98,7 @@ export function TaskMarketPanel() {
         loading={tasks.loading}
         onRefresh={() => void tasks.load()}
         onPublish={() => setShowCreate(true)}
-        publishDisabled={user.profile != null && !user.profile.canPublish}
+        publishDisabled={hubStatus?.offlineReadOnly === true || user.profile?.canPublish === false}
         isEmpty={sortedItems.length === 0}
         emptyHint="暂无任务，点击右上角发布任务"
       >

@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { type CommunityUserProfile } from '@toolman/shared'
 
-import { getCommunityUserMe } from './community-api.client'
-import { isCommunitySessionActive, COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
+import {
+  invalidateCommunityUserProfile,
+  loadCommunityUserProfile,
+  subscribeCommunityUserProfile,
+} from './community-user-store'
 
 export function useCommunityUser(autoLoad = true) {
   const [profile, setProfile] = useState<CommunityUserProfile | null>(null)
@@ -11,16 +14,10 @@ export function useCommunityUser(autoLoad = true) {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!isCommunitySessionActive()) {
-      setProfile(null)
-      setError(null)
-      return null
-    }
-
     setLoading(true)
     setError(null)
     try {
-      const user = await getCommunityUserMe()
+      const user = await loadCommunityUserProfile()
       setProfile(user)
       return user
     } catch (loadError) {
@@ -38,27 +35,13 @@ export function useCommunityUser(autoLoad = true) {
     void load().catch(() => undefined)
   }, [autoLoad, load])
 
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === 'toolman.community.session.active') {
-        void load().catch(() => undefined)
-      }
-    }
-    const onSessionChanged = () => {
-      void load().catch(() => undefined)
-    }
-    window.addEventListener('storage', onStorage)
-    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, onSessionChanged)
-    return () => {
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, onSessionChanged)
-    }
-  }, [load])
+  useEffect(() => subscribeCommunityUserProfile(() => void load().catch(() => undefined)), [load])
 
   return {
     profile,
     loading,
     error,
     load,
+    invalidate: invalidateCommunityUserProfile,
   }
 }

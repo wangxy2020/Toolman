@@ -4,6 +4,7 @@ import { CommunityListCoverIcon } from './CommunityListCoverIcon'
 
 interface Props {
   title: string
+  titleExtra?: ReactNode
   meta?: ReactNode
   description?: string
   selected?: boolean
@@ -14,6 +15,7 @@ interface Props {
 
 export function CommunityListFileCard({
   title,
+  titleExtra,
   meta,
   description,
   selected = false,
@@ -40,7 +42,10 @@ export function CommunityListFileCard({
         <CommunityListCoverIcon coverUrl={coverUrl} fallback={icon} alt={title} />
       ) : null}
       <div className="tm-kb-file-card-main">
-        <div className="tm-kb-file-card-title">{title}</div>
+        <div className="tm-kb-file-card-title-row">
+          <div className="tm-kb-file-card-title">{title}</div>
+          {titleExtra ? <div className="tm-kb-file-card-title-extra">{titleExtra}</div> : null}
+        </div>
         {meta ? <div className="tm-kb-file-card-meta">{meta}</div> : null}
         <div
           className={[

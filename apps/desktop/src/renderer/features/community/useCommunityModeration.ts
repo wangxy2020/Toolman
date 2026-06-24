@@ -8,6 +8,7 @@ import {
 
 import {
   approveCommunityModerationResource,
+  approveCommunityModerationTask,
   banCommunityModerationUser,
   banCommunityModerationDevice,
   unbanCommunityModerationUser,
@@ -111,6 +112,13 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
     [runAction],
   )
 
+  const approveTask = useCallback(
+    async (taskId: string, note?: string) => {
+      await runAction(() => approveCommunityModerationTask({ resourceId: taskId, note }))
+    },
+    [runAction],
+  )
+
   const banUser = useCallback(
     async (userId: string, reason?: string, durationHours?: number) => {
       await runAction(() =>
@@ -208,6 +216,7 @@ export function useCommunityModeration(options: { autoScan?: boolean; enabled?: 
     refresh,
     suspendResource,
     approveResource,
+    approveTask,
     banUser,
     banDevice,
     unbanUser,

@@ -9,7 +9,7 @@ import {
   type IpcResult,
 } from '@toolman/shared'
 
-import { CommunityHttpError } from '../services/community/community-http.client'
+import { CommunityHttpError, humanizeCommunityFetchError } from '../services/community/community-http.client'
 import { installCommunityResource } from '../services/community/community-install.service'
 import {
   removeCommunityBoardMessageFromYjs,
@@ -24,6 +24,7 @@ import {
   acceptTaskDelivery,
   applyTask,
   approveModerationResource,
+  approveModerationTask,
   appointCommunityAdmin,
   banModerationUser,
   banModerationDevice,
@@ -56,6 +57,10 @@ import {
   favoriteResource,
   getHubHealth,
   getHubStatus,
+  getHubConfig,
+  updateHubConfig,
+  getFederationStatus,
+  syncHubPeering,
   getNewsArticle,
   getOrder,
   getResource,
@@ -83,6 +88,7 @@ import {
   patchResource,
   patchReview,
   patchTask,
+  exportCommunityKnowledgeBundle,
   publishResource,
   publishTask,
   rejectTaskDelivery,
@@ -125,11 +131,13 @@ function mapCommunityError(error: unknown): IpcResult<never> {
     return ipcErr({
       code,
       message: error.message,
-      retryable: error.status >= 500,
+      retryable:
+        error.status >= 500 || error.status === 429 || error.code === 'HUB_CONNECTION_FAILED',
     })
   }
 
-  const message = error instanceof Error ? error.message : 'Community request failed'
+  const message =
+    error instanceof Error ? humanizeCommunityFetchError(error) : 'Community request failed'
   return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
 }
 
@@ -146,6 +154,10 @@ function communityHandler(handler: (input: unknown) => Promise<unknown>): Handle
 export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityHubHealth]: communityHandler(() => getHubHealth()),
   [IpcChannel.CommunityHubStatus]: communityHandler(async () => getHubStatus()),
+  [IpcChannel.CommunityHubConfigGet]: communityHandler(async () => getHubConfig()),
+  [IpcChannel.CommunityHubConfigUpdate]: communityHandler(async (input) => updateHubConfig(input)),
+  [IpcChannel.CommunityFederationStatusGet]: communityHandler(async () => getFederationStatus()),
+  [IpcChannel.CommunityHubPeeringSync]: communityHandler(async () => syncHubPeering()),
 
   [IpcChannel.CommunityUserMe]: communityHandler(() => getUserMe()),
   [IpcChannel.CommunityUserMeUpdate]: communityHandler(async (input) => {
@@ -158,6 +170,9 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityResourceGet]: communityHandler((input) => getResource(input)),
   [IpcChannel.CommunityResourceCreate]: communityHandler((input) => createResource(input)),
   [IpcChannel.CommunityResourcePublish]: communityHandler((input) => publishResource(input)),
+  [IpcChannel.CommunityKnowledgeBundleExport]: communityHandler((input) =>
+    exportCommunityKnowledgeBundle(input),
+  ),
   [IpcChannel.CommunityResourcePatch]: communityHandler((input) => patchResource(input)),
   [IpcChannel.CommunityResourceDelete]: communityHandler((input) => deleteResource(input)),
   [IpcChannel.CommunityResourceLike]: communityHandler((input) => likeResource(input)),
@@ -249,6 +264,9 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   ),
   [IpcChannel.CommunityModerationResourceApprove]: communityHandler((input) =>
     approveModerationResource(input),
+  ),
+  [IpcChannel.CommunityModerationTaskApprove]: communityHandler((input) =>
+    approveModerationTask(input),
   ),
   [IpcChannel.CommunityModerationUserBan]: communityHandler((input) => banModerationUser(input)),
   [IpcChannel.CommunityModerationUserUnban]: communityHandler((input) => unbanModerationUser(input)),

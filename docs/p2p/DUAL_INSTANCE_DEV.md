@@ -138,6 +138,20 @@ pnpm verify:folders:b
 
 `electron-vite dev` 的 HMR **不会**热更新 main 进程。修改 `apps/desktop/src/main/**` 后需**完全退出**两个 Electron 窗口再重启。
 
+### 成员显示离线 / 无法收发群消息
+
+终端若出现：
+
+```text
+[p2p] discovery bootstrap failed: ... NapiIceServer.username
+```
+
+说明 P2P **设备发现未启动**（ICE 配置传入 `null` 导致原生模块报错）。请**完全退出**两个窗口后重新 `pnpm dev:p2p:a` / `dev:p2p:b`（main 进程改动不会热更新）。
+
+`[toolman-libp2p] outgoing connection error ... Handshake failed` 影响社区联邦（CID/Yjs），**不影响**群组 WebRTC 同步；群组依赖上方的 `discovery_start` 成功。
+
+双开脚本已默认 `TOOLMAN_P2P_IDENTITY_STORAGE=file`，每个 `--user-data-dir` 使用独立设备密钥，避免 Keychain 共用。
+
 ### 端口占用
 
 若日志出现 `EADDRINUSE 127.0.0.1:18765`，说明旧实例未退出。关闭所有 Toolman 窗口后重试。
@@ -170,5 +184,45 @@ export TOOLMAN_P2P_USER_B_KB="$HOME/Documents/Toolman/乙/本地知识库"
 | `pnpm dev:p2p:b` | 启动用户 B |
 | `pnpm p2p:dual-init` | 初始化目录与 DB 路径 |
 | `./scripts/p2p-dual-node-e2e.sh` | 打印完整双节点 E2E 清单 |
+
+---
+
+## 8. 联邦验收（F0 + F1）
+
+详见 [HUB_FEDERATION.md](../community/HUB_FEDERATION.md)。双开脚本默认共用 `TOOLMAN_COMMUNITY_DATA_DIR`，适合 F0（P2P gossip）与社区审核流程；**F1 Hub HTTP Peering** 需独立 Community 数据目录。
+
+### 8.1 F0（P2P 联邦，默认双开即可）
+
+1. A、B 均启动且 libp2p 互连（见上文 §4.2 建群与加入）
+2. A 发布 MCP/Skill 等资源并通过审核
+3. B 在对应市场 Tab 可见资源，卡片显示 **「P2P 联邦」** 徽章（`federationSource: p2p`）
+4. B 可安装；Hub 进程停止后 B 仍可浏览已同步联邦目录
+
+### 8.2 F1（Hub HTTP Peering，需独立 Hub）
+
+**终端 A**（默认共享 community 数据）：
+
+```bash
+pnpm build:community-hub
+pnpm dev:p2p:a
+```
+
+记下 A 的 Hub 地址（`{communityDataDir}/hub.port`，默认 `http://127.0.0.1:3721`）。
+
+**终端 B**（独立 community 目录 + 配置 peer）：
+
+```bash
+TOOLMAN_COMMUNITY_DATA_DIR=/tmp/toolman-community-b pnpm dev:p2p:b
+```
+
+B 内：**社区 → 设置 → 联邦 Peering** → Peer Hub 填入 A 的 URL → **保存** → **立即同步**。
+
+验收：
+
+1. B 市场可见 A 已发布资源，卡片显示 **「Peer Hub」** 徽章
+2. A 新发资源 → B 下一同步周期增量更新（Peer 同步状态表 cursor 前进）
+3. 配置 `upstream` 后优先从 upstream 拉取
+4. peer Hub 返回 bootstrap → 写入 B 的 `p2p/libp2p.json`
+5. 关闭 A 的 Hub 后，B 仍可浏览已同步 catalog
 
 更多 P2P 概念与故障排查见 [README.md](./README.md)。

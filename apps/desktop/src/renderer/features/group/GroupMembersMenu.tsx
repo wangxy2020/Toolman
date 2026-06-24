@@ -36,6 +36,15 @@ function memberInitial(name: string): string {
   return trimmed ? trimmed.slice(0, 1).toUpperCase() : '?'
 }
 
+function isPortaledGroupMemberOverlayTarget(target: Node): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest('.tm-group-context-menu') ||
+      target.closest('.tm-group-context-menu-backdrop') ||
+      target.closest('.tm-modal-overlay'),
+  )
+}
+
 export function GroupMembersMenu({
   open,
   anchorRef,
@@ -87,6 +96,7 @@ export function GroupMembersMenu({
       const target = event.target as Node
       if (panelRef.current?.contains(target)) return
       if (anchorRef.current?.contains(target)) return
+      if (isPortaledGroupMemberOverlayTarget(target)) return
       onClose()
     }
     document.addEventListener('mousedown', onPointerDown)

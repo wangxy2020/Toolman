@@ -73,6 +73,11 @@ type PendingAction =
       title: string
     }
   | {
+      kind: 'approve-task'
+      taskId: string
+      title: string
+    }
+  | {
       kind: 'appoint-admin'
       userId: string
       label: string
@@ -137,7 +142,8 @@ export function AdminModerationPanel() {
     canViewList: isModerator,
     canManage: isFounder,
   })
-  const { category, subTab, setSubTab } = useCommunityModerationCategory()
+  const { category, subTab, setSubTab, handleCategoryChange, setPendingReviewCount } =
+    useCommunityModerationCategory()
   const [hubHealth, setHubHealth] = useState<CommunityHubHealthOutput | null>(null)
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [adminSearch, setAdminSearch] = useState('')
@@ -167,6 +173,15 @@ export function AdminModerationPanel() {
   }
 
   const scan = moderation.scan
+
+  useEffect(() => {
+    const count =
+      (scan?.pendingReviewCount ?? 0) + (scan?.pendingReviewTasks?.length ?? 0)
+    setPendingReviewCount(count)
+    if (count > 0 && category === 'resources') {
+      handleCategoryChange('review')
+    }
+  }, [category, handleCategoryChange, scan, setPendingReviewCount])
 
   const blacklistCount = useMemo(() => {
     if (!scan) return 0
@@ -373,6 +388,9 @@ export function AdminModerationPanel() {
         case 'approve-resource':
           await moderation.approveResource(pending.resourceId, '管理员审核通过')
           break
+        case 'approve-task':
+          await moderation.approveTask(pending.taskId, '管理员审核通过')
+          break
         case 'appoint-admin':
           await adminManagement.appointAdmin(pending.userId)
           break
@@ -506,50 +524,103 @@ export function AdminModerationPanel() {
         ) : null}
 
         {category === 'review' && subTab === 'pending' ? (
-          <ModerationList
-            empty="暂无待审核资源"
-            items={scan?.pendingReview ?? []}
-            renderItem={(resource) => (
-              <div key={resource.id} className="tm-community-moderation-row">
-                <div className="tm-community-moderation-row-main">
-                  <div className="tm-community-moderation-row-title">{resource.title}</div>
-                  <div className="tm-community-moderation-row-meta">
-                    {resource.resourceType} · {resource.authorName}
+          <>
+            <ModerationList
+              empty={
+                <>
+                  <div>暂无待审核资源</div>
+                  <p className="tm-community-moderation-empty-hint">
+                    仅状态为「待审核」的资源会出现在此列表。若发布者在「我的」中看到「草稿（未提交审核）」，需点击「提交审核」并完成资源包上传后才会进入审核队列。
+                  </p>
+                </>
+              }
+              items={scan?.pendingReview ?? []}
+              renderItem={(resource) => (
+                <div key={resource.id} className="tm-community-moderation-row">
+                  <div className="tm-community-moderation-row-main">
+                    <div className="tm-community-moderation-row-title">{resource.title}</div>
+                    <div className="tm-community-moderation-row-meta">
+                      {resource.resourceType} · {resource.authorName}
+                    </div>
+                  </div>
+                  <div className="tm-community-moderation-row-actions">
+                    <button
+                      type="button"
+                      className="tm-btn tm-btn--primary"
+                      disabled={moderation.acting}
+                      onClick={() =>
+                        setPending({
+                          kind: 'approve-resource',
+                          resourceId: resource.id,
+                          title: resource.title,
+                        })
+                      }
+                    >
+                      通过
+                    </button>
+                    <button
+                      type="button"
+                      className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                      disabled={moderation.acting}
+                      onClick={() =>
+                        setPending({
+                          kind: 'suspend-resource',
+                          resourceId: resource.id,
+                          title: resource.title,
+                        })
+                      }
+                    >
+                      拒绝
+                    </button>
                   </div>
                 </div>
-                <div className="tm-community-moderation-row-actions">
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--primary"
-                    disabled={moderation.acting}
-                    onClick={() =>
-                      setPending({
-                        kind: 'approve-resource',
-                        resourceId: resource.id,
-                        title: resource.title,
-                      })
-                    }
-                  >
-                    通过
-                  </button>
-                  <button
-                    type="button"
-                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
-                    disabled={moderation.acting}
-                    onClick={() =>
-                      setPending({
-                        kind: 'suspend-resource',
-                        resourceId: resource.id,
-                        title: resource.title,
-                      })
-                    }
-                  >
-                    拒绝
-                  </button>
+              )}
+            />
+            <ModerationList
+              empty=""
+              items={scan?.pendingReviewTasks ?? []}
+              renderItem={(task) => (
+                <div key={task.id} className="tm-community-moderation-row">
+                  <div className="tm-community-moderation-row-main">
+                    <div className="tm-community-moderation-row-title">{task.title}</div>
+                    <div className="tm-community-moderation-row-meta">
+                      任务 · {task.publisherName}
+                    </div>
+                  </div>
+                  <div className="tm-community-moderation-row-actions">
+                    <button
+                      type="button"
+                      className="tm-btn tm-btn--primary"
+                      disabled={moderation.acting}
+                      onClick={() =>
+                        setPending({
+                          kind: 'approve-task',
+                          taskId: task.id,
+                          title: task.title,
+                        })
+                      }
+                    >
+                      通过
+                    </button>
+                    <button
+                      type="button"
+                      className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                      disabled={moderation.acting}
+                      onClick={() =>
+                        setPending({
+                          kind: 'cancel-task',
+                          taskId: task.id,
+                          title: task.title,
+                        })
+                      }
+                    >
+                      拒绝
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          />
+              )}
+            />
+          </>
         ) : null}
 
         {category === 'resources' && subTab === 'tasks' ? (
@@ -852,7 +923,7 @@ function ModerationList<T>({
   renderItem,
 }: {
   items: T[]
-  empty: string
+  empty: ReactNode
   renderItem: (item: T) => ReactNode
 }) {
   if (items.length === 0) {
@@ -939,6 +1010,16 @@ function buildConfirmDialog(
         <ConfirmDialog
           title="通过审核"
           message={`确定通过资源「${pending.title}」并公开发布吗？`}
+          confirmLabel="通过"
+          onCancel={onCancel}
+          onConfirm={() => void onConfirm()}
+        />
+      )
+    case 'approve-task':
+      return (
+        <ConfirmDialog
+          title="通过任务审核"
+          message={`确定通过任务「${pending.title}」并向社区开放吗？`}
           confirmLabel="通过"
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}

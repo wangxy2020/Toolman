@@ -1,9 +1,14 @@
 import { useMemo, useState, type ReactNode } from 'react'
 
-import { type CommunityResourceType } from '@toolman/shared'
+import { type CommunityResourceItem, type CommunityResourceType } from '@toolman/shared'
 
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { CommunityPanelHeader, CommunityPanelRefreshButton } from './CommunityPanelHeader'
+import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
+import { deleteCommunityResource } from './community-api.client'
+import { notifyCommunityUserDataChanged } from './community-events'
 import { TASK_STATUS_LABELS, TASK_TYPE_LABELS } from './community-task-utils'
+import { getResourceUserCenterStatusLabel } from './community-resource-status'
 import { INSTALL_STATUS_LABELS, USER_ROLE_LABELS } from './community-user-utils'
 import {
   groupUserCenterResources,
@@ -107,12 +112,14 @@ function UserCenterFeedCard({
   title,
   description,
   stats,
+  actions,
 }: {
   tag: string
   date: string
   title: string
   description?: string | null
   stats?: FeedStat[]
+  actions?: ReactNode
 }) {
   return (
     <article className="tm-user-center-feed-card">
@@ -143,6 +150,7 @@ function UserCenterFeedCard({
           ))}
         </div>
       ) : null}
+      {actions ? <div className="tm-user-center-feed-actions">{actions}</div> : null}
     </article>
   )
 }
@@ -158,17 +166,46 @@ function UserCenterFeedGroup({ label, children }: { label: string; children: Rea
 
 export function UserCenterPanel() {
   const [section, setSection] = useState<UserCenterSection>('publishes')
+  const [resourceToWithdraw, setResourceToWithdraw] = useState<CommunityResourceItem | null>(null)
+  const [resumePublish, setResumePublish] = useState<CommunityResourceItem | null>(null)
+  const [publishNotice, setPublishNotice] = useState<string | null>(null)
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
   const center = useCommunityUserCenter()
   const profile = center.profile
   const activeCount = useMemo(() => getSectionCount(section, center), [section, center])
 
+  const handleConfirmWithdraw = async () => {
+    if (!resourceToWithdraw) return
+    setWithdrawingId(resourceToWithdraw.id)
+    try {
+      await deleteCommunityResource(resourceToWithdraw.id)
+      notifyCommunityUserDataChanged()
+      setResourceToWithdraw(null)
+      await center.load()
+    } catch (withdrawError) {
+      const message = withdrawError instanceof Error ? withdrawError.message : '撤回失败'
+      setWithdrawError(message)
+    } finally {
+      setWithdrawingId(null)
+    }
+  }
+
+  const canWithdrawResource = (item: CommunityResourceItem) =>
+    item.status === 'draft' || item.status === 'pending_review'
+
   useRegisterModulePanelError('community-user-center-profile', center.profileError)
   useRegisterModulePanelError('community-user-center', center.error)
+  useRegisterModulePanelError('community-user-center-withdraw', withdrawError, () =>
+    setWithdrawError(null),
+  )
   useRegisterModulePanelStatus(
     'community-user-center-loading',
     center.loading || center.profileLoading
       ? { tone: 'info', message: '加载个人数据中…' }
-      : null,
+      : publishNotice
+        ? { tone: 'info', message: publishNotice }
+        : null,
   )
 
   const renderSectionContent = () => {
@@ -188,14 +225,52 @@ export function UserCenterPanel() {
           {center.publishes.map((item) => (
             <UserCenterFeedCard
               key={item.id}
-              tag={item.resourceType}
+              tag={USER_CENTER_RESOURCE_LABELS[item.resourceType] ?? item.resourceType}
               date={formatUserCenterDateTime(item.updatedAt)}
               title={item.title}
               description={item.description}
               stats={[
                 { kind: 'like', label: `${item.likeCount} 赞` },
-                { kind: 'favorite', label: `v${item.version}` },
+                {
+                  kind: 'favorite',
+                  label: `${getResourceUserCenterStatusLabel(item.status)} · v${item.version}`,
+                },
               ]}
+              actions={
+                <>
+                  {item.status === 'draft' ? (
+                    <button
+                      type="button"
+                      className="tm-btn tm-btn--secondary"
+                      onClick={() => {
+                        setPublishNotice(null)
+                        setResumePublish(item)
+                      }}
+                    >
+                      提交审核
+                    </button>
+                  ) : null}
+                  {canWithdrawResource(item) ? (
+                  <button
+                    type="button"
+                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                    disabled={withdrawingId === item.id}
+                    onClick={() => setResourceToWithdraw(item)}
+                  >
+                    {withdrawingId === item.id ? '撤回中…' : '撤回'}
+                  </button>
+                ) : item.status === 'published' ? (
+                  <button
+                    type="button"
+                    className="tm-btn tm-btn--ghost tm-community-moderation-btn-danger"
+                    disabled={withdrawingId === item.id}
+                    onClick={() => setResourceToWithdraw(item)}
+                  >
+                    {withdrawingId === item.id ? '删除中…' : '删除'}
+                  </button>
+                ) : null}
+                </>
+              }
             />
           ))}
         </div>
@@ -467,6 +542,38 @@ export function UserCenterPanel() {
         </div>
         <div className="tm-user-center-feed-body">{renderSectionContent()}</div>
       </div>
+
+      {resourceToWithdraw ? (
+        <ConfirmDialog
+          title={canWithdrawResource(resourceToWithdraw) ? '撤回提交' : '删除资源'}
+          message={
+            canWithdrawResource(resourceToWithdraw)
+              ? `确定撤回「${resourceToWithdraw.title}」吗？撤回后将从审核队列移除。`
+              : `确定删除「${resourceToWithdraw.title}」吗？删除后将从市场下架。`
+          }
+          confirmLabel={canWithdrawResource(resourceToWithdraw) ? '撤回' : '删除'}
+          danger
+          onCancel={() => setResourceToWithdraw(null)}
+          onConfirm={() => void handleConfirmWithdraw()}
+        />
+      ) : null}
+
+      {resumePublish ? (
+        <CommunityResourcePublishModal
+          resourceType={resumePublish.resourceType}
+          resourceLabel={
+            USER_CENTER_RESOURCE_LABELS[resumePublish.resourceType] ?? resumePublish.resourceType
+          }
+          resumeResource={resumePublish}
+          onClose={() => setResumePublish(null)}
+          onPublished={(message) => {
+            setPublishNotice(message)
+            setResumePublish(null)
+            notifyCommunityUserDataChanged()
+            void center.load()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

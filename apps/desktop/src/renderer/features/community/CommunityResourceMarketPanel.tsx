@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { type CommunityResourceItem, type CommunityResourceType } from '@toolman/shared'
 
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { IconFile, IconKnowledge, IconMcp, IconSkill, IconWorkflow } from '../../components/icons'
+import { IconKnowledge, IconMcp, IconSkill, IconWorkflow } from '../../components/icons'
 import {
   formatCommunityDate,
 } from './community-market-utils'
@@ -11,6 +11,7 @@ import { buildResourceCommentTarget } from './community-comment-utils'
 import { sortCommunityListItems } from './community-list-sort'
 import { CommunityCommentListItemShell } from './CommunityCommentListItemShell'
 import { CommunityListFileCard } from './CommunityListFileCard'
+import { CommunityFederationSourceBadge } from './CommunityFederationSourceBadge'
 import { CommunityListPanelShell } from './CommunityListPanelShell'
 import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
 import { copyCommunityShareText } from './community-share-utils'
@@ -18,10 +19,12 @@ import { deleteCommunityResource } from './community-api.client'
 import { isUiMockCommunityId } from './community-ui-mock'
 import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
+import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useCommunityResources } from './useCommunityResources'
 import { useCommunityUser } from './useCommunityUser'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useCommunityPanelStatus } from './community-panel-status'
+import { useRegisterModulePanelStatus } from '../../components/module-page-status'
 
 export interface CommunityResourceMarketPanelProps {
   resourceType: CommunityResourceType
@@ -57,6 +60,7 @@ export function CommunityResourceMarketPanel({
 }: CommunityResourceMarketPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showPublish, setShowPublish] = useState(false)
+  const [publishNotice, setPublishNotice] = useState<string | null>(null)
   const [resourceToDelete, setResourceToDelete] = useState<CommunityResourceItem | null>(null)
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<
@@ -70,12 +74,12 @@ export function CommunityResourceMarketPanel({
     query: RESOURCE_LIST_QUERY,
     autoLoadDetail: false,
   })
+  const { status: hubStatus } = useCommunityHubConnection()
   const user = useCommunityUser()
   const { requireRegistration, modal } = useRegistrationGate()
 
-  const hubOffline = market.hubStatus != null && !market.hubStatus.running
-  const icon = RESOURCE_ICONS[resourceType] ?? <IconFile size={18} />
-  const canPublish = user.profile?.canPublish === true && !hubOffline
+  const hubWriteBlocked = hubStatus?.offlineReadOnly === true
+  const publishDisabled = hubWriteBlocked || user.profile?.canPublish === false
 
   useCommunityPanelStatus(`community-market-${resourceType}`, {
     loading: market.loading,
@@ -85,6 +89,17 @@ export function CommunityResourceMarketPanel({
   useCommunityPanelStatus(`community-market-${resourceType}-user`, {
     error: user.error,
   })
+  useRegisterModulePanelStatus(
+    `community-market-${resourceType}-publish`,
+    publishNotice
+      ? {
+          tone: 'info',
+          message: publishNotice,
+          onDismiss: () => setPublishNotice(null),
+        }
+      : null,
+    () => setPublishNotice(null),
+  )
 
   useEffect(() => {
     setSelectedId(null)
@@ -165,7 +180,7 @@ export function CommunityResourceMarketPanel({
           if (!requireRegistration('community_write')) return
           setShowPublish(true)
         }}
-        publishDisabled={!canPublish}
+        publishDisabled={publishDisabled}
         isEmpty={sortedItems.length === 0}
         emptyHint={emptyHint}
       >
@@ -173,6 +188,7 @@ export function CommunityResourceMarketPanel({
           {sortedItems.map((item) => {
             const isOwner = user.profile?.id === item.author.id
             const commentTarget = buildResourceCommentTarget(item.id)
+            const icon = RESOURCE_ICONS[resourceType]
 
             return (
               <CommunityCommentListItemShell
@@ -215,6 +231,7 @@ export function CommunityResourceMarketPanel({
               >
                 <CommunityListFileCard
                   title={item.title}
+                  titleExtra={<CommunityFederationSourceBadge source={item.federationSource} />}
                   meta={
                     <>
                       <span>v{item.version}</span>
@@ -240,7 +257,11 @@ export function CommunityResourceMarketPanel({
           resourceType={resourceType}
           resourceLabel={RESOURCE_LABELS[resourceType]}
           onClose={() => setShowPublish(false)}
-          onPublished={() => void market.load()}
+          onPublished={(message) => {
+            setPublishNotice(message)
+            market.setError(null)
+            void market.load()
+          }}
         />
       ) : null}
 

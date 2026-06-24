@@ -9,15 +9,17 @@ import {
 } from './community-api.client'
 import { notifyCommunityNewsSourcesChanged } from './community-events'
 import { NewsSourcesPanel } from './NewsSourcesPanel'
+import { CommunityFederationSettingsPanel } from './CommunityFederationSettingsPanel'
 
 interface Props {
   onClose: () => void
 }
 
-type SettingsTab = 'hub' | 'rss'
+type SettingsTab = 'hub' | 'federation' | 'rss'
 
 const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: 'hub', label: 'Hub 服务' },
+  { id: 'federation', label: '联邦 Peering' },
   { id: 'rss', label: '资讯源' },
 ]
 
@@ -195,10 +197,12 @@ export function CommunitySettingsModal({ onClose }: Props) {
 
                 <p className="tm-group-settings-hint">
                   {hubStatus?.mode === 'remote'
-                    ? 'Release 包默认连接官方 Hub（https://hub.toolman.app）。Hub 不可达时将使用本地缓存只读展示市场与留言列表。'
-                    : '开发模式默认启动本地 Community Hub（SQLite sidecar）。使用 pnpm dev:p2p:a / dev:p2p:b 双开时可共享同一 Hub 数据目录。'}
+                    ? '已连接远程 Hub（企业版 / 网络版可选）。联邦目录与 P2P 资源同步在社区版默认开启。'
+                    : '社区版默认本地 Hub + P2P 联邦。使用 pnpm dev:p2p:a / dev:p2p:b 双开时可共享同一 Hub 数据目录；跨实例资源通过 libp2p 联邦同步。'}
                 </p>
               </div>
+            ) : activeTab === 'federation' ? (
+              <CommunityFederationSettingsPanel embedded />
             ) : (
               <NewsSourcesPanel onChanged={() => notifyCommunityNewsSourcesChanged()} embedded />
             )}

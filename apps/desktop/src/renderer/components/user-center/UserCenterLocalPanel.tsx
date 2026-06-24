@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import { isRegisteredAuthSession } from '@toolman/shared'
-
-import { USER_ROLE_LABELS } from '../../features/community/community-user-utils'
+import {
+  resolveUserTypeLabel,
+} from '../../features/user/user-account-utils'
 import type { useUserAccount } from '../../features/user/useUserAccount'
 import { formatAccountStatusLabel, formatBindingSummary } from '../../features/user/user-account-utils'
 import { getAvatarFallbackLabel, shortenId } from '../../features/user/user-avatar-utils'
@@ -84,10 +84,7 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
   const statusLabel = formatAccountStatusLabel(authSession)
   const visibleBindings =
     authSession?.isLoggedIn && authSession.bindings.length > 0 ? authSession.bindings : []
-  const communityRoleLabel =
-    community && isRegisteredAuthSession(authSession ?? { registrationStatus: 'guest' })
-      ? USER_ROLE_LABELS[community.role]
-      : null
+  const userTypeLabel = resolveUserTypeLabel(authSession, community?.role)
 
   const saveDisplayName = () => {
     const trimmed = displayName.trim()
@@ -132,13 +129,11 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
               </button>
             </div>
             <StatusBadges label={statusLabel} />
-            {communityRoleLabel ? (
-              <div className="tm-user-center-profile-tags">
-                <span className="tm-user-center-profile-tag tm-user-center-profile-tag--accent">
-                  {communityRoleLabel}
-                </span>
-              </div>
-            ) : null}
+            <div className="tm-user-center-profile-tags">
+              <span className="tm-user-center-profile-tag tm-user-center-profile-tag--accent">
+                {userTypeLabel}
+              </span>
+            </div>
             {visibleBindings.length ? (
               <div className="tm-user-center-profile-bindings">
                 {visibleBindings.map((binding) => (

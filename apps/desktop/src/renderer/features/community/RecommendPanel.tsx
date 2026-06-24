@@ -12,6 +12,7 @@ import { formatCommunityCount } from './community-market-utils'
 import { formatNewsArticleDescription, formatNewsDate } from './community-news-utils'
 import { useCommunityRecommendations } from './useCommunityRecommendations'
 import { useCommunityPanelStatus } from './community-panel-status'
+import { CommunityFederationSourceBadge } from './CommunityFederationSourceBadge'
 
 import type { CommunityNewsArticle, CommunityResourceItem } from '@toolman/shared'
 import type { ReactNode } from 'react'
@@ -19,7 +20,10 @@ import type { ReactNode } from 'react'
 function ResourceRecommendCard({ item }: { item: CommunityResourceItem }) {
   return (
     <article className="tm-community-recommend-card">
-      <h4 className="tm-community-recommend-card-title">{item.title}</h4>
+      <div className="tm-community-recommend-card-title-row">
+        <h4 className="tm-community-recommend-card-title">{item.title}</h4>
+        <CommunityFederationSourceBadge source={item.federationSource} />
+      </div>
       <p className="tm-community-recommend-card-meta">
         {item.author.displayName} · v{item.version} · {formatCommunityCount(item.installCount)} 次安装
       </p>

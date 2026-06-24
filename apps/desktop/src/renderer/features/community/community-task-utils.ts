@@ -13,6 +13,7 @@ export const TASK_TYPE_LABELS: Record<CommunityTaskType, string> = {
 
 export const TASK_STATUS_LABELS: Record<CommunityTaskStatus, string> = {
   draft: '草稿',
+  pending_review: '待审核',
   open: '开放中',
   assigned: '已指派',
   in_progress: '进行中',

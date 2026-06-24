@@ -55,14 +55,33 @@ import {
   type CommunityModerationUserUnbanInput,
   type CommunityModerationDeviceBanInput,
   type CommunityModerationDeviceUnbanInput,
+  type CommunityHubConfig,
+  type CommunityHubConfigUpdateInput,
+  type CommunityFederationStatusOutput,
   type IpcResult,
 } from '@toolman/shared'
 
 function unwrap<T>(result: IpcResult<T>): T {
   if (!result.ok) {
-    throw new Error(result.error.message)
+    throw new Error(formatIpcErrorMessage(result.error.message))
   }
   return result.data
+}
+
+function formatIpcErrorMessage(message: string): string {
+  if (!message.startsWith('[')) return message
+  try {
+    const issues = JSON.parse(message) as Array<{
+      path?: Array<string | number>
+      message?: string
+    }>
+    const first = issues[0]
+    if (!first?.message) return message
+    const path = first.path?.filter((segment) => typeof segment === 'string').join('.')
+    return path ? `${path}: ${first.message}` : first.message
+  } catch {
+    return message
+  }
 }
 
 async function invokeIpc<T>(channel: IpcChannel, input?: unknown): Promise<T> {
@@ -75,6 +94,28 @@ export async function getCommunityHubStatus(): Promise<CommunityHubStatusOutput>
 
 export async function getCommunityHubHealth(): Promise<CommunityHubHealthOutput> {
   return invokeIpc(IpcChannel.CommunityHubHealth)
+}
+
+export async function getCommunityHubConfig(): Promise<CommunityHubConfig> {
+  return invokeIpc(IpcChannel.CommunityHubConfigGet)
+}
+
+export async function updateCommunityHubConfig(
+  input: CommunityHubConfigUpdateInput,
+): Promise<CommunityHubConfig> {
+  return invokeIpc(IpcChannel.CommunityHubConfigUpdate, input)
+}
+
+export async function getCommunityFederationStatus(): Promise<CommunityFederationStatusOutput> {
+  return invokeIpc(IpcChannel.CommunityFederationStatusGet)
+}
+
+export async function syncCommunityHubPeering(): Promise<{
+  syncState: CommunityFederationStatusOutput['syncState']
+  federatedCatalogEntryCount: number
+  libp2pBootstrapAdded: number
+}> {
+  return invokeIpc(IpcChannel.CommunityHubPeeringSync)
 }
 
 export async function listCommunityResources(
@@ -97,6 +138,12 @@ export async function publishCommunityResource(
   input: CommunityResourcePublishInput,
 ): Promise<CommunityResourceItem> {
   return invokeIpc(IpcChannel.CommunityResourcePublish, input)
+}
+
+export async function exportCommunityKnowledgeBundle(
+  kbId: string,
+): Promise<{ packagePath: string }> {
+  return invokeIpc(IpcChannel.CommunityKnowledgeBundleExport, { kbId })
 }
 
 export async function deleteCommunityResource(id: string): Promise<{ deleted: boolean }> {
@@ -285,6 +332,12 @@ export async function approveCommunityModerationResource(
   input: CommunityModerationResourceActionInput,
 ): Promise<{ id: string; title: string; status: string }> {
   return invokeIpc(IpcChannel.CommunityModerationResourceApprove, input)
+}
+
+export async function approveCommunityModerationTask(
+  input: CommunityModerationResourceActionInput,
+): Promise<{ id: string; title: string; status: string }> {
+  return invokeIpc(IpcChannel.CommunityModerationTaskApprove, input)
 }
 
 export async function banCommunityModerationUser(
