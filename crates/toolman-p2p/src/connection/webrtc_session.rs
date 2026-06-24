@@ -23,7 +23,7 @@ use super::types::{
     EVENTS_CHANNEL_LABEL, FILES_CHANNEL_LABEL, HANDSHAKE_PING, HANDSHAKE_PONG,
 };
 use crate::crypto::{ChannelCipherSet, WorkspaceKeyRegistry, WORKSPACE_KEY_LEN};
-use crate::state::configured_ice_servers;
+use crate::state::configured_ice_server_entries;
 
 struct SessionCiphers {
     scope_id: String,
@@ -59,11 +59,20 @@ impl WebRtcSession {
         let ice_servers = if lan_only {
             Vec::new()
         } else {
-            configured_ice_servers()
+            configured_ice_server_entries()
                 .into_iter()
-                .map(|url| RTCIceServer {
-                    urls: vec![url],
-                    ..Default::default()
+                .map(|entry| {
+                    let mut server = RTCIceServer {
+                        urls: entry.urls,
+                        ..Default::default()
+                    };
+                    if let Some(username) = entry.username {
+                        server.username = username;
+                    }
+                    if let Some(credential) = entry.credential {
+                        server.credential = credential;
+                    }
+                    server
                 })
                 .collect()
         };

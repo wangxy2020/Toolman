@@ -68,15 +68,35 @@ export type P2pDeviceGetInfoOutput = z.infer<typeof P2pDeviceGetInfoOutputSchema
 
 export const P2pNetworkGetConfigOutputSchema = z.object({
   stunServers: z.array(z.string().min(1)),
+  iceServers: z.array(
+    z.object({
+      urls: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
+      username: z.string().min(1).optional(),
+      credential: z.string().min(1).optional(),
+    }),
+  ),
 })
 
 export const P2pNetworkSetStunServersInputSchema = z.object({
   stunServers: z.array(z.string().min(1)),
 })
 
+export const P2pNetworkSetIceServersInputSchema = z.object({
+  iceServers: z.array(
+    z.object({
+      urls: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
+      username: z.string().min(1).optional(),
+      credential: z.string().min(1).optional(),
+    }),
+  ),
+})
+
 export const P2pNetworkSetStunServersOutputSchema = z.object({
   stunServers: z.array(z.string().min(1)),
+  iceServers: P2pNetworkGetConfigOutputSchema.shape.iceServers,
 })
+
+export const P2pNetworkSetIceServersOutputSchema = P2pNetworkGetConfigOutputSchema
 
 // --- Connection ---
 

@@ -11,12 +11,25 @@ import { ensureP2pDeviceIdentity } from './p2p-device-identity.service'
 import { Libp2pBridge } from './libp2p-bridge'
 import { broadcastP2pNetworkSnapshotUpdated } from './p2p-network-broadcast'
 import { ensureDefaultLibp2pConfig, readLibp2pConfig } from './p2p-libp2p.config'
+import {
+  createInitialLibp2pRestartStatus,
+  nextLibp2pRestartDelayMs,
+  notifyLibp2pRestartListeners,
+  type Libp2pRestartStatus,
+} from './p2p-libp2p-restart'
+import { ensureLibp2pDependentPubsubResync } from './p2p-libp2p-resync'
 
 const POLL_INTERVAL_MS = 3_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let restartTimer: ReturnType<typeof setTimeout> | null = null
 let started = false
+let shutdownRequested = false
+let restartInFlight = false
+let bootstrapCompleted = false
+let lastObservedRunning = false
 let lastError: string | null = null
+let restartStatus = createInitialLibp2pRestartStatus(false)
 
 function parseDhtMode(value: string): P2pNetworkSnapshot['dht']['mode'] {
   const parsed = P2pLibp2pDhtModeSchema.safeParse(value)
@@ -30,6 +43,10 @@ async function countWebrtcConnectedPeers(): Promise<number> {
   } catch {
     return 0
   }
+}
+
+export function getLibp2pRestartStatus(): Libp2pRestartStatus {
+  return { ...restartStatus }
 }
 
 export async function buildP2pNetworkSnapshot(): Promise<P2pNetworkSnapshot> {
@@ -110,14 +127,107 @@ export function getP2pNetworkSnapshot(): Promise<P2pNetworkSnapshot> {
   return buildP2pNetworkSnapshot()
 }
 
+function clearRestartTimer(): void {
+  if (restartTimer) {
+    clearTimeout(restartTimer)
+    restartTimer = null
+  }
+  restartStatus = {
+    ...restartStatus,
+    nextDelayMs: null,
+  }
+}
+
+function scheduleLibp2pRestart(reason: string): void {
+  if (shutdownRequested || restartTimer || restartInFlight || !restartStatus.enabled) {
+    return
+  }
+
+  const attempt = restartStatus.attempt + 1
+  const delayMs = nextLibp2pRestartDelayMs(attempt)
+  restartStatus = {
+    ...restartStatus,
+    attempt,
+    nextDelayMs: delayMs,
+    lastReason: reason,
+  }
+
+  recordDiagnosticEvent(
+    'libp2p',
+    'warn',
+    `scheduling swarm restart in ${delayMs}ms (attempt ${attempt}): ${reason}`,
+  )
+
+  restartTimer = setTimeout(() => {
+    restartTimer = null
+    restartStatus = {
+      ...restartStatus,
+      nextDelayMs: null,
+    }
+    void restartLibp2pNetwork(reason)
+  }, delayMs)
+}
+
+async function restartLibp2pNetwork(reason: string): Promise<void> {
+  if (shutdownRequested || restartInFlight || !Libp2pBridge.isAvailable()) {
+    return
+  }
+
+  restartInFlight = true
+  try {
+    try {
+      Libp2pBridge.networkStop()
+    } catch {
+      // Swarm may already be stopped after an abnormal exit.
+    }
+
+    const startedOk = await bootstrapLibp2pNetwork()
+    if (startedOk) {
+      restartStatus = {
+        ...restartStatus,
+        attempt: 0,
+        lastRestartAt: Date.now(),
+        lastReason: reason,
+        nextDelayMs: null,
+      }
+      await notifyLibp2pRestartListeners()
+      recordDiagnosticEvent('libp2p', 'info', `swarm restart succeeded: ${reason}`)
+      return
+    }
+
+    scheduleLibp2pRestart(`restart failed: ${reason}`)
+  } finally {
+    restartInFlight = false
+  }
+}
+
+function observeLibp2pHealth(running: boolean): void {
+  if (!restartStatus.enabled || shutdownRequested || !bootstrapCompleted) {
+    lastObservedRunning = running
+    return
+  }
+
+  if (lastObservedRunning && !running) {
+    scheduleLibp2pRestart('swarm stopped unexpectedly')
+  }
+
+  lastObservedRunning = running
+}
+
 async function pollAndBroadcast(): Promise<void> {
   const snapshot = await buildP2pNetworkSnapshot()
+  if (Libp2pBridge.isAvailable()) {
+    observeLibp2pHealth(snapshot.libp2pRunning)
+  }
   broadcastP2pNetworkSnapshotUpdated(snapshot)
 }
 
 export function startP2pNetworkManager(): void {
   if (started) return
   started = true
+  shutdownRequested = false
+  restartStatus = createInitialLibp2pRestartStatus(Libp2pBridge.isAvailable())
+  ensureLibp2pDependentPubsubResync()
 
   if (!Libp2pBridge.isAvailable()) {
     recordDiagnosticEvent('libp2p', 'warn', 'toolman-libp2p native module unavailable')
@@ -128,14 +238,20 @@ export function startP2pNetworkManager(): void {
     return
   }
 
-  void bootstrapLibp2pNetwork()
+  void bootstrapLibp2pNetwork().then((running) => {
+    bootstrapCompleted = true
+    lastObservedRunning = running
+    if (!running && !shutdownRequested) {
+      scheduleLibp2pRestart('initial bootstrap failed')
+    }
+  })
 
   pollTimer = setInterval(() => {
     void pollAndBroadcast()
   }, POLL_INTERVAL_MS)
 }
 
-async function bootstrapLibp2pNetwork(): Promise<void> {
+async function bootstrapLibp2pNetwork(): Promise<boolean> {
   try {
     ensureP2pDeviceIdentity()
     if (P2pBridge.isAvailable()) {
@@ -151,20 +267,24 @@ async function bootstrapLibp2pNetwork(): Promise<void> {
       const message = snapshot.error ?? 'libp2p swarm failed to start'
       lastError = message
       recordDiagnosticEvent('libp2p', 'error', message)
-    } else {
-      recordDiagnosticEvent(
-        'libp2p',
-        'info',
-        `network started (peer=${peerId ?? 'unknown'})`,
-      )
+      return false
     }
+
+    lastError = null
+    recordDiagnosticEvent(
+      'libp2p',
+      'info',
+      `network started (peer=${peerId ?? 'unknown'})`,
+    )
+    return true
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     lastError = message
     recordDiagnosticEvent('libp2p', 'error', message)
+    return false
+  } finally {
+    void pollAndBroadcast()
   }
-
-  void pollAndBroadcast()
 }
 
 function sleep(ms: number): Promise<void> {
@@ -185,6 +305,15 @@ async function waitForLibp2pRunning(timeoutMs: number): Promise<boolean> {
 }
 
 export function stopP2pNetworkManager(): void {
+  shutdownRequested = true
+  clearRestartTimer()
+  restartStatus = {
+    ...restartStatus,
+    enabled: false,
+    attempt: 0,
+    nextDelayMs: null,
+  }
+
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
@@ -199,6 +328,8 @@ export function stopP2pNetworkManager(): void {
     }
   }
 
+  lastObservedRunning = false
+  bootstrapCompleted = false
   started = false
 }
 

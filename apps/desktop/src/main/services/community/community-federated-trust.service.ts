@@ -24,41 +24,50 @@ function readBlockedDidsFile(): Set<string> {
   }
 }
 
-let blockedDids = readBlockedDidsFile()
+let blockedDids: Set<string> | undefined
+
+function ensureBlockedDidsLoaded(): Set<string> {
+  if (!blockedDids) {
+    blockedDids = readBlockedDidsFile()
+  }
+  return blockedDids
+}
 
 export function reloadBlockedDids(): void {
   blockedDids = readBlockedDidsFile()
 }
 
 export function listBlockedDids(): string[] {
-  return [...blockedDids]
+  return [...ensureBlockedDidsLoaded()]
 }
 
 export function getBlockedDidCount(): number {
-  return blockedDids.size
+  return ensureBlockedDidsLoaded().size
 }
 
 export function isDidBlocked(did: string): boolean {
-  return blockedDids.has(did)
+  return ensureBlockedDidsLoaded().has(did)
 }
 
 export function blockDid(did: string): void {
   if (!isToolmanDid(did)) {
     throw new Error('Invalid Toolman DID')
   }
-  blockedDids.add(did)
+  const set = ensureBlockedDidsLoaded()
+  set.add(did)
   writeFileSync(
     getBlockedDidsPath(),
-    JSON.stringify({ blockedDids: [...blockedDids] }, null, 2),
+    JSON.stringify({ blockedDids: [...set] }, null, 2),
     'utf8',
   )
 }
 
 export function unblockDid(did: string): void {
-  blockedDids.delete(did)
+  const set = ensureBlockedDidsLoaded()
+  set.delete(did)
   writeFileSync(
     getBlockedDidsPath(),
-    JSON.stringify({ blockedDids: [...blockedDids] }, null, 2),
+    JSON.stringify({ blockedDids: [...set] }, null, 2),
     'utf8',
   )
 }

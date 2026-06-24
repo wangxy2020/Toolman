@@ -22,10 +22,12 @@ vi.mock('../bootstrap/database', () => ({
 vi.mock('./community/community-bridge.service', () => ({
   getCommunityHubStatus: () => ({
     running: false,
+    mode: 'local',
     port: null,
     host: '127.0.0.1',
     baseUrl: null,
     binaryPath: null,
+    offlineReadOnly: false,
   }),
 }))
 
@@ -99,6 +101,10 @@ vi.mock('./p2p/p2p-workspace.service', () => ({
   listP2pWorkspaces: () => [],
 }))
 
+vi.mock('./p2p/p2p-network.config', () => ({
+  getP2pIceServers: () => [{ urls: 'stun:stun.l.google.com:19302' }],
+}))
+
 describe('getAppDiagnostics', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -112,6 +118,7 @@ describe('getAppDiagnostics', () => {
     expect(snapshot.p2p.nativeAvailable).toBe(true)
     expect(snapshot.p2p.deviceId).toBe('00000000-0000-0000-0000-000000000099')
     expect(snapshot.communityHub.running).toBe(false)
-    expect(snapshot.ingest.pendingJobs).toBe(0)
+    expect(snapshot.p2p.iceServersSummary).toContain('STUN')
+    expect(snapshot.p2p.wanConnectedPeers).toBe(0)
   })
 })

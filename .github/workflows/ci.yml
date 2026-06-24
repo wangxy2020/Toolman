@@ -28,6 +28,9 @@ jobs:
       - name: Build packages
         run: pnpm --filter @toolman/desktop^... build
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -36,6 +39,9 @@ jobs:
 
       - name: P2P schema smoke
         run: pnpm --filter @toolman/db test:p2p-schema
+
+      - name: Auth schema smoke
+        run: pnpm --filter @toolman/db test:auth-schema
 
       - name: P2P desktop integration
         run: pnpm --filter @toolman/desktop test:p2p-integration
@@ -65,8 +71,26 @@ jobs:
       - name: Build P2P native (current arch)
         run: pnpm build:p2p
 
+      - name: Build libp2p native (current arch)
+        run: pnpm build:libp2p
+
       - name: Rust unit tests (toolman-p2p)
         run: cargo test -p toolman-p2p
 
+      - name: Rust unit tests (toolman-libp2p)
+        run: cargo test -p toolman-libp2p
+
       - name: Verify ping
         run: node -e "const m=require('./apps/desktop/native/toolman-p2p.darwin-arm64.node'); if(m.ping()!=='pong') process.exit(1)"
+
+      - name: Build desktop for E2E
+        run: |
+          pnpm build:community-hub
+          pnpm --filter @toolman/desktop^... build
+          pnpm --filter @toolman/desktop build
+
+      - name: Playwright E2E (GA smoke)
+        run: pnpm --filter @toolman/desktop test:e2e:quick
+        env:
+          CI: true
+          ELECTRON_RUN_AS_NODE: ''

@@ -32,6 +32,7 @@ import { useCommunityModerationCategory } from './community-moderation-category-
 import { useCommunityAdminManagement } from './useCommunityAdminManagement'
 import { useCommunityModeration } from './useCommunityModeration'
 import { useCommunityUser } from './useCommunityUser'
+import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 
 type PendingAction =
   | {
@@ -316,6 +317,16 @@ export function AdminModerationPanel() {
     return [...new Set(messages)]
   }, [adminManagement.error, moderation.error, moderation.scanError])
 
+  useRegisterModulePanelError('community-moderation', errorMessages[0] ?? null)
+  useRegisterModulePanelStatus(
+    'community-moderation-loading',
+    moderation.loading ? { tone: 'info', message: '加载管理数据…' } : null,
+  )
+  useRegisterModulePanelStatus(
+    'community-moderation-acting',
+    moderation.acting ? { tone: 'info', message: '正在执行管理操作…' } : null,
+  )
+
   if (!isModerator) {
     return (
       <div className="tm-community-market tm-community-user-center">
@@ -387,12 +398,6 @@ export function AdminModerationPanel() {
 
   return (
     <div className="tm-community-market tm-community-user-center">
-      {errorMessages.map((message) => (
-        <div key={message} className="tm-error-bar">
-          {message}
-        </div>
-      ))}
-
       <div className="tm-user-center-overview">
         <CommunityPanelHeader
           title="社区管理"

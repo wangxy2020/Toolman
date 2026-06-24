@@ -1,6 +1,6 @@
 # Toolman
 
-AI 桌面客户端（Cherry Studio 风格），基于 Electron + React + SQLite。当前为 **Beta**：除多 Provider 对话与知识库外，已包含 **P2P 群组同步、社区 Hub、会员与渠道** 等能力；部分模块仍为占位或本地模拟。
+AI 桌面客户端（Cherry Studio 风格），基于 Electron + React + SQLite。当前为 **Beta**（**RC1 内部 dogfood**：`0.2.0-rc.1`，见 [RC1 手册](docs/engineering/RC1_DOGFOOD.md)）：除多 Provider 对话与知识库外，已包含 **P2P 群组同步、社区 Hub、会员与渠道** 等能力；部分模块仍为占位或本地模拟。
 
 ## 环境要求
 

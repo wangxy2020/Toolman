@@ -1,0 +1,140 @@
+name: Release Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Update channel
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - stable
+      publish:
+        description: Upload to CDN (requires secrets)
+        required: true
+        default: false
+        type: boolean
+      notes:
+        description: Release notes (manifest.json)
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+env:
+  TOOLMAN_UPDATE_FEED_URL: https://releases.toolman.app
+  CSC_IDENTITY_AUTO_DISCOVERY: false
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop release (macOS)
+        env:
+          TOOLMAN_UPDATE_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
+          TOOLMAN_RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.notes || format('Tag {0}', github.ref_name) }}
+        run: bash scripts/build-desktop-release.sh
+
+      - name: Publish to CDN
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          TOOLMAN_UPDATE_CHANNEL: ${{ inputs.channel }}
+          TOOLMAN_UPDATE_PLATFORM: darwin
+          TOOLMAN_UPDATE_ARCH: arm64
+          TOOLMAN_UPDATE_S3_BUCKET: ${{ secrets.TOOLMAN_UPDATE_S3_BUCKET }}
+          TOOLMAN_UPDATE_S3_ENDPOINT: ${{ secrets.TOOLMAN_UPDATE_S3_ENDPOINT }}
+          TOOLMAN_UPDATE_S3_PREFIX: ${{ secrets.TOOLMAN_UPDATE_S3_PREFIX }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TOOLMAN_UPDATE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TOOLMAN_UPDATE_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: bash scripts/publish-update-feed.sh
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
+          path: |
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/latest-mac.yml
+            apps/desktop/dist/*-manifest.json
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop release (Windows)
+        shell: bash
+        env:
+          TOOLMAN_UPDATE_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
+          TOOLMAN_RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.notes || format('Tag {0}', github.ref_name) }}
+        run: bash scripts/build-desktop-release.sh
+
+      - name: Publish to CDN
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        shell: bash
+        env:
+          TOOLMAN_UPDATE_CHANNEL: ${{ inputs.channel }}
+          TOOLMAN_UPDATE_PLATFORM: win32
+          TOOLMAN_UPDATE_ARCH: x64
+          TOOLMAN_UPDATE_S3_BUCKET: ${{ secrets.TOOLMAN_UPDATE_S3_BUCKET }}
+          TOOLMAN_UPDATE_S3_ENDPOINT: ${{ secrets.TOOLMAN_UPDATE_S3_ENDPOINT }}
+          TOOLMAN_UPDATE_S3_PREFIX: ${{ secrets.TOOLMAN_UPDATE_S3_PREFIX }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TOOLMAN_UPDATE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TOOLMAN_UPDATE_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: bash scripts/publish-update-feed.sh
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/latest.yml
+            apps/desktop/dist/*-manifest.json
+
+  verify-staging-feed:
+    needs: [build-macos]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify remote OTA feed
+        env:
+          TOOLMAN_UPDATE_CHANNEL: ${{ inputs.channel }}
+        run: bash scripts/verify-update-feed.sh "$TOOLMAN_UPDATE_FEED_URL" "$TOOLMAN_UPDATE_CHANNEL" darwin arm64

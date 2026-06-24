@@ -4,6 +4,7 @@ import { createServer } from 'node:net'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+import type { CommunityHubMode } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../diagnostics-log'
 
 import {
@@ -18,6 +19,13 @@ import {
 import { CommunityHttpClient } from './community-http.client'
 import { resolveCommunityHubAuth } from './community-hub-auth.service'
 import { getHubJwtSecret } from '../auth/hub-jwt-secret.service'
+import {
+  ensureDefaultCommunityHubConfig,
+  getCommunityHubMode,
+  readCommunityHubConfig,
+  resolveCommunityHubBaseUrl,
+} from './community-hub.config'
+import { hasAnyCommunityHubCache } from './community-hub-cache.service'
 
 export interface CommunityHubPortFile {
   host: string
@@ -28,10 +36,12 @@ export interface CommunityHubPortFile {
 
 export interface CommunityHubStatus {
   running: boolean
+  mode: CommunityHubMode
   port: number | null
   host: string
   baseUrl: string | null
   binaryPath: string | null
+  offlineReadOnly: boolean
   error?: string
 }
 
@@ -43,10 +53,12 @@ let childProcess: ChildProcess | null = null
 let httpClient: CommunityHttpClient | null = null
 let currentStatus: CommunityHubStatus = {
   running: false,
+  mode: 'local',
   port: null,
   host: COMMUNITY_HUB_HOST,
   baseUrl: null,
   binaryPath: null,
+  offlineReadOnly: false,
 }
 
 function log(message: string, error?: unknown): void {
@@ -181,14 +193,70 @@ function attachProcessLogging(process: ChildProcess): void {
 async function markStopped(): Promise<void> {
   childProcess = null
   httpClient = null
+  const mode = getCommunityHubMode()
   currentStatus = {
     running: false,
+    mode,
     port: null,
-    host: COMMUNITY_HUB_HOST,
-    baseUrl: null,
+    host: mode === 'remote' ? '' : COMMUNITY_HUB_HOST,
+    baseUrl: mode === 'remote' ? resolveCommunityHubBaseUrl() : null,
     binaryPath: currentStatus.binaryPath,
+    offlineReadOnly: mode === 'remote' && hasAnyCommunityHubCache(),
+    error: mode === 'remote' ? currentStatus.error : undefined,
   }
-  await removeCommunityHubPortFile()
+  if (mode === 'local') {
+    await removeCommunityHubPortFile()
+  }
+}
+
+export function markCommunityHubOfflineReadOnly(error?: string): void {
+  currentStatus = {
+    ...currentStatus,
+    running: false,
+    offlineReadOnly: hasAnyCommunityHubCache(),
+    error: error ?? currentStatus.error ?? '官方 Hub 暂不可达，已切换为本地缓存只读',
+  }
+}
+
+async function connectRemoteCommunityHub(baseUrl: string): Promise<CommunityHubStatus> {
+  const client = new CommunityHttpClient({
+    baseUrl,
+    resolveAuth: resolveCommunityHubAuth,
+  })
+
+  try {
+    await waitForHealth(client)
+    httpClient = client
+    currentStatus = {
+      running: true,
+      mode: 'remote',
+      port: null,
+      host: '',
+      baseUrl,
+      binaryPath: null,
+      offlineReadOnly: false,
+    }
+    log(`connected to remote hub at ${baseUrl}`)
+    return getCommunityHubStatus()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const offlineReadOnly = hasAnyCommunityHubCache()
+    httpClient = null
+    currentStatus = {
+      running: false,
+      mode: 'remote',
+      port: null,
+      host: '',
+      baseUrl,
+      binaryPath: null,
+      offlineReadOnly,
+      error: offlineReadOnly
+        ? `官方 Hub 暂不可达，已切换为本地缓存只读（${message}）`
+        : `无法连接官方 Hub：${message}`,
+    }
+    recordDiagnosticEvent('community-hub', 'warn', currentStatus.error ?? message)
+    return getCommunityHubStatus()
+  }
 }
 
 async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null> {
@@ -217,10 +285,12 @@ async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null
       httpClient = client
       currentStatus = {
         running: true,
+        mode: 'local',
         port,
         host: COMMUNITY_HUB_HOST,
         baseUrl: buildCommunityHubBaseUrl(port),
         binaryPath,
+        offlineReadOnly: false,
       }
       log(`attached to existing sidecar at ${currentStatus.baseUrl}`)
       return getCommunityHubStatus()
@@ -252,10 +322,12 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
       'toolman-community-hub binary not found. Run: pnpm --filter @toolman/desktop build:community-hub'
     currentStatus = {
       running: false,
+      mode: 'local',
       port: null,
       host: COMMUNITY_HUB_HOST,
       baseUrl: null,
       binaryPath: null,
+      offlineReadOnly: false,
       error,
     }
     log(error)
@@ -319,10 +391,12 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
     httpClient = client
     currentStatus = {
       running: true,
+      mode: 'local',
       port,
       host: COMMUNITY_HUB_HOST,
       baseUrl: buildCommunityHubBaseUrl(port),
       binaryPath,
+      offlineReadOnly: false,
     }
 
     log(`sidecar ready at ${currentStatus.baseUrl}`)
@@ -331,10 +405,12 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
 
   currentStatus = {
     running: false,
+    mode: 'local',
     port: null,
     host: COMMUNITY_HUB_HOST,
     baseUrl: null,
     binaryPath,
+    offlineReadOnly: false,
     error: lastError,
   }
   return getCommunityHubStatus()
@@ -377,7 +453,45 @@ async function stopCommunityHub(target = childProcess): Promise<void> {
 }
 
 export async function shutdownCommunityHub(): Promise<void> {
+  if (getCommunityHubMode() === 'remote') {
+    httpClient = null
+    currentStatus = {
+      ...currentStatus,
+      running: false,
+    }
+    return
+  }
   await stopCommunityHub()
+}
+
+export async function bootstrapCommunityHub(): Promise<CommunityHubStatus> {
+  if (!app.isReady()) {
+    await app.whenReady()
+  }
+
+  ensureDefaultCommunityHubConfig()
+  const config = readCommunityHubConfig()
+
+  if (config.mode === 'remote') {
+    const baseUrl = resolveCommunityHubBaseUrl(config)
+    if (!baseUrl) {
+      currentStatus = {
+        running: false,
+        mode: 'remote',
+        port: null,
+        host: '',
+        baseUrl: null,
+        binaryPath: null,
+        offlineReadOnly: false,
+        error: '远程 Hub 未配置 baseUrl',
+      }
+      return getCommunityHubStatus()
+    }
+    return connectRemoteCommunityHub(baseUrl)
+  }
+
+  await restartCommunityHubIfBinaryUpdated()
+  return startCommunityHub()
 }
 
 async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
@@ -403,12 +517,4 @@ async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
   } finally {
     await removeCommunityHubPortFile()
   }
-}
-
-export async function bootstrapCommunityHub(): Promise<CommunityHubStatus> {
-  if (!app.isReady()) {
-    await app.whenReady()
-  }
-  await restartCommunityHubIfBinaryUpdated()
-  return startCommunityHub()
 }

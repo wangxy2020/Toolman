@@ -1,6 +1,6 @@
 {
   "name": "@toolman/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.1",
   "private": true,
   "description": "Toolman desktop AI client",
   "main": "./out/main/index.js",
@@ -12,13 +12,16 @@
     "predev": "pnpm build:p2p && pnpm build:libp2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist": "pnpm build && electron-builder --config electron-builder.yml",
+    "dist": "pnpm build && pnpm exec electron-builder --config electron-builder.yml --publish never",
+    "dist:release": "bash ../../scripts/build-desktop-release.sh",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "pnpm typecheck",
     "test": "vitest run",
     "test:p2p-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
-    "test:docx-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/docx-review.integration.test.ts"
+    "test:docx-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/docx-review.integration.test.ts",
+    "test:e2e": "bash scripts/run-e2e.sh",
+    "test:e2e:quick": "playwright test"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -33,6 +36,7 @@
     "authing-js-sdk": "^4.23.55",
     "better-sqlite3": "^11.10.0",
     "chokidar": "^4.0.3",
+    "electron-updater": "^6.6.2",
     "firebase": "^11.10.0",
     "highlight.js": "^11.11.1",
     "jose": "^6.2.3",
@@ -43,19 +47,21 @@
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "react-virtuoso": "^4.12.6",
-    "yjs": "^13.6.27",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
+    "@playwright/test": "^1.52.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/qrcode": "^1.5.5",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.5.2",
     "electron": "^36.5.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",

@@ -11816,6 +11816,13 @@ html.theme-dark .tm-agent-workdir-browse {
   font-weight: 500;
 }
 
+.tm-about-update-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--tm-text-secondary);
+}
+
 .tm-about-outline-btn {
   flex-shrink: 0;
   padding: 6px 14px;
@@ -17132,6 +17139,25 @@ html.theme-dark .tm-community-publish-interval-input {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.tm-community-offline-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--tm-warning, #faad14) 35%, var(--tm-border));
+  background: color-mix(in srgb, var(--tm-warning, #faad14) 10%, var(--tm-bg));
+  color: var(--tm-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tm-community-offline-banner strong {
+  color: var(--tm-text);
+  font-size: 13px;
 }
 
 .tm-community-board-compose,

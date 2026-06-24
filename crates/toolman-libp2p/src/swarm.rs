@@ -22,7 +22,7 @@ use crate::pubsub::SwarmCommand;
 use crate::pubsub_state::{push_pubsub_message, PubsubInboxMessage};
 use crate::state::now_ms;
 use crate::state::{
-    read_snapshot, remove_peer, set_dht_ready, set_running, set_stopped, upsert_peer, NetworkSnapshot,
+    read_snapshot, remove_peer, set_dht_ready, set_running, upsert_peer, NetworkSnapshot,
 };
 
 const PROTOCOL_VERSION: &str = "/toolman/libp2p/1.0.0";
@@ -82,7 +82,6 @@ pub async fn run_network_swarm(
         }
     }
 
-    set_stopped(&snapshot);
     Ok(())
 }
 

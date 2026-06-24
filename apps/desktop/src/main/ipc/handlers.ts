@@ -3,6 +3,11 @@ import {
   IpcChannel,
   AppGetInfoOutputSchema,
   AppGetPathsOutputSchema,
+  AppUpdateSetAutoInputSchema,
+  AppUpdateStatusSchema,
+  CrashReportSetUploadInputSchema,
+  CrashReportUploadResultSchema,
+  CrashReportUploadStatusSchema,
   AssistantDeleteInputSchema,
   AuthBindProviderInputSchema,
   AuthDeleteAccountInputSchema,
@@ -99,6 +104,8 @@ import {
   P2pNetworkGetSnapshotOutputSchema,
   P2pNetworkSetStunServersInputSchema,
   P2pNetworkSetStunServersOutputSchema,
+  P2pNetworkSetIceServersInputSchema,
+  P2pNetworkSetIceServersOutputSchema,
   P2pDeviceGetInfoOutputSchema,
   P2pPingOutputSchema,
   P2pWorkspaceCreateInputSchema,
@@ -199,7 +206,9 @@ import * as p2pGroupAgentProxyService from '../services/p2p/p2p-group-agent-prox
 import * as p2pGroupChatService from '../services/p2p/p2p-group-chat.service'
 import {
   applyP2pNetworkConfig,
+  getP2pIceServers,
   getP2pStunServers,
+  setP2pIceServers,
   setP2pStunServers,
 } from '../services/p2p/p2p-network.config'
 import { getP2pNetworkSnapshot } from '../services/p2p/p2p-network-manager.service'
@@ -220,6 +229,50 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const message = error instanceof Error ? error.message : 'Failed to collect diagnostics'
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
     }
+  },
+
+  [IpcChannel.AppCrashReportGetStatus]: async () => {
+    const { getCrashReportUploadStatus } = await import('../services/crash-report.service')
+    return ipcOk(CrashReportUploadStatusSchema.parse(getCrashReportUploadStatus()))
+  },
+
+  [IpcChannel.AppCrashReportSetUpload]: async (input) => {
+    const parsed = CrashReportSetUploadInputSchema.parse(input)
+    const { setCrashReportUploadEnabled } = await import('../services/crash-report.service')
+    return ipcOk(
+      CrashReportUploadStatusSchema.parse(setCrashReportUploadEnabled(parsed.uploadEnabled)),
+    )
+  },
+
+  [IpcChannel.AppCrashReportUploadNow]: async () => {
+    const { flushPendingCrashReports } = await import('../services/crash-report.service')
+    return ipcOk(CrashReportUploadResultSchema.parse(await flushPendingCrashReports()))
+  },
+
+  [IpcChannel.AppUpdateGetStatus]: async () => {
+    const { getAppUpdateStatus } = await import('../services/app-update.service')
+    return ipcOk(AppUpdateStatusSchema.parse(getAppUpdateStatus()))
+  },
+
+  [IpcChannel.AppUpdateCheck]: async () => {
+    const { checkForAppUpdate } = await import('../services/app-update.service')
+    return ipcOk(AppUpdateStatusSchema.parse(await checkForAppUpdate()))
+  },
+
+  [IpcChannel.AppUpdateDownload]: async () => {
+    const { downloadAppUpdate } = await import('../services/app-update.service')
+    return ipcOk(AppUpdateStatusSchema.parse(await downloadAppUpdate()))
+  },
+
+  [IpcChannel.AppUpdateInstall]: async () => {
+    const { installAppUpdate } = await import('../services/app-update.service')
+    return ipcOk(AppUpdateStatusSchema.parse(installAppUpdate()))
+  },
+
+  [IpcChannel.AppUpdateSetAuto]: async (input) => {
+    const parsed = AppUpdateSetAutoInputSchema.parse(input)
+    const { setAppUpdateAutoEnabled } = await import('../services/app-update.service')
+    return ipcOk(AppUpdateStatusSchema.parse(setAppUpdateAutoEnabled(parsed.autoUpdate)))
   },
 
   [IpcChannel.BillingListPlans]: async () => {
@@ -1181,7 +1234,13 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pNetworkGetConfig]: async () => {
     try {
       applyP2pNetworkConfig()
-      return ipcOk(P2pNetworkGetConfigOutputSchema.parse({ stunServers: getP2pStunServers() }))
+      const iceServers = getP2pIceServers()
+      return ipcOk(
+        P2pNetworkGetConfigOutputSchema.parse({
+          stunServers: getP2pStunServers(),
+          iceServers,
+        }),
+      )
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to read network config'
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
@@ -1191,11 +1250,34 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pNetworkSetStunServers]: async (input) => {
     try {
       const parsed = P2pNetworkSetStunServersInputSchema.parse(input)
-      const stunServers = setP2pStunServers(parsed.stunServers)
+      setP2pStunServers(parsed.stunServers)
       applyP2pNetworkConfig()
-      return ipcOk(P2pNetworkSetStunServersOutputSchema.parse({ stunServers }))
+      const iceServers = getP2pIceServers()
+      return ipcOk(
+        P2pNetworkSetStunServersOutputSchema.parse({
+          stunServers: getP2pStunServers(),
+          iceServers,
+        }),
+      )
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : 'Failed to update STUN servers'
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pNetworkSetIceServers]: async (input) => {
+    try {
+      const parsed = P2pNetworkSetIceServersInputSchema.parse(input)
+      setP2pIceServers(parsed.iceServers)
+      applyP2pNetworkConfig()
+      return ipcOk(
+        P2pNetworkSetIceServersOutputSchema.parse({
+          stunServers: getP2pStunServers(),
+          iceServers: getP2pIceServers(),
+        }),
+      )
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to update ICE servers'
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },

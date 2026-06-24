@@ -9,6 +9,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { AppGetDiagnosticsOutput } from '@toolman/shared'
+import { compareSemver } from '@toolman/shared'
 
 export interface LocalUpdateManifest {
   channel: string
@@ -95,10 +96,18 @@ export function recordCrashReport(input: {
       ),
       'utf8',
     )
+    onCrashReportRecorded(path)
     return path
   } catch {
     return null
   }
+}
+
+export function onCrashReportRecorded(path: string | null): void {
+  if (!path) return
+  void import('./crash-report.service')
+    .then(({ notifyCrashReportRecorded }) => notifyCrashReportRecorded())
+    .catch(() => undefined)
 }
 
 export function countCrashReports(): number {
@@ -118,25 +127,6 @@ export function readLocalUpdateManifest(): LocalUpdateManifest | null {
     return null
   }
 }
-
-export function compareSemver(left: string, right: string): number {
-  const parse = (value: string) =>
-    value
-      .split('.')
-      .map((part) => Number.parseInt(part.replace(/[^0-9].*$/, ''), 10))
-      .map((part) => (Number.isFinite(part) ? part : 0))
-
-  const leftParts = parse(left)
-  const rightParts = parse(right)
-  const length = Math.max(leftParts.length, rightParts.length)
-
-  for (let index = 0; index < length; index += 1) {
-    const delta = (leftParts[index] ?? 0) - (rightParts[index] ?? 0)
-    if (delta !== 0) return delta
-  }
-  return 0
-}
-
 export function getOperationsDiagnostics(): AppGetDiagnosticsOutput['operations'] {
   const manifest = readLocalUpdateManifest()
   const currentVersion = app.getVersion()
@@ -147,6 +137,9 @@ export function getOperationsDiagnostics(): AppGetDiagnosticsOutput['operations'
     logFilePath: diagnosticsLogPath(),
     crashReportDir: crashReportDir(),
     crashReportCount: countCrashReports(),
+    crashReportUploadEnabled: false,
+    crashReportPendingUpload: countCrashReports(),
+    crashReportIngestUrl: null,
     update: {
       channel: manifest?.channel ?? 'local',
       currentVersion,

@@ -34,6 +34,33 @@ describe('community bridge helpers', () => {
 })
 
 describe('CommunityHttpClient', () => {
+  it('parses successful health response via remote baseUrl', async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        ok: true,
+        data: {
+          status: 'healthy',
+          version: '0.2.0',
+          db: 'connected',
+        },
+      }),
+    )
+
+    const client = new CommunityHttpClient({
+      baseUrl: 'https://hub.toolman.app',
+      fetchImpl,
+    })
+
+    const health = await client.health()
+    expect(health.status).toBe('healthy')
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://hub.toolman.app/health',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    )
+  })
+
   it('parses successful health response', async () => {
     const fetchImpl = vi.fn(async () =>
       Response.json({

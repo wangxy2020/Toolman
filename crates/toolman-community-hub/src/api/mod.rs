@@ -1,6 +1,7 @@
 mod auth;
 mod board;
 mod comments;
+mod diagnostics;
 mod error;
 mod health;
 mod install;
@@ -48,6 +49,7 @@ pub fn router(state: AppState) -> Router {
                 .merge(moderation::router())
                 .merge(presence::router())
                 .merge(install::router())
+                .merge(diagnostics::router())
                 .merge(search_semantic::router())
                 .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
                 .layer(from_fn_with_state(state.clone(), guest_write_block_middleware)),
@@ -556,7 +558,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn semantic_search_returns_501_when_disabled() {
+    async fn semantic_search_falls_back_to_fts_when_disabled() {
         let (app, pool, data_dir) = test_app().await;
 
         let response = app
@@ -569,7 +571,14 @@ mod tests {
             .await
             .expect("response");
 
-        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(payload["data"]["engine"], "fts");
+        assert_eq!(payload["data"]["query"], "toolman");
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);

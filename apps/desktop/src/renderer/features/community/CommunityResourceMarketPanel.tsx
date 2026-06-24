@@ -21,6 +21,7 @@ import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityResources } from './useCommunityResources'
 import { useCommunityUser } from './useCommunityUser'
 import { useRegistrationGate } from '../user/useRegistrationGate'
+import { useCommunityPanelStatus } from './community-panel-status'
 
 export interface CommunityResourceMarketPanelProps {
   resourceType: CommunityResourceType
@@ -75,6 +76,15 @@ export function CommunityResourceMarketPanel({
   const hubOffline = market.hubStatus != null && !market.hubStatus.running
   const icon = RESOURCE_ICONS[resourceType] ?? <IconFile size={18} />
   const canPublish = user.profile?.canPublish === true && !hubOffline
+
+  useCommunityPanelStatus(`community-market-${resourceType}`, {
+    loading: market.loading,
+    error: market.error,
+    onClearError: () => market.setError(null),
+  })
+  useCommunityPanelStatus(`community-market-${resourceType}-user`, {
+    error: user.error,
+  })
 
   useEffect(() => {
     setSelectedId(null)
@@ -156,15 +166,6 @@ export function CommunityResourceMarketPanel({
           setShowPublish(true)
         }}
         publishDisabled={!canPublish}
-        banner={
-          hubOffline ? (
-            <div className="tm-community-market-banner" role="status">
-              Community Hub 未运行
-              {market.hubStatus?.error ? `：${market.hubStatus.error}` : '，请稍后重试。'}
-            </div>
-          ) : null
-        }
-        error={market.error ? <div className="tm-error-bar">{market.error}</div> : null}
         isEmpty={sortedItems.length === 0}
         emptyHint={emptyHint}
       >

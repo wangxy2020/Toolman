@@ -17,9 +17,23 @@ pub static CONNECTIONS: Lazy<AsyncMutex<ConnectionManager>> =
 pub static WORKSPACE_KEYS: Lazy<Mutex<WorkspaceKeyRegistry>> =
     Lazy::new(|| Mutex::new(WorkspaceKeyRegistry::default()));
 
-pub static ICE_SERVERS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| {
-    Mutex::new(vec!["stun:stun.l.google.com:19302".to_string()])
-});
+#[derive(Clone, Debug)]
+pub struct IceServerEntry {
+    pub urls: Vec<String>,
+    pub username: Option<String>,
+    pub credential: Option<String>,
+}
+
+fn default_ice_servers() -> Vec<IceServerEntry> {
+    vec![IceServerEntry {
+        urls: vec!["stun:stun.l.google.com:19302".to_string()],
+        username: None,
+        credential: None,
+    }]
+}
+
+pub static ICE_SERVERS: Lazy<Mutex<Vec<IceServerEntry>>> =
+    Lazy::new(|| Mutex::new(default_ice_servers()));
 
 pub struct PendingInviteHandshake {
     pub invite_id: String,
@@ -36,19 +50,43 @@ pub static PENDING_INVITES: Lazy<AsyncMutex<HashMap<String, PendingInviteHandsha
 pub static INVITE_UDP_ANSWERS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub fn configured_ice_servers() -> Vec<String> {
+pub fn configured_ice_server_entries() -> Vec<IceServerEntry> {
     ICE_SERVERS
         .lock()
         .map(|servers| servers.clone())
-        .unwrap_or_else(|_| vec!["stun:stun.l.google.com:19302".to_string()])
+        .unwrap_or_else(|_| default_ice_servers())
 }
 
-pub fn set_configured_ice_servers(servers: Vec<String>) {
+/** Legacy flat URL list (STUN + TURN urls). */
+pub fn configured_ice_servers() -> Vec<String> {
+    configured_ice_server_entries()
+        .into_iter()
+        .flat_map(|entry| entry.urls)
+        .collect()
+}
+
+pub fn set_configured_ice_server_entries(servers: Vec<IceServerEntry>) {
     if let Ok(mut guard) = ICE_SERVERS.lock() {
         *guard = if servers.is_empty() {
-            vec!["stun:stun.l.google.com:19302".to_string()]
+            default_ice_servers()
         } else {
             servers
         };
     }
+}
+
+pub fn set_configured_ice_servers(servers: Vec<String>) {
+    let entries = if servers.is_empty() {
+        default_ice_servers()
+    } else {
+        servers
+            .into_iter()
+            .map(|url| IceServerEntry {
+                urls: vec![url],
+                username: None,
+                credential: None,
+            })
+            .collect()
+    };
+    set_configured_ice_server_entries(entries);
 }

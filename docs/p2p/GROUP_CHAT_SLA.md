@@ -11,7 +11,7 @@
 | 群主在线、星型拓扑（成员仅连群主） | 发送后 **≤5s** 全员收到 | 群主 hub 二次转发 |
 | 群主离线、链状/部分 mesh | 沿连通路径多跳 gossip，**≤30s** | 接收方 mesh relay，跳数 = 图直径 |
 | 成员完全孤立（无任何 P2P 连接） | **不保证送达** | 等待 mesh 恢复后手动刷新/重连 |
-| 跨 NAT / WAN、无直连 | **不保证实时送达** | 依赖 STUN/后续 WAN 增强 |
+| 跨 NAT / WAN（已配置 TURN） | **≤30s** 全员收到（10 人自动化） | STUN + TURN ICE + gossip |
 
 自动化覆盖：`p2p-multi-member.integration.test.ts` 对 3/5/10 人全 mesh、星型、链式拓扑做仿真断言。
 
@@ -41,7 +41,7 @@
 
 1. **无送达 ACK**：发送方不感知远端是否入库，仅日志 `group chat relay failed`
 2. **无离线队列**：成员离线期间消息不会补发（除非另一成员已收到并仍在群内打开）
-3. **10 人 WAN 全连通未 E2E 自动化**：CI 以图仿真 + 双实例手册为主
+3. **10 人 WAN 全连通 E2E 自动化**：`p2p-wan-mesh.integration.test.ts`（TURN 假设全连通 + NAT 星型隔离对照）
 4. **重复消息**：靠 `message.id` 去重，gossip 可能产生重复投递尝试
 
 ## 验证命令
@@ -49,7 +49,7 @@
 ```bash
 pnpm --filter @toolman/desktop test:p2p-integration
 pnpm --filter @toolman/desktop exec vitest run src/main/services/p2p/p2p-group-chat-relay.test.ts
-pnpm --filter @toolman/desktop exec vitest run src/main/services/p2p/p2p-multi-member.integration.test.ts
+pnpm --filter @toolman/desktop exec vitest run src/main/services/p2p/p2p-wan-mesh.integration.test.ts
 ```
 
 ## 后续可选增强

@@ -47,6 +47,9 @@ export const AppDiagnosticsP2pSchema = z.object({
   discoveryRunning: z.boolean(),
   workspaceCount: z.number().int().nonnegative(),
   connectedPeers: z.number().int().nonnegative(),
+  wanConnectedPeers: z.number().int().nonnegative(),
+  lanConnectedPeers: z.number().int().nonnegative(),
+  iceServersSummary: z.string(),
   connections: z.array(AppDiagnosticsP2pConnectionSchema),
   libp2pAvailable: z.boolean(),
   libp2pVersion: z.string().nullable(),
@@ -79,6 +82,9 @@ export const AppDiagnosticsOperationsSchema = z.object({
   logFilePath: z.string(),
   crashReportDir: z.string(),
   crashReportCount: z.number().int().nonnegative(),
+  crashReportUploadEnabled: z.boolean(),
+  crashReportPendingUpload: z.number().int().nonnegative(),
+  crashReportIngestUrl: z.string().nullable(),
   update: AppDiagnosticsUpdateSchema,
 })
 

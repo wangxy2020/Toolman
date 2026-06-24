@@ -95,6 +95,13 @@ export interface P2pNativeModule {
   connectionList(): Promise<{ connections: NativeConnectionInfo[] }>
   connectionSend(peerDeviceId: string, channel: string, data: Buffer): Promise<void>
   connectionSetStunServers(servers: string[]): void
+  connectionSetIceServers(
+    servers: Array<{
+      urls: string[]
+      username?: string | null
+      credential?: string | null
+    }>,
+  ): void
   connectionGetStunServers(): string[]
   inviteCreateOffer(inviteId: string, workspaceId?: string | null): Promise<string>
   inviteWaitForAnswer(
@@ -238,6 +245,30 @@ export class P2pBridge {
 
   static connectionSetStunServers(servers: string[]): void {
     loadNativeModule().connectionSetStunServers(servers)
+  }
+
+  static connectionSetIceServers(
+    servers: Array<{
+      urls: string | string[]
+      username?: string
+      credential?: string
+    }>,
+  ): void {
+    const native = loadNativeModule()
+    if (typeof native.connectionSetIceServers === 'function') {
+      native.connectionSetIceServers(
+        servers.map((server) => ({
+          urls: Array.isArray(server.urls) ? server.urls : [server.urls],
+          username: server.username ?? null,
+          credential: server.credential ?? null,
+        })),
+      )
+      return
+    }
+    const flat = servers.flatMap((server) =>
+      Array.isArray(server.urls) ? server.urls : [server.urls],
+    )
+    native.connectionSetStunServers(flat.length > 0 ? flat : ['stun:stun.l.google.com:19302'])
   }
 
   static connectionGetStunServers(): string[] {

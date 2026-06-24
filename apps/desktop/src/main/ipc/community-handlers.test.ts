@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getPath: () => '/tmp/toolman-test-community',
+  },
+}))
+
 import { IpcChannel, ipcOk } from '@toolman/shared'
 
 import { communityHandlers } from './community-handlers'

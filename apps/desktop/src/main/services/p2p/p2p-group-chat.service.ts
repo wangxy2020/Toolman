@@ -1,7 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
 import {
   ContentBlockSchema,
   P2pGroupChatClearInputSchema,
@@ -24,6 +21,13 @@ import {
   broadcastP2pGroupChatCleared,
   broadcastP2pGroupChatMessage,
 } from './p2p-group-chat-broadcast'
+import {
+  appendGroupChatMessage,
+  clearGroupChatMessages,
+  readGroupChatMessages,
+  removeGroupChatMessage,
+} from './p2p-group-chat-store'
+import { appendGroupChatWalEvent } from './p2p-group-chat-wal'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { getIdentityProfile } from '../identity.service'
 import { isOwnerPeerConnected } from './p2p-sync-sequencing'
@@ -35,61 +39,8 @@ import {
 export const GROUP_CHAT_CHANNEL = 'group-chat'
 export const P2P_EVENTS_CHANNEL = 'events'
 
-type StoredChatFile = {
-  messages: P2pGroupChatMessage[]
-}
-
 function getMemberRepo(): P2pMemberRepository {
   return new P2pMemberRepository(getDatabase())
-}
-
-function chatFilePath(workspaceId: string): string {
-  const dir = join(app.getPath('userData'), 'p2p', 'group-chat')
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-  return join(dir, `${workspaceId}.json`)
-}
-
-function readChatFile(workspaceId: string): StoredChatFile {
-  const path = chatFilePath(workspaceId)
-  if (!existsSync(path)) {
-    return { messages: [] }
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as StoredChatFile
-    const messages = Array.isArray(parsed.messages)
-      ? parsed.messages
-          .map((item) => {
-            try {
-              return P2pGroupChatMessageSchema.parse(item)
-            } catch {
-              return null
-            }
-          })
-          .filter((item): item is P2pGroupChatMessage => item != null)
-      : []
-    return { messages }
-  } catch {
-    return { messages: [] }
-  }
-}
-
-function writeChatFile(workspaceId: string, data: StoredChatFile): void {
-  writeFileSync(chatFilePath(workspaceId), JSON.stringify(data, null, 2), 'utf8')
-}
-
-function appendMessage(workspaceId: string, message: P2pGroupChatMessage): void {
-  const file = readChatFile(workspaceId)
-  if (file.messages.some((item) => item.id === message.id)) {
-    return
-  }
-  file.messages.push(message)
-  file.messages.sort((a, b) => a.createdAt - b.createdAt)
-  if (file.messages.length > 1000) {
-    file.messages = file.messages.slice(-1000)
-  }
-  writeChatFile(workspaceId, file)
 }
 
 function getWorkspaceRepo(): P2pWorkspaceRepository {
@@ -147,8 +98,7 @@ export function listP2pGroupChatMessages(rawInput: unknown): { items: P2pGroupCh
   const input = P2pGroupChatListInputSchema.parse(rawInput)
   assertWorkspaceMemberAccess(input.workspaceId)
   const limit = input.limit ?? 200
-  const file = readChatFile(input.workspaceId)
-  return { items: file.messages.slice(-limit) }
+  return { items: readGroupChatMessages(input.workspaceId).slice(-limit) }
 }
 
 export async function sendP2pGroupChatMessage(
@@ -175,9 +125,17 @@ export async function sendP2pGroupChatMessage(
     getMemberRepo().update({ id: member.id, displayName: identityName })
   }
 
-  appendMessage(input.workspaceId, message)
+  appendGroupChatMessage(message)
   broadcastP2pGroupChatMessage(message)
   void relayMessageToPeers(message)
+  void appendGroupChatWalEvent(input.workspaceId, member.id, {
+    v: 1,
+    kind: 'group.chat.message',
+    message,
+  }).catch((error) => {
+    const errMessage = error instanceof Error ? error.message : String(error)
+    console.warn(`[p2p] group chat WAL append failed: ${errMessage}`)
+  })
 
   return { message }
 }
@@ -231,17 +189,29 @@ export function clearP2pGroupChatMessages(rawInput: unknown): { cleared: boolean
     throw new Error('只有群主可以清空群组消息')
   }
 
-  writeChatFile(input.workspaceId, { messages: [] })
+  clearGroupChatMessages(input.workspaceId)
   broadcastP2pGroupChatCleared(input.workspaceId)
   void relayClearToPeers(input.workspaceId)
+  const clearedAt = Date.now()
+  void appendGroupChatWalEvent(input.workspaceId, member.id, {
+    v: 1,
+    kind: 'group.chat.clear',
+    workspaceId: input.workspaceId,
+    clearedAt,
+    clearedByMemberId: member.id,
+  }).catch((error) => {
+    const errMessage = error instanceof Error ? error.message : String(error)
+    console.warn(`[p2p] group chat clear WAL append failed: ${errMessage}`)
+  })
+
   return { cleared: true }
 }
 
 export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean } {
   const input = P2pGroupChatDeleteInputSchema.parse(rawInput)
   const member = assertWorkspaceMemberAccess(input.workspaceId)
-  const file = readChatFile(input.workspaceId)
-  const target = file.messages.find((item) => item.id === input.messageId)
+  const messages = readGroupChatMessages(input.workspaceId)
+  const target = messages.find((item) => item.id === input.messageId)
   if (!target) {
     return { deleted: false }
   }
@@ -252,8 +222,20 @@ export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean
     throw new Error('无权删除该消息')
   }
 
-  file.messages = file.messages.filter((item) => item.id !== input.messageId)
-  writeChatFile(input.workspaceId, file)
+  removeGroupChatMessage(input.workspaceId, input.messageId)
+  const deletedAt = Date.now()
+  void appendGroupChatWalEvent(input.workspaceId, member.id, {
+    v: 1,
+    kind: 'group.chat.delete',
+    workspaceId: input.workspaceId,
+    messageId: input.messageId,
+    deletedAt,
+    deletedByMemberId: member.id,
+  }).catch((error) => {
+    const errMessage = error instanceof Error ? error.message : String(error)
+    console.warn(`[p2p] group chat delete WAL append failed: ${errMessage}`)
+  })
+
   return { deleted: true }
 }
 
@@ -330,7 +312,7 @@ function handleIncomingP2pGroupChatClear(peerDeviceId: string, workspaceId: stri
     return
   }
 
-  writeChatFile(workspaceId, { messages: [] })
+  clearGroupChatMessages(workspaceId)
   broadcastP2pGroupChatCleared(workspaceId)
 }
 
@@ -394,12 +376,11 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
     return
   }
 
-  const file = readChatFile(message.workspaceId)
-  if (file.messages.some((item) => item.id === message.id)) {
+  const inserted = appendGroupChatMessage(message)
+  if (!inserted) {
     return
   }
 
-  appendMessage(message.workspaceId, message)
   broadcastP2pGroupChatMessage(message)
   void maybeRelayGroupChatAfterReceive(peerDeviceId, message)
 }

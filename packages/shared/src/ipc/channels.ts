@@ -6,6 +6,16 @@ export enum IpcChannel {
   AppGetStorageStats = 'app:storage:stats',
   AppGetDiagnostics = 'app:diagnostics:get',
 
+  AppCrashReportGetStatus = 'app:crash-report:status:get',
+  AppCrashReportSetUpload = 'app:crash-report:upload:set',
+  AppCrashReportUploadNow = 'app:crash-report:upload:now',
+
+  AppUpdateGetStatus = 'app:update:status:get',
+  AppUpdateCheck = 'app:update:check',
+  AppUpdateDownload = 'app:update:download',
+  AppUpdateInstall = 'app:update:install',
+  AppUpdateSetAuto = 'app:update:auto:set',
+
   BillingListPlans = 'billing:plans:list',
   BillingCreateOrder = 'billing:order:create',
   BillingGetOrderStatus = 'billing:order:status',
@@ -171,6 +181,7 @@ export enum IpcChannel {
 
   P2pNetworkGetConfig = 'p2p:network:get-config',
   P2pNetworkSetStunServers = 'p2p:network:set-stun-servers',
+  P2pNetworkSetIceServers = 'p2p:network:set-ice-servers',
   P2pNetworkGetSnapshot = 'p2p:network:snapshot',
 
   P2pWorkspaceCreate = 'p2p:workspace:create',
@@ -337,6 +348,9 @@ export const P2P_PUSH_CHANNELS = [
 ] as const
 
 export type P2pPushChannel = (typeof P2P_PUSH_CHANNELS)[number]
+
+/** App update status push (via window.api.subscribe) */
+export const APP_UPDATE_STATUS_CHANNEL = 'app:update:status-changed' as const
 
 export const SUBSCRIBE_CHANNELS = [
   IpcChannel.MessageStream,

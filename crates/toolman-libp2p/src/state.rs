@@ -69,6 +69,16 @@ pub fn set_stopped(snapshot: &Arc<RwLock<NetworkSnapshot>>) {
     }
 }
 
+pub fn set_stopped_with_error(snapshot: &Arc<RwLock<NetworkSnapshot>>, error: String) {
+    if let Ok(mut guard) = snapshot.write() {
+        guard.running = false;
+        guard.peers.clear();
+        guard.local_peer_id = None;
+        guard.dht.ready = false;
+        guard.last_error = Some(error);
+    }
+}
+
 pub fn upsert_peer(snapshot: &Arc<RwLock<NetworkSnapshot>>, peer_id: String, transport: String) {
     if let Ok(mut guard) = snapshot.write() {
         if let Some(existing) = guard.peers.iter_mut().find(|peer| peer.peer_id == peer_id) {

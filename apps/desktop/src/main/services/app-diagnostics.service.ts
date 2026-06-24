@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ingestJobs, messages } from '@toolman/db'
 import {
   AppGetDiagnosticsOutputSchema,
+  summarizeIceServers,
   type AppGetDiagnosticsOutput,
 } from '@toolman/shared'
 import { getDatabase } from '../bootstrap/database'
@@ -14,6 +15,7 @@ import { getCommunityYjsStatus } from './community/community-yjs-bridge.service'
 import { getCommunityCidProviderStatus } from './community/community-cid-provider.service'
 import { listDiagnosticEvents, recordDiagnosticEvent } from './diagnostics-log'
 import { getOperationsDiagnostics } from './local-operations.service'
+import { getCrashReportDiagnosticsFields } from './crash-report.service'
 import { P2pBridge } from './p2p/p2p-bridge'
 import { listP2pConnections } from './p2p/p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
@@ -22,6 +24,7 @@ import { getIdentityProfile } from './identity.service'
 import { listP2pWorkspaces } from './p2p/p2p-workspace.service'
 import { Libp2pBridge } from './p2p/libp2p-bridge'
 import { readLibp2pConfig } from './p2p/p2p-libp2p.config'
+import { getP2pIceServers } from './p2p/p2p-network.config'
 
 const INGEST_PENDING_STAGES = [
   'queued',
@@ -148,6 +151,13 @@ async function getP2pDiagnostics(): Promise<AppGetDiagnosticsOutput['p2p']> {
     discoveryRunning: isP2pDiscoveryRunning(),
     workspaceCount: listP2pWorkspaces('all').length,
     connectedPeers: connections.filter((row) => row.state === 'connected').length,
+    wanConnectedPeers: connections.filter(
+      (row) => row.state === 'connected' && row.transport === 'wan',
+    ).length,
+    lanConnectedPeers: connections.filter(
+      (row) => row.state === 'connected' && row.transport === 'lan',
+    ).length,
+    iceServersSummary: summarizeIceServers(getP2pIceServers()).summary,
     connections,
     libp2pAvailable: Libp2pBridge.isAvailable(),
     libp2pVersion: (() => {
@@ -219,7 +229,10 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
     communityYjs,
     communityCid,
     p2p,
-    operations: getOperationsDiagnostics(),
+    operations: {
+      ...getOperationsDiagnostics(),
+      ...getCrashReportDiagnosticsFields(),
+    },
     recentEvents: listDiagnosticEvents(30),
   }
 

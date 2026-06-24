@@ -1,8 +1,18 @@
-import { IpcChannel, CommunityCidSetEnabledInputSchema, CommunityYjsSetEnabledInputSchema, ipcErr, ipcOk, type IpcError, type IpcResult } from '@toolman/shared'
+import {
+  CommunityBoardMessageDeleteInputSchema,
+  CommunityCidSetEnabledInputSchema,
+  CommunityYjsSetEnabledInputSchema,
+  IpcChannel,
+  ipcErr,
+  ipcOk,
+  type IpcError,
+  type IpcResult,
+} from '@toolman/shared'
 
 import { CommunityHttpError } from '../services/community/community-http.client'
 import { installCommunityResource } from '../services/community/community-install.service'
 import {
+  removeCommunityBoardMessageFromYjs,
   syncCommunityBoardMessageToYjs,
   syncCommunityProfileToYjs,
 } from '../services/community/community-yjs-provider'
@@ -193,7 +203,12 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityBoardMessageFavorite]: communityHandler((input) =>
     favoriteBoardMessage(input),
   ),
-  [IpcChannel.CommunityBoardMessageDelete]: communityHandler((input) => deleteBoardMessage(input)),
+  [IpcChannel.CommunityBoardMessageDelete]: communityHandler(async (input) => {
+    const result = await deleteBoardMessage(input)
+    const parsed = CommunityBoardMessageDeleteInputSchema.parse(input)
+    removeCommunityBoardMessageFromYjs(parsed.messageId)
+    return result
+  }),
 
   [IpcChannel.CommunityTaskList]: communityHandler((input) => listTasks(input)),
   [IpcChannel.CommunityTaskGet]: communityHandler((input) => getTask(input)),

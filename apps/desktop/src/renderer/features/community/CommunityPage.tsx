@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import {
   IconKnowledge,
@@ -13,11 +13,15 @@ import {
   IconTaskList,
   IconWorkflow,
 } from '../../components/icons'
+import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
+import { ModulePageStatusProvider } from '../../components/module-page-status'
 import { getModulePageConfig } from '../modules/module-config'
 import { communitySectionLabel, type CommunitySidebarSection } from './community-sidebar-types'
 import { AdminModerationPanel } from './AdminModerationPanel'
 import { CommunityModerationCategoryNav } from './CommunityModerationCategoryNav'
 import { CommunityModerationCategoryProvider } from './community-moderation-category-context'
+import { useCommunityHubConnection } from './useCommunityHubConnection'
+import { useCommunityHubOfflineStatus } from './useCommunityHubOfflineStatus'
 import { CommunityListSortProvider, useCommunityListSortContext } from './CommunityListSortContext'
 import { CommunityListSortToolbar } from './CommunityListSortToolbar'
 import { CommunityPlaceholderPanel } from './CommunityPlaceholderPanel'
@@ -139,6 +143,22 @@ function CommunityPageHeaderEnd({
   )
 }
 
+function CommunityPageStatusRegistrar() {
+  const { status: hubStatus } = useCommunityHubConnection()
+  useCommunityHubOfflineStatus(hubStatus)
+  return null
+}
+
+function CommunityPageStatusArea({ children }: { children: ReactNode }) {
+  return (
+    <ModulePageStatusProvider>
+      <CommunityPageStatusRegistrar />
+      {children}
+      <ModulePageStatusBar />
+    </ModulePageStatusProvider>
+  )
+}
+
 export function CommunityPage({
   activeAction = DEFAULT_COMMUNITY_ACTION,
   sidebarSection = 'news',
@@ -182,7 +202,8 @@ export function CommunityPage({
           </div>
         </header>
 
-        <div className="tm-module-content">
+        <CommunityPageStatusArea>
+          <div className="tm-module-content">
         {effectiveAction === 'recommend' ? (
           <RecommendPanel />
         ) : effectiveAction === 'mcp' ? (
@@ -211,7 +232,8 @@ export function CommunityPage({
             <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
           </div>
         )}
-        </div>
+          </div>
+        </CommunityPageStatusArea>
       </main>
   )
 

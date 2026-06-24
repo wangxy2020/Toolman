@@ -9,11 +9,14 @@ vi.mock('./community-bridge.service', () => ({
   getCommunityHttpClient: () => getCommunityHttpClient(),
   getCommunityHubStatus: () => ({
     running: true,
+    mode: 'local',
     port: 3721,
     host: '127.0.0.1',
     baseUrl: 'http://127.0.0.1:3721',
     binaryPath: '/tmp/toolman-community-hub',
+    offlineReadOnly: false,
   }),
+  markCommunityHubOfflineReadOnly: vi.fn(),
 }))
 
 describe('community-case', () => {

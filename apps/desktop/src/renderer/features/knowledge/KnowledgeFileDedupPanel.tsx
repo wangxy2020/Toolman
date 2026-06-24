@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type KnowledgeFileDedupStreamEvent } from '@toolman/shared'
 import { IconExternalLink, IconFile, IconFolder, IconTrash } from '../../components/icons'
+import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 
 interface DuplicateFile {
   path: string
@@ -130,6 +131,20 @@ export function KnowledgeFileDedupPanel({
   const scanStartedAtRef = useRef<number | null>(null)
   const scanGenerationRef = useRef(0)
   const handleScanRef = useRef<() => Promise<void>>(async () => {})
+
+  useRegisterModulePanelError('knowledge-dedup', error, () => setError(null))
+  useRegisterModulePanelStatus(
+    'knowledge-dedup-scan',
+    loading
+      ? {
+          tone: 'info',
+          message:
+            progress && progress.total > 0
+              ? `正在扫描重复文件… ${progress.scanned}/${progress.total}`
+              : '正在扫描重复文件…',
+        }
+      : null,
+  )
 
   const applyScanResult = useCallback((data: ScanStats & { groups: DuplicateGroup[] }) => {
     setGroups(data.groups)
@@ -414,8 +429,6 @@ export function KnowledgeFileDedupPanel({
 
   return (
     <div className="tm-dedup-page">
-      {error ? <div className="tm-dedup-error">{error}</div> : null}
-
       {loading ? (
         <div className="tm-dedup-loading">
           <p className="tm-dedup-loading-title">

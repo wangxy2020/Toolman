@@ -69,7 +69,7 @@ export const p2pEvents = sqliteTable(
       .references(() => p2pWorkspaces.id, { onDelete: 'cascade' }),
     seq: integer('seq').notNull(),
     resourceType: text('resource_type', {
-      enum: ['Knowledge', 'Note', 'Agent', 'File', 'Member', 'Workspace'],
+      enum: ['Knowledge', 'Note', 'Agent', 'File', 'Member', 'Workspace', 'GroupChat'],
     }).notNull(),
     resourceId: text('resource_id').notNull(),
     operatorId: text('operator_id').notNull(),

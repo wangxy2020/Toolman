@@ -20,6 +20,7 @@ import {
   syncWorkspaceNameFromJoinEvent,
 } from './p2p-member-projection'
 import { projectWorkspaceUpdatedFromEvent } from './p2p-workspace-vip-pool.service'
+import { projectGroupChatEvent } from './p2p-group-chat-projector'
 
 export function projectP2pEvent(event: WorkspaceEvent): void {
   switch (event.resourceType) {
@@ -37,6 +38,9 @@ export function projectP2pEvent(event: WorkspaceEvent): void {
       break
     case 'Agent':
       projectAgentEvent(event)
+      break
+    case 'GroupChat':
+      projectGroupChatEvent(event)
       break
     default:
       break

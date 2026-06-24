@@ -69,7 +69,7 @@
 ## 验证
 
 ```bash
-pnpm smoke          # typecheck + test + p2p-integration + community-hub
+pnpm smoke          # lint + typecheck + test + p2p/auth schema + p2p-integration + community-hub
 pnpm typecheck
 cargo test -p toolman-community-hub
 ```

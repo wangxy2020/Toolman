@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareSemver } from './local-operations.service'
+import { compareSemver } from '@toolman/shared'
 
 describe('compareSemver', () => {
   it('orders patch versions', () => {

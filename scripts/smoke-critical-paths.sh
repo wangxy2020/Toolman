@@ -14,6 +14,9 @@ step() {
   printf '\n==> %s\n' "$1"
 }
 
+step "Lint"
+pnpm lint
+
 step "Typecheck"
 pnpm typecheck
 
@@ -22,6 +25,9 @@ pnpm test
 
 step "P2P schema smoke"
 pnpm --filter @toolman/db test:p2p-schema
+
+step "Auth schema smoke"
+pnpm --filter @toolman/db test:auth-schema
 
 step "P2P desktop integration"
 pnpm --filter @toolman/desktop test:p2p-integration

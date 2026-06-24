@@ -1,4 +1,6 @@
 export * from './ipc/index.js'
+export * from './app-update.js'
+export * from './crash-report.js'
 export * from './p2p/index.js'
 export * from './provider-model.js'
 export * from './agent-constants.js'

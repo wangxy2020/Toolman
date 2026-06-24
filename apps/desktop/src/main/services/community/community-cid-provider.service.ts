@@ -84,6 +84,35 @@ function pollCidInbox(): void {
   }
 }
 
+function subscribeCommunityCidTopics(): void {
+  for (const topic of CID_TOPICS) {
+    try {
+      Libp2pBridge.pubsubSubscribe(topic)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      lastError = message
+      recordDiagnosticEvent('community-cid', 'warn', `subscribe ${topic}: ${message}`)
+    }
+  }
+}
+
+export async function resubscribeCommunityCidPubsub(): Promise<void> {
+  if (!started || !isCommunityCidDistributionEnabled()) return
+  if (!Libp2pBridge.isAvailable() || !Libp2pBridge.networkIsRunning()) return
+
+  subscribeCommunityCidTopics()
+
+  try {
+    const indexed = await scanCommunityPackagesForCidIndex()
+    publishAnnouncements(indexed)
+    recordDiagnosticEvent('community-cid', 'info', 'resubscribed pubsub after libp2p restart')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    lastError = message
+    recordDiagnosticEvent('community-cid', 'warn', `resubscribe failed: ${message}`)
+  }
+}
+
 export async function startCommunityCidProvider(): Promise<void> {
   if (started || !isCommunityCidDistributionEnabled()) return
   if (!Libp2pBridge.isAvailable()) {
@@ -94,16 +123,7 @@ export async function startCommunityCidProvider(): Promise<void> {
   ensureDefaultCommunityCidConfig()
   started = true
 
-  for (const topic of CID_TOPICS) {
-    try {
-      Libp2pBridge.pubsubSubscribe(topic)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      lastError = message
-      recordDiagnosticEvent('community-cid', 'warn', `subscribe ${topic}: ${message}`)
-    }
-  }
-
+  subscribeCommunityCidTopics()
   try {
     const indexed = await scanCommunityPackagesForCidIndex()
     publishAnnouncements(indexed)

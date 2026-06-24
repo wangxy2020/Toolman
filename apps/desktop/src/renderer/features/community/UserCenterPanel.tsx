@@ -10,6 +10,7 @@ import {
   useCommunityUserCenter,
   type UserCenterSection,
 } from './useCommunityUserCenter'
+import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 
 const SECTIONS: Array<{ key: UserCenterSection; label: string }> = [
   { key: 'publishes', label: '发布' },
@@ -160,6 +161,15 @@ export function UserCenterPanel() {
   const center = useCommunityUserCenter()
   const profile = center.profile
   const activeCount = useMemo(() => getSectionCount(section, center), [section, center])
+
+  useRegisterModulePanelError('community-user-center-profile', center.profileError)
+  useRegisterModulePanelError('community-user-center', center.error)
+  useRegisterModulePanelStatus(
+    'community-user-center-loading',
+    center.loading || center.profileLoading
+      ? { tone: 'info', message: '加载个人数据中…' }
+      : null,
+  )
 
   const renderSectionContent = () => {
     if (center.profileLoading || center.loading) {
@@ -389,9 +399,6 @@ export function UserCenterPanel() {
 
   return (
     <div className="tm-community-market tm-community-user-center">
-      {center.profileError ? <div className="tm-error-bar">{center.profileError}</div> : null}
-      {center.error ? <div className="tm-error-bar">{center.error}</div> : null}
-
       <div className="tm-user-center-overview">
         <CommunityPanelHeader
           title="我的"

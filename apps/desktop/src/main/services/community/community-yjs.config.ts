@@ -11,7 +11,7 @@ const CommunitySyncConfigSchema = z.object({
 export type CommunitySyncConfig = z.infer<typeof CommunitySyncConfigSchema>
 
 const DEFAULT_CONFIG: CommunitySyncConfig = {
-  yjsEnabled: false,
+  yjsEnabled: app.isPackaged,
   requireSignedUpdates: true,
 }
 

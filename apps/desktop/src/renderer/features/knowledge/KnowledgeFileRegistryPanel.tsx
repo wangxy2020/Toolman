@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type KnowledgeFileRegistryItem } from '@toolman/shared'
 import { IconExternalLink, IconFile } from '../../components/icons'
+import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 
 interface Props {
   workspaceId: string
@@ -43,6 +44,12 @@ export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
     void load()
   }, [load])
 
+  useRegisterModulePanelError('knowledge-registry', error, () => setError(null))
+  useRegisterModulePanelStatus(
+    'knowledge-registry-loading',
+    loading ? { tone: 'info', message: '加载文件注册表…' } : null,
+  )
+
   const handleOpenPath = async (absolutePath: string) => {
     await window.api.invoke(IpcChannel.AppShellOpenPath, { path: absolutePath })
   }
@@ -64,8 +71,6 @@ export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
           {loading ? '刷新中…' : '刷新'}
         </button>
       </div>
-
-      {error ? <div className="tm-registry-error">{error}</div> : null}
 
       {!loading && items.length === 0 ? (
         <div className="tm-registry-empty">

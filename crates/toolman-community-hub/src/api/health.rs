@@ -17,6 +17,7 @@ pub struct HealthData {
     pub semantic_search: &'static str,
     pub user_count: i64,
     pub resource_count: i64,
+    pub crash_report_count: i64,
 }
 
 pub async fn health(State(state): State<AppState>) -> Json<ApiResponse<HealthData>> {
@@ -30,6 +31,12 @@ pub async fn health(State(state): State<AppState>) -> Json<ApiResponse<HealthDat
         .await
         .unwrap_or((0,));
 
+    let crash_report_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM client_crash_reports")
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or((0,));
+
     let embedding = EmbeddingService::from_config(&state.config);
 
     Json(ApiResponse::ok(HealthData {
@@ -42,5 +49,6 @@ pub async fn health(State(state): State<AppState>) -> Json<ApiResponse<HealthDat
         semantic_search: embedding.status_label(),
         user_count: user_count.0,
         resource_count: resource_count.0,
+        crash_report_count: crash_report_count.0,
     }))
 }

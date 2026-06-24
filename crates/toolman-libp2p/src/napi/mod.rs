@@ -9,7 +9,8 @@ use tokio::sync::{mpsc, oneshot};
 use crate::config::NetworkConfig;
 use crate::pubsub::SwarmCommand;
 use crate::state::{
-    read_snapshot, set_stopped, NetworkRuntime, NetworkSnapshot, NETWORK_RUNTIME,
+    read_snapshot, set_stopped, set_stopped_with_error, NetworkRuntime, NetworkSnapshot,
+    NETWORK_RUNTIME,
 };
 use crate::swarm::run_network_swarm;
 
@@ -55,6 +56,10 @@ fn spawn_swarm(data_dir: PathBuf, config: NetworkConfig) -> napi::Result<()> {
         return Err(napi::Error::from_reason("libp2p network already running"));
     }
 
+    if read_snapshot(&SNAPSHOT).running {
+        set_stopped(&SNAPSHOT);
+    }
+
     drop(runtime);
 
     {
@@ -67,17 +72,23 @@ fn spawn_swarm(data_dir: PathBuf, config: NetworkConfig) -> napi::Result<()> {
     let handle = Handle::current();
     let config_for_task = config.clone();
     handle.spawn(async move {
-        if let Err(error) = run_network_swarm(
+        let result = run_network_swarm(
             data_dir,
             config_for_task,
-            snapshot,
+            snapshot.clone(),
             shutdown_rx,
             command_rx,
         )
-        .await
-        {
-            eprintln!("[toolman-libp2p] swarm stopped with error: {error}");
+        .await;
+
+        match result {
+            Ok(()) => set_stopped(&snapshot),
+            Err(error) => {
+                eprintln!("[toolman-libp2p] swarm stopped with error: {error}");
+                set_stopped_with_error(&snapshot, error.to_string());
+            }
         }
+
         if let Ok(mut guard) = NETWORK_RUNTIME.write() {
             *guard = None;
         }

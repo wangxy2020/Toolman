@@ -39,6 +39,7 @@ import {
 import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
 import { reconcileAgentSharedResources } from './p2p-agent-projection'
 import { handleP2pGroupChatChannelMessage, handleP2pGroupChatClearFromPeer } from './p2p-group-chat.service'
+import { reconcileGroupChatProjection } from './p2p-group-chat-projector'
 import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse } from './p2p-member.service'
 import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 import { maybeAutoSnapshot } from './p2p-snapshot.service'
@@ -318,6 +319,15 @@ async function handleEventsBatch(
   return applied
 }
 
+function reconcileGroupChatAfterSync(workspaceId: string): void {
+  try {
+    reconcileGroupChatProjection(workspaceId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`[p2p] group chat projection reconcile failed: ${message}`)
+  }
+}
+
 function reportSyncConflict(
   workspaceId: string,
   message: string,
@@ -360,6 +370,7 @@ async function handleReplicationMessage(
         error: undefined,
       })
       if (applied > 0) {
+        reconcileGroupChatAfterSync(message.workspaceId)
         broadcastP2pSyncCompleted({
           workspaceId: message.workspaceId,
           eventsApplied: applied,
@@ -572,6 +583,7 @@ async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string)
   reconcileAgentSharedResources(workspaceId)
   await syncMissingSharedKnowledgeDocuments(workspaceId)
   await reconcileWorkspaceMemberMesh(workspaceId)
+  reconcileGroupChatAfterSync(workspaceId)
 }
 
 export function scheduleJoinerEventCatchUp(workspaceId: string): void {
@@ -686,6 +698,7 @@ export async function recoverWorkspaceSyncAfterReconnect(
       if (!isPeerTrusted(workspaceId, peer)) continue
       await syncWithPeer(workspaceId, peer)
     }
+    reconcileGroupChatAfterSync(workspaceId)
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : '重连后同步失败'
     console.warn(`[p2p] reconnect catch-up failed for ${workspaceId}: ${errMessage}`)

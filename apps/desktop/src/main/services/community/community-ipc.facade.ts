@@ -110,8 +110,10 @@ import { buildApiQuery, fromApiJson, toApiJson } from './community-case'
 import {
   getCommunityHubStatus,
   getCommunityHttpClient,
+  markCommunityHubOfflineReadOnly,
 } from './community-bridge.service'
 import type { CommunityHttpClient } from './community-http.client'
+import { readCommunityHubCache, writeCommunityHubCache } from './community-hub-cache.service'
 
 export class CommunityHubUnavailableError extends Error {
   constructor() {
@@ -126,6 +128,33 @@ function requireClient(): CommunityHttpClient {
     throw new CommunityHubUnavailableError()
   }
   return client
+}
+
+async function fetchWithHubCache<T>(
+  cacheKey: string,
+  fetch: (client: CommunityHttpClient) => Promise<T>,
+): Promise<T> {
+  const client = getCommunityHttpClient()
+  if (!client) {
+    const cached = readCommunityHubCache<T>(cacheKey)
+    if (cached != null && getCommunityHubStatus().offlineReadOnly) {
+      return cached
+    }
+    throw new CommunityHubUnavailableError()
+  }
+
+  try {
+    const data = await fetch(client)
+    writeCommunityHubCache(cacheKey, data)
+    return data
+  } catch (error) {
+    const cached = readCommunityHubCache<T>(cacheKey)
+    if (cached != null) {
+      markCommunityHubOfflineReadOnly(error instanceof Error ? error.message : String(error))
+      return cached
+    }
+    throw error
+  }
 }
 
 function asItems<T>(data: unknown): T[] {
@@ -191,7 +220,6 @@ export async function updateUserMe(input: unknown) {
 
 export async function listResources(input: unknown) {
   const parsed = CommunityResourceListInputSchema.parse(input)
-  const client = requireClient()
   const query = buildApiQuery({
     resource_type: parsed.resourceType,
     category: parsed.category,
@@ -203,7 +231,10 @@ export async function listResources(input: unknown) {
     limit: parsed.limit,
     offset: parsed.offset,
   })
-  const data = await client.get<unknown[]>(`/api/v1/marketplace/resources${query}`)
+  const cacheKey = `marketplace-resources${query}`
+  const data = await fetchWithHubCache(cacheKey, (client) =>
+    client.get<unknown[]>(`/api/v1/marketplace/resources${query}`),
+  )
   return CommunityResourceListOutputSchema.parse({
     items: asItems(data).map((item) => CommunityResourceItemSchema.parse(fromApiJson(item))),
   })
@@ -536,14 +567,16 @@ export async function countComments(input: unknown) {
 
 export async function listBoardMessages(input: unknown) {
   const parsed = CommunityBoardMessageListInputSchema.parse(input ?? {})
-  const client = requireClient()
   const query = buildApiQuery({
     user_id: parsed.userId,
     parent_id: parsed.parentId ?? undefined,
     limit: parsed.limit,
     offset: parsed.offset,
   })
-  const data = await client.get<unknown[]>(`/api/v1/board/messages${query}`)
+  const cacheKey = `board-messages${query}`
+  const data = await fetchWithHubCache(cacheKey, (client) =>
+    client.get<unknown[]>(`/api/v1/board/messages${query}`),
+  )
   return CommunityBoardMessageListOutputSchema.parse({
     items: asItems(data).map((item) => CommunityBoardMessageSchema.parse(fromApiJson(item))),
   })

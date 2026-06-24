@@ -16,9 +16,6 @@ interface Props {
   onPublish?: () => void
   publishDisabled?: boolean
   headerExtra?: ReactNode
-  banner?: ReactNode
-  error?: ReactNode
-  success?: ReactNode
   isEmpty?: boolean
   emptyHint?: string
   children: ReactNode
@@ -34,9 +31,6 @@ export function CommunityListPanelShell({
   onPublish,
   publishDisabled = false,
   headerExtra,
-  banner,
-  error,
-  success,
   isEmpty = false,
   emptyHint = '暂无内容',
   children,
@@ -60,10 +54,6 @@ export function CommunityListPanelShell({
           </>
         }
       />
-
-      {banner}
-      {error}
-      {success}
 
       <div className="tm-kb-file-panel tm-community-list-panel-body">
         {loading && isEmpty ? (

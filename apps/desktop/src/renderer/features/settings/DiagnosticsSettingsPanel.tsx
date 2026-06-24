@@ -6,6 +6,7 @@ import {
   SettingsSection,
   SettingsToggle,
 } from './SettingsShared'
+import { useCrashReportUpload } from './useCrashReportUpload'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -34,6 +35,13 @@ export function DiagnosticsSettingsPanel() {
   const [yjsToggling, setYjsToggling] = useState(false)
   const [cidToggling, setCidToggling] = useState(false)
   const [toggleError, setToggleError] = useState<string | null>(null)
+  const {
+    status: crashUploadStatus,
+    uploading: crashUploading,
+    setUploadEnabled: setCrashUploadEnabled,
+    uploadNow: uploadCrashReportsNow,
+    refresh: refreshCrashUploadStatus,
+  } = useCrashReportUpload()
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -45,7 +53,8 @@ export function DiagnosticsSettingsPanel() {
     }
     setSnapshot(result.data as AppGetDiagnosticsOutput)
     setError(null)
-  }, [])
+    await refreshCrashUploadStatus().catch(() => undefined)
+  }, [refreshCrashUploadStatus])
 
   useEffect(() => {
     void refresh()
@@ -240,6 +249,14 @@ export function DiagnosticsSettingsPanel() {
             <SettingsRow label="局域网发现">
               {statusBadge(snapshot.p2p.discoveryRunning, '已开启', '未开启')}
             </SettingsRow>
+            <SettingsRow label="ICE / TURN">
+              <span className="tm-settings-static">{snapshot.p2p.iceServersSummary}</span>
+            </SettingsRow>
+            <SettingsRow label="WAN / LAN 连接">
+              <span className="tm-settings-static">
+                {snapshot.p2p.wanConnectedPeers} WAN · {snapshot.p2p.lanConnectedPeers} LAN
+              </span>
+            </SettingsRow>
             <SettingsRow label="群组 / 在线连接">
               <span className="tm-settings-static">
                 {snapshot.p2p.workspaceCount} 个群组 · {snapshot.p2p.connectedPeers} 条在线连接
@@ -313,6 +330,50 @@ export function DiagnosticsSettingsPanel() {
               <span className="tm-settings-static">
                 {snapshot.operations.crashReportCount} 份 · {snapshot.operations.crashReportDir}
               </span>
+            </SettingsRow>
+            <SettingsRow
+              label="上传崩溃报告"
+              hint="开启后，脱敏的崩溃摘要会上传到官方 Hub，不含消息正文或 API Key。默认关闭。"
+            >
+              <SettingsToggle
+                checked={crashUploadStatus?.uploadEnabled ?? snapshot.operations.crashReportUploadEnabled}
+                disabled={crashUploading}
+                onChange={(checked) => {
+                  void setCrashUploadEnabled(checked).catch((err) => {
+                    setToggleError(err instanceof Error ? err.message : '更新崩溃上报设置失败')
+                  })
+                }}
+              />
+            </SettingsRow>
+            <SettingsRow label="待上传">
+              <span className="tm-settings-static">
+                {crashUploadStatus?.pendingCount ?? snapshot.operations.crashReportPendingUpload} 份
+              </span>
+            </SettingsRow>
+            {snapshot.operations.crashReportIngestUrl ? (
+              <SettingsRow label="上报地址">
+                <span className="tm-settings-static">{snapshot.operations.crashReportIngestUrl}</span>
+              </SettingsRow>
+            ) : null}
+            {crashUploadStatus?.lastUploadError ? (
+              <p className="tm-settings-row-hint">{crashUploadStatus.lastUploadError}</p>
+            ) : null}
+            <SettingsRow label="立即上传">
+              <button
+                type="button"
+                className="tm-data-btn"
+                disabled={
+                  crashUploading ||
+                  (crashUploadStatus?.pendingCount ?? snapshot.operations.crashReportPendingUpload) === 0
+                }
+                onClick={() => {
+                  void uploadCrashReportsNow().catch((err) => {
+                    setToggleError(err instanceof Error ? err.message : '上传崩溃报告失败')
+                  })
+                }}
+              >
+                {crashUploading ? '上传中…' : '上传待处理报告'}
+              </button>
             </SettingsRow>
             <SettingsRow label="更新通道">
               <span className="tm-settings-static">{snapshot.operations.update.channel}</span>

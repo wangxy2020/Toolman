@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { IpcChannel, type KnowledgeBase } from '@toolman/shared'
 import { IconFolderPlus, IconRefresh, IconChevronUp, IconSliders } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
+import {
+  ModulePageStatusProvider,
+  useRegisterModulePanelError,
+} from '../../components/module-page-status'
 import { getModulePageConfig } from '../modules/module-config'
 import { KnowledgeBaseSettingsModal } from './KnowledgeBaseSettingsModal'
 import {
@@ -455,17 +460,6 @@ export function KnowledgePage({
     }
   }
 
-  const combinedError =
-    error ??
-    documents.error ??
-    knowledgeFolderError ??
-    networkKnowledgeFolderError ??
-    localFilesFolderError ??
-    localDefaultKb.error ??
-    networkDefaultKb.error ??
-    localFilesDefaultKb.error ??
-    null
-
   const sectionLabel =
     KNOWLEDGE_SIDEBAR_SECTIONS.find((item) => item.id === section)?.label ?? '知识库'
   const breadcrumbItemName =
@@ -543,6 +537,32 @@ export function KnowledgePage({
   const panelLoading =
     defaultFolderInitializing ||
     (documents.loading && Boolean(importTarget.kbId))
+
+  const statusFallback = useMemo(() => {
+    if (documents.ingesting) {
+      return { tone: 'info' as const, text: '正在导入并建立索引…' }
+    }
+    if (panelLoading) {
+      return { tone: 'info' as const, text: '加载中…' }
+    }
+    if (isFileDedupView && dedupScanState.scanning) {
+      const progress = dedupScanState.progress
+      if (progress && progress.total > 0) {
+        return {
+          tone: 'info' as const,
+          text: `正在扫描重复文件… ${progress.scanned}/${progress.total}`,
+        }
+      }
+      return { tone: 'info' as const, text: '正在扫描重复文件…' }
+    }
+    return { tone: 'muted' as const, text: '就绪' }
+  }, [
+    dedupScanState.progress,
+    dedupScanState.scanning,
+    documents.ingesting,
+    isFileDedupView,
+    panelLoading,
+  ])
 
   const importReady =
     importTarget.ready ||
@@ -697,14 +717,23 @@ export function KnowledgePage({
         }
       />
 
-      {combinedError &&
-      (section === 'local' || section === 'network' || section === 'local-files') ? (
-        <div className="tm-error-bar" role="alert">
-          {combinedError}
-        </div>
-      ) : null}
+      <ModulePageStatusProvider>
+        <KnowledgePageStatusRegistry
+          error={error}
+          documentsError={documents.error}
+          onClearDocumentsError={() => documents.setError(null)}
+          knowledgeFolderError={knowledgeFolderError}
+          networkKnowledgeFolderError={networkKnowledgeFolderError}
+          localFilesFolderError={localFilesFolderError}
+          localDefaultKbError={localDefaultKb.error}
+          onClearLocalDefaultKbError={() => localDefaultKb.setError(null)}
+          networkDefaultKbError={networkDefaultKb.error}
+          onClearNetworkDefaultKbError={() => networkDefaultKb.setError(null)}
+          localFilesDefaultKbError={localFilesDefaultKb.error}
+          onClearLocalFilesDefaultKbError={() => localFilesDefaultKb.setError(null)}
+        />
 
-      <div className="tm-module-content">
+        <div className="tm-module-content">
         {!workspaceId ? (
           <div className="tm-module-empty">
             <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
@@ -746,7 +775,10 @@ export function KnowledgePage({
             <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
           </div>
         )}
-      </div>
+        </div>
+
+        <ModulePageStatusBar fallback={statusFallback} />
+      </ModulePageStatusProvider>
 
       {settingsTarget === 'kb' && workspaceId && (settingsKbOverride ?? embedSettingsKb) ? (
         <KnowledgeBaseSettingsModal
@@ -813,6 +845,57 @@ export function KnowledgePage({
       ) : null}
     </main>
   )
+}
+
+function KnowledgePageStatusRegistry({
+  error,
+  documentsError,
+  onClearDocumentsError,
+  knowledgeFolderError,
+  networkKnowledgeFolderError,
+  localFilesFolderError,
+  localDefaultKbError,
+  onClearLocalDefaultKbError,
+  networkDefaultKbError,
+  onClearNetworkDefaultKbError,
+  localFilesDefaultKbError,
+  onClearLocalFilesDefaultKbError,
+}: {
+  error?: string | null
+  documentsError: string | null
+  onClearDocumentsError: () => void
+  knowledgeFolderError?: string | null
+  networkKnowledgeFolderError?: string | null
+  localFilesFolderError?: string | null
+  localDefaultKbError: string | null
+  onClearLocalDefaultKbError: () => void
+  networkDefaultKbError: string | null
+  onClearNetworkDefaultKbError: () => void
+  localFilesDefaultKbError: string | null
+  onClearLocalFilesDefaultKbError: () => void
+}) {
+  useRegisterModulePanelError('knowledge-bases', error ?? null)
+  useRegisterModulePanelError('knowledge-documents', documentsError, onClearDocumentsError)
+  useRegisterModulePanelError('knowledge-folder-local', knowledgeFolderError ?? null)
+  useRegisterModulePanelError('knowledge-folder-network', networkKnowledgeFolderError ?? null)
+  useRegisterModulePanelError('knowledge-folder-local-files', localFilesFolderError ?? null)
+  useRegisterModulePanelError(
+    'knowledge-default-local',
+    localDefaultKbError,
+    onClearLocalDefaultKbError,
+  )
+  useRegisterModulePanelError(
+    'knowledge-default-network',
+    networkDefaultKbError,
+    onClearNetworkDefaultKbError,
+  )
+  useRegisterModulePanelError(
+    'knowledge-default-local-files',
+    localFilesDefaultKbError,
+    onClearLocalFilesDefaultKbError,
+  )
+
+  return null
 }
 
 function KnowledgePageHeader({

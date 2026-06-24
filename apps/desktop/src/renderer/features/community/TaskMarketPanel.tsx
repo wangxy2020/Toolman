@@ -25,6 +25,7 @@ import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityLocalInteractions } from './useCommunityLocalInteractions'
 import { useCommunityTasks } from './useCommunityTasks'
 import { useCommunityUser } from './useCommunityUser'
+import { useCommunityPanelStatus } from './community-panel-status'
 
 export function TaskMarketPanel() {
   const [showCreate, setShowCreate] = useState(false)
@@ -37,6 +38,15 @@ export function TaskMarketPanel() {
 
   const tasks = useCommunityTasks({ query: useMemo(() => ({}), []) })
   const user = useCommunityUser()
+
+  useCommunityPanelStatus('community-tasks', {
+    loading: tasks.loading,
+    error: tasks.error,
+    onClearError: () => tasks.setError(null),
+  })
+  useCommunityPanelStatus('community-tasks-user', {
+    error: user.error,
+  })
 
   const sortedItems = useMemo(
     () =>
@@ -87,12 +97,6 @@ export function TaskMarketPanel() {
         onRefresh={() => void tasks.load()}
         onPublish={() => setShowCreate(true)}
         publishDisabled={user.profile != null && !user.profile.canPublish}
-        error={
-          <>
-            {user.error ? <div className="tm-error-bar">{user.error}</div> : null}
-            {tasks.error ? <div className="tm-error-bar">{tasks.error}</div> : null}
-          </>
-        }
         isEmpty={sortedItems.length === 0}
         emptyHint="暂无任务，点击右上角发布任务"
       >

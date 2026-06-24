@@ -11,6 +11,7 @@ import {
 import { formatCommunityCount } from './community-market-utils'
 import { formatNewsArticleDescription, formatNewsDate } from './community-news-utils'
 import { useCommunityRecommendations } from './useCommunityRecommendations'
+import { useCommunityPanelStatus } from './community-panel-status'
 
 import type { CommunityNewsArticle, CommunityResourceItem } from '@toolman/shared'
 import type { ReactNode } from 'react'
@@ -69,7 +70,12 @@ function RecommendSection({
 
 export function RecommendPanel() {
   const recommend = useCommunityRecommendations()
-  const hubOffline = recommend.hubStatus != null && !recommend.hubStatus.running
+
+  useCommunityPanelStatus('community-recommend', {
+    loading: recommend.loading,
+    error: recommend.error,
+    loadingMessage: '加载推荐内容…',
+  })
 
   return (
     <div className="tm-community-market tm-community-recommend">
@@ -84,15 +90,6 @@ export function RecommendPanel() {
           />
         }
       />
-
-      {hubOffline ? (
-        <div className="tm-community-market-banner" role="status">
-          Community Hub 未运行
-          {recommend.hubStatus?.error ? `：${recommend.hubStatus.error}` : '，推荐内容可能不可用。'}
-        </div>
-      ) : null}
-
-      {recommend.error ? <div className="tm-error-bar">{recommend.error}</div> : null}
 
       <div className="tm-kb-file-panel tm-community-recommend-content">
         {recommend.loading && !recommend.hasContent ? (

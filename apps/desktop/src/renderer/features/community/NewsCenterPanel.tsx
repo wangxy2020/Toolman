@@ -20,6 +20,7 @@ import { copyCommunityShareText } from './community-share-utils'
 import { COMMUNITY_NEWS_SOURCES_CHANGED_EVENT } from './community-events'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityNews } from './useCommunityNews'
+import { useCommunityPanelStatus } from './community-panel-status'
 
 const NEWS_LIST_QUERY = { sort: 'diverse' as const, limit: 30 }
 
@@ -32,6 +33,13 @@ export function NewsCenterPanel() {
   const news = useCommunityNews({
     query: NEWS_LIST_QUERY,
     autoLoadDetail: false,
+  })
+
+  useCommunityPanelStatus('community-news', {
+    loading: news.loading,
+    error: news.error,
+    onClearError: () => news.setError(null),
+    loadingMessage: '加载资讯…',
   })
 
   useEffect(() => {
@@ -76,7 +84,6 @@ export function NewsCenterPanel() {
             <span>RSS 源</span>
           </CommunityPanelSecondaryButton>
         }
-        error={news.error ? <div className="tm-error-bar">{news.error}</div> : null}
         isEmpty={listItems.length === 0}
         emptyHint="暂无资讯文章"
       >

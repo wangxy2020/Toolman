@@ -2,9 +2,19 @@ import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
+const isReleaseBuild = process.env.TOOLMAN_RELEASE_BUILD === '1'
+const bakedUpdateFeedUrl =
+  process.env.TOOLMAN_UPDATE_FEED_URL?.trim() ??
+  (isReleaseBuild ? 'https://releases.toolman.app' : '')
+const bakedUpdateChannel = process.env.TOOLMAN_UPDATE_CHANNEL?.trim() ?? 'stable'
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    define: {
+      __TOOLMAN_UPDATE_FEED_URL__: JSON.stringify(bakedUpdateFeedUrl),
+      __TOOLMAN_UPDATE_CHANNEL__: JSON.stringify(bakedUpdateChannel),
+    },
     build: {
       rollupOptions: {
         input: {

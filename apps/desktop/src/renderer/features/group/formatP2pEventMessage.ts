@@ -8,6 +8,7 @@ export const P2P_RESOURCE_LABELS: Record<P2pResourceType, string> = {
   Agent: '智能体',
   File: '文件',
   Workflow: '工作流',
+  GroupChat: '群聊',
 }
 
 const EVENT_TYPE_LABELS: Record<P2pEventType, string> = {
@@ -67,6 +68,20 @@ export function formatP2pEventMessage(event: WorkspaceEvent): string {
 
   if (event.resourceType === 'Knowledge' && event.eventType === 'Deleted') {
     return '取消了知识库共享'
+  }
+
+  if (event.resourceType === 'GroupChat' && event.eventType === 'Created') {
+    const kind = payload.kind
+    if (kind === 'group.chat.message') {
+      const message = payload.message
+      if (message && typeof message === 'object' && message !== null) {
+        const senderName =
+          typeof (message as { senderName?: unknown }).senderName === 'string'
+            ? (message as { senderName: string }).senderName
+            : '成员'
+        return `${senderName} 发送了群聊消息`
+      }
+    }
   }
 
   const resourceLabel = P2P_RESOURCE_LABELS[event.resourceType]

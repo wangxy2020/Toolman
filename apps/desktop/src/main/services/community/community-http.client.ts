@@ -38,8 +38,9 @@ export class CommunityHttpError extends Error {
 }
 
 export interface CommunityHttpClientOptions {
-  port: number
+  port?: number
   host?: string
+  baseUrl?: string
   identityId?: string
   fetchImpl?: typeof fetch
   resolveAuth?: () => Promise<CommunityHubAuthContext> | CommunityHubAuthContext
@@ -52,7 +53,13 @@ export class CommunityHttpClient {
   private readonly resolveAuth?: () => Promise<CommunityHubAuthContext> | CommunityHubAuthContext
 
   constructor(options: CommunityHttpClientOptions) {
-    this.baseUrl = buildCommunityHubBaseUrl(options.port, options.host)
+    if (options.baseUrl) {
+      this.baseUrl = options.baseUrl.replace(/\/$/, '')
+    } else if (options.port != null) {
+      this.baseUrl = buildCommunityHubBaseUrl(options.port, options.host)
+    } else {
+      throw new Error('CommunityHttpClient requires baseUrl or port')
+    }
     this.identityId = options.identityId ?? COMMUNITY_HUB_IDENTITY_ID
     this.fetchImpl = options.fetchImpl ?? fetch
     this.resolveAuth = options.resolveAuth

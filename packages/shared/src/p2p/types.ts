@@ -20,6 +20,7 @@ export const P2pResourceTypeSchema = z.enum([
   'Workflow',
   'Member',
   'Workspace',
+  'GroupChat',
 ])
 export type P2pResourceType = z.infer<typeof P2pResourceTypeSchema>
 

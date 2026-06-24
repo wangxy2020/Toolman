@@ -20,6 +20,11 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "smoke": "bash scripts/smoke-critical-paths.sh",
+    "rc1:preflight": "bash scripts/rc1-preflight.sh",
+    "rc1:build": "bash scripts/build-rc1-desktop.sh",
+    "release:desktop": "bash scripts/build-desktop-release.sh",
+    "release:desktop:publish": "bash scripts/publish-update-feed.sh",
+    "release:verify-feed": "bash scripts/verify-update-feed.sh",
     "db:generate": "pnpm --filter @toolman/db generate",
     "db:migrate": "pnpm --filter @toolman/db migrate"
   },

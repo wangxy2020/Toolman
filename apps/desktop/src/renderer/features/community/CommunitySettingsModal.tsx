@@ -23,9 +23,10 @@ const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
 
 function hubStatusLabel(status: CommunityHubStatusOutput | null): string {
   if (!status) return '加载中…'
-  if (status.running) return '运行中'
+  if (status.offlineReadOnly) return '离线只读'
+  if (status.running) return '已连接'
   if (status.error) return '不可用'
-  return '未启动'
+  return '未连接'
 }
 
 export function CommunitySettingsModal({ onClose }: Props) {
@@ -82,7 +83,7 @@ export function CommunitySettingsModal({ onClose }: Props) {
               <span className="tm-group-settings-modal-title-dot" aria-hidden="true" />
               社区设置
             </h3>
-            <p className="tm-group-settings-modal-subtitle">本地 Community Hub 与资讯源配置</p>
+            <p className="tm-group-settings-modal-subtitle">Community Hub 连接与资讯源配置</p>
           </div>
           <button
             type="button"
@@ -141,6 +142,10 @@ export function CommunitySettingsModal({ onClose }: Props) {
                 </div>
 
                 <div className="tm-group-settings-field">
+                  <span className="tm-group-settings-label">连接模式</span>
+                  <span>{hubStatus?.mode === 'remote' ? '官方远程 Hub' : '本地 Sidecar'}</span>
+                </div>
+                <div className="tm-group-settings-field">
                   <span className="tm-group-settings-label">运行状态</span>
                   <span>{hubStatusLabel(hubStatus)}</span>
                 </div>
@@ -189,9 +194,9 @@ export function CommunitySettingsModal({ onClose }: Props) {
                 ) : null}
 
                 <p className="tm-group-settings-hint">
-                  社区数据保存在本机 Community Hub（SQLite）。使用{' '}
-                  <code>pnpm dev:p2p:a</code> / <code>pnpm dev:p2p:b</code>{' '}
-                  双开测试时，两个实例会共享同一 Hub 与数据库，留言与市场内容可互相可见。
+                  {hubStatus?.mode === 'remote'
+                    ? 'Release 包默认连接官方 Hub（https://hub.toolman.app）。Hub 不可达时将使用本地缓存只读展示市场与留言列表。'
+                    : '开发模式默认启动本地 Community Hub（SQLite sidecar）。使用 pnpm dev:p2p:a / dev:p2p:b 双开时可共享同一 Hub 数据目录。'}
                 </p>
               </div>
             ) : (

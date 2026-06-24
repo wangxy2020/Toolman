@@ -2,14 +2,7 @@ import { useState } from 'react'
 import { SettingsToggle } from './SettingsShared'
 import { AboutJoinUsModal } from './AboutJoinUsModal'
 import { TOOLMAN_GITHUB_URL } from './about-settings.constants'
-
-const APP_VERSION = '0.1.0'
-
-const CHANGELOG = [
-  '[知识库] 修复知识库搜索在空索引时崩溃的问题。',
-  '[智能体] 优化多模型并行回复时的消息排序。',
-  '[模型] 改进流式输出中断后的状态恢复。',
-]
+import { useAppUpdate } from './useAppUpdate'
 
 const ABOUT_LINKS = [
   { id: 'docs', label: '帮助文档', action: '查看' },
@@ -43,8 +36,19 @@ function IconGithub({ size = 24 }: { size?: number }) {
 }
 
 export function AboutSettingsPanel() {
-  const [autoUpdate, setAutoUpdate] = useState(true)
   const [joinModalOpen, setJoinModalOpen] = useState(false)
+  const {
+    status,
+    currentVersion,
+    releaseNotes,
+    updateButtonLabel,
+    updateButtonDisabled,
+    setAutoUpdate,
+    runUpdateAction,
+  } = useAppUpdate()
+
+  const latestVersion = status?.latestVersion
+  const showReleaseNotes = status?.updateAvailable && releaseNotes.length > 0
 
   return (
     <div className="tm-about-settings">
@@ -67,32 +71,49 @@ export function AboutSettingsPanel() {
           <div className="tm-about-hero-text">
             <h3 className="tm-about-name">Toolman</h3>
             <p className="tm-about-tagline">一款为创造者而生的 AI 助手</p>
-            <span className="tm-about-version-badge">v{APP_VERSION}</span>
+            <span className="tm-about-version-badge">v{currentVersion}</span>
+            {status?.channel ? (
+              <span className="tm-about-version-badge"> · {status.channel}</span>
+            ) : null}
           </div>
-          <button type="button" className="tm-about-outline-btn" disabled>
-            立即更新
+          <button
+            type="button"
+            className="tm-about-outline-btn"
+            disabled={updateButtonDisabled}
+            onClick={() => void runUpdateAction()}
+          >
+            {updateButtonLabel}
           </button>
         </div>
+
+        {status?.error ? <p className="tm-about-update-hint">{status.error}</p> : null}
 
         <div className="tm-about-divider" />
 
         <div className="tm-about-toggle-row">
           <span>自动更新</span>
-          <SettingsToggle checked={autoUpdate} onChange={setAutoUpdate} />
+          <SettingsToggle
+            checked={status?.autoUpdate ?? true}
+            onChange={(checked) => void setAutoUpdate(checked)}
+          />
         </div>
       </div>
 
-      <div className="tm-about-card">
-        <div className="tm-about-changelog-head">
-          <span className="tm-about-status-dot" aria-hidden="true" />
-          <span>发现新版本 {APP_VERSION}</span>
+      {showReleaseNotes ? (
+        <div className="tm-about-card">
+          <div className="tm-about-changelog-head">
+            <span className="tm-about-status-dot" aria-hidden="true" />
+            <span>
+              发现新版本 {latestVersion ?? currentVersion}
+            </span>
+          </div>
+          <ul className="tm-about-changelog-list">
+            {releaseNotes.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
         </div>
-        <ul className="tm-about-changelog-list">
-          {CHANGELOG.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
+      ) : null}
 
       <div className="tm-about-card tm-about-links-card">
         {ABOUT_LINKS.map((link) => (

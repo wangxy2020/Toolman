@@ -1,0 +1,2 @@
+declare const __TOOLMAN_UPDATE_FEED_URL__: string
+declare const __TOOLMAN_UPDATE_CHANNEL__: string

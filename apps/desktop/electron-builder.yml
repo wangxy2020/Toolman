@@ -15,9 +15,15 @@ mac:
   target:
     - dmg
   category: public.app-category.productivity
+  artifactName: Toolman-${version}-${arch}.${ext}
 win:
   target:
     - nsis
+  artifactName: Toolman-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage
+  artifactName: Toolman-${version}-${arch}.${ext}
+publish:
+  provider: generic
+  url: ${env.TOOLMAN_UPDATE_PUBLISH_URL}

@@ -20,6 +20,7 @@ import {
 } from './community-yjs-signing.service'
 import {
   applyCommunityDocUpdate,
+  deleteLwwEntity,
   encodeCommunityDocUpdate,
   getCommunityEntityMap,
   observeCommunityDoc,
@@ -154,7 +155,16 @@ export function startCommunityYjsProvider(): void {
 
   started = true
   attachDomainListeners()
+  subscribeCommunityYjsTopics()
 
+  pollTimer = setInterval(() => {
+    pollPubsubInbox()
+  }, 2_000)
+
+  recordDiagnosticEvent('community-yjs', 'info', 'provider started')
+}
+
+function subscribeCommunityYjsTopics(): void {
   for (const domain of ALL_DOMAINS) {
     try {
       Libp2pBridge.pubsubSubscribe(communityYjsTopicForDomain(domain))
@@ -164,12 +174,13 @@ export function startCommunityYjsProvider(): void {
       recordDiagnosticEvent('community-yjs', 'warn', `subscribe ${domain}: ${message}`)
     }
   }
+}
 
-  pollTimer = setInterval(() => {
-    pollPubsubInbox()
-  }, 2_000)
-
-  recordDiagnosticEvent('community-yjs', 'info', 'provider started')
+export function resubscribeCommunityYjsPubsub(): void {
+  if (!started || !isCommunityYjsEnabled()) return
+  if (!Libp2pBridge.isAvailable() || !Libp2pBridge.networkIsRunning()) return
+  subscribeCommunityYjsTopics()
+  recordDiagnosticEvent('community-yjs', 'info', 'resubscribed pubsub after libp2p restart')
 }
 
 export function stopCommunityYjsProvider(): void {
@@ -230,6 +241,17 @@ export function syncCommunityBoardMessageToYjs(message: CommunityBoardMessage): 
       updatedAt: message.updatedAt,
       authorDeviceId: getP2pDeviceId(),
     },
+    YJS_ORIGIN_LOCAL,
+  )
+}
+
+export function removeCommunityBoardMessageFromYjs(messageId: string): void {
+  if (!isCommunityYjsEnabled()) return
+
+  deleteLwwEntity(
+    'board',
+    messageId,
+    { updatedAt: Date.now() },
     YJS_ORIGIN_LOCAL,
   )
 }

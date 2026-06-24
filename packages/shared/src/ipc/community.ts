@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CommunityHubModeSchema } from '../community/hub-config.js'
 import { TimestampSchema, UuidSchema } from './base.js'
 
 // --- Shared enums ---
@@ -130,10 +131,12 @@ export type CommunityHubHealthOutput = z.infer<typeof CommunityHubHealthOutputSc
 
 export const CommunityHubStatusOutputSchema = z.object({
   running: z.boolean(),
+  mode: CommunityHubModeSchema.default('local'),
   port: z.number().int().positive().nullable(),
   host: z.string(),
   baseUrl: z.string().nullable(),
   binaryPath: z.string().nullable(),
+  offlineReadOnly: z.boolean().default(false),
   error: z.string().optional(),
 })
 export type CommunityHubStatusOutput = z.infer<typeof CommunityHubStatusOutputSchema>

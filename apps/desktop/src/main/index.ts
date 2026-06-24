@@ -4,6 +4,11 @@ loadWorkspaceEnvFiles()
 
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+
+const e2eUserDataDir = process.env.TOOLMAN_E2E_USER_DATA_DIR
+if (e2eUserDataDir) {
+  app.setPath('userData', e2eUserDataDir)
+}
 import { registerIpcHandlers } from './ipc/handlers'
 import { bootstrapDatabase } from './bootstrap/database'
 import { bootstrapSkills } from './services/skills-facade.service'
@@ -50,6 +55,8 @@ import {
   bootstrapLocalOperations,
   registerProcessCrashHandlers,
 } from './services/local-operations.service'
+import { bootstrapAppUpdateService } from './services/app-update.service'
+import { bootstrapCrashReportService } from './services/crash-report.service'
 import { recordDiagnosticEvent } from './services/diagnostics-log'
 
 registerProcessCrashHandlers()
@@ -253,6 +260,8 @@ app.whenReady().then(() => {
     bootstrapSkills()
     bootstrapChannels()
     registerIpcHandlers()
+    bootstrapAppUpdateService()
+    bootstrapCrashReportService()
     bootstrapP2pSync()
     bootstrapP2pAgentRelay()
     startP2pConnectionMonitor()
@@ -275,6 +284,9 @@ app.whenReady().then(() => {
     } else if (status.error) {
       console.warn(`[community-hub] unavailable: ${status.error}`)
     }
+    void import('./services/crash-report.service')
+      .then(({ flushPendingCrashReports }) => flushPendingCrashReports())
+      .catch(() => undefined)
   })
 
   app.on('activate', () => {

@@ -20,6 +20,7 @@ import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityMessageBoard } from './useCommunityMessageBoard'
 import { useCommunityUser } from './useCommunityUser'
 import { useRegistrationGate } from '../user/useRegistrationGate'
+import { useCommunityPanelStatus } from './community-panel-status'
 
 export function MessageBoardPanel() {
   const [showPublish, setShowPublish] = useState(false)
@@ -31,6 +32,15 @@ export function MessageBoardPanel() {
   const board = useCommunityMessageBoard()
   const user = useCommunityUser()
   const { requireRegistration, modal } = useRegistrationGate()
+
+  useCommunityPanelStatus('community-message-board', {
+    loading: board.loading,
+    error: board.error,
+    onClearError: () => board.setError(null),
+  })
+  useCommunityPanelStatus('community-message-board-user', {
+    error: user.error,
+  })
 
   const sortedItems = useMemo(
     () =>
@@ -72,7 +82,7 @@ export function MessageBoardPanel() {
     <>
       <CommunityListPanelShell
         title="留言板"
-        subtitle="浏览社区留言与互动讨论"
+        subtitle="浏览社区留言与互动讨论；点赞/收藏经 Hub HTTP 同步，不经 P2P"
         publishLabel="发布留言"
         loading={board.loading}
         onRefresh={() => void board.load()}
@@ -80,12 +90,6 @@ export function MessageBoardPanel() {
           if (!requireRegistration('community_write')) return
           setShowPublish(true)
         }}
-        error={
-          <>
-            {user.error ? <div className="tm-error-bar">{user.error}</div> : null}
-            {board.error ? <div className="tm-error-bar">{board.error}</div> : null}
-          </>
-        }
         isEmpty={sortedItems.length === 0}
         emptyHint="暂无留言，点击右上角发布第一条留言"
       >
