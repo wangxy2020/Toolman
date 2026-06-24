@@ -38,6 +38,7 @@ impl TaskType {
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     Draft,
+    PendingReview,
     Open,
     Assigned,
     InProgress,
@@ -51,6 +52,7 @@ impl TaskStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Draft => "draft",
+            Self::PendingReview => "pending_review",
             Self::Open => "open",
             Self::Assigned => "assigned",
             Self::InProgress => "in_progress",
@@ -64,6 +66,7 @@ impl TaskStatus {
     pub fn parse(value: &str) -> Result<Self, TaskError> {
         match value {
             "draft" => Ok(Self::Draft),
+            "pending_review" => Ok(Self::PendingReview),
             "open" => Ok(Self::Open),
             "assigned" => Ok(Self::Assigned),
             "in_progress" => Ok(Self::InProgress),
@@ -80,7 +83,10 @@ impl TaskStatus {
         matches!(
             (self, next),
             (Draft, Open)
+                | (Draft, PendingReview)
                 | (Draft, Cancelled)
+                | (PendingReview, Open)
+                | (PendingReview, Cancelled)
                 | (Open, Cancelled)
                 | (Open, Assigned)
                 | (Assigned, InProgress)
@@ -349,6 +355,8 @@ mod tests {
     #[test]
     fn allows_publish_and_cancel_transitions() {
         assert!(TaskStatus::Draft.can_transition_to(TaskStatus::Open));
+        assert!(TaskStatus::Draft.can_transition_to(TaskStatus::PendingReview));
+        assert!(TaskStatus::PendingReview.can_transition_to(TaskStatus::Open));
         assert!(TaskStatus::Draft.can_transition_to(TaskStatus::Cancelled));
         assert!(TaskStatus::Open.can_transition_to(TaskStatus::Cancelled));
     }

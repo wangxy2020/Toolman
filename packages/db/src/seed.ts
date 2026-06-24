@@ -11,16 +11,24 @@ const DEFAULT_ASSISTANT_ID = '00000000-0000-0000-0000-000000000003'
 const DEFAULT_PROVIDER_ID = '00000000-0000-0000-0000-000000000004'
 export const DEFAULT_LOCAL_MODEL = 'gemma4:latest'
 
-export function seedDefaultData(db: ToolmanDatabase) {
+export function seedDefaultData(
+  db: ToolmanDatabase,
+  options?: {
+    identityId?: string
+    displayName?: string
+  },
+) {
   const now = new Date()
+  const identityId = options?.identityId ?? DEFAULT_IDENTITY_ID
+  const displayName = options?.displayName ?? '本地用户'
 
-  const existing = db.select().from(identities).where(eq(identities.id, DEFAULT_IDENTITY_ID)).get()
+  const existing = db.select().from(identities).where(eq(identities.id, identityId)).get()
   if (existing) return
 
   db.insert(identities).values({
-    id: DEFAULT_IDENTITY_ID,
+    id: identityId,
     type: 'local',
-    displayName: '本地用户',
+    displayName,
     createdAt: now,
     updatedAt: now,
   }).run()
@@ -28,7 +36,7 @@ export function seedDefaultData(db: ToolmanDatabase) {
   db.insert(workspaces).values({
     id: DEFAULT_WORKSPACE_ID,
     name: '默认工作区',
-    ownerId: DEFAULT_IDENTITY_ID,
+    ownerId: identityId,
     settingsJson: JSON.stringify({ theme: 'system', defaultLocale: 'zh-CN' }),
     isDefault: true,
     createdAt: now,

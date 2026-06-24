@@ -257,11 +257,22 @@ export class P2pBridge {
     const native = loadNativeModule()
     if (typeof native.connectionSetIceServers === 'function') {
       native.connectionSetIceServers(
-        servers.map((server) => ({
-          urls: Array.isArray(server.urls) ? server.urls : [server.urls],
-          username: server.username ?? null,
-          credential: server.credential ?? null,
-        })),
+        servers.map((server) => {
+          const entry: {
+            urls: string[]
+            username?: string
+            credential?: string
+          } = {
+            urls: Array.isArray(server.urls) ? server.urls : [server.urls],
+          }
+          if (server.username?.trim()) {
+            entry.username = server.username.trim()
+          }
+          if (server.credential?.trim()) {
+            entry.credential = server.credential.trim()
+          }
+          return entry
+        }),
       )
       return
     }

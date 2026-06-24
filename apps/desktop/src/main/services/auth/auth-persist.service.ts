@@ -12,10 +12,9 @@ import { getDatabase } from '../../bootstrap/database'
 import { invalidateHubTokenCache } from '../community/community-hub-auth.service'
 import { encryptSecret } from '../secret-store'
 import { getAuthSession } from '../auth-session.service'
+import { getLocalIdentityId } from '../local-identity'
 import { bindP2pDeviceToIdentity, refreshP2pDeviceIdentityBinding } from '../p2p/p2p-device-identity.service'
 import { AuthLoginError } from './auth-login.error.js'
-
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
 export interface PersistAuthLoginInput {
   region: AuthRegion
@@ -41,7 +40,7 @@ export function upsertAuthBinding(input: {
   bindingLabel?: string
   bindingMetadata?: AuthBindingMetadata
 }): void {
-  const identityId = input.identityId ?? DEFAULT_IDENTITY_ID
+  const identityId = input.identityId ?? getLocalIdentityId()
   const db = getDatabase()
   const bindingRepo = new AuthBindingRepository(db)
   const existingBinding = bindingRepo.findByProviderSubject(input.provider, input.subjectId)
@@ -68,7 +67,7 @@ export function persistAuthLogin(input: PersistAuthLoginInput): AuthSession {
   const db = getDatabase()
   const sessionRepo = new AuthSessionRepository(db)
   const now = new Date()
-  const identityId = DEFAULT_IDENTITY_ID
+  const identityId = getLocalIdentityId()
 
   upsertAuthBinding({
     identityId,
@@ -130,7 +129,7 @@ export function refreshAuthSessionTokens(input: {
   invalidateHubTokenCache()
 }
 
-export function resetIdentityToGuest(identityId: string = DEFAULT_IDENTITY_ID): void {
+export function resetIdentityToGuest(identityId: string = getLocalIdentityId()): void {
   const db = getDatabase()
   const now = new Date()
   db.update(identities)

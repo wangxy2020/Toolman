@@ -13,6 +13,7 @@ export interface MintHubAccessTokenInput {
   identityId: string
   registrationStatus: RegistrationStatus
   sku?: ProductSku | null
+  email?: string | null
   ttlSeconds?: number
   /** Test-only override to avoid Electron secret storage. */
   secretOverride?: string
@@ -37,6 +38,10 @@ export async function mintHubAccessToken(
   }
   if (input.sku) {
     payload.sku = input.sku
+  }
+  const email = input.email?.trim().toLowerCase()
+  if (email && email.includes('@')) {
+    payload.email = email
   }
 
   const accessToken = await new SignJWT(payload)

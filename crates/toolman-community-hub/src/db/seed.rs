@@ -23,6 +23,13 @@ pub fn resolve_default_identity_id() -> String {
 
 pub async fn seed_default_admin_user(pool: &SqlitePool) -> Result<(), SeedError> {
     let identity_id = resolve_default_identity_id();
+
+    // Founder seed uses a fixed user id. Only run for the default founder identity;
+    // dual-instance dev (user B) must not pass a different identity here.
+    if identity_id != DEFAULT_IDENTITY_ID {
+        return Ok(());
+    }
+
     let now = chrono::Utc::now().timestamp_millis();
 
     sqlx::query(

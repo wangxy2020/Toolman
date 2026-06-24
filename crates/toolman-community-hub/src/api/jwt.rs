@@ -11,6 +11,7 @@ pub struct ResolvedIdentity {
     pub identity_id: String,
     pub registration_status: String,
     pub sku: Option<String>,
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,6 +24,8 @@ struct HubJwtClaims {
     registration_status: String,
     #[serde(default)]
     sku: Option<String>,
+    #[serde(default)]
+    email: Option<String>,
 }
 
 pub fn bearer_token_from_headers(headers: &HeaderMap) -> Option<&str> {
@@ -60,6 +63,10 @@ pub fn validate_hub_jwt(token: &str, secret: &str) -> Result<ResolvedIdentity, A
         identity_id: claims.sub,
         registration_status: claims.registration_status,
         sku: claims.sku,
+        email: claims
+            .email
+            .map(|value| value.trim().to_lowercase())
+            .filter(|value| !value.is_empty()),
     })
 }
 
@@ -85,6 +92,7 @@ mod tests {
             iat: chrono::Utc::now().timestamp(),
             registration_status: registration_status.to_string(),
             sku: Some("community".to_string()),
+            email: None,
         };
 
         encode(
@@ -111,6 +119,7 @@ mod tests {
             identity_id: "guest-id".to_string(),
             registration_status: "guest".to_string(),
             sku: None,
+            email: None,
         };
         ensure_registered(&identity).expect_err("guest blocked");
     }

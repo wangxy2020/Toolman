@@ -11,7 +11,7 @@
 
 | # | 决策 | GA 约束 |
 |---|------|---------|
-| D1 | **社区 Hub 部署** | 仅【客户端 → 官方远程 Hub `https://hub.toolman.app`】星型联邦；**不做**企业私有 Hub |
+| D1 | **社区 Hub 部署** | **社区版（开源）**：F0 P2P 联邦 + 本地 Hub，默认不依赖官方中心；**企业版（闭源）**：F2 可选 `https://hub.toolman.app` / 企业 Hub |
 | D2 | **WAN 群组** | GA **必须承诺**跨网段/广域网协作；R2.3 TURN + 10 人 WAN E2E 为 **P1 必做**，不得降级为 LAN 优先 |
 | D3 | **Yjs 点赞/收藏** | **HTTP-only** + UI 说明；**禁止**合入 Yjs CRDT，避免半同步脏数据 |
 | D4 | **语义搜索** | **降级至 v1.1**；GA 阶段 Hub 搜索 **全量 Fallback SQLite FTS**，**禁止**对用户返回 HTTP 501 |
@@ -36,7 +36,7 @@
 ## 明确不在 GA 范围（v1.1+）
 
 - 语义搜索 / Embedding 向量检索（D4）
-- 企业自建 Hub、Hub upstream 多源联邦（D1 简化后 v2 再议）
+- 企业自建 Hub、Hub upstream 多源联邦（**F1 开源**；F2 企业版闭源）
 - 群聊送达 ACK / 已读回执
 - CID 断点续传 session 持久化
 - D5 全部占位模块

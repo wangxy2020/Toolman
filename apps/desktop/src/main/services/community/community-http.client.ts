@@ -23,6 +23,7 @@ export interface CommunityHealthData {
   require_review?: boolean
   user_count?: number
   resource_count?: number
+  federation_peering?: boolean
 }
 
 export class CommunityHttpError extends Error {
@@ -35,6 +36,35 @@ export class CommunityHttpError extends Error {
     this.status = status
     this.code = code
   }
+}
+
+export function isCommunityFetchNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  const cause = (error as Error & { cause?: { code?: string } }).cause
+  const causeCode = cause?.code?.toLowerCase() ?? ''
+  return (
+    error.name === 'TypeError' &&
+    (message.includes('fetch failed') ||
+      message.includes('econnrefused') ||
+      message.includes('enotfound') ||
+      message.includes('etimedout') ||
+      message.includes('econnreset') ||
+      causeCode.includes('econnrefused') ||
+      causeCode.includes('enotfound') ||
+      causeCode.includes('etimedout') ||
+      causeCode.includes('econnreset'))
+  )
+}
+
+export function humanizeCommunityFetchError(error: unknown): string {
+  if (error instanceof CommunityHttpError) {
+    return error.message
+  }
+  if (isCommunityFetchNetworkError(error)) {
+    return '无法连接 Community Hub。双实例测试请先启动用户 A，并确认 Hub 正常运行后重试。'
+  }
+  return error instanceof Error ? error.message : 'Community 请求失败'
 }
 
 export interface CommunityHttpClientOptions {
@@ -145,6 +175,36 @@ export class CommunityHttpClient {
       authenticated?: boolean
     } = { method: 'GET' },
   ): Promise<T> {
+    const maxAttempts = 3
+    let lastError: unknown
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        return await this.requestOnce<T>(path, init)
+      } catch (error) {
+        lastError = error
+        const shouldRetry =
+          error instanceof CommunityHttpError &&
+          error.status === 429 &&
+          attempt < maxAttempts - 1
+        if (!shouldRetry) {
+          throw error
+        }
+        await sleepMs(800 * (attempt + 1))
+      }
+    }
+
+    throw lastError
+  }
+
+  private async requestOnce<T>(
+    path: string,
+    init: {
+      method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+      body?: string | FormData
+      authenticated?: boolean
+    } = { method: 'GET' },
+  ): Promise<T> {
     const url = this.resolveUrl(path)
 
     const headers = new Headers({
@@ -161,6 +221,15 @@ export class CommunityHttpClient {
       method: init.method,
       headers,
       body: init.body,
+    }).catch((error: unknown) => {
+      if (isCommunityFetchNetworkError(error)) {
+        throw new CommunityHttpError(
+          humanizeCommunityFetchError(error),
+          0,
+          'HUB_CONNECTION_FAILED',
+        )
+      }
+      throw error
     })
 
     const text = await response.text()
@@ -211,4 +280,10 @@ export class CommunityHttpClient {
 
     headers.set(COMMUNITY_HUB_HEADER, auth.identityId)
   }
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }

@@ -52,6 +52,7 @@ pub fn resolve_identity_from_headers(
             identity_id: identity_id.to_string(),
             registration_status: "registered".to_string(),
             sku: None,
+            email: None,
         });
     }
 
@@ -60,11 +61,17 @@ pub fn resolve_identity_from_headers(
     ))
 }
 
-pub async fn load_auth_user(state: &AppState, identity_id: &str) -> Result<AuthUser, ApiError> {
+pub async fn load_auth_user(state: &AppState, identity: &ResolvedIdentity) -> Result<AuthUser, ApiError> {
     let repo = UserRepository::new(state.db.clone());
     let user = repo
-        .find_or_create_by_identity_id(identity_id, None)
+        .find_or_create_by_identity_id(&identity.identity_id, None)
         .await?;
+    let user = crate::services::dev_test_user_role::apply_dev_test_user_role(
+        &repo,
+        user,
+        identity.email.as_deref(),
+    )
+    .await?;
     Ok(AuthUser(user))
 }
 
@@ -81,7 +88,7 @@ pub async fn load_optional_viewer(
     };
 
     Ok(Some(
-        load_auth_user(state, &identity.identity_id)
+        load_auth_user(state, &identity)
             .await?
             .into_user(),
     ))
@@ -123,7 +130,7 @@ pub async fn permission_middleware(
     )?;
 
     ensure_registered(&identity)?;
-    let auth_user = load_auth_user(&state, &identity.identity_id).await?;
+    let auth_user = load_auth_user(&state, &identity).await?;
     auth_user.user().ensure_permission(UserPermission::Publish)?;
 
     request.extensions_mut().insert(auth_user);
@@ -149,7 +156,7 @@ where
                 state.config.jwt_secret.as_deref(),
             )?;
 
-            load_auth_user(&state, &identity.identity_id).await
+            load_auth_user(&state, &identity).await
         }
     }
 }
@@ -178,7 +185,7 @@ pub async fn require_publish_handler(
         state.config.jwt_secret.as_deref(),
     )?;
     ensure_registered(&identity)?;
-    let auth_user = load_auth_user(&state, &identity.identity_id).await?;
+    let auth_user = load_auth_user(&state, &identity).await?;
     require_permission(auth_user.user(), UserPermission::Publish)?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -173,6 +173,7 @@ pub struct ModerationScanResult {
     pub online_mobile_devices: Vec<ScanDeviceItem>,
     pub open_reports: Vec<ReportItem>,
     pub pending_review: Vec<ScanResourceItem>,
+    pub pending_review_tasks: Vec<ScanTaskItem>,
     pub recent_messages: Vec<ScanMessageItem>,
     pub active_tasks: Vec<ScanTaskItem>,
     pub banned_users: Vec<ScanBannedUserItem>,
@@ -428,6 +429,46 @@ impl ModerationService {
         })
     }
 
+    pub async fn approve_task(
+        &self,
+        actor: &CommunityUser,
+        task_id: &str,
+        note: Option<String>,
+    ) -> Result<ResourceModerationItem, ModerationServiceError> {
+        ensure_admin(actor)?;
+
+        let task = TaskRepository::new(self.pool.clone())
+            .find_by_id(task_id)
+            .await
+            .map_err(|error| ModerationServiceError::Validation(error.to_string()))?
+            .ok_or_else(|| ModerationServiceError::Validation(format!("task not found: {task_id}")))?;
+
+        if task.status != TaskStatus::PendingReview {
+            return Err(ModerationServiceError::NotPendingReview);
+        }
+
+        let updated = TaskRepository::new(self.pool.clone())
+            .transition_status(task_id, TaskStatus::Open)
+            .await
+            .map_err(|error| ModerationServiceError::Validation(error.to_string()))?;
+
+        self.write_log(
+            actor,
+            "approve_task",
+            "task",
+            task_id,
+            note.as_deref(),
+            None,
+        )
+        .await?;
+
+        Ok(ResourceModerationItem {
+            id: updated.id,
+            title: updated.title,
+            status: updated.status.as_str().to_string(),
+        })
+    }
+
     pub async fn ban_user(
         &self,
         actor: &CommunityUser,
@@ -611,6 +652,33 @@ impl ModerationService {
             pending_items.push(self.to_scan_resource(&users, resource).await?);
         }
 
+        let pending_review_task_records = TaskRepository::new(self.pool.clone())
+            .list(&TaskListFilter {
+                status: Some(TaskStatus::PendingReview),
+                limit: SCAN_LIMIT,
+                offset: 0,
+                ..Default::default()
+            })
+            .await
+            .map_err(|error| ModerationServiceError::Validation(error.to_string()))?;
+
+        let mut pending_review_tasks = Vec::with_capacity(pending_review_task_records.len());
+        for task in pending_review_task_records {
+            let publisher_name = users
+                .find_by_id(&task.publisher_id)
+                .await?
+                .map(|user| user.display_name)
+                .unwrap_or_else(|| "Unknown".to_string());
+            pending_review_tasks.push(ScanTaskItem {
+                id: task.id,
+                title: task.title,
+                publisher_id: task.publisher_id,
+                publisher_name,
+                status: task.status.as_str().to_string(),
+                created_at: task.created_at,
+            });
+        }
+
         let open_reports = ReportRepository::new(self.pool.clone())
             .list(&ReportListFilter {
                 status: Some(ReportStatus::Open),
@@ -741,7 +809,7 @@ impl ModerationService {
             online_desktop_device_count,
             online_mobile_device_count,
             open_report_count: open_reports.len() as i64,
-            pending_review_count: pending_items.len() as i64,
+            pending_review_count: pending_items.len() as i64 + pending_review_tasks.len() as i64,
             board_message_count,
             active_task_count,
             online_resources,
@@ -749,6 +817,7 @@ impl ModerationService {
             online_mobile_devices: map_scan_devices(online_mobile_devices),
             open_reports,
             pending_review: pending_items,
+            pending_review_tasks,
             recent_messages,
             active_tasks,
             banned_users,

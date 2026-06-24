@@ -71,6 +71,7 @@ pub fn router() -> Router<AppState> {
         .route("/moderation/reports/{id}/resolve", post(resolve_report))
         .route("/moderation/resources/{id}/suspend", post(suspend_resource))
         .route("/moderation/resources/{id}/approve", post(approve_resource))
+        .route("/moderation/tasks/{id}/approve", post(approve_task))
         .route("/moderation/users/{id}/ban", post(ban_user))
         .route("/moderation/users/{id}/unban", post(unban_user))
         .route("/moderation/devices/{id}/ban", post(ban_device))
@@ -181,6 +182,19 @@ async fn approve_resource(
 ) -> Result<Json<ApiResponse<ResourceModerationItem>>, ApiError> {
     let item = service(&state)
         .approve_resource(&user, &id, body.note)
+        .await?;
+
+    Ok(Json(ApiResponse::ok(item)))
+}
+
+async fn approve_task(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<ApproveResourceBody>,
+) -> Result<Json<ApiResponse<ResourceModerationItem>>, ApiError> {
+    let item = service(&state)
+        .approve_task(&user, &id, body.note)
         .await?;
 
     Ok(Json(ApiResponse::ok(item)))

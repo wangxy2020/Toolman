@@ -116,6 +116,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn skips_founder_seed_for_non_default_identity() {
+        let db_path = temp_db_path();
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .create_if_missing(true)
+                    .foreign_keys(true),
+            )
+            .await
+            .expect("connect");
+
+        run_migrations(&pool).await.expect("migrate");
+
+        std::env::set_var(
+            "COMMUNITY_HUB_DEFAULT_IDENTITY_ID",
+            "00000000-0000-4000-8000-00000000000b",
+        );
+        seed::seed_default_admin_user(&pool)
+            .await
+            .expect("seed should noop for non-founder identity");
+        std::env::remove_var("COMMUNITY_HUB_DEFAULT_IDENTITY_ID");
+
+        let count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM community_users WHERE id = ?1")
+                .bind(DEFAULT_ADMIN_USER_ID)
+                .fetch_one(&pool)
+                .await
+                .expect("count");
+        assert_eq!(count.0, 0);
+
+        pool.close().await;
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
     async fn fts_triggers_index_resources() {
         let db_path = temp_db_path();
         let pool = init_pool(&db_path).await.expect("init");

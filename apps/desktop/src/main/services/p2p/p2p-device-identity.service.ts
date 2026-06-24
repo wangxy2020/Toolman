@@ -7,21 +7,21 @@ import {
 } from '@toolman/db'
 import type { P2pDeviceGetInfoOutput } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
+import { getLocalIdentityId } from '../local-identity'
 import { P2pBridge, type NativeDeviceInfo } from './p2p-bridge'
-
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
 let cachedDeviceInfo: P2pDeviceGetInfoOutput | null = null
 
 function resolveIdentityIdForDevice(): string {
+  const localIdentityId = getLocalIdentityId()
   // Read auth session directly — do not call getAuthSession(), which loads
   // getIdentityProfile() → getP2pDeviceInfo() and would recurse infinitely.
   try {
     const sessionRepo = new AuthSessionRepository(getDatabase())
-    const session = sessionRepo.ensureCurrent(DEFAULT_IDENTITY_ID)
-    return session.identityId ?? DEFAULT_IDENTITY_ID
+    const session = sessionRepo.ensureCurrent(localIdentityId)
+    return session.identityId ?? localIdentityId
   } catch {
-    return DEFAULT_IDENTITY_ID
+    return localIdentityId
   }
 }
 
@@ -44,7 +44,7 @@ function syncIdentityPublicKey(publicKey: string): void {
       publicKey,
       updatedAt: now,
     })
-    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .where(eq(identities.id, getLocalIdentityId()))
     .run()
 }
 

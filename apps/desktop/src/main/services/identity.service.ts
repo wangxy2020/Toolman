@@ -13,8 +13,7 @@ import { getDatabase } from '../bootstrap/database'
 import { getBlobDataUrl, writeBlobFromPath } from './blob.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { P2pMemberRepository } from '@toolman/db'
-
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
+import { getLocalIdentityId } from './local-identity'
 
 function resolveAvatarUrl(avatarHash: string | null | undefined): string | null {
   if (!avatarHash) return null
@@ -27,7 +26,7 @@ function resolveAvatarUrl(avatarHash: string | null | undefined): string | null 
 
 function mapIdentityRow(): IdentityProfile {
   const db = getDatabase()
-  const row = db.select().from(identities).where(eq(identities.id, DEFAULT_IDENTITY_ID)).get()
+  const row = db.select().from(identities).where(eq(identities.id, getLocalIdentityId())).get()
   if (!row) {
     throw new Error('Default identity not found')
   }
@@ -68,7 +67,7 @@ export function ensureLocalDisplayNameSyncedToP2pMembers(): void {
   const row = getDatabase()
     .select({ displayName: identities.displayName })
     .from(identities)
-    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .where(eq(identities.id, getLocalIdentityId()))
     .get()
   if (!row?.displayName) return
   syncLocalDisplayNameToP2pMembers(row.displayName)
@@ -77,7 +76,7 @@ export function ensureLocalDisplayNameSyncedToP2pMembers(): void {
 export function updateIdentityProfile(input: unknown): IdentityProfile {
   const parsed = IdentityUpdateInputSchema.parse(input)
   const db = getDatabase()
-  const row = db.select().from(identities).where(eq(identities.id, DEFAULT_IDENTITY_ID)).get()
+  const row = db.select().from(identities).where(eq(identities.id, getLocalIdentityId())).get()
   if (!row) {
     throw new Error('Default identity not found')
   }
@@ -105,7 +104,7 @@ export function updateIdentityProfile(input: unknown): IdentityProfile {
       avatarHash: nextAvatarHash,
       updatedAt: now,
     })
-    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .where(eq(identities.id, getLocalIdentityId()))
     .run()
 
   if (nextDisplayName !== row.displayName) {

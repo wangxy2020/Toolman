@@ -10,6 +10,9 @@ import {
   inferDefaultAuthRegion,
   isRegisteredUser,
   PRODUCT_SKU_LABELS,
+  resolveUserTypeLabel,
+  USER_TYPE_LABELS,
+  DEV_TEST_USER_TYPE_BY_EMAIL,
 } from './user-account-utils'
 
 const baseSession = {
@@ -99,6 +102,56 @@ describe('user-account-utils', () => {
         verifiedAt: Date.parse('2026-01-01T00:00:00.000Z'),
       }),
     ).toBe('微信 · 小王')
+  })
+
+  it('resolves user type labels', () => {
+    expect(
+      resolveUserTypeLabel({
+        ...baseSession,
+        registrationStatus: 'guest',
+        isLoggedIn: false,
+      }),
+    ).toBe(USER_TYPE_LABELS.unregistered)
+
+    expect(
+      resolveUserTypeLabel(
+        {
+          ...baseSession,
+          registrationStatus: 'registered',
+          isLoggedIn: true,
+          bindings: [
+            {
+              provider: 'firebase_email',
+              subjectId: 'wxymale@126.com',
+              label: 'wxymale@126.com',
+              verifiedAt: Date.now(),
+            },
+          ],
+        },
+        'founder',
+      ),
+    ).toBe(USER_TYPE_LABELS.admin)
+
+    expect(
+      resolveUserTypeLabel(
+        {
+          ...baseSession,
+          registrationStatus: 'registered',
+          isLoggedIn: true,
+          bindings: [
+            {
+              provider: 'firebase_email',
+              subjectId: '31897124@qq.com',
+              label: '31897124@qq.com',
+              verifiedAt: Date.now(),
+            },
+          ],
+        },
+        'admin',
+      ),
+    ).toBe(USER_TYPE_LABELS.normal)
+
+    expect(DEV_TEST_USER_TYPE_BY_EMAIL['wxymale@126.com']).toBe('admin')
   })
 
   it('detects registered users', () => {

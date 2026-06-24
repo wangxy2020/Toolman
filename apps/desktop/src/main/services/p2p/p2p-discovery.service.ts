@@ -114,7 +114,13 @@ function stopPolling(): void {
 }
 
 export function startP2pDiscovery(): void {
-  applyP2pNetworkConfig()
+  try {
+    applyP2pNetworkConfig()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`[p2p] ICE config apply failed (discovery will still start): ${message}`)
+  }
+
   const { version } = getAppInfo()
   P2pBridge.discoveryStart({
     deviceId: getP2pDeviceId(),

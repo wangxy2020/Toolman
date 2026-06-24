@@ -165,8 +165,20 @@ fn load_pkcs8_from_file(data_dir: &Path) -> Result<Vec<u8>, String> {
 }
 
 fn load_pkcs8_from_storage(data_dir: &Path) -> Result<Vec<u8>, String> {
-    load_pkcs8_from_keychain()
-        .or_else(|_| load_pkcs8_from_file(data_dir))
+    if identity_storage_is_file_only() {
+        return load_pkcs8_from_file(data_dir);
+    }
+    load_pkcs8_from_keychain().or_else(|_| load_pkcs8_from_file(data_dir))
+}
+
+fn identity_storage_is_file_only() -> bool {
+    matches!(
+        std::env::var("TOOLMAN_P2P_IDENTITY_STORAGE")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("file")
+    )
 }
 
 fn save_pkcs8_to_keychain(pkcs8: &[u8]) -> Result<(), String> {
@@ -185,6 +197,9 @@ fn save_pkcs8_to_file(data_dir: &Path, pkcs8: &[u8]) -> Result<(), String> {
 }
 
 fn save_pkcs8_to_storage(data_dir: &Path, pkcs8: &[u8]) -> Result<(), String> {
+    if identity_storage_is_file_only() {
+        return save_pkcs8_to_file(data_dir, pkcs8);
+    }
     match save_pkcs8_to_keychain(pkcs8) {
         Ok(()) => {}
         Err(_) => save_pkcs8_to_file(data_dir, pkcs8)?,

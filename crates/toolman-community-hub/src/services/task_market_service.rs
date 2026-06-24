@@ -65,6 +65,7 @@ pub struct RejectDeliveryRequest {
 pub struct TaskListQuery {
     pub task_type: Option<TaskType>,
     pub status: Option<TaskStatus>,
+    pub publisher_id: Option<String>,
     pub q: Option<String>,
     pub limit: i64,
     pub offset: i64,
@@ -172,11 +173,16 @@ impl TaskMarketService {
         &self,
         query: &TaskListQuery,
     ) -> Result<Vec<TaskMarketItem>, TaskMarketError> {
+        let default_status = if query.publisher_id.is_some() {
+            None
+        } else {
+            Some(TaskStatus::Open)
+        };
         let tasks = TaskRepository::new(self.pool.clone())
             .list(&TaskListFilter {
                 task_type: query.task_type,
-                status: query.status.or(Some(TaskStatus::Open)),
-                publisher_id: None,
+                status: query.status.or(default_status),
+                publisher_id: query.publisher_id.clone(),
                 q: query.q.clone(),
                 limit: query.limit,
                 offset: query.offset,
@@ -233,8 +239,14 @@ impl TaskMarketService {
         let current = self.require_task(id).await?;
         ensure_publisher_or_admin(actor, &current.publisher_id)?;
 
+        let next_status = if self.config.require_review {
+            TaskStatus::PendingReview
+        } else {
+            TaskStatus::Open
+        };
+
         let task = TaskRepository::new(self.pool.clone())
-            .transition_status(id, TaskStatus::Open)
+            .transition_status(id, next_status)
             .await
             .map_err(map_repo_error)?;
 

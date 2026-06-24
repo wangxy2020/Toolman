@@ -2,6 +2,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [HUB_FEDERATION.md](./HUB_FEDERATION.md) | **F0/F1** P2P 联邦（社区版开源）；F2 企业/网络 Hub 为企业版 |
 | [COMMUNITY_ARCHITECTURE.md](./COMMUNITY_ARCHITECTURE.md) | 系统架构、模块划分、服务划分、资源模型 |
 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | Users、Resources、Reviews、Tasks、Orders 等表设计 |
 | [API_SPEC.md](./API_SPEC.md) | Marketplace / Task / Review / Install / News / Moderation API |
@@ -101,6 +102,32 @@ pnpm --filter @toolman/desktop dev
 
 `Run: pnpm --filter @toolman/desktop build:community-hub`
 
+### 3.1 双实例 P2P + 共享社区 Hub（开发）
+
+用于模拟用户 A / 用户 B（群组、社区审核、联邦测试）：
+
+```bash
+# 终端 1 — 用户 A（Hub 由 A 拉起或附着）
+pnpm dev:p2p:a
+
+# 终端 2 — 用户 B（附着 A 的 Hub，独立登录与 P2P 设备）
+pnpm dev:p2p:b
+```
+
+共享配置见 `scripts/p2p-community-env.sh`：
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `TOOLMAN_COMMUNITY_DATA_DIR` | `/tmp/toolman-community-shared` | 两实例共用 `community.db` |
+| `TOOLMAN_COMMUNITY_JWT_SECRET` | `toolman-dev-community-jwt-secret` | JWT 密钥必须一致 |
+| `COMMUNITY_HUB_REQUIRE_REVIEW` | `true` | 发布走待审核 |
+| `COMMUNITY_HUB_DEV_TEST_ROLES` | `true` | 仅开发：按邮箱映射 Hub 角色 |
+| `TOOLMAN_DEV_IDENTITY_ID` | A=`...001`，B=`...00b` | 各实例本地 identity |
+
+完整步骤见 [docs/p2p/DUAL_INSTANCE_DEV.md](../p2p/DUAL_INSTANCE_DEV.md)。
+
+> **注意**：修改 `apps/desktop/src/main/**` 后需完全退出 Electron 再重启（main 进程无 HMR）。
+
 ### 4. 运行测试
 
 ```bash
@@ -121,7 +148,10 @@ pnpm --filter @toolman/desktop test -- src/main/services/community src/main/ipc/
 | `COMMUNITY_HUB_DATA_DIR` | 数据根目录 | Desktop：`{userData}/community` |
 | `COMMUNITY_HUB_PORT` | 监听端口 | `3721` |
 | `COMMUNITY_HUB_REQUIRE_REVIEW` | 发布需审核 | `false` |
-| `COMMUNITY_HUB_DEFAULT_IDENTITY_ID` | 种子管理员 identity | `00000000-0000-0000-0000-000000000001` |
+| `COMMUNITY_HUB_DEFAULT_IDENTITY_ID` | 种子管理员 identity（仅 Hub 自启时） | `00000000-0000-0000-0000-000000000001` |
+| `COMMUNITY_HUB_DEV_TEST_ROLES` | 开发邮箱→Hub 角色映射 | 未设置时：打包版 `false`，开发版 `true` |
+| `COMMUNITY_HUB_JWT_SECRET` | Hub JWT 密钥（双开需一致） | 各实例 `userData` 内独立生成 |
+| `TOOLMAN_COMMUNITY_JWT_SECRET` | 覆盖 Hub JWT（双开脚本） | 见 `p2p-community-env.sh` |
 | `RUST_LOG` | Sidecar 日志级别 | `toolman_community_hub=info` |
 
 ### 6. 常见问题

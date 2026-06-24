@@ -156,7 +156,7 @@ impl From<McpMarketError> for ApiError {
     fn from(error: McpMarketError) -> Self {
         match error {
             McpMarketError::Forbidden => Self::forbidden("permission denied"),
-            McpMarketError::NotFound(value) => Self::not_found(value),
+            McpMarketError::NotFound(value) => Self::not_found(format!("resource not found: {value}")),
             McpMarketError::NotMcpResource => Self::validation("resource is not an MCP package"),
             McpMarketError::VersionConflict {
                 resource_id,
@@ -223,7 +223,9 @@ impl From<crate::services::MarketplaceError> for ApiError {
     fn from(error: crate::services::MarketplaceError) -> Self {
         match error {
             crate::services::MarketplaceError::Forbidden => Self::forbidden("permission denied"),
-            crate::services::MarketplaceError::NotFound(value) => Self::not_found(value),
+            crate::services::MarketplaceError::NotFound(value) => {
+                Self::not_found(format!("resource not found: {value}"))
+            }
             crate::services::MarketplaceError::Validation(message) => Self::validation(message),
             crate::services::MarketplaceError::Repository(error) => error.into(),
             crate::services::MarketplaceError::VersionRepository(error) => {

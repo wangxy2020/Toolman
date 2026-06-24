@@ -4,9 +4,10 @@ import {
   runMigrations,
   getMigrationsPath,
   seedDefaultData,
+  AuthSessionRepository,
   type ToolmanDatabase,
 } from '@toolman/db'
-import { assistants, providers, workspaces, DEFAULT_LOCAL_MODEL } from '@toolman/db'
+import { assistants, providers, workspaces, identities, DEFAULT_LOCAL_MODEL } from '@toolman/db'
 import { app } from 'electron'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -18,6 +19,7 @@ import { cleanupMisplacedP2pMirrorKnowledgeBases } from '../services/p2p/p2p-kno
 import { migrateAllLegacyGroupSavedKnowledgeBases } from '../services/p2p/p2p-group-saved-knowledge-migration.service'
 import { migrateAllDefaultFolderKnowledgeBases } from '../services/knowledge-default-folder-kb.service'
 import { bootstrapToolmanUserDocumentLayout } from '../services/knowledge-folder.service'
+import { getLocalIdentityId } from '../services/local-identity'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
 const DEFAULT_ASSISTANT_ID = '00000000-0000-0000-0000-000000000003'
@@ -36,7 +38,11 @@ export function bootstrapDatabase(): void {
 
   const packageRoot = resolveDbPackageRoot()
   runMigrations(db, getMigrationsPath(packageRoot))
-  seedDefaultData(db)
+  const localIdentityId = getLocalIdentityId()
+  const localDisplayName =
+    localIdentityId === '00000000-0000-4000-8000-00000000000b' ? 'P2P 用户 B' : '本地用户'
+  seedDefaultData(db, { identityId: localIdentityId, displayName: localDisplayName })
+  ensureDevIdentityRow(db, localIdentityId, localDisplayName)
   ensureWorkspaceDefaults(db)
   initAuthSessionStore()
   migratePlaintextApiKeys()
@@ -82,6 +88,34 @@ export function bootstrapDatabase(): void {
       const message = error instanceof Error ? error.message : String(error)
       console.error(`[p2p] group saved knowledge bootstrap failed: ${message}`)
     })
+}
+
+function ensureDevIdentityRow(
+  database: ToolmanDatabase,
+  identityId: string,
+  displayName: string,
+) {
+  const existing = database
+    .select()
+    .from(identities)
+    .where(eq(identities.id, identityId))
+    .get()
+  if (existing) return
+
+  const now = new Date()
+  database
+    .insert(identities)
+    .values({
+      id: identityId,
+      type: 'local',
+      displayName,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run()
+
+  const sessionRepo = new AuthSessionRepository(database)
+  sessionRepo.ensureCurrent(identityId)
 }
 
 function ensureWorkspaceDefaults(database: ToolmanDatabase) {

@@ -5,6 +5,7 @@ import type { AuthBindProviderInput, AuthProvider, AuthSession } from '@toolman/
 
 import { getDatabase } from '../../bootstrap/database'
 import { getAuthSession } from '../auth-session.service'
+import { getLocalIdentityId } from '../local-identity'
 import { assertAuthBindAllowed } from './auth-build-profile.service.js'
 import { AuthLoginError } from './auth-login.error.js'
 import { verifySmsChallenge } from './auth-sms-challenge.service.js'
@@ -18,8 +19,6 @@ import {
 } from './wechat-merge-pending.service.js'
 import { runWechatOAuthFlow } from './wechat-oauth-flow.service.js'
 import type { WechatAuthIdentity } from './wechat-oauth.service.js'
-
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
 export class AuthMergeRequiredError extends AuthLoginError {
   constructor(
@@ -45,16 +44,16 @@ function wechatSessionToken(wechat: WechatAuthIdentity): string {
   return wechat.accessToken || randomUUID()
 }
 
-function getIdentityBindings(identityId: string = DEFAULT_IDENTITY_ID) {
+function getIdentityBindings(identityId: string = getLocalIdentityId()) {
   const bindingRepo = new AuthBindingRepository(getDatabase())
   return bindingRepo.listByIdentityId(identityId)
 }
 
-function findPhoneBinding(identityId: string = DEFAULT_IDENTITY_ID) {
+function findPhoneBinding(identityId: string = getLocalIdentityId()) {
   return getIdentityBindings(identityId).find((binding) => binding.provider === 'tencent_phone') ?? null
 }
 
-function findWechatBinding(identityId: string = DEFAULT_IDENTITY_ID) {
+function findWechatBinding(identityId: string = getLocalIdentityId()) {
   return getIdentityBindings(identityId).find((binding) => binding.provider === 'tencent_wechat') ?? null
 }
 
@@ -79,7 +78,7 @@ export async function loginWithWechatOAuth(): Promise<AuthSession> {
   const wechat = await runWechatOAuthFlow()
   const bindingRepo = new AuthBindingRepository(getDatabase())
   const existingWechat = bindingRepo.findByProviderSubject('tencent_wechat', wechat.subjectId)
-  if (existingWechat && existingWechat.identityId !== DEFAULT_IDENTITY_ID) {
+  if (existingWechat && existingWechat.identityId !== getLocalIdentityId()) {
     throw new AuthLoginError('该微信已绑定到其他 Toolman 账户')
   }
 
@@ -125,7 +124,7 @@ export async function bindAuthProvider(input: AuthBindProviderInput): Promise<Au
     }
     const wechat = await runWechatOAuthFlow()
     upsertAuthBinding({
-      identityId: DEFAULT_IDENTITY_ID,
+      identityId: getLocalIdentityId(),
       provider: 'tencent_wechat',
       subjectId: wechat.subjectId,
       bindingLabel: wechat.nickname,
@@ -139,7 +138,7 @@ export async function bindAuthProvider(input: AuthBindProviderInput): Promise<Au
     const code = typeof input.payload?.code === 'string' ? input.payload.code : ''
     const phoneResult = verifyPhoneSmsLogin(phone, code)
     upsertAuthBinding({
-      identityId: DEFAULT_IDENTITY_ID,
+      identityId: getLocalIdentityId(),
       provider: 'tencent_phone',
       subjectId: phoneResult.subjectId,
       bindingLabel: phoneResult.label,
@@ -151,6 +150,6 @@ export async function bindAuthProvider(input: AuthBindProviderInput): Promise<Au
   throw new AuthLoginError('暂不支持绑定该登录方式')
 }
 
-export function hasAuthBinding(provider: AuthProvider, identityId: string = DEFAULT_IDENTITY_ID): boolean {
+export function hasAuthBinding(provider: AuthProvider, identityId: string = getLocalIdentityId()): boolean {
   return getIdentityBindings(identityId).some((binding) => binding.provider === provider)
 }

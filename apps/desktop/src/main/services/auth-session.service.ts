@@ -21,8 +21,7 @@ import { getDatabase } from '../bootstrap/database'
 import { invalidateHubTokenCache } from './community/community-hub-auth.service'
 import { refreshP2pDeviceIdentityBinding } from './p2p/p2p-device-identity.service'
 import { getIdentityProfile } from './identity.service'
-
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
+import { getLocalIdentityId } from './local-identity'
 
 /** 同一 identity 下每种登录方式只保留一个账户（桌面端 V1 单用户） */
 const SINGLE_ACCOUNT_AUTH_PROVIDERS = new Set<AuthProvider>([
@@ -134,8 +133,9 @@ export function initAuthSessionStore(): void {
   const db = getDatabase()
   const sessionRepo = new AuthSessionRepository(db)
   const bindingRepo = new AuthBindingRepository(db)
-  sessionRepo.ensureCurrent(DEFAULT_IDENTITY_ID)
-  dedupeExclusiveAuthBindings(bindingRepo, DEFAULT_IDENTITY_ID)
+  const identityId = getLocalIdentityId()
+  sessionRepo.ensureCurrent(identityId)
+  dedupeExclusiveAuthBindings(bindingRepo, identityId)
 }
 
 export function getAuthSession(): AuthSession {

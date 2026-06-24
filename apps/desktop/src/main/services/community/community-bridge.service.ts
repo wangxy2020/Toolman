@@ -10,12 +10,12 @@ import { recordDiagnosticEvent } from '../diagnostics-log'
 import {
   COMMUNITY_HUB_DEFAULT_PORT,
   COMMUNITY_HUB_HOST,
-  COMMUNITY_HUB_IDENTITY_ID,
   buildCommunityHubBaseUrl,
   getCommunityDataDir,
   getCommunityHubPortFilePath,
   resolveCommunityHubBinaryPath,
 } from './community-paths'
+import { DEFAULT_LOCAL_IDENTITY_ID } from '../local-identity'
 import { CommunityHttpClient } from './community-http.client'
 import { resolveCommunityHubAuth } from './community-hub-auth.service'
 import { getHubJwtSecret } from '../auth/hub-jwt-secret.service'
@@ -218,6 +218,71 @@ export function markCommunityHubOfflineReadOnly(error?: string): void {
   }
 }
 
+export function clearCommunityHubOfflineReadOnly(): void {
+  if (!httpClient || !currentStatus.offlineReadOnly) return
+  currentStatus = {
+    ...currentStatus,
+    running: true,
+    offlineReadOnly: false,
+    error: undefined,
+  }
+}
+
+export async function recoverCommunityHubConnection(): Promise<CommunityHubStatus> {
+  await refreshCommunityHubClientIfNeeded()
+  return getCommunityHubStatus()
+}
+
+/** Re-attach when the cached client points at a dead port (common in dual-instance dev). */
+export async function refreshCommunityHubClientIfNeeded(): Promise<boolean> {
+  if (httpClient) {
+    try {
+      const health = await httpClient.health()
+      if (health.status === 'healthy') {
+        if (!currentStatus.running || currentStatus.offlineReadOnly) {
+          currentStatus = {
+            ...currentStatus,
+            running: true,
+            offlineReadOnly: false,
+            error: undefined,
+          }
+        }
+        return true
+      }
+    } catch {
+      // stale client — re-attach below
+    }
+  }
+
+  httpClient = null
+
+  if (childProcess && currentStatus.port !== null) {
+    const client = new CommunityHttpClient({
+      port: currentStatus.port,
+      host: COMMUNITY_HUB_HOST,
+      resolveAuth: resolveCommunityHubAuth,
+    })
+    try {
+      const health = await client.health()
+      if (health.status === 'healthy') {
+        httpClient = client
+        currentStatus = {
+          ...currentStatus,
+          running: true,
+          offlineReadOnly: false,
+          error: undefined,
+        }
+        return true
+      }
+    } catch {
+      // owned sidecar may have exited
+    }
+  }
+
+  const attached = await tryAttachRunningCommunityHub()
+  return attached !== null && httpClient !== null
+}
+
 async function connectRemoteCommunityHub(baseUrl: string): Promise<CommunityHubStatus> {
   const client = new CommunityHttpClient({
     baseUrl,
@@ -349,8 +414,16 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
       ...process.env,
       COMMUNITY_HUB_DATA_DIR: dataDir,
       COMMUNITY_HUB_PORT: String(port),
-      COMMUNITY_HUB_DEFAULT_IDENTITY_ID: COMMUNITY_HUB_IDENTITY_ID,
+      COMMUNITY_HUB_DEFAULT_IDENTITY_ID:
+        process.env.COMMUNITY_HUB_DEFAULT_IDENTITY_ID?.trim() || DEFAULT_LOCAL_IDENTITY_ID,
+      COMMUNITY_HUB_DEV_TEST_ROLES:
+        process.env.COMMUNITY_HUB_DEV_TEST_ROLES ??
+        (app.isPackaged ? 'false' : 'true'),
       COMMUNITY_HUB_JWT_SECRET: jwtSecret,
+      COMMUNITY_HUB_REQUIRE_REVIEW:
+        process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'false' : 'true'),
+      COMMUNITY_HUB_RATE_LIMIT_RPM:
+        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? (app.isPackaged ? '600' : '0'),
       RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
     }
 

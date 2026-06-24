@@ -26,6 +26,7 @@ pub struct ResourceListParams {
     pub sort: Option<String>,
     pub visibility: Option<String>,
     pub status: Option<String>,
+    pub author_id: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -109,6 +110,13 @@ async fn list_resources(
         .map(ResourceStatus::parse)
         .transpose()
         .map_err(|error| ApiError::validation(error.to_string()))?;
+    let author_id = params.author_id.clone();
+    if let Some(requested_author_id) = &author_id {
+        let viewer = viewer.as_ref().ok_or_else(|| ApiError::unauthorized("unauthorized"))?;
+        if !viewer.is_moderator() && viewer.id != *requested_author_id {
+            return Err(ApiError::forbidden("forbidden"));
+        }
+    }
     let tags = params.tags.as_deref().map(parse_tags);
     let has_query = params.q.as_ref().is_some_and(|value| !value.trim().is_empty());
     let sort = parse_sort(params.sort.as_deref(), has_query)?;
@@ -123,6 +131,7 @@ async fn list_resources(
                 sort,
                 visibility,
                 status,
+                author_id,
                 limit: params.limit.unwrap_or(20).clamp(1, 100),
                 offset: params.offset.unwrap_or(0).max(0),
             },
@@ -145,17 +154,23 @@ async fn get_resource(
 
 async fn list_versions(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<Vec<MarketplaceVersionSummary>>>, ApiError> {
-    let versions = service(&state).list_versions(&id).await?;
+    let viewer = load_optional_viewer(&state, &headers).await?;
+    let versions = service(&state).list_versions(&id, viewer.as_ref()).await?;
     Ok(Json(ApiResponse::ok(versions)))
 }
 
 async fn get_version(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((id, version)): Path<(String, String)>,
 ) -> Result<Json<ApiResponse<MarketplaceVersionDetail>>, ApiError> {
-    let detail = service(&state).get_version(&id, &version).await?;
+    let viewer = load_optional_viewer(&state, &headers).await?;
+    let detail = service(&state)
+        .get_version(&id, &version, viewer.as_ref())
+        .await?;
     Ok(Json(ApiResponse::ok(detail)))
 }
 

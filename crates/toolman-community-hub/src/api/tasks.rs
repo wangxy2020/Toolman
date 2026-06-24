@@ -1,10 +1,11 @@
 use axum::extract::{Multipart, Path, Query, State};
+use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::api::auth::{require_permission, AuthUser};
+use crate::api::auth::{load_optional_viewer, require_permission, AuthUser};
 use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
 use crate::domain::{
@@ -47,6 +48,7 @@ pub struct PatchTaskBody {
 pub struct TaskListParams {
     pub task_type: Option<String>,
     pub status: Option<String>,
+    pub publisher_id: Option<String>,
     pub q: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -101,6 +103,7 @@ fn review_service(state: &AppState) -> TaskReviewService {
 
 async fn list_tasks(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(params): Query<TaskListParams>,
 ) -> Result<Json<ApiResponse<Vec<TaskMarketItem>>>, ApiError> {
     let task_type = params
@@ -115,11 +118,20 @@ async fn list_tasks(
         .map(TaskStatus::parse)
         .transpose()
         .map_err(|error| ApiError::validation(error.to_string()))?;
+    let publisher_id = params.publisher_id.clone();
+    if let Some(requested_publisher_id) = &publisher_id {
+        let viewer = load_optional_viewer(&state, &headers).await?;
+        let viewer = viewer.as_ref().ok_or_else(|| ApiError::unauthorized("unauthorized"))?;
+        if !viewer.is_moderator() && viewer.id != *requested_publisher_id {
+            return Err(ApiError::forbidden("forbidden"));
+        }
+    }
 
     let items = service(&state)
         .list_tasks(&TaskListQuery {
             task_type,
             status,
+            publisher_id,
             q: params.q,
             limit: params.limit.unwrap_or(20).clamp(1, 100),
             offset: params.offset.unwrap_or(0).max(0),

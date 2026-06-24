@@ -17,6 +17,11 @@ vi.mock('./community-bridge.service', () => ({
     offlineReadOnly: false,
   }),
   markCommunityHubOfflineReadOnly: vi.fn(),
+  clearCommunityHubOfflineReadOnly: vi.fn(),
+}))
+
+vi.mock('./community-federation.config', () => ({
+  isCommunityFederationEnabled: () => false,
 }))
 
 describe('community-case', () => {

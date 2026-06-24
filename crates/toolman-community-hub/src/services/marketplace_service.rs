@@ -30,6 +30,7 @@ pub struct MarketplaceListQuery {
     pub sort: SearchSort,
     pub visibility: Option<ResourceVisibility>,
     pub status: Option<ResourceStatus>,
+    pub author_id: Option<String>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -164,13 +165,24 @@ impl MarketplaceService {
     ) -> Result<Vec<MarketplaceResourceItem>, MarketplaceError> {
         let q = query.q.clone().unwrap_or_default();
         let search = SearchService::new(self.pool.clone());
+        let default_status = if query.author_id.is_some() {
+            query.status
+        } else {
+            query.status.or(Some(ResourceStatus::Published))
+        };
+        let default_visibility = if query.author_id.is_some() {
+            query.visibility
+        } else {
+            query.visibility.or(Some(ResourceVisibility::Public))
+        };
         let ranked = search
             .search_resources(&ResourceSearchFilter {
                 q,
                 resource_type: query.resource_type,
                 category: query.category.clone(),
-                status: query.status.or(Some(ResourceStatus::Published)),
-                visibility: query.visibility.or(Some(ResourceVisibility::Public)),
+                status: default_status,
+                visibility: default_visibility,
+                author_id: query.author_id.clone(),
                 sort: query.sort,
                 limit: query.limit,
                 offset: query.offset,
@@ -199,7 +211,7 @@ impl MarketplaceService {
         id: &str,
         viewer: Option<&CommunityUser>,
     ) -> Result<MarketplaceResourceDetail, MarketplaceError> {
-        let resource = self.require_visible_resource(id).await?;
+        let resource = self.require_readable_resource(id, viewer).await?;
         let item = self.to_list_item(resource.clone(), viewer).await?;
         let versions = VersionRepository::new(self.pool.clone())
             .list_for_resource(id)
@@ -224,8 +236,9 @@ impl MarketplaceService {
     pub async fn list_versions(
         &self,
         resource_id: &str,
+        viewer: Option<&CommunityUser>,
     ) -> Result<Vec<MarketplaceVersionSummary>, MarketplaceError> {
-        self.require_visible_resource(resource_id).await?;
+        self.require_readable_resource(resource_id, viewer).await?;
         let versions = VersionRepository::new(self.pool.clone())
             .list_for_resource(resource_id)
             .await?;
@@ -246,8 +259,9 @@ impl MarketplaceService {
         &self,
         resource_id: &str,
         version: &str,
+        viewer: Option<&CommunityUser>,
     ) -> Result<MarketplaceVersionDetail, MarketplaceError> {
-        self.require_visible_resource(resource_id).await?;
+        self.require_readable_resource(resource_id, viewer).await?;
         let record = VersionRepository::new(self.pool.clone())
             .find_by_resource_and_version(resource_id, version)
             .await?
@@ -361,14 +375,26 @@ impl MarketplaceService {
         Ok(resource)
     }
 
-    async fn require_visible_resource(&self, id: &str) -> Result<CommunityResource, MarketplaceError> {
+    async fn require_readable_resource(
+        &self,
+        id: &str,
+        viewer: Option<&CommunityUser>,
+    ) -> Result<CommunityResource, MarketplaceError> {
         let resource = self.require_resource(id).await?;
-        if resource.status != ResourceStatus::Published
-            || resource.visibility != ResourceVisibility::Public
+        if resource.status == ResourceStatus::Published
+            && resource.visibility == ResourceVisibility::Public
         {
-            return Err(MarketplaceError::NotFound(id.to_string()));
+            return Ok(resource);
         }
-        Ok(resource)
+
+        let Some(viewer) = viewer else {
+            return Err(MarketplaceError::NotFound(id.to_string()));
+        };
+        if viewer.is_moderator() || viewer.id == resource.author_id {
+            return Ok(resource);
+        }
+
+        Err(MarketplaceError::NotFound(id.to_string()))
     }
 
     async fn to_list_item(
