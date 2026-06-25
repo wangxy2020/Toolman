@@ -8,6 +8,7 @@ import {
   type IpcError,
   type IpcResult,
 } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 
 import { CommunityHttpError, humanizeCommunityFetchError } from '../services/community/community-http.client'
 import { installCommunityResource } from '../services/community/community-install.service'
@@ -327,7 +328,7 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(getCommunityYjsStatus())
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to read Yjs status'
+      const errMessage = toErrorMessage(error, 'Failed to read Yjs status')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -341,7 +342,7 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(getCommunityCidProviderStatus())
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to read CID status'
+      const errMessage = toErrorMessage(error, 'Failed to read CID status')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },

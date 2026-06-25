@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
 import { readXmlTag, WechatWorkCrypto } from './wechat-work-crypto'
@@ -65,7 +66,7 @@ export class WechatChannelAdapter implements ChannelAdapter {
       this.statusMessage = `Webhook: ${ctx.webhookBaseUrl}/wechat/events`
     } catch (error) {
       this.status = 'error'
-      this.statusMessage = error instanceof Error ? error.message : '企业微信连接失败'
+      this.statusMessage = toErrorMessage(error, '企业微信连接失败')
     }
   }
 
@@ -89,7 +90,7 @@ export class WechatChannelAdapter implements ChannelAdapter {
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : '企业微信凭据验证失败',
+        message: toErrorMessage(error, '企业微信凭据验证失败'),
       }
     }
   }
@@ -168,7 +169,7 @@ export class WechatChannelAdapter implements ChannelAdapter {
       return true
     } catch (error) {
       res.writeHead(403, { 'Content-Type': 'text/plain' })
-      res.end(error instanceof Error ? error.message : 'forbidden')
+      res.end(toErrorMessage(error, 'forbidden'))
       return true
     }
   }
@@ -212,7 +213,7 @@ export class WechatChannelAdapter implements ChannelAdapter {
         await this.sendText(config, chatId, reply)
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '处理企业微信消息失败'
+      const message = toErrorMessage(error, '处理企业微信消息失败')
       this.status = 'error'
       this.statusMessage = message
       console.error('[wechat-channel]', error)

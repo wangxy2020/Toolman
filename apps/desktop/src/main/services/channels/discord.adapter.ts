@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
 
@@ -74,7 +75,7 @@ export class DiscordChannelAdapter implements ChannelAdapter {
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : 'Discord 验证失败',
+        message: toErrorMessage(error, 'Discord 验证失败'),
       }
     }
   }
@@ -185,7 +186,7 @@ export class DiscordChannelAdapter implements ChannelAdapter {
         } catch (error) {
           console.error('[discord-channel]', error)
           this.status = 'error'
-          this.statusMessage = error instanceof Error ? error.message : 'Discord 消息处理失败'
+          this.statusMessage = toErrorMessage(error, 'Discord 消息处理失败')
         }
       })()
     }

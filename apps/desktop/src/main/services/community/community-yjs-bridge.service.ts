@@ -4,6 +4,7 @@ import {
   type CommunityBoardMessage,
   type CommunityUserProfile,
 } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { listBoardMessages, getUserMe } from './community-ipc.facade'
 import { isCommunityYjsEnabled, ensureDefaultCommunitySyncConfig, readCommunitySyncConfig, writeCommunitySyncConfig } from './community-yjs.config'
@@ -59,7 +60,7 @@ export async function bootstrapCommunityYjsFromHub(): Promise<void> {
       `hydrated board=${board.items.length} profile=${profile ? 1 : 0}`,
     )
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     recordDiagnosticEvent('community-yjs', 'warn', `hydrate failed: ${message}`)
   }
 }

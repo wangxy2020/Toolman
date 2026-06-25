@@ -1,15 +1,14 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { basename, join, resolve, sep } from 'node:path'
 import { scanDirectory } from '@toolman/knowledge'
-import {
-  DEFAULT_KNOWLEDGE_WATCH_CONFIG,
+import {DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   KnowledgeFolderDeleteFileInputSchema,
   KnowledgeFolderDeleteFileOutputSchema,
   KnowledgeFolderImportFilesInputSchema,
   KnowledgeFolderImportFilesOutputSchema,
   KnowledgeFolderListFilesInputSchema,
-  KnowledgeFolderListFilesOutputSchema,
-} from '@toolman/shared'
+  KnowledgeFolderListFilesOutputSchema } from '@toolman/shared'
 import { resolveKnowledgeWatchConfig } from './knowledge-watch-config.service'
 
 function ensureFolder(folderPath: string) {
@@ -80,7 +79,7 @@ export function importKnowledgeFolderFiles(input: unknown) {
       copyFileSync(sourcePath, destinationPath)
       imported += 1
     } catch (error) {
-      const message = error instanceof Error ? error.message : '复制失败'
+      const message = toErrorMessage(error, '复制失败')
       failed.push({ path: sourcePath, message })
     }
   }

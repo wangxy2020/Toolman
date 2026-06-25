@@ -3,6 +3,7 @@ import {
   FederatedCatalogWireMessageSchema,
   cidWireTopic,
 } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { Libp2pBridge } from '../p2p/libp2p-bridge'
@@ -31,7 +32,7 @@ function subscribeFederationTopics(): void {
   try {
     Libp2pBridge.pubsubSubscribe(FEDERATION_CATALOG_TOPIC)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-federation', 'warn', `subscribe failed: ${message}`)
   }
@@ -52,7 +53,7 @@ export function publishFederatedCatalogWireMessage(
     upsertFederatedCatalogEntry(entry)
     recordDiagnosticEvent('community-federation', 'info', `published catalog ${entry.id}`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-federation', 'warn', `publish failed: ${message}`)
   }

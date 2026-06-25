@@ -1,4 +1,4 @@
-import { CommunityInstallInputSchema } from '@toolman/shared'
+import { CommunityInstallInputSchema, toErrorMessage } from '@toolman/shared'
 
 import { upsertServer } from '../mcp.service'
 import { manifestToMcpServerConfig } from './adapters/mcp-market.adapter'
@@ -50,7 +50,7 @@ async function runTypedInstall(
     const primaryLocalRef = await run()
     await completeCommunityInstall(installId, packagePath, primaryLocalRef)
   } catch (error) {
-    const message = error instanceof Error ? error.message : errorLabel
+    const message = toErrorMessage(error, errorLabel)
     await reportInstallFailure(installId, message)
     throw error
   }

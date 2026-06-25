@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { fetchSitemapUrls } from '@toolman/knowledge'
-import {
-  KnowledgeSourceAddFolderInputSchema,
+import {KnowledgeSourceAddFolderInputSchema,
   KnowledgeSourceAddNotionExportInputSchema,
   KnowledgeSourceAddSitemapInputSchema,
   KnowledgeSourceAddUrlInputSchema,
@@ -9,8 +9,7 @@ import {
   KnowledgeSourceRemoveInputSchema,
   KnowledgeSourceSchema,
   DEFAULT_KNOWLEDGE_WATCH_CONFIG,
-  type KnowledgeSource,
-} from '@toolman/shared'
+  type KnowledgeSource } from '@toolman/shared'
 import { scanDirectory } from '@toolman/knowledge'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { ingestFilePaths, ingestUrlDocument } from './knowledge-ingest.service'
@@ -228,7 +227,7 @@ export async function addKnowledgeSitemap(input: unknown) {
     } catch (error) {
       failed.push({
         path: url,
-        message: error instanceof Error ? error.message : '导入失败',
+        message: toErrorMessage(error, '导入失败'),
       })
     }
   }

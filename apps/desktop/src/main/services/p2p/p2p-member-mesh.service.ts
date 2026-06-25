@@ -1,4 +1,5 @@
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
+import { toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { ensurePeerReadyForWorkspace, isPeerConnected } from './p2p-connection.service'
 import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
@@ -70,7 +71,7 @@ async function reconcileWorkspaceMemberMeshNow(
       try {
         await ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'mesh workspace key sync failed'
+        const message = toErrorMessage(error, 'mesh workspace key sync failed')
         console.warn(`[p2p] member mesh workspace sync failed for ${member.deviceId}: ${message}`)
       }
       continue
@@ -79,7 +80,7 @@ async function reconcileWorkspaceMemberMeshNow(
     try {
       await ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'mesh connect failed'
+      const message = toErrorMessage(error, 'mesh connect failed')
       console.warn(`[p2p] member mesh connect failed for ${member.deviceId}: ${message}`)
     }
   }

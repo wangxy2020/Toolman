@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
 
@@ -93,7 +94,7 @@ export class FeishuChannelAdapter implements ChannelAdapter {
       this.statusMessage = `Webhook: ${ctx.webhookBaseUrl}/feishu/events`
     } catch (error) {
       this.status = 'error'
-      this.statusMessage = error instanceof Error ? error.message : '飞书连接失败'
+      this.statusMessage = toErrorMessage(error, '飞书连接失败')
     }
   }
 
@@ -114,7 +115,7 @@ export class FeishuChannelAdapter implements ChannelAdapter {
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : '飞书凭据验证失败',
+        message: toErrorMessage(error, '飞书凭据验证失败'),
       }
     }
   }
@@ -180,7 +181,7 @@ export class FeishuChannelAdapter implements ChannelAdapter {
         await this.sendText(config, chatId, reply)
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '处理飞书消息失败'
+      const message = toErrorMessage(error, '处理飞书消息失败')
       this.status = 'error'
       this.statusMessage = message
       console.error('[feishu-channel]', error)

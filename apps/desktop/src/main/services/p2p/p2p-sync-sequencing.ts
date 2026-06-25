@@ -1,4 +1,5 @@
 import { P2pEventRepository, P2pWorkspaceRepository } from '@toolman/db'
+import { toErrorMessage } from '@toolman/shared'
 import type { P2pConnectionInfo, P2pSequencingMode } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
@@ -86,7 +87,7 @@ export function applySequencingToAppend(
 }
 
 export function isSeqConflictError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = toErrorMessage(error, String(error))
   return (
     (message.includes('UNIQUE constraint failed') && message.includes('seq')) ||
     message.includes('序号冲突') ||

@@ -1,4 +1,5 @@
 import { access, copyFile, mkdir, readdir, rm } from 'node:fs/promises'
+import { toErrorMessage } from '@toolman/shared'
 import { constants } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -467,7 +468,7 @@ export async function materializeDocxForMcp(options: {
         await converter.convert(inputPath, targetDocxPath)
         return { method: converter.method, capabilities }
       } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error))
+        errors.push(toErrorMessage(error, String(error)))
       }
     }
 
@@ -476,7 +477,7 @@ export async function materializeDocxForMcp(options: {
         await convertWithPlainText(inputPath, targetDocxPath, fileName)
         return { method: 'plaintext', capabilities }
       } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error))
+        errors.push(toErrorMessage(error, String(error)))
       }
     } else {
       errors.push(

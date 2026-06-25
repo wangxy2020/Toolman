@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import {
-  P2pAgentOpenSessionInputSchema,
+import { toErrorMessage } from '@toolman/shared'
+import {P2pAgentOpenSessionInputSchema,
   P2pGroupAgentProxySchema,
   type Message,
-  type P2pGroupAgentProxy,
-} from '@toolman/shared'
+  type P2pGroupAgentProxy } from '@toolman/shared'
 import {
   P2pMemberRepository,
   P2pSharedResourceRepository,
@@ -493,7 +492,7 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
               sessionTitle,
             })
           } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
+            const message = toErrorMessage(error, String(error))
             console.warn(`[p2p] proxy session history sync failed: ${message}`)
           }
         }
@@ -610,7 +609,7 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
         sessionTitle,
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[p2p] proxy session history sync failed: ${message}`)
     }
   }

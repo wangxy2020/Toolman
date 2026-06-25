@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, statSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { P2pSharedResourceRepository, P2pWorkspaceRepository, type KnowledgeBaseRow, type P2pSharedResourceRow } from '@toolman/db'
 import type { P2pSharedResource, P2pKnowledgeDocumentPermission, WorkspaceEvent } from '@toolman/shared'
-import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
+import {isP2pSharedKnowledgeMirrorDescription, toErrorMessage } from '@toolman/shared'
 import {
   buildP2pGroupSavedKnowledgeDescription,
   buildP2pGroupSavedKnowledgeDisplayName,
@@ -263,7 +263,7 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
         documentId: doc.id,
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[p2p] failed to sync knowledge document ${doc.id}: ${message}`)
     }
   }
@@ -474,7 +474,7 @@ export async function maybeSyncSharedKnowledgeDocument(
         documentId,
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[p2p] auto knowledge sync failed for ${documentId}: ${message}`)
     }
   }

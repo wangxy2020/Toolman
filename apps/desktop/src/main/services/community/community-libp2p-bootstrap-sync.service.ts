@@ -1,6 +1,6 @@
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { readLibp2pConfig, writeLibp2pConfig } from '../p2p/p2p-libp2p.config'
-import { normalizeCommunityHubBaseUrl } from '@toolman/shared'
+import {normalizeCommunityHubBaseUrl, toErrorMessage } from '@toolman/shared'
 import { readCommunityHubConfig } from './community-hub.config'
 import { fetchPeerLibp2pBootstrap } from './community-hub-peering.service'
 import { isCommunityFederationEnabled } from './community-federation.config'
@@ -33,7 +33,7 @@ export async function syncLibp2pBootstrapFromPeerHubs(): Promise<number> {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       recordDiagnosticEvent(
         'community-federation',
         'warn',

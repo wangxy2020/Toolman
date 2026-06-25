@@ -1,10 +1,9 @@
 import { statSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { isImageFilePath } from '@toolman/knowledge'
-import {
-  FileReadForChatInputSchema,
+import {FileReadForChatInputSchema,
   FileReadForChatOutputSchema,
-  ipcOk,
-} from '@toolman/shared'
+  ipcOk } from '@toolman/shared'
 import { getDefaultWorkspace } from './workspace.service'
 import { isDocumentOcrEnabled } from './runtime-app-settings.service'
 import {
@@ -72,7 +71,7 @@ export async function readFilesForChat(input: unknown) {
     } catch (error) {
       errors.push({
         path,
-        message: error instanceof Error ? error.message : '读取文件失败',
+        message: toErrorMessage(error, '读取文件失败'),
       })
     }
   }

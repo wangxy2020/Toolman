@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { extractLlmJsonArray, toErrorMessage } from '@toolman/shared'
 import { basename } from 'node:path'
 
 import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
@@ -244,20 +245,6 @@ export function buildDocxReviewSummaryBlock(
   }
 }
 
-function extractJsonArray(raw: string): string | null {
-  const trimmed = raw.trim()
-  if (trimmed.startsWith('[')) return trimmed
-
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fenced?.[1]?.trim().startsWith('[')) return fenced[1].trim()
-
-  const start = trimmed.indexOf('[')
-  const end = trimmed.lastIndexOf(']')
-  if (start >= 0 && end > start) return trimmed.slice(start, end + 1)
-
-  return null
-}
-
 function parseParagraphIndex(raw: unknown): number | undefined {
   if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 0) return raw
   const text = String(raw ?? '').trim()
@@ -302,36 +289,22 @@ export function parseDocxReviewIssues(raw: string): {
   warnings: string[]
 } {
   const warnings: string[] = []
-  const jsonText = extractJsonArray(raw)
-  if (!jsonText) {
+  const parsed = extractLlmJsonArray(raw)
+  if (!parsed) {
     return { issues: [], warnings: ['模型未返回 JSON 数组格式的 issue 列表'] }
   }
 
-  try {
-    const parsed = JSON.parse(jsonText) as unknown
-    if (!Array.isArray(parsed)) {
-      return { issues: [], warnings: ['issue 列表必须是 JSON 数组'] }
-    }
-
-    const issues: DocxReviewIssue[] = []
-    for (let i = 0; i < parsed.length; i += 1) {
-      const issue = normalizeIssue(parsed[i], i)
-      if (issue) {
-        issues.push(issue)
-      } else {
-        warnings.push(`第 ${i + 1} 项 issue 格式无效，已跳过`)
-      }
-    }
-
-    return { issues, warnings }
-  } catch (error) {
-    return {
-      issues: [],
-      warnings: [
-        `JSON 解析失败：${error instanceof Error ? error.message : '未知错误'}`,
-      ],
+  const issues: DocxReviewIssue[] = []
+  for (let i = 0; i < parsed.length; i += 1) {
+    const issue = normalizeIssue(parsed[i], i)
+    if (issue) {
+      issues.push(issue)
+    } else {
+      warnings.push(`第 ${i + 1} 项 issue 格式无效，已跳过`)
     }
   }
+
+  return { issues, warnings }
 }
 
 export function chunkReviewCommentIssues(issues: DocxReviewIssue[]): DocxReviewIssue[][] {
@@ -1079,7 +1052,7 @@ async function applySingleReplaceWithCandidates(options: {
       })
       return false
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'replace_text 失败'
+      const message = toErrorMessage(error, 'replace_text 失败')
       lastResult = `Error: ${message}`
       if (isCommentAnchorNotFoundFailure(lastResult)) {
         retryNotes.push(search.length > 48 ? `${search.slice(0, 48)}…` : search)
@@ -1190,7 +1163,7 @@ async function applySingleCommentWithCandidates(options: {
       })
       return false
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'add_comment 失败'
+      const message = toErrorMessage(error, 'add_comment 失败')
       lastResult = `Error: ${message}`
       if (isCommentAnchorNotFoundFailure(lastResult)) {
         retryNotes.push(anchorText.length > 48 ? `${anchorText.slice(0, 48)}…` : anchorText)
@@ -1478,7 +1451,7 @@ export async function applyDocxReviewIssues(options: {
         })
       } catch (error) {
         paragraphEditsFailed = paragraphEditsRequested
-        const message = error instanceof Error ? error.message : 'edit_paragraphs 失败'
+        const message = toErrorMessage(error, 'edit_paragraphs 失败')
         errors.push(message)
         options.emitToolUpdate({
           toolCallId: callId,
@@ -1521,7 +1494,7 @@ export async function applyDocxReviewIssues(options: {
           })
         } catch (error) {
           paragraphEditsFailed += 1
-          const message = error instanceof Error ? error.message : 'edit_paragraph 失败'
+          const message = toErrorMessage(error, 'edit_paragraph 失败')
           errors.push(message)
           options.emitToolUpdate({
             toolCallId: callId,

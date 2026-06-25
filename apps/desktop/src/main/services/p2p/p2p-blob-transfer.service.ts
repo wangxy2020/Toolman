@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { createHash, randomUUID } from 'node:crypto'
@@ -389,6 +390,72 @@ function handleIncomingChunk(
   broadcastFileProgress(session.workspaceId, session.chunks.size, totalChunks)
 }
 
+type BlobChannelHandler = (peerDeviceId: string, message: FileChannelMessage) => Promise<void> | void
+
+const BLOB_CHANNEL_HANDLERS: Record<FileChannelMessage['type'], BlobChannelHandler> = {
+  'blob.request': (peerDeviceId, message) => {
+    if (message.type !== 'blob.request') return
+    return handleBlobRequest(peerDeviceId, message)
+  },
+  'blob.not_found': (_peerDeviceId, message) => {
+    if (message.type !== 'blob.not_found') return
+    pendingFetchResolvers.get(message.requestId)?.resolve(false)
+    pendingFetchResolvers.delete(message.requestId)
+  },
+  'blob.meta': (peerDeviceId, message) => {
+    if (message.type !== 'blob.meta') return
+    startReceiveSession({
+      transferId: message.requestId,
+      workspaceId: message.workspaceId,
+      contentHash: message.contentHash,
+      mimeType: message.mimeType,
+      sizeBytes: message.sizeBytes,
+      totalChunks: message.totalChunks,
+      peerDeviceId,
+    })
+  },
+  'blob.chunk': (_peerDeviceId, message) => {
+    if (message.type !== 'blob.chunk') return
+    handleIncomingChunk(
+      message.requestId,
+      message.index,
+      message.totalChunks,
+      message.data,
+      message.contentHash,
+    )
+  },
+  'blob.complete': (_peerDeviceId, message) => {
+    if (message.type !== 'blob.complete') return
+    completeReceiveSession(message.requestId)
+  },
+  'blob.push.start': (peerDeviceId, message) => {
+    if (message.type !== 'blob.push.start') return
+    startReceiveSession({
+      transferId: message.pushId,
+      workspaceId: message.workspaceId,
+      contentHash: message.contentHash,
+      mimeType: message.mimeType,
+      sizeBytes: message.sizeBytes,
+      totalChunks: message.totalChunks,
+      peerDeviceId,
+    })
+  },
+  'blob.push.chunk': (_peerDeviceId, message) => {
+    if (message.type !== 'blob.push.chunk') return
+    handleIncomingChunk(
+      message.pushId,
+      message.index,
+      message.totalChunks,
+      message.data,
+      message.contentHash,
+    )
+  },
+  'blob.push.complete': (_peerDeviceId, message) => {
+    if (message.type !== 'blob.push.complete') return
+    completeReceiveSession(message.pushId)
+  },
+}
+
 export async function handleP2pFileChannelMessage(
   peerDeviceId: string,
   payload: Buffer,
@@ -396,63 +463,7 @@ export async function handleP2pFileChannelMessage(
   const message = parseFileChannelMessage(payload)
   if (!message) return
 
-  switch (message.type) {
-    case 'blob.request':
-      await handleBlobRequest(peerDeviceId, message)
-      break
-    case 'blob.not_found':
-      pendingFetchResolvers.get(message.requestId)?.resolve(false)
-      pendingFetchResolvers.delete(message.requestId)
-      break
-    case 'blob.meta':
-      startReceiveSession({
-        transferId: message.requestId,
-        workspaceId: message.workspaceId,
-        contentHash: message.contentHash,
-        mimeType: message.mimeType,
-        sizeBytes: message.sizeBytes,
-        totalChunks: message.totalChunks,
-        peerDeviceId,
-      })
-      break
-    case 'blob.chunk':
-      handleIncomingChunk(
-        message.requestId,
-        message.index,
-        message.totalChunks,
-        message.data,
-        message.contentHash,
-      )
-      break
-    case 'blob.complete':
-      completeReceiveSession(message.requestId)
-      break
-    case 'blob.push.start':
-      startReceiveSession({
-        transferId: message.pushId,
-        workspaceId: message.workspaceId,
-        contentHash: message.contentHash,
-        mimeType: message.mimeType,
-        sizeBytes: message.sizeBytes,
-        totalChunks: message.totalChunks,
-        peerDeviceId,
-      })
-      break
-    case 'blob.push.chunk':
-      handleIncomingChunk(
-        message.pushId,
-        message.index,
-        message.totalChunks,
-        message.data,
-        message.contentHash,
-      )
-      break
-    case 'blob.push.complete':
-      completeReceiveSession(message.pushId)
-      break
-    default:
-      break
-  }
+  await BLOB_CHANNEL_HANDLERS[message.type](peerDeviceId, message)
 }
 
 async function requestBlobFromPeer(
@@ -500,7 +511,7 @@ async function requestBlobFromPeer(
     }).catch((error) => {
       clearTimeout(timeout)
       pendingFetchResolvers.delete(requestId)
-      reject(error instanceof Error ? error : new Error(String(error)))
+      reject(new Error(toErrorMessage(error, 'blob request failed')))
     })
   })
 
@@ -556,7 +567,7 @@ export async function fetchBlobFromPeers(
           return true
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = toErrorMessage(error, String(error))
         console.warn(`[p2p] blob fetch from ${peerDeviceId} failed: ${message}`)
       }
     }
@@ -610,7 +621,7 @@ export async function pushBlobToPeers(
           }),
         ])
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = toErrorMessage(error, String(error))
         console.warn(`[p2p] blob push to ${peer.peerDeviceId} failed: ${message}`)
       }
     }),

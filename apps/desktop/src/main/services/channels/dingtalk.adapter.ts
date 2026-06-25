@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
 
@@ -130,7 +131,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : '钉钉凭据验证失败',
+        message: toErrorMessage(error, '钉钉凭据验证失败'),
       }
     }
   }
@@ -190,7 +191,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
       })
     } catch (error) {
       this.status = 'error'
-      this.statusMessage = error instanceof Error ? error.message : '钉钉连接失败'
+      this.statusMessage = toErrorMessage(error, '钉钉连接失败')
       if (!this.stopped) {
         this.scheduleReconnect(appKey, appSecret)
       }
@@ -248,7 +249,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
     } catch (error) {
       console.error('[dingtalk-channel]', error)
       this.status = 'error'
-      this.statusMessage = error instanceof Error ? error.message : '钉钉消息处理失败'
+      this.statusMessage = toErrorMessage(error, '钉钉消息处理失败')
     }
   }
 

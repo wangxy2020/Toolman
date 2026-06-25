@@ -1,12 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import { app } from 'electron'
-import {
-  P2pIceServerListSchema,
+import {P2pIceServerListSchema,
   P2pNetworkIceConfigSchema,
   resolveP2pIceServers,
-  type P2pIceServer,
-} from '@toolman/shared'
+  type P2pIceServer } from '@toolman/shared'
 import { P2pBridge } from './p2p-bridge'
 
 function getConfigPath(): string {
@@ -73,7 +72,7 @@ export function getP2pIceServers(): P2pIceServer[] {
       return fromEnv
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.warn(`[p2p] invalid TOOLMAN_P2P_ICE_SERVERS / TURN env: ${message}`)
   }
   return readFileConfig()

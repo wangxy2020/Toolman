@@ -1,15 +1,14 @@
 import { app } from 'electron'
+import { toErrorMessage } from '@toolman/shared'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { autoUpdater } from 'electron-updater'
-import {
-  AppUpdateStatusSchema,
+import {AppUpdateStatusSchema,
   isVersionNewer,
   parseAppUpdateManifest,
   satisfiesMinVersion,
   type AppUpdateManifest,
-  type AppUpdateStatus,
-} from '@toolman/shared'
+  type AppUpdateStatus } from '@toolman/shared'
 import { recordDiagnosticEvent } from './diagnostics-log'
 import { broadcastAppUpdateStatus } from './app-update-broadcast'
 import { getAppUpdateConfig } from './app-update.config'
@@ -176,7 +175,7 @@ function ensureAutoUpdaterConfigured(): void {
   })
 
   autoUpdater.on('error', (error) => {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     recordDiagnosticEvent('update', 'error', message)
     publishStatus({ phase: 'error', error: message })
   })
@@ -229,7 +228,7 @@ export async function checkForAppUpdate(): Promise<AppUpdateStatus> {
     await autoUpdater.checkForUpdates()
     return ensureStatus()
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     recordDiagnosticEvent('update', 'error', message)
     return publishStatus({ phase: 'error', error: message })
   }
@@ -254,7 +253,7 @@ export async function downloadAppUpdate(): Promise<AppUpdateStatus> {
     await autoUpdater.downloadUpdate()
     return ensureStatus()
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     recordDiagnosticEvent('update', 'error', message)
     return publishStatus({ phase: 'error', error: message })
   }
@@ -284,7 +283,7 @@ export function bootstrapAppUpdateService(): void {
   ensureAutoUpdaterConfigured()
   setTimeout(() => {
     void checkForAppUpdate().catch((error) => {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       recordDiagnosticEvent('update', 'warn', `startup check failed: ${message}`)
     })
   }, 30_000)

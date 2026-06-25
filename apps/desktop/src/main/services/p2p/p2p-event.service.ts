@@ -6,7 +6,7 @@ import type {
   P2pResourceType,
   WorkspaceEvent,
 } from '@toolman/shared'
-import { resolveSeqSlotConflict } from '@toolman/shared'
+import {resolveSeqSlotConflict, toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
 import { broadcastP2pEventAppended } from './p2p-event-broadcast'
@@ -133,7 +133,7 @@ export function bootstrapP2pEventStore(): void {
   try {
     ensureEventStore()
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.warn(`[p2p] event store init skipped: ${message}`)
   }
 }

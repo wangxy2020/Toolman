@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { app } from 'electron'
@@ -14,16 +15,14 @@ import {
   type P2pWorkspaceMemberRow,
   type P2pWorkspaceRow,
 } from '@toolman/db'
-import {
-  formatGroupMemberLimitMessage,
+import {formatGroupMemberLimitMessage,
   P2pMemberJoinInputSchema,
   P2pMemberRemoveInputSchema,
   P2pMemberUpdateRoleInputSchema,
   type P2pMember,
   type P2pMemberRole,
   type P2pWorkspace,
-  type ProductSku,
-} from '@toolman/shared'
+  type ProductSku } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import * as p2pConnectionService from './p2p-connection.service'
 import { listP2pDiscoveredNodes, isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
@@ -291,7 +290,7 @@ async function connectToOwnerPeer(
     await p2pConnectionService.ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
     return p2pConnectionService.isPeerConnected(ownerDeviceId)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'connect owner failed'
+    const message = toErrorMessage(error, 'connect owner failed')
     console.warn(`[p2p] ${context}: ${message}`)
     return false
   }
@@ -354,7 +353,7 @@ async function ensureJoinPeerConnection(
       }
       lastError = '邀请链路未建立连接'
     } catch (error) {
-      lastError = error instanceof Error ? error.message : '邀请链路连接失败'
+      lastError = toErrorMessage(error, '邀请链路连接失败')
       console.warn(`[p2p] WAN invite connect failed: ${lastError}`)
     }
   } else if (offerSdp) {
@@ -398,7 +397,7 @@ async function notifyOwnerOfJoinOnce(
     await P2pBridge.connectionSend(payload.ownerDeviceId, 'events', envelope)
     return true
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'notify owner failed'
+    const message = toErrorMessage(error, 'notify owner failed')
     console.warn(`[p2p] notify owner of join failed: ${message}`)
     return false
   }
@@ -676,7 +675,7 @@ export async function runOwnerPeerReconcileTick(): Promise<void> {
     try {
       await reconcileOwnerWorkspaceMembersNow(workspace.id)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'owner reconcile tick failed'
+      const message = toErrorMessage(error, 'owner reconcile tick failed')
       console.warn(`[p2p] owner reconcile tick failed for ${workspace.id}: ${message}`)
     }
   }
@@ -708,7 +707,7 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
     try {
       await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'connect active member failed'
+      const message = toErrorMessage(error, 'connect active member failed')
       console.warn(`[p2p] owner connect to member ${member.deviceId} failed: ${message}`)
     }
   }
@@ -727,7 +726,7 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
     try {
       await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspaceId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'connect peer failed'
+      const message = toErrorMessage(error, 'connect peer failed')
       console.warn(`[p2p] owner reconcile connect failed for ${node.deviceId}: ${message}`)
     }
   }
@@ -741,7 +740,7 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
     try {
       await requestMemberSyncFromPeer(workspaceId, connection.peerDeviceId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'member sync request failed'
+      const message = toErrorMessage(error, 'member sync request failed')
       console.warn(
         `[p2p] owner member sync request failed for ${connection.peerDeviceId}: ${message}`,
       )
@@ -865,7 +864,7 @@ async function finishJoinSync(
   }
 
   void requestSnapshotFromOwner(payload.workspaceId, payload.ownerDeviceId).catch((error) => {
-    const message = error instanceof Error ? error.message : 'request snapshot failed'
+    const message = toErrorMessage(error, 'request snapshot failed')
     console.warn(`[p2p] snapshot request after join failed: ${message}`)
   })
 }
@@ -879,7 +878,7 @@ function scheduleJoinPeerSync(
     try {
       await publishJoinToOwner(payload, member)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'notify owner failed'
+      const message = toErrorMessage(error, 'notify owner failed')
       console.warn(`[p2p] publish join to owner failed: ${message}`)
     }
 
@@ -891,7 +890,7 @@ function scheduleJoinPeerSync(
         await awaitJoinerEventCatchUp(payload.workspaceId)
         await reconcileWorkspaceMemberMesh(payload.workspaceId)
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'post-join sync failed'
+        const message = toErrorMessage(error, 'post-join sync failed')
         console.warn(`[p2p] post-join event sync failed: ${message}`)
       }
     }

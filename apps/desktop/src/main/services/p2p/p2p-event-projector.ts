@@ -1,4 +1,5 @@
 import type { WorkspaceEvent } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 import {
   applyKnowledgeUpdatedEvent,
   projectKnowledgeDeletedEvent,
@@ -22,108 +23,70 @@ import {
 import { projectWorkspaceUpdatedFromEvent } from './p2p-workspace-vip-pool.service'
 import { projectGroupChatEvent } from './p2p-group-chat-projector'
 
+type EventProjector = (event: WorkspaceEvent) => void
+
+const RESOURCE_PROJECTORS: Record<string, EventProjector> = {
+  Workspace: projectWorkspaceEvent,
+  Member: projectMemberEvent,
+  Knowledge: projectKnowledgeEvent,
+  Note: projectNoteEvent,
+  Agent: projectAgentEvent,
+  GroupChat: projectGroupChatEvent,
+}
+
 export function projectP2pEvent(event: WorkspaceEvent): void {
-  switch (event.resourceType) {
-    case 'Workspace':
-      projectWorkspaceEvent(event)
-      break
-    case 'Member':
-      projectMemberEvent(event)
-      break
-    case 'Knowledge':
-      projectKnowledgeEvent(event)
-      break
-    case 'Note':
-      projectNoteEvent(event)
-      break
-    case 'Agent':
-      projectAgentEvent(event)
-      break
-    case 'GroupChat':
-      projectGroupChatEvent(event)
-      break
-    default:
-      break
-  }
+  RESOURCE_PROJECTORS[event.resourceType]?.(event)
 }
 
 function projectWorkspaceEvent(event: WorkspaceEvent): void {
-  switch (event.eventType) {
-    case 'Updated':
-      projectWorkspaceUpdatedFromEvent(event)
-      return
-    case 'Created':
-    case 'Deleted':
-      return
-    default:
-      return
+  if (event.eventType === 'Updated') {
+    projectWorkspaceUpdatedFromEvent(event)
   }
 }
 
 function projectMemberEvent(event: WorkspaceEvent): void {
-  switch (event.eventType) {
-    case 'Joined':
-      syncWorkspaceNameFromJoinEvent(event)
-      projectMemberJoinedEvent(event)
-      return
-    case 'Left':
-      projectMemberLeftEvent(event)
-      return
-    default:
-      return
+  if (event.eventType === 'Joined') {
+    syncWorkspaceNameFromJoinEvent(event)
+    projectMemberJoinedEvent(event)
+    return
+  }
+  if (event.eventType === 'Left') {
+    projectMemberLeftEvent(event)
   }
 }
 
 function projectKnowledgeEvent(event: WorkspaceEvent): void {
-  switch (event.eventType) {
-    case 'Shared':
-    case 'Created':
-      projectKnowledgeSharedEvent(event)
-      return
-    case 'Updated':
-      void applyKnowledgeUpdatedEvent(event).catch((error) => {
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn(`[p2p] apply knowledge updated event failed: ${message}`)
+  const handlers: Partial<Record<WorkspaceEvent['eventType'], EventProjector>> = {
+    Shared: projectKnowledgeSharedEvent,
+    Created: projectKnowledgeSharedEvent,
+    Updated: (evt) => {
+      void applyKnowledgeUpdatedEvent(evt).catch((error) => {
+        console.warn(
+          `[p2p] apply knowledge updated event failed: ${toErrorMessage(error, String(error))}`,
+        )
       })
-      return
-    case 'Deleted':
-      projectKnowledgeDeletedEvent(event)
-      return
-    default:
-      return
+    },
+    Deleted: projectKnowledgeDeletedEvent,
   }
+  handlers[event.eventType]?.(event)
 }
 
 function projectNoteEvent(event: WorkspaceEvent): void {
-  switch (event.eventType) {
-    case 'Shared':
-    case 'Created':
-      projectNoteSharedEvent(event)
-      return
-    case 'Updated':
-      applyNoteUpdatedEvent(event)
-      return
-    case 'Deleted':
-      projectNoteDeletedEvent(event)
-      return
-    default:
-      return
+  const handlers: Partial<Record<WorkspaceEvent['eventType'], EventProjector>> = {
+    Shared: projectNoteSharedEvent,
+    Created: projectNoteSharedEvent,
+    Updated: applyNoteUpdatedEvent,
+    Deleted: projectNoteDeletedEvent,
   }
+  handlers[event.eventType]?.(event)
 }
 
 function projectAgentEvent(event: WorkspaceEvent): void {
-  switch (event.eventType) {
-    case 'Shared':
-    case 'Created':
-      projectAgentSharedEvent(event)
-      return
-    case 'Updated':
-      applyAgentUpdatedEvent(event)
-      return
-    case 'Deleted':
-      projectAgentDeletedEvent(event)
-      return
-    default:
-      return
+  const handlers: Partial<Record<WorkspaceEvent['eventType'], EventProjector>> = {
+    Shared: projectAgentSharedEvent,
+    Created: projectAgentSharedEvent,
+    Updated: applyAgentUpdatedEvent,
+    Deleted: projectAgentDeletedEvent,
   }
+  handlers[event.eventType]?.(event)
 }

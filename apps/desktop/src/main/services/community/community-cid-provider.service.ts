@@ -1,7 +1,5 @@
-import {
-  CidDistributionStatusSchema,
-  cidWireTopic,
-} from '@toolman/shared'
+import { CidDistributionStatusSchema, cidWireTopic } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { Libp2pBridge } from '../p2p/libp2p-bridge'
@@ -46,7 +44,7 @@ function publishAnnouncements(indexed: Awaited<ReturnType<typeof scanCommunityPa
       dhtProvides += 1
       providedRootCids += 1
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       recordDiagnosticEvent('community-cid', 'warn', `provide failed: ${message}`)
     }
   }
@@ -82,7 +80,7 @@ function pollCidInbox(): void {
       }
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-cid', 'warn', message)
   }
@@ -93,7 +91,7 @@ function subscribeCommunityCidTopics(): void {
     try {
       Libp2pBridge.pubsubSubscribe(topic)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       lastError = message
       recordDiagnosticEvent('community-cid', 'warn', `subscribe ${topic}: ${message}`)
     }
@@ -111,7 +109,7 @@ export async function resubscribeCommunityCidPubsub(): Promise<void> {
     publishAnnouncements(indexed)
     recordDiagnosticEvent('community-cid', 'info', 'resubscribed pubsub after libp2p restart')
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-cid', 'warn', `resubscribe failed: ${message}`)
   }
@@ -123,7 +121,7 @@ export async function republishCommunityCidAnnouncements(): Promise<void> {
     const indexed = await scanCommunityPackagesForCidIndex()
     publishAnnouncements(indexed)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-cid', 'warn', `republish failed: ${message}`)
   }
@@ -145,7 +143,7 @@ export async function startCommunityCidProvider(): Promise<void> {
     publishAnnouncements(indexed)
     recordDiagnosticEvent('community-cid', 'info', `indexed packages=${indexed.length}`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-cid', 'warn', `scan failed: ${message}`)
   }

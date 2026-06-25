@@ -7,7 +7,7 @@ import {
   type P2pWorkspaceRow,
 } from '@toolman/db'
 import type { P2pInvitableMemberRole } from '@toolman/shared'
-import { P2pMemberInviteInputSchema } from '@toolman/shared'
+import {P2pMemberInviteInputSchema, toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertCanInvite as assertCanInviteMember } from './p2p-permission.guard'
@@ -35,7 +35,7 @@ function beginInviteHandshake(inviteId: string): void {
     try {
       await P2pBridge.inviteWaitForAnswer(inviteId, 3600)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[p2p] invite handshake ended: ${message}`)
     }
   })()

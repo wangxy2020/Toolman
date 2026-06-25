@@ -1,13 +1,12 @@
 import { app } from 'electron'
+import { toErrorMessage } from '@toolman/shared'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ingestJobs, messages } from '@toolman/db'
-import {
-  AppGetDiagnosticsOutputSchema,
+import {AppGetDiagnosticsOutputSchema,
   summarizeIceServers,
-  type AppGetDiagnosticsOutput,
-} from '@toolman/shared'
+  type AppGetDiagnosticsOutput } from '@toolman/shared'
 import { getDatabase } from '../bootstrap/database'
 import { getCommunityHubStatus } from './community/community-bridge.service'
 import { getHubHealth } from './community/community-ipc.facade'
@@ -104,7 +103,7 @@ async function getCommunityHubDiagnostics(): Promise<AppGetDiagnosticsOutput['co
       resourceCount: health.resourceCount ?? null,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Community Hub health check failed'
+    const message = toErrorMessage(error, 'Community Hub health check failed')
     recordDiagnosticEvent('community-hub', 'error', message)
     return {
       ...base,
@@ -125,7 +124,7 @@ async function getP2pDiagnostics(): Promise<AppGetDiagnosticsOutput['p2p']> {
     nativeAvailable = true
     nativeVersion = P2pBridge.version()
   } catch (error) {
-    nativeError = error instanceof Error ? error.message : 'P2P native module unavailable'
+    nativeError = toErrorMessage(error, 'P2P native module unavailable')
     recordDiagnosticEvent('p2p', 'error', nativeError)
   }
 
@@ -138,7 +137,7 @@ async function getP2pDiagnostics(): Promise<AppGetDiagnosticsOutput['p2p']> {
       transport: row.connectionMode,
     }))
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to list P2P connections'
+    const message = toErrorMessage(error, 'Failed to list P2P connections')
     recordDiagnosticEvent('p2p', 'warn', message)
     nativeError = nativeError ?? message
   }

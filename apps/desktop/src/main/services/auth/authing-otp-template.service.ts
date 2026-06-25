@@ -1,4 +1,5 @@
 import { EmailTemplateType, ManagementClient } from 'authing-js-sdk'
+import { toErrorMessage } from '@toolman/shared'
 
 import { OTP_CODE_TTL_SECONDS } from './auth-otp.constants.js'
 import { getAuthingConfig, getAuthingOtpTtlSeconds } from './authing-auth.config.js'
@@ -108,7 +109,7 @@ export async function ensureAuthingOtpTemplateTtl(): Promise<void> {
       })
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.warn('[authing] OTP email template sync skipped:', message)
   }
 

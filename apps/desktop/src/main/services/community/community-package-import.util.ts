@@ -154,3 +154,71 @@ export function assertZipSource(sourcePath: string, label: string): Buffer {
   }
   return bytes
 }
+
+export interface CommunityPackageImportRunOptions {
+  sourcePath: string
+  title?: string
+  resourceLabel: string
+  zipLabel: string
+  stagingPrefix: string
+  rootMarkers: string[]
+  manifestFilename: string
+  packageExtension: string
+  zipBaseNamePrefix: string
+  packStagingPrefix: string
+  packLabel: string
+  tryReturnReadyPackage: (packageRoot: string) => PrepareCommunityPackageResult | null
+  resolveManifest: (ctx: {
+    packageRoot: string
+    title?: string
+    manifestPath: string
+  }) => {
+    manifest: Record<string, unknown>
+    generated: boolean
+    messageWhenNormalized: string
+    messageWhenGenerated: string
+  }
+}
+
+export function runCommunityPackageImport(
+  options: CommunityPackageImportRunOptions,
+): PrepareCommunityPackageResult {
+  assertZipSource(options.sourcePath, options.resourceLabel)
+
+  const stagingRoot = mkdtempSync(join(tmpdir(), options.stagingPrefix))
+  const extractDir = join(stagingRoot, 'extract')
+  try {
+    extractZip(options.sourcePath, extractDir, options.zipLabel)
+    const packageRoot = resolvePackageRoot(extractDir, options.rootMarkers)
+
+    const ready = options.tryReturnReadyPackage(packageRoot)
+    if (ready) return ready
+
+    const manifestPath = join(packageRoot, options.manifestFilename)
+    const resolved = options.resolveManifest({
+      packageRoot,
+      title: options.title,
+      manifestPath,
+    })
+
+    writeFileSync(manifestPath, `${JSON.stringify(resolved.manifest, null, 2)}\n`, 'utf8')
+
+    const zipFileName = `${safeZipBaseName(options.sourcePath, options.title, options.zipBaseNamePrefix)}${options.packageExtension}`
+    const repacked = repackDirectory({
+      sourceDir: packageRoot,
+      zipFileName,
+      stagingPrefix: options.packStagingPrefix,
+      zipCommandLabel: options.packLabel,
+    })
+
+    return {
+      packagePath: repacked.packagePath,
+      normalized: true,
+      message: resolved.generated
+        ? resolved.messageWhenGenerated
+        : resolved.messageWhenNormalized,
+    }
+  } finally {
+    rmSync(stagingRoot, { recursive: true, force: true })
+  }
+}

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { toErrorMessage } from '@toolman/shared'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { URL } from 'node:url'
@@ -74,7 +75,7 @@ export function humanizeCommunityFetchError(error: unknown): string {
   if (isCommunityFetchNetworkError(error)) {
     return '无法连接 Community Hub。双实例测试请先启动用户 A，并确认 Hub 正常运行后重试。'
   }
-  return error instanceof Error ? error.message : 'Community 请求失败'
+  return toErrorMessage(error, 'Community 请求失败')
 }
 
 export interface CommunityHttpClientOptions {

@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { toErrorMessage } from '@toolman/shared'
 import {
   existsSync,
   readFileSync,
@@ -7,14 +8,12 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import {
-  CrashReportPayloadSchema,
+import {CrashReportPayloadSchema,
   CrashReportUploadResultSchema,
   CrashReportUploadStatusSchema,
   redactCrashReportText,
   type CrashReportUploadResult,
-  type CrashReportUploadStatus,
-} from '@toolman/shared'
+  type CrashReportUploadStatus } from '@toolman/shared'
 import { recordDiagnosticEvent } from './diagnostics-log'
 import { crashReportDir } from './local-operations.service'
 import { resolveCrashReportIngestUrl } from './crash-report.config'
@@ -172,7 +171,7 @@ export async function flushPendingCrashReports(): Promise<CrashReportUploadResul
         uploaded += 1
       } catch (error) {
         failed += 1
-        lastError = error instanceof Error ? error.message : 'upload failed'
+        lastError = toErrorMessage(error, 'upload failed')
         recordDiagnosticEvent('crash-report', 'warn', lastError)
       }
     }

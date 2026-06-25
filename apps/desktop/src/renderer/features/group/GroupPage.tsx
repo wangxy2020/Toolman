@@ -361,7 +361,7 @@ export function GroupPage({
           )}
         </div>
 
-        {workspace ? (
+        {workspace && effectiveAction !== 'messages' ? (
           <GroupPageStatusBar
             syncError={syncStatus.error}
             showSyncIndicator={syncStatus.showSyncIndicator}

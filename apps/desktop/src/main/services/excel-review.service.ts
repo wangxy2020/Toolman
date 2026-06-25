@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { extractLlmJsonArray, toErrorMessage } from '@toolman/shared'
 
 import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
 import { createModelGateway, type ProviderConfig } from '@toolman/model-gateway'
@@ -554,27 +555,12 @@ export function buildExcelReviewSummaryBlock(
   }
 }
 
-function extractJsonArray(raw: string): unknown[] | null {
-  const trimmed = raw.trim()
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fenced?.[1]?.trim() ?? trimmed
-  const start = candidate.indexOf('[')
-  const end = candidate.lastIndexOf(']')
-  if (start === -1 || end <= start) return null
-  try {
-    const parsed = JSON.parse(candidate.slice(start, end + 1))
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
 export function parseExcelReviewIssues(raw: string): {
   issues: ExcelReviewIssue[]
   warnings: string[]
 } {
   const warnings: string[] = []
-  const parsed = extractJsonArray(raw)
+  const parsed = extractLlmJsonArray(raw)
   if (!parsed) {
     warnings.push('模型输出不是有效 JSON 数组')
     return { issues: [], warnings }
@@ -731,7 +717,7 @@ async function applyExcelReviewIssues(options: {
         })
       } catch (error) {
         modifiesFailed = modifyIssues.length
-        errors.push(error instanceof Error ? error.message : 'modify_excel_cells 失败')
+        errors.push(toErrorMessage(error, 'modify_excel_cells 失败'))
         options.emitToolUpdate({
           toolCallId: callId,
           name: modifyTool,
@@ -779,7 +765,7 @@ async function applyExcelReviewIssues(options: {
         })
       } catch (error) {
         highlightsFailed = highlightIssues.length
-        errors.push(error instanceof Error ? error.message : 'highlight_excel_cells 失败')
+        errors.push(toErrorMessage(error, 'highlight_excel_cells 失败'))
         options.emitToolUpdate({
           toolCallId: callId,
           name: highlightTool,

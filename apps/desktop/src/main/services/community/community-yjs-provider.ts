@@ -1,11 +1,10 @@
 import * as Y from 'yjs'
-import {
-  communityYjsTopicForDomain,
+import { toErrorMessage } from '@toolman/shared'
+import {communityYjsTopicForDomain,
   parseCommunityYjsWireMessage,
   type CommunityBoardMessage,
   type CommunityUserProfile,
-  type CommunityYjsDomain,
-} from '@toolman/shared'
+  type CommunityYjsDomain } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { getP2pDeviceId } from '../p2p/p2p-device-identity.service'
 import { Libp2pBridge } from '../p2p/libp2p-bridge'
@@ -104,7 +103,7 @@ function pollPubsubInbox(): void {
       handleIncomingWire(Buffer.from(message.data), message.topic)
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-yjs', 'warn', message)
   }
@@ -169,7 +168,7 @@ function subscribeCommunityYjsTopics(): void {
     try {
       Libp2pBridge.pubsubSubscribe(communityYjsTopicForDomain(domain))
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       lastError = message
       recordDiagnosticEvent('community-yjs', 'warn', `subscribe ${domain}: ${message}`)
     }

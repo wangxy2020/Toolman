@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import {
-  ContentBlockSchema,
+import { toErrorMessage } from '@toolman/shared'
+import {ContentBlockSchema,
   P2pGroupChatClearInputSchema,
   P2pGroupChatDeleteInputSchema,
   P2pGroupChatListInputSchema,
   P2pGroupChatMessageSchema,
   P2pGroupChatSendInputSchema,
   canWriteWorkspace,
-  type P2pGroupChatMessage,
-} from '@toolman/shared'
+  type P2pGroupChatMessage } from '@toolman/shared'
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
@@ -91,7 +90,7 @@ async function relayMessageToPeers(
           await ensurePeerReadyForWorkspace(peerDeviceId, message.workspaceId)
           await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, signedPayload)
         } catch (error) {
-          const errMessage = error instanceof Error ? error.message : 'relay failed'
+          const errMessage = toErrorMessage(error, 'relay failed')
           console.warn(
             `[p2p] group chat relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`,
           )
@@ -139,7 +138,7 @@ export async function sendP2pGroupChatMessage(
     kind: 'group.chat.message',
     message,
   }).catch((error) => {
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     console.warn(`[p2p] group chat WAL append failed: ${errMessage}`)
   })
 
@@ -179,7 +178,7 @@ async function relayClearToPeers(workspaceId: string): Promise<void> {
         await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
         await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
       } catch (error) {
-        const errMessage = error instanceof Error ? error.message : 'relay failed'
+        const errMessage = toErrorMessage(error, 'relay failed')
         console.warn(
           `[p2p] group chat clear relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`,
         )
@@ -206,7 +205,7 @@ export function clearP2pGroupChatMessages(rawInput: unknown): { cleared: boolean
     clearedAt,
     clearedByMemberId: member.id,
   }).catch((error) => {
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     console.warn(`[p2p] group chat clear WAL append failed: ${errMessage}`)
   })
 
@@ -238,7 +237,7 @@ export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean
     deletedAt,
     deletedByMemberId: member.id,
   }).catch((error) => {
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     console.warn(`[p2p] group chat delete WAL append failed: ${errMessage}`)
   })
 
@@ -327,7 +326,7 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
 
     handleIncomingP2pGroupChatMessage(peerDeviceId, wireMessage)
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : 'parse failed'
+    const errMessage = toErrorMessage(error, 'parse failed')
     console.warn(`[p2p] group chat payload rejected from ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
   }
 }

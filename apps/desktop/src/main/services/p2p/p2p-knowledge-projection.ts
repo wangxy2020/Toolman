@@ -3,7 +3,7 @@ import { sep } from 'node:path'
 import { hashFileBytes } from '@toolman/knowledge'
 import { P2pSharedResourceRepository } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
-import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
+import {isP2pSharedKnowledgeMirrorDescription, toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
 import { blobExists, writeBlobFromPath } from '../blob.service'
@@ -433,7 +433,7 @@ export async function syncMissingSharedKnowledgeDocuments(workspaceId: string): 
         await applyKnowledgeUpdatedEvent(event)
         synced += 1
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = toErrorMessage(error, String(error))
         console.warn(`[p2p] replay knowledge doc ${docId} failed: ${message}`)
       }
     }

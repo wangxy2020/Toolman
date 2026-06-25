@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { basename, join, relative, resolve, sep } from 'node:path'
-import {
-  KnowledgeDefaultFolderEnsureKbInputSchema,
+import {KnowledgeDefaultFolderEnsureKbInputSchema,
   KnowledgeDefaultFolderEnsureKbOutputSchema,
-  KnowledgeWatchConfigSchema,
-} from '@toolman/shared'
+  KnowledgeWatchConfigSchema } from '@toolman/shared'
 import {
   createKnowledgeBase,
   listKnowledgeBases,
@@ -340,7 +339,7 @@ export function migrateAllDefaultFolderKnowledgeBases(): {
         ensureDefaultFolderKnowledgeBase({ workspaceId: workspace.id, kind })
         migratedKinds += 1
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = toErrorMessage(error, String(error))
         console.warn(
           `[knowledge] default folder migration failed for workspace ${workspace.id} (${kind}): ${message}`,
         )

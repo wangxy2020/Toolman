@@ -3,9 +3,16 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
 import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
-import { EXCEL_MCP_SERVER_ID } from '@toolman/shared'
+import {EXCEL_MCP_SERVER_ID, toErrorMessage } from '@toolman/shared'
 
 import { ensureMcpServersConnected, getMcpClientState } from './mcp-client-manager.service'
+import {
+  buildMcpApprovalScopeKey,
+  buildMcpBatchApprovalArgs,
+  filterMcpToolDefinitions,
+  findMcpToolName,
+  resolveMcpShortToolName,
+} from './document-mcp-task.util'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
 
 export const EXCEL_MCP_BATCH_TOOL_NAME = '__excel_mcp_batch__'
@@ -105,11 +112,7 @@ export async function assertExcelMcpReady(): Promise<number> {
 }
 
 export function resolveExcelMcpShortToolName(toolName: string): string {
-  if (toolName === EXCEL_MCP_BATCH_TOOL_NAME) return toolName
-  if (toolName.includes(EXCEL_MCP_SERVER_ID)) {
-    return toolName.split('__').pop()?.toLowerCase() ?? toolName.toLowerCase()
-  }
-  return toolName.toLowerCase()
+  return resolveMcpShortToolName(toolName, EXCEL_MCP_SERVER_ID, EXCEL_MCP_BATCH_TOOL_NAME)
 }
 
 export function isExcelMcpToolName(toolName: string): boolean {
@@ -129,45 +132,30 @@ export function isExcelMcpEditToolName(toolName: string): boolean {
 }
 
 export function filterExcelMcpToolDefinitions(tools: ToolDefinition[]): ToolDefinition[] {
-  const excelTools = tools.filter((tool) => tool.function.name.includes(EXCEL_MCP_SERVER_ID))
-  if (excelTools.length > 0) return excelTools
-
-  return tools.filter((tool) => {
-    const shortName = resolveExcelMcpShortToolName(tool.function.name)
-    return [
-      'read_excel',
-      'review_excel',
-      'modify_excel_cells',
-      'highlight_excel_cells',
-    ].includes(shortName)
-  })
+  return filterMcpToolDefinitions(tools, EXCEL_MCP_SERVER_ID, [
+    'read_excel',
+    'review_excel',
+    'modify_excel_cells',
+    'highlight_excel_cells',
+  ])
 }
 
 export function findExcelMcpToolName(
   tools: ToolDefinition[],
   shortName: string,
 ): string | null {
-  const normalized = shortName.toLowerCase()
-  for (const tool of tools) {
-    const name = tool.function.name
-    if (name === normalized || name.endsWith(`__${normalized}`)) return name
-  }
-  return null
+  return findMcpToolName(tools, shortName)
 }
 
 export function buildExcelMcpBatchApprovalArgs(workingCopies: ExcelWorkingCopy[]): string {
-  return JSON.stringify(
-    {
-      summary: '本次将调用 modify_excel_cells / highlight_excel_cells 写入 Excel 修订版',
-      files: workingCopies.map((copy) => copy.workingPath),
-    },
-    null,
-    2,
+  return buildMcpBatchApprovalArgs(
+    '本次将调用 modify_excel_cells / highlight_excel_cells 写入 Excel 修订版',
+    workingCopies.map((copy) => copy.workingPath),
   )
 }
 
 export function buildExcelMcpApprovalScopeKey(assistantMessageId: string): string {
-  return `excel-mcp:${assistantMessageId}`
+  return buildMcpApprovalScopeKey('excel-mcp', assistantMessageId)
 }
 
 export async function prepareExcelWorkingCopies(options: {
@@ -233,7 +221,7 @@ export async function bootstrapExcelMcpRead(options: {
       try {
         result = await executeToolCall(toolName, args, options.toolContext)
       } catch (error) {
-        result = `Error: ${error instanceof Error ? error.message : `${shortLabel} 失败`}`
+        result = `Error: ${toErrorMessage(error, `${shortLabel} 失败`)}`
       }
 
       const snippet = result.length > 12000 ? `${result.slice(0, 12000)}…` : result

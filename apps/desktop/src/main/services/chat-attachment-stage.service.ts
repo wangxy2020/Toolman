@@ -1,10 +1,9 @@
 import { basename } from 'node:path'
+import { toErrorMessage } from '@toolman/shared'
 import { isImageFilePath } from '@toolman/knowledge'
-import {
-  ChatStageAttachmentsInputSchema,
+import {ChatStageAttachmentsInputSchema,
   ChatStageAttachmentsOutputSchema,
-  ipcOk,
-} from '@toolman/shared'
+  ipcOk } from '@toolman/shared'
 import { writeBlobFromPath } from './blob.service'
 
 export function stageAttachmentPath(path: string) {
@@ -35,7 +34,7 @@ export function stageChatAttachments(input: unknown) {
     } catch (error) {
       errors.push({
         path,
-        message: error instanceof Error ? error.message : '暂存文件失败',
+        message: toErrorMessage(error, '暂存文件失败'),
       })
     }
   }

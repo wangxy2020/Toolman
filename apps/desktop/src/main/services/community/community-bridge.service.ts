@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { toErrorMessage } from '@toolman/shared'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -64,7 +65,7 @@ let currentStatus: CommunityHubStatus = {
 function log(message: string, error?: unknown): void {
   if (error !== undefined) {
     console.error(`[community-hub] ${message}`, error)
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     recordDiagnosticEvent('community-hub', 'error', `${message}: ${errMessage}`)
     return
   }
@@ -304,7 +305,7 @@ async function connectRemoteCommunityHub(baseUrl: string): Promise<CommunityHubS
     log(`connected to remote hub at ${baseUrl}`)
     return getCommunityHubStatus()
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     const offlineReadOnly = hasAnyCommunityHubCache()
     httpClient = null
     currentStatus = {
@@ -444,7 +445,7 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
     try {
       await waitForHealth(client)
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
+      lastError = toErrorMessage(error, String(error))
       log(
         `failed to start sidecar on port ${port} (attempt ${attempt + 1}/${HUB_START_MAX_ATTEMPTS})`,
         error,

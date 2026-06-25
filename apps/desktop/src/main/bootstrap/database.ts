@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { toErrorMessage } from '@toolman/shared'
 import {
   createDatabase,
   runMigrations,
@@ -64,7 +65,7 @@ export function bootstrapDatabase(): void {
       )
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.error(`[knowledge] folder bootstrap failed: ${message}`)
   }
   void migrateAllLegacyGroupSavedKnowledgeBases()
@@ -85,7 +86,7 @@ export function bootstrapDatabase(): void {
       }
     })
     .catch((error) => {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.error(`[p2p] group saved knowledge bootstrap failed: ${message}`)
     })
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { toErrorMessage } from '@toolman/shared'
 import { createModelGateway, ProviderError, type ChatContentPart, type ChatMessage, providerSupportsOpenAiVision, isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
-import {
-  buildModelTextFromUserBlocks,
+import {buildModelTextFromUserBlocks,
   buildStoredUserContent,
   userBlocksHaveUnresolvedAttachments,
   DOCX_MCP_SERVER_ID,
@@ -25,8 +25,7 @@ import {
   isOcrVisionModelId,
   type Message,
   type MessageStreamEvent,
-  type ContentBlock,
-} from '@toolman/shared'
+  type ContentBlock } from '@toolman/shared'
 import { blocksToText, createMessageRepository, createSessionRepository, runInTransaction } from '@toolman/db'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 import { getDatabase } from '../bootstrap/database'
@@ -515,7 +514,7 @@ async function buildRuntimeSystemHints(options: {
       hints.push(buildWebSearchSystemHint(result, options.userText))
     } catch (error) {
       hints.push(
-        `## 网络搜索\n检索失败：${error instanceof Error ? error.message : '未知错误'}。请基于已有知识回答。`,
+        `## 网络搜索\n检索失败：${toErrorMessage(error, '未知错误')}。请基于已有知识回答。`,
       )
     }
   }
@@ -551,7 +550,7 @@ async function buildRuntimeSystemHints(options: {
         if (knowledgeHint) hints.push(knowledgeHint)
       } catch (error) {
         hints.push(
-          `## 知识库检索\n检索失败：${error instanceof Error ? error.message : '未知错误'}。请基于已有知识回答。`,
+          `## 知识库检索\n检索失败：${toErrorMessage(error, '未知错误')}。请基于已有知识回答。`,
         )
       }
     }
@@ -717,7 +716,7 @@ export async function sendMessage(input: unknown) {
       memberUserMessageId: userMessageId,
       memberAssistantMessageId: assistantMessageId,
     }).catch((error) => {
-      const errMessage = error instanceof Error ? error.message : '发送消息失败'
+      const errMessage = toErrorMessage(error, '发送消息失败')
       const ipcError = {
         code: 'INTERNAL_ERROR' as const,
         message: errMessage,
@@ -1179,7 +1178,7 @@ async function runGeneration(opts: {
         })
       } catch (error) {
         if (isAbortError(error)) throw error
-        const parseMessage = error instanceof Error ? error.message : '附件解析失败'
+        const parseMessage = toErrorMessage(error, '附件解析失败')
         const ipcError = {
           code: 'INTERNAL_ERROR' as const,
           message: parseMessage,
@@ -1587,7 +1586,7 @@ async function runGeneration(opts: {
                   try {
                     result = await executeToolCall(call.name, call.arguments, runtime.toolContext)
                   } catch (error) {
-                    result = `Error: ${error instanceof Error ? error.message : '工具执行失败'}`
+                    result = `Error: ${toErrorMessage(error, '工具执行失败')}`
                   }
                 } else {
                   const approval = await requestToolApproval({
@@ -1605,7 +1604,7 @@ async function runGeneration(opts: {
                     try {
                       result = await executeToolCall(call.name, call.arguments, runtime.toolContext)
                     } catch (error) {
-                      result = `Error: ${error instanceof Error ? error.message : '工具执行失败'}`
+                      result = `Error: ${toErrorMessage(error, '工具执行失败')}`
                     }
                   }
                 }
@@ -1615,7 +1614,7 @@ async function runGeneration(opts: {
                 try {
                   result = await executeToolCall(call.name, call.arguments, runtime.toolContext)
                 } catch (error) {
-                  result = `Error: ${error instanceof Error ? error.message : '工具执行失败'}`
+                  result = `Error: ${toErrorMessage(error, '工具执行失败')}`
                 }
               }
 
@@ -1762,7 +1761,7 @@ async function runGeneration(opts: {
     }
   } catch (error) {
     const isAbort = error instanceof Error && error.name === 'AbortError'
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    const message = toErrorMessage(error, 'Unknown error')
     const ipcError = {
       code: isAbort ? ('ABORTED' as const) : ('PROVIDER_ERROR' as const),
       message,

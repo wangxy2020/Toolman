@@ -1,6 +1,5 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { z } from 'zod'
 
 import {
@@ -9,12 +8,9 @@ import {
 } from './adapters/workflow-market.adapter'
 import {
   assertZipSource,
-  extractZip,
   isCommunityReadyPackage,
   readJsonFile,
-  repackDirectory,
-  resolvePackageRoot,
-  safeZipBaseName,
+  runCommunityPackageImport,
   slugifyCommunityId,
   type PrepareCommunityPackageResult,
 } from './community-package-import.util'
@@ -104,16 +100,20 @@ export async function prepareCommunityWorkflowPackage(
   const sourcePath = parsed.packagePath
   assertZipSource(sourcePath, '工作流资源包')
 
-  const stagingRoot = mkdtempSync(join(tmpdir(), 'toolman-workflow-import-'))
-  const extractDir = join(stagingRoot, 'extract')
-  try {
-    extractZip(sourcePath, extractDir, '工作流压缩包')
-    const packageRoot = resolvePackageRoot(extractDir, [
-      WORKFLOW_MANIFEST_FILENAME,
-      ...GRAPH_CANDIDATES,
-    ])
-
-    if (isCommunityReadyPackage(packageRoot, WORKFLOW_MANIFEST_FILENAME)) {
+  return runCommunityPackageImport({
+    sourcePath,
+    title: parsed.title,
+    resourceLabel: '工作流资源包',
+    zipLabel: '工作流压缩包',
+    stagingPrefix: 'toolman-workflow-import-',
+    rootMarkers: [WORKFLOW_MANIFEST_FILENAME, ...GRAPH_CANDIDATES],
+    manifestFilename: WORKFLOW_MANIFEST_FILENAME,
+    packageExtension: '.toolman-workflow',
+    zipBaseNamePrefix: 'community-workflow',
+    packStagingPrefix: 'toolman-workflow-import-pack-',
+    packLabel: '工作流资源',
+    tryReturnReadyPackage(packageRoot) {
+      if (!isCommunityReadyPackage(packageRoot, WORKFLOW_MANIFEST_FILENAME)) return null
       try {
         const existing = WorkflowMarketManifestSchema.parse(
           readJsonFile(join(packageRoot, WORKFLOW_MANIFEST_FILENAME)),
@@ -125,46 +125,33 @@ export async function prepareCommunityWorkflowPackage(
           message: '资源包已符合 Toolman 社区工作流格式，可直接提交。',
         }
       } catch {
-        // fall through to regenerate checksums / manifest fixes
+        return null
       }
-    }
-
-    const manifestPath = join(packageRoot, WORKFLOW_MANIFEST_FILENAME)
-    let manifest: Record<string, unknown>
-    let generatedManifest = false
-
-    if (existsSync(manifestPath)) {
-      const existing = readJsonFile(manifestPath)
-      if (!existing) {
-        throw new Error('workflow.manifest.json 无法解析，请检查 JSON 格式')
+    },
+    resolveManifest({ packageRoot, title, manifestPath }) {
+      if (existsSync(manifestPath)) {
+        const existing = readJsonFile(manifestPath)
+        if (!existing) {
+          throw new Error('workflow.manifest.json 无法解析，请检查 JSON 格式')
+        }
+        const manifest = WorkflowMarketManifestSchema.parse(existing) as Record<string, unknown>
+        ensureGraphExists(packageRoot, String(manifest.graphPath))
+        return {
+          manifest,
+          generated: false,
+          messageWhenNormalized: '已补全 SHA256SUMS 并转换为 .toolman-workflow 社区包。',
+          messageWhenGenerated:
+            '已从外部工作流 zip 自动生成 workflow.manifest.json 与 SHA256SUMS，并转换为 .toolman-workflow 社区包。',
+        }
       }
-      manifest = WorkflowMarketManifestSchema.parse(existing) as Record<string, unknown>
-      ensureGraphExists(packageRoot, String(manifest.graphPath))
-    } else {
-      manifest = inferManifestFromGraph(packageRoot, parsed.title)
-      generatedManifest = true
-    }
 
-    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-
-    const zipFileName = `${safeZipBaseName(sourcePath, parsed.title, 'community-workflow')}.toolman-workflow`
-    const repacked = repackDirectory({
-      sourceDir: packageRoot,
-      zipFileName,
-      stagingPrefix: 'toolman-workflow-import-pack-',
-      zipCommandLabel: '工作流资源',
-    })
-
-    const message = generatedManifest
-      ? '已从外部工作流 zip 自动生成 workflow.manifest.json 与 SHA256SUMS，并转换为 .toolman-workflow 社区包。'
-      : '已补全 SHA256SUMS 并转换为 .toolman-workflow 社区包。'
-
-    return {
-      packagePath: repacked.packagePath,
-      normalized: true,
-      message,
-    }
-  } finally {
-    rmSync(stagingRoot, { recursive: true, force: true })
-  }
+      return {
+        manifest: inferManifestFromGraph(packageRoot, title),
+        generated: true,
+        messageWhenNormalized: '已补全 SHA256SUMS 并转换为 .toolman-workflow 社区包。',
+        messageWhenGenerated:
+          '已从外部工作流 zip 自动生成 workflow.manifest.json 与 SHA256SUMS，并转换为 .toolman-workflow 社区包。',
+      }
+    },
+  })
 }

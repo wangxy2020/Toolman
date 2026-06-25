@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { McpStatusListInputSchema, type McpStatusItem } from '@toolman/shared'
+import {McpStatusListInputSchema, type McpStatusItem, toErrorMessage } from '@toolman/shared'
 import {
   discoverLocalSqliteFiles,
   getDefaultSqliteHint,
@@ -41,7 +41,7 @@ function checkBuiltinSqlite(context: ToolExecutionContext): McpStatusItem {
     return {
       id: 'sqlite',
       connected: false,
-      reason: error instanceof Error ? error.message : 'SQLite 不可用',
+      reason: toErrorMessage(error, 'SQLite 不可用'),
     }
   }
 }
@@ -117,7 +117,7 @@ async function checkRemoteServer(serverId: string): Promise<McpStatusItem> {
         serverVersion: active.serverVersion,
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '数据库连接失败'
+      const message = toErrorMessage(error, '数据库连接失败')
       const failed = getMcpClientState(serverId)
       return {
         id: serverId,
@@ -150,7 +150,7 @@ async function checkRemoteServer(serverId: string): Promise<McpStatusItem> {
       serverVersion: active.serverVersion,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : '连接失败'
+    const message = toErrorMessage(error, '连接失败')
     const failed = getMcpClientState(serverId)
     return {
       id: serverId,

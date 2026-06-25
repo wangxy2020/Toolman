@@ -1,19 +1,14 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { z } from 'zod'
 
 import { SkillMarketManifestSchema } from './adapters/skill-market.adapter'
 import {
   assertZipSource,
-  extractZip,
   isCommunityReadyPackage,
   listRelativeFiles,
   readJsonFile,
-  repackDirectory,
-  resolvePackageRoot,
-  safeZipBaseName,
+  runCommunityPackageImport,
   slugifyCommunityId,
   type PrepareCommunityPackageResult,
 } from './community-package-import.util'
@@ -133,16 +128,20 @@ export async function prepareCommunitySkillPackage(
   const sourcePath = parsed.packagePath
   assertZipSource(sourcePath, 'Skill 资源包')
 
-  const stagingRoot = mkdtempSync(join(tmpdir(), 'toolman-skill-import-'))
-  const extractDir = join(stagingRoot, 'extract')
-  try {
-    extractZip(sourcePath, extractDir, 'Skill 压缩包')
-    const packageRoot = resolvePackageRoot(extractDir, [
-      SKILL_MANIFEST_FILENAME,
-      SKILL_MD_FILENAME,
-    ])
-
-    if (isCommunityReadyPackage(packageRoot, SKILL_MANIFEST_FILENAME)) {
+  return runCommunityPackageImport({
+    sourcePath,
+    title: parsed.title,
+    resourceLabel: 'Skill 资源包',
+    zipLabel: 'Skill 压缩包',
+    stagingPrefix: 'toolman-skill-import-',
+    rootMarkers: [SKILL_MANIFEST_FILENAME, SKILL_MD_FILENAME],
+    manifestFilename: SKILL_MANIFEST_FILENAME,
+    packageExtension: '.toolman-skill',
+    zipBaseNamePrefix: 'community-skill',
+    packStagingPrefix: 'toolman-skill-import-pack-',
+    packLabel: 'Skill 资源',
+    tryReturnReadyPackage(packageRoot) {
+      if (!isCommunityReadyPackage(packageRoot, SKILL_MANIFEST_FILENAME)) return null
       try {
         const existing = readJsonFile<Record<string, unknown>>(join(packageRoot, SKILL_MANIFEST_FILENAME))
         const skillMd = existsSync(join(packageRoot, SKILL_MD_FILENAME))
@@ -159,45 +158,33 @@ export async function prepareCommunitySkillPackage(
           message: '资源包已符合 Toolman 社区 Skill 格式，可直接提交。',
         }
       } catch {
-        // fall through to regenerate checksums / sync manifest
+        return null
       }
-    }
-
-    const manifestPath = join(packageRoot, SKILL_MANIFEST_FILENAME)
-    let manifest: Record<string, unknown>
-    let generatedManifest = false
-
-    if (existsSync(manifestPath)) {
-      const existing = readJsonFile<Record<string, unknown>>(manifestPath)
-      if (!existing) {
-        throw new Error('skill.manifest.json 无法解析，请检查 JSON 格式')
+    },
+    resolveManifest({ packageRoot, title, manifestPath }) {
+      if (existsSync(manifestPath)) {
+        const existing = readJsonFile<Record<string, unknown>>(manifestPath)
+        if (!existing) {
+          throw new Error('skill.manifest.json 无法解析，请检查 JSON 格式')
+        }
+        return {
+          manifest: syncManifestWithSkillMd(packageRoot, existing),
+          generated: false,
+          messageWhenNormalized:
+            '已同步 manifest 与 SKILL.md 前言，并补全 SHA256SUMS 转换为 .toolman-skill 社区包。',
+          messageWhenGenerated:
+            '已从外部 Skill zip 自动生成 skill.manifest.json 与 SHA256SUMS，并转换为 .toolman-skill 社区包。',
+        }
       }
-      manifest = syncManifestWithSkillMd(packageRoot, existing)
-    } else {
-      manifest = inferManifestFromSkillMd(packageRoot, parsed.title)
-      generatedManifest = true
-    }
 
-    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-
-    const zipFileName = `${safeZipBaseName(sourcePath, parsed.title, 'community-skill')}.toolman-skill`
-    const repacked = repackDirectory({
-      sourceDir: packageRoot,
-      zipFileName,
-      stagingPrefix: 'toolman-skill-import-pack-',
-      zipCommandLabel: 'Skill 资源',
-    })
-
-    const message = generatedManifest
-      ? '已从外部 Skill zip 自动生成 skill.manifest.json 与 SHA256SUMS，并转换为 .toolman-skill 社区包。'
-      : '已同步 manifest 与 SKILL.md 前言，并补全 SHA256SUMS 转换为 .toolman-skill 社区包。'
-
-    return {
-      packagePath: repacked.packagePath,
-      normalized: true,
-      message,
-    }
-  } finally {
-    rmSync(stagingRoot, { recursive: true, force: true })
-  }
+      return {
+        manifest: inferManifestFromSkillMd(packageRoot, title),
+        generated: true,
+        messageWhenNormalized:
+          '已同步 manifest 与 SKILL.md 前言，并补全 SHA256SUMS 转换为 .toolman-skill 社区包。',
+        messageWhenGenerated:
+          '已从外部 Skill zip 自动生成 skill.manifest.json 与 SHA256SUMS，并转换为 .toolman-skill 社区包。',
+      }
+    },
+  })
 }

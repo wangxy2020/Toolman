@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import { app } from 'electron'
 import {
@@ -184,7 +185,7 @@ export function maybeAutoSnapshot(workspaceId: string): P2pSnapshotRow | null {
   try {
     return createWorkspaceSnapshot(workspaceId)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.warn(`[p2p] auto snapshot failed: ${message}`)
     return null
   }

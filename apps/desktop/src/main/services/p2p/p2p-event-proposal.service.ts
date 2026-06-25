@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { toErrorMessage } from '@toolman/shared'
 import type { WorkspaceEvent } from '@toolman/shared'
 import { ensurePeerReadyForWorkspace } from './p2p-connection.service'
 import type { AppendP2pEventInput } from './p2p-event.service'
@@ -132,7 +133,7 @@ export async function handleRemoteEventProposal(
       event: workspaceEventToWire(event),
     })
   } catch (error) {
-    const reason = error instanceof Error ? error.message : '群主写入事件失败'
+    const reason = toErrorMessage(error, '群主写入事件失败')
     await sendReplicationMessage(proposerDeviceId, {
       type: 'events.propose_rejected',
       workspaceId: message.workspaceId,

@@ -13,6 +13,7 @@ import {
   type KnowledgeIngestJob,
   type KnowledgeSearchResult,
 } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 import {
   embedTexts,
   fuseHybridResults,
@@ -184,7 +185,7 @@ export async function deleteKnowledgeDocument(input: unknown): Promise<boolean> 
           filePath: doc.absolutePath,
         })
       } catch (error) {
-        const message = error instanceof Error ? error.message : '删除本地文件失败'
+        const message = toErrorMessage(error, '删除本地文件失败')
         throw new Error(message)
       }
     }

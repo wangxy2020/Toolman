@@ -7,6 +7,7 @@ import type { P2pConnectionInfo, P2pMember, P2pSyncStatus, WorkspaceEvent } from
 import {
   orderMeshCatchUpPeers,
   resolveReplicationTopology,
+  toErrorMessage,
   type MeshPeerSyncCandidate,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
@@ -112,10 +113,6 @@ function getMemberRepo(): P2pMemberRepository {
 
 function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
-}
-
-function toErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
 }
 
 function getPeerCursor(workspaceId: string, peerDeviceId: string) {

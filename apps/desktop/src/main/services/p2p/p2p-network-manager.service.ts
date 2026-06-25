@@ -1,9 +1,8 @@
 import { app } from 'electron'
-import {
-  P2pLibp2pDhtModeSchema,
+import { toErrorMessage } from '@toolman/shared'
+import {P2pLibp2pDhtModeSchema,
   P2pNetworkGetSnapshotOutputSchema,
-  type P2pNetworkSnapshot,
-} from '@toolman/shared'
+  type P2pNetworkSnapshot } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { P2pBridge } from './p2p-bridge'
 import { listP2pConnections } from './p2p-connection.service'
@@ -86,7 +85,7 @@ export async function buildP2pNetworkSnapshot(): Promise<P2pNetworkSnapshot> {
         lastError = nativeSnapshot.error
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       lastError = message
       recordDiagnosticEvent('libp2p', 'warn', message)
     }
@@ -278,7 +277,7 @@ async function bootstrapLibp2pNetwork(): Promise<boolean> {
     )
     return true
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('libp2p', 'error', message)
     return false
@@ -323,7 +322,7 @@ export function stopP2pNetworkManager(): void {
     try {
       Libp2pBridge.networkStop()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       recordDiagnosticEvent('libp2p', 'warn', `network stop failed: ${message}`)
     }
   }

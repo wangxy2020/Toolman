@@ -1,4 +1,5 @@
 import { parentPort } from 'node:worker_threads'
+import { toErrorMessage } from '@toolman/shared'
 import { hashFileBytes, parseFile } from '@toolman/knowledge'
 
 interface ParseFileWorkerRequest {
@@ -39,7 +40,7 @@ parentPort?.on('message', (request: ParseFileWorkerRequest) => {
     } catch (error) {
       const response: ParseFileWorkerResponse = {
         ok: false,
-        error: error instanceof Error ? error.message : '文件解析失败',
+        error: toErrorMessage(error, '文件解析失败'),
       }
       parentPort?.postMessage(response)
     }

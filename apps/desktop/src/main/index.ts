@@ -1,4 +1,5 @@
 import { loadWorkspaceEnvFiles } from './bootstrap/load-env'
+import { toErrorMessage } from '@toolman/shared'
 
 loadWorkspaceEnvFiles()
 
@@ -105,7 +106,7 @@ function logLibp2pNativeStatus(): void {
     const version = Libp2pBridge.version()
     console.log(`[libp2p] native module ready (${version}): ${message}`)
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     console.warn(`[libp2p] native module unavailable: ${errMessage}`)
   }
 }
@@ -120,7 +121,7 @@ function logP2pNativeStatus(): void {
       `[p2p] device identity ready: ${device.deviceId} (fp=${device.publicKeyFingerprint})`,
     )
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     console.error(`[p2p] native module unavailable: ${errMessage}`)
   }
 }
@@ -245,26 +246,26 @@ app.whenReady().then(() => {
     try {
       startP2pDiscovery()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[p2p] discovery bootstrap failed: ${message}`)
     }
     try {
       startP2pNetworkManager()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[libp2p] network bootstrap failed: ${message}`)
     }
     void startCommunityYjsBridge().catch((error) => {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[community-yjs] bootstrap failed: ${message}`)
     })
     void startCommunityFederationProvider().catch((error) => {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[community-federation] bootstrap failed: ${message}`)
     })
     startCommunityHubPeeringSync()
     void startCommunityCidProvider().catch((error) => {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error, String(error))
       console.warn(`[community-cid] bootstrap failed: ${message}`)
     })
     bootstrapP2pEventStore()

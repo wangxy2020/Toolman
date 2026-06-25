@@ -1,12 +1,11 @@
 import { AuthBindingRepository, AuthSessionRepository } from '@toolman/db'
-import {
-  AuthDeleteAccountInputSchema,
+import { toErrorMessage } from '@toolman/shared'
+import {AuthDeleteAccountInputSchema,
   AuthVerifyDeleteReauthInputSchema,
   type AuthDeleteAccountInput,
   type AuthSession,
   type AuthVerifyDeleteReauthInput,
-  type AuthVerifyDeleteReauthOutput,
-} from '@toolman/shared'
+  type AuthVerifyDeleteReauthOutput } from '@toolman/shared'
 
 import { getDatabase } from '../../bootstrap/database'
 import { decryptSecret } from '../secret-store'
@@ -94,7 +93,7 @@ export async function deleteAuthAccountRemote(input: AuthDeleteAccountInput): Pr
     try {
       await firebaseDeleteUser(config, idToken)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Firebase 删号失败'
+      const message = toErrorMessage(error, 'Firebase 删号失败')
       throw new AuthLoginError(message)
     }
   }

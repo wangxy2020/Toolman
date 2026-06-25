@@ -3,10 +3,17 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
 import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
-import { DOCX_MCP_SERVER_ID } from '@toolman/shared'
+import {DOCX_MCP_SERVER_ID, toErrorMessage } from '@toolman/shared'
 
 import { ensureMcpServersConnected, getMcpClientState } from './mcp-client-manager.service'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
+import {
+  buildMcpApprovalScopeKey,
+  buildMcpBatchApprovalArgs,
+  filterMcpToolDefinitions,
+  findMcpToolName,
+  resolveMcpShortToolName,
+} from './document-mcp-task.util'
 import {
   buildLegacyWordConversionStatusMessage,
   docxWorkingStem,
@@ -59,32 +66,22 @@ export async function assertDocxMcpReady(): Promise<number> {
 }
 
 export function filterDocxMcpToolDefinitions(tools: ToolDefinition[]): ToolDefinition[] {
-  const docxTools = tools.filter((tool) => tool.function.name.includes(DOCX_MCP_SERVER_ID))
-  if (docxTools.length > 0) return docxTools
-
-  return tools.filter((tool) => {
-    const shortName = tool.function.name.split('__').pop()?.toLowerCase() ?? ''
-    return [
-      'read_document',
-      'get_document_info',
-      'search_text',
-      'replace_text',
-      'replace_texts',
-      'edit_paragraph',
-      'edit_paragraphs',
-      'add_comment',
-      'add_comments',
-      'create_document',
-    ].includes(shortName)
-  })
+  return filterMcpToolDefinitions(tools, DOCX_MCP_SERVER_ID, [
+    'read_document',
+    'get_document_info',
+    'search_text',
+    'replace_text',
+    'replace_texts',
+    'edit_paragraph',
+    'edit_paragraphs',
+    'add_comment',
+    'add_comments',
+    'create_document',
+  ])
 }
 
 export function resolveDocxMcpShortToolName(toolName: string): string {
-  if (toolName === DOCX_MCP_BATCH_TOOL_NAME) return toolName
-  if (toolName.includes(DOCX_MCP_SERVER_ID)) {
-    return toolName.split('__').pop()?.toLowerCase() ?? toolName.toLowerCase()
-  }
-  return toolName.toLowerCase()
+  return resolveMcpShortToolName(toolName, DOCX_MCP_SERVER_ID, DOCX_MCP_BATCH_TOOL_NAME)
 }
 
 export function isDocxMcpToolName(toolName: string): boolean {
@@ -113,18 +110,14 @@ export function isDocxMcpEditToolName(toolName: string): boolean {
 }
 
 export function buildDocxMcpBatchApprovalArgs(workingCopies: DocxWorkingCopy[]): string {
-  return JSON.stringify(
-    {
-      summary: '本次将依次调用 add_comment、replace_text、edit_paragraph 等多个 DOCX 编辑工具',
-      files: workingCopies.map((copy) => copy.workingPath),
-    },
-    null,
-    2,
+  return buildMcpBatchApprovalArgs(
+    '本次将依次调用 add_comment、replace_text、edit_paragraph 等多个 DOCX 编辑工具',
+    workingCopies.map((copy) => copy.workingPath),
   )
 }
 
 export function buildDocxMcpApprovalScopeKey(assistantMessageId: string): string {
-  return `docx-mcp:${assistantMessageId}`
+  return buildMcpApprovalScopeKey('docx-mcp', assistantMessageId)
 }
 
 const DOCX_THOROUGH_EDIT_KEYWORDS =
@@ -198,19 +191,14 @@ export function shouldContinueDocxEditing(options: {
 }
 
 export function findDocxReadDocumentToolName(tools: ToolDefinition[]): string | null {
-  return findDocxMcpToolName(tools, 'read_document')
+  return findMcpToolName(tools, 'read_document')
 }
 
 export function findDocxMcpToolName(
   tools: ToolDefinition[],
   shortName: string,
 ): string | null {
-  const normalized = shortName.toLowerCase()
-  for (const tool of tools) {
-    const name = tool.function.name
-    if (name === normalized || name.endsWith(`__${normalized}`)) return name
-  }
-  return null
+  return findMcpToolName(tools, shortName)
 }
 
 export async function prepareDocxWorkingCopies(options: {
@@ -289,7 +277,7 @@ export async function bootstrapDocxMcpRead(options: {
     try {
       result = await executeToolCall(readTool, args, options.toolContext)
     } catch (error) {
-      result = `Error: ${error instanceof Error ? error.message : 'read_document 失败'}`
+      result = `Error: ${toErrorMessage(error, 'read_document 失败')}`
     }
 
     const snippet = result.length > 12000 ? `${result.slice(0, 12000)}…` : result

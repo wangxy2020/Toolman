@@ -1,4 +1,5 @@
 import type { P2pConnectionInfo, P2pConnectionMode, P2pConnectionState } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 import { P2pBridge, type NativeConnectionInfo } from './p2p-bridge'
 import {
   broadcastP2pConnectionError,
@@ -114,7 +115,7 @@ async function pollConnections(): Promise<void> {
     syncConnectionEvents(connections)
     await processP2pIncomingMessagesFromPoll()
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to poll P2P connections'
+    const message = toErrorMessage(error, 'Failed to poll P2P connections')
     console.error(`[p2p] connection poll failed: ${message}`)
   } finally {
     pollInFlight = false
@@ -168,7 +169,7 @@ export async function ensurePeerReadyForWorkspace(
   try {
     await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : 'rotate failed'
+    const errMessage = toErrorMessage(error, 'rotate failed')
     console.warn(
       `[p2p] workspace key rotate skipped for ${peerDeviceId.slice(0, 8)}: ${errMessage}`,
     )
@@ -203,7 +204,7 @@ async function connectP2pPeerOnce(
     }
     return state
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to connect peer'
+    const message = toErrorMessage(error, 'Failed to connect peer')
     broadcastP2pConnectionError({
       peerDeviceId,
       code: 'P2P_CONNECTION_FAILED',

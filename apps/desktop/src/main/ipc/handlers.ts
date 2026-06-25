@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import {
-  IpcChannel,
+import { toErrorMessage } from '@toolman/shared'
+import {IpcChannel,
   AppGetInfoOutputSchema,
   AppGetPathsOutputSchema,
   AppUpdateSetAutoInputSchema,
@@ -22,8 +22,7 @@ import {
   AuthMergeRequiredDetailsSchema,
   ipcOk,
   ipcErr,
-  type IpcResult,
-} from '@toolman/shared'
+  type IpcResult } from '@toolman/shared'
 import { ProviderError } from '@toolman/model-gateway'
 import * as sessionService from '../services/session.service'
 import * as agentService from '../services/agent.service'
@@ -226,7 +225,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const { getAppDiagnostics } = await import('../services/app-diagnostics.service')
       return ipcOk(await getAppDiagnostics())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to collect diagnostics'
+      const message = toErrorMessage(error, 'Failed to collect diagnostics')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
     }
   },
@@ -280,7 +279,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const { listBillingPlans } = await import('../services/billing/billing.service')
       return ipcOk(listBillingPlans())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to list billing plans'
+      const message = toErrorMessage(error, 'Failed to list billing plans')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -290,7 +289,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const { createBillingOrder } = await import('../services/billing/billing.service')
       return ipcOk(createBillingOrder(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create billing order'
+      const message = toErrorMessage(error, 'Failed to create billing order')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -300,7 +299,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const { getBillingOrderStatus } = await import('../services/billing/billing.service')
       return ipcOk(getBillingOrderStatus(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to get billing order status'
+      const message = toErrorMessage(error, 'Failed to get billing order status')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
     }
   },
@@ -311,7 +310,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = mockPayBillingOrder(input)
       return ipcOk(result)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to mock pay billing order'
+      const message = toErrorMessage(error, 'Failed to mock pay billing order')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -346,7 +345,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const data = input as { notesDataJson?: string } | undefined
       return ipcOk(await backupAppData(data))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Backup failed'
+      const message = toErrorMessage(error, 'Backup failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -356,7 +355,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const data = input as { backupPath: string; restoreKnowledge?: boolean }
       return ipcOk(await restoreAppData(data))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Restore failed'
+      const message = toErrorMessage(error, 'Restore failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -381,7 +380,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(knowledgeService.createKnowledgeBase(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Create failed'
+      const message = toErrorMessage(error, 'Create failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -402,7 +401,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const path = knowledgeFolderService.ensureKnowledgeBaseStoragePath(input)
       return ipcOk({ path })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ensure storage path failed'
+      const message = toErrorMessage(error, 'Ensure storage path failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -414,7 +413,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeDocumentService.ingestKnowledgeDocuments(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ingest failed'
+      const message = toErrorMessage(error, 'Ingest failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -428,7 +427,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeDocumentService.reindexKnowledgeDocument(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Reindex failed'
+      const message = toErrorMessage(error, 'Reindex failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -437,7 +436,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeDocumentService.reindexKnowledgeBaseDocuments(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Reindex failed'
+      const message = toErrorMessage(error, 'Reindex failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -446,7 +445,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(rebuildKnowledgeFtsIndex())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'FTS rebuild failed'
+      const message = toErrorMessage(error, 'FTS rebuild failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -456,7 +455,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const items = await knowledgeDocumentService.searchKnowledge(input)
       return ipcOk({ items })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Search failed'
+      const message = toErrorMessage(error, 'Search failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -468,7 +467,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeSourceService.addKnowledgeWatchFolder(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Add folder failed'
+      const message = toErrorMessage(error, 'Add folder failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -477,7 +476,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeSourceService.addKnowledgeUrl(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Add URL failed'
+      const message = toErrorMessage(error, 'Add URL failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -486,7 +485,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeSourceService.addKnowledgeSitemap(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Add Sitemap failed'
+      const message = toErrorMessage(error, 'Add Sitemap failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -515,7 +514,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeSourceService.addKnowledgeNotionExportFolder(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Add Notion export failed'
+      const message = toErrorMessage(error, 'Add Notion export failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -537,7 +536,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const path = knowledgeFolderService.ensureWorkspaceKnowledgeFolder(input)
       return ipcOk({ path })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ensure folder failed'
+      const message = toErrorMessage(error, 'Ensure folder failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -551,7 +550,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(scanKnowledgeFolderPreview(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Scan folder failed'
+      const message = toErrorMessage(error, 'Scan folder failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -560,7 +559,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(listKnowledgeFolderFiles(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'List folder files failed'
+      const message = toErrorMessage(error, 'List folder files failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -569,7 +568,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(importKnowledgeFolderFiles(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Import folder files failed'
+      const message = toErrorMessage(error, 'Import folder files failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -578,7 +577,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(deleteKnowledgeFolderFile(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete folder file failed'
+      const message = toErrorMessage(error, 'Delete folder file failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -588,7 +587,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const path = knowledgeFolderService.ensureWorkspaceNetworkKnowledgeFolder(input)
       return ipcOk({ path })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ensure network folder failed'
+      const message = toErrorMessage(error, 'Ensure network folder failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -603,7 +602,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const path = knowledgeFolderService.ensureWorkspaceLocalFilesFolder(input)
       return ipcOk({ path })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ensure local files folder failed'
+      const message = toErrorMessage(error, 'Ensure local files folder failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -617,7 +616,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(ensureDefaultFolderKnowledgeBase(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ensure default folder kb failed'
+      const message = toErrorMessage(error, 'Ensure default folder kb failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -626,7 +625,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await knowledgeDedupService.scanDuplicateFiles(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Scan failed'
+      const message = toErrorMessage(error, 'Scan failed')
       if (message === '扫描已取消') {
         return ipcErr({ code: 'ABORTED', message, retryable: true })
       }
@@ -641,7 +640,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(knowledgeDedupService.deleteDuplicateFiles(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete failed'
+      const message = toErrorMessage(error, 'Delete failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -652,7 +651,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const record = writeBlobFromPath(data.sourcePath)
       return ipcOk(record)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Upload failed'
+      const message = toErrorMessage(error, 'Upload failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -670,7 +669,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const dataUrl = getBlobDataUrl(data.hash)
       return ipcOk({ dataUrl })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Read blob failed'
+      const message = toErrorMessage(error, 'Read blob failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -706,7 +705,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(identityService.getIdentityProfile())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load identity'
+      const message = toErrorMessage(error, 'Failed to load identity')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -715,7 +714,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(identityService.updateIdentityProfile(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update identity'
+      const message = toErrorMessage(error, 'Failed to update identity')
       return ipcErr({ code: 'VALIDATION_ERROR', message, retryable: false })
     }
   },
@@ -724,7 +723,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(authSessionService.getAuthSession())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load auth session'
+      const message = toErrorMessage(error, 'Failed to load auth session')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -734,7 +733,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const session = await authLoginService.loginAuth(AuthLoginInputSchema.parse(input))
       return ipcOk({ session })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Login failed'
+      const message = toErrorMessage(error, 'Login failed')
       if (error instanceof AuthLoginError && message.includes('尚未实现')) {
         return ipcErr({ code: AUTH_ERROR_CODES.NOT_IMPLEMENTED, message, retryable: false })
       }
@@ -763,7 +762,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       AuthLogoutInputSchema.parse(input ?? {})
       return ipcOk({ session: authSessionService.logoutAuthSession() })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Logout failed'
+      const message = toErrorMessage(error, 'Logout failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -773,7 +772,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const session = await deleteAuthAccountRemote(AuthDeleteAccountInputSchema.parse(input))
       return ipcOk({ session })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete account failed'
+      const message = toErrorMessage(error, 'Delete account failed')
       const code = message.includes('再次验证')
         ? AUTH_ERROR_CODES.REAUTH_REQUIRED
         : message.includes('尚未实现')
@@ -787,7 +786,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await verifyDeleteAccountReauth(AuthVerifyDeleteReauthInputSchema.parse(input)))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Reauth verification failed'
+      const message = toErrorMessage(error, 'Reauth verification failed')
       const code = message.includes('未配置') ? AUTH_ERROR_CODES.NOT_CONFIGURED : 'VALIDATION_ERROR'
       return ipcErr({ code, message, retryable: false })
     }
@@ -797,7 +796,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(getFirebaseWebConfig())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load Firebase config'
+      const message = toErrorMessage(error, 'Failed to load Firebase config')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -806,7 +805,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(getTencentWebConfig())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load Tencent config'
+      const message = toErrorMessage(error, 'Failed to load Tencent config')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -815,7 +814,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(getAuthBuildProfile())
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load auth build profile'
+      const message = toErrorMessage(error, 'Failed to load auth build profile')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -857,7 +856,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const session = await bindAuthProvider(AuthBindProviderInputSchema.parse(input))
       return ipcOk({ session })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Bind provider failed'
+      const message = toErrorMessage(error, 'Bind provider failed')
       const code = message.includes('未配置')
         ? AUTH_ERROR_CODES.NOT_CONFIGURED
         : message.includes('尚未实现')
@@ -873,7 +872,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const token = await exchangeAuthHubToken()
       return ipcOk(token)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Hub token exchange failed'
+      const message = toErrorMessage(error, 'Hub token exchange failed')
       return ipcErr({ code: 'VALIDATION_ERROR', message, retryable: false })
     }
   },
@@ -899,7 +898,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await ingestNotesToKnowledgeBase(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ingest notes failed'
+      const message = toErrorMessage(error, 'Ingest notes failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -925,7 +924,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const session = sessionService.forkSession(input)
       return ipcOk({ session })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Fork failed'
+      const message = toErrorMessage(error, 'Fork failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -934,7 +933,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const cleared = sessionService.clearSessionMessages(input)
       return ipcOk({ cleared })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Clear messages failed'
+      const message = toErrorMessage(error, 'Clear messages failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -944,7 +943,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await agentService.sendMessage(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Send failed'
+      const message = toErrorMessage(error, 'Send failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -952,7 +951,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await agentService.regenerateMessage(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Regenerate failed'
+      const message = toErrorMessage(error, 'Regenerate failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -960,7 +959,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await agentService.editUserMessage(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Edit message failed'
+      const message = toErrorMessage(error, 'Edit message failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -968,7 +967,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await agentService.translateText(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Translate failed'
+      const message = toErrorMessage(error, 'Translate failed')
       return ipcErr({
         code: 'PROVIDER_ERROR',
         message,
@@ -980,7 +979,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await agentService.diagnoseError(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Diagnose failed'
+      const message = toErrorMessage(error, 'Diagnose failed')
       return ipcErr({
         code: 'PROVIDER_ERROR',
         message,
@@ -1002,7 +1001,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const server = mcpService.upsertServer(input)
       return ipcOk(server)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Save failed'
+      const message = toErrorMessage(error, 'Save failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1010,7 +1009,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(mcpService.removeServer(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete failed'
+      const message = toErrorMessage(error, 'Delete failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1023,7 +1022,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(skillsFacade.installSkill(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Install failed'
+      const message = toErrorMessage(error, 'Install failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1031,7 +1030,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(skillsFacade.removeSkill(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete failed'
+      const message = toErrorMessage(error, 'Delete failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1041,7 +1040,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await imChannelFacade.saveImChannel(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Save failed'
+      const message = toErrorMessage(error, 'Save failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1049,7 +1048,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await imChannelFacade.testImChannel(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Test failed'
+      const message = toErrorMessage(error, 'Test failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1092,7 +1091,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       }
       return ipcOk(assistantService.deleteAssistant(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete failed'
+      const message = toErrorMessage(error, 'Delete failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1113,7 +1112,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await providerService.testProvider(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Test failed'
+      const message = toErrorMessage(error, 'Test failed')
       return ipcErr({ code: 'PROVIDER_ERROR', message, retryable: false })
     }
   },
@@ -1121,7 +1120,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk(await providerService.fetchProviderModels(input))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Fetch models failed'
+      const message = toErrorMessage(error, 'Fetch models failed')
       return ipcErr({
         code: 'PROVIDER_ERROR',
         message,
@@ -1133,7 +1132,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       return ipcOk({ deleted: providerService.deleteProvider(input) })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Delete failed'
+      const message = toErrorMessage(error, 'Delete failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },
@@ -1150,7 +1149,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         }),
       )
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'P2P native module unavailable'
+      const errMessage = toErrorMessage(error, 'P2P native module unavailable')
       return ipcErr({ code: 'P2P_NATIVE_UNAVAILABLE', message: errMessage, retryable: false })
     }
   },
@@ -1160,7 +1159,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const info = p2pDeviceIdentityService.getP2pDeviceInfo()
       return ipcOk(P2pDeviceGetInfoOutputSchema.parse(info))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to get device identity'
+      const errMessage = toErrorMessage(error, 'Failed to get device identity')
       return ipcErr({ code: 'P2P_NATIVE_UNAVAILABLE', message: errMessage, retryable: false })
     }
   },
@@ -1170,7 +1169,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       p2pDiscoveryService.startP2pDiscovery()
       return ipcOk(P2pDiscoveryStartOutputSchema.parse({ started: true }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to start P2P discovery'
+      const errMessage = toErrorMessage(error, 'Failed to start P2P discovery')
       return ipcErr({ code: 'P2P_NATIVE_UNAVAILABLE', message: errMessage, retryable: true })
     }
   },
@@ -1180,7 +1179,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       p2pDiscoveryService.stopP2pDiscovery()
       return ipcOk({})
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to stop P2P discovery'
+      const errMessage = toErrorMessage(error, 'Failed to stop P2P discovery')
       return ipcErr({ code: 'P2P_NATIVE_UNAVAILABLE', message: errMessage, retryable: false })
     }
   },
@@ -1191,7 +1190,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const nodes = p2pDiscoveryService.listP2pDiscoveredNodes(parsed.onlineOnly ?? false)
       return ipcOk(P2pDiscoveryListNodesOutputSchema.parse({ nodes }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list discovered nodes'
+      const errMessage = toErrorMessage(error, 'Failed to list discovered nodes')
       return ipcErr({ code: 'P2P_NATIVE_UNAVAILABLE', message: errMessage, retryable: true })
     }
   },
@@ -1205,7 +1204,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       )
       return ipcOk(P2pConnectionConnectOutputSchema.parse({ state }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to connect peer'
+      const errMessage = toErrorMessage(error, 'Failed to connect peer')
       return ipcErr({ code: 'P2P_CONNECTION_FAILED', message: errMessage, retryable: true })
     }
   },
@@ -1216,7 +1215,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       await p2pConnectionService.disconnectP2pPeer(parsed.peerDeviceId)
       return ipcOk(P2pConnectionDisconnectOutputSchema.parse({ state: 'closed' }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to disconnect peer'
+      const errMessage = toErrorMessage(error, 'Failed to disconnect peer')
       return ipcErr({ code: 'P2P_CONNECTION_FAILED', message: errMessage, retryable: false })
     }
   },
@@ -1226,7 +1225,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const connections = await p2pConnectionService.listP2pConnections()
       return ipcOk(P2pConnectionListOutputSchema.parse({ connections }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list connections'
+      const errMessage = toErrorMessage(error, 'Failed to list connections')
       return ipcErr({ code: 'P2P_CONNECTION_FAILED', message: errMessage, retryable: true })
     }
   },
@@ -1242,7 +1241,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         }),
       )
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to read network config'
+      const errMessage = toErrorMessage(error, 'Failed to read network config')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -1260,7 +1259,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         }),
       )
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to update STUN servers'
+      const errMessage = toErrorMessage(error, 'Failed to update STUN servers')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
@@ -1277,7 +1276,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         }),
       )
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to update ICE servers'
+      const errMessage = toErrorMessage(error, 'Failed to update ICE servers')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
@@ -1287,7 +1286,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const snapshot = await getP2pNetworkSnapshot()
       return ipcOk(P2pNetworkGetSnapshotOutputSchema.parse(snapshot))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to read network snapshot'
+      const errMessage = toErrorMessage(error, 'Failed to read network snapshot')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -1298,7 +1297,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pWorkspaceService.createP2pWorkspace(parsed)
       return ipcOk(P2pWorkspaceCreateOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to create workspace'
+      const errMessage = toErrorMessage(error, 'Failed to create workspace')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
@@ -1313,7 +1312,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const workspaces = p2pWorkspaceService.listP2pWorkspaces(filter)
       return ipcOk(P2pWorkspaceListOutputSchema.parse({ workspaces }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list workspaces'
+      const errMessage = toErrorMessage(error, 'Failed to list workspaces')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -1324,7 +1323,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const workspace = p2pWorkspaceService.getP2pWorkspace(parsed.id)
       return ipcOk(P2pWorkspaceGetOutputSchema.parse({ workspace }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to get workspace'
+      const errMessage = toErrorMessage(error, 'Failed to get workspace')
       const code = errMessage.includes('不存在') ? 'P2P_NOT_FOUND' : 'P2P_FORBIDDEN'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1336,7 +1335,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const workspace = p2pWorkspaceService.updateP2pWorkspace(parsed)
       return ipcOk(P2pWorkspaceUpdateOutputSchema.parse({ workspace }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to update workspace'
+      const errMessage = toErrorMessage(error, 'Failed to update workspace')
       const code = errMessage.includes('群主') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1348,7 +1347,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       p2pWorkspaceService.deleteP2pWorkspace(parsed.id)
       return ipcOk(P2pWorkspaceDeleteOutputSchema.parse({ deleted: true }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to delete workspace'
+      const errMessage = toErrorMessage(error, 'Failed to delete workspace')
       const code = errMessage.includes('群主') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1360,7 +1359,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       p2pWorkspaceService.leaveP2pWorkspace(parsed.id)
       return ipcOk(P2pWorkspaceLeaveOutputSchema.parse({ left: true }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to leave workspace'
+      const errMessage = toErrorMessage(error, 'Failed to leave workspace')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
@@ -1371,7 +1370,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const storagePath = p2pWorkspaceService.getP2pWorkspaceStoragePath(parsed.id)
       return ipcOk(P2pWorkspaceGetStoragePathOutputSchema.parse({ storagePath }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to get workspace storage path'
+      const errMessage = toErrorMessage(error, 'Failed to get workspace storage path')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1383,7 +1382,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const members = await p2pMemberService.prepareP2pMemberList(parsed.workspaceId)
       return ipcOk(P2pMemberListOutputSchema.parse({ members }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list members'
+      const errMessage = toErrorMessage(error, 'Failed to list members')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1395,7 +1394,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pInviteService.createP2pInvite(parsed)
       return ipcOk(P2pMemberInviteOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to create invite'
+      const errMessage = toErrorMessage(error, 'Failed to create invite')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1413,7 +1412,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       if (error instanceof p2pMemberService.P2pMemberVipRequiredError) {
         return ipcErr({ code: 'P2P_MEMBER_VIP_REQUIRED', message: error.message, retryable: false })
       }
-      const errMessage = error instanceof Error ? error.message : 'Failed to join workspace'
+      const errMessage = toErrorMessage(error, 'Failed to join workspace')
       let code: 'P2P_INVITE_EXPIRED' | 'P2P_FORBIDDEN' | 'P2P_MEMBER_LIMIT' | 'INTERNAL_ERROR' =
         'INTERNAL_ERROR'
       if (errMessage.includes('过期')) code = 'P2P_INVITE_EXPIRED'
@@ -1429,7 +1428,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       p2pMemberService.removeP2pMember(parsed)
       return ipcOk(P2pMemberRemoveOutputSchema.parse({ removed: true }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to remove member'
+      const errMessage = toErrorMessage(error, 'Failed to remove member')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1441,7 +1440,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const member = p2pMemberService.updateP2pMemberRole(parsed)
       return ipcOk(P2pMemberUpdateRoleOutputSchema.parse({ member }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to update member role'
+      const errMessage = toErrorMessage(error, 'Failed to update member role')
       const code = errMessage.includes('群主') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1453,7 +1452,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pPeerService.trustP2pPeerDevice(parsed)
       return ipcOk(P2pMemberTrustDeviceOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to trust device'
+      const errMessage = toErrorMessage(error, 'Failed to trust device')
       const code = errMessage.includes('信任') ? 'P2P_TRUST_REQUIRED' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1465,7 +1464,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pEventService.listP2pEvents(parsed)
       return ipcOk(P2pEventListOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list events'
+      const errMessage = toErrorMessage(error, 'Failed to list events')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1477,7 +1476,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const event = p2pEventService.getP2pEvent(parsed.eventId)
       return ipcOk(P2pEventGetOutputSchema.parse({ event }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to get event'
+      const errMessage = toErrorMessage(error, 'Failed to get event')
       const code = errMessage.includes('不存在')
         ? 'NOT_FOUND'
         : errMessage.includes('无权')
@@ -1493,7 +1492,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pSyncService.startP2pSync(parsed.workspaceId)
       return ipcOk(P2pSyncStartOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to start sync'
+      const errMessage = toErrorMessage(error, 'Failed to start sync')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -1504,7 +1503,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pSyncService.stopP2pSync(parsed.workspaceId)
       return ipcOk(P2pSyncStopOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to stop sync'
+      const errMessage = toErrorMessage(error, 'Failed to stop sync')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
@@ -1515,7 +1514,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pSyncService.getP2pSyncStatus(parsed.workspaceId)
       return ipcOk(P2pSyncStatusOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to get sync status'
+      const errMessage = toErrorMessage(error, 'Failed to get sync status')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1530,7 +1529,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       )
       return ipcOk(P2pSyncForceOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to force sync'
+      const errMessage = toErrorMessage(error, 'Failed to force sync')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -1541,7 +1540,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       await p2pSyncService.awaitJoinerEventCatchUp(parsed.workspaceId)
       return ipcOk(P2pSyncCatchUpOutputSchema.parse({ caughtUp: true }))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to catch up events'
+      const errMessage = toErrorMessage(error, 'Failed to catch up events')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
@@ -1552,7 +1551,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pKnowledgeSyncService.shareP2pKnowledge(parsed)
       return ipcOk(P2pKnowledgeShareOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to share knowledge base'
+      const errMessage = toErrorMessage(error, 'Failed to share knowledge base')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在')
@@ -1568,7 +1567,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pKnowledgeSyncService.syncP2pKnowledgeDocument(parsed)
       return ipcOk(P2pKnowledgeSyncDocumentOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to sync knowledge document'
+      const errMessage = toErrorMessage(error, 'Failed to sync knowledge document')
       const code = errMessage.includes('无权')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未就绪') || errMessage.includes('尚未共享')
@@ -1585,7 +1584,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pKnowledgeRemoveDocumentsOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to remove shared knowledge documents'
+        toErrorMessage(error, 'Failed to remove shared knowledge documents')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未能移除')
@@ -1602,7 +1601,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pKnowledgeSetDocumentPermissionOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to set knowledge document permission'
+        toErrorMessage(error, 'Failed to set knowledge document permission')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未共享')
@@ -1619,7 +1618,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pKnowledgeEnsureDocumentSavedOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to save shared knowledge document'
+        toErrorMessage(error, 'Failed to save shared knowledge document')
       const code = errMessage.includes('无权') || errMessage.includes('未开放')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未就绪') || errMessage.includes('尚未同步')
@@ -1636,7 +1635,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pKnowledgeMaterializeDocumentOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to materialize shared knowledge document'
+        toErrorMessage(error, 'Failed to materialize shared knowledge document')
       const code =
         errMessage.includes('不存在') || errMessage.includes('未就绪') || errMessage.includes('尚未同步')
           ? 'NOT_FOUND'
@@ -1651,7 +1650,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pAgentShareService.exportP2pAgentPackage(parsed)
       return ipcOk(P2pAgentExportPackageOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to export agent package'
+      const errMessage = toErrorMessage(error, 'Failed to export agent package')
       const code = errMessage.includes('不存在')
         ? 'NOT_FOUND'
         : errMessage.includes('内置')
@@ -1667,7 +1666,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pAgentShareService.importP2pAgentPackage(parsed)
       return ipcOk(P2pAgentImportPackageOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to import agent package'
+      const errMessage = toErrorMessage(error, 'Failed to import agent package')
       const code = errMessage.includes('不存在') ? 'NOT_FOUND' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1679,7 +1678,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pAgentShareService.shareP2pAgent(parsed)
       return ipcOk(P2pAgentShareOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to share agent'
+      const errMessage = toErrorMessage(error, 'Failed to share agent')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未就绪')
@@ -1696,7 +1695,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pAgentRemoveSessionsOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to remove shared agent sessions'
+        toErrorMessage(error, 'Failed to remove shared agent sessions')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未能移除')
@@ -1713,7 +1712,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pAgentSetSessionPermissionOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to set agent session permission'
+        toErrorMessage(error, 'Failed to set agent session permission')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未共享')
@@ -1730,7 +1729,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(P2pAgentOpenSessionOutputSchema.parse(result))
     } catch (error) {
       const errMessage =
-        error instanceof Error ? error.message : 'Failed to open group agent session'
+        toErrorMessage(error, 'Failed to open group agent session')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('未就绪')
@@ -1746,7 +1745,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pGroupChatService.listP2pGroupChatMessages(parsed)
       return ipcOk(P2pGroupChatListOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list group chat messages'
+      const errMessage = toErrorMessage(error, 'Failed to list group chat messages')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1758,7 +1757,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pGroupChatService.sendP2pGroupChatMessage(parsed)
       return ipcOk(P2pGroupChatSendOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to send group chat message'
+      const errMessage = toErrorMessage(error, 'Failed to send group chat message')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : 'INTERNAL_ERROR'
@@ -1772,7 +1771,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pGroupChatService.deleteP2pGroupChatMessage(parsed)
       return ipcOk(P2pGroupChatDeleteOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to delete group chat message'
+      const errMessage = toErrorMessage(error, 'Failed to delete group chat message')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1784,7 +1783,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pGroupChatService.clearP2pGroupChatMessages(parsed)
       return ipcOk(P2pGroupChatClearOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to clear group chat messages'
+      const errMessage = toErrorMessage(error, 'Failed to clear group chat messages')
       const code = errMessage.includes('无权') || errMessage.includes('只读') || errMessage.includes('群主')
         ? 'P2P_FORBIDDEN'
         : 'INTERNAL_ERROR'
@@ -1800,7 +1799,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         P2pNoteShareOutputSchema.parse({ sharedResource: result.sharedResource }),
       )
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to share note'
+      const errMessage = toErrorMessage(error, 'Failed to share note')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在')
@@ -1816,7 +1815,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pNoteSyncService.pushP2pNoteUpdate(parsed)
       return ipcOk(P2pNotePushUpdateOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to push note update'
+      const errMessage = toErrorMessage(error, 'Failed to push note update')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在') || errMessage.includes('尚未共享')
@@ -1832,7 +1831,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = p2pNoteSyncService.listP2pNoteShareTargets(parsed.noteId)
       return ipcOk(P2pNoteListShareTargetsOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list note share targets'
+      const errMessage = toErrorMessage(error, 'Failed to list note share targets')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
@@ -1845,7 +1844,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         P2pNoteSetPermissionOutputSchema.parse({ sharedResource: result.sharedResource }),
       )
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to set note permission'
+      const errMessage = toErrorMessage(error, 'Failed to set note permission')
       const code = errMessage.includes('无权') || errMessage.includes('只读')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在')
@@ -1877,7 +1876,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
             : await p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
       return ipcOk(P2pResourceUnshareOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to unshare resource'
+      const errMessage = toErrorMessage(error, 'Failed to unshare resource')
       const code = errMessage.includes('无权') || errMessage.includes('只读') || errMessage.includes('群主')
         ? 'P2P_FORBIDDEN'
         : errMessage.includes('不存在')
@@ -1896,7 +1895,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
           : p2pKnowledgeSyncService.listP2pSharedResources(parsed)
       return ipcOk(P2pResourceListOutputSchema.parse(result))
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to list shared resources'
+      const errMessage = toErrorMessage(error, 'Failed to list shared resources')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
     }
@@ -1923,7 +1922,7 @@ export function registerIpcHandlers(): void {
         }
         const gateError = mapAuthGateError(error)
         if (gateError) return gateError
-        const message = error instanceof Error ? error.message : 'Unknown error'
+        const message = toErrorMessage(error, 'Unknown error')
         return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
       }
     })

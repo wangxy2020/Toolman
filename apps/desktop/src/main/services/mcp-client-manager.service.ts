@@ -1,4 +1,5 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { toErrorMessage } from '@toolman/shared'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -164,7 +165,7 @@ export async function connectMcpServer(serverId: string): Promise<ActiveMcpClien
           await verifyPostgresMcpDatabase(existing.client, config)
         } catch (error) {
           await disconnectMcpServer(serverId)
-          const message = error instanceof Error ? error.message : '数据库连接失败'
+          const message = toErrorMessage(error, '数据库连接失败')
           throw new Error(message)
         }
       }
@@ -183,7 +184,7 @@ export async function connectMcpServer(serverId: string): Promise<ActiveMcpClien
     })
     .catch((error) => {
       connecting.delete(serverId)
-      const message = error instanceof Error ? error.message : '连接失败'
+      const message = toErrorMessage(error, '连接失败')
       activeClients.set(serverId, {
         config,
         client: new Client({ name: 'toolman', version: '0.1.0' }),
@@ -342,7 +343,7 @@ export async function testMcpServer(serverId: string) {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : '连接失败',
+      error: toErrorMessage(error, '连接失败'),
     }
   }
 }

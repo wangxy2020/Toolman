@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { toErrorMessage } from '@toolman/shared'
 import { basename } from 'node:path'
 
 import {
@@ -112,6 +113,10 @@ import {
 
 import { buildApiQuery, fromApiJson, toApiJson } from './community-case'
 import {
+  marketplacePublishSegment,
+  resolveCommunityPackageFilename,
+} from './community-resource-type.config'
+import {
   buildFederatedCatalogEntryFromResource,
   getFederatedCatalogStats,
   listFederatedCatalogResources,
@@ -216,7 +221,7 @@ async function fetchWithHubCache<T>(
   } catch (error) {
     const cached = readCommunityHubCache<T>(cacheKey)
     if (cached != null && !isTransientHubError(error)) {
-      markCommunityHubOfflineReadOnly(error instanceof Error ? error.message : String(error))
+      markCommunityHubOfflineReadOnly(toErrorMessage(error, String(error)))
       return cached
     }
     throw error
@@ -236,38 +241,6 @@ function parseTaskItem(value: unknown) {
   }
 
   return CommunityTaskItemSchema.parse(item)
-}
-
-function marketplacePublishSegment(resourceType: string): string {
-  switch (resourceType) {
-    case 'mcp':
-      return 'mcp'
-    case 'skill':
-      return 'skills'
-    case 'workflow':
-      return 'workflows'
-    case 'knowledge':
-      return 'knowledge'
-    default:
-      throw new Error(`Publishing is not supported for resource type: ${resourceType}`)
-  }
-}
-
-function resolveCommunityPackageFilename(resourceType: string, packagePath: string): string {
-  const base = basename(packagePath)
-  const extensions: Record<string, string> = {
-    mcp: '.toolman-mcp',
-    skill: '.toolman-skill',
-    workflow: '.toolman-workflow',
-    knowledge: '.zip',
-    task: '.zip',
-  }
-  const expected = extensions[resourceType] ?? '.zip'
-  if (base.toLowerCase().endsWith(expected)) {
-    return base
-  }
-  const stem = base.replace(/\.[^.]+$/, '') || 'package'
-  return `${stem}${expected}`
 }
 
 export async function getHubStatus() {

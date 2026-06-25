@@ -1,4 +1,5 @@
 import type { AgentRelayMessage } from '@toolman/shared'
+import { toErrorMessage } from '@toolman/shared'
 import { P2pBridge } from './p2p-bridge'
 import {
   encodeReplicationMessage,
@@ -104,7 +105,7 @@ export async function sendReplicationMessageOnEventsChannel(
   try {
     await P2pBridge.connectionSend(peerDeviceId, 'events', encodeReplicationMessage(message))
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : String(error)
+    const errMessage = toErrorMessage(error, String(error))
     console.error(
       `[p2p] events send failed: ${label} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES} error=${errMessage}`,
     )

@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { toErrorMessage } from '@toolman/shared'
 import { identities } from '@toolman/db'
 import os from 'node:os'
 import type { DiscoveredNode } from '@toolman/shared'
@@ -117,7 +118,7 @@ export function startP2pDiscovery(): void {
   try {
     applyP2pNetworkConfig()
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.warn(`[p2p] ICE config apply failed (discovery will still start): ${message}`)
   }
 

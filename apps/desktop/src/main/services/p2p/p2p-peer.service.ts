@@ -6,7 +6,7 @@ import {
   p2pPeerNodes,
 } from '@toolman/db'
 import type { DiscoveredNode, P2pConnectionState } from '@toolman/shared'
-import { P2pMemberTrustDeviceInputSchema } from '@toolman/shared'
+import {P2pMemberTrustDeviceInputSchema, toErrorMessage } from '@toolman/shared'
 import { eq } from 'drizzle-orm'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceId } from './p2p-device-identity.service'
@@ -209,7 +209,7 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
           await module.reconcileWorkspaceMemberMesh(workspace.id, { immediate: true })
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'discovery online reconnect failed'
+        const message = toErrorMessage(error, 'discovery online reconnect failed')
         console.warn(
           `[p2p] discovery online reconnect failed for ${peerDeviceId.slice(0, 8)} in ${workspace.id}: ${message}`,
         )

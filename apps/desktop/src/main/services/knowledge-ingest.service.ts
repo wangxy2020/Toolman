@@ -1,4 +1,5 @@
 import { statSync, writeFileSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import {
   fetchUrlContent,
@@ -23,6 +24,10 @@ import { maybeSyncSharedKnowledgeDocument } from './p2p/knowledge-sync.service'
 import { assertIngestNotCancelled, clearIngestCancel, isIngestCancelled } from './knowledge-ingest-manager.service'
 import { parseFileInWorker, shouldParseInWorker } from './parse-file-worker.service'
 import { withTimeout } from '../utils/async-timeout'
+import {
+  findActiveDocumentById,
+  findActiveDocumentByPath,
+} from './knowledge-document-lifecycle.util'
 
 const PARSE_TIMEOUT_MS = 20 * 60 * 1000
 const EMBED_TIMEOUT_MS = 15 * 60 * 1000
@@ -125,14 +130,7 @@ function recordIngestFailure(
 
   const title = buildDocumentTitle(filePath)
 
-  let existing = repo.findByPath(kbId, filePath)
-  if (!existing) {
-    const deleted = repo.findAnyByPath(kbId, filePath)
-    if (deleted?.deletedAt) {
-      existing = repo.restoreDocument(deleted.id, kbId)
-    }
-  }
-
+  const existing = findActiveDocumentByPath(repo, kbId, filePath)
   if (existing) {
     updateDocumentStage(repo, {
       workspaceId,
@@ -174,36 +172,17 @@ function ensureIngestDocument(
   const title = buildDocumentTitle(filePath)
 
   if (documentId) {
-    const byId = repo.findById(documentId, kbId)
-    if (byId) {
+    const existing = findActiveDocumentById(repo, kbId, documentId)
+    if (existing) {
       updateDocumentStage(repo, {
         workspaceId,
         kbId,
-        documentId: byId.id,
+        documentId: existing.id,
         stage: 'parsing',
         errorMessage: null,
         patch: { title, contentHash, absolutePath: filePath },
       })
-      return byId
-    }
-
-    const existingAny = repo.findAnyById(documentId, kbId)
-    if (existingAny) {
-      const active =
-        existingAny.deletedAt != null
-          ? repo.restoreDocument(documentId, kbId)
-          : existingAny
-      if (active) {
-        updateDocumentStage(repo, {
-          workspaceId,
-          kbId,
-          documentId: active.id,
-          stage: 'parsing',
-          errorMessage: null,
-          patch: { title, contentHash, absolutePath: filePath },
-        })
-        return active
-      }
+      return existing
     }
 
     const created = repo.create({
@@ -224,14 +203,7 @@ function ensureIngestDocument(
     return created
   }
 
-  let existing = repo.findByPath(kbId, filePath)
-  if (!existing) {
-    const deleted = repo.findAnyByPath(kbId, filePath)
-    if (deleted?.deletedAt) {
-      existing = repo.restoreDocument(deleted.id, kbId)
-    }
-  }
-
+  const existing = findActiveDocumentByPath(repo, kbId, filePath)
   if (existing) {
     updateDocumentStage(repo, {
       workspaceId,
@@ -275,50 +247,38 @@ async function registerStorageOnlyFileAtPath(
   try {
     contentHash = hashFileBytes(filePath)
   } catch (error) {
-    const message = error instanceof Error ? error.message : '无法读取文件'
+    const message = toErrorMessage(error, '无法读取文件')
     recordIngestFailure(repo, workspaceId, kbId, filePath, message)
     return { outcome: 'failed', path: filePath, message }
   }
 
-  let existing = repo.findByPath(kbId, filePath)
-  if (!existing) {
-    const deleted = repo.findAnyByPath(kbId, filePath)
-    if (deleted?.deletedAt) {
-      existing = repo.restoreDocument(deleted.id, kbId)
-    }
-  }
-
-  if (!existing && documentId) {
-    existing = repo.findById(documentId, kbId) ?? undefined
-  }
+  let existing =
+    findActiveDocumentByPath(repo, kbId, filePath) ??
+    (documentId ? findActiveDocumentById(repo, kbId, documentId) : undefined)
 
   if (existing?.contentHash === contentHash && existing.status === 'ready') {
     return { outcome: 'skipped', path: filePath }
   }
 
   const title = buildDocumentTitle(filePath)
-  let docRow = existing
-
-  if (docRow) {
-    repo.update(docRow.id, kbId, {
-      title,
-      contentHash,
-      absolutePath: filePath,
-      status: 'ready',
-      errorJson: null,
-    })
-    docRow = repo.findById(docRow.id, kbId) ?? docRow
-  } else {
-    docRow = repo.create({
-      id: documentId,
-      kbId,
-      sourceId: sourceId ?? null,
-      title,
-      contentHash,
-      status: 'ready',
-      absolutePath: filePath,
-    })
-  }
+  const docRow = existing
+    ? (repo.update(existing.id, kbId, {
+        title,
+        contentHash,
+        absolutePath: filePath,
+        status: 'ready',
+        errorJson: null,
+      }),
+      repo.findById(existing.id, kbId) ?? existing)
+    : repo.create({
+        id: documentId,
+        kbId,
+        sourceId: sourceId ?? null,
+        title,
+        contentHash,
+        status: 'ready',
+        absolutePath: filePath,
+      })
 
   const stat = statSync(filePath)
   repo.upsertFileRegistry({
@@ -402,7 +362,7 @@ export async function ingestFileAtPath(
   try {
     contentHash = hashFileBytes(filePath)
   } catch (error) {
-    const message = error instanceof Error ? error.message : '无法读取文件'
+    const message = toErrorMessage(error, '无法读取文件')
     recordIngestFailure(repo, workspaceId, kbId, filePath, message)
     return { outcome: 'failed', path: filePath, message }
   }
@@ -572,7 +532,7 @@ export async function ingestFileAtPath(
 
     return { outcome: 'ingested', path: filePath }
   } catch (error) {
-    const message = error instanceof Error ? error.message : '导入失败'
+    const message = toErrorMessage(error, '导入失败')
     updateDocumentStage(repo, {
       workspaceId,
       kbId,
@@ -601,13 +561,7 @@ export async function ingestUrlDocument(options: {
     const contentHash = hashText(fetched.plainText)
     const canonicalUrl = fetched.url
 
-    let existing = repo.findByPath(kbId, canonicalUrl)
-    if (!existing) {
-      const deleted = repo.findAnyByPath(kbId, canonicalUrl)
-      if (deleted?.deletedAt) {
-        existing = repo.restoreDocument(deleted.id, kbId)
-      }
-    }
+    const existing = findActiveDocumentByPath(repo, kbId, canonicalUrl)
 
     if (existing?.contentHash === contentHash && existing.status === 'ready') {
       return { outcome: 'skipped', documentId: existing.id }
@@ -616,17 +570,18 @@ export async function ingestUrlDocument(options: {
     const embed = resolveEmbedConfig(workspaceId, kbId)
     const chunkConfig = resolveChunkConfig(kbId, workspaceId)
 
-    let docRow = existing
-    if (docRow) {
-      await removeDocumentVectors(vectorsDir, kbId, docRow.id, embed.vectorBackend)
+    let docRow: KnowledgeDocument
+    if (existing) {
+      await removeDocumentVectors(vectorsDir, kbId, existing.id, embed.vectorBackend)
       updateDocumentStage(repo, {
         workspaceId,
         kbId,
-        documentId: docRow.id,
+        documentId: existing.id,
         stage: 'embedding',
         errorMessage: null,
         patch: { contentHash },
       })
+      docRow = existing
     } else {
       docRow = repo.create({
         kbId,
@@ -672,7 +627,7 @@ export async function ingestUrlDocument(options: {
       kbId,
       result.chunks.map((chunk) => ({
         ...chunk,
-        documentId: docRow!.id,
+        documentId: docRow.id,
         kbId,
       })),
     )
@@ -698,8 +653,8 @@ export async function ingestUrlDocument(options: {
     refreshKbStats(workspaceId, kbId)
     return { outcome: 'ingested', documentId: docRow.id }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'URL 导入失败'
-    const existing = repo.findByPath(kbId, url.trim())
+    const message = toErrorMessage(error, 'URL 导入失败')
+    const existing = findActiveDocumentByPath(repo, kbId, url.trim())
     if (existing) {
       updateDocumentStage(repo, {
         workspaceId,
@@ -739,13 +694,7 @@ export function prepareIngestQueue(options: {
 
     try {
       const contentHash = hashFileBytes(filePath)
-      let existing = repo.findByPath(options.kbId, filePath)
-      if (!existing) {
-        const deleted = repo.findAnyByPath(options.kbId, filePath)
-        if (deleted?.deletedAt) {
-          existing = repo.restoreDocument(deleted.id, options.kbId)
-        }
-      }
+      const existing = findActiveDocumentByPath(repo, options.kbId, filePath)
 
       if (existing?.contentHash === contentHash && existing.status === 'ready') {
         skipped += 1
@@ -781,7 +730,7 @@ export function prepareIngestQueue(options: {
 
       pending.push(filePath)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '无法读取文件'
+      const message = toErrorMessage(error, '无法读取文件')
       recordIngestFailure(repo, options.workspaceId, options.kbId, filePath, message)
       failed.push({ path: filePath, message })
     }
@@ -1019,7 +968,7 @@ export async function reindexKnowledgeBase(options: {
     } catch (error) {
       failed.push({
         path: doc.absolutePath,
-        message: error instanceof Error ? error.message : '重建失败',
+        message: toErrorMessage(error, '重建失败'),
       })
     }
   }

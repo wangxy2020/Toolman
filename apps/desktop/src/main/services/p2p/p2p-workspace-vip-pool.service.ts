@@ -7,14 +7,13 @@ import {
   type P2pWorkspaceRow,
 } from '@toolman/db'
 import type { EntitlementContext, ProductSku, WorkspaceEvent } from '@toolman/shared'
-import {
-  GROUP_MAX_MEMBERS_PRO,
+import { toErrorMessage } from '@toolman/shared'
+import {GROUP_MAX_MEMBERS_PRO,
   GROUP_VIP_POOL_ACTIVATION_COUNT,
   formatVipPoolJoinRequiredMessage,
   isProSubscription,
   isWorkspaceVipPoolEnabled,
-  mergeP2pWorkspaceSettings,
-} from '@toolman/shared'
+  mergeP2pWorkspaceSettings } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getEntitlementContext } from '../auth/entitlement.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
@@ -167,7 +166,7 @@ export function maybeActivateWorkspaceVipPool(workspaceId: string): boolean {
       vip_pool_enabled: true,
     },
   }).catch((error) => {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error, String(error))
     console.warn(`[p2p] vip pool workspace event append failed: ${message}`)
   })
 

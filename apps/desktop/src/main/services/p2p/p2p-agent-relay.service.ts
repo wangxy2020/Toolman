@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import {
-  AgentRelayMessageSchema,
+import { toErrorMessage } from '@toolman/shared'
+import {AgentRelayMessageSchema,
   type AgentRelayMessage,
   type ContentBlock,
   type Message,
   type MessageStreamEvent,
-  type P2pGroupAgentProxy,
-} from '@toolman/shared'
+  type P2pGroupAgentProxy } from '@toolman/shared'
 import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { getMessageRepository, getSessionRepository } from '../../db/repos'
@@ -443,7 +442,7 @@ async function handleOwnerFetch(
 
     await sendFetchOkResponse(peerDeviceId, message.requestId, session.title, messages)
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : '拉取话题历史失败'
+    const errMessage = toErrorMessage(error, '拉取话题历史失败')
     await sendRelayMessage(peerDeviceId, {
       v: 1,
       type: 'fetch_err',
@@ -506,7 +505,7 @@ async function runOwnerRelaySend(
           requestId: message.requestId,
           event: remapped,
         }).catch((error) => {
-          const errMessage = error instanceof Error ? error.message : String(error)
+          const errMessage = toErrorMessage(error, String(error))
           console.error(
             `[p2p] agent relay stream forward failed: requestId=${message.requestId} event=${event.type} error=${errMessage}`,
           )
@@ -580,7 +579,7 @@ async function runOwnerRelaySend(
   } catch (error) {
     activeOwnerRelays.get(message.requestId)?.unsubscribe()
     activeOwnerRelays.delete(message.requestId)
-    const errMessage = error instanceof Error ? error.message : '发送消息失败'
+    const errMessage = toErrorMessage(error, '发送消息失败')
     console.error(
       `[p2p] agent relay owner send failed: sourceSessionId=${message.sourceSessionId} error=${errMessage}`,
     )

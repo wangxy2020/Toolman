@@ -1,11 +1,10 @@
 import { readdirSync, statSync, unlinkSync } from 'node:fs'
+import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
-import {
-  KnowledgeFileDedupDeleteInputSchema,
+import {KnowledgeFileDedupDeleteInputSchema,
   KnowledgeFileDedupScanCancelInputSchema,
   KnowledgeFileDedupScanInputSchema,
-  type KnowledgeFileDedupScanOutputSchema,
-} from '@toolman/shared'
+  type KnowledgeFileDedupScanOutputSchema } from '@toolman/shared'
 import { hashFileBytes } from '@toolman/knowledge'
 import type { z } from 'zod'
 import { broadcastKnowledgeDedupEvent } from './knowledge-dedup-broadcast'
@@ -223,7 +222,7 @@ export function deleteDuplicateFiles(input: unknown) {
     } catch (error) {
       failed.push({
         path: filePath,
-        message: error instanceof Error ? error.message : '删除失败',
+        message: toErrorMessage(error, '删除失败'),
       })
     }
   }

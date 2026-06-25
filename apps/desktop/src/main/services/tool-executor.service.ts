@@ -371,6 +371,43 @@ const LEGACY_FS_ALIASES: Record<string, string> = {
   edit: 'fs_edit',
 }
 
+type ToolHandler = (
+  args: Record<string, unknown>,
+  context: ToolExecutionContext,
+) => Promise<string> | string
+
+const TOOL_HANDLERS: Record<string, ToolHandler> = {
+  fs_glob: executeFsGlob,
+  fs_grep: executeFsGrep,
+  fs_edit: executeFsEdit,
+  fs_delete: executeFsDelete,
+  bash: executeBash,
+  fs_read: executeFsRead,
+  fs_write: executeFsWrite,
+  fs_list: executeFsList,
+  sql_list_tables: executeSqlListTables,
+  sql_query: executeSqlQuery,
+  http_fetch: (args) => executeHttpFetch(args),
+  browser_open: (args) => browserOpen(args),
+  browser_execute: (args) => browserExecute(args),
+  browser_screenshot: (args) => browserScreenshot(args),
+  browser_fetch: (args) => browserFetch(args),
+  github_request: executeGithubRequest,
+  list_knowledges: (_args, context) => difyListKnowledges(context.environmentVariables),
+  search_knowledge: (args, context) => difySearchKnowledge(args, context.environmentVariables),
+  list_local_knowledges: (_args, context) => executeListLocalKnowledges(context),
+  search_local_knowledge: (args, context) => executeSearchLocalKnowledge(args, context),
+  search_notes: (args) => executeSearchNotes(args),
+  read_note: (args) => executeReadNote(args),
+  hub_list: (args, context) => hubList(args, context.mcpServerIds ?? []),
+  hub_invoke: (args, context) => hubInvoke(args, context, context.mcpServerIds ?? []),
+  memory_save: (args, context) => executeMemorySave(args, context),
+  memory_list: (_args, context) => executeMemoryList(context),
+  agent_task_create: (args, context) => executeAgentTaskCreate(args, context),
+  agent_task_update: (args, context) => executeAgentTaskUpdate(args, context),
+  agent_task_list: (_args, context) => executeAgentTaskList(context),
+}
+
 export async function executeToolCall(
   toolName: string,
   argsJson: string,
@@ -383,69 +420,12 @@ export async function executeToolCall(
   }
 
   const resolvedName = LEGACY_FS_ALIASES[toolName] ?? toolName
-
-  switch (resolvedName) {
-    case 'fs_glob':
-      return executeFsGlob(args, context)
-    case 'fs_grep':
-      return executeFsGrep(args, context)
-    case 'fs_edit':
-      return executeFsEdit(args, context)
-    case 'fs_delete':
-      return executeFsDelete(args, context)
-    case 'bash':
-      return executeBash(args, context)
-    case 'fs_read':
-      return executeFsRead(args, context)
-    case 'fs_write':
-      return executeFsWrite(args, context)
-    case 'fs_list':
-      return executeFsList(args, context)
-    case 'sql_list_tables':
-      return executeSqlListTables(args, context)
-    case 'sql_query':
-      return executeSqlQuery(args, context)
-    case 'http_fetch':
-      return executeHttpFetch(args)
-    case 'browser_open':
-      return browserOpen(args)
-    case 'browser_execute':
-      return browserExecute(args)
-    case 'browser_screenshot':
-      return browserScreenshot(args)
-    case 'browser_fetch':
-      return browserFetch(args)
-    case 'github_request':
-      return executeGithubRequest(args, context)
-    case 'list_knowledges':
-      return difyListKnowledges(context.environmentVariables)
-    case 'search_knowledge':
-      return difySearchKnowledge(args, context.environmentVariables)
-    case 'list_local_knowledges':
-      return executeListLocalKnowledges(context)
-    case 'search_local_knowledge':
-      return executeSearchLocalKnowledge(args, context)
-    case 'search_notes':
-      return executeSearchNotes(args)
-    case 'read_note':
-      return executeReadNote(args)
-    case 'hub_list':
-      return hubList(args, context.mcpServerIds ?? [])
-    case 'hub_invoke':
-      return hubInvoke(args, context, context.mcpServerIds ?? [])
-    case 'memory_save':
-      return executeMemorySave(args, context)
-    case 'memory_list':
-      return executeMemoryList(context)
-    case 'agent_task_create':
-      return executeAgentTaskCreate(args, context)
-    case 'agent_task_update':
-      return executeAgentTaskUpdate(args, context)
-    case 'agent_task_list':
-      return executeAgentTaskList(context)
-    default:
-      throw new Error(`未知工具: ${toolName}`)
+  const handler = TOOL_HANDLERS[resolvedName]
+  if (!handler) {
+    throw new Error(`未知工具: ${toolName}`)
   }
+
+  return handler(args, context)
 }
 
 interface HubToolEntry {
