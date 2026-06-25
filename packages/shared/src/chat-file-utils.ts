@@ -1,6 +1,6 @@
-import { DOCX_MCP_SERVER_ID } from './agent-constants.js'
+import { DOCX_MCP_SERVER_ID, EXCEL_MCP_SERVER_ID } from './agent-constants.js'
 
-export { DOCX_MCP_SERVER_ID }
+export { DOCX_MCP_SERVER_ID, EXCEL_MCP_SERVER_ID }
 
 export interface ChatFilePayload {
   path: string
@@ -39,6 +39,34 @@ export function isLegacyWordFileBlock(block: UserBlock): boolean {
   return mime === 'application/msword' || mime === 'application/wps-office.doc'
 }
 
+export function isExcelFileBlock(block: UserBlock): boolean {
+  if (block.type !== 'file') return false
+  const name = (block.name ?? block.path ?? '').toLowerCase()
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return true
+  const mime = (block.mimeType ?? '').toLowerCase()
+  return (
+    mime.includes('spreadsheetml') ||
+    mime === 'application/vnd.ms-excel'
+  )
+}
+
+export function isExcelMcpSourceFileBlock(block: UserBlock): boolean {
+  return isExcelFileBlock(block)
+}
+
+export function contentBlocksHaveExcelAttachments(blocks: UserBlock[]): boolean {
+  return blocks.some(isExcelMcpSourceFileBlock)
+}
+
+export function isExcelMcpAttachmentBlock(
+  block: UserBlock,
+  mcpServerIds?: readonly string[],
+): boolean {
+  if (!mcpServerIds?.includes(EXCEL_MCP_SERVER_ID)) return false
+  if (!isExcelMcpSourceFileBlock(block)) return false
+  return Boolean(block.path?.trim() || block.blobHash?.trim())
+}
+
 /** 可进入 DOCX MCP 审查流水线的 Word 附件（含 .docx / .doc / .wps） */
 export function isDocxMcpSourceFileBlock(block: UserBlock): boolean {
   return isDocxFileBlock(block) || isLegacyWordFileBlock(block)
@@ -74,6 +102,12 @@ export function shouldEnableToolsWithAttachments(
   ) {
     return true
   }
+  if (
+    mcpServerIds.includes(EXCEL_MCP_SERVER_ID) &&
+    contentBlocksHaveExcelAttachments(blocks)
+  ) {
+    return true
+  }
   return false
 }
 
@@ -97,7 +131,12 @@ export function buildModelTextFromUserBlocks(
   const docxToolFiles = files.filter(
     (file) => file.delivery === 'docx_tool' && file.path?.trim(),
   )
-  const inlineFiles = files.filter((file) => Boolean(file.content?.trim()))
+  const excelToolFiles = files.filter(
+    (file) => file.delivery === 'excel_tool' && file.path?.trim(),
+  )
+  const inlineFiles = files.filter(
+    (file) => Boolean(file.content?.trim()) && file.delivery !== 'docx_tool' && file.delivery !== 'excel_tool',
+  )
 
   const sections: string[] = []
 
@@ -107,8 +146,20 @@ export function buildModelTextFromUserBlocks(
       .join('\n')
     sections.push(
       [
-        '用户上传了 Word 文档，请使用 DOCX MCP 的 read_document / add_comment / replace_text 等工具处理（参数 file_path 为绝对路径）：',
+        '用户上传了 Word 文档，应用将使用 DOCX MCP 结构化审查流水线处理（无需你自行调用工具）：',
         docxLines,
+      ].join('\n'),
+    )
+  }
+
+  if (excelToolFiles.length > 0) {
+    const excelLines = excelToolFiles
+      .map((file) => `- ${file.name}: ${file.path}`)
+      .join('\n')
+    sections.push(
+      [
+        '用户上传了 Excel 表格，应用将使用 Excel MCP 结构化审查流水线处理（无需你自行调用工具）：',
+        excelLines,
       ].join('\n'),
     )
   }
@@ -132,10 +183,11 @@ export function userBlocksHaveUnresolvedAttachments(
     if (block.type === 'image') return !block.blobHash?.trim()
     if (block.type === 'file') {
       if (isDocxMcpAttachmentBlock(block, options?.mcpServerIds)) return false
+      if (isExcelMcpAttachmentBlock(block, options?.mcpServerIds)) return false
       const file = block as UserBlock & {
         visionPages?: Array<{ blobHash: string }>
       }
-      if (file.delivery === 'docx_tool') return false
+      if (file.delivery === 'docx_tool' || file.delivery === 'excel_tool') return false
       if (file.content?.trim()) return false
       if (file.visionPages && file.visionPages.length > 0) return false
       return true

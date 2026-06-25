@@ -85,6 +85,10 @@ impl ResourceStatus {
         }
     }
 
+    pub fn allows_version_replace_on_publish(self) -> bool {
+        matches!(self, Self::Draft | Self::PendingReview | Self::Rejected)
+    }
+
     pub fn parse(value: &str) -> Result<Self, ResourceError> {
         match value {
             "draft" => Ok(Self::Draft),

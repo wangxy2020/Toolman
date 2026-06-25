@@ -54,6 +54,11 @@ export const MCP_SERVERS = [
     name: 'DOCX MCP Server',
     description: 'Word 文档读写、批注、修订与排版（npx）',
   },
+  {
+    id: 'excel-mcp-server',
+    name: 'Toolman Excel MCP',
+    description: 'Excel 无损审核、单元格修改与高亮批注（内置）',
+  },
   { id: 'dify', name: 'Dify Knowledge', description: '检索 Dify 知识库' },
   { id: 'hub', name: 'Hub', description: '聚合所有 MCP 工具' },
   { id: 'local-db', name: 'Local-db', description: '访问本地 PostgreSQL 数据库' },

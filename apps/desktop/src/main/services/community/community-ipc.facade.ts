@@ -53,6 +53,7 @@ import {
   CommunityBoardMessageLikeInputSchema,
   CommunityBoardMessageListInputSchema,
   CommunityBoardMessageListOutputSchema,
+  CommunityBoardMessagePatchInputSchema,
   CommunityBoardMessageSchema,
   CommunityNewsListInputSchema,
   CommunityNewsListOutputSchema,
@@ -822,6 +823,15 @@ export async function deleteBoardMessage(input: unknown) {
   const client = requireClient()
   await client.delete<unknown>(`/api/v1/board/messages/${parsed.messageId}`)
   return CommunityBoardMessageDeleteOutputSchema.parse({ deleted: true })
+}
+
+export async function patchBoardMessage(input: unknown) {
+  const parsed = CommunityBoardMessagePatchInputSchema.parse(input)
+  const client = requireClient()
+  const data = await client.patch<unknown>(`/api/v1/board/messages/${parsed.messageId}`, {
+    body: parsed.body,
+  })
+  return CommunityBoardMessageSchema.parse(fromApiJson(data))
 }
 
 export async function listTasks(input: unknown) {

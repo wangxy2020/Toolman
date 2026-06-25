@@ -93,6 +93,7 @@ impl EventStore {
         };
 
         self.append_wal_record(&record)?;
+        self.write_cached_last_seq(&record.workspace_id, record.seq)?;
         Ok(record)
     }
 
@@ -134,7 +135,50 @@ impl EventStore {
             .join("events.wal.jsonl")
     }
 
+    fn last_seq_path(&self, workspace_id: &str) -> PathBuf {
+        self.data_dir
+            .join("p2p")
+            .join("workspaces")
+            .join(workspace_id)
+            .join("events.wal.last_seq")
+    }
+
+    fn read_cached_last_seq(&self, workspace_id: &str) -> Option<u64> {
+        let path = self.last_seq_path(workspace_id);
+        if !path.exists() {
+            return None;
+        }
+        let raw = fs::read_to_string(&path).ok()?;
+        raw.trim().parse::<u64>().ok()
+    }
+
+    fn write_cached_last_seq(&self, workspace_id: &str, seq: u64) -> Result<(), String> {
+        let path = self.last_seq_path(workspace_id);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        fs::write(path, seq.to_string()).map_err(|error| error.to_string())
+    }
+
     fn read_last_record(&self, workspace_id: &str) -> Result<Option<WalEventRecord>, String> {
+        if let Some(seq) = self.read_cached_last_seq(workspace_id) {
+            return Ok(Some(WalEventRecord {
+                event_id: String::new(),
+                workspace_id: workspace_id.to_string(),
+                seq,
+                resource_type: String::new(),
+                resource_id: String::new(),
+                operator_id: String::new(),
+                event_type: String::new(),
+                payload_json: String::new(),
+                payload_hash: String::new(),
+                prev_event_hash: None,
+                event_hash: String::new(),
+                timestamp: 0,
+                source_device_id: String::new(),
+            }));
+        }
+
         let path = self.wal_path(workspace_id);
         if !path.exists() {
             return Ok(None);

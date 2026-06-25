@@ -5,7 +5,9 @@ import {
   buildStoredUserContent,
   userBlocksHaveUnresolvedAttachments,
   DOCX_MCP_SERVER_ID,
+  EXCEL_MCP_SERVER_ID,
   isDocxMcpSourceFileBlock,
+  isExcelMcpSourceFileBlock,
   shouldEnableToolsWithAttachments,
   ContentBlockSchema,
   MessageAbortInputSchema,
@@ -67,11 +69,28 @@ import {
   type DocxWorkingCopy,
 } from './docx-mcp-task.service'
 import {
+  assertExcelMcpReady,
+  bootstrapExcelMcpRead,
+  buildExcelMcpApprovalScopeKey,
+  buildExcelMcpBatchApprovalArgs,
+  EXCEL_MCP_BATCH_TOOL_NAME,
+  ExcelMcpNotReadyError,
+  filterExcelMcpToolDefinitions,
+  prepareExcelWorkingCopies,
+  type ExcelWorkingCopy,
+} from './excel-mcp-task.service'
+import {
   buildDocxFinalSummaryPrompt,
   buildDocxReviewSummaryBlock,
   formatDocxReviewReport,
   runDocxStructuredReviewPipeline,
 } from './docx-review.service'
+import {
+  buildExcelFinalSummaryPrompt,
+  buildExcelReviewSummaryBlock,
+  formatExcelReviewReport,
+  runExcelStructuredReviewPipeline,
+} from './excel-review.service'
 import { getProviderConfig, parseModelId } from './provider.service'
 import { broadcastStreamEvent } from './stream-broadcast'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
@@ -111,7 +130,7 @@ function assertAttachmentContentResolved(
   if (!userBlocksHaveUnresolvedAttachments(blocks, { mcpServerIds })) return
 
   for (const block of blocks) {
-    if (block.type === 'file' && block.delivery === 'docx_tool') continue
+    if (block.type === 'file' && (block.delivery === 'docx_tool' || block.delivery === 'excel_tool')) continue
     if (block.type === 'file' && !block.content?.trim() && !(block.visionPages && block.visionPages.length > 0)) {
       throw new Error(`附件「${block.name}」未能准备就绪，请重新发送`)
     }
@@ -312,6 +331,7 @@ async function buildRuntimeSystemHints(options: {
     kbScoreThreshold?: number
   }
   docxWorkingCopies?: DocxWorkingCopy[]
+  excelWorkingCopies?: ExcelWorkingCopy[]
   modelId?: string
 }): Promise<{ hints: string[]; kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> }> {
   const hints: string[] = []
@@ -332,6 +352,16 @@ async function buildRuntimeSystemHints(options: {
     options.enableTools &&
     options.mcpServerIds.includes(DOCX_MCP_SERVER_ID) &&
     docxBlocks.length > 0
+
+  const excelBlocks =
+    options.userContentBlocks?.filter(
+      (block): block is Extract<ContentBlock, { type: 'file' }> =>
+        block.type === 'file' && isExcelMcpSourceFileBlock(block),
+    ) ?? []
+  const excelMcpEnabled =
+    options.enableTools &&
+    options.mcpServerIds.includes(EXCEL_MCP_SERVER_ID) &&
+    excelBlocks.length > 0
 
   if (docxMcpEnabled) {
     const workdir = resolveWorkingDirectory(options.runtime.toolContext.workingDirectory)
@@ -363,12 +393,42 @@ async function buildRuntimeSystemHints(options: {
     )
   }
 
+  if (excelMcpEnabled) {
+    const workdir = resolveWorkingDirectory(options.runtime.toolContext.workingDirectory)
+    const sourcePaths = excelBlocks
+      .map((block) => `- 源文件 ${block.name}: ${resolveAttachmentReadPath(block)}`)
+      .join('\n')
+    const workingPaths =
+      options.excelWorkingCopies
+        ?.map((copy) => `- 修订版 ${copy.fileName}: ${copy.workingPath}`)
+        .join('\n') ?? ''
+    hints.push(
+      [
+        '## Excel 表格（Excel MCP · 结构化审查流水线）',
+        '用户上传了 Excel 并要求审查、修订并生成新文件。应用将按以下阶段自动执行：',
+        '1. **准备修订版**：复制为工作目录中的 `修订版_*.xlsx` 副本',
+        '2. **读取**：应用调用 read_excel / review_excel 读取修订版',
+        '3. **审查**：内置审查 prompt 生成结构化 issue JSON（含 sheet、cell、modify/highlight）',
+        '4. **应用**：应用调用 modify_excel_cells / highlight_excel_cells 写入修订版',
+        '5. **总结**：向你输出审查摘要；修订版下载链接由应用自动附上',
+        '**禁止**模拟工具执行、禁止手写假下载链接、禁止编造未实际修改的内容。',
+        sourcePaths,
+        workingPaths ? `修订版文件：\n${workingPaths}` : '',
+        `工作文件路径：${workdir}`,
+        '你无需再自行调用 Excel 工具。',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
+
   if (
     options.userContentBlocks?.some(
       (block) =>
         block.type === 'file' &&
         block.content?.trim() &&
-        !(docxMcpEnabled && isDocxMcpSourceFileBlock(block)),
+        !(docxMcpEnabled && isDocxMcpSourceFileBlock(block)) &&
+        !(excelMcpEnabled && isExcelMcpSourceFileBlock(block)),
     )
   ) {
     hints.push(
@@ -986,6 +1046,7 @@ async function runGeneration(opts: {
   const controller = new AbortController()
   abortControllers.set(assistantMessageId, controller)
   const docxApprovalScopeKey = buildDocxMcpApprovalScopeKey(assistantMessageId)
+  const excelApprovalScopeKey = buildExcelMcpApprovalScopeKey(assistantMessageId)
   const sessionApprovalScopeKey = buildSessionToolApprovalScopeKey(sessionId)
 
   const startedAt = Date.now()
@@ -1164,6 +1225,15 @@ async function runGeneration(opts: {
       mcpServerIds.includes(DOCX_MCP_SERVER_ID) &&
       docxBlocks.length > 0
 
+    const excelBlocks = generationBlocks.filter(
+      (block): block is Extract<ContentBlock, { type: 'file' }> =>
+        block.type === 'file' && isExcelMcpSourceFileBlock(block),
+    )
+    const excelTaskActive =
+      enableTools &&
+      mcpServerIds.includes(EXCEL_MCP_SERVER_ID) &&
+      excelBlocks.length > 0
+
     let docxWorkingCopies: DocxWorkingCopy[] | undefined
     if (docxTaskActive) {
       appendStatus('正在连接 DOCX MCP Server…\n')
@@ -1180,6 +1250,22 @@ async function runGeneration(opts: {
       appendStatus('修订版文档已就绪…\n')
     }
 
+    let excelWorkingCopies: ExcelWorkingCopy[] | undefined
+    if (excelTaskActive) {
+      appendStatus('正在连接 Excel MCP Server…\n')
+      await assertExcelMcpReady()
+      const workdir = resolveWorkingDirectory(runtime.toolContext.workingDirectory)
+      excelWorkingCopies = await prepareExcelWorkingCopies({
+        workdir,
+        sourcePaths: excelBlocks.map((block) => ({
+          sourcePath: resolveAttachmentReadPath(block),
+          fileName: block.name,
+        })),
+        onStatus: (message) => appendStatus(`${message}\n`),
+      })
+      appendStatus('修订版 Excel 已就绪…\n')
+    }
+
     const { hints: runtimeHints, kbResults } = await withAbortSignal(
       buildRuntimeSystemHints({
         assistant,
@@ -1190,6 +1276,7 @@ async function runGeneration(opts: {
         mcpServerIds,
         sendOptions,
         docxWorkingCopies,
+        excelWorkingCopies,
         modelId,
       }),
       controller.signal,
@@ -1248,14 +1335,26 @@ async function runGeneration(opts: {
         throw new DocxMcpNotReadyError('DOCX MCP Server 已连接，但未加载 Word 编辑工具')
       }
       tools = docxTools
+    } else if (excelTaskActive) {
+      const excelTools = filterExcelMcpToolDefinitions(tools)
+      if (excelTools.length === 0) {
+        throw new ExcelMcpNotReadyError('Excel MCP Server 已连接，但未加载 Excel 编辑工具')
+      }
+      tools = excelTools
     }
 
     if (docxTaskActive && (!enableTools || tools.length === 0)) {
       throw new DocxMcpNotReadyError('Word 文档任务需要 DOCX MCP 工具，但当前未启用任何工具')
     }
+    if (excelTaskActive && (!enableTools || tools.length === 0)) {
+      throw new ExcelMcpNotReadyError('Excel 表格任务需要 Excel MCP 工具，但当前未启用任何工具')
+    }
 
     const preferGemmaOllamaStreamOnly =
-      providerConfig.type === 'ollama' && isGemmaThinkingOllamaModelId(model) && !docxTaskActive
+      providerConfig.type === 'ollama' &&
+      isGemmaThinkingOllamaModelId(model) &&
+      !docxTaskActive &&
+      !excelTaskActive
 
     if (!enableTools || tools.length === 0 || preferGemmaOllamaStreamOnly) {
       buffers.clearThinking()
@@ -1328,6 +1427,80 @@ async function runGeneration(opts: {
         chatMessages.push({
           role: 'user',
           content: buildDocxFinalSummaryPrompt(reviewResults),
+        })
+
+        buffers.clearThinking()
+        persistBlocks(true)
+        await streamPlainCompletion({
+          sessionId,
+          assistantMessageId,
+          modelId,
+          providerConfig,
+          model,
+          chatMessages,
+          temperature: runtime.temperature,
+          maxTokens: runtime.maxTokens,
+          signal: controller.signal,
+          onText: appendText,
+          onThinking: appendThinking,
+          onUsage: (value) => {
+            usage = value
+          },
+        })
+
+        buffers.setLocalFileLinks(reviewResults.map((result) => result.workingPath))
+        persistBlocks(true)
+      } else if (excelTaskActive && excelWorkingCopies?.length) {
+        appendStatus('正在读取 Excel 表格…\n')
+        await bootstrapExcelMcpRead({
+          chatMessages,
+          tools,
+          workingCopies: excelWorkingCopies,
+          toolContext: runtime.toolContext,
+          emitToolUpdate,
+        })
+
+        if (effectivePermissionMode === 'normal') {
+          appendStatus('等待 Excel 编辑授权…\n')
+          const batchApproval = await requestToolApproval({
+            toolName: EXCEL_MCP_BATCH_TOOL_NAME,
+            arguments: buildExcelMcpBatchApprovalArgs(excelWorkingCopies),
+          })
+          if (!batchApproval.approved) {
+            throw new Error(
+              batchApproval.timedOut
+                ? 'Excel 编辑授权超时，请在弹出的授权窗口中点击「允许本次全部」'
+                : '已取消 Excel 编辑授权',
+            )
+          }
+          grantToolApprovalScope(excelApprovalScopeKey)
+        }
+
+        appendStatus('正在执行 Excel 结构化审查流水线…\n')
+        const reviewResults = await runExcelStructuredReviewPipeline({
+          chatMessages,
+          tools,
+          workingCopies: excelWorkingCopies,
+          userRequest: generationText,
+          providerConfig,
+          model,
+          toolContext: runtime.toolContext,
+          temperature: runtime.temperature,
+          maxTokens: runtime.maxTokens,
+          signal: controller.signal,
+          onStatus: appendStatus,
+          emitToolUpdate,
+        })
+
+        for (const result of reviewResults) {
+          appendText(formatExcelReviewReport(result))
+        }
+        buffers.setDocxReviewSummaries(reviewResults.map(buildExcelReviewSummaryBlock))
+        persistBlocks(true)
+
+        chatMessages.push({
+          role: 'user',
+          content: buildExcelFinalSummaryPrompt(reviewResults),
         })
 
         buffers.clearThinking()
@@ -1619,6 +1792,7 @@ async function runGeneration(opts: {
     })
   } finally {
     clearToolApprovalScope(docxApprovalScopeKey)
+    clearToolApprovalScope(excelApprovalScopeKey)
     abortControllers.delete(assistantMessageId)
   }
 }

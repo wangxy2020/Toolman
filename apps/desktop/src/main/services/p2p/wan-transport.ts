@@ -118,6 +118,7 @@ export function countWanSdpCandidates(sdp: string): number {
 
 function candidatePriority(line: string): number {
   const type = line.trim().split(/\s+/)[7] ?? ''
+  if (type === 'relay') return -1
   if (type === 'srflx') return 0
   if (type === 'host') return 1
   if (type === 'prflx') return 2
@@ -130,7 +131,10 @@ function trimSdpCandidates(sdp: string, maxCandidates: number): string {
     .map((line) => line.trim())
     .filter((line) => line.startsWith('a=candidate:'))
     .sort((a, b) => candidatePriority(a) - candidatePriority(b))
-    .filter((line) => candidatePriority(line) < 9)
+    .filter((line) => {
+      const type = line.trim().split(/\s+/)[7] ?? ''
+      return type === 'relay' || candidatePriority(line) < 9
+    })
     .slice(0, Math.max(0, maxCandidates))
   const keepCandidates = new Set(candidateLines)
 

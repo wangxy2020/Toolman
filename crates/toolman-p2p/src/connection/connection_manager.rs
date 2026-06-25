@@ -108,6 +108,11 @@ impl ConnectionManager {
                     .await;
                 drop(guard);
                 session.lock().await.mark_connected().await;
+                session
+                    .lock()
+                    .await
+                    .install_connection_state_monitor()
+                    .await;
                 Self::clear_local_signal()?;
                 Ok(ConnectionState::Connected)
             }
@@ -140,6 +145,10 @@ impl ConnectionManager {
             results.push(session.info_snapshot().await);
         }
         results
+    }
+
+    pub fn list_peer_ids(&self) -> Vec<String> {
+        self.sessions.keys().cloned().collect()
     }
 
     pub async fn rotate_workspace_key(
@@ -383,6 +392,11 @@ impl ConnectionManager {
             .set_connection_mode(ConnectionMode::Wan)
             .await;
         session.lock().await.mark_connected().await;
+        session
+            .lock()
+            .await
+            .install_connection_state_monitor()
+            .await;
         Self::clear_local_signal()?;
         Ok((ConnectionState::Connected, answer_sdp))
     }
@@ -428,6 +442,11 @@ impl ConnectionManager {
             .set_connection_mode(ConnectionMode::Wan)
             .await;
         session.lock().await.mark_connected().await;
+        session
+            .lock()
+            .await
+            .install_connection_state_monitor()
+            .await;
 
         if joiner_device_id != "unknown-joiner" {
             self.sessions.insert(

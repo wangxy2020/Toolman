@@ -7,6 +7,21 @@ export const LORO_NOTE_TEXT_KEY = 'content'
 
 const docCache = new Map<string, LoroDoc>()
 const versionCache = new Map<string, VersionVector>()
+const MAX_LORO_DOC_CACHE = 32
+
+function touchLoroDocCache(key: string, doc: LoroDoc): LoroDoc {
+  if (docCache.has(key)) {
+    docCache.delete(key)
+  }
+  docCache.set(key, doc)
+  while (docCache.size > MAX_LORO_DOC_CACHE) {
+    const oldest = docCache.keys().next().value
+    if (!oldest) break
+    docCache.delete(oldest)
+    versionCache.delete(oldest)
+  }
+  return doc
+}
 
 function docKey(workspaceId: string, noteId: string): string {
   return `${workspaceId}:${noteId}`
@@ -60,7 +75,7 @@ export function importLoroOplogBase64(doc: LoroDoc, base64: string): void {
 export function getLoroDoc(workspaceId: string, noteId: string): LoroDoc {
   const key = docKey(workspaceId, noteId)
   const cached = docCache.get(key)
-  if (cached) return cached
+  if (cached) return touchLoroDocCache(key, cached)
 
   const doc = new LoroDoc()
   const path = loroSnapshotPath(workspaceId, noteId)
@@ -70,16 +85,15 @@ export function getLoroDoc(workspaceId: string, noteId: string): LoroDoc {
 
   docCache.set(key, doc)
   versionCache.set(key, doc.version())
-  return doc
+  return touchLoroDocCache(key, doc)
 }
 
 export function initLoroDocFromText(workspaceId: string, noteId: string, text: string): LoroDoc {
   const doc = createLoroDocFromText(text)
   const key = docKey(workspaceId, noteId)
-  docCache.set(key, doc)
   versionCache.set(key, doc.version())
   persistLoroDoc(workspaceId, noteId, doc)
-  return doc
+  return touchLoroDocCache(key, doc)
 }
 
 export function exportPendingLoroOplog(

@@ -2,6 +2,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::delete;
 use axum::routing::get;
+use axum::routing::patch;
 use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -9,7 +10,9 @@ use serde::Deserialize;
 use crate::api::auth::{load_optional_viewer, AuthUser};
 use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
-use crate::services::board_service::{BoardMessageItem, BoardService, CreateBoardMessageRequest};
+use crate::services::board_service::{
+    BoardMessageItem, BoardService, CreateBoardMessageRequest, UpdateBoardMessageRequest,
+};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -26,10 +29,15 @@ pub struct CreateBoardMessageBody {
     pub parent_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateBoardMessageBody {
+    pub body: String,
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/board/messages", get(list_messages).post(create_message))
-        .route("/board/messages/{id}", delete(delete_message))
+        .route("/board/messages/{id}", patch(update_message).delete(delete_message))
         .route("/board/messages/{id}/like", post(like_message))
         .route("/board/messages/{id}/dislike", post(dislike_message))
         .route("/board/messages/{id}/favorite", post(favorite_message))
@@ -108,6 +116,25 @@ async fn favorite_message(
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<BoardMessageItem>>, ApiError> {
     let message = service(&state).favorite_message(&user, &id).await?;
+    Ok(Json(ApiResponse::ok(message)))
+}
+
+async fn update_message(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateBoardMessageBody>,
+) -> Result<Json<ApiResponse<BoardMessageItem>>, ApiError> {
+    let message = service(&state)
+        .update_message(
+            &user,
+            &id,
+            UpdateBoardMessageRequest {
+                body: body.body,
+            },
+        )
+        .await?;
+
     Ok(Json(ApiResponse::ok(message)))
 }
 

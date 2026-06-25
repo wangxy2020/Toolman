@@ -9,6 +9,12 @@ export function LocalFileLinksBlock({ paths }: Props) {
   const uniquePaths = [...new Set(paths.map((path) => path.trim()).filter(Boolean))]
   if (uniquePaths.length === 0) return null
 
+  const openLabel = uniquePaths.every((path) => /\.xlsx?$/i.test(path))
+    ? '用 Excel 打开'
+    : uniquePaths.every((path) => /\.docx?$/i.test(path))
+      ? '用 Word 打开'
+      : '打开文件'
+
   return (
     <section className="tm-local-file-links">
       <div className="tm-local-file-links-section">
@@ -21,7 +27,7 @@ export function LocalFileLinksBlock({ paths }: Props) {
       </div>
 
       <div className="tm-local-file-links-section">
-        <h3 className="tm-local-file-links-title">用 Word 打开</h3>
+        <h3 className="tm-local-file-links-title">{openLabel}</h3>
         <div className="tm-local-file-links-items">
           {uniquePaths.map((path) => (
             <LocalFilePathLink key={`open-${path}`} path={path} action="open" />

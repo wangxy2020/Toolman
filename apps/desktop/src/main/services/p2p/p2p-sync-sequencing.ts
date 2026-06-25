@@ -1,4 +1,4 @@
-import { P2pWorkspaceRepository } from '@toolman/db'
+import { P2pEventRepository, P2pWorkspaceRepository } from '@toolman/db'
 import type { P2pConnectionInfo, P2pSequencingMode } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
@@ -96,4 +96,27 @@ export function isSeqConflictError(error: unknown): boolean {
 
 export function resetLamportClockForTests(workspaceId: string): void {
   lamportClocks.delete(workspaceId)
+}
+
+export function rehydrateLamportClocksFromDatabase(): void {
+  const workspaceRepo = getWorkspaceRepo()
+  const eventRepo = new P2pEventRepository(getDatabase())
+  for (const workspace of workspaceRepo.listActive()) {
+    const rows = eventRepo.list({
+      workspaceId: workspace.id,
+      limit: 500,
+      order: 'desc',
+    })
+    for (const row of rows) {
+      try {
+        const payload = JSON.parse(row.payloadJson) as Record<string, unknown>
+        const lamport = extractLamportFromPayload(payload)
+        if (lamport !== undefined) {
+          observeRemoteLamport(workspace.id, lamport)
+        }
+      } catch {
+        // ignore malformed payloads
+      }
+    }
+  }
 }

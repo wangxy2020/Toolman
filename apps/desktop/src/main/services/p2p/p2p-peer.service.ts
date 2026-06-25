@@ -37,7 +37,7 @@ function resolveDiscoveredNode(deviceId: string): DiscoveredNode | null {
   return listP2pDiscoveredNodes(false).find((node) => node.deviceId === deviceId) ?? null
 }
 
-function resolvePeerPublicKey(deviceId: string, fingerprint: string): string {
+export function resolvePeerPublicKey(deviceId: string, fingerprint: string): string {
   const repo = createP2pDeviceIdentityRepository(getDatabase())
   const row = repo.getByDeviceId(deviceId)
   return row?.publicKey ?? fingerprint

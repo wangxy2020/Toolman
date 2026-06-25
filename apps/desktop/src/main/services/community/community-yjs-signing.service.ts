@@ -4,7 +4,10 @@ import {
   verifyDidMatchesPublicKey,
   type CommunityYjsSignedWireMessage,
 } from '@toolman/shared'
+import { createHash } from 'node:crypto'
+
 import { recordDiagnosticEvent } from '../diagnostics-log'
+import { checkReplayGuard } from '../p2p/p2p-replay-guard.service'
 import { getP2pDeviceInfo } from '../p2p/p2p-device-identity.service'
 import { signDeviceMessage, verifyDeviceMessage } from '../p2p/p2p-crypto.service'
 import { isDidBlocked } from './community-federated-trust.service'
@@ -95,6 +98,17 @@ export function verifyCommunityYjsSignedWireMessage(
       `signature verify failed for ${message.signerDid}`,
     )
     return { ok: false, reason: 'invalid signature' }
+  }
+
+  const replay = checkReplayGuard({
+    scope: `community-yjs:${message.domain}`,
+    signerId: message.signerDid,
+    at: message.at,
+    payloadHash: createHash('sha256').update(message.update).digest('hex'),
+  })
+  if (!replay.ok) {
+    verifyFailures += 1
+    return { ok: false, reason: replay.reason }
   }
 
   acceptedSignedUpdates += 1

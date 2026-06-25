@@ -1,5 +1,7 @@
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { app } from 'electron'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
 import { hashFileBytes } from '@toolman/knowledge'
 import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
 import {
@@ -26,6 +28,45 @@ import {
   parseFileChannelMessage,
   type FileChannelMessage,
 } from './p2p-file-protocol'
+import {
+  deleteBlobReceiveSession,
+  saveBlobReceiveSession,
+} from './p2p-blob-session-store'
+
+function blobChunkPartPath(contentHash: string, index: number): string {
+  const dir = join(app.getPath('userData'), 'p2p', 'blob-parts', contentHash)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  return join(dir, `${index}.part`)
+}
+
+function writeBlobChunkPart(contentHash: string, index: number, data: Buffer): void {
+  writeFileSync(blobChunkPartPath(contentHash, index), data)
+}
+
+function readBlobChunkPart(contentHash: string, index: number): Buffer | null {
+  const path = blobChunkPartPath(contentHash, index)
+  if (!existsSync(path)) return null
+  return readFileSync(path)
+}
+
+function clearBlobChunkParts(contentHash: string): void {
+  const dir = join(app.getPath('userData'), 'p2p', 'blob-parts', contentHash)
+  if (!existsSync(dir)) return
+  for (let index = 0; index < 10_000; index += 1) {
+    const path = join(dir, `${index}.part`)
+    if (!existsSync(path)) {
+      if (index > 0) break
+      continue
+    }
+    try {
+      unlinkSync(path)
+    } catch {
+      // ignore
+    }
+  }
+}
 
 interface BlobReceiveSession {
   workspaceId: string
@@ -177,6 +218,17 @@ function startReceiveSession(input: {
     transferId: input.transferId,
   }
   receiveSessions.set(input.transferId, session)
+  saveBlobReceiveSession({
+    transferId: input.transferId,
+    workspaceId: input.workspaceId,
+    contentHash: input.contentHash,
+    mimeType: input.mimeType,
+    sizeBytes: input.sizeBytes,
+    totalChunks: input.totalChunks,
+    peerDeviceId: input.peerDeviceId,
+    receivedIndices: [],
+    updatedAt: Date.now(),
+  })
   return session
 }
 
@@ -196,9 +248,22 @@ function completeReceiveSession(sessionKey: string): void {
 
 function finalizeReceiveSession(session: BlobReceiveSession): boolean {
   receiveSessions.delete(session.transferId)
+  deleteBlobReceiveSession(session.transferId)
 
   if (blobExists(session.contentHash)) {
+    clearBlobChunkParts(session.contentHash)
     return true
+  }
+
+  if (session.chunks.size !== session.totalChunks) {
+    for (let index = 0; index < session.totalChunks; index += 1) {
+      if (!session.chunks.has(index)) {
+        const part = readBlobChunkPart(session.contentHash, index)
+        if (part) {
+          session.chunks.set(index, part)
+        }
+      }
+    }
   }
 
   if (session.chunks.size !== session.totalChunks) {
@@ -226,6 +291,7 @@ function finalizeReceiveSession(session: BlobReceiveSession): boolean {
   }
 
   writeBlobFromBuffer(data, session.mimeType ?? 'application/octet-stream')
+  clearBlobChunkParts(session.contentHash)
   broadcastP2pSyncCompleted({
     workspaceId: session.workspaceId,
     eventsApplied: 0,
@@ -306,7 +372,20 @@ function handleIncomingChunk(
     return
   }
 
-  session.chunks.set(index, Buffer.from(dataB64, 'base64'))
+  const chunk = Buffer.from(dataB64, 'base64')
+  session.chunks.set(index, chunk)
+  writeBlobChunkPart(contentHash, index, chunk)
+  saveBlobReceiveSession({
+    transferId: session.transferId,
+    workspaceId: session.workspaceId,
+    contentHash: session.contentHash,
+    mimeType: session.mimeType,
+    sizeBytes: session.sizeBytes,
+    totalChunks: session.totalChunks,
+    peerDeviceId: session.peerDeviceId,
+    receivedIndices: [...session.chunks.keys()].sort((a, b) => a - b),
+    updatedAt: Date.now(),
+  })
   broadcastFileProgress(session.workspaceId, session.chunks.size, totalChunks)
 }
 

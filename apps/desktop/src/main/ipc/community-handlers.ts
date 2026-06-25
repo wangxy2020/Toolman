@@ -88,6 +88,7 @@ import {
   listTaskReviews,
   listTasks,
   patchResource,
+  patchBoardMessage,
   patchReview,
   patchTask,
   exportCommunityKnowledgeBundle,
@@ -251,6 +252,11 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     const parsed = CommunityBoardMessageDeleteInputSchema.parse(input)
     removeCommunityBoardMessageFromYjs(parsed.messageId)
     return result
+  }),
+  [IpcChannel.CommunityBoardMessagePatch]: communityHandler(async (input) => {
+    const message = await patchBoardMessage(input)
+    syncCommunityBoardMessageToYjs(message)
+    return message
   }),
 
   [IpcChannel.CommunityTaskList]: communityHandler((input) => listTasks(input)),

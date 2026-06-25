@@ -302,6 +302,7 @@ export enum IpcChannel {
   CommunityBoardMessageDislike = 'community:board:message:dislike',
   CommunityBoardMessageFavorite = 'community:board:message:favorite',
   CommunityBoardMessageDelete = 'community:board:message:delete',
+  CommunityBoardMessagePatch = 'community:board:message:patch',
 
   CommunityTaskList = 'community:task:list',
   CommunityTaskGet = 'community:task:get',

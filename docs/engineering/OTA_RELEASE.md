@@ -20,7 +20,8 @@ Base URL（示例）：`https://releases.toolman.app`
     win32/
       x64/
         latest.yml
-        Toolman-0.2.0-x64.exe
+        Toolman-0.2.0-x64-Setup.exe      # OTA / 安装包
+        Toolman-0.2.0-x64-Portable.exe   # 免安装（GitHub Release 分发）
   stable/
     ...
 ```
@@ -44,7 +45,9 @@ bash scripts/build-desktop-release.sh
 
 产物：
 
-- `apps/desktop/dist/Toolman-{version}-{arch}.dmg|exe`
+- `apps/desktop/dist/Toolman-{version}-{arch}.dmg`
+- `apps/desktop/dist/Toolman-{version}-{arch}-Portable.exe`（Windows 免安装）
+- `apps/desktop/dist/Toolman-{version}-{arch}-Setup.exe`（Windows 安装包）
 - `apps/desktop/dist/latest-mac.yml` 或 `latest.yml`
 - `apps/desktop/dist/staging-manifest.json`
 
@@ -88,7 +91,9 @@ Workflow：`.github/workflows/release-desktop.yml`
 | 触发 | 行为 |
 |------|------|
 | `workflow_dispatch` | 选择 channel、是否 publish、release notes |
-| `push tag v*` | 构建 stable 渠道 artifact（默认不上传，除非配置 secrets + manual 扩展） |
+| `push tag v*` | 构建 stable 渠道 + **自动创建 GitHub Release**（上传 dmg / Portable / Setup） |
+
+GitHub 发布详见 [GITHUB_RELEASE.md](./GITHUB_RELEASE.md)。
 
 所需 Secrets（publish 时）：
 

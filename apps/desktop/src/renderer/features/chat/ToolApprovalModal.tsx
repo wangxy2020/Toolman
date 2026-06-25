@@ -4,8 +4,9 @@ import { IpcChannel, type ToolApprovalRequest } from '@toolman/shared'
 import { resolveToolDisplayMeta } from './tool-display-meta'
 
 const DOCX_MCP_BATCH_TOOL_NAME = '__docx_mcp_batch__'
+const EXCEL_MCP_BATCH_TOOL_NAME = '__excel_mcp_batch__'
 
-function parseDocxBatchApproval(argumentsJson: string): {
+function parseBatchApproval(argumentsJson: string): {
   summary?: string
   files: string[]
 } {
@@ -25,9 +26,11 @@ export function ToolApprovalModal() {
   const [responding, setResponding] = useState(false)
   const request = queue[0] ?? null
   const isDocxBatch = request?.toolName === DOCX_MCP_BATCH_TOOL_NAME
-  const docxBatch = useMemo(
-    () => (isDocxBatch && request ? parseDocxBatchApproval(request.arguments) : null),
-    [isDocxBatch, request],
+  const isExcelBatch = request?.toolName === EXCEL_MCP_BATCH_TOOL_NAME
+  const isBatchApproval = isDocxBatch || isExcelBatch
+  const batchApproval = useMemo(
+    () => (isBatchApproval && request ? parseBatchApproval(request.arguments) : null),
+    [isBatchApproval, request],
   )
 
   useEffect(() => {
@@ -57,8 +60,8 @@ export function ToolApprovalModal() {
   )
 
   const meta = useMemo(
-    () => (request && !isDocxBatch ? resolveToolDisplayMeta(request.toolName) : null),
-    [request, isDocxBatch],
+    () => (request && !isBatchApproval ? resolveToolDisplayMeta(request.toolName) : null),
+    [request, isBatchApproval],
   )
 
   if (!request) return null
@@ -73,25 +76,30 @@ export function ToolApprovalModal() {
       <div className="tm-modal tm-modal--narrow" onClick={(event) => event.stopPropagation()}>
         <header className="tm-modal-header">
           <h2 className="tm-modal-title">
-            {isDocxBatch ? 'Word 文档编辑授权' : '工具调用授权'}
+            {isDocxBatch
+              ? 'Word 文档编辑授权'
+              : isExcelBatch
+                ? 'Excel 表格编辑授权'
+                : '工具调用授权'}
           </h2>
           {queue.length > 1 ? (
             <span className="tm-tool-approval-queue-hint">待处理 {queue.length} 项</span>
           ) : null}
         </header>
         <div className="tm-modal-body">
-          {isDocxBatch ? (
+          {isBatchApproval ? (
             <>
               <p className="tm-knowledge-detail-hint">
-                本次将依次调用多个 DOCX 编辑工具（批注、替换、段落修改等）。允许后，本次任务内后续
-                DOCX 工具将自动执行，不再逐项询问。
+                {isExcelBatch
+                  ? '本次将调用 modify_excel_cells / highlight_excel_cells 写入修订版。允许后，本次任务内后续 Excel 编辑工具将自动执行，不再逐项询问。'
+                  : '本次将依次调用多个 DOCX 编辑工具（批注、替换、段落修改等）。允许后，本次任务内后续 DOCX 工具将自动执行，不再逐项询问。'}
               </p>
-              {docxBatch?.summary ? (
-                <p className="tm-tool-approval-tool-name">{docxBatch.summary}</p>
+              {batchApproval?.summary ? (
+                <p className="tm-tool-approval-tool-name">{batchApproval.summary}</p>
               ) : null}
-              {docxBatch?.files.length ? (
+              {batchApproval?.files.length ? (
                 <ul className="tm-tool-approval-file-list">
-                  {docxBatch.files.map((file) => (
+                  {batchApproval.files.map((file) => (
                     <li key={file} className="tm-tool-approval-file-item">
                       {file}
                     </li>
@@ -127,7 +135,7 @@ export function ToolApprovalModal() {
             disabled={responding}
             onClick={() => void respond(true)}
           >
-            {isDocxBatch ? '允许本次全部' : '允许'}
+            {isBatchApproval ? '允许本次全部' : '允许'}
           </button>
         </footer>
       </div>

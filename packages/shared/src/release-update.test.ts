@@ -61,6 +61,26 @@ describe('pickPrimaryArtifact', () => {
     ])
     expect(picked?.fileName).toBe('Toolman-0.2.0-arm64.dmg')
   })
+
+  it('prefers Windows Setup exe over Portable for OTA manifest', () => {
+    const picked = pickPrimaryArtifact([
+      {
+        fileName: 'Toolman-0.2.0-x64-Portable.exe',
+        filePath: '/tmp/Toolman-0.2.0-x64-Portable.exe',
+        platform: 'win32',
+        arch: 'x64',
+        publicUrl: 'https://example.com/Toolman-0.2.0-x64-Portable.exe',
+      },
+      {
+        fileName: 'Toolman-0.2.0-x64-Setup.exe',
+        filePath: '/tmp/Toolman-0.2.0-x64-Setup.exe',
+        platform: 'win32',
+        arch: 'x64',
+        publicUrl: 'https://example.com/Toolman-0.2.0-x64-Setup.exe',
+      },
+    ])
+    expect(picked?.fileName).toBe('Toolman-0.2.0-x64-Setup.exe')
+  })
 })
 
 describe('buildReleaseArtifactUrl', () => {

@@ -9,6 +9,7 @@ export const OFFICIAL_MCP_PRESET_IDS = [
   'python',
   'brave-search',
   'docx-mcp-server',
+  'excel-mcp-server',
 ] as const
 
 export type OfficialMcpPresetId = (typeof OFFICIAL_MCP_PRESET_IDS)[number]
@@ -31,6 +32,12 @@ export function matchOfficialMcpPresetId(server: PresetProbe): OfficialMcpPreset
   }
   if (server.command === 'npx' && args.includes('docx-mcp-server')) {
     return 'docx-mcp-server'
+  }
+  if (server.id === 'excel-mcp-server') {
+    return 'excel-mcp-server'
+  }
+  if (server.command === 'node' && args.some((arg) => arg.includes('excelServer.js'))) {
+    return 'excel-mcp-server'
   }
 
   return null

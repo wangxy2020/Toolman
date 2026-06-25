@@ -48,11 +48,14 @@ export const DEFAULT_MCP_SERVER_IDS = [
   'python',
   'brave-search',
   'docx-mcp-server',
+  'excel-mcp-server',
 ] as const
 
 export const LOCAL_DB_MCP_SERVER_ID = 'local-db'
 
 export const DOCX_MCP_SERVER_ID = 'docx-mcp-server'
+
+export const EXCEL_MCP_SERVER_ID = 'excel-mcp-server'
 
 /** 已移除、不应再挂载或注入上下文的技能 ID */
 export const REMOVED_SKILL_IDS = ['office-audit'] as const
@@ -63,11 +66,12 @@ export const REMOVED_MCP_SERVER_IDS = ['toolman-office'] as const
 /** 默认启用的 MCP 服务器（全局配置与新建智能体） */
 export const DEFAULT_ENABLED_MCP_SERVER_IDS = [
   'filesystem',
-  'browser',
+  'fetch',
   'local-db',
   'memory',
   'python',
   'docx-mcp-server',
+  'excel-mcp-server',
 ] as const
 
 const DEFAULT_ENABLED_MCP_SERVER_ID_SET = new Set<string>(DEFAULT_ENABLED_MCP_SERVER_IDS)
@@ -93,6 +97,7 @@ export const MCP_SETTINGS_CATEGORIES = [
       'python',
       'brave-search',
       'docx-mcp-server',
+      'excel-mcp-server',
       'filesystem',
       'browser',
       'github',

@@ -359,6 +359,38 @@ impl CommentRepository {
             .ok_or_else(|| CommentRepositoryError::NotFound(id.to_string()))
     }
 
+    pub async fn update_body(
+        &self,
+        id: &str,
+        body: &str,
+    ) -> Result<CommunityComment, CommentRepositoryError> {
+        if body.trim().is_empty() {
+            return Err(CommentRepositoryError::Validation(SocialError::EmptyCommentBody));
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let result = sqlx::query(
+            r#"
+            UPDATE community_comments
+            SET body = ?1, updated_at = ?2
+            WHERE id = ?3 AND status = 'visible'
+            "#,
+        )
+        .bind(body.trim())
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(CommentRepositoryError::NotFound(id.to_string()));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| CommentRepositoryError::NotFound(id.to_string()))
+    }
+
     pub async fn soft_delete(&self, id: &str) -> Result<bool, CommentRepositoryError> {
         let now = chrono::Utc::now().timestamp_millis();
         let result = sqlx::query(

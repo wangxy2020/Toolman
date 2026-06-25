@@ -35,6 +35,12 @@ import {
   buildGroupChatRelayExcludeDeviceIds,
   shouldRelayGroupChatAfterReceive,
 } from './p2p-group-chat-relay'
+import {
+  signGroupChatWireMessage,
+  verifyGroupChatWireMessage,
+  type SignedGroupChatWireEnvelope,
+} from './p2p-group-chat-signing.service'
+import { checkReplayGuard } from './p2p-replay-guard.service'
 
 export const GROUP_CHAT_CHANNEL = 'group-chat'
 export const P2P_EVENTS_CHANNEL = 'events'
@@ -66,10 +72,10 @@ async function relayMessageToPeers(
     peerDeviceIds.add(item.peerDeviceId)
   }
 
-  const payload = encodeReplicationMessage({
-    type: 'group-chat.message',
-    message,
-  })
+  const signedPayload = Buffer.from(
+    JSON.stringify(signGroupChatWireMessage(message)),
+    'utf8',
+  )
 
   await Promise.all(
     [...peerDeviceIds]
@@ -83,7 +89,7 @@ async function relayMessageToPeers(
         }
         try {
           await ensurePeerReadyForWorkspace(peerDeviceId, message.workspaceId)
-          await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
+          await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, signedPayload)
         } catch (error) {
           const errMessage = error instanceof Error ? error.message : 'relay failed'
           console.warn(
@@ -274,11 +280,45 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       type?: string
       message?: unknown
       workspaceId?: string
+      signerDeviceId?: string
+      signature?: string
     }
     if (parsed.type === 'group-chat.clear' && typeof parsed.workspaceId === 'string') {
       handleIncomingP2pGroupChatClear(peerDeviceId, parsed.workspaceId)
       return
     }
+
+    if (
+      parsed.v === 2 &&
+      parsed.type === 'group-chat.message' &&
+      parsed.message &&
+      parsed.signerDeviceId &&
+      parsed.signature
+    ) {
+      const envelope = parsed as SignedGroupChatWireEnvelope
+      const verified = verifyGroupChatWireMessage(peerDeviceId, envelope)
+      if (!verified.ok) {
+        console.warn(
+          `[p2p] dropped signed group chat from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`,
+        )
+        return
+      }
+      const replay = checkReplayGuard({
+        scope: `group-chat:${envelope.message.workspaceId}`,
+        signerId: peerDeviceId,
+        at: envelope.message.createdAt,
+        payloadHash: envelope.message.id,
+      })
+      if (!replay.ok) {
+        console.warn(
+          `[p2p] dropped replay group chat from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`,
+        )
+        return
+      }
+      handleIncomingP2pGroupChatMessage(peerDeviceId, envelope.message)
+      return
+    }
+
     const wireMessage =
       parsed.type === 'group-chat.message' || parsed.type === 'message' ? parsed.message : null
     if (!wireMessage) {
@@ -367,6 +407,13 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
     member.deviceId === peerDeviceId
   ) {
     getMemberRepo().update({ id: member.id, displayName: message.senderName })
+  }
+
+  if (member && member.id !== message.senderMemberId) {
+    console.warn(
+      `[p2p] dropped group chat ${message.id.slice(0, 8)}: senderMemberId does not match peer member`,
+    )
+    return
   }
 
   if (!member && !connected) {

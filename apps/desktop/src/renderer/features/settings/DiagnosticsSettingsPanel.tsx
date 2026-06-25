@@ -252,6 +252,13 @@ export function DiagnosticsSettingsPanel() {
             <SettingsRow label="ICE / TURN">
               <span className="tm-settings-static">{snapshot.p2p.iceServersSummary}</span>
             </SettingsRow>
+            {!snapshot.p2p.iceServersSummary.includes('TURN') ? (
+              <SettingsRow label="WAN 提示">
+                <span className="tm-settings-static" style={{ color: 'var(--tm-warning)' }}>
+                  未配置 TURN 时，跨网 P2P 在对称 NAT 后可能无法连接。请在 userData/p2p/network.json 或环境变量中配置 TURN。
+                </span>
+              </SettingsRow>
+            ) : null}
             <SettingsRow label="WAN / LAN 连接">
               <span className="tm-settings-static">
                 {snapshot.p2p.wanConnectedPeers} WAN · {snapshot.p2p.lanConnectedPeers} LAN

@@ -49,4 +49,15 @@ describe('mcp-preset-utils official presets', () => {
       }),
     ).toBe('docx-mcp-server')
   })
+
+  it('matches excel-mcp-server bundled preset', () => {
+    expect(
+      matchOfficialMcpPresetId({
+        id: 'excel-mcp-server',
+        type: 'stdio',
+        command: 'node',
+        args: ['/app/resources/mcp-excel/dist/excelServer.js'],
+      }),
+    ).toBe('excel-mcp-server')
+  })
 })

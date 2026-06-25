@@ -288,8 +288,10 @@ impl SkillMarketService {
         let (_, manifest) = validate_skill_contents(&skill_md, &stored.manifest)?;
         self.validate_published_manifest(&resource, &manifest)?;
 
+        let allow_replace = resource.status.allows_version_replace_on_publish();
         let version = VersionRepository::new(self.pool.clone())
-            .create(CreateVersionInput {
+            .create_or_replace(
+                CreateVersionInput {
                 resource_id: input.resource_id.clone(),
                 version: input.version.clone(),
                 changelog: input.changelog,
@@ -297,7 +299,9 @@ impl SkillMarketService {
                 manifest_json: stored.manifest.clone(),
                 resource_size: stored.resource_size,
                 sha256: stored.archive_sha256,
-            })
+            },
+                allow_replace,
+            )
             .await
             .map_err(|error| match error {
                 VersionRepositoryError::Conflict {

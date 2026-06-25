@@ -111,6 +111,65 @@ impl VersionRepository {
         }
     }
 
+    pub async fn create_or_replace(
+        &self,
+        input: CreateVersionInput,
+        allow_replace: bool,
+    ) -> Result<CommunityResourceVersion, VersionRepositoryError> {
+        match self.create(input.clone()).await {
+            Ok(version) => Ok(version),
+            Err(VersionRepositoryError::Conflict {
+                resource_id,
+                version,
+            }) if allow_replace => {
+                let existing = self
+                    .find_by_resource_and_version(&resource_id, &version)
+                    .await?
+                    .ok_or(VersionRepositoryError::Conflict {
+                        resource_id,
+                        version,
+                    })?;
+                self.replace_package(&existing.id, &input).await
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn replace_package(
+        &self,
+        id: &str,
+        input: &CreateVersionInput,
+    ) -> Result<CommunityResourceVersion, VersionRepositoryError> {
+        let manifest_json = serde_json::to_string(&input.manifest_json)?;
+        let result = sqlx::query(
+            r#"
+            UPDATE community_resource_versions
+            SET changelog = ?1,
+                package_path = ?2,
+                manifest_json = ?3,
+                resource_size = ?4,
+                sha256 = ?5
+            WHERE id = ?6
+            "#,
+        )
+        .bind(&input.changelog)
+        .bind(&input.package_path)
+        .bind(&manifest_json)
+        .bind(input.resource_size)
+        .bind(&input.sha256)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(VersionRepositoryError::NotFound(id.to_string()));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| VersionRepositoryError::NotFound(id.to_string()))
+    }
+
     pub async fn find_by_id(&self, id: &str) -> Result<Option<CommunityResourceVersion>, VersionRepositoryError> {
         let query = format!("{VERSION_SELECT} WHERE id = ?1");
         let record = sqlx::query_as::<_, VersionRecord>(&query)

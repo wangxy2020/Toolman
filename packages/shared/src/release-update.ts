@@ -86,7 +86,10 @@ export async function sha256FileHex(filePath: string): Promise<string> {
 export function pickPrimaryArtifact(
   artifacts: ReleaseArtifactDescriptor[],
 ): ReleaseArtifactDescriptor | null {
-  const preference = ['.dmg', '.exe', '.AppImage']
+  const setup = artifacts.find((item) => item.fileName.includes('-Setup.'))
+  if (setup) return setup
+
+  const preference = ['.dmg', '-Portable.exe', '.exe', '.AppImage']
   for (const suffix of preference) {
     const match = artifacts.find((item) => item.fileName.endsWith(suffix))
     if (match) return match

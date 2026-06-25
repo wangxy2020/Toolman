@@ -26,7 +26,8 @@ pub use admin_management_service::{
     AdminManagementError, AdminManagementService, ModeratorUserItem,
 };
 pub use board_service::{
-    BoardMessageItem, BoardService, BoardServiceError, CreateBoardMessageRequest, BOARD_MAIN_ID,
+    BoardMessageItem, BoardService, BoardServiceError, CreateBoardMessageRequest,
+    UpdateBoardMessageRequest, BOARD_MAIN_ID,
 };
 pub use comment_service::{
     CommentCountResult, CommentItem, CommentService, CommentServiceError, CreateCommentRequest,

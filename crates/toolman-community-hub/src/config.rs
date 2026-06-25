@@ -9,6 +9,7 @@ pub const ENV_PORT: &str = "COMMUNITY_HUB_PORT";
 pub const ENV_REQUIRE_REVIEW: &str = "COMMUNITY_HUB_REQUIRE_REVIEW";
 pub const ENV_CONFIG_FILE: &str = "COMMUNITY_HUB_CONFIG_FILE";
 pub const ENV_JWT_SECRET: &str = "COMMUNITY_HUB_JWT_SECRET";
+pub const ENV_ALLOW_HEADER_AUTH: &str = "COMMUNITY_HUB_ALLOW_HEADER_AUTH";
 pub const ENV_RATE_LIMIT_RPM: &str = "COMMUNITY_HUB_RATE_LIMIT_RPM";
 pub const ENV_SEMANTIC_SEARCH: &str = "COMMUNITY_HUB_SEMANTIC_SEARCH";
 pub const ENV_EMBEDDING_URL: &str = "COMMUNITY_HUB_EMBEDDING_URL";
@@ -246,6 +247,13 @@ fn resolve_jwt_secret() -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+pub fn is_header_auth_allowed() -> bool {
+    std::env::var(ENV_ALLOW_HEADER_AUTH)
+        .ok()
+        .map(|value| matches!(value.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }
 
 fn resolve_rate_limit_rpm() -> u64 {

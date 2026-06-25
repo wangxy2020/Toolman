@@ -11,6 +11,10 @@ extraResources:
     to: bin/toolman-community-hub
     filter:
       - '**/*'
+  - from: resources/mcp-excel
+    to: mcp-excel
+    filter:
+      - '**/*'
 mac:
   target:
     - dmg
@@ -18,8 +22,20 @@ mac:
   artifactName: Toolman-${version}-${arch}.${ext}
 win:
   target:
-    - nsis
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
   artifactName: Toolman-${version}-${arch}.${ext}
+portable:
+  artifactName: Toolman-${version}-${arch}-Portable.${ext}
+nsis:
+  artifactName: Toolman-${version}-${arch}-Setup.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
 linux:
   target:
     - AppImage

@@ -9,7 +9,7 @@ import {
   type SupportedFileKind,
 } from '@toolman/knowledge'
 import type { ContentBlock } from '@toolman/shared'
-import { getModelTypeSupport, isOcrVisionModelId, DOCX_MCP_SERVER_ID } from '@toolman/shared'
+import { getModelTypeSupport, isOcrVisionModelId, DOCX_MCP_SERVER_ID, EXCEL_MCP_SERVER_ID } from '@toolman/shared'
 import { parseModelId } from './provider.service'
 import { writeBlobFromBuffer } from './blob.service'
 import {
@@ -56,6 +56,7 @@ const PARSE_TEXT_KINDS = new Set<SupportedFileKind>([
 ])
 
 const DOCX_MCP_SOURCE_KINDS = new Set<SupportedFileKind>(['docx', 'doc', 'wps'])
+const EXCEL_MCP_SOURCE_KINDS = new Set<SupportedFileKind>(['xlsx', 'xls'])
 
 function isLikelyTextFile(name: string): boolean {
   const lower = name.toLowerCase()
@@ -233,6 +234,7 @@ async function prepareFileBlock(
     documentOcrEnabled?: boolean
     ocrChatModel?: boolean
     docxMcpEnabled?: boolean
+    excelMcpEnabled?: boolean
     signal?: AbortSignal
     onStatus?: (message: string) => void
   },
@@ -252,6 +254,11 @@ async function prepareFileBlock(
   if (DOCX_MCP_SOURCE_KINDS.has(kind) && options.docxMcpEnabled) {
     options.onStatus?.(`「${fileName}」将通过 DOCX MCP 工具处理…`)
     return { ...block, content: '', delivery: 'docx_tool' }
+  }
+
+  if (EXCEL_MCP_SOURCE_KINDS.has(kind) && options.excelMcpEnabled) {
+    options.onStatus?.(`「${fileName}」将通过 Excel MCP 工具处理…`)
+    return { ...block, content: '', delivery: 'excel_tool' }
   }
 
   if (isLikelyTextFile(fileName) && kind !== 'pdf') {
@@ -299,6 +306,7 @@ export async function prepareChatAttachmentsForModel(options: {
   const supportsVision = getModelTypeSupport(model).vision
   const ocrChatModel = isOcrVisionModelId(model)
   const docxMcpEnabled = options.mcpServerIds?.includes(DOCX_MCP_SERVER_ID) ?? false
+  const excelMcpEnabled = options.mcpServerIds?.includes(EXCEL_MCP_SERVER_ID) ?? false
   const prepared: ContentBlock[] = []
 
   for (const block of staged) {
@@ -328,6 +336,7 @@ export async function prepareChatAttachmentsForModel(options: {
         documentOcrEnabled: options.documentOcrEnabled,
         ocrChatModel,
         docxMcpEnabled,
+        excelMcpEnabled,
         signal: options.signal,
         onStatus: options.onStatus,
       }),

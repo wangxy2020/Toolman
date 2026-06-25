@@ -353,6 +353,13 @@ export async function deleteCommunityBoardMessage(
   return invokeIpc(IpcChannel.CommunityBoardMessageDelete, { messageId })
 }
 
+export async function patchCommunityBoardMessage(
+  messageId: string,
+  body: string,
+): Promise<CommunityBoardMessage> {
+  return invokeIpc(IpcChannel.CommunityBoardMessagePatch, { messageId, body })
+}
+
 export async function createCommunityModerationReport(
   input: CommunityModerationReportCreateInput,
 ): Promise<CommunityModerationReport> {

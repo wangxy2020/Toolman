@@ -10,6 +10,7 @@
     "build:libp2p": "bash scripts/build-libp2p-native.sh",
     "build:p2p:macos": "bash scripts/build-p2p-macos.sh",
     "build:community-hub": "bash scripts/build-community-hub.sh",
+    "build:excel-mcp-server": "bash scripts/build-excel-mcp-server.sh",
     "p2p:dual-init": "bash scripts/p2p-dual-instance-init.sh",
     "dev:p2p:a": "bash scripts/p2p-dev-user-a.sh",
     "dev:p2p:b": "bash scripts/p2p-dev-user-b.sh",

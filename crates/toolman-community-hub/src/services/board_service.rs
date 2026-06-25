@@ -43,6 +43,11 @@ pub struct CreateBoardMessageRequest {
     pub parent_id: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct UpdateBoardMessageRequest {
+    pub body: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum BoardServiceError {
     #[error("message not found: {0}")]
@@ -288,6 +293,33 @@ impl BoardService {
             .ok_or_else(|| BoardServiceError::NotFound(message_id.to_string()))?;
 
         self.to_message_item(comment, Some(actor)).await
+    }
+
+    pub async fn update_message(
+        &self,
+        actor: &CommunityUser,
+        message_id: &str,
+        input: UpdateBoardMessageRequest,
+    ) -> Result<BoardMessageItem, BoardServiceError> {
+        ensure_active(actor)?;
+
+        let comment = self.require_board_message(message_id).await?;
+
+        if !actor.is_moderator() && actor.id != comment.user_id {
+            return Err(BoardServiceError::Forbidden);
+        }
+
+        if comment.parent_id.is_some() {
+            return Err(BoardServiceError::Validation(
+                "only top-level board messages can be edited".to_string(),
+            ));
+        }
+
+        let updated = CommentRepository::new(self.pool.clone())
+            .update_body(message_id, &input.body)
+            .await?;
+
+        self.to_message_item(updated, Some(actor)).await
     }
 
     pub async fn delete_message(

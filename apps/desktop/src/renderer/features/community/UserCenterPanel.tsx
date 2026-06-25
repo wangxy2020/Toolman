@@ -1,14 +1,15 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { type CommunityResourceItem, type CommunityResourceType, type CommunityTaskItem } from '@toolman/shared'
+import { type CommunityResourceItem, type CommunityResourceType, type CommunityTaskItem, type CommunityBoardMessage } from '@toolman/shared'
 
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { CommunityPanelHeader, CommunityPanelRefreshButton } from './CommunityPanelHeader'
 import { CommunityCommentDropdown } from './CommunityCommentDropdown'
+import { CommunityMessagePublishModal } from './CommunityMessagePublishModal'
 import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
 import { TaskCreateModal } from './TaskCreateModal'
-import { cancelCommunityTask, deleteCommunityResource, deleteCommunityTask } from './community-api.client'
-import { notifyCommunityUserDataChanged } from './community-events'
+import { cancelCommunityTask, deleteCommunityBoardMessage, deleteCommunityResource, deleteCommunityTask } from './community-api.client'
+import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
 import { buildResourceCommentTarget, buildTaskCommentTarget, type CommunityCommentTarget } from './community-comment-utils'
 import { TASK_STATUS_LABELS, TASK_TYPE_LABELS } from './community-task-utils'
 import {
@@ -26,6 +27,7 @@ import {
   useCommunityUserCenter,
   type UserCenterSection,
 } from './useCommunityUserCenter'
+import { isUiMockCommunityId } from './community-ui-mock'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 
@@ -266,6 +268,9 @@ export function UserCenterPanel() {
   const [editTask, setEditTask] = useState<CommunityTaskItem | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<CommunityTaskItem | null>(null)
   const [taskToWithdraw, setTaskToWithdraw] = useState<CommunityTaskItem | null>(null)
+  const [resumeMessage, setResumeMessage] = useState<CommunityBoardMessage | null>(null)
+  const [editMessage, setEditMessage] = useState<CommunityBoardMessage | null>(null)
+  const [messageToDelete, setMessageToDelete] = useState<CommunityBoardMessage | null>(null)
   const [publishNotice, setPublishNotice] = useState<string | null>(null)
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
@@ -330,6 +335,30 @@ export function UserCenterPanel() {
   const closeTaskModal = () => {
     setResumeTask(null)
     setEditTask(null)
+  }
+
+  const closeMessageModal = () => {
+    setResumeMessage(null)
+    setEditMessage(null)
+  }
+
+  const handleConfirmDeleteMessage = async () => {
+    if (!messageToDelete) return
+    setWithdrawingId(messageToDelete.id)
+    try {
+      if (!isUiMockCommunityId(messageToDelete.id)) {
+        await deleteCommunityBoardMessage(messageToDelete.id)
+      }
+      notifyCommunityBoardChanged()
+      notifyCommunityUserDataChanged()
+      setMessageToDelete(null)
+      await center.load()
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : '删除留言失败'
+      setWithdrawError(message)
+    } finally {
+      setWithdrawingId(null)
+    }
   }
 
   const canWithdrawResource = (item: CommunityResourceItem) =>
@@ -481,6 +510,36 @@ export function UserCenterPanel() {
                   accent: item.replyCount > 0,
                 },
               ]}
+              actions={
+                <>
+                  <UserCenterActionLink
+                    onClick={() => {
+                      setPublishNotice(null)
+                      setResumeMessage(null)
+                      setEditMessage(item)
+                    }}
+                  >
+                    修改
+                  </UserCenterActionLink>
+                  <UserCenterActionLink
+                    tone="primary"
+                    onClick={() => {
+                      setPublishNotice(null)
+                      setEditMessage(null)
+                      setResumeMessage(item)
+                    }}
+                  >
+                    重新提交
+                  </UserCenterActionLink>
+                  <UserCenterActionLink
+                    tone="danger"
+                    disabled={withdrawingId === item.id}
+                    onClick={() => setMessageToDelete(item)}
+                  >
+                    {withdrawingId === item.id ? '删除中…' : '删除'}
+                  </UserCenterActionLink>
+                </>
+              }
             />
           ))}
         </div>
@@ -850,6 +909,30 @@ export function UserCenterPanel() {
             closeTaskModal()
             void center.load()
           }}
+        />
+      ) : null}
+
+      {resumeMessage || editMessage ? (
+        <CommunityMessagePublishModal
+          resumeMessage={editMessage ?? resumeMessage}
+          editOnly={Boolean(editMessage)}
+          onClose={closeMessageModal}
+          onCreated={(message) => {
+            setPublishNotice(message)
+            closeMessageModal()
+            void center.load()
+          }}
+        />
+      ) : null}
+
+      {messageToDelete ? (
+        <ConfirmDialog
+          title="删除留言"
+          message="确定删除这条留言吗？删除后不可恢复。"
+          confirmLabel="删除"
+          danger
+          onCancel={() => setMessageToDelete(null)}
+          onConfirm={() => void handleConfirmDeleteMessage()}
         />
       ) : null}
 

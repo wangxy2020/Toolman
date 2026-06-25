@@ -117,27 +117,31 @@ pub async fn connection_drain_messages(
 
 #[napi]
 pub async fn connection_drain_all_messages() -> napi::Result<Vec<NapiIncomingMessage>> {
-    let manager = CONNECTIONS.lock().await;
-    let connections = manager.list().await;
+    let peer_ids = {
+        let manager = CONNECTIONS.lock().await;
+        manager.list_peer_ids()
+    };
+
     let mut results = Vec::new();
-    for connection in connections {
-        let event_messages = manager
-            .drain_incoming_events(&connection.peer_device_id)
-            .await;
+    for peer_device_id in peer_ids {
+        let (event_messages, file_messages) = {
+            let manager = CONNECTIONS.lock().await;
+            let event_messages = manager.drain_incoming_events(&peer_device_id).await;
+            let file_messages = manager.drain_incoming_files(&peer_device_id).await;
+            (event_messages, file_messages)
+        };
+
         for data in event_messages {
             results.push(NapiIncomingMessage {
-                peer_device_id: connection.peer_device_id.clone(),
+                peer_device_id: peer_device_id.clone(),
                 channel: EVENTS_CHANNEL_LABEL.to_string(),
                 data: napi::bindgen_prelude::Buffer::from(data),
             });
         }
 
-        let file_messages = manager
-            .drain_incoming_files(&connection.peer_device_id)
-            .await;
         for data in file_messages {
             results.push(NapiIncomingMessage {
-                peer_device_id: connection.peer_device_id.clone(),
+                peer_device_id: peer_device_id.clone(),
                 channel: FILES_CHANNEL_LABEL.to_string(),
                 data: napi::bindgen_prelude::Buffer::from(data),
             });

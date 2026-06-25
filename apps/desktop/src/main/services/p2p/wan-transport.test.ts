@@ -58,6 +58,12 @@ describe('encodeWanSdpParam', () => {
     expect(Buffer.byteLength(encoded, 'utf8')).toBeLessThan(Buffer.byteLength(legacy, 'utf8'))
   })
 
+  it('preserves relay candidates when trimming sdp', () => {
+    const encoded = encodeWanSdpParam(SAMPLE_SDP)
+    const decoded = decodeWanSdpParam(encoded)
+    expect(decoded).toContain('typ relay')
+  })
+
   it('targets compact encoded sdp payload', () => {
     const encoded = encodeWanSdpParam(SAMPLE_SDP)
     expect(encoded.startsWith('z1.') || encoded.startsWith('r1.')).toBe(true)

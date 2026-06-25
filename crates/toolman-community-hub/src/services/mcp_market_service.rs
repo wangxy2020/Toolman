@@ -252,8 +252,10 @@ impl McpMarketService {
         let manifest = parse_mcp_manifest(&stored.manifest)?;
         self.validate_published_manifest(&resource, &manifest)?;
 
+        let allow_replace = resource.status.allows_version_replace_on_publish();
         let version = VersionRepository::new(self.pool.clone())
-            .create(CreateVersionInput {
+            .create_or_replace(
+                CreateVersionInput {
                 resource_id: input.resource_id.clone(),
                 version: input.version.clone(),
                 changelog: input.changelog,
@@ -261,7 +263,9 @@ impl McpMarketService {
                 manifest_json: stored.manifest.clone(),
                 resource_size: stored.resource_size,
                 sha256: stored.archive_sha256,
-            })
+            },
+                allow_replace,
+            )
             .await
             .map_err(|error| match error {
                 VersionRepositoryError::Conflict {
@@ -420,7 +424,9 @@ mod tests {
 
     use super::*;
     use crate::db::{init_pool, DEFAULT_IDENTITY_ID};
+    use crate::repositories::resource_repository::ResourceRepository;
     use crate::repositories::UserRepository;
+    use crate::repositories::version_repository::VersionRepository;
     use crate::testing::build_test_package;
 
     fn temp_data_dir() -> PathBuf {
@@ -518,6 +524,96 @@ mod tests {
 
         let templates = service.get_templates(&draft.id).await.expect("templates");
         assert_eq!(templates.len(), 1);
+
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn resubmits_rejected_package_with_same_version() {
+        let data_dir = temp_data_dir();
+        std::fs::create_dir_all(&data_dir).expect("data dir");
+        let config = hub_config(&data_dir);
+        config.bootstrap().expect("bootstrap");
+        let pool = init_pool(&config.db_path).await.expect("init");
+        let user = UserRepository::new(pool.clone())
+            .find_by_identity_id(DEFAULT_IDENTITY_ID)
+            .await
+            .expect("user")
+            .expect("seeded admin");
+        let service = McpMarketService::new(config, pool.clone());
+
+        let draft = service
+            .create_draft(
+                &user,
+                CreateMcpDraftInput {
+                    title: "Rejected MCP".to_string(),
+                    description: Some("resubmit test".to_string()),
+                    tags: None,
+                    category: None,
+                    license: None,
+                    visibility: None,
+                },
+            )
+            .await
+            .expect("create draft");
+
+        let package_bytes =
+            build_test_package(ResourceType::Mcp, &sample_manifest_json(), &[]);
+
+        service
+            .publish_package(
+                &user,
+                PublishMcpPackageInput {
+                    resource_id: draft.id.clone(),
+                    version: "1.0.0".to_string(),
+                    changelog: Some("Initial release".to_string()),
+                    package_bytes,
+                    original_filename: Some("filesystem.toolman-mcp".to_string()),
+                },
+            )
+            .await
+            .expect("publish");
+
+        ResourceRepository::new(pool.clone())
+            .update(
+                &draft.id,
+                UpdateResourceInput {
+                    status: Some(ResourceStatus::Rejected),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("mark rejected");
+
+        let updated_package =
+            build_test_package(ResourceType::Mcp, &sample_manifest_json(), &[]);
+
+        let republished = service
+            .publish_package(
+                &user,
+                PublishMcpPackageInput {
+                    resource_id: draft.id.clone(),
+                    version: "1.0.0".to_string(),
+                    changelog: Some("Fixed review issues".to_string()),
+                    package_bytes: updated_package,
+                    original_filename: Some("filesystem-v2.toolman-mcp".to_string()),
+                },
+            )
+            .await
+            .expect("resubmit rejected package");
+
+        assert_eq!(republished.status, ResourceStatus::Published);
+        assert_eq!(republished.version, "1.0.0");
+
+        let versions = VersionRepository::new(pool.clone())
+            .list_for_resource(&draft.id)
+            .await
+            .expect("list versions");
+        assert_eq!(versions.len(), 1);
+        assert_eq!(
+            versions[0].changelog.as_deref(),
+            Some("Fixed review issues")
+        );
 
         let _ = std::fs::remove_dir_all(data_dir);
     }

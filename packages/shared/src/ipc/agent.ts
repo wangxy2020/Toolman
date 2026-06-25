@@ -40,7 +40,7 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
     blobHash: z.string().default(''),
     mimeType: z.string().optional(),
     truncated: z.boolean().optional(),
-    delivery: z.enum(['text', 'vision', 'docx_tool']).optional(),
+    delivery: z.enum(['text', 'vision', 'docx_tool', 'excel_tool']).optional(),
     visionPages: z
       .array(
         z.object({

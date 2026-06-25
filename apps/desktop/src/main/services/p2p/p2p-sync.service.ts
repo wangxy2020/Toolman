@@ -70,6 +70,7 @@ import {
   isOwnerPeerConnected,
   isSeqConflictError,
   MAX_SEQ_CONFLICT_RETRIES,
+  rehydrateLamportClocksFromDatabase,
 } from './p2p-sync-sequencing'
 import {
   handleRemoteEventProposal,
@@ -83,11 +84,23 @@ interface WorkspaceSyncState {
   lastSyncAt?: number
 }
 
+type ReplicationMessage = NonNullable<ReturnType<typeof parseReplicationMessage>>
+type SyncHelloMessage = Extract<ReplicationMessage, { type: 'sync.hello' }>
+type SyncHelloAckMessage = Extract<ReplicationMessage, { type: 'sync.hello_ack' }>
+type EventsBatchMessage = Extract<ReplicationMessage, { type: 'events.batch' }>
+type SnapshotResponseMessage = Extract<ReplicationMessage, { type: 'snapshot.response' }>
+
 const workspaceStates = new Map<string, WorkspaceSyncState>()
 const syncingWorkspaces = new Set<string>()
 const reconnectRecoveryInFlight = new Set<string>()
 const reconnectRecoveryLastRunAt = new Map<string, number>()
 const RECONNECT_RECOVERY_COOLDOWN_MS = 30_000
+
+const joinerCatchUpInFlight = new Map<string, Promise<void>>()
+const joinerCatchUpScheduled = new Map<string, ReturnType<typeof setTimeout>>()
+const JOINER_CATCH_UP_DEBOUNCE_MS = 1500
+
+const connectionSnapshot: P2pConnectionInfo[] = []
 
 function getCursorRepo(): P2pSyncCursorRepository {
   return new P2pSyncCursorRepository(getDatabase())
@@ -101,13 +114,53 @@ function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
 }
 
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
+function getPeerCursor(workspaceId: string, peerDeviceId: string) {
+  return getCursorRepo().findByWorkspaceAndPeer(workspaceId, peerDeviceId)
+}
+
+function cursorLastReceived(cursor: ReturnType<typeof getPeerCursor>): number {
+  return cursor?.lastReceivedSeq ?? 0
+}
+
+function cursorLastSent(cursor: ReturnType<typeof getPeerCursor>): number {
+  return cursor?.lastSentSeq ?? 0
+}
+
 function getWorkspaceState(workspaceId: string): WorkspaceSyncState {
   return workspaceStates.get(workspaceId) ?? { status: 'idle' }
 }
 
 function setWorkspaceState(workspaceId: string, patch: Partial<WorkspaceSyncState>): void {
-  const current = getWorkspaceState(workspaceId)
-  workspaceStates.set(workspaceId, { ...current, ...patch })
+  workspaceStates.set(workspaceId, { ...getWorkspaceState(workspaceId), ...patch })
+}
+
+function listWorkspacePeerDeviceIds(workspaceId: string): string[] {
+  const device = getP2pDeviceInfo()
+  return getMemberRepo()
+    .listByWorkspace(workspaceId)
+    .filter((member) => member.status === 'active' && member.deviceId !== device.deviceId)
+    .map((member) => member.deviceId)
+}
+
+function listSyncTargetPeerIds(workspaceId: string, peerDeviceId?: string): string[] {
+  const device = getP2pDeviceInfo()
+  const targets = peerDeviceId ? [peerDeviceId] : listWorkspacePeerDeviceIds(workspaceId)
+  return targets.filter((id) => id !== device.deviceId)
+}
+
+function knownConnectionsSnapshot(): P2pConnectionInfo[] {
+  return [...connectionSnapshot]
+}
+
+function findConnectedPeer(
+  connections: P2pConnectionInfo[],
+  peerDeviceId: string,
+): P2pConnectionInfo | undefined {
+  return connections.find((item) => item.peerDeviceId === peerDeviceId && item.state === 'connected')
 }
 
 async function sendReplicationMessage(
@@ -122,102 +175,127 @@ async function sendEventsBatch(
   workspaceId: string,
   sinceSeq: number,
 ): Promise<number> {
-  const events = listWorkspaceEventsSince(workspaceId, sinceSeq)
-  if (events.length === 0) return 0
+  const BATCH_LIMIT = 200
+  let totalSent = 0
+  let cursor = sinceSeq
 
-  const wireEvents = events.map(workspaceEventToWire)
-  await sendEventsBatchChunked(peerDeviceId, workspaceId, wireEvents)
+  while (true) {
+    const events = listWorkspaceEventsSince(workspaceId, cursor, BATCH_LIMIT)
+    if (events.length === 0) break
 
-  const lastSeq = events[events.length - 1]?.seq ?? sinceSeq
-  getCursorRepo().updateSentSeq(workspaceId, peerDeviceId, lastSeq)
-  for (const event of events) {
-    markP2pEventSynced(event.eventId)
+    const wireEvents = events.map(workspaceEventToWire)
+    await sendEventsBatchChunked(peerDeviceId, workspaceId, wireEvents)
+
+    const lastSeq = events.at(-1)?.seq ?? cursor
+    getCursorRepo().updateSentSeq(workspaceId, peerDeviceId, lastSeq)
+    for (const event of events) {
+      markP2pEventSynced(event.eventId)
+    }
+
+    totalSent += events.length
+    cursor = lastSeq
+    if (events.length < BATCH_LIMIT) break
   }
-  return events.length
+
+  return totalSent
+}
+
+async function requestCatchUpFromPeer(
+  peerDeviceId: string,
+  workspaceId: string,
+  localLastReceivedSeq: number,
+  remoteLatestSeq: number,
+): Promise<void> {
+  if (localLastReceivedSeq >= remoteLatestSeq) return
+
+  if (shouldUseSnapshotSync(localLastReceivedSeq, remoteLatestSeq)) {
+    await sendReplicationMessage(peerDeviceId, { type: 'snapshot.request', workspaceId })
+    return
+  }
+
+  await sendReplicationMessage(peerDeviceId, {
+    type: 'events.request',
+    workspaceId,
+    sinceSeq: localLastReceivedSeq,
+  })
+}
+
+async function pushMissingEventsToPeer(
+  peerDeviceId: string,
+  workspaceId: string,
+  peerLastReceivedSeq: number,
+  localLatestSeq: number,
+): Promise<void> {
+  if (peerLastReceivedSeq >= localLatestSeq) return
+
+  if (shouldUseSnapshotSync(peerLastReceivedSeq, localLatestSeq)) {
+    await sendSnapshotToPeer(peerDeviceId, workspaceId)
+    const snapshot = getLatestWorkspaceSnapshot(workspaceId)
+    const sinceSeq = snapshot?.snapshotSeq ?? peerLastReceivedSeq
+    await sendEventsBatch(peerDeviceId, workspaceId, sinceSeq)
+    return
+  }
+
+  await sendEventsBatch(peerDeviceId, workspaceId, peerLastReceivedSeq)
 }
 
 async function sendSyncHello(peerDeviceId: string, workspaceId: string): Promise<void> {
   const device = getP2pDeviceInfo()
-  const cursor = getCursorRepo().findByWorkspaceAndPeer(workspaceId, peerDeviceId)
+  const cursor = getPeerCursor(workspaceId, peerDeviceId)
   await sendReplicationMessage(peerDeviceId, {
     type: 'sync.hello',
     workspaceId,
     deviceId: device.deviceId,
-    lastReceivedSeq: cursor?.lastReceivedSeq ?? 0,
+    lastReceivedSeq: cursorLastReceived(cursor),
     latestSeq: getWorkspaceLatestSeq(workspaceId),
   })
 }
 
-async function handleSyncHello(
-  peerDeviceId: string,
-  message: Extract<ReturnType<typeof parseReplicationMessage>, { type: 'sync.hello' }>,
-): Promise<void> {
+async function handleSyncHello(peerDeviceId: string, message: SyncHelloMessage): Promise<void> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
+
   const device = getP2pDeviceInfo()
   const latestSeq = getWorkspaceLatestSeq(message.workspaceId)
-  const cursor = getCursorRepo().findByWorkspaceAndPeer(message.workspaceId, peerDeviceId)
+  const cursor = getPeerCursor(message.workspaceId, peerDeviceId)
 
   await sendReplicationMessage(peerDeviceId, {
     type: 'sync.hello_ack',
     workspaceId: message.workspaceId,
     deviceId: device.deviceId,
-    lastReceivedSeq: cursor?.lastReceivedSeq ?? 0,
+    lastReceivedSeq: cursorLastReceived(cursor),
     latestSeq,
   })
 
-  if (message.lastReceivedSeq < latestSeq) {
-    if (shouldUseSnapshotSync(message.lastReceivedSeq, latestSeq)) {
-      await sendSnapshotToPeer(peerDeviceId, message.workspaceId)
-      const snapshot = getLatestWorkspaceSnapshot(message.workspaceId)
-      const sinceSeq = snapshot?.snapshotSeq ?? message.lastReceivedSeq
-      await sendEventsBatch(peerDeviceId, message.workspaceId, sinceSeq)
-    } else {
-      await sendEventsBatch(peerDeviceId, message.workspaceId, message.lastReceivedSeq)
-    }
-  }
-
-  if ((cursor?.lastReceivedSeq ?? 0) < message.latestSeq) {
-    if (shouldUseSnapshotSync(cursor?.lastReceivedSeq ?? 0, message.latestSeq)) {
-      await sendReplicationMessage(peerDeviceId, {
-        type: 'snapshot.request',
-        workspaceId: message.workspaceId,
-      })
-    } else {
-      await sendReplicationMessage(peerDeviceId, {
-        type: 'events.request',
-        workspaceId: message.workspaceId,
-        sinceSeq: cursor?.lastReceivedSeq ?? 0,
-      })
-    }
-  }
+  await pushMissingEventsToPeer(
+    peerDeviceId,
+    message.workspaceId,
+    message.lastReceivedSeq,
+    latestSeq,
+  )
+  await requestCatchUpFromPeer(
+    peerDeviceId,
+    message.workspaceId,
+    cursorLastReceived(cursor),
+    message.latestSeq,
+  )
 }
 
-async function handleSyncHelloAck(
-  peerDeviceId: string,
-  message: Extract<ReturnType<typeof parseReplicationMessage>, { type: 'sync.hello_ack' }>,
-): Promise<void> {
+async function handleSyncHelloAck(peerDeviceId: string, message: SyncHelloAckMessage): Promise<void> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
-  const cursor = getCursorRepo().findByWorkspaceAndPeer(message.workspaceId, peerDeviceId)
+
+  const cursor = getPeerCursor(message.workspaceId, peerDeviceId)
   const latestSeq = getWorkspaceLatestSeq(message.workspaceId)
 
-  if ((cursor?.lastSentSeq ?? 0) < latestSeq) {
-    await sendEventsBatch(peerDeviceId, message.workspaceId, cursor?.lastSentSeq ?? 0)
+  if (cursorLastSent(cursor) < latestSeq) {
+    await sendEventsBatch(peerDeviceId, message.workspaceId, cursorLastSent(cursor))
   }
 
-  if ((cursor?.lastReceivedSeq ?? 0) < message.latestSeq) {
-    if (shouldUseSnapshotSync(cursor?.lastReceivedSeq ?? 0, message.latestSeq)) {
-      await sendReplicationMessage(peerDeviceId, {
-        type: 'snapshot.request',
-        workspaceId: message.workspaceId,
-      })
-    } else {
-      await sendReplicationMessage(peerDeviceId, {
-        type: 'events.request',
-        workspaceId: message.workspaceId,
-        sinceSeq: cursor?.lastReceivedSeq ?? 0,
-      })
-    }
-  }
+  await requestCatchUpFromPeer(
+    peerDeviceId,
+    message.workspaceId,
+    cursorLastReceived(cursor),
+    message.latestSeq,
+  )
 }
 
 async function sendSnapshotToPeer(
@@ -240,7 +318,7 @@ async function sendSnapshotToPeer(
 
 async function handleSnapshotRequest(
   peerDeviceId: string,
-  message: Extract<ReturnType<typeof parseReplicationMessage>, { type: 'snapshot.request' }>,
+  message: Extract<ReplicationMessage, { type: 'snapshot.request' }>,
 ): Promise<void> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
   await sendSnapshotToPeer(peerDeviceId, message.workspaceId)
@@ -248,7 +326,7 @@ async function handleSnapshotRequest(
 
 async function handleSnapshotResponse(
   peerDeviceId: string,
-  message: Extract<ReturnType<typeof parseReplicationMessage>, { type: 'snapshot.response' }>,
+  message: SnapshotResponseMessage,
 ): Promise<boolean> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
   if (!message.snapshot) return false
@@ -271,15 +349,27 @@ async function handleSnapshotResponse(
 
 async function handleEventsRequest(
   peerDeviceId: string,
-  message: Extract<ReturnType<typeof parseReplicationMessage>, { type: 'events.request' }>,
+  message: Extract<ReplicationMessage, { type: 'events.request' }>,
 ): Promise<void> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
   await sendEventsBatch(peerDeviceId, message.workspaceId, message.sinceSeq)
 }
 
+async function handleSeqGapDuringBatch(
+  peerDeviceId: string,
+  message: EventsBatchMessage,
+): Promise<void> {
+  const cursor = getPeerCursor(message.workspaceId, peerDeviceId)
+  await sendReplicationMessage(peerDeviceId, {
+    type: 'events.request',
+    workspaceId: message.workspaceId,
+    sinceSeq: cursorLastReceived(cursor),
+  })
+}
+
 async function handleEventsBatch(
   peerDeviceId: string,
-  message: Extract<ReturnType<typeof parseReplicationMessage>, { type: 'events.batch' }>,
+  message: EventsBatchMessage,
 ): Promise<number> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
 
@@ -290,28 +380,26 @@ async function handleEventsBatch(
   for (const wire of sorted) {
     try {
       const event = applyRemoteP2pEvent(wireToRemoteInput(wire))
-      if (event) {
-        applied += 1
-        getCursorRepo().updateReceivedSeq(message.workspaceId, peerDeviceId, event.seq)
-        broadcastP2pSyncEventApplied(event)
-      }
+      getCursorRepo().updateReceivedSeq(message.workspaceId, peerDeviceId, wire.seq)
+      if (!event) continue
+
+      applied += 1
+      broadcastP2pSyncEventApplied(event)
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to apply remote event'
+      const errMessage = toErrorMessage(error, 'Failed to apply remote event')
+
       if (errMessage.includes('序号不连续')) {
-        await sendReplicationMessage(peerDeviceId, {
-          type: 'events.request',
-          workspaceId: message.workspaceId,
-          sinceSeq: getCursorRepo().findByWorkspaceAndPeer(message.workspaceId, peerDeviceId)
-            ?.lastReceivedSeq ?? 0,
-        })
+        await handleSeqGapDuringBatch(peerDeviceId, message)
         break
       }
+
       if (isSeqConflictError(error) && conflictRetries < MAX_SEQ_CONFLICT_RETRIES) {
         conflictRetries += 1
         reportSyncConflict(message.workspaceId, errMessage, conflictRetries)
         await forceP2pSync(message.workspaceId, peerDeviceId)
         break
       }
+
       throw error
     }
   }
@@ -319,20 +407,36 @@ async function handleEventsBatch(
   return applied
 }
 
+async function handleEventsBatchReplication(
+  peerDeviceId: string,
+  message: EventsBatchMessage,
+): Promise<void> {
+  const applied = await handleEventsBatch(peerDeviceId, message)
+  setWorkspaceState(message.workspaceId, {
+    status: 'idle',
+    lastSyncAt: Date.now(),
+    error: undefined,
+  })
+
+  if (applied <= 0) return
+
+  reconcileGroupChatAfterSync(message.workspaceId)
+  broadcastP2pSyncCompleted({
+    workspaceId: message.workspaceId,
+    eventsApplied: applied,
+    filesFetched: 0,
+  })
+}
+
 function reconcileGroupChatAfterSync(workspaceId: string): void {
   try {
     reconcileGroupChatProjection(workspaceId)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn(`[p2p] group chat projection reconcile failed: ${message}`)
+    console.warn(`[p2p] group chat projection reconcile failed: ${toErrorMessage(error, String(error))}`)
   }
 }
 
-function reportSyncConflict(
-  workspaceId: string,
-  message: string,
-  attempt: number,
-): void {
+function reportSyncConflict(workspaceId: string, message: string, attempt: number): void {
   const detail =
     attempt < MAX_SEQ_CONFLICT_RETRIES
       ? `${message}（正在自动重试 ${attempt}/${MAX_SEQ_CONFLICT_RETRIES}）`
@@ -345,68 +449,49 @@ function reportSyncConflict(
   })
 }
 
-async function handleReplicationMessage(
-  peerDeviceId: string,
-  payload: Buffer,
-): Promise<void> {
+async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): Promise<void> {
   const message = parseReplicationMessage(payload)
   if (!message) return
 
   switch (message.type) {
     case 'sync.hello':
       await handleSyncHello(peerDeviceId, message)
-      break
+      return
     case 'sync.hello_ack':
       await handleSyncHelloAck(peerDeviceId, message)
-      break
+      return
     case 'events.request':
       await handleEventsRequest(peerDeviceId, message)
-      break
-    case 'events.batch': {
-      const applied = await handleEventsBatch(peerDeviceId, message)
-      setWorkspaceState(message.workspaceId, {
-        status: 'idle',
-        lastSyncAt: Date.now(),
-        error: undefined,
-      })
-      if (applied > 0) {
-        reconcileGroupChatAfterSync(message.workspaceId)
-        broadcastP2pSyncCompleted({
-          workspaceId: message.workspaceId,
-          eventsApplied: applied,
-          filesFetched: 0,
-        })
-      }
-      break
-    }
+      return
+    case 'events.batch':
+      await handleEventsBatchReplication(peerDeviceId, message)
+      return
     case 'events.propose':
       if (isLocalWorkspaceOwner(message.workspaceId)) {
         await handleRemoteEventProposal(peerDeviceId, message, async (input) =>
           appendP2pEventLocally(input),
         )
       }
-      break
-    case 'events.proposed': {
+      return
+    case 'events.proposed':
       applyRemoteP2pEvent(wireToRemoteInput(message.event))
       handleRemoteEventProposed(message)
-      break
-    }
+      return
     case 'events.propose_rejected':
       handleRemoteEventProposalRejected(message)
-      break
+      return
     case 'snapshot.request':
       await handleSnapshotRequest(peerDeviceId, message)
-      break
+      return
     case 'snapshot.response': {
       const used = await handleSnapshotResponse(peerDeviceId, message)
-      if (used) {
-        broadcastP2pSyncCompleted({
-          workspaceId: message.workspaceId,
-          eventsApplied: 0,
-          filesFetched: 0,
-        })
-      }
-      break
+      if (!used) return
+      broadcastP2pSyncCompleted({
+        workspaceId: message.workspaceId,
+        eventsApplied: 0,
+        filesFetched: 0,
+      })
+      return
     }
     case 'member.joined':
       void applyRemoteMemberJoin(
@@ -428,27 +513,38 @@ async function handleReplicationMessage(
         },
         { requirePeerTrust: false },
       )
-      break
+      return
     case 'group-chat.message':
       handleP2pGroupChatChannelMessage(peerDeviceId, payload)
-      break
+      return
     case 'group-chat.clear':
       handleP2pGroupChatClearFromPeer(peerDeviceId, message.workspaceId)
-      break
+      return
     case 'agent-relay.message':
       await dispatchP2pAgentRelayMessage(
         peerDeviceId,
         Buffer.from(JSON.stringify(message.relay)),
       )
-      break
+      return
     case 'member.sync_request':
       await handleMemberSyncRequest(peerDeviceId, message.workspaceId)
-      break
+      return
     case 'member.sync_response':
       handleMemberSyncResponse(peerDeviceId, message)
-      break
+      return
     default:
-      break
+      return
+  }
+}
+
+async function runIncomingChannelHandler(
+  label: string,
+  handler: () => void | Promise<void>,
+): Promise<void> {
+  try {
+    await handler()
+  } catch (error) {
+    console.error(`[p2p] ${label} failed: ${toErrorMessage(error, `Failed to process ${label}`)}`)
   }
 }
 
@@ -457,43 +553,36 @@ export async function processP2pIncomingMessages(): Promise<void> {
 
   for (const item of messages) {
     if (item.channel === 'files') {
-      try {
-        await handleP2pFileChannelMessage(item.peerDeviceId, item.data)
-      } catch (error) {
-        const errMessage = error instanceof Error ? error.message : 'Failed to process file message'
-        console.error(`[p2p] file channel message failed: ${errMessage}`)
-      }
+      await runIncomingChannelHandler('file channel message', () =>
+        handleP2pFileChannelMessage(item.peerDeviceId, item.data),
+      )
       continue
     }
 
     if (item.channel === 'agent-relay') {
-      try {
-        await dispatchP2pAgentRelayMessage(item.peerDeviceId, item.data)
-      } catch (error) {
-        const errMessage = error instanceof Error ? error.message : 'Failed to process agent relay message'
-        console.error(`[p2p] agent relay message failed: ${errMessage}`)
-      }
+      await runIncomingChannelHandler('agent relay message', () =>
+        dispatchP2pAgentRelayMessage(item.peerDeviceId, item.data),
+      )
       continue
     }
 
     if (item.channel === 'group-chat') {
-      try {
-        handleP2pGroupChatChannelMessage(item.peerDeviceId, item.data)
-      } catch (error) {
-        const errMessage = error instanceof Error ? error.message : 'Failed to process group chat message'
-        console.error(`[p2p] group chat message failed: ${errMessage}`)
-      }
+      await runIncomingChannelHandler('group chat message', () =>
+        handleP2pGroupChatChannelMessage(item.peerDeviceId, item.data),
+      )
       continue
     }
 
     if (item.channel !== 'events') continue
+
     try {
       await handleReplicationMessage(item.peerDeviceId, item.data)
     } catch (error) {
       const parsed = parseReplicationMessage(item.data)
       const label = parsed ? describeReplicationMessage(parsed) : 'unknown'
-      const errMessage = error instanceof Error ? error.message : 'Failed to process replication message'
-      console.error(`[p2p] replication message failed: ${label} error=${errMessage}`)
+      console.error(
+        `[p2p] replication message failed: ${label} error=${toErrorMessage(error, 'Failed to process replication message')}`,
+      )
     }
   }
 }
@@ -505,20 +594,12 @@ export async function syncWithPeer(workspaceId: string, peerDeviceId: string): P
   if (!isPeerTrusted(workspaceId, peerDeviceId)) return
 
   const connections = await listP2pConnections()
-  const connected = connections.find(
-    (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
-  )
-
-  if (!connected) {
+  if (!findConnectedPeer(connections, peerDeviceId)) {
     await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
   }
 
   await sendSyncHello(peerDeviceId, workspaceId)
 }
-
-const joinerCatchUpInFlight = new Map<string, Promise<void>>()
-const joinerCatchUpScheduled = new Map<string, ReturnType<typeof setTimeout>>()
-const JOINER_CATCH_UP_DEBOUNCE_MS = 1500
 
 async function catchUpFromMeshPeers(workspaceId: string): Promise<number> {
   await reconcileWorkspaceMemberMesh(workspaceId, { immediate: true })
@@ -531,13 +612,13 @@ async function catchUpFromMeshPeers(workspaceId: string): Promise<number> {
   const candidates: MeshPeerSyncCandidate[] = peerDeviceIds
     .filter((deviceId) => deviceId !== ownerDeviceId)
     .map((deviceId) => {
-      const cursor = getCursorRepo().findByWorkspaceAndPeer(workspaceId, deviceId)
+      const cursor = getPeerCursor(workspaceId, deviceId)
       const connection = connections.find((item) => item.peerDeviceId === deviceId)
       return {
         deviceId,
         connected: connection?.state === 'connected',
-        lastReceivedSeq: cursor?.lastReceivedSeq ?? 0,
-        lastSentSeq: cursor?.lastSentSeq ?? 0,
+        lastReceivedSeq: cursorLastReceived(cursor),
+        lastSentSeq: cursorLastSent(cursor),
       }
     })
 
@@ -550,8 +631,9 @@ async function catchUpFromMeshPeers(workspaceId: string): Promise<number> {
       await syncWithPeer(workspaceId, peerDeviceId)
       syncedPeers += 1
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'mesh catch-up failed'
-      console.warn(`[p2p] mesh catch-up with ${peerDeviceId} failed: ${message}`)
+      console.warn(
+        `[p2p] mesh catch-up with ${peerDeviceId} failed: ${toErrorMessage(error, 'mesh catch-up failed')}`,
+      )
     }
   }
 
@@ -564,13 +646,9 @@ async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string)
 
   if (ownerOnline) {
     ensureOwnerPeerTrustedForSync(workspaceId, ownerDeviceId)
-
-    if (isPeerConnected(ownerDeviceId)) {
-      await ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
-    } else {
-      await ensureMemberConnectsToOwner(workspaceId)
-    }
-
+    await (isPeerConnected(ownerDeviceId)
+      ? ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
+      : ensureMemberConnectsToOwner(workspaceId))
     await syncWithPeer(workspaceId, ownerDeviceId)
   } else {
     const syncedPeers = await catchUpFromMeshPeers(workspaceId)
@@ -593,13 +671,10 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
 
   const device = getP2pDeviceInfo()
   if (workspace.ownerDeviceId === device.deviceId) return
-
   if (joinerCatchUpInFlight.has(workspaceId)) return
 
   const pending = joinerCatchUpScheduled.get(workspaceId)
-  if (pending) {
-    clearTimeout(pending)
-  }
+  if (pending) clearTimeout(pending)
 
   joinerCatchUpScheduled.set(
     workspaceId,
@@ -609,8 +684,9 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
 
       const promise = runJoinerEventCatchUp(workspaceId, workspace.ownerDeviceId)
         .catch((error) => {
-          const message = error instanceof Error ? error.message : 'joiner event catch-up failed'
-          console.warn(`[p2p] joiner event catch-up failed: ${message}`)
+          console.warn(
+            `[p2p] joiner event catch-up failed: ${toErrorMessage(error, 'joiner event catch-up failed')}`,
+          )
         })
         .finally(() => {
           joinerCatchUpInFlight.delete(workspaceId)
@@ -624,9 +700,7 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
 export async function awaitJoinerEventCatchUp(workspaceId: string): Promise<void> {
   scheduleJoinerEventCatchUp(workspaceId)
   const inFlight = joinerCatchUpInFlight.get(workspaceId)
-  if (inFlight) {
-    await inFlight
-  }
+  if (inFlight) await inFlight
 }
 
 export function onLocalP2pEventAppended(event: WorkspaceEvent): void {
@@ -642,20 +716,19 @@ export async function replicateLocalP2pEvent(event: WorkspaceEvent): Promise<voi
       .map((item) => item.deviceId),
   )
   const connections = await listP2pConnections()
-  let peers = connections.filter(
+
+  const isJoinerOwnEvent =
+    Boolean(ownerDeviceId) &&
+    event.sourceDeviceId === device.deviceId &&
+    !isLocalWorkspaceOwner(event.workspaceId)
+
+  const peers = connections.filter(
     (item) =>
       item.state === 'connected' &&
       item.peerDeviceId !== device.deviceId &&
-      memberDeviceIds.has(item.peerDeviceId),
+      memberDeviceIds.has(item.peerDeviceId) &&
+      !(isJoinerOwnEvent && item.peerDeviceId === ownerDeviceId),
   )
-
-  if (
-    ownerDeviceId &&
-    event.sourceDeviceId === device.deviceId &&
-    !isLocalWorkspaceOwner(event.workspaceId)
-  ) {
-    peers = peers.filter((item) => item.peerDeviceId !== ownerDeviceId)
-  }
 
   if (peers.length === 0) return
 
@@ -669,8 +742,9 @@ export async function replicateLocalP2pEvent(event: WorkspaceEvent): Promise<voi
         getCursorRepo().updateSentSeq(event.workspaceId, peer.peerDeviceId, event.seq)
         markP2pEventSynced(event.eventId)
       } catch (error) {
-        const errMessage = error instanceof Error ? error.message : 'Failed to replicate event'
-        console.warn(`[p2p] replicate to ${peer.peerDeviceId} failed: ${errMessage}`)
+        console.warn(
+          `[p2p] replicate to ${peer.peerDeviceId} failed: ${toErrorMessage(error, 'Failed to replicate event')}`,
+        )
       }
     }),
   )
@@ -681,27 +755,26 @@ export async function recoverWorkspaceSyncAfterReconnect(
   peerDeviceId?: string,
 ): Promise<void> {
   if (!workspaceId) return
+
   const recoveryKey = `${workspaceId}:${peerDeviceId ?? 'all'}`
   if (reconnectRecoveryInFlight.has(recoveryKey)) return
 
   const lastRun = reconnectRecoveryLastRunAt.get(recoveryKey) ?? 0
   if (Date.now() - lastRun < RECONNECT_RECOVERY_COOLDOWN_MS) return
-  reconnectRecoveryLastRunAt.set(recoveryKey, Date.now())
 
+  reconnectRecoveryLastRunAt.set(recoveryKey, Date.now())
   reconnectRecoveryInFlight.add(recoveryKey)
+
   try {
-    const device = getP2pDeviceInfo()
-    const targets = (peerDeviceId ? [peerDeviceId] : listWorkspacePeerDeviceIds(workspaceId)).filter(
-      (id) => id !== device.deviceId,
-    )
-    for (const peer of targets) {
+    for (const peer of listSyncTargetPeerIds(workspaceId, peerDeviceId)) {
       if (!isPeerTrusted(workspaceId, peer)) continue
       await syncWithPeer(workspaceId, peer)
     }
     reconcileGroupChatAfterSync(workspaceId)
   } catch (error) {
-    const errMessage = error instanceof Error ? error.message : '重连后同步失败'
-    console.warn(`[p2p] reconnect catch-up failed for ${workspaceId}: ${errMessage}`)
+    console.warn(
+      `[p2p] reconnect catch-up failed for ${workspaceId}: ${toErrorMessage(error, '重连后同步失败')}`,
+    )
   } finally {
     reconnectRecoveryInFlight.delete(recoveryKey)
   }
@@ -716,26 +789,18 @@ export async function handleP2pPeerConnected(
   void reconcileWorkspaceMemberMesh(workspaceId)
 }
 
-function listWorkspacePeerDeviceIds(workspaceId: string): string[] {
-  const device = getP2pDeviceInfo()
-  return getMemberRepo()
-    .listByWorkspace(workspaceId)
-    .filter((member) => member.status === 'active' && member.deviceId !== device.deviceId)
-    .map((member) => member.deviceId)
-}
-
 function mapPeerStatus(
   workspaceId: string,
   connection: P2pConnectionInfo | undefined,
   peerDeviceId: string,
 ) {
-  const cursor = getCursorRepo().findByWorkspaceAndPeer(workspaceId, peerDeviceId)
+  const cursor = getPeerCursor(workspaceId, peerDeviceId)
   const latestSeq = getWorkspaceLatestSeq(workspaceId)
-  const lastReceivedSeq = cursor?.lastReceivedSeq ?? 0
+  const lastReceivedSeq = cursorLastReceived(cursor)
   return {
     deviceId: peerDeviceId,
     state: connection?.state ?? 'idle',
-    lastSentSeq: cursor?.lastSentSeq ?? 0,
+    lastSentSeq: cursorLastSent(cursor),
     lastReceivedSeq,
     pendingEvents: Math.max(0, latestSeq - lastReceivedSeq),
   }
@@ -770,10 +835,7 @@ export async function startP2pSync(workspaceId: string): Promise<{
     try {
       if (!isPeerTrusted(workspaceId, peerDeviceId)) continue
       await syncWithPeer(workspaceId, peerDeviceId)
-      const connected = connections.find(
-        (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
-      )
-      if (connected) peersConnected += 1
+      if (findConnectedPeer(connections, peerDeviceId)) peersConnected += 1
       broadcastP2pSyncProgress({
         workspaceId,
         phase: 'events',
@@ -781,7 +843,7 @@ export async function startP2pSync(workspaceId: string): Promise<{
         total: peerDeviceIds.length,
       })
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Sync failed'
+      const errMessage = toErrorMessage(error, 'Sync failed')
       setWorkspaceState(workspaceId, { status: 'error', error: errMessage })
       broadcastP2pSyncError({ workspaceId, code: 'P2P_SYNC_FAILED', message: errMessage })
     }
@@ -827,9 +889,7 @@ export function getP2pSyncStatus(workspaceId: string): {
   const ownerDeviceId = workspaceRow?.ownerDeviceId
   const meshPeersConnected = peerDeviceIds.filter((peerDeviceId) => {
     if (peerDeviceId === ownerDeviceId) return false
-    return connections.some(
-      (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
-    )
+    return Boolean(findConnectedPeer(connections, peerDeviceId))
   }).length
 
   return {
@@ -852,14 +912,8 @@ export function getP2pSyncStatus(workspaceId: string): {
   }
 }
 
-const connectionSnapshot: P2pConnectionInfo[] = []
-
 export function updateP2pSyncConnectionSnapshot(connections: P2pConnectionInfo[]): void {
   connectionSnapshot.splice(0, connectionSnapshot.length, ...connections)
-}
-
-function knownConnectionsSnapshot(): P2pConnectionInfo[] {
-  return [...connectionSnapshot]
 }
 
 export async function requestSnapshotFromOwner(
@@ -873,8 +927,9 @@ export async function requestSnapshotFromOwner(
   try {
     await ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'connect owner failed'
-    console.warn(`[p2p] snapshot connect to owner failed: ${message}`)
+    console.warn(
+      `[p2p] snapshot connect to owner failed: ${toErrorMessage(error, 'connect owner failed')}`,
+    )
     return
   }
 
@@ -889,32 +944,28 @@ export async function forceP2pSync(
   peerDeviceId?: string,
 ): Promise<{ eventsApplied: number; filesFetched: number; snapshotUsed: boolean }> {
   assertRegisteredForP2p()
-  const device = getP2pDeviceInfo()
-  const targets = (peerDeviceId ? [peerDeviceId] : listWorkspacePeerDeviceIds(workspaceId)).filter(
-    (id) => id !== device.deviceId,
-  )
 
   let eventsApplied = 0
   let snapshotUsed = false
 
   setWorkspaceState(workspaceId, { status: 'syncing', error: undefined })
 
-  for (const peer of targets) {
+  for (const peer of listSyncTargetPeerIds(workspaceId, peerDeviceId)) {
     if (!isPeerTrusted(workspaceId, peer)) continue
 
     try {
       await ensurePeerReadyForWorkspace(peer, workspaceId)
       const latestSeq = getWorkspaceLatestSeq(workspaceId)
-      const cursor = getCursorRepo().findByWorkspaceAndPeer(workspaceId, peer)
-      const peerBehind = (cursor?.lastReceivedSeq ?? 0) < latestSeq
+      const cursor = getPeerCursor(workspaceId, peer)
+      const peerBehind = cursorLastReceived(cursor) < latestSeq
 
-      if (peerBehind && shouldUseSnapshotSync(cursor?.lastReceivedSeq ?? 0, latestSeq)) {
+      if (peerBehind && shouldUseSnapshotSync(cursorLastReceived(cursor), latestSeq)) {
         const wire = await sendSnapshotToPeer(peer, workspaceId)
         if (wire) snapshotUsed = true
-        const sinceSeq = wire?.snapshotSeq ?? cursor?.lastSentSeq ?? 0
+        const sinceSeq = wire?.snapshotSeq ?? cursorLastSent(cursor)
         eventsApplied += await sendEventsBatch(peer, workspaceId, sinceSeq)
       } else if (peerBehind) {
-        eventsApplied += await sendEventsBatch(peer, workspaceId, cursor?.lastSentSeq ?? 0)
+        eventsApplied += await sendEventsBatch(peer, workspaceId, cursorLastSent(cursor))
       }
 
       const localSeq = getWorkspaceLatestSeq(workspaceId)
@@ -928,7 +979,7 @@ export async function forceP2pSync(
 
       await sendSyncHello(peer, workspaceId)
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : 'Force sync failed'
+      const errMessage = toErrorMessage(error, 'Force sync failed')
       setWorkspaceState(workspaceId, { status: 'error', error: errMessage })
       broadcastP2pSyncError({ workspaceId, code: 'P2P_SYNC_FAILED', message: errMessage })
     }
@@ -944,6 +995,7 @@ export async function forceP2pSync(
 }
 
 export function bootstrapP2pSync(): void {
+  rehydrateLamportClocksFromDatabase()
   registerP2pSyncHandlers({
     onLocalEventAppended: onLocalP2pEventAppended,
     onReconnect: recoverWorkspaceSyncAfterReconnect,

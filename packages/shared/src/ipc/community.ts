@@ -757,6 +757,14 @@ export type CommunityBoardMessageFavoriteInput = z.infer<
   typeof CommunityBoardMessageFavoriteInputSchema
 >
 
+export const CommunityBoardMessagePatchInputSchema = z.object({
+  messageId: UuidSchema,
+  body: z.string().min(1).max(5000),
+})
+export type CommunityBoardMessagePatchInput = z.infer<
+  typeof CommunityBoardMessagePatchInputSchema
+>
+
 export const CommunityBoardMessageDeleteInputSchema = z.object({
   messageId: UuidSchema,
 })

@@ -255,8 +255,10 @@ impl WorkflowMarketService {
             .map_err(|error| WorkflowMarketError::Validation(error.to_string()))?;
         validate_langgraph_json(&manifest, &graph)?;
 
+        let allow_replace = resource.status.allows_version_replace_on_publish();
         let version = VersionRepository::new(self.pool.clone())
-            .create(CreateVersionInput {
+            .create_or_replace(
+                CreateVersionInput {
                 resource_id: input.resource_id.clone(),
                 version: input.version.clone(),
                 changelog: input.changelog,
@@ -264,7 +266,9 @@ impl WorkflowMarketService {
                 manifest_json: stored.manifest.clone(),
                 resource_size: stored.resource_size,
                 sha256: stored.archive_sha256,
-            })
+            },
+                allow_replace,
+            )
             .await
             .map_err(|error| match error {
                 VersionRepositoryError::Conflict {

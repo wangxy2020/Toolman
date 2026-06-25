@@ -36,8 +36,11 @@ export async function bootstrapGroupWorkspace(workspaceId: string): Promise<bool
 /** 本会话内首次进入某群组时 bootstrap 一次（上线后打开群组页） */
 export function ensureGroupWorkspaceBootstrapped(workspaceId: string | null): void {
   if (!workspaceId || bootstrappedWorkspaceIds.has(workspaceId)) return
-  bootstrappedWorkspaceIds.add(workspaceId)
-  void bootstrapGroupWorkspace(workspaceId)
+  void bootstrapGroupWorkspace(workspaceId).then((ok) => {
+    if (ok) {
+      bootstrappedWorkspaceIds.add(workspaceId)
+    }
+  })
 }
 
 /** 入群成功后强制 bootstrap（新成员补全历史活动与文件） */

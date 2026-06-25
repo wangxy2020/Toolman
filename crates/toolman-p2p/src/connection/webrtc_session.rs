@@ -25,6 +25,15 @@ use super::types::{
 use crate::crypto::{ChannelCipherSet, WorkspaceKeyRegistry, WORKSPACE_KEY_LEN};
 use crate::state::configured_ice_server_entries;
 
+const MAX_INCOMING_QUEUE_MESSAGES: usize = 512;
+
+fn push_incoming_message(queue: &mut Vec<Vec<u8>>, message: Vec<u8>) {
+    if queue.len() >= MAX_INCOMING_QUEUE_MESSAGES {
+        queue.remove(0);
+    }
+    queue.push(message);
+}
+
 struct SessionCiphers {
     scope_id: String,
     workspace_key: [u8; WORKSPACE_KEY_LEN],
@@ -487,7 +496,34 @@ impl WebRtcSession {
                 if plaintext == HANDSHAKE_PING || plaintext == HANDSHAKE_PONG {
                     return;
                 }
-                queue.lock().await.push(plaintext);
+                let mut guard = queue.lock().await;
+                push_incoming_message(&mut guard, plaintext);
+            })
+        }));
+    }
+
+    pub async fn install_connection_state_monitor(&self) {
+        let state = Arc::clone(&self.state);
+        let manual_close = Arc::clone(&self.manual_close);
+        self.pc.on_peer_connection_state_change(Box::new(move |pc_state| {
+            let state = Arc::clone(&state);
+            let manual_close = Arc::clone(&manual_close);
+            Box::pin(async move {
+                if manual_close.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                match pc_state {
+                    RTCPeerConnectionState::Disconnected => {
+                        *state.lock().await = ConnectionState::Reconnecting;
+                    }
+                    RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed => {
+                        *state.lock().await = ConnectionState::Closed;
+                    }
+                    RTCPeerConnectionState::Connected => {
+                        *state.lock().await = ConnectionState::Connected;
+                    }
+                    _ => {}
+                }
             })
         }));
     }
@@ -517,7 +553,8 @@ impl WebRtcSession {
                 let Some(plaintext) = plaintext else {
                     return;
                 };
-                queue.lock().await.push(plaintext);
+                let mut guard = queue.lock().await;
+                push_incoming_message(&mut guard, plaintext);
             })
         }));
     }

@@ -94,20 +94,6 @@ function computeEventHash(input: {
   return createHash('sha256').update(material).digest('hex')
 }
 
-function appendViaNative(input: AppendP2pEventInput & { sourceDeviceId: string }) {
-  ensureEventStore()
-  const payloadJson = JSON.stringify(input.payload)
-  return P2pBridge.eventStoreAppend(input.workspaceId, {
-    resourceType: input.resourceType,
-    resourceId: input.resourceId,
-    operatorId: input.operatorId,
-    eventType: input.eventType,
-    payloadJson,
-    sourceDeviceId: input.sourceDeviceId,
-    timestamp: input.timestamp,
-  })
-}
-
 function appendViaFallback(input: AppendP2pEventInput & { sourceDeviceId: string }): P2pEventRow {
   const repo = getEventRepo()
   const latestSeq = repo.getLatestSeq(input.workspaceId)
@@ -205,26 +191,12 @@ function appendP2pEventRow(
   input: AppendP2pEventInput & { sourceDeviceId: string },
 ): P2pEventRow {
   try {
-    const walRecord = appendViaNative(input)
-    return getEventRepo().insert({
-      id: walRecord.eventId,
-      workspaceId: walRecord.workspaceId,
-      seq: walRecord.seq,
-      resourceType: walRecord.resourceType as P2pResourceType,
-      resourceId: walRecord.resourceId,
-      operatorId: walRecord.operatorId,
-      eventType: walRecord.eventType as P2pEventType,
-      payload: input.payload,
-      prevEventHash: walRecord.prevEventHash ?? null,
-      sourceDeviceId: walRecord.sourceDeviceId,
-      timestamp: new Date(walRecord.timestamp),
-      synced: false,
-    })
+    return appendViaFallback(input)
   } catch (error) {
     if (isSeqConflictError(error)) {
       throw error
     }
-    return appendViaFallback(input)
+    throw error instanceof Error ? error : new Error('事件写入失败')
   }
 }
 

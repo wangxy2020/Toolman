@@ -10,6 +10,7 @@ import { loadWorkspaceKey } from './p2p-workspace-key.store'
 import { rotateWorkspaceKey, setWorkspaceKey } from './p2p-crypto.service'
 
 const POLL_INTERVAL_MS = 2_000
+const CONNECT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000] as const
 const KNOWN_STATES = new Set<P2pConnectionState>([
   'idle',
   'signaling',
@@ -20,6 +21,7 @@ const KNOWN_STATES = new Set<P2pConnectionState>([
 ])
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollInFlight = false
 const knownConnections = new Map<string, P2pConnectionInfo>()
 const connectInFlight = new Map<string, Promise<P2pConnectionState>>()
 
@@ -104,6 +106,8 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
 }
 
 async function pollConnections(): Promise<void> {
+  if (pollInFlight) return
+  pollInFlight = true
   try {
     const connections = (await P2pBridge.connectionList()).map(mapNativeConnection)
     applyP2pConnectionSnapshot(connections)
@@ -112,7 +116,15 @@ async function pollConnections(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to poll P2P connections'
     console.error(`[p2p] connection poll failed: ${message}`)
+  } finally {
+    pollInFlight = false
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
 
 function startPolling(): void {
@@ -210,7 +222,27 @@ export async function connectP2pPeer(
     return inFlight
   }
 
-  const promise = connectP2pPeerOnce(peerDeviceId, workspaceId)
+  const promise = (async () => {
+    let lastError: unknown = null
+    for (let attempt = 0; attempt < CONNECT_RETRY_DELAYS_MS.length; attempt += 1) {
+      try {
+        const state = await connectP2pPeerOnce(peerDeviceId, workspaceId)
+        if (state === 'connected') {
+          return state
+        }
+      } catch (error) {
+        lastError = error
+      }
+      if (attempt < CONNECT_RETRY_DELAYS_MS.length - 1) {
+        await sleep(CONNECT_RETRY_DELAYS_MS[attempt]!)
+      }
+    }
+    if (lastError instanceof Error) {
+      throw lastError
+    }
+    throw new Error('Failed to connect peer after retries')
+  })()
+
   connectInFlight.set(peerDeviceId, promise)
   try {
     return await promise

@@ -1,0 +1,30 @@
+{
+  "name": "@toolman/mcp-excel-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Excel lossless review & highlight MCP server (stdio)",
+  "type": "module",
+  "main": "./dist/excelServer.js",
+  "bin": {
+    "excel-mcp-server": "./dist/excelServer.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/excelServer.js",
+    "dev": "tsx excelServer.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "exceljs": "^4.4.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

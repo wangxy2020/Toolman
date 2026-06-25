@@ -16,6 +16,7 @@ import {
   isDuplicateOfficialMcpPreset,
 } from '@toolman/shared'
 import { isPostgresMcpConfig } from './mcp-postgres-verify.service'
+import { resolveExcelMcpServerEntryPath } from './excel-mcp-paths'
 
 const CONFIG_FILE = 'mcp-servers.json'
 
@@ -158,6 +159,24 @@ function defaultDocxMcpServerPreset(): McpServerConfig {
   }
 }
 
+function defaultExcelMcpServerPreset(): McpServerConfig {
+  const entryPath = resolveExcelMcpServerEntryPath()
+  return {
+    id: 'excel-mcp-server',
+    name: 'Toolman Excel MCP',
+    description:
+      'Excel (.xlsx/.xls) 无损审核、单元格修改与高亮批注；本地 stdio（内置 excel-mcp-server，需 Node.js 20+）',
+    type: 'stdio',
+    enabled: isDefaultEnabledMcpServer('excel-mcp-server'),
+    command: 'node',
+    args: entryPath ? [entryPath] : [],
+    env: {},
+    packageSource: 'default',
+    longRunning: true,
+    timeoutSeconds: 120,
+  }
+}
+
 function defaultSystemMcpServers(): McpServerConfig[] {
   return [
     defaultLocalDbServer(),
@@ -166,6 +185,7 @@ function defaultSystemMcpServers(): McpServerConfig[] {
     defaultPythonPreset(),
     defaultBraveSearchPreset(),
     defaultDocxMcpServerPreset(),
+    defaultExcelMcpServerPreset(),
   ]
 }
 
@@ -279,6 +299,18 @@ function mergeSystemMcpServerPreset(system: McpServerConfig, source: McpServerCo
     const docxBroken = merged.command !== 'npx' || !args.includes('docx-mcp-server')
     if (docxBroken) {
       merged = { ...merged, command: 'npx', args: ['-y', 'docx-mcp-server'] }
+    }
+  }
+
+  if (system.id === 'excel-mcp-server') {
+    const entryPath = resolveExcelMcpServerEntryPath()
+    const args = merged.args ?? []
+    const excelBroken =
+      merged.command !== 'node' ||
+      args.length === 0 ||
+      !args.some((arg) => arg.includes('excelServer.js'))
+    if (excelBroken && entryPath) {
+      merged = { ...merged, command: 'node', args: [entryPath] }
     }
   }
 

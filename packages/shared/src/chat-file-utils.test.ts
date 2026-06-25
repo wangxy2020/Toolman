@@ -121,7 +121,22 @@ describe('buildModelTextFromUserBlocks', () => {
       },
     ])
 
-    expect(text).toContain('read_document')
+    expect(text).toContain('DOCX MCP 结构化审查流水线')
     expect(text).toContain('/Users/wangxy/Documents/notes.docx')
+  })
+
+  it('includes excel_tool attachment paths for MCP', () => {
+    const text = buildModelTextFromUserBlocks([
+      { type: 'text', text: '请审查表格' },
+      {
+        type: 'file',
+        name: 'invoice.xlsx',
+        path: '/tmp/invoice.xlsx',
+        delivery: 'excel_tool',
+      },
+    ])
+
+    expect(text).toContain('Excel MCP 结构化审查流水线')
+    expect(text).toContain('/tmp/invoice.xlsx')
   })
 })

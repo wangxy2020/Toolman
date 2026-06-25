@@ -45,6 +45,15 @@ pub fn resolve_identity_from_headers(
         if let Some(token) = bearer_token_from_headers(headers) {
             return validate_hub_jwt(token, secret);
         }
+        return Err(ApiError::unauthorized(
+            "missing Authorization Bearer token",
+        ));
+    }
+
+    if !crate::config::is_header_auth_allowed() {
+        return Err(ApiError::unauthorized(
+            "community hub JWT secret not configured; set COMMUNITY_HUB_JWT_SECRET or COMMUNITY_HUB_ALLOW_HEADER_AUTH=1 for local dev",
+        ));
     }
 
     if let Some(identity_id) = identity_id_from_headers(headers) {
