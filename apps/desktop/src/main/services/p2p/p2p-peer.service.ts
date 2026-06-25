@@ -5,6 +5,7 @@ import {
   createP2pDeviceIdentityRepository,
   p2pPeerNodes,
 } from '@toolman/db'
+import { logStructured } from '../structured-log.service'
 import type { DiscoveredNode, P2pConnectionState } from '@toolman/shared'
 import {P2pMemberTrustDeviceInputSchema, toErrorMessage } from '@toolman/shared'
 import { eq } from 'drizzle-orm'
@@ -210,9 +211,7 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
         }
       } catch (error) {
         const message = toErrorMessage(error, 'discovery online reconnect failed')
-        console.warn(
-          `[p2p] discovery online reconnect failed for ${peerDeviceId.slice(0, 8)} in ${workspace.id}: ${message}`,
-        )
+        logStructured('p2p', 'warn', `discovery online reconnect failed for ${peerDeviceId.slice(0, 8)} in ${workspace.id}: ${message}`)
       }
     }
   })()

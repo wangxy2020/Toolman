@@ -1,3 +1,4 @@
+import { isDevModeEnvEnabled } from './auth-dev-guard.js'
 import { getWechatOpenConfig, isWechatAuthAvailable, isWechatDevMode } from './wechat-auth.config.js'
 import { getAuthingWebConfig, isAuthingConfigured } from './authing-auth.config.js'
 
@@ -27,13 +28,10 @@ function readEnv(keys: readonly string[]): string | undefined {
   return undefined
 }
 
-function isTruthyEnv(value: string | undefined): boolean {
-  if (!value) return false
-  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
-}
-
 export function isTencentSmsDevMode(): boolean {
-  return isTruthyEnv(process.env.TOOLMAN_TENCENT_SMS_DEV_MODE ?? process.env.TENCENT_SMS_DEV_MODE)
+  return (
+    isDevModeEnvEnabled(['TOOLMAN_TENCENT_SMS_DEV_MODE', 'TENCENT_SMS_DEV_MODE'])
+  )
 }
 
 export function getTencentSmsConfig(): TencentSmsConfig | null {

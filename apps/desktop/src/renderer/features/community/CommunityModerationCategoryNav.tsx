@@ -7,30 +7,31 @@ import {
   IconKnowledge,
   IconUsers,
 } from '../../components/icons'
-import {
-  MODERATION_CATEGORY_LABELS,
-  type ModerationCategory,
-} from './community-moderation-utils'
+import { getModerationCategoryLabels } from '../../i18n/community-moderation-labels'
+import { useI18n } from '../../i18n/useI18n'
+import { type ModerationCategory } from './community-moderation-utils'
 import { useCommunityModerationCategoryOptional } from './community-moderation-category-context'
 import { isCommunityModerator } from './community-user-utils'
 import { useCommunityUser } from './useCommunityUser'
 
-const MODERATION_CATEGORIES: Array<{
-  key: ModerationCategory
-  label: string
-  icon: ReactNode
-}> = [
-  { key: 'resources', label: MODERATION_CATEGORY_LABELS.resources, icon: <IconKnowledge size={16} /> },
-  { key: 'review', label: MODERATION_CATEGORY_LABELS.review, icon: <IconAccess size={16} /> },
-  { key: 'online', label: MODERATION_CATEGORY_LABELS.online, icon: <IconGlobe size={16} /> },
-  { key: 'admin', label: MODERATION_CATEGORY_LABELS.admin, icon: <IconUsers size={16} /> },
-  { key: 'logs', label: MODERATION_CATEGORY_LABELS.logs, icon: <IconActivity size={16} /> },
-]
-
 export function CommunityModerationCategoryNav() {
+  const { t } = useI18n()
   const user = useCommunityUser()
   const isModerator = isCommunityModerator(user.profile?.role)
   const moderationCategory = useCommunityModerationCategoryOptional()
+  const categoryLabels = getModerationCategoryLabels(t)
+
+  const moderationCategories: Array<{
+    key: ModerationCategory
+    label: string
+    icon: ReactNode
+  }> = [
+    { key: 'resources', label: categoryLabels.resources, icon: <IconKnowledge size={16} /> },
+    { key: 'review', label: categoryLabels.review, icon: <IconAccess size={16} /> },
+    { key: 'online', label: categoryLabels.online, icon: <IconGlobe size={16} /> },
+    { key: 'admin', label: categoryLabels.admin, icon: <IconUsers size={16} /> },
+    { key: 'logs', label: categoryLabels.logs, icon: <IconActivity size={16} /> },
+  ]
 
   if (!isModerator || !moderationCategory) return null
 
@@ -40,9 +41,9 @@ export function CommunityModerationCategoryNav() {
     <div
       className="tm-community-moderation-header-nav"
       role="tablist"
-      aria-label="管理分类"
+      aria-label={t('communityPage.admin.navAria')}
     >
-      {MODERATION_CATEGORIES.map((item) => {
+      {moderationCategories.map((item) => {
         const active = category === item.key
         return (
           <button

@@ -17,6 +17,7 @@ import {
 import { formatCommunityCount } from './community-market-utils'
 import { CommunityReportModal } from './CommunityReportModal'
 import { useRegistrationGate } from '../user/useRegistrationGate'
+import { useI18n } from '../../i18n/useI18n'
 
 export interface CommunityCardActionCounts {
   likeCount?: number
@@ -122,6 +123,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
   },
   ref,
 ) {
+  const { t } = useI18n()
   const [showReport, setShowReport] = useState(false)
   const { requireRegistration, modal } = useRegistrationGate()
   const actionsBusy =
@@ -142,7 +144,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           {showInstall ? (
             <ActionButton
               kind="install"
-              label="安装"
+              label={t('communityPage.actions.install')}
               count={counts.installCount}
               disabled={busyAction === 'install'}
               onClick={guardWrite(onInstall)}
@@ -153,7 +155,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           {onDelete ? (
             <ActionButton
               kind="delete"
-              label="删除"
+              label={t('communityPage.actions.delete')}
               disabled={busyAction === 'delete'}
               onClick={guardWrite(onDelete)}
             >
@@ -165,7 +167,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
         <div className="tm-community-list-card-actions-main">
           <ActionButton
             kind="like"
-            label="点赞"
+            label={t('communityPage.actions.like')}
             count={counts.likeCount}
             active={state.liked}
             disabled={actionsBusy}
@@ -176,7 +178,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           {onComment ? (
             <ActionButton
               kind="comment"
-              label="评论"
+              label={t('communityPage.actions.comment')}
               count={counts.commentCount}
               active={commentsExpanded}
               disabled={actionsBusy}
@@ -187,7 +189,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           ) : null}
           <ActionButton
             kind="dislike"
-            label="点踩"
+            label={t('communityPage.actions.dislike')}
             count={counts.dislikeCount}
             active={state.disliked}
             disabled={actionsBusy}
@@ -201,7 +203,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           </ActionButton>
           <ActionButton
             kind="favorite"
-            label="收藏"
+            label={t('communityPage.actions.favorite')}
             count={counts.favoriteCount}
             active={state.favorited}
             disabled={actionsBusy}
@@ -216,7 +218,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           {onShare ? (
             <ActionButton
               kind="share"
-              label="转发"
+              label={t('communityPage.actions.share')}
               disabled={actionsBusy}
               onClick={onShare}
             >
@@ -226,7 +228,7 @@ export const CommunityListCardActions = forwardRef<HTMLDivElement, Props>(functi
           {reportTarget ? (
             <ActionButton
               kind="report"
-              label="举报"
+              label={t('communityPage.actions.report')}
               disabled={busyAction === 'report'}
               onClick={() => {
                 if (!requireRegistration('community_write')) return

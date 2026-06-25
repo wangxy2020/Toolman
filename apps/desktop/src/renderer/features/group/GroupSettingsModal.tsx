@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   IpcChannel,
-  replicationTopologyLabel,
   type P2pReplicationTopology,
   type P2pSequencingMode,
   type P2pSyncPeerStatus,
@@ -9,6 +8,14 @@ import {
   type P2pWorkspace,
 } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { useI18n } from '../../i18n/useI18n'
+import {
+  formatGroupPeerState,
+  formatGroupSequencingMode,
+  formatGroupSyncStatus,
+  formatReplicationTopologyLabel,
+} from '../../i18n/group-sync-labels'
+import { translateGroupName } from '../../i18n/system-labels'
 
 interface SyncStatusProps {
   status: P2pSyncStatus
@@ -37,44 +44,6 @@ interface Props {
 type ConfirmAction = 'leave' | 'dissolve' | null
 type SettingsTab = 'general' | 'storage' | 'danger'
 
-const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: 'general', label: '基本信息' },
-  { id: 'storage', label: '存储与同步' },
-  { id: 'danger', label: '危险操作' },
-]
-
-function formatSyncStatus(status: P2pSyncStatus): string {
-  switch (status) {
-    case 'idle':
-      return '空闲'
-    case 'syncing':
-      return '同步中'
-    case 'error':
-      return '错误'
-  }
-}
-
-function formatSequencingMode(mode: P2pSequencingMode): string {
-  return mode === 'owner_authoritative' ? '群主权威模式' : 'Lamport 降级模式'
-}
-
-function formatPeerState(state: P2pSyncPeerStatus['state']): string {
-  switch (state) {
-    case 'connected':
-      return '已连接'
-    case 'connecting':
-      return '连接中'
-    case 'reconnecting':
-      return '重连中'
-    case 'signaling':
-      return '信令交换中'
-    case 'idle':
-      return '空闲'
-    case 'closed':
-      return '已关闭'
-  }
-}
-
 function formatTimestamp(timestamp?: number): string {
   if (!timestamp) return '—'
   return new Date(timestamp).toLocaleString()
@@ -100,6 +69,7 @@ export function GroupSettingsModal({
   onWorkspaceUpdated,
   onWorkspaceLeft,
 }: Props) {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [name, setName] = useState(workspace.name)
   const [description, setDescription] = useState(workspace.description ?? '')
@@ -166,7 +136,7 @@ export function GroupSettingsModal({
   const handleSave = async () => {
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('群组名称不能为空')
+      setError(t('groupPage.settings.nameRequired'))
       setActiveTab('general')
       return
     }
@@ -228,13 +198,18 @@ export function GroupSettingsModal({
 
   const displayLastEventSeq = Math.max(syncStatus.lastEventSeq, workspace.lastEventSeq)
   const sequencingLabel =
-    formatSequencingMode(syncStatus.sequencingMode) +
-    (!isOwner && !syncStatus.ownerOnline ? '（群主离线）' : '')
-  const replicationLabel = replicationTopologyLabel(syncStatus.replicationTopology)
+    formatGroupSequencingMode(syncStatus.sequencingMode, t) +
+    (!isOwner && !syncStatus.ownerOnline ? t('groupPage.settings.ownerOffline') : '')
+  const replicationLabel = formatReplicationTopologyLabel(syncStatus.replicationTopology, t)
   const meshDetail =
     syncStatus.replicationTopology === 'member_mesh'
-      ? ` · ${syncStatus.meshPeersConnected} 个成员节点`
+      ? ` · ${t('groupPage.settings.memberNodes', { count: syncStatus.meshPeersConnected })}`
       : ''
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: 'general', label: t('groupPage.settings.tabs.general') },
+    { id: 'storage', label: t('groupPage.settings.tabs.storage') },
+    { id: 'danger', label: t('groupPage.settings.tabs.danger') },
+  ]
 
   return (
     <div className="tm-modal-overlay tm-modal-overlay--group-settings" onClick={onClose}>
@@ -249,13 +224,13 @@ export function GroupSettingsModal({
           <div className="tm-group-settings-modal-heading">
             <h3 id="group-settings-title" className="tm-group-settings-modal-title">
               <span className="tm-group-settings-modal-title-dot" aria-hidden="true" />
-              群组设置
+              {t('groupPage.settingsTitle')}
             </h3>
             <p className="tm-group-settings-modal-subtitle">
-              {workspaceName} · {workspace.memberCount} 名成员
+              {workspaceName} · {t('groupPage.settings.memberCount', { count: workspace.memberCount })}
             </p>
           </div>
-          <button type="button" className="tm-group-settings-modal-close" aria-label="关闭" onClick={onClose}>
+          <button type="button" className="tm-group-settings-modal-close" aria-label={t('common.close')} onClick={onClose}>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -269,8 +244,8 @@ export function GroupSettingsModal({
         </header>
 
         <div className="tm-group-settings-modal-body">
-          <nav className="tm-group-settings-modal-nav" aria-label="群组设置分类">
-            {SETTINGS_TABS.map((tab) => (
+          <nav className="tm-group-settings-modal-nav" aria-label={t('groupPage.settingsNavAria')}>
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -292,18 +267,18 @@ export function GroupSettingsModal({
 
             {activeTab === 'general' ? (
               <div className="tm-group-settings-form">
-                <span className="tm-group-settings-section-title">常规设置</span>
+                <span className="tm-group-settings-section-title">{t('groupPage.settings.generalSection')}</span>
 
                 <div className="tm-group-settings-field">
                   <label className="tm-group-settings-label" htmlFor="group-settings-name">
-                    群组名称 <span className="tm-group-settings-required">*</span>
+                    {t('groupPage.settings.groupName')} <span className="tm-group-settings-required">*</span>
                   </label>
                   <input
                     id="group-settings-name"
                     className="tm-group-settings-input"
-                    value={name}
+                    value={translateGroupName(name, t)}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder="输入群组名称"
+                    placeholder={t('groupPage.settings.namePlaceholder')}
                     maxLength={100}
                     readOnly={!isOwner}
                     disabled={!isOwner}
@@ -312,14 +287,14 @@ export function GroupSettingsModal({
 
                 <div className="tm-group-settings-field">
                   <label className="tm-group-settings-label" htmlFor="group-settings-description">
-                    描述
+                    {t('common.description')}
                   </label>
                   <textarea
                     id="group-settings-description"
                     className="tm-group-settings-textarea"
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
-                    placeholder="简要描述群组用途…"
+                    placeholder={t('groupPage.settings.descriptionPlaceholder')}
                     maxLength={500}
                     rows={3}
                     readOnly={!isOwner}
@@ -328,7 +303,7 @@ export function GroupSettingsModal({
                 </div>
 
                 {!isOwner ? (
-                  <p className="tm-group-settings-hint">仅群主可修改群组名称与描述。</p>
+                  <p className="tm-group-settings-hint">{t('groupPage.settings.ownerHint')}</p>
                 ) : null}
               </div>
             ) : null}
@@ -336,14 +311,14 @@ export function GroupSettingsModal({
             {activeTab === 'storage' ? (
               <div className="tm-group-settings-form">
                 <div className="tm-group-settings-section-head">
-                  <span className="tm-group-settings-section-title">数据底座状态</span>
+                  <span className="tm-group-settings-section-title">{t('groupPage.settings.storageSection')}</span>
                   <div className="tm-group-settings-inline-actions">
                     <button
                       type="button"
                       className="tm-group-settings-inline-btn"
                       onClick={() => void syncStatus.onRefresh()}
                     >
-                      刷新状态
+                      {t('groupPage.settings.refreshStatus')}
                     </button>
                     <button
                       type="button"
@@ -351,54 +326,54 @@ export function GroupSettingsModal({
                       disabled={!storagePath}
                       onClick={() => void openStoragePath()}
                     >
-                      打开目录
+                      {t('groupPage.settings.openDir')}
                     </button>
                   </div>
                 </div>
 
                 <div className="tm-group-settings-field">
-                  <span className="tm-group-settings-label">本地存储路径</span>
+                  <span className="tm-group-settings-label">{t('groupPage.settings.localPath')}</span>
                   <div
                     className="tm-group-settings-path-box"
                     title={storagePath ?? undefined}
                   >
-                    {storageLoading ? '加载中…' : (storagePath ?? '—')}
+                    {storageLoading ? t('common.loading') : (storagePath ?? '—')}
                   </div>
                 </div>
 
                 <div className="tm-group-settings-stat-grid">
                   <div className="tm-group-settings-stat-card">
-                    <span className="tm-group-settings-stat-label">同步状态</span>
+                    <span className="tm-group-settings-stat-label">{t('groupPage.settings.syncStatus')}</span>
                     <span className="tm-group-settings-stat-value">
                       <span className={syncStatusDotClass(syncStatus.status)} aria-hidden="true" />
-                      {formatSyncStatus(syncStatus.status)}
+                      {formatGroupSyncStatus(syncStatus.status, t)}
                     </span>
                   </div>
                   <div className="tm-group-settings-stat-card">
-                    <span className="tm-group-settings-stat-label">序号模式</span>
+                    <span className="tm-group-settings-stat-label">{t('groupPage.settings.sequencingMode')}</span>
                     <span className="tm-group-settings-stat-value">{sequencingLabel}</span>
                   </div>
                   <div className="tm-group-settings-stat-card">
-                    <span className="tm-group-settings-stat-label">复制拓扑</span>
+                    <span className="tm-group-settings-stat-label">{t('groupPage.settings.replicationTopology')}</span>
                     <span className="tm-group-settings-stat-value">
                       {replicationLabel}
                       {meshDetail}
                     </span>
                   </div>
                   <div className="tm-group-settings-stat-card">
-                    <span className="tm-group-settings-stat-label">最新事件序号</span>
+                    <span className="tm-group-settings-stat-label">{t('groupPage.settings.lastEventSeq')}</span>
                     <span className="tm-group-settings-stat-value tm-group-settings-stat-value--mono">
                       {displayLastEventSeq}
                     </span>
                   </div>
                   <div className="tm-group-settings-stat-card">
-                    <span className="tm-group-settings-stat-label">上次同步时间</span>
+                    <span className="tm-group-settings-stat-label">{t('groupPage.settings.lastSyncTime')}</span>
                     <span className="tm-group-settings-stat-value tm-group-settings-stat-value--mono tm-group-settings-stat-value--muted">
                       {formatTimestamp(syncStatus.lastSyncAt)}
                     </span>
                   </div>
                   <div className="tm-group-settings-stat-card">
-                    <span className="tm-group-settings-stat-label">待同步文件</span>
+                    <span className="tm-group-settings-stat-label">{t('groupPage.settings.pendingFiles')}</span>
                     <span className="tm-group-settings-stat-value tm-group-settings-stat-value--mono">
                       {syncStatus.pendingFiles}
                     </span>
@@ -411,62 +386,59 @@ export function GroupSettingsModal({
                   </div>
                 ) : null}
 
-                <p className="tm-group-settings-callout">
-                  本机已知的群组事件最大序号，用于成员间同步与排序；创建群组、分享资源等操作会递增。
-                </p>
+                <p className="tm-group-settings-callout">{t('groupPage.settings.eventSeqCallout')}</p>
 
                 {syncStatus.peers.length > 0 ? (
                   <div className="tm-group-settings-peers">
-                    <span className="tm-group-settings-section-title">对端同步</span>
+                    <span className="tm-group-settings-section-title">{t('groupPage.settings.peerSync')}</span>
                     <ul className="tm-group-settings-peer-list">
                       {syncStatus.peers.map((peer) => (
                         <li key={peer.deviceId} className="tm-group-settings-peer-item">
                           <span className="tm-group-settings-peer-id">{peer.deviceId.slice(0, 8)}…</span>
                           <span className="tm-group-settings-peer-meta">
-                            {formatPeerState(peer.state)} · 已收 {peer.lastReceivedSeq} / 已发{' '}
-                            {peer.lastSentSeq}
+                            {formatGroupPeerState(peer.state, t)} ·{' '}
+                            {t('groupPage.settings.peerReceivedSent', {
+                              received: peer.lastReceivedSeq,
+                              sent: peer.lastSentSeq,
+                            })}
                           </span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 ) : (
-                  <p className="tm-group-settings-hint">暂无已连接的对端设备。</p>
+                  <p className="tm-group-settings-hint">{t('groupPage.settings.noPeers')}</p>
                 )}
               </div>
             ) : null}
 
             {activeTab === 'danger' ? (
               <div className="tm-group-settings-form">
-                <span className="tm-group-settings-section-title">危险操作</span>
+                <span className="tm-group-settings-section-title">{t('groupPage.settings.dangerSection')}</span>
 
                 <div className="tm-group-settings-danger-card">
                   {isOwner ? (
                     <>
-                      <p className="tm-group-settings-hint">
-                        解散群组后，本地成员记录与密钥将被移除，其他成员将无法继续同步此群组。
-                      </p>
+                      <p className="tm-group-settings-hint">{t('groupPage.settings.dissolveHint')}</p>
                       <button
                         type="button"
                         className="tm-group-settings-danger-btn"
                         disabled={actionBusy}
                         onClick={() => setConfirmAction('dissolve')}
                       >
-                        解散群组
+                        {t('groupPage.settings.dissolveBtn')}
                       </button>
                     </>
                   ) : (
                     <>
-                      <p className="tm-group-settings-hint">
-                        退出群组后，本设备将不再接收该群组的事件与文件。
-                      </p>
+                      <p className="tm-group-settings-hint">{t('groupPage.settings.leaveHint')}</p>
                       <button
                         type="button"
                         className="tm-group-settings-danger-btn"
                         disabled={actionBusy}
                         onClick={() => setConfirmAction('leave')}
                       >
-                        退出群组
+                        {t('groupPage.settings.leaveBtn')}
                       </button>
                     </>
                   )}
@@ -478,13 +450,13 @@ export function GroupSettingsModal({
 
         <footer className="tm-group-settings-modal-footer">
           <div className="tm-group-settings-modal-footer-actions">
-            <button
+              <button
               type="button"
               className="tm-group-settings-modal-footer-btn tm-group-settings-modal-footer-btn--secondary"
               onClick={onClose}
               disabled={saving}
             >
-              {isOwner ? '取消' : '关闭'}
+              {isOwner ? t('common.cancel') : t('common.close')}
             </button>
             {isOwner ? (
               <button
@@ -493,7 +465,7 @@ export function GroupSettingsModal({
                 disabled={!isDirty || saving}
                 onClick={() => void handleSave()}
               >
-                {saving ? '保存中…' : '保存设置'}
+                {saving ? t('common.loading') : t('knowledgePage.settings.saveConfig')}
               </button>
             ) : null}
           </div>
@@ -502,9 +474,9 @@ export function GroupSettingsModal({
 
       {confirmAction === 'leave' ? (
         <ConfirmDialog
-          title="退出群组"
-          message={`确定要退出「${workspaceName}」吗？退出后需重新通过邀请链接加入。`}
-          confirmLabel="退出群组"
+          title={t('groupPage.settings.leaveTitle')}
+          message={t('groupPage.settings.leaveConfirm', { name: workspaceName })}
+          confirmLabel={t('groupPage.settings.leaveTitle')}
           danger
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => void handleLeave()}
@@ -513,9 +485,9 @@ export function GroupSettingsModal({
 
       {confirmAction === 'dissolve' ? (
         <ConfirmDialog
-          title="解散群组"
-          message={`确定要解散「${workspaceName}」吗？此操作不可撤销，所有成员将失去访问权限。`}
-          confirmLabel="解散群组"
+          title={t('groupPage.settings.dissolveTitle')}
+          message={t('groupPage.settings.dissolveConfirm', { name: workspaceName })}
+          confirmLabel={t('groupPage.settings.dissolveTitle')}
           danger
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => void handleDissolve()}

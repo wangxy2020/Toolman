@@ -30,7 +30,7 @@ pub struct FederationCatalogEntry {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FederationCatalogPage {
-    pub items: Vec<FederationCatalogEntry>,
+    pub items: Vec<crate::services::federation_catalog_signing::FederatedCatalogWireMessage>,
     pub latest_updated_at: Option<i64>,
 }
 
@@ -86,6 +86,7 @@ impl FederationService {
     pub async fn list_catalog(
         &self,
         query: FederationCatalogQuery,
+        data_dir: &std::path::Path,
     ) -> Result<FederationCatalogPage, sqlx::Error> {
         let limit = query.limit.clamp(1, 500);
         let mut builder = sqlx::QueryBuilder::new(
@@ -148,7 +149,7 @@ impl FederationService {
                 .map(build_root_cid)
                 .unwrap_or_default();
 
-            items.push(FederationCatalogEntry {
+            let catalog_entry = FederationCatalogEntry {
                 id: record.id,
                 title: record.title,
                 description: record.description,
@@ -165,7 +166,15 @@ impl FederationService {
                 license: record.license,
                 created_at: record.created_at,
                 updated_at: record.updated_at,
-            });
+            };
+
+            match crate::services::federation_catalog_signing::sign_federation_catalog_entry(
+                data_dir,
+                &catalog_entry,
+            ) {
+                Ok(wire) => items.push(wire),
+                Err(error) => tracing::warn!("federation catalog signing failed: {error}"),
+            }
         }
 
         Ok(FederationCatalogPage {
@@ -300,24 +309,31 @@ mod tests {
 
         let service = FederationService::new(pool);
         let page = service
-            .list_catalog(FederationCatalogQuery {
-                updated_after: 0,
-                limit: 50,
-                resource_type: None,
-            })
+            .list_catalog(
+                FederationCatalogQuery {
+                    updated_after: 0,
+                    limit: 50,
+                    resource_type: None,
+                },
+                &data_dir,
+            )
             .await
             .expect("catalog");
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.items[0].title, "Peer MCP");
-        assert_eq!(page.items[0].root_cid, "toolman:sha256:abc123");
+        assert_eq!(page.items[0].entry.title, "Peer MCP");
+        assert_eq!(page.items[0].entry.root_cid, "toolman:sha256:abc123");
+        assert!(!page.items[0].signature.is_empty());
 
         let empty = service
-            .list_catalog(FederationCatalogQuery {
-                updated_after: page.items[0].updated_at,
-                limit: 50,
-                resource_type: None,
-            })
+            .list_catalog(
+                FederationCatalogQuery {
+                    updated_after: page.items[0].entry.updated_at,
+                    limit: 50,
+                    resource_type: None,
+                },
+                &data_dir,
+            )
             .await
             .expect("incremental");
         assert!(empty.items.is_empty());

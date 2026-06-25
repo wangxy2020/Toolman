@@ -37,6 +37,16 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Desktop coverage
+        run: pnpm --filter @toolman/desktop exec vitest run --coverage
+
+      - name: Docx integration
+        run: pnpm --filter @toolman/desktop test:docx-integration
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+
       - name: P2P schema smoke
         run: pnpm --filter @toolman/db test:p2p-schema
 

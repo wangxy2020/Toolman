@@ -1,18 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useI18n } from '../../i18n/useI18n'
 import { SettingsToggle } from './SettingsShared'
 import { AboutJoinUsModal } from './AboutJoinUsModal'
 import { TOOLMAN_GITHUB_URL } from './about-settings.constants'
 import { useAppUpdate } from './useAppUpdate'
 
-const ABOUT_LINKS = [
-  { id: 'docs', label: '帮助文档', action: '查看' },
-  { id: 'changelog', label: '更新日志', action: '查看' },
-  { id: 'website', label: '官方网站', action: '查看' },
-  { id: 'feedback', label: '意见反馈', action: '反馈' },
-  { id: 'enterprise', label: '企业版', action: '查看' },
-  { id: 'email', label: '邮件联系', action: '邮件' },
-  { id: 'join', label: '加入我们', action: '查看' },
+const ABOUT_LINK_IDS = [
+  'docs',
+  'changelog',
+  'website',
+  'feedback',
+  'enterprise',
+  'email',
+  'join',
 ] as const
+
+type AboutLinkId = (typeof ABOUT_LINK_IDS)[number]
 
 function openExternal(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
@@ -35,31 +38,52 @@ function IconGithub({ size = 24 }: { size?: number }) {
   )
 }
 
+function getLinkActionKey(id: AboutLinkId): string {
+  if (id === 'feedback') return 'settings.about.links.action.feedback'
+  if (id === 'email') return 'settings.about.links.action.email'
+  return 'settings.about.links.action.view'
+}
+
 export function AboutSettingsPanel() {
+  const { t } = useI18n()
   const [joinModalOpen, setJoinModalOpen] = useState(false)
   const {
     status,
     currentVersion,
     releaseNotes,
     updateButtonLabel,
+    updateStatusHint,
     updateButtonDisabled,
     setAutoUpdate,
     runUpdateAction,
   } = useAppUpdate()
 
+  const aboutLinks = useMemo(
+    () =>
+      ABOUT_LINK_IDS.map((id) => ({
+        id,
+        label: t(`settings.about.links.${id}`),
+        action: t(getLinkActionKey(id)),
+      })),
+    [t],
+  )
+
   const latestVersion = status?.latestVersion
   const showReleaseNotes = status?.updateAvailable && releaseNotes.length > 0
+  const showUpdateProgress =
+    status?.phase === 'downloading' && status.downloadProgress != null && status.downloadProgress >= 0
+  const showStatusHint = updateStatusHint && status?.phase !== 'idle'
 
   return (
     <div className="tm-about-settings">
       <div className="tm-about-card">
         <div className="tm-about-card-header">
-          <h2 className="tm-about-card-title">关于我们</h2>
+          <h2 className="tm-about-card-title">{t('settings.about.title')}</h2>
           <button
             type="button"
             className="tm-about-icon-btn tm-about-icon-btn--github"
             title="GitHub"
-            aria-label="在 GitHub 打开 Toolman 仓库"
+            aria-label={t('settings.about.githubAriaLabel')}
             onClick={() => openExternal(TOOLMAN_GITHUB_URL)}
           >
             <IconGithub size={24} />
@@ -70,7 +94,7 @@ export function AboutSettingsPanel() {
           <div className="tm-about-logo">T</div>
           <div className="tm-about-hero-text">
             <h3 className="tm-about-name">Toolman</h3>
-            <p className="tm-about-tagline">一款为创造者而生的 AI 助手</p>
+            <p className="tm-about-tagline">{t('settings.about.tagline')}</p>
             <span className="tm-about-version-badge">v{currentVersion}</span>
             {status?.channel ? (
               <span className="tm-about-version-badge"> · {status.channel}</span>
@@ -86,17 +110,32 @@ export function AboutSettingsPanel() {
           </button>
         </div>
 
-        {status?.error ? <p className="tm-about-update-hint">{status.error}</p> : null}
+        {showStatusHint ? <p className="tm-about-update-status">{updateStatusHint}</p> : null}
+        {status?.error && status.phase !== 'error' ? (
+          <p className="tm-about-update-hint">{status.error}</p>
+        ) : null}
+
+        {showUpdateProgress ? (
+          <div className="tm-about-update-progress" role="progressbar" aria-valuenow={status.downloadProgress ?? 0} aria-valuemin={0} aria-valuemax={100}>
+            <div
+              className="tm-about-update-progress-bar"
+              style={{ width: `${status.downloadProgress ?? 0}%` }}
+            />
+          </div>
+        ) : null}
 
         <div className="tm-about-divider" />
 
         <div className="tm-about-toggle-row">
-          <span>自动更新</span>
+          <span>{t('settings.about.autoUpdate')}</span>
           <SettingsToggle
             checked={status?.autoUpdate ?? true}
             onChange={(checked) => void setAutoUpdate(checked)}
           />
         </div>
+        <p className="tm-about-auto-update-hint">
+          {status?.enabled ? t('settings.about.autoUpdateHint') : t('settings.about.autoUpdateDisabledHint')}
+        </p>
       </div>
 
       {showReleaseNotes ? (
@@ -104,7 +143,7 @@ export function AboutSettingsPanel() {
           <div className="tm-about-changelog-head">
             <span className="tm-about-status-dot" aria-hidden="true" />
             <span>
-              发现新版本 {latestVersion ?? currentVersion}
+              {t('settings.about.newVersionFound', { version: latestVersion ?? currentVersion })}
             </span>
           </div>
           <ul className="tm-about-changelog-list">
@@ -116,7 +155,7 @@ export function AboutSettingsPanel() {
       ) : null}
 
       <div className="tm-about-card tm-about-links-card">
-        {ABOUT_LINKS.map((link) => (
+        {aboutLinks.map((link) => (
           <div key={link.id} className="tm-about-link-row">
             <div className="tm-about-link-label">
               <span className="tm-about-link-icon" aria-hidden="true">

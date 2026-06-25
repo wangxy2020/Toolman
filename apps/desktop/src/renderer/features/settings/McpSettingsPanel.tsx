@@ -9,6 +9,12 @@ import {
   type McpStatusItem,
 } from '@toolman/shared'
 import { IconMinus, IconPlus, IconSliders } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
+import {
+  getMcpCategoryDescription,
+  getMcpCategoryTitle,
+} from '../../i18n/settings-labels'
+import type { TranslateFn } from '../../i18n/useI18n'
 import { MCP_SERVERS } from '../chat/agent-settings-constants'
 import { McpServerEditModal, EMPTY_STDIO_DRAFT, applyPackageSource } from './McpServerEditModal'
 import { withPostgresDefaults } from './mcp-db-connection'
@@ -30,13 +36,6 @@ function canPersist(config: McpServerConfig, creating: boolean): boolean {
   if (creating && !config.id.trim()) return false
   return true
 }
-
-const CUSTOM_CATEGORY = {
-  id: 'custom',
-  title: '自定义',
-  description: '通过 uvx/npx 或 HTTP 传输连接的外部 MCP 服务器，可按需添加或删除',
-  serverIds: [] as const,
-} as const
 
 type McpSettingsCategoryGroup = {
   id: string
@@ -66,13 +65,16 @@ function sortServersByName(servers: McpServerConfig[]): McpServerConfig[] {
   return [...servers].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 }
 
-function groupServers(servers: McpServerConfig[]): McpSettingsCategoryGroup[] {
+function groupServers(servers: McpServerConfig[], t: TranslateFn): McpSettingsCategoryGroup[] {
   const knownIds = new Set<string>(
     MCP_SETTINGS_CATEGORIES.flatMap((category) => category.serverIds),
   )
 
   const categorized: McpSettingsCategoryGroup[] = MCP_SETTINGS_CATEGORIES.map((category) => ({
-    ...category,
+    id: category.id,
+    title: getMcpCategoryTitle(category.id, t),
+    description: getMcpCategoryDescription(category.id, t),
+    serverIds: category.serverIds,
     servers: sortServersByName(
       category.serverIds
         .map((id) => resolveCategoryServer(id, servers))
@@ -85,12 +87,19 @@ function groupServers(servers: McpServerConfig[]): McpSettingsCategoryGroup[] {
       (server) => !knownIds.has(server.id) && !isDuplicateOfficialMcpPreset(server),
     ),
   )
-  categorized.push({ ...CUSTOM_CATEGORY, servers: customServers })
+  categorized.push({
+    id: 'custom',
+    title: getMcpCategoryTitle('custom', t),
+    description: getMcpCategoryDescription('custom', t),
+    serverIds: [],
+    servers: customServers,
+  })
 
   return categorized
 }
 
 export function McpSettingsPanel() {
+  const { t } = useI18n()
   const [servers, setServers] = useState<McpServerConfig[]>([])
   const [statusMap, setStatusMap] = useState<Record<string, McpStatusItem>>({})
   const [loading, setLoading] = useState(true)
@@ -102,7 +111,7 @@ export function McpSettingsPanel() {
   const [testResults, setTestResults] = useState<Record<string, string>>({})
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const groupedServers = useMemo(() => groupServers(servers), [servers])
+  const groupedServers = useMemo(() => groupServers(servers, t), [servers, t])
 
   const loadServers = useCallback(async () => {
     setLoading(true)
@@ -172,6 +181,22 @@ export function McpSettingsPanel() {
     [saveServer, loadStatus, servers],
   )
 
+  const formatTestResult = useCallback(
+    (data: { success: boolean; toolCount?: number; serverName?: string; error?: string }) => {
+      if (!data.success) return data.error ?? t('settings.mcp.test.failed')
+      return t('settings.mcp.test.success', {
+        toolCount:
+          data.toolCount != null
+            ? t('settings.mcp.test.toolCount', { count: data.toolCount })
+            : '',
+        serverName: data.serverName
+          ? t('settings.mcp.test.serverName', { name: data.serverName })
+          : '',
+      })
+    },
+    [t],
+  )
+
   const handleTest = useCallback(
     async (serverId: string) => {
       setTestingId(serverId)
@@ -187,23 +212,16 @@ export function McpSettingsPanel() {
         serverName?: string
         error?: string
       }
-      setTestResults((prev) => ({
-        ...prev,
-        [serverId]: data.success
-          ? `连接成功${data.toolCount != null ? `，${data.toolCount} 个工具` : ''}${
-              data.serverName ? `（${data.serverName}）` : ''
-            }`
-          : (data.error ?? '连接失败'),
-      }))
+      setTestResults((prev) => ({ ...prev, [serverId]: formatTestResult(data) }))
       void loadStatus(servers)
     },
-    [loadStatus, servers],
+    [formatTestResult, loadStatus, servers],
   )
 
   const handleDelete = useCallback(
     async (server: McpServerConfig) => {
       if (server.type === 'builtin' || isSystemDefaultServer(server.id)) return
-      if (!window.confirm(`确定删除 MCP 服务器「${server.name}」？`)) return
+      if (!window.confirm(t('settings.mcp.delete.confirm', { name: server.name }))) return
 
       const result = await window.api.invoke(IpcChannel.McpServerDelete, { id: server.id })
       if (!result.ok) {
@@ -221,7 +239,7 @@ export function McpSettingsPanel() {
       })
       await loadServers()
     },
-    [draft.id, loadServers, modalOpen],
+    [draft.id, loadServers, modalOpen, t],
   )
 
   const openCreate = () => {
@@ -281,11 +299,11 @@ export function McpSettingsPanel() {
   }
 
   const getStatusLabel = (server: McpServerConfig) => {
-    if (!server.enabled) return { text: '未启用', connected: false }
+    if (!server.enabled) return { text: t('settings.mcp.status.disabled'), connected: false }
     const status = statusMap[server.id]
-    if (!status) return { text: '检测中…', connected: false }
-    if (status.connected) return { text: '已连接', connected: true }
-    return { text: '未连接', connected: false, reason: status.reason }
+    if (!status) return { text: t('settings.mcp.status.checking'), connected: false }
+    if (status.connected) return { text: t('settings.mcp.status.connected'), connected: true }
+    return { text: t('settings.mcp.status.disconnected'), connected: false, reason: status.reason }
   }
 
   const renderServerRow = (server: McpServerConfig) => {
@@ -297,7 +315,7 @@ export function McpSettingsPanel() {
       !isBuiltin && !isLocalDb && server.command
         ? [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')
         : null
-    const description = isLocalDb ? '访问本地 PostgreSQL 数据库' : server.description
+    const description = isLocalDb ? t('settings.mcp.servers.localDbDescription') : server.description
 
     return (
       <div key={server.id} className="tm-mcp-server-card">
@@ -322,7 +340,7 @@ export function McpSettingsPanel() {
           <button
             type="button"
             className="tm-provider-icon-btn"
-            title="编辑MCP服务器"
+            title={t('settings.mcp.servers.editTitle')}
             onClick={() => openEdit(server)}
           >
             <IconSliders size={14} />
@@ -331,7 +349,7 @@ export function McpSettingsPanel() {
             <button
               type="button"
               className="tm-provider-icon-btn tm-provider-icon-btn--danger"
-              title="删除MCP服务器"
+              title={t('settings.mcp.servers.deleteTitle')}
               onClick={() => void handleDelete(server)}
             >
               <IconMinus size={14} />
@@ -343,7 +361,9 @@ export function McpSettingsPanel() {
             disabled={testingId === server.id || !server.enabled}
             onClick={() => void handleTest(server.id)}
           >
-            {testingId === server.id ? '测试中…' : '测试连接'}
+            {testingId === server.id
+              ? t('settings.mcp.servers.testing')
+              : t('settings.mcp.servers.testConnection')}
           </button>
           <SettingsToggle
             checked={server.enabled}
@@ -358,7 +378,7 @@ export function McpSettingsPanel() {
     <>
       <SettingsPageLayout>
         {error ? <div className="tm-settings-error">{error}</div> : null}
-        {loading ? <div className="tm-settings-loading">加载中…</div> : null}
+        {loading ? <div className="tm-settings-loading">{t('common.loading')}</div> : null}
 
         {groupedServers.map((category) => (
           <SettingsSection
@@ -369,7 +389,7 @@ export function McpSettingsPanel() {
               category.id === 'servers' ? (
                 <button type="button" className="tm-mcp-add-btn" onClick={openCreate}>
                   <IconPlus size={14} />
-                  添加
+                  {t('common.add')}
                 </button>
               ) : undefined
             }
@@ -377,7 +397,7 @@ export function McpSettingsPanel() {
             {category.servers.length > 0 ? (
               <div className="tm-mcp-server-list">{category.servers.map(renderServerRow)}</div>
             ) : category.id === 'custom' ? (
-              <div className="tm-mcp-empty-hint">暂无自定义 MCP 服务器。</div>
+              <div className="tm-mcp-empty-hint">{t('settings.mcp.custom.empty')}</div>
             ) : null}
           </SettingsSection>
         ))}

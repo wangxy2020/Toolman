@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type Provider, type ProviderModel } from '@toolman/shared'
 import { IconChevronRight, IconPlus, IconSearch } from '../../components/icons'
 import { IconRefresh } from '../../components/nav-module-icons'
+import { useI18n } from '../../i18n/useI18n'
+import { getModelCategoryLabel, getProviderPresetDisplayName } from '../../i18n/settings-labels'
 import { ModelCapabilityTags } from './ModelCapabilityTags'
 import type { ProviderPreset } from './provider-presets'
 import {
-  MODEL_CATEGORY_LABELS,
   createProviderModel,
   groupProviderModels,
   inferModelGroup,
@@ -41,6 +42,7 @@ const CATEGORIES: ModelCategory[] = [
 ]
 
 export function ModelPickerModal({ provider, preset, installedModels, onClose, onSave }: Props) {
+  const { t } = useI18n()
   const [remoteModels, setRemoteModels] = useState<ProviderModel[]>([])
   const [installed, setInstalled] = useState<ProviderModel[]>(installedModels)
   const [query, setQuery] = useState('')
@@ -128,7 +130,9 @@ export function ModelPickerModal({ provider, preset, installedModels, onClose, o
     <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-model-picker-modal" onClick={(e) => e.stopPropagation()}>
         <header className="tm-modal-header">
-          <h2 className="tm-modal-title">{preset.name}模型</h2>
+          <h2 className="tm-modal-title">
+            {t('settings.models.picker.title', { name: getProviderPresetDisplayName(preset, t) })}
+          </h2>
           <button type="button" className="tm-modal-close" onClick={onClose}>
             ×
           </button>
@@ -140,13 +144,13 @@ export function ModelPickerModal({ provider, preset, installedModels, onClose, o
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索模型 ID 或名称"
+              placeholder={t('settings.models.picker.searchPlaceholder')}
             />
           </div>
           <button
             type="button"
             className="tm-model-picker-icon-btn"
-            title="刷新"
+            title={t('settings.models.picker.refresh')}
             disabled={loading}
             onClick={() => void fetchRemote()}
           >
@@ -162,16 +166,16 @@ export function ModelPickerModal({ provider, preset, installedModels, onClose, o
               className={`tm-model-picker-tab ${category === tab ? 'tm-model-picker-tab--active' : ''}`}
               onClick={() => setCategory(tab)}
             >
-              {MODEL_CATEGORY_LABELS[tab]}
+              {getModelCategoryLabel(tab, t)}
             </button>
           ))}
         </div>
 
         <div className="tm-model-picker-body">
-          {loading && <p className="tm-model-picker-status">正在获取模型列表…</p>}
+          {loading && <p className="tm-model-picker-status">{t('settings.models.picker.loading')}</p>}
           {error && <p className="tm-model-picker-status tm-model-picker-status--error">{error}</p>}
           {!loading && !error && grouped.length === 0 && (
-            <p className="tm-model-picker-status">未找到匹配的模型</p>
+            <p className="tm-model-picker-status">{t('settings.models.picker.noResults')}</p>
           )}
 
           {grouped.map((group) => {
@@ -193,7 +197,7 @@ export function ModelPickerModal({ provider, preset, installedModels, onClose, o
                   <button
                     type="button"
                     className="tm-model-picker-group-add"
-                    title="添加整组"
+                    title={t('settings.models.picker.addGroup')}
                     onClick={() => addGroup(group.key)}
                   >
                     <IconPlus size={14} />
@@ -213,7 +217,7 @@ export function ModelPickerModal({ provider, preset, installedModels, onClose, o
                         <button
                           type="button"
                           className={`tm-model-picker-toggle ${isInstalled ? 'tm-model-picker-toggle--remove' : ''}`}
-                          title={isInstalled ? '移除' : '添加'}
+                          title={isInstalled ? t('settings.models.picker.remove') : t('settings.models.picker.add')}
                           onClick={() => toggleModel(model, !isInstalled)}
                         >
                           {isInstalled ? <IconMinus /> : <IconPlus size={14} />}
@@ -227,14 +231,16 @@ export function ModelPickerModal({ provider, preset, installedModels, onClose, o
         </div>
 
         <footer className="tm-model-picker-footer">
-          <span className="tm-model-picker-footer-hint">已选择 {installed.length} 个模型</span>
+          <span className="tm-model-picker-footer-hint">
+            {t('settings.models.picker.selectedCount', { count: installed.length })}
+          </span>
           <button
             type="button"
             className="tm-btn tm-btn--primary"
             disabled={saving}
             onClick={() => void handleSave()}
           >
-            {saving ? '保存中…' : '完成'}
+            {saving ? t('common.saving') : t('settings.models.picker.done')}
           </button>
         </footer>
       </div>

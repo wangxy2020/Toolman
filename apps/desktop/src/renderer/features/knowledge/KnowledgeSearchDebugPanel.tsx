@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IpcChannel, type KnowledgeSearchResult } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceId: string
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function KnowledgeSearchDebugPanel({ workspaceId, kbId }: Props) {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,13 +40,13 @@ export function KnowledgeSearchDebugPanel({ workspaceId, kbId }: Props) {
 
   return (
     <section className="tm-knowledge-settings-section">
-      <h3 className="tm-knowledge-settings-heading">检索调试</h3>
-      <p className="tm-knowledge-detail-hint">测试当前知识库的混合检索效果，仅用于调试。</p>
+      <h3 className="tm-knowledge-settings-heading">{t('knowledgePage.searchDebug.title')}</h3>
+      <p className="tm-knowledge-detail-hint">{t('knowledgePage.searchDebug.hint')}</p>
       <div className="tm-form-picker-row">
         <input
           className="tm-form-input"
           value={query}
-          placeholder="输入检索问题"
+          placeholder={t('knowledgePage.searchDebug.placeholder')}
           disabled={loading}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -57,7 +59,7 @@ export function KnowledgeSearchDebugPanel({ workspaceId, kbId }: Props) {
           disabled={loading || !query.trim()}
           onClick={() => void handleSearch()}
         >
-          {loading ? '检索中…' : '检索'}
+          {loading ? t('knowledgePage.searchDebug.searching') : t('knowledgePage.searchDebug.search')}
         </button>
       </div>
       {error ? <p className="tm-form-error">{error}</p> : null}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BillingChannel, BillingOrder, BillingPlan } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 import {
   createBillingOrder,
   getBillingOrderStatus,
@@ -9,12 +10,10 @@ import {
 import { useAuthSession } from './AuthSessionProvider'
 import { formatSkuLabel } from './user-account-utils'
 
-export function formatMembershipPrice(cents: number): string {
-  if (cents <= 0) return '免费'
-  return `¥${(cents / 100).toFixed(2)}`
-}
+export { formatMembershipPrice } from '../../i18n/billing-labels'
 
 export function useMembershipUpgrade(active: boolean) {
+  const { t } = useI18n()
   const { session, refresh } = useAuthSession()
   const [plans, setPlans] = useState<BillingPlan[]>([])
   const [mockMode, setMockMode] = useState(true)
@@ -26,7 +25,7 @@ export function useMembershipUpgrade(active: boolean) {
   const [message, setMessage] = useState<string | null>(null)
 
   const proPlan = useMemo(() => plans.find((plan) => plan.sku === 'pro') ?? null, [plans])
-  const currentSkuLabel = formatSkuLabel(session) ?? '社区版'
+  const currentSkuLabel = formatSkuLabel(session, t) ?? t('user.labels.sku.community')
 
   const resetState = useCallback(() => {
     setOrder(null)
@@ -52,7 +51,7 @@ export function useMembershipUpgrade(active: boolean) {
       })
       .catch((err) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : '无法加载会员套餐')
+        setError(err instanceof Error ? err.message : t('user.membership.errors.loadPlans'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -61,7 +60,7 @@ export function useMembershipUpgrade(active: boolean) {
     return () => {
       cancelled = true
     }
-  }, [active, resetState])
+  }, [active, resetState, t])
 
   useEffect(() => {
     if (!active || !order || order.status !== 'pending' || order.mockMode) return
@@ -71,7 +70,7 @@ export function useMembershipUpgrade(active: boolean) {
         .then((next) => {
           setOrder(next)
           if (next.status === 'paid') {
-            setMessage('支付成功，会员权益已生效。')
+            setMessage(t('user.membership.successPaid'))
             void refresh()
           }
         })
@@ -79,7 +78,7 @@ export function useMembershipUpgrade(active: boolean) {
     }, 3000)
 
     return () => window.clearInterval(timer)
-  }, [active, order, refresh])
+  }, [active, order, refresh, t])
 
   const handleCreateOrder = async () => {
     setLoading(true)
@@ -92,7 +91,7 @@ export function useMembershipUpgrade(active: boolean) {
         setMessage(created.message)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建订单失败')
+      setError(err instanceof Error ? err.message : t('user.membership.errors.createOrder'))
     } finally {
       setLoading(false)
     }
@@ -105,12 +104,12 @@ export function useMembershipUpgrade(active: boolean) {
     try {
       const result = await mockPayBillingOrder(order.orderId)
       setOrder(result.order)
-      setMessage('模拟支付成功，专业版会员已生效。')
+      setMessage(t('user.membership.successMockPaid'))
       if (result.sessionRefreshed) {
         await refresh()
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '模拟支付失败')
+      setError(err instanceof Error ? err.message : t('user.membership.errors.mockPay'))
     } finally {
       setPaying(false)
     }

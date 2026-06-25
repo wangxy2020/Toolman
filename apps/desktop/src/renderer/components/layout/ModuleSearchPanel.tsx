@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { IconSearch } from '../icons'
 import { getModulePageConfig } from '../../features/modules/module-config'
+import { useI18n } from '../../i18n/useI18n'
 import type { ModuleView } from '../../types/app-view'
 
 interface Props {
@@ -9,7 +10,8 @@ interface Props {
 }
 
 export function ModuleSearchPanel({ view, onClose }: Props) {
-  const config = getModulePageConfig(view)
+  const { t } = useI18n()
+  const config = getModulePageConfig(view, t)
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
 
@@ -34,7 +36,7 @@ export function ModuleSearchPanel({ view, onClose }: Props) {
             ref={inputRef}
             type="search"
             className="tm-search-input"
-            placeholder={`搜索${config.title}…`}
+            placeholder={t('modulesSearch.placeholder', { module: config.title })}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -42,7 +44,7 @@ export function ModuleSearchPanel({ view, onClose }: Props) {
         <div className="tm-search-results">
           <div className="tm-empty">
             {query.trim()
-              ? `「${config.title}」搜索功能开发中，暂无「${query.trim()}」相关结果。`
+              ? t('modulesSearch.developing', { module: config.title, query: query.trim() })
               : config.sidebarEmptyHint}
           </div>
         </div>

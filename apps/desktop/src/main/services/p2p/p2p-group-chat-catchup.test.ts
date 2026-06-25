@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { P2pGroupChatMessage, WorkspaceEvent } from '@toolman/shared'
 import { P2pGroupChatMessagePayloadSchema } from '@toolman/shared'
-import { readGroupChatMessages, appendGroupChatMessage } from './p2p-group-chat-store'
+import { readGroupChatMessages, appendGroupChatMessage, resetGroupChatStoreCacheForTests } from './p2p-group-chat-store'
 import { reprojectGroupChatWalEvents } from './p2p-group-chat-projector'
 
 let tempUserData = ''
@@ -53,10 +53,12 @@ function buildGroupChatMessageEvent(input: {
 
 describe('p2p-group-chat-catchup', () => {
   beforeEach(() => {
+    resetGroupChatStoreCacheForTests()
     tempUserData = mkdtempSync(join(tmpdir(), 'toolman-group-chat-catchup-'))
   })
 
   afterEach(() => {
+    resetGroupChatStoreCacheForTests()
     rmSync(tempUserData, { recursive: true, force: true })
   })
 

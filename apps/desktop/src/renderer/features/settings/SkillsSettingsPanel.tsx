@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type SkillInfo } from '@toolman/shared'
 import { IconMinus, IconPlus } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import { SettingsPageLayout, SettingsSection } from './SettingsShared'
 
 function sortSkillsByName(skills: SkillInfo[]): SkillInfo[] {
@@ -8,6 +9,7 @@ function sortSkillsByName(skills: SkillInfo[]): SkillInfo[] {
 }
 
 export function SkillsSettingsPanel() {
+  const { t } = useI18n()
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +50,7 @@ export function SkillsSettingsPanel() {
   const handleDelete = useCallback(
     async (skill: SkillInfo) => {
       if (skill.builtin) return
-      if (!window.confirm(`确定删除技能「${skill.name}」？`)) return
+      if (!window.confirm(t('settings.skills.delete.confirm', { name: skill.name }))) return
 
       const result = await window.api.invoke(IpcChannel.SkillDelete, { id: skill.id })
       if (!result.ok) {
@@ -57,21 +59,21 @@ export function SkillsSettingsPanel() {
       }
       await loadSkills()
     },
-    [loadSkills],
+    [loadSkills, t],
   )
 
   return (
     <SettingsPageLayout>
       {error ? <div className="tm-settings-error">{error}</div> : null}
-      {loading ? <div className="tm-settings-loading">加载中…</div> : null}
+      {loading ? <div className="tm-settings-loading">{t('common.loading')}</div> : null}
 
       <SettingsSection
-        title="技能"
-        intro="已安装的技能可在智能体设置中按需挂载；运行时会把 SKILL.md 内容注入系统提示。"
+        title={t('settings.skills.title')}
+        intro={t('settings.skills.intro')}
         action={
           <button type="button" className="tm-mcp-add-btn" onClick={() => void handleInstall()}>
             <IconPlus size={14} />
-            添加
+            {t('common.add')}
           </button>
         }
       >
@@ -82,7 +84,9 @@ export function SkillsSettingsPanel() {
                 <div className="tm-mcp-server-main">
                   <div className="tm-mcp-server-head">
                     <span className="tm-mcp-server-name">{skill.name}</span>
-                    {skill.builtin ? <span className="tm-skill-badge">内置</span> : null}
+                    {skill.builtin ? (
+                      <span className="tm-skill-badge">{t('settings.skills.builtinBadge')}</span>
+                    ) : null}
                   </div>
                   <div className="tm-mcp-server-desc">{skill.description}</div>
                 </div>
@@ -91,7 +95,7 @@ export function SkillsSettingsPanel() {
                     <button
                       type="button"
                       className="tm-provider-icon-btn tm-provider-icon-btn--danger"
-                      title="删除技能"
+                      title={t('settings.skills.delete.title')}
                       onClick={() => void handleDelete(skill)}
                     >
                       <IconMinus size={14} />
@@ -102,7 +106,7 @@ export function SkillsSettingsPanel() {
             ))}
           </div>
         ) : (
-          <div className="tm-mcp-empty-hint">暂无技能，点击「添加」从本地文件夹安装（需包含 SKILL.md）。</div>
+          <div className="tm-mcp-empty-hint">{t('settings.skills.empty')}</div>
         )}
       </SettingsSection>
     </SettingsPageLayout>

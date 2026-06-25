@@ -16,6 +16,7 @@ import { UserCenterLocalPanel } from './UserCenterLocalPanel'
 import type { ProfileSubView, UserCenterSuccessBehavior, ViewMode } from './types'
 import { useUserCenterAuth, viewSubtitle, viewTitle } from './useUserCenterAuth'
 import { isRegisteredUser } from '../../features/user/user-account-utils'
+import { useI18n } from '../../i18n/useI18n'
 
 export interface UserCenterModalProps {
   open: boolean
@@ -27,12 +28,16 @@ export interface UserCenterModalProps {
   account: ReturnType<typeof useUserAccount>
 }
 
-function authPanelTitle(view: ViewMode): string {
-  return viewTitle(view)
+function authPanelTitle(view: ViewMode, t: ReturnType<typeof useI18n>['t']): string {
+  return viewTitle(view, t)
 }
 
-function authPanelSubtitle(view: ViewMode, region?: Parameters<typeof viewSubtitle>[1]): string {
-  return viewSubtitle(view, region)
+function authPanelSubtitle(
+  view: ViewMode,
+  t: ReturnType<typeof useI18n>['t'],
+  region?: Parameters<typeof viewSubtitle>[2],
+): string {
+  return viewSubtitle(view, t, region)
 }
 
 export function UserCenterModal({
@@ -44,6 +49,7 @@ export function UserCenterModal({
   successBehavior = 'close',
   account,
 }: UserCenterModalProps) {
+  const { t } = useI18n()
   const [view, setView] = useState<ViewMode>(initialView)
   const [profileSubView, setProfileSubView] = useState<ProfileSubView>('main')
 
@@ -81,11 +87,11 @@ export function UserCenterModal({
   }, [loggedIn, view])
 
   const rightTitle = showAccountPanel
-    ? accountPanelTitle(profileSubView)
-    : authPanelTitle(view)
+    ? accountPanelTitle(profileSubView, t)
+    : authPanelTitle(view, t)
   const rightSubtitle = showAccountPanel
-    ? accountPanelSubtitle(profileSubView)
-    : authPanelSubtitle(view, auth.region)
+    ? accountPanelSubtitle(profileSubView, t)
+    : authPanelSubtitle(view, t, auth.region)
 
   return (
     <Dialog
@@ -102,7 +108,7 @@ export function UserCenterModal({
     >
       <IconButton
         className="tm-user-center-close"
-        aria-label="关闭"
+        aria-label={t('common.close')}
         size="small"
         onClick={onClose}
       >

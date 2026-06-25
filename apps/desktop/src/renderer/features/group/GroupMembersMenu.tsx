@@ -3,13 +3,10 @@ import { createPortal } from 'react-dom'
 import type { P2pMember, P2pMemberRole } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconMoreHorizontal, IconPlus } from '../../components/icons'
+import { getGroupConnectionModeLabel, getGroupMemberRoleLabel } from '../../i18n/group-member-labels'
+import { useI18n } from '../../i18n/useI18n'
 import { GroupMemberContextMenu } from './GroupMemberContextMenu'
-import { canManageTargetMember, MEMBER_ROLE_LABELS } from './group-member-utils'
-
-const CONNECTION_MODE_LABELS = {
-  lan: '局域网',
-  wan: '广域网',
-} as const
+import { canManageTargetMember } from './group-member-utils'
 
 interface Props {
   open: boolean
@@ -59,6 +56,7 @@ export function GroupMembersMenu({
   onRemoveMember,
   onUpdateMemberRole,
 }: Props) {
+  const { t } = useI18n()
   const panelRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const [contextMenu, setContextMenu] = useState<{
@@ -146,7 +144,7 @@ export function GroupMembersMenu({
       try {
         await onUpdateMemberRole(member.id, role)
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : '修改角色失败')
+        setActionError(err instanceof Error ? err.message : t('groupPage.members.roleChangeFailed'))
       } finally {
         setActionBusy(false)
       }
@@ -162,7 +160,7 @@ export function GroupMembersMenu({
       await onRemoveMember(removeTarget.id)
       setRemoveTarget(null)
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : '移出成员失败')
+      setActionError(err instanceof Error ? err.message : t('groupPage.members.removeFailed'))
     } finally {
       setActionBusy(false)
     }
@@ -177,13 +175,13 @@ export function GroupMembersMenu({
         className="tm-group-members-menu"
         style={{ top: position.top, left: position.left }}
         role="dialog"
-        aria-label="群组成员"
+        aria-label={t('groupPage.members.aria')}
       >
         <header className="tm-group-members-menu-header">
           <div>
-            <h3 className="tm-group-members-menu-title">群组成员</h3>
+            <h3 className="tm-group-members-menu-title">{t('groupPage.members.title')}</h3>
             <p className="tm-group-members-menu-subtitle">
-              {workspaceName} · {activeMembers.length} 人
+              {t('groupPage.members.subtitle', { name: workspaceName, count: activeMembers.length })}
             </p>
           </div>
           {canManageMembers && onInvite ? (
@@ -196,7 +194,7 @@ export function GroupMembersMenu({
               }}
             >
               <IconPlus size={14} />
-              邀请成员
+              {t('groupPage.members.invite')}
             </button>
           ) : null}
         </header>
@@ -205,9 +203,9 @@ export function GroupMembersMenu({
 
         <div className="tm-group-members-menu-body">
           {loading && activeMembers.length === 0 ? (
-            <div className="tm-session-empty">加载成员中…</div>
+            <div className="tm-session-empty">{t('groupPage.members.loading')}</div>
           ) : activeMembers.length === 0 ? (
-            <div className="tm-group-members-menu-empty">暂无成员</div>
+            <div className="tm-group-members-menu-empty">{t('groupPage.members.empty')}</div>
           ) : (
             <ul className="tm-group-member-list tm-group-members-menu-list">
               {activeMembers.map((member) => {
@@ -228,7 +226,7 @@ export function GroupMembersMenu({
                       <span className="tm-group-member-name">
                         {member.displayName}
                         {member.id === selfMemberId ? (
-                          <span className="tm-group-member-you">（我）</span>
+                          <span className="tm-group-member-you">{t('groupPage.members.you')}</span>
                         ) : null}
                       </span>
                       <span className="tm-group-member-device" title={member.deviceId}>
@@ -244,7 +242,7 @@ export function GroupMembersMenu({
                           .filter(Boolean)
                           .join(' ')}
                       >
-                        {MEMBER_ROLE_LABELS[member.role]}
+                        {getGroupMemberRoleLabel(member.role, t)}
                       </span>
                       <div className="tm-group-member-status-row">
                         <span
@@ -254,21 +252,23 @@ export function GroupMembersMenu({
                           ]
                             .filter(Boolean)
                             .join(' ')}
-                          title={member.online ? '在线' : '离线'}
+                          title={member.online ? t('groupPage.members.online') : t('groupPage.members.offline')}
                         >
                           {member.online
                             ? member.id === selfMemberId
-                              ? '本机 · 在线'
+                              ? t('groupPage.members.localOnline')
                               : member.connectionMode
-                                ? `${CONNECTION_MODE_LABELS[member.connectionMode]} · 在线`
-                                : '在线'
-                            : '离线'}
+                                ? t('groupPage.members.connectionOnline', {
+                                    mode: getGroupConnectionModeLabel(member.connectionMode, t),
+                                  })
+                                : t('groupPage.members.online')
+                            : t('groupPage.members.offline')}
                         </span>
                         {manageable ? (
                           <button
                             type="button"
                             className="tm-group-member-manage-btn"
-                            title="管理成员"
+                            title={t('groupPage.members.manageMember')}
                             disabled={actionBusy}
                             onClick={(event) => openManageMenu(event, member)}
                           >
@@ -301,10 +301,10 @@ export function GroupMembersMenu({
 
       {removeTarget ? (
         <ConfirmDialog
-          title="移出成员"
-          message={`确定将「${removeTarget.displayName}」移出群组？该成员将无法继续访问群组内容。`}
-          confirmLabel="移出"
-          cancelLabel="取消"
+          title={t('groupPage.members.removeTitle')}
+          message={t('groupPage.members.removeMessage', { name: removeTarget.displayName })}
+          confirmLabel={t('groupPage.members.removeConfirm')}
+          cancelLabel={t('communityPage.publish.cancel')}
           danger
           onCancel={() => {
             if (!actionBusy) setRemoveTarget(null)

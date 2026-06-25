@@ -19,10 +19,16 @@
     "verify:folders:b": "bash scripts/verify-toolman-folders.sh /tmp/toolman-p2p-b 用户2",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
+    "lint:eslint": "eslint .",
     "test": "turbo run test",
     "smoke": "bash scripts/smoke-critical-paths.sh",
     "rc1:preflight": "bash scripts/rc1-preflight.sh",
     "rc1:build": "bash scripts/build-rc1-desktop.sh",
+    "rc1:install-p2p-network": "bash scripts/rc1-install-p2p-network.sh",
+    "rc1:wan-prep": "bash scripts/rc1-wan-prep.sh",
+    "dev:coturn": "bash scripts/dev-coturn-up.sh",
+    "rc1:publish-staging": "bash scripts/rc1-publish-staging.sh",
+    "rc1:wan-10-checklist": "bash scripts/p2p-wan-10-peer-checklist.sh",
     "release:desktop": "bash scripts/build-desktop-release.sh",
     "release:desktop:publish": "bash scripts/publish-update-feed.sh",
     "release:verify-feed": "bash scripts/verify-update-feed.sh",
@@ -30,9 +36,12 @@
     "db:migrate": "pnpm --filter @toolman/db migrate"
   },
   "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
     "nanoid": "3.3.12",
     "turbo": "^2.5.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0"
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {

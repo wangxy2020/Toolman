@@ -1,13 +1,15 @@
 import { CommunityResourceMarketPanel } from './CommunityResourceMarketPanel'
+import { useI18n } from '../../i18n/useI18n'
 
 export function McpMarketPanel() {
+  const { t } = useI18n()
   return (
     <CommunityResourceMarketPanel
       resourceType="mcp"
-      title="MCP 市场"
-      subtitle="探索社区推荐的 MCP 服务器与工具集成"
-      publishLabel="发布MCP"
-      emptyHint="暂无 MCP 资源，请确认 Community Hub 已启动并已发布资源"
+      title={t('communityPage.panels.mcp.title')}
+      subtitle={t('communityPage.panels.mcp.subtitle')}
+      publishLabel={t('communityPage.panels.mcp.publish')}
+      emptyHint={t('communityPage.market.mcpEmpty')}
     />
   )
 }

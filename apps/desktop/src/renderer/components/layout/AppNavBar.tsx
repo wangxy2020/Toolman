@@ -7,6 +7,8 @@ import {
   type AppTheme,
 } from '../../features/settings/app-settings'
 import { getNavModuleDef } from '../../features/settings/nav-modules'
+import { getNavModuleLabel } from '../../i18n/nav-labels'
+import { useI18n } from '../../i18n/useI18n'
 import { UserAccountMenu } from '../../features/user/UserAccountMenu'
 import type { AppView } from '../../types/app-view'
 
@@ -47,11 +49,14 @@ function NavModuleButtons({
   moduleIds: AppSettings['sidebarVisibleModules']
   onNavigate: (view: AppView) => void
 }) {
+  const { t } = useI18n()
+
   return (
     <>
       {moduleIds.map((moduleId) => {
         const def = getNavModuleDef(moduleId)
         const Icon = def.icon
+        const label = getNavModuleLabel(moduleId, t)
         const isActive = def.view != null && activeView === def.view
         const canNavigate = Boolean(def.view)
 
@@ -66,8 +71,8 @@ function NavModuleButtons({
             ]
               .filter(Boolean)
               .join(' ')}
-            title={canNavigate ? def.label : `${def.label}（即将推出）`}
-            aria-label={def.label}
+            title={canNavigate ? label : t('nav.moduleUnavailable', { label })}
+            aria-label={label}
             disabled={!canNavigate}
             onClick={() => {
               if (def.view) onNavigate(def.view)
@@ -88,14 +93,17 @@ function ThemeButton({
   theme: AppTheme
   onThemeChange: (theme: AppTheme) => void
 }) {
+  const { t } = useI18n()
   const nextTheme = cycleAppTheme(theme)
+  const currentLabel = appThemeLabel(theme, t)
+  const nextLabel = appThemeLabel(nextTheme, t)
 
   return (
     <button
       type="button"
       className="tm-nav-item tm-nav-theme"
-      title={`主题：${appThemeLabel(theme)}，点击切换为${appThemeLabel(nextTheme)}`}
-      aria-label={`切换主题，当前${appThemeLabel(theme)}`}
+      title={t('theme.switchTitle', { current: currentLabel, next: nextLabel })}
+      aria-label={t('theme.switchAria', { current: currentLabel })}
       onClick={() => onThemeChange(nextTheme)}
     >
       <ThemeToggleIcon theme={theme} />
@@ -110,12 +118,14 @@ function SettingsButton({
   activeView: AppView
   onNavigate: (view: AppView) => void
 }) {
+  const { t } = useI18n()
+
   return (
     <button
       type="button"
       className={`tm-nav-item ${activeView === 'settings' ? 'tm-nav-item--active' : ''}`}
-      title="设置"
-      aria-label="设置"
+      title={t('nav.settings')}
+      aria-label={t('nav.settings')}
       onClick={() => onNavigate('settings')}
     >
       <IconSettings />
@@ -132,9 +142,13 @@ export function AppNavBar({
   sidebarVisible = true,
   onToggleSidebar,
   searchEnabled = false,
-  searchTitle = '搜索',
+  searchTitle,
   onOpenSearch,
 }: Props) {
+  const { t } = useI18n()
+  const resolvedSearchTitle = searchTitle ?? t('nav.search')
+  const sidebarTitle = sidebarVisible ? t('sidebar.hide') : t('sidebar.show')
+
   if (layout === 'top') {
     return (
       <header className="tm-top-bar">
@@ -143,8 +157,8 @@ export function AppNavBar({
             <button
               type="button"
               className="tm-window-chrome-btn"
-              title={sidebarVisible ? '隐藏侧边栏' : '显示侧边栏'}
-              aria-label={sidebarVisible ? '隐藏侧边栏' : '显示侧边栏'}
+              title={sidebarTitle}
+              aria-label={sidebarTitle}
               onClick={onToggleSidebar}
             >
               <IconPanelLeft collapsed={!sidebarVisible} />
@@ -165,8 +179,8 @@ export function AppNavBar({
             <button
               type="button"
               className="tm-window-chrome-btn"
-              title={searchTitle}
-              aria-label={searchTitle}
+              title={resolvedSearchTitle}
+              aria-label={resolvedSearchTitle}
               onClick={onOpenSearch}
             >
               <IconSearch />

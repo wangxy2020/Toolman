@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { logStructured } from '../services/structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {
   createDatabase,
@@ -53,41 +54,33 @@ export function bootstrapDatabase(): void {
   try {
     const { migratedWorkspaces, userRoot } = bootstrapToolmanUserDocumentLayout()
     if (migratedWorkspaces > 0) {
-      console.info(
-        `[knowledge] migrated Toolman folders to user-scoped layout for ${migratedWorkspaces} workspace(s)`,
-      )
+      logStructured('knowledge', 'info', `migrated Toolman folders to user-scoped layout for ${migratedWorkspaces} workspace(s)`)
     }
-    console.info(`[knowledge] user document root ready at ${userRoot}`)
+    logStructured('knowledge', 'info', `user document root ready at ${userRoot}`)
     const defaultFolderMigration = migrateAllDefaultFolderKnowledgeBases()
     if (defaultFolderMigration.migratedKinds > 0) {
-      console.info(
-        `[knowledge] default folder KB layout ready for ${defaultFolderMigration.workspaceCount} workspace(s)`,
-      )
+      logStructured('knowledge', 'info', `default folder KB layout ready for ${defaultFolderMigration.workspaceCount} workspace(s)`)
     }
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    console.error(`[knowledge] folder bootstrap failed: ${message}`)
+    logStructured('knowledge', 'error', `folder bootstrap failed: ${message}`)
   }
   void migrateAllLegacyGroupSavedKnowledgeBases()
     .then((result) => {
       if (result.migratedKbCount > 0 || result.upgradedKbCount > 0 || result.recoveredDocCount > 0) {
-        console.info(
-          `[p2p] group saved knowledge bootstrap: migrated=${result.migratedKbCount} upgraded=${result.upgradedKbCount} recoveredDocs=${result.recoveredDocCount}`,
-        )
+        logStructured('p2p', 'info', `group saved knowledge bootstrap: migrated=${result.migratedKbCount} upgraded=${result.upgradedKbCount} recoveredDocs=${result.recoveredDocCount}`)
       }
       return cleanupMisplacedP2pMirrorKnowledgeBases()
     })
     .then((result) => {
       const { purgedKbCount, restoredKbCount, removedDocCount } = result
       if (purgedKbCount > 0 || restoredKbCount > 0 || removedDocCount > 0) {
-        console.info(
-          `[p2p] cleaned misplaced mirror knowledge bases: purged=${purgedKbCount} restored=${restoredKbCount} docs=${removedDocCount}`,
-        )
+        logStructured('p2p', 'info', `cleaned misplaced mirror knowledge bases: purged=${purgedKbCount} restored=${restoredKbCount} docs=${removedDocCount}`)
       }
     })
     .catch((error) => {
       const message = toErrorMessage(error, String(error))
-      console.error(`[p2p] group saved knowledge bootstrap failed: ${message}`)
+      logStructured('p2p', 'error', `group saved knowledge bootstrap failed: ${message}`)
     })
 }
 

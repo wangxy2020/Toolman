@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { logStructured } from '../structured-log.service'
 import {
   P2pInviteRepository,
   P2pWorkspaceRepository,
@@ -14,6 +15,7 @@ import { assertCanInvite as assertCanInviteMember } from './p2p-permission.guard
 import {
   buildInviteUrl,
   encodeInviteToken,
+  INVITE_TOKEN_VERSION,
   signInvitePayload,
 } from './p2p-invite.token'
 import { loadWorkspaceKey } from './p2p-workspace-key.store'
@@ -36,7 +38,7 @@ function beginInviteHandshake(inviteId: string): void {
       await P2pBridge.inviteWaitForAnswer(inviteId, 3600)
     } catch (error) {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[p2p] invite handshake ended: ${message}`)
+      logStructured('p2p', 'warn', `invite handshake ended: ${message}`)
     }
   })()
 }
@@ -90,7 +92,7 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
   const maxUses = input.maxUses ?? 1
 
   const signed = signInvitePayload({
-    v: 1,
+    v: INVITE_TOKEN_VERSION,
     inviteId,
     workspaceId: workspace.id,
     workspaceName: workspace.name,

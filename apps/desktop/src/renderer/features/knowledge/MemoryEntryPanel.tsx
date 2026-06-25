@@ -1,22 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type MemoryEntry } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceId: string
   onCountChange?: (count: number) => void
-}
-
-function formatMemorySource(source: MemoryEntry['source']): string {
-  switch (source) {
-    case 'conversation':
-      return '从对话中记忆'
-    case 'manual':
-      return '手动添加'
-    case 'import':
-      return '导入'
-    default:
-      return source
-  }
 }
 
 function MemoryDeleteIcon() {
@@ -34,10 +22,24 @@ function MemoryDeleteIcon() {
 }
 
 export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
+  const { t } = useI18n()
   const [items, setItems] = useState<MemoryEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
+
+  const formatMemorySource = (source: MemoryEntry['source']) => {
+    switch (source) {
+      case 'conversation':
+        return t('knowledgePage.memory.sources.conversation')
+      case 'manual':
+        return t('knowledgePage.memory.sources.manual')
+      case 'import':
+        return t('knowledgePage.memory.sources.import')
+      default:
+        return source
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -62,7 +64,7 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
   }, [load])
 
   const handleDelete = async (entryId: string) => {
-    if (!window.confirm('确定删除这条长期记忆吗？')) return
+    if (!window.confirm(t('knowledgePage.memory.deleteConfirm'))) return
     const result = await window.api.invoke(IpcChannel.MemoryEntryDelete, {
       workspaceId,
       entryId,
@@ -76,7 +78,7 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
 
   const handleClearAll = async () => {
     if (items.length === 0) return
-    if (!window.confirm('确定清空全部长期记忆吗？此操作不可撤销。')) return
+    if (!window.confirm(t('knowledgePage.memory.clearConfirm'))) return
 
     setClearing(true)
     setError(null)
@@ -99,26 +101,24 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
   return (
     <div className="tm-kb-memory-panel">
       <div className="tm-kb-memory-panel-head">
-        <span className="tm-kb-memory-panel-title">自动保存的上下文记忆</span>
+        <span className="tm-kb-memory-panel-title">{t('knowledgePage.memory.title')}</span>
         <button
           type="button"
           className="tm-kb-memory-panel-clear"
           disabled={loading || clearing || items.length === 0}
           onClick={() => void handleClearAll()}
         >
-          清空全部
+          {t('knowledgePage.memory.clearAll')}
         </button>
       </div>
 
-      <p className="tm-kb-memory-panel-hint">
-        对话中由智能体保存的跨会话记忆，删除后不会影响已索引的知识库文档。
-      </p>
+      <p className="tm-kb-memory-panel-hint">{t('knowledgePage.memory.hint')}</p>
 
-      {loading ? <p className="tm-kb-memory-panel-empty">加载中…</p> : null}
+      {loading ? <p className="tm-kb-memory-panel-empty">{t('knowledgePage.memory.loading')}</p> : null}
       {error ? <p className="tm-form-error">{error}</p> : null}
 
       {!loading && items.length === 0 ? (
-        <p className="tm-kb-memory-panel-empty">暂无长期记忆</p>
+        <p className="tm-kb-memory-panel-empty">{t('knowledgePage.memory.empty')}</p>
       ) : null}
 
       {items.length > 0 ? (
@@ -134,7 +134,7 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
               <button
                 type="button"
                 className="tm-kb-memory-entry-delete"
-                aria-label="删除记忆"
+                aria-label={t('knowledgePage.memory.deleteAria')}
                 disabled={clearing}
                 onClick={() => void handleDelete(item.id)}
               >

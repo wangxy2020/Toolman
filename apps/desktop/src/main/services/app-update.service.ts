@@ -120,12 +120,17 @@ async function fetchRemoteManifest(): Promise<AppUpdateManifest | null> {
   return manifest
 }
 
+function syncAutoUpdaterPreferences(): void {
+  const prefs = readUpdatePreferences()
+  autoUpdater.autoDownload = prefs.autoUpdate
+  autoUpdater.autoInstallOnAppQuit = prefs.autoUpdate
+}
+
 function ensureAutoUpdaterConfigured(): void {
   if (autoUpdaterReady) return
 
   const config = getAppUpdateConfig()
-  autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = readUpdatePreferences().autoUpdate
+  syncAutoUpdaterPreferences()
   autoUpdater.allowDowngrade = false
 
   if (config.autoUpdaterFeedUrl) {
@@ -146,6 +151,12 @@ function ensureAutoUpdaterConfigured(): void {
       updateAvailable: true,
       error: null,
     })
+    if (readUpdatePreferences().autoUpdate) {
+      void downloadAppUpdate().catch((error) => {
+        const message = toErrorMessage(error, String(error))
+        recordDiagnosticEvent('update', 'warn', `auto download failed: ${message}`)
+      })
+    }
   })
 
   autoUpdater.on('update-not-available', () => {
@@ -189,8 +200,26 @@ export function getAppUpdateStatus(): AppUpdateStatus {
 
 export function setAppUpdateAutoEnabled(autoUpdate: boolean): AppUpdateStatus {
   writeUpdatePreferences({ autoUpdate })
-  autoUpdater.autoInstallOnAppQuit = autoUpdate
-  return publishStatus({ autoUpdate })
+  ensureAutoUpdaterConfigured()
+  syncAutoUpdaterPreferences()
+  const next = publishStatus({ autoUpdate })
+
+  const config = getAppUpdateConfig()
+  if (autoUpdate && config.enabled) {
+    void checkForAppUpdate()
+      .then((result) => {
+        if (result.autoUpdate && result.updateAvailable && result.phase === 'available') {
+          return downloadAppUpdate()
+        }
+        return result
+      })
+      .catch((error) => {
+        const message = toErrorMessage(error, String(error))
+        recordDiagnosticEvent('update', 'warn', `auto check on enable failed: ${message}`)
+      })
+  }
+
+  return next
 }
 
 export async function checkForAppUpdate(): Promise<AppUpdateStatus> {
@@ -282,9 +311,16 @@ export function bootstrapAppUpdateService(): void {
 
   ensureAutoUpdaterConfigured()
   setTimeout(() => {
-    void checkForAppUpdate().catch((error) => {
-      const message = toErrorMessage(error, String(error))
-      recordDiagnosticEvent('update', 'warn', `startup check failed: ${message}`)
-    })
+    void checkForAppUpdate()
+      .then((result) => {
+        if (result.autoUpdate && result.updateAvailable && result.phase === 'available') {
+          return downloadAppUpdate()
+        }
+        return result
+      })
+      .catch((error) => {
+        const message = toErrorMessage(error, String(error))
+        recordDiagnosticEvent('update', 'warn', `startup check failed: ${message}`)
+      })
   }, 30_000)
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { bindAuthProvider, sendAuthSmsCode } from './auth-api.client'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   open: boolean
@@ -21,6 +22,7 @@ function AuthBindWechatIcon() {
 }
 
 export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
+  const { t } = useI18n()
   const [phone, setPhone] = useState('')
   const [smsCode, setSmsCode] = useState('')
   const [smsCooldown, setSmsCooldown] = useState(0)
@@ -38,11 +40,11 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
 
   if (!open) return null
 
-  const title = provider === 'tencent_wechat' ? '绑定微信' : '绑定手机号'
+  const title = provider === 'tencent_wechat' ? t('user.bind.titleWechat') : t('user.bind.titlePhone')
   const subtitle =
     provider === 'tencent_wechat'
-      ? '授权后可在微信与手机号之间共用同一 Toolman 账户。'
-      : '绑定后可在微信与手机号之间共用同一 Toolman 账户。'
+      ? t('user.bind.descriptionOauth')
+      : t('user.bind.descriptionManual')
 
   const sendSms = async () => {
     setBusy(true)
@@ -52,7 +54,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
       setSmsCooldown(result.retryAfterSeconds)
       setDevHint(result.devHint ?? null)
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : '验证码发送失败')
+      setError(sendError instanceof Error ? sendError.message : t('user.errors.sendCodeFailed'))
     } finally {
       setBusy(false)
     }
@@ -73,7 +75,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
       onSuccess?.()
       onClose()
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : '绑定失败')
+      setError(submitError instanceof Error ? submitError.message : t('user.errors.bindFailed'))
     } finally {
       setBusy(false)
     }
@@ -108,7 +110,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  placeholder="请输入手机号"
+                  placeholder={t('user.bind.placeholderPhone')}
                   value={phone}
                   disabled={busy}
                   onChange={(event) => setPhone(event.target.value)}
@@ -120,7 +122,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                     className="tm-auth-entry-input tm-auth-entry-input--plain"
                     type="text"
                     inputMode="numeric"
-                    placeholder="请输入验证码"
+                    placeholder={t('user.bind.placeholderCode')}
                     value={smsCode}
                     disabled={busy}
                     onChange={(event) => setSmsCode(event.target.value)}
@@ -132,7 +134,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                   disabled={busy || !phone.trim() || smsCooldown > 0}
                   onClick={() => void sendSms()}
                 >
-                  {smsCooldown > 0 ? `${smsCooldown}s` : '获取验证码'}
+                  {smsCooldown > 0 ? `${smsCooldown}s` : t('user.auth.getCode')}
                 </button>
               </div>
               <button
@@ -141,7 +143,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                 disabled={busy || !phone.trim() || !smsCode.trim()}
                 onClick={() => void submit()}
               >
-                确认绑定
+                {t('user.bind.confirm')}
               </button>
               <button
                 type="button"
@@ -149,7 +151,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                 disabled={busy}
                 onClick={onClose}
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           ) : (
@@ -161,7 +163,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                 onClick={() => void submit()}
               >
                 <AuthBindWechatIcon />
-                打开微信授权
+                {t('user.bind.openWechatAuth')}
               </button>
               <button
                 type="button"
@@ -169,7 +171,7 @@ export function AuthBindModal({ open, provider, onClose, onSuccess }: Props) {
                 disabled={busy}
                 onClick={onClose}
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           )}

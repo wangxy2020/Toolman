@@ -183,6 +183,7 @@ export enum IpcChannel {
   P2pNetworkSetStunServers = 'p2p:network:set-stun-servers',
   P2pNetworkSetIceServers = 'p2p:network:set-ice-servers',
   P2pNetworkGetSnapshot = 'p2p:network:snapshot',
+  P2pNetworkRestartLibp2p = 'p2p:network:restart-libp2p',
 
   P2pWorkspaceCreate = 'p2p:workspace:create',
   P2pWorkspaceList = 'p2p:workspace:list',

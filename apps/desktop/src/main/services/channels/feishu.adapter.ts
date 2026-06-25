@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
@@ -184,7 +185,7 @@ export class FeishuChannelAdapter implements ChannelAdapter {
       const message = toErrorMessage(error, '处理飞书消息失败')
       this.status = 'error'
       this.statusMessage = message
-      console.error('[feishu-channel]', error)
+      logStructured('feishu.channel', 'error', `[feishu-channel]`, { detail: error })
     }
   }
 

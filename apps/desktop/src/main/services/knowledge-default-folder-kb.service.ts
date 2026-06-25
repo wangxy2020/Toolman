@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs'
+import { logStructured } from './structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import {KnowledgeDefaultFolderEnsureKbInputSchema,
@@ -340,9 +341,7 @@ export function migrateAllDefaultFolderKnowledgeBases(): {
         migratedKinds += 1
       } catch (error) {
         const message = toErrorMessage(error, String(error))
-        console.warn(
-          `[knowledge] default folder migration failed for workspace ${workspace.id} (${kind}): ${message}`,
-        )
+        logStructured('knowledge', 'warn', `default folder migration failed for workspace ${workspace.id} (${kind}): ${message}`)
       }
     }
   }

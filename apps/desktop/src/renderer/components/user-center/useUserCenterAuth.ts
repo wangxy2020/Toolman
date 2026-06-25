@@ -13,6 +13,8 @@ import {
   formatFirebaseAuthError,
   signInWithFirebaseOAuth,
 } from '../../features/user/firebase-auth.client'
+import type { TranslateFn } from '../../i18n/useI18n'
+import { useI18n } from '../../i18n/useI18n'
 import { useAuthBuildProfile } from '../../features/user/useAuthBuildProfile'
 import { useAuthProviderConfig } from '../../features/user/useAuthProviderConfig'
 import { inferDefaultAuthRegion } from '../../features/user/user-account-utils'
@@ -22,38 +24,42 @@ export function isCnEmailAccountInput(value: string): boolean {
   return value.trim().includes('@')
 }
 
-export function cnPrimaryActionLabel(view: ViewMode, account: string): string {
+export function cnPrimaryActionLabel(view: ViewMode, account: string, t?: TranslateFn): string {
   if (view === 'register') {
-    return isCnEmailAccountInput(account) ? '邮箱注册' : '手机号注册'
+    return isCnEmailAccountInput(account)
+      ? (t?.('user.auth.registerEmail') ?? '邮箱注册')
+      : (t?.('user.auth.registerPhone') ?? '手机号注册')
   }
-  return isCnEmailAccountInput(account) ? '邮箱登录' : '手机号登录'
+  return isCnEmailAccountInput(account)
+    ? (t?.('user.auth.loginEmail') ?? '邮箱登录')
+    : (t?.('user.auth.loginPhone') ?? '手机号登录')
 }
 
-export function viewTitle(view: ViewMode): string {
+export function viewTitle(view: ViewMode, t?: TranslateFn): string {
   switch (view) {
     case 'register':
-      return '注册 Toolman 账户'
+      return t?.('user.auth.titleRegister') ?? '注册 Toolman 账户'
     case 'forgot_password':
-      return '找回密码'
+      return t?.('user.auth.titleForgotPassword') ?? '找回密码'
     case 'profile':
-      return '账户中心'
+      return t?.('user.auth.titleProfile') ?? '账户中心'
     default:
-      return '登录 Toolman 账户'
+      return t?.('user.auth.titleLogin') ?? '登录 Toolman 账户'
   }
 }
 
-export function viewSubtitle(view: ViewMode, region: AuthRegion = 'cn'): string {
+export function viewSubtitle(view: ViewMode, t?: TranslateFn, region: AuthRegion = 'cn'): string {
   switch (view) {
     case 'register':
-      return '使用手机号或邮箱注册，验证码验证后即可完成。'
+      return t?.('user.auth.subtitleRegister') ?? '使用手机号或邮箱注册，验证码验证后即可完成。'
     case 'forgot_password':
       return region === 'intl'
-        ? '输入注册邮箱，我们将发送密码重置链接。'
-        : '通过注册手机号或邮箱接收验证码，设置新密码。'
+        ? (t?.('user.auth.subtitleForgotPasswordIntl') ?? '输入注册邮箱，我们将发送密码重置链接。')
+        : (t?.('user.auth.subtitleForgotPasswordCn') ?? '通过注册手机号或邮箱接收验证码，设置新密码。')
     case 'profile':
-      return '管理个人资料、安全绑定与账户设置。'
+      return t?.('user.auth.subtitleProfile') ?? '管理个人资料、安全绑定与账户设置。'
     default:
-      return '加入我们，解锁全部功能，你的电脑将如虎添翼。'
+      return t?.('user.auth.subtitleLogin') ?? '加入我们，解锁全部功能，你的电脑将如虎添翼。'
   }
 }
 
@@ -63,6 +69,7 @@ export function useUserCenterAuth(options: {
   onAuthComplete: () => void
 }) {
   const { open, view, onAuthComplete } = options
+  const { t } = useI18n()
   const { profile, loading: profileLoading } = useAuthBuildProfile()
   const {
     loading: providerConfigLoading,
@@ -70,7 +77,6 @@ export function useUserCenterAuth(options: {
     wechatConfigured,
     phoneConfigured,
     douyinConfigured,
-    tencent,
   } = useAuthProviderConfig()
 
   const [region, setRegion] = useState<AuthRegion>(() => inferDefaultAuthRegion())
@@ -164,12 +170,9 @@ export function useUserCenterAuth(options: {
   const cnAccountIsEmail = isCnEmailAccountInput(account)
 
   const firebaseConfigHint =
-    '国际登录未配置。请在项目根目录创建 `.env.local`（可参考 `.env.example`），设置 TOOLMAN_FIREBASE_API_KEY / AUTH_DOMAIN / PROJECT_ID 后重启应用。'
+    t('user.auth.configFirebase')
 
-  const cnConfigHint =
-    tencent?.configured === true && tencent.authingEnabled
-      ? '国内登录未配置。请在 `.env.local` 设置 TOOLMAN_AUTHING_APP_ID / TOOLMAN_AUTHING_APP_HOST / TOOLMAN_AUTHING_APP_SECRET 后重启应用。'
-      : '国内登录未配置。请在 `.env.local` 设置 TOOLMAN_AUTHING_*（推荐）或 TOOLMAN_TENCENT_* / TOOLMAN_WECHAT_* 后重启应用。'
+  const cnConfigHint = t('user.auth.configCn')
 
   const codeIntent =
     view === 'register' ? 'register' : view === 'forgot_password' ? 'reset' : 'login'
@@ -197,7 +200,7 @@ export function useUserCenterAuth(options: {
       setSmsCooldown(result.retryAfterSeconds)
       setDevHint(result.devHint ?? null)
     } catch (sendError) {
-      const message = sendError instanceof Error ? sendError.message : '验证码发送失败'
+      const message = sendError instanceof Error ? sendError.message : t('user.errors.sendCodeFailed')
       setError(message)
     } finally {
       setSendingCode(false)
@@ -214,7 +217,7 @@ export function useUserCenterAuth(options: {
           account: email.trim(),
         })
         resetFormFields()
-        setDevHint(result.message ?? '密码重置邮件已发送，请查收邮箱并完成重置。')
+        setDevHint(result.message ?? t('user.auth.hintResetEmailSent'))
         return
       }
 
@@ -226,9 +229,9 @@ export function useUserCenterAuth(options: {
         confirmPassword,
       })
       resetFormFields()
-      setDevHint('密码已重置，请使用新密码登录。')
+      setDevHint(t('user.auth.hintPasswordReset'))
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : '重置密码失败')
+      setError(submitError instanceof Error ? submitError.message : t('user.errors.resetPasswordFailed'))
     } finally {
       setBusy(false)
     }
@@ -286,7 +289,7 @@ export function useUserCenterAuth(options: {
         return
       }
       const message =
-        submitError instanceof Error ? formatFirebaseAuthError(submitError) : '登录失败'
+        submitError instanceof Error ? formatFirebaseAuthError(submitError) : t('user.errors.loginFailed')
       setError(message)
     } finally {
       setBusy(false)

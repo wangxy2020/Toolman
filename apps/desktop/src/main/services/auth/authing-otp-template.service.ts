@@ -1,4 +1,5 @@
 import { EmailTemplateType, ManagementClient } from 'authing-js-sdk'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 
 import { OTP_CODE_TTL_SECONDS } from './auth-otp.constants.js'
@@ -110,7 +111,7 @@ export async function ensureAuthingOtpTemplateTtl(): Promise<void> {
     }
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    console.warn('[authing] OTP email template sync skipped:', message)
+    logStructured('authing', 'warn', `OTP email template sync skipped:`, { detail: message })
   }
 
   templateTtlEnsured = true

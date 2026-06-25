@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   IpcChannel,
   type McpPromptInfo,
@@ -8,6 +8,7 @@ import {
 } from '@toolman/shared'
 import { LOCAL_DB_MCP_SERVER_ID } from '@toolman/shared'
 import { IconChevronDown } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   buildPostgresArgs,
   isPostgresMcpServer,
@@ -19,12 +20,6 @@ import { SettingsInput, SettingsSelect, SettingsToggle } from './SettingsShared'
 type ModalTab = 'general' | 'tools' | 'prompts' | 'resources'
 
 type CustomTransportType = 'stdio' | 'sse' | 'streamableHttp'
-
-const TRANSPORT_OPTIONS: Array<{ value: CustomTransportType; label: string }> = [
-  { value: 'stdio', label: '标准输入 / 输出 (stdio)' },
-  { value: 'sse', label: '服务器发送事件 (sse)' },
-  { value: 'streamableHttp', label: '可流式传输的HTTP (streamableHttp)' },
-]
 
 const EMPTY_STDIO_DRAFT: McpServerConfig = {
   id: '',
@@ -123,12 +118,22 @@ interface Props {
 }
 
 export function McpServerEditModal({ draft, creating, onChange, onCancel, onConfirm }: Props) {
+  const { t } = useI18n()
   const [tab, setTab] = useState<ModalTab>('general')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [inspectLoading, setInspectLoading] = useState(false)
   const [tools, setTools] = useState<McpToolInfo[]>([])
   const [prompts, setPrompts] = useState<McpPromptInfo[]>([])
   const [resources, setResources] = useState<McpResourceInfo[]>([])
+
+  const transportOptions = useMemo<Array<{ value: CustomTransportType; label: string }>>(
+    () => [
+      { value: 'stdio', label: t('settings.mcp.transport.stdio') },
+      { value: 'sse', label: t('settings.mcp.transport.sse') },
+      { value: 'streamableHttp', label: t('settings.mcp.transport.streamableHttp') },
+    ],
+    [t],
+  )
 
   const isBuiltin = draft.type === 'builtin'
   const isSqliteBuiltin = isBuiltin && (draft.builtinId ?? draft.id) === 'sqlite'
@@ -174,10 +179,10 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
   }, [draft.id, creating])
 
   const tabs: Array<{ id: ModalTab; label: string; count?: number }> = [
-    { id: 'general', label: '通用设置' },
-    { id: 'tools', label: '工具', count: tools.length },
-    { id: 'prompts', label: '提示', count: prompts.length },
-    { id: 'resources', label: '资源', count: resources.length },
+    { id: 'general', label: t('settings.mcp.edit.tabs.general') },
+    { id: 'tools', label: t('settings.mcp.edit.tabs.tools'), count: tools.length },
+    { id: 'prompts', label: t('settings.mcp.edit.tabs.prompts'), count: prompts.length },
+    { id: 'resources', label: t('settings.mcp.edit.tabs.resources'), count: resources.length },
   ]
 
   const updateDbField = (patch: Partial<McpServerConfig>) => {
@@ -194,9 +199,9 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
         <header className="tm-mcp-modal-header">
           <h3 className="tm-mcp-modal-title">
             <span className="tm-channel-config-title-dot" aria-hidden="true" />
-            {creating ? '添加 MCP 服务器' : draft.name}
+            {creating ? t('settings.mcp.edit.addTitle') : draft.name}
           </h3>
-          <button type="button" className="tm-mcp-modal-close" aria-label="关闭" onClick={onCancel}>
+          <button type="button" className="tm-mcp-modal-close" aria-label={t('common.close')} onClick={onCancel}>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -229,33 +234,30 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
           {tab === 'general' ? (
             <div className="tm-mcp-general-panel">
               {isSqliteBuiltin ? (
-                <div className="tm-mcp-info-banner">
-                  内置 SQLite 仅支持工作目录中的 <code>.db</code> / <code>.sqlite</code> 文件。
-                  若要访问 PostgreSQL，请配置系统默认的 <strong>Local-db</strong> 服务器。
-                </div>
+                <div className="tm-mcp-info-banner">{t('settings.mcp.edit.sqliteBuiltinBanner')}</div>
               ) : null}
 
               <div className="tm-mcp-form-grid tm-mcp-form-grid--2">
                 <div className="tm-mcp-form-field">
-                  <FormLabel required>名称</FormLabel>
+                  <FormLabel required>{t('settings.mcp.edit.name')}</FormLabel>
                   <SettingsInput
                     value={draft.name}
-                    placeholder="例如: My MCP Server"
+                    placeholder={t('settings.mcp.edit.namePlaceholder')}
                     onChange={(name) => onChange({ name })}
                   />
                 </div>
 
                 {isBuiltin ? (
                   <div className="tm-mcp-form-field">
-                    <FormLabel>类型</FormLabel>
-                    <SettingsInput value="内置实现" disabled onChange={() => undefined} />
+                    <FormLabel>{t('settings.mcp.edit.type')}</FormLabel>
+                    <SettingsInput value={t('settings.mcp.edit.typeBuiltin')} disabled onChange={() => undefined} />
                   </div>
                 ) : (
                   <div className="tm-mcp-form-field">
-                    <FormLabel required>类型</FormLabel>
+                    <FormLabel required>{t('settings.mcp.edit.type')}</FormLabel>
                     <SettingsSelect
                       value={transportType}
-                      options={TRANSPORT_OPTIONS}
+                      options={transportOptions}
                       onChange={(type) => onChange({ type })}
                     />
                   </div>
@@ -263,17 +265,19 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
               </div>
 
               <div className="tm-mcp-form-field">
-                <FormLabel>描述</FormLabel>
+                <FormLabel>{t('settings.mcp.edit.description')}</FormLabel>
                 <SettingsInput
                   value={draft.description ?? ''}
-                  placeholder="对此服务器功能的简要说明..."
+                  placeholder={t('settings.mcp.edit.descriptionPlaceholder')}
                   onChange={(description) => onChange({ description })}
                 />
               </div>
 
               {isBuiltin && (draft.builtinId ?? draft.id) === 'dify' ? (
                 <div className="tm-mcp-form-field">
-                  <FormLabel required hint="Dify 知识库 API 根地址">API 地址</FormLabel>
+                  <FormLabel required hint={t('settings.mcp.edit.difyApiUrlHint')}>
+                    {t('settings.mcp.edit.difyApiUrl')}
+                  </FormLabel>
                   <SettingsInput
                     value={draft.providerUrl ?? 'https://api.dify.ai/v1'}
                     placeholder="https://api.dify.ai/v1"
@@ -284,12 +288,14 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
 
               {isBuiltin && (draft.builtinId ?? draft.id) === 'dify' ? (
                 <div className="tm-mcp-form-field">
-                  <FormLabel required hint="每行 KEY=VALUE">Dify API Key</FormLabel>
+                  <FormLabel required hint={t('settings.mcp.edit.difyApiKeyHint')}>
+                    {t('settings.mcp.edit.difyApiKey')}
+                  </FormLabel>
                   <textarea
                     className="tm-mcp-textarea"
                     rows={2}
                     value={formatEnv(draft.env)}
-                    placeholder="DIFY_KEY=your-dataset-api-key"
+                    placeholder={t('settings.mcp.edit.difyApiKeyPlaceholder')}
                     onChange={(e) => onChange({ env: parseEnvInput(e.target.value) })}
                   />
                 </div>
@@ -299,32 +305,34 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
                 <>
                   {isHttpTransport ? (
                     <div className="tm-mcp-form-field">
-                      <FormLabel required>URL</FormLabel>
+                      <FormLabel required>{t('settings.mcp.edit.url')}</FormLabel>
                       <SettingsInput
                         value={draft.url ?? ''}
-                        placeholder="https://example.com/mcp"
+                        placeholder={t('settings.mcp.edit.urlPlaceholder')}
                         onChange={(url) => onChange({ url })}
                       />
                     </div>
                   ) : (
                     <>
                       <div className="tm-mcp-form-field">
-                        <FormLabel required>命令</FormLabel>
+                        <FormLabel required>{t('settings.mcp.edit.command')}</FormLabel>
                         <input
                           className="tm-mcp-form-input tm-mcp-form-input--mono"
                           value={draft.command ?? ''}
-                          placeholder="npx"
+                          placeholder={t('settings.mcp.edit.commandPlaceholder')}
                           onChange={(event) => onChange({ command: event.target.value })}
                         />
                       </div>
 
                       <div className="tm-mcp-form-field">
-                        <FormLabel hint="npx 安装依赖时使用的 npm 源">包管理器源</FormLabel>
+                        <FormLabel hint={t('settings.mcp.edit.packageSourceHint')}>
+                          {t('settings.mcp.edit.packageSource')}
+                        </FormLabel>
                         <div className="tm-mcp-package-source-group">
                           {(
                             [
-                              { value: 'default', label: '默认' },
-                              { value: 'taobao', label: '淘宝' },
+                              { value: 'default', label: t('settings.mcp.edit.packageSourceDefault') },
+                              { value: 'taobao', label: t('settings.mcp.edit.packageSourceTaobao') },
                             ] as const
                           ).map((option) => (
                             <label key={option.value} className="tm-mcp-package-source-option">
@@ -344,18 +352,18 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
                               checked={(draft.packageSource ?? 'default') === 'custom'}
                               onChange={() => onChange({ packageSource: 'custom' })}
                             />
-                            <span>自定义</span>
+                            <span>{t('settings.mcp.edit.packageSourceCustom')}</span>
                           </label>
                         </div>
                       </div>
 
                       <div className="tm-mcp-form-field">
-                        <FormLabel hint="每行输入一个启动参数">参数 (Arguments)</FormLabel>
+                        <FormLabel hint={t('settings.mcp.edit.argsHint')}>{t('settings.mcp.edit.args')}</FormLabel>
                         <textarea
                           className="tm-mcp-textarea tm-mcp-textarea--code"
                           rows={3}
                           value={(draft.args ?? []).join('\n')}
-                          placeholder={'-y\n@modelcontextprotocol/server-memory'}
+                          placeholder={t('settings.mcp.edit.argsPlaceholder')}
                           onChange={(e) => onChange({ args: parseArgsInput(e.target.value) })}
                         />
                       </div>
@@ -364,8 +372,8 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
 
                   {!isHttpTransport ? null : (
                     <div className="tm-mcp-form-field">
-                      <FormLabel hint="可选，作为 HTTP 请求头（每行 KEY=VALUE）">
-                        请求头 / 环境变量
+                      <FormLabel hint={t('settings.mcp.edit.headersEnvHint')}>
+                        {t('settings.mcp.edit.headersEnv')}
                       </FormLabel>
                       <textarea
                         className="tm-mcp-textarea tm-mcp-textarea--code"
@@ -378,34 +386,34 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
 
                   {showPostgresFields ? (
                     <div className="tm-mcp-db-section">
-                      <div className="tm-mcp-db-section-title">数据库连接（PostgreSQL）</div>
+                      <div className="tm-mcp-db-section-title">{t('settings.mcp.edit.postgres.title')}</div>
                       <div className="tm-mcp-db-grid">
                         <div className="tm-mcp-form-field">
-                          <FormLabel required>地址</FormLabel>
+                          <FormLabel required>{t('settings.mcp.edit.postgres.host')}</FormLabel>
                           <SettingsInput
                             value={db.dbHost}
-                            placeholder="localhost"
+                            placeholder={t('settings.mcp.edit.postgres.hostPlaceholder')}
                             onChange={(dbHost) => updateDbField({ dbHost })}
                           />
                         </div>
                         <div className="tm-mcp-form-field">
-                          <FormLabel required>端口</FormLabel>
+                          <FormLabel required>{t('settings.mcp.edit.postgres.port')}</FormLabel>
                           <SettingsInput
                             value={db.dbPort}
-                            placeholder="5432"
+                            placeholder={t('settings.mcp.edit.postgres.portPlaceholder')}
                             onChange={(dbPort) => updateDbField({ dbPort })}
                           />
                         </div>
                         <div className="tm-mcp-form-field">
-                          <FormLabel required>用户名</FormLabel>
+                          <FormLabel required>{t('settings.mcp.edit.postgres.user')}</FormLabel>
                           <SettingsInput
                             value={db.dbUser}
-                            placeholder="postgres"
+                            placeholder={t('settings.mcp.edit.postgres.userPlaceholder')}
                             onChange={(dbUser) => updateDbField({ dbUser })}
                           />
                         </div>
                         <div className="tm-mcp-form-field">
-                          <FormLabel required>密码</FormLabel>
+                          <FormLabel required>{t('settings.mcp.edit.postgres.password')}</FormLabel>
                           <SettingsInput
                             type="password"
                             value={db.dbPassword}
@@ -413,37 +421,39 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
                           />
                         </div>
                         <div className="tm-mcp-form-field tm-mcp-db-grid-full">
-                          <FormLabel required>数据库名</FormLabel>
+                          <FormLabel required>{t('settings.mcp.edit.postgres.database')}</FormLabel>
                           <SettingsInput
                             value={db.dbName}
-                            placeholder="postgres"
+                            placeholder={t('settings.mcp.edit.postgres.databasePlaceholder')}
                             onChange={(dbName) => updateDbField({ dbName })}
                           />
                         </div>
                       </div>
                       {!isPostgresMcpServer(draft) && !creating ? (
-                        <p className="tm-mcp-db-hint">
-                          填写连接信息后，保存时会自动写入 PostgreSQL MCP 启动参数。
-                        </p>
+                        <p className="tm-mcp-db-hint">{t('settings.mcp.edit.postgres.hint')}</p>
                       ) : null}
                     </div>
                   ) : null}
 
                   {!isHttpTransport ? (
                     <div className="tm-mcp-form-field">
-                      <FormLabel hint="格式为 KEY=value，每行一个">环境变量 (Environment Variables)</FormLabel>
+                      <FormLabel hint={t('settings.mcp.edit.envVarsHint')}>
+                        {t('settings.mcp.edit.envVars')}
+                      </FormLabel>
                       <textarea
                         className="tm-mcp-textarea tm-mcp-textarea--code"
                         rows={3}
                         value={formatEnv(draft.env)}
-                        placeholder={'KEY1=value1\nKEY2=value2'}
+                        placeholder={t('settings.mcp.edit.envVarsPlaceholder')}
                         onChange={(e) => onChange({ env: parseEnvInput(e.target.value) })}
                       />
                     </div>
                   ) : null}
 
                   <div className="tm-mcp-form-field tm-mcp-toggle-row">
-                    <FormLabel hint="保持子进程持续运行">长时间运行模式</FormLabel>
+                    <FormLabel hint={t('settings.mcp.edit.longRunningHint')}>
+                      {t('settings.mcp.edit.longRunning')}
+                    </FormLabel>
                     <SettingsToggle
                       checked={draft.longRunning ?? false}
                       onChange={(longRunning) => onChange({ longRunning })}
@@ -451,7 +461,7 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
                   </div>
 
                   <div className="tm-mcp-form-field">
-                    <FormLabel hint="连接 MCP 服务器的超时时间">超时</FormLabel>
+                    <FormLabel hint={t('settings.mcp.edit.timeoutHint')}>{t('settings.mcp.edit.timeout')}</FormLabel>
                     <div className="tm-mcp-timeout-input">
                       <SettingsInput
                         type="number"
@@ -461,7 +471,7 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
                           onChange({ timeoutSeconds: Math.max(1, Number(value) || 60) })
                         }
                       />
-                      <span className="tm-mcp-timeout-suffix">s</span>
+                      <span className="tm-mcp-timeout-suffix">{t('settings.mcp.edit.timeoutSuffix')}</span>
                     </div>
                   </div>
                 </>
@@ -472,7 +482,7 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
                 className="tm-mcp-advanced-toggle"
                 onClick={() => setAdvancedOpen((open) => !open)}
               >
-                <span>高级设置</span>
+                <span>{t('settings.mcp.edit.advancedSettings')}</span>
                 <IconChevronDown
                   size={14}
                   className={advancedOpen ? 'tm-mcp-chevron--open' : undefined}
@@ -482,34 +492,34 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
               {advancedOpen ? (
                 <div className="tm-mcp-advanced-panel">
                   <div className="tm-mcp-form-field">
-                    <FormLabel>提供者</FormLabel>
+                    <FormLabel>{t('settings.mcp.edit.provider')}</FormLabel>
                     <SettingsInput
                       value={draft.provider ?? ''}
-                      placeholder="提供者名称"
+                      placeholder={t('settings.mcp.edit.providerPlaceholder')}
                       onChange={(provider) => onChange({ provider })}
                     />
                   </div>
                   <div className="tm-mcp-form-field">
-                    <FormLabel>提供者网址</FormLabel>
+                    <FormLabel>{t('settings.mcp.edit.providerUrl')}</FormLabel>
                     <SettingsInput
                       value={draft.providerUrl ?? ''}
-                      placeholder="https://provider-website.com"
+                      placeholder={t('settings.mcp.edit.providerUrlPlaceholder')}
                       onChange={(providerUrl) => onChange({ providerUrl })}
                     />
                   </div>
                   <div className="tm-mcp-form-field">
-                    <FormLabel>标志网址</FormLabel>
+                    <FormLabel>{t('settings.mcp.edit.logoUrl')}</FormLabel>
                     <SettingsInput
                       value={draft.logoUrl ?? ''}
-                      placeholder="https://example.com/logo.png"
+                      placeholder={t('settings.mcp.edit.logoUrlPlaceholder')}
                       onChange={(logoUrl) => onChange({ logoUrl })}
                     />
                   </div>
                   <div className="tm-mcp-form-field">
-                    <FormLabel>标签</FormLabel>
+                    <FormLabel>{t('settings.mcp.edit.tags')}</FormLabel>
                     <SettingsInput
                       value={formatTags(draft.tags)}
-                      placeholder="输入标签，逗号分隔"
+                      placeholder={t('settings.mcp.edit.tagsPlaceholder')}
                       onChange={(value) => onChange({ tags: parseTagsInput(value) })}
                     />
                   </div>
@@ -522,9 +532,11 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
             <div className="tm-mcp-inspect-panel">
               {tab === 'tools' ? (
                 <div className="tm-mcp-inspect-list">
-                  {inspectLoading ? <p className="tm-mcp-inspect-empty">加载中…</p> : null}
+                  {inspectLoading ? (
+                    <p className="tm-mcp-inspect-empty">{t('settings.mcp.edit.inspect.loading')}</p>
+                  ) : null}
                   {!inspectLoading && tools.length === 0 ? (
-                    <p className="tm-mcp-inspect-empty">暂无工具</p>
+                    <p className="tm-mcp-inspect-empty">{t('settings.mcp.edit.inspect.noTools')}</p>
                   ) : null}
                   {tools.map((tool) => (
                     <div key={tool.name} className="tm-mcp-inspect-item">
@@ -539,9 +551,11 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
 
               {tab === 'prompts' ? (
                 <div className="tm-mcp-inspect-list">
-                  {inspectLoading ? <p className="tm-mcp-inspect-empty">加载中…</p> : null}
+                  {inspectLoading ? (
+                    <p className="tm-mcp-inspect-empty">{t('settings.mcp.edit.inspect.loading')}</p>
+                  ) : null}
                   {!inspectLoading && prompts.length === 0 ? (
-                    <p className="tm-mcp-inspect-empty">暂无提示</p>
+                    <p className="tm-mcp-inspect-empty">{t('settings.mcp.edit.inspect.noPrompts')}</p>
                   ) : null}
                   {prompts.map((prompt) => (
                     <div key={prompt.name} className="tm-mcp-inspect-item">
@@ -556,9 +570,11 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
 
               {tab === 'resources' ? (
                 <div className="tm-mcp-inspect-list">
-                  {inspectLoading ? <p className="tm-mcp-inspect-empty">加载中…</p> : null}
+                  {inspectLoading ? (
+                    <p className="tm-mcp-inspect-empty">{t('settings.mcp.edit.inspect.loading')}</p>
+                  ) : null}
                   {!inspectLoading && resources.length === 0 ? (
-                    <p className="tm-mcp-inspect-empty">暂无资源</p>
+                    <p className="tm-mcp-inspect-empty">{t('settings.mcp.edit.inspect.noResources')}</p>
                   ) : null}
                   {resources.map((resource) => (
                     <div key={resource.uri} className="tm-mcp-inspect-item">
@@ -582,14 +598,14 @@ export function McpServerEditModal({ draft, creating, onChange, onCancel, onConf
               className="tm-mcp-modal-footer-btn tm-mcp-modal-footer-btn--secondary"
               onClick={onCancel}
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="button"
               className="tm-mcp-modal-footer-btn tm-mcp-modal-footer-btn--primary"
               onClick={onConfirm}
             >
-              {creating ? '确认添加' : '保存设置'}
+              {creating ? t('settings.mcp.edit.confirmAdd') : t('settings.mcp.edit.save')}
             </button>
           </div>
         </footer>

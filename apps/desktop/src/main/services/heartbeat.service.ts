@@ -1,4 +1,5 @@
 import { listAssistants } from './assistant.service'
+import { logStructured } from './structured-log.service'
 import { sendMessage } from './agent.service'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 
@@ -70,7 +71,7 @@ async function runHeartbeatTick(workspaceId: string): Promise<void> {
         },
       })
     } catch (error) {
-      console.error(`[heartbeat] assistant ${assistant.id}:`, error)
+      logStructured('heartbeat', 'error', `assistant ${assistant.id}:`, { detail: error })
     } finally {
       inFlightHeartbeats.delete(assistant.id)
     }

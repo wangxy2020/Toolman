@@ -59,6 +59,40 @@ export function getBlobStoragePath(hash: string): string {
   return blobFilePath(hash)
 }
 
+export function ensureBlobRecord(hash: string, mimeType: string, sizeBytes: number): BlobRecord {
+  const targetPath = blobFilePath(hash)
+  if (!existsSync(targetPath)) {
+    throw new Error(`Blob 文件不存在: ${hash}`)
+  }
+
+  const db = getDatabase()
+  const existing = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
+  if (!existing) {
+    db.insert(blobs)
+      .values({
+        hash,
+        mimeType,
+        sizeBytes,
+        originalName: null,
+        createdAt: new Date(),
+      })
+      .run()
+  }
+
+  const row = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
+  if (!row) {
+    throw new Error('写入 blob 元数据失败')
+  }
+
+  return {
+    hash: row.hash,
+    mimeType: row.mimeType,
+    sizeBytes: row.sizeBytes,
+    originalName: row.originalName,
+    createdAt: row.createdAt.getTime(),
+  }
+}
+
 export function writeBlobFromBuffer(data: Buffer, mimeType: string): BlobRecord {
   const hash = sha256Hex(data)
   const targetPath = blobFilePath(hash)

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import { purgeAllKnowledgeStorageData } from './knowledge.service'
 import { purgeAllMemoryData } from './memory-entry.service'
+import { assertPathWithinAllowedRoots } from './path-sandbox.service'
 
 const BACKUP_MANIFEST_VERSION = 1
 
@@ -71,13 +72,14 @@ export function getStorageStats() {
 }
 
 export async function openPathInShell(path: string) {
-  if (!existsSync(path)) {
+  const allowedPath = assertPathWithinAllowedRoots(path)
+  if (!existsSync(allowedPath)) {
     return {
       opened: false,
-      error: `文件不存在：${path}`,
+      error: `文件不存在：${allowedPath}`,
     }
   }
-  const error = await shell.openPath(path)
+  const error = await shell.openPath(allowedPath)
   return {
     opened: !error,
     error: error || undefined,
@@ -85,7 +87,8 @@ export async function openPathInShell(path: string) {
 }
 
 export function revealPathInShell(path: string) {
-  shell.showItemInFolder(path)
+  const allowedPath = assertPathWithinAllowedRoots(path)
+  shell.showItemInFolder(allowedPath)
   return { revealed: true }
 }
 

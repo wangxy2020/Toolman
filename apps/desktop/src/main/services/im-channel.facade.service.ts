@@ -4,6 +4,7 @@ import {
   migrateRendererChannelConfigs,
   upsertImChannelConfig,
 } from './channel-config.service'
+import { logStructured } from './structured-log.service'
 import {
   getChannelWebhookBaseUrl,
   getChannelWebhookInfo,
@@ -16,7 +17,7 @@ import {
 
 export function bootstrapChannels(): void {
   void startChannelManager().catch((error) => {
-    console.error('[channels] bootstrap failed:', error)
+    logStructured('channels', 'error', `bootstrap failed:`, { detail: error })
   })
 }
 

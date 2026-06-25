@@ -10,6 +10,17 @@ export const YJS_ORIGIN_BOOTSTRAP = 'community-yjs-bootstrap'
 
 const docs = new Map<CommunityYjsDomain, Y.Doc>()
 
+export function destroyCommunityDocs(): void {
+  for (const doc of docs.values()) {
+    doc.destroy()
+  }
+  docs.clear()
+}
+
+export function getCommunityDocCount(): number {
+  return docs.size
+}
+
 export interface LwwEntityRecord {
   updatedAt: number
   authorDeviceId?: string

@@ -7,6 +7,7 @@ import type { useUserAccount } from '../../features/user/useUserAccount'
 import { formatAccountStatusLabel, formatBindingSummary } from '../../features/user/user-account-utils'
 import { getAvatarFallbackLabel, shortenId } from '../../features/user/user-avatar-utils'
 import { useP2pNetworkStatus } from '../../features/group/useP2pNetworkStatus'
+import { useI18n } from '../../i18n/useI18n'
 
 interface UserCenterLocalPanelProps {
   account: ReturnType<typeof useUserAccount>
@@ -45,7 +46,15 @@ function ChevronIcon() {
   )
 }
 
-function StatusBadges({ label }: { label: string }) {
+function StatusBadges({
+  label,
+  isLoggedIn,
+  isRegisteredLoggedOut,
+}: {
+  label: string
+  isLoggedIn: boolean
+  isRegisteredLoggedOut: boolean
+}) {
   const parts = label.split(' · ').filter(Boolean)
   return (
     <div className="tm-user-center-status-badges">
@@ -54,8 +63,8 @@ function StatusBadges({ label }: { label: string }) {
           key={part}
           className={[
             'tm-user-center-status-badge',
-            i === parts.length - 1 && part.includes('登录') ? 'tm-user-center-status-badge--active' : '',
-            part.includes('未登录') ? 'tm-user-center-status-badge--warn' : '',
+            i === parts.length - 1 && isLoggedIn ? 'tm-user-center-status-badge--active' : '',
+            i === parts.length - 1 && isRegisteredLoggedOut ? 'tm-user-center-status-badge--warn' : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -68,6 +77,7 @@ function StatusBadges({ label }: { label: string }) {
 }
 
 export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
+  const { t } = useI18n()
   const identity = account.identity
   const authSession = account.authSession
   const community = account.communityProfile
@@ -81,10 +91,13 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
   }, [identity?.displayName])
 
   const avatarFallback = getAvatarFallbackLabel({ avatarUrl: identity?.avatarUrl })
-  const statusLabel = formatAccountStatusLabel(authSession)
+  const statusLabel = formatAccountStatusLabel(authSession, t)
+  const isLoggedIn = !!authSession?.isLoggedIn
+  const isRegisteredLoggedOut =
+    authSession?.registrationStatus === 'registered' && authSession.isLoggedIn === false
   const visibleBindings =
     authSession?.isLoggedIn && authSession.bindings.length > 0 ? authSession.bindings : []
-  const userTypeLabel = resolveUserTypeLabel(authSession, community?.role)
+  const userTypeLabel = resolveUserTypeLabel(authSession, community?.role, t)
 
   const saveDisplayName = () => {
     const trimmed = displayName.trim()
@@ -105,7 +118,7 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
           <button
             type="button"
             className="tm-nav-avatar tm-user-center-profile-avatar-btn"
-            aria-label="更换头像"
+            aria-label={t('user.profile.changeAvatar')}
             disabled={account.saving}
             onClick={pickAvatar}
           >
@@ -117,18 +130,24 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
           </button>
           <div className="tm-user-center-profile-meta">
             <div className="tm-user-center-profile-name-row">
-              <h3 className="tm-user-center-profile-name">{identity?.displayName ?? '本地用户'}</h3>
+              <h3 className="tm-user-center-profile-name">
+                {identity?.displayName ?? t('user.profile.localUser')}
+              </h3>
               <button
                 type="button"
                 className="tm-user-center-icon-btn tm-user-center-icon-btn--ghost"
-                aria-label="刷新账户信息"
+                aria-label={t('user.profile.refreshAccount')}
                 disabled={account.loading}
                 onClick={() => void account.load().catch(() => undefined)}
               >
                 {account.loading ? <span className="tm-user-center-spinner" /> : <RefreshIcon />}
               </button>
             </div>
-            <StatusBadges label={statusLabel} />
+            <StatusBadges
+              label={statusLabel}
+              isLoggedIn={isLoggedIn}
+              isRegisteredLoggedOut={isRegisteredLoggedOut}
+            />
             <div className="tm-user-center-profile-tags">
               <span className="tm-user-center-profile-tag tm-user-center-profile-tag--accent">
                 {userTypeLabel}
@@ -140,9 +159,9 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
                   <span
                     key={`${binding.provider}-${binding.subjectId}`}
                     className="tm-user-center-profile-binding"
-                    title={formatBindingSummary(binding)}
+                    title={formatBindingSummary(binding, t)}
                   >
-                    {formatBindingSummary(binding)}
+                    {formatBindingSummary(binding, t)}
                   </span>
                 ))}
               </div>
@@ -158,14 +177,14 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
       ) : null}
       {account.hubOnline === false ? (
         <div className="tm-user-center-alert tm-user-center-alert--warning">
-          社区 Hub 未启动，部分功能不可用
+          {t('user.profile.hubOffline')}
         </div>
       ) : null}
 
       <section className="tm-user-center-local-settings">
         <div className="tm-user-center-display-name-box">
           <label className="tm-user-center-display-name-row">
-            <span className="tm-user-center-display-name-label">显示名称</span>
+            <span className="tm-user-center-display-name-label">{t('user.profile.displayName')}</span>
             <div className="tm-user-center-display-name-input-wrap">
               <input
                 className="tm-user-center-display-name-input"
@@ -186,21 +205,23 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
         <details className="tm-user-center-device">
           <summary className="tm-user-center-device-summary">
             <ComputerIcon />
-            <span className="tm-user-center-device-name">{device?.deviceName ?? '正在加载设备…'}</span>
+            <span className="tm-user-center-device-name">
+              {device?.deviceName ?? t('user.profile.loadingDevice')}
+            </span>
             <ChevronIcon />
           </summary>
           {device ? (
             <dl className="tm-user-center-device-body">
-              <DeviceMetaRow label="设备 ID" value={device.deviceId} />
-              <DeviceMetaRow label="身份 ID" value={device.identityId} />
-              <DeviceMetaRow label="设备指纹" value={device.publicKeyFingerprint} shorten />
+              <DeviceMetaRow label={t('user.profile.deviceId')} value={device.deviceId} />
+              <DeviceMetaRow label={t('user.profile.identityId')} value={device.identityId} />
+              <DeviceMetaRow label={t('user.profile.deviceFingerprint')} value={device.publicKeyFingerprint} shorten />
               {device.did ? <DeviceMetaRow label="DID" value={device.did} shorten /> : null}
               {networkSnapshot?.localPeerId ? (
                 <DeviceMetaRow label="libp2p PeerId" value={networkSnapshot.localPeerId} shorten />
               ) : null}
               {networkSnapshot ? (
                 <DeviceMetaRow
-                  label="网络连接"
+                  label={t('user.profile.networkConnection')}
                   value={`libp2p ${networkSnapshot.libp2pPeerCount} · WebRTC ${networkSnapshot.webrtcConnectedPeers}`}
                 />
               ) : null}

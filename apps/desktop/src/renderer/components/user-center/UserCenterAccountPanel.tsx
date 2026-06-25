@@ -5,6 +5,7 @@ import { requiresDeleteReauth, resolveGroupMaxMembers } from '@toolman/shared'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { bindAuthProvider, changeAuthPassword, sendAuthSmsCode } from '../../features/user/auth-api.client'
 import { DeleteAccountReauthModal } from '../../features/user/DeleteAccountReauthModal'
+import { useI18n } from '../../i18n/useI18n'
 import type { useUserAccount } from '../../features/user/useUserAccount'
 import { useAuthBuildProfile } from '../../features/user/useAuthBuildProfile'
 import { isRegisteredUser, formatSkuLabel } from '../../features/user/user-account-utils'
@@ -214,6 +215,7 @@ export function UserCenterAccountPanel({
   onSubViewChange,
   onSwitchToLogin,
 }: UserCenterAccountPanelProps) {
+  const { t } = useI18n()
   const { profile: authBuildProfile } = useAuthBuildProfile()
   const authSession = account.authSession
   const registered = isRegisteredUser(authSession)
@@ -256,7 +258,7 @@ export function UserCenterAccountPanel({
       const result = await sendAuthSmsCode({ phone: bindPhone.trim(), region: 'cn', intent: 'login' })
       setBindCooldown(result.retryAfterSeconds)
     } catch (err) {
-      setBindError(err instanceof Error ? err.message : '验证码发送失败')
+      setBindError(err instanceof Error ? err.message : t('user.errors.sendCodeFailed'))
     } finally {
       setBindBusy(false)
     }
@@ -273,7 +275,7 @@ export function UserCenterAccountPanel({
       onSubViewChange('main')
       void account.load().catch(() => undefined)
     } catch (err) {
-      setBindError(err instanceof Error ? err.message : '绑定失败')
+      setBindError(err instanceof Error ? err.message : t('user.errors.bindFailed'))
     } finally {
       setBindBusy(false)
     }
@@ -287,7 +289,7 @@ export function UserCenterAccountPanel({
       onSubViewChange('main')
       void account.load().catch(() => undefined)
     } catch (err) {
-      setBindError(err instanceof Error ? err.message : '绑定失败')
+      setBindError(err instanceof Error ? err.message : t('user.errors.bindFailed'))
     } finally {
       setBindBusy(false)
     }
@@ -295,7 +297,7 @@ export function UserCenterAccountPanel({
 
   const submitChangePassword = async () => {
     if (newPassword !== confirmPassword) {
-      setPasswordError('两次输入的密码不一致')
+      setPasswordError(t('user.auth.passwordMismatch'))
       return
     }
 
@@ -310,7 +312,7 @@ export function UserCenterAccountPanel({
       })
       setPasswordSuccess(true)
     } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : '修改密码失败')
+      setPasswordError(err instanceof Error ? err.message : t('user.errors.changePasswordFailed'))
     } finally {
       setPasswordBusy(false)
     }
@@ -320,9 +322,9 @@ export function UserCenterAccountPanel({
     <>
       {showDeleteConfirm ? (
         <ConfirmDialog
-          title="注销账户"
-          message="注销将删除远端账户并解除与本机的绑定，本地智能体与知识库数据会保留。此操作不可撤销，确定继续吗？"
-          confirmLabel="确认注销"
+          title={t('user.account.deleteAccount')}
+          message={t('user.account.deleteConfirmMessage')}
+          confirmLabel={t('user.account.confirmDelete')}
           danger
           onCancel={() => setShowDeleteConfirm(false)}
           onConfirm={() => {
@@ -363,7 +365,7 @@ export function UserCenterAccountPanel({
           ) : null}
           <div className="tm-user-center-account-form">
             <AccountField
-              label="手机号"
+              label={t('user.account.phone')}
               type="tel"
               inputMode="tel"
               value={bindPhone}
@@ -376,7 +378,7 @@ export function UserCenterAccountPanel({
                   className="tm-auth-entry-input tm-auth-entry-input--plain"
                   type="text"
                   inputMode="numeric"
-                  placeholder="验证码"
+                  placeholder={t('user.account.verificationCode')}
                   value={bindCode}
                   disabled={bindBusy}
                   onChange={(e) => setBindCode(e.target.value)}
@@ -388,7 +390,7 @@ export function UserCenterAccountPanel({
                 disabled={bindBusy || !bindPhone.trim() || bindCooldown > 0}
                 onClick={() => void sendBindCode()}
               >
-                {bindCooldown > 0 ? `${bindCooldown}s` : '获取验证码'}
+                {bindCooldown > 0 ? `${bindCooldown}s` : t('user.auth.getCode')}
               </button>
             </div>
             <button
@@ -397,7 +399,7 @@ export function UserCenterAccountPanel({
               disabled={bindBusy || !bindPhone.trim() || !bindCode.trim()}
               onClick={() => void submitBindPhone()}
             >
-              确认绑定
+              {t('user.account.confirmBind')}
             </button>
             <button
               type="button"
@@ -405,7 +407,7 @@ export function UserCenterAccountPanel({
               disabled={bindBusy}
               onClick={() => onSubViewChange('main')}
             >
-              返回
+              {t('user.account.back')}
             </button>
           </div>
         </div>
@@ -425,7 +427,7 @@ export function UserCenterAccountPanel({
           ) : null}
           <div className="tm-user-center-account-form tm-user-center-account-form--auth">
             <p className="tm-user-center-account-form-desc">
-              授权后可在微信与手机号之间共用同一 Toolman 账户。
+              {t('user.account.wechatBindHint')}
             </p>
             <button
               type="button"
@@ -433,7 +435,7 @@ export function UserCenterAccountPanel({
               disabled={bindBusy}
               onClick={() => void submitBindWechat()}
             >
-              打开微信授权
+              {t('user.account.openWechatAuth')}
             </button>
             <button
               type="button"
@@ -441,7 +443,7 @@ export function UserCenterAccountPanel({
               disabled={bindBusy}
               onClick={() => onSubViewChange('main')}
             >
-              返回
+              {t('user.account.back')}
             </button>
           </div>
         </div>
@@ -473,27 +475,27 @@ export function UserCenterAccountPanel({
           ) : null}
           {passwordSuccess ? (
             <div className="tm-user-center-account-alert tm-user-center-account-alert--success">
-              密码已更新，请使用新密码登录。
+              {t('user.account.passwordUpdated')}
             </div>
           ) : null}
           <div className="tm-user-center-account-form tm-user-center-account-form--auth">
             <AccountPasswordInput
               autoComplete="current-password"
-              placeholder="请输入原密码"
+              placeholder={t('user.account.placeholderOldPassword')}
               value={oldPassword}
               disabled={passwordBusy || passwordSuccess}
               onChange={setOldPassword}
             />
             <AccountPasswordInput
               autoComplete="new-password"
-              placeholder="请输入新密码"
+              placeholder={t('user.account.placeholderNewPassword')}
               value={newPassword}
               disabled={passwordBusy || passwordSuccess}
               onChange={setNewPassword}
             />
             <AccountPasswordInput
               autoComplete="new-password"
-              placeholder="请再次输入新密码"
+              placeholder={t('user.account.placeholderConfirmNewPassword')}
               value={confirmPassword}
               disabled={passwordBusy || passwordSuccess}
               onChange={setConfirmPassword}
@@ -510,7 +512,7 @@ export function UserCenterAccountPanel({
               }
               onClick={() => void submitChangePassword()}
             >
-              确认修改
+              {t('user.account.changePasswordConfirm')}
             </button>
             <button
               type="button"
@@ -518,7 +520,7 @@ export function UserCenterAccountPanel({
               disabled={passwordBusy}
               onClick={() => onSubViewChange('main')}
             >
-              返回
+              {t('user.account.back')}
             </button>
           </div>
         </div>
@@ -530,7 +532,7 @@ export function UserCenterAccountPanel({
   if (!registered) {
     return (
       <div className="tm-user-center-account-alert">
-        注册并登录后可使用群组、社区互动与资源安装。
+        {t('user.account.registerHint')}
       </div>
     )
   }
@@ -539,7 +541,7 @@ export function UserCenterAccountPanel({
     return (
       <div className="tm-user-center-account-panel">
         <div className="tm-user-center-alert tm-user-center-alert--warning">
-          账户已注册，请重新登录以使用社区功能。
+          {t('user.account.reloginRequired')}
         </div>
         <button
           type="button"
@@ -547,7 +549,7 @@ export function UserCenterAccountPanel({
           disabled={account.saving}
           onClick={onSwitchToLogin}
         >
-          去登录
+          {t('user.account.goLogin')}
         </button>
       </div>
     )
@@ -559,8 +561,8 @@ export function UserCenterAccountPanel({
     securityItems.push({
       key: 'phone',
       icon: <PhoneIcon />,
-      label: '绑定手机号',
-      secondary: '账户找回与国内功能',
+      label: t('user.account.bindPhoneSection'),
+      secondary: t('user.account.bindPhoneHint'),
       onClick: () => onSubViewChange('bind_phone'),
     })
   }
@@ -568,7 +570,7 @@ export function UserCenterAccountPanel({
     securityItems.push({
       key: 'wechat',
       icon: <WechatIcon />,
-      label: '绑定微信',
+      label: t('user.account.bindWechat'),
       disabled: true,
       onClick: () => onSubViewChange('bind_wechat'),
     })
@@ -577,7 +579,7 @@ export function UserCenterAccountPanel({
     securityItems.push({
       key: 'password',
       icon: <LockIcon />,
-      label: '修改密码',
+      label: t('user.account.changePassword'),
       onClick: () => onSubViewChange('change_password'),
     })
   }
@@ -586,19 +588,19 @@ export function UserCenterAccountPanel({
     {
       key: 'logout',
       icon: <LogoutIcon />,
-      label: '退出登录',
+      label: t('user.account.logout'),
       onClick: () => void account.logoutAccount().catch(() => undefined),
     },
     {
       key: 'delete',
       icon: <DeleteIcon />,
-      label: '注销账户',
+      label: t('user.account.deleteAccount'),
       danger: true,
       onClick: () => setShowDeleteConfirm(true),
     },
   ]
 
-  const membershipLabel = formatSkuLabel(authSession) ?? '社区版'
+  const membershipLabel = formatSkuLabel(authSession, t) ?? t('user.labels.sku.community')
   const groupMaxMembers = resolveGroupMaxMembers({
     subscriptionSku: authSession?.subscriptionSku,
     entitlements: authSession?.entitlements,
@@ -608,11 +610,11 @@ export function UserCenterAccountPanel({
     <>
       <div className="tm-user-center-account-panel tm-user-center-account-panel--centered">
         <div className="tm-user-center-account-section">
-          <span className="tm-user-center-account-section-label">会员套餐</span>
+          <span className="tm-user-center-account-section-label">{t('user.account.membershipSection')}</span>
           <div className="tm-user-center-account-stack">
             <AccountActionBox
               icon={<StarIcon />}
-              label={`${membershipLabel}（群组人数上限 ${groupMaxMembers} 人）`}
+              label={t('user.account.currentPlan', { sku: membershipLabel, count: groupMaxMembers })}
               highlight
               onClick={() => onSubViewChange('upgrade_membership')}
             />
@@ -621,13 +623,13 @@ export function UserCenterAccountPanel({
 
         {hasPhoneBinding && hasWechatBinding ? (
           <div className="tm-user-center-account-alert tm-user-center-account-alert--success">
-            账户已就绪，安全绑定已完成。
+            {t('user.account.securityComplete')}
           </div>
         ) : null}
 
         {securityItems.length > 0 ? (
           <div className="tm-user-center-account-section">
-            <span className="tm-user-center-account-section-label">安全绑定</span>
+            <span className="tm-user-center-account-section-label">{t('user.account.securitySection')}</span>
             <div className="tm-user-center-account-stack">
               {securityItems.map((item) => (
                 <AccountActionBox
@@ -643,11 +645,11 @@ export function UserCenterAccountPanel({
             </div>
           </div>
         ) : (
-          <p className="tm-user-center-account-empty">安全项已全部完成</p>
+          <p className="tm-user-center-account-empty">{t('user.account.securityAllDone')}</p>
         )}
 
         <div className="tm-user-center-account-section">
-          <span className="tm-user-center-account-section-label">账户操作</span>
+          <span className="tm-user-center-account-section-label">{t('user.account.actionsSection')}</span>
           <div className="tm-user-center-account-stack">
             {accountActionItems.map((item) => (
               <AccountActionBox
@@ -668,30 +670,33 @@ export function UserCenterAccountPanel({
   )
 }
 
-function accountPanelTitle(subView: ProfileSubView): string {
+function accountPanelTitle(subView: ProfileSubView, t: ReturnType<typeof useI18n>['t']): string {
   switch (subView) {
     case 'bind_phone':
-      return '绑定手机号'
+      return t('user.account.titles.bindPhone')
     case 'bind_wechat':
-      return '绑定微信'
+      return t('user.account.titles.bindWechat')
     case 'change_password':
-      return '修改密码'
+      return t('user.account.titles.changePassword')
     case 'upgrade_membership':
-      return '升级会员'
+      return t('user.account.titles.upgradeMembership')
     default:
-      return '账户与安全'
+      return t('user.account.titles.accountSecurity')
   }
 }
 
-export function accountPanelSubtitle(subView: ProfileSubView): string {
+export function accountPanelSubtitle(
+  subView: ProfileSubView,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
   switch (subView) {
     case 'bind_phone':
     case 'bind_wechat':
     case 'change_password':
     case 'upgrade_membership':
-      return '完成操作后点击返回。'
+      return t('user.account.subtitles.afterAction')
     default:
-      return '管理绑定、密码与账户操作。'
+      return t('user.account.subtitles.manage')
   }
 }
 

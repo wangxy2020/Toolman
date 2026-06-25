@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { IpcChannel, type KnowledgeBase, type KnowledgeDocument, type P2pSharedResource } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 import {
   formatKnowledgeFileSize,
   getKnowledgeDocStatusLabel,
@@ -25,6 +26,7 @@ export function GroupKnowledgePickerModal({
   onClose,
   onConfirm,
 }: Props) {
+  const { t } = useI18n()
   const [loadedDocs, setLoadedDocs] = useState<Record<string, GroupPickerGroup['items']>>({})
   const [loadingGroupId, setLoadingGroupId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -90,7 +92,7 @@ export function GroupKnowledgePickerModal({
             name: doc.title,
             meta: [
               doc.sizeBytes != null ? formatKnowledgeFileSize(doc.sizeBytes) : null,
-              doc.status === 'ready' ? null : getKnowledgeDocStatusLabel(doc.status),
+              doc.status === 'ready' ? null : getKnowledgeDocStatusLabel(doc.status, t),
             ]
               .filter(Boolean)
               .join(' · '),

@@ -1,4 +1,5 @@
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { ensurePeerReadyForWorkspace, isPeerConnected } from './p2p-connection.service'
@@ -72,7 +73,7 @@ async function reconcileWorkspaceMemberMeshNow(
         await ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
       } catch (error) {
         const message = toErrorMessage(error, 'mesh workspace key sync failed')
-        console.warn(`[p2p] member mesh workspace sync failed for ${member.deviceId}: ${message}`)
+        logStructured('p2p', 'warn', `member mesh workspace sync failed for ${member.deviceId}: ${message}`)
       }
       continue
     }
@@ -81,7 +82,7 @@ async function reconcileWorkspaceMemberMeshNow(
       await ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
     } catch (error) {
       const message = toErrorMessage(error, 'mesh connect failed')
-      console.warn(`[p2p] member mesh connect failed for ${member.deviceId}: ${message}`)
+      logStructured('p2p', 'warn', `member mesh connect failed for ${member.deviceId}: ${message}`)
     }
   }
 }

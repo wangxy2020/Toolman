@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {ContentBlockSchema,
   P2pGroupChatClearInputSchema,
@@ -35,8 +36,11 @@ import {
   shouldRelayGroupChatAfterReceive,
 } from './p2p-group-chat-relay'
 import {
+  signGroupChatClearWireMessage,
   signGroupChatWireMessage,
+  verifyGroupChatClearWireMessage,
   verifyGroupChatWireMessage,
+  type SignedGroupChatClearWireEnvelope,
   type SignedGroupChatWireEnvelope,
 } from './p2p-group-chat-signing.service'
 import { checkReplayGuard } from './p2p-replay-guard.service'
@@ -91,9 +95,7 @@ async function relayMessageToPeers(
           await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, signedPayload)
         } catch (error) {
           const errMessage = toErrorMessage(error, 'relay failed')
-          console.warn(
-            `[p2p] group chat relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`,
-          )
+          logStructured('p2p', 'warn', `group chat relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`)
         }
       }),
   )
@@ -139,7 +141,7 @@ export async function sendP2pGroupChatMessage(
     message,
   }).catch((error) => {
     const errMessage = toErrorMessage(error, String(error))
-    console.warn(`[p2p] group chat WAL append failed: ${errMessage}`)
+    logStructured('p2p', 'warn', `group chat WAL append failed: ${errMessage}`)
   })
 
   return { message }
@@ -161,10 +163,8 @@ async function relayClearToPeers(workspaceId: string): Promise<void> {
     peerDeviceIds.add(item.peerDeviceId)
   }
 
-  const payload = encodeReplicationMessage({
-    type: 'group-chat.clear',
-    workspaceId,
-  })
+  const signed = signGroupChatClearWireMessage(workspaceId)
+  const payload = encodeReplicationMessage(signed)
 
   await Promise.all(
     [...peerDeviceIds].map(async (peerDeviceId) => {
@@ -179,9 +179,7 @@ async function relayClearToPeers(workspaceId: string): Promise<void> {
         await P2pBridge.connectionSend(peerDeviceId, P2P_EVENTS_CHANNEL, payload)
       } catch (error) {
         const errMessage = toErrorMessage(error, 'relay failed')
-        console.warn(
-          `[p2p] group chat clear relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`,
-        )
+        logStructured('p2p', 'warn', `group chat clear relay to ${peerDeviceId.slice(0, 8)} failed: ${errMessage}`)
       }
     }),
   )
@@ -206,7 +204,7 @@ export function clearP2pGroupChatMessages(rawInput: unknown): { cleared: boolean
     clearedByMemberId: member.id,
   }).catch((error) => {
     const errMessage = toErrorMessage(error, String(error))
-    console.warn(`[p2p] group chat clear WAL append failed: ${errMessage}`)
+    logStructured('p2p', 'warn', `group chat clear WAL append failed: ${errMessage}`)
   })
 
   return { cleared: true }
@@ -238,7 +236,7 @@ export function deleteP2pGroupChatMessage(rawInput: unknown): { deleted: boolean
     deletedByMemberId: member.id,
   }).catch((error) => {
     const errMessage = toErrorMessage(error, String(error))
-    console.warn(`[p2p] group chat delete WAL append failed: ${errMessage}`)
+    logStructured('p2p', 'warn', `group chat delete WAL append failed: ${errMessage}`)
   })
 
   return { deleted: true }
@@ -281,9 +279,39 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       workspaceId?: string
       signerDeviceId?: string
       signature?: string
+      clearedAt?: number
     }
-    if (parsed.type === 'group-chat.clear' && typeof parsed.workspaceId === 'string') {
-      handleIncomingP2pGroupChatClear(peerDeviceId, parsed.workspaceId)
+
+    if (
+      parsed.v === 2 &&
+      parsed.type === 'group-chat.clear' &&
+      typeof parsed.workspaceId === 'string' &&
+      parsed.signerDeviceId &&
+      parsed.signature &&
+      typeof parsed.clearedAt === 'number'
+    ) {
+      const envelope = parsed as SignedGroupChatClearWireEnvelope
+      const verified = verifyGroupChatClearWireMessage(peerDeviceId, envelope)
+      if (!verified.ok) {
+        logStructured('p2p', 'warn', `dropped signed group chat clear from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`)
+        return
+      }
+      const replay = checkReplayGuard({
+        scope: `group-chat-clear:${envelope.workspaceId}`,
+        signerId: peerDeviceId,
+        at: envelope.clearedAt,
+        payloadHash: String(envelope.clearedAt),
+      })
+      if (!replay.ok) {
+        logStructured('p2p', 'warn', `dropped replay group chat clear from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`)
+        return
+      }
+      handleIncomingP2pGroupChatClear(peerDeviceId, envelope.workspaceId)
+      return
+    }
+
+    if (parsed.type === 'group-chat.clear') {
+      logStructured('p2p', 'warn', `dropped unsigned group-chat.clear from ${peerDeviceId.slice(0, 8)}`)
       return
     }
 
@@ -297,9 +325,7 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
       const envelope = parsed as SignedGroupChatWireEnvelope
       const verified = verifyGroupChatWireMessage(peerDeviceId, envelope)
       if (!verified.ok) {
-        console.warn(
-          `[p2p] dropped signed group chat from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`,
-        )
+        logStructured('p2p', 'warn', `dropped signed group chat from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`)
         return
       }
       const replay = checkReplayGuard({
@@ -309,25 +335,17 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
         payloadHash: envelope.message.id,
       })
       if (!replay.ok) {
-        console.warn(
-          `[p2p] dropped replay group chat from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`,
-        )
+        logStructured('p2p', 'warn', `dropped replay group chat from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`)
         return
       }
       handleIncomingP2pGroupChatMessage(peerDeviceId, envelope.message)
       return
     }
 
-    const wireMessage =
-      parsed.type === 'group-chat.message' || parsed.type === 'message' ? parsed.message : null
-    if (!wireMessage) {
-      return
-    }
-
-    handleIncomingP2pGroupChatMessage(peerDeviceId, wireMessage)
+    logStructured('p2p', 'warn', `dropped unsigned group chat payload from ${peerDeviceId.slice(0, 8)}`)
   } catch (error) {
     const errMessage = toErrorMessage(error, 'parse failed')
-    console.warn(`[p2p] group chat payload rejected from ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
+    logStructured('p2p', 'warn', `group chat payload rejected from ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
   }
 }
 
@@ -368,9 +386,7 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
   let member = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, peerDeviceId)
   if (!member || member.status !== 'active') {
     if (!connected) {
-      console.warn(
-        `[p2p] dropped group chat ${message.id.slice(0, 8)}: sender ${peerDeviceId.slice(0, 8)} not connected`,
-      )
+      logStructured('p2p', 'warn', `dropped group chat ${message.id.slice(0, 8)}: sender ${peerDeviceId.slice(0, 8)} not connected`)
       return
     }
 
@@ -409,16 +425,12 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
   }
 
   if (member && member.id !== message.senderMemberId) {
-    console.warn(
-      `[p2p] dropped group chat ${message.id.slice(0, 8)}: senderMemberId does not match peer member`,
-    )
+    logStructured('p2p', 'warn', `dropped group chat ${message.id.slice(0, 8)}: senderMemberId does not match peer member`)
     return
   }
 
   if (!member && !connected) {
-    console.warn(
-      `[p2p] dropped group chat ${message.id.slice(0, 8)}: unknown sender ${peerDeviceId.slice(0, 8)}`,
-    )
+    logStructured('p2p', 'warn', `dropped group chat ${message.id.slice(0, 8)}: unknown sender ${peerDeviceId.slice(0, 8)}`)
     return
   }
 

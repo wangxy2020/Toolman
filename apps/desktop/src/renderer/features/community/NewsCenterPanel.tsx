@@ -21,10 +21,12 @@ import { COMMUNITY_NEWS_SOURCES_CHANGED_EVENT } from './community-events'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityNews } from './useCommunityNews'
 import { useCommunityPanelStatus } from './community-panel-status'
+import { useI18n } from '../../i18n/useI18n'
 
 const NEWS_LIST_QUERY = { sort: 'diverse' as const, limit: 30 }
 
 export function NewsCenterPanel() {
+  const { t } = useI18n()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailArticleId, setDetailArticleId] = useState<string | null>(null)
   const [showSources, setShowSources] = useState(false)
@@ -39,7 +41,7 @@ export function NewsCenterPanel() {
     loading: news.loading,
     error: news.error,
     onClearError: () => news.setError(null),
-    loadingMessage: '加载资讯…',
+    loadingMessage: t('communityPage.panels.news.loading'),
   })
 
   useEffect(() => {
@@ -68,24 +70,24 @@ export function NewsCenterPanel() {
   return (
     <>
       <CommunityListPanelShell
-        title="资讯"
-        subtitle="查看社区动态、更新公告与 RSS 拉取文章"
-        publishLabel="发布资讯"
+        title={t('communityPage.panels.news.title')}
+        subtitle={t('communityPage.panels.news.subtitle')}
+        publishLabel={t('communityPage.panels.news.publish')}
         showPublish={false}
         loading={news.loading}
         onRefresh={() => void news.load({ fetchFeeds: true })}
         headerExtra={
           <CommunityPanelSecondaryButton
-            title="RSS 源管理"
-            ariaLabel="RSS 源管理"
+            title={t('communityPage.panels.news.rss')}
+            ariaLabel={t('communityPage.panels.news.rss')}
             onClick={() => setShowSources(true)}
           >
             <IconSliders size={16} />
-            <span>RSS 源</span>
+            <span>{t('communityPage.panels.news.rss')}</span>
           </CommunityPanelSecondaryButton>
         }
         isEmpty={listItems.length === 0}
-        emptyHint="暂无资讯文章"
+        emptyHint={t('communityPage.panels.news.empty')}
       >
         <ul className="tm-kb-file-list">
           {listItems.map((article) => {

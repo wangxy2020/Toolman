@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { IconChevronRight, IconSliders } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   CODE_STYLE_OPTIONS,
   MESSAGE_STYLE_OPTIONS,
@@ -103,6 +104,7 @@ function CollapsibleSection({
 }
 
 export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: Props) {
+  const { t } = useI18n()
   const [messageOpen, setMessageOpen] = useState(true)
   const [mathOpen, setMathOpen] = useState(true)
   const [codeOpen, setCodeOpen] = useState(true)
@@ -120,6 +122,23 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
   const sliderStyle = {
     '--slider-progress': `${settings.messageFontSize}%`,
   } as CSSProperties
+  const messageStyleOptions = MESSAGE_STYLE_OPTIONS.map((opt) => ({
+    ...opt,
+    label: t(`chat.messageStyles.${opt.value}`),
+  }))
+  const targetLanguageOptions = TARGET_LANGUAGE_OPTIONS.map((opt) => ({
+    ...opt,
+    label: t(`agent.languages.${opt.value}`),
+  }))
+  const sendShortcutOptions = SEND_SHORTCUT_OPTIONS.map((opt) => {
+    const key =
+      opt.value === 'ctrl+enter'
+        ? 'chat.input.sendCtrlEnter'
+        : opt.value === 'shift+enter'
+          ? 'chat.input.sendShiftEnter'
+          : 'chat.input.sendEnter'
+    return { ...opt, label: t(key) }
+  })
 
   return (
     <div className="tm-message-settings-overlay" onClick={onClose}>
@@ -127,12 +146,12 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
         <header className="tm-message-settings-header">
           <div className="tm-message-settings-header-title">
             <IconSliders size={16} />
-            <h3>系统偏好设置</h3>
+            <h3>{t('chat.systemPreferences')}</h3>
           </div>
           <button
             type="button"
             className="tm-message-settings-close"
-            aria-label="关闭"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             <IconChevronRight size={16} />
@@ -141,12 +160,12 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
 
         <div className="tm-message-settings-scroll">
           <CollapsibleSection
-            title="消息设置 (Messages)"
+            title={t('chat.sections.messages')}
             open={messageOpen}
             onToggle={() => setMessageOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel>使用衬线字体</SettingLabel>
+              <SettingLabel>{t('chat.fields.serifFont')}</SettingLabel>
               <Toggle
                 checked={settings.useSerifFont}
                 onChange={(useSerifFont) => onChange({ useSerifFont })}
@@ -154,7 +173,9 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel help="开启后，思考过程默认折叠显示">思考内容自动折叠</SettingLabel>
+              <SettingLabel help={t('chat.fields.collapseThinkingHint')}>
+                {t('chat.fields.collapseThinking')}
+              </SettingLabel>
               <Toggle
                 checked={settings.autoCollapseThinking}
                 onChange={(autoCollapseThinking) => onChange({ autoCollapseThinking })}
@@ -162,17 +183,17 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>消息显示样式</SettingLabel>
+              <SettingLabel>{t('chat.fields.messageStyle')}</SettingLabel>
               <SettingSelect
                 value={settings.messageStyle}
-                options={MESSAGE_STYLE_OPTIONS}
+                options={messageStyleOptions}
                 onChange={(messageStyle) => onChange({ messageStyle })}
               />
             </div>
 
             <div className="tm-msg-setting-block tm-msg-font-block">
               <div className="tm-msg-font-block-head">
-                <span>消息字体大小</span>
+                <span>{t('chat.fields.messageFontSize')}</span>
                 <span className="tm-msg-font-block-value">{fontSizePx}px</span>
               </div>
               <div className="tm-msg-font-slider-row">
@@ -192,12 +213,12 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="数学公式设置 (Math)"
+            title={t('chat.sections.math')}
             open={mathOpen}
             onToggle={() => setMathOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel>数学公式引擎</SettingLabel>
+              <SettingLabel>{t('chat.fields.mathEngine')}</SettingLabel>
               <SettingSelect
                 value={settings.mathEngine}
                 options={MATH_ENGINE_OPTIONS}
@@ -206,7 +227,9 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel help="允许使用 $...$ 语法渲染行内数学公式">启用 $...$ 行内渲染</SettingLabel>
+              <SettingLabel help={t('chat.fields.inlineMath')}>
+                {t('chat.fields.inlineMath')}
+              </SettingLabel>
               <Toggle
                 checked={settings.enableInlineDollar}
                 onChange={(enableInlineDollar) => onChange({ enableInlineDollar })}
@@ -215,12 +238,12 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="代码块设置 (Code Blocks)"
+            title={t('chat.sections.codeBlocks')}
             open={codeOpen}
             onToggle={() => setCodeOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码高亮风格</SettingLabel>
+              <SettingLabel>{t('chat.fields.codeHighlight')}</SettingLabel>
               <SettingSelect
                 value={settings.codeStyle}
                 options={CODE_STYLE_OPTIONS}
@@ -229,7 +252,9 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel help="为代码块启用更丰富的展示样式">花式代码块主题</SettingLabel>
+              <SettingLabel help={t('chat.fields.fancyCodeTheme')}>
+                {t('chat.fields.fancyCodeTheme')}
+              </SettingLabel>
               <Toggle
                 checked={settings.fancyCodeBlocks}
                 onChange={(fancyCodeBlocks) => onChange({ fancyCodeBlocks })}
@@ -237,7 +262,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码编辑器</SettingLabel>
+              <SettingLabel>{t('chat.fields.codeEditor')}</SettingLabel>
               <Toggle
                 checked={settings.codeEditor}
                 onChange={(codeEditor) => onChange({ codeEditor })}
@@ -245,7 +270,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>显示代码行号</SettingLabel>
+              <SettingLabel>{t('chat.fields.showLineNumbers')}</SettingLabel>
               <Toggle
                 checked={settings.showLineNumbers}
                 onChange={(showLineNumbers) => onChange({ showLineNumbers })}
@@ -253,7 +278,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码块可折叠</SettingLabel>
+              <SettingLabel>{t('chat.fields.foldCodeBlocks')}</SettingLabel>
               <Toggle
                 checked={settings.collapsibleCodeBlocks}
                 onChange={(collapsibleCodeBlocks) => onChange({ collapsibleCodeBlocks })}
@@ -261,7 +286,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>代码长文本自动换行</SettingLabel>
+              <SettingLabel>{t('chat.fields.wrapLongLines')}</SettingLabel>
               <Toggle
                 checked={settings.wrapCodeBlocks}
                 onChange={(wrapCodeBlocks) => onChange({ wrapCodeBlocks })}
@@ -270,12 +295,12 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="输入设置 (Input)"
+            title={t('chat.sections.input')}
             open={inputOpen}
             onToggle={() => setInputOpen((v) => !v)}
           >
             <div className="tm-msg-setting-row">
-              <SettingLabel>长文本自动粘贴为文件</SettingLabel>
+              <SettingLabel>{t('chat.fields.pasteLongTextAsFile')}</SettingLabel>
               <Toggle
                 checked={settings.pasteLongTextAsFile}
                 onChange={(pasteLongTextAsFile) => onChange({ pasteLongTextAsFile })}
@@ -283,7 +308,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>Markdown 实时渲染输入</SettingLabel>
+              <SettingLabel>{t('chat.fields.markdownInput')}</SettingLabel>
               <Toggle
                 checked={settings.markdownRenderInput}
                 onChange={(markdownRenderInput) => onChange({ markdownRenderInput })}
@@ -291,7 +316,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>连续 3 个空格触发快速翻译</SettingLabel>
+              <SettingLabel>{t('chat.fields.tripleSpaceTranslate')}</SettingLabel>
               <Toggle
                 checked={settings.quickTranslateWithSpaces}
                 onChange={(quickTranslateWithSpaces) => onChange({ quickTranslateWithSpaces })}
@@ -299,7 +324,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>激活时显示翻译确认框</SettingLabel>
+              <SettingLabel>{t('chat.fields.translateConfirm')}</SettingLabel>
               <Toggle
                 checked={settings.showTranslateConfirmDialog}
                 onChange={(showTranslateConfirmDialog) => onChange({ showTranslateConfirmDialog })}
@@ -307,7 +332,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>启用 / 与 @ 智能菜单</SettingLabel>
+              <SettingLabel>{t('chat.fields.smartMenu')}</SettingLabel>
               <Toggle
                 checked={settings.enableSlashAtShortcutMenu}
                 onChange={(enableSlashAtShortcutMenu) => onChange({ enableSlashAtShortcutMenu })}
@@ -315,7 +340,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>删除消息前二次确认</SettingLabel>
+              <SettingLabel>{t('chat.fields.confirmDeleteMessage')}</SettingLabel>
               <Toggle
                 checked={settings.confirmBeforeDeleteMessage}
                 onChange={(confirmBeforeDeleteMessage) => onChange({ confirmBeforeDeleteMessage })}
@@ -323,7 +348,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>重新生成消息前二次确认</SettingLabel>
+              <SettingLabel>{t('chat.fields.confirmRegenerate')}</SettingLabel>
               <Toggle
                 checked={settings.confirmBeforeRegenerateMessage}
                 onChange={(confirmBeforeRegenerateMessage) =>
@@ -333,19 +358,19 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>翻译目标语言</SettingLabel>
+              <SettingLabel>{t('chat.fields.translateTarget')}</SettingLabel>
               <SettingSelect
                 value={settings.targetLanguage}
-                options={TARGET_LANGUAGE_OPTIONS}
+                options={targetLanguageOptions}
                 onChange={(targetLanguage) => onChange({ targetLanguage })}
               />
             </div>
 
             <div className="tm-msg-setting-row">
-              <SettingLabel>发送快捷键</SettingLabel>
+              <SettingLabel>{t('chat.fields.sendShortcut')}</SettingLabel>
               <SettingSelect
                 value={settings.sendShortcut}
-                options={SEND_SHORTCUT_OPTIONS}
+                options={sendShortcutOptions}
                 onChange={(sendShortcut) => onChange({ sendShortcut })}
               />
             </div>
@@ -354,7 +379,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
 
         <footer className="tm-message-settings-footer">
           <button type="button" className="tm-message-settings-reset" onClick={onReset}>
-            恢复默认配置
+            {t('chat.restoreDefaults')}
           </button>
         </footer>
       </aside>

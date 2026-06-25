@@ -13,6 +13,13 @@ import {
   type DocxWorkingCopy,
 } from './docx-mcp-task.service'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
+import {
+  clampDocumentToolBatchStats,
+  isDocumentToolHardFailure,
+  parseDocumentReviewSeverity,
+  type DocumentReviewIssueSeverity,
+  type DocumentToolBatchStats,
+} from './document-review.util'
 
 export const DOCX_FILE_LINK_SCHEME = 'toolman-local://'
 
@@ -34,7 +41,7 @@ export function buildDocxFileLinksMarkdown(paths: readonly string[]): string {
 }
 
 export type DocxReviewIssueAction = 'comment' | 'replace' | 'edit_paragraph'
-export type DocxReviewIssueSeverity = 'high' | 'medium' | 'low'
+export type DocxReviewIssueSeverity = DocumentReviewIssueSeverity
 export type DocxReviewIssueCategory =
   | 'error'
   | 'wording'
@@ -79,7 +86,6 @@ const MAX_COMMENT_ANCHOR_ATTEMPTS = 10
 const MAX_COMMENT_SEARCH_SEEDS = 24
 
 const VALID_ACTIONS = new Set<DocxReviewIssueAction>(['comment', 'replace', 'edit_paragraph'])
-const VALID_SEVERITIES = new Set<DocxReviewIssueSeverity>(['high', 'medium', 'low'])
 const VALID_CATEGORIES = new Set<DocxReviewIssueCategory>([
   'error',
   'wording',
@@ -262,7 +268,7 @@ function normalizeIssue(raw: unknown, index: number): DocxReviewIssue | null {
   const anchorText = String(item.anchor_text ?? item.anchorText ?? '').trim()
   if (!anchorText) return null
 
-  const severity = String(item.severity ?? 'medium').toLowerCase() as DocxReviewIssueSeverity
+  const severity = parseDocumentReviewSeverity(item.severity)
   const category = String(item.category ?? 'other').toLowerCase() as DocxReviewIssueCategory
   const comment = String(item.comment ?? '').trim()
   const replacement = String(item.replacement ?? item.replace ?? item.new_text ?? '').trim()
@@ -274,7 +280,7 @@ function normalizeIssue(raw: unknown, index: number): DocxReviewIssue | null {
 
   return {
     id: String(item.id ?? index + 1),
-    severity: VALID_SEVERITIES.has(severity) ? severity : 'medium',
+    severity,
     category: VALID_CATEGORIES.has(category) ? category : 'other',
     action,
     anchorText,
@@ -316,18 +322,12 @@ export function chunkReviewCommentIssues(issues: DocxReviewIssue[]): DocxReviewI
   return batches
 }
 
-export interface DocxToolBatchStats {
-  applied: number
-  failed: number
-}
+export type DocxToolBatchStats = DocumentToolBatchStats
 
-export function isDocxToolHardFailure(result: string): boolean {
-  const trimmed = result.trim()
-  return trimmed.startsWith('Error:') || /^UNTRACKED_EDIT_NOT_ALLOWED/i.test(trimmed)
-}
+export const isDocxToolHardFailure = isDocumentToolHardFailure
 
 export function parseDocxCommentsBatchResult(result: string, requested: number): DocxToolBatchStats {
-  if (isDocxToolHardFailure(result)) {
+  if (isDocumentToolHardFailure(result)) {
     return { applied: 0, failed: requested }
   }
 
@@ -335,10 +335,7 @@ export function parseDocxCommentsBatchResult(result: string, requested: number):
   if (summaryMatch) {
     const applied = Number.parseInt(summaryMatch[1] ?? '0', 10)
     const failed = Number.parseInt(summaryMatch[2] ?? '0', 10)
-    return {
-      applied: Math.max(0, Math.min(requested, applied)),
-      failed: Math.max(0, Math.min(requested, failed)),
-    }
+    return clampDocumentToolBatchStats(requested, applied, failed)
   }
 
   try {
@@ -348,10 +345,7 @@ export function parseDocxCommentsBatchResult(result: string, requested: number):
     )
     const failed = Number(parsed.failed ?? parsed.failure_count ?? parsed.failures ?? NaN)
     if (Number.isFinite(succeeded) && Number.isFinite(failed)) {
-      return {
-        applied: Math.max(0, Math.min(requested, succeeded)),
-        failed: Math.max(0, Math.min(requested, failed)),
-      }
+      return clampDocumentToolBatchStats(requested, succeeded, failed)
     }
     if (Number.isFinite(succeeded)) {
       const applied = Math.max(0, Math.min(requested, succeeded))
@@ -383,7 +377,7 @@ export function parseDocxCommentsBatchResult(result: string, requested: number):
 }
 
 export function parseDocxSingleReplaceResult(result: string): boolean {
-  if (isDocxToolHardFailure(result)) return false
+  if (isDocumentToolHardFailure(result)) return false
   if (
     /0\s*replacement|未找到|not found|no match|no occurrences|0\s*occurrences/i.test(result)
   ) {
@@ -396,7 +390,7 @@ export function parseDocxReplaceTextsBatchResult(
   result: string,
   requested: number,
 ): DocxToolBatchStats {
-  if (isDocxToolHardFailure(result)) {
+  if (isDocumentToolHardFailure(result)) {
     return { applied: 0, failed: requested }
   }
 
@@ -443,7 +437,7 @@ export function parseDocxEditParagraphsBatchResult(
   result: string,
   requested: number,
 ): DocxToolBatchStats {
-  if (isDocxToolHardFailure(result)) {
+  if (isDocumentToolHardFailure(result)) {
     return { applied: 0, failed: requested }
   }
 
@@ -452,7 +446,7 @@ export function parseDocxEditParagraphsBatchResult(
     const edited = Number(parsed.edited ?? parsed.succeeded ?? parsed.success_count ?? NaN)
     if (Number.isFinite(edited)) {
       const applied = Math.max(0, Math.min(requested, edited))
-      return { applied, failed: Math.max(0, requested - applied) }
+      return clampDocumentToolBatchStats(requested, applied, requested - applied)
     }
     if (Array.isArray(parsed.results)) {
       const applied = parsed.results.filter((entry) => {
@@ -1381,10 +1375,10 @@ export async function applyDocxReviewIssues(options: {
     commentsFailed += stats.failed
   }
 
-  let replacementsRequested = replaceIssues.length
+  const replacementsRequested = replaceIssues.length
   let replacementsApplied = 0
   let replacementsFailed = 0
-  let paragraphEditsRequested = paragraphIssues.length
+  const paragraphEditsRequested = paragraphIssues.length
   let paragraphEditsApplied = 0
   let paragraphEditsFailed = 0
 

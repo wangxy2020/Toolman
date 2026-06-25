@@ -1,8 +1,12 @@
 import type { BillingChannel } from '@toolman/shared'
 import {
   formatMembershipPrice,
-  useMembershipUpgrade,
-} from './useMembershipUpgrade'
+  translateBillingPeriodLabel,
+  translateBillingPlanDescription,
+  translateBillingPlanName,
+} from '../../i18n/billing-labels'
+import { useMembershipUpgrade } from './useMembershipUpgrade'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   open: boolean
@@ -10,6 +14,7 @@ interface Props {
 }
 
 export function MembershipUpgradeModal({ open, onClose }: Props) {
+  const { t } = useI18n()
   const {
     proPlan,
     currentSkuLabel,
@@ -25,7 +30,7 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
     handleMockPay,
   } = useMembershipUpgrade(open)
 
-  const channelLabel = channel === 'alipay' ? '支付宝' : '微信'
+  const channelLabel = channel === 'alipay' ? t('user.membership.alipay') : t('user.membership.wechat')
 
   if (!open) return null
 
@@ -41,39 +46,41 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
         <header className="tm-membership-modal-header">
           <div>
             <h3 id="membership-upgrade-title" className="tm-membership-modal-title">
-              升级会员
+              {t('user.membership.titleUpgrade')}
             </h3>
-            <p className="tm-membership-modal-subtitle">当前套餐：{currentSkuLabel}</p>
+            <p className="tm-membership-modal-subtitle">
+              {t('user.membership.currentPlan', { sku: currentSkuLabel })}
+            </p>
           </div>
-          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+          <button type="button" className="tm-agent-modal-close" aria-label={t('common.close')} onClick={onClose}>
             ×
           </button>
         </header>
 
         <div className="tm-membership-modal-body">
-          {loading && !proPlan ? <p className="tm-settings-row-hint">加载套餐中…</p> : null}
+          {loading && !proPlan ? <p className="tm-settings-row-hint">{t('user.membership.loadingPlans')}</p> : null}
           {error ? <p className="tm-settings-error">{error}</p> : null}
           {message ? <p className="tm-membership-modal-message">{message}</p> : null}
 
           {proPlan ? (
             <section className="tm-membership-plan-card">
               <div className="tm-membership-plan-card-head">
-                <h4>{proPlan.name}</h4>
+                <h4>{translateBillingPlanName(proPlan, t)}</h4>
                 <span className="tm-membership-plan-price">
-                  {formatMembershipPrice(proPlan.priceCents)}
-                  <small> / {proPlan.billingPeriodLabel}</small>
+                  {formatMembershipPrice(proPlan.priceCents, t)}
+                  <small> / {translateBillingPeriodLabel(proPlan.billingPeriodLabel, t)}</small>
                 </span>
               </div>
-              <p className="tm-membership-plan-desc">{proPlan.description}</p>
+              <p className="tm-membership-plan-desc">{translateBillingPlanDescription(proPlan, t)}</p>
               <ul className="tm-membership-plan-features">
-                <li>群组成员上限 {proPlan.groupMaxMembers} 人</li>
-                <li>保留社区版全部能力</li>
-                <li>支付成功后可创建更高上限的新群组</li>
+                <li>{t('user.membership.groupMaxMembers', { count: proPlan.groupMaxMembers })}</li>
+                <li>{t('user.membership.keepCommunity')}</li>
+                <li>{t('user.membership.higherGroupLimit')}</li>
               </ul>
             </section>
           ) : null}
 
-          <div className="tm-membership-channel-tabs" role="tablist" aria-label="支付方式">
+          <div className="tm-membership-channel-tabs" role="tablist" aria-label={t('user.membership.paymentMethods')}>
             {(['alipay', 'wechat'] as BillingChannel[]).map((item) => (
               <button
                 key={item}
@@ -85,27 +92,27 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
                 }
                 onClick={() => setChannel(item)}
               >
-                {item === 'alipay' ? '支付宝' : '微信'}
+                {item === 'alipay' ? t('user.membership.alipay') : t('user.membership.wechat')}
               </button>
             ))}
           </div>
 
           <div className="tm-membership-qr-panel">
             {order?.qrImageDataUrl ? (
-              <img src={order.qrImageDataUrl} alt="支付二维码" className="tm-membership-qr-image" />
+              <img src={order.qrImageDataUrl} alt={t('user.membership.qrAlt')} className="tm-membership-qr-image" />
             ) : (
               <div className="tm-membership-qr-placeholder" aria-hidden="true">
                 <span>{channelLabel}</span>
-                <span>扫码支付</span>
+                <span>{t('user.membership.scanToPay')}</span>
               </div>
             )}
             <p className="tm-membership-qr-hint">
               {order?.qrUrl
-                ? '请使用手机扫码完成支付，支付成功后会员状态会自动更新。'
+                ? t('user.membership.scanHint')
                 : order?.message ??
                   (mockMode
-                    ? '支付通道占位中。可先创建订单，再使用模拟支付验证会员生效流程。'
-                    : '支付通道配置中，请稍后再试。')}
+                    ? t('user.membership.mockMode')
+                    : t('user.membership.channelConfiguring'))}
             </p>
           </div>
         </div>
@@ -118,11 +125,11 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
               disabled={loading || !proPlan}
               onClick={() => void handleCreateOrder()}
             >
-              生成{channelLabel}支付码
+              {t('user.membership.generateQr', { channel: channelLabel })}
             </button>
           ) : order.status === 'paid' ? (
             <button type="button" className="tm-btn tm-btn--primary" onClick={onClose}>
-              完成
+              {t('user.membership.done')}
             </button>
           ) : (
             <>
@@ -133,7 +140,7 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
                   disabled={paying}
                   onClick={() => void handleMockPay()}
                 >
-                  {paying ? '处理中…' : '模拟支付成功'}
+                  {paying ? t('user.membership.processing') : t('user.membership.mockPay')}
                 </button>
               ) : null}
               <button
@@ -142,7 +149,7 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
                 disabled={loading}
                 onClick={() => void handleCreateOrder()}
               >
-                刷新二维码
+                {t('user.membership.refreshQr')}
               </button>
             </>
           )}

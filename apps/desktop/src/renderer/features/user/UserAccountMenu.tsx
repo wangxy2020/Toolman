@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 
 import { UserCenterModal } from '../../components/user-center'
+import { useI18n } from '../../i18n/useI18n'
 import { useUserAccount } from './useUserAccount'
 import { getAvatarFallbackLabel, getDisplayInitial } from './user-avatar-utils'
 import { isRegisteredUser } from './user-account-utils'
@@ -10,6 +11,7 @@ interface UserAccountMenuProps {
 }
 
 export function UserAccountMenu({ className }: UserAccountMenuProps) {
+  const { t } = useI18n()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const account = useUserAccount()
@@ -28,8 +30,8 @@ export function UserAccountMenu({ className }: UserAccountMenuProps) {
         ref={buttonRef}
         type="button"
         className={['tm-nav-avatar', className].filter(Boolean).join(' ')}
-        title="用户账户"
-        aria-label="用户账户"
+        title={t('user.menu.title')}
+        aria-label={t('user.menu.ariaLabel')}
         aria-expanded={open}
         onClick={() => {
           void account.load().catch(() => undefined)

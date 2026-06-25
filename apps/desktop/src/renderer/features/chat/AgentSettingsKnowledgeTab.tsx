@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type KnowledgeBase } from '@toolman/shared'
 import { SYSTEM_DEFAULT_FOLDER_KB_NAMES } from '../knowledge/knowledge-sidebar-types'
+import { useI18n } from '../../i18n/useI18n'
 
 function Toggle({
   checked,
@@ -57,6 +58,7 @@ export function AgentSettingsKnowledgeTab({
   onKbScoreThresholdChange,
   onKbSettingChange,
 }: Props) {
+  const { t } = useI18n()
   const [items, setItems] = useState<KnowledgeBase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -90,29 +92,28 @@ export function AgentSettingsKnowledgeTab({
       {error ? <div className="tm-settings-error">{error}</div> : null}
 
       <div className="tm-agent-tab-head">
-        <h3 className="tm-agent-tab-title">绑定知识库</h3>
+        <h3 className="tm-agent-tab-title">{t('agent.knowledge.bindTitle')}</h3>
       </div>
 
       <p className="tm-knowledge-detail-hint">
-        勾选后，该智能体对话将优先检索所选知识库（需同时开启输入框旁的「知识库」开关）。
-        未勾选任何库时，将使用工作区内全部知识库。
+        {t('agent.knowledge.bindHint')}
       </p>
 
       <div className="tm-agent-kb-global-settings">
         <label className="tm-form-field">
-          <span className="tm-form-label">默认返回条数</span>
+          <span className="tm-form-label">{t('agent.knowledge.defaultTopK')}</span>
           <input
             className="tm-form-input"
             type="number"
             min={1}
             max={20}
             value={kbTopK ?? ''}
-            placeholder="默认 6"
+            placeholder={t('agent.knowledge.placeholderTopK')}
             onChange={(event) => onKbTopKChange(parseOptionalNumber(event.target.value))}
           />
         </label>
         <label className="tm-form-field">
-          <span className="tm-form-label">默认匹配度阈值</span>
+          <span className="tm-form-label">{t('agent.knowledge.defaultThreshold')}</span>
           <input
             className="tm-form-input"
             type="number"
@@ -120,16 +121,16 @@ export function AgentSettingsKnowledgeTab({
             max={1}
             step={0.01}
             value={kbScoreThreshold ?? ''}
-            placeholder="使用各库设置"
+            placeholder={t('agent.knowledge.placeholderThreshold')}
             onChange={(event) => onKbScoreThresholdChange(parseOptionalNumber(event.target.value))}
           />
         </label>
       </div>
 
-      {loading ? <div className="tm-settings-loading">加载知识库…</div> : null}
+      {loading ? <div className="tm-settings-loading">{t('agent.knowledge.loading')}</div> : null}
 
       {!loading && items.length === 0 ? (
-        <p className="tm-knowledge-detail-hint">暂无知识库，请先在「知识库」模块创建。</p>
+        <p className="tm-knowledge-detail-hint">{t('agent.knowledge.empty')}</p>
       ) : null}
 
       <div className="tm-skill-list">
@@ -148,10 +149,13 @@ export function AgentSettingsKnowledgeTab({
                   ) : null}
                   <div className="tm-skill-card-meta">
                     <span className={`tm-tool-tag ${enabled ? 'tm-tool-tag--on' : 'tm-tool-tag--off'}`}>
-                      {enabled ? '已绑定' : '未绑定'}
+                      {enabled ? t('agent.knowledge.bound') : t('agent.knowledge.unbound')}
                     </span>
                     <span className="tm-knowledge-item-meta">
-                      {kb.documentCount} 文档 · {kb.chunkCount} 块
+                      {t('agent.knowledge.docMeta', {
+                        documents: kb.documentCount,
+                        chunks: kb.chunkCount,
+                      })}
                     </span>
                   </div>
                 </div>
@@ -162,7 +166,7 @@ export function AgentSettingsKnowledgeTab({
                       className="tm-btn tm-btn--ghost tm-btn--sm"
                       onClick={() => setExpandedKbId(expanded ? null : kb.id)}
                     >
-                      {expanded ? '收起' : '检索参数'}
+                      {expanded ? t('common.collapse') : t('agent.knowledge.retrievalParams')}
                     </button>
                   ) : null}
                   <Toggle checked={enabled} onChange={(value) => onKbToggle(kb.id, value)} />
@@ -172,14 +176,14 @@ export function AgentSettingsKnowledgeTab({
               {enabled && expanded ? (
                 <div className="tm-agent-kb-per-settings">
                   <label className="tm-form-field">
-                    <span className="tm-form-label">返回条数覆盖</span>
+                    <span className="tm-form-label">{t('agent.knowledge.topKOverride')}</span>
                     <input
                       className="tm-form-input"
                       type="number"
                       min={1}
                       max={20}
                       value={perKb?.topK ?? ''}
-                      placeholder="使用全局默认"
+                      placeholder={t('agent.knowledge.useGlobalDefault')}
                       onChange={(event) =>
                         onKbSettingChange(kb.id, {
                           ...perKb,
@@ -189,7 +193,7 @@ export function AgentSettingsKnowledgeTab({
                     />
                   </label>
                   <label className="tm-form-field">
-                    <span className="tm-form-label">匹配度阈值覆盖</span>
+                    <span className="tm-form-label">{t('agent.knowledge.thresholdOverride')}</span>
                     <input
                       className="tm-form-input"
                       type="number"
@@ -197,7 +201,7 @@ export function AgentSettingsKnowledgeTab({
                       max={1}
                       step={0.01}
                       value={perKb?.scoreThreshold ?? ''}
-                      placeholder="使用全局或库设置"
+                      placeholder={t('agent.knowledge.useGlobalOrKb')}
                       onChange={(event) =>
                         onKbSettingChange(kb.id, {
                           ...perKb,

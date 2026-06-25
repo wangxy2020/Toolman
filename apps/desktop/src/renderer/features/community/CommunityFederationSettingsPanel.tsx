@@ -6,17 +6,13 @@ import type {
 } from '@toolman/shared'
 
 import { IconRefresh } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   getCommunityFederationStatus,
   getCommunityHubHealth,
   syncCommunityHubPeering,
   updateCommunityHubConfig,
 } from './community-api.client'
-
-function formatSyncTime(value?: number): string {
-  if (!value) return '尚未同步'
-  return new Date(value).toLocaleString()
-}
 
 function peersToText(peers: string[] | undefined): string {
   return (peers ?? []).join('\n')
@@ -31,6 +27,7 @@ interface Props {
 }
 
 export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
+  const { t } = useI18n()
   const [status, setStatus] = useState<CommunityFederationStatusOutput | null>(null)
   const [federationPeering, setFederationPeering] = useState<boolean | null>(null)
   const [peerText, setPeerText] = useState('')
@@ -42,6 +39,11 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const editable = status?.hubConfigEditable ?? false
+
+  const formatSyncTime = (value?: number) => {
+    if (!value) return t('communityPage.federation.neverSynced')
+    return new Date(value).toLocaleString()
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -56,12 +58,13 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
       setPeerText(peersToText(nextStatus.hubConfig.peers))
       setUpstream(nextStatus.hubConfig.upstream ?? '')
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : '加载联邦状态失败'
+      const message =
+        loadError instanceof Error ? loadError.message : t('communityPage.federation.loadFailed')
       setError(message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -85,10 +88,11 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
         upstream: nextUpstream || undefined,
       }
       await updateCommunityHubConfig(config)
-      setNotice('联邦配置已保存，正在重新同步 peer Hub…')
+      setNotice(t('communityPage.federation.saveNotice'))
       await load()
     } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : '保存失败'
+      const message =
+        saveError instanceof Error ? saveError.message : t('communityPage.federation.saveFailed')
       setError(message)
     } finally {
       setSaving(false)
@@ -102,11 +106,15 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
     try {
       const result = await syncCommunityHubPeering()
       setNotice(
-        `同步完成：联邦目录 ${result.federatedCatalogEntryCount} 条，新增 bootstrap ${result.libp2pBootstrapAdded} 个`,
+        t('communityPage.federation.syncComplete', {
+          catalogCount: result.federatedCatalogEntryCount,
+          bootstrapAdded: result.libp2pBootstrapAdded,
+        }),
       )
       await load()
     } catch (syncError) {
-      const message = syncError instanceof Error ? syncError.message : '同步失败'
+      const message =
+        syncError instanceof Error ? syncError.message : t('communityPage.federation.syncFailed')
       setError(message)
     } finally {
       setSyncing(false)
@@ -124,7 +132,7 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
             gap: 12,
           }}
         >
-          <span className="tm-group-settings-section-title">F1 Hub Peering</span>
+          <span className="tm-group-settings-section-title">{t('communityPage.federation.title')}</span>
           <button
             type="button"
             className="tm-group-settings-inline-btn"
@@ -132,7 +140,7 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
             onClick={() => void load()}
           >
             <IconRefresh size={14} className={loading ? 'tm-icon-spin' : undefined} />
-            刷新
+            {t('communityPage.federation.refresh')}
           </button>
         </div>
       </div>
@@ -141,36 +149,54 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
       {notice ? <div className="tm-group-settings-hint">{notice}</div> : null}
 
       <div className="tm-group-settings-field">
-        <span className="tm-group-settings-label">P2P 联邦</span>
-        <span>{status?.federationConfig.federationEnabled ? '已开启' : '已关闭'}</span>
+        <span className="tm-group-settings-label">{t('communityPage.federation.p2pFederation')}</span>
+        <span>
+          {status?.federationConfig.federationEnabled
+            ? t('communityPage.federation.enabled')
+            : t('communityPage.federation.disabled')}
+        </span>
       </div>
       <div className="tm-group-settings-field">
-        <span className="tm-group-settings-label">Hub Peering API</span>
-        <span>{federationPeering ? '可用' : federationPeering === false ? '不可用' : '—'}</span>
+        <span className="tm-group-settings-label">{t('communityPage.federation.hubPeeringApi')}</span>
+        <span>
+          {federationPeering
+            ? t('communityPage.federation.available')
+            : federationPeering === false
+              ? t('communityPage.federation.unavailable')
+              : '—'}
+        </span>
       </div>
       <div className="tm-group-settings-field">
-        <span className="tm-group-settings-label">联邦目录缓存</span>
-        <span>{status?.federatedCatalogEntryCount ?? '—'} 条</span>
+        <span className="tm-group-settings-label">{t('communityPage.federation.catalogCache')}</span>
+        <span>
+          {t('communityPage.federation.catalogEntries', {
+            count: status?.federatedCatalogEntryCount ?? '—',
+          })}
+        </span>
       </div>
       <div className="tm-group-settings-field">
         <span className="tm-group-settings-label">libp2p Bootstrap</span>
-        <span>{status?.libp2pBootstrapCount ?? '—'} 个</span>
+        <span>
+          {t('communityPage.federation.bootstrapCount', {
+            count: status?.libp2pBootstrapCount ?? '—',
+          })}
+        </span>
       </div>
 
       <label className="tm-group-settings-field">
-        <span className="tm-group-settings-label">Peer Hub 地址</span>
+        <span className="tm-group-settings-label">{t('communityPage.federation.peerHubAddresses')}</span>
         <textarea
           className="tm-group-settings-textarea"
           rows={4}
           value={peerText}
           disabled={!editable || saving}
-          placeholder={'每行一个 URL，例如：\nhttp://192.168.1.10:3721'}
+          placeholder={t('communityPage.federation.peerPlaceholder')}
           onChange={(event) => setPeerText(event.target.value)}
         />
       </label>
 
       <label className="tm-group-settings-field">
-        <span className="tm-group-settings-label">Upstream（优先同步节点）</span>
+        <span className="tm-group-settings-label">{t('communityPage.federation.upstream')}</span>
         {upstreamOptions.length > 0 ? (
           <select
             className="tm-group-settings-input"
@@ -178,7 +204,7 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
             disabled={!editable || saving}
             onChange={(event) => setUpstream(event.target.value)}
           >
-            <option value="">（不指定）</option>
+            <option value="">{t('communityPage.federation.upstreamNone')}</option>
             {upstreamOptions.map((url) => (
               <option key={url} value={url}>
                 {url}
@@ -198,44 +224,40 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
       </label>
 
       {!editable ? (
-        <p className="tm-group-settings-hint">
-          当前 Hub 配置由环境变量覆盖（`TOOLMAN_COMMUNITY_HUB_URL` / `TOOLMAN_COMMUNITY_HUB_MODE`），无法在 UI 中修改 peers。
-        </p>
+        <p className="tm-group-settings-hint">{t('communityPage.federation.envOverrideHint')}</p>
       ) : (
-        <p className="tm-group-settings-hint">
-          配置保存到 Community 数据目录下的 hub.json（与 hub.port、联邦同步状态同目录）。双开测试时，可在 B 实例填入 A 的 Hub 地址实现 HTTP catalog 同步（无需 libp2p）。
-        </p>
+        <p className="tm-group-settings-hint">{t('communityPage.federation.editableHint')}</p>
       )}
 
-        <div className="tm-group-settings-inline-actions">
-          <button
-            type="button"
-            className="tm-btn tm-btn--secondary"
-            disabled={!editable || saving || loading}
-            onClick={() => void handleSave()}
-          >
-            {saving ? '保存中…' : '保存 Peering 配置'}
-          </button>
-          <button
-            type="button"
-            className="tm-btn tm-btn--primary"
-            disabled={syncing || loading}
-            onClick={() => void handleSyncNow()}
-          >
-            {syncing ? '同步中…' : '立即同步'}
-          </button>
-        </div>
+      <div className="tm-group-settings-inline-actions">
+        <button
+          type="button"
+          className="tm-btn tm-btn--secondary"
+          disabled={!editable || saving || loading}
+          onClick={() => void handleSave()}
+        >
+          {saving ? t('communityPage.federation.saving') : t('communityPage.federation.savePeering')}
+        </button>
+        <button
+          type="button"
+          className="tm-btn tm-btn--primary"
+          disabled={syncing || loading}
+          onClick={() => void handleSyncNow()}
+        >
+          {syncing ? t('communityPage.federation.syncing') : t('communityPage.federation.syncNow')}
+        </button>
+      </div>
 
       {status?.syncState.peers.length ? (
         <div className="tm-community-settings-peer-table-wrap">
-          <div className="tm-group-settings-section-title">Peer 同步状态</div>
+          <div className="tm-group-settings-section-title">{t('communityPage.federation.peerSyncStatus')}</div>
           <table className="tm-community-settings-peer-table">
             <thead>
               <tr>
                 <th>Peer</th>
-                <th>上次同步</th>
+                <th>{t('communityPage.federation.lastSync')}</th>
                 <th>Cursor</th>
-                <th>状态</th>
+                <th>{t('communityPage.federation.status')}</th>
               </tr>
             </thead>
             <tbody>
@@ -244,7 +266,11 @@ export function CommunityFederationSettingsPanel({ embedded = false }: Props) {
                   <td>{peer.peerUrl}</td>
                   <td>{formatSyncTime(peer.lastSyncedAt)}</td>
                   <td>{peer.updatedAfter}</td>
-                  <td>{peer.lastError ? `失败：${peer.lastError}` : '正常'}</td>
+                  <td>
+                    {peer.lastError
+                      ? t('communityPage.federation.peerFailed', { error: peer.lastError })
+                      : t('communityPage.federation.peerNormal')}
+                  </td>
                 </tr>
               ))}
             </tbody>

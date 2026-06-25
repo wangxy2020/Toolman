@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { logStructured } from '../structured-log.service'
 import { app } from 'electron'
 import { P2pEventRepository, type P2pEventRow } from '@toolman/db'
 import type {
@@ -26,8 +27,51 @@ import {
 import { notifyLocalP2pEventAppended } from './p2p-sync-lifecycle'
 import { getKnownP2pConnections } from './p2p-connection.service'
 import { proposeP2pEventToOwner } from './p2p-event-proposal.service'
+import { withWorkspaceEventWrite } from './p2p-workspace-event-mutex'
+import {
+  dequeueProjectionOutbox,
+  enqueueProjectionOutbox,
+  loadProjectionOutbox,
+  persistProjectionOutbox,
+} from './p2p-projection-outbox'
 
 let eventStoreReady = false
+let projectionRetryQueue: Map<string, WorkspaceEvent> | null = null
+
+function getProjectionRetryQueue(): Map<string, WorkspaceEvent> {
+  if (!projectionRetryQueue) {
+    projectionRetryQueue = loadProjectionOutbox()
+  }
+  return projectionRetryQueue
+}
+
+function projectP2pEventSafe(event: WorkspaceEvent): void {
+  const queue = getProjectionRetryQueue()
+  try {
+    projectP2pEvent(event)
+    dequeueProjectionOutbox(queue, event.eventId)
+  } catch (error) {
+    if (!queue.has(event.eventId)) {
+      enqueueProjectionOutbox(queue, event)
+    } else {
+      queue.set(event.eventId, event)
+      persistProjectionOutbox(queue)
+    }
+    logStructured('p2p', 'warn', `projection failed for ${event.eventId}: ${toErrorMessage(error, 'projection failed')}`)
+  }
+}
+
+function drainProjectionRetryQueue(): void {
+  const queue = getProjectionRetryQueue()
+  for (const [eventId, event] of [...queue]) {
+    try {
+      projectP2pEvent(event)
+      dequeueProjectionOutbox(queue, eventId)
+    } catch {
+      // keep for next drain
+    }
+  }
+}
 
 export interface AppendP2pEventInput {
   workspaceId: string
@@ -134,23 +178,31 @@ export function bootstrapP2pEventStore(): void {
     ensureEventStore()
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    console.warn(`[p2p] event store init skipped: ${message}`)
+    logStructured('p2p', 'warn', `event store init skipped: ${message}`)
   }
 }
 
 export async function appendP2pEvent(input: AppendP2pEventInput): Promise<WorkspaceEvent> {
-  assertWorkspaceMemberAccess(input.workspaceId)
-  const connections = getKnownP2pConnections()
-  if (
-    !isLocalWorkspaceOwner(input.workspaceId) &&
-    isOwnerPeerConnected(input.workspaceId, connections)
-  ) {
-    return proposeP2pEventToOwner(input)
-  }
-  return appendP2pEventLocally(input)
+  return withWorkspaceEventWrite(input.workspaceId, async () => {
+    assertWorkspaceMemberAccess(input.workspaceId)
+    const connections = getKnownP2pConnections()
+    if (
+      !isLocalWorkspaceOwner(input.workspaceId) &&
+      isOwnerPeerConnected(input.workspaceId, connections)
+    ) {
+      return proposeP2pEventToOwner(input)
+    }
+    return appendP2pEventLocallyCore(input)
+  })
 }
 
-export function appendP2pEventLocally(input: AppendP2pEventInput): WorkspaceEvent {
+export async function appendP2pEventLocally(input: AppendP2pEventInput): Promise<WorkspaceEvent> {
+  return withWorkspaceEventWrite(input.workspaceId, () =>
+    Promise.resolve(appendP2pEventLocallyCore(input)),
+  )
+}
+
+function appendP2pEventLocallyCore(input: AppendP2pEventInput): WorkspaceEvent {
   assertWorkspaceMemberAccess(input.workspaceId)
   const device = getP2pDeviceInfo()
   const connections = getKnownP2pConnections()
@@ -294,7 +346,25 @@ export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent 
       return null
     }
     if (resolution === 'replace') {
-      repo.deleteById(existingBySeq.id)
+      const row = getEventRepo().replaceConflictingEvent(existingBySeq.id, {
+        id: input.eventId,
+        workspaceId: input.workspaceId,
+        seq: input.seq,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        operatorId: input.operatorId,
+        eventType: input.eventType,
+        payload: input.payload,
+        prevEventHash: input.prevEventHash ?? null,
+        sourceDeviceId: input.sourceDeviceId,
+        timestamp: new Date(input.timestamp),
+        synced: true,
+      })
+      const event = mapEventRow(row)
+      drainProjectionRetryQueue()
+      projectP2pEventSafe(event)
+      broadcastP2pEventAppended(event)
+      return event
     } else {
       throw new Error('序号冲突：远端事件与本地序号槽位不一致')
     }
@@ -325,7 +395,8 @@ export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent 
   })
 
   const event = mapEventRow(row)
-  projectP2pEvent(event)
+  drainProjectionRetryQueue()
+  projectP2pEventSafe(event)
   broadcastP2pEventAppended(event)
   return event
 }

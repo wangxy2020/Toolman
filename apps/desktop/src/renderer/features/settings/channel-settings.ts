@@ -37,18 +37,3 @@ export function loadLegacyChannelConfigs(): LegacyChannelConfig[] {
 export function clearLegacyChannelConfigs(): void {
   localStorage.removeItem(STORAGE_KEY)
 }
-
-export function channelStatusLabel(status: string): string {
-  switch (status) {
-    case 'connected':
-      return '已连接'
-    case 'connecting':
-      return '连接中'
-    case 'error':
-      return '错误'
-    case 'unsupported':
-      return '即将推出'
-    default:
-      return '未连接'
-  }
-}

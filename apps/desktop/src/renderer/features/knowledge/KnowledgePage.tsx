@@ -1,3 +1,7 @@
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { useI18n } from '../../i18n/useI18n'
+import { getKnowledgeSidebarSectionLabel } from '../../i18n/knowledge-sidebar-labels'
+import { translateKnowledgeFolderName } from '../../i18n/system-labels'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { IpcChannel, type KnowledgeBase } from '@toolman/shared'
 import { IconFolderPlus, IconRefresh, IconChevronUp, IconSliders } from '../../components/icons'
@@ -16,7 +20,6 @@ import {
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
   isSharedKnowledgeId,
-  KNOWLEDGE_SIDEBAR_SECTIONS,
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
@@ -103,7 +106,8 @@ export function KnowledgePage({
   onOpenNote,
   onChatWithKnowledgeFiles,
 }: Props) {
-  const config = getModulePageConfig('knowledge')
+  const { t } = useI18n()
+  const config = getModulePageConfig('knowledge', t)
   const [settingsTarget, setSettingsTarget] = useState<SettingsTarget>(null)
   const [showAddUrlModal, setShowAddUrlModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -224,7 +228,7 @@ export function KnowledgePage({
 
   const handleChatWithFiles = () => {
     if (selectedIds.size === 0) {
-      documents.setError('请先选择要带到聊天的知识库文件')
+      documents.setError(t('knowledgePage.toolbar.chatWithFiles'))
       return
     }
     const items = chatAttachableFiles
@@ -460,8 +464,7 @@ export function KnowledgePage({
     }
   }
 
-  const sectionLabel =
-    KNOWLEDGE_SIDEBAR_SECTIONS.find((item) => item.id === section)?.label ?? '知识库'
+  const sectionLabel = getKnowledgeSidebarSectionLabel(section, t)
   const breadcrumbItemName =
     section === 'local'
       ? activeId === DEFAULT_KNOWLEDGE_FOLDER_ID
@@ -479,8 +482,8 @@ export function KnowledgePage({
             ? active?.name
           : section === 'file-tools'
             ? activeId === FILE_REGISTRY_TOOL_ID
-              ? '文件注册表'
-              : '文件查重'
+              ? t('knowledgePage.fileRegistry')
+              : t('knowledgePage.fileDedup')
             : undefined
 
   const settingsEnabled = Boolean(
@@ -540,28 +543,29 @@ export function KnowledgePage({
 
   const statusFallback = useMemo(() => {
     if (documents.ingesting) {
-      return { tone: 'info' as const, text: '正在导入并建立索引…' }
+      return { tone: 'info' as const, text: t('knowledgePage.importing') }
     }
     if (panelLoading) {
-      return { tone: 'info' as const, text: '加载中…' }
+      return { tone: 'info' as const, text: t('common.loading') }
     }
     if (isFileDedupView && dedupScanState.scanning) {
       const progress = dedupScanState.progress
       if (progress && progress.total > 0) {
         return {
           tone: 'info' as const,
-          text: `正在扫描重复文件… ${progress.scanned}/${progress.total}`,
+          text: `${t('knowledgePage.scanningDuplicates')} ${progress.scanned}/${progress.total}`,
         }
       }
-      return { tone: 'info' as const, text: '正在扫描重复文件…' }
+      return { tone: 'info' as const, text: t('knowledgePage.scanningDuplicates') }
     }
-    return { tone: 'muted' as const, text: '就绪' }
+    return { tone: 'muted' as const, text: t('knowledgePage.ready') }
   }, [
     dedupScanState.progress,
     dedupScanState.scanning,
     documents.ingesting,
     isFileDedupView,
     panelLoading,
+    t,
   ])
 
   const importReady =
@@ -641,9 +645,12 @@ export function KnowledgePage({
       ) {
         return (
           <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">本地知识库</h2>
+            <h2 className="tm-module-empty-title">{t('knowledgePage.sections.local')}</h2>
             <p className="tm-module-empty-hint">
-              「{active.name}」不属于本地知识库分区。请在左侧对应分区中管理。
+              {t('knowledgePage.wrongSection', {
+                name: translateKnowledgeFolderName(active.name, t),
+                section: t('knowledgePage.sections.local'),
+              })}
             </p>
           </div>
         )
@@ -657,9 +664,12 @@ export function KnowledgePage({
       ) {
         return (
           <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">网络知识库</h2>
+            <h2 className="tm-module-empty-title">{t('knowledgePage.sections.network')}</h2>
             <p className="tm-module-empty-hint">
-              「{active.name}」不属于网络知识库分区。请在左侧对应分区中管理。
+              {t('knowledgePage.wrongSection', {
+                name: translateKnowledgeFolderName(active.name, t),
+                section: t('knowledgePage.sections.network'),
+              })}
             </p>
           </div>
         )
@@ -673,9 +683,12 @@ export function KnowledgePage({
       ) {
         return (
           <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">本地文件</h2>
+            <h2 className="tm-module-empty-title">{t('knowledgePage.sections.localFiles')}</h2>
             <p className="tm-module-empty-hint">
-              「{active.name}」不属于本地文件分区。请在左侧对应分区中管理。
+              {t('knowledgePage.wrongSection', {
+                name: translateKnowledgeFolderName(active.name, t),
+                section: t('knowledgePage.sections.localFiles'),
+              })}
             </p>
           </div>
         )
@@ -688,6 +701,7 @@ export function KnowledgePage({
   }
 
   return (
+    <ErrorBoundary title={t('errors.knowledge')}>
     <main className="tm-main">
       <KnowledgePageHeader
         sectionLabel={sectionLabel}
@@ -737,7 +751,7 @@ export function KnowledgePage({
         {!workspaceId ? (
           <div className="tm-module-empty">
             <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
-            <p className="tm-module-empty-hint">请先选择工作区</p>
+            <p className="tm-module-empty-hint">{t('knowledgePage.selectWorkspace')}</p>
           </div>
         ) : section === 'local' || section === 'network' || section === 'local-files' ? (
           renderKnowledgeSectionContent()
@@ -746,8 +760,8 @@ export function KnowledgePage({
             renderKnowledgeFilePanel()
           ) : (
             <div className="tm-module-empty">
-              <h2 className="tm-module-empty-title">共享知识库</h2>
-              <p className="tm-module-empty-hint">暂无文件夹</p>
+              <h2 className="tm-module-empty-title">{t('knowledgePage.sections.shared')}</h2>
+              <p className="tm-module-empty-hint">{t('sidebar.knowledge.noFolders')}</p>
             </div>
           )
         ) : section === 'file-tools' ? (
@@ -765,13 +779,13 @@ export function KnowledgePage({
             )
           ) : (
             <div className="tm-module-empty">
-              <h2 className="tm-module-empty-title">本地文件工具</h2>
-              <p className="tm-module-empty-hint">请先选择工作区</p>
+              <h2 className="tm-module-empty-title">{t('knowledgePage.sections.fileTools')}</h2>
+              <p className="tm-module-empty-hint">{t('knowledgePage.selectWorkspace')}</p>
             </div>
           )
         ) : (
           <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">本地知识库</h2>
+            <h2 className="tm-module-empty-title">{t('knowledgePage.sections.local')}</h2>
             <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
           </div>
         )}
@@ -834,16 +848,17 @@ export function KnowledgePage({
 
       {pendingDelete ? (
         <ConfirmDialog
-          title="删除文件"
+          title={t('knowledgePage.deleteFile')}
           message={pendingDelete.message}
-          confirmLabel="删除"
-          cancelLabel="取消"
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
           danger
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => void confirmDeleteDocuments()}
         />
       ) : null}
     </main>
+    </ErrorBoundary>
   )
 }
 
@@ -923,14 +938,15 @@ function KnowledgePageHeader({
   onDedupGoParent?: () => void
   toolbar?: ReactNode
 }) {
-  const config = getModulePageConfig('knowledge')
+  const { t } = useI18n()
+  const config = getModulePageConfig('knowledge', t)
 
   return (
     <header className="tm-chat-header">
       <div className="tm-chat-breadcrumb tm-chat-breadcrumb--dedup">
         {dedupMode ? (
           <>
-            <span className="tm-model-pill tm-module-pill">文件查重</span>
+            <span className="tm-model-pill tm-module-pill">{t('knowledgePage.fileDedup')}</span>
             {dedupFolderPath ? (
               <span className="tm-dedup-header-path-group">
                 {dedupScanning ? (
@@ -939,7 +955,7 @@ function KnowledgePageHeader({
                   <button
                     type="button"
                     className="tm-dedup-header-icon-btn"
-                    aria-label="刷新扫描"
+                    aria-label={t('knowledgePage.refreshScan')}
                     onClick={onDedupRefresh}
                   >
                     <IconRefresh size={14} />
@@ -948,7 +964,7 @@ function KnowledgePageHeader({
                 <button
                   type="button"
                   className="tm-dedup-header-icon-btn"
-                  aria-label="上级文件夹"
+                  aria-label={t('knowledgePage.parentFolder')}
                   disabled={dedupScanning || !getParentPath(dedupFolderPath)}
                   onClick={onDedupGoParent}
                 >
@@ -974,7 +990,7 @@ function KnowledgePageHeader({
                   className="tm-model-pill tm-module-pill tm-module-pill--secondary"
                   title={kbName}
                 >
-                  {kbName}
+                  {translateKnowledgeFolderName(kbName, t)}
                 </span>
               </span>
             ) : null}
@@ -991,13 +1007,13 @@ function KnowledgePageHeader({
             onClick={onSelectDedupFolder}
           >
             <IconFolderPlus size={18} />
-            <span>选择文件夹</span>
+            <span>{t('knowledgePage.selectFolder')}</span>
           </button>
         ) : (
           <button
             type="button"
             className="tm-chat-header-settings-btn"
-            title={`${config.title}设置`}
+            title={t('knowledgePage.settingsTitle', { title: config.title })}
             disabled={!settingsEnabled}
             onClick={onOpenSettings}
           >

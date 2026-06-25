@@ -1,6 +1,7 @@
+import { homedir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 
-import { evaluateToolPermission, isDeleteTool } from './permission.service'
+import { evaluateToolPermission, isDeleteTool, parseEnvironmentVariables, resolveWorkingDirectory, canExecuteTool } from './permission.service'
 
 describe('isDeleteTool', () => {
   it('detects builtin delete tools', () => {
@@ -48,6 +49,42 @@ describe('evaluateToolPermission autonomous mode', () => {
       reason: '删除工具 fs_delete 需要人工授权',
       requiresApproval: true,
     })
+  })
+})
+
+describe('evaluateToolPermission full-auto mode', () => {
+  it('allows write tools without approval', () => {
+    expect(
+      evaluateToolPermission({
+        toolName: 'mcp__docx__replace_text',
+        permissionMode: 'full-auto',
+        toolStates: {},
+      }),
+    ).toEqual({ allowed: true })
+  })
+})
+
+describe('permission helpers', () => {
+  it('parses environment variables from KEY=VALUE lines', () => {
+    expect(parseEnvironmentVariables('FOO=bar\n# comment\nBAZ=qux')).toEqual({
+      FOO: 'bar',
+      BAZ: 'qux',
+    })
+  })
+
+  it('resolves working directory with fallback', () => {
+    expect(resolveWorkingDirectory(undefined)).toBe(homedir())
+    expect(resolveWorkingDirectory('/tmp/custom')).toBe('/tmp/custom')
+  })
+
+  it('checks canExecuteTool delegates to evaluateToolPermission', () => {
+    expect(
+      canExecuteTool({
+        toolName: 'mcp__docx__replace_text',
+        permissionMode: 'full-auto',
+        toolStates: {},
+      }),
+    ).toEqual({ allowed: true })
   })
 })
 

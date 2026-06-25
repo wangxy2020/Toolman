@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IconEdit, IconPlus, IconTrash } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   addQuickPhrase,
   loadQuickPhrases,
@@ -16,6 +17,7 @@ interface EditModalProps {
 }
 
 function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
+  const { t } = useI18n()
   const [label, setLabel] = useState(phrase?.label ?? '')
   const [text, setText] = useState(phrase?.text ?? '')
 
@@ -28,7 +30,7 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
     })
   }
 
-  const title = phrase ? '编辑快捷短语' : '添加快捷短语'
+  const title = phrase ? t('settings.quickPhrases.edit.title') : t('settings.quickPhrases.add.title')
 
   return (
     <div className="tm-modal-overlay tm-modal-overlay--channel-config" onClick={onClose}>
@@ -44,7 +46,12 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
             <span className="tm-channel-config-title-dot" aria-hidden="true" />
             {title}
           </h3>
-          <button type="button" className="tm-channel-config-close" aria-label="关闭" onClick={onClose}>
+          <button
+            type="button"
+            className="tm-channel-config-close"
+            aria-label={t('common.close')}
+            onClick={onClose}
+          >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -59,26 +66,29 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
 
         <div className="tm-channel-config-body">
           <div className="tm-channel-config-field">
-            <label className="tm-channel-config-label">名称</label>
-            <SettingsInput value={label} placeholder="显示在菜单中的名称" onChange={setLabel} />
+            <label className="tm-channel-config-label">{t('settings.quickPhrases.label')}</label>
+            <SettingsInput
+              value={label}
+              placeholder={t('settings.quickPhrases.labelPlaceholder')}
+              onChange={setLabel}
+            />
           </div>
 
           <div className="tm-channel-config-field">
             <label className="tm-channel-config-label">
-              内容<span className="tm-channel-config-required">*</span>
+              {t('settings.quickPhrases.content')}
+              <span className="tm-channel-config-required">*</span>
             </label>
             <textarea
               className="tm-channel-config-textarea"
               rows={5}
               value={text}
-              placeholder="插入到输入框中的短语内容"
+              placeholder={t('settings.quickPhrases.contentPlaceholder')}
               onChange={(e) => setText(e.target.value)}
             />
           </div>
 
-          <p className="tm-channel-config-field-hint">
-            名称留空时将自动使用内容前缀；可在聊天输入框的快捷短语菜单中直接插入。
-          </p>
+          <p className="tm-channel-config-field-hint">{t('settings.quickPhrases.hint')}</p>
         </div>
 
         <footer className="tm-channel-config-footer">
@@ -88,7 +98,7 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
               className="tm-channel-config-footer-btn tm-channel-config-footer-btn--secondary"
               onClick={onClose}
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -96,7 +106,7 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
               disabled={!text.trim()}
               onClick={handleSave}
             >
-              保存
+              {t('common.save')}
             </button>
           </div>
         </footer>
@@ -106,6 +116,7 @@ function QuickPhraseEditModal({ phrase, onClose, onSave }: EditModalProps) {
 }
 
 export function QuickPhrasesSettingsPanel() {
+  const { t } = useI18n()
   const [phrases, setPhrases] = useState<QuickPhrase[]>(() => loadQuickPhrases())
   const [editingPhrase, setEditingPhrase] = useState<QuickPhrase | null | 'new'>(null)
 
@@ -119,7 +130,7 @@ export function QuickPhrasesSettingsPanel() {
   }
 
   const handleDelete = (phrase: QuickPhrase) => {
-    if (!window.confirm(`确定删除快捷短语「${phrase.label}」？`)) return
+    if (!window.confirm(t('settings.quickPhrases.delete.confirm', { label: phrase.label }))) return
     setPhrases(removeQuickPhrase(phrase.id))
   }
 
@@ -127,8 +138,8 @@ export function QuickPhrasesSettingsPanel() {
     <>
       <SettingsPageLayout>
         <SettingsSection
-          title="快捷短语"
-          intro="在输入框中快速插入常用提示词。"
+          title={t('settings.quickPhrases.title')}
+          intro={t('settings.quickPhrases.intro')}
           action={
             <button
               type="button"
@@ -136,12 +147,12 @@ export function QuickPhrasesSettingsPanel() {
               onClick={() => setEditingPhrase('new')}
             >
               <IconPlus size={14} />
-              添加
+              {t('common.add')}
             </button>
           }
         >
           {phrases.length === 0 ? (
-            <p className="tm-quick-phrase-empty">暂无快捷短语，点击右上角「添加」创建。</p>
+            <p className="tm-quick-phrase-empty">{t('settings.quickPhrases.empty')}</p>
           ) : (
             phrases.map((phrase) => (
               <div key={phrase.id} className="tm-quick-phrase-row">
@@ -153,7 +164,7 @@ export function QuickPhrasesSettingsPanel() {
                   <button
                     type="button"
                     className="tm-provider-icon-btn"
-                    title="编辑"
+                    title={t('settings.quickPhrases.edit.action')}
                     onClick={() => setEditingPhrase(phrase)}
                   >
                     <IconEdit size={14} />
@@ -161,7 +172,7 @@ export function QuickPhrasesSettingsPanel() {
                   <button
                     type="button"
                     className="tm-provider-icon-btn tm-provider-icon-btn--danger"
-                    title="删除"
+                    title={t('settings.quickPhrases.delete.action')}
                     onClick={() => handleDelete(phrase)}
                   >
                     <IconTrash size={14} />

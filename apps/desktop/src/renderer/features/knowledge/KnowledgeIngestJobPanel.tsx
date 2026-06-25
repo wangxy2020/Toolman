@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type KnowledgeIngestJob } from '@toolman/shared'
-
-const STAGE_LABELS: Record<KnowledgeIngestJob['stage'], string> = {
-  queued: '排队中',
-  parsing: '解析中',
-  chunking: '分块中',
-  embedding: '向量化',
-  indexing: '索引中',
-  done: '完成',
-  failed: '失败',
-}
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceId: string
@@ -17,9 +8,13 @@ interface Props {
 }
 
 export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
+  const { t } = useI18n()
   const [items, setItems] = useState<KnowledgeIngestJob[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const stageLabel = (stage: KnowledgeIngestJob['stage']) =>
+    t(`knowledgePage.ingest.stages.${stage}` as 'knowledgePage.ingest.stages.queued')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,10 +70,8 @@ export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
   if (!loading && items.length === 0) {
     return (
       <section className="tm-knowledge-settings-section">
-        <h3 className="tm-knowledge-settings-heading">索引任务</h3>
-        <p className="tm-knowledge-detail-hint">
-          进行中的文档索引任务会显示在这里，可取消或重试失败项。当前没有排队、进行中或失败的任务。
-        </p>
+        <h3 className="tm-knowledge-settings-heading">{t('knowledgePage.ingest.title')}</h3>
+        <p className="tm-knowledge-detail-hint">{t('knowledgePage.ingest.hintEmpty')}</p>
       </section>
     )
   }
@@ -86,12 +79,12 @@ export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
   return (
     <section className="tm-knowledge-settings-section">
       <div className="tm-knowledge-ingest-job-header">
-        <h3 className="tm-knowledge-settings-heading">索引任务</h3>
+        <h3 className="tm-knowledge-settings-heading">{t('knowledgePage.ingest.title')}</h3>
         <button type="button" className="tm-btn tm-btn--ghost" onClick={() => void load()} disabled={loading}>
-          {loading ? '刷新中…' : '刷新'}
+          {loading ? t('knowledgePage.ingest.refreshing') : t('knowledgePage.ingest.refresh')}
         </button>
       </div>
-      <p className="tm-knowledge-detail-hint">进行中的文档索引任务，可取消或重试失败项。</p>
+      <p className="tm-knowledge-detail-hint">{t('knowledgePage.ingest.hintActive')}</p>
       {error ? <p className="tm-form-error">{error}</p> : null}
       <ul className="tm-knowledge-ingest-job-list">
         {items.map((item) => {
@@ -104,7 +97,7 @@ export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
                   <div className="tm-knowledge-ingest-job-path">{item.absolutePath}</div>
                 ) : null}
                 <div className="tm-knowledge-ingest-job-meta">
-                  {STAGE_LABELS[item.stage]} · {item.progress}%
+                  {stageLabel(item.stage)} · {item.progress}%
                   {item.errorMessage ? ` · ${item.errorMessage}` : ''}
                 </div>
                 <div className="tm-knowledge-ingest-job-progress">
@@ -121,7 +114,7 @@ export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
                     className="tm-btn tm-btn--ghost"
                     onClick={() => void handleCancel(item.documentId)}
                   >
-                    取消
+                    {t('knowledgePage.ingest.cancel')}
                   </button>
                 ) : null}
                 {item.stage === 'failed' ? (
@@ -130,7 +123,7 @@ export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
                     className="tm-btn tm-btn--ghost"
                     onClick={() => void handleRetry(item.documentId)}
                   >
-                    重试
+                    {t('knowledgePage.ingest.retry')}
                   </button>
                 ) : null}
               </div>

@@ -19,6 +19,7 @@ import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './
 import { useP2pKnowledge } from './useP2pKnowledge'
 import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
 import { hasShareableKnowledgeBases } from './group-knowledge-picker-utils'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   p2pWorkspaceId: string
@@ -61,6 +62,7 @@ export function GroupKnowledgePanel({
   onOpenGroupKnowledgeMarkdown,
   onKnowledgeBasesChanged,
 }: Props) {
+  const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [removingKbId, setRemovingKbId] = useState<string | null>(null)
@@ -533,8 +535,11 @@ export function GroupKnowledgePanel({
   return (
     <div className="tm-group-member-panel tm-group-resource-panel">
       <GroupPanelHeader
-        title="群组知识库"
-        subtitle={`${workspaceName} · ${p2pKnowledge.sharedResources.length} 个知识库`}
+        title={t('groupPage.header.knowledge')}
+        subtitle={`${workspaceName} · ${t('groupPage.panels.count', {
+          count: p2pKnowledge.sharedResources.length,
+          type: t('groupPage.panels.types.knowledge'),
+        })}`}
         actions={
           <GroupPanelRefreshButton
             loading={p2pKnowledge.loading}
@@ -556,20 +561,22 @@ export function GroupKnowledgePanel({
           onClick={() => setShowPicker(true)}
         >
           <span className="tm-kb-file-dropzone-title">
-            {p2pKnowledge.sharing ? '正在添加知识库…' : '点击添加知识库到群组'}
+            {p2pKnowledge.sharing
+              ? t('groupPage.panels.adding', { type: t('groupPage.panels.types.knowledge') })
+              : t('groupPage.panels.clickAdd', { type: t('groupPage.panels.types.knowledge') })}
           </span>
           <span className="tm-kb-file-dropzone-hint">
-            从已有知识库中选择，共享给群组成员
+            {t('groupPage.panels.pickHint', { type: t('groupPage.panels.types.knowledge') })}
           </span>
         </button>
 
         {p2pKnowledge.loading && p2pKnowledge.sharedResources.length === 0 ? (
           <div className="tm-kb-file-panel-empty">
-            <p>加载知识库列表中…</p>
+            <p>{t('groupPage.panels.loading', { type: t('groupPage.panels.types.knowledge') })}</p>
           </div>
         ) : p2pKnowledge.sharedResources.length === 0 ? (
           <div className="tm-kb-file-panel-empty">
-            <p>暂无共享知识库，点击上方区域添加</p>
+            <p>{t('groupPage.panels.empty', { type: t('groupPage.panels.types.knowledge') })}</p>
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">

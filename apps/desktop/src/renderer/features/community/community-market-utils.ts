@@ -1,3 +1,6 @@
+import type { AppLanguage } from '../settings/app-settings'
+import { getDateLocale } from '../../i18n/date-locale'
+
 export function formatCommunityCount(value: number): string {
   if (value >= 10_000) {
     return `${(value / 10_000).toFixed(1)}万`
@@ -5,8 +8,8 @@ export function formatCommunityCount(value: number): string {
   return String(value)
 }
 
-export function formatCommunityDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('zh-CN', {
+export function formatCommunityDate(timestamp: number, language: AppLanguage = 'zh-CN'): string {
+  return new Date(timestamp).toLocaleDateString(getDateLocale(language), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

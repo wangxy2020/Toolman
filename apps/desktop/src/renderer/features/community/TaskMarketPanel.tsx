@@ -13,8 +13,6 @@ import { formatNewsDate } from './community-news-utils'
 import { sortCommunityListItems } from './community-list-sort'
 import {
   formatTaskBudget,
-  TASK_STATUS_LABELS,
-  TASK_TYPE_LABELS,
 } from './community-task-utils'
 import { canDeleteCommunityResource } from './community-user-utils'
 import { CommunityCommentListItemShell } from './CommunityCommentListItemShell'
@@ -31,8 +29,14 @@ import { useCommunityUser } from './useCommunityUser'
 import { useCommunityPanelStatus } from './community-panel-status'
 import { useRegisterModulePanelStatus } from '../../components/module-page-status'
 import { useRegistrationGate } from '../user/useRegistrationGate'
+import { useI18n } from '../../i18n/useI18n'
+import {
+  getCommunityTaskStatusLabel,
+  getCommunityTaskTypeLabel,
+} from '../../i18n/community-status-labels'
 
 export function TaskMarketPanel() {
+  const { t, language } = useI18n()
   const [showCreate, setShowCreate] = useState(false)
   const [resumeTask, setResumeTask] = useState<CommunityTaskItem | null>(null)
   const [publishNotice, setPublishNotice] = useState<string | null>(null)
@@ -104,7 +108,8 @@ export function TaskMarketPanel() {
       if (selectedId === taskId) setSelectedId(null)
       await tasks.load()
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : '删除任务失败'
+      const message =
+        deleteError instanceof Error ? deleteError.message : t('communityPage.market.deleteTaskFailed')
       tasks.setError(message)
     } finally {
       setDeletingId(null)
@@ -114,9 +119,9 @@ export function TaskMarketPanel() {
   return (
     <>
       <CommunityListPanelShell
-        title="任务市场"
-        subtitle="发布协作任务、申请接单并完成交付验收"
-        publishLabel="发布任务"
+        title={t('communityPage.panels.tasks.title')}
+        subtitle={t('communityPage.panels.tasks.subtitle')}
+        publishLabel={t('communityPage.panels.tasks.publish')}
         loading={tasks.loading}
         onRefresh={() => void tasks.load()}
         onPublish={() => {
@@ -134,7 +139,7 @@ export function TaskMarketPanel() {
               const pending = mine.items.find((item) => item.status === 'pending_review')
               if (pending) {
                 setPublishNotice(
-                  `「${pending.title}」已在审核中，请等待管理员处理。可在「我的 → 任务」查看进度。`,
+                  t('communityPage.market.pendingTaskReview', { title: pending.title }),
                 )
                 return
               }
@@ -150,7 +155,7 @@ export function TaskMarketPanel() {
         }}
         publishDisabled={publishDisabled}
         isEmpty={sortedItems.length === 0}
-        emptyHint="暂无任务，点击右上角发布任务"
+        emptyHint={t('communityPage.panels.tasks.empty')}
       >
         <ul className="tm-kb-file-list">
           {sortedItems.map((task) => {
@@ -187,13 +192,17 @@ export function TaskMarketPanel() {
                 }
                 onShare={() =>
                   void copyCommunityShareText(
-                    `${task.title}\n${task.description}\n预算：${formatTaskBudget(task.budgetAmount, task.budgetCurrency)}`,
+                    t('communityPage.market.shareTask', {
+                      title: task.title,
+                      description: task.description,
+                      budget: formatTaskBudget(task.budgetAmount, task.budgetCurrency, t, language),
+                    }),
                   )
                 }
               >
                 <CommunityListFileCard
                   title={task.title}
-                  meta={buildTaskMeta(task)}
+                  meta={buildTaskMeta(task, t, language)}
                   description={task.description || undefined}
                   selected={selectedId === task.id}
                   onClick={() => setSelectedId((current) => (current === task.id ? null : task.id))}
@@ -223,9 +232,9 @@ export function TaskMarketPanel() {
 
       {taskToDelete ? (
         <ConfirmDialog
-          title="删除任务"
-          message={`确定删除任务「${taskToDelete.title}」吗？删除后任务将取消发布。`}
-          confirmLabel="删除"
+          title={t('communityPage.market.deleteTaskTitle')}
+          message={t('communityPage.market.deleteTaskMessage', { title: taskToDelete.title })}
+          confirmLabel={t('common.delete')}
           danger
           onCancel={() => setTaskToDelete(null)}
           onConfirm={() => void handleConfirmDelete()}
@@ -235,14 +244,18 @@ export function TaskMarketPanel() {
   )
 }
 
-function buildTaskMeta(task: CommunityTaskItem) {
+function buildTaskMeta(
+  task: CommunityTaskItem,
+  t: ReturnType<typeof useI18n>['t'],
+  language: ReturnType<typeof useI18n>['language'],
+) {
   return (
     <>
-      <span>{TASK_STATUS_LABELS[task.status]}</span>
+      <span>{getCommunityTaskStatusLabel(task.status, t)}</span>
       <span>·</span>
-      <span>{TASK_TYPE_LABELS[task.taskType]}</span>
+      <span>{getCommunityTaskTypeLabel(task.taskType, t)}</span>
       <span>·</span>
-      <span>{formatTaskBudget(task.budgetAmount, task.budgetCurrency)}</span>
+      <span>{formatTaskBudget(task.budgetAmount, task.budgetCurrency, t, language)}</span>
       <span>·</span>
       <span>{task.publisher.displayName}</span>
       <span>·</span>

@@ -28,6 +28,10 @@ vi.mock('../p2p/p2p-workspace-vip-pool.service', () => ({
   refreshOwnedWorkspaceVipPools: vi.fn(),
 }))
 
+vi.mock('electron', () => ({
+  app: { isPackaged: false },
+}))
+
 describe('billing.service', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -45,5 +49,19 @@ describe('billing.service', () => {
     const paid = mockPayBillingOrder({ orderId: order.orderId })
     expect(paid.order.status).toBe('paid')
     expect(paid.sessionRefreshed).toBe(true)
+  })
+
+  it('disables mock pay in packaged builds', async () => {
+    vi.doMock('electron', () => ({
+      app: { isPackaged: true },
+    }))
+    process.env.TOOLMAN_BILLING_MOCK = '1'
+    const { listBillingPlans, mockPayBillingOrder, createBillingOrder } = await import('./billing.service')
+
+    expect(listBillingPlans().mockMode).toBe(false)
+
+    const order = createBillingOrder({ sku: 'pro', channel: 'alipay' })
+    expect(order.mockMode).toBe(false)
+    expect(() => mockPayBillingOrder({ orderId: order.orderId })).toThrow('模拟支付仅在占位模式下可用')
   })
 })

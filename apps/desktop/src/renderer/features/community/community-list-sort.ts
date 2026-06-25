@@ -1,10 +1,16 @@
+import type { TranslateFn } from '../../i18n/I18nProvider'
+
 export type CommunityListSortField = 'createdAt' | 'size' | 'name'
 
-export const COMMUNITY_LIST_SORT_OPTIONS: Array<{ id: CommunityListSortField; label: string }> = [
-  { id: 'createdAt', label: '创建时间' },
-  { id: 'size', label: '大小' },
-  { id: 'name', label: '名称' },
-]
+export function getCommunityListSortOptions(
+  t: TranslateFn,
+): Array<{ id: CommunityListSortField; label: string }> {
+  return [
+    { id: 'createdAt', label: t('communityPage.sort.createdAt') },
+    { id: 'size', label: t('communityPage.sort.size') },
+    { id: 'name', label: t('communityPage.sort.name') },
+  ]
+}
 
 export interface CommunityListSortableItem {
   id: string

@@ -1,4 +1,5 @@
 import type { AuthProvider } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 
 const SOCIAL_OAUTH_LOGIN_ENABLED = false
 
@@ -60,14 +61,12 @@ function AppleIcon() {
 
 const SOCIAL_ITEMS: Array<{
   provider: AuthProvider
-  label: string
   icon: 'wechat' | 'douyin' | 'google' | 'apple'
-  region: 'cn' | 'intl'
 }> = [
-  { provider: 'tencent_wechat', label: '微信', icon: 'wechat', region: 'cn' },
-  { provider: 'tencent_douyin', label: '抖音', icon: 'douyin', region: 'cn' },
-  { provider: 'firebase_google', label: 'Google', icon: 'google', region: 'intl' },
-  { provider: 'firebase_apple', label: 'Apple', icon: 'apple', region: 'intl' },
+  { provider: 'tencent_wechat', icon: 'wechat' },
+  { provider: 'tencent_douyin', icon: 'douyin' },
+  { provider: 'firebase_google', icon: 'google' },
+  { provider: 'firebase_apple', icon: 'apple' },
 ]
 
 function renderIcon(icon: (typeof SOCIAL_ITEMS)[number]['icon']) {
@@ -98,6 +97,12 @@ export function SocialIconGrid({
   douyinConfigured,
   onSelect,
 }: SocialIconGridProps) {
+  const { t } = useI18n()
+  const items = SOCIAL_ITEMS.map((item) => ({
+    ...item,
+    label: t(`user.labels.providers.${item.provider}`),
+  }))
+
   const isProviderAvailable = (provider: AuthProvider) => {
     switch (provider) {
       case 'tencent_wechat':
@@ -115,10 +120,10 @@ export function SocialIconGrid({
   return (
     <div className="tm-user-center-social">
       <div className="tm-user-center-social-divider" aria-hidden="true">
-        <span>或使用第三方登录</span>
+        <span>{t('user.auth.socialDivider')}</span>
       </div>
-      <div className="tm-user-center-social-grid" role="group" aria-label="第三方登录">
-        {SOCIAL_ITEMS.map((item) => {
+      <div className="tm-user-center-social-grid" role="group" aria-label={t('user.auth.socialAria')}>
+        {items.map((item) => {
           const available = isProviderAvailable(item.provider)
           const unavailable = !available
           return (
@@ -133,7 +138,7 @@ export function SocialIconGrid({
                 .filter(Boolean)
                 .join(' ')}
               disabled={disabled || unavailable}
-              title={unavailable ? '暂未开通' : item.label}
+              title={unavailable ? t('common.unavailable') : item.label}
               aria-label={item.label}
               onClick={() => onSelect(item.provider)}
             >

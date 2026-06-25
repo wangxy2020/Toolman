@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {P2pAgentOpenSessionInputSchema,
   P2pGroupAgentProxySchema,
@@ -351,7 +352,7 @@ export function resolveProxyMetaForSend(
     partial = {}
   }
 
-  let sourceSessionId =
+  const sourceSessionId =
     typeof partial.sourceSessionId === 'string' ? partial.sourceSessionId : null
 
   const resource = getSharedResourceRepo().findById(proxyParams.resourceId)
@@ -493,7 +494,7 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
             })
           } catch (error) {
             const message = toErrorMessage(error, String(error))
-            console.warn(`[p2p] proxy session history sync failed: ${message}`)
+            logStructured('p2p', 'warn', `proxy session history sync failed: ${message}`)
           }
         }
         return { sessionId: existingSessionId, assistantId: existing.assistantId }
@@ -610,7 +611,7 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
       })
     } catch (error) {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[p2p] proxy session history sync failed: ${message}`)
+      logStructured('p2p', 'warn', `proxy session history sync failed: ${message}`)
     }
   }
 

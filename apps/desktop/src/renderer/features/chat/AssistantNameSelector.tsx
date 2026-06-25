@@ -1,5 +1,6 @@
 import type { Assistant } from '@toolman/shared'
 import { IconChevronDown } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   assistant: Assistant | null
@@ -7,14 +8,15 @@ interface Props {
 }
 
 export function AssistantNameSelector({ assistant, onOpenSettings }: Props) {
-  const name = assistant?.name ?? '智能体'
+  const { t } = useI18n()
+  const name = assistant?.name ?? t('agent.fallbackName')
 
   return (
     <button
       type="button"
       className="tm-model-pill tm-agent-pill"
       onClick={onOpenSettings}
-      title="智能体设置"
+      title={t('agent.settingsButton')}
     >
       {assistant?.isPinned && <span className="tm-agent-pill-star">★</span>}
       <span className="tm-agent-pill-label">{name}</span>

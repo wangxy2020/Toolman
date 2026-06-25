@@ -20,6 +20,7 @@ import {
 import {
   applyCommunityDocUpdate,
   deleteLwwEntity,
+  destroyCommunityDocs,
   encodeCommunityDocUpdate,
   getCommunityEntityMap,
   observeCommunityDoc,
@@ -204,6 +205,7 @@ export function stopCommunityYjsProvider(): void {
   }
 
   started = false
+  destroyCommunityDocs()
 }
 
 export function getCommunityYjsProviderStatus() {

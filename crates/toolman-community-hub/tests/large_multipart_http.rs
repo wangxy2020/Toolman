@@ -50,6 +50,7 @@ async fn http_multipart_publish_accepts_package_larger_than_2mb() {
         .await
         .expect("bind ephemeral port");
     let addr: SocketAddr = listener.local_addr().expect("local addr");
+    let admin_token = harness.bearer_token(ADMIN);
     let TestHarness {
         app,
         pool,
@@ -67,7 +68,7 @@ async fn http_multipart_publish_accepts_package_larger_than_2mb() {
         .post(format!(
             "http://{addr}/api/v1/marketplace/mcp/{resource_id}/publish"
         ))
-        .header("x-community-user-id", ADMIN)
+        .header("Authorization", format!("Bearer {admin_token}"))
         .header(
             "content-type",
             format!("multipart/form-data; boundary={boundary}"),

@@ -16,6 +16,7 @@ import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 import { useP2pAgents } from './useP2pAgents'
 import { useRegisterGroupPanelError } from './group-page-status'
 import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   p2pWorkspaceId: string
@@ -48,6 +49,7 @@ export function GroupAgentsPanel({
   onOpenGroupAgentSession,
   onReloadAssistants,
 }: Props) {
+  const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [removingResourceId, setRemovingResourceId] = useState<string | null>(null)
@@ -385,8 +387,11 @@ export function GroupAgentsPanel({
   return (
     <div className="tm-group-member-panel tm-group-resource-panel">
       <GroupPanelHeader
-        title="群组智能体"
-        subtitle={`${workspaceName} · ${p2pAgents.sharedResources.length} 个智能体`}
+        title={t('groupPage.header.agents')}
+        subtitle={`${workspaceName} · ${t('groupPage.panels.count', {
+          count: p2pAgents.sharedResources.length,
+          type: t('groupPage.panels.types.agents'),
+        })}`}
         actions={
           <GroupPanelRefreshButton
             loading={p2pAgents.loading}
@@ -408,18 +413,22 @@ export function GroupAgentsPanel({
           onClick={() => setShowPicker(true)}
         >
           <span className="tm-kb-file-dropzone-title">
-            {p2pAgents.sharing ? '正在添加智能体…' : '点击添加智能体到群组'}
+            {p2pAgents.sharing
+              ? t('groupPage.panels.adding', { type: t('groupPage.panels.types.agents') })
+              : t('groupPage.panels.clickAdd', { type: t('groupPage.panels.types.agents') })}
           </span>
-          <span className="tm-kb-file-dropzone-hint">从已有智能体中选择，共享给群组成员</span>
+          <span className="tm-kb-file-dropzone-hint">
+            {t('groupPage.panels.pickHint', { type: t('groupPage.panels.types.agents') })}
+          </span>
         </button>
 
         {p2pAgents.loading && p2pAgents.sharedResources.length === 0 ? (
           <div className="tm-kb-file-panel-empty">
-            <p>加载智能体列表中…</p>
+            <p>{t('groupPage.panels.loading', { type: t('groupPage.panels.types.agents') })}</p>
           </div>
         ) : p2pAgents.sharedResources.length === 0 ? (
           <div className="tm-kb-file-panel-empty">
-            <p>暂无群组智能体，点击上方区域添加</p>
+            <p>{t('groupPage.panels.empty', { type: t('groupPage.panels.types.agents') })}</p>
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">

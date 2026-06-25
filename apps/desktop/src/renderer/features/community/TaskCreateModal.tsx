@@ -13,6 +13,7 @@ import { notifyCommunityUserDataChanged } from './community-events'
 import { buildTaskPublishSuccessMessage } from './community-resource-status'
 import { parseTaskTags, TASK_TYPE_LABELS } from './community-task-utils'
 import { canModerationResubmitTask } from './community-user-center-status'
+import { useI18n } from '../../i18n/useI18n'
 import {
   CommunityPublishModalError,
   CommunityPublishModalFooterActions,
@@ -38,6 +39,7 @@ function toDatetimeLocalValue(timestamp: number | null | undefined): string {
 }
 
 export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, onCreated }: Props) {
+  const { t } = useI18n()
   const isResume = Boolean(resumeTask)
   const isDraftResume = resumeTask?.status === 'draft'
   const isRejected = resumeTask ? canModerationResubmitTask(resumeTask) : false
@@ -71,7 +73,11 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
     setError(null)
   }, [resumeTask])
 
-  const submitLabel = editOnly ? '保存修改' : requireReview ? '提交审核' : '发布任务'
+  const submitLabel = editOnly
+    ? t('communityPage.publish.saveChanges')
+    : requireReview
+      ? t('communityPage.publish.submitReview')
+      : t('communityPage.taskPublish.publishTask')
 
   const buildPatchInput = (taskId: string) => ({
     id: taskId,
@@ -86,7 +92,7 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      setError('请填写任务标题')
+      setError(t('communityPage.taskPublish.fillTitle'))
       return
     }
 
@@ -97,7 +103,7 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
       if (editOnly && resumeTask) {
         await patchCommunityTask(buildPatchInput(resumeTask.id))
         notifyCommunityUserDataChanged()
-        onCreated?.('修改已保存')
+        onCreated?.(t('communityPage.taskPublish.successEdit'))
         onClose()
         return
       }
@@ -121,16 +127,17 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
 
       const published = await publishCommunityTask(taskId)
       notifyCommunityUserDataChanged()
-      onCreated?.(buildTaskPublishSuccessMessage(published.status, requireReview))
+      onCreated?.(buildTaskPublishSuccessMessage(published.status, requireReview, t))
       onClose()
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : '发布任务失败'
+      const message =
+        submitError instanceof Error ? submitError.message : t('communityPage.taskPublish.publishFailed')
       if (createdId) {
         try {
           const existing = await getCommunityTask(createdId)
           if (existing.status === 'pending_review' || existing.status === 'open') {
             notifyCommunityUserDataChanged()
-            onCreated?.(buildTaskPublishSuccessMessage(existing.status, requireReview))
+            onCreated?.(buildTaskPublishSuccessMessage(existing.status, requireReview, t))
             onClose()
             return
           }
@@ -140,7 +147,7 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
       }
       setError(
         createdId && !isResume
-          ? `${message}。任务已保存为草稿，请返回任务市场重新提交审核。`
+          ? t('communityPage.taskPublish.draftSavedHint', { message })
           : message,
       )
     } finally {
@@ -153,25 +160,25 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
     onClose()
   }
 
+  const modalTitle = editOnly
+    ? t('communityPage.taskPublish.titleEdit')
+    : isRejected
+      ? t('communityPage.taskPublish.titleResubmit')
+      : isResume
+        ? t('communityPage.taskPublish.titleContinue')
+        : requireReview
+          ? t('communityPage.taskPublish.titleSubmitReview')
+          : t('communityPage.taskPublish.titlePublish')
+
   return (
     <CommunityPublishModalShell
-      title={
-        editOnly
-          ? '修改任务'
-          : isRejected
-            ? '重新提交任务审核'
-            : isResume
-              ? '继续提交任务审核'
-              : requireReview
-                ? '提交任务审核'
-                : '发布任务'
-      }
+      title={modalTitle}
       onClose={handleClose}
       footer={
         <CommunityPublishModalFooterActions
           onCancel={handleClose}
           cancelDisabled={submitting}
-          confirmLabel={submitting ? '提交中…' : submitLabel}
+          confirmLabel={submitting ? t('communityPage.publish.submitting') : submitLabel}
           confirmDisabled={submitting}
           onConfirm={() => void handleSubmit()}
         />
@@ -179,43 +186,44 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
     >
       {error ? <CommunityPublishModalError message={error} /> : null}
       {isDraftResume && !editOnly ? (
-        <CommunityPublishModalNotice message="上次提交未完成发布。请确认信息后重新提交，管理员才能看到待审核条目。" />
+        <CommunityPublishModalNotice message={t('communityPage.taskPublish.draftNotice')} />
       ) : null}
       {isRejected && !editOnly ? (
-        <CommunityPublishModalNotice message="审核未通过。请修改任务信息后重新提交审核。" />
+        <CommunityPublishModalNotice message={t('communityPage.taskPublish.rejectedNotice')} />
       ) : null}
       {editOnly ? (
-        <CommunityPublishModalNotice message="修改任务基本信息后保存；确认无误后可使用「重新提交」再次送审。" />
+        <CommunityPublishModalNotice message={t('communityPage.taskPublish.editNotice')} />
       ) : null}
 
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">
-          任务标题 <span className="tm-community-publish-required">*</span>
+          {t('communityPage.taskPublish.titleLabel')}{' '}
+          <span className="tm-community-publish-required">{t('communityPage.publish.required')}</span>
         </span>
         <input
           type="text"
           className="tm-community-publish-input"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="例如：开发 Toolman MCP 插件"
+          placeholder={t('communityPage.taskPublish.titlePlaceholder')}
           readOnly={readOnlyFields}
         />
       </label>
 
       <label className="tm-community-publish-field">
-        <span className="tm-community-publish-label">任务描述</span>
+        <span className="tm-community-publish-label">{t('communityPage.taskPublish.descriptionLabel')}</span>
         <textarea
           className="tm-community-publish-textarea"
           rows={4}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="说明任务目标、交付要求与验收标准..."
+          placeholder={t('communityPage.taskPublish.descriptionPlaceholder')}
           readOnly={readOnlyFields}
         />
       </label>
 
       <label className="tm-community-publish-field">
-        <span className="tm-community-publish-label">任务类型</span>
+        <span className="tm-community-publish-label">{t('communityPage.taskPublish.typeLabel')}</span>
         <select
           className="tm-community-publish-input tm-community-publish-input--select"
           value={taskType}
@@ -232,7 +240,7 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
 
       <div className="tm-community-publish-grid">
         <label className="tm-community-publish-field">
-          <span className="tm-community-publish-label">预算</span>
+          <span className="tm-community-publish-label">{t('communityPage.taskPublish.budgetLabel')}</span>
           <input
             type="number"
             className="tm-community-publish-input"
@@ -244,7 +252,7 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
           />
         </label>
         <label className="tm-community-publish-field">
-          <span className="tm-community-publish-label">币种</span>
+          <span className="tm-community-publish-label">{t('communityPage.taskPublish.currencyLabel')}</span>
           <input
             type="text"
             className="tm-community-publish-input tm-community-publish-input--medium"
@@ -257,7 +265,8 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
 
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">
-          截止日期 <span className="tm-community-publish-label-optional">(可选)</span>
+          {t('communityPage.taskPublish.deadlineLabel')}{' '}
+          <span className="tm-community-publish-label-optional">{t('communityPage.publish.optional')}</span>
         </span>
         <input
           type="datetime-local"
@@ -269,13 +278,13 @@ export function TaskCreateModal({ resumeTask = null, editOnly = false, onClose, 
       </label>
 
       <label className="tm-community-publish-field">
-        <span className="tm-community-publish-label">标签</span>
+        <span className="tm-community-publish-label">{t('communityPage.taskPublish.tagsLabel')}</span>
         <input
           type="text"
           className="tm-community-publish-input"
           value={tags}
           onChange={(event) => setTags(event.target.value)}
-          placeholder="用逗号分隔，例如：rust, electron"
+          placeholder={t('communityPage.taskPublish.tagsPlaceholder')}
           readOnly={readOnlyFields}
         />
       </label>

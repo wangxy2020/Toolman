@@ -1,4 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm'
+import { logStructured } from './structured-log.service'
 import {
   createModelGateway,
   DEEPSEEK_PRESET_MODELS,
@@ -145,7 +146,7 @@ function rowToConfig(row: typeof providers.$inferSelect) {
 /** 将 config_json 中的明文 _apiKey 迁移到系统 Keychain（api_key_ref） */
 export function migratePlaintextApiKeys(): void {
   if (!isSecretStorageAvailable()) {
-    console.warn('[secret-store] 加密不可用，跳过明文 API Key 迁移')
+    logStructured('secret.store', 'warn', `加密不可用，跳过明文 API Key 迁移`)
     return
   }
 
@@ -171,9 +172,9 @@ export function migratePlaintextApiKeys(): void {
         })
         .where(eq(providers.id, row.id))
         .run()
-      console.info(`[secret-store] 已迁移 Provider ${row.id} 的 API Key 到 Keychain`)
+      logStructured('secret.store', 'info', `已迁移 Provider ${row.id} 的 API Key 到 Keychain`)
     } catch (error) {
-      console.error(`[secret-store] 迁移 Provider ${row.id} 失败:`, error)
+      logStructured('secret.store', 'error', `迁移 Provider ${row.id} 失败:`, { detail: error })
     }
   }
 }
@@ -356,7 +357,7 @@ export async function syncOllamaProviders(workspaceId: string): Promise<void> {
     try {
       await fetchProviderModels({ id: provider.id })
     } catch (error) {
-      console.error(`[syncOllama] ${provider.name}:`, error)
+      logStructured('syncOllama', 'error', `${provider.name}:`, { detail: error })
     }
   }
 }

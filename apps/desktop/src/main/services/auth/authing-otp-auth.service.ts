@@ -1,4 +1,5 @@
 import { EmailScene, SceneType } from 'authing-js-sdk'
+import { logStructured } from '../structured-log.service'
 import { formatAuthDevSmsLog, type AuthSendSmsCodeInput, type AuthSendSmsCodeOutput } from '@toolman/shared'
 
 import {
@@ -182,7 +183,7 @@ export async function sendCnVerificationCode(input: AuthSendSmsCodeInput): Promi
 
   if (isAuthingDevMode()) {
     const { code, retryAfterSeconds } = issueSmsChallenge(account.normalized)
-    console.log(formatAuthDevSmsLog(account.normalized, code))
+    logStructured('auth', 'info', formatAuthDevSmsLog(account.normalized, code))
     return {
       ...buildOtpSendResult(account, retryAfterSeconds),
       devHint: getDevSmsHint(),

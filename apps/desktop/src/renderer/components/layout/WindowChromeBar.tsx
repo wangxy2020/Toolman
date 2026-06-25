@@ -1,4 +1,5 @@
 import { IconPanelLeft, IconSearch } from '../icons'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   sidebarVisible: boolean
@@ -12,18 +13,22 @@ interface Props {
 export function WindowChromeBar({
   sidebarVisible,
   onToggleSidebar,
-  searchTitle = '搜索',
+  searchTitle,
   searchEnabled = true,
   onOpenSearch,
 }: Props) {
+  const { t } = useI18n()
+  const resolvedSearchTitle = searchTitle ?? t('nav.search')
+  const sidebarTitle = sidebarVisible ? t('sidebar.hide') : t('sidebar.show')
+
   return (
     <header className="tm-window-chrome">
       <div className="tm-window-chrome-leading">
         <button
           type="button"
           className="tm-window-chrome-btn"
-          title={sidebarVisible ? '隐藏侧边栏' : '显示侧边栏'}
-          aria-label={sidebarVisible ? '隐藏侧边栏' : '显示侧边栏'}
+          title={sidebarTitle}
+          aria-label={sidebarTitle}
           onClick={onToggleSidebar}
         >
           <IconPanelLeft collapsed={!sidebarVisible} />
@@ -37,8 +42,8 @@ export function WindowChromeBar({
           <button
             type="button"
             className="tm-window-chrome-btn"
-            title={searchTitle}
-            aria-label={searchTitle}
+            title={resolvedSearchTitle}
+            aria-label={resolvedSearchTitle}
             onClick={onOpenSearch}
           >
             <IconSearch />

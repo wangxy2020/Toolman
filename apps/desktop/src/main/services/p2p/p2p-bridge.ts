@@ -92,6 +92,7 @@ export interface P2pNativeModule {
     workspaceId?: string | null,
   ): Promise<NativeConnectionConnectResult>
   connectionDisconnect(peerDeviceId: string): Promise<void>
+  connectionRestartIce(peerDeviceId: string): Promise<NativeConnectionConnectResult>
   connectionList(): Promise<{ connections: NativeConnectionInfo[] }>
   connectionSend(peerDeviceId: string, channel: string, data: Buffer): Promise<void>
   connectionSetStunServers(servers: string[]): void
@@ -232,6 +233,10 @@ export class P2pBridge {
 
   static connectionDisconnect(peerDeviceId: string): Promise<void> {
     return loadNativeModule().connectionDisconnect(peerDeviceId)
+  }
+
+  static connectionRestartIce(peerDeviceId: string): Promise<NativeConnectionConnectResult> {
+    return loadNativeModule().connectionRestartIce(peerDeviceId)
   }
 
   static async connectionList(): Promise<NativeConnectionInfo[]> {

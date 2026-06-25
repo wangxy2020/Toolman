@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceId: string
@@ -7,12 +8,13 @@ interface Props {
 }
 
 export function KnowledgeSourcesPanel({ workspaceId, onChanged }: Props) {
+  const { t } = useI18n()
   const [rebuildingFts, setRebuildingFts] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ftsMessage, setFtsMessage] = useState<string | null>(null)
 
   const handleFtsRebuild = async () => {
-    if (!window.confirm('确定重建工作区全文检索（FTS）索引吗？大型知识库可能需要一些时间。')) {
+    if (!window.confirm(t('knowledgePage.sources.rebuildConfirm'))) {
       return
     }
 
@@ -28,23 +30,21 @@ export function KnowledgeSourcesPanel({ workspaceId, onChanged }: Props) {
     }
 
     const data = result.data as { indexed: number }
-    setFtsMessage(`全文检索索引已重建，共索引 ${data.indexed} 个文本块。`)
+    setFtsMessage(t('knowledgePage.sources.rebuilt', { count: data.indexed }))
     onChanged?.()
   }
 
   return (
     <section className="tm-knowledge-settings-section">
-      <h3 className="tm-knowledge-settings-heading">索引维护</h3>
-      <p className="tm-knowledge-detail-hint">
-        当检索结果异常或 FTS 数据损坏时，可重建工作区全文检索索引（不影响向量索引）。
-      </p>
+      <h3 className="tm-knowledge-settings-heading">{t('knowledgePage.sources.title')}</h3>
+      <p className="tm-knowledge-detail-hint">{t('knowledgePage.sources.hint')}</p>
       <button
         type="button"
         className="tm-btn tm-btn--secondary"
         disabled={rebuildingFts}
         onClick={() => void handleFtsRebuild()}
       >
-        {rebuildingFts ? '重建中…' : '重建 FTS 索引'}
+        {rebuildingFts ? t('knowledgePage.sources.rebuilding') : t('knowledgePage.sources.rebuild')}
       </button>
       {error ? <p className="tm-form-error">{error}</p> : null}
       {ftsMessage ? <p className="tm-knowledge-detail-hint">{ftsMessage}</p> : null}

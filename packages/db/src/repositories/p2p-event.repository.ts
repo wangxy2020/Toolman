@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { and, count, desc, eq, gt } from 'drizzle-orm'
+import { and, count, desc, eq, gt, lt } from 'drizzle-orm'
 import type { ToolmanDatabase } from '../index.js'
 import { p2pEvents, p2pWorkspaces } from '../schema/p2p.js'
 import type { P2pEventRow, P2pEventType, P2pResourceType } from '../types/p2p.js'
@@ -223,6 +223,54 @@ export class P2pEventRepository {
     if (!existing) return false
     this.db.delete(p2pEvents).where(eq(p2pEvents.id, id)).run()
     return true
+  }
+
+  replaceConflictingEvent(existingId: string, input: InsertP2pEventInput): P2pEventRow {
+    const now = new Date()
+    const payloadJson = JSON.stringify(input.payload)
+    const payloadHash = createHash('sha256').update(payloadJson).digest('hex')
+    const timestamp = input.timestamp ?? now
+
+    return this.db.transaction((tx) => {
+      tx.delete(p2pEvents).where(eq(p2pEvents.id, existingId)).run()
+
+      tx.insert(p2pEvents)
+        .values({
+          id: input.id,
+          workspaceId: input.workspaceId,
+          seq: input.seq,
+          resourceType: input.resourceType,
+          resourceId: input.resourceId,
+          operatorId: input.operatorId,
+          eventType: input.eventType,
+          payloadJson,
+          payloadHash,
+          prevEventHash: input.prevEventHash ?? null,
+          timestamp,
+          sourceDeviceId: input.sourceDeviceId,
+          synced: input.synced ?? false,
+          createdAt: now,
+        })
+        .run()
+
+      tx.update(p2pWorkspaces)
+        .set({
+          lastEventSeq: input.seq,
+          updatedAt: now,
+        })
+        .where(eq(p2pWorkspaces.id, input.workspaceId))
+        .run()
+
+      return tx.select().from(p2pEvents).where(eq(p2pEvents.id, input.id)).get()!
+    })
+  }
+
+  deleteEventsBeforeSeq(workspaceId: string, beforeSeq: number): number {
+    const result = this.db
+      .delete(p2pEvents)
+      .where(and(eq(p2pEvents.workspaceId, workspaceId), lt(p2pEvents.seq, beforeSeq)))
+      .run()
+    return result.changes
   }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { IconTerminalPrompt } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 
 export interface InputPopupMenuItemData {
   id: string
@@ -54,6 +55,7 @@ interface MenuProps {
 }
 
 export function InputPopupMenu({ title, open, onClose, children }: MenuProps) {
+  const { t } = useI18n()
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -84,10 +86,10 @@ export function InputPopupMenu({ title, open, onClose, children }: MenuProps) {
       <div className="tm-input-popup-menu-footer">
         <span className="tm-input-popup-menu-footer-title">{title}</span>
         <div className="tm-input-popup-menu-shortcuts">
-          <span className="tm-input-popup-menu-kbd">ESC 关闭</span>
-          <span className="tm-input-popup-menu-kbd">▲▼ 选择</span>
-          <span className="tm-input-popup-menu-kbd">⌘ + ▲▼ 翻页</span>
-          <span className="tm-input-popup-menu-kbd">↵ 确认</span>
+          <span className="tm-input-popup-menu-kbd">{t('chat.popupMenu.escClose')}</span>
+          <span className="tm-input-popup-menu-kbd">{t('chat.popupMenu.arrowSelect')}</span>
+          <span className="tm-input-popup-menu-kbd">{t('chat.popupMenu.pageTurn')}</span>
+          <span className="tm-input-popup-menu-kbd">{t('chat.popupMenu.confirm')}</span>
         </div>
       </div>
     </div>

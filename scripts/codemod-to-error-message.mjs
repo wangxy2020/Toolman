@@ -55,7 +55,7 @@ for (const file of files) {
 
   if (file.endsWith('p2p-sync.service.ts')) {
     content = content.replace(
-      /\nfunction toErrorMessage\(error: unknown, fallback: string\): string \{\n  return error instanceof Error \? error\.message : fallback\n\}\n/,
+      /\nfunction toErrorMessage\(error: unknown, fallback: string\): string \{\n {2}return error instanceof Error \? error\.message : fallback\n\}\n/,
       '\n',
     )
   }

@@ -28,6 +28,7 @@ import {
 } from './translation-utils'
 import type { MessageSettings, SendShortcut } from './message-settings'
 import { sendShortcutPlaceholder } from './message-settings'
+import { useI18n } from '../../i18n/useI18n'
 import { MessageContent } from './MessageContent'
 import { MessageDeleteConfirmPopover } from './MessageDeleteConfirmPopover'
 import { MessageMarkdown } from './MessageMarkdown'
@@ -59,6 +60,9 @@ interface Props {
   getUserAvatarInitial?: (message: Message) => string
   isOwnUserMessage?: (message: Message) => boolean
   sendShortcut?: SendShortcut
+  emptyTitle?: string
+  emptyHint?: string
+  loadingLabel?: string
 }
 
 export type MessageTurn =
@@ -542,7 +546,16 @@ export function MessagePanel({
   getUserAvatarInitial,
   isOwnUserMessage,
   sendShortcut = 'enter',
+  emptyTitle,
+  emptyHint,
+  loadingLabel,
 }: Props) {
+  const { t } = useI18n()
+  const resolvedEmptyTitle = emptyTitle ?? t('chat.messages.emptyTitle')
+  const resolvedEmptyHint =
+    emptyHint ??
+    t('chat.messages.emptyHint', { shortcut: sendShortcutPlaceholder(sendShortcut) })
+  const resolvedLoadingLabel = loadingLabel ?? t('chat.messages.loading')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
@@ -731,7 +744,7 @@ export function MessagePanel({
   if (loading) {
     return (
       <>
-        <div className="tm-messages-center">加载消息…</div>
+        <div className="tm-messages-center">{resolvedLoadingLabel}</div>
         {deleteConfirmPopover}
       </>
     )
@@ -741,8 +754,8 @@ export function MessagePanel({
     return (
       <>
         <div className="tm-messages-center">
-          <div className="tm-messages-empty-title">开始对话</div>
-          <div>在这里输入消息，按 {sendShortcutPlaceholder(sendShortcut)} 发送</div>
+          <div className="tm-messages-empty-title">{resolvedEmptyTitle}</div>
+          <div>{resolvedEmptyHint}</div>
         </div>
         {deleteConfirmPopover}
       </>

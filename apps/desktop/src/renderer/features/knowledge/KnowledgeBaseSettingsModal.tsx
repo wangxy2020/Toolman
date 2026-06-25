@@ -4,8 +4,6 @@ import {
   DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   IpcChannel,
   KNOWLEDGE_WATCH_INCLUDE_PLACEHOLDER,
-  KNOWLEDGE_WATCH_OFFICE_TEMP_EXCLUDE_HINT,
-  KNOWLEDGE_WATCH_SUPPORTED_TYPES_HINT,
   type KnowledgeBase,
 } from '@toolman/shared'
 import {
@@ -22,6 +20,8 @@ import { KnowledgeSourcesPanel } from './KnowledgeSourcesPanel'
 import { KnowledgeIngestJobPanel } from './KnowledgeIngestJobPanel'
 import { MemoryEntryPanel } from './MemoryEntryPanel'
 import { SYSTEM_DEFAULT_FOLDER_KB_NAMES } from './knowledge-sidebar-types'
+import { useI18n } from '../../i18n/useI18n'
+import { translateKnowledgeFolderName } from '../../i18n/system-labels'
 
 interface Props {
   workspaceId: string
@@ -150,12 +150,18 @@ function resolveEmbeddingSelection(
 function WatchStatusBadge({
   loading,
   watching,
+  loadingLabel,
+  watchingLabel,
+  notWatchingLabel,
 }: {
   loading: boolean
   watching: boolean
+  loadingLabel: string
+  watchingLabel: string
+  notWatchingLabel: string
 }) {
   if (loading) {
-    return <span className="tm-kb-settings-watch-status">检查中…</span>
+    return <span className="tm-kb-settings-watch-status">{loadingLabel}</span>
   }
 
   return (
@@ -165,7 +171,7 @@ function WatchStatusBadge({
         watching ? 'tm-kb-settings-watch-status--active' : 'tm-kb-settings-watch-status--inactive',
       ].join(' ')}
     >
-      {watching ? '● 监听中' : '● 未监听'}
+      {watching ? watchingLabel : notWatchingLabel}
     </span>
   )
 }
@@ -185,6 +191,7 @@ export function KnowledgeBaseSettingsModal({
   onClose,
   onSaved,
 }: Props) {
+  const { t } = useI18n()
   const isNetworkKb = kb.kind === 'network'
   const isLocalKb = kb.kind === 'local'
   const isLocalFilesKb = kb.kind === 'local_files'
@@ -528,9 +535,7 @@ export function KnowledgeBaseSettingsModal({
     await onSaved?.()
 
     if (kb.documentCount > 0 && (embedReindexChanged || chunkChanged)) {
-      const shouldReindex = window.confirm(
-        '嵌入模型、分块或向量存储设置已变更，建议重建全部索引以使检索生效。是否立即重建？',
-      )
+      const shouldReindex = window.confirm(t('knowledgePage.settings.advanced.vectorReindexConfirm'))
       if (shouldReindex) {
         const reindexResult = await window.api.invoke(IpcChannel.KnowledgeKbReindex, {
           workspaceId,
@@ -560,25 +565,30 @@ export function KnowledgeBaseSettingsModal({
     error ?? watchStatus.error ?? networkRootFolder.error ?? localFilesRootFolder.error
 
   const modalTitle = isLocalFilesKb
-    ? '本地文件设置'
+    ? t('knowledgePage.settings.titleLocalFiles')
     : isLocalKb
-      ? '本地知识库设置'
-      : '网络知识库设置'
+      ? t('knowledgePage.settings.titleLocal')
+      : t('knowledgePage.settings.titleNetwork')
 
   const settingsTabs = useMemo(() => {
     const tabs: Array<{ id: SettingsTab; label: string; badge?: string }> = [
-      { id: 'basic', label: isLocalFilesKb ? '基础设置' : '基础与模型' },
+      {
+        id: 'basic',
+        label: isLocalFilesKb
+          ? t('knowledgePage.settings.tabs.basic')
+          : t('knowledgePage.settings.tabs.basicModel'),
+      },
     ]
-    if (isLocalKb) tabs.push({ id: 'watch', label: '文件夹监听' })
-    if (isNetworkKb) tabs.push({ id: 'watch', label: '网页刷新' })
+    if (isLocalKb) tabs.push({ id: 'watch', label: t('knowledgePage.settings.tabs.watch') })
+    if (isNetworkKb) tabs.push({ id: 'watch', label: t('knowledgePage.settings.tabs.refresh') })
     tabs.push({
       id: 'memory',
-      label: '长期记忆',
+      label: t('knowledgePage.settings.tabs.memory'),
       badge: formatMemoryBadge(memoryCount),
     })
-    if (isVectorizedKb) tabs.push({ id: 'advanced', label: '高级与调试' })
+    if (isVectorizedKb) tabs.push({ id: 'advanced', label: t('knowledgePage.settings.tabs.advanced') })
     return tabs
-  }, [isLocalFilesKb, isLocalKb, isNetworkKb, isVectorizedKb, memoryCount])
+  }, [isLocalFilesKb, isLocalKb, isNetworkKb, isVectorizedKb, memoryCount, t])
 
   useEffect(() => {
     if (!settingsTabs.some((tab) => tab.id === activeTab)) {
@@ -600,7 +610,7 @@ export function KnowledgeBaseSettingsModal({
             <span className="tm-kb-settings-modal-title-dot" aria-hidden="true" />
             {modalTitle}
           </h3>
-          <button type="button" className="tm-kb-settings-modal-close" aria-label="关闭" onClick={onClose}>
+          <button type="button" className="tm-kb-settings-modal-close" aria-label={t('common.close')} onClick={onClose}>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -614,7 +624,7 @@ export function KnowledgeBaseSettingsModal({
         </header>
 
         <div className="tm-kb-settings-modal-body">
-          <nav className="tm-kb-settings-modal-nav" aria-label="知识库设置分类">
+          <nav className="tm-kb-settings-modal-nav" aria-label={t('knowledgePage.settingsTitle', { title: t('modules.knowledge.title') })}>
             {settingsTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -639,12 +649,12 @@ export function KnowledgeBaseSettingsModal({
               <div className="tm-kb-settings-form">
                 <div className="tm-kb-settings-row">
                   <label className="tm-kb-settings-label" htmlFor="kb-settings-name">
-                    名称
+                    {t('knowledgePage.settings.name')}
                   </label>
                   <input
                     id="kb-settings-name"
                     className="tm-kb-settings-input"
-                    value={name}
+                    value={nameReadOnly ? translateKnowledgeFolderName(name, t) : name}
                     onChange={(event) => setName(event.target.value)}
                     readOnly={nameReadOnly}
                   />
@@ -652,7 +662,7 @@ export function KnowledgeBaseSettingsModal({
 
                 <div className="tm-kb-settings-row tm-kb-settings-row--top">
                   <label className="tm-kb-settings-label" htmlFor="kb-settings-description">
-                    描述 (可选)
+                    {t('knowledgePage.settings.descriptionOptional')}
                   </label>
                   <textarea
                     id="kb-settings-description"
@@ -664,20 +674,16 @@ export function KnowledgeBaseSettingsModal({
                 </div>
 
                 {isNetworkKb ? (
-                  <p className="tm-kb-settings-hint">
-                    在主界面拖拽或添加 HTTP/HTTPS 网页链接，系统会抓取页面内容并建立索引。
-                  </p>
+                  <p className="tm-kb-settings-hint">{t('knowledgePage.settings.hints.networkKbBasic')}</p>
                 ) : null}
                 {isLocalFilesKb ? (
-                  <p className="tm-kb-settings-hint">
-                    本地文件仅用于存储与管理文件，不会进行向量化或检索索引。
-                  </p>
+                  <p className="tm-kb-settings-hint">{t('knowledgePage.settings.hints.localFilesBasic')}</p>
                 ) : null}
 
                 {isLocalFilesKb && kbStoragePath ? (
                   <>
                     <div className="tm-kb-settings-row">
-                      <span className="tm-kb-settings-label">存储目录</span>
+                      <span className="tm-kb-settings-label">{t('knowledgePage.settings.storageDir')}</span>
                       <div className="tm-kb-settings-path">{kbStoragePath}</div>
                     </div>
                     <div className="tm-kb-settings-row-actions">
@@ -687,7 +693,7 @@ export function KnowledgeBaseSettingsModal({
                         onClick={() => void handleOpenStorageInFinder(kbStoragePath)}
                         disabled={submitting}
                       >
-                        在 Finder 中打开
+                        {t('knowledgePage.settings.openInFinder')}
                       </button>
                     </div>
                   </>
@@ -695,7 +701,7 @@ export function KnowledgeBaseSettingsModal({
 
                 {isVectorizedKb ? (
                   <div className="tm-kb-settings-row">
-                    <FormLabel hint="用于将文档内容转换为向量，修改后需重建索引。">嵌入模型</FormLabel>
+                    <FormLabel hint="用于将文档内容转换为向量，修改后需重建索引。">{t('knowledgePage.settings.embedModel')}</FormLabel>
                     <select
                       id="kb-settings-embedding"
                       className="tm-kb-settings-input"
@@ -704,7 +710,7 @@ export function KnowledgeBaseSettingsModal({
                       disabled={modelsLoading}
                     >
                       {embeddingOptions.length === 0 ? (
-                        <option value="">没有模型</option>
+                        <option value="">{t('knowledgePage.settings.noModel')}</option>
                       ) : (
                         embeddingOptions.map((model) => (
                           <option key={model.value} value={model.value}>
@@ -719,7 +725,7 @@ export function KnowledgeBaseSettingsModal({
                 {isNetworkKb && !defaultFolderKind && kbStoragePath ? (
                   <>
                     <div className="tm-kb-settings-row">
-                      <span className="tm-kb-settings-label">存储目录</span>
+                      <span className="tm-kb-settings-label">{t('knowledgePage.settings.storageDir')}</span>
                       <div className="tm-kb-settings-path">{kbStoragePath}</div>
                     </div>
                     <div className="tm-kb-settings-row-actions">
@@ -729,7 +735,7 @@ export function KnowledgeBaseSettingsModal({
                         onClick={() => void handleOpenStorageInFinder(kbStoragePath)}
                         disabled={submitting}
                       >
-                        在 Finder 中打开
+                        {t('knowledgePage.settings.openInFinder')}
                       </button>
                     </div>
                   </>
@@ -740,10 +746,13 @@ export function KnowledgeBaseSettingsModal({
             {activeTab === 'watch' && isLocalKb ? (
               <div className="tm-kb-settings-form">
                 <div className="tm-kb-settings-section-head">
-                  <span className="tm-kb-settings-section-title">包含规则</span>
+                  <span className="tm-kb-settings-section-title">{t('knowledgePage.settings.includeRules')}</span>
                   <WatchStatusBadge
                     loading={watchStatus.loading}
                     watching={isWatchingStoragePath}
+                    loadingLabel={t('knowledgePage.settings.checking')}
+                    watchingLabel={t('knowledgePage.settings.watching')}
+                    notWatchingLabel={t('knowledgePage.settings.notWatching')}
                   />
                 </div>
                 <textarea
@@ -753,10 +762,10 @@ export function KnowledgeBaseSettingsModal({
                   placeholder={KNOWLEDGE_WATCH_INCLUDE_PLACEHOLDER}
                   rows={4}
                 />
-                <p className="tm-kb-settings-hint">{KNOWLEDGE_WATCH_SUPPORTED_TYPES_HINT}</p>
+                <p className="tm-kb-settings-hint">{t('knowledgePage.settings.watch.supportedTypes')}</p>
 
                 <div className="tm-kb-settings-field-block">
-                  <FormLabel hint="每行一个 glob 模式，匹配到的文件将跳过索引。">排除规则</FormLabel>
+                  <FormLabel hint={t('knowledgePage.settings.watch.excludeHint')}>{t('knowledgePage.settings.excludeRules')}</FormLabel>
                   <textarea
                     className="tm-kb-settings-textarea tm-kb-settings-textarea--mono"
                     value={watchExclude}
@@ -764,23 +773,25 @@ export function KnowledgeBaseSettingsModal({
                     placeholder={patternsToText(DEFAULT_KNOWLEDGE_WATCH_CONFIG.exclude)}
                     rows={3}
                   />
-                  <p className="tm-kb-settings-hint">{KNOWLEDGE_WATCH_OFFICE_TEMP_EXCLUDE_HINT}</p>
+                  <p className="tm-kb-settings-hint">{t('knowledgePage.settings.watch.officeTempExclude')}</p>
                 </div>
 
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="文件变更后等待多久再触发重新索引（毫秒）。">防抖间隔</FormLabel>
+                  <FormLabel hint={t('knowledgePage.settings.watch.debounceHint')}>{t('knowledgePage.settings.debounce')}</FormLabel>
                   <input
                     className="tm-kb-settings-input"
                     type="number"
                     min={100}
                     value={watchDebounceMs}
                     onChange={(event) => setWatchDebounceMs(event.target.value)}
-                    placeholder={`默认 ${DEFAULT_KNOWLEDGE_WATCH_CONFIG.debounceMs}`}
+                    placeholder={t('knowledgePage.settings.watch.defaultDebounce', {
+                      value: DEFAULT_KNOWLEDGE_WATCH_CONFIG.debounceMs,
+                    })}
                   />
                 </div>
 
                 {watchChanged ? (
-                  <p className="tm-kb-settings-hint">监听规则变更后需保存，将对知识库目录内文件生效。</p>
+                  <p className="tm-kb-settings-hint">{t('knowledgePage.settings.hints.watchRulesChanged')}</p>
                 ) : null}
               </div>
             ) : null}
@@ -788,8 +799,8 @@ export function KnowledgeBaseSettingsModal({
             {activeTab === 'watch' && isNetworkKb ? (
               <div className="tm-kb-settings-form">
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="定时重新抓取并索引知识库内全部网页，0 表示关闭。">
-                    刷新间隔（小时）
+                  <FormLabel hint={t('knowledgePage.settings.watch.refreshIntervalHint')}>
+                    {t('knowledgePage.settings.refreshInterval')}
                   </FormLabel>
                   <input
                     className="tm-kb-settings-input"
@@ -797,12 +808,14 @@ export function KnowledgeBaseSettingsModal({
                     min={0}
                     value={urlRefreshIntervalHours}
                     onChange={(event) => setUrlRefreshIntervalHours(event.target.value)}
-                    placeholder="0（关闭）"
+                    placeholder="0"
                   />
                 </div>
                 {kb.watchConfig.lastUrlRefreshAt ? (
                   <p className="tm-kb-settings-hint">
-                    上次刷新：{new Date(kb.watchConfig.lastUrlRefreshAt).toLocaleString()}
+                    {t('knowledgePage.settings.hints.lastRefresh', {
+                      time: new Date(kb.watchConfig.lastUrlRefreshAt).toLocaleString(),
+                    })}
                   </p>
                 ) : null}
               </div>
@@ -816,14 +829,14 @@ export function KnowledgeBaseSettingsModal({
               <div className="tm-kb-settings-form">
                 {isLocalKb ? (
                   <div className="tm-kb-settings-row">
-                    <FormLabel hint="用于解析 PDF、Office 等复杂文档格式的服务商。">文档处理</FormLabel>
+                    <FormLabel hint={t('knowledgePage.settings.advanced.docProcessorHint')}>{t('knowledgePage.settings.documentProcessing')}</FormLabel>
                     <select
                       className="tm-kb-settings-input"
                       value={docProcessorProviderId}
                       onChange={(event) => setDocProcessorProviderId(event.target.value)}
                       disabled={modelsLoading}
                     >
-                      <option value="">选择一个文档处理服务商</option>
+                      <option value="">{t('knowledgePage.settings.advanced.docProcessorPlaceholder')}</option>
                       {docProcessorProviders.map((provider) => (
                         <option key={provider.value} value={provider.value}>
                           {provider.label}
@@ -834,14 +847,14 @@ export function KnowledgeBaseSettingsModal({
                 ) : null}
 
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="检索时对候选结果重新排序的模型。">重排模型</FormLabel>
+                    <FormLabel hint={t('knowledgePage.settings.advanced.rerankHint')}>{t('knowledgePage.settings.rerankModel')}</FormLabel>
                   <select
                     className="tm-kb-settings-input"
                     value={rerankRef}
                     onChange={(event) => setRerankRef(event.target.value)}
                     disabled={modelsLoading}
                   >
-                    <option value="">没有模型</option>
+                    <option value="">{t('knowledgePage.settings.noModel')}</option>
                     {rerankModels.map((model) => (
                       <option key={model.value} value={model.value}>
                         {model.label}
@@ -854,11 +867,11 @@ export function KnowledgeBaseSettingsModal({
                   <FormLabel
                     hint={
                       isNetworkKb
-                        ? '网页内容通常适合 Markdown 结构分块。'
-                        : 'fixed 按字符切分；markdown 保留标题结构；semantic 按语义边界切分（较慢）。'
+                        ? t('knowledgePage.settings.advanced.chunkStrategyNetwork')
+                        : t('knowledgePage.settings.advanced.chunkStrategyLocal')
                     }
                   >
-                    分块策略
+                    {t('knowledgePage.settings.chunkStrategy')}
                   </FormLabel>
                   <select
                     className="tm-kb-settings-input"
@@ -867,39 +880,39 @@ export function KnowledgeBaseSettingsModal({
                       setChunkStrategy(event.target.value as KnowledgeBase['chunkConfig']['strategy'])
                     }
                   >
-                    <option value="markdown">Markdown 结构</option>
-                    <option value="fixed">固定长度</option>
-                    {isLocalKb ? <option value="semantic">语义分块</option> : null}
+                    <option value="markdown">{t('knowledgePage.settings.chunkMarkdown')}</option>
+                    <option value="fixed">{t('knowledgePage.settings.chunkFixed')}</option>
+                    {isLocalKb ? <option value="semantic">{t('knowledgePage.settings.chunkSemantic')}</option> : null}
                   </select>
                 </div>
 
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="每个文本分段的字符数，留空使用默认值。">分段大小</FormLabel>
+                  <FormLabel hint={t('knowledgePage.settings.advanced.chunkSizeHint')}>{t('knowledgePage.settings.chunkSize')}</FormLabel>
                   <input
                     className="tm-kb-settings-input"
                     type="number"
                     min={64}
                     value={chunkSize}
                     onChange={(event) => setChunkSize(event.target.value)}
-                    placeholder="默认值（不建议修改）"
+                    placeholder={t('knowledgePage.settings.advanced.defaultPlaceholder')}
                   />
                 </div>
 
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="相邻分段之间的重叠字符数，留空使用默认值。">重叠大小</FormLabel>
+                  <FormLabel hint={t('knowledgePage.settings.advanced.chunkOverlapHint')}>{t('knowledgePage.settings.chunkOverlap')}</FormLabel>
                   <input
                     className="tm-kb-settings-input"
                     type="number"
                     min={0}
                     value={chunkOverlap}
                     onChange={(event) => setChunkOverlap(event.target.value)}
-                    placeholder="默认值（不建议修改）"
+                    placeholder={t('knowledgePage.settings.advanced.defaultPlaceholder')}
                   />
                 </div>
 
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="检索时过滤低相关度结果的阈值（0–1），留空使用默认值。">
-                    匹配度阈值
+                  <FormLabel hint={t('knowledgePage.settings.advanced.matchThresholdHint')}>
+                    {t('knowledgePage.settings.matchThreshold')}
                   </FormLabel>
                   <input
                     className="tm-kb-settings-input"
@@ -909,21 +922,21 @@ export function KnowledgeBaseSettingsModal({
                     step={0.01}
                     value={scoreThreshold}
                     onChange={(event) => setScoreThreshold(event.target.value)}
-                    placeholder="默认值（不建议修改）"
+                    placeholder={t('knowledgePage.settings.advanced.defaultPlaceholder')}
                   />
                 </div>
 
                 <div className="tm-kb-settings-row">
-                  <FormLabel hint="file 为 JSON 文件向量；lance 使用 LanceDB，适合较大知识库。切换后建议重建索引。">
-                    向量存储
+                  <FormLabel hint={t('knowledgePage.settings.advanced.vectorStoreHint')}>
+                    {t('knowledgePage.settings.vectorStore')}
                   </FormLabel>
                   <select
                     className="tm-kb-settings-input"
                     value={vectorBackend}
                     onChange={(event) => setVectorBackend(event.target.value as 'file' | 'lance')}
                   >
-                    <option value="file">JSON 文件（默认）</option>
-                    <option value="lance">LanceDB</option>
+                    <option value="file">{t('knowledgePage.settings.storeJson')}</option>
+                    <option value="lance">{t('knowledgePage.settings.storeLance')}</option>
                   </select>
                 </div>
 
@@ -948,7 +961,7 @@ export function KnowledgeBaseSettingsModal({
               onClick={onClose}
               disabled={submitting}
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -956,7 +969,7 @@ export function KnowledgeBaseSettingsModal({
               onClick={() => void handleSubmit()}
               disabled={submitting}
             >
-              {submitting ? '保存中…' : '保存配置'}
+              {submitting ? t('common.loading') : t('knowledgePage.settings.saveConfig')}
             </button>
           </div>
         </footer>

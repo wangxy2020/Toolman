@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
+import { logStructured } from './structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
@@ -239,7 +240,7 @@ function moveFolderIfNeeded(oldPath: string, newPath: string): void {
       renameSync(oldPath, newPath)
     } catch (error) {
       const message = toErrorMessage(error, String(error))
-      console.error(`[knowledge] failed to rename folder ${oldPath} -> ${newPath}: ${message}`)
+      logStructured('knowledge', 'error', `failed to rename folder ${oldPath} -> ${newPath}: ${message}`)
       throw error
     }
   }
@@ -324,9 +325,7 @@ export function bootstrapToolmanUserDocumentLayout(): {
         ensureWorkspaceFolderSetting(workspace.id, spec.key, spec.defaultPath)
       } catch (error) {
         const message = toErrorMessage(error, String(error))
-        console.warn(
-          `[knowledge] failed to bootstrap folder ${spec.key} for workspace ${workspace.id}: ${message}`,
-        )
+        logStructured('knowledge', 'warn', `failed to bootstrap folder ${spec.key} for workspace ${workspace.id}: ${message}`)
       }
     }
   }

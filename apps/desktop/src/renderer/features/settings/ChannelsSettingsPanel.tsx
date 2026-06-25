@@ -8,6 +8,13 @@ import {
   type ImChannelConfigPublic,
 } from '@toolman/shared'
 import { IconCopy } from '../../components/icons'
+import { getChannelPlatformLabel, getChannelStatusLabel, resolveChannelDisplayName } from '../../i18n/settings-labels'
+import { useI18n } from '../../i18n/useI18n'
+import type { TranslateFn } from '../../i18n/useI18n'
+import {
+  clearLegacyChannelConfigs,
+  loadLegacyChannelConfigs,
+} from './channel-settings'
 import {
   SettingsInput,
   SettingsPageLayout,
@@ -16,11 +23,6 @@ import {
   SettingsSelect,
   SettingsToggle,
 } from './SettingsShared'
-import {
-  channelStatusLabel,
-  clearLegacyChannelConfigs,
-  loadLegacyChannelConfigs,
-} from './channel-settings'
 
 interface ModalProps {
   config: ImChannelConfigPublic
@@ -52,57 +54,45 @@ function hasWebhookUrl(platform: ChannelPlatformId): boolean {
   return platform === 'feishu' || platform === 'wechat'
 }
 
-function getEnableDescription(platform: ChannelPlatformId, platformName: string): string {
+function getEnableDescription(
+  platform: ChannelPlatformId,
+  platformName: string,
+  t: TranslateFn,
+): string {
+  const key = `settings.channels.enable.${platform}` as const
+  const translated = t(key)
+  if (translated !== key) return translated
+  return t('settings.channels.enable.default', { platform: platformName })
+}
+
+function getConnectionHint(platform: ChannelPlatformId, t: TranslateFn): string | null {
+  const key = `settings.channels.hints.${platform}` as const
+  const translated = t(key)
+  if (translated !== key) return translated
+  return t('settings.channels.hints.default')
+}
+
+function getAppSecretLabel(platform: ChannelPlatformId, t: TranslateFn): string {
   switch (platform) {
-    case 'feishu':
-      return '开启后智能体将可以通过飞书接收与回复消息'
-    case 'dingtalk':
-      return '开启后智能体将可以通过钉钉接收与回复消息'
-    case 'wechat':
-      return '开启后智能体将可以通过企业微信接收与回复消息'
     case 'discord':
-      return '开启后智能体将可以通过 Discord 接收与回复消息'
+      return t('settings.channels.credentials.appSecretDiscord')
+    case 'dingtalk':
+      return t('settings.channels.credentials.appSecretDingtalk')
+    case 'wechat':
+      return t('settings.channels.credentials.appSecretWechat')
     default:
-      return `开启后智能体将可以通过${platformName}接收与回复消息`
+      return t('settings.channels.credentials.appSecretDefault')
   }
 }
 
-function getConnectionHint(platform: ChannelPlatformId): string | null {
-  switch (platform) {
-    case 'discord':
-      return 'Discord 通过 Bot Gateway 长连接接收消息，将 Bot Token 填入「应用密钥」即可。'
-    case 'dingtalk':
-      return '钉钉通过 Stream 长连接接收消息。在开发者后台启用机器人并选择 Stream 模式，将 AppKey 填入「应用 ID」、AppSecret 填入「应用密钥」。'
-    case 'feishu':
-      return '请在飞书开发者后台 → 事件订阅中，将请求地址配置为上述 URL，并订阅「接收消息」事件。'
-    case 'wechat':
-      return '请在企业微信开发者后台配置回调 URL，填写 Token 与 EncodingAESKey，并在「域名」字段填写应用 AgentId。'
-    default:
-      return '该平台运行时适配即将推出，可先保存配置。'
-  }
-}
-
-function getAppSecretLabel(platform: ChannelPlatformId): string {
-  switch (platform) {
-    case 'discord':
-      return '应用密钥 (Bot Token)'
-    case 'dingtalk':
-      return '应用密钥 (App Secret)'
-    case 'wechat':
-      return '应用密钥 (CorpSecret)'
-    default:
-      return '应用密钥 (App Secret)'
-  }
-}
-
-function getDomainPlaceholder(platform: ChannelPlatformId): string {
+function getDomainPlaceholder(platform: ChannelPlatformId, t: TranslateFn): string {
   switch (platform) {
     case 'feishu':
-      return '飞书（中国）'
+      return t('settings.channels.modal.domainFeishu')
     case 'wechat':
-      return '应用 AgentId（数字）'
+      return t('settings.channels.modal.domainWechat')
     default:
-      return '默认'
+      return t('settings.channels.modal.domainDefault')
   }
 }
 
@@ -114,6 +104,7 @@ function ChannelConfigModal({
   onSave,
   onTest,
 }: ModalProps) {
+  const { t } = useI18n()
   const [draft, setDraft] = useState(config)
   const [appSecret, setAppSecret] = useState('')
   const [encryptKey, setEncryptKey] = useState('')
@@ -122,16 +113,18 @@ function ChannelConfigModal({
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    setDraft(config)
+    setDraft({
+      ...config,
+      name: resolveChannelDisplayName(config.platform, config.name, t),
+    })
     setAppSecret('')
     setEncryptKey('')
     setTestMessage(null)
     setCopied(false)
-  }, [config])
+  }, [config, t])
 
-  const platformName =
-    CHANNEL_PLATFORMS.find((item) => item.id === draft.platform)?.name ?? draft.platform
-  const connectionHint = getConnectionHint(draft.platform)
+  const platformName = getChannelPlatformLabel(draft.platform, t)
+  const connectionHint = getConnectionHint(draft.platform, t)
   const showWebhook = hasWebhookUrl(draft.platform)
 
   const handleCopyWebhook = async () => {
@@ -140,7 +133,7 @@ function ChannelConfigModal({
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      setTestMessage('复制失败，请手动选择文本复制')
+      setTestMessage(t('settings.channels.webhook.copyFailed'))
     }
   }
 
@@ -155,9 +148,9 @@ function ChannelConfigModal({
         <header className="tm-channel-config-header">
           <h3 className="tm-channel-config-title">
             <span className="tm-channel-config-title-dot" aria-hidden="true" />
-            {platformName} 频道配置
+            {t('settings.channels.modal.title', { platform: platformName })}
           </h3>
-          <button type="button" className="tm-channel-config-close" aria-label="关闭" onClick={onClose}>
+          <button type="button" className="tm-channel-config-close" aria-label={t('common.close')} onClick={onClose}>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -174,9 +167,11 @@ function ChannelConfigModal({
           <div className="tm-channel-config-card">
             <div className="tm-channel-config-enable-row">
               <div className="tm-channel-config-enable-copy">
-                <span className="tm-channel-config-enable-title">启用{platformName}频道</span>
+                <span className="tm-channel-config-enable-title">
+                  {t('settings.channels.modal.enableTitle', { platform: platformName })}
+                </span>
                 <p className="tm-channel-config-enable-desc">
-                  {getEnableDescription(draft.platform, platformName)}
+                  {getEnableDescription(draft.platform, platformName, t)}
                 </p>
               </div>
               <SettingsToggle
@@ -187,7 +182,7 @@ function ChannelConfigModal({
 
             {showWebhook ? (
               <div className="tm-channel-config-webhook">
-                <ChannelFormLabel>回调地址 (Webhook URL)</ChannelFormLabel>
+                <ChannelFormLabel>{t('settings.channels.modal.webhookLabel')}</ChannelFormLabel>
                 <div className="tm-channel-config-webhook-input">
                   <input
                     className="tm-channel-config-webhook-value"
@@ -201,7 +196,7 @@ function ChannelConfigModal({
                     onClick={() => void handleCopyWebhook()}
                   >
                     <IconCopy size={14} />
-                    {copied ? '已复制' : '复制'}
+                    {copied ? t('settings.channels.modal.copied') : t('settings.channels.modal.copy')}
                   </button>
                 </div>
                 {connectionHint ? (
@@ -215,7 +210,7 @@ function ChannelConfigModal({
 
           <div className="tm-channel-config-grid-2">
             <div className="tm-channel-config-field">
-              <ChannelFormLabel>频道名称</ChannelFormLabel>
+              <ChannelFormLabel>{t('settings.channels.modal.channelName')}</ChannelFormLabel>
               <SettingsInput
                 value={draft.name}
                 onChange={(name) => setDraft((prev) => ({ ...prev, name }))}
@@ -223,11 +218,11 @@ function ChannelConfigModal({
             </div>
 
             <div className="tm-channel-config-field">
-              <ChannelFormLabel>绑定智能体</ChannelFormLabel>
+              <ChannelFormLabel>{t('settings.channels.modal.bindAssistant')}</ChannelFormLabel>
               <SettingsSelect
                 value={draft.assistantId || ''}
                 options={[
-                  { value: '', label: '请选择智能体...' },
+                  { value: '', label: t('settings.channels.modal.selectAssistant') },
                   ...assistants.map((assistant) => ({
                     value: assistant.id,
                     label: assistant.name,
@@ -240,46 +235,54 @@ function ChannelConfigModal({
 
           <div className="tm-channel-config-section">
             <span className="tm-channel-config-section-title">
-              {platformName} 凭证配置 (App Credentials)
+              {t('settings.channels.credentials.sectionTitle', { platform: platformName })}
             </span>
 
             <div className="tm-channel-config-card tm-channel-config-card--flat">
               <div className="tm-channel-config-field">
-                <ChannelFormLabel required>应用 ID (App ID)</ChannelFormLabel>
+                <ChannelFormLabel required>{t('settings.channels.credentials.appId')}</ChannelFormLabel>
                 <SettingsInput
                   value={draft.appId}
-                  placeholder="cli_xxxxxxxxxxxxxxxx"
+                  placeholder={t('settings.channels.credentials.appIdPlaceholder')}
                   onChange={(appId) => setDraft((prev) => ({ ...prev, appId }))}
                 />
               </div>
 
               <div className="tm-channel-config-field">
-                <ChannelFormLabel required>{getAppSecretLabel(draft.platform)}</ChannelFormLabel>
+                <ChannelFormLabel required>{getAppSecretLabel(draft.platform, t)}</ChannelFormLabel>
                 <SettingsInput
                   type="password"
                   value={appSecret}
-                  placeholder={draft.hasAppSecret ? '已保存，留空则不修改' : '••••••••••••••••••••••••••••••••'}
+                  placeholder={
+                    draft.hasAppSecret
+                      ? t('settings.channels.credentials.appSecretPlaceholderSaved')
+                      : t('settings.channels.credentials.appSecretPlaceholder')
+                  }
                   onChange={setAppSecret}
                 />
               </div>
 
               <div className="tm-channel-config-grid-2">
                 <div className="tm-channel-config-field">
-                  <ChannelFormLabel>加密密钥 (Encrypt Key)</ChannelFormLabel>
+                  <ChannelFormLabel>{t('settings.channels.credentials.encryptKey')}</ChannelFormLabel>
                   <SettingsInput
                     type="password"
                     value={encryptKey}
-                    placeholder={draft.hasEncryptKey ? '已保存，留空则不修改' : '选填'}
+                    placeholder={
+                      draft.hasEncryptKey
+                        ? t('settings.channels.credentials.encryptKeyPlaceholderSaved')
+                        : t('settings.channels.credentials.encryptKeyPlaceholder')
+                    }
                     onChange={setEncryptKey}
                   />
                 </div>
 
                 <div className="tm-channel-config-field">
-                  <ChannelFormLabel>验证令牌 (Verification Token)</ChannelFormLabel>
+                  <ChannelFormLabel>{t('settings.channels.credentials.verificationToken')}</ChannelFormLabel>
                   <SettingsInput
                     type="password"
                     value={draft.verificationToken}
-                    placeholder="选填"
+                    placeholder={t('settings.channels.credentials.verificationTokenPlaceholder')}
                     onChange={(verificationToken) => setDraft((prev) => ({ ...prev, verificationToken }))}
                   />
                 </div>
@@ -289,27 +292,25 @@ function ChannelConfigModal({
 
           <div className="tm-channel-config-grid-2">
             <div className="tm-channel-config-field">
-              <ChannelFormLabel>域名</ChannelFormLabel>
+              <ChannelFormLabel>{t('settings.channels.modal.domain')}</ChannelFormLabel>
               <SettingsInput
                 value={draft.domain}
-                placeholder={getDomainPlaceholder(draft.platform)}
+                placeholder={getDomainPlaceholder(draft.platform, t)}
                 onChange={(domain) => setDraft((prev) => ({ ...prev, domain }))}
               />
             </div>
 
             <div className="tm-channel-config-field">
-              <ChannelFormLabel>允许的聊天 ID</ChannelFormLabel>
+              <ChannelFormLabel>{t('settings.channels.modal.allowedChatIds')}</ChannelFormLabel>
               <SettingsInput
                 value={draft.allowedChatIds}
-                placeholder="留空表示不限制"
+                placeholder={t('settings.channels.modal.allowedChatIdsPlaceholder')}
                 onChange={(allowedChatIds) => setDraft((prev) => ({ ...prev, allowedChatIds }))}
               />
             </div>
           </div>
 
-          <p className="tm-channel-config-field-hint">
-            可填写群聊或单聊 ID，多个 ID 用逗号分隔；留空则响应所有会话。
-          </p>
+          <p className="tm-channel-config-field-hint">{t('settings.channels.modal.allowedChatIdsHint')}</p>
 
           {testMessage ? <div className="tm-settings-error">{testMessage}</div> : null}
         </div>
@@ -321,7 +322,7 @@ function ChannelConfigModal({
               className="tm-channel-config-footer-btn tm-channel-config-footer-btn--secondary"
               onClick={onClose}
             >
-              取消
+              {t('settings.channels.modal.cancel')}
             </button>
             <button
               type="button"
@@ -337,7 +338,7 @@ function ChannelConfigModal({
                   .finally(() => setTesting(false))
               }}
             >
-              {testing ? '测试中…' : '测试连接'}
+              {testing ? t('settings.channels.modal.testing') : t('settings.channels.modal.testConnection')}
             </button>
             <button
               type="button"
@@ -350,7 +351,7 @@ function ChannelConfigModal({
                 })
               }
             >
-              保存配置
+              {t('settings.channels.modal.saveConfig')}
             </button>
           </div>
         </footer>
@@ -364,6 +365,7 @@ interface Props {
 }
 
 export function ChannelsSettingsPanel({ workspaceId }: Props) {
+  const { t } = useI18n()
   const [configs, setConfigs] = useState<ImChannelConfigPublic[]>([])
   const [statuses, setStatuses] = useState<Record<string, ChannelRuntimeStatus>>({})
   const [statusMessages, setStatusMessages] = useState<Record<string, string | undefined>>({})
@@ -469,14 +471,11 @@ export function ChannelsSettingsPanel({ workspaceId }: Props) {
   return (
     <SettingsPageLayout>
       {error ? <div className="tm-settings-error">{error}</div> : null}
-      {loading ? <div className="tm-settings-loading">加载中…</div> : null}
+      {loading ? <div className="tm-settings-loading">{t('common.loading')}</div> : null}
 
-      <SettingsSection
-        title="频道"
-        intro="将智能体接入飞书、钉钉、企业微信、QQ、Discord、Slack 等平台。飞书、钉钉、Discord、企业微信已可用；QQ/Slack 为「即将推出」。启用后会启动本地 Webhook 服务（钉钉使用 Stream 长连接）；渠道消息遵循智能体工具权限设置（危险操作仍需审批，心跳任务除外）。"
-      >
+      <SettingsSection title={t('settings.channels.title')} intro={t('settings.channels.intro')}>
         <div className="tm-channel-webhook-hint">
-          本地 Webhook 基址：<code>{webhookBaseUrl || '—'}</code>
+          {t('settings.channels.webhookBase')}<code>{webhookBaseUrl || '—'}</code>
         </div>
 
         {CHANNEL_PLATFORMS.map((platform) => {
@@ -484,19 +483,24 @@ export function ChannelsSettingsPanel({ workspaceId }: Props) {
           const enabled = config?.enabled ?? false
           const status = statuses[platform.id] ?? 'stopped'
           const statusMessage = statusMessages[platform.id]
+          const statusLabel = getChannelStatusLabel(status, t)
+          const platformLabel = getChannelPlatformLabel(platform.id, t)
+          const channelDisplayName = config
+            ? resolveChannelDisplayName(platform.id, config.name, t)
+            : platformLabel
           return (
             <SettingsRow
               key={platform.id}
-              label={platform.name}
+              label={platformLabel}
               hint={
                 enabled
-                  ? `${config?.name ?? platform.name} · ${channelStatusLabel(status)}${statusMessage ? ` · ${statusMessage}` : ''}`
-                  : '未配置'
+                  ? `${channelDisplayName} · ${statusLabel}${statusMessage ? ` · ${statusMessage}` : ''}`
+                  : t('settings.channels.notConfigured')
               }
             >
               <div className="tm-channel-row-actions">
                 <span className={`tm-channel-status tm-channel-status--${status}`}>
-                  {channelStatusLabel(status)}
+                  {statusLabel}
                 </span>
                 <SettingsToggle
                   checked={enabled}

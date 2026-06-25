@@ -3,12 +3,14 @@ import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
 import { useRegisterGroupPanelError } from './group-page-status'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceName: string
 }
 
 export function GroupWorkflowPanel({ workspaceName }: Props) {
+  const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const sharedCount = 0
@@ -18,8 +20,11 @@ export function GroupWorkflowPanel({ workspaceName }: Props) {
   return (
     <div className="tm-group-member-panel tm-group-resource-panel">
       <GroupPanelHeader
-        title="群组工作流"
-        subtitle={`${workspaceName} · ${sharedCount} 个工作流`}
+        title={t('groupPage.header.workflow')}
+        subtitle={`${workspaceName} · ${t('groupPage.panels.count', {
+          count: sharedCount,
+          type: t('groupPage.panels.types.workflows'),
+        })}`}
         actions={<GroupPanelRefreshButton onRefresh={() => {}} />}
       />
 
@@ -29,12 +34,16 @@ export function GroupWorkflowPanel({ workspaceName }: Props) {
           className="tm-kb-file-dropzone"
           onClick={() => setShowPicker(true)}
         >
-          <span className="tm-kb-file-dropzone-title">点击添加工作流到群组</span>
-          <span className="tm-kb-file-dropzone-hint">从已有工作流中选择，共享给群组成员</span>
+          <span className="tm-kb-file-dropzone-title">
+            {t('groupPage.panels.clickAdd', { type: t('groupPage.panels.types.workflows') })}
+          </span>
+          <span className="tm-kb-file-dropzone-hint">
+            {t('groupPage.panels.pickHint', { type: t('groupPage.panels.types.workflows') })}
+          </span>
         </button>
 
         <div className="tm-kb-file-panel-empty">
-          <p>暂无群组工作流，点击上方区域添加</p>
+          <p>{t('groupPage.panels.empty', { type: t('groupPage.panels.types.workflows') })}</p>
         </div>
       </div>
 

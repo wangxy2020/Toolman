@@ -5,6 +5,7 @@ import {
   CommunityPanelPublishButton,
   CommunityPanelRefreshButton,
 } from './CommunityPanelHeader'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   title: string
@@ -32,9 +33,12 @@ export function CommunityListPanelShell({
   publishDisabled = false,
   headerExtra,
   isEmpty = false,
-  emptyHint = '暂无内容',
+  emptyHint,
   children,
 }: Props) {
+  const { t } = useI18n()
+  const resolvedEmptyHint = emptyHint ?? t('communityPage.empty')
+
   return (
     <div className="tm-community-market tm-community-list-panel">
       <CommunityPanelHeader
@@ -58,11 +62,11 @@ export function CommunityListPanelShell({
       <div className="tm-kb-file-panel tm-community-list-panel-body">
         {loading && isEmpty ? (
           <div className="tm-kb-file-panel-empty">
-            <p>加载中…</p>
+            <p>{t('common.loading')}</p>
           </div>
         ) : isEmpty ? (
           <div className="tm-kb-file-panel-empty">
-            <p>{emptyHint}</p>
+            <p>{resolvedEmptyHint}</p>
           </div>
         ) : (
           children

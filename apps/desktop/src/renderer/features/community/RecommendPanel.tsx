@@ -13,11 +13,14 @@ import { formatNewsArticleDescription, formatNewsDate } from './community-news-u
 import { useCommunityRecommendations } from './useCommunityRecommendations'
 import { useCommunityPanelStatus } from './community-panel-status'
 import { CommunityFederationSourceBadge } from './CommunityFederationSourceBadge'
+import { useI18n } from '../../i18n/useI18n'
 
 import type { CommunityNewsArticle, CommunityResourceItem } from '@toolman/shared'
 import type { ReactNode } from 'react'
 
 function ResourceRecommendCard({ item }: { item: CommunityResourceItem }) {
+  const { t } = useI18n()
+
   return (
     <article className="tm-community-recommend-card">
       <div className="tm-community-recommend-card-title-row">
@@ -25,7 +28,10 @@ function ResourceRecommendCard({ item }: { item: CommunityResourceItem }) {
         <CommunityFederationSourceBadge source={item.federationSource} />
       </div>
       <p className="tm-community-recommend-card-meta">
-        {item.author.displayName} · v{item.version} · {formatCommunityCount(item.installCount)} 次安装
+        {item.author.displayName} · v{item.version} ·{' '}
+        {t('communityPage.recommendSections.installCount', {
+          count: formatCommunityCount(item.installCount),
+        })}
       </p>
       {item.description ? (
         <p className="tm-community-recommend-card-desc">{item.description}</p>
@@ -73,19 +79,20 @@ function RecommendSection({
 }
 
 export function RecommendPanel() {
+  const { t } = useI18n()
   const recommend = useCommunityRecommendations()
 
   useCommunityPanelStatus('community-recommend', {
     loading: recommend.loading,
     error: recommend.error,
-    loadingMessage: '加载推荐内容…',
+    loadingMessage: t('communityPage.panels.recommend.loading'),
   })
 
   return (
     <div className="tm-community-market tm-community-recommend">
       <CommunityPanelHeader
-        title="为你推荐"
-        subtitle="聚合热门 MCP、Skills、工作流与资讯"
+        title={t('communityPage.panels.recommend.title')}
+        subtitle={t('communityPage.panels.recommend.subtitle')}
         actions={
           <CommunityPanelRefreshButton
             loading={recommend.loading}
@@ -97,17 +104,17 @@ export function RecommendPanel() {
 
       <div className="tm-kb-file-panel tm-community-recommend-content">
         {recommend.loading && !recommend.hasContent ? (
-          <div className="tm-session-empty">加载推荐内容中…</div>
+          <div className="tm-session-empty">{t('communityPage.panels.recommend.loading')}</div>
         ) : !recommend.hasContent ? (
           <div className="tm-kb-file-panel-empty">
-            <p>暂无推荐内容，请确认 Community Hub 已启动并已发布资源或拉取资讯</p>
+            <p>{t('communityPage.panels.recommend.empty')}</p>
           </div>
         ) : (
           <div className="tm-community-recommend-grid">
           <RecommendSection
-            title="热门 MCP"
+            title={t('communityPage.recommendSections.hotMcp')}
             icon={<IconMcp size={18} />}
-            emptyHint="暂无 MCP 推荐"
+            emptyHint={t('communityPage.market.recommendMcp')}
           >
             {recommend.data.mcp.length > 0 ? (
               <div className="tm-community-recommend-cards">
@@ -119,9 +126,9 @@ export function RecommendPanel() {
           </RecommendSection>
 
           <RecommendSection
-            title="热门 Skills"
+            title={t('communityPage.recommendSections.hotSkills')}
             icon={<IconSkill size={18} />}
-            emptyHint="暂无 Skills 推荐"
+            emptyHint={t('communityPage.market.recommendSkills')}
           >
             {recommend.data.skill.length > 0 ? (
               <div className="tm-community-recommend-cards">
@@ -133,9 +140,9 @@ export function RecommendPanel() {
           </RecommendSection>
 
           <RecommendSection
-            title="热门工作流"
+            title={t('communityPage.recommendSections.hotWorkflow')}
             icon={<IconWorkflow size={18} />}
-            emptyHint="暂无工作流推荐"
+            emptyHint={t('communityPage.market.recommendWorkflow')}
           >
             {recommend.data.workflow.length > 0 ? (
               <div className="tm-community-recommend-cards">
@@ -147,9 +154,9 @@ export function RecommendPanel() {
           </RecommendSection>
 
           <RecommendSection
-            title="推荐资讯"
+            title={t('communityPage.recommendSections.hotNews')}
             icon={<IconNews size={18} />}
-            emptyHint="暂无资讯推荐"
+            emptyHint={t('communityPage.market.recommendNews')}
           >
             {recommend.data.news.length > 0 ? (
               <div className="tm-community-recommend-cards">

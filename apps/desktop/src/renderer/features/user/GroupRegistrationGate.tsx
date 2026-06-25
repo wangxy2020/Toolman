@@ -1,4 +1,5 @@
 import { AuthGuardModal } from './AuthGuardModal'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   onDismiss?: () => void
@@ -6,13 +7,14 @@ interface Props {
 }
 
 export function GroupRegistrationGate({ onDismiss, onRegister }: Props) {
+  const { t } = useI18n()
   return (
     <AuthGuardModal
       isOpen
-      title="群组功能需要注册"
-      description="创建或加入群组、群聊与协作同步需要先注册并登录 Toolman 账户。"
-      confirmText="去注册"
-      cancelText="返回"
+      title={t('user.guard.titleGroup')}
+      description={t('user.guard.descriptionGroup')}
+      confirmText={t('user.guard.goRegister')}
+      cancelText={t('user.account.back')}
       onConfirm={() => onRegister?.()}
       onCancel={() => onDismiss?.()}
     />

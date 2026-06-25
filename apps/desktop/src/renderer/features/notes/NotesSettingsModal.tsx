@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
 import { useSystemPaths } from '../chat/useSystemPaths'
+import { useI18n } from '../../i18n/useI18n'
 import {
   NOTES_OPEN_MODE_OPTIONS,
   notesOpenModeFromSettings,
@@ -26,9 +27,9 @@ interface Props {
 type SettingsTab = 'storage' | 'editor' | 'display'
 
 const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: 'storage', label: '存储与数据' },
-  { id: 'editor', label: '编辑器设置' },
-  { id: 'display', label: '显示与外观' },
+  { id: 'storage', label: 'storage' },
+  { id: 'editor', label: 'editor' },
+  { id: 'display', label: 'display' },
 ]
 
 function Toggle({
@@ -59,6 +60,7 @@ export function NotesSettingsModal({
   onExportBackup,
   onImportBackup,
 }: Props) {
+  const { t } = useI18n()
   const systemPaths = useSystemPaths()
   const defaultWorkingDirectory = getDefaultNotesWorkingDirectory(systemPaths)
   const resolvedWorkingDirectory = resolveNotesWorkingDirectory(workingDirectory, systemPaths)
@@ -118,7 +120,7 @@ export function NotesSettingsModal({
       reader.onload = () => {
         const raw = typeof reader.result === 'string' ? reader.result : ''
         if (!raw.trim()) return
-        if (!window.confirm('导入将覆盖当前所有笔记数据，是否继续？')) return
+        if (!window.confirm(t('notesPage.settings.importConfirm'))) return
         onImportBackup(raw)
       }
       reader.readAsText(file)
@@ -138,9 +140,9 @@ export function NotesSettingsModal({
         <header className="tm-notes-settings-modal-header">
           <h3 id="notes-settings-title" className="tm-notes-settings-modal-title">
             <span className="tm-notes-settings-modal-title-dot" aria-hidden="true" />
-            笔记设置
+            {t('notesPage.settings.title')}
           </h3>
-          <button type="button" className="tm-notes-settings-modal-close" aria-label="关闭" onClick={onClose}>
+          <button type="button" className="tm-notes-settings-modal-close" aria-label={t('common.close')} onClick={onClose}>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -154,7 +156,7 @@ export function NotesSettingsModal({
         </header>
 
         <div className="tm-notes-settings-modal-body">
-          <nav className="tm-notes-settings-modal-nav" aria-label="笔记设置分类">
+          <nav className="tm-notes-settings-modal-nav" aria-label={t('notesPage.settingsNavAria')}>
             {SETTINGS_TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -167,7 +169,7 @@ export function NotesSettingsModal({
                   .join(' ')}
                 onClick={() => setActiveTab(tab.id)}
               >
-                {tab.label}
+                {t(`notesPage.settings.tabs.${tab.label}`)}
               </button>
             ))}
           </nav>
@@ -176,26 +178,26 @@ export function NotesSettingsModal({
             {activeTab === 'storage' ? (
               <div className="tm-notes-settings-form">
                 <div className="tm-notes-settings-section-head">
-                  <span className="tm-notes-settings-section-title">数据设置</span>
+                  <span className="tm-notes-settings-section-title">{t('notesPage.settings.dataSection')}</span>
                   <button
                     type="button"
                     className="tm-notes-settings-link-btn"
                     onClick={handleResetDirectory}
                   >
-                    重置为默认
+                    {t('notesPage.settings.resetDefault')}
                   </button>
                 </div>
 
                 <div className="tm-notes-settings-field-block">
                   <label className="tm-notes-settings-label" htmlFor="notes-settings-directory">
-                    当前工作目录
+                    {t('notesPage.settings.workingDirectory')}
                   </label>
                   <div className="tm-notes-settings-workdir-group">
                     <input
                       id="notes-settings-directory"
                       className="tm-notes-settings-workdir-input"
                       value={draftWorkingDirectory}
-                      placeholder={defaultWorkingDirectory || '加载中…'}
+                      placeholder={defaultWorkingDirectory || t('common.loading')}
                       title={draftWorkingDirectory}
                       onChange={(event) => {
                         setDirectoryTouched(true)
@@ -207,34 +209,34 @@ export function NotesSettingsModal({
                       className="tm-notes-settings-workdir-browse"
                       onClick={() => void handlePickDirectory()}
                     >
-                      选择
+                      {t('notesPage.settings.select')}
                     </button>
                   </div>
                   <p className="tm-notes-settings-hint">
-                    更改工作目录不会移动现有文件，请手动迁移文件。
+                    {t('notesPage.settings.migrateHint')}
                   </p>
                 </div>
 
                 <div className="tm-notes-settings-divider-block">
-                  <span className="tm-notes-settings-label">数据备份</span>
+                  <span className="tm-notes-settings-label">{t('notesPage.settings.backup')}</span>
                   <div className="tm-notes-settings-action-row">
                     <button
                       type="button"
                       className="tm-notes-settings-inline-btn"
                       onClick={onExportBackup}
                     >
-                      导出笔记 JSON
+                      {t('notesPage.settings.exportJson')}
                     </button>
                     <button
                       type="button"
                       className="tm-notes-settings-inline-btn"
                       onClick={handleImportBackup}
                     >
-                      导入笔记 JSON
+                      {t('notesPage.settings.importJson')}
                     </button>
                   </div>
                   <p className="tm-notes-settings-hint">
-                    笔记保存在本机浏览器存储中，建议定期导出备份。
+                    {t('notesPage.settings.backupHint')}
                   </p>
                 </div>
               </div>
@@ -244,7 +246,7 @@ export function NotesSettingsModal({
               <div className="tm-notes-settings-form">
                 <div className="tm-notes-settings-row tm-notes-settings-row--inline">
                   <label className="tm-notes-settings-label" htmlFor="notes-settings-open-mode">
-                    默认打开模式
+                    {t('notesPage.settings.defaultOpenMode')}
                   </label>
                   <select
                     id="notes-settings-open-mode"
@@ -258,27 +260,27 @@ export function NotesSettingsModal({
                   >
                     {NOTES_OPEN_MODE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {t(`notesPage.openModes.${option.value === 'edit-only' ? 'editOnly' : option.value === 'live-preview' ? 'livePreview' : 'preview'}`)}
                       </option>
                     ))}
                   </select>
                 </div>
                 <p className="tm-notes-settings-hint">
-                  打开笔记时的默认视图：仅编辑、左右实时预览，或纯预览模式。
+                  {t('notesPage.settings.openModeHint')}
                 </p>
               </div>
             ) : null}
 
             {activeTab === 'display' ? (
               <div className="tm-notes-settings-form">
-                <span className="tm-notes-settings-section-title">显示与外观</span>
+                <span className="tm-notes-settings-section-title">{t('notesPage.settings.displaySection')}</span>
 
                 <div className="tm-notes-settings-toggle-card">
                   <div className="tm-notes-settings-toggle-item">
                     <div className="tm-notes-settings-toggle-copy">
-                      <span className="tm-notes-settings-toggle-label">显示大纲</span>
+                      <span className="tm-notes-settings-toggle-label">{t('notesPage.settings.showOutline')}</span>
                       <p className="tm-notes-settings-hint">
-                        在笔记编辑区右侧显示标题大纲，点击可快速跳转
+                        {t('notesPage.settings.outlineHint')}
                       </p>
                     </div>
                     <Toggle
@@ -289,9 +291,9 @@ export function NotesSettingsModal({
 
                   <div className="tm-notes-settings-toggle-item tm-notes-settings-toggle-item--bordered">
                     <div className="tm-notes-settings-toggle-copy">
-                      <span className="tm-notes-settings-toggle-label">缩减栏宽</span>
+                      <span className="tm-notes-settings-toggle-label">{t('notesPage.settings.narrowColumn')}</span>
                       <p className="tm-notes-settings-hint">
-                        开启后将限制每行字数，使屏幕显示的内容更聚焦
+                        {t('notesPage.settings.narrowColumnHint')}
                       </p>
                     </div>
                     <Toggle
@@ -304,7 +306,7 @@ export function NotesSettingsModal({
                 <div className="tm-notes-settings-slider-block">
                   <div className="tm-notes-settings-slider-head">
                     <label className="tm-notes-settings-label" htmlFor="notes-settings-font-size">
-                      字体大小
+                      {t('notesPage.settings.fontSize')}
                     </label>
                     <span className="tm-notes-settings-slider-value">{draftSettings.fontSize}px</span>
                   </div>
@@ -330,7 +332,7 @@ export function NotesSettingsModal({
               className="tm-notes-settings-modal-footer-btn tm-notes-settings-modal-footer-btn--secondary"
               onClick={onClose}
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -338,7 +340,7 @@ export function NotesSettingsModal({
               disabled={!dirty}
               onClick={handleSave}
             >
-              保存设置
+              {t('notesPage.settings.saveSettings')}
             </button>
           </div>
         </footer>

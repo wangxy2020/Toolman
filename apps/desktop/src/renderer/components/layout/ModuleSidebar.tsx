@@ -1,5 +1,6 @@
 import { IconPlus } from '../icons'
 import { getModulePageConfig } from '../../features/modules/module-config'
+import { useI18n } from '../../i18n/useI18n'
 import type { ModuleView } from '../../types/app-view'
 
 interface Props {
@@ -7,12 +8,13 @@ interface Props {
 }
 
 export function ModuleSidebar({ view }: Props) {
-  const config = getModulePageConfig(view)
+  const { t } = useI18n()
+  const config = getModulePageConfig(view, t)
 
   return (
     <aside className="tm-sidebar">
       <div className="tm-sidebar-content">
-        <button type="button" className="tm-sidebar-add" disabled title="即将推出">
+        <button type="button" className="tm-sidebar-add" disabled title={t('common.comingSoon')}>
           <IconPlus />
           {config.addLabel}
         </button>

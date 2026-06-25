@@ -1,4 +1,5 @@
 import type { KnowledgeDocument } from '@toolman/shared'
+import type { TranslateFn } from '../../i18n/I18nProvider'
 
 export type KnowledgeDocumentDisplayStatus = KnowledgeDocument['status'] | 'pending'
 
@@ -71,25 +72,24 @@ export function isKnowledgeDocProcessing(status: KnowledgeDocumentDisplayStatus)
   )
 }
 
-export function getKnowledgeDocStatusLabel(status: KnowledgeDocumentDisplayStatus): string {
-  switch (status) {
-    case 'pending':
-      return '等待同步'
-    case 'queued':
-      return '排队中'
-    case 'parsing':
-      return '解析中'
-    case 'chunking':
-      return '分块中'
-    case 'embedding':
-      return '嵌入中'
-    case 'indexing':
-      return '索引中'
-    case 'ready':
-      return '已嵌入'
-    case 'failed':
-      return '嵌入失败'
-    default:
-      return '处理中'
-  }
+export function getKnowledgeDocStatusLabel(
+  status: KnowledgeDocumentDisplayStatus,
+  t: TranslateFn,
+): string {
+  const key =
+    status in DOC_STATUS_KEYS
+      ? DOC_STATUS_KEYS[status as keyof typeof DOC_STATUS_KEYS]
+      : 'processing'
+  return t(`knowledgePage.docStatus.${key}`)
 }
+
+const DOC_STATUS_KEYS = {
+  pending: 'pending',
+  queued: 'queued',
+  parsing: 'parsing',
+  chunking: 'chunking',
+  embedding: 'embedding',
+  indexing: 'indexing',
+  ready: 'ready',
+  failed: 'failed',
+} as const satisfies Partial<Record<KnowledgeDocumentDisplayStatus, string>>

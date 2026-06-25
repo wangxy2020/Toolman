@@ -138,10 +138,28 @@ impl ConnectionManager {
         Ok(())
     }
 
+    pub async fn prune_dead_sessions(&mut self) {
+        let mut dead_peers = Vec::new();
+        for (peer_id, entry) in &self.sessions {
+            let session = entry.session.lock().await;
+            if session.current_state().await == ConnectionState::Closed {
+                dead_peers.push(peer_id.clone());
+            }
+        }
+
+        for peer_id in dead_peers {
+            let _ = self.disconnect(&peer_id).await;
+        }
+    }
+
     pub async fn list(&self) -> Vec<ConnectionInfo> {
         let mut results = Vec::new();
         for entry in self.sessions.values() {
             let session = entry.session.lock().await;
+            let state = session.current_state().await;
+            if state == ConnectionState::Closed {
+                continue;
+            }
             results.push(session.info_snapshot().await);
         }
         results
@@ -171,6 +189,65 @@ impl ConnectionManager {
                 .await?;
         }
         Ok(())
+    }
+
+    pub async fn restart_ice(&mut self, peer_device_id: &str) -> Result<ConnectionState, String> {
+        if !Self::discovery_running()? {
+            return Err("P2P discovery is not running".to_string());
+        }
+
+        let local_device_id = Self::local_device_id()?;
+        let entry = self
+            .sessions
+            .get(peer_device_id)
+            .ok_or_else(|| "Connection not found".to_string())?;
+        let session = Arc::clone(&entry.session);
+
+        {
+            let guard = session.lock().await;
+            if guard
+                .manual_close
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                return Err("Connection manually closed".to_string());
+            }
+            let state = guard.current_state().await;
+            if state == ConnectionState::Closed {
+                return Err("Connection is closed".to_string());
+            }
+            guard.set_state(ConnectionState::Reconnecting).await;
+        }
+
+        let is_offerer = local_device_id < peer_device_id.to_string();
+
+        if is_offerer {
+            let nonce = format!("ice-restart-{}", crate::util::now_ms());
+            let offer_sdp = session.lock().await.create_ice_restart_offer_sdp().await?;
+            Self::publish_local_signal(peer_device_id, "offer", &offer_sdp, &nonce)?;
+            let answer =
+                Self::wait_for_ice_restart_signal(peer_device_id, &local_device_id, "answer")
+                    .await?;
+            session.lock().await.apply_answer(&answer.sdp).await?;
+        } else {
+            let offer =
+                Self::wait_for_ice_restart_signal(peer_device_id, &local_device_id, "offer")
+                    .await?;
+            let answer_sdp = session
+                .lock()
+                .await
+                .accept_ice_restart_offer(&offer.sdp)
+                .await?;
+            Self::publish_local_signal(peer_device_id, "answer", &answer_sdp, &offer.nonce)?;
+        }
+
+        {
+            let guard = session.lock().await;
+            guard.set_state(ConnectionState::Connecting).await;
+            guard.wait_until_connected(CONNECT_TIMEOUT).await?;
+            *guard.state.lock().await = ConnectionState::Connected;
+        }
+
+        Ok(ConnectionState::Connected)
     }
 
     pub async fn send(
@@ -603,6 +680,43 @@ impl ConnectionManager {
             tokio::time::sleep(SIGNAL_POLL_INTERVAL).await;
         }
         Err(format!("Peer not discovered on LAN: {peer_device_id}"))
+    }
+
+    async fn wait_for_ice_restart_signal(
+        peer_device_id: &str,
+        local_device_id: &str,
+        signal_type: &str,
+    ) -> Result<SignalMessage, String> {
+        let deadline = tokio::time::Instant::now() + CONNECT_TIMEOUT;
+        let mut seen_nonce: Option<String> = None;
+
+        while tokio::time::Instant::now() < deadline {
+            let properties = {
+                let discovery = DISCOVERY
+                    .lock()
+                    .map_err(|_| "discovery lock poisoned".to_string())?;
+                discovery.get_peer_properties(peer_device_id)
+            };
+
+            if let Some(props) = properties {
+                if let Some(signal) = parse_signal(peer_device_id, &props) {
+                    if signal.target_device_id == local_device_id
+                        && signal.signal_type == signal_type
+                        && signal.nonce.starts_with("ice-restart-")
+                        && seen_nonce.as_deref() != Some(signal.nonce.as_str())
+                    {
+                        seen_nonce = Some(signal.nonce.clone());
+                        return Ok(signal);
+                    }
+                }
+            }
+
+            tokio::time::sleep(SIGNAL_POLL_INTERVAL).await;
+        }
+
+        Err(format!(
+            "Timed out waiting for ICE restart {signal_type} from {peer_device_id}"
+        ))
     }
 
     async fn wait_for_signal(

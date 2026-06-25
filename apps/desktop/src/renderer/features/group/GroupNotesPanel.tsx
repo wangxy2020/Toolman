@@ -17,6 +17,7 @@ import {
 import { useP2pNotes } from './useP2pNotes'
 import { useRegisterGroupPanelError } from './group-page-status'
 import type { NoteItem, NotebookItem } from '../notes/notes-storage'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   p2pWorkspaceId: string
@@ -54,6 +55,7 @@ export function GroupNotesPanel({
   onSaveGroupNoteAsCopy,
   onSyncGroupNoteLock,
 }: Props) {
+  const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
   const [noteActionMenu, setNoteActionMenu] = useState<{
     x: number
@@ -214,7 +216,7 @@ export function GroupNotesPanel({
 
         const name =
           notebookId === UNKNOWN_NOTEBOOK_ID
-            ? '未知笔记本'
+            ? t('groupPage.panels.unknownNotebook')
             : resolveSharedNoteNotebookName(
                 items[0]?.resource ?? { notebookId, notebookName: undefined },
                 notebookId,
@@ -233,7 +235,7 @@ export function GroupNotesPanel({
         if (leftOrder !== rightOrder) return leftOrder - rightOrder
         return left.name.localeCompare(right.name, 'zh-CN')
       })
-  }, [notebooks, notebooksById, notesById, p2pNotes.sharedResources])
+  }, [notebooks, notebooksById, notesById, p2pNotes.sharedResources, t])
 
   const handleAddNotes = useCallback(
     async (selections: Array<{ notebookId: string; noteIds: string[] }>) => {
@@ -425,8 +427,11 @@ export function GroupNotesPanel({
   return (
     <div className="tm-group-member-panel tm-group-resource-panel">
       <GroupPanelHeader
-        title="群组笔记"
-        subtitle={`${workspaceName} · ${p2pNotes.sharedResources.length} 篇笔记`}
+        title={t('groupPage.header.notes')}
+        subtitle={`${workspaceName} · ${t('groupPage.panels.count', {
+          count: p2pNotes.sharedResources.length,
+          type: t('groupPage.panels.types.notes'),
+        })}`}
       />
 
       <div className="tm-kb-file-panel" onContextMenu={handleContextMenu}>
@@ -437,18 +442,22 @@ export function GroupNotesPanel({
           onClick={() => setShowPicker(true)}
         >
           <span className="tm-kb-file-dropzone-title">
-            {p2pNotes.sharing ? '正在添加笔记…' : '点击添加笔记到群组'}
+            {p2pNotes.sharing
+              ? t('groupPage.panels.adding', { type: t('groupPage.panels.types.notes') })
+              : t('groupPage.panels.clickAdd', { type: t('groupPage.panels.types.notes') })}
           </span>
-          <span className="tm-kb-file-dropzone-hint">从已有笔记本中选择笔记，共享给群组成员</span>
+          <span className="tm-kb-file-dropzone-hint">
+            {t('groupPage.panels.pickHint', { type: t('groupPage.panels.types.notes') })}
+          </span>
         </button>
 
         {p2pNotes.loading && p2pNotes.sharedResources.length === 0 ? (
           <div className="tm-kb-file-panel-empty">
-            <p>加载笔记列表中…</p>
+            <p>{t('groupPage.panels.loading', { type: t('groupPage.panels.types.notes') })}</p>
           </div>
         ) : p2pNotes.sharedResources.length === 0 ? (
           <div className="tm-kb-file-panel-empty">
-            <p>暂无群组笔记，点击上方区域添加</p>
+            <p>{t('groupPage.panels.empty', { type: t('groupPage.panels.types.notes') })}</p>
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">

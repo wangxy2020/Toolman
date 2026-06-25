@@ -21,6 +21,7 @@ pub mod task_review_service;
 pub mod workflow_market_service;
 pub mod embedding_service;
 pub mod federation_service;
+pub mod federation_catalog_signing;
 
 pub use admin_management_service::{
     AdminManagementError, AdminManagementService, ModeratorUserItem,

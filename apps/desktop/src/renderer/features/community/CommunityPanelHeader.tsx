@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { IconPlus, IconRefresh } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 
 interface HeaderProps {
   title: string
@@ -34,15 +35,18 @@ interface RefreshButtonProps {
 export function CommunityPanelRefreshButton({
   disabled = false,
   loading = false,
-  title = '刷新',
+  title,
   onClick,
 }: RefreshButtonProps) {
+  const { t } = useI18n()
+  const label = title ?? t('communityPage.panelRefresh')
+
   return (
     <button
       type="button"
       className="tm-community-panel-icon-btn"
-      title={title}
-      aria-label={title}
+      title={label}
+      aria-label={label}
       disabled={disabled}
       onClick={onClick}
     >

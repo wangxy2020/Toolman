@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type KnowledgeFileDedupStreamEvent } from '@toolman/shared'
 import { IconExternalLink, IconFile, IconFolder, IconTrash } from '../../components/icons'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
+import type { TranslateFn } from '../../i18n/I18nProvider'
+import { useI18n } from '../../i18n/useI18n'
 
 interface DuplicateFile {
   path: string
@@ -68,11 +70,13 @@ function formatStatSize(bytes: number): string {
   return `${Math.max(mb, 0.01).toFixed(mb >= 10 ? 0 : 1)} MB`
 }
 
-function formatEta(seconds: number | null): string {
-  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return '计算中…'
-  if (seconds < 60) return `约 ${Math.ceil(seconds)} 秒`
-  if (seconds < 3600) return `约 ${Math.ceil(seconds / 60)} 分钟`
-  return `约 ${(seconds / 3600).toFixed(1)} 小时`
+function formatEta(seconds: number | null, t: TranslateFn): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return t('knowledgePage.dedup.etaCalculating')
+  }
+  if (seconds < 60) return t('knowledgePage.dedup.etaSeconds', { count: Math.ceil(seconds) })
+  if (seconds < 3600) return t('knowledgePage.dedup.etaMinutes', { count: Math.ceil(seconds / 60) })
+  return t('knowledgePage.dedup.etaHours', { hours: (seconds / 3600).toFixed(1) })
 }
 
 function getFileName(filePath: string): string {
@@ -120,6 +124,7 @@ export function KnowledgeFileDedupPanel({
   onScanStateChange,
   refreshToken = 0,
 }: Props) {
+  const { t } = useI18n()
   const [groups, setGroups] = useState<DuplicateGroup[]>([])
   const [stats, setStats] = useState<ScanStats | null>(null)
   const [loading, setLoading] = useState(false)
@@ -140,8 +145,11 @@ export function KnowledgeFileDedupPanel({
           tone: 'info',
           message:
             progress && progress.total > 0
-              ? `正在扫描重复文件… ${progress.scanned}/${progress.total}`
-              : '正在扫描重复文件…',
+              ? t('knowledgePage.dedup.loadingProgress', {
+                  scanned: progress.scanned,
+                  total: progress.total,
+                })
+              : t('knowledgePage.dedup.loadingStatus'),
         }
       : null,
   )
@@ -350,7 +358,7 @@ export function KnowledgeFileDedupPanel({
 
   const handleDeleteSelected = async () => {
     if (!workspaceId || selectedPaths.size === 0) return
-    if (!window.confirm(`确定删除选中的 ${selectedPaths.size} 个重复文件吗？此操作不可恢复。`)) {
+    if (!window.confirm(t('knowledgePage.dedup.deleteSelectedConfirm', { count: selectedPaths.size }))) {
       return
     }
 
@@ -374,13 +382,13 @@ export function KnowledgeFileDedupPanel({
     await handleScan()
 
     if (data.failed.length > 0) {
-      setError(`已删除 ${data.deleted} 个，${data.failed.length} 个删除失败`)
+      setError(t('knowledgePage.dedup.deletePartialResult', { deleted: data.deleted, failed: data.failed.length }))
     }
   }
 
   const handleDeleteSingle = async (path: string) => {
     if (!workspaceId) return
-    if (!window.confirm('确定删除此文件吗？此操作不可恢复。')) return
+    if (!window.confirm(t('knowledgePage.dedup.deleteOneConfirm'))) return
 
     setLoading(true)
     setError(null)
@@ -421,8 +429,8 @@ export function KnowledgeFileDedupPanel({
   if (!folderPath) {
     return (
       <div className="tm-dedup-empty">
-        <p className="tm-dedup-empty-title">选择文件夹开始查重</p>
-        <p className="tm-dedup-empty-hint">点击右上角「选择文件夹」，选择要扫描的目录。</p>
+        <p className="tm-dedup-empty-title">{t('knowledgePage.dedup.pickFolderTitle')}</p>
+        <p className="tm-dedup-empty-hint">{t('knowledgePage.dedup.pickFolderHint')}</p>
       </div>
     )
   }
@@ -432,17 +440,25 @@ export function KnowledgeFileDedupPanel({
       {loading ? (
         <div className="tm-dedup-loading">
           <p className="tm-dedup-loading-title">
-            {progress?.phase === 'listing' ? '正在枚举文件…' : '正在扫描文件夹…'}
+            {progress?.phase === 'listing'
+              ? t('knowledgePage.dedup.phaseListing')
+              : t('knowledgePage.dedup.phaseHashing')}
           </p>
           <p className="tm-dedup-loading-meta">
             {progress?.phase === 'hashing' && progress.total > 0
-              ? `已处理 ${progress.scanned} / ${progress.total} 个文件（${progressPercent}%）`
+              ? t('knowledgePage.dedup.progressHashing', {
+                  scanned: progress.scanned,
+                  total: progress.total,
+                  percent: progressPercent,
+                })
               : progress && progress.scanned > 0
-                ? `已发现 ${progress.scanned} 个文件`
-                : '准备中…'}
+                ? t('knowledgePage.dedup.progressListed', { scanned: progress.scanned })
+                : t('knowledgePage.dedup.preparing')}
           </p>
           <p className="tm-dedup-loading-meta">
-            预计剩余：{formatEta(progress?.etaSeconds ?? null)}
+            {t('knowledgePage.dedup.etaRemaining', {
+              eta: formatEta(progress?.etaSeconds ?? null, t),
+            })}
           </p>
           <div className="tm-dedup-progress">
             <div
@@ -458,7 +474,7 @@ export function KnowledgeFileDedupPanel({
             disabled={cancelling}
             onClick={() => void handleCancelScan()}
           >
-            {cancelling ? '取消中…' : '取消扫描'}
+            {cancelling ? t('knowledgePage.dedup.cancelling') : t('knowledgePage.dedup.cancelScan')}
           </button>
         </div>
       ) : null}
@@ -466,19 +482,19 @@ export function KnowledgeFileDedupPanel({
       {stats && !loading ? (
         <div className="tm-dedup-stats">
           <div className="tm-dedup-stat-card">
-            <span className="tm-dedup-stat-label">总文件数</span>
+            <span className="tm-dedup-stat-label">{t('knowledgePage.dedup.statsTotalFiles')}</span>
             <strong className="tm-dedup-stat-value">{stats.scannedCount}</strong>
           </div>
           <div className="tm-dedup-stat-card">
-            <span className="tm-dedup-stat-label">总大小</span>
+            <span className="tm-dedup-stat-label">{t('knowledgePage.dedup.statsTotalSize')}</span>
             <strong className="tm-dedup-stat-value">{formatStatSize(stats.totalSizeBytes)}</strong>
           </div>
           <div className="tm-dedup-stat-card">
-            <span className="tm-dedup-stat-label">重复组数</span>
+            <span className="tm-dedup-stat-label">{t('knowledgePage.dedup.statsDuplicateGroups')}</span>
             <strong className="tm-dedup-stat-value">{duplicateGroupCount}</strong>
           </div>
           <div className="tm-dedup-stat-card">
-            <span className="tm-dedup-stat-label">可节省空间</span>
+            <span className="tm-dedup-stat-label">{t('knowledgePage.dedup.statsSavable')}</span>
             <strong className="tm-dedup-stat-value">{formatStatSize(stats.savableBytes)}</strong>
           </div>
         </div>
@@ -486,22 +502,24 @@ export function KnowledgeFileDedupPanel({
 
       {!loading && stats && rows.length === 0 ? (
         <div className="tm-dedup-empty tm-dedup-empty--inline">
-          <p className="tm-dedup-empty-title">未发现重复文件</p>
-          <p className="tm-dedup-empty-hint">该文件夹中的文件内容均不相同。</p>
+          <p className="tm-dedup-empty-title">{t('knowledgePage.dedup.noDuplicatesTitle')}</p>
+          <p className="tm-dedup-empty-hint">{t('knowledgePage.dedup.noDuplicatesHint')}</p>
         </div>
       ) : null}
 
       {rows.length > 0 && !loading ? (
         <>
           <div className="tm-dedup-toolbar">
-            <h3 className="tm-dedup-toolbar-title">重复文件 ({duplicateGroupCount})</h3>
+            <h3 className="tm-dedup-toolbar-title">
+              {t('knowledgePage.dedup.duplicateTitle', { count: duplicateGroupCount })}
+            </h3>
             <div className="tm-dedup-toolbar-actions">
               {(
                 [
-                  ['all', '所有'],
-                  ['largest', '最大'],
-                  ['oldest', '最旧'],
-                  ['smart', '智能选择'],
+                  ['all', t('knowledgePage.dedup.modeAll')],
+                  ['largest', t('knowledgePage.dedup.modeLargest')],
+                  ['oldest', t('knowledgePage.dedup.modeOldest')],
+                  ['smart', t('knowledgePage.dedup.modeSmart')],
                 ] as const
               ).map(([mode, label]) => (
                 <button
@@ -515,10 +533,10 @@ export function KnowledgeFileDedupPanel({
               ))}
               <span className="tm-dedup-toolbar-sep" />
               <button type="button" className="tm-dedup-filter-btn" onClick={handleSelectAll}>
-                全选
+                {t('knowledgePage.dedup.selectAll')}
               </button>
               <button type="button" className="tm-dedup-filter-btn" onClick={handleClearSelection}>
-                取消
+                {t('knowledgePage.dedup.clearSelection')}
               </button>
               <button
                 type="button"
@@ -526,7 +544,9 @@ export function KnowledgeFileDedupPanel({
                 disabled={loading || selectedPaths.size === 0}
                 onClick={() => void handleDeleteSelected()}
               >
-                删除{selectedPaths.size > 0 ? ` (${selectedPaths.size})` : ''}
+                {selectedPaths.size > 0
+                  ? t('knowledgePage.dedup.deleteCount', { count: selectedPaths.size })
+                  : t('knowledgePage.dedup.delete')}
               </button>
             </div>
           </div>
@@ -536,10 +556,10 @@ export function KnowledgeFileDedupPanel({
               <thead>
                 <tr>
                   <th className="tm-dedup-col-check" />
-                  <th>文件名</th>
-                  <th className="tm-dedup-col-type">文件类型</th>
-                  <th className="tm-dedup-col-size">大小</th>
-                  <th className="tm-dedup-col-actions">操作</th>
+                  <th>{t('knowledgePage.dedup.colFileName')}</th>
+                  <th className="tm-dedup-col-type">{t('knowledgePage.dedup.colFileType')}</th>
+                  <th className="tm-dedup-col-size">{t('knowledgePage.dedup.colSize')}</th>
+                  <th className="tm-dedup-col-actions">{t('knowledgePage.dedup.colActions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -561,7 +581,7 @@ export function KnowledgeFileDedupPanel({
                         <span className="tm-dedup-file-name" title={row.path}>
                           {row.fileName}
                           {row.isFirstInGroup ? (
-                            <span className="tm-dedup-file-badge">保留</span>
+                            <span className="tm-dedup-file-badge">{t('knowledgePage.dedup.keepBadge')}</span>
                           ) : null}
                         </span>
                       </div>
@@ -576,7 +596,7 @@ export function KnowledgeFileDedupPanel({
                         <button
                           type="button"
                           className="tm-dedup-icon-btn"
-                          title="打开文件"
+                          title={t('knowledgePage.dedup.openFile')}
                           onClick={() => void openPath(row.path)}
                         >
                           <IconExternalLink size={15} />
@@ -584,7 +604,7 @@ export function KnowledgeFileDedupPanel({
                         <button
                           type="button"
                           className="tm-dedup-icon-btn"
-                          title="打开所在文件夹"
+                          title={t('knowledgePage.dedup.openFolder')}
                           onClick={() => void openParentFolder(row.path)}
                         >
                           <IconFolder size={15} />
@@ -592,7 +612,7 @@ export function KnowledgeFileDedupPanel({
                         <button
                           type="button"
                           className="tm-dedup-icon-btn tm-dedup-icon-btn--danger"
-                          title="删除"
+                          title={t('knowledgePage.dedup.deleteFile')}
                           disabled={loading}
                           onClick={() => void handleDeleteSingle(row.path)}
                         >

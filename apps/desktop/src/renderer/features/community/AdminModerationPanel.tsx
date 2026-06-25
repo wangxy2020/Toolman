@@ -15,14 +15,6 @@ import { getCommunityHubHealth } from './community-api.client'
 import { formatCommunityDate } from './community-market-utils'
 import { formatBoardMessageTitle, formatNewsPreview } from './community-news-utils'
 import {
-  ADMIN_SUB_TAB_LABELS,
-  MODERATION_CATEGORY_LABELS,
-  MODERATION_REPORT_REASON_LABELS,
-  MODERATION_REPORT_RESOLVE_ACTION_LABELS,
-  MODERATION_TARGET_TYPE_LABELS,
-  ONLINE_SUB_TAB_LABELS,
-  RESOURCE_SUB_TAB_LABELS,
-  REVIEW_SUB_TAB_LABELS,
   getDefaultReportResolveAction,
   type AdminSubTab,
   type ModerationSubTab,
@@ -33,7 +25,6 @@ import {
 import {
   isCommunityFounder,
   isCommunityModerator,
-  USER_ROLE_LABELS,
 } from './community-user-utils'
 import { useCommunityModerationCategory } from './community-moderation-category-context'
 import { useCommunityAdminManagement } from './useCommunityAdminManagement'
@@ -41,6 +32,13 @@ import { useCommunityModeration } from './useCommunityModeration'
 import { useCommunityUser } from './useCommunityUser'
 import { ModerationReviewQueue } from './ModerationReviewQueue'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
+import {
+  getModerationLogActionLabel,
+  getModerationLogTargetTypeLabel,
+  getCommunityUserRoleLabel,
+} from '../../i18n/community-user-labels'
+import { getModerationCategoryLabels, getResourceSubTabLabels, getReviewSubTabLabels, getOnlineSubTabLabels, getAdminSubTabLabels, getModerationTargetTypeLabels, getModerationReportReasonLabels, getModerationReportResolveActionLabels } from '../../i18n/community-moderation-labels'
+import { useI18n } from '../../i18n/useI18n'
 
 type PendingAction =
   | {
@@ -125,19 +123,26 @@ type BlacklistEntry =
     }
 
 function isReviewSubTab(subTab: ModerationSubTab): subTab is ReviewSubTab {
-  return subTab in REVIEW_SUB_TAB_LABELS
+  return subTab === 'pending' || subTab === 'reports'
 }
 
 function isResourceSubTab(subTab: ModerationSubTab): subTab is ResourceSubTab {
-  return subTab in RESOURCE_SUB_TAB_LABELS
+  return (
+    subTab === 'messages' ||
+    subTab === 'knowledge' ||
+    subTab === 'mcp' ||
+    subTab === 'skill' ||
+    subTab === 'workflow' ||
+    subTab === 'tasks'
+  )
 }
 
 function isOnlineSubTab(subTab: ModerationSubTab): subTab is OnlineSubTab {
-  return subTab in ONLINE_SUB_TAB_LABELS
+  return subTab === 'desktop' || subTab === 'mobile'
 }
 
 function isAdminSubTab(subTab: ModerationSubTab): subTab is AdminSubTab {
-  return subTab in ADMIN_SUB_TAB_LABELS
+  return subTab === 'registeredUsers' || subTab === 'admins' || subTab === 'blacklist'
 }
 
 function filterResourcesByType(
@@ -148,6 +153,15 @@ function filterResourcesByType(
 }
 
 export function AdminModerationPanel() {
+  const { t, language } = useI18n()
+  const resourceSubTabLabels = useMemo(() => getResourceSubTabLabels(t), [t])
+  const reviewSubTabLabels = useMemo(() => getReviewSubTabLabels(t), [t])
+  const onlineSubTabLabels = useMemo(() => getOnlineSubTabLabels(t), [t])
+  const adminSubTabLabels = useMemo(() => getAdminSubTabLabels(t), [t])
+  const reportTargetLabels = useMemo(() => getModerationTargetTypeLabels(t), [t])
+  const reportReasonLabels = useMemo(() => getModerationReportReasonLabels(t), [t])
+  const reportActionLabels = useMemo(() => getModerationReportResolveActionLabels(t), [t])
+  const moderationCategoryLabels = useMemo(() => getModerationCategoryLabels(t), [t])
   const user = useCommunityUser()
   const isModerator = isCommunityModerator(user.profile?.role)
   const isFounder = isCommunityFounder(user.profile?.role)
@@ -170,7 +184,7 @@ export function AdminModerationPanel() {
       setHubHealthError(null)
     } catch (error) {
       setHubHealth(null)
-      setHubHealthError(error instanceof Error ? error.message : 'Hub 健康检查失败')
+      setHubHealthError(error instanceof Error ? error.message : t('communityPage.admin.hubHealthFailed'))
     }
   }, [])
 
@@ -245,7 +259,7 @@ export function AdminModerationPanel() {
         device.userName,
         device.deviceId,
         device.userId,
-        device.deviceKind === 'mobile' ? '移动端' : '桌面端',
+        device.deviceKind === 'mobile' ? t('communityPage.admin.mobile') : t('communityPage.admin.desktop'),
       ]
         .join(' ')
         .toLowerCase()
@@ -257,43 +271,43 @@ export function AdminModerationPanel() {
     switch (category) {
       case 'resources':
         return [
-          { key: 'messages' as const, label: RESOURCE_SUB_TAB_LABELS.messages, count: scan?.boardMessageCount ?? 0 },
-          { key: 'knowledge' as const, label: RESOURCE_SUB_TAB_LABELS.knowledge, count: scan?.onlineKnowledgeCount ?? 0 },
-          { key: 'mcp' as const, label: RESOURCE_SUB_TAB_LABELS.mcp, count: scan?.onlineMcpCount ?? 0 },
-          { key: 'skill' as const, label: RESOURCE_SUB_TAB_LABELS.skill, count: scan?.onlineSkillCount ?? 0 },
-          { key: 'workflow' as const, label: RESOURCE_SUB_TAB_LABELS.workflow, count: scan?.onlineWorkflowCount ?? 0 },
-          { key: 'tasks' as const, label: RESOURCE_SUB_TAB_LABELS.tasks, count: scan?.activeTaskCount ?? 0 },
+          { key: 'messages' as const, label: resourceSubTabLabels.messages, count: scan?.boardMessageCount ?? 0 },
+          { key: 'knowledge' as const, label: resourceSubTabLabels.knowledge, count: scan?.onlineKnowledgeCount ?? 0 },
+          { key: 'mcp' as const, label: resourceSubTabLabels.mcp, count: scan?.onlineMcpCount ?? 0 },
+          { key: 'skill' as const, label: resourceSubTabLabels.skill, count: scan?.onlineSkillCount ?? 0 },
+          { key: 'workflow' as const, label: resourceSubTabLabels.workflow, count: scan?.onlineWorkflowCount ?? 0 },
+          { key: 'tasks' as const, label: resourceSubTabLabels.tasks, count: scan?.activeTaskCount ?? 0 },
         ]
       case 'review':
         return [
-          { key: 'pending' as const, label: REVIEW_SUB_TAB_LABELS.pending, count: scan?.pendingReviewCount ?? 0 },
-          { key: 'reports' as const, label: REVIEW_SUB_TAB_LABELS.reports, count: scan?.openReportCount ?? 0 },
+          { key: 'pending' as const, label: reviewSubTabLabels.pending, count: scan?.pendingReviewCount ?? 0 },
+          { key: 'reports' as const, label: reviewSubTabLabels.reports, count: scan?.openReportCount ?? 0 },
         ]
       case 'online':
         return [
-          { key: 'desktop' as const, label: ONLINE_SUB_TAB_LABELS.desktop, count: scan?.onlineDesktopDeviceCount ?? 0 },
-          { key: 'mobile' as const, label: ONLINE_SUB_TAB_LABELS.mobile, count: scan?.onlineMobileDeviceCount ?? 0 },
+          { key: 'desktop' as const, label: onlineSubTabLabels.desktop, count: scan?.onlineDesktopDeviceCount ?? 0 },
+          { key: 'mobile' as const, label: onlineSubTabLabels.mobile, count: scan?.onlineMobileDeviceCount ?? 0 },
         ]
       case 'admin':
         return [
           {
             key: 'registeredUsers' as const,
-            label: ADMIN_SUB_TAB_LABELS.registeredUsers,
+            label: adminSubTabLabels.registeredUsers,
             count: hubHealth?.userCount ?? 0,
           },
           {
             key: 'admins' as const,
-            label: ADMIN_SUB_TAB_LABELS.admins,
+            label: adminSubTabLabels.admins,
             count: adminManagement.moderators.length,
           },
           {
             key: 'blacklist' as const,
-            label: ADMIN_SUB_TAB_LABELS.blacklist,
+            label: adminSubTabLabels.blacklist,
             count: blacklistCount,
           },
         ]
       case 'logs':
-        return [{ key: 'logs' as const, label: '日志', count: moderation.logs.length }]
+        return [{ key: 'logs' as const, label: t('communityPage.admin.logs'), count: moderation.logs.length }]
     }
   }, [
     adminManagement.moderators.length,
@@ -301,6 +315,11 @@ export function AdminModerationPanel() {
     category,
     hubHealth?.userCount,
     moderation.logs.length,
+    resourceSubTabLabels,
+    reviewSubTabLabels,
+    onlineSubTabLabels,
+    adminSubTabLabels,
+    t,
     scan,
   ])
 
@@ -342,9 +361,9 @@ export function AdminModerationPanel() {
   ])
 
   const scannedAtLabel = useMemo(() => {
-    if (!scan) return '尚未扫描'
-    return formatCommunityDate(scan.scannedAt)
-  }, [scan])
+    if (!scan) return t('communityPage.admin.neverScanned')
+    return formatCommunityDate(scan.scannedAt, language)
+  }, [language, scan, t])
 
   const errorMessages = useMemo(() => {
     const messages = [
@@ -359,22 +378,22 @@ export function AdminModerationPanel() {
   useRegisterModulePanelError('community-moderation', errorMessages[0] ?? null)
   useRegisterModulePanelStatus(
     'community-moderation-loading',
-    moderation.loading ? { tone: 'info', message: '加载管理数据…' } : null,
+    moderation.loading ? { tone: 'info', message: t('communityPage.admin.loadingData') } : null,
   )
   useRegisterModulePanelStatus(
     'community-moderation-acting',
-    moderation.acting ? { tone: 'info', message: '正在执行管理操作…' } : null,
+    moderation.acting ? { tone: 'info', message: t('communityPage.admin.acting') } : null,
   )
 
   if (!isModerator) {
     return (
       <div className="tm-community-market tm-community-user-center">
         <CommunityPanelHeader
-          title="社区管理"
-          subtitle="仅创始人或管理员可访问社区管理功能。"
+          title={t('communityPage.panels.management.title')}
+          subtitle={t('communityPage.panels.management.subtitle')}
         />
         <div className="tm-user-center-feed">
-          <div className="tm-user-center-empty">需要管理权限</div>
+          <div className="tm-user-center-empty">{t('communityPage.admin.needPermission')}</div>
         </div>
       </div>
     )
@@ -438,7 +457,9 @@ export function AdminModerationPanel() {
     }
   }
 
-  const confirmDialog = pending ? buildConfirmDialog(pending, () => setPending(null), handleConfirm) : null
+  const confirmDialog = pending
+    ? buildConfirmDialog(pending, () => setPending(null), handleConfirm, t, reportActionLabels)
+    : null
 
   const profileRole = user.profile?.role
 
@@ -446,16 +467,18 @@ export function AdminModerationPanel() {
     <div className="tm-community-market tm-community-user-center">
       <div className="tm-user-center-overview">
         <CommunityPanelHeader
-          title="社区管理"
-          subtitle={isFounder ? '创始人控制台' : '管理员控制台'}
+          title={t('communityPage.panels.management.title')}
+          subtitle={isFounder ? t('communityPage.admin.founderConsole') : t('communityPage.admin.adminConsole')}
           titleExtra={
             profileRole ? (
-              <span className="tm-user-center-role-badge">{USER_ROLE_LABELS[profileRole]}</span>
+              <span className="tm-user-center-role-badge">
+                {getCommunityUserRoleLabel(profileRole, t)}
+              </span>
             ) : null
           }
           actions={
             <CommunityPanelRefreshButton
-              title="立即扫描"
+              title={t('communityPage.admin.scanNow')}
               loading={moderation.loading}
               disabled={moderation.loading || moderation.acting}
               onClick={handleRefresh}
@@ -467,7 +490,7 @@ export function AdminModerationPanel() {
           className="tm-user-center-stat-grid"
           style={{ ['--tm-stat-cols' as string]: categoryStatCards.length }}
           role="tablist"
-          aria-label={`${MODERATION_CATEGORY_LABELS[category]}数据分区`}
+          aria-label={`${moderationCategoryLabels[category]}${t('communityPage.admin.dataSectionSuffix')}`}
         >
           {categoryStatCards.map((item) => {
             const active = subTab === item.key
@@ -495,17 +518,17 @@ export function AdminModerationPanel() {
 
       <div className="tm-user-center-feed">
         <div className="tm-user-center-feed-meta">
-          <span>当前列表共 {activeListCount} 条记录</span>
+          <span>{t('communityPage.admin.listCount', { count: activeListCount })}</span>
           <span>
-            最近扫描 {scannedAtLabel}
-            {moderation.loading ? '（扫描中…）' : ''}
+            {t('communityPage.admin.lastScan', { time: scannedAtLabel })}
+            {moderation.loading ? t('communityPage.admin.scanning') : ''}
           </span>
         </div>
 
         <div className="tm-user-center-feed-body">
         {category === 'resources' && subTab === 'messages' ? (
           <ModerationList
-            empty="暂无留言"
+            empty={t('communityPage.admin.emptyMessages')}
             items={scan?.recentMessages ?? []}
             renderItem={(message) => (
               <div key={message.id} className="tm-community-moderation-row">
@@ -514,7 +537,7 @@ export function AdminModerationPanel() {
                     {formatBoardMessageTitle(message.body)}
                   </div>
                   <div className="tm-community-moderation-row-meta">
-                    {message.authorName} · {formatCommunityDate(message.createdAt)}
+                    {message.authorName} · {formatCommunityDate(message.createdAt, language)}
                   </div>
                   <div className="tm-community-moderation-row-desc">{formatNewsPreview(message.body)}</div>
                 </div>
@@ -531,7 +554,7 @@ export function AdminModerationPanel() {
                       })
                     }
                   >
-                    删除
+                    {t('communityPage.admin.delete')}
                   </button>
                   <button
                     type="button"
@@ -545,7 +568,7 @@ export function AdminModerationPanel() {
                       })
                     }
                   >
-                    封禁发布者
+                    {t('communityPage.admin.banPublisher')}
                   </button>
                 </div>
               </div>
@@ -555,7 +578,7 @@ export function AdminModerationPanel() {
 
         {category === 'resources' && isResourceSubTab(subTab) && subTab !== 'tasks' && subTab !== 'messages' ? (
           <ModerationList
-            empty={`暂无在线${RESOURCE_SUB_TAB_LABELS[subTab]}`}
+            empty={t('communityPage.admin.emptyOnline', { type: resourceSubTabLabels[subTab] })}
             items={filterResourcesByType(scan?.onlineResources ?? [], subTab)}
             renderItem={(resource) => (
               <div key={resource.id} className="tm-community-moderation-row">
@@ -563,7 +586,7 @@ export function AdminModerationPanel() {
                   <div className="tm-community-moderation-row-title">{resource.title}</div>
                   <div className="tm-community-moderation-row-meta">
                     {resource.resourceType} · {resource.status} · {resource.authorName} ·{' '}
-                    {formatCommunityDate(resource.createdAt)}
+                    {formatCommunityDate(resource.createdAt, language)}
                   </div>
                 </div>
                 <div className="tm-community-moderation-row-actions">
@@ -579,7 +602,7 @@ export function AdminModerationPanel() {
                       })
                     }
                   >
-                    下架
+                    {t('communityPage.admin.delist')}
                   </button>
                   <button
                     type="button"
@@ -593,7 +616,7 @@ export function AdminModerationPanel() {
                       })
                     }
                   >
-                    封禁发布者
+                    {t('communityPage.admin.banPublisher')}
                   </button>
                 </div>
               </div>
@@ -641,7 +664,7 @@ export function AdminModerationPanel() {
 
         {category === 'review' && subTab === 'reports' ? (
           <ModerationList
-            empty="暂无待处理举报"
+            empty={t('communityPage.admin.emptyReports')}
             items={scan?.openReports ?? []}
             renderItem={(report) => {
               const defaultAction = getDefaultReportResolveAction(report.targetType)
@@ -649,11 +672,13 @@ export function AdminModerationPanel() {
                 <div key={report.id} className="tm-community-moderation-row">
                   <div className="tm-community-moderation-row-main">
                     <div className="tm-community-moderation-row-title">
-                      {MODERATION_TARGET_TYPE_LABELS[report.targetType]} ·{' '}
-                      {MODERATION_REPORT_REASON_LABELS[report.reason]}
+                      {reportTargetLabels[report.targetType]} · {reportReasonLabels[report.reason]}
                     </div>
                     <div className="tm-community-moderation-row-meta">
-                      目标 ID {report.targetId} · {formatCommunityDate(report.createdAt)}
+                      {t('communityPage.admin.targetId', {
+                        id: report.targetId,
+                        time: formatCommunityDate(report.createdAt, language),
+                      })}
                     </div>
                     {report.description.trim() ? (
                       <div className="tm-community-moderation-row-meta">{report.description}</div>
@@ -672,7 +697,7 @@ export function AdminModerationPanel() {
                         })
                       }
                     >
-                      {MODERATION_REPORT_RESOLVE_ACTION_LABELS[defaultAction]}
+                      {reportActionLabels[defaultAction]}
                     </button>
                     <button
                       type="button"
@@ -686,7 +711,7 @@ export function AdminModerationPanel() {
                         })
                       }
                     >
-                      驳回
+                      {t('communityPage.admin.reject')}
                     </button>
                   </div>
                 </div>
@@ -697,14 +722,14 @@ export function AdminModerationPanel() {
 
         {category === 'resources' && subTab === 'tasks' ? (
           <ModerationList
-            empty="暂无进行中任务"
+            empty={t('communityPage.admin.emptyTasks')}
             items={scan?.activeTasks ?? []}
             renderItem={(task) => (
               <div key={task.id} className="tm-community-moderation-row">
                 <div className="tm-community-moderation-row-main">
                   <div className="tm-community-moderation-row-title">{task.title}</div>
                   <div className="tm-community-moderation-row-meta">
-                    {task.status} · {task.publisherName} · {formatCommunityDate(task.createdAt)}
+                    {task.status} · {task.publisherName} · {formatCommunityDate(task.createdAt, language)}
                   </div>
                 </div>
                 <div className="tm-community-moderation-row-actions">
@@ -720,7 +745,7 @@ export function AdminModerationPanel() {
                       })
                     }
                   >
-                    取消任务
+                    {t('communityPage.admin.cancelTask')}
                   </button>
                   <button
                     type="button"
@@ -734,7 +759,7 @@ export function AdminModerationPanel() {
                       })
                     }
                   >
-                    封禁发布者
+                    {t('communityPage.admin.banPublisher')}
                   </button>
                 </div>
               </div>
@@ -744,14 +769,14 @@ export function AdminModerationPanel() {
 
         {category === 'admin' && subTab === 'blacklist' ? (
           blacklistEntries.length === 0 ? (
-            <div className="tm-user-center-empty">暂无黑名单记录</div>
+            <div className="tm-user-center-empty">{t('communityPage.admin.emptyBlacklist')}</div>
           ) : (
             <div className="tm-community-moderation-table-wrap">
               <div className="tm-community-moderation-table-head">
-                <span>序号</span>
-                <span>用户名</span>
-                <span>设备 ID</span>
-                <span>操作</span>
+                <span>{t('communityPage.admin.columns.index')}</span>
+                <span>{t('communityPage.admin.columns.userName')}</span>
+                <span>{t('communityPage.admin.columns.deviceId')}</span>
+                <span>{t('communityPage.admin.columns.action')}</span>
               </div>
               <div className="tm-community-moderation-table-body">
                 {blacklistEntries.map((entry, index) => (
@@ -787,7 +812,7 @@ export function AdminModerationPanel() {
                           )
                         }
                       >
-                        解禁
+                        {t('communityPage.admin.unban')}
                       </button>
                     </div>
                   </div>
@@ -803,7 +828,7 @@ export function AdminModerationPanel() {
               <input
                 type="search"
                 className="tm-community-moderation-admin-search-input"
-                placeholder="搜索设备名称、设备 ID 或用户名"
+                placeholder={t('communityPage.admin.searchDevicesPlaceholder')}
                 value={deviceSearch}
                 onChange={(event) => setDeviceSearch(event.target.value)}
               />
@@ -811,10 +836,10 @@ export function AdminModerationPanel() {
             <ModerationList
               empty={
                 deviceSearch.trim()
-                  ? '未找到匹配设备或用户'
+                  ? t('communityPage.admin.noMatchDevices')
                   : subTab === 'mobile'
-                    ? '暂无在线移动端设备'
-                    : '暂无在线桌面端设备'
+                    ? t('communityPage.admin.emptyDevices', { kind: t('communityPage.admin.mobile') })
+                    : t('communityPage.admin.emptyDevices', { kind: t('communityPage.admin.desktop') })
               }
               items={filteredDevicesByKind}
               renderItem={(device) => (
@@ -822,10 +847,18 @@ export function AdminModerationPanel() {
                   <div className="tm-community-moderation-row-main">
                     <div className="tm-community-moderation-row-title">{device.deviceName}</div>
                     <div className="tm-community-moderation-row-meta">
-                      {device.deviceKind === 'mobile' ? '移动端' : '桌面端'} · {device.userName} ·{' '}
-                      最近活跃 {formatCommunityDate(device.lastSeenAt)}
+                      {t('communityPage.admin.deviceMeta', {
+                        kind:
+                          device.deviceKind === 'mobile'
+                            ? t('communityPage.admin.mobile')
+                            : t('communityPage.admin.desktop'),
+                        userName: device.userName,
+                        time: formatCommunityDate(device.lastSeenAt, language),
+                      })}
                     </div>
-                    <div className="tm-community-moderation-row-desc">设备 ID：{device.deviceId}</div>
+                    <div className="tm-community-moderation-row-desc">
+                      {t('communityPage.admin.deviceIdLabel', { id: device.deviceId })}
+                    </div>
                   </div>
                   <div className="tm-community-moderation-row-actions">
                     <button
@@ -842,7 +875,7 @@ export function AdminModerationPanel() {
                         })
                       }
                     >
-                      封禁设备
+                      {t('communityPage.admin.banDevice')}
                     </button>
                   </div>
                 </div>
@@ -854,15 +887,21 @@ export function AdminModerationPanel() {
         {category === 'admin' && subTab === 'registeredUsers' ? (
           <div className="tm-user-center-empty">
             {hubHealthError
-              ? `无法加载注册用户统计：${hubHealthError}`
-              : `社区共有 ${hubHealth?.userCount ?? '—'} 位注册用户`}
+              ? t('communityPage.admin.registeredUsersError', { error: hubHealthError })
+              : t('communityPage.admin.registeredUsers', {
+                  count: hubHealth?.userCount ?? '—',
+                })}
           </div>
         ) : null}
 
         {category === 'admin' && subTab === 'admins' && isModerator ? (
           <div className="tm-community-moderation-admins">
             <ModerationList
-              empty={adminManagement.loading ? '加载中…' : '暂无管理员'}
+              empty={
+                adminManagement.loading
+                  ? t('communityPage.admin.loadingAdmins')
+                  : t('communityPage.admin.emptyAdmins')
+              }
               items={adminManagement.moderators}
               renderItem={(moderator) => (
                 <div key={moderator.id} className="tm-community-moderation-row">
@@ -871,12 +910,13 @@ export function AdminModerationPanel() {
                       {moderator.displayName}
                     </div>
                     <div className="tm-community-moderation-row-meta">
-                      {USER_ROLE_LABELS[moderator.role]} · {formatCommunityDate(moderator.createdAt)}
+                      {getCommunityUserRoleLabel(moderator.role, t)} ·{' '}
+                      {formatCommunityDate(moderator.createdAt, language)}
                     </div>
                   </div>
                   <div className="tm-community-moderation-row-actions">
                     {moderator.role === 'founder' ? (
-                      <span className="tm-community-moderation-scan-meta">创始人</span>
+                      <span className="tm-community-moderation-scan-meta">{t('communityPage.admin.founder')}</span>
                     ) : isFounder ? (
                       <button
                         type="button"
@@ -890,10 +930,10 @@ export function AdminModerationPanel() {
                           })
                         }
                       >
-                        撤销管理员
+                        {t('communityPage.admin.revokeAdmin')}
                       </button>
                     ) : (
-                      <span className="tm-community-moderation-scan-meta">管理员</span>
+                      <span className="tm-community-moderation-scan-meta">{t('communityPage.admin.admin')}</span>
                     )}
                   </div>
                 </div>
@@ -902,14 +942,12 @@ export function AdminModerationPanel() {
 
             {isFounder ? (
               <>
-                <p className="tm-community-moderation-subtitle">
-                  搜索社区用户并任命为管理员。管理员可协助处置违规内容，但无法任命其他管理员。
-                </p>
+                <p className="tm-community-moderation-subtitle">{t('communityPage.admin.appointHint')}</p>
                 <div className="tm-community-moderation-admin-search">
                   <input
                     type="search"
                     className="tm-community-moderation-admin-search-input"
-                    placeholder="搜索用户名称或 ID 以任命管理员"
+                    placeholder={t('communityPage.admin.searchAdminPlaceholder')}
                     value={adminSearch}
                     onChange={(event) => {
                       const value = event.target.value
@@ -918,12 +956,16 @@ export function AdminModerationPanel() {
                     }}
                   />
                   {adminManagement.searching ? (
-                    <span className="tm-community-moderation-scan-meta">搜索中…</span>
+                    <span className="tm-community-moderation-scan-meta">{t('communityPage.admin.searching')}</span>
                   ) : null}
                 </div>
 
                 <ModerationList
-                  empty={adminSearch.trim() ? '未找到匹配用户' : '输入关键词搜索用户'}
+                  empty={
+                    adminSearch.trim()
+                      ? t('communityPage.admin.noMatchUsers')
+                      : t('communityPage.admin.searchUsersEmpty')
+                  }
                   items={adminSearch.trim() ? adminManagement.searchResults : []}
                   renderItem={(candidate) => (
                     <div key={candidate.id} className="tm-community-moderation-row">
@@ -932,12 +974,12 @@ export function AdminModerationPanel() {
                           {candidate.displayName}
                         </div>
                         <div className="tm-community-moderation-row-meta">
-                          {USER_ROLE_LABELS[candidate.role]} · {candidate.id.slice(0, 8)}…
+                          {getCommunityUserRoleLabel(candidate.role, t)} · {candidate.id.slice(0, 8)}…
                         </div>
                       </div>
                       <div className="tm-community-moderation-row-actions">
                         {candidate.role === 'admin' || candidate.role === 'founder' ? (
-                          <span className="tm-community-moderation-scan-meta">已是管理角色</span>
+                          <span className="tm-community-moderation-scan-meta">{t('communityPage.admin.alreadyAdmin')}</span>
                         ) : (
                           <button
                             type="button"
@@ -951,7 +993,7 @@ export function AdminModerationPanel() {
                               })
                             }
                           >
-                            任命为管理员
+                            {t('communityPage.admin.appointAdmin')}
                           </button>
                         )}
                       </div>
@@ -965,15 +1007,17 @@ export function AdminModerationPanel() {
 
         {category === 'logs' ? (
           <ModerationList
-            empty="暂无处置日志"
+            empty={t('communityPage.admin.emptyLogs')}
             items={moderation.logs}
             renderItem={(log) => (
               <div key={log.id} className="tm-community-moderation-row">
                 <div className="tm-community-moderation-row-main">
-                  <div className="tm-community-moderation-row-title">{log.action}</div>
+                  <div className="tm-community-moderation-row-title">
+                    {getModerationLogActionLabel(log.action, t)}
+                  </div>
                   <div className="tm-community-moderation-row-meta">
-                    {log.targetType} · {log.targetId.slice(0, 8)}… ·{' '}
-                    {formatCommunityDate(log.createdAt)}
+                    {getModerationLogTargetTypeLabel(log.targetType, t)} · {log.targetId.slice(0, 8)}… ·{' '}
+                    {formatCommunityDate(log.createdAt, language)}
                   </div>
                   {log.reason ? (
                     <p className="tm-community-moderation-row-desc">{log.reason}</p>
@@ -1011,18 +1055,28 @@ function buildConfirmDialog(
   pending: PendingAction,
   onCancel: () => void,
   onConfirm: () => void,
+  t: ReturnType<typeof useI18n>['t'],
+  reportActionLabels: ReturnType<typeof getModerationReportResolveActionLabels>,
 ) {
   switch (pending.kind) {
     case 'suspend-resource':
       return (
         <ConfirmDialog
-          title={pending.reviewReject ? '拒绝审核' : '下架资源'}
+          title={
+            pending.reviewReject
+              ? t('communityPage.admin.confirms.rejectReviewTitle')
+              : t('communityPage.admin.confirms.delistResourceTitle')
+          }
           message={
             pending.reviewReject
-              ? `确定拒绝「${pending.title}」的审核申请吗？发布者可在「我的」中修改后重新提交。`
-              : `确定下架「${pending.title}」吗？资源将从市场移除。`
+              ? t('communityPage.admin.confirms.rejectReviewResourceMessage', { title: pending.title })
+              : t('communityPage.admin.confirms.delistResourceMessage', { title: pending.title })
           }
-          confirmLabel={pending.reviewReject ? '拒绝' : '下架'}
+          confirmLabel={
+            pending.reviewReject
+              ? t('communityPage.admin.confirms.reject')
+              : t('communityPage.admin.delist')
+          }
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1031,9 +1085,9 @@ function buildConfirmDialog(
     case 'ban-user':
       return (
         <ConfirmDialog
-          title="封禁用户"
-          message={`确定封禁用户「${pending.label}」7 天吗？封禁期间无法发布资源、留言或任务。`}
-          confirmLabel="封禁"
+          title={t('communityPage.admin.confirms.banUserTitle')}
+          message={t('communityPage.admin.confirms.banUserMessage', { label: pending.label })}
+          confirmLabel={t('communityPage.admin.confirms.ban')}
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1042,9 +1096,12 @@ function buildConfirmDialog(
     case 'ban-device':
       return (
         <ConfirmDialog
-          title="封禁设备"
-          message={`确定封禁设备「${pending.deviceName}」（${pending.userName}）7 天吗？该设备将无法继续上报在线状态。`}
-          confirmLabel="封禁"
+          title={t('communityPage.admin.confirms.banDeviceTitle')}
+          message={t('communityPage.admin.confirms.banDeviceMessage', {
+            deviceName: pending.deviceName,
+            userName: pending.userName,
+          })}
+          confirmLabel={t('communityPage.admin.confirms.ban')}
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1053,9 +1110,11 @@ function buildConfirmDialog(
     case 'resolve-report':
       return (
         <ConfirmDialog
-          title="处理举报"
-          message={`确定按「${MODERATION_REPORT_RESOLVE_ACTION_LABELS[pending.action]}」处理该举报吗？`}
-          confirmLabel="确认"
+          title={t('communityPage.admin.confirms.resolveReportTitle')}
+          message={t('communityPage.admin.confirms.resolveReportMessage', {
+            action: reportActionLabels[pending.action],
+          })}
+          confirmLabel={t('communityPage.admin.confirm')}
           danger={pending.action !== 'dismiss_report'}
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1064,9 +1123,9 @@ function buildConfirmDialog(
     case 'delete-message':
       return (
         <ConfirmDialog
-          title="删除留言"
-          message={`确定删除留言「${pending.preview}」吗？`}
-          confirmLabel="删除"
+          title={t('communityPage.admin.confirms.deleteMessageTitle')}
+          message={t('communityPage.admin.confirms.deleteMessageMessage', { preview: pending.preview })}
+          confirmLabel={t('communityPage.admin.delete')}
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1075,13 +1134,21 @@ function buildConfirmDialog(
     case 'cancel-task':
       return (
         <ConfirmDialog
-          title={pending.reviewReject ? '拒绝审核' : '取消任务'}
+          title={
+            pending.reviewReject
+              ? t('communityPage.admin.confirms.rejectReviewTitle')
+              : t('communityPage.admin.confirms.cancelTaskTitle')
+          }
           message={
             pending.reviewReject
-              ? `确定拒绝任务「${pending.title}」的审核申请吗？发布者可在「我的」中修改后重新提交。`
-              : `确定取消任务「${pending.title}」吗？`
+              ? t('communityPage.admin.confirms.rejectReviewTaskMessage', { title: pending.title })
+              : t('communityPage.admin.confirms.cancelTaskMessage', { title: pending.title })
           }
-          confirmLabel={pending.reviewReject ? '拒绝' : '取消任务'}
+          confirmLabel={
+            pending.reviewReject
+              ? t('communityPage.admin.confirms.reject')
+              : t('communityPage.admin.cancelTask')
+          }
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1090,9 +1157,9 @@ function buildConfirmDialog(
     case 'approve-resource':
       return (
         <ConfirmDialog
-          title="通过审核"
-          message={`确定通过资源「${pending.title}」并公开发布吗？`}
-          confirmLabel="通过"
+          title={t('communityPage.admin.confirms.approveResourceTitle')}
+          message={t('communityPage.admin.confirms.approveResourceMessage', { title: pending.title })}
+          confirmLabel={t('communityPage.admin.confirms.approve')}
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
         />
@@ -1100,9 +1167,9 @@ function buildConfirmDialog(
     case 'approve-task':
       return (
         <ConfirmDialog
-          title="通过任务审核"
-          message={`确定通过任务「${pending.title}」并向社区开放吗？`}
-          confirmLabel="通过"
+          title={t('communityPage.admin.confirms.approveTaskTitle')}
+          message={t('communityPage.admin.confirms.approveTaskMessage', { title: pending.title })}
+          confirmLabel={t('communityPage.admin.confirms.approve')}
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
         />
@@ -1110,9 +1177,9 @@ function buildConfirmDialog(
     case 'appoint-admin':
       return (
         <ConfirmDialog
-          title="任命管理员"
-          message={`确定任命「${pending.label}」为社区管理员吗？管理员可扫描内容并处置违规资源。`}
-          confirmLabel="任命"
+          title={t('communityPage.admin.confirms.appointAdminTitle')}
+          message={t('communityPage.admin.confirms.appointAdminMessage', { label: pending.label })}
+          confirmLabel={t('communityPage.admin.confirms.appoint')}
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
         />
@@ -1120,9 +1187,9 @@ function buildConfirmDialog(
     case 'revoke-admin':
       return (
         <ConfirmDialog
-          title="撤销管理员"
-          message={`确定撤销「${pending.label}」的管理员权限吗？`}
-          confirmLabel="撤销"
+          title={t('communityPage.admin.confirms.revokeAdminTitle')}
+          message={t('communityPage.admin.confirms.revokeAdminMessage', { label: pending.label })}
+          confirmLabel={t('communityPage.admin.confirms.revoke')}
           danger
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
@@ -1131,9 +1198,9 @@ function buildConfirmDialog(
     case 'unban-user':
       return (
         <ConfirmDialog
-          title="解禁用户"
-          message={`确定解除用户「${pending.label}」的封禁吗？`}
-          confirmLabel="解禁"
+          title={t('communityPage.admin.confirms.unbanUserTitle')}
+          message={t('communityPage.admin.confirms.unbanUserMessage', { label: pending.label })}
+          confirmLabel={t('communityPage.admin.unban')}
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
         />
@@ -1141,9 +1208,9 @@ function buildConfirmDialog(
     case 'unban-device':
       return (
         <ConfirmDialog
-          title="解禁设备"
-          message={`确定解除设备「${pending.label}」的封禁吗？`}
-          confirmLabel="解禁"
+          title={t('communityPage.admin.confirms.unbanDeviceTitle')}
+          message={t('communityPage.admin.confirms.unbanDeviceMessage', { label: pending.label })}
+          confirmLabel={t('communityPage.admin.unban')}
           onCancel={onCancel}
           onConfirm={() => void onConfirm()}
         />

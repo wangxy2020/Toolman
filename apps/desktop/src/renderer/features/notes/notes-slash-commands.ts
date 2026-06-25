@@ -40,11 +40,14 @@ export const NOTES_SLASH_COMMANDS: NotesSlashCommandItem[] = [
   { id: 'divider', command: '/分隔', description: '分隔线', action: 'divider' },
 ]
 
-export function filterNotesSlashCommands(query: string): NotesSlashCommandItem[] {
+export function filterNotesSlashCommands(
+  query: string,
+  commands: NotesSlashCommandItem[],
+): NotesSlashCommandItem[] {
   const normalized = query.trim().toLowerCase()
-  if (!normalized.startsWith('/')) return NOTES_SLASH_COMMANDS
-  if (normalized === '/') return NOTES_SLASH_COMMANDS
-  return NOTES_SLASH_COMMANDS.filter(
+  if (!normalized.startsWith('/')) return commands
+  if (normalized === '/') return commands
+  return commands.filter(
     (item) =>
       item.command.toLowerCase().startsWith(normalized) ||
       item.description.toLowerCase().includes(normalized.slice(1)),

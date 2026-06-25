@@ -11,7 +11,19 @@ export function cycleAppTheme(current: AppTheme): AppTheme {
   return APP_THEME_ORDER[nextIndex]!
 }
 
-export function appThemeLabel(theme: AppTheme): string {
+export function appThemeLabel(theme: AppTheme, t?: (key: string) => string): string {
+  if (t) {
+    switch (theme) {
+      case 'light':
+        return t('theme.light')
+      case 'dark':
+        return t('theme.dark')
+      case 'system':
+        return t('theme.system')
+      default:
+        return theme
+    }
+  }
   switch (theme) {
     case 'light':
       return '浅色'
@@ -107,6 +119,7 @@ export function loadAppSettings(): AppSettings {
     return {
       ...DEFAULT_APP_SETTINGS,
       ...parsed,
+      language: parsed.language === 'en' ? 'en' : 'zh-CN',
       navBarPosition: parsed.navBarPosition === 'top' ? 'left' : (parsed.navBarPosition ?? 'left'),
       sidebarVisibleModules: normalized.visible,
       sidebarHiddenModules: normalized.hidden,

@@ -6,6 +6,7 @@ import {
   cnPrimaryActionLabel,
   type useUserCenterAuth,
 } from './useUserCenterAuth'
+import { useI18n } from '../../i18n/useI18n'
 
 function TextInput({
   type = 'text',
@@ -47,6 +48,7 @@ interface UserCenterAuthViewsProps {
 }
 
 export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuthViewsProps) {
+  const { t } = useI18n()
   const {
     profileLoading,
     providerConfigLoading,
@@ -87,7 +89,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
   } = auth
 
   if (profileLoading || providerConfigLoading) {
-    return <p className="tm-user-center-loading">正在加载登录配置…</p>
+    return <p className="tm-user-center-loading">{t('user.auth.loadingConfig')}</p>
   }
 
   const renderCodeRow = () => (
@@ -97,7 +99,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           className="tm-user-center-otp-input"
           type="text"
           inputMode="numeric"
-          placeholder="请输入验证码"
+          placeholder={t('user.auth.placeholderCode')}
           value={smsCode}
           disabled={authBusy}
           onChange={(e) => setSmsCode(e.target.value)}
@@ -108,7 +110,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           disabled={authBusy || sendingCode || !phoneConfigured || !account.trim() || smsCooldown > 0}
           onClick={() => void sendVerificationCode()}
         >
-          {sendingCode ? '发送中…' : smsCooldown > 0 ? `${smsCooldown}s` : '获取验证码'}
+          {sendingCode ? t('user.auth.sendingCode') : smsCooldown > 0 ? `${smsCooldown}s` : t('user.auth.getCode')}
         </button>
       </div>
     </div>
@@ -122,7 +124,9 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
         <TextInput
           type="password"
           autoComplete={newPasswordOnly || view === 'register' ? 'new-password' : 'current-password'}
-          placeholder={newPasswordOnly ? '请输入新密码' : '请输入密码'}
+          placeholder={
+            newPasswordOnly ? t('user.auth.placeholderNewPassword') : t('user.auth.placeholderPassword')
+          }
           value={password}
           disabled={authBusy || !phoneConfigured}
           onChange={setPassword}
@@ -131,7 +135,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           <TextInput
             type="password"
             autoComplete="new-password"
-            placeholder="请再次输入密码"
+            placeholder={t('user.auth.placeholderConfirmPassword')}
             value={confirmPassword}
             disabled={authBusy || !phoneConfigured}
             onChange={setConfirmPassword}
@@ -175,7 +179,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           <TextInput
             type="email"
             autoComplete="email"
-            placeholder="请输入注册邮箱"
+            placeholder={t('user.auth.placeholderRegisterEmail')}
             value={email}
             disabled={authBusy || !firebaseConfigured}
             onChange={setEmail}
@@ -184,7 +188,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
             <p className="tm-auth-entry-section-desc tm-auth-entry-section-desc--inline">{devHint}</p>
           ) : (
             <p className="tm-auth-entry-section-desc">
-              我们将向该邮箱发送 Firebase 密码重置链接，请在邮件中完成重置。
+              {t('user.auth.firebaseResetHint')}
             </p>
           )}
           <button
@@ -193,7 +197,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
             disabled={authBusy || !firebaseConfigured || !email.trim()}
             onClick={() => void submitResetPassword()}
           >
-            发送重置邮件
+            {t('user.auth.sendResetEmail')}
           </button>
         </div>
       )
@@ -205,7 +209,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           <TextInput
             type="email"
             autoComplete="email"
-            placeholder="请输入邮箱"
+            placeholder={t('user.auth.placeholderEmail')}
             value={email}
             disabled={authBusy || !firebaseConfigured}
             onChange={setEmail}
@@ -224,13 +228,13 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           }
           onClick={() => {
             if (isRegister && password !== confirmPassword) {
-              auth.setError('两次输入的密码不一致')
+              auth.setError(t('user.auth.passwordMismatch'))
               return
             }
             void submit('firebase_email')
           }}
         >
-          {isRegister ? '邮箱注册' : '邮箱登录'}
+          {isRegister ? t('user.auth.registerEmail') : t('user.auth.loginEmail')}
         </button>,
       )
     }
@@ -238,7 +242,10 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
     body = (
       <>
         <p className="tm-auth-entry-section-desc">
-          微信账户「{mergeState.wechatLabel}」需要与本机手机号账户（{mergeState.maskedPhone}）合并。
+          {t('user.auth.mergeDescription', {
+            wechat: mergeState.wechatLabel,
+            phone: mergeState.maskedPhone,
+          })}
         </p>
         <div className="tm-auth-entry-form">
           <div className="tm-auth-entry-phone-field">
@@ -259,7 +266,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
             disabled={authBusy || !account.trim() || !smsCode.trim()}
             onClick={() => void submit('tencent_wechat')}
           >
-            验证并合并登录
+            {t('user.auth.mergeConfirm')}
           </button>
           <button
             type="button"
@@ -272,7 +279,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
               setOtpChannel(null)
             }}
           >
-            取消合并
+            {t('user.auth.mergeCancel')}
           </button>
         </div>
       </>
@@ -286,11 +293,11 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
     const otpHint =
       otpChannel && view !== 'forgot_password' ? (
         <p className="tm-auth-entry-section-desc tm-auth-entry-section-desc--inline">
-          验证码已发送至{otpChannel === 'email' ? '邮箱' : '手机'}，{otpExpiresMinutes} 分钟内有效。
+          {t('user.auth.otpSent', { minutes: otpExpiresMinutes })}
         </p>
       ) : view === 'forgot_password' && otpChannel ? (
         <p className="tm-auth-entry-section-desc tm-auth-entry-section-desc--inline">
-          验证码已发送至{cnAccountIsEmail ? '邮箱' : '手机'}，{otpExpiresMinutes} 分钟内有效。
+          {t('user.auth.otpSent', { minutes: otpExpiresMinutes })}
         </p>
       ) : null
 
@@ -302,7 +309,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           <TextInput
             autoComplete="username"
             inputMode="email"
-            placeholder="请输入注册手机或邮箱"
+            placeholder={t('user.auth.placeholderRegisterPhone')}
             value={account}
             disabled={authBusy || !phoneConfigured}
             onChange={(value) => {
@@ -321,7 +328,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
             disabled={authBusy || !phoneConfigured || !resetReady}
             onClick={() => void submitResetPassword()}
           >
-            重置密码
+            {t('user.auth.resetPassword')}
           </button>
         </div>
       )
@@ -333,7 +340,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           <TextInput
             autoComplete="username"
             inputMode="email"
-            placeholder="请输入手机或邮箱"
+            placeholder={t('user.auth.placeholderPhoneOrEmail')}
             value={account}
             disabled={authBusy || !phoneConfigured}
             onChange={(value) => {
@@ -353,13 +360,13 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           disabled={authBusy || !phoneConfigured || !registerReady}
           onClick={() => {
             if (password !== confirmPassword) {
-              auth.setError('两次输入的密码不一致')
+              auth.setError(t('user.auth.passwordMismatch'))
               return
             }
             void submit('tencent_phone')
           }}
         >
-          {cnPrimaryActionLabel(view, account)}
+          {cnPrimaryActionLabel(view, account, t)}
         </button>,
       )
     } else {
@@ -370,7 +377,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           <TextInput
             autoComplete="username"
             inputMode="email"
-            placeholder="请输入手机或邮箱"
+            placeholder={t('user.auth.placeholderPhoneOrEmail')}
             value={account}
             disabled={authBusy || !phoneConfigured}
             onChange={(value) => {
@@ -405,12 +412,12 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           }
           onClick={() => void submit('tencent_phone')}
         >
-          {cnPrimaryActionLabel(view, account)}
+          {cnPrimaryActionLabel(view, account, t)}
         </button>,
       )
     }
   } else {
-    body = <p className="tm-auth-entry-section-desc">当前构建不支持所选登录区域。</p>
+    body = <p className="tm-auth-entry-section-desc">{t('user.auth.unsupportedRegion')}</p>
   }
 
   const footerLinks = () => {
@@ -423,7 +430,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
             disabled={authBusy}
             onClick={() => onSwitchView('register')}
           >
-            没有账号？<span>立即注册</span>
+            {t('user.auth.footerNoAccount')}<span>{t('user.auth.registerNow')}</span>
           </button>
           {showCnAuth && cnAccountIsEmail ? (
             <button
@@ -436,7 +443,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
                 onSwitchView('forgot_password')
               }}
             >
-              忘记密码？
+              {t('user.auth.forgotPassword')}
             </button>
           ) : showIntlAuth || region === 'intl' ? (
             <button
@@ -449,7 +456,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
                 onSwitchView('forgot_password')
               }}
             >
-              忘记密码？
+              {t('user.auth.forgotPassword')}
             </button>
           ) : null}
         </>
@@ -463,7 +470,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
           disabled={authBusy}
           onClick={() => onSwitchView('login')}
         >
-          已有账号？<span>立即登录</span>
+          {t('user.auth.footerHasAccount')}<span>{t('user.auth.loginNow')}</span>
         </button>
       )
     }
@@ -478,7 +485,7 @@ export function UserCenterAuthViews({ view, auth, onSwitchView }: UserCenterAuth
             onSwitchView('login')
           }}
         >
-          返回登录
+          {t('user.auth.backToLogin')}
         </button>
       )
     }

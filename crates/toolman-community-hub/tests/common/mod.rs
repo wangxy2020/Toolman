@@ -8,15 +8,18 @@ use sqlx::SqlitePool;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use toolman_community_hub::api::{router, HEADER_COMMUNITY_USER_ID};
+use toolman_community_hub::api::router;
 use toolman_community_hub::config::HubConfig;
 use toolman_community_hub::db::init_pool;
 use toolman_community_hub::state::AppState;
+
+const TEST_HUB_JWT_SECRET: &str = "toolman-integration-test-jwt-secret";
 
 pub struct TestHarness {
     pub app: Router,
     pub pool: SqlitePool,
     pub data_dir: PathBuf,
+    jwt_secret: String,
 }
 
 impl TestHarness {
@@ -25,7 +28,10 @@ impl TestHarness {
         std::fs::create_dir_all(&data_dir).expect("data dir");
         let db_path = data_dir.join("community.db");
         let pool = init_pool(&db_path).await.expect("init pool");
-        let config = HubConfig::with_data_dir(data_dir.clone());
+        let config = HubConfig {
+            jwt_secret: Some(TEST_HUB_JWT_SECRET.to_string()),
+            ..HubConfig::with_data_dir(data_dir.clone())
+        };
         config.bootstrap().expect("bootstrap");
         let state = AppState::new(config, pool.clone());
         let app = router(state);
@@ -33,7 +39,12 @@ impl TestHarness {
             app,
             pool,
             data_dir,
+            jwt_secret: TEST_HUB_JWT_SECRET.to_string(),
         }
+    }
+
+    pub fn bearer_token(&self, identity_id: &str) -> String {
+        sign_test_hub_token(&self.jwt_secret, identity_id, "registered")
     }
 
     pub async fn teardown(self) {
@@ -51,7 +62,10 @@ impl TestHarness {
     ) -> (StatusCode, Value) {
         let mut builder = Request::builder().method(method).uri(uri);
         if let Some(identity) = identity {
-            builder = builder.header(HEADER_COMMUNITY_USER_ID, identity);
+            builder = builder.header(
+                "Authorization",
+                format!("Bearer {}", self.bearer_token(identity)),
+            );
         }
         if let Some(content_type) = content_type {
             builder = builder.header("content-type", content_type);
@@ -158,4 +172,34 @@ pub fn multipart_body(
 
 pub fn data_field(json: &Value) -> &Value {
     json.get("data").expect("response data field")
+}
+
+fn sign_test_hub_token(secret: &str, identity_id: &str, registration_status: &str) -> String {
+    use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+
+    #[derive(serde::Serialize)]
+    struct Claims {
+        sub: String,
+        iss: String,
+        aud: String,
+        exp: i64,
+        iat: i64,
+        registration_status: String,
+    }
+
+    let claims = Claims {
+        sub: identity_id.to_string(),
+        iss: "toolman-desktop".to_string(),
+        aud: "toolman-community-hub".to_string(),
+        exp: chrono::Utc::now().timestamp() + 3600,
+        iat: chrono::Utc::now().timestamp(),
+        registration_status: registration_status.to_string(),
+    };
+
+    encode(
+        &Header::new(Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .expect("sign token")
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconPlus, IconRefresh, IconTrash } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import { formatNewsDate } from './community-news-utils'
 import {
   CommunityPublishModalError,
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
+  const { t } = useI18n()
   const user = useCommunityUser()
   const sources = useCommunityNewsSources(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -29,13 +31,13 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
 
   const handleCreate = async (input: RssSourceConfigInput) => {
     if (!user.profile) {
-      sources.setError('请先登录后再添加 RSS 源')
+      sources.setError(t('communityPage.newsSources.loginRequired'))
       return
     }
 
     const interval = input.fetchIntervalMinutes
     if (!Number.isFinite(interval) || interval < 5) {
-      sources.setError('拉取间隔至少为 5 分钟')
+      sources.setError(t('communityPage.newsSources.minInterval'))
       return
     }
 
@@ -70,9 +72,9 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
     <>
       <div className={embedded ? 'tm-group-settings-form' : undefined}>
         {!embedded ? (
-          <p className="tm-community-publish-modal-subtitle">订阅资讯源，手动或定时拉取文章</p>
+          <p className="tm-community-publish-modal-subtitle">{t('communityPage.newsSources.subtitle')}</p>
         ) : (
-          <span className="tm-group-settings-section-title">RSS 资讯源</span>
+          <span className="tm-group-settings-section-title">{t('communityPage.newsSources.sectionTitle')}</span>
         )}
 
         {sources.error ? <CommunityPublishModalError message={sources.error} /> : null}
@@ -86,7 +88,7 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
             onClick={() => setShowAddForm(true)}
           >
             <IconPlus size={14} />
-            添加 RSS 源
+            {t('communityPage.newsSources.addSource')}
           </button>
           <button
             type="button"
@@ -95,18 +97,18 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
             onClick={() => void sources.load()}
           >
             <IconRefresh size={14} />
-            刷新列表
+            {t('communityPage.newsSources.refreshList')}
           </button>
         </div>
 
         {!user.profile ? (
-          <p className="tm-community-publish-modal-hint">登录后可添加、删除 RSS 源并手动拉取。</p>
+          <p className="tm-community-publish-modal-hint">{t('communityPage.newsSources.loginHint')}</p>
         ) : null}
 
         {sources.loading && sources.items.length === 0 ? (
-          <div className="tm-community-publish-modal-empty">加载 RSS 源中…</div>
+          <div className="tm-community-publish-modal-empty">{t('communityPage.newsSources.loading')}</div>
         ) : sources.items.length === 0 ? (
-          <div className="tm-community-publish-modal-empty">暂无 RSS 源，点击上方按钮添加</div>
+          <div className="tm-community-publish-modal-empty">{t('communityPage.newsSources.empty')}</div>
         ) : (
           <ul className="tm-community-news-sources-list">
             {sources.items.map((source) => (
@@ -122,15 +124,17 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
                           : 'tm-community-news-source-status--disabled',
                       ].join(' ')}
                     >
-                      {source.enabled ? '启用' : '停用'}
+                      {source.enabled
+                        ? t('communityPage.newsSources.enabled')
+                        : t('communityPage.newsSources.disabled')}
                     </span>
                   </div>
                   <p className="tm-community-news-source-url">{source.feedUrl}</p>
                   <p className="tm-community-news-source-meta">
-                    {source.category} · 每 {source.fetchIntervalMinutes} 分钟
+                    {source.category} · {t('communityPage.newsSources.interval', { minutes: source.fetchIntervalMinutes })}
                     {source.lastFetchedAt
-                      ? ` · 上次拉取 ${formatNewsDate(source.lastFetchedAt)}`
-                      : ' · 尚未拉取'}
+                      ? ` · ${t('communityPage.newsSources.lastFetch', { time: formatNewsDate(source.lastFetchedAt) })}`
+                      : ` · ${t('communityPage.newsSources.neverFetched')}`}
                   </p>
                   {source.lastError ? (
                     <p className="tm-community-news-source-error">{source.lastError}</p>
@@ -143,14 +147,16 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
                     disabled={!source.enabled || sources.fetchingId === source.id}
                     onClick={() => void handleFetch(source.id)}
                   >
-                    {sources.fetchingId === source.id ? '拉取中…' : '立即拉取'}
+                    {sources.fetchingId === source.id
+                      ? t('communityPage.newsSources.fetching')
+                      : t('communityPage.newsSources.fetchNow')}
                   </button>
                   {user.profile ? (
                     <button
                       type="button"
                       className="tm-community-publish-toolbar-btn tm-community-publish-toolbar-btn--ghost"
-                      title="删除"
-                      aria-label="删除 RSS 源"
+                      title={t('common.delete')}
+                      aria-label={t('communityPage.newsSources.deleteTitle')}
                       disabled={sources.deletingId === source.id}
                       onClick={() => setSourceToDelete({ id: source.id, title: source.title })}
                     >
@@ -178,9 +184,9 @@ export function NewsSourcesPanel({ onChanged, embedded = false }: Props) {
 
       {sourceToDelete ? (
         <ConfirmDialog
-          title="删除 RSS 源"
-          message={`确定删除「${sourceToDelete.title}」吗？已拉取的文章不会自动删除。`}
-          confirmLabel="删除"
+          title={t('communityPage.newsSources.deleteTitle')}
+          message={t('communityPage.newsSources.deleteMessage', { title: sourceToDelete.title })}
+          confirmLabel={t('common.delete')}
           danger
           onCancel={() => setSourceToDelete(null)}
           onConfirm={() => void handleConfirmDelete()}

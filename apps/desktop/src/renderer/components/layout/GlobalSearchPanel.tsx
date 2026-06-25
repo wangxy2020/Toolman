@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type KnowledgeBase, type KnowledgeSearchResult, type Session } from '@toolman/shared'
 import { IconSearch } from '../icons'
+import { useI18n } from '../../i18n/useI18n'
 import { searchNotes, type NotesSearchResult } from '../../features/notes/notes-search'
 import type { NoteItem } from '../../features/notes/notes-storage'
 
@@ -25,6 +26,7 @@ export function GlobalSearchPanel({
   onSelectKnowledgeBase,
   onClose,
 }: Props) {
+  const { t } = useI18n()
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [kbLoading, setKbLoading] = useState(false)
@@ -124,7 +126,7 @@ export function GlobalSearchPanel({
             ref={inputRef}
             type="search"
             className="tm-search-input"
-            placeholder="全局搜索：话题、笔记、知识库…"
+            placeholder={t('search.placeholder')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -132,12 +134,12 @@ export function GlobalSearchPanel({
 
         <div className="tm-search-results">
           {!trimmed ? (
-            <div className="tm-empty tm-empty--compact">输入关键词搜索话题、笔记与知识库文档</div>
+            <div className="tm-empty tm-empty--compact">{t('search.emptyHint')}</div>
           ) : null}
 
           {sessionResults.length > 0 ? (
             <>
-              <div className="tm-search-result-group-label">话题</div>
+              <div className="tm-search-result-group-label">{t('search.sessions')}</div>
               {sessionResults.map((session) => (
                 <button
                   key={session.id}
@@ -149,7 +151,9 @@ export function GlobalSearchPanel({
                   }}
                 >
                   <span className="tm-search-result-title">{session.title}</span>
-                  <span className="tm-search-result-meta">{session.messageCount} 条消息</span>
+                  <span className="tm-search-result-meta">
+                    {t('search.messageCount', { count: session.messageCount })}
+                  </span>
                 </button>
               ))}
             </>
@@ -157,7 +161,7 @@ export function GlobalSearchPanel({
 
           {noteResults.length > 0 ? (
             <>
-              <div className="tm-search-result-group-label">笔记</div>
+              <div className="tm-search-result-group-label">{t('search.notes')}</div>
               {noteResults.map(({ note }) => (
                 <button
                   key={note.id}
@@ -170,7 +174,7 @@ export function GlobalSearchPanel({
                 >
                   <span className="tm-search-result-title">{note.title}</span>
                   <span className="tm-search-result-meta">
-                    {(note.tags ?? []).length > 0 ? `#${(note.tags ?? []).join(' #')}` : '无标签'}
+                    {(note.tags ?? []).length > 0 ? `#${(note.tags ?? []).join(' #')}` : t('search.noTags')}
                   </span>
                 </button>
               ))}
@@ -179,7 +183,7 @@ export function GlobalSearchPanel({
 
           {kbNameResults.length > 0 ? (
             <>
-              <div className="tm-search-result-group-label">知识库</div>
+              <div className="tm-search-result-group-label">{t('search.knowledge')}</div>
               {kbNameResults.map((item) => (
                 <button
                   key={item.id}
@@ -191,7 +195,9 @@ export function GlobalSearchPanel({
                   }}
                 >
                   <span className="tm-search-result-title">{item.name}</span>
-                  <span className="tm-search-result-meta">{item.documentCount} 个文档</span>
+                  <span className="tm-search-result-meta">
+                    {t('search.documentCount', { count: item.documentCount })}
+                  </span>
                 </button>
               ))}
             </>
@@ -199,12 +205,12 @@ export function GlobalSearchPanel({
 
           {trimmed.length >= 2 ? (
             kbLoading ? (
-              <div className="tm-empty tm-empty--compact">正在检索知识库文档…</div>
+              <div className="tm-empty tm-empty--compact">{t('search.kbLoading')}</div>
             ) : kbError ? (
               <div className="tm-empty tm-empty--compact">{kbError}</div>
             ) : kbResults.length > 0 ? (
               <>
-                <div className="tm-search-result-group-label">知识库文档</div>
+                <div className="tm-search-result-group-label">{t('search.knowledgeDocs')}</div>
                 {kbResults.map((item) => (
                   <button
                     key={item.chunkId}
@@ -227,7 +233,7 @@ export function GlobalSearchPanel({
           ) : null}
 
           {trimmed && !hasAnyResults ? (
-            <div className="tm-empty">未找到匹配结果</div>
+            <div className="tm-empty">{t('search.noResults')}</div>
           ) : null}
         </div>
       </div>

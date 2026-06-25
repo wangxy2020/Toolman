@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   onClose: () => void
@@ -6,6 +7,7 @@ interface Props {
 }
 
 export function GroupCreateModal({ onClose, onSubmit }: Props) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -14,7 +16,7 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
   const handleSubmit = async () => {
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('请输入群组名称')
+      setError(t('modals.groupCreate.nameRequired'))
       return
     }
 
@@ -27,7 +29,7 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
       })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建失败')
+      setError(err instanceof Error ? err.message : t('modals.groupCreate.createFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -45,9 +47,9 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
         <header className="tm-agent-modal-header">
           <h3 id="create-group-title" className="tm-agent-modal-title">
             <span className="tm-agent-modal-title-dot" aria-hidden="true" />
-            创建群组
+            {t('modals.groupCreate.title')}
           </h3>
-          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+          <button type="button" className="tm-agent-modal-close" aria-label={t('common.close')} onClick={onClose}>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -65,7 +67,7 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
             <div className="tm-agent-settings-form">
               <div className="tm-agent-setting-row">
                 <label className="tm-agent-setting-label" htmlFor="group-create-name">
-                  名称
+                  {t('common.name')}
                   <span className="tm-agent-required" aria-hidden="true">
                     *
                   </span>
@@ -75,7 +77,7 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
                   className="tm-agent-setting-input"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="例如：产品讨论组"
+                  placeholder={t('modals.groupCreate.namePlaceholder')}
                   maxLength={100}
                   autoFocus
                 />
@@ -83,14 +85,14 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
 
               <div className="tm-agent-setting-row tm-agent-setting-row--top">
                 <label className="tm-agent-setting-label" htmlFor="group-create-description">
-                  描述
+                  {t('common.description')}
                 </label>
                 <textarea
                   id="group-create-description"
                   className="tm-agent-setting-textarea"
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  placeholder="简要说明群组用途（可选）"
+                  placeholder={t('modals.groupCreate.descriptionPlaceholder')}
                   maxLength={500}
                   rows={3}
                 />
@@ -108,7 +110,7 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
             onClick={onClose}
             disabled={submitting}
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -116,7 +118,7 @@ export function GroupCreateModal({ onClose, onSubmit }: Props) {
             onClick={() => void handleSubmit()}
             disabled={submitting}
           >
-            {submitting ? '创建中…' : '创建'}
+            {submitting ? t('common.creating') : t('common.create')}
           </button>
         </footer>
       </div>

@@ -13,6 +13,8 @@ import {
   IconTaskList,
   IconUndo,
 } from '../../components/icons'
+import { getNotesToolbarTitles } from '../../i18n/notes-editor-labels'
+import { useI18n } from '../../i18n/useI18n'
 
 const ICON_SIZE = 16
 
@@ -45,27 +47,6 @@ type ToolbarItem = {
   async?: boolean
 }
 
-const TOOLBAR_ITEMS: ToolbarItem[] = [
-  { key: 'bold', title: '加粗 (⌘B)', label: <strong>B</strong>, variant: 'text' },
-  { key: 'italic', title: '斜体 (⌘I)', label: <em>I</em>, variant: 'text' },
-  { key: 'underline', title: '下划线 (⌘U)', label: <span className="tm-notes-toolbar-underline">U</span>, variant: 'text' },
-  { key: 'strike', title: '删除线', label: <span className="tm-notes-toolbar-strike">S</span>, variant: 'text' },
-  { key: 'code', title: '行内代码', label: <span className="tm-notes-toolbar-code">&lt;&gt;</span>, variant: 'text', dividerAfter: true },
-  { key: 'body', title: '正文', label: <span className="tm-notes-toolbar-body">T</span>, variant: 'body' },
-  { key: 'h1', title: '标题 1', label: 'H1', variant: 'heading' },
-  { key: 'h2', title: '标题 2', label: 'H2', variant: 'heading' },
-  { key: 'h3', title: '标题 3', label: 'H3', variant: 'heading', dividerAfter: true },
-  { key: 'bullet', title: '无序列表', label: <IconListBullet size={ICON_SIZE} />, variant: 'icon' },
-  { key: 'ordered', title: '有序列表', label: <IconListOrdered size={ICON_SIZE} />, variant: 'icon', dividerAfter: true },
-  { key: 'image', title: '插入图片', label: <IconImage size={ICON_SIZE} />, variant: 'icon', async: true },
-  { key: 'codeblock', title: '代码块', label: <IconCodeBlock size={ICON_SIZE} />, variant: 'icon' },
-  { key: 'quote', title: '引用', label: <IconQuote size={ICON_SIZE} />, variant: 'icon' },
-  { key: 'task', title: '任务清单', label: <IconTaskList size={ICON_SIZE} />, variant: 'icon' },
-  { key: 'math', title: '公式', label: <IconFormula size={ICON_SIZE} />, variant: 'icon' },
-  { key: 'table', title: '表格', label: <IconTable size={ICON_SIZE} />, variant: 'icon', dividerAfter: true },
-  { key: 'link', title: '链接 (⌘K)', label: <IconLink size={ICON_SIZE} />, variant: 'icon', async: true },
-]
-
 interface Props {
   bodyRef: RefObject<HTMLTextAreaElement | null>
   disabled?: boolean
@@ -92,6 +73,51 @@ export function NotesEditorToolbar({
   showOutline = false,
   onToggleOutline,
 }: Props) {
+  const { t } = useI18n()
+  const titles = getNotesToolbarTitles(t)
+
+  const toolbarItems: ToolbarItem[] = [
+    { key: 'bold', title: titles.bold, label: <strong>B</strong>, variant: 'text' },
+    { key: 'italic', title: titles.italic, label: <em>I</em>, variant: 'text' },
+    {
+      key: 'underline',
+      title: titles.underline,
+      label: <span className="tm-notes-toolbar-underline">U</span>,
+      variant: 'text',
+    },
+    {
+      key: 'strike',
+      title: titles.strike,
+      label: <span className="tm-notes-toolbar-strike">S</span>,
+      variant: 'text',
+    },
+    {
+      key: 'code',
+      title: titles.code,
+      label: <span className="tm-notes-toolbar-code">&lt;&gt;</span>,
+      variant: 'text',
+      dividerAfter: true,
+    },
+    {
+      key: 'body',
+      title: titles.body,
+      label: <span className="tm-notes-toolbar-body">T</span>,
+      variant: 'body',
+    },
+    { key: 'h1', title: titles.h1, label: 'H1', variant: 'heading' },
+    { key: 'h2', title: titles.h2, label: 'H2', variant: 'heading' },
+    { key: 'h3', title: titles.h3, label: 'H3', variant: 'heading', dividerAfter: true },
+    { key: 'bullet', title: titles.bullet, label: <IconListBullet size={ICON_SIZE} />, variant: 'icon' },
+    { key: 'ordered', title: titles.ordered, label: <IconListOrdered size={ICON_SIZE} />, variant: 'icon', dividerAfter: true },
+    { key: 'image', title: titles.image, label: <IconImage size={ICON_SIZE} />, variant: 'icon', async: true },
+    { key: 'codeblock', title: titles.codeblock, label: <IconCodeBlock size={ICON_SIZE} />, variant: 'icon' },
+    { key: 'quote', title: titles.quote, label: <IconQuote size={ICON_SIZE} />, variant: 'icon' },
+    { key: 'task', title: titles.task, label: <IconTaskList size={ICON_SIZE} />, variant: 'icon' },
+    { key: 'math', title: titles.math, label: <IconFormula size={ICON_SIZE} />, variant: 'icon' },
+    { key: 'table', title: titles.table, label: <IconTable size={ICON_SIZE} />, variant: 'icon', dividerAfter: true },
+    { key: 'link', title: titles.link, label: <IconLink size={ICON_SIZE} />, variant: 'icon', async: true },
+  ]
+
   const handleClick = (item: ToolbarItem) => {
     if (disabled) return
     if (item.key === 'image') {
@@ -108,7 +134,7 @@ export function NotesEditorToolbar({
   return (
     <div className="tm-notes-toolbar">
       <div className="tm-notes-toolbar-group">
-        {TOOLBAR_ITEMS.map((item) => (
+        {toolbarItems.map((item) => (
           <span key={item.key} className="tm-notes-toolbar-item">
             <button
               type="button"
@@ -133,7 +159,7 @@ export function NotesEditorToolbar({
         <button
           type="button"
           className="tm-notes-toolbar-btn tm-notes-toolbar-btn--icon"
-          title="撤销 (⌘Z)"
+          title={t('notesPage.editor.toolbar.undo')}
           disabled={disabled || !canUndo}
           onClick={onUndo}
         >
@@ -142,7 +168,7 @@ export function NotesEditorToolbar({
         <button
           type="button"
           className="tm-notes-toolbar-btn tm-notes-toolbar-btn--icon"
-          title="重做 (⌘⇧Z)"
+          title={t('notesPage.editor.toolbar.redo')}
           disabled={disabled || !canRedo}
           onClick={onRedo}
         >
@@ -158,7 +184,7 @@ export function NotesEditorToolbar({
           ]
             .filter(Boolean)
             .join(' ')}
-          title={showOutline ? '隐藏大纲' : '显示大纲'}
+          title={showOutline ? t('notesPage.editor.outlineHide') : t('notesPage.editor.outlineShow')}
           aria-pressed={showOutline}
           onClick={onToggleOutline}
         >

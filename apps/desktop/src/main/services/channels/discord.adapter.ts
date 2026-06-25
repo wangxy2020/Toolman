@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
@@ -184,7 +185,7 @@ export class DiscordChannelAdapter implements ChannelAdapter {
             await this.sendText(token, message.channel_id!, reply)
           }
         } catch (error) {
-          console.error('[discord-channel]', error)
+          logStructured('discord.channel', 'error', `[discord-channel]`, { detail: error })
           this.status = 'error'
           this.statusMessage = toErrorMessage(error, 'Discord 消息处理失败')
         }

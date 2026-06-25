@@ -1,9 +1,10 @@
 import { useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import joinUsQrImage from '../../assets/toolman-qq-group-qr.png'
+import { useI18n } from '../../i18n/useI18n'
 import {
-  TOOLMAN_JOIN_US_WELCOME_LINE1,
-  TOOLMAN_JOIN_US_WELCOME_LINE2,
+  TOOLMAN_JOIN_US_QQ,
+  TOOLMAN_JOIN_US_QQ_GROUP,
 } from './about-settings.constants'
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
 }
 
 export function AboutJoinUsModal({ onClose }: Props) {
+  const { t } = useI18n()
+
   const handleClose = useCallback(() => {
     onClose()
   }, [onClose])
@@ -41,13 +44,13 @@ export function AboutJoinUsModal({ onClose }: Props) {
       >
         <div className="tm-modal-header">
           <h2 id="about-join-title" className="tm-modal-title">
-            加入我们
+            {t('settings.about.join.title')}
           </h2>
           <button
             type="button"
             className="tm-modal-close"
             onClick={handleClose}
-            aria-label="关闭"
+            aria-label={t('common.close')}
           >
             ×
           </button>
@@ -58,14 +61,17 @@ export function AboutJoinUsModal({ onClose }: Props) {
             <img
               className="tm-about-join-qr-image"
               src={joinUsQrImage}
-              alt="Toolman QQ 群二维码"
+              alt={t('settings.about.join.qrAlt')}
             />
           </div>
 
           <p className="tm-about-join-welcome">
-            {TOOLMAN_JOIN_US_WELCOME_LINE1}
+            {t('settings.about.join.welcomeLine1')}
             <br />
-            {TOOLMAN_JOIN_US_WELCOME_LINE2}
+            {t('settings.about.join.welcomeLine2', {
+              group: TOOLMAN_JOIN_US_QQ_GROUP,
+              qq: TOOLMAN_JOIN_US_QQ,
+            })}
           </p>
         </div>
       </div>

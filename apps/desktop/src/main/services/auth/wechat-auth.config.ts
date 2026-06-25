@@ -1,3 +1,5 @@
+import { isDevModeEnvEnabled } from './auth-dev-guard.js'
+
 export interface WechatOpenConfig {
   appId: string
   appSecret: string
@@ -19,13 +21,8 @@ function readEnv(keys: readonly string[]): string | undefined {
   return undefined
 }
 
-function isTruthyEnv(value: string | undefined): boolean {
-  if (!value) return false
-  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
-}
-
 export function isWechatDevMode(): boolean {
-  return isTruthyEnv(process.env.TOOLMAN_WECHAT_DEV_MODE ?? process.env.WECHAT_DEV_MODE)
+  return isDevModeEnvEnabled(['TOOLMAN_WECHAT_DEV_MODE', 'WECHAT_DEV_MODE'])
 }
 
 export function getWechatRedirectUri(): string {

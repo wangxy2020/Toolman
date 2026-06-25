@@ -23,7 +23,8 @@ import {
 } from './community-api.client'
 import { buildResourceCommentTarget, buildTaskCommentTarget } from './community-comment-utils'
 import { formatCommunityDate } from './community-market-utils'
-import { RESOURCE_SUB_TAB_LABELS } from './community-moderation-utils'
+import { getResourceSubTabLabels } from '../../i18n/community-moderation-labels'
+import { useI18n } from '../../i18n/useI18n'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { TaskReviewDetailModal } from './TaskReviewDetailModal'
 
@@ -96,6 +97,8 @@ function ModerationReviewResourceCard({
   onApprove: () => void
   onReject: () => void
 }) {
+  const { t } = useI18n()
+  const resourceSubTabLabels = getResourceSubTabLabels(t)
   const [busyAction, setBusyAction] = useState<ReviewAction>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
@@ -103,7 +106,7 @@ function ModerationReviewResourceCard({
   const commentTarget = buildResourceCommentTarget(resource.id)
   const commentOpen = comments.isExpanded(commentTarget)
   const typeLabel =
-    RESOURCE_SUB_TAB_LABELS[resource.resourceType as keyof typeof RESOURCE_SUB_TAB_LABELS] ??
+    resourceSubTabLabels[resource.resourceType as keyof typeof resourceSubTabLabels] ??
     resource.resourceType
 
   const runPackageAction = async (kind: 'download' | 'view', runner: () => Promise<unknown>) => {
@@ -114,12 +117,12 @@ function ModerationReviewResourceCard({
       if (result.error) {
         setActionError(result.error)
       } else if (kind === 'view' && result.opened === false) {
-        setActionError('无法打开资源包目录')
+        setActionError(t('communityPage.admin.reviewQueue.openPackageFailed'))
       } else if (kind === 'download' && result.saved === false) {
         setActionError(null)
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : '操作失败')
+      setActionError(error instanceof Error ? error.message : t('communityPage.admin.reviewQueue.actionFailed'))
     } finally {
       setBusyAction(null)
     }
@@ -142,7 +145,7 @@ function ModerationReviewResourceCard({
       >
         <div className="tm-community-list-card-actions-start">
           <ReviewActionButton
-            label="下载"
+            label={t('communityPage.admin.reviewQueue.download')}
             disabled={acting || busyAction != null}
             onClick={() =>
               void runPackageAction('download', () =>
@@ -153,7 +156,7 @@ function ModerationReviewResourceCard({
             <IconDownload size={14} className="tm-community-card-action-svg" />
           </ReviewActionButton>
           <ReviewActionButton
-            label="查看"
+            label={t('communityPage.admin.reviewQueue.view')}
             disabled={acting || busyAction != null}
             onClick={() =>
               void runPackageAction('view', () => openCommunityResourcePackageForReview(resource.id))
@@ -162,7 +165,7 @@ function ModerationReviewResourceCard({
             <IconFolder size={14} className="tm-community-card-action-svg" />
           </ReviewActionButton>
           <ReviewActionButton
-            label="批注"
+            label={t('communityPage.admin.reviewQueue.annotate')}
             active={commentOpen}
             disabled={acting}
             onClick={() => comments.toggleExpanded(commentTarget)}
@@ -177,7 +180,7 @@ function ModerationReviewResourceCard({
             disabled={acting}
             onClick={onApprove}
           >
-            通过
+            {t('communityPage.admin.reviewQueue.approve')}
           </button>
           <button
             type="button"
@@ -185,7 +188,7 @@ function ModerationReviewResourceCard({
             disabled={acting}
             onClick={onReject}
           >
-            拒绝
+            {t('communityPage.admin.reviewQueue.reject')}
           </button>
         </div>
       </div>
@@ -214,6 +217,7 @@ function ModerationReviewTaskCard({
   onApprove: () => void
   onReject: () => void
 }) {
+  const { t } = useI18n()
   const [detailOpen, setDetailOpen] = useState(false)
   const actionsRef = useRef<HTMLDivElement>(null)
   const comments = useCommunityCommentExpansion()
@@ -229,7 +233,10 @@ function ModerationReviewTaskCard({
         <div className="tm-community-moderation-review-main">
           <div className="tm-community-moderation-row-title">{task.title}</div>
           <div className="tm-community-moderation-row-meta">
-            任务 · {task.publisherName} · {formatCommunityDate(task.createdAt)}
+            {t('communityPage.admin.reviewQueue.taskMeta', {
+              publisher: task.publisherName,
+              time: formatCommunityDate(task.createdAt),
+            })}
           </div>
         </div>
       </div>
@@ -239,14 +246,14 @@ function ModerationReviewTaskCard({
       >
         <div className="tm-community-list-card-actions-start">
           <ReviewActionButton
-            label="查看"
+            label={t('communityPage.admin.reviewQueue.view')}
             disabled={acting}
             onClick={() => setDetailOpen(true)}
           >
             <IconFolder size={14} className="tm-community-card-action-svg" />
           </ReviewActionButton>
           <ReviewActionButton
-            label="批注"
+            label={t('communityPage.admin.reviewQueue.annotate')}
             active={commentOpen}
             disabled={acting}
             onClick={() => comments.toggleExpanded(commentTarget)}
@@ -261,7 +268,7 @@ function ModerationReviewTaskCard({
             disabled={acting}
             onClick={onApprove}
           >
-            通过
+            {t('communityPage.admin.reviewQueue.approve')}
           </button>
           <button
             type="button"
@@ -269,7 +276,7 @@ function ModerationReviewTaskCard({
             disabled={acting}
             onClick={onReject}
           >
-            拒绝
+            {t('communityPage.admin.reviewQueue.reject')}
           </button>
         </div>
       </div>
@@ -296,15 +303,15 @@ export function ModerationReviewQueue({
   onApproveTask,
   onRejectTask,
 }: Props) {
+  const { t } = useI18n()
+
   if (resources.length === 0 && tasks.length === 0) {
-    return <div className="tm-user-center-empty">暂无待审核内容</div>
+    return <div className="tm-user-center-empty">{t('communityPage.admin.reviewQueue.empty')}</div>
   }
 
   return (
     <>
-      <p className="tm-community-moderation-review-hint">
-        审核资源时可点击「查看」在本地打开资源包文件夹，「下载」保存副本；审核任务时点击「查看」阅读任务详情。「批注」填写的意见会展示在发布者「我的」页面。
-      </p>
+      <p className="tm-community-moderation-review-hint">{t('communityPage.admin.reviewQueue.hint')}</p>
       <ul className="tm-kb-file-list tm-community-moderation-review-list">
       {resources.map((resource) => (
         <ModerationReviewResourceCard

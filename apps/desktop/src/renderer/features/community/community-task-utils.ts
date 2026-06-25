@@ -3,6 +3,10 @@ import {
   type CommunityTaskType,
 } from '@toolman/shared'
 
+import type { AppLanguage } from '../settings/app-settings'
+import type { TranslateFn } from '../../i18n/I18nProvider'
+import { formatCommunityTaskBudget } from '../../i18n/community-status-labels'
+
 export const TASK_TYPE_LABELS: Record<CommunityTaskType, string> = {
   development: '开发',
   design: '设计',
@@ -24,9 +28,13 @@ export const TASK_STATUS_LABELS: Record<CommunityTaskStatus, string> = {
   disputed: '争议中',
 }
 
-export function formatTaskBudget(amount: number, currency: string): string {
-  if (amount <= 0) return '面议'
-  return `${amount.toLocaleString('zh-CN')} ${currency}`
+export function formatTaskBudget(
+  amount: number,
+  currency: string,
+  t: TranslateFn,
+  language: AppLanguage = 'zh-CN',
+): string {
+  return formatCommunityTaskBudget(amount, currency, t, language)
 }
 
 export function parseTaskTags(input: string): string[] {

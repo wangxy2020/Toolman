@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+
+const path = process.argv[2];
+if (!path) {
+  console.error('usage: verify-p2p-network-json.js <network.json>');
+  process.exit(1);
+}
+
+const raw = JSON.parse(fs.readFileSync(path, 'utf8'));
+const servers = raw.iceServers ?? (raw.stunServers ?? []).map((urls) => ({ urls }));
+
+let stun = 0;
+let turn = 0;
+let turnWithCreds = 0;
+
+for (const server of servers) {
+  const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+  const isTurn = urls.some((u) => /^turn:/i.test(u) || /^turns:/i.test(u));
+  if (isTurn) {
+    turn += 1;
+    if (server.username && server.credential) turnWithCreds += 1;
+  } else {
+    stun += 1;
+  }
+}
+
+console.log(`file: ${path}`);
+console.log(
+  `iceServers: ${servers.length} (${stun} STUN, ${turn} TURN, ${turnWithCreds} TURN with credentials)`,
+);
+
+if (turn === 0) {
+  console.error('FAIL: no TURN server configured');
+  process.exit(1);
+}
+if (turnWithCreds === 0) {
+  console.error('FAIL: TURN missing username/credential');
+  process.exit(1);
+}
+console.log('OK: WAN readiness config valid');

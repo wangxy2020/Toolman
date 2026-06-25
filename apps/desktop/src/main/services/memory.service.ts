@@ -41,7 +41,7 @@ function writeJsonEntries(workspaceId: string, entries: MemoryEntry[]): void {
   writeFileSync(memoryPath(workspaceId), JSON.stringify(entries, null, 2), 'utf8')
 }
 
-let migrationDone = new Set<string>()
+const migrationDone = new Set<string>()
 
 async function ensureMigrated(workspaceId: string): Promise<void> {
   if (migrationDone.has(workspaceId)) return

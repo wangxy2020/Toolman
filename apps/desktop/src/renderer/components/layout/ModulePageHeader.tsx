@@ -1,5 +1,6 @@
 import { IconSliders } from '../icons'
 import { getModulePageConfig } from '../../features/modules/module-config'
+import { useI18n } from '../../i18n/useI18n'
 import type { ModuleView } from '../../types/app-view'
 
 interface Props {
@@ -7,7 +8,8 @@ interface Props {
 }
 
 export function ModulePageHeader({ view }: Props) {
-  const config = getModulePageConfig(view)
+  const { t } = useI18n()
+  const config = getModulePageConfig(view, t)
 
   return (
     <header className="tm-chat-header">
@@ -27,7 +29,7 @@ export function ModulePageHeader({ view }: Props) {
         <button
           type="button"
           className="tm-chat-header-settings-btn"
-          title={`${config.title}设置`}
+          title={`${config.title} · ${t('nav.settings')}`}
           disabled
         >
           <IconSliders size={16} />

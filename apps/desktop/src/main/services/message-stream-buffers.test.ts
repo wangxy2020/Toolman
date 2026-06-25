@@ -17,6 +17,33 @@ describe('MessageStreamBuffers local_file_links', () => {
   })
 })
 
+describe('MessageStreamBuffers thinking + tools', () => {
+  it('promotes thinking to text when model returns reasoning only', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendThinking('answer text')
+    expect(buffers.promoteThinkingToText()).toBe(true)
+    expect(buffers.plainText()).toBe('answer text')
+  })
+
+  it('upserts tool call deltas', () => {
+    const buffers = new MessageStreamBuffers()
+    const first = buffers.upsertTool({
+      toolCallId: 'tool-1',
+      name: 'fs_read',
+      status: 'running',
+    })
+    expect(first.type).toBe('tool')
+    buffers.upsertTool({
+      toolCallId: 'tool-1',
+      name: 'fs_read',
+      status: 'done',
+      result: 'ok',
+    })
+    const blocks = buffers.toContentBlocks()
+    expect(blocks.some((block) => block.type === 'tool' && block.status === 'done')).toBe(true)
+  })
+})
+
 describe('MessageStreamBuffers docx_review_summary', () => {
   it('places summary block before local file links', () => {
     const buffers = new MessageStreamBuffers()

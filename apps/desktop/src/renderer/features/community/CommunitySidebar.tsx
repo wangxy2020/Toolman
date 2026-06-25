@@ -1,4 +1,6 @@
 import { getModulePageConfig } from '../modules/module-config'
+import { useI18n } from '../../i18n/useI18n'
+import { getCommunitySidebarSectionLabel } from '../../i18n/community-sidebar-labels'
 import {
   COMMUNITY_SIDEBAR_SECTIONS,
   type CommunitySidebarSection,
@@ -14,7 +16,8 @@ interface Props {
 }
 
 export function CommunitySidebar({ activeSection, onSelectSection }: Props) {
-  const config = getModulePageConfig('community')
+  const { t } = useI18n()
+  const config = getModulePageConfig('community', t)
   const user = useCommunityUser()
   const canAccessManagement =
     isCommunitySessionActive() && isCommunityModerator(user.profile?.role)
@@ -26,7 +29,7 @@ export function CommunitySidebar({ activeSection, onSelectSection }: Props) {
   return (
     <aside className="tm-sidebar">
       <div className="tm-sidebar-content">
-        <button type="button" className="tm-sidebar-add" disabled title="即将推出">
+        <button type="button" className="tm-sidebar-add" disabled title={t('common.comingSoon')}>
           <IconPlus />
           {config.addLabel}
         </button>
@@ -56,7 +59,7 @@ export function CommunitySidebar({ activeSection, onSelectSection }: Props) {
                       .join(' ')}
                     onClick={() => onSelectSection(section.id)}
                   >
-                    {section.label}
+                    {getCommunitySidebarSectionLabel(section.id, t)}
                   </button>
                   <div className="tm-assistant-actions tm-assistant-actions--placeholder" aria-hidden="true" />
                 </div>

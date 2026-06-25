@@ -8,6 +8,7 @@ import {
   toggleModelId,
 } from './model-utils'
 import { IconChevronDown } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   providers: Provider[]
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function MultiModelSelector({ providers, selectedModelIds, onChange, readOnly = false }: Props) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const options = useMemo(() => buildModelOptions(providers), [providers])
@@ -33,7 +35,7 @@ export function MultiModelSelector({ providers, selectedModelIds, onChange, read
   }, [open])
 
   if (options.length === 0 || !primaryModelId) {
-    return <span className="tm-model-pill tm-model-pill--muted">未配置模型</span>
+    return <span className="tm-model-pill tm-model-pill--muted">{t('chat.multiModel.noModels')}</span>
   }
 
   const modelLabel = modelNameFromId(primaryModelId)
@@ -76,7 +78,10 @@ export function MultiModelSelector({ providers, selectedModelIds, onChange, read
       {open && (
         <div className="tm-model-panel">
           <div className="tm-model-panel-hint">
-            选择模型（最多 {MAX_PARALLEL_MODELS} 个，已选 {selectedModelIds.length}）
+            {t('chat.multiModel.selectModels', {
+              max: MAX_PARALLEL_MODELS,
+              count: selectedModelIds.length,
+            })}
           </div>
           <div className="tm-model-panel-list">
             {options.map((opt) => {

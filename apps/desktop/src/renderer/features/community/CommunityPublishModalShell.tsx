@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 
 import { IconX } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 
 interface ShellProps {
   title: string
@@ -23,6 +24,8 @@ export function CommunityPublishModalShell({
   modalClassName,
   stacked = false,
 }: ShellProps) {
+  const { t } = useI18n()
+
   return (
     <div
       className={[
@@ -51,7 +54,7 @@ export function CommunityPublishModalShell({
           <button
             type="button"
             className="tm-community-publish-modal-close"
-            aria-label="关闭"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             <IconX size={16} />
@@ -77,7 +80,7 @@ interface FooterActionsProps {
 }
 
 export function CommunityPublishModalFooterActions({
-  cancelLabel = '取消',
+  cancelLabel,
   confirmLabel,
   onCancel,
   onConfirm,
@@ -85,6 +88,8 @@ export function CommunityPublishModalFooterActions({
   confirmDisabled = false,
   confirmOnly = false,
 }: FooterActionsProps) {
+  const { t } = useI18n()
+
   return (
     <div className="tm-community-publish-modal-footer-actions">
       {!confirmOnly ? (
@@ -94,7 +99,7 @@ export function CommunityPublishModalFooterActions({
           onClick={onCancel}
           disabled={cancelDisabled}
         >
-          {cancelLabel}
+          {cancelLabel ?? t('communityPage.publish.cancel')}
         </button>
       ) : null}
       {confirmLabel ? (

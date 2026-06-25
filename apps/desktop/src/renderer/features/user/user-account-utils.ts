@@ -7,6 +7,7 @@ import type {
   CommunityUserRole,
   ProductSku,
 } from '@toolman/shared'
+import type { TranslateFn } from '../../i18n/useI18n'
 
 export const USER_TYPE_LABELS = {
   unregistered: '未注册',
@@ -38,27 +39,36 @@ export function extractSessionEmail(session: AuthSession | null | undefined): st
 export function resolveUserTypeLabel(
   session: AuthSession | null | undefined,
   communityRole?: CommunityUserRole | null,
+  t?: TranslateFn,
 ): string {
+  const labels = {
+    unregistered: t?.('user.labels.role.unregistered') ?? USER_TYPE_LABELS.unregistered,
+    normal: t?.('user.labels.role.normal') ?? USER_TYPE_LABELS.normal,
+    vip: t?.('user.labels.role.vip') ?? USER_TYPE_LABELS.vip,
+    admin: t?.('user.labels.role.admin') ?? USER_TYPE_LABELS.admin,
+    super_admin: t?.('user.labels.role.super_admin') ?? USER_TYPE_LABELS.super_admin,
+  } as const
+
   const email = extractSessionEmail(session)
   const devType =
     import.meta.env.DEV && email ? DEV_TEST_USER_TYPE_BY_EMAIL[email] : undefined
   if (devType) {
-    return USER_TYPE_LABELS[devType]
+    return labels[devType]
   }
 
   if (!session || session.registrationStatus === 'guest') {
-    return USER_TYPE_LABELS.unregistered
+    return labels.unregistered
   }
   if (!session.isLoggedIn) {
-    return USER_TYPE_LABELS.normal
+    return labels.normal
   }
 
-  if (communityRole === 'founder') return USER_TYPE_LABELS.super_admin
-  if (communityRole === 'admin') return USER_TYPE_LABELS.admin
+  if (communityRole === 'founder') return labels.super_admin
+  if (communityRole === 'admin') return labels.admin
   if (communityRole === 'enterprise' || session.subscriptionSku === 'pro') {
-    return USER_TYPE_LABELS.vip
+    return labels.vip
   }
-  return USER_TYPE_LABELS.normal
+  return labels.normal
 }
 
 export const PRODUCT_SKU_LABELS: Record<ProductSku, string> = {
@@ -92,29 +102,35 @@ export function inferDefaultAuthRegion(
   return profile?.defaultRegion ?? fromLocale
 }
 
-export function formatSkuLabel(session: AuthSession | null | undefined): string | null {
+export function formatSkuLabel(session: AuthSession | null | undefined, t?: TranslateFn): string | null {
+  const skuLabels: Record<ProductSku, string> = {
+    community: t?.('user.labels.sku.community') ?? PRODUCT_SKU_LABELS.community,
+    pro: t?.('user.labels.sku.pro') ?? PRODUCT_SKU_LABELS.pro,
+  }
   if (!session || session.registrationStatus !== 'registered' || !session.isLoggedIn) {
     return null
   }
   if (!session.subscriptionSku) {
-    return PRODUCT_SKU_LABELS.community
+    return skuLabels.community
   }
-  return PRODUCT_SKU_LABELS[session.subscriptionSku]
+  return skuLabels[session.subscriptionSku]
 }
 
-export function formatAccountStatusLabel(session: AuthSession | null | undefined): string {
+export function formatAccountStatusLabel(session: AuthSession | null | undefined, t?: TranslateFn): string {
   if (!session || session.registrationStatus === 'guest') {
-    return '访客 · 社区只读'
+    return t?.('user.labels.status.guest') ?? '访客 · 社区只读'
   }
   if (!session.isLoggedIn) {
-    return '已注册 · 未登录'
+    return t?.('user.labels.status.registeredLoggedOut') ?? '已注册 · 未登录'
   }
-  const sku = session.subscriptionSku ? PRODUCT_SKU_LABELS[session.subscriptionSku] : '社区版'
-  return `${sku} · 已登录`
+  const sku = formatSkuLabel(session, t) ?? (t?.('user.labels.sku.community') ?? '社区版')
+  return t?.('user.labels.status.loggedIn', { sku }) ?? `${sku} · 已登录`
 }
 
-export function formatBindingSummary(binding: AuthBindingSummary): string {
-  return binding.label ?? AUTH_PROVIDER_LABELS[binding.provider]
+export function formatBindingSummary(binding: AuthBindingSummary, t?: TranslateFn): string {
+  const providerLabel =
+    t?.(`user.labels.providers.${binding.provider}`) ?? AUTH_PROVIDER_LABELS[binding.provider]
+  return binding.label ?? providerLabel
 }
 
 export function isRegisteredUser(session: AuthSession | null | undefined): boolean {

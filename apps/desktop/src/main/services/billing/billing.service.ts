@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { app } from 'electron'
 import { eq } from 'drizzle-orm'
 import { identities } from '@toolman/db'
 import {
@@ -30,6 +31,7 @@ function isBillingApiConfigured(): boolean {
 }
 
 function isBillingMockEnabled(): boolean {
+  if (app.isPackaged) return false
   if (process.env.TOOLMAN_BILLING_MOCK === '0') return false
   if (process.env.TOOLMAN_BILLING_MOCK === '1') return true
   return !isBillingApiConfigured()

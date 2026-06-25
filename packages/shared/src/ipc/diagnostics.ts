@@ -39,6 +39,15 @@ export const AppDiagnosticsP2pConnectionSchema = z.object({
   transport: z.string().optional(),
 })
 
+export const AppDiagnosticsLibp2pRestartSchema = z.object({
+  enabled: z.boolean(),
+  attempt: z.number().int().nonnegative(),
+  tripped: z.boolean(),
+  nextDelayMs: z.number().int().nonnegative().nullable(),
+  lastReason: z.string().nullable(),
+  lastRestartAt: z.number().int().nonnegative().nullable(),
+})
+
 export const AppDiagnosticsP2pSchema = z.object({
   nativeAvailable: z.boolean(),
   nativeVersion: z.string().nullable(),
@@ -50,6 +59,11 @@ export const AppDiagnosticsP2pSchema = z.object({
   wanConnectedPeers: z.number().int().nonnegative(),
   lanConnectedPeers: z.number().int().nonnegative(),
   iceServersSummary: z.string(),
+  wanReadiness: z.object({
+    ready: z.boolean(),
+    summary: z.string(),
+    reason: z.string().optional(),
+  }),
   connections: z.array(AppDiagnosticsP2pConnectionSchema),
   libp2pAvailable: z.boolean(),
   libp2pVersion: z.string().nullable(),
@@ -63,6 +77,7 @@ export const AppDiagnosticsP2pSchema = z.object({
       connectedAt: z.number().int().nonnegative().optional(),
     }),
   ),
+  libp2pRestart: AppDiagnosticsLibp2pRestartSchema,
   dhtMode: z.enum(['off', 'client', 'server']).nullable(),
   dhtReady: z.boolean().nullable(),
   error: z.string().optional(),

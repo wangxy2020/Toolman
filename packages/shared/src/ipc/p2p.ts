@@ -66,6 +66,12 @@ export const P2pDeviceGetInfoOutputSchema = z.object({
 
 export type P2pDeviceGetInfoOutput = z.infer<typeof P2pDeviceGetInfoOutputSchema>
 
+export const P2pWanReadinessSchema = z.object({
+  ready: z.boolean(),
+  summary: z.string(),
+  reason: z.string().optional(),
+})
+
 export const P2pNetworkGetConfigOutputSchema = z.object({
   stunServers: z.array(z.string().min(1)),
   iceServers: z.array(
@@ -75,6 +81,11 @@ export const P2pNetworkGetConfigOutputSchema = z.object({
       credential: z.string().min(1).optional(),
     }),
   ),
+  wanReadiness: P2pWanReadinessSchema,
+})
+
+export const P2pNetworkRestartLibp2pOutputSchema = z.object({
+  restarted: z.literal(true),
 })
 
 export const P2pNetworkSetStunServersInputSchema = z.object({

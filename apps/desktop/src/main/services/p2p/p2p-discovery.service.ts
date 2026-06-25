@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { identities } from '@toolman/db'
 import os from 'node:os'
@@ -119,7 +120,7 @@ export function startP2pDiscovery(): void {
     applyP2pNetworkConfig()
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    console.warn(`[p2p] ICE config apply failed (discovery will still start): ${message}`)
+    logStructured('p2p', 'warn', `ICE config apply failed (discovery will still start): ${message}`)
   }
 
   const { version } = getAppInfo()

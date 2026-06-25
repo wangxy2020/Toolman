@@ -2,6 +2,7 @@ import {
   useRegisterModulePanelError,
   useRegisterModulePanelStatus,
 } from '../../components/module-page-status'
+import { useI18n } from '../../i18n/useI18n'
 
 export function useCommunityPanelStatus(
   panelKey: string,
@@ -12,11 +13,12 @@ export function useCommunityPanelStatus(
     loadingMessage?: string
   } = {},
 ) {
+  const { t } = useI18n()
   useRegisterModulePanelError(panelKey, options.error ?? null, options.onClearError)
   useRegisterModulePanelStatus(
     `${panelKey}:loading`,
     options.loading
-      ? { tone: 'info', message: options.loadingMessage ?? '加载中…' }
+      ? { tone: 'info', message: options.loadingMessage ?? t('common.loading') }
       : null,
   )
 }

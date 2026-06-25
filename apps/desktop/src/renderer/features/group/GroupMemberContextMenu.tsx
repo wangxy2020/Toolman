@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { P2pMember, P2pMemberRole } from '@toolman/shared'
 import { IconCheck } from '../../components/icons'
-import { getAssignableRoles, MEMBER_ROLE_LABELS } from './group-member-utils'
+import { getGroupMemberRoleLabel } from '../../i18n/group-member-labels'
+import { useI18n } from '../../i18n/useI18n'
+import { getAssignableRoles } from './group-member-utils'
 
 interface Props {
   x: number
@@ -27,6 +29,7 @@ export function GroupMemberContextMenu({
   onSelectRole,
   onRemove,
 }: Props) {
+  const { t } = useI18n()
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -42,7 +45,7 @@ export function GroupMemberContextMenu({
       <button
         type="button"
         className="tm-group-context-menu-backdrop"
-        aria-label="关闭菜单"
+        aria-label={t('groupPage.members.contextMenu.closeAria')}
         onClick={onClose}
       />
       <div className="tm-group-context-menu" style={{ top: y, left: x }} role="menu">
@@ -68,7 +71,9 @@ export function GroupMemberContextMenu({
               }}
             >
               <span className="tm-group-context-menu-item-label">
-                设为{MEMBER_ROLE_LABELS[role]}
+                {t('groupPage.members.contextMenu.setRole', {
+                  role: getGroupMemberRoleLabel(role, t),
+                })}
               </span>
               <span className="tm-group-context-menu-item-check" aria-hidden="true">
                 {active ? <IconCheck size={14} /> : null}
@@ -92,7 +97,7 @@ export function GroupMemberContextMenu({
             onClose()
           }}
         >
-          移出群组
+          {t('groupPage.members.contextMenu.removeFromGroup')}
         </button>
       </div>
     </>,

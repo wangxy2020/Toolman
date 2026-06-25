@@ -96,6 +96,18 @@
 |------|---------|
 | `{userData}/p2p/network.json` | `iceServers` 含 STUN + TURN（或通过 env 注入） |
 
+**开发 / RC1 WAN 冒烟测试**（Metered OpenRelay，公开凭据，**不可用于 GA 生产**）：
+
+| 项 | 值 |
+|----|-----|
+| STUN | `stun:staticauth.openrelay.metered.ca:80` |
+| TURN | `turn:staticauth.openrelay.metered.ca:80` · `:443` · `turns:…:443` |
+| 用户名 | `openrelayproject` |
+| 密码 | `openrelayprojectsecret` |
+
+完整模板：[templates/p2p-network.openrelay.json](./templates/p2p-network.openrelay.json)  
+一键安装：`cp docs/engineering/templates/env.p2p.turn.example .env.p2p.turn && pnpm rc1:wan-prep`
+
 ### 自动更新（R1.1）
 
 | 变量 | 生产值 | 说明 |

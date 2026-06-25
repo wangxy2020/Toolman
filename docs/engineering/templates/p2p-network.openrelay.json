@@ -1,0 +1,19 @@
+{
+  "iceServers": [
+    {
+      "urls": "stun:staticauth.openrelay.metered.ca:80"
+    },
+    {
+      "urls": [
+        "turn:staticauth.openrelay.metered.ca:80",
+        "turn:staticauth.openrelay.metered.ca:443",
+        "turns:staticauth.openrelay.metered.ca:443"
+      ],
+      "username": "openrelayproject",
+      "credential": "openrelayprojectsecret"
+    }
+  ],
+  "stunServers": [
+    "stun:staticauth.openrelay.metered.ca:80"
+  ]
+}

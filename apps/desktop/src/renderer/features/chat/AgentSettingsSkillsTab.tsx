@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type SkillInfo } from '@toolman/shared'
 import { IconPlus, IconSearch } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 
 function Toggle({
   checked,
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function AgentSettingsSkillsTab({ skillIds, onSkillToggle, onInstallSkill }: Props) {
+  const { t } = useI18n()
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -97,13 +99,13 @@ export function AgentSettingsSkillsTab({ skillIds, onSkillToggle, onInstallSkill
 
       <div className="tm-agent-tab-head">
         <h3 className="tm-agent-tab-title">
-          已安装技能
+          {t('agent.skills.installed')}
           <button
             type="button"
             className="tm-agent-tab-search"
-            title="搜索技能"
+            title={t('agent.skills.search')}
             onClick={() => {
-              const next = window.prompt('搜索技能', query)
+              const next = window.prompt(t('agent.skills.searchPrompt'), query)
               if (next != null) setQuery(next)
             }}
           >
@@ -114,16 +116,18 @@ export function AgentSettingsSkillsTab({ skillIds, onSkillToggle, onInstallSkill
           type="button"
           className="tm-agent-skill-add"
           disabled={installing}
-          title={installing ? '安装中…' : '添加更多技能'}
+          title={installing ? t('agent.skills.installing') : t('agent.skills.addMore')}
           onClick={() => void handleInstall()}
         >
           <IconPlus size={14} className={installing ? 'tm-icon-spin' : undefined} />
-          {installing ? '安装中…' : '添加更多技能'}
+          {installing ? t('agent.skills.installing') : t('agent.skills.addMore')}
         </button>
       </div>
 
-      {query ? <div className="tm-agent-skill-search-hint">搜索：{query}</div> : null}
-      {loading ? <div className="tm-settings-loading">加载技能…</div> : null}
+      {query ? (
+        <div className="tm-agent-skill-search-hint">{t('agent.skills.searchResult', { query })}</div>
+      ) : null}
+      {loading ? <div className="tm-settings-loading">{t('agent.skills.loading')}</div> : null}
 
       <div className="tm-skill-list">
         {filteredSkills.map((skill) => {
@@ -134,9 +138,9 @@ export function AgentSettingsSkillsTab({ skillIds, onSkillToggle, onInstallSkill
                 <div className="tm-skill-card-name">{skill.name}</div>
                 <div className="tm-skill-card-desc">{skill.description}</div>
                 <div className="tm-skill-card-meta">
-                  {skill.builtin ? <span className="tm-skill-badge">内置</span> : null}
+                  {skill.builtin ? <span className="tm-skill-badge">{t('agent.skills.builtin')}</span> : null}
                   <span className={`tm-tool-tag ${enabled ? 'tm-tool-tag--on' : 'tm-tool-tag--off'}`}>
-                    {enabled ? '已挂载' : '未挂载'}
+                    {enabled ? t('agent.skills.mounted') : t('agent.skills.unmounted')}
                   </span>
                 </div>
               </div>

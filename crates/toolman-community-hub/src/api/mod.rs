@@ -83,14 +83,17 @@ mod tests {
         std::env::temp_dir().join(format!("toolman-user-api-{}", Uuid::new_v4()))
     }
 
+    const TEST_HUB_JWT_SECRET: &str = "toolman-test-hub-jwt-secret";
+
     async fn test_app() -> (Router, sqlx::SqlitePool, PathBuf) {
-        let data_dir = temp_data_dir();
-        std::fs::create_dir_all(&data_dir).expect("data dir");
-        let db_path = data_dir.join("community.db");
-        let pool = init_pool(&db_path).await.expect("init pool");
-        let config = HubConfig::with_data_dir(data_dir.clone());
-        let state = AppState::new(config, pool.clone());
-        (router(state), pool, data_dir)
+        test_app_with_jwt(TEST_HUB_JWT_SECRET).await
+    }
+
+    fn bearer_auth(identity_id: &str) -> String {
+        format!(
+            "Bearer {}",
+            sign_test_hub_token(TEST_HUB_JWT_SECRET, identity_id, "registered")
+        )
     }
 
     async fn test_app_with_jwt(secret: &str) -> (Router, sqlx::SqlitePool, PathBuf) {
@@ -212,7 +215,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/v1/users/me")
-                    .header(HEADER_COMMUNITY_USER_ID, DEFAULT_IDENTITY_ID)
+                    .header("Authorization", bearer_auth(DEFAULT_IDENTITY_ID))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -242,7 +245,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/v1/users/me/publish-check")
-                    .header(HEADER_COMMUNITY_USER_ID, identity)
+                    .header("Authorization", bearer_auth(&identity))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -264,7 +267,7 @@ mod tests {
                 Request::builder()
                     .method("PATCH")
                     .uri("/api/v1/users/me")
-                    .header(HEADER_COMMUNITY_USER_ID, DEFAULT_IDENTITY_ID)
+                    .header("Authorization", bearer_auth(DEFAULT_IDENTITY_ID))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         r#"{"display_name":"Updated Name","bio":"Hello community"}"#,
@@ -327,7 +330,7 @@ mod tests {
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/reviews")
-                    .header(HEADER_COMMUNITY_USER_ID, &identity)
+                    .header("Authorization", bearer_auth(&identity))
                     .header("content-type", "application/json")
                     .body(Body::from(body.clone()))
                     .unwrap(),
@@ -341,7 +344,7 @@ mod tests {
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/reviews")
-                    .header(HEADER_COMMUNITY_USER_ID, identity)
+                    .header("Authorization", bearer_auth(&identity))
                     .header("content-type", "application/json")
                     .body(Body::from(body))
                     .unwrap(),

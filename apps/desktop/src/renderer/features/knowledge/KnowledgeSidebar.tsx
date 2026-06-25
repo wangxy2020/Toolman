@@ -4,6 +4,8 @@ import { isP2pSharedKnowledgeMirrorDescription, resolveGroupSavedKnowledgeSideba
 import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconPlus } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { getModulePageConfig } from '../modules/module-config'
+import { useI18n } from '../../i18n/useI18n'
+import { getKnowledgeSidebarSectionLabel } from '../../i18n/knowledge-sidebar-labels'
 import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
@@ -11,7 +13,6 @@ import {
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
   KNOWLEDGE_SIDEBAR_SECTIONS,
-  SYSTEM_DEFAULT_FOLDER_KB_NAME,
   SYSTEM_DEFAULT_FOLDER_KB_NAMES,
   isDeletableKnowledgeBase,
   type KnowledgeSidebarSection,
@@ -49,7 +50,8 @@ export function KnowledgeSidebar({
   onCreate,
   onDelete,
 }: Props) {
-  const config = getModulePageConfig('knowledge')
+  const { t } = useI18n()
+  const config = getModulePageConfig('knowledge', t)
   const localItems = items.filter(
     (item) => item.kind === 'local' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
   )
@@ -102,6 +104,8 @@ export function KnowledgeSidebar({
     event.preventDefault()
   }
 
+  const defaultFolderLabel = t('sidebar.knowledge.defaultFolder')
+
   return (
     <aside className="tm-sidebar">
       <div className="tm-sidebar-content">
@@ -112,10 +116,11 @@ export function KnowledgeSidebar({
 
         <div className="tm-sidebar-list">
           {loading && localItems.length === 0 && activeSection === 'local' && (
-            <div className="tm-empty">加载中…</div>
+            <div className="tm-empty">{t('common.loading')}</div>
           )}
 
           {KNOWLEDGE_SIDEBAR_SECTIONS.map((section) => {
+            const sectionLabel = getKnowledgeSidebarSectionLabel(section.id, t)
             const isOpen = expanded.has(section.id)
             const isActive = activeSection === section.id
 
@@ -133,7 +138,7 @@ export function KnowledgeSidebar({
                   <button
                     type="button"
                     className="tm-assistant-expand"
-                    title={isOpen ? '收起' : '展开'}
+                    title={isOpen ? t('common.collapse') : t('common.expand')}
                     onClick={() => toggleExpanded(section.id)}
                     onContextMenu={suppressContextMenu}
                   >
@@ -150,7 +155,7 @@ export function KnowledgeSidebar({
                     onClick={() => handleSectionClick(section.id)}
                     onContextMenu={suppressContextMenu}
                   >
-                    {section.label}
+                    {sectionLabel}
                   </button>
                   <div className="tm-assistant-actions tm-assistant-actions--placeholder" aria-hidden="true" />
                 </div>
@@ -159,11 +164,11 @@ export function KnowledgeSidebar({
                   <>
                     <KnowledgeSidebarMenuItem
                       icon={<IconFolder size={14} />}
-                      label="默认文件夹"
+                      label={defaultFolderLabel}
                       active={
                         activeId === DEFAULT_KNOWLEDGE_FOLDER_ID && activeSection === 'local'
                       }
-                      title="知识库文件的默认存储与导入位置"
+                      title={t('sidebar.knowledge.defaultFolderTitle')}
                       onClick={onSelectDefaultFolder}
                     />
                     {localItems.map((item) => (
@@ -172,7 +177,11 @@ export function KnowledgeSidebar({
                         icon={<IconFolder size={14} />}
                         label={item.name}
                         active={item.id === activeId && activeSection === 'local'}
-                        title={`${item.name} · ${item.documentCount} 文档 · ${item.chunkCount} 块`}
+                        title={t('sidebar.knowledge.itemMeta', {
+                          name: item.name,
+                          documents: item.documentCount,
+                          chunks: item.chunkCount,
+                        })}
                         onClick={() => onSelect(item.id)}
                         deletable={isDeletableKnowledgeBase(item.name)}
                         onRequestDelete={
@@ -189,12 +198,12 @@ export function KnowledgeSidebar({
                   <>
                     <KnowledgeSidebarMenuItem
                       icon={<IconFolder size={14} />}
-                      label={SYSTEM_DEFAULT_FOLDER_KB_NAME}
+                      label={defaultFolderLabel}
                       active={
                         activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID &&
                         activeSection === 'network'
                       }
-                      title="网络知识库内容的默认保存位置"
+                      title={t('sidebar.knowledge.networkDefaultTitle')}
                       onClick={onSelectDefaultNetworkFolder}
                     />
                     {networkItems.map((item) => (
@@ -203,7 +212,11 @@ export function KnowledgeSidebar({
                         icon={<IconGlobe size={14} />}
                         label={item.name}
                         active={item.id === activeId && activeSection === 'network'}
-                        title={`${item.name} · ${item.documentCount} 文档 · ${item.chunkCount} 块`}
+                        title={t('sidebar.knowledge.itemMeta', {
+                          name: item.name,
+                          documents: item.documentCount,
+                          chunks: item.chunkCount,
+                        })}
                         onClick={() => onSelect(item.id)}
                         deletable={isDeletableKnowledgeBase(item.name)}
                         onRequestDelete={
@@ -219,18 +232,23 @@ export function KnowledgeSidebar({
                 {isOpen && section.id === 'shared' ? (
                   <>
                     {loading && savedSharedItems.length === 0 ? (
-                      <div className="tm-session-empty">加载中…</div>
+                      <div className="tm-session-empty">{t('common.loading')}</div>
                     ) : null}
                     {!loading && savedSharedItems.length === 0 ? (
-                      <div className="tm-session-empty">暂无文件夹</div>
+                      <div className="tm-session-empty">{t('sidebar.knowledge.noFolders')}</div>
                     ) : null}
-                    {savedSharedItems.map((item) => (
+                    {savedSharedItems.map((item) => {
+                      const sharedLabel = resolveGroupSavedKnowledgeSidebarLabel(item)
+                      return (
                       <KnowledgeSidebarMenuItem
                         key={item.id}
                         icon={<IconFolder size={14} />}
-                        label={resolveGroupSavedKnowledgeSidebarLabel(item)}
+                        label={sharedLabel}
                         active={item.id === activeId && activeSection === 'shared'}
-                        title={`${resolveGroupSavedKnowledgeSidebarLabel(item)} · ${item.documentCount} 文档 · 其他成员分享到群组后保存到本地`}
+                        title={t('sidebar.knowledge.sharedItemMeta', {
+                          name: sharedLabel,
+                          documents: item.documentCount,
+                        })}
                         onClick={() => onSelect(item.id)}
                         deletable={isDeletableKnowledgeBase(item.name)}
                         onRequestDelete={
@@ -239,7 +257,8 @@ export function KnowledgeSidebar({
                             : undefined
                         }
                       />
-                    ))}
+                      )
+                    })}
                   </>
                 ) : null}
 
@@ -247,12 +266,12 @@ export function KnowledgeSidebar({
                   <>
                     <KnowledgeSidebarMenuItem
                       icon={<IconFolder size={14} />}
-                      label={SYSTEM_DEFAULT_FOLDER_KB_NAME}
+                      label={defaultFolderLabel}
                       active={
                         activeId === DEFAULT_LOCAL_FILES_FOLDER_ID &&
                         activeSection === 'local-files'
                       }
-                      title="本地文件的默认存储位置（不进行向量化）"
+                      title={t('sidebar.knowledge.localFilesDefaultTitle')}
                       onClick={onSelectDefaultLocalFilesFolder}
                     />
                     {localFilesItems.map((item) => (
@@ -261,7 +280,10 @@ export function KnowledgeSidebar({
                         icon={<IconFile size={14} />}
                         label={item.name}
                         active={item.id === activeId && activeSection === 'local-files'}
-                        title={`${item.name} · ${item.documentCount} 个文件`}
+                        title={t('sidebar.knowledge.fileMeta', {
+                          name: item.name,
+                          count: item.documentCount,
+                        })}
                         onClick={() => onSelect(item.id)}
                         deletable={isDeletableKnowledgeBase(item.name)}
                         onRequestDelete={
@@ -278,18 +300,18 @@ export function KnowledgeSidebar({
                   <>
                     <KnowledgeSidebarMenuItem
                       icon={<IconFile size={14} />}
-                      label="文件注册表"
+                      label={t('sidebar.knowledge.fileRegistry')}
                       active={
                         activeId === FILE_REGISTRY_TOOL_ID && activeSection === 'file-tools'
                       }
-                      title="查看已索引文件的登记信息"
+                      title={t('sidebar.knowledge.fileRegistryTitle')}
                       onClick={onSelectFileRegistry}
                     />
                     <KnowledgeSidebarMenuItem
                       icon={<IconCopy size={14} />}
-                      label="文件查重"
+                      label={t('sidebar.knowledge.fileDedup')}
                       active={activeId === FILE_DEDUP_TOOL_ID && activeSection === 'file-tools'}
-                      title="扫描并识别重复文件"
+                      title={t('sidebar.knowledge.fileDedupTitle')}
                       onClick={onSelectFileDedup}
                     />
                   </>
@@ -302,10 +324,10 @@ export function KnowledgeSidebar({
 
       {deleteTarget ? (
         <ConfirmDialog
-          title="删除知识库"
-          message={`确定删除「${deleteTarget.name}」？相关文档与索引将一并清理。`}
-          confirmLabel="删除"
-          cancelLabel="取消"
+          title={t('sidebar.knowledge.deleteTitle')}
+          message={t('sidebar.knowledge.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
           danger
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {

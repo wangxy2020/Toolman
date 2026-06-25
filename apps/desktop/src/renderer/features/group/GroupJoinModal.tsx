@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { IpcChannel } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 import { GroupMemberLimitModal } from './GroupMemberLimitModal'
 import { P2pJoinError } from './useP2pWorkspaces'
 
@@ -9,16 +11,31 @@ interface Props {
 }
 
 export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props) {
+  const { t } = useI18n()
   const [inviteInput, setInviteInput] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [memberLimitOpen, setMemberLimitOpen] = useState(false)
+  const [wanWarning, setWanWarning] = useState<string | null>(null)
+
+  useEffect(() => {
+    void window.api.invoke(IpcChannel.P2pNetworkGetConfig).then((result) => {
+      if (!result.ok) return
+      const config = result.data as {
+        wanReadiness?: { ready: boolean; reason?: string }
+      }
+      const readiness = config.wanReadiness
+      if (!readiness?.ready) {
+        setWanWarning(readiness?.reason ?? t('modals.groupJoin.wanDefaultWarning'))
+      }
+    })
+  }, [t])
 
   const handleSubmit = async () => {
     const trimmed = inviteInput.trim()
     if (!trimmed) {
-      setError('请输入邀请码或邀请链接')
+      setError(t('modals.groupJoin.inviteRequired'))
       return
     }
 
@@ -36,7 +53,7 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
         setError(null)
         return
       }
-      setError(err instanceof Error ? err.message : '加入失败')
+      setError(err instanceof Error ? err.message : t('modals.groupJoin.joinFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -47,34 +64,40 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
       <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
         <div className="tm-modal-header">
-          <h2 className="tm-modal-title">加入群组</h2>
+          <h2 className="tm-modal-title">{t('modals.groupJoin.title')}</h2>
           <button type="button" className="tm-modal-close" onClick={onClose}>
             ×
           </button>
         </div>
 
         <div className="tm-modal-body">
+          {wanWarning ? (
+            <div className="tm-diagnostics-banner tm-diagnostics-banner--warn" role="status">
+              <p>{wanWarning}</p>
+              <p className="tm-settings-row-hint">{t('modals.groupJoin.wanHint')}</p>
+            </div>
+          ) : null}
           {error && <div className="tm-error-bar">{error}</div>}
 
           <label className="tm-model-form-field">
-            <span className="tm-model-form-label">邀请码 / 邀请链接</span>
+            <span className="tm-model-form-label">{t('modals.groupJoin.inviteLabel')}</span>
             <textarea
               className="tm-model-form-input"
               value={inviteInput}
               onChange={(e) => setInviteInput(e.target.value)}
-              placeholder="粘贴 toolman://join?... 或邀请码"
+              placeholder={t('modals.groupJoin.invitePlaceholder')}
               rows={4}
               autoFocus
             />
           </label>
 
           <label className="tm-model-form-field">
-            <span className="tm-model-form-label">群内显示名（可选）</span>
+            <span className="tm-model-form-label">{t('modals.groupJoin.displayNameLabel')}</span>
             <input
               className="tm-model-form-input"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="在群组中显示的名称"
+              placeholder={t('modals.groupJoin.displayNamePlaceholder')}
               maxLength={100}
             />
           </label>
@@ -82,7 +105,7 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
 
         <div className="tm-modal-footer">
           <button type="button" className="tm-btn tm-btn--secondary" onClick={onClose} disabled={submitting}>
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -90,7 +113,7 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
             onClick={() => void handleSubmit()}
             disabled={submitting}
           >
-            {submitting ? '加入中…' : '加入'}
+            {submitting ? t('common.joining') : t('common.join')}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -64,12 +65,12 @@ let currentStatus: CommunityHubStatus = {
 
 function log(message: string, error?: unknown): void {
   if (error !== undefined) {
-    console.error(`[community-hub] ${message}`, error)
+    logStructured('community.hub', 'error', `${message}`, { detail: error })
     const errMessage = toErrorMessage(error, String(error))
     recordDiagnosticEvent('community-hub', 'error', `${message}: ${errMessage}`)
     return
   }
-  console.log(`[community-hub] ${message}`)
+  logStructured('community.hub', 'info', `${message}`)
 }
 
 export function getCommunityHubStatus(): CommunityHubStatus {
@@ -422,9 +423,9 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
         (app.isPackaged ? 'false' : 'true'),
       COMMUNITY_HUB_JWT_SECRET: jwtSecret,
       COMMUNITY_HUB_REQUIRE_REVIEW:
-        process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'false' : 'true'),
+        process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'true' : 'true'),
       COMMUNITY_HUB_RATE_LIMIT_RPM:
-        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? (app.isPackaged ? '600' : '0'),
+        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? (app.isPackaged ? '120' : '0'),
       RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
     }
 

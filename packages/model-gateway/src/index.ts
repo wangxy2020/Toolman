@@ -59,7 +59,7 @@ export class DefaultModelGateway implements ModelGateway {
     if (OPENAI_COMPAT_TYPES.includes(config.type)) {
       if (shouldUseOllamaNativeChat(config, params)) {
         let content = ''
-        let toolCalls: ChatCompletionResult['toolCalls'] = []
+        const toolCalls: ChatCompletionResult['toolCalls'] = []
         let usage: ChatCompletionResult['usage']
         for await (const chunk of streamOllamaNativeChat(config, params)) {
           if (chunk.type === 'text-delta' && chunk.text) content += chunk.text

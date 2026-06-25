@@ -66,3 +66,59 @@ export function verifyGroupChatWireMessage(
 
   return { ok: true }
 }
+
+export interface SignedGroupChatClearWireEnvelope {
+  v: 2
+  type: 'group-chat.clear'
+  workspaceId: string
+  clearedAt: number
+  signerDeviceId: string
+  signature: string
+}
+
+function buildGroupChatClearSignPayload(input: {
+  workspaceId: string
+  clearedAt: number
+}): string {
+  return JSON.stringify({
+    v: SIGN_PAYLOAD_VERSION,
+    type: 'group-chat.clear',
+    workspaceId: input.workspaceId,
+    clearedAt: input.clearedAt,
+  })
+}
+
+export function signGroupChatClearWireMessage(workspaceId: string): SignedGroupChatClearWireEnvelope {
+  const device = getP2pDeviceInfo()
+  const clearedAt = Date.now()
+  const payload = buildGroupChatClearSignPayload({ workspaceId, clearedAt })
+  return {
+    v: 2,
+    type: 'group-chat.clear',
+    workspaceId,
+    clearedAt,
+    signerDeviceId: device.deviceId,
+    signature: signDeviceMessage(payload),
+  }
+}
+
+export function verifyGroupChatClearWireMessage(
+  peerDeviceId: string,
+  envelope: SignedGroupChatClearWireEnvelope,
+): { ok: true } | { ok: false; reason: string } {
+  if (envelope.signerDeviceId !== peerDeviceId) {
+    return { ok: false, reason: 'signer device does not match peer' }
+  }
+
+  const publicKey = resolvePeerPublicKey(peerDeviceId, peerDeviceId)
+  const payload = buildGroupChatClearSignPayload({
+    workspaceId: envelope.workspaceId,
+    clearedAt: envelope.clearedAt,
+  })
+  const valid = verifyDeviceMessage(payload, envelope.signature, publicKey)
+  if (!valid) {
+    return { ok: false, reason: 'invalid group chat clear signature' }
+  }
+
+  return { ok: true }
+}

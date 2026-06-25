@@ -1,4 +1,5 @@
 import { statSync, writeFileSync } from 'node:fs'
+import { logStructured } from './structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import {
@@ -31,6 +32,27 @@ import {
 
 const PARSE_TIMEOUT_MS = 20 * 60 * 1000
 const EMBED_TIMEOUT_MS = 15 * 60 * 1000
+const MAX_CONCURRENT_INGEST_JOBS = 2
+
+let activeIngestJobs = 0
+const ingestJobWaiters: Array<() => void> = []
+
+async function acquireIngestJobSlot(): Promise<void> {
+  if (activeIngestJobs < MAX_CONCURRENT_INGEST_JOBS) {
+    activeIngestJobs += 1
+    return
+  }
+  await new Promise<void>((resolve) => {
+    ingestJobWaiters.push(resolve)
+  })
+  activeIngestJobs += 1
+}
+
+function releaseIngestJobSlot(): void {
+  activeIngestJobs = Math.max(0, activeIngestJobs - 1)
+  const next = ingestJobWaiters.shift()
+  if (next) next()
+}
 
 const STAGE_PROGRESS: Record<string, number> = {
   queued: 5,
@@ -252,7 +274,7 @@ async function registerStorageOnlyFileAtPath(
     return { outcome: 'failed', path: filePath, message }
   }
 
-  let existing =
+  const existing =
     findActiveDocumentByPath(repo, kbId, filePath) ??
     (documentId ? findActiveDocumentById(repo, kbId, documentId) : undefined)
 
@@ -757,7 +779,7 @@ export function startIngestFilePathsInBackground(options: {
     kbId: options.kbId,
     filePaths: options.filePaths,
   }).catch((error) => {
-    console.error('[knowledge] background ingest failed', error)
+    logStructured('knowledge', 'error', `background ingest failed`, { detail: error })
     refreshKbStats(options.workspaceId, options.kbId, { status: 'error' })
   })
 }
@@ -779,20 +801,28 @@ export async function ingestFilePaths(options: {
   const failed: Array<{ path: string; message: string }> = []
   const repo = getDocumentRepository()
 
-  for (const filePath of options.filePaths) {
+  const ingestOne = async (filePath: string) => {
     const existing = repo.findByPath(options.kbId, filePath)
     if (existing && isIngestCancelled(existing.id)) {
-      continue
+      return { outcome: 'skipped' as const, path: filePath }
     }
 
-    const result = await ingestFileAtPath({
-      workspaceId: options.workspaceId,
-      kbId: options.kbId,
-      filePath,
-      sourceId: options.sourceId,
-      documentId: existing?.id,
-    })
+    await acquireIngestJobSlot()
+    try {
+      return await ingestFileAtPath({
+        workspaceId: options.workspaceId,
+        kbId: options.kbId,
+        filePath,
+        sourceId: options.sourceId,
+        documentId: existing?.id,
+      })
+    } finally {
+      releaseIngestJobSlot()
+    }
+  }
 
+  const results = await Promise.all(options.filePaths.map((filePath) => ingestOne(filePath)))
+  for (const result of results) {
     if (result.outcome === 'ingested') ingested++
     else if (result.outcome === 'skipped') skipped++
     else failed.push({ path: result.path, message: result.message ?? '导入失败' })
@@ -828,7 +858,7 @@ export function recoverStaleIngestJobs(): number {
   }
 
   if (recovered > 0) {
-    console.warn(`[knowledge] marked ${recovered} stale ingest jobs as failed`)
+    logStructured('knowledge', 'warn', `marked ${recovered} stale ingest jobs as failed`)
   }
 
   return recovered

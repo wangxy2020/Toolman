@@ -4719,6 +4719,8 @@ name = "toolman-community-hub"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
+ "bs58",
  "chrono",
  "directories",
  "encoding_rs",
@@ -4726,6 +4728,7 @@ dependencies = [
  "hex",
  "jsonwebtoken",
  "reqwest",
+ "ring 0.17.14",
  "scraper",
  "serde",
  "serde_json",

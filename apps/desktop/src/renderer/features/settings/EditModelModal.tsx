@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { ProviderModel } from '@toolman/shared'
 import { IconCopy } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
+import { getModelTypeLabel } from '../../i18n/settings-labels'
 import { SettingsToggle } from './SettingsShared'
 import {
   getDefaultModelTypes,
@@ -39,6 +41,7 @@ function buildInitialTypes(model: ProviderModel): ModelTypeState {
 }
 
 export function EditModelModal({ model, onClose, onSave }: Props) {
+  const { t } = useI18n()
   const [modelId] = useState(model.id)
   const [name, setName] = useState(model.name)
   const [group, setGroup] = useState(model.group ?? inferModelGroup(model.id))
@@ -66,7 +69,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
-      setError('复制失败')
+      setError(t('settings.models.edit.errors.copyFailed'))
     }
   }
 
@@ -86,7 +89,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
       })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
+      setError(err instanceof Error ? err.message : t('settings.models.edit.errors.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -96,7 +99,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
     <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-model-form-modal tm-model-form-modal--wide" onClick={(e) => e.stopPropagation()}>
         <header className="tm-modal-header">
-          <h2 className="tm-modal-title">编辑模型</h2>
+          <h2 className="tm-modal-title">{t('settings.models.edit.title')}</h2>
           <button type="button" className="tm-modal-close" onClick={onClose}>
             ×
           </button>
@@ -105,24 +108,29 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
         <div className="tm-model-form-body">
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              <span className="tm-model-form-required">*</span> 模型 ID
-              <span className="tm-model-form-help" title="模型在 API 中使用的唯一标识">
+              <span className="tm-model-form-required">*</span> {t('settings.models.edit.idLabel')}
+              <span className="tm-model-form-help" title={t('settings.models.edit.idHelp')}>
                 <IconHelp />
               </span>
             </span>
             <div className="tm-model-form-input-wrap">
               <input className="tm-model-form-input" value={modelId} readOnly />
-              <button type="button" className="tm-model-form-copy" title="复制" onClick={() => void handleCopyId()}>
+              <button
+                type="button"
+                className="tm-model-form-copy"
+                title={t('common.copy')}
+                onClick={() => void handleCopyId()}
+              >
                 <IconCopy size={16} />
               </button>
             </div>
-            {copied && <span className="tm-model-form-copied">已复制</span>}
+            {copied && <span className="tm-model-form-copied">{t('common.copied')}</span>}
           </label>
 
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              模型名称
-              <span className="tm-model-form-help" title="在界面中显示的名称">
+              {t('settings.models.edit.nameLabel')}
+              <span className="tm-model-form-help" title={t('settings.models.edit.nameHelp')}>
                 <IconHelp />
               </span>
             </span>
@@ -131,8 +139,8 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
 
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              分组名称
-              <span className="tm-model-form-help" title="用于在列表中分组展示">
+              {t('settings.models.edit.groupLabel')}
+              <span className="tm-model-form-help" title={t('settings.models.edit.groupHelp')}>
                 <IconHelp />
               </span>
             </span>
@@ -146,7 +154,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                 className="tm-model-form-more-toggle"
                 onClick={() => setShowMore((v) => !v)}
               >
-                更多设置 {showMore ? '∧' : '∨'}
+                {t('settings.models.edit.moreSettings')} {showMore ? '∧' : '∨'}
               </button>
               <button
                 type="button"
@@ -154,16 +162,16 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                 disabled={busy}
                 onClick={() => void handleSave()}
               >
-                {busy ? '保存中…' : '保存'}
+                {busy ? t('common.saving') : t('common.save')}
               </button>
             </div>
 
             {showMore && (
               <div className="tm-model-form-more">
                 <div className="tm-model-form-field">
-                  <span className="tm-model-form-label">模型类型</span>
+                  <span className="tm-model-form-label">{t('settings.models.edit.typeLabel')}</span>
                   {lockedTypes ? (
-                    <p className="tm-model-form-hint">该模型仅支持固定类型，不可修改其他能力。</p>
+                    <p className="tm-model-form-hint">{t('settings.models.edit.typeLockedHint')}</p>
                   ) : null}
                   <div className="tm-model-type-grid">
                     {availableOptions.map((opt) => {
@@ -177,7 +185,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                           onClick={() => toggleType(opt.key)}
                         >
                           <ModelTypeIcon type={opt.key} size={14} />
-                          <span>{opt.label}</span>
+                          <span>{getModelTypeLabel(opt.key, t)}</span>
                         </button>
                       )
                     })}
@@ -188,8 +196,11 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                   <>
                     <div className="tm-model-form-row">
                       <span className="tm-model-form-label">
-                        支持增量文本输出
-                        <span className="tm-model-form-help" title="流式返回模型输出">
+                        {t('settings.models.edit.incrementalOutput')}
+                        <span
+                          className="tm-model-form-help"
+                          title={t('settings.models.edit.incrementalOutputHelp')}
+                        >
                           <IconHelp />
                         </span>
                       </span>
@@ -197,7 +208,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                     </div>
 
                     <div className="tm-model-form-row">
-                      <span className="tm-model-form-label">币种</span>
+                      <span className="tm-model-form-label">{t('settings.models.edit.currency')}</span>
                       <select
                         className="tm-model-form-select"
                         value={currency}
@@ -209,7 +220,7 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                     </div>
 
                     <label className="tm-model-form-field">
-                      <span className="tm-model-form-label">输入价格</span>
+                      <span className="tm-model-form-label">{t('settings.models.edit.inputPrice')}</span>
                       <div className="tm-model-form-price">
                         <input
                           className="tm-model-form-input"
@@ -220,7 +231,9 @@ export function EditModelModal({ model, onClose, onSave }: Props) {
                           onChange={(e) => setInputPrice(e.target.value)}
                         />
                         <span className="tm-model-form-price-unit">
-                          {currency === 'CNY' ? '¥' : '$'}/百万 Token
+                          {t('settings.models.edit.pricePerMillionTokens', {
+                            symbol: currency === 'CNY' ? '¥' : '$',
+                          })}
                         </span>
                       </div>
                     </label>

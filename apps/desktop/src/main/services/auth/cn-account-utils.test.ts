@@ -21,4 +21,8 @@ describe('cn-account-utils', () => {
     expect(maskCnAuthAccount(phone)).toContain('****')
     expect(maskCnAuthAccount(email)).toBe('he***@example.com')
   })
+
+  it('rejects empty account input', () => {
+    expect(() => parseCnAuthAccount('   ')).toThrow('请输入手机号或邮箱')
+  })
 })

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ProviderModel } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 import type { ProviderPresetId } from './provider-presets'
 import { createProviderModel, isDeepSeekSupportedModelId, normalizeDeepSeekModelId } from './provider-model-utils'
 
@@ -20,6 +21,7 @@ function IconHelp({ size = 14 }: { size?: number }) {
 }
 
 export function AddModelModal({ presetId, onClose, onAdd }: Props) {
+  const { t } = useI18n()
   const [modelId, setModelId] = useState('')
   const [modelName, setModelName] = useState('')
   const [groupName, setGroupName] = useState('')
@@ -29,12 +31,12 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
   const handleSubmit = async () => {
     const rawId = modelId.trim()
     if (!rawId) {
-      setError('请填写模型 ID')
+      setError(t('settings.models.add.errors.idRequired'))
       return
     }
     const id = presetId === 'deepseek' ? normalizeDeepSeekModelId(rawId) : rawId
     if (presetId === 'deepseek' && !isDeepSeekSupportedModelId(id)) {
-      setError('DeepSeek 支持：deepseek-v4-flash、deepseek-v4-pro')
+      setError(t('settings.models.add.errors.deepseekUnsupported'))
       return
     }
     setBusy(true)
@@ -48,7 +50,7 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
       )
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '添加失败')
+      setError(err instanceof Error ? err.message : t('settings.models.add.errors.addFailed'))
     } finally {
       setBusy(false)
     }
@@ -58,7 +60,7 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
     <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-model-form-modal" onClick={(e) => e.stopPropagation()}>
         <header className="tm-modal-header">
-          <h2 className="tm-modal-title">添加模型</h2>
+          <h2 className="tm-modal-title">{t('settings.models.add.title')}</h2>
           <button type="button" className="tm-modal-close" onClick={onClose}>
             ×
           </button>
@@ -67,8 +69,8 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
         <div className="tm-model-form-body">
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              <span className="tm-model-form-required">*</span> 模型 ID
-              <span className="tm-model-form-help" title="模型在 API 中使用的唯一标识">
+              <span className="tm-model-form-required">*</span> {t('settings.models.add.idLabel')}
+              <span className="tm-model-form-help" title={t('settings.models.add.idHelp')}>
                 <IconHelp />
               </span>
             </span>
@@ -77,8 +79,8 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
               value={modelId}
               placeholder={
                 presetId === 'deepseek'
-                  ? '例如 deepseek-v4-flash 或 deepseek-v4-pro'
-                  : '必填 例如 gpt-3.5-turbo'
+                  ? t('settings.models.add.idPlaceholderDeepseek')
+                  : t('settings.models.add.idPlaceholder')
               }
               onChange={(e) => setModelId(e.target.value)}
             />
@@ -86,30 +88,30 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
 
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              模型名称
-              <span className="tm-model-form-help" title="在界面中显示的名称">
+              {t('settings.models.add.nameLabel')}
+              <span className="tm-model-form-help" title={t('settings.models.add.nameHelp')}>
                 <IconHelp />
               </span>
             </span>
             <input
               className="tm-model-form-input"
               value={modelName}
-              placeholder="例如 GPT-4"
+              placeholder={t('settings.models.add.namePlaceholder')}
               onChange={(e) => setModelName(e.target.value)}
             />
           </label>
 
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              分组名称
-              <span className="tm-model-form-help" title="用于在列表中分组展示">
+              {t('settings.models.add.groupLabel')}
+              <span className="tm-model-form-help" title={t('settings.models.add.groupHelp')}>
                 <IconHelp />
               </span>
             </span>
             <input
               className="tm-model-form-input"
               value={groupName}
-              placeholder="例如 ChatGPT"
+              placeholder={t('settings.models.add.groupPlaceholder')}
               onChange={(e) => setGroupName(e.target.value)}
             />
           </label>
@@ -124,7 +126,7 @@ export function AddModelModal({ presetId, onClose, onAdd }: Props) {
             disabled={busy}
             onClick={() => void handleSubmit()}
           >
-            {busy ? '添加中…' : '添加模型'}
+            {busy ? t('settings.models.add.submitting') : t('settings.models.add.submit')}
           </button>
         </footer>
       </div>

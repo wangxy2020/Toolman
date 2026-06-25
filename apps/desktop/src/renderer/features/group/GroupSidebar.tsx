@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { P2pWorkspace } from '@toolman/shared'
 import { IconChevronRight, IconFolder, IconPlus } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
+import { translateGroupName } from '../../i18n/system-labels'
 
 interface Props {
   myGroups: P2pWorkspace[]
@@ -16,11 +18,6 @@ function isGroupInList(groups: P2pWorkspace[], activeId: string | null) {
   return activeId != null && groups.some((group) => group.id === activeId)
 }
 
-function formatGroupLabel(name: string | null | undefined): string {
-  const trimmed = name?.trim()
-  return trimmed || '未命名群组'
-}
-
 export function GroupSidebar({
   myGroups,
   joinedGroups,
@@ -30,17 +27,24 @@ export function GroupSidebar({
   onCreate,
   onJoin,
 }: Props) {
+  const { t } = useI18n()
   const [myGroupsOpen, setMyGroupsOpen] = useState(true)
   const [joinedGroupsOpen, setJoinedGroupsOpen] = useState(true)
   const isMyGroupsActive = isGroupInList(myGroups, activeId)
   const isJoinedGroupsActive = isGroupInList(joinedGroups, activeId)
+
+  const formatGroupLabel = (name: string | null | undefined): string => {
+    const trimmed = name?.trim()
+    if (!trimmed) return t('sidebar.group.unnamed')
+    return translateGroupName(trimmed, t)
+  }
 
   return (
     <aside className="tm-sidebar">
       <div className="tm-sidebar-content">
         <button type="button" className="tm-sidebar-add" onClick={onCreate}>
           <IconPlus />
-          创建群组
+          {t('sidebar.group.create')}
         </button>
 
         <div className="tm-sidebar-list">
@@ -57,7 +61,7 @@ export function GroupSidebar({
               <button
                 type="button"
                 className="tm-assistant-expand"
-                title={myGroupsOpen ? '收起' : '展开'}
+                title={myGroupsOpen ? t('common.collapse') : t('common.expand')}
                 onClick={() => setMyGroupsOpen((v) => !v)}
               >
                 <IconChevronRight open={myGroupsOpen} />
@@ -72,15 +76,15 @@ export function GroupSidebar({
                   .join(' ')}
                 onClick={() => setMyGroupsOpen((v) => !v)}
               >
-                我创建的群组
+                {t('sidebar.group.myGroups')}
               </button>
             </div>
 
             {myGroupsOpen &&
               (loading && myGroups.length === 0 ? (
-                <div className="tm-session-empty">加载中…</div>
+                <div className="tm-session-empty">{t('common.loading')}</div>
               ) : myGroups.length === 0 ? (
-                <div className="tm-session-empty">暂无群组，点击上方创建</div>
+                <div className="tm-session-empty">{t('sidebar.group.emptyNoGroups')}</div>
               ) : (
                 myGroups.map((group) => (
                   <button
@@ -118,7 +122,7 @@ export function GroupSidebar({
               <button
                 type="button"
                 className="tm-assistant-expand"
-                title={joinedGroupsOpen ? '收起' : '展开'}
+                title={joinedGroupsOpen ? t('common.collapse') : t('common.expand')}
                 onClick={() => setJoinedGroupsOpen((v) => !v)}
               >
                 <IconChevronRight open={joinedGroupsOpen} />
@@ -133,13 +137,13 @@ export function GroupSidebar({
                   .join(' ')}
                 onClick={() => setJoinedGroupsOpen((v) => !v)}
               >
-                已加入群组
+                {t('sidebar.group.joinedGroups')}
               </button>
               <div className="tm-assistant-actions">
                 <button
                   type="button"
                   className="tm-assistant-action-btn"
-                  title="加入群组"
+                  title={t('sidebar.group.join')}
                   onClick={onJoin}
                 >
                   <IconPlus size={14} />
@@ -149,7 +153,7 @@ export function GroupSidebar({
 
             {joinedGroupsOpen &&
               (joinedGroups.length === 0 ? (
-                <div className="tm-session-empty">暂未加入任何群组</div>
+                <div className="tm-session-empty">{t('sidebar.group.emptyNoJoined')}</div>
               ) : (
                 joinedGroups.map((group) => (
                   <button

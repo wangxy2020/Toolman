@@ -2,6 +2,7 @@ import {
   DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   KnowledgeWatchConfigSchema,
 } from '@toolman/shared'
+import { logStructured } from './structured-log.service'
 import { listWorkspaces } from './workspace.service'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { ingestUrlDocument, refreshKbStats } from './knowledge-ingest.service'
@@ -48,7 +49,7 @@ async function refreshNetworkKnowledgeBaseUrls(
       if (result.outcome === 'failed') failed += 1
     } catch (error) {
       failed += 1
-      console.error('[knowledge] scheduled URL refresh failed', doc.absolutePath, error)
+      logStructured('knowledge', 'error', `scheduled URL refresh failed`, { detail: doc.absolutePath, error })
     }
   }
 
@@ -83,7 +84,7 @@ async function runUrlRefreshCheck() {
       try {
         await refreshNetworkKnowledgeBaseUrls(kb.workspaceId, kb.id, watchConfig)
       } catch (error) {
-        console.error('[knowledge] URL refresh scheduler failed for kb', kb.id, error)
+        logStructured('knowledge', 'error', `URL refresh scheduler failed for kb`, { detail: kb.id, error })
       }
     }
   }

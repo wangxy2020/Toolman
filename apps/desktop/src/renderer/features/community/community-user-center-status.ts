@@ -1,7 +1,10 @@
 import type { CommunityResourceItem, CommunityTaskItem } from '@toolman/shared'
 
-import { getResourceUserCenterStatusLabel } from './community-resource-status'
-import { TASK_STATUS_LABELS } from './community-task-utils'
+import type { TranslateFn } from '../../i18n/I18nProvider'
+import {
+  getCommunityResourceStatusLabel,
+  getCommunityTaskStatusLabel,
+} from '../../i18n/community-status-labels'
 
 export function isTaskRejectedLike(task: CommunityTaskItem): boolean {
   return task.status === 'rejected'
@@ -29,12 +32,15 @@ export function canModerationResubmitResource(item: CommunityResourceItem): bool
   return false
 }
 
-export function getTaskUserCenterStatusLabel(task: CommunityTaskItem): string {
-  return TASK_STATUS_LABELS[task.status]
+export function getTaskUserCenterStatusLabel(task: CommunityTaskItem, t: TranslateFn): string {
+  return getCommunityTaskStatusLabel(task.status, t)
 }
 
-export function getResourceUserCenterDisplayStatusLabel(item: CommunityResourceItem): string {
-  return getResourceUserCenterStatusLabel(item.status)
+export function getResourceUserCenterDisplayStatusLabel(
+  item: CommunityResourceItem,
+  t: TranslateFn,
+): string {
+  return getCommunityResourceStatusLabel(item.status, t)
 }
 
 export function canWithdrawCommunityTask(task: CommunityTaskItem): boolean {

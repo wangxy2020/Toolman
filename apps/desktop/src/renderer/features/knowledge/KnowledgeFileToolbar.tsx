@@ -1,6 +1,7 @@
 import { IconAgent, IconSort } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
-  KNOWLEDGE_FILE_SORT_OPTIONS,
+  getKnowledgeFileSortOptions,
   type KnowledgeFileSortField,
 } from './knowledge-file-sort'
 
@@ -19,14 +20,17 @@ export function KnowledgeFileToolbar({
   onChatWithFiles,
   chatDisabled = false,
 }: Props) {
+  const { t } = useI18n()
+  const sortOptions = getKnowledgeFileSortOptions(t)
+
   return (
     <div className="tm-kb-file-toolbar">
       {onChatWithFiles ? (
         <button
           type="button"
           className="tm-chat-header-settings-btn"
-          title="带着知识库文件去聊天"
-          aria-label="带着知识库文件去聊天"
+          title={t('knowledgePage.toolbar.chatWithFiles')}
+          aria-label={t('knowledgePage.toolbar.chatWithFiles')}
           disabled={chatDisabled}
           onClick={onChatWithFiles}
         >
@@ -34,7 +38,7 @@ export function KnowledgeFileToolbar({
         </button>
       ) : null}
       <div className="tm-kb-file-toolbar-sort">
-        {KNOWLEDGE_FILE_SORT_OPTIONS.map((option) => {
+        {sortOptions.map((option) => {
           const active = sortField === option.id
           return (
             <button

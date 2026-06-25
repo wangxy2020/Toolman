@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 
@@ -42,6 +42,20 @@ export function saveBlobReceiveSession(session: PersistedBlobReceiveSession): vo
     JSON.stringify({ ...session, updatedAt: Date.now() }, null, 2),
     'utf8',
   )
+}
+
+export function listBlobReceiveSessions(): PersistedBlobReceiveSession[] {
+  const dir = sessionsDir()
+  const files = readdirSync(dir).filter((name) => name.endsWith('.json'))
+  const sessions: PersistedBlobReceiveSession[] = []
+  for (const file of files) {
+    const transferId = file.replace(/\.json$/, '')
+    const session = loadBlobReceiveSession(transferId)
+    if (session) {
+      sessions.push(session)
+    }
+  }
+  return sessions
 }
 
 export function deleteBlobReceiveSession(transferId: string): void {

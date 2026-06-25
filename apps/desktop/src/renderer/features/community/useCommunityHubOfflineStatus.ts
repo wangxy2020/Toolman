@@ -1,15 +1,16 @@
-import { useRegisterModulePanelStatus } from '../../components/module-page-status'
 import type { CommunityHubStatusOutput } from '@toolman/shared'
 
+import { useRegisterModulePanelStatus } from '../../components/module-page-status'
+import { useI18n } from '../../i18n/useI18n'
+
 export function useCommunityHubOfflineStatus(status: CommunityHubStatusOutput | null) {
+  const { t } = useI18n()
   useRegisterModulePanelStatus(
     'community-hub-offline',
     status?.offlineReadOnly
       ? {
           tone: 'warning',
-          message:
-            status.error ??
-            '社区 Hub 离线，当前为本地缓存只读模式，发布、点赞等写操作暂不可用。恢复网络后将自动重新连接官方 Hub。',
+          message: status.error ?? t('communityPage.hubOfflineHint'),
         }
       : null,
   )

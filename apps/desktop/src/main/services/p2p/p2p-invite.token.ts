@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import type { P2pInvitableMemberRole } from '@toolman/shared'
 import { signDeviceMessage, verifyDeviceMessage } from './p2p-crypto.service'
 import {
@@ -9,10 +10,11 @@ import {
   unpackWanInviteBundle,
 } from './wan-transport'
 
-export const INVITE_TOKEN_VERSION = 1
+export const INVITE_TOKEN_VERSION = 2
+export const LEGACY_INVITE_TOKEN_VERSION = 1
 
 export interface InviteTokenPayload {
-  v: typeof INVITE_TOKEN_VERSION
+  v: typeof INVITE_TOKEN_VERSION | typeof LEGACY_INVITE_TOKEN_VERSION
   inviteId: string
   workspaceId: string
   workspaceName: string
@@ -30,6 +32,7 @@ export interface InviteTokenPayload {
 }
 
 export function buildInviteCanonicalMessage(input: {
+  version: typeof INVITE_TOKEN_VERSION | typeof LEGACY_INVITE_TOKEN_VERSION
   inviteId: string
   workspaceId: string
   role: P2pInvitableMemberRole
@@ -37,10 +40,13 @@ export function buildInviteCanonicalMessage(input: {
   maxUses: number
   issuerDeviceId: string
   workspaceKeyB64: string
+  ownerDeviceId?: string
+  ownerIdentityId?: string
+  ownerPublicKey?: string
 }): string {
-  return [
+  const parts = [
     'toolman-invite',
-    `v${INVITE_TOKEN_VERSION}`,
+    `v${input.version}`,
     input.inviteId,
     input.workspaceId,
     input.role,
@@ -48,13 +54,26 @@ export function buildInviteCanonicalMessage(input: {
     String(input.maxUses),
     input.issuerDeviceId,
     input.workspaceKeyB64,
-  ].join('|')
+  ]
+
+  if (input.version >= INVITE_TOKEN_VERSION) {
+    parts.push(
+      input.ownerDeviceId ?? '',
+      input.ownerIdentityId ?? '',
+      input.ownerPublicKey ?? '',
+    )
+  }
+
+  return parts.join('|')
 }
 
 export function signInvitePayload(
   payload: Omit<InviteTokenPayload, 'signature'>,
 ): InviteTokenPayload {
+  const version =
+    payload.v >= INVITE_TOKEN_VERSION ? INVITE_TOKEN_VERSION : LEGACY_INVITE_TOKEN_VERSION
   const canonical = buildInviteCanonicalMessage({
+    version,
     inviteId: payload.inviteId,
     workspaceId: payload.workspaceId,
     role: payload.role,
@@ -62,9 +81,12 @@ export function signInvitePayload(
     maxUses: payload.maxUses,
     issuerDeviceId: payload.issuerDeviceId,
     workspaceKeyB64: payload.workspaceKeyB64,
+    ownerDeviceId: payload.ownerDeviceId,
+    ownerIdentityId: payload.ownerIdentityId,
+    ownerPublicKey: payload.ownerPublicKey,
   })
   const signature = signDeviceMessage(canonical)
-  return { ...payload, signature }
+  return { ...payload, v: version, signature }
 }
 
 export function encodeInviteToken(payload: InviteTokenPayload): string {
@@ -78,14 +100,28 @@ export function decodeInviteToken(token: string): InviteTokenPayload {
       ? decodeWanBlob(normalized).toString('utf8')
       : Buffer.from(normalized, 'base64url').toString('utf8')
   const payload = JSON.parse(json) as InviteTokenPayload
-  if (payload.v !== INVITE_TOKEN_VERSION) {
+  if (
+    payload.v !== INVITE_TOKEN_VERSION &&
+    payload.v !== LEGACY_INVITE_TOKEN_VERSION
+  ) {
     throw new Error('不支持的邀请码版本')
   }
   return payload
 }
 
 export function verifyInviteToken(payload: InviteTokenPayload): void {
+  const version =
+    payload.v >= INVITE_TOKEN_VERSION ? INVITE_TOKEN_VERSION : LEGACY_INVITE_TOKEN_VERSION
+
+  if (
+    app.isPackaged &&
+    version < INVITE_TOKEN_VERSION &&
+    process.env.TOOLMAN_P2P_ALLOW_LEGACY_INVITE !== '1'
+  ) {
+    throw new Error('邀请码版本过旧，请让群主重新生成邀请链接')
+  }
   const canonical = buildInviteCanonicalMessage({
+    version,
     inviteId: payload.inviteId,
     workspaceId: payload.workspaceId,
     role: payload.role,
@@ -93,6 +129,9 @@ export function verifyInviteToken(payload: InviteTokenPayload): void {
     maxUses: payload.maxUses,
     issuerDeviceId: payload.issuerDeviceId,
     workspaceKeyB64: payload.workspaceKeyB64,
+    ownerDeviceId: payload.ownerDeviceId,
+    ownerIdentityId: payload.ownerIdentityId,
+    ownerPublicKey: payload.ownerPublicKey,
   })
 
   const valid = verifyDeviceMessage(
@@ -106,6 +145,16 @@ export function verifyInviteToken(payload: InviteTokenPayload): void {
 
   if (payload.expiresAt <= Date.now()) {
     throw new Error('邀请码已过期')
+  }
+
+  if (version >= INVITE_TOKEN_VERSION) {
+    if (
+      !payload.ownerDeviceId.trim() ||
+      !payload.ownerIdentityId.trim() ||
+      !payload.ownerPublicKey.trim()
+    ) {
+      throw new Error('邀请码缺少群主身份信息')
+    }
   }
 }
 

@@ -4,6 +4,7 @@ import {
   recoverStaleIngestJobs,
   startIngestFilePathsInBackground,
 } from './knowledge-ingest.service'
+import { logStructured } from './structured-log.service'
 import { getDocumentRepository } from '../db/repos'
 
 function isUrlPath(path: string | null | undefined): boolean {
@@ -69,13 +70,11 @@ export function resumePendingIngestJobs(): void {
           })
           refreshKbStats(job.workspaceId, job.kbId)
         } catch (error) {
-          console.error('[knowledge] resume URL ingest failed', job.url, error)
+          logStructured('knowledge', 'error', `resume URL ingest failed`, { detail: job.url, error })
         }
       }
     })()
   }
 
-  console.info(
-    `[knowledge] resumed ${fileJobsByKb.size} file ingest batches and ${urlJobs.length} URL jobs`,
-  )
+  logStructured('knowledge', 'info', `resumed ${fileJobsByKb.size} file ingest batches and ${urlJobs.length} URL jobs`)
 }

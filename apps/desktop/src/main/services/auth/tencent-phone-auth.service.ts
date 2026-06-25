@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { logStructured } from '../structured-log.service'
 
 import { formatAuthDevSmsLog, type AuthSendSmsCodeInput, type AuthSendSmsCodeOutput } from '@toolman/shared'
 
@@ -40,7 +41,7 @@ export async function sendPhoneSmsCode(input: AuthSendSmsCodeInput): Promise<Aut
   if (smsConfig) {
     await sendTencentSmsCode(smsConfig, phone, code)
   } else if (isTencentSmsDevMode()) {
-    console.log(formatAuthDevSmsLog(phone, code))
+    logStructured('auth', 'info', formatAuthDevSmsLog(phone, code))
   }
 
   return {

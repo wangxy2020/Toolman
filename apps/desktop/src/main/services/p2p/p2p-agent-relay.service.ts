@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {AgentRelayMessageSchema,
   type AgentRelayMessage,
@@ -93,15 +94,11 @@ function slimStreamEventForRelay(
   if (bytes <= P2P_EVENTS_SAFE_PAYLOAD_BYTES) return event
 
   if (event.type === 'message.done' && event.contentBlocks) {
-    console.warn(
-      `[p2p] agent relay stream trimmed: event=message.done bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`,
-    )
+    logStructured('p2p', 'warn', `agent relay stream trimmed: event=message.done bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`)
     return { ...event, contentBlocks: undefined }
   }
 
-  console.warn(
-    `[p2p] agent relay stream oversize: event=${event.type} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`,
-  )
+  logStructured('p2p', 'warn', `agent relay stream oversize: event=${event.type} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`)
   return event
 }
 
@@ -173,9 +170,7 @@ async function sendFetchOkResponse(
   }
 
   const parts = splitFetchOkParts(requestId, title, messages)
-  console.warn(
-    `[p2p] agent relay fetch_ok chunked: requestId=${requestId} messages=${messages.length} parts=${parts.length}`,
-  )
+  logStructured('p2p', 'warn', `agent relay fetch_ok chunked: requestId=${requestId} messages=${messages.length} parts=${parts.length}`)
   for (const part of parts) {
     await sendRelayMessage(peerDeviceId, part)
   }
@@ -315,9 +310,7 @@ async function ensureRelayContentBlobs(
     if (!hash || blobExists(hash)) continue
 
     const label = block.type === 'file' ? block.name || '附件' : '图片'
-    console.log(
-      `[p2p] agent relay fetching blob: hash=${hash.slice(0, 12)}… peer=${peerDeviceId}`,
-    )
+    logStructured('p2p', 'info', `agent relay fetching blob: hash=${hash.slice(0, 12)}… peer=${peerDeviceId}`)
     const ok = await fetchBlobFromPeers(p2pWorkspaceId, hash, block.mimeType, peerDeviceId)
     if (!ok) {
       throw new Error(`附件「${label}」未能从群组成员同步，请让对方重新发送`)
@@ -383,9 +376,7 @@ export async function relayProxySendMessage(input: {
   }
 
   if (input.proxy.ownerDeviceId === localDeviceId) {
-    console.log(
-      `[p2p] agent relay send start (local): sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`,
-    )
+    logStructured('p2p', 'info', `agent relay send start (local): sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`)
     await runOwnerRelaySend(localDeviceId, relayMessage, { deliverStreamLocally: true })
     return {
       userMessageId: input.memberUserMessageId,
@@ -396,9 +387,7 @@ export async function relayProxySendMessage(input: {
   await assertPeerTrustedForSync(input.proxy.p2pWorkspaceId, input.proxy.ownerDeviceId)
   await ensurePeerConnected(input.proxy.ownerDeviceId, input.proxy.p2pWorkspaceId)
 
-  console.log(
-    `[p2p] agent relay send start: ownerDeviceId=${input.proxy.ownerDeviceId} sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`,
-  )
+  logStructured('p2p', 'info', `agent relay send start: ownerDeviceId=${input.proxy.ownerDeviceId} sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`)
 
   const responsePromise = waitForRelayResponse(requestId)
 
@@ -464,9 +453,7 @@ async function runOwnerRelaySend(
   message: Extract<AgentRelayMessage, { type: 'send' }>,
   options: { deliverStreamLocally?: boolean } = {},
 ): Promise<void> {
-  console.log(
-    `[p2p] agent relay send received: peer=${peerDeviceId} sourceSessionId=${message.sourceSessionId} local=${options.deliverStreamLocally === true}`,
-  )
+  logStructured('p2p', 'info', `agent relay send received: peer=${peerDeviceId} sourceSessionId=${message.sourceSessionId} local=${options.deliverStreamLocally === true}`)
   try {
     assertRelayAccess(
       message.p2pWorkspaceId,
@@ -506,9 +493,7 @@ async function runOwnerRelaySend(
           event: remapped,
         }).catch((error) => {
           const errMessage = toErrorMessage(error, String(error))
-          console.error(
-            `[p2p] agent relay stream forward failed: requestId=${message.requestId} event=${event.type} error=${errMessage}`,
-          )
+          logStructured('p2p', 'error', `agent relay stream forward failed: requestId=${message.requestId} event=${event.type} error=${errMessage}`)
         })
       }
 
@@ -558,9 +543,7 @@ async function runOwnerRelaySend(
       throw new Error('生成回复失败')
     }
 
-    console.log(
-      `[p2p] agent relay owner send ok: sourceSessionId=${message.sourceSessionId} userMessageId=${result.userMessageId} assistantMessageId=${ownerAssistantMessageId}`,
-    )
+    logStructured('p2p', 'info', `agent relay owner send ok: sourceSessionId=${message.sourceSessionId} userMessageId=${result.userMessageId} assistantMessageId=${ownerAssistantMessageId}`)
     broadcastSessionMessagesReload(message.sourceSessionId)
 
     for (const event of bufferedEvents) {
@@ -580,9 +563,7 @@ async function runOwnerRelaySend(
     activeOwnerRelays.get(message.requestId)?.unsubscribe()
     activeOwnerRelays.delete(message.requestId)
     const errMessage = toErrorMessage(error, '发送消息失败')
-    console.error(
-      `[p2p] agent relay owner send failed: sourceSessionId=${message.sourceSessionId} error=${errMessage}`,
-    )
+    logStructured('p2p', 'error', `agent relay owner send failed: sourceSessionId=${message.sourceSessionId} error=${errMessage}`)
     if (options.deliverStreamLocally) {
       throw error
     }

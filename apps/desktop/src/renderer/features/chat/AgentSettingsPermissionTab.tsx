@@ -1,4 +1,7 @@
-import { PERMISSION_MODES, type PermissionMode } from './agent-settings-constants'
+import { useMemo } from 'react'
+import { useI18n } from '../../i18n/useI18n'
+import { getPermissionModes } from '../../i18n/agent-labels'
+import type { PermissionMode } from './agent-settings-constants'
 
 interface Props {
   value: PermissionMode
@@ -7,24 +10,25 @@ interface Props {
 }
 
 export function AgentSettingsPermissionTab({ value, autonomousMode, onChange }: Props) {
+  const { t } = useI18n()
+  const permissionModes = useMemo(() => getPermissionModes(t), [t])
   const effectiveMode: PermissionMode = autonomousMode ? 'full-auto' : value
-  const effectiveLabel = PERMISSION_MODES.find((mode) => mode.id === effectiveMode)
+  const effectiveLabel = permissionModes.find((mode) => mode.id === effectiveMode)
 
   return (
     <div className="tm-agent-tab-panel">
-      <h3 className="tm-agent-tab-title">权限模式</h3>
+      <h3 className="tm-agent-tab-title">{t('agent.permissionTab.title')}</h3>
       {autonomousMode ? (
         <p className="tm-agent-permission-effective-hint">
-          已开启<strong>自主模式</strong>，实际生效为「全自动模式」：写入与执行类工具无需逐项授权。
+          {t('agent.permissionTab.autonomousActive')}
         </p>
       ) : (
         <p className="tm-agent-permission-effective-hint">
-          当前生效：{effectiveLabel?.title ?? value}。读取类工具自动放行；写入与执行类工具每次需授权（Bash
-          预授权开启时除外）。
+          {t('agent.permissionTab.effectiveNormal', { mode: effectiveLabel?.title ?? value })}
         </p>
       )}
       <div className="tm-perm-grid">
-        {PERMISSION_MODES.map((mode) => {
+        {permissionModes.map((mode) => {
           const selected = value === mode.id
           return (
             <button

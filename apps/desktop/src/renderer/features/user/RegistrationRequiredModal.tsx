@@ -1,6 +1,7 @@
 import type { AuthFeature } from '@toolman/shared'
 
 import { AuthGuardModal } from './AuthGuardModal'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   open: boolean
@@ -10,19 +11,16 @@ interface Props {
   onRegister: () => void
 }
 
-function featureTitle(feature: AuthFeature): string {
+function featureTitle(feature: AuthFeature, t: ReturnType<typeof useI18n>['t']): string {
   switch (feature) {
     case 'group':
-      return '群组功能需要注册'
+      return t('user.guard.titleGroup')
     case 'community_write':
-      return '此操作需要注册'
+      return t('user.guard.titleCommunityWrite')
     default:
-      return '需要注册账户'
+      return t('user.guard.titleDefault')
   }
 }
-
-const DEFAULT_MESSAGE =
-  '注册并登录后可使用群组、发布内容、评论、安装资源等功能。'
 
 export function RegistrationRequiredModal({
   open,
@@ -31,13 +29,15 @@ export function RegistrationRequiredModal({
   onClose,
   onRegister,
 }: Props) {
+  const { t } = useI18n()
+
   return (
     <AuthGuardModal
       isOpen={open}
-      title={featureTitle(feature)}
-      description={message ?? DEFAULT_MESSAGE}
-      confirmText="去注册"
-      cancelText="我知道了"
+      title={featureTitle(feature, t)}
+      description={message ?? t('user.guard.descriptionDefault')}
+      confirmText={t('user.guard.goRegister')}
+      cancelText={t('user.guard.dismiss')}
       onConfirm={onRegister}
       onCancel={onClose}
     />

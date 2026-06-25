@@ -1,13 +1,15 @@
 import { CommunityResourceMarketPanel } from './CommunityResourceMarketPanel'
+import { useI18n } from '../../i18n/useI18n'
 
 export function WorkflowMarketPanel() {
+  const { t } = useI18n()
   return (
     <CommunityResourceMarketPanel
       resourceType="workflow"
-      title="工作流市场"
-      subtitle="浏览与导入社区共享的自动化工作流"
-      publishLabel="发布工作流"
-      emptyHint="暂无工作流资源，请确认 Community Hub 已启动并已发布资源"
+      title={t('communityPage.panels.workflow.title')}
+      subtitle={t('communityPage.panels.workflow.subtitle')}
+      publishLabel={t('communityPage.panels.workflow.publish')}
+      emptyHint={t('communityPage.market.workflowEmpty')}
     />
   )
 }

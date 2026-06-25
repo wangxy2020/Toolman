@@ -4,12 +4,13 @@ import {
   formatAbsoluteTime,
   formatP2pEventMessage,
   formatP2pEventTime,
-  P2P_RESOURCE_LABELS,
+  getP2pResourceLabel,
   shortDeviceId,
-} from './formatP2pEventMessage'
+} from '../../i18n/group-event-labels'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { useRegisterGroupPanelError } from './group-page-status'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceName: string
@@ -26,13 +27,14 @@ export function GroupActivityLog({
   error,
   onRefresh,
 }: Props) {
+  const { t, language } = useI18n()
   useRegisterGroupPanelError('activity', error)
 
   return (
     <div className="tm-group-activity-panel">
       <GroupPanelHeader
-        title="群组活动记录"
-        subtitle={`${workspaceName} · ${events.length} 条记录`}
+        title={t('groupPage.header.activity')}
+        subtitle={`${workspaceName} · ${t('groupPage.activity.count', { count: events.length })}`}
         actions={
           onRefresh ? (
             <GroupPanelRefreshButton loading={loading} onRefresh={onRefresh} />
@@ -41,33 +43,33 @@ export function GroupActivityLog({
       />
 
       {loading && events.length === 0 ? (
-        <div className="tm-session-empty">加载活动记录中…</div>
+        <div className="tm-session-empty">{t('groupPage.activity.loading')}</div>
       ) : events.length === 0 ? (
         <div className="tm-group-member-panel-empty">
           <span className="tm-group-member-panel-empty-icon" aria-hidden="true">
             <IconActivity size={28} />
           </span>
-          <p>暂无活动记录</p>
-          <p className="tm-kb-file-dropzone-hint">创建群组、加入成员等操作会显示在这里</p>
+          <p>{t('groupPage.activity.empty')}</p>
+          <p className="tm-kb-file-dropzone-hint">{t('groupPage.activity.emptyHint')}</p>
         </div>
       ) : (
         <ul className="tm-group-activity-list">
           {events.map((event) => {
-            const absoluteTime = formatAbsoluteTime(event.timestamp)
-            const relativeTime = formatP2pEventTime(event.timestamp)
+            const absoluteTime = formatAbsoluteTime(event.timestamp, language)
+            const relativeTime = formatP2pEventTime(event.timestamp, t, language)
 
             return (
               <li key={event.eventId} className="tm-group-activity-card">
                 <div className="tm-group-activity-main">
                   <span className="tm-group-activity-message">
-                    {formatP2pEventMessage(event)}
+                    {formatP2pEventMessage(event, t)}
                   </span>
                   <span className="tm-group-activity-meta">
-                    #{event.seq} · {P2P_RESOURCE_LABELS[event.resourceType]}
+                    #{event.seq} · {getP2pResourceLabel(event.resourceType, t)}
                     {event.sourceDeviceId ? (
                       <>
                         {' '}
-                        · 来自{' '}
+                        {' '}{t('groupPage.activity.from')}{' '}
                         <span title={event.sourceDeviceId}>
                           {shortDeviceId(event.sourceDeviceId)}
                         </span>

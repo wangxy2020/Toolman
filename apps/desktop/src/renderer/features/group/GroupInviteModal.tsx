@@ -4,6 +4,9 @@ import QRCode from 'qrcode'
 import { createStyledInviteQrDataUrl } from './invite-qr-code'
 import { IpcChannel } from '@toolman/shared'
 
+import { getDateLocale } from '../../i18n/date-locale'
+import { useI18n } from '../../i18n/useI18n'
+
 interface Props {
   workspaceId: string
   workspaceName: string
@@ -13,6 +16,7 @@ interface Props {
 const INVITE_QR_DISPLAY_SIZE = 176
 
 export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props) {
+  const { t, language } = useI18n()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [inviteUrl, setInviteUrl] = useState('')
@@ -79,7 +83,7 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
             marginModules: 4,
             moduleScale: 0.74,
             darkColor: '#00a962',
-            centerLabel: '群',
+            centerLabel: t('groupPage.invite.qrCenterLabel'),
           })
           if (!cancelled) setQrDataUrl(url)
         } catch {
@@ -96,12 +100,12 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
         }
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : '生成邀请失败'
+          const message = err instanceof Error ? err.message : t('groupPage.invite.generateFailed')
           setError(
             message.includes('No handler registered')
-              ? '邀请服务未就绪，请完全退出并重新启动应用'
+              ? t('groupPage.invite.serviceNotReady')
               : message.includes('secure storage') || message.includes('private key')
-                ? '设备密钥读取失败，请完全退出并重新启动应用后重试'
+                ? t('groupPage.invite.keyReadFailed')
                 : message,
           )
         }
@@ -113,7 +117,7 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
     return () => {
       cancelled = true
     }
-  }, [workspaceId])
+  }, [t, workspaceId])
 
   const handleCopy = async (text: string, kind: 'url' | 'token') => {
     try {
@@ -121,13 +125,13 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
       setCopied(kind)
       window.setTimeout(() => setCopied(null), 2000)
     } catch {
-      setError('复制失败，请手动选择文本复制')
+      setError(t('groupPage.invite.copyFailed'))
     }
   }
 
   const expiresLabel =
     expiresAt != null
-      ? new Date(expiresAt).toLocaleString('zh-CN', {
+      ? new Date(expiresAt).toLocaleString(getDateLocale(language), {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
@@ -153,13 +157,13 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
       >
         <div className="tm-modal-header">
           <h2 id="group-invite-title" className="tm-modal-title">
-            邀请加入「{workspaceName}」
+            {t('groupPage.invite.title', { name: workspaceName })}
           </h2>
           <button
             type="button"
             className="tm-modal-close"
             onClick={handleClose}
-            aria-label="关闭"
+            aria-label={t('groupPage.invite.close')}
           >
             ×
           </button>
@@ -171,10 +175,10 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
           <div className="tm-invite-qr-wrap">
             <div className="tm-invite-qr-card">
               {qrDataUrl ? (
-                <img className="tm-invite-qr-image" src={qrDataUrl} alt="邀请二维码" />
+                <img className="tm-invite-qr-image" src={qrDataUrl} alt={t('groupPage.invite.qrAlt')} />
               ) : (
                 <div className="tm-invite-qr-placeholder" aria-busy={loading}>
-                  {loading ? '生成邀请中…' : '二维码生成失败'}
+                  {loading ? t('groupPage.invite.generatingQr') : t('groupPage.invite.qrFailed')}
                 </div>
               )}
             </div>
@@ -182,20 +186,20 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
 
           <p className="tm-invite-hint">
             {loading
-              ? '正在生成邀请链接与二维码…'
+              ? t('groupPage.invite.generatingHint')
               : ready
-                ? `扫描二维码或复制邀请链接发送给其他成员。链接内已包含广域网连接信息（SDP），不同网络也可尝试加入。有效期至 ${expiresLabel}。`
-                : '邀请生成失败，请关闭后重试。'}
+                ? t('groupPage.invite.readyHint', { expires: expiresLabel })
+                : t('groupPage.invite.failedHint')}
           </p>
 
           <label className="tm-invite-url-field">
-            <span className="tm-invite-url-label">邀请链接</span>
+            <span className="tm-invite-url-label">{t('groupPage.invite.linkLabel')}</span>
             <input
               type="text"
               className="tm-invite-url-preview"
               value={inviteUrl}
               readOnly
-              placeholder={loading ? '生成中…' : ''}
+              placeholder={loading ? t('groupPage.invite.generating') : ''}
               disabled={!ready}
               title={inviteUrl || undefined}
             />
@@ -208,7 +212,7 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
               disabled={!ready}
               onClick={() => void handleCopy(inviteUrl, 'url')}
             >
-              {copied === 'url' ? '已复制' : '复制链接'}
+              {copied === 'url' ? t('groupPage.invite.copied') : t('groupPage.invite.copyLink')}
             </button>
             <button
               type="button"
@@ -216,7 +220,7 @@ export function GroupInviteModal({ workspaceId, workspaceName, onClose }: Props)
               disabled={!ready}
               onClick={() => void handleCopy(inviteToken, 'token')}
             >
-              {copied === 'token' ? '已复制' : '复制邀请码'}
+              {copied === 'token' ? t('groupPage.invite.copied') : t('groupPage.invite.copyToken')}
             </button>
           </div>
         </div>

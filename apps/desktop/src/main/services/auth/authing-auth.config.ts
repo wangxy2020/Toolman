@@ -1,3 +1,5 @@
+import { isDevModeEnvEnabled } from './auth-dev-guard.js'
+
 export interface AuthingConfig {
   appId: string
   /** User pool ID for Management API; falls back to appId when unset. */
@@ -17,11 +19,6 @@ function readEnv(keys: readonly string[]): string | undefined {
   return undefined
 }
 
-function isTruthyEnv(value: string | undefined): boolean {
-  if (!value) return false
-  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
-}
-
 function readPositiveIntEnv(keys: readonly string[], fallback: number): number {
   for (const key of keys) {
     const raw = process.env[key]?.trim()
@@ -39,7 +36,7 @@ export function getAuthingOtpTtlSeconds(fallbackSeconds: number): number {
 }
 
 export function isAuthingDevMode(): boolean {
-  return isTruthyEnv(process.env.TOOLMAN_AUTHING_DEV_MODE)
+  return isDevModeEnvEnabled(['TOOLMAN_AUTHING_DEV_MODE'])
 }
 
 export function getAuthingConfig(): AuthingConfig | null {

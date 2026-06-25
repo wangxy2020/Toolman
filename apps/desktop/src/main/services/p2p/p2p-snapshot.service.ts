@@ -1,8 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import { app } from 'electron'
 import {
+  P2pEventRepository,
   P2pMemberRepository,
   P2pSnapshotRepository,
   P2pWorkspaceRepository,
@@ -168,6 +170,14 @@ export function createWorkspaceSnapshot(workspaceId: string): P2pSnapshotRow {
   })
   getSnapshotRepo().deleteOlderThan(workspaceId, P2P_SNAPSHOT_RETAIN)
 
+  const pruned = new P2pEventRepository(getDatabase()).deleteEventsBeforeSeq(
+    workspaceId,
+    snapshotSeq,
+  )
+  if (pruned > 0) {
+    logStructured('p2p', 'info', `pruned ${pruned} events before seq ${snapshotSeq} for ${workspaceId}`)
+  }
+
   return row
 }
 
@@ -186,7 +196,7 @@ export function maybeAutoSnapshot(workspaceId: string): P2pSnapshotRow | null {
     return createWorkspaceSnapshot(workspaceId)
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    console.warn(`[p2p] auto snapshot failed: ${message}`)
+    logStructured('p2p', 'warn', `auto snapshot failed: ${message}`)
     return null
   }
 }

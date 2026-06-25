@@ -20,7 +20,7 @@ export function shouldUsePostgresMcp(config: McpServerConfig): boolean {
 }
 
 export function stripDbConnectionFields(config: McpServerConfig): McpServerConfig {
-  const { dbHost, dbPort, dbUser, dbPassword, dbName, ...rest } = config
+  const { dbHost: _dbHost, dbPort: _dbPort, dbUser: _dbUser, dbPassword: _dbPassword, dbName: _dbName, ...rest } = config
   return rest
 }
 

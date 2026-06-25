@@ -1,6 +1,5 @@
-import {
-  CommunityPublishModalShell,
-} from './CommunityPublishModalShell'
+import { useI18n } from '../../i18n/useI18n'
+import { CommunityPublishModalShell } from './CommunityPublishModalShell'
 import { NewsSourcesPanel } from './NewsSourcesPanel'
 
 interface Props {
@@ -9,10 +8,12 @@ interface Props {
 }
 
 export function NewsSourcesModal({ onClose, onFetched }: Props) {
+  const { t } = useI18n()
+
   return (
     <CommunityPublishModalShell
-      title="RSS 源管理"
-      ariaLabel="RSS 源管理"
+      title={t('communityPage.newsSources.title')}
+      ariaLabel={t('communityPage.newsSources.title')}
       onClose={onClose}
       footer={
         <div className="tm-community-publish-modal-footer-actions">
@@ -21,7 +22,7 @@ export function NewsSourcesModal({ onClose, onFetched }: Props) {
             className="tm-community-publish-modal-footer-btn tm-community-publish-modal-footer-btn--secondary"
             onClick={onClose}
           >
-            关闭
+            {t('communityPage.publish.close')}
           </button>
         </div>
       }

@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { logStructured } from '../structured-log.service'
 import {
   P2pMemberRepository,
   P2pWorkspaceRepository,
@@ -167,7 +168,7 @@ export function maybeActivateWorkspaceVipPool(workspaceId: string): boolean {
     },
   }).catch((error) => {
     const message = toErrorMessage(error, String(error))
-    console.warn(`[p2p] vip pool workspace event append failed: ${message}`)
+    logStructured('p2p', 'warn', `vip pool workspace event append failed: ${message}`)
   })
 
   return true

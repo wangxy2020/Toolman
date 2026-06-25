@@ -11,11 +11,17 @@ import {
   type ExcelWorkingCopy,
 } from './excel-mcp-task.service'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
+import {
+  countExcelToolApplyResult,
+  DOCUMENT_REVIEW_SEVERITIES,
+  parseDocumentReviewSeverity,
+  type DocumentReviewIssueSeverity,
+} from './document-review.util'
 
 const gateway = createModelGateway()
 
 export type ExcelReviewIssueAction = 'modify' | 'highlight'
-export type ExcelReviewIssueSeverity = 'high' | 'medium' | 'low'
+export type ExcelReviewIssueSeverity = DocumentReviewIssueSeverity
 
 export interface ExcelReviewIssue {
   id: string
@@ -44,7 +50,7 @@ export interface ExcelReviewApplyResult {
 }
 
 const VALID_ACTIONS = new Set<ExcelReviewIssueAction>(['modify', 'highlight'])
-const VALID_SEVERITIES = new Set<ExcelReviewIssueSeverity>(['high', 'medium', 'low'])
+const VALID_SEVERITIES = DOCUMENT_REVIEW_SEVERITIES
 
 export function requestsExcelDirectFix(userRequest: string): boolean {
   const text = (userRequest || '审查表格错误并生成修订版').trim()
@@ -330,7 +336,7 @@ export function normalizeExcelReviewIssues(
     cell = snapCellViaMerges(sheet, cell, options.snapshot)
 
     let action = issue.action
-    let value = issue.value
+    const value = issue.value
     const comment = issue.comment
 
     const draftIssue = { ...issue, sheet, cell, action, value, comment }
@@ -373,43 +379,6 @@ export function normalizeExcelReviewIssues(
     return enriched
   })
 }
-
-function countToolApplyResult(
-  result: string,
-  kind: 'modify' | 'highlight',
-): { applied: number; failed: number } {
-  const jsonStart = result.indexOf('{')
-  const jsonEnd = result.lastIndexOf('}')
-  if (jsonStart !== -1 && jsonEnd > jsonStart) {
-    try {
-      const parsed = JSON.parse(result.slice(jsonStart, jsonEnd + 1)) as {
-        updatedCount?: number
-        highlightedCount?: number
-        applied?: Array<{ status?: string }>
-      }
-      if (kind === 'modify' && typeof parsed.updatedCount === 'number') {
-        const failed = (parsed.applied ?? []).filter((item) => item.status === 'skipped').length
-        return { applied: parsed.updatedCount, failed }
-      }
-      if (kind === 'highlight' && typeof parsed.highlightedCount === 'number') {
-        const failed = (parsed.applied ?? []).filter((item) => item.status === 'skipped').length
-        return { applied: parsed.highlightedCount, failed }
-      }
-      if (Array.isArray(parsed.applied)) {
-        const applied = parsed.applied.filter((item) => item.status === 'updated').length
-        const failed = parsed.applied.filter((item) => item.status === 'skipped').length
-        return { applied, failed }
-      }
-    } catch {
-      // fall through
-    }
-  }
-
-  const failed = (result.match(/"status":\s*"skipped"/g) ?? []).length
-  const updated = (result.match(/"status":\s*"updated"/g) ?? []).length
-  return { applied: updated, failed }
-}
-
 export function buildExcelAuditSystemPrompt(options?: { userRequest?: string }): string {
   const fixMode = requestsExcelDirectFix(options?.userRequest ?? '')
   const fixRules = fixMode
@@ -571,7 +540,7 @@ export function parseExcelReviewIssues(raw: string): {
     if (!item || typeof item !== 'object') continue
     const row = item as Record<string, unknown>
     const action = String(row.action ?? '').toLowerCase() as ExcelReviewIssueAction
-    const severity = String(row.severity ?? 'medium').toLowerCase() as ExcelReviewIssueSeverity
+    const severity = parseDocumentReviewSeverity(row.severity)
     const sheet = String(row.sheet ?? row.sheetName ?? '').trim()
     const cell = String(row.cell ?? row.address ?? '')
       .trim()
@@ -585,7 +554,7 @@ export function parseExcelReviewIssues(raw: string): {
     }
     issues.push({
       id: String(row.id ?? index + 1),
-      severity: VALID_SEVERITIES.has(severity) ? severity : 'medium',
+      severity,
       category: String(row.category ?? 'other'),
       action,
       sheet,
@@ -704,7 +673,7 @@ async function applyExcelReviewIssues(options: {
       options.emitToolUpdate({ toolCallId: callId, name: modifyTool, arguments: args, status: 'running' })
       try {
         const result = await executeToolCall(modifyTool, args, options.toolContext)
-        const counts = countToolApplyResult(result, 'modify')
+        const counts = countExcelToolApplyResult(result, 'modify')
         modifiesApplied = counts.applied
         modifiesFailed = modifyIssues.length - counts.applied
         if (modifiesFailed > 0) errors.push(`部分单元格修改失败：${result.slice(0, 200)}`)
@@ -752,7 +721,7 @@ async function applyExcelReviewIssues(options: {
       })
       try {
         const result = await executeToolCall(highlightTool, args, options.toolContext)
-        const counts = countToolApplyResult(result, 'highlight')
+        const counts = countExcelToolApplyResult(result, 'highlight')
         highlightsApplied = counts.applied
         highlightsFailed = highlightIssues.length - counts.applied
         if (highlightsFailed > 0) errors.push(`部分高亮失败：${result.slice(0, 200)}`)

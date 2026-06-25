@@ -1,4 +1,5 @@
 import type { WorkspaceEvent } from '@toolman/shared'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {
   applyKnowledgeUpdatedEvent,
@@ -61,9 +62,7 @@ function projectKnowledgeEvent(event: WorkspaceEvent): void {
     Created: projectKnowledgeSharedEvent,
     Updated: (evt) => {
       void applyKnowledgeUpdatedEvent(evt).catch((error) => {
-        console.warn(
-          `[p2p] apply knowledge updated event failed: ${toErrorMessage(error, String(error))}`,
-        )
+        logStructured('p2p', 'warn', `apply knowledge updated event failed: ${toErrorMessage(error, String(error))}`)
       })
     },
     Deleted: projectKnowledgeDeletedEvent,

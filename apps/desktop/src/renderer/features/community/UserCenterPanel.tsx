@@ -11,7 +11,6 @@ import { TaskCreateModal } from './TaskCreateModal'
 import { cancelCommunityTask, deleteCommunityBoardMessage, deleteCommunityResource, deleteCommunityTask } from './community-api.client'
 import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
 import { buildResourceCommentTarget, buildTaskCommentTarget, type CommunityCommentTarget } from './community-comment-utils'
-import { TASK_STATUS_LABELS, TASK_TYPE_LABELS } from './community-task-utils'
 import {
   canDeleteCommunityResourceFromUserCenter,
   canDeleteCommunityTaskFromUserCenter,
@@ -21,7 +20,6 @@ import {
   getResourceUserCenterDisplayStatusLabel,
   getTaskUserCenterStatusLabel,
 } from './community-user-center-status'
-import { INSTALL_STATUS_LABELS, USER_ROLE_LABELS } from './community-user-utils'
 import {
   groupUserCenterResources,
   useCommunityUserCenter,
@@ -30,22 +28,32 @@ import {
 import { isUiMockCommunityId } from './community-ui-mock'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
+import { useI18n } from '../../i18n/useI18n'
+import {
+  getCommunityInstallStatusLabel,
+  getCommunityTaskStatusLabel,
+  getCommunityTaskTypeLabel,
+} from '../../i18n/community-status-labels'
+import {
+  getCommunityUserRoleLabel,
+  translateCommunityDisplayName,
+} from '../../i18n/community-user-labels'
 
-const SECTIONS: Array<{ key: UserCenterSection; label: string }> = [
-  { key: 'publishes', label: '发布' },
-  { key: 'messages', label: '我的留言' },
-  { key: 'installs', label: '安装' },
-  { key: 'likes', label: '点赞' },
-  { key: 'favorites', label: '收藏' },
-  { key: 'tasks', label: '任务' },
+const SECTIONS: Array<{ key: UserCenterSection; labelKey: `communityPage.mine.sections.${UserCenterSection}` }> = [
+  { key: 'publishes', labelKey: 'communityPage.mine.sections.publishes' },
+  { key: 'messages', labelKey: 'communityPage.mine.sections.messages' },
+  { key: 'installs', labelKey: 'communityPage.mine.sections.installs' },
+  { key: 'likes', labelKey: 'communityPage.mine.sections.likes' },
+  { key: 'favorites', labelKey: 'communityPage.mine.sections.favorites' },
+  { key: 'tasks', labelKey: 'communityPage.mine.sections.tasks' },
 ]
 
-const USER_CENTER_RESOURCE_LABELS: Record<CommunityResourceType, string> = {
-  knowledge: '知识库',
-  mcp: 'MCP',
-  skill: 'Skills',
-  workflow: '工作流',
-  task: '任务',
+function getUserCenterResourceLabel(
+  type: CommunityResourceType,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  const key = `communityPage.mine.resourceTypes.${type}` as const
+  return t(key)
 }
 
 type FeedStat = {
@@ -211,9 +219,11 @@ function UserCenterFeedCard({
 function UserCenterRejectedFeedbackStat({
   target,
   comments,
+  t,
 }: {
   target: CommunityCommentTarget
   comments: ReturnType<typeof useCommunityCommentExpansion>
+  t: ReturnType<typeof useI18n>['t']
 }) {
   const statRef = useRef<HTMLButtonElement>(null)
   const open = comments.isExpanded(target)
@@ -231,12 +241,12 @@ function UserCenterRejectedFeedbackStat({
         ]
           .filter(Boolean)
           .join(' ')}
-        title="查看审核批注"
+        title={t('communityPage.mine.viewReviewNotes')}
         aria-expanded={open}
         onClick={() => comments.toggleExpanded(target)}
       >
         <FeedStatIcon kind="reply" />
-        已拒绝
+        {t('communityPage.mine.rejected')}
       </button>
       <CommunityCommentDropdown
         anchorRef={statRef}
@@ -244,7 +254,7 @@ function UserCenterRejectedFeedbackStat({
         open={open}
         onClose={() => comments.toggleExpanded(target)}
         onCountChange={(count) => comments.setCount(target, count)}
-        emptyHint="暂无审核批注"
+        emptyHint={t('communityPage.mine.noReviewNotes')}
       />
     </>
   )
@@ -260,6 +270,7 @@ function UserCenterFeedGroup({ label, children }: { label: string; children: Rea
 }
 
 export function UserCenterPanel() {
+  const { t } = useI18n()
   const [section, setSection] = useState<UserCenterSection>('publishes')
   const [resourceToWithdraw, setResourceToWithdraw] = useState<CommunityResourceItem | null>(null)
   const [resumePublish, setResumePublish] = useState<CommunityResourceItem | null>(null)
@@ -288,7 +299,7 @@ export function UserCenterPanel() {
       setResourceToWithdraw(null)
       await center.load()
     } catch (withdrawError) {
-      const message = withdrawError instanceof Error ? withdrawError.message : '删除失败'
+      const message = withdrawError instanceof Error ? withdrawError.message : t('communityPage.mine.errors.deleteFailed')
       setWithdrawError(message)
     } finally {
       setWithdrawingId(null)
@@ -304,7 +315,7 @@ export function UserCenterPanel() {
       setTaskToWithdraw(null)
       await center.load()
     } catch (withdrawError) {
-      const message = withdrawError instanceof Error ? withdrawError.message : '撤回失败'
+      const message = withdrawError instanceof Error ? withdrawError.message : t('communityPage.mine.errors.withdrawFailed')
       setWithdrawError(message)
     } finally {
       setWithdrawingId(null)
@@ -320,7 +331,7 @@ export function UserCenterPanel() {
       setTaskToDelete(null)
       await center.load()
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : '删除任务失败'
+      const message = deleteError instanceof Error ? deleteError.message : t('communityPage.mine.errors.deleteTaskFailed')
       setWithdrawError(message)
     } finally {
       setWithdrawingId(null)
@@ -354,7 +365,7 @@ export function UserCenterPanel() {
       setMessageToDelete(null)
       await center.load()
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : '删除留言失败'
+      const message = deleteError instanceof Error ? deleteError.message : t('communityPage.mine.errors.deleteMessageFailed')
       setWithdrawError(message)
     } finally {
       setWithdrawingId(null)
@@ -372,7 +383,7 @@ export function UserCenterPanel() {
   useRegisterModulePanelStatus(
     'community-user-center-loading',
     center.loading || center.profileLoading
-      ? { tone: 'info', message: '加载个人数据中…' }
+      ? { tone: 'info', message: t('communityPage.mine.loading') }
       : publishNotice
         ? { tone: 'info', message: publishNotice }
         : null,
@@ -380,22 +391,22 @@ export function UserCenterPanel() {
 
   const renderSectionContent = () => {
     if (center.profileLoading || center.loading) {
-      return <div className="tm-user-center-empty">加载个人数据中…</div>
+      return <div className="tm-user-center-empty">{t('communityPage.mine.loading')}</div>
     }
     if (!profile) {
-      return <div className="tm-user-center-empty">请先登录或注册</div>
+      return <div className="tm-user-center-empty">{t('communityPage.mine.loginRequired')}</div>
     }
 
     if (section === 'publishes') {
       if (center.publishes.length === 0) {
-        return <div className="tm-user-center-empty">暂无发布资源</div>
+        return <div className="tm-user-center-empty">{t('communityPage.mine.emptyPublishes')}</div>
       }
       return (
         <div className="tm-user-center-feed-list">
           {center.publishes.map((item) => (
             <UserCenterFeedCard
               key={item.id}
-              tag={USER_CENTER_RESOURCE_LABELS[item.resourceType] ?? item.resourceType}
+              tag={getUserCenterResourceLabel(item.resourceType, t)}
               date={formatUserCenterDateTime(item.updatedAt)}
               title={item.title}
               description={item.description}
@@ -403,10 +414,10 @@ export function UserCenterPanel() {
                 canModerationResubmitResource(item)
                   ? undefined
                   : [
-                      { kind: 'like', label: `${item.likeCount} 赞` },
+                      { kind: 'like', label: t('communityPage.mine.likesCount', { count: item.likeCount }) },
                       {
                         kind: 'favorite',
-                        label: `${getResourceUserCenterDisplayStatusLabel(item)} · v${item.version}`,
+                        label: `${getResourceUserCenterDisplayStatusLabel(item, t)} · v${item.version}`,
                       },
                     ]
               }
@@ -415,6 +426,7 @@ export function UserCenterPanel() {
                   <UserCenterRejectedFeedbackStat
                     target={buildResourceCommentTarget(item.id)}
                     comments={comments}
+                    t={t}
                   />
                 ) : undefined
               }
@@ -429,7 +441,7 @@ export function UserCenterPanel() {
                         setResumePublish(item)
                       }}
                     >
-                      提交审核
+                      {t('communityPage.mine.submitReview')}
                     </UserCenterActionLink>
                   ) : null}
                   {canModerationResubmitResource(item) ? (
@@ -441,7 +453,7 @@ export function UserCenterPanel() {
                           setEditPublish(item)
                         }}
                       >
-                        修改
+                        {t('communityPage.mine.edit')}
                       </UserCenterActionLink>
                       <UserCenterActionLink
                         tone="primary"
@@ -451,14 +463,16 @@ export function UserCenterPanel() {
                           setResumePublish(item)
                         }}
                       >
-                        重新提交
+                        {t('communityPage.mine.resubmit')}
                       </UserCenterActionLink>
                       <UserCenterActionLink
                         tone="danger"
                         disabled={withdrawingId === item.id}
                         onClick={() => setResourceToWithdraw(item)}
                       >
-                        {withdrawingId === item.id ? '删除中…' : '删除'}
+                        {withdrawingId === item.id
+                          ? t('communityPage.mine.deleting')
+                          : t('communityPage.mine.delete')}
                       </UserCenterActionLink>
                     </>
                   ) : null}
@@ -468,7 +482,9 @@ export function UserCenterPanel() {
                       disabled={withdrawingId === item.id}
                       onClick={() => setResourceToWithdraw(item)}
                     >
-                      {withdrawingId === item.id ? '撤回中…' : '撤回'}
+                      {withdrawingId === item.id
+                        ? t('communityPage.mine.withdrawing')
+                        : t('communityPage.mine.withdraw')}
                     </UserCenterActionLink>
                   ) : canDeleteCommunityResourceFromUserCenter(item) &&
                     !canModerationResubmitResource(item) &&
@@ -478,7 +494,9 @@ export function UserCenterPanel() {
                       disabled={withdrawingId === item.id}
                       onClick={() => setResourceToWithdraw(item)}
                     >
-                      {withdrawingId === item.id ? '删除中…' : '删除'}
+                      {withdrawingId === item.id
+                        ? t('communityPage.mine.deleting')
+                        : t('communityPage.mine.delete')}
                     </UserCenterActionLink>
                   ) : null}
                 </>
@@ -491,22 +509,25 @@ export function UserCenterPanel() {
 
     if (section === 'messages') {
       if (center.messages.length === 0) {
-        return <div className="tm-user-center-empty">暂无留言</div>
+        return <div className="tm-user-center-empty">{t('communityPage.mine.emptyMessages')}</div>
       }
       return (
         <div className="tm-user-center-feed-list">
           {center.messages.map((item) => (
             <UserCenterFeedCard
               key={item.id}
-              tag="留言"
+              tag={t('communityPage.mine.tags.message')}
               date={formatUserCenterDateTime(item.createdAt)}
               title={item.body}
               stats={[
-                { kind: 'like', label: `${item.likeCount} 赞` },
-                { kind: 'favorite', label: `${item.favoriteCount} 收藏` },
+                { kind: 'like', label: t('communityPage.mine.likesCount', { count: item.likeCount }) },
+                {
+                  kind: 'favorite',
+                  label: t('communityPage.mine.favoritesCount', { count: item.favoriteCount }),
+                },
                 {
                   kind: 'reply',
-                  label: `${item.replyCount} 回复`,
+                  label: t('communityPage.mine.replyCount', { count: item.replyCount }),
                   accent: item.replyCount > 0,
                 },
               ]}
@@ -519,7 +540,7 @@ export function UserCenterPanel() {
                       setEditMessage(item)
                     }}
                   >
-                    修改
+                    {t('communityPage.mine.edit')}
                   </UserCenterActionLink>
                   <UserCenterActionLink
                     tone="primary"
@@ -529,14 +550,16 @@ export function UserCenterPanel() {
                       setResumeMessage(item)
                     }}
                   >
-                    重新提交
+                    {t('communityPage.mine.resubmit')}
                   </UserCenterActionLink>
                   <UserCenterActionLink
                     tone="danger"
                     disabled={withdrawingId === item.id}
                     onClick={() => setMessageToDelete(item)}
                   >
-                    {withdrawingId === item.id ? '删除中…' : '删除'}
+                    {withdrawingId === item.id
+                      ? t('communityPage.mine.deleting')
+                      : t('communityPage.mine.delete')}
                   </UserCenterActionLink>
                 </>
               }
@@ -548,16 +571,16 @@ export function UserCenterPanel() {
 
     if (section === 'installs') {
       if (center.installs.length === 0) {
-        return <div className="tm-user-center-empty">暂无安装记录</div>
+        return <div className="tm-user-center-empty">{t('communityPage.mine.emptyInstalls')}</div>
       }
       return (
         <div className="tm-user-center-feed-list">
           {center.installs.map((item) => (
             <UserCenterFeedCard
               key={item.id}
-              tag={INSTALL_STATUS_LABELS[item.installStatus]}
+              tag={getCommunityInstallStatusLabel(item.installStatus, t)}
               date={formatUserCenterDateTime(item.installedAt)}
-              title={`资源 ${item.resourceId}`}
+              title={t('communityPage.mine.resourceTitle', { id: item.resourceId })}
               description={item.errorMessage ?? item.localRef}
             />
           ))}
@@ -567,35 +590,37 @@ export function UserCenterPanel() {
 
     if (section === 'likes') {
       if (center.likeCount === 0) {
-        return <div className="tm-user-center-empty">暂无点赞内容</div>
+        return <div className="tm-user-center-empty">{t('communityPage.mine.emptyLikes')}</div>
       }
       const likedResourceGroups = groupUserCenterResources(center.likes.resources)
       return (
         <div className="tm-user-center-feed-groups">
           {center.likes.news.length > 0 ? (
-            <UserCenterFeedGroup label="资讯">
+            <UserCenterFeedGroup label={t('communityPage.mine.tags.news')}>
               {center.likes.news.map((item) => (
                 <UserCenterFeedCard
                   key={`news-${item.id}`}
-                  tag="资讯"
+                  tag={t('communityPage.mine.tags.news')}
                   date={formatUserCenterDateTime(item.publishedAt)}
                   title={item.title}
                   description={item.summary}
-                  stats={[{ kind: 'like', label: `${item.likeCount} 赞` }]}
+                  stats={[
+                    { kind: 'like', label: t('communityPage.mine.likesCount', { count: item.likeCount }) },
+                  ]}
                 />
               ))}
             </UserCenterFeedGroup>
           ) : null}
           {center.likes.messages.length > 0 ? (
-            <UserCenterFeedGroup label="留言">
+            <UserCenterFeedGroup label={t('communityPage.mine.tags.message')}>
               {center.likes.messages.map((item) => (
                 <UserCenterFeedCard
                   key={`message-${item.id}`}
-                  tag="留言"
+                  tag={t('communityPage.mine.tags.message')}
                   date={formatUserCenterDateTime(item.createdAt)}
                   title={item.body}
                   stats={[
-                    { kind: 'like', label: `${item.likeCount} 赞` },
+                    { kind: 'like', label: t('communityPage.mine.likesCount', { count: item.likeCount }) },
                     { kind: 'reply', label: item.author.displayName },
                   ]}
                 />
@@ -605,16 +630,18 @@ export function UserCenterPanel() {
           {Object.entries(likedResourceGroups).map(([resourceType, items]) => (
             <UserCenterFeedGroup
               key={`likes-${resourceType}`}
-              label={USER_CENTER_RESOURCE_LABELS[resourceType as CommunityResourceType]}
+              label={getUserCenterResourceLabel(resourceType as CommunityResourceType, t)}
             >
               {items.map((item) => (
                 <UserCenterFeedCard
                   key={`resource-${item.id}`}
-                  tag={USER_CENTER_RESOURCE_LABELS[item.resourceType]}
+                  tag={getUserCenterResourceLabel(item.resourceType, t)}
                   date={formatUserCenterDateTime(item.updatedAt)}
                   title={item.title}
                   description={item.description}
-                  stats={[{ kind: 'like', label: `${item.likeCount} 赞` }]}
+                  stats={[
+                    { kind: 'like', label: t('communityPage.mine.likesCount', { count: item.likeCount }) },
+                  ]}
                 />
               ))}
             </UserCenterFeedGroup>
@@ -625,34 +652,44 @@ export function UserCenterPanel() {
 
     if (section === 'favorites') {
       if (center.favoriteCount === 0) {
-        return <div className="tm-user-center-empty">暂无收藏内容</div>
+        return <div className="tm-user-center-empty">{t('communityPage.mine.emptyFavorites')}</div>
       }
       const favoriteResourceGroups = groupUserCenterResources(center.favorites.resources)
       return (
         <div className="tm-user-center-feed-groups">
           {center.favorites.news.length > 0 ? (
-            <UserCenterFeedGroup label="资讯">
+            <UserCenterFeedGroup label={t('communityPage.mine.tags.news')}>
               {center.favorites.news.map((item) => (
                 <UserCenterFeedCard
                   key={`news-${item.id}`}
-                  tag="资讯"
+                  tag={t('communityPage.mine.tags.news')}
                   date={formatUserCenterDateTime(item.publishedAt)}
                   title={item.title}
                   description={item.summary}
-                  stats={[{ kind: 'favorite', label: `${item.favoriteCount} 收藏` }]}
+                  stats={[
+                    {
+                      kind: 'favorite',
+                      label: t('communityPage.mine.favoritesCount', { count: item.favoriteCount }),
+                    },
+                  ]}
                 />
               ))}
             </UserCenterFeedGroup>
           ) : null}
           {center.favorites.messages.length > 0 ? (
-            <UserCenterFeedGroup label="留言">
+            <UserCenterFeedGroup label={t('communityPage.mine.tags.message')}>
               {center.favorites.messages.map((item) => (
                 <UserCenterFeedCard
                   key={`message-${item.id}`}
-                  tag="留言"
+                  tag={t('communityPage.mine.tags.message')}
                   date={formatUserCenterDateTime(item.createdAt)}
                   title={item.body}
-                  stats={[{ kind: 'favorite', label: `${item.favoriteCount} 收藏` }]}
+                  stats={[
+                    {
+                      kind: 'favorite',
+                      label: t('communityPage.mine.favoritesCount', { count: item.favoriteCount }),
+                    },
+                  ]}
                 />
               ))}
             </UserCenterFeedGroup>
@@ -660,16 +697,21 @@ export function UserCenterPanel() {
           {Object.entries(favoriteResourceGroups).map(([resourceType, items]) => (
             <UserCenterFeedGroup
               key={`favorites-${resourceType}`}
-              label={USER_CENTER_RESOURCE_LABELS[resourceType as CommunityResourceType]}
+              label={getUserCenterResourceLabel(resourceType as CommunityResourceType, t)}
             >
               {items.map((item) => (
                 <UserCenterFeedCard
                   key={`resource-${item.id}`}
-                  tag={USER_CENTER_RESOURCE_LABELS[item.resourceType]}
+                  tag={getUserCenterResourceLabel(item.resourceType, t)}
                   date={formatUserCenterDateTime(item.updatedAt)}
                   title={item.title}
                   description={item.description}
-                  stats={[{ kind: 'favorite', label: `${item.favoriteCount} 收藏` }]}
+                  stats={[
+                    {
+                      kind: 'favorite',
+                      label: t('communityPage.mine.favoritesCount', { count: item.favoriteCount }),
+                    },
+                  ]}
                 />
               ))}
             </UserCenterFeedGroup>
@@ -679,29 +721,30 @@ export function UserCenterPanel() {
     }
 
     if (center.tasks.published.length === 0 && center.tasks.assigned.length === 0) {
-      return <div className="tm-user-center-empty">暂无相关任务</div>
+      return <div className="tm-user-center-empty">{t('communityPage.mine.emptyTasks')}</div>
     }
 
     return (
       <div className="tm-user-center-feed-groups">
         {center.tasks.published.length > 0 ? (
-          <UserCenterFeedGroup label="我发布的">
+          <UserCenterFeedGroup label={t('communityPage.mine.publishedTasks')}>
             {center.tasks.published.map((task) => (
               <UserCenterFeedCard
                 key={task.id}
-                tag={TASK_TYPE_LABELS[task.taskType]}
+                tag={getCommunityTaskTypeLabel(task.taskType, t)}
                 date={formatUserCenterDateTime(task.updatedAt)}
                 title={task.title}
                 stats={
                   canModerationResubmitTask(task)
                     ? undefined
-                    : [{ kind: 'reply', label: getTaskUserCenterStatusLabel(task) }]
+                    : [{ kind: 'reply', label: getTaskUserCenterStatusLabel(task, t) }]
                 }
                 footerStats={
                   canModerationResubmitTask(task) ? (
                     <UserCenterRejectedFeedbackStat
                       target={buildTaskCommentTarget(task.id)}
                       comments={comments}
+                      t={t}
                     />
                   ) : undefined
                 }
@@ -716,7 +759,7 @@ export function UserCenterPanel() {
                           setResumeTask(task)
                         }}
                       >
-                        提交审核
+                        {t('communityPage.mine.submitReview')}
                       </UserCenterActionLink>
                     ) : null}
                     {canModerationResubmitTask(task) ? (
@@ -728,7 +771,7 @@ export function UserCenterPanel() {
                             setEditTask(task)
                           }}
                         >
-                          修改
+                          {t('communityPage.mine.edit')}
                         </UserCenterActionLink>
                         <UserCenterActionLink
                           tone="primary"
@@ -738,14 +781,16 @@ export function UserCenterPanel() {
                             setResumeTask(task)
                           }}
                         >
-                          重新提交
+                          {t('communityPage.mine.resubmit')}
                         </UserCenterActionLink>
                         <UserCenterActionLink
                           tone="danger"
                           disabled={withdrawingId === task.id}
                           onClick={() => setTaskToDelete(task)}
                         >
-                          {withdrawingId === task.id ? '删除中…' : '删除'}
+                          {withdrawingId === task.id
+                            ? t('communityPage.mine.deleting')
+                            : t('communityPage.mine.delete')}
                         </UserCenterActionLink>
                       </>
                     ) : null}
@@ -755,7 +800,9 @@ export function UserCenterPanel() {
                         disabled={withdrawingId === task.id}
                         onClick={() => setTaskToWithdraw(task)}
                       >
-                        {withdrawingId === task.id ? '撤回中…' : '撤回'}
+                        {withdrawingId === task.id
+                          ? t('communityPage.mine.withdrawing')
+                          : t('communityPage.mine.withdraw')}
                       </UserCenterActionLink>
                     ) : null}
                     {canDeleteCommunityTaskFromUserCenter(task) &&
@@ -766,7 +813,9 @@ export function UserCenterPanel() {
                         disabled={withdrawingId === task.id}
                         onClick={() => setTaskToDelete(task)}
                       >
-                        {withdrawingId === task.id ? '删除中…' : '删除'}
+                        {withdrawingId === task.id
+                          ? t('communityPage.mine.deleting')
+                          : t('communityPage.mine.delete')}
                       </UserCenterActionLink>
                     ) : null}
                   </>
@@ -776,11 +825,11 @@ export function UserCenterPanel() {
           </UserCenterFeedGroup>
         ) : null}
         {center.tasks.assigned.length > 0 ? (
-          <UserCenterFeedGroup label="我接单的">
+          <UserCenterFeedGroup label={t('communityPage.mine.assignedTasks')}>
             {center.tasks.assigned.map((task) => (
               <UserCenterFeedCard
                 key={task.id}
-                tag={TASK_STATUS_LABELS[task.status]}
+                tag={getCommunityTaskStatusLabel(task.status, t)}
                 date={formatUserCenterDateTime(task.updatedAt)}
                 title={task.title}
                 stats={[{ kind: 'reply', label: task.publisher.displayName }]}
@@ -796,15 +845,17 @@ export function UserCenterPanel() {
     <div className="tm-community-market tm-community-user-center">
       <div className="tm-user-center-overview">
         <CommunityPanelHeader
-          title="我的"
+          title={t('communityPage.panels.mine.title')}
           subtitle={
             profile
-              ? profile.displayName
-              : '查看我的发布、安装、收藏与任务'
+              ? translateCommunityDisplayName(profile.displayName, t)
+              : t('communityPage.panels.mine.subtitle')
           }
           titleExtra={
             profile ? (
-              <span className="tm-user-center-role-badge">{USER_ROLE_LABELS[profile.role]}</span>
+              <span className="tm-user-center-role-badge">
+                {getCommunityUserRoleLabel(profile.role, t)}
+              </span>
             ) : null
           }
           actions={
@@ -820,7 +871,7 @@ export function UserCenterPanel() {
           className="tm-user-center-stat-grid"
           style={{ ['--tm-stat-cols' as string]: SECTIONS.length }}
           role="tablist"
-          aria-label="我的数据分区"
+          aria-label={t('communityPage.mine.dataSectionAria')}
         >
           {SECTIONS.map((item) => {
             const count = getSectionCount(item.key, center)
@@ -839,7 +890,7 @@ export function UserCenterPanel() {
                   .join(' ')}
                 onClick={() => setSection(item.key)}
               >
-                <span className="tm-user-center-stat-label">{item.label}</span>
+                <span className="tm-user-center-stat-label">{t(item.labelKey)}</span>
                 <span className="tm-user-center-stat-value">{count}</span>
               </button>
             )
@@ -853,11 +904,11 @@ export function UserCenterPanel() {
         <div className="tm-user-center-feed-meta">
           {profile ? (
             <>
-              <span>当前列表共 {activeCount} 条记录</span>
-              <span>按最新时间排序</span>
+              <span>{t('communityPage.mine.listCount', { count: activeCount })}</span>
+              <span>{t('communityPage.mine.sortByLatest')}</span>
             </>
           ) : (
-            <span>登录后查看个人数据</span>
+            <span>{t('communityPage.mine.loginToView')}</span>
           )}
         </div>
         <div className="tm-user-center-feed-body">{renderSectionContent()}</div>
@@ -866,14 +917,24 @@ export function UserCenterPanel() {
       {resourceToWithdraw ? (
         <ConfirmDialog
           title={
-            resourceToWithdraw.status === 'pending_review' ? '撤回提交' : '删除资源'
+            resourceToWithdraw.status === 'pending_review'
+              ? t('communityPage.mine.confirm.withdrawResourceTitle')
+              : t('communityPage.mine.confirm.deleteResourceTitle')
           }
           message={
             resourceToWithdraw.status === 'pending_review'
-              ? `确定撤回「${resourceToWithdraw.title}」吗？撤回后将从审核队列移除。`
-              : `确定删除「${resourceToWithdraw.title}」吗？删除后将从列表移除。`
+              ? t('communityPage.mine.confirm.withdrawResourceMessage', {
+                  title: resourceToWithdraw.title,
+                })
+              : t('communityPage.mine.confirm.deleteResourceMessage', {
+                  title: resourceToWithdraw.title,
+                })
           }
-          confirmLabel={resourceToWithdraw.status === 'pending_review' ? '撤回' : '删除'}
+          confirmLabel={
+            resourceToWithdraw.status === 'pending_review'
+              ? t('communityPage.mine.withdraw')
+              : t('communityPage.mine.delete')
+          }
           danger
           onCancel={() => setResourceToWithdraw(null)}
           onConfirm={() => void handleConfirmWithdraw()}
@@ -884,7 +945,7 @@ export function UserCenterPanel() {
         <CommunityResourcePublishModal
           resourceType={(editPublish ?? resumePublish)!.resourceType}
           resourceLabel={
-            USER_CENTER_RESOURCE_LABELS[(editPublish ?? resumePublish)!.resourceType] ??
+            getUserCenterResourceLabel((editPublish ?? resumePublish)!.resourceType, t) ??
             (editPublish ?? resumePublish)!.resourceType
           }
           resumeResource={editPublish ?? resumePublish}
@@ -927,9 +988,9 @@ export function UserCenterPanel() {
 
       {messageToDelete ? (
         <ConfirmDialog
-          title="删除留言"
-          message="确定删除这条留言吗？删除后不可恢复。"
-          confirmLabel="删除"
+          title={t('communityPage.mine.confirm.deleteMessageTitle')}
+          message={t('communityPage.mine.confirm.deleteMessageMessage')}
+          confirmLabel={t('communityPage.mine.delete')}
           danger
           onCancel={() => setMessageToDelete(null)}
           onConfirm={() => void handleConfirmDeleteMessage()}
@@ -938,9 +999,11 @@ export function UserCenterPanel() {
 
       {taskToWithdraw ? (
         <ConfirmDialog
-          title="撤回提交"
-          message={`确定撤回任务「${taskToWithdraw.title}」吗？撤回后将回到草稿状态。`}
-          confirmLabel="撤回"
+          title={t('communityPage.mine.confirm.withdrawTaskTitle')}
+          message={t('communityPage.mine.confirm.withdrawTaskMessage', {
+            title: taskToWithdraw.title,
+          })}
+          confirmLabel={t('communityPage.mine.withdraw')}
           danger
           onCancel={() => setTaskToWithdraw(null)}
           onConfirm={() => void handleConfirmWithdrawTask()}
@@ -949,9 +1012,9 @@ export function UserCenterPanel() {
 
       {taskToDelete ? (
         <ConfirmDialog
-          title="删除任务"
-          message={`确定删除任务「${taskToDelete.title}」吗？`}
-          confirmLabel="删除"
+          title={t('communityPage.mine.confirm.deleteTaskTitle')}
+          message={t('communityPage.mine.confirm.deleteTaskMessage', { title: taskToDelete.title })}
+          confirmLabel={t('communityPage.mine.delete')}
           danger
           onCancel={() => setTaskToDelete(null)}
           onConfirm={() => void handleConfirmDeleteTask()}

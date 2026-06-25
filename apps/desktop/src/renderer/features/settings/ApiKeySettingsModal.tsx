@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useI18n } from '../../i18n/useI18n'
 import { SettingsToggle } from './SettingsShared'
 
 interface Props {
@@ -19,6 +20,7 @@ function IconHelp({ size = 14 }: { size?: number }) {
 }
 
 export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }: Props) {
+  const { t } = useI18n()
   const [keysText, setKeysText] = useState('')
   const [rotate, setRotate] = useState(apiKeyRotate)
   const [busy, setBusy] = useState(false)
@@ -35,7 +37,7 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
         .join(',')
 
       if (!apiKeys && !hasApiKey) {
-        setError('请至少填写一个 API 密钥')
+        setError(t('settings.apiKey.errors.required'))
         setBusy(false)
         return
       }
@@ -43,7 +45,7 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
       await onSave({ apiKeys, apiKeyRotate: rotate })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
+      setError(err instanceof Error ? err.message : t('settings.apiKey.errors.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -53,7 +55,7 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
     <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-model-form-modal" onClick={(e) => e.stopPropagation()}>
         <header className="tm-modal-header">
-          <h2 className="tm-modal-title">API 密钥设置</h2>
+          <h2 className="tm-modal-title">{t('settings.apiKey.title')}</h2>
           <button type="button" className="tm-modal-close" onClick={onClose}>
             ×
           </button>
@@ -62,8 +64,8 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
         <div className="tm-model-form-body">
           <label className="tm-model-form-field">
             <span className="tm-model-form-label">
-              API 密钥
-              <span className="tm-model-form-help" title="可配置多个密钥，每行一个或使用逗号分隔">
+              {t('settings.apiKey.label')}
+              <span className="tm-model-form-help" title={t('settings.apiKey.help')}>
                 <IconHelp />
               </span>
             </span>
@@ -72,19 +74,19 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
               value={keysText}
               placeholder={
                 hasApiKey
-                  ? '已配置密钥（留空表示不修改）。每行一个，或使用逗号分隔。'
-                  : '每行一个密钥，或使用逗号分隔'
+                  ? t('settings.apiKey.placeholderConfigured')
+                  : t('settings.apiKey.placeholder')
               }
               rows={5}
               onChange={(e) => setKeysText(e.target.value)}
             />
-            <p className="tm-model-form-hint">多个密钥使用逗号或换行分隔。保存后将加密存储在系统 Keychain。</p>
+            <p className="tm-model-form-hint">{t('settings.apiKey.storageHint')}</p>
           </label>
 
           <div className="tm-model-form-row">
             <span className="tm-model-form-label">
-              轮询使用多个密钥
-              <span className="tm-model-form-help" title="请求失败或负载均衡时自动切换下一个密钥">
+              {t('settings.apiKey.rotateLabel')}
+              <span className="tm-model-form-help" title={t('settings.apiKey.rotateHelp')}>
                 <IconHelp />
               </span>
             </span>
@@ -96,7 +98,7 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
 
         <footer className="tm-model-form-footer">
           <button type="button" className="tm-btn" onClick={onClose}>
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -104,7 +106,7 @@ export function ApiKeySettingsModal({ hasApiKey, apiKeyRotate, onClose, onSave }
             disabled={busy}
             onClick={() => void handleSave()}
           >
-            {busy ? '保存中…' : '保存'}
+            {busy ? t('common.saving') : t('common.save')}
           </button>
         </footer>
       </div>

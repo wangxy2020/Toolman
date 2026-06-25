@@ -1,7 +1,9 @@
+import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  FederatedCatalogWireMessageSchema,
   FederationCatalogPageSchema,
   FederationLibp2pBootstrapSchema,
   FederatedResourceCatalogEntrySchema,
@@ -14,6 +16,7 @@ import {
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { fromApiJson } from './community-case'
 import { upsertFederatedCatalogEntry } from './community-federated-catalog.service'
+import { verifyFederatedCatalogWireMessage } from './community-federation-signing.service'
 import { CommunityHttpClient, humanizeCommunityFetchError } from './community-http.client'
 import { readCommunityHubConfig } from './community-hub.config'
 import { getCommunityDataDir } from './community-paths'
@@ -71,6 +74,23 @@ function resolvePeerUrls(): string[] {
 }
 
 function mapCatalogEntry(raw: Record<string, unknown>): FederatedResourceCatalogEntry | null {
+  const wireParsed = FederatedCatalogWireMessageSchema.safeParse(raw)
+  if (wireParsed.success) {
+    if (!verifyFederatedCatalogWireMessage(wireParsed.data)) {
+      return null
+    }
+    return wireParsed.data.entry
+  }
+
+  if (app.isPackaged) {
+    recordDiagnosticEvent(
+      'community-federation',
+      'warn',
+      `skipped unsigned hub catalog entry ${String(raw.id ?? 'unknown')}`,
+    )
+    return null
+  }
+
   try {
     const entry = fromApiJson(raw) as Record<string, unknown>
     const author = (entry.author ?? {}) as Record<string, unknown>

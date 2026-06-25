@@ -1,4 +1,5 @@
 import type { AgentRelayMessage } from '@toolman/shared'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { P2pBridge } from './p2p-bridge'
 import {
@@ -96,9 +97,7 @@ export async function sendReplicationMessageOnEventsChannel(
 
   if (bytes > P2P_EVENTS_SAFE_PAYLOAD_BYTES) {
     const error = new P2pEventsPayloadTooLargeError(label, bytes, P2P_EVENTS_SAFE_PAYLOAD_BYTES)
-    console.error(
-      `[p2p] events send rejected (oversize): ${label} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`,
-    )
+    logStructured('p2p', 'error', `events send rejected (oversize): ${label} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES}`)
     throw error
   }
 
@@ -106,9 +105,7 @@ export async function sendReplicationMessageOnEventsChannel(
     await P2pBridge.connectionSend(peerDeviceId, 'events', encodeReplicationMessage(message))
   } catch (error) {
     const errMessage = toErrorMessage(error, String(error))
-    console.error(
-      `[p2p] events send failed: ${label} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES} error=${errMessage}`,
-    )
+    logStructured('p2p', 'error', `events send failed: ${label} bytes=${bytes} limit=${P2P_EVENTS_SAFE_PAYLOAD_BYTES} error=${errMessage}`)
     throw error
   }
 }

@@ -82,8 +82,23 @@ pub async fn connection_disconnect(peer_device_id: String) -> napi::Result<()> {
 }
 
 #[napi]
+pub async fn connection_restart_ice(
+    peer_device_id: String,
+) -> napi::Result<NapiConnectionConnectResult> {
+    let mut manager = CONNECTIONS.lock().await;
+    let state = manager
+        .restart_ice(&peer_device_id)
+        .await
+        .map_err(napi::Error::from_reason)?;
+    Ok(NapiConnectionConnectResult {
+        state: map_state(state),
+    })
+}
+
+#[napi]
 pub async fn connection_list() -> napi::Result<NapiConnectionListResult> {
-    let manager = CONNECTIONS.lock().await;
+    let mut manager = CONNECTIONS.lock().await;
+    manager.prune_dead_sessions().await;
     let connections = manager.list().await;
     Ok(NapiConnectionListResult {
         connections: connections.into_iter().map(map_connection).collect(),

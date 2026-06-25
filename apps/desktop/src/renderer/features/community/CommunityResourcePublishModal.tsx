@@ -21,6 +21,7 @@ import {
 import { notifyCommunityUserDataChanged } from './community-events'
 import { buildResourcePublishSuccessMessage } from './community-resource-status'
 import { canModerationResubmitResource } from './community-user-center-status'
+import { useI18n } from '../../i18n/useI18n'
 import {
   CommunityPublishModalError,
   CommunityPublishModalFooterActions,
@@ -53,6 +54,7 @@ export function CommunityResourcePublishModal({
   onClose,
   onPublished,
 }: Props) {
+  const { t } = useI18n()
   const isResume = Boolean(resumeResource)
   const isDraftResume = resumeResource?.status === 'draft'
   const isRejected = resumeResource ? canModerationResubmitResource(resumeResource) : false
@@ -82,7 +84,11 @@ export function CommunityResourcePublishModal({
   const [showKbAdvanced, setShowKbAdvanced] = useState(false)
 
   const packageDisplayName = useMemo(() => getPackageDisplayName(packagePath), [packagePath])
-  const submitLabel = editOnly ? '保存修改' : requireReview ? '提交审核' : `发布${resourceLabel}`
+  const submitLabel = editOnly
+    ? t('communityPage.publish.saveChanges')
+    : requireReview
+      ? t('communityPage.publish.submitReview')
+      : t('communityPage.resourcePublish.publishLabel', { label: resourceLabel })
 
   useEffect(() => {
     void getCommunityHubHealth()
@@ -142,7 +148,7 @@ export function CommunityResourcePublishModal({
     const result = await window.api.invoke(IpcChannel.DialogSelectFiles, {
       filters: [
         {
-          name: '资源包',
+          name: t('communityPage.resourcePublish.packageFilterName'),
           extensions,
         },
       ],
@@ -166,16 +172,22 @@ export function CommunityResourcePublishModal({
               ? await prepareCommunitySkillPackage(pickedPath, inferredTitle)
               : await prepareCommunityWorkflowPackage(pickedPath, inferredTitle)
         setPackagePath(prepared.packagePath)
-        setPackageNotice(prepared.message ?? '资源包已就绪，可提交审核。')
+        setPackageNotice(prepared.message ?? t('communityPage.resourcePublish.packageReady'))
         if (!title.trim()) {
           setTitle(getPackageDisplayName(pickedPath).replace(/\.[^.]+$/, ''))
         }
       } catch (prepareError) {
         setPackagePath('')
         const fallbackLabel =
-          resourceType === 'mcp' ? 'MCP' : resourceType === 'skill' ? 'Skill' : '工作流'
+          resourceType === 'mcp'
+            ? 'MCP'
+            : resourceType === 'skill'
+              ? 'Skill'
+              : t('communityPage.resourcePublish.workflowLabel')
         const message =
-          prepareError instanceof Error ? prepareError.message : `${fallbackLabel} 资源包转换失败`
+          prepareError instanceof Error
+            ? prepareError.message
+            : t('communityPage.resourcePublish.packageConvertFailed', { label: fallbackLabel })
         setError(message)
       } finally {
         setPreparingPackage(false)
@@ -189,7 +201,7 @@ export function CommunityResourcePublishModal({
 
   const handlePackageKnowledgeBase = async () => {
     if (!selectedKbId) {
-      setError('请选择要打包的知识库')
+      setError(t('communityPage.resourcePublish.selectKnowledgeBase'))
       return
     }
     setPackagingKb(true)
@@ -197,7 +209,7 @@ export function CommunityResourcePublishModal({
     try {
       const exported = await exportCommunityKnowledgeBundle(selectedKbId)
       setPackagePath(exported.packagePath)
-      setPackageNotice('已从本地知识库生成社区包，可提交审核。')
+      setPackageNotice(t('communityPage.resourcePublish.kbPackReady'))
       setError(null)
       const selected = knowledgeBases.find((item) => item.id === selectedKbId)
       if (selected && !title.trim()) {
@@ -207,7 +219,8 @@ export function CommunityResourcePublishModal({
         setDescription(selected.description)
       }
     } catch (packError) {
-      const message = packError instanceof Error ? packError.message : '知识库打包失败'
+      const message =
+        packError instanceof Error ? packError.message : t('communityPage.resourcePublish.kbPackFailed')
       setError(message)
     } finally {
       setPackagingKb(false)
@@ -216,14 +229,14 @@ export function CommunityResourcePublishModal({
 
   const handlePackageMcpServer = async () => {
     if (!selectedMcpId) {
-      setError('请选择要打包的 MCP 服务器')
+      setError(t('communityPage.resourcePublish.selectMcpServer'))
       return
     }
     setPackagingMcp(true)
     try {
       const exported = await exportCommunityMcpPackage(selectedMcpId)
       setPackagePath(exported.packagePath)
-      setPackageNotice('已从本机 MCP 配置导出社区包，可提交审核。')
+      setPackageNotice(t('communityPage.resourcePublish.mcpPackReady'))
       setError(null)
       const selected = mcpServers.find((item) => item.id === selectedMcpId)
       if (selected && !title.trim()) {
@@ -233,7 +246,8 @@ export function CommunityResourcePublishModal({
         setDescription(selected.description)
       }
     } catch (packError) {
-      const message = packError instanceof Error ? packError.message : 'MCP 打包失败'
+      const message =
+        packError instanceof Error ? packError.message : t('communityPage.resourcePublish.mcpPackFailed')
       setError(message)
     } finally {
       setPackagingMcp(false)
@@ -242,11 +256,15 @@ export function CommunityResourcePublishModal({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      setError('请填写资源标题')
+      setError(t('communityPage.resourcePublish.fillTitle'))
       return
     }
     if (!editOnly && !packagePath) {
-      setError(requireReview ? '请选择或打包要提交的资源包' : '请选择要发布的资源包')
+      setError(
+        requireReview
+          ? t('communityPage.resourcePublish.selectPackageReview')
+          : t('communityPage.resourcePublish.selectPackagePublish'),
+      )
       return
     }
 
@@ -264,7 +282,7 @@ export function CommunityResourcePublishModal({
           tags: parsePublishTags(tags),
         })
         notifyCommunityUserDataChanged()
-        onPublished?.('修改已保存')
+        onPublished?.(t('communityPage.resourcePublish.successEdit'))
         onClose()
         return
       }
@@ -302,11 +320,14 @@ export function CommunityResourcePublishModal({
         packagePath,
       })
       notifyCommunityUserDataChanged()
-      const successMessage = buildResourcePublishSuccessMessage(published.status, requireReview)
+      const successMessage = buildResourcePublishSuccessMessage(published.status, requireReview, t)
       onPublished?.(successMessage)
       onClose()
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : `发布${resourceLabel}失败`
+      const message =
+        submitError instanceof Error
+          ? submitError.message
+          : t('communityPage.resourcePublish.publishFailed', { label: resourceLabel })
       const isMultipartError = message.toLowerCase().includes('multipart')
       const isChecksumError = message.toLowerCase().includes('sha256sums')
       if (createdId && !isMultipartError) {
@@ -314,7 +335,7 @@ export function CommunityResourcePublishModal({
           const existing = await getCommunityResource(createdId)
           if (existing.status === 'pending_review' || existing.status === 'published') {
             notifyCommunityUserDataChanged()
-            onPublished?.(buildResourcePublishSuccessMessage(existing.status, requireReview))
+            onPublished?.(buildResourcePublishSuccessMessage(existing.status, requireReview, t))
             onClose()
             return
           }
@@ -324,11 +345,14 @@ export function CommunityResourcePublishModal({
       }
       setError(
         isChecksumError
-          ? `${message}。请确认资源包包含 ${publishConfig.manifestFile} 与 SHA256SUMS，或使用下方高级选项从本机一键生成。`
+          ? t('communityPage.resourcePublish.checksumHint', {
+              message,
+              manifest: publishConfig.manifestFile,
+            })
           : isMultipartError
-            ? `${message}。若资源包较大（>2MB），请先 Cmd+Q 退出用户 A 并重启双实例，使 Community Hub 更新生效。`
+            ? t('communityPage.resourcePublish.multipartHint', { message })
             : createdId && !isResume
-              ? `${message}。资源已保存为草稿，请返回对应市场页重新选择资源包提交。`
+              ? t('communityPage.resourcePublish.draftSavedHint', { message })
               : message,
       )
     } finally {
@@ -341,25 +365,25 @@ export function CommunityResourcePublishModal({
     onClose()
   }
 
+  const modalTitle = editOnly
+    ? t('communityPage.resourcePublish.titleEdit', { label: resourceLabel })
+    : isRejected
+      ? t('communityPage.resourcePublish.titleResubmit', { label: resourceLabel })
+      : isResume
+        ? t('communityPage.resourcePublish.titleContinue', { label: resourceLabel })
+        : requireReview
+          ? t('communityPage.resourcePublish.titleSubmitReview', { label: resourceLabel })
+          : t('communityPage.resourcePublish.titlePublish', { label: resourceLabel })
+
   return (
     <CommunityPublishModalShell
-      title={
-        editOnly
-          ? `修改${resourceLabel}`
-          : isRejected
-            ? `重新提交${resourceLabel}审核`
-            : isResume
-              ? `继续提交${resourceLabel}审核`
-              : requireReview
-                ? `提交${resourceLabel}审核`
-                : `发布${resourceLabel}`
-      }
+      title={modalTitle}
       onClose={handleClose}
       footer={
         <CommunityPublishModalFooterActions
           onCancel={handleClose}
           cancelDisabled={submitting}
-          confirmLabel={submitting ? '提交中…' : submitLabel}
+          confirmLabel={submitting ? t('communityPage.publish.submitting') : submitLabel}
           confirmDisabled={submitting || packagingKb || packagingMcp || preparingPackage}
           onConfirm={() => void handleSubmit()}
         />
@@ -368,44 +392,45 @@ export function CommunityResourcePublishModal({
       {error ? <CommunityPublishModalError message={error} /> : null}
       {packageNotice ? <CommunityPublishModalNotice message={packageNotice} /> : null}
       {isDraftResume && !editOnly ? (
-        <CommunityPublishModalNotice message="上次提交未完成资源包上传。请选择或打包资源包后重新提交，管理员才能看到待审核条目。" />
+        <CommunityPublishModalNotice message={t('communityPage.resourcePublish.draftUploadNotice')} />
       ) : null}
       {isRejected && !editOnly ? (
-        <CommunityPublishModalNotice message="审核未通过。请根据管理员意见修改内容或资源包后重新提交审核。" />
+        <CommunityPublishModalNotice message={t('communityPage.resourcePublish.rejectedNotice')} />
       ) : null}
       {editOnly ? (
-        <CommunityPublishModalNotice message="修改基本信息后保存；如需更换资源包，请使用「重新提交」。" />
+        <CommunityPublishModalNotice message={t('communityPage.resourcePublish.editNotice')} />
       ) : null}
 
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">
-          {resourceLabel}标题 <span className="tm-community-publish-required">*</span>
+          {t('communityPage.resourcePublish.titleField', { label: resourceLabel })}{' '}
+          <span className="tm-community-publish-required">{t('communityPage.publish.required')}</span>
         </span>
         <input
           type="text"
           className="tm-community-publish-input"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder={`例如：社区${resourceLabel}示例`}
+          placeholder={t('communityPage.resourcePublish.titlePlaceholder', { label: resourceLabel })}
           readOnly={readOnlyMeta}
         />
       </label>
 
       <label className="tm-community-publish-field">
-        <span className="tm-community-publish-label">详细描述</span>
+        <span className="tm-community-publish-label">{t('communityPage.resourcePublish.descriptionLabel')}</span>
         <textarea
           className="tm-community-publish-textarea"
           rows={3}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="简要说明资源用途、适用场景与使用方式..."
+          placeholder={t('communityPage.resourcePublish.descriptionPlaceholder')}
           readOnly={readOnlyMeta}
         />
       </label>
 
       <div className="tm-community-publish-grid">
         <label className="tm-community-publish-field">
-          <span className="tm-community-publish-label">分类</span>
+          <span className="tm-community-publish-label">{t('communityPage.resourcePublish.categoryLabel')}</span>
           <input
             type="text"
             className="tm-community-publish-input"
@@ -415,7 +440,7 @@ export function CommunityResourcePublishModal({
           />
         </label>
         <label className="tm-community-publish-field">
-          <span className="tm-community-publish-label">标签</span>
+          <span className="tm-community-publish-label">{t('communityPage.resourcePublish.tagsLabel')}</span>
           <input
             type="text"
             className="tm-community-publish-input"
@@ -428,7 +453,7 @@ export function CommunityResourcePublishModal({
 
       <div className="tm-community-publish-grid">
         <label className="tm-community-publish-field">
-          <span className="tm-community-publish-label">开源许可证</span>
+          <span className="tm-community-publish-label">{t('communityPage.resourcePublish.licenseLabel')}</span>
           <input
             type="text"
             className="tm-community-publish-input tm-community-publish-input--medium"
@@ -438,7 +463,7 @@ export function CommunityResourcePublishModal({
           />
         </label>
         <label className="tm-community-publish-field">
-          <span className="tm-community-publish-label">版本号</span>
+          <span className="tm-community-publish-label">{t('communityPage.resourcePublish.versionLabel')}</span>
           <input
             type="text"
             className="tm-community-publish-input tm-community-publish-input--mono"
@@ -452,19 +477,20 @@ export function CommunityResourcePublishModal({
         <>
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">
-          更新说明 <span className="tm-community-publish-label-optional">(可选)</span>
+          {t('communityPage.resourcePublish.changelogLabel')}{' '}
+          <span className="tm-community-publish-label-optional">{t('communityPage.publish.optional')}</span>
         </span>
         <input
           type="text"
           className="tm-community-publish-input"
           value={changelog}
           onChange={(event) => setChangelog(event.target.value)}
-          placeholder="说明本次发布变更"
+          placeholder={t('communityPage.resourcePublish.changelogPlaceholder')}
         />
       </label>
 
       <div className="tm-community-publish-field tm-community-publish-field--upload">
-        <span className="tm-community-publish-label">资源包</span>
+        <span className="tm-community-publish-label">{t('communityPage.resourcePublish.packageLabel')}</span>
         {resourceType === 'knowledge' && publishConfig.localPackSummary ? (
           <details
             className="tm-community-publish-field"
@@ -478,7 +504,7 @@ export function CommunityResourcePublishModal({
             {knowledgeBases.length > 0 ? (
               <div className="tm-community-publish-grid" style={{ marginTop: 12 }}>
                 <label className="tm-community-publish-field">
-                  <span className="tm-community-publish-label">本地知识库</span>
+                  <span className="tm-community-publish-label">{t('communityPage.resourcePublish.localKnowledgeBase')}</span>
                   <select
                     className="tm-community-publish-input tm-community-publish-input--select"
                     value={selectedKbId}
@@ -487,7 +513,7 @@ export function CommunityResourcePublishModal({
                     {knowledgeBases.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
-                        {item.kind === 'shared' ? '（共享）' : ''}
+                        {item.kind === 'shared' ? t('communityPage.resourcePublish.sharedSuffix') : ''}
                       </option>
                     ))}
                   </select>
@@ -500,12 +526,14 @@ export function CommunityResourcePublishModal({
                     disabled={packagingKb || submitting || preparingPackage}
                     onClick={() => void handlePackageKnowledgeBase()}
                   >
-                    {packagingKb ? '打包中…' : '一键打包'}
+                    {packagingKb
+                      ? t('communityPage.resourcePublish.packingKb')
+                      : t('communityPage.resourcePublish.packKb')}
                   </button>
                 </div>
               </div>
             ) : (
-              <CommunityPublishModalNotice message="展开后若列表为空，请先在「知识库」模块创建并添加文档。" />
+              <CommunityPublishModalNotice message={t('communityPage.resourcePublish.kbEmptyHint')} />
             )}
           </details>
         ) : null}
@@ -522,7 +550,7 @@ export function CommunityResourcePublishModal({
             {mcpServers.length > 0 ? (
               <div className="tm-community-publish-grid" style={{ marginTop: 12 }}>
                 <label className="tm-community-publish-field">
-                  <span className="tm-community-publish-label">本地 MCP 配置</span>
+                  <span className="tm-community-publish-label">{t('communityPage.resourcePublish.localMcpConfig')}</span>
                   <select
                     className="tm-community-publish-input tm-community-publish-input--select"
                     value={selectedMcpId}
@@ -543,12 +571,14 @@ export function CommunityResourcePublishModal({
                     disabled={packagingMcp || submitting || preparingPackage}
                     onClick={() => void handlePackageMcpServer()}
                   >
-                    {packagingMcp ? '导出中…' : '导出配置包'}
+                    {packagingMcp
+                      ? t('communityPage.resourcePublish.exportingMcp')
+                      : t('communityPage.resourcePublish.exportMcp')}
                   </button>
                 </div>
               </div>
             ) : (
-              <CommunityPublishModalNotice message="展开后若列表为空，请先在「设置 → MCP」添加自定义 MCP。" />
+              <CommunityPublishModalNotice message={t('communityPage.resourcePublish.mcpEmptyHint')} />
             )}
           </details>
         ) : null}
@@ -564,7 +594,7 @@ export function CommunityResourcePublishModal({
               title={packagePath || undefined}
             >
               {preparingPackage
-                ? '正在转换资源包…'
+                ? t('communityPage.resourcePublish.convertingPackage')
                 : packageDisplayName || publishConfig.packagePickerPlaceholder}
             </div>
             <button
@@ -573,7 +603,9 @@ export function CommunityResourcePublishModal({
               disabled={preparingPackage || submitting}
               onClick={() => void handlePickPackage()}
             >
-              {preparingPackage ? '转换中…' : '选择文件'}
+              {preparingPackage
+                ? t('communityPage.resourcePublish.converting')
+                : t('communityPage.resourcePublish.pickFile')}
             </button>
           </div>
           <p className="tm-community-publish-upload-hint">
@@ -581,7 +613,10 @@ export function CommunityResourcePublishModal({
               ⓘ
             </span>
             <span>
-              {publishConfig.packageHint} 需包含 <code>{publishConfig.manifestFile}</code>。
+              {publishConfig.packageHint}{' '}
+              {t('communityPage.resourcePublish.packageMustInclude', {
+                file: publishConfig.manifestFile,
+              })}
             </span>
           </p>
         </div>

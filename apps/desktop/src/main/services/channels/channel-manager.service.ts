@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { logStructured } from '../structured-log.service'
 import type { ChannelPlatformId, ImChannelConfig } from '@toolman/shared'
 import { CHANNEL_PLATFORMS } from '@toolman/shared'
 import {
@@ -105,13 +106,13 @@ function ensureHttpServer(): void {
 
   httpServer = createServer((req, res) => {
     void routeHttpRequest(req, res).catch((error) => {
-      console.error('[channel-http]', error)
+      logStructured('channel.http', 'error', `[channel-http]`, { detail: error })
       writeJson(res, 500, { error: 'Internal server error' })
     })
   })
 
   httpServer.on('error', (error) => {
-    console.error('[channel-http] server error:', error)
+    logStructured('channel.http', 'error', `server error:`, { detail: error })
   })
 }
 

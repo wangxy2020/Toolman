@@ -15,6 +15,7 @@ import {
   TASK_STATUS_LABELS,
   TASK_TYPE_LABELS,
 } from './community-task-utils'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   taskId: string
@@ -31,6 +32,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 export function TaskReviewDetailModal({ taskId, onClose }: Props) {
+  const { t, language } = useI18n()
   const [task, setTask] = useState<CommunityTaskItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -84,7 +86,7 @@ export function TaskReviewDetailModal({ taskId, onClose }: Props) {
           <DetailRow label="状态" value={TASK_STATUS_LABELS[task.status]} />
           <DetailRow
             label="预算"
-            value={formatTaskBudget(task.budgetAmount, task.budgetCurrency)}
+            value={formatTaskBudget(task.budgetAmount, task.budgetCurrency, t, language)}
           />
           <DetailRow
             label="截止时间"

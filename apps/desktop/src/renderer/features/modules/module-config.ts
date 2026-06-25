@@ -1,4 +1,6 @@
 import type { ModuleView } from '../../types/app-view'
+import type { TranslateFn } from '../../i18n/I18nProvider'
+import { resolveModulePageConfig } from '../../i18n/module-page-labels'
 
 export interface ModulePageConfig {
   title: string
@@ -55,6 +57,7 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
   },
 }
 
-export function getModulePageConfig(view: ModuleView): ModulePageConfig {
+export function getModulePageConfig(view: ModuleView, t?: TranslateFn): ModulePageConfig {
+  if (t) return resolveModulePageConfig(view, t)
   return MODULE_PAGE_CONFIG[view]
 }

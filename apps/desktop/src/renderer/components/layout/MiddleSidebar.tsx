@@ -4,6 +4,8 @@ import { ConfirmDialog } from '../ConfirmDialog'
 import { IconChevronRight, IconPlus, IconTopic } from '../icons'
 import { SidebarRenameInput } from '../../features/notes/SidebarRenameInput'
 import { isGroupProxyAssistant } from '../../features/group/group-agent-utils'
+import { useI18n } from '../../i18n/useI18n'
+import { translateAssistantName } from '../../i18n/system-labels'
 
 interface Props {
   assistants: Assistant[]
@@ -53,6 +55,7 @@ export function MiddleSidebar({
   onDeleteAssistant,
   onAddAssistant,
 }: Props) {
+  const { t } = useI18n()
   const { map, unassigned } = useMemo(
     () => groupSessions(sessions, assistants),
     [sessions, assistants],
@@ -141,15 +144,15 @@ export function MiddleSidebar({
       <div className="tm-sidebar-content">
         <button type="button" className="tm-sidebar-add" onClick={onAddAssistant}>
           <IconPlus />
-          添加智能体
+          {t('sidebar.agent.addAssistant')}
         </button>
 
         <div className="tm-sidebar-list">
           {sessionsLoading && assistants.length === 0 && (
-            <div className="tm-empty">加载中…</div>
+            <div className="tm-empty">{t('common.loading')}</div>
           )}
           {!sessionsLoading && assistants.length === 0 && (
-            <div className="tm-empty">暂无智能体，点击上方添加</div>
+            <div className="tm-empty">{t('sidebar.agent.emptyNoAssistant')}</div>
           )}
 
           {assistants.map((assistant) => {
@@ -171,7 +174,7 @@ export function MiddleSidebar({
                   <button
                     type="button"
                     className="tm-assistant-expand"
-                    title={isOpen ? '收起历史' : '展开历史'}
+                    title={isOpen ? t('sidebar.agent.collapseHistory') : t('sidebar.agent.expandHistory')}
                     onClick={() => toggleExpanded(assistant.id)}
                   >
                     <IconChevronRight open={isOpen} />
@@ -192,13 +195,13 @@ export function MiddleSidebar({
                       }
                     }}
                   >
-                    {assistant.name}
+                    {translateAssistantName(assistant.name, t)}
                   </button>
                   <div className="tm-assistant-actions">
                     <button
                       type="button"
                       className="tm-assistant-action-btn"
-                      title="新建话题"
+                      title={t('sidebar.agent.newTopic')}
                       onClick={() => onCreateSession(assistant.id)}
                     >
                       <IconPlus size={14} />
@@ -208,7 +211,7 @@ export function MiddleSidebar({
 
                 {isOpen &&
                   (assistantSessions.length === 0 ? (
-                    <div className="tm-session-empty">暂无历史话题</div>
+                    <div className="tm-session-empty">{t('sidebar.agent.emptyNoTopics')}</div>
                   ) : (
                     assistantSessions.map(renderSession)
                   ))}
@@ -220,7 +223,7 @@ export function MiddleSidebar({
             <div className="tm-assistant-group">
               <div className="tm-assistant-row tm-assistant-row--open">
                 <span className="tm-assistant-expand tm-assistant-expand--placeholder" />
-                <span className="tm-assistant-name tm-assistant-name--static">其他话题</span>
+                <span className="tm-assistant-name tm-assistant-name--static">{t('sidebar.agent.otherTopics')}</span>
                 <div className="tm-assistant-actions tm-assistant-actions--placeholder" aria-hidden="true" />
               </div>
               {unassigned.map(renderSession)}
@@ -231,10 +234,10 @@ export function MiddleSidebar({
 
       {deleteTarget && (
         <ConfirmDialog
-          title="删除话题"
-          message={`确定删除「${deleteTarget.title}」？删除后无法恢复。`}
-          confirmLabel="删除"
-          cancelLabel="取消"
+          title={t('sidebar.agent.deleteTopicTitle')}
+          message={t('sidebar.agent.deleteTopicMessage', { title: deleteTarget.title })}
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
           danger
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
@@ -246,14 +249,14 @@ export function MiddleSidebar({
 
       {deleteAssistantTarget && (
         <ConfirmDialog
-          title="删除智能体"
+          title={t('sidebar.agent.deleteAssistantTitle')}
           message={
             isGroupProxyAssistant(deleteAssistantTarget)
-              ? `确定删除「${deleteAssistantTarget.name}」？该智能体下的本地话题将一并删除；之后仍可通过群组智能体重新打开。`
-              : `确定删除「${deleteAssistantTarget.name}」？该智能体下的所有话题将一并删除，且无法恢复。`
+              ? t('sidebar.agent.deleteAssistantGroupMessage', { name: deleteAssistantTarget.name })
+              : t('sidebar.agent.deleteAssistantMessage', { name: deleteAssistantTarget.name })
           }
-          confirmLabel="删除"
-          cancelLabel="取消"
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
           danger
           onCancel={() => setDeleteAssistantTarget(null)}
           onConfirm={() => {

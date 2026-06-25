@@ -1,6 +1,7 @@
 import { IconSort } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
-  COMMUNITY_LIST_SORT_OPTIONS,
+  getCommunityListSortOptions,
   type CommunityListSortField,
 } from './community-list-sort'
 
@@ -15,10 +16,13 @@ export function CommunityListSortToolbar({
   sortAscending,
   onSortFieldChange,
 }: Props) {
+  const { t } = useI18n()
+  const sortOptions = getCommunityListSortOptions(t)
+
   return (
     <div className="tm-kb-file-toolbar">
       <div className="tm-kb-file-toolbar-sort">
-        {COMMUNITY_LIST_SORT_OPTIONS.map((option) => {
+        {sortOptions.map((option) => {
           const active = sortField === option.id
           return (
             <button

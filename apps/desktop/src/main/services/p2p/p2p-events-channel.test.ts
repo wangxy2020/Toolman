@@ -1,8 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('./p2p-bridge', () => ({
+  P2pBridge: {
+    connectionSend: vi.fn(async () => undefined),
+  },
+}))
+
+import { P2pBridge } from './p2p-bridge'
 import {
   P2P_EVENTS_SAFE_PAYLOAD_BYTES,
+  P2pEventsPayloadTooLargeError,
   describeReplicationMessage,
+  measureAgentRelayEnvelopeBytes,
   measureReplicationMessageBytes,
+  sendEventsBatchChunked,
+  sendReplicationMessageOnEventsChannel,
   splitWireEventsByPayloadBudget,
 } from './p2p-events-channel'
 import type { RemoteWorkspaceEventWire } from './p2p-sync-protocol'
@@ -63,5 +75,34 @@ describe('p2p-events-channel', () => {
     }
 
     expect(chunks.flat()).toHaveLength(events.length)
+  })
+
+  it('measures agent relay envelopes', () => {
+    const bytes = measureAgentRelayEnvelopeBytes({
+      type: 'stream',
+      event: { type: 'message.delta' },
+    } as never)
+    expect(bytes).toBeGreaterThan(0)
+  })
+
+  it('rejects oversize replication messages', async () => {
+    const hugeEvent = makeWireEvent(1, P2P_EVENTS_SAFE_PAYLOAD_BYTES)
+    await expect(
+      sendReplicationMessageOnEventsChannel('peer-1', {
+        type: 'events.batch',
+        workspaceId: 'ws-1',
+        events: [hugeEvent],
+      }),
+    ).rejects.toBeInstanceOf(P2pEventsPayloadTooLargeError)
+  })
+
+  it('sends chunked event batches', async () => {
+    vi.mocked(P2pBridge.connectionSend).mockClear()
+    const sent = await sendEventsBatchChunked('peer-1', 'ws-1', [
+      makeWireEvent(1, 1024),
+      makeWireEvent(2, 1024),
+    ])
+    expect(sent).toBe(2)
+    expect(P2pBridge.connectionSend).toHaveBeenCalled()
   })
 })

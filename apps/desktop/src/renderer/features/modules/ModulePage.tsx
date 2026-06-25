@@ -1,5 +1,6 @@
 import { ModulePageHeader } from '../../components/layout/ModulePageHeader'
 import { getModulePageConfig } from './module-config'
+import { useI18n } from '../../i18n/useI18n'
 import type { ModuleView } from '../../types/app-view'
 
 interface Props {
@@ -7,7 +8,8 @@ interface Props {
 }
 
 export function ModulePage({ view }: Props) {
-  const config = getModulePageConfig(view)
+  const { t } = useI18n()
+  const config = getModulePageConfig(view, t)
 
   return (
     <main className="tm-main">

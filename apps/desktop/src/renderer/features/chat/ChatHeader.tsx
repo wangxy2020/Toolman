@@ -5,6 +5,7 @@ import { AssistantNameSelector } from './AssistantNameSelector'
 import { MultiModelSelector } from './MultiModelSelector'
 import { WorkspaceFolderSelector } from './WorkspaceFolderSelector'
 import type { CodeEditorId } from './code-editor-options'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   assistant: Assistant | null
@@ -37,6 +38,7 @@ export function ChatHeader({
   onOpenSettings,
   groupProxyMode = false,
 }: Props) {
+  const { t } = useI18n()
   return (
     <header className="tm-chat-header">
       <div className="tm-chat-breadcrumb">
@@ -59,7 +61,7 @@ export function ChatHeader({
       <div className="tm-chat-header-end">
         {!hasConfiguredProvider && (
           <button type="button" className="tm-model-pill tm-model-pill--warn" onClick={onOpenSettings}>
-            配置 API Key
+            {t('chat.configureApiKey')}
           </button>
         )}
 
@@ -72,7 +74,7 @@ export function ChatHeader({
           ]
             .filter(Boolean)
             .join(' ')}
-          title="消息设置"
+          title={t('chat.messageSettings')}
           onClick={onOpenMessageSettings}
         >
           <IconSliders size={16} />

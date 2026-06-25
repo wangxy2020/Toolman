@@ -1,3 +1,5 @@
+import { useI18n } from '../../i18n/useI18n'
+
 interface Props {
   sessionRoundLimit: number
   environmentVariables: string
@@ -35,12 +37,13 @@ export function AgentSettingsAdvancedTab({
   onMaxTokensChange,
   onMaxTokensBlur,
 }: Props) {
+  const { t } = useI18n()
   return (
     <div className="tm-agent-tab-panel">
       <div className="tm-agent-advanced-block">
         <label className="tm-agent-advanced-label">
-          温度 (Temperature)
-          <HelpHint title="越高越有创造性，越低越稳定；范围 0–2" />
+          {t('agent.fields.temperature')}
+          <HelpHint title={t('agent.fields.temperatureHint')} />
         </label>
         <div className="tm-notes-settings-slider-row">
           <input
@@ -59,14 +62,14 @@ export function AgentSettingsAdvancedTab({
 
       <div className="tm-agent-advanced-block">
         <label className="tm-agent-advanced-label">
-          最大输出 Token
-          <HelpHint title="限制单次回复的最大 token 数；留空表示使用模型默认值" />
+          {t('agent.fields.maxTokens')}
+          <HelpHint title={t('agent.fields.maxTokensHint')} />
         </label>
         <input
           type="number"
           className="tm-agent-advanced-input"
           min={1}
-          placeholder="默认"
+          placeholder={t('agent.fields.maxTokensPlaceholder')}
           value={maxTokens}
           onChange={(event) => onMaxTokensChange(event.target.value)}
           onBlur={onMaxTokensBlur}
@@ -75,8 +78,8 @@ export function AgentSettingsAdvancedTab({
 
       <div className="tm-agent-advanced-block">
         <label className="tm-agent-advanced-label">
-          会话轮次上限
-          <HelpHint title="限制单次自主会话的最大轮次" />
+          {t('agent.fields.sessionRoundLimit')}
+          <HelpHint title={t('agent.fields.sessionRoundLimitHint')} />
         </label>
         <input
           type="number"
@@ -87,14 +90,14 @@ export function AgentSettingsAdvancedTab({
           onBlur={onSessionRoundLimitBlur}
         />
         <p className="tm-agent-advanced-hint">
-          数值越高可自主运行越久；数值越低更易控制。
+          {t('agent.fields.sessionRoundLimitNote')}
         </p>
       </div>
 
       <div className="tm-agent-advanced-block">
         <label className="tm-agent-advanced-label">
-          环境变量
-          <HelpHint title="为智能体运行环境注入自定义变量" />
+          {t('agent.fields.envVars')}
+          <HelpHint title={t('agent.fields.envVarsHint')} />
         </label>
         <textarea
           className="tm-agent-advanced-textarea"

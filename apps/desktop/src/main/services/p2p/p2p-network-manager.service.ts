@@ -12,6 +12,7 @@ import { broadcastP2pNetworkSnapshotUpdated } from './p2p-network-broadcast'
 import { ensureDefaultLibp2pConfig, readLibp2pConfig } from './p2p-libp2p.config'
 import {
   createInitialLibp2pRestartStatus,
+  LIBP2P_MAX_RESTART_ATTEMPTS,
   nextLibp2pRestartDelayMs,
   notifyLibp2pRestartListeners,
   type Libp2pRestartStatus,
@@ -139,6 +140,20 @@ function clearRestartTimer(): void {
 
 function scheduleLibp2pRestart(reason: string): void {
   if (shutdownRequested || restartTimer || restartInFlight || !restartStatus.enabled) {
+    return
+  }
+
+  if (restartStatus.tripped || restartStatus.attempt >= LIBP2P_MAX_RESTART_ATTEMPTS) {
+    restartStatus = {
+      ...restartStatus,
+      tripped: true,
+      lastReason: reason,
+    }
+    recordDiagnosticEvent(
+      'libp2p',
+      'error',
+      `swarm restart circuit breaker tripped after ${restartStatus.attempt} attempts: ${reason}`,
+    )
     return
   }
 
@@ -339,4 +354,19 @@ export function isP2pNetworkManagerRunning(): boolean {
   } catch {
     return false
   }
+}
+
+/** Manual restart from diagnostics UI — resets circuit breaker and restarts swarm. */
+export async function manualRestartLibp2pNetwork(): Promise<void> {
+  if (!Libp2pBridge.isAvailable()) {
+    throw new Error('libp2p 原生模块不可用')
+  }
+  clearRestartTimer()
+  restartStatus = {
+    ...createInitialLibp2pRestartStatus(true),
+    enabled: true,
+  }
+  shutdownRequested = false
+  bootstrapCompleted = true
+  await restartLibp2pNetwork('manual restart from diagnostics')
 }

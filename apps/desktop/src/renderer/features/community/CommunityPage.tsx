@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 
 import {
   IconKnowledge,
@@ -13,10 +13,13 @@ import {
   IconTaskList,
   IconWorkflow,
 } from '../../components/icons'
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { useI18n } from '../../i18n/useI18n'
 import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
 import { ModulePageStatusProvider } from '../../components/module-page-status'
 import { getModulePageConfig } from '../modules/module-config'
-import { communitySectionLabel, type CommunitySidebarSection } from './community-sidebar-types'
+import { communitySectionLabel } from '../../i18n/community-sidebar-labels'
+import type { CommunitySidebarSection } from './community-sidebar-types'
 import { AdminModerationPanel } from './AdminModerationPanel'
 import { CommunityModerationCategoryNav } from './CommunityModerationCategoryNav'
 import { CommunityModerationCategoryProvider } from './community-moderation-category-context'
@@ -50,60 +53,17 @@ const SORTABLE_ACTIONS = new Set([
   'tasks',
 ])
 
-const PANEL_CONFIG: Record<
-  string,
-  { title: string; hint: string; icon: React.ReactNode }
-> = {
-  subscribe: {
-    title: '我的',
-    hint: '查看我的发布、安装记录、收藏与任务。',
-    icon: <IconSubscribe size={28} />,
-  },
-  workflow: {
-    title: '工作流市场',
-    hint: '浏览与安装社区共享的自动化工作流。',
-    icon: <IconWorkflow size={28} />,
-  },
-  skills: {
-    title: 'Skills市场',
-    hint: '发现与安装社区贡献的 Agent Skills。',
-    icon: <IconSkill size={28} />,
-  },
-  mcp: {
-    title: 'MCP市场',
-    hint: '探索社区推荐的 MCP 服务器与工具集成。',
-    icon: <IconMcp size={28} />,
-  },
-  knowledge: {
-    title: '知识库市场',
-    hint: '浏览社区公开的知识库与文档合集。',
-    icon: <IconKnowledge size={28} />,
-  },
-  tasks: {
-    title: '任务市场',
-    hint: '浏览与承接社区任务。',
-    icon: <IconTaskList size={28} />,
-  },
-  news: {
-    title: '资讯',
-    hint: '查看社区动态、更新公告与活动资讯。',
-    icon: <IconNews size={28} />,
-  },
-  messages: {
-    title: '留言板',
-    hint: '浏览社区留言与互动讨论。',
-    icon: <IconMessageBoard size={28} />,
-  },
-  recommend: {
-    title: '推荐',
-    hint: '根据你的使用习惯，为你推荐智能体与资源。',
-    icon: <IconRecommend size={28} />,
-  },
-  management: {
-    title: '社区管理',
-    hint: '扫描在线资源、处理举报、任命管理员并封禁恶意用户。',
-    icon: <IconFlag size={28} />,
-  },
+const PANEL_ICONS: Record<string, ReactNode> = {
+  subscribe: <IconSubscribe size={28} />,
+  workflow: <IconWorkflow size={28} />,
+  skills: <IconSkill size={28} />,
+  mcp: <IconMcp size={28} />,
+  knowledge: <IconKnowledge size={28} />,
+  tasks: <IconTaskList size={28} />,
+  news: <IconNews size={28} />,
+  messages: <IconMessageBoard size={28} />,
+  recommend: <IconRecommend size={28} />,
+  management: <IconFlag size={28} />,
 }
 
 interface Props {
@@ -118,6 +78,7 @@ function CommunityPageHeaderEnd({
   showSort: boolean
   onOpenSettings: () => void
 }) {
+  const { t } = useI18n()
   const sort = useCommunityListSortContext()
 
   return (
@@ -133,8 +94,8 @@ function CommunityPageHeaderEnd({
       <button
         type="button"
         className="tm-chat-header-settings-btn"
-        title="社区设置"
-        aria-label="社区设置"
+        title={t('communityPage.settings')}
+        aria-label={t('communityPage.settings')}
         onClick={onOpenSettings}
       >
         <IconSliders size={16} />
@@ -163,13 +124,22 @@ export function CommunityPage({
   activeAction = DEFAULT_COMMUNITY_ACTION,
   sidebarSection = 'news',
 }: Props) {
+  const { t } = useI18n()
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   useCommunityPresence(isCommunitySessionActive())
-  const config = getModulePageConfig('community')
+  const config = getModulePageConfig('community', t)
 
   const effectiveAction = activeAction
-  const panel = PANEL_CONFIG[effectiveAction]
-  const sectionLabel = communitySectionLabel(sidebarSection)
+  const panel = useMemo(() => {
+    const icon = PANEL_ICONS[effectiveAction]
+    if (!icon) return undefined
+    return {
+      title: t(`communityPage.panels.${effectiveAction}.title`),
+      hint: t(`communityPage.panels.${effectiveAction}.subtitle`),
+      icon,
+    }
+  }, [effectiveAction, t])
+  const sectionLabel = communitySectionLabel(sidebarSection, t)
   const panelTitle = panel?.title
   const showSort = SORTABLE_ACTIONS.has(effectiveAction)
 
@@ -238,6 +208,7 @@ export function CommunityPage({
   )
 
   return (
+    <ErrorBoundary title={t('errors.community')}>
     <CommunityListSortProvider>
       {effectiveAction === 'management' ? (
         <CommunityModerationCategoryProvider>{pageContent}</CommunityModerationCategoryProvider>
@@ -248,5 +219,6 @@ export function CommunityPage({
         <CommunitySettingsModal onClose={() => setShowSettingsModal(false)} />
       ) : null}
     </CommunityListSortProvider>
+    </ErrorBoundary>
   )
 }

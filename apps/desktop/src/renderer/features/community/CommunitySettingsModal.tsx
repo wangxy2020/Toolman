@@ -10,6 +10,7 @@ import {
 import { notifyCommunityNewsSourcesChanged } from './community-events'
 import { NewsSourcesPanel } from './NewsSourcesPanel'
 import { CommunityFederationSettingsPanel } from './CommunityFederationSettingsPanel'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   onClose: () => void
@@ -17,21 +18,8 @@ interface Props {
 
 type SettingsTab = 'hub' | 'federation' | 'rss'
 
-const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: 'hub', label: 'Hub 服务' },
-  { id: 'federation', label: '联邦 Peering' },
-  { id: 'rss', label: '资讯源' },
-]
-
-function hubStatusLabel(status: CommunityHubStatusOutput | null): string {
-  if (!status) return '加载中…'
-  if (status.offlineReadOnly) return '离线只读'
-  if (status.running) return '已连接'
-  if (status.error) return '不可用'
-  return '未连接'
-}
-
 export function CommunitySettingsModal({ onClose }: Props) {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<SettingsTab>('hub')
   const [hubStatus, setHubStatus] = useState<CommunityHubStatusOutput | null>(null)
   const [hubHealth, setHubHealth] = useState<CommunityHubHealthOutput | null>(null)
@@ -51,7 +39,7 @@ export function CommunitySettingsModal({ onClose }: Props) {
         setHubHealth(null)
       }
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : '加载 Hub 状态失败'
+      const message = loadError instanceof Error ? loadError.message : t('communityPage.hub.loadFailed')
       setError(message)
     } finally {
       setLoading(false)
@@ -70,6 +58,22 @@ export function CommunitySettingsModal({ onClose }: Props) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: 'hub', label: t('communityPage.tabs.hub') },
+    { id: 'federation', label: t('communityPage.tabs.federation') },
+    { id: 'rss', label: t('communityPage.tabs.news') },
+  ]
+
+  const hubStatusText = !hubStatus
+    ? t('common.loading')
+    : hubStatus.offlineReadOnly
+      ? t('communityPage.hub.offlineReadonly')
+      : hubStatus.running
+        ? t('communityPage.hub.connected')
+        : hubStatus.error
+          ? t('communityPage.hub.unavailable')
+          : t('communityPage.hub.disconnected')
+
   return (
     <div className="tm-modal-overlay tm-modal-overlay--group-settings" onClick={onClose}>
       <div
@@ -83,14 +87,14 @@ export function CommunitySettingsModal({ onClose }: Props) {
           <div className="tm-group-settings-modal-heading">
             <h3 id="community-settings-title" className="tm-group-settings-modal-title">
               <span className="tm-group-settings-modal-title-dot" aria-hidden="true" />
-              社区设置
+              {t('communityPage.settings')}
             </h3>
-            <p className="tm-group-settings-modal-subtitle">Community Hub 连接与资讯源配置</p>
+            <p className="tm-group-settings-modal-subtitle">{t('communityPage.settingsSubtitle')}</p>
           </div>
           <button
             type="button"
             className="tm-group-settings-modal-close"
-            aria-label="关闭"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             <IconX size={16} />
@@ -98,8 +102,8 @@ export function CommunitySettingsModal({ onClose }: Props) {
         </header>
 
         <div className="tm-group-settings-modal-body">
-          <nav className="tm-group-settings-modal-nav" aria-label="社区设置分类">
-            {SETTINGS_TABS.map((tab) => (
+          <nav className="tm-group-settings-modal-nav" aria-label={t('communityPage.settingsNavAria')}>
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -130,7 +134,7 @@ export function CommunitySettingsModal({ onClose }: Props) {
                       gap: 12,
                     }}
                   >
-                    <span className="tm-group-settings-section-title">Hub 服务状态</span>
+                    <span className="tm-group-settings-section-title">{t('communityPage.hub.statusSection')}</span>
                     <button
                       type="button"
                       className="tm-group-settings-inline-btn"
@@ -138,40 +142,40 @@ export function CommunitySettingsModal({ onClose }: Props) {
                       onClick={() => void loadHub()}
                     >
                       <IconRefresh size={14} className={loading ? 'tm-icon-spin' : undefined} />
-                      刷新
+                      {t('communityPage.refresh')}
                     </button>
                   </div>
                 </div>
 
                 <div className="tm-group-settings-field">
-                  <span className="tm-group-settings-label">连接模式</span>
-                  <span>{hubStatus?.mode === 'remote' ? '官方远程 Hub' : '本地 Sidecar'}</span>
+                  <span className="tm-group-settings-label">{t('communityPage.hub.connectionMode')}</span>
+                  <span>{hubStatus?.mode === 'remote' ? t('communityPage.hub.remoteMode') : t('communityPage.hub.localMode')}</span>
                 </div>
                 <div className="tm-group-settings-field">
-                  <span className="tm-group-settings-label">运行状态</span>
-                  <span>{hubStatusLabel(hubStatus)}</span>
+                  <span className="tm-group-settings-label">{t('communityPage.hub.runStatus')}</span>
+                  <span>{hubStatusText}</span>
                 </div>
                 {hubStatus?.baseUrl ? (
                   <div className="tm-group-settings-field">
-                    <span className="tm-group-settings-label">访问地址</span>
+                    <span className="tm-group-settings-label">{t('communityPage.hub.address')}</span>
                     <span>{hubStatus.baseUrl}</span>
                   </div>
                 ) : null}
                 {hubStatus?.port ? (
                   <div className="tm-group-settings-field">
-                    <span className="tm-group-settings-label">端口</span>
+                    <span className="tm-group-settings-label">{t('communityPage.hub.port')}</span>
                     <span>{hubStatus.port}</span>
                   </div>
                 ) : null}
                 {hubHealth?.version ? (
                   <div className="tm-group-settings-field">
-                    <span className="tm-group-settings-label">版本</span>
+                    <span className="tm-group-settings-label">{t('communityPage.hub.version')}</span>
                     <span>{hubHealth.version}</span>
                   </div>
                 ) : null}
                 {hubHealth?.dataDir ? (
                   <div className="tm-group-settings-field">
-                    <span className="tm-group-settings-label">数据目录</span>
+                    <span className="tm-group-settings-label">{t('communityPage.hub.dataDir')}</span>
                     <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
                       {hubHealth.dataDir}
                     </span>
@@ -179,13 +183,13 @@ export function CommunitySettingsModal({ onClose }: Props) {
                 ) : null}
                 {hubHealth?.userCount != null ? (
                   <div className="tm-group-settings-field">
-                    <span className="tm-group-settings-label">社区用户</span>
+                    <span className="tm-group-settings-label">{t('communityPage.hub.communityUser')}</span>
                     <span>{hubHealth.userCount}</span>
                   </div>
                 ) : null}
                 {hubHealth?.resourceCount != null ? (
                   <div className="tm-group-settings-field">
-                    <span className="tm-group-settings-label">资源数量</span>
+                    <span className="tm-group-settings-label">{t('communityPage.hub.resourceCount')}</span>
                     <span>{hubHealth.resourceCount}</span>
                   </div>
                 ) : null}
@@ -197,8 +201,8 @@ export function CommunitySettingsModal({ onClose }: Props) {
 
                 <p className="tm-group-settings-hint">
                   {hubStatus?.mode === 'remote'
-                    ? '已连接远程 Hub（企业版 / 网络版可选）。联邦目录与 P2P 资源同步在社区版默认开启。'
-                    : '社区版默认本地 Hub + P2P 联邦。使用 pnpm dev:p2p:a / dev:p2p:b 双开时可共享同一 Hub 数据目录；跨实例资源通过 libp2p 联邦同步。'}
+                    ? t('communityPage.hub.remoteHint')
+                    : t('communityPage.hub.localHint')}
                 </p>
               </div>
             ) : activeTab === 'federation' ? (
@@ -216,7 +220,7 @@ export function CommunitySettingsModal({ onClose }: Props) {
               className="tm-group-settings-modal-footer-btn tm-group-settings-modal-footer-btn--primary"
               onClick={onClose}
             >
-              关闭
+              {t('common.close')}
             </button>
           </div>
         </footer>

@@ -15,6 +15,7 @@ use webrtc::data_channel::RTCDataChannel;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::offer_answer_options::RTCOfferOptions;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
@@ -169,10 +170,27 @@ impl WebRtcSession {
     }
 
     pub async fn create_offer_sdp(&self) -> Result<String, String> {
-        self.create_outgoing_channels().await?;
+        self.create_offer_sdp_with_options(None).await
+    }
+
+    pub async fn create_ice_restart_offer_sdp(&self) -> Result<String, String> {
+        self.create_offer_sdp_with_options(Some(RTCOfferOptions {
+            ice_restart: true,
+            ..Default::default()
+        }))
+        .await
+    }
+
+    async fn create_offer_sdp_with_options(
+        &self,
+        options: Option<RTCOfferOptions>,
+    ) -> Result<String, String> {
+        if self.events_channel.lock().await.is_none() {
+            self.create_outgoing_channels().await?;
+        }
         let offer = self
             .pc
-            .create_offer(None)
+            .create_offer(options)
             .await
             .map_err(|e| e.to_string())?;
         let mut gathering_complete = self.pc.gathering_complete_promise().await;
@@ -188,8 +206,34 @@ impl WebRtcSession {
             .ok_or_else(|| "Missing local offer description".to_string())
     }
 
+    pub async fn accept_ice_restart_offer(&self, offer_sdp: &str) -> Result<String, String> {
+        let offer =
+            RTCSessionDescription::offer(offer_sdp.to_string()).map_err(|e| e.to_string())?;
+        self.pc
+            .set_remote_description(offer)
+            .await
+            .map_err(|e| e.to_string())?;
+        let answer = self
+            .pc
+            .create_answer(None)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut gathering_complete = self.pc.gathering_complete_promise().await;
+        self.pc
+            .set_local_description(answer)
+            .await
+            .map_err(|e| e.to_string())?;
+        let _ = gathering_complete.recv().await;
+        self.pc
+            .local_description()
+            .await
+            .map(|desc| desc.sdp)
+            .ok_or_else(|| "Missing local answer description".to_string())
+    }
+
     pub async fn accept_offer_and_create_answer(&self, offer_sdp: &str) -> Result<String, String> {
-        let offer = RTCSessionDescription::offer(offer_sdp.to_string()).map_err(|e| e.to_string())?;
+        let offer =
+            RTCSessionDescription::offer(offer_sdp.to_string()).map_err(|e| e.to_string())?;
         self.pc
             .set_remote_description(offer)
             .await

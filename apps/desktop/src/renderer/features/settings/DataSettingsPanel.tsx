@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { useI18n } from '../../i18n/useI18n'
 import {
   SettingsPageLayout,
   SettingsRow,
@@ -42,29 +43,8 @@ type PendingConfirm =
   | { kind: 'clearCache' }
   | { kind: 'resetData' }
 
-const DELETE_KNOWLEDGE_MESSAGE =
-  '将删除知识库目录下的向量与索引文件，并清空数据库中的知识库文档记录。此操作不可撤销。'
-
-const CLEAR_CACHE_MESSAGE =
-  '将清除应用缓存（cache、GPUCache、Code Cache）。不影响智能体、对话、知识库、笔记与群组。'
-
-const RESET_DATA_MESSAGE = [
-  '将清除以下内容：',
-  '· 应用缓存（cache、GPUCache、Code Cache）',
-  '· 运行日志（logs/）',
-  '· 智能体 JSON 记忆文件（agent-memory/）',
-  '· 智能体任务清单（agent-tasks/）',
-  '· 长期记忆（memory_entries 表及向量索引）',
-  '',
-  '以下内容将保留：',
-  '· 智能体与对话话题',
-  '· 知识库及文件',
-  '· 笔记',
-  '· 群组',
-  '· 模型配置、账户与消息附件（toolman.db、storage/）',
-].join('\n')
-
 export function DataSettingsPanel() {
+  const { t } = useI18n()
   const [stats, setStats] = useState<{
     cacheBytes: number
     userData: string
@@ -120,10 +100,15 @@ export function DataSettingsPanel() {
       includesKnowledge?: boolean
       includesNotes?: boolean
     }
-    const parts = ['数据库']
-    if (data.includesKnowledge) parts.push('知识库向量')
-    if (data.includesNotes) parts.push('笔记')
-    setMessage(`完整备份已保存：${data.backupPath}（含 ${parts.join('、')}）`)
+    const parts = [t('settings.data.backupParts.database')]
+    if (data.includesKnowledge) parts.push(t('settings.data.backupParts.knowledge'))
+    if (data.includesNotes) parts.push(t('settings.data.backupParts.notes'))
+    setMessage(
+      t('settings.data.messages.backupSuccess', {
+        path: data.backupPath,
+        parts: parts.join('、'),
+      }),
+    )
   }
 
   const handleRestore = async () => {
@@ -132,7 +117,7 @@ export function DataSettingsPanel() {
     const folder = (pick.data as { path: string | null }).path
     if (!folder) return
 
-    if (!window.confirm('恢复将覆盖当前数据库、知识库与笔记数据，是否继续？')) return
+    if (!window.confirm(t('settings.data.restoreConfirm'))) return
 
     setBusy(true)
     setMessage(null)
@@ -153,10 +138,10 @@ export function DataSettingsPanel() {
     if (data.notesDataJson) {
       window.dispatchEvent(new CustomEvent('toolman:notes-restore', { detail: data.notesDataJson }))
     }
-    const parts = ['数据库']
-    if (data.includesKnowledge) parts.push('知识库')
-    if (data.notesDataJson) parts.push('笔记')
-    setMessage(`${parts.join('、')}已恢复，请重启应用以确保数据库与知识库生效。`)
+    const parts = [t('settings.data.backupParts.database')]
+    if (data.includesKnowledge) parts.push(t('settings.data.backupParts.knowledge'))
+    if (data.notesDataJson) parts.push(t('settings.data.backupParts.notes'))
+    setMessage(t('settings.data.messages.restoreSuccess', { parts: parts.join('、') }))
   }
 
   const handleDeleteKnowledge = async () => {
@@ -168,7 +153,7 @@ export function DataSettingsPanel() {
       return
     }
     await loadStats()
-    setMessage('知识库文件已删除')
+    setMessage(t('settings.data.messages.deleteKnowledge'))
   }
 
   const handleClearCache = async () => {
@@ -180,7 +165,7 @@ export function DataSettingsPanel() {
       return
     }
     await loadStats()
-    setMessage('缓存已清除')
+    setMessage(t('settings.data.messages.clearCache'))
   }
 
   const handleReset = async () => {
@@ -193,15 +178,20 @@ export function DataSettingsPanel() {
     }
     await loadStats()
     const data = result.data as { cleared?: string[]; memoryEntriesDeleted?: number }
-    const memoryHint =
-      data.memoryEntriesDeleted && data.memoryEntriesDeleted > 0
-        ? `已清除 ${data.memoryEntriesDeleted} 条长期记忆。`
-        : '长期记忆已清空。'
-    const clearedHint =
-      data.cleared && data.cleared.length > 0
-        ? `已清除：${data.cleared.join('、')}。`
-        : '未发现需清除的临时目录。'
-    setMessage(`${memoryHint}${clearedHint}请重启应用以确保缓存完全生效。`)
+    const memoryCount = data.memoryEntriesDeleted ?? 0
+    const clearedItems = data.cleared ?? []
+    if (memoryCount === 0 && clearedItems.length === 0) {
+      setMessage(t('settings.data.messages.resetRestart'))
+    } else {
+      const segments: string[] = []
+      if (memoryCount > 0) {
+        segments.push(t('settings.data.messages.resetMemory', { count: memoryCount }))
+      }
+      if (clearedItems.length > 0) {
+        segments.push(t('settings.data.messages.resetCleared', { items: clearedItems.join('、') }))
+      }
+      setMessage(segments.join(''))
+    }
   }
 
   const handleConfirm = () => {
@@ -223,21 +213,21 @@ export function DataSettingsPanel() {
   const confirmDialog = pendingConfirm
     ? {
         deleteKnowledge: {
-          title: '删除文件',
-          message: DELETE_KNOWLEDGE_MESSAGE,
-          confirmLabel: '删除',
+          title: t('settings.data.confirm.deleteKnowledge.title'),
+          message: t('settings.data.confirm.deleteKnowledge.message'),
+          confirmLabel: t('settings.data.confirm.deleteKnowledge.confirmLabel'),
           danger: true,
         },
         clearCache: {
-          title: '清除缓存',
-          message: CLEAR_CACHE_MESSAGE,
-          confirmLabel: '清除',
+          title: t('settings.data.confirm.clearCache.title'),
+          message: t('settings.data.confirm.clearCache.message'),
+          confirmLabel: t('settings.data.confirm.clearCache.confirmLabel'),
           danger: false,
         },
         resetData: {
-          title: '重置数据',
-          message: RESET_DATA_MESSAGE,
-          confirmLabel: '重置',
+          title: t('settings.data.confirm.resetData.title'),
+          message: t('settings.data.confirm.resetData.message'),
+          confirmLabel: t('settings.data.confirm.resetData.confirmLabel'),
           danger: true,
         },
       }[pendingConfirm.kind]
@@ -246,8 +236,8 @@ export function DataSettingsPanel() {
   return (
     <SettingsPageLayout>
       <div className="tm-data-settings">
-        <SettingsSection title="数据设置">
-          <SettingsRow label="数据备份与恢复">
+        <SettingsSection title={t('settings.data.title')}>
+          <SettingsRow label={t('settings.data.backupRestore')}>
             <div className="tm-data-actions">
               <button
                 type="button"
@@ -256,7 +246,7 @@ export function DataSettingsPanel() {
                 onClick={() => void handleBackup()}
               >
                 <IconSave />
-                完整备份
+                {t('settings.data.fullBackup')}
               </button>
               <button
                 type="button"
@@ -265,17 +255,17 @@ export function DataSettingsPanel() {
                 onClick={() => void handleRestore()}
               >
                 <IconFolderOpen />
-                恢复
+                {t('settings.data.restore')}
               </button>
             </div>
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection title="数据目录">
-          <SettingsRow label="应用数据">
+        <SettingsSection title={t('settings.data.directories.title')}>
+          <SettingsRow label={t('settings.data.directories.appData')}>
             <div className="tm-data-path-control">
               <span className="tm-data-path" title={stats?.userData}>
-                {statsLoading ? '加载中…' : stats ? truncatePath(stats.userData) : '—'}
+                {statsLoading ? t('settings.data.loading') : stats ? truncatePath(stats.userData) : '—'}
               </span>
               <button
                 type="button"
@@ -283,15 +273,15 @@ export function DataSettingsPanel() {
                 disabled={!stats}
                 onClick={() => stats && void openPath(stats.userData)}
               >
-                打开目录
+                {t('settings.data.openDir')}
               </button>
             </div>
           </SettingsRow>
 
-          <SettingsRow label="应用日志">
+          <SettingsRow label={t('settings.data.directories.appLogs')}>
             <div className="tm-data-path-control">
               <span className="tm-data-path" title={stats?.logs}>
-                {statsLoading ? '加载中…' : stats ? truncatePath(stats.logs) : '—'}
+                {statsLoading ? t('settings.data.loading') : stats ? truncatePath(stats.logs) : '—'}
               </span>
               <button
                 type="button"
@@ -299,24 +289,28 @@ export function DataSettingsPanel() {
                 disabled={!stats}
                 onClick={() => stats && void openPath(stats.logs)}
               >
-                打开日志
+                {t('settings.data.openLogs')}
               </button>
             </div>
           </SettingsRow>
 
-          <SettingsRow label="知识库文件">
+          <SettingsRow label={t('settings.data.directories.knowledgeFiles')}>
             <button
               type="button"
               className="tm-data-btn"
               disabled={busy || !stats}
               onClick={() => setPendingConfirm({ kind: 'deleteKnowledge' })}
             >
-              删除文件
+              {t('settings.data.deleteFiles')}
             </button>
           </SettingsRow>
 
           <SettingsRow
-            label={`清除缓存${stats ? `（${formatBytes(stats.cacheBytes)}）` : ''}`}
+            label={
+              stats
+                ? t('settings.data.clearCacheWithSize', { size: formatBytes(stats.cacheBytes) })
+                : t('settings.data.clearCache')
+            }
           >
             <button
               type="button"
@@ -324,18 +318,18 @@ export function DataSettingsPanel() {
               disabled={busy}
               onClick={() => setPendingConfirm({ kind: 'clearCache' })}
             >
-              清除缓存
+              {t('settings.data.clearCache')}
             </button>
           </SettingsRow>
 
-          <SettingsRow label="重置数据">
+          <SettingsRow label={t('settings.data.resetData')}>
             <button
               type="button"
               className="tm-data-btn tm-data-btn--danger"
               disabled={busy}
               onClick={() => setPendingConfirm({ kind: 'resetData' })}
             >
-              重置数据
+              {t('settings.data.resetData')}
             </button>
           </SettingsRow>
         </SettingsSection>
@@ -349,7 +343,7 @@ export function DataSettingsPanel() {
           title={confirmDialog.title}
           message={confirmDialog.message}
           confirmLabel={confirmDialog.confirmLabel}
-          cancelLabel="取消"
+          cancelLabel={t('common.cancel')}
           danger={confirmDialog.danger}
           onCancel={() => setPendingConfirm(null)}
           onConfirm={handleConfirm}

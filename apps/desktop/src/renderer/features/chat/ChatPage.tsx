@@ -5,8 +5,7 @@ import { MiddleSidebar } from '../../components/layout/MiddleSidebar'
 import { ModuleSidebar } from '../../components/layout/ModuleSidebar'
 import { GlobalSearchPanel } from '../../components/layout/GlobalSearchPanel'
 import { WindowChromeBar } from '../../components/layout/WindowChromeBar'
-import { MessagePanel } from './MessagePanel'
-import { MessageInput } from './MessageInput'
+import { ChatComposer } from './ChatComposer'
 import { AgentSettingsModal } from './AgentSettingsModal'
 import { AssistantSettings } from './AssistantSettings'
 import { MessageSettingsPanel } from './MessageSettingsPanel'
@@ -19,7 +18,7 @@ import { useSystemPaths } from './useSystemPaths'
 import { messageFontSizePx } from './message-settings'
 import type { CodeEditorId } from './code-editor-options'
 import { SettingsPage } from '../settings/SettingsPage'
-import { useAppSettings } from '../settings/useAppSettings'
+import type { AppSettings } from '../settings/app-settings'
 import type { SettingsSectionId } from '../settings/settings-nav'
 import { ModulePage } from '../modules/ModulePage'
 import type {
@@ -79,9 +78,17 @@ import {
   knowledgeSectionForKind,
   type KnowledgeSidebarSection,
 } from '../knowledge/knowledge-sidebar-types'
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { useI18n } from '../../i18n/useI18n'
 import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 
-export function ChatPage() {
+interface ChatPageProps {
+  appSettings: AppSettings
+  updateAppSettings: (patch: Partial<AppSettings>) => void
+}
+
+export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
+  const { t } = useI18n()
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [activeView, setActiveView] = useState<AppView>('agent')
@@ -136,7 +143,6 @@ export function ChatPage() {
     }
   }, [communityAction, communityUser.profile?.role])
 
-  const { settings: appSettings, updateSettings: updateAppSettings } = useAppSettings()
   const chat = useChat(workspaceId, appSettings)
   const { settings: messageSettings, updateSettings: updateMessageSettings, resetSettings } =
     useMessageSettings()
@@ -326,7 +332,7 @@ export function ChatPage() {
   const showContentSidebar = activeView !== 'settings' && sidebarVisible
   const isTopNav = appSettings.navBarPosition === 'top'
 
-  const chromeSearchTitle = '全局搜索'
+  const chromeSearchTitle = t('search.globalTitle')
 
   const handlePrefillConsumed = useCallback(() => {
     setAgentPrefillText(null)
@@ -509,6 +515,7 @@ export function ChatPage() {
   } as CSSProperties
 
   return (
+    <ErrorBoundary title={t('errors.chat')}>
     <div className="tm-shell">
       {isTopNav ? (
         <AppNavBar
@@ -741,23 +748,23 @@ export function ChatPage() {
               </div>
             ) : null}
 
-          <MessagePanel
-            messages={chat.messages}
-            loading={chat.loading}
-            assistantName={activeAssistant?.name ?? '智能体'}
+          <ChatComposer
+            chat={chat}
+            activeAssistantName={activeAssistant?.name ?? '智能体'}
             defaultModelId={defaultModelId}
             translationLanguages={translationLanguages}
             messageSettings={messageSettings}
-            sending={chat.sending}
-            sendShortcut={messageSettings.sendShortcut}
-            pendingMessageAction={chat.pendingMessageAction}
-            onDeleteMessage={(id) => void chat.deleteMessage(id)}
-            onRegenerateMessage={(id) => void chat.regenerateMessage(id)}
-            onEditUserMessage={
-              groupProxyReadOnly ? undefined : (id) => handleEditUserMessage(id)
-            }
-            editingUserMessageId={chat.editingUserMessageId}
-            onForkFromMessage={(id) => void chat.forkFromMessage(id)}
+            appSettings={appSettings}
+            systemPaths={systemPaths}
+            groupProxyReadOnly={groupProxyReadOnly}
+            agentPrefillText={agentPrefillText}
+            agentPrefillAttachments={agentPrefillAttachments}
+            chatPrefillRevision={chatPrefillRevision}
+            onEditUserMessage={(id) => handleEditUserMessage(id)}
+            onPrefillConsumed={handlePrefillConsumed}
+            onUpdateAppSettings={updateAppSettings}
+            onCreateSession={() => void chat.createSession(activeAssistant?.id)}
+            onClearSession={() => void chat.clearSessionMessages()}
             onSaveToNote={(messageId) => {
               const message = chat.messages.find((item) => item.id === messageId)
               if (!message) return
@@ -767,36 +774,6 @@ export function ChatPage() {
               notes.createNoteFromMessage(title, text)
               setActiveView('notes')
             }}
-            onError={chat.setError}
-          />
-          <MessageInput
-            disabled={
-              !chat.activeSessionId ||
-              chat.effectiveModelIds.length === 0 ||
-              groupProxyReadOnly
-            }
-            streaming={chat.sending}
-            modelCount={chat.effectiveModelIds.length}
-            defaultModelId={defaultModelId}
-            defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
-            translationLanguages={translationLanguages}
-            webSearchEnabled={appSettings.webSearchEnabled}
-            kbEnabled={appSettings.kbEnabled}
-            spellCheckEnabled={appSettings.spellCheckEnabled}
-            sendShortcut={messageSettings.sendShortcut}
-            onCreateSession={() => void chat.createSession(activeAssistant?.id)}
-            onClearSession={() => void chat.clearSessionMessages()}
-            prefillText={agentPrefillText}
-            prefillAttachments={agentPrefillAttachments}
-            prefillRevision={chatPrefillRevision}
-            onPrefillConsumed={handlePrefillConsumed}
-            onToggleWebSearch={() =>
-              updateAppSettings({ webSearchEnabled: !appSettings.webSearchEnabled })
-            }
-            onToggleKb={() => updateAppSettings({ kbEnabled: !appSettings.kbEnabled })}
-            onSend={(contentBlocks) => void chat.sendMessage(contentBlocks)}
-            onAbort={() => void chat.abortStreaming()}
-            onError={chat.setError}
           />
           </main>
         ) : activeView === 'knowledge' ? (
@@ -1036,5 +1013,6 @@ export function ChatPage() {
       <ToolApprovalModal />
       {registrationGate.modal}
     </div>
+    </ErrorBoundary>
   )
 }

@@ -34,6 +34,7 @@ import {
   getSystemVoiceInputTitle,
 } from './system-voice-input'
 import { getLocalFilePaths } from '../knowledge/knowledge-file-paths'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   disabled: boolean
@@ -81,20 +82,21 @@ function shouldSubmitOnEnter(
   return enter && shift
 }
 
-function sendShortcutPlaceholder(sendShortcut: SendShortcut): string {
-  if (sendShortcut === 'ctrl+enter') return 'Ctrl + Enter 发送'
-  if (sendShortcut === 'shift+enter') return 'Shift + Enter 发送'
-  return 'Enter 发送'
+function sendShortcutPlaceholder(sendShortcut: SendShortcut, t: (key: string) => string): string {
+  if (sendShortcut === 'ctrl+enter') return t('chat.input.sendCtrlEnter')
+  if (sendShortcut === 'shift+enter') return t('chat.input.sendShiftEnter')
+  return t('chat.input.sendEnter')
 }
 
 function InputResizeHandle({ onResizeStart }: { onResizeStart: (startY: number) => void }) {
+  const { t } = useI18n()
   return (
     <div
       className="tm-input-resize-handle"
       role="separator"
       aria-orientation="vertical"
-      aria-label="调节输入框高度"
-      title="拖动调节输入框高度"
+      aria-label={t('chat.input.resizeHandle')}
+      title={t('chat.input.resizeHandleTitle')}
       onPointerDown={(e) => {
         e.preventDefault()
         onResizeStart(e.clientY)
@@ -144,6 +146,7 @@ export function MessageInput({
   toolbarMode = 'agent',
   groupIsOwner = false,
 }: Props) {
+  const { t } = useI18n()
   const [text, setText] = useState('')
   const [fieldHeight, setFieldHeight] = useState(INPUT_MIN_HEIGHT)
   const [slashMenuOpen, setSlashMenuOpen] = useState(false)
@@ -168,10 +171,26 @@ export function MessageInput({
     () => (toolbarMode === 'group' ? getGroupSlashCommands(groupIsOwner) : SLASH_COMMANDS),
     [groupIsOwner, toolbarMode],
   )
+  const localizedSlashCommands = useMemo(
+    () =>
+      slashCommands.map((item) => ({
+        ...item,
+        description: t(
+          `chat.slashCommands.${
+            item.id === 'new'
+              ? 'newSession'
+              : item.id === 'clear' && toolbarMode === 'group'
+                ? 'clearGroup'
+                : item.id
+          }`,
+        ),
+      })),
+    [slashCommands, t, toolbarMode],
+  )
 
   const phraseMenuItems = useMemo<InputPopupMenuItemData[]>(
     () => [
-      { id: 'add', command: '+ 添加快捷短语…', showIcon: false },
+      { id: 'add', command: t('chat.input.addQuickPhrase'), showIcon: false },
       ...quickPhrases.map((phrase) => ({
         id: phrase.id,
         command: phrase.label,
@@ -179,7 +198,7 @@ export function MessageInput({
         showIcon: false,
       })),
     ],
-    [quickPhrases],
+    [quickPhrases, t],
   )
 
   useEffect(() => {
@@ -287,7 +306,7 @@ export function MessageInput({
       })
       setText(result.text)
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : '翻译失败')
+      onError?.(error instanceof Error ? error.message : t('chat.input.translateFailed'))
     }
   }
 
@@ -296,7 +315,7 @@ export function MessageInput({
       if (paths.length === 0) return
 
       if (disabled) {
-        onError?.('请先选择或创建话题并配置模型后再上传文件')
+        onError?.(t('chat.input.uploadNeedSession'))
         return
       }
 
@@ -347,10 +366,10 @@ export function MessageInput({
           return next
         })
       } catch (error) {
-        onError?.(error instanceof Error ? error.message : '上传文件失败')
+        onError?.(error instanceof Error ? error.message : t('chat.input.uploadFailed'))
       }
     },
-    [disabled, onError],
+    [disabled, onError, t],
   )
 
   const handleUploadFiles = async () => {
@@ -368,7 +387,7 @@ export function MessageInput({
       const { paths } = pickResult.data as { paths: string[] }
       await stagePathsAsAttachments(paths)
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : '上传文件失败')
+      onError?.(error instanceof Error ? error.message : t('chat.input.uploadFailed'))
     }
   }
 
@@ -449,28 +468,28 @@ export function MessageInput({
 
     const onKeyDown = (event: Event) => {
       if (!(event instanceof KeyboardEvent)) return
-      if (event.key === 'ArrowDown') {
+      if (event.metaKey && event.key === 'ArrowDown') {
+        event.preventDefault()
+        setSlashActiveIndex((index) => Math.min(index + 5, slashCommands.length - 1))
+      } else if (event.key === 'ArrowDown') {
         event.preventDefault()
         setSlashActiveIndex((index) => Math.min(index + 1, slashCommands.length - 1))
+      } else if (event.metaKey && event.key === 'ArrowUp') {
+        event.preventDefault()
+        setSlashActiveIndex((index) => Math.max(index - 5, 0))
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         setSlashActiveIndex((index) => Math.max(index - 1, 0))
       } else if (event.key === 'Enter') {
         event.preventDefault()
-        const item = slashCommands[slashActiveIndex]
+        const item = localizedSlashCommands[slashActiveIndex]
         if (item) runSlashCommand(item)
-      } else if (event.metaKey && event.key === 'ArrowDown') {
-        event.preventDefault()
-        setSlashActiveIndex((index) => Math.min(index + 5, slashCommands.length - 1))
-      } else if (event.metaKey && event.key === 'ArrowUp') {
-        event.preventDefault()
-        setSlashActiveIndex((index) => Math.max(index - 5, 0))
       }
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [runSlashCommand, slashActiveIndex, slashCommands, slashMenuOpen])
+  }, [localizedSlashCommands, runSlashCommand, slashActiveIndex, slashMenuOpen])
 
   useEffect(() => {
     if (!phraseMenuOpen || addingPhrase) return
@@ -478,21 +497,21 @@ export function MessageInput({
     const onKeyDown = (event: Event) => {
       if (!(event instanceof KeyboardEvent)) return
       const maxIndex = phraseMenuItems.length - 1
-      if (event.key === 'ArrowDown') {
+      if (event.metaKey && event.key === 'ArrowDown') {
+        event.preventDefault()
+        setPhraseActiveIndex((index) => Math.min(index + 5, maxIndex))
+      } else if (event.key === 'ArrowDown') {
         event.preventDefault()
         setPhraseActiveIndex((index) => Math.min(index + 1, maxIndex))
+      } else if (event.metaKey && event.key === 'ArrowUp') {
+        event.preventDefault()
+        setPhraseActiveIndex((index) => Math.max(index - 5, 0))
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         setPhraseActiveIndex((index) => Math.max(index - 1, 0))
       } else if (event.key === 'Enter') {
         event.preventDefault()
         handleSelectQuickPhrase(phraseActiveIndex)
-      } else if (event.metaKey && event.key === 'ArrowDown') {
-        event.preventDefault()
-        setPhraseActiveIndex((index) => Math.min(index + 5, maxIndex))
-      } else if (event.metaKey && event.key === 'ArrowUp') {
-        event.preventDefault()
-        setPhraseActiveIndex((index) => Math.max(index - 5, 0))
       }
     }
 
@@ -516,13 +535,13 @@ export function MessageInput({
 
   const placeholder = disabled
     ? toolbarMode === 'group'
-      ? '只读成员无法发送消息'
-      : '请先选择或创建话题'
+      ? t('chat.input.placeholderGroupReadonly')
+      : t('chat.input.placeholderNoSession')
     : modelCount > 1
-      ? `在这里输入消息，将同时发送给 ${modelCount} 个模型`
+      ? t('chat.input.placeholderMultiModel', { count: modelCount })
       : toolbarMode === 'group'
-        ? `在这里输入消息，按 ${sendShortcutPlaceholder(sendShortcut)} · / 选择命令`
-        : `在这里输入消息，按 ${sendShortcutPlaceholder(sendShortcut)} · @ 选择路径，/ 选择命令`
+        ? t('chat.input.placeholderGroup', { shortcut: sendShortcutPlaceholder(sendShortcut, t) })
+        : t('chat.input.placeholderAgent', { shortcut: sendShortcutPlaceholder(sendShortcut, t) })
 
   return (
     <div className="tm-input-area">
@@ -537,7 +556,7 @@ export function MessageInput({
               type="button"
               className="tm-input-tool"
               disabled={!onCreateSession}
-              title="新建话题"
+              title={t('chat.input.newTopic')}
               onClick={() => onCreateSession?.()}
             >
               <IconNewTopic />
@@ -554,7 +573,7 @@ export function MessageInput({
                   .filter(Boolean)
                   .join(' ')}
                 disabled={disabled}
-                title="表情"
+                title={t('chat.input.emoji')}
                 onClick={() => {
                   setSlashMenuOpen(false)
                   setPhraseMenuOpen(false)
@@ -574,7 +593,7 @@ export function MessageInput({
           <button
             type="button"
             className="tm-input-tool"
-            title="上传文件"
+            title={t('chat.input.uploadFile')}
             onClick={() => void handleUploadFiles()}
           >
             <IconPaperclip />
@@ -589,7 +608,7 @@ export function MessageInput({
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                title={webSearchEnabled ? '关闭联网搜索' : '开启联网搜索'}
+                title={webSearchEnabled ? t('chat.input.webSearchOff') : t('chat.input.webSearchOn')}
                 onClick={() => onToggleWebSearch?.()}
               >
                 <IconGlobe />
@@ -602,7 +621,7 @@ export function MessageInput({
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                title={kbEnabled ? '关闭知识库检索' : '开启知识库检索'}
+                title={kbEnabled ? t('chat.input.kbSearchOff') : t('chat.input.kbSearchOn')}
                 onClick={() => onToggleKb?.()}
               >
                 <IconKnowledge size={18} />
@@ -615,7 +634,7 @@ export function MessageInput({
               .filter(Boolean)
               .join(' ')}
             disabled={disabled}
-            title="斜杠命令"
+            title={t('chat.input.slashCommands')}
             onClick={() => {
               setPhraseMenuOpen(false)
               setSlashMenuOpen((open) => !open)
@@ -629,7 +648,7 @@ export function MessageInput({
               .filter(Boolean)
               .join(' ')}
             disabled={disabled}
-            title="快捷短语"
+            title={t('chat.input.quickPhrases')}
             onClick={() => {
               setSlashMenuOpen(false)
               setPhraseMenuOpen((open) => {
@@ -648,7 +667,7 @@ export function MessageInput({
             type="button"
             className="tm-input-tool"
             disabled={disabled || !text.trim()}
-            title="清空"
+            title={t('chat.input.clear')}
             onClick={clearInput}
           >
             <IconClear />
@@ -657,12 +676,12 @@ export function MessageInput({
         </div>
 
         <InputPopupMenu
-          title="斜杠命令"
+          title={t('chat.input.slashCommands')}
           open={slashMenuOpen}
           onClose={() => setSlashMenuOpen(false)}
         >
           <InputPopupMenuList
-            items={slashCommands.map((item) => ({
+            items={localizedSlashCommands.map((item) => ({
               id: item.id,
               command: item.command,
               description: item.description,
@@ -670,14 +689,14 @@ export function MessageInput({
             activeIndex={slashActiveIndex}
             onActiveIndexChange={setSlashActiveIndex}
             onSelect={(index) => {
-              const item = slashCommands[index]
+              const item = localizedSlashCommands[index]
               if (item) runSlashCommand(item)
             }}
           />
         </InputPopupMenu>
 
         <InputPopupMenu
-          title="快捷短语"
+          title={t('chat.input.quickPhrases')}
           open={phraseMenuOpen}
           onClose={() => {
             setPhraseMenuOpen(false)
@@ -690,7 +709,7 @@ export function MessageInput({
               <input
                 className="tm-input-popup-menu-input"
                 value={phraseDraft}
-                placeholder="输入快捷短语内容"
+                placeholder={t('chat.input.quickPhrasePlaceholder')}
                 autoFocus
                 onChange={(e) => setPhraseDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -709,7 +728,7 @@ export function MessageInput({
                     setPhraseDraft('')
                   }}
                 >
-                  取消
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
@@ -717,7 +736,7 @@ export function MessageInput({
                   disabled={!phraseDraft.trim()}
                   onClick={handleAddQuickPhrase}
                 >
-                  保存
+                  {t('chat.input.save')}
                 </button>
               </div>
             </div>
@@ -773,7 +792,7 @@ export function MessageInput({
           <div className="tm-input-footer-actions">
             {streaming ? (
               <button type="button" className="tm-abort-btn" onClick={onAbort}>
-                停止生成
+                {t('chat.input.stopGenerating')}
               </button>
             ) : (
               <>
@@ -781,7 +800,7 @@ export function MessageInput({
                   type="button"
                   className={`tm-input-footer-btn ${translating ? 'tm-input-footer-btn--active' : ''}`}
                   disabled={disabled || !text.trim() || !defaultModelId || translating}
-                  title={translating ? '翻译中…' : '翻译'}
+                  title={translating ? t('chat.input.translating') : t('chat.input.translate')}
                   onClick={() => void handleTranslate()}
                 >
                   <IconTranslate size={18} className={translating ? 'tm-icon-spin' : undefined} />
@@ -799,7 +818,7 @@ export function MessageInput({
                   type="button"
                   className="tm-send-btn"
                   disabled={disabled || !canSend}
-                  title="发送"
+                  title={t('chat.input.send')}
                   onClick={handleSubmit}
                 >
                   <IconSend />

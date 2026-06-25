@@ -140,6 +140,8 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 ```bash
 pnpm rc1:preflight              # 启动前自动化门禁
 pnpm rc1:build                  # RC1 staging Release 包
+pnpm rc1:install-p2p-network    # 写入 RC1 profile 的 TURN network.json
+pnpm rc1:publish-staging        # 构建 + 上传 CDN + verify-feed（需凭据）
 pnpm release:verify-feed ...    # 验证 staging OTA
 ./scripts/p2p-dual-node-e2e.sh  # P2P 手册清单
 pnpm --filter @toolman/desktop test:e2e   # Playwright GA smoke

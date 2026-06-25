@@ -13,6 +13,7 @@ import { CommunityCommentListItemShell } from './CommunityCommentListItemShell'
 import { CommunityListFileCard } from './CommunityListFileCard'
 import { CommunityListPanelShell } from './CommunityListPanelShell'
 import { CommunityMessagePublishModal } from './CommunityMessagePublishModal'
+import { MessageBoardDetailModal } from './MessageBoardDetailModal'
 import { copyCommunityShareText } from './community-share-utils'
 import { canDeleteCommunityResource } from './community-user-utils'
 import { isUiMockCommunityId } from './community-ui-mock'
@@ -22,10 +23,13 @@ import { useCommunityMessageBoard } from './useCommunityMessageBoard'
 import { useCommunityUser } from './useCommunityUser'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useCommunityPanelStatus } from './community-panel-status'
+import { useI18n } from '../../i18n/useI18n'
 
 export function MessageBoardPanel() {
+  const { t } = useI18n()
   const [showPublish, setShowPublish] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detailMessageId, setDetailMessageId] = useState<string | null>(null)
   const [messageToDelete, setMessageToDelete] = useState<CommunityBoardMessage | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const { sortField, sortAscending } = useCommunityListSortContext()
@@ -69,22 +73,29 @@ export function MessageBoardPanel() {
       }
       setMessageToDelete(null)
       if (selectedId === messageId) setSelectedId(null)
+      if (detailMessageId === messageId) setDetailMessageId(null)
       await board.load()
       notifyCommunityBoardChanged()
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : '删除留言失败'
+      const message =
+        deleteError instanceof Error ? deleteError.message : t('communityPage.market.deleteMessageFailed')
       board.setError(message)
     } finally {
       setDeletingId(null)
     }
   }
 
+  const detailMessage = useMemo(
+    () => (detailMessageId ? sortedItems.find((item) => item.id === detailMessageId) ?? null : null),
+    [detailMessageId, sortedItems],
+  )
+
   return (
     <>
       <CommunityListPanelShell
-        title="留言板"
-        subtitle="浏览社区留言与互动讨论；点赞/收藏经 Hub HTTP 同步，不经 P2P"
-        publishLabel="发布留言"
+        title={t('communityPage.panels.messages.title')}
+        subtitle={t('communityPage.panels.messages.subtitle')}
+        publishLabel={t('communityPage.panels.messages.publish')}
         loading={board.loading}
         onRefresh={() => void board.load()}
         onPublish={() => {
@@ -92,7 +103,7 @@ export function MessageBoardPanel() {
           setShowPublish(true)
         }}
         isEmpty={sortedItems.length === 0}
-        emptyHint="暂无留言，点击右上角发布第一条留言"
+        emptyHint={t('communityPage.panels.messages.empty')}
       >
         <ul className="tm-kb-file-list">
           {sortedItems.map((message) => {
@@ -140,9 +151,10 @@ export function MessageBoardPanel() {
                     </>
                   }
                   selected={selectedId === message.id}
-                  onClick={() =>
-                    setSelectedId((current) => (current === message.id ? null : message.id))
-                  }
+                  onClick={() => {
+                    setSelectedId(message.id)
+                    setDetailMessageId(message.id)
+                  }}
                   icon={<IconMessageBoard size={18} />}
                 />
               </CommunityCommentListItemShell>
@@ -160,12 +172,22 @@ export function MessageBoardPanel() {
 
       {messageToDelete ? (
         <ConfirmDialog
-          title="删除留言"
-          message="确定删除这条留言吗？删除后不可恢复。"
-          confirmLabel="删除"
+          title={t('communityPage.mine.confirm.deleteMessageTitle')}
+          message={t('communityPage.mine.confirm.deleteMessageMessage')}
+          confirmLabel={t('common.delete')}
           danger
           onCancel={() => setMessageToDelete(null)}
           onConfirm={() => void handleConfirmDelete()}
+        />
+      ) : null}
+
+      {detailMessage ? (
+        <MessageBoardDetailModal
+          message={detailMessage}
+          onClose={() => {
+            setDetailMessageId(null)
+            setSelectedId(null)
+          }}
         />
       ) : null}
       {modal}

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { useI18n } from '../i18n/useI18n'
 import {
   useModulePagePanelStatuses,
   type ModulePanelStatusEntry,
@@ -46,6 +47,7 @@ function resolveStatusMessage(
   panelStatuses: Record<string, ModulePanelStatusEntry>,
   priority: StatusMessage | null | undefined,
   fallback: StatusMessage | null | undefined,
+  readyLabel: string,
 ): StatusMessage {
   if (priority) return priority
 
@@ -53,7 +55,7 @@ function resolveStatusMessage(
   if (panelStatus) return panelStatus
 
   if (fallback) return fallback
-  return { tone: 'muted', text: '就绪' }
+  return { tone: 'muted', text: readyLabel }
 }
 
 export function ModulePageStatusBar({
@@ -61,11 +63,12 @@ export function ModulePageStatusBar({
   fallback = null,
   meta = null,
 }: Props) {
+  const { t } = useI18n()
   const panelStatuses = useModulePagePanelStatuses()
 
   const status = useMemo(
-    () => resolveStatusMessage(panelStatuses, priority, fallback),
-    [fallback, panelStatuses, priority],
+    () => resolveStatusMessage(panelStatuses, priority, fallback, t('common.ready')),
+    [fallback, panelStatuses, priority, t],
   )
 
   return (
@@ -86,7 +89,7 @@ export function ModulePageStatusBar({
           <button
             type="button"
             className="tm-group-statusbar-dismiss"
-            aria-label="关闭提示"
+            aria-label={t('common.dismissStatus')}
             onClick={status.onDismiss}
           >
             ×

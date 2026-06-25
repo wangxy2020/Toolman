@@ -1,3 +1,5 @@
+import { useI18n } from '../../i18n/useI18n'
+
 interface AuthGuardModalProps {
   isOpen: boolean
   title: string
@@ -26,11 +28,15 @@ export function AuthGuardModal({
   isOpen,
   title,
   description,
-  confirmText = '去注册',
-  cancelText = '我知道了',
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
 }: AuthGuardModalProps) {
+  const { t } = useI18n()
+  const resolvedConfirmText = confirmText ?? t('user.guard.goRegister')
+  const resolvedCancelText = cancelText ?? t('user.guard.dismiss')
+
   if (!isOpen) return null
 
   return (
@@ -59,14 +65,14 @@ export function AuthGuardModal({
             className="tm-auth-guard-btn tm-auth-guard-btn--secondary"
             onClick={onCancel}
           >
-            {cancelText}
+            {resolvedCancelText}
           </button>
           <button
             type="button"
             className="tm-auth-guard-btn tm-auth-guard-btn--primary"
             onClick={onConfirm}
           >
-            {confirmText}
+            {resolvedConfirmText}
           </button>
         </div>
       </div>

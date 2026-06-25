@@ -42,11 +42,14 @@ async fn list_catalog(
         .and_then(|value| ResourceType::parse(value).ok());
 
     let page = service(&state)
-        .list_catalog(FederationCatalogQuery {
-            updated_after: params.updated_after.unwrap_or(0),
-            limit: params.limit.unwrap_or(100),
-            resource_type,
-        })
+        .list_catalog(
+            FederationCatalogQuery {
+                updated_after: params.updated_after.unwrap_or(0),
+                limit: params.limit.unwrap_or(100),
+                resource_type,
+            },
+            &state.config.data_dir,
+        )
         .await
         .expect("federation catalog query");
 

@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -47,8 +48,7 @@ describe('prepareCommunityMcpPackage', () => {
     }
     const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`
     writeFileSync(join(bundle, 'mcp.manifest.json'), manifestJson, 'utf8')
-    const manifestHash = require('node:crypto')
-      .createHash('sha256')
+    const manifestHash = createHash('sha256')
       .update(manifestJson)
       .digest('hex')
     writeFileSync(join(bundle, 'SHA256SUMS'), `${manifestHash}  mcp.manifest.json\n`, 'utf8')

@@ -1,5 +1,6 @@
 export const LIBP2P_RESTART_MIN_DELAY_MS = 1_000
 export const LIBP2P_RESTART_MAX_DELAY_MS = 60_000
+export const LIBP2P_MAX_RESTART_ATTEMPTS = 20
 
 export function nextLibp2pRestartDelayMs(attempt: number): number {
   const normalizedAttempt = Math.max(1, attempt)
@@ -16,6 +17,7 @@ export interface Libp2pRestartStatus {
   nextDelayMs: number | null
   lastReason: string | null
   lastRestartAt: number | null
+  tripped: boolean
 }
 
 type Libp2pRestartListener = () => void | Promise<void>
@@ -42,5 +44,6 @@ export function createInitialLibp2pRestartStatus(enabled: boolean): Libp2pRestar
     nextDelayMs: null,
     lastReason: null,
     lastRestartAt: null,
+    tripped: false,
   }
 }

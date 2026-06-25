@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   x: number
@@ -26,6 +27,8 @@ export function KnowledgeFileContextMenu({
   onDeleteSelected,
   onReindexAll,
 }: Props) {
+  const { t } = useI18n()
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -41,7 +44,7 @@ export function KnowledgeFileContextMenu({
       <button
         type="button"
         className="tm-group-context-menu-backdrop"
-        aria-label="关闭菜单"
+        aria-label={t('knowledgePage.contextMenu.closeMenu')}
         onClick={onClose}
       />
       <div className="tm-group-context-menu" style={{ top: y, left: x }} role="menu">
@@ -54,7 +57,7 @@ export function KnowledgeFileContextMenu({
             onClose()
           }}
         >
-          全选
+          {t('knowledgePage.contextMenu.selectAll')}
         </button>
         <button
           type="button"
@@ -72,7 +75,7 @@ export function KnowledgeFileContextMenu({
             onClose()
           }}
         >
-          取消
+          {t('knowledgePage.contextMenu.clearSelection')}
         </button>
         <button
           type="button"
@@ -91,7 +94,8 @@ export function KnowledgeFileContextMenu({
             onClose()
           }}
         >
-          删除已勾选{selectedCount > 0 ? ` (${selectedCount})` : ''}
+          {t('knowledgePage.contextMenu.deleteSelected')}
+          {selectedCount > 0 ? ` (${selectedCount})` : ''}
         </button>
         {onReindexAll ? (
           <button
@@ -105,7 +109,7 @@ export function KnowledgeFileContextMenu({
               onClose()
             }}
           >
-            全部重建索引
+            {t('knowledgePage.contextMenu.reindexAll')}
           </button>
         ) : null}
       </div>

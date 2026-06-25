@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { useI18n } from '../../i18n/useI18n'
+import { translateNotebookName } from '../../i18n/system-labels'
 import { IconSliders } from '../../components/icons'
 import type { MessageSettings } from '../chat/message-settings'
 import { NotesEditor } from './NotesEditor'
@@ -53,6 +56,7 @@ export function NotesPage({
   onSelectNote,
   onImportAttachment,
 }: Props) {
+  const { t } = useI18n()
   const [editorSettings, setEditorSettings] = useState(loadNotesEditorSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -80,11 +84,14 @@ export function NotesPage({
   })
 
   return (
+    <ErrorBoundary title={t('errors.notes')}>
     <main className="tm-main tm-notes-page">
       <header className="tm-chat-header">
         <div className="tm-chat-breadcrumb">
           <span className="tm-model-pill tm-agent-pill tm-notes-notebook-pill">
-            <span className="tm-agent-pill-label">{notebook?.name ?? '笔记'}</span>
+            <span className="tm-agent-pill-label">
+              {translateNotebookName(notebook?.name ?? t('notesPage.fallbackNotebook'), t)}
+            </span>
           </span>
           {note ? (
             <span className="tm-module-breadcrumb-group">
@@ -109,7 +116,7 @@ export function NotesPage({
             <button
               type="button"
               className="tm-chat-header-settings-btn"
-              title="笔记设置"
+              title={t('notesPage.settingsTitle')}
               onClick={() => setSettingsOpen(true)}
             >
               <IconSliders size={16} />
@@ -141,10 +148,8 @@ export function NotesPage({
           />
         ) : (
           <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">笔记</h2>
-            <p className="tm-module-empty-hint">
-              选择左侧笔记，或点击笔记本名称旁的 + 新建笔记。
-            </p>
+            <h2 className="tm-module-empty-title">{t('notesPage.fallbackNotebook')}</h2>
+            <p className="tm-module-empty-hint">{t('notesPage.emptyHint')}</p>
           </div>
         )}
       </div>
@@ -160,5 +165,6 @@ export function NotesPage({
         />
       ) : null}
     </main>
+    </ErrorBoundary>
   )
 }

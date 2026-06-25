@@ -23,6 +23,8 @@ import {
 import { readNoteData, searchNotesData } from './notes-data.service'
 import { getAssistantRow } from './assistant.service'
 import { FilesystemSandbox } from './filesystem-sandbox.service'
+import { buildSandboxedBashEnv } from './bash-env.util'
+import { assertHttpFetchUrlAllowed } from './http-fetch-policy'
 import { BUILTIN_MCP_TOOL_DEFS } from './tool-registry'
 import { getMcpServer } from './mcp-server-config.service'
 import { listMcpServerTools } from './mcp-client-manager.service'
@@ -214,10 +216,7 @@ async function executeBash(args: Record<string, unknown>, context: ToolExecution
 
   const sandbox = sandboxFor(context)
   const cwd = args.cwd ? sandbox.resolveDirectory(String(args.cwd)) : sandbox.rootReal
-  const env = {
-    ...process.env,
-    ...parseEnvironmentVariables(context.environmentVariables),
-  }
+  const env = buildSandboxedBashEnv(parseEnvironmentVariables(context.environmentVariables))
 
   const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
   const shellArgs = process.platform === 'win32' ? ['/d', '/s', '/c', command] : ['-lc', command]
@@ -328,6 +327,8 @@ function executeSqlQuery(args: Record<string, unknown>, context: ToolExecutionCo
 async function executeHttpFetch(args: Record<string, unknown>) {
   const url = String(args.url ?? '')
   if (!url) throw new Error('缺少 url')
+
+  assertHttpFetchUrlAllowed(url)
 
   const method = String(args.method ?? 'GET').toUpperCase()
   const response = await fetch(url, { method })

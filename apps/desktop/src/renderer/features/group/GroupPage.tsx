@@ -35,6 +35,9 @@ import type {
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 import type { MessageSettings } from '../chat/message-settings'
 import { useAuthSession } from '../user/AuthSessionProvider'
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { useI18n } from '../../i18n/useI18n'
+import { translateGroupName } from '../../i18n/system-labels'
 
 interface HeaderAction {
   key: string
@@ -51,16 +54,6 @@ const GROUP_NESTED_SCROLL_ACTIONS = new Set([
   'notes',
   'workflow',
 ])
-
-const HEADER_ACTIONS: HeaderAction[] = [
-  { key: 'members', icon: <IconUsers size={16} />, title: '群组成员' },
-  { key: 'messages', icon: <IconMessageBoard size={16} />, title: '群组消息' },
-  { key: 'agents', icon: <IconAgent size={16} />, title: '群组智能体' },
-  { key: 'knowledge', icon: <IconKnowledge size={16} />, title: '群组知识库' },
-  { key: 'notes', icon: <IconNotes size={16} />, title: '群组笔记' },
-  { key: 'workflow', icon: <IconWorkflow size={16} />, title: '群组工作流' },
-  { key: 'activity', icon: <IconActivity size={16} />, title: '群组活动记录' },
-]
 
 interface Props {
   workspace: P2pWorkspace | null
@@ -117,11 +110,21 @@ export function GroupPage({
   requireRegistration,
   onUpgradeMembership,
 }: Props) {
+  const { t } = useI18n()
   const [activeAction, setActiveAction] = useState<string | null>(DEFAULT_GROUP_ACTION)
   const [showSettings, setShowSettings] = useState(false)
   const [membersMenuOpen, setMembersMenuOpen] = useState(false)
   const membersButtonRef = useRef<HTMLButtonElement>(null)
   const { session } = useAuthSession()
+  const headerActions: HeaderAction[] = [
+    { key: 'members', icon: <IconUsers size={16} />, title: t('groupPage.header.members') },
+    { key: 'messages', icon: <IconMessageBoard size={16} />, title: t('groupPage.header.messages') },
+    { key: 'agents', icon: <IconAgent size={16} />, title: t('groupPage.header.agents') },
+    { key: 'knowledge', icon: <IconKnowledge size={16} />, title: t('groupPage.header.knowledge') },
+    { key: 'notes', icon: <IconNotes size={16} />, title: t('groupPage.header.notes') },
+    { key: 'workflow', icon: <IconWorkflow size={16} />, title: t('groupPage.header.workflow') },
+    { key: 'activity', icon: <IconActivity size={16} />, title: t('groupPage.header.activity') },
+  ]
 
   const effectiveAction = activeAction ?? DEFAULT_GROUP_ACTION
 
@@ -163,7 +166,10 @@ export function GroupPage({
   }, [workspace?.id])
 
   const displayWorkspace = detail.workspace ?? workspace
-  const workspaceName = displayWorkspace?.name ?? workspace?.name ?? '群组'
+  const workspaceName = translateGroupName(
+    displayWorkspace?.name ?? workspace?.name ?? t('groupPage.title'),
+    t,
+  )
   const memberLimitWarning = useGroupMemberLimitWarning({
     workspace: displayWorkspace,
     memberCount: displayWorkspace?.memberCount ?? detail.members.length,
@@ -258,20 +264,21 @@ export function GroupPage({
   }
 
   return (
+    <ErrorBoundary title={t('errors.group')}>
     <main className="tm-main">
       <header className="tm-chat-header">
         <div className="tm-chat-breadcrumb">
-          <span className="tm-model-pill tm-module-pill">群组</span>
+          <span className="tm-model-pill tm-module-pill">{t('groupPage.title')}</span>
           <span className="tm-module-breadcrumb-group">
             <span className="tm-chat-breadcrumb-sep">/</span>
             <span className="tm-model-pill tm-module-pill tm-module-pill--secondary">
-              {displayWorkspace?.name ?? '选择群组'}
+              {translateGroupName(displayWorkspace?.name ?? t('groupPage.selectGroup'), t)}
             </span>
           </span>
         </div>
 
         <div className="tm-chat-header-end">
-          {HEADER_ACTIONS.map((action) => {
+          {headerActions.map((action) => {
             const isMembersMenu = action.key === 'members'
             const isActive = isMembersMenu
               ? membersMenuOpen
@@ -311,8 +318,8 @@ export function GroupPage({
           <button
             type="button"
             className="tm-chat-header-settings-btn"
-            title="群组设置"
-            aria-label="群组设置"
+            title={t('groupPage.settingsTitle')}
+            aria-label={t('groupPage.settingsTitle')}
             disabled={!workspace}
             onClick={() => {
               if (!guardGroupAccess()) return
@@ -353,8 +360,8 @@ export function GroupPage({
         >
           {!workspace ? (
             <div className="tm-module-empty">
-              <h2 className="tm-module-empty-title">选择或创建群组</h2>
-              <p className="tm-module-empty-hint">在左侧创建群组，或通过邀请链接加入已有群组。</p>
+              <h2 className="tm-module-empty-title">{t('groupPage.emptyTitle')}</h2>
+              <p className="tm-module-empty-hint">{t('groupPage.emptyHint')}</p>
             </div>
           ) : (
             renderPanel()
@@ -408,5 +415,6 @@ export function GroupPage({
         />
       ) : null}
     </main>
+    </ErrorBoundary>
   )
 }

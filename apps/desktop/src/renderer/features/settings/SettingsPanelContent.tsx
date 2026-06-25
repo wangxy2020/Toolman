@@ -1,6 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
+import type { AppLanguage } from './app-settings'
 import type { MessageSettings } from '../chat/message-settings'
 import type { AppSettings } from './app-settings'
+import { useI18n } from '../../i18n/useI18n'
 import { DataSettingsPanel } from './DataSettingsPanel'
 import { ChannelsSettingsPanel } from './ChannelsSettingsPanel'
 import { McpSettingsPanel } from './McpSettingsPanel'
@@ -31,14 +33,6 @@ interface Props {
   onProvidersSaved?: () => void
 }
 
-const SHORTCUTS = [
-  { keys: '⌘ + N', action: '新建会话' },
-  { keys: '⌘ + K', action: '打开搜索' },
-  { keys: '⌘ + ,', action: '打开设置' },
-  { keys: '⌘ + Enter', action: '发送消息' },
-  { keys: 'Esc', action: '关闭弹窗 / 取消' },
-]
-
 export function SettingsPanelContent({
   section,
   workspaceId,
@@ -48,9 +42,29 @@ export function SettingsPanelContent({
   onMessageSettingsChange,
   onProvidersSaved,
 }: Props) {
+  const { t } = useI18n()
   const patchApp = useCallback(
     (patch: Partial<AppSettings>) => onAppSettingsChange(patch),
     [onAppSettingsChange],
+  )
+
+  const languageOptions = useMemo(
+    (): { value: AppLanguage; label: string }[] => [
+      { value: 'zh-CN', label: t('language.zhCN') },
+      { value: 'en', label: t('language.en') },
+    ],
+    [t],
+  )
+
+  const shortcuts = useMemo(
+    () => [
+      { keys: '⌘ + N', action: t('settings.shortcuts.newSession') },
+      { keys: '⌘ + K', action: t('settings.shortcuts.openSearch') },
+      { keys: '⌘ + ,', action: t('settings.shortcuts.openSettings') },
+      { keys: '⌘ + Enter', action: t('settings.shortcuts.sendMessage') },
+      { keys: 'Esc', action: t('settings.shortcuts.closeOrCancel') },
+    ],
+    [t],
   )
 
   const content = (() => {
@@ -58,14 +72,25 @@ export function SettingsPanelContent({
     case 'general':
       return (
         <SettingsPageLayout>
-          <SettingsSection title="一般设置">
-            <SettingsRow label="启动时恢复上次会话" hint="重新打开应用时自动回到上次的对话">
+          <SettingsSection title={t('settings.general.title')}>
+            <SettingsRow label={t('settings.general.language')} hint={t('settings.general.languageHint')}>
+              <SettingsSelect
+                compact
+                value={appSettings.language}
+                options={languageOptions}
+                onChange={(language) => patchApp({ language })}
+              />
+            </SettingsRow>
+            <SettingsRow
+              label={t('settings.general.restoreSession')}
+              hint={t('settings.general.restoreSessionHint')}
+            >
               <SettingsToggle
                 checked={appSettings.restoreLastSession}
                 onChange={(restoreLastSession) => patchApp({ restoreLastSession })}
               />
             </SettingsRow>
-            <SettingsRow label="拼写检查" hint="在输入框中启用拼写检查">
+            <SettingsRow label={t('settings.general.spellCheck')} hint={t('settings.general.spellCheckHint')}>
               <SettingsToggle
                 checked={appSettings.spellCheckEnabled}
                 onChange={(spellCheckEnabled) => patchApp({ spellCheckEnabled })}
@@ -87,7 +112,12 @@ export function SettingsPanelContent({
 
     case 'model-service':
       if (!workspaceId) {
-        return <SettingsPlaceholder title="模型服务" description="正在加载工作区…" />
+        return (
+          <SettingsPlaceholder
+            title={t('settings.modelService.title')}
+            description={t('settings.modelService.loading')}
+          />
+        )
       }
       return <ModelServicePanel workspaceId={workspaceId} onSaved={onProvidersSaved} />
 
@@ -102,14 +132,14 @@ export function SettingsPanelContent({
 
     case 'web-search':
       return (
-        <SettingsSection title="网络搜索">
-          <SettingsRow label="启用网络搜索" hint="允许智能体在对话中检索互联网信息">
+        <SettingsSection title={t('settings.webSearch.title')}>
+          <SettingsRow label={t('settings.webSearch.enable')} hint={t('settings.webSearch.enableHint')}>
             <SettingsToggle
               checked={appSettings.webSearchEnabled}
               onChange={(webSearchEnabled) => patchApp({ webSearchEnabled })}
             />
           </SettingsRow>
-          <SettingsRow label="搜索提供商">
+          <SettingsRow label={t('settings.webSearch.provider')}>
             <SettingsSelect
               value={appSettings.webSearchProvider}
               options={[
@@ -125,14 +155,14 @@ export function SettingsPanelContent({
 
     case 'memory':
       return (
-        <SettingsSection title="记忆">
-          <SettingsRow label="启用长期记忆" hint="智能体可记住跨会话的偏好与上下文">
+        <SettingsSection title={t('settings.memory.title')}>
+          <SettingsRow label={t('settings.memory.enable')} hint={t('settings.memory.enableHint')}>
             <SettingsToggle
               checked={appSettings.memoryEnabled}
               onChange={(memoryEnabled) => patchApp({ memoryEnabled })}
             />
           </SettingsRow>
-          <SettingsRow label="记忆保留天数">
+          <SettingsRow label={t('settings.memory.retentionDays')}>
             <SettingsInput
               type="number"
               min={1}
@@ -148,18 +178,15 @@ export function SettingsPanelContent({
 
     case 'documents':
       return (
-        <SettingsSection title="文档处理">
-          <SettingsRow
-            label="OCR 识别"
-            hint="扫描件 PDF 与图片（PNG/JPG 等）通过视觉模型提取文字；需在知识库设置中配置文档处理 Provider"
-          >
+        <SettingsSection title={t('settings.documents.title')}>
+          <SettingsRow label={t('settings.documents.ocr')} hint={t('settings.documents.ocrHint')}>
             <SettingsToggle
               checked={appSettings.documentOcrEnabled}
               onChange={(documentOcrEnabled) => patchApp({ documentOcrEnabled })}
             />
           </SettingsRow>
-          <SettingsRow label="PDF 解析">
-            <span className="tm-settings-static">内置解析器</span>
+          <SettingsRow label={t('settings.documents.pdfParser')}>
+            <span className="tm-settings-static">{t('settings.documents.builtInParser')}</span>
           </SettingsRow>
         </SettingsSection>
       )
@@ -169,8 +196,8 @@ export function SettingsPanelContent({
 
     case 'shortcuts':
       return (
-        <SettingsSection title="快捷键">
-          {SHORTCUTS.map((item) => (
+        <SettingsSection title={t('settings.shortcuts.title')}>
+          {shortcuts.map((item) => (
             <div key={item.keys} className="tm-display-row">
               <span className="tm-settings-shortcut-keys">{item.keys}</span>
               <span className="tm-settings-shortcut-action">{item.action}</span>

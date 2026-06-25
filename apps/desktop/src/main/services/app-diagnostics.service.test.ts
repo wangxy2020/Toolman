@@ -103,6 +103,22 @@ vi.mock('./p2p/p2p-workspace.service', () => ({
 
 vi.mock('./p2p/p2p-network.config', () => ({
   getP2pIceServers: () => [{ urls: 'stun:stun.l.google.com:19302' }],
+  getP2pWanNetworkReadiness: () => ({
+    ready: false,
+    summary: 'STUN only',
+    reason: '未配置 TURN 服务器，广域网协作可能失败',
+  }),
+}))
+
+vi.mock('./p2p/p2p-network-manager.service', () => ({
+  getLibp2pRestartStatus: () => ({
+    enabled: false,
+    attempt: 0,
+    tripped: false,
+    nextDelayMs: null,
+    lastReason: null,
+    lastRestartAt: null,
+  }),
 }))
 
 describe('getAppDiagnostics', () => {

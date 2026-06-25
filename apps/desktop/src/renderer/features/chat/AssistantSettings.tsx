@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { IpcChannel, type Assistant, type Provider, type Workspace } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
+import { getPermissionModes } from '../../i18n/agent-labels'
 import { buildModelOptions, modelNameFromId, providerNameFromModelId } from './model-utils'
 import { useSystemPaths } from './useSystemPaths'
 import { getWorkspaceFolderPath } from './workspace-utils'
 import {
   DEFAULT_PERMISSION_MODE,
-  PERMISSION_MODES,
   type PermissionMode,
 } from './agent-settings-constants'
 
@@ -54,8 +55,9 @@ function RequiredMark() {
 }
 
 export function AssistantSettings({ workspaceId, workspace, providers, onClose, onSaved }: Props) {
+  const { t } = useI18n()
   const systemPaths = useSystemPaths()
-  const [name, setName] = useState('新智能体')
+  const [name, setName] = useState(t('agent.newAssistant'))
   const [modelId, setModelId] = useState('')
   const [autonomousMode, setAutonomousMode] = useState(false)
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(DEFAULT_PERMISSION_MODE)
@@ -65,7 +67,8 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
   const [message, setMessage] = useState<string | null>(null)
 
   const modelOptions = useMemo(() => buildModelOptions(providers), [providers])
-  const selectedPermission = PERMISSION_MODES.find((mode) => mode.id === permissionMode)
+  const permissionModes = useMemo(() => getPermissionModes(t), [t])
+  const selectedPermission = permissionModes.find((mode) => mode.id === permissionMode)
 
   const handleSelectWorkingDirectory = async () => {
     const pickResult = await window.api.invoke(IpcChannel.DialogSelectFolder, {
@@ -83,15 +86,15 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
 
   const handleAdd = async () => {
     if (!name.trim()) {
-      setMessage('请填写名称')
+      setMessage(t('agent.errors.nameRequired'))
       return
     }
     if (!modelId) {
-      setMessage('请选择模型')
+      setMessage(t('agent.errors.modelRequired'))
       return
     }
     if (!permissionMode) {
-      setMessage('请选择权限模式')
+      setMessage(t('agent.errors.permissionRequired'))
       return
     }
 
@@ -108,7 +111,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
     const result = await window.api.invoke(IpcChannel.AssistantCreate, {
       workspaceId,
       name: name.trim(),
-      systemPrompt: '你是一个有帮助的 AI 助手。',
+      systemPrompt: t('agent.defaultSystemPrompt'),
       modelId,
       parameters,
     })
@@ -136,9 +139,14 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
         <header className="tm-agent-modal-header">
           <h3 id="add-agent-title" className="tm-agent-modal-title">
             <span className="tm-agent-modal-title-dot" aria-hidden="true" />
-            添加智能体
+            {t('agent.addAssistant')}
           </h3>
-          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+          <button
+            type="button"
+            className="tm-agent-modal-close"
+            aria-label={t('common.close')}
+            onClick={onClose}
+          >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -156,7 +164,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
             <div className="tm-agent-settings-form">
               <div className="tm-agent-setting-row">
                 <label className="tm-agent-setting-label" htmlFor="add-agent-name">
-                  名称
+                  {t('common.name')}
                   <RequiredMark />
                 </label>
                 <input
@@ -171,10 +179,10 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
               <div className="tm-agent-setting-row">
                 <div className="tm-agent-setting-label-group">
                   <label className="tm-agent-setting-label" htmlFor="add-agent-model">
-                    模型
+                    {t('agent.fields.model')}
                   </label>
                   <RequiredMark />
-                  <HelpHint title="选择智能体使用的默认模型" />
+                  <HelpHint title={t('agent.fields.modelHintCreate')} />
                 </div>
                 <select
                   id="add-agent-model"
@@ -183,7 +191,9 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                   onChange={(event) => setModelId(event.target.value)}
                 >
                   <option value="">
-                    {modelOptions.length === 0 ? '请先在模型服务中配置模型' : '选择模型'}
+                    {modelOptions.length === 0
+                      ? t('agent.fields.noModels')
+                      : t('agent.fields.selectModel')}
                   </option>
                   {modelOptions.map((opt) => (
                     <option key={opt.modelId} value={opt.modelId}>
@@ -195,15 +205,15 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
 
               <div className="tm-agent-setting-row">
                 <div className="tm-agent-setting-label-group">
-                  <span className="tm-agent-setting-label">自动编辑模式</span>
-                  <HelpHint title="开启后智能体可自主执行更多操作" />
+                  <span className="tm-agent-setting-label">{t('agent.fields.autonomousMode')}</span>
+                  <HelpHint title={t('agent.fields.autonomousModeHint')} />
                 </div>
                 <Toggle checked={autonomousMode} onChange={setAutonomousMode} />
               </div>
 
               <div className="tm-agent-setting-row tm-agent-setting-row--top">
                 <label className="tm-agent-setting-label" htmlFor="add-agent-permission">
-                  权限模式
+                  {t('agent.permissionTab.title')}
                   <RequiredMark />
                 </label>
                 <div className="tm-agent-setting-block">
@@ -213,7 +223,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                     value={permissionMode}
                     onChange={(event) => setPermissionMode(event.target.value as PermissionMode)}
                   >
-                    {PERMISSION_MODES.map((mode) => (
+                    {permissionModes.map((mode) => (
                       <option key={mode.id} value={mode.id}>
                         {mode.title}
                       </option>
@@ -226,14 +236,14 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
               </div>
 
               <div className="tm-agent-setting-row tm-agent-setting-row--top">
-                <label className="tm-agent-setting-label">工作目录</label>
+                <label className="tm-agent-setting-label">{t('agent.fields.workingDirectory')}</label>
                 <div className="tm-agent-workdir-field">
                   <div className="tm-agent-workdir-input-group">
                     <input
                       className="tm-agent-workdir-input"
                       readOnly
                       value={workingDirectory}
-                      placeholder="未指定时将自动创建默认工作目录"
+                      placeholder={t('agent.fields.workingDirectoryDefault')}
                       title={workingDirectory || undefined}
                     />
                     <button
@@ -241,7 +251,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                       className="tm-agent-workdir-browse"
                       onClick={() => void handleSelectWorkingDirectory()}
                     >
-                      浏览
+                      {t('agent.browse')}
                     </button>
                   </div>
                   {workingDirectory ? (
@@ -250,7 +260,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                       className="tm-agent-workdir-reset"
                       onClick={handleRemoveWorkingDirectory}
                     >
-                      清除目录
+                      {t('common.clear')}
                     </button>
                   ) : null}
                 </div>
@@ -259,9 +269,9 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
               <div className="tm-agent-setting-row tm-agent-setting-row--top">
                 <div className="tm-agent-setting-label-group">
                   <label className="tm-agent-setting-label" htmlFor="add-agent-env">
-                    环境变量
+                    {t('agent.fields.envVars')}
                   </label>
-                  <HelpHint title="为智能体运行环境注入自定义变量" />
+                  <HelpHint title={t('agent.fields.envVarsHint')} />
                 </div>
                 <div className="tm-agent-setting-block">
                   <textarea
@@ -272,7 +282,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                     placeholder={'API_KEY=xxx\nDEBUG=true'}
                     onChange={(event) => setEnvironmentVariables(event.target.value)}
                   />
-                  <p className="tm-agent-field-hint">每行一个，格式：KEY=value</p>
+                  <p className="tm-agent-field-hint">{t('agent.fields.envVarsPlaceholder')}</p>
                 </div>
               </div>
 
@@ -288,7 +298,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
             disabled={busy}
             onClick={onClose}
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -296,7 +306,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
             disabled={busy}
             onClick={() => void handleAdd()}
           >
-            {busy ? '处理中…' : '添加'}
+            {busy ? t('agent.processing') : t('common.add')}
           </button>
         </footer>
       </div>

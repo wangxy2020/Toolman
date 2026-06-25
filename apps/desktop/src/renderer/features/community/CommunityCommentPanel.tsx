@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'react'
 import { IconTrash, IconX } from '../../components/icons'
 import { formatCommunityDate } from './community-market-utils'
 import { CommunityCommentInput } from './CommunityCommentInput'
-import type { CommunityCommentTarget } from './community-comment-utils'
+import { useI18n } from '../../i18n/useI18n'
+import { type CommunityCommentTarget } from './community-comment-utils'
 import { useCommunityInlineComments } from './useCommunityInlineComments'
 import { canDeleteCommunityComment } from './community-user-utils'
 import { useCommunityUser } from './useCommunityUser'
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function CommunityCommentPanel({ target, open, onCountChange, onClose, emptyHint }: Props) {
+  const { t } = useI18n()
   const user = useCommunityUser()
   const comments = useCommunityInlineComments(target, open)
   const onCountChangeRef = useRef(onCountChange)
@@ -31,15 +33,15 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose, em
     canDeleteCommunityComment(authorId, user.profile)
 
   return (
-    <section className="tm-community-inline-comments" aria-label="评论区">
+    <section className="tm-community-inline-comments" aria-label={t('communityPage.comment.aria')}>
       <header className="tm-community-inline-comments-header">
-        <h4 className="tm-community-inline-comments-title">评论区</h4>
+        <h4 className="tm-community-inline-comments-title">{t('communityPage.comment.title')}</h4>
         {onClose ? (
           <button
             type="button"
             className="tm-community-comment-dropdown-close"
-            title="关闭"
-            aria-label="关闭评论区"
+            title={t('communityPage.comment.close')}
+            aria-label={t('communityPage.comment.closeAria')}
             onClick={onClose}
           >
             <IconX size={14} />
@@ -51,10 +53,10 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose, em
         {comments.error ? <div className="tm-error-bar">{comments.error}</div> : null}
 
         {comments.loading ? (
-          <div className="tm-community-inline-comments-empty">加载评论中…</div>
+          <div className="tm-community-inline-comments-empty">{t('communityPage.comment.loading')}</div>
         ) : comments.items.length === 0 ? (
           <div className="tm-community-inline-comments-empty">
-            {emptyHint ?? '暂无评论，来发表第一条吧'}
+            {emptyHint ?? t('communityPage.comment.empty')}
           </div>
         ) : (
           <ul className="tm-community-inline-comments-list">
@@ -72,8 +74,8 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose, em
                       <button
                         type="button"
                         className="tm-community-inline-comment-delete"
-                        title="删除评论"
-                        aria-label="删除评论"
+                        title={t('communityPage.comment.delete')}
+                        aria-label={t('communityPage.comment.deleteAria')}
                         disabled={comments.deletingId === item.id}
                         onClick={() => void comments.remove(item.id)}
                       >
@@ -95,7 +97,11 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose, em
         onSubmit={() => comments.submit()}
         submitting={comments.submitting}
         disabled={!user.profile}
-        placeholder={user.profile ? '写下你的评论…' : '请先登录后再评论'}
+        placeholder={
+          user.profile
+            ? t('communityPage.comment.placeholderWrite')
+            : t('communityPage.comment.placeholderLogin')
+        }
       />
     </section>
   )

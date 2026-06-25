@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { IpcChannel, type McpServerConfig, type McpStatusItem } from '@toolman/shared'
 import { IconSearch } from '../../components/icons'
-import { MCP_SERVERS, PREAUTH_TOOLS } from './agent-settings-constants'
+import { useI18n } from '../../i18n/useI18n'
+import { getMcpServers, getPreauthTools } from '../../i18n/agent-labels'
 
 function Toggle({
   checked,
@@ -40,8 +41,11 @@ export function AgentSettingsToolsTab({
   onToolChange,
   onMcpToggle,
 }: Props) {
+  const { t } = useI18n()
+  const mcpServers = getMcpServers(t)
+  const preauthTools = getPreauthTools(t)
   const [servers, setServers] = useState<McpServerConfig[]>(() =>
-    MCP_SERVERS.map((server) => ({
+    mcpServers.map((server) => ({
       id: server.id,
       name: server.name,
       description: server.description,
@@ -90,7 +94,7 @@ export function AgentSettingsToolsTab({
   return (
     <div className="tm-agent-tab-panel">
       <div className="tm-agent-tab-head">
-        <h3 className="tm-agent-tab-title">MCP 服务器</h3>
+        <h3 className="tm-agent-tab-title">{t('agent.tools.mcpServers')}</h3>
       </div>
       <div className="tm-tool-list">
         {servers.map((server) => {
@@ -99,12 +103,12 @@ export function AgentSettingsToolsTab({
           const connected = Boolean(enabled && status?.connected)
           const globallyDisabled = !server.enabled
           const statusLabel = globallyDisabled
-            ? '全局已禁用'
+            ? t('agent.tools.statusGlobalOff')
             : !enabled
-              ? '未启用'
+              ? t('agent.tools.statusOff')
               : connected
-                ? '已连接'
-                : '未连接'
+                ? t('agent.tools.statusConnected')
+                : t('agent.tools.statusDisconnected')
           const statusTitle = status?.reason
 
           return (
@@ -137,14 +141,14 @@ export function AgentSettingsToolsTab({
 
       <div className="tm-agent-tab-head tm-agent-tab-head--spaced">
         <h3 className="tm-agent-tab-title">
-          预授权工具
-          <button type="button" className="tm-agent-tab-search" title="搜索工具">
+          {t('agent.tools.preauthTools')}
+          <button type="button" className="tm-agent-tab-search" title={t('agent.tools.searchTools')}>
             <IconSearch size={14} />
           </button>
         </h3>
       </div>
       <div className="tm-tool-list">
-        {PREAUTH_TOOLS.map((tool) => {
+        {preauthTools.map((tool) => {
           const enabled = toolStates[tool.id] ?? tool.defaultEnabled
           return (
             <div key={tool.id} className="tm-settings-tool-item">

@@ -7,6 +7,7 @@ import {
   IconSliders,
   IconStar,
 } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import { exportNoteAsMarkdown, printNote } from './notes-import-export'
 import type { NoteItem } from './notes-storage'
 
@@ -27,13 +28,15 @@ export function NotesHeaderActions({
   onChatWithNote,
   onIngestNote,
 }: Props) {
+  const { t } = useI18n()
+
   return (
     <div className="tm-chat-header-end">
       {onChatWithNote ? (
         <button
           type="button"
           className="tm-chat-header-settings-btn"
-          title="带着这篇笔记聊天"
+          title={t('notesPage.header.chatWithNote')}
           onClick={() => onChatWithNote(note.id)}
         >
           <IconAgent size={16} />
@@ -43,7 +46,7 @@ export function NotesHeaderActions({
         <button
           type="button"
           className="tm-chat-header-settings-btn"
-          title="添加到知识库"
+          title={t('notesPage.header.addToKnowledge')}
           onClick={() => onIngestNote(note.id, note.title)}
         >
           <IconKnowledge size={16} />
@@ -52,7 +55,7 @@ export function NotesHeaderActions({
       <button
         type="button"
         className="tm-chat-header-settings-btn"
-        title="导出 Markdown"
+        title={t('notesPage.header.exportMarkdown')}
         onClick={() => exportNoteAsMarkdown(note)}
       >
         <IconDownload size={16} />
@@ -60,7 +63,7 @@ export function NotesHeaderActions({
       <button
         type="button"
         className="tm-chat-header-settings-btn"
-        title="打印 / PDF"
+        title={t('notesPage.header.printPdf')}
         onClick={() => printNote(note)}
       >
         <IconPrint size={16} />
@@ -73,7 +76,7 @@ export function NotesHeaderActions({
         ]
           .filter(Boolean)
           .join(' ')}
-        title={note.starred ? '取消收藏' : '收藏'}
+        title={note.starred ? t('notesPage.header.unstar') : t('notesPage.header.star')}
         onClick={() => onToggleStarred(note.id)}
       >
         <IconStar size={16} filled={note.starred} />
@@ -86,7 +89,7 @@ export function NotesHeaderActions({
         ]
           .filter(Boolean)
           .join(' ')}
-        title={note.locked ? '解锁' : '锁定'}
+        title={note.locked ? t('notesPage.header.unlock') : t('notesPage.header.lock')}
         onClick={() => onToggleLocked(note.id)}
       >
         <IconLock size={16} locked={note.locked} />
@@ -94,7 +97,7 @@ export function NotesHeaderActions({
       <button
         type="button"
         className="tm-chat-header-settings-btn"
-        title="笔记设置"
+        title={t('notesPage.header.noteSettings')}
         onClick={onOpenSettings}
       >
         <IconSliders size={16} />

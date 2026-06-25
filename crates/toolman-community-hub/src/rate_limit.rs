@@ -77,7 +77,11 @@ impl HubRateLimiterRegistry {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         if buckets.len() > MAX_TRACKED_CLIENTS {
-            buckets.clear();
+            let evict_count = MAX_TRACKED_CLIENTS / 10;
+            let keys: Vec<String> = buckets.keys().take(evict_count).cloned().collect();
+            for key in keys {
+                buckets.remove(&key);
+            }
         }
 
         buckets

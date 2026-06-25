@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { IpcChannel, type KnowledgeDocument } from '@toolman/shared'
 import { IconCheck, IconFile, IconGlobe, IconRefresh, IconTrash } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   formatKnowledgeDocTime,
   formatKnowledgeFileSize,
@@ -84,13 +85,15 @@ function FileSelectCheckbox({
   checked,
   disabled,
   onChange,
+  title,
 }: {
   checked: boolean
   disabled?: boolean
   onChange: () => void
+  title: string
 }) {
   return (
-    <label className="tm-kb-file-card-select" title="选择文件">
+    <label className="tm-kb-file-card-select" title={title}>
       <input
         type="checkbox"
         className="tm-kb-file-card-select-input"
@@ -132,6 +135,7 @@ export function KnowledgeBaseFilePanel({
   onOpenMarkdownFile,
   onContextMenu,
 }: Props) {
+  const { t } = useI18n()
   const [dragOver, setDragOver] = useState(false)
   const [picking, setPicking] = useState(false)
   const isUrlMode = mode === 'url'
@@ -152,7 +156,7 @@ export function KnowledgeBaseFilePanel({
   const importPaths = (files: FileList | File[], dataTransfer?: DataTransfer | null) => {
     const paths = getLocalFilePaths(files, dataTransfer)
     if (paths.length === 0) {
-      onImportError?.('无法获取文件路径，请重试或点击区域选择文件')
+      onImportError?.(t('knowledgePage.filePanel.pathError'))
       return
     }
     void onImportFiles(paths)
@@ -193,7 +197,7 @@ export function KnowledgeBaseFilePanel({
     if (isUrlMode) {
       const url = extractDroppedUrl(event.dataTransfer)
       if (!url) {
-        onImportError?.('请拖拽有效的网页链接')
+        onImportError?.(t('knowledgePage.filePanel.invalidUrl'))
         return
       }
       void onAddUrl?.(url)
@@ -243,22 +247,22 @@ export function KnowledgeBaseFilePanel({
           onClick={() => void handlePickFiles()}
         >
           <span className="tm-kb-file-dropzone-title">
-            {isUrlMode ? '拖拽网页到这里或点击添加' : '拖拽文件到这里或点击添加'}
+            {isUrlMode ? t('knowledgePage.filePanel.dropTitleUrl') : t('knowledgePage.filePanel.dropTitleFile')}
           </span>
           <span className="tm-kb-file-dropzone-hint">
-            {isUrlMode
-              ? '支持 HTTP/HTTPS 网页链接，也可从浏览器拖拽书签或链接'
-              : '支持 TXT, MD, HTML, PDF, DOCX, PPTX, XLSX, EPUB... 格式'}
+            {isUrlMode ? t('knowledgePage.filePanel.dropHintUrl') : t('knowledgePage.filePanel.dropHintFile')}
           </span>
         </button>
       ) : null}
 
       {loading && documents.length === 0 ? (
-        <p className="tm-kb-file-panel-empty">加载文件中…</p>
+        <p className="tm-kb-file-panel-empty">{t('knowledgePage.filePanel.loading')}</p>
       ) : null}
 
       {!loading && documents.length === 0 ? (
-        <p className="tm-kb-file-panel-empty">{isUrlMode ? '暂无网页' : '暂无文件'}</p>
+        <p className="tm-kb-file-panel-empty">
+          {isUrlMode ? t('knowledgePage.filePanel.emptyUrls') : t('knowledgePage.filePanel.emptyFiles')}
+        </p>
       ) : null}
 
       {documents.length > 0 ? (
@@ -267,7 +271,7 @@ export function KnowledgeBaseFilePanel({
             const extension = getKnowledgeDocExtension(doc.title, doc.mimeType)
             const status = doc.status ?? 'ready'
             const processing = isKnowledgeDocProcessing(status)
-            const statusLabel = getKnowledgeDocStatusLabel(status)
+            const statusLabel = getKnowledgeDocStatusLabel(status, t)
             const selected = selectedIds?.has(doc.id) ?? false
             const selectionEnabled = Boolean(onToggleSelect)
             const isUrlDoc = isUrlMode || doc.sourceKind === 'url'
@@ -407,7 +411,7 @@ export function KnowledgeBaseFilePanel({
                       <button
                         type="button"
                         className="tm-kb-file-card-action tm-kb-file-card-action--danger"
-                        title="删除文件"
+                        title={t('knowledgePage.filePanel.deleteFile')}
                         disabled={processing}
                         onClick={() => onDeleteDocument(doc.id)}
                       >
@@ -418,6 +422,7 @@ export function KnowledgeBaseFilePanel({
                       <FileSelectCheckbox
                         checked={selected}
                         disabled={processing}
+                        title={t('knowledgePage.filePanel.selectFile')}
                         onChange={() => onToggleSelect?.(doc.id)}
                       />
                     ) : null}
@@ -436,6 +441,7 @@ export function KnowledgeBaseFilePanel({
                     {selectionEnabled ? (
                       <FileSelectCheckbox
                         checked={selected}
+                        title={t('knowledgePage.filePanel.selectFile')}
                         onChange={() => onToggleSelect?.(doc.id)}
                       />
                     ) : null}
@@ -444,6 +450,7 @@ export function KnowledgeBaseFilePanel({
                   <div className="tm-kb-file-card-actions">
                     <FileSelectCheckbox
                       checked={selected}
+                      title={t('knowledgePage.filePanel.selectFile')}
                       onChange={() => onToggleSelect?.(doc.id)}
                     />
                   </div>

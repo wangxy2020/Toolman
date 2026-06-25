@@ -1,13 +1,15 @@
 import { CommunityResourceMarketPanel } from './CommunityResourceMarketPanel'
+import { useI18n } from '../../i18n/useI18n'
 
 export function SkillsMarketPanel() {
+  const { t } = useI18n()
   return (
     <CommunityResourceMarketPanel
       resourceType="skill"
-      title="Skills 市场"
-      subtitle="发现与安装社区贡献的 Agent Skills"
-      publishLabel="发布Skills"
-      emptyHint="暂无 Skill 资源，请确认 Community Hub 已启动并已发布资源"
+      title={t('communityPage.panels.skills.title')}
+      subtitle={t('communityPage.panels.skills.subtitle')}
+      publishLabel={t('communityPage.panels.skills.publish')}
+      emptyHint={t('communityPage.market.skillsEmpty')}
     />
   )
 }

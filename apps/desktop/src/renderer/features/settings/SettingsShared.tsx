@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useI18n } from '../../i18n/useI18n'
 
 export function SettingsPageLayout({ children }: { children: ReactNode }) {
   return <div className="tm-settings-page-body">{children}</div>
@@ -17,12 +18,14 @@ export function SettingsSection({
   intro?: string
   children: ReactNode
 }) {
+  const { t } = useI18n()
+
   return (
     <section className="tm-display-card">
       <header className="tm-display-card-header">
         <h3 className="tm-display-card-title">
           {title}
-          {badge ? <span className="tm-display-badge">New</span> : null}
+          {badge ? <span className="tm-display-badge">{t('common.new')}</span> : null}
         </h3>
         {action}
       </header>
@@ -83,15 +86,17 @@ export function SettingsSelect<T extends string>({
   options,
   onChange,
   disabled,
+  compact,
 }: {
   value: T
   options: { value: T; label: string }[]
   onChange: (value: T) => void
   disabled?: boolean
+  compact?: boolean
 }) {
   return (
     <select
-      className="tm-settings-select"
+      className={`tm-settings-select${compact ? ' tm-settings-select--compact' : ''}`}
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as T)}

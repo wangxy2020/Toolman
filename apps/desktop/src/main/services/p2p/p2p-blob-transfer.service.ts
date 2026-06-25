@@ -1,4 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs'
+import { logStructured } from '../structured-log.service'
+import { open } from 'node:fs/promises'
 import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -7,9 +20,9 @@ import { hashFileBytes } from '@toolman/knowledge'
 import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
 import {
   blobExists,
+  ensureBlobRecord,
   getBlobMeta,
-  readBlobBytes,
-  writeBlobFromBuffer,
+  getBlobStoragePath,
   writeBlobFromPath,
 } from '../blob.service'
 import { getDatabase } from '../../bootstrap/database'
@@ -31,8 +44,34 @@ import {
 } from './p2p-file-protocol'
 import {
   deleteBlobReceiveSession,
+  listBlobReceiveSessions,
   saveBlobReceiveSession,
 } from './p2p-blob-session-store'
+
+const MAX_CONCURRENT_BLOB_SENDS = 2
+let activeBlobSends = 0
+const blobSendWaiters: Array<() => void> = []
+
+async function acquireBlobSendSlot(): Promise<void> {
+  if (activeBlobSends < MAX_CONCURRENT_BLOB_SENDS) {
+    activeBlobSends += 1
+    return
+  }
+  await new Promise<void>((resolve) => {
+    blobSendWaiters.push(resolve)
+  })
+  activeBlobSends += 1
+}
+
+function releaseBlobSendSlot(): void {
+  activeBlobSends = Math.max(0, activeBlobSends - 1)
+  const next = blobSendWaiters.shift()
+  if (next) next()
+}
+
+export function getPendingBlobTransferCount(): number {
+  return receiveSessions.size + inFlightFetches.size + activeBlobSends
+}
 
 function blobChunkPartPath(contentHash: string, index: number): string {
   const dir = join(app.getPath('userData'), 'p2p', 'blob-parts', contentHash)
@@ -75,7 +114,7 @@ interface BlobReceiveSession {
   mimeType?: string
   sizeBytes: number
   totalChunks: number
-  chunks: Map<number, Buffer>
+  receivedCount: number
   peerDeviceId: string
   transferId: string
 }
@@ -87,8 +126,14 @@ const pendingFetchResolvers = new Map<
 >()
 const inFlightFetches = new Set<string>()
 
-function sha256Hex(data: Buffer): string {
-  return createHash('sha256').update(data).digest('hex')
+function listReceivedChunkIndices(contentHash: string, totalChunks: number): number[] {
+  const indices: number[] = []
+  for (let index = 0; index < totalChunks; index += 1) {
+    if (readBlobChunkPart(contentHash, index)) {
+      indices.push(index)
+    }
+  }
+  return indices
 }
 
 function listActiveWorkspacePeerIds(workspaceId: string): string[] {
@@ -135,68 +180,81 @@ async function sendBlobToPeer(
   peerDeviceId: string,
   workspaceId: string,
   contentHash: string,
-  data: Buffer,
   mimeType: string,
   transferId: string,
   mode: 'request' | 'push',
 ): Promise<void> {
-  const totalChunks = chunkCountForSize(data.length)
-  const metaMessage =
-    mode === 'request'
-      ? {
-          type: 'blob.meta' as const,
-          requestId: transferId,
-          workspaceId,
-          contentHash,
-          sizeBytes: data.length,
-          mimeType,
-          totalChunks,
-        }
-      : {
-          type: 'blob.push.start' as const,
-          pushId: transferId,
-          workspaceId,
-          contentHash,
-          sizeBytes: data.length,
-          mimeType,
-          totalChunks,
-        }
-
-  await sendFileMessage(peerDeviceId, metaMessage)
-
-  for (let index = 0; index < totalChunks; index += 1) {
-    const start = index * P2P_BLOB_CHUNK_SIZE
-    const end = Math.min(start + P2P_BLOB_CHUNK_SIZE, data.length)
-    const chunk = data.subarray(start, end)
-    const chunkMessage =
+  const filePath = getBlobStoragePath(contentHash)
+  const sizeBytes = statSync(filePath).size
+  await acquireBlobSendSlot()
+  const fileHandle = await open(filePath, 'r')
+  try {
+    const totalChunks = chunkCountForSize(sizeBytes)
+    const metaMessage =
       mode === 'request'
         ? {
-            type: 'blob.chunk' as const,
+            type: 'blob.meta' as const,
             requestId: transferId,
+            workspaceId,
             contentHash,
-            index,
+            sizeBytes,
+            mimeType,
             totalChunks,
-            data: chunk.toString('base64'),
           }
         : {
-            type: 'blob.push.chunk' as const,
+            type: 'blob.push.start' as const,
             pushId: transferId,
+            workspaceId,
             contentHash,
-            index,
+            sizeBytes,
+            mimeType,
             totalChunks,
-            data: chunk.toString('base64'),
           }
 
-    await sendFileMessage(peerDeviceId, chunkMessage)
-    broadcastFileProgress(workspaceId, index + 1, totalChunks)
-  }
+    await sendFileMessage(peerDeviceId, metaMessage)
 
-  await sendFileMessage(
-    peerDeviceId,
-    mode === 'request'
-      ? { type: 'blob.complete', requestId: transferId, contentHash }
-      : { type: 'blob.push.complete', pushId: transferId, contentHash },
-  )
+    for (let index = 0; index < totalChunks; index += 1) {
+      const start = index * P2P_BLOB_CHUNK_SIZE
+      const end = Math.min(start + P2P_BLOB_CHUNK_SIZE, sizeBytes)
+      const chunkLength = end - start
+      const chunk = Buffer.alloc(chunkLength)
+      const { bytesRead } = await fileHandle.read(chunk, 0, chunkLength, start)
+      if (bytesRead !== chunkLength) {
+        throw new Error(`blob read short at chunk ${index}`)
+      }
+      const chunkMessage =
+        mode === 'request'
+          ? {
+              type: 'blob.chunk' as const,
+              requestId: transferId,
+              contentHash,
+              index,
+              totalChunks,
+              data: chunk.toString('base64'),
+            }
+          : {
+              type: 'blob.push.chunk' as const,
+              pushId: transferId,
+              contentHash,
+              index,
+              totalChunks,
+              data: chunk.toString('base64'),
+            }
+
+      await sendFileMessage(peerDeviceId, chunkMessage)
+      broadcastFileProgress(workspaceId, index + 1, totalChunks)
+    }
+
+    await sendFileMessage(
+      peerDeviceId,
+      mode === 'request'
+        ? { type: 'blob.complete', requestId: transferId, contentHash }
+        : { type: 'blob.push.complete', pushId: transferId, contentHash },
+    )
+  } finally {
+    await fileHandle.close()
+    releaseBlobSendSlot()
+  }
 }
 
 function startReceiveSession(input: {
@@ -214,7 +272,7 @@ function startReceiveSession(input: {
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes,
     totalChunks: input.totalChunks,
-    chunks: new Map(),
+    receivedCount: 0,
     peerDeviceId: input.peerDeviceId,
     transferId: input.transferId,
   }
@@ -243,7 +301,66 @@ function completeReceiveSession(sessionKey: string): void {
     pendingFetchResolvers.delete(sessionKey)
     pending.resolve(ok)
   } else if (!ok) {
-    console.warn(`[p2p] incomplete blob transfer for ${session.contentHash}`)
+    logStructured('p2p', 'warn', `incomplete blob transfer for ${session.contentHash}`)
+  }
+}
+
+function assembleBlobFromChunkParts(session: BlobReceiveSession): boolean {
+  const targetPath = getBlobStoragePath(session.contentHash)
+  if (existsSync(targetPath)) {
+    return true
+  }
+
+  const tempPath = `${targetPath}.partial`
+  const hash = createHash('sha256')
+  let fd: number | null = null
+  try {
+    fd = openSync(tempPath, 'w')
+    let totalWritten = 0
+    for (let index = 0; index < session.totalChunks; index += 1) {
+      const part = readBlobChunkPart(session.contentHash, index)
+      if (!part) {
+        return false
+      }
+      hash.update(part)
+      writeSync(fd, part)
+      totalWritten += part.length
+    }
+    closeSync(fd)
+    fd = null
+
+    if (totalWritten !== session.sizeBytes) {
+      unlinkSync(tempPath)
+      return false
+    }
+
+    const digest = hash.digest('hex')
+    if (digest !== session.contentHash) {
+      logStructured('p2p', 'warn', `blob hash mismatch for ${session.contentHash}: got ${digest}`)
+      unlinkSync(tempPath)
+      return false
+    }
+
+    renameSync(tempPath, targetPath)
+    ensureBlobRecord(session.contentHash, session.mimeType ?? 'application/octet-stream', session.sizeBytes)
+    return true
+  } catch (error) {
+    if (fd != null) {
+      try {
+        closeSync(fd)
+      } catch {
+        // ignore
+      }
+    }
+    if (existsSync(tempPath)) {
+      try {
+        unlinkSync(tempPath)
+      } catch {
+        // ignore
+      }
+    }
+    logStructured('p2p', 'warn', `blob assembly failed for ${session.contentHash}: ${toErrorMessage(error, 'assembly failed')}`)
+    return false
   }
 }
 
@@ -256,49 +373,28 @@ function finalizeReceiveSession(session: BlobReceiveSession): boolean {
     return true
   }
 
-  if (session.chunks.size !== session.totalChunks) {
+  if (session.receivedCount < session.totalChunks) {
+    let onDisk = 0
     for (let index = 0; index < session.totalChunks; index += 1) {
-      if (!session.chunks.has(index)) {
-        const part = readBlobChunkPart(session.contentHash, index)
-        if (part) {
-          session.chunks.set(index, part)
-        }
+      if (readBlobChunkPart(session.contentHash, index)) {
+        onDisk += 1
       }
+    }
+    if (onDisk !== session.totalChunks) {
+      return false
     }
   }
 
-  if (session.chunks.size !== session.totalChunks) {
-    return false
+  const ok = assembleBlobFromChunkParts(session)
+  if (ok) {
+    clearBlobChunkParts(session.contentHash)
+    broadcastP2pSyncCompleted({
+      workspaceId: session.workspaceId,
+      eventsApplied: 0,
+      filesFetched: 1,
+    })
   }
-
-  const parts: Buffer[] = []
-  for (let index = 0; index < session.totalChunks; index += 1) {
-    const chunk = session.chunks.get(index)
-    if (!chunk) return false
-    parts.push(chunk)
-  }
-
-  const data = Buffer.concat(parts)
-  if (data.length !== session.sizeBytes) {
-    return false
-  }
-
-  const actualHash = sha256Hex(data)
-  if (actualHash !== session.contentHash) {
-    console.warn(
-      `[p2p] blob hash mismatch for ${session.contentHash}: got ${actualHash}`,
-    )
-    return false
-  }
-
-  writeBlobFromBuffer(data, session.mimeType ?? 'application/octet-stream')
-  clearBlobChunkParts(session.contentHash)
-  broadcastP2pSyncCompleted({
-    workspaceId: session.workspaceId,
-    eventsApplied: 0,
-    filesFetched: 1,
-  })
-  return true
+  return ok
 }
 
 async function tryRecoverBlobFromSharedKnowledge(
@@ -348,13 +444,11 @@ async function handleBlobRequest(
     return
   }
 
-  const data = readBlobBytes(message.contentHash)
   const meta = getBlobMeta(message.contentHash)
   await sendBlobToPeer(
     peerDeviceId,
     message.workspaceId,
     message.contentHash,
-    data,
     meta?.mimeType ?? 'application/octet-stream',
     message.requestId,
     'request',
@@ -373,9 +467,13 @@ function handleIncomingChunk(
     return
   }
 
+  if (readBlobChunkPart(contentHash, index)) {
+    return
+  }
+
   const chunk = Buffer.from(dataB64, 'base64')
-  session.chunks.set(index, chunk)
   writeBlobChunkPart(contentHash, index, chunk)
+  session.receivedCount += 1
   saveBlobReceiveSession({
     transferId: session.transferId,
     workspaceId: session.workspaceId,
@@ -384,10 +482,10 @@ function handleIncomingChunk(
     sizeBytes: session.sizeBytes,
     totalChunks: session.totalChunks,
     peerDeviceId: session.peerDeviceId,
-    receivedIndices: [...session.chunks.keys()].sort((a, b) => a - b),
+    receivedIndices: listReceivedChunkIndices(contentHash, totalChunks),
     updatedAt: Date.now(),
   })
-  broadcastFileProgress(session.workspaceId, session.chunks.size, totalChunks)
+  broadcastFileProgress(session.workspaceId, session.receivedCount, totalChunks)
 }
 
 type BlobChannelHandler = (peerDeviceId: string, message: FileChannelMessage) => Promise<void> | void
@@ -568,7 +666,7 @@ export async function fetchBlobFromPeers(
         }
       } catch (error) {
         const message = toErrorMessage(error, String(error))
-        console.warn(`[p2p] blob fetch from ${peerDeviceId} failed: ${message}`)
+        logStructured('p2p', 'warn', `blob fetch from ${peerDeviceId} failed: ${message}`)
       }
     }
 
@@ -589,7 +687,6 @@ export async function pushBlobToPeers(
 
   const device = getP2pDeviceInfo()
   const memberPeerIds = new Set(listActiveWorkspacePeerIds(workspaceId))
-  const data = readBlobBytes(contentHash)
   const connections = await listP2pConnections()
   const peers = connections.filter(
     (item) =>
@@ -610,7 +707,6 @@ export async function pushBlobToPeers(
               peer.peerDeviceId,
               workspaceId,
               contentHash,
-              data,
               mimeType ?? 'application/octet-stream',
               pushId,
               'push',
@@ -622,7 +718,7 @@ export async function pushBlobToPeers(
         ])
       } catch (error) {
         const message = toErrorMessage(error, String(error))
-        console.warn(`[p2p] blob push to ${peer.peerDeviceId} failed: ${message}`)
+        logStructured('p2p', 'warn', `blob push to ${peer.peerDeviceId} failed: ${message}`)
       }
     }),
   )
@@ -643,6 +739,53 @@ export function scheduleBlobFetch(
 ): void {
   if (!contentHash || blobExists(contentHash)) return
   void fetchBlobFromPeers(workspaceId, contentHash, mimeType)
+}
+
+function restoreReceiveSessionFromDisk(
+  persisted: import('./p2p-blob-session-store').PersistedBlobReceiveSession,
+): BlobReceiveSession | null {
+  return {
+    workspaceId: persisted.workspaceId,
+    contentHash: persisted.contentHash,
+    mimeType: persisted.mimeType,
+    sizeBytes: persisted.sizeBytes,
+    totalChunks: persisted.totalChunks,
+    receivedCount: persisted.receivedIndices.length,
+    peerDeviceId: persisted.peerDeviceId,
+    transferId: persisted.transferId,
+  }
+}
+
+export async function resumeInterruptedBlobTransfers(): Promise<void> {
+  for (const persisted of listBlobReceiveSessions()) {
+    if (blobExists(persisted.contentHash)) {
+      deleteBlobReceiveSession(persisted.transferId)
+      clearBlobChunkParts(persisted.contentHash)
+      continue
+    }
+
+    const session = restoreReceiveSessionFromDisk(persisted)
+    if (!session) {
+      deleteBlobReceiveSession(persisted.transferId)
+      continue
+    }
+
+    if (session.receivedCount >= session.totalChunks) {
+      finalizeReceiveSession(session)
+      continue
+    }
+
+    receiveSessions.set(persisted.transferId, session)
+    logStructured('p2p', 'info', `restored partial blob receive ${persisted.contentHash.slice(0, 8)} (${session.receivedCount}/${session.totalChunks} chunks)`)
+    void fetchBlobFromPeers(
+      persisted.workspaceId,
+      persisted.contentHash,
+      persisted.mimeType,
+      persisted.peerDeviceId,
+    ).catch((error) => {
+      logStructured('p2p', 'warn', `blob resume fetch failed for ${persisted.contentHash.slice(0, 8)}: ${toErrorMessage(error, 'blob resume fetch failed')}`)
+    })
+  }
 }
 
 export async function syncMissingWorkspaceBlobs(workspaceId: string): Promise<number> {

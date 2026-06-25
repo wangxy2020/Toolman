@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { type CommunityBoardMessage } from '@toolman/shared'
 
+import { useI18n } from '../../i18n/useI18n'
 import {
   createCommunityBoardMessage,
   patchCommunityBoardMessage,
@@ -54,6 +55,7 @@ export function CommunityMessagePublishModal({
   onClose,
   onCreated,
 }: Props) {
+  const { t } = useI18n()
   const isResume = Boolean(resumeMessage)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -68,12 +70,22 @@ export function CommunityMessagePublishModal({
     setError(null)
   }, [resumeMessage])
 
-  const submitLabel = editOnly ? '保存修改' : isResume ? '重新提交' : '发布留言'
+  const submitLabel = editOnly
+    ? t('communityPage.publish.saveChanges')
+    : isResume
+      ? t('communityPage.messagePublish.resubmit')
+      : t('communityPage.messagePublish.publish')
+
+  const modalTitle = editOnly
+    ? t('communityPage.messagePublish.titleEdit')
+    : isResume
+      ? t('communityPage.messagePublish.titleResubmit')
+      : t('communityPage.messagePublish.titlePublish')
 
   const handleSubmit = async () => {
     const messageBody = buildMessageBody(title, body)
     if (!messageBody) {
-      setError('请填写留言标题或内容')
+      setError(t('communityPage.messagePublish.fillRequired'))
       return
     }
 
@@ -84,7 +96,9 @@ export function CommunityMessagePublishModal({
         await patchCommunityBoardMessage(resumeMessage.id, messageBody)
         notifyCommunityUserDataChanged()
         notifyCommunityBoardChanged()
-        onCreated?.(editOnly ? '修改已保存' : '留言已更新')
+        onCreated?.(
+          editOnly ? t('communityPage.messagePublish.successEdit') : t('communityPage.messagePublish.successUpdate'),
+        )
         onClose()
         return
       }
@@ -92,10 +106,12 @@ export function CommunityMessagePublishModal({
       await createCommunityBoardMessage({ body: messageBody })
       notifyCommunityUserDataChanged()
       notifyCommunityBoardChanged()
-      onCreated?.('发布成功')
+      onCreated?.(t('communityPage.messagePublish.successPublish'))
       onClose()
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : '发布留言失败')
+      setError(
+        submitError instanceof Error ? submitError.message : t('communityPage.messagePublish.errorPublish'),
+      )
     } finally {
       setSubmitting(false)
     }
@@ -103,15 +119,13 @@ export function CommunityMessagePublishModal({
 
   return (
     <CommunityPublishModalShell
-      title={
-        editOnly ? '修改留言' : isResume ? '重新提交留言' : '发布留言'
-      }
+      title={modalTitle}
       onClose={onClose}
       footer={
         <CommunityPublishModalFooterActions
           onCancel={onClose}
           cancelDisabled={submitting}
-          confirmLabel={submitting ? '提交中…' : submitLabel}
+          confirmLabel={submitting ? t('communityPage.publish.submitting') : submitLabel}
           confirmDisabled={submitting || (!title.trim() && !body.trim())}
           onConfirm={() => void handleSubmit()}
         />
@@ -119,32 +133,34 @@ export function CommunityMessagePublishModal({
     >
       {error ? <CommunityPublishModalError message={error} /> : null}
       {editOnly ? (
-        <CommunityPublishModalNotice message="修改留言内容后保存；确认无误后可使用「重新提交」再次发布。" />
+        <CommunityPublishModalNotice message={t('communityPage.messagePublish.editNotice')} />
       ) : null}
 
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">
-          留言标题 <span className="tm-community-publish-label-optional">(可选)</span>
+          {t('communityPage.messagePublish.titleLabel')}{' '}
+          <span className="tm-community-publish-label-optional">{t('communityPage.publish.optional')}</span>
         </span>
         <input
           type="text"
           className="tm-community-publish-input"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="简短概括留言主题"
+          placeholder={t('communityPage.messagePublish.titlePlaceholder')}
         />
       </label>
 
       <label className="tm-community-publish-field">
         <span className="tm-community-publish-label">
-          留言内容 <span className="tm-community-publish-required">*</span>
+          {t('communityPage.messagePublish.contentLabel')}{' '}
+          <span className="tm-community-publish-required">{t('communityPage.publish.required')}</span>
         </span>
         <textarea
           className="tm-community-publish-textarea"
           rows={5}
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          placeholder="写下你想分享的留言、问题或建议…"
+          placeholder={t('communityPage.messagePublish.contentPlaceholder')}
         />
       </label>
     </CommunityPublishModalShell>

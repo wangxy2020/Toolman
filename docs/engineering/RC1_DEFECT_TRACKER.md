@@ -1,7 +1,8 @@
 # RC1 缺陷跟踪表（模板）
 
 > **版本**：`0.2.0-rc.1` · **通道**：`staging`  
-> **维护者**：_填写姓名_ · **周期**：_YYYY-MM-DD_ ～ _YYYY-MM-DD_  
+> **维护者**：_填写姓名_ · **周期**：2026-06-22 ～ 2026-06-29（RC1 Kickoff）  
+> **状态板**：[RC1_KICKOFF_STATUS.md](./RC1_KICKOFF_STATUS.md)  
 > **用法**：整表复制到飞书多维表格 / Notion / Google Sheet；单条缺陷用 [§4 单条模板](#4-单条缺陷填报模板) 粘贴到群或 Issue。
 
 关联：[RC1_DOGFOOD.md](./RC1_DOGFOOD.md) · [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)

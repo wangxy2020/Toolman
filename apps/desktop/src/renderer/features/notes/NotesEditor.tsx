@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IconChevronDown } from '../../components/icons'
+import { getNotesSlashCommands } from '../../i18n/notes-editor-labels'
+import { useI18n } from '../../i18n/useI18n'
 import {
   InputPopupMenu,
   InputPopupMenuList,
@@ -8,7 +10,6 @@ import type { MessageSettings } from '../chat/message-settings'
 import { countNoteCharacters, detectSlashQuery, scrollTextareaToLine, syncTextareaHeight } from './note-editor-utils'
 import {
   filterNotesSlashCommands,
-  NOTES_SLASH_COMMANDS,
   type NotesSlashCommandItem,
 } from './notes-slash-commands'
 import { markdownToBlocks } from './notes-blocks'
@@ -31,11 +32,6 @@ type PreviewMode = 'edit' | 'preview'
 type EditorSnapshot = {
   title: string
   content: string
-}
-
-const PREVIEW_MODE_LABELS: Record<PreviewMode, string> = {
-  edit: '仅编辑',
-  preview: '实时预览',
 }
 
 interface Props {
@@ -65,6 +61,15 @@ export function NotesEditor({
   onImportAttachment,
   onToggleOutline,
 }: Props) {
+  const { t } = useI18n()
+  const slashCommands = useMemo(() => getNotesSlashCommands(t), [t])
+  const previewModeLabels = useMemo(
+    (): Record<PreviewMode, string> => ({
+      edit: t('notesPage.openModes.editOnly'),
+      preview: t('notesPage.openModes.livePreview'),
+    }),
+    [t],
+  )
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const editPaneRef = useRef<HTMLDivElement>(null)
@@ -163,11 +168,11 @@ export function NotesEditor({
   const slashCandidates = useMemo(() => {
     if (!slashMenuOpen) return []
     const textarea = bodyRef.current
-    if (!textarea) return NOTES_SLASH_COMMANDS
+    if (!textarea) return slashCommands
     const detected = detectSlashQuery(note.content, textarea.selectionStart)
-    if (!detected) return NOTES_SLASH_COMMANDS
-    return filterNotesSlashCommands(detected.query)
-  }, [note.content, slashMenuOpen])
+    if (!detected) return slashCommands
+    return filterNotesSlashCommands(detected.query, slashCommands)
+  }, [note.content, slashCommands, slashMenuOpen])
 
   useEffect(() => {
     if (!slashMenuOpen) return
@@ -454,7 +459,7 @@ export function NotesEditor({
                 className="tm-notes-editor-title"
                 value={note.title}
                 readOnly={locked}
-                placeholder="无标题"
+                placeholder={t('notesPage.editor.untitled')}
                 rows={1}
                 cols={1}
                 onChange={(event) => {
@@ -493,7 +498,7 @@ export function NotesEditor({
                 className="tm-notes-editor-body"
                 value={note.content}
                 readOnly={locked}
-                placeholder="输入'/'调用命令"
+                placeholder={t('notesPage.editor.slashPlaceholder')}
                 onChange={(event) => handleBodyChange(event.target.value)}
                 onKeyDown={handleBodyKeyDown}
                 onClick={() => {
@@ -504,7 +509,7 @@ export function NotesEditor({
               />
             )}
             <InputPopupMenu
-              title="笔记命令"
+              title={t('notesPage.editor.commandsTitle')}
               open={slashMenuOpen && slashCandidates.length > 0}
               onClose={() => setSlashMenuOpen(false)}
             >
@@ -554,7 +559,9 @@ export function NotesEditor({
       </div>
 
       <footer className="tm-notes-statusbar">
-        <span className="tm-notes-statusbar-count">字符: {charCount}</span>
+        <span className="tm-notes-statusbar-count">
+          {t('notesPage.editor.charCount', { count: charCount })}
+        </span>
         <div className="tm-notes-statusbar-mode" ref={modeMenuRef}>
           <button
             type="button"
@@ -562,12 +569,12 @@ export function NotesEditor({
             onClick={() => setModeMenuOpen((open) => !open)}
           >
             <span className="tm-notes-statusbar-mode-icon">A</span>
-            <span>{PREVIEW_MODE_LABELS[previewMode]}</span>
+            <span>{previewModeLabels[previewMode]}</span>
             <IconChevronDown size={12} className="tm-notes-statusbar-mode-chevron" />
           </button>
           {modeMenuOpen ? (
             <div className="tm-notes-statusbar-mode-menu" role="menu">
-              {(Object.keys(PREVIEW_MODE_LABELS) as PreviewMode[]).map((mode) => (
+              {(Object.keys(previewModeLabels) as PreviewMode[]).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -584,7 +591,7 @@ export function NotesEditor({
                     setModeMenuOpen(false)
                   }}
                 >
-                  {PREVIEW_MODE_LABELS[mode]}
+                  {previewModeLabels[mode]}
                 </button>
               ))}
             </div>

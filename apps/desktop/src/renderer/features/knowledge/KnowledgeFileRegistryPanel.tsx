@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type KnowledgeFileRegistryItem } from '@toolman/shared'
 import { IconExternalLink, IconFile } from '../../components/icons'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   workspaceId: string
@@ -20,6 +21,7 @@ function fileNameFromPath(path: string): string {
 }
 
 export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
+  const { t } = useI18n()
   const [items, setItems] = useState<KnowledgeFileRegistryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,7 +49,7 @@ export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
   useRegisterModulePanelError('knowledge-registry', error, () => setError(null))
   useRegisterModulePanelStatus(
     'knowledge-registry-loading',
-    loading ? { tone: 'info', message: '加载文件注册表…' } : null,
+    loading ? { tone: 'info', message: t('knowledgePage.registry.loadingStatus') } : null,
   )
 
   const handleOpenPath = async (absolutePath: string) => {
@@ -57,27 +59,25 @@ export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
   return (
     <div className="tm-registry-page">
       <div className="tm-registry-intro">
-        <p className="tm-registry-intro-title">已索引文件的原始路径登记</p>
-        <p className="tm-registry-intro-hint">
-          记录已成功导入知识库的本地文件路径、大小与内容哈希，便于核对索引来源、定位原文件，并为查重与后续同步提供依据。删除知识库文档后，对应登记会在刷新时自动移除。
-        </p>
+        <p className="tm-registry-intro-title">{t('knowledgePage.registry.introTitle')}</p>
+        <p className="tm-registry-intro-hint">{t('knowledgePage.registry.introHint')}</p>
       </div>
 
       <div className="tm-registry-toolbar">
         <span className="tm-registry-count">
-          {loading ? '加载中…' : `共 ${items.length} 个已登记文件`}
+          {loading
+            ? t('knowledgePage.registry.countLoading')
+            : t('knowledgePage.registry.count', { count: items.length })}
         </span>
         <button type="button" className="tm-btn tm-btn--ghost" onClick={() => void load()} disabled={loading}>
-          {loading ? '刷新中…' : '刷新'}
+          {loading ? t('knowledgePage.registry.refreshing') : t('knowledgePage.registry.refresh')}
         </button>
       </div>
 
       {!loading && items.length === 0 ? (
         <div className="tm-registry-empty">
-          <p className="tm-registry-empty-title">暂无已登记文件</p>
-          <p className="tm-registry-empty-hint">
-            向知识库导入或监听文件夹中的文件后，成功索引的条目会自动出现在这里。
-          </p>
+          <p className="tm-registry-empty-title">{t('knowledgePage.registry.emptyTitle')}</p>
+          <p className="tm-registry-empty-hint">{t('knowledgePage.registry.emptyHint')}</p>
         </div>
       ) : null}
 
@@ -94,12 +94,12 @@ export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
             </colgroup>
             <thead>
               <tr>
-                <th className="tm-registry-col-file">文件</th>
-                <th className="tm-registry-col-kb">知识库</th>
-                <th className="tm-registry-col-size">大小</th>
-                <th className="tm-registry-col-hash">哈希</th>
-                <th className="tm-registry-col-time">更新时间</th>
-                <th className="tm-registry-col-actions">操作</th>
+                <th className="tm-registry-col-file">{t('knowledgePage.registry.columns.file')}</th>
+                <th className="tm-registry-col-kb">{t('knowledgePage.registry.columns.kb')}</th>
+                <th className="tm-registry-col-size">{t('knowledgePage.registry.columns.size')}</th>
+                <th className="tm-registry-col-hash">{t('knowledgePage.registry.columns.hash')}</th>
+                <th className="tm-registry-col-time">{t('knowledgePage.registry.columns.updatedAt')}</th>
+                <th className="tm-registry-col-actions">{t('knowledgePage.registry.columns.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -136,7 +136,7 @@ export function KnowledgeFileRegistryPanel({ workspaceId }: Props) {
                         <button
                           type="button"
                           className="tm-registry-action-btn"
-                          title="在 Finder 中打开"
+                          title={t('knowledgePage.registry.openInFinder')}
                           onClick={() => void handleOpenPath(item.absolutePath)}
                         >
                           <IconExternalLink size={14} />

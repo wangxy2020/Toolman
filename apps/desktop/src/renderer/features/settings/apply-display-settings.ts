@@ -27,6 +27,7 @@ export function applyDisplaySettings(settings: AppSettings): void {
   root.dataset.theme = settings.theme
   root.dataset.navPosition = settings.navBarPosition
   root.dataset.transparentWindow = settings.transparentWindow ? 'true' : 'false'
+  root.lang = settings.language === 'en' ? 'en' : 'zh-CN'
 
   root.style.setProperty('--tm-accent', settings.themeColor)
 

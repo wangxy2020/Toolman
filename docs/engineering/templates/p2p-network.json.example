@@ -1,0 +1,18 @@
+{
+  "iceServers": [
+    {
+      "urls": "stun:stun.l.google.com:19302"
+    },
+    {
+      "urls": [
+        "turn:turn.toolman.app:3478?transport=udp",
+        "turn:turn.toolman.app:3478?transport=tcp"
+      ],
+      "username": "toolman",
+      "credential": "<TURN_SECRET>"
+    }
+  ],
+  "stunServers": [
+    "stun:stun.l.google.com:19302"
+  ]
+}

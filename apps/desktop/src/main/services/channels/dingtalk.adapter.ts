@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
@@ -247,7 +248,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
         await this.sendReply(message, reply)
       }
     } catch (error) {
-      console.error('[dingtalk-channel]', error)
+      logStructured('dingtalk.channel', 'error', `[dingtalk-channel]`, { detail: error })
       this.status = 'error'
       this.statusMessage = toErrorMessage(error, '钉钉消息处理失败')
     }

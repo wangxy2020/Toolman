@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { logStructured } from '../structured-log.service'
 import { sep } from 'node:path'
 import { hashFileBytes } from '@toolman/knowledge'
 import { P2pSharedResourceRepository } from '@toolman/db'
@@ -363,7 +364,7 @@ export async function applyKnowledgeUpdatedEvent(event: WorkspaceEvent): Promise
     sharedBy,
   })
   if (!cachedPath) {
-    console.warn(`[p2p] knowledge blob ${contentHash} not available for doc ${docId}`)
+    logStructured('p2p', 'warn', `knowledge blob ${contentHash} not available for doc ${docId}`)
     return
   }
 
@@ -434,7 +435,7 @@ export async function syncMissingSharedKnowledgeDocuments(workspaceId: string): 
         synced += 1
       } catch (error) {
         const message = toErrorMessage(error, String(error))
-        console.warn(`[p2p] replay knowledge doc ${docId} failed: ${message}`)
+        logStructured('p2p', 'warn', `replay knowledge doc ${docId} failed: ${message}`)
       }
     }
 

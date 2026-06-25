@@ -16,6 +16,8 @@ import {
   normalizeProviderBaseUrl,
   previewChatEndpoint,
 } from './provider-model-utils'
+import { useI18n } from '../../i18n/useI18n'
+import { getProviderPresetDisplayName } from '../../i18n/settings-labels'
 import { SettingsToggle } from './SettingsShared'
 
 interface Props {
@@ -77,12 +79,15 @@ function openExternal(url: string) {
 }
 
 export function ProviderConfigPanel({ workspaceId, preset, provider, providers, onChanged }: Props) {
+  const { t } = useI18n()
+  const presetName = getProviderPresetDisplayName(preset, t)
   const enabled = provider?.isEnabled ?? false
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [messageIsError, setMessageIsError] = useState(false)
   const [modelQuery, setModelQuery] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -95,6 +100,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
     setBaseUrl(displayBaseUrl(preset.type, provider?.baseUrl ?? null, preset))
     setApiKey('')
     setMessage(null)
+    setMessageIsError(false)
   }, [provider?.id, provider?.baseUrl, preset])
 
   const models = provider?.models ?? []
@@ -168,6 +174,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
   const handleToggle = async (next: boolean) => {
     setBusy(true)
     setMessage(null)
+    setMessageIsError(false)
     if (next) {
       await saveProvider({ isEnabled: true, baseUrl })
     } else if (provider) {
@@ -188,6 +195,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
   const handleTestKey = async () => {
     setBusy(true)
     setMessage(null)
+    setMessageIsError(false)
     const current = provider ?? (await ensureProvider())
     if (!current) {
       setBusy(false)
@@ -208,13 +216,19 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
 
     const data = result.data as { success: boolean; latencyMs: number; error?: string }
     if (data.success) {
-      setMessage(`检测成功（${data.latencyMs}ms）`)
+      setMessage(t('settings.providers.test.success', { latencyMs: data.latencyMs }))
+      setMessageIsError(false)
       if (apiKey.trim()) {
         await saveProvider({ apiKey: apiKey.trim(), baseUrl })
         setApiKey('')
       }
     } else {
-      setMessage(`检测失败：${data.error ?? '未知错误'}`)
+      setMessage(
+        t('settings.providers.test.failed', {
+          error: data.error ?? t('settings.providers.test.unknownError'),
+        }),
+      )
+      setMessageIsError(true)
     }
   }
 
@@ -237,14 +251,15 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
     setBusy(true)
     await saveProvider({ models: nextModels, isEnabled: true })
     setBusy(false)
-    setMessage(`已更新 ${nextModels.length} 个模型`)
+    setMessage(t('settings.providers.models.updatedCount', { count: nextModels.length }))
+    setMessageIsError(false)
   }
 
   const handleAddModel = async (model: ProviderModel) => {
     const current = provider ?? (await ensureProvider())
-    if (!current) throw new Error('无法创建服务商')
+    if (!current) throw new Error(t('settings.providers.errors.createFailed'))
     if (current.models.some((m) => m.id === model.id)) {
-      throw new Error('模型已存在')
+      throw new Error(t('settings.providers.models.alreadyExists'))
     }
     await saveProvider({ models: [...current.models, model], isEnabled: true })
   }
@@ -255,7 +270,8 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
       models: provider.models.map((m) => (m.id === model.id ? model : m)),
     })
     setEditingModel(null)
-    setMessage('模型设置已保存')
+    setMessage(t('settings.providers.models.settingsSaved'))
+    setMessageIsError(false)
   }
 
   const handleRemoveModel = async (modelId: string) => {
@@ -272,12 +288,13 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
       ...(data.apiKeys ? { apiKey: data.apiKeys } : {}),
       apiKeyRotate: data.apiKeyRotate,
     })
-    setMessage('密钥设置已保存')
+    setMessage(t('settings.providers.apiKey.settingsSaved'))
+    setMessageIsError(false)
   }
 
   const handleDeleteProvider = async () => {
     if (!provider || preset.locked) return
-    if (!window.confirm(`确定移除 ${preset.name} 的配置？`)) return
+    if (!window.confirm(t('settings.providers.remove.confirm', { name: presetName }))) return
     setBusy(true)
     const result = await window.api.invoke(IpcChannel.ProviderDelete, { id: provider.id })
     setBusy(false)
@@ -297,11 +314,11 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
         <header className="tm-provider-card-header">
           <div className="tm-provider-card-title-wrap">
             <h4 className="tm-provider-card-title">
-              {preset.name}
+              {presetName}
               <button
                 type="button"
                 className="tm-provider-icon-btn"
-                title="打开文档"
+                title={t('settings.providers.openDocs')}
                 onClick={() => openExternal(preset.docUrl)}
               >
                 <IconExternalLink />
@@ -312,7 +329,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
         </header>
 
         {showDuplicateHint && (
-          <p className="tm-provider-hint tm-provider-hint--warn">检测到多个同类型服务商，请只保留一个启用项。</p>
+          <p className="tm-provider-hint tm-provider-hint--warn">{t('settings.providers.duplicateHint')}</p>
         )}
 
         {enabled && (
@@ -320,11 +337,11 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
             {!preset.isLocal && (
               <div className="tm-provider-field">
                 <div className="tm-provider-field-label tm-provider-field-label--split">
-                  <span>API 密钥</span>
+                  <span>{t('settings.providers.apiKey.label')}</span>
                   <button
                     type="button"
                     className="tm-provider-icon-btn"
-                    title="密钥设置"
+                    title={t('settings.providers.apiKey.settingsTitle')}
                     onClick={() => setApiKeySettingsOpen(true)}
                   >
                     <IconSliders size={14} />
@@ -336,13 +353,17 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                       className="tm-provider-input"
                       type={showKey ? 'text' : 'password'}
                       value={apiKey}
-                      placeholder={provider?.hasApiKey ? '已配置（输入新 Key 覆盖）' : 'API 密钥'}
+                      placeholder={
+                        provider?.hasApiKey
+                          ? t('settings.providers.apiKey.placeholderConfigured')
+                          : t('settings.providers.apiKey.placeholder')
+                      }
                       onChange={(e) => setApiKey(e.target.value)}
                     />
                     <button
                       type="button"
                       className="tm-provider-input-action"
-                      title={showKey ? '隐藏' : '显示'}
+                      title={showKey ? t('settings.providers.apiKey.hide') : t('settings.providers.apiKey.show')}
                       onClick={() => setShowKey((v) => !v)}
                     >
                       <IconEye hidden={showKey} />
@@ -353,7 +374,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                       disabled={busy}
                       onClick={() => void handleTestKey()}
                     >
-                      检测
+                      {t('settings.providers.apiKey.test')}
                     </button>
                   </div>
                   <div className="tm-provider-field-footer">
@@ -363,12 +384,12 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                         className="tm-provider-field-link"
                         onClick={() => openExternal(preset.apiKeyUrl!)}
                       >
-                        点击这里获取密钥
+                        {t('settings.providers.apiKey.getKeyLink')}
                       </button>
                     ) : (
                       <span />
                     )}
-                    <span className="tm-provider-field-hint">多个密钥使用逗号分隔</span>
+                    <span className="tm-provider-field-hint">{t('settings.providers.apiKey.multiKeyHint')}</span>
                   </div>
                 </div>
               </div>
@@ -376,8 +397,8 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
 
             <div className="tm-provider-field">
               <div className="tm-provider-field-label">
-                <span>API 地址</span>
-                <button type="button" className="tm-provider-icon-btn" title="帮助">
+                <span>{t('settings.providers.baseUrl.label')}</span>
+                <button type="button" className="tm-provider-icon-btn" title={t('settings.providers.baseUrl.help')}>
                   <IconHelp />
                 </button>
               </div>
@@ -389,14 +410,16 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                   onBlur={() => void handleBaseUrlBlur()}
                   placeholder={preset.defaultBaseUrl}
                 />
-                <p className="tm-provider-field-hint">预览：{previewUrl}</p>
+                <p className="tm-provider-field-hint">
+                  {t('settings.providers.baseUrl.preview', { url: previewUrl })}
+                </p>
               </div>
             </div>
 
             <div className="tm-provider-models">
               <div className="tm-provider-models-header">
                 <div className="tm-provider-models-title">
-                  <span>模型</span>
+                  <span>{t('settings.providers.models.label')}</span>
                   <span className="tm-provider-models-count">{chatModelCount || models.length}</span>
                 </div>
                 <div className="tm-provider-models-actions">
@@ -407,13 +430,13 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                     onClick={() => void openPicker()}
                   >
                     <IconRefresh size={14} />
-                    获取模型列表
+                    {t('settings.providers.models.fetchList')}
                   </button>
                   <button
                     type="button"
                     className="tm-provider-add-btn"
                     disabled={busy}
-                    title="手动添加模型"
+                    title={t('settings.providers.models.addManualTitle')}
                     onClick={() => void (async () => {
                       const current = provider ?? (await ensureProvider())
                       if (current) setAddOpen(true)
@@ -429,13 +452,13 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                 <input
                   className="tm-provider-input tm-provider-input--compact"
                   value={modelQuery}
-                  placeholder="搜索模型…"
+                  placeholder={t('settings.providers.models.searchPlaceholder')}
                   onChange={(e) => setModelQuery(e.target.value)}
                 />
               </div>
 
               {groupedModels.length === 0 ? (
-                <p className="tm-provider-empty">暂无模型，点击「获取模型列表」或手动添加。</p>
+                <p className="tm-provider-empty">{t('settings.providers.models.empty')}</p>
               ) : (
                 <div className="tm-provider-model-groups">
                   {groupedModels.map((group) => {
@@ -464,7 +487,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                                 <button
                                   type="button"
                                   className="tm-provider-icon-btn"
-                                  title="编辑模型"
+                                  title={t('settings.providers.models.editTitle')}
                                   disabled={busy}
                                   onClick={() => setEditingModel(model)}
                                 >
@@ -473,7 +496,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                                 <button
                                   type="button"
                                   className="tm-provider-icon-btn tm-provider-icon-btn--danger"
-                                  title="移除模型"
+                                  title={t('settings.providers.models.removeTitle')}
                                   disabled={busy}
                                   onClick={() => void handleRemoveModel(model.id)}
                                 >
@@ -491,7 +514,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
 
             {message && (
               <p
-                className={`tm-provider-message ${message.includes('失败') ? 'tm-provider-message--error' : ''}`}
+                className={`tm-provider-message ${messageIsError ? 'tm-provider-message--error' : ''}`}
               >
                 {message}
               </p>
@@ -499,19 +522,19 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
 
             <footer className="tm-provider-footer">
               <span>
-                查看{' '}
+                {t('settings.providers.footer.view')}{' '}
                 <button type="button" className="tm-provider-link" onClick={() => openExternal(preset.docUrl)}>
-                  {preset.name} 文档
+                  {t('settings.providers.footer.providerDocs', { name: presetName })}
                 </button>{' '}
-                和{' '}
+                {t('settings.providers.footer.and')}{' '}
                 <button
                   type="button"
                   className="tm-provider-link"
                   onClick={() => openExternal(preset.modelsDocUrl)}
                 >
-                  模型
+                  {t('settings.providers.footer.modelsLink')}
                 </button>{' '}
-                获取更多详情
+                {t('settings.providers.footer.moreDetails')}
               </span>
               {!preset.locked && provider && (
                 <button
@@ -520,7 +543,7 @@ export function ProviderConfigPanel({ workspaceId, preset, provider, providers, 
                   disabled={busy}
                   onClick={() => void handleDeleteProvider()}
                 >
-                  移除此服务商
+                  {t('settings.providers.remove.action')}
                 </button>
               )}
             </footer>

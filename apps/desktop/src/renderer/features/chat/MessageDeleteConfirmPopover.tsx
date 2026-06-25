@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   anchorEl: HTMLElement
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function MessageDeleteConfirmPopover({ anchorEl, onConfirm, onCancel }: Props) {
+  const { t } = useI18n()
   const popoverRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
 
@@ -76,15 +78,15 @@ export function MessageDeleteConfirmPopover({ anchorEl, onConfirm, onCancel }: P
           !
         </span>
         <p id="tm-message-delete-confirm-title" className="tm-message-delete-confirm-text">
-          确定要删除此消息吗？
+          {t('chat.deleteMessageConfirm')}
         </p>
       </div>
       <div className="tm-message-delete-confirm-actions">
         <button type="button" className="tm-btn tm-btn--ghost" onClick={onCancel}>
-          取消
+          {t('common.cancel')}
         </button>
         <button type="button" className="tm-btn tm-message-delete-confirm-submit" onClick={onConfirm}>
-          确定
+          {t('chat.confirm')}
         </button>
       </div>
     </div>,

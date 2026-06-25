@@ -25,18 +25,10 @@ import {
   normalizeTranslationLanguages,
 } from './translation-utils'
 import type { TranslationLanguage } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
+import { getAgentSettingsTabs } from '../../i18n/agent-labels'
 
 type SettingsTab = 'basic' | 'prompt' | 'permission' | 'tools' | 'skills' | 'knowledge' | 'advanced'
-
-const TABS: { id: SettingsTab; label: string }[] = [
-  { id: 'basic', label: '基础设置' },
-  { id: 'prompt', label: '提示词设置' },
-  { id: 'permission', label: '权限模式' },
-  { id: 'tools', label: '工具集成' },
-  { id: 'skills', label: '技能' },
-  { id: 'knowledge', label: '知识库' },
-  { id: 'advanced', label: '高级设置' },
-]
 
 interface Props {
   assistant: Assistant
@@ -83,6 +75,7 @@ export function AgentSettingsModal({
   onClose,
   onSaved,
 }: Props) {
+  const { t } = useI18n()
   const systemPaths = useSystemPaths()
   const groupProxyMode = isGroupProxyAssistant(assistant)
   const displayModelId = useMemo(
@@ -143,6 +136,10 @@ export function AgentSettingsModal({
     [TranslationLanguage, TranslationLanguage]
   >(normalizeTranslationLanguages(assistant.parameters.translationLanguages))
   const [busy, setBusy] = useState(false)
+  const tabs = useMemo(
+    () => getAgentSettingsTabs(t).map((tab) => ({ ...tab, id: tab.id as SettingsTab })),
+    [t],
+  )
 
   const modelOptions = useMemo(() => buildModelOptions(providers), [providers])
   const sharedModelLabel = useMemo(
@@ -289,9 +286,14 @@ export function AgentSettingsModal({
         <header className="tm-agent-modal-header">
           <h3 id="agent-settings-title" className="tm-agent-modal-title">
             <span className="tm-agent-modal-title-dot" aria-hidden="true" />
-            {name.trim() || assistant.name}设置
+            {t('agent.settingsTitle', { name: name.trim() || assistant.name })}
           </h3>
-          <button type="button" className="tm-agent-modal-close" aria-label="关闭" onClick={onClose}>
+          <button
+            type="button"
+            className="tm-agent-modal-close"
+            aria-label={t('common.close')}
+            onClick={onClose}
+          >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 stroke="currentColor"
@@ -305,8 +307,8 @@ export function AgentSettingsModal({
         </header>
 
         <div className="tm-agent-modal-body">
-          <nav className="tm-agent-modal-nav" aria-label="智能体设置分类">
-            {TABS.map((tab) => (
+          <nav className="tm-agent-modal-nav" aria-label={t('agent.settingsNavAria')}>
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -323,7 +325,7 @@ export function AgentSettingsModal({
               <div className="tm-agent-settings-form">
                 <div className="tm-agent-setting-row">
                   <label className="tm-agent-setting-label" htmlFor="agent-settings-name">
-                    名称
+                    {t('common.name')}
                   </label>
                   <input
                     id="agent-settings-name"
@@ -339,9 +341,9 @@ export function AgentSettingsModal({
                 <div className="tm-agent-setting-row">
                   <div className="tm-agent-setting-label-group">
                     <label className="tm-agent-setting-label" htmlFor="agent-settings-model">
-                      模型
+                      {t('agent.fields.model')}
                     </label>
-                    <HelpHint title="选择运行此智能体的本地或云端大模型" />
+                    <HelpHint title={t('agent.fields.modelHint')} />
                   </div>
                   {groupProxyMode ? (
                     <input
@@ -349,7 +351,7 @@ export function AgentSettingsModal({
                       className="tm-agent-setting-input"
                       readOnly
                       value={sharedModelLabel}
-                      title="群组共享智能体的模型由共享者决定"
+                      title={t('agent.fields.groupModelLocked')}
                     />
                   ) : (
                     <select
@@ -372,7 +374,7 @@ export function AgentSettingsModal({
 
                 <div className="tm-agent-setting-row tm-agent-setting-row--top">
                   <label className="tm-agent-setting-label" htmlFor="agent-settings-workdir">
-                    工作目录
+                    {t('agent.fields.workingDirectory')}
                   </label>
                   <div className="tm-agent-workdir-field">
                     <div className="tm-agent-workdir-input-group">
@@ -381,7 +383,7 @@ export function AgentSettingsModal({
                         className="tm-agent-workdir-input"
                         readOnly
                         value={effectiveWorkingDirectory}
-                        placeholder="未设置工作目录"
+                        placeholder={t('agent.fields.workingDirectoryUnset')}
                         title={effectiveWorkingDirectory}
                       />
                       <button
@@ -389,7 +391,7 @@ export function AgentSettingsModal({
                         className="tm-agent-workdir-browse"
                         onClick={() => void handleSelectWorkingDirectory()}
                       >
-                        浏览
+                        {t('agent.browse')}
                       </button>
                     </div>
                     {workingDirectory ? (
@@ -398,7 +400,7 @@ export function AgentSettingsModal({
                         className="tm-agent-workdir-reset"
                         onClick={handleRemoveWorkingDirectory}
                       >
-                        恢复工作区默认
+                        {t('agent.fields.restoreWorkspaceDefault')}
                       </button>
                     ) : null}
                   </div>
@@ -407,8 +409,8 @@ export function AgentSettingsModal({
                 <div className="tm-agent-toggle-card">
                   <div className="tm-agent-toggle-card-item">
                     <span className="tm-agent-toggle-card-label">
-                      自动编辑模式
-                      <HelpHint title="开启后智能体可自主执行更多操作" />
+                      {t('agent.fields.autonomousMode')}
+                      <HelpHint title={t('agent.fields.autonomousModeHint')} />
                     </span>
                     <Toggle
                       checked={autonomousMode}
@@ -420,8 +422,8 @@ export function AgentSettingsModal({
                   </div>
                   <div className="tm-agent-toggle-card-item">
                     <span className="tm-agent-toggle-card-label">
-                      启用心跳
-                      <HelpHint title="定期触发智能体后台检查任务" />
+                      {t('agent.fields.heartbeat')}
+                      <HelpHint title={t('agent.fields.heartbeatHint')} />
                     </span>
                     <Toggle
                       checked={heartbeatEnabled}
@@ -435,7 +437,7 @@ export function AgentSettingsModal({
 
                 <div className="tm-agent-setting-row">
                   <label className="tm-agent-setting-label" htmlFor="agent-settings-heartbeat">
-                    间隔 (分钟)
+                    {t('agent.fields.heartbeatInterval')}
                   </label>
                   <div className="tm-agent-interval-wrap">
                     <input
@@ -460,8 +462,8 @@ export function AgentSettingsModal({
 
                 <div className="tm-agent-setting-row">
                   <div className="tm-agent-setting-label-group">
-                    <span className="tm-agent-setting-label">翻译目标语言</span>
-                    <HelpHint title="点击翻译时，自动识别原文语言并翻译成另一种目标语言" />
+                    <span className="tm-agent-setting-label">{t('agent.fields.translationTarget')}</span>
+                    <HelpHint title={t('agent.fields.translationTargetHint')} />
                   </div>
                   <div className="tm-agent-translation-langs">
                     <select
@@ -473,7 +475,7 @@ export function AgentSettingsModal({
                     >
                       {TRANSLATION_LANGUAGE_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
-                          {opt.label}
+                          {t(`agent.languages.${opt.value}`)}
                         </option>
                       ))}
                     </select>
@@ -487,7 +489,7 @@ export function AgentSettingsModal({
                     >
                       {TRANSLATION_LANGUAGE_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
-                          {opt.label}
+                          {t(`agent.languages.${opt.value}`)}
                         </option>
                       ))}
                     </select>
@@ -496,14 +498,14 @@ export function AgentSettingsModal({
 
                 <div className="tm-agent-setting-block">
                   <label className="tm-agent-setting-label" htmlFor="agent-settings-description">
-                    描述
+                    {t('common.description')}
                   </label>
                   <textarea
                     id="agent-settings-description"
                     className="tm-agent-setting-textarea"
                     rows={4}
                     value={description}
-                    placeholder="可选"
+                    placeholder={t('agent.optional')}
                     onChange={(e) => setDescription(e.target.value)}
                     onBlur={() => {
                       if (description !== (assistant.description ?? '')) {
@@ -518,7 +520,7 @@ export function AgentSettingsModal({
             {activeTab === 'prompt' && (
               <div className="tm-agent-settings-form">
                 <div className="tm-agent-setting-block">
-                  <label className="tm-agent-setting-label">系统提示词</label>
+                  <label className="tm-agent-setting-label">{t('agent.fields.systemPrompt')}</label>
                   <textarea
                     className="tm-agent-setting-textarea"
                     rows={10}
@@ -686,7 +688,7 @@ export function AgentSettingsModal({
               />
             )}
 
-            {busy ? <div className="tm-agent-saving">保存中…</div> : null}
+            {busy ? <div className="tm-agent-saving">{t('agent.saving')}</div> : null}
           </div>
         </div>
 
@@ -697,7 +699,7 @@ export function AgentSettingsModal({
             disabled={busy}
             onClick={onClose}
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -705,7 +707,7 @@ export function AgentSettingsModal({
             disabled={busy}
             onClick={() => void handleSaveAndClose()}
           >
-            保存设置
+            {t('agent.saveSettings')}
           </button>
         </footer>
       </div>

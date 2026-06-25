@@ -28,6 +28,8 @@ import { useCommunityUser } from './useCommunityUser'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useCommunityPanelStatus } from './community-panel-status'
 import { useRegisterModulePanelStatus } from '../../components/module-page-status'
+import { useI18n } from '../../i18n/useI18n'
+import { getCommunityResourceTypeLabel } from '../../i18n/community-status-labels'
 
 export interface CommunityResourceMarketPanelProps {
   resourceType: CommunityResourceType
@@ -44,14 +46,6 @@ const RESOURCE_ICONS: Partial<Record<CommunityResourceType, ReactNode>> = {
   knowledge: <IconKnowledge size={18} />,
 }
 
-const RESOURCE_LABELS: Record<CommunityResourceType, string> = {
-  mcp: 'MCP',
-  skill: 'Skills',
-  workflow: '工作流',
-  task: '任务',
-  knowledge: '知识库',
-}
-
 const RESOURCE_LIST_QUERY = { sort: 'installs' as const }
 
 export function CommunityResourceMarketPanel({
@@ -59,8 +53,10 @@ export function CommunityResourceMarketPanel({
   title,
   subtitle,
   publishLabel,
-  emptyHint = '暂无可用资源',
+  emptyHint,
 }: CommunityResourceMarketPanelProps) {
+  const { t } = useI18n()
+  const resolvedEmptyHint = emptyHint ?? t('communityPage.market.defaultEmpty')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showPublish, setShowPublish] = useState(false)
   const [resumePublish, setResumePublish] = useState<CommunityResourceItem | null>(null)
@@ -164,7 +160,8 @@ export function CommunityResourceMarketPanel({
       if (selectedId === resourceId) setSelectedId(null)
       await market.load()
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : '删除资源失败'
+      const message =
+        deleteError instanceof Error ? deleteError.message : t('communityPage.market.deleteResourceFailed')
       market.setError(message)
     } finally {
       setBusyItemId(null)
@@ -199,7 +196,7 @@ export function CommunityResourceMarketPanel({
               const pending = mine.items.find((item) => item.status === 'pending_review')
               if (pending) {
                 setPublishNotice(
-                  `「${pending.title}」已在审核中，请等待管理员处理。可在「我的 → 发布」查看进度。`,
+                  t('communityPage.market.pendingResourceReview', { title: pending.title }),
                 )
                 return
               }
@@ -215,7 +212,7 @@ export function CommunityResourceMarketPanel({
         }}
         publishDisabled={publishDisabled}
         isEmpty={sortedItems.length === 0}
-        emptyHint={emptyHint}
+        emptyHint={resolvedEmptyHint}
       >
         <ul className="tm-kb-file-list">
           {sortedItems.map((item) => {
@@ -253,7 +250,11 @@ export function CommunityResourceMarketPanel({
                 }
                 onShare={() =>
                   void copyCommunityShareText(
-                    `${item.title}\n类型：${RESOURCE_LABELS[resourceType]}\n版本：${item.version}`,
+                    t('communityPage.market.shareResource', {
+                      title: item.title,
+                      type: getCommunityResourceTypeLabel(resourceType, t),
+                      version: item.version,
+                    }),
                   )
                 }
                 onInstall={
@@ -288,7 +289,7 @@ export function CommunityResourceMarketPanel({
       {showPublish ? (
         <CommunityResourcePublishModal
           resourceType={resourceType}
-          resourceLabel={RESOURCE_LABELS[resourceType]}
+          resourceLabel={getCommunityResourceTypeLabel(resourceType, t)}
           resumeResource={resumePublish}
           onClose={() => {
             setShowPublish(false)
@@ -307,9 +308,11 @@ export function CommunityResourceMarketPanel({
 
       {resourceToDelete ? (
         <ConfirmDialog
-          title="删除资源"
-          message={`确定删除「${resourceToDelete.title}」吗？删除后将从市场下架。`}
-          confirmLabel="删除"
+          title={t('communityPage.market.deleteResourceTitle')}
+          message={t('communityPage.market.deleteResourceMessage', {
+            title: resourceToDelete.title,
+          })}
+          confirmLabel={t('common.delete')}
           danger
           onCancel={() => setResourceToDelete(null)}
           onConfirm={() => void handleConfirmDelete()}

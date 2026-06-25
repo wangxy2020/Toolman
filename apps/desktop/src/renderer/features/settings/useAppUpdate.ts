@@ -4,34 +4,12 @@ import {
   IpcChannel,
   type AppUpdateStatus,
 } from '@toolman/shared'
-
-function updateButtonLabel(status: AppUpdateStatus | null): string {
-  if (!status) return '检查更新'
-  switch (status.phase) {
-    case 'checking':
-      return '检查中…'
-    case 'available':
-      return '下载更新'
-    case 'downloading':
-      return status.downloadProgress != null
-        ? `下载中 ${status.downloadProgress}%`
-        : '下载中…'
-    case 'downloaded':
-      return '立即重启安装'
-    case 'not-available':
-      return '已是最新'
-    case 'error':
-      return '重试检查'
-    default:
-      return status.enabled ? '检查更新' : '立即更新'
-  }
-}
+import { getAppUpdateButtonLabel, getAppUpdateStatusHint } from '../../i18n/settings-labels'
+import { useI18n } from '../../i18n/useI18n'
 
 function isUpdateButtonDisabled(status: AppUpdateStatus | null): boolean {
   if (!status) return true
-  if (status.phase === 'checking' || status.phase === 'downloading') return true
-  if (!status.enabled && status.phase !== 'error') return true
-  return false
+  return status.phase === 'checking' || status.phase === 'downloading'
 }
 
 function parseReleaseNotes(notes: string | null | undefined): string[] {
@@ -43,6 +21,7 @@ function parseReleaseNotes(notes: string | null | undefined): string[] {
 }
 
 export function useAppUpdate() {
+  const { t } = useI18n()
   const [status, setStatus] = useState<AppUpdateStatus | null>(null)
   const [currentVersion, setCurrentVersion] = useState('0.1.0')
 
@@ -93,7 +72,8 @@ export function useAppUpdate() {
     status,
     currentVersion,
     releaseNotes: parseReleaseNotes(status?.notes),
-    updateButtonLabel: updateButtonLabel(status),
+    updateButtonLabel: getAppUpdateButtonLabel(status, t),
+    updateStatusHint: getAppUpdateStatusHint(status, t),
     updateButtonDisabled: isUpdateButtonDisabled(status),
     refresh,
     setAutoUpdate,

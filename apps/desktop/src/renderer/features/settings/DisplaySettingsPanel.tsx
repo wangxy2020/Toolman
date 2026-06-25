@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import type { MessageSettings } from '../chat/message-settings'
+import { useI18n } from '../../i18n/useI18n'
+import { getNavModuleLabel } from '../../i18n/nav-labels'
 import { messageFontSizePx } from '../chat/message-settings'
 import {
   resetSidebarModules,
@@ -49,10 +51,11 @@ function ThemeSegment({
   value: AppTheme
   onChange: (theme: AppTheme) => void
 }) {
+  const { t } = useI18n()
   const options: { value: AppTheme; label: string; icon: React.ReactNode }[] = [
-    { value: 'light', label: '浅色', icon: <IconSun size={14} /> },
-    { value: 'dark', label: '深色', icon: <IconMoon size={14} /> },
-    { value: 'system', label: '系统', icon: <IconMonitor size={14} /> },
+    { value: 'light', label: t('theme.light'), icon: <IconSun size={14} /> },
+    { value: 'dark', label: t('theme.dark'), icon: <IconMoon size={14} /> },
+    { value: 'system', label: t('theme.system'), icon: <IconMonitor size={14} /> },
   ]
 
   return (
@@ -79,9 +82,10 @@ function NavPositionSegment({
   value: NavBarPosition
   onChange: (position: NavBarPosition) => void
 }) {
+  const { t } = useI18n()
   const options: { value: NavBarPosition; label: string; disabled?: boolean }[] = [
-    { value: 'left', label: '左侧' },
-    { value: 'top', label: '顶部', disabled: true },
+    { value: 'left', label: t('settings.display.navLeft') },
+    { value: 'top', label: t('settings.display.navTop'), disabled: true },
   ]
 
   return (
@@ -98,7 +102,7 @@ function NavPositionSegment({
             .filter(Boolean)
             .join(' ')}
           disabled={opt.disabled}
-          title={opt.disabled ? '暂不可用' : undefined}
+          title={opt.disabled ? t('common.unavailable') : undefined}
           onClick={() => {
             if (opt.disabled) return
             onChange(opt.value)
@@ -118,6 +122,7 @@ function ZoomControl({
   value: number
   onChange: (zoom: number) => void
 }) {
+  const { t } = useI18n()
   const step = 10
   const min = 80
   const max = 150
@@ -129,7 +134,7 @@ function ZoomControl({
         className="tm-zoom-btn"
         disabled={value <= min}
         onClick={() => onChange(Math.max(min, value - step))}
-        aria-label="缩小"
+        aria-label={t('settings.display.zoomOut')}
       >
         −
       </button>
@@ -139,7 +144,7 @@ function ZoomControl({
         className="tm-zoom-btn"
         disabled={value >= max}
         onClick={() => onChange(Math.min(max, value + step))}
-        aria-label="放大"
+        aria-label={t('settings.display.zoomIn')}
       >
         +
       </button>
@@ -147,8 +152,8 @@ function ZoomControl({
         type="button"
         className="tm-zoom-btn tm-zoom-btn--icon"
         onClick={() => onChange(100)}
-        title="重置缩放"
-        aria-label="重置缩放"
+        title={t('settings.display.zoomReset')}
+        aria-label={t('settings.display.zoomReset')}
       >
         <IconRefresh size={14} />
       </button>
@@ -165,8 +170,10 @@ function MenuModuleItem({
   showClose: boolean
   onClose?: () => void
 }) {
+  const { t } = useI18n()
   const def = getNavModuleDef(moduleId)
   const Icon = def.icon
+  const label = getNavModuleLabel(moduleId, t)
 
   return (
     <div className="tm-menu-module-item">
@@ -174,8 +181,8 @@ function MenuModuleItem({
         <button
           type="button"
           className="tm-menu-module-close"
-          title="移除"
-          aria-label={`移除 ${def.label}`}
+          title={t('common.remove')}
+          aria-label={`${t('common.remove')} ${label}`}
           onClick={(e) => {
             e.stopPropagation()
             onClose()
@@ -185,7 +192,7 @@ function MenuModuleItem({
         </button>
       )}
       <Icon size={18} />
-      <span>{def.label}</span>
+      <span>{label}</span>
     </div>
   )
 }
@@ -224,6 +231,7 @@ export function DisplaySettingsPanel({
   onAppSettingsChange,
   onMessageSettingsChange,
 }: Props) {
+  const { t } = useI18n()
   const patchApp = useCallback(
     (patch: Partial<AppSettings>) => onAppSettingsChange(patch),
     [onAppSettingsChange],
@@ -256,19 +264,19 @@ export function DisplaySettingsPanel({
   }
 
   const fontOptions: { value: AppFontFamily; label: string }[] = [
-    { value: 'system', label: '系统默认' },
-    { value: 'serif', label: '衬线字体' },
-    { value: 'mono', label: '等宽字体' },
+    { value: 'system', label: t('settings.display.fontSystem') },
+    { value: 'serif', label: t('settings.display.fontSerif') },
+    { value: 'mono', label: t('settings.display.fontMono') },
   ]
 
   return (
     <>
-      <DisplayCard title="显示设置">
-        <DisplayRow label="主题">
+      <DisplayCard title={t('settings.display.title')}>
+        <DisplayRow label={t('settings.display.theme')}>
           <ThemeSegment value={appSettings.theme} onChange={(theme) => patchApp({ theme })} />
         </DisplayRow>
 
-        <DisplayRow label="主题颜色">
+        <DisplayRow label={t('settings.display.themeColor')}>
           <div className="tm-theme-colors">
             {THEME_COLOR_PRESETS.map((color) => (
               <button
@@ -300,7 +308,7 @@ export function DisplaySettingsPanel({
           </div>
         </DisplayRow>
 
-        <DisplayRow label="透明窗口">
+        <DisplayRow label={t('settings.display.transparentWindow')}>
           <SettingsToggle
             checked={appSettings.transparentWindow}
             onChange={(transparentWindow) => patchApp({ transparentWindow })}
@@ -308,8 +316,8 @@ export function DisplaySettingsPanel({
         </DisplayRow>
       </DisplayCard>
 
-      <DisplayCard title="导航栏设置" badge>
-        <DisplayRow label="导航栏位置">
+      <DisplayCard title={t('settings.display.navTitle')} badge>
+        <DisplayRow label={t('settings.display.navPosition')}>
           <NavPositionSegment
             value={appSettings.navBarPosition}
             onChange={(navBarPosition) => patchApp({ navBarPosition })}
@@ -317,8 +325,8 @@ export function DisplaySettingsPanel({
         </DisplayRow>
       </DisplayCard>
 
-      <DisplayCard title="缩放设置">
-        <DisplayRow label="缩放">
+      <DisplayCard title={t('settings.display.zoomTitle')}>
+        <DisplayRow label={t('settings.display.zoom')}>
           <ZoomControl
             value={appSettings.zoomLevel}
             onChange={(zoomLevel) => patchApp({ zoomLevel })}
@@ -326,8 +334,8 @@ export function DisplaySettingsPanel({
         </DisplayRow>
       </DisplayCard>
 
-      <DisplayCard title="字体设置" badge>
-        <DisplayRow label="界面字体">
+      <DisplayCard title={t('settings.display.fontTitle')} badge>
+        <DisplayRow label={t('settings.display.uiFont')}>
           <select
             className="tm-settings-select"
             value={appSettings.fontFamily}
@@ -348,7 +356,7 @@ export function DisplaySettingsPanel({
             ))}
           </select>
         </DisplayRow>
-        <DisplayRow label="消息字号">
+        <DisplayRow label={t('settings.display.messageFontSize')}>
           <div className="tm-settings-range-wrap">
             <input
               type="range"
@@ -365,7 +373,7 @@ export function DisplaySettingsPanel({
             </span>
           </div>
         </DisplayRow>
-        <DisplayRow label="消息样式">
+        <DisplayRow label={t('settings.display.messageStyle')}>
           <select
             className="tm-settings-select"
             value={messageSettings.messageStyle}
@@ -375,38 +383,36 @@ export function DisplaySettingsPanel({
               })
             }
           >
-            <option value="concise">简洁</option>
-            <option value="default">默认</option>
-            <option value="detailed">详细</option>
+            <option value="concise">{t('settings.display.messageStyleConcise')}</option>
+            <option value="default">{t('settings.display.messageStyleDefault')}</option>
+            <option value="detailed">{t('settings.display.messageStyleDetailed')}</option>
           </select>
         </DisplayRow>
       </DisplayCard>
 
       <DisplayCard
-        title="菜单设置"
+        title={t('settings.display.menuTitle')}
         action={
           <button type="button" className="tm-display-reset-btn" onClick={handleResetMenu}>
-            重置
+            {t('common.reset')}
           </button>
         }
       >
         <div className="tm-menu-module-columns">
           <MenuModuleColumn
-            title="显示的图标"
+            title={t('settings.display.menuVisible')}
             modules={appSettings.sidebarVisibleModules}
             canClose={(id) => getNavModuleDef(id).closable}
             onCloseItem={moveToHidden}
           />
           <MenuModuleColumn
-            title="隐藏的图标"
+            title={t('settings.display.menuHidden')}
             modules={appSettings.sidebarHiddenModules}
             canClose={() => true}
             onCloseItem={moveToVisible}
           />
         </div>
-        <p className="tm-display-hint">
-          鼠标悬停图标可点击右上角关闭：显示的图标将移入隐藏列表并从左侧菜单移除；隐藏的图标将恢复显示。智能体不可关闭。
-        </p>
+        <p className="tm-display-hint">{t('settings.display.menuHint')}</p>
       </DisplayCard>
     </>
   )

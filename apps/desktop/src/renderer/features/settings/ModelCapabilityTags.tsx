@@ -1,5 +1,7 @@
 import type { ProviderModel } from '@toolman/shared'
 import { getDisplayModelTypes } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
+import { getModelCapabilityLabel } from '../../i18n/settings-labels'
 import { ModelTypeIcon, type ModelTypeIconKey } from './ModelTypeIcon'
 
 interface Props {
@@ -16,12 +18,13 @@ function CapIcon({ type, title }: { type: ModelTypeIconKey; title: string }) {
 }
 
 export function ModelCapabilityTags({ model, className }: Props) {
+  const { t } = useI18n()
   const types = getDisplayModelTypes(model)
 
   if (types.embedding) {
     return (
       <div className={`tm-model-cap-icons ${className ?? ''}`.trim()}>
-        <CapIcon type="embedding" title="嵌入" />
+        <CapIcon type="embedding" title={getModelCapabilityLabel('embedding', t)} />
       </div>
     )
   }
@@ -29,16 +32,16 @@ export function ModelCapabilityTags({ model, className }: Props) {
   if (types.rerank) {
     return (
       <div className={`tm-model-cap-icons ${className ?? ''}`.trim()}>
-        <CapIcon type="rerank" title="重排" />
+        <CapIcon type="rerank" title={getModelCapabilityLabel('rerank', t)} />
       </div>
     )
   }
 
   const icons: Array<{ key: ModelTypeIconKey; title: string }> = []
-  if (types.vision) icons.push({ key: 'vision', title: '视觉' })
-  if (types.web) icons.push({ key: 'web', title: '联网' })
-  if (types.reasoning) icons.push({ key: 'reasoning', title: '推理' })
-  if (types.tools) icons.push({ key: 'tools', title: '工具' })
+  if (types.vision) icons.push({ key: 'vision', title: getModelCapabilityLabel('vision', t) })
+  if (types.web) icons.push({ key: 'web', title: getModelCapabilityLabel('web', t) })
+  if (types.reasoning) icons.push({ key: 'reasoning', title: getModelCapabilityLabel('reasoning', t) })
+  if (types.tools) icons.push({ key: 'tools', title: getModelCapabilityLabel('tools', t) })
 
   if (icons.length === 0) return null
 

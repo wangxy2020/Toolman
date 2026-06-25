@@ -3,6 +3,7 @@ import {
   P2pSyncCursorRepository,
   P2pWorkspaceRepository,
 } from '@toolman/db'
+import { logStructured } from '../structured-log.service'
 import type { P2pConnectionInfo, P2pMember, P2pSyncStatus, WorkspaceEvent } from '@toolman/shared'
 import {
   orderMeshCatchUpPeers,
@@ -20,6 +21,7 @@ import {
   markP2pEventSynced,
 } from './p2p-event.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { withWorkspaceEventWrite } from './p2p-workspace-event-mutex'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
 import { ensurePeerReadyForWorkspace, isPeerConnected, listP2pConnections } from './p2p-connection.service'
 import {
@@ -35,13 +37,21 @@ import {
 } from './p2p-sync-broadcast'
 import {
   handleP2pFileChannelMessage,
+  getPendingBlobTransferCount,
   syncMissingWorkspaceBlobs,
 } from './p2p-blob-transfer.service'
 import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
 import { reconcileAgentSharedResources } from './p2p-agent-projection'
-import { handleP2pGroupChatChannelMessage, handleP2pGroupChatClearFromPeer } from './p2p-group-chat.service'
+import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
 import { reconcileGroupChatProjection } from './p2p-group-chat-projector'
 import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse } from './p2p-member.service'
+import {
+  verifyMemberJoinedWireMessage,
+  type SignedMemberJoinedWire,
+  type SignedMemberSyncRequestWire,
+  type SignedMemberSyncResponseWire,
+} from './p2p-member-sync-signing.service'
+import { checkReplayGuard } from './p2p-replay-guard.service'
 import { dispatchP2pAgentRelayMessage, registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 import { maybeAutoSnapshot } from './p2p-snapshot.service'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
@@ -429,7 +439,7 @@ function reconcileGroupChatAfterSync(workspaceId: string): void {
   try {
     reconcileGroupChatProjection(workspaceId)
   } catch (error) {
-    console.warn(`[p2p] group chat projection reconcile failed: ${toErrorMessage(error, String(error))}`)
+    logStructured('p2p', 'warn', `group chat projection reconcile failed: ${toErrorMessage(error, String(error))}`)
   }
 }
 
@@ -490,32 +500,55 @@ async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): 
       })
       return
     }
-    case 'member.joined':
+    case 'member.joined': {
+      const joined = message as SignedMemberJoinedWire
+      if (joined.v !== 2 || !joined.signature || !joined.signerDeviceId || !joined.at) {
+        logStructured('p2p', 'warn', `dropped unsigned member.joined from ${peerDeviceId.slice(0, 8)}`)
+        return
+      }
+      const verified = verifyMemberJoinedWireMessage(peerDeviceId, joined)
+      if (!verified.ok) {
+        logStructured('p2p', 'warn', `dropped member.joined from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`)
+        return
+      }
+      const replay = checkReplayGuard({
+        scope: `member-join:${joined.workspaceId}`,
+        signerId: peerDeviceId,
+        at: joined.at,
+        payloadHash: joined.member.id,
+      })
+      if (!replay.ok) {
+        logStructured('p2p', 'warn', `dropped replay member.joined from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`)
+        return
+      }
       void applyRemoteMemberJoin(
         {
-          workspaceId: message.workspaceId,
+          workspaceId: joined.workspaceId,
           member: {
-            id: message.member.id,
-            workspaceId: message.workspaceId,
-            identityId: message.member.identityId ?? '',
-            deviceId: message.member.deviceId,
-            displayName: message.member.displayName,
-            role: message.member.role as P2pMember['role'],
+            id: joined.member.id,
+            workspaceId: joined.workspaceId,
+            identityId: joined.member.identityId ?? '',
+            deviceId: joined.member.deviceId,
+            displayName: joined.member.displayName,
+            role: joined.member.role as P2pMember['role'],
             status: 'active',
             online: false,
           },
-          inviteId: message.inviteId,
+          inviteId: joined.inviteId,
           peerDeviceId,
-          subscriptionSku: message.member.subscriptionSku,
+          subscriptionSku: joined.member.subscriptionSku,
         },
         { requirePeerTrust: false },
-      )
+      ).catch((error) => {
+        logStructured('p2p', 'warn', `member.joined apply failed: ${toErrorMessage(error, 'member.joined apply failed')}`)
+      })
       return
+    }
     case 'group-chat.message':
       handleP2pGroupChatChannelMessage(peerDeviceId, payload)
       return
     case 'group-chat.clear':
-      handleP2pGroupChatClearFromPeer(peerDeviceId, message.workspaceId)
+      handleP2pGroupChatChannelMessage(peerDeviceId, payload)
       return
     case 'agent-relay.message':
       await dispatchP2pAgentRelayMessage(
@@ -524,10 +557,10 @@ async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): 
       )
       return
     case 'member.sync_request':
-      await handleMemberSyncRequest(peerDeviceId, message.workspaceId)
+      await handleMemberSyncRequest(peerDeviceId, message as SignedMemberSyncRequestWire)
       return
     case 'member.sync_response':
-      handleMemberSyncResponse(peerDeviceId, message)
+      handleMemberSyncResponse(peerDeviceId, message as SignedMemberSyncResponseWire)
       return
     default:
       return
@@ -541,7 +574,7 @@ async function runIncomingChannelHandler(
   try {
     await handler()
   } catch (error) {
-    console.error(`[p2p] ${label} failed: ${toErrorMessage(error, `Failed to process ${label}`)}`)
+    logStructured('p2p', 'error', `${label} failed: ${toErrorMessage(error, `Failed to process ${label}`)}`)
   }
 }
 
@@ -577,9 +610,7 @@ export async function processP2pIncomingMessages(): Promise<void> {
     } catch (error) {
       const parsed = parseReplicationMessage(item.data)
       const label = parsed ? describeReplicationMessage(parsed) : 'unknown'
-      console.error(
-        `[p2p] replication message failed: ${label} error=${toErrorMessage(error, 'Failed to process replication message')}`,
-      )
+      logStructured('p2p', 'error', `replication message failed: ${label} error=${toErrorMessage(error, 'Failed to process replication message')}`)
     }
   }
 }
@@ -628,9 +659,7 @@ async function catchUpFromMeshPeers(workspaceId: string): Promise<number> {
       await syncWithPeer(workspaceId, peerDeviceId)
       syncedPeers += 1
     } catch (error) {
-      console.warn(
-        `[p2p] mesh catch-up with ${peerDeviceId} failed: ${toErrorMessage(error, 'mesh catch-up failed')}`,
-      )
+      logStructured('p2p', 'warn', `mesh catch-up with ${peerDeviceId} failed: ${toErrorMessage(error, 'mesh catch-up failed')}`)
     }
   }
 
@@ -650,7 +679,7 @@ async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string)
   } else {
     const syncedPeers = await catchUpFromMeshPeers(workspaceId)
     if (syncedPeers === 0) {
-      console.warn(`[p2p] owner offline and no mesh peers available for ${workspaceId}`)
+      logStructured('p2p', 'warn', `owner offline and no mesh peers available for ${workspaceId}`)
     }
   }
 
@@ -681,9 +710,7 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
 
       const promise = runJoinerEventCatchUp(workspaceId, workspace.ownerDeviceId)
         .catch((error) => {
-          console.warn(
-            `[p2p] joiner event catch-up failed: ${toErrorMessage(error, 'joiner event catch-up failed')}`,
-          )
+          logStructured('p2p', 'warn', `joiner event catch-up failed: ${toErrorMessage(error, 'joiner event catch-up failed')}`)
         })
         .finally(() => {
           joinerCatchUpInFlight.delete(workspaceId)
@@ -695,9 +722,35 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
 }
 
 export async function awaitJoinerEventCatchUp(workspaceId: string): Promise<void> {
-  scheduleJoinerEventCatchUp(workspaceId)
-  const inFlight = joinerCatchUpInFlight.get(workspaceId)
-  if (inFlight) await inFlight
+  assertRegisteredForP2p()
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (!workspace) return
+
+  const device = getP2pDeviceInfo()
+  if (workspace.ownerDeviceId === device.deviceId) return
+
+  const existing = joinerCatchUpInFlight.get(workspaceId)
+  if (existing) {
+    await existing
+    return
+  }
+
+  const pending = joinerCatchUpScheduled.get(workspaceId)
+  if (pending) {
+    clearTimeout(pending)
+    joinerCatchUpScheduled.delete(workspaceId)
+  }
+
+  const promise = runJoinerEventCatchUp(workspaceId, workspace.ownerDeviceId)
+    .catch((error) => {
+      logStructured('p2p', 'warn', `joiner event catch-up failed: ${toErrorMessage(error, 'joiner event catch-up failed')}`)
+    })
+    .finally(() => {
+      joinerCatchUpInFlight.delete(workspaceId)
+    })
+
+  joinerCatchUpInFlight.set(workspaceId, promise)
+  await promise
 }
 
 export function onLocalP2pEventAppended(event: WorkspaceEvent): void {
@@ -739,9 +792,7 @@ export async function replicateLocalP2pEvent(event: WorkspaceEvent): Promise<voi
         getCursorRepo().updateSentSeq(event.workspaceId, peer.peerDeviceId, event.seq)
         markP2pEventSynced(event.eventId)
       } catch (error) {
-        console.warn(
-          `[p2p] replicate to ${peer.peerDeviceId} failed: ${toErrorMessage(error, 'Failed to replicate event')}`,
-        )
+        logStructured('p2p', 'warn', `replicate to ${peer.peerDeviceId} failed: ${toErrorMessage(error, 'Failed to replicate event')}`)
       }
     }),
   )
@@ -769,9 +820,7 @@ export async function recoverWorkspaceSyncAfterReconnect(
     }
     reconcileGroupChatAfterSync(workspaceId)
   } catch (error) {
-    console.warn(
-      `[p2p] reconnect catch-up failed for ${workspaceId}: ${toErrorMessage(error, '重连后同步失败')}`,
-    )
+    logStructured('p2p', 'warn', `reconnect catch-up failed for ${workspaceId}: ${toErrorMessage(error, '重连后同步失败')}`)
   } finally {
     reconnectRecoveryInFlight.delete(recoveryKey)
   }
@@ -804,6 +853,14 @@ function mapPeerStatus(
 }
 
 export async function startP2pSync(workspaceId: string): Promise<{
+  status: 'syncing' | 'idle'
+  peersTotal: number
+  peersConnected: number
+}> {
+  return withWorkspaceEventWrite(workspaceId, () => startP2pSyncCore(workspaceId))
+}
+
+async function startP2pSyncCore(workspaceId: string): Promise<{
   status: 'syncing' | 'idle'
   peersTotal: number
   peersConnected: number
@@ -900,7 +957,7 @@ export function getP2pSyncStatus(workspaceId: string): {
         peerDeviceId,
       ),
     ),
-    pendingFiles: 0,
+    pendingFiles: getPendingBlobTransferCount(),
     error: state.error,
     sequencingMode: getWorkspaceSequencingMode(workspaceId, connections),
     ownerOnline,
@@ -924,9 +981,7 @@ export async function requestSnapshotFromOwner(
   try {
     await ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
   } catch (error) {
-    console.warn(
-      `[p2p] snapshot connect to owner failed: ${toErrorMessage(error, 'connect owner failed')}`,
-    )
+    logStructured('p2p', 'warn', `snapshot connect to owner failed: ${toErrorMessage(error, 'connect owner failed')}`)
     return
   }
 
@@ -937,6 +992,13 @@ export async function requestSnapshotFromOwner(
 }
 
 export async function forceP2pSync(
+  workspaceId: string,
+  peerDeviceId?: string,
+): Promise<{ eventsApplied: number; filesFetched: number; snapshotUsed: boolean }> {
+  return withWorkspaceEventWrite(workspaceId, () => forceP2pSyncCore(workspaceId, peerDeviceId))
+}
+
+async function forceP2pSyncCore(
   workspaceId: string,
   peerDeviceId?: string,
 ): Promise<{ eventsApplied: number; filesFetched: number; snapshotUsed: boolean }> {

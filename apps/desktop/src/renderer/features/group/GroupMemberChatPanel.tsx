@@ -1,8 +1,9 @@
 import type { CSSProperties } from 'react'
 import { MessagePanel } from '../chat/MessagePanel'
 import { MessageInput } from '../chat/MessageInput'
-import { messageFontSizePx } from '../chat/message-settings'
+import { messageFontSizePx, sendShortcutPlaceholder } from '../chat/message-settings'
 import type { MessageSettings } from '../chat/message-settings'
+import { useI18n } from '../../i18n/useI18n'
 import { useGroupChat } from './useGroupChat'
 
 interface Props {
@@ -26,6 +27,7 @@ export function GroupMemberChatPanel({
   spellCheckEnabled = true,
   defaultFilePath = null,
 }: Props) {
+  const { t } = useI18n()
   const chat = useGroupChat(workspaceId, selfMemberId)
 
   const messagePanelStyle: CSSProperties = {
@@ -60,6 +62,11 @@ export function GroupMemberChatPanel({
           messageSettings={messageSettings}
           sending={chat.sending}
           sendShortcut={messageSettings.sendShortcut}
+          emptyTitle={t('groupPage.messages.emptyTitle')}
+          emptyHint={t('groupPage.messages.emptyHint', {
+            shortcut: sendShortcutPlaceholder(messageSettings.sendShortcut),
+          })}
+          loadingLabel={t('groupPage.messages.loading')}
           onDeleteMessage={(id) => void chat.deleteMessage(id)}
           onError={chat.setError}
           getUserDisplayName={chat.getUserDisplayName}

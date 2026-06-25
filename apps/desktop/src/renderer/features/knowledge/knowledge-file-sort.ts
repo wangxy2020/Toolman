@@ -1,12 +1,17 @@
 import type { KnowledgeFilePanelItem } from './KnowledgeBaseFilePanel'
+import type { TranslateFn } from '../../i18n/useI18n'
 
 export type KnowledgeFileSortField = 'createdAt' | 'size' | 'name'
 
-export const KNOWLEDGE_FILE_SORT_OPTIONS: Array<{ id: KnowledgeFileSortField; label: string }> = [
-  { id: 'createdAt', label: '创建时间' },
-  { id: 'size', label: '大小' },
-  { id: 'name', label: '文件名' },
-]
+export function getKnowledgeFileSortOptions(
+  t: TranslateFn,
+): Array<{ id: KnowledgeFileSortField; label: string }> {
+  return [
+    { id: 'createdAt', label: t('knowledgePage.sort.createdAt') },
+    { id: 'size', label: t('knowledgePage.sort.size') },
+    { id: 'name', label: t('knowledgePage.sort.fileName') },
+  ]
+}
 
 export function sortKnowledgeFilePanelItems(
   items: KnowledgeFilePanelItem[],

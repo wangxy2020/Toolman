@@ -3,6 +3,8 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconChevronRight, IconNotes, IconPlus } from '../../components/icons'
 import { isGroupNotebookId } from '../group/group-note-utils'
 import { getModulePageConfig } from '../modules/module-config'
+import { useI18n } from '../../i18n/useI18n'
+import { translateNotebookName } from '../../i18n/system-labels'
 import { collectAllTags } from './notes-search'
 import { normalizeRenameTitle, type NoteItem, type NotebookItem } from './notes-storage'
 import { NotesSidebarContextMenu } from './NotesSidebarContextMenu'
@@ -54,7 +56,8 @@ export function NotesSidebar({
   onIngestNotebook,
   onIngestNote,
 }: Props) {
-  const config = getModulePageConfig('notes')
+  const { t } = useI18n()
+  const config = getModulePageConfig('notes', t)
   const [renameTarget, setRenameTarget] = useState<RenameTarget>(null)
   const [deleteNoteTarget, setDeleteNoteTarget] = useState<NoteItem | null>(null)
   const [deleteNotebookTarget, setDeleteNotebookTarget] = useState<NotebookItem | null>(null)
@@ -154,7 +157,7 @@ export function NotesSidebar({
                 .join(' ')}
               onClick={() => onTagFilterChange(null)}
             >
-              全部
+              {t('common.all')}
             </button>
             {tags.map((tag) => (
               <button
@@ -176,7 +179,12 @@ export function NotesSidebar({
 
         {filtering ? (
           <div className="tm-notes-sidebar-filter-hint">
-            <span>已筛选{searchQuery.trim() ? `「${searchQuery.trim()}」` : ''}{activeTagFilter ? ` #${activeTagFilter}` : ''}</span>
+            <span>
+              {t('sidebar.notes.filtered', {
+                query: searchQuery.trim() ? `「${searchQuery.trim()}」` : '',
+                tag: activeTagFilter ? ` #${activeTagFilter}` : '',
+              })}
+            </span>
             <button
               type="button"
               className="tm-notes-sidebar-import-btn"
@@ -185,7 +193,7 @@ export function NotesSidebar({
                 onTagFilterChange(null)
               }}
             >
-              清除
+              {t('common.clear')}
             </button>
           </div>
         ) : null}
@@ -215,7 +223,7 @@ export function NotesSidebar({
                     <button
                       type="button"
                       className="tm-assistant-expand"
-                      title={isOpen ? '收起笔记' : '展开笔记'}
+                      title={isOpen ? t('sidebar.notes.collapseNotes') : t('sidebar.notes.expandNotes')}
                       onClick={() => onToggleExpanded(notebook.id)}
                     >
                       <IconChevronRight open={isOpen} />
@@ -256,16 +264,16 @@ export function NotesSidebar({
                             notebook,
                           })
                         }}
-                        title={notebook.name}
+                        title={translateNotebookName(notebook.name, t)}
                       >
-                        {notebook.name}
+                        {translateNotebookName(notebook.name, t)}
                       </button>
                     )}
                     <div className="tm-assistant-actions">
                       <button
                         type="button"
                         className="tm-assistant-action-btn"
-                        title="新建笔记"
+                        title={t('sidebar.notes.newNote')}
                         onClick={() => onCreateNote(notebook.id)}
                       >
                         <IconPlus size={14} />
@@ -275,7 +283,7 @@ export function NotesSidebar({
 
                   {isOpen &&
                     (notebookNotes.length === 0 ? (
-                      <div className="tm-session-empty">暂无笔记，点击 + 新建</div>
+                      <div className="tm-session-empty">{t('sidebar.notes.emptyNoNotes')}</div>
                     ) : (
                       notebookNotes.map(renderNote)
                     ))}
@@ -292,7 +300,7 @@ export function NotesSidebar({
           y={notebookContextMenu.y}
           canDelete={!notebookContextMenu.notebook.isDefault}
           canIngest={Boolean(onIngestNotebook)}
-          deleteLabel="删除笔记本"
+          deleteLabel={t('sidebar.notes.deleteNotebook')}
           onClose={() => setNotebookContextMenu(null)}
           onIngest={() => setIngestNotebookTarget(notebookContextMenu.notebook)}
           onDelete={() => setDeleteNotebookTarget(notebookContextMenu.notebook)}
@@ -305,7 +313,7 @@ export function NotesSidebar({
           y={noteContextMenu.y}
           canDelete
           canIngest={Boolean(onIngestNote)}
-          deleteLabel="删除笔记"
+          deleteLabel={t('sidebar.notes.deleteNote')}
           onClose={() => setNoteContextMenu(null)}
           onIngest={() => onIngestNote?.(noteContextMenu.note.id, noteContextMenu.note.title)}
           onDelete={() => setDeleteNoteTarget(noteContextMenu.note)}
@@ -314,10 +322,10 @@ export function NotesSidebar({
 
       {ingestNotebookTarget ? (
         <ConfirmDialog
-          title="添加到知识库"
-          message={`将「${ingestNotebookTarget.name}」下的全部笔记添加到知识库？`}
-          confirmLabel="添加"
-          cancelLabel="取消"
+          title={t('sidebar.notes.addToKnowledge')}
+          message={t('sidebar.notes.ingestMessage', { name: ingestNotebookTarget.name })}
+          confirmLabel={t('common.add')}
+          cancelLabel={t('common.cancel')}
           onCancel={() => setIngestNotebookTarget(null)}
           onConfirm={() => {
             onIngestNotebook?.(ingestNotebookTarget.id, ingestNotebookTarget.name)
@@ -328,10 +336,10 @@ export function NotesSidebar({
 
       {deleteNoteTarget ? (
         <ConfirmDialog
-          title="删除笔记"
-          message={`确定删除「${deleteNoteTarget.title}」？删除后无法恢复。`}
-          confirmLabel="删除"
-          cancelLabel="取消"
+          title={t('sidebar.notes.deleteNoteTitle')}
+          message={t('sidebar.notes.deleteNoteMessage', { title: deleteNoteTarget.title })}
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
           danger
           onCancel={() => setDeleteNoteTarget(null)}
           onConfirm={() => {
@@ -343,14 +351,14 @@ export function NotesSidebar({
 
       {deleteNotebookTarget ? (
         <ConfirmDialog
-          title="删除笔记本"
+          title={t('sidebar.notes.deleteNotebookTitle')}
           message={
             isGroupNotebookId(deleteNotebookTarget.id)
-              ? `确定删除本地「${deleteNotebookTarget.name}」笔记本及其缓存笔记？群组中的共享内容不受影响。`
-              : `确定删除「${deleteNotebookTarget.name}」？该笔记本下的笔记将一并删除，且无法恢复。`
+              ? t('sidebar.notes.deleteNotebookLocalMessage', { name: deleteNotebookTarget.name })
+              : t('sidebar.notes.deleteNotebookMessage', { name: deleteNotebookTarget.name })
           }
-          confirmLabel="删除"
-          cancelLabel="取消"
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
           danger
           onCancel={() => setDeleteNotebookTarget(null)}
           onConfirm={() => {

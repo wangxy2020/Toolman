@@ -23,7 +23,8 @@ import { getIdentityProfile } from './identity.service'
 import { listP2pWorkspaces } from './p2p/p2p-workspace.service'
 import { Libp2pBridge } from './p2p/libp2p-bridge'
 import { readLibp2pConfig } from './p2p/p2p-libp2p.config'
-import { getP2pIceServers } from './p2p/p2p-network.config'
+import { getP2pIceServers, getP2pWanNetworkReadiness } from './p2p/p2p-network.config'
+import { getLibp2pRestartStatus } from './p2p/p2p-network-manager.service'
 
 const INGEST_PENDING_STAGES = [
   'queued',
@@ -157,6 +158,7 @@ async function getP2pDiagnostics(): Promise<AppGetDiagnosticsOutput['p2p']> {
       (row) => row.state === 'connected' && row.transport === 'lan',
     ).length,
     iceServersSummary: summarizeIceServers(getP2pIceServers()).summary,
+    wanReadiness: getP2pWanNetworkReadiness(),
     connections,
     libp2pAvailable: Libp2pBridge.isAvailable(),
     libp2pVersion: (() => {
@@ -197,6 +199,17 @@ async function getP2pDiagnostics(): Promise<AppGetDiagnosticsOutput['p2p']> {
         }))
       } catch {
         return []
+      }
+    })(),
+    libp2pRestart: (() => {
+      const status = getLibp2pRestartStatus()
+      return {
+        enabled: status.enabled,
+        attempt: status.attempt,
+        tripped: status.tripped,
+        nextDelayMs: status.nextDelayMs,
+        lastReason: status.lastReason,
+        lastRestartAt: status.lastRestartAt,
       }
     })(),
     dhtMode: readLibp2pConfig().dhtMode,

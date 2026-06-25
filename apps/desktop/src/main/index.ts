@@ -1,4 +1,5 @@
 import { loadWorkspaceEnvFiles } from './bootstrap/load-env'
+import { logStructured } from './services/structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 
 loadWorkspaceEnvFiles()
@@ -10,7 +11,7 @@ const e2eUserDataDir = process.env.TOOLMAN_E2E_USER_DATA_DIR
 if (e2eUserDataDir) {
   app.setPath('userData', e2eUserDataDir)
 }
-import { registerIpcHandlers } from './ipc/handlers'
+import { registerIpcHandlers } from './ipc/register-handlers'
 import { bootstrapDatabase } from './bootstrap/database'
 import { bootstrapSkills } from './services/skills-facade.service'
 import { bootstrapMcpPresets } from './services/mcp-server-config.service'
@@ -50,6 +51,11 @@ import {
 } from './services/community/community-hub-peering.service'
 import { Libp2pBridge } from './services/p2p/libp2p-bridge'
 import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
+import {
+  startP2pNetworkChangeMonitor,
+  stopP2pNetworkChangeMonitor,
+} from './services/p2p/p2p-network-change.service'
+import { resumeInterruptedBlobTransfers } from './services/p2p/p2p-blob-transfer.service'
 import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
 import { bootstrapP2pEventStore } from './services/p2p/p2p-event.service'
 import { bootstrapP2pSync } from './services/p2p/p2p-sync.service'
@@ -67,8 +73,10 @@ import {
 import { bootstrapAppUpdateService } from './services/app-update.service'
 import { bootstrapCrashReportService } from './services/crash-report.service'
 import { recordDiagnosticEvent } from './services/diagnostics-log'
+import { assertProductionAuthProfile } from './services/auth/auth-dev-guard'
 
 registerProcessCrashHandlers()
+assertProductionAuthProfile()
 
 const ELECTRON_CHROME_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -104,10 +112,10 @@ function logLibp2pNativeStatus(): void {
   try {
     const message = Libp2pBridge.ping()
     const version = Libp2pBridge.version()
-    console.log(`[libp2p] native module ready (${version}): ${message}`)
+    logStructured('libp2p', 'info', `native module ready (${version}): ${message}`)
   } catch (error) {
     const errMessage = toErrorMessage(error, String(error))
-    console.warn(`[libp2p] native module unavailable: ${errMessage}`)
+    logStructured('libp2p', 'warn', `native module unavailable: ${errMessage}`)
   }
 }
 
@@ -115,14 +123,12 @@ function logP2pNativeStatus(): void {
   try {
     const message = P2pBridge.ping()
     const version = P2pBridge.version()
-    console.log(`[p2p] native module ready (${version}): ${message}`)
+    logStructured('p2p', 'info', `native module ready (${version}): ${message}`)
     const device = ensureP2pDeviceIdentity()
-    console.log(
-      `[p2p] device identity ready: ${device.deviceId} (fp=${device.publicKeyFingerprint})`,
-    )
+    logStructured('p2p', 'info', `device identity ready: ${device.deviceId} (fp=${device.publicKeyFingerprint})`)
   } catch (error) {
     const errMessage = toErrorMessage(error, String(error))
-    console.error(`[p2p] native module unavailable: ${errMessage}`)
+    logStructured('p2p', 'error', `native module unavailable: ${errMessage}`)
   }
 }
 
@@ -156,7 +162,7 @@ function createWindow(): void {
 
   const showFallbackTimer = setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      console.warn('[window] ready-to-show timeout; forcing show')
+      logStructured('window', 'warn', `ready-to-show timeout; forcing show`)
       mainWindow.show()
       mainWindow.focus()
     }
@@ -171,9 +177,7 @@ function createWindow(): void {
   attachRendererCrashHandler(mainWindow.webContents)
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-    console.error(
-      `[window] failed to load ${validatedURL}: ${errorCode} ${errorDescription}`,
-    )
+    logStructured('window', 'error', `failed to load ${validatedURL}: ${errorCode} ${errorDescription}`)
     recordDiagnosticEvent('window', 'error', `load failed ${validatedURL}: ${errorCode} ${errorDescription}`)
     mainWindow?.show()
   })
@@ -182,7 +186,7 @@ function createWindow(): void {
     const url = mainWindow?.webContents.getURL()
     if (!url || !isAuthOAuthPopupUrl(url)) return
 
-    console.warn('[auth] OAuth page loaded in main window; restoring app shell')
+    logStructured('auth', 'warn', `OAuth page loaded in main window; restoring app shell`)
     if (isDev && process.env['ELECTRON_RENDERER_URL']) {
       void mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL'])
       return
@@ -247,26 +251,26 @@ app.whenReady().then(() => {
       startP2pDiscovery()
     } catch (error) {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[p2p] discovery bootstrap failed: ${message}`)
+      logStructured('p2p', 'warn', `discovery bootstrap failed: ${message}`)
     }
     try {
       startP2pNetworkManager()
     } catch (error) {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[libp2p] network bootstrap failed: ${message}`)
+      logStructured('libp2p', 'warn', `network bootstrap failed: ${message}`)
     }
     void startCommunityYjsBridge().catch((error) => {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[community-yjs] bootstrap failed: ${message}`)
+      logStructured('community.yjs', 'warn', `bootstrap failed: ${message}`)
     })
     void startCommunityFederationProvider().catch((error) => {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[community-federation] bootstrap failed: ${message}`)
+      logStructured('community.federation', 'warn', `bootstrap failed: ${message}`)
     })
     startCommunityHubPeeringSync()
     void startCommunityCidProvider().catch((error) => {
       const message = toErrorMessage(error, String(error))
-      console.warn(`[community-cid] bootstrap failed: ${message}`)
+      logStructured('community.cid', 'warn', `bootstrap failed: ${message}`)
     })
     bootstrapP2pEventStore()
     bootstrapP2pWorkspaceKeys()
@@ -277,8 +281,13 @@ app.whenReady().then(() => {
     bootstrapAppUpdateService()
     bootstrapCrashReportService()
     bootstrapP2pSync()
+    void resumeInterruptedBlobTransfers().catch((error) => {
+      const message = toErrorMessage(error, String(error))
+      logStructured('p2p', 'warn', `blob resume failed: ${message}`)
+    })
     bootstrapP2pAgentRelay()
     startP2pConnectionMonitor()
+    startP2pNetworkChangeMonitor()
     logP2pNativeStatus()
     logLibp2pNativeStatus()
     startHeartbeatScheduler()
@@ -287,16 +296,16 @@ app.whenReady().then(() => {
     startKnowledgeUrlRefreshScheduler()
   } catch (error) {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
-    console.error(`[bootstrap] failed: ${message}`)
+    logStructured('bootstrap', 'error', `failed: ${message}`)
   }
 
   createWindow()
 
   void bootstrapCommunityHub().then((status) => {
     if (status.running) {
-      console.log(`[community-hub] ready at ${status.baseUrl}`)
+      logStructured('community.hub', 'info', `ready at ${status.baseUrl}`)
     } else if (status.error) {
-      console.warn(`[community-hub] unavailable: ${status.error}`)
+      logStructured('community.hub', 'warn', `unavailable: ${status.error}`)
     }
     void import('./services/crash-report.service')
       .then(({ flushPendingCrashReports }) => flushPendingCrashReports())
@@ -313,7 +322,7 @@ app.whenReady().then(() => {
   })
 }).catch((error) => {
   const message = error instanceof Error ? error.stack ?? error.message : String(error)
-  console.error(`[app] whenReady failed: ${message}`)
+  logStructured('app', 'error', `whenReady failed: ${message}`)
 })
 
 app.on('window-all-closed', () => {
@@ -330,6 +339,7 @@ app.on('before-quit', () => {
   stopCommunityHubPeeringSync()
   stopCommunityCidProvider()
   stopP2pConnectionMonitor()
+  stopP2pNetworkChangeMonitor()
   void shutdownCommunityHub()
   void disconnectAllMcpServers()
   void shutdownChannels()

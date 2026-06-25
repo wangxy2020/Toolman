@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
 import { useModulePagePanelStatuses } from '../../components/module-page-status'
+import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
   syncError: string | null
@@ -21,12 +22,13 @@ export function GroupPageStatusBar({
   showDegraded,
   lastSyncAt,
 }: Props) {
+  const { t } = useI18n()
   const panelStatuses = useModulePagePanelStatuses()
   const hasPanelStatus = Object.keys(panelStatuses).length > 0
 
   const priority = useMemo(() => {
     if (syncError) {
-      return { tone: 'error' as const, text: `同步错误：${syncError}` }
+      return { tone: 'error' as const, text: t('groupPage.status.syncError', { message: syncError }) }
     }
     return null
   }, [syncError])
@@ -42,16 +44,16 @@ export function GroupPageStatusBar({
     }
 
     if (showSyncIndicator) {
-      return { tone: 'info' as const, text: '正在同步群组数据…' }
+      return { tone: 'info' as const, text: t('groupPage.status.syncing') }
     }
 
-    return { tone: 'muted' as const, text: '就绪' }
-  }, [hasPanelStatus, showDegraded, showSyncIndicator])
+    return { tone: 'muted' as const, text: t('groupPage.status.ready') }
+  }, [hasPanelStatus, showDegraded, showSyncIndicator, t])
 
   const lastSyncLabel = formatLastSyncAt(lastSyncAt)
   const meta =
     lastSyncLabel && !priority && !hasPanelStatus && fallback?.tone === 'muted'
-      ? `上次同步 ${lastSyncLabel}`
+      ? t('groupPage.status.lastSync', { time: lastSyncLabel })
       : null
 
   return <ModulePageStatusBar priority={priority} fallback={fallback} meta={meta} />

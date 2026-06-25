@@ -1,4 +1,5 @@
 import type { P2pConnectionInfo, P2pConnectionMode, P2pConnectionState } from '@toolman/shared'
+import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import { P2pBridge, type NativeConnectionInfo } from './p2p-bridge'
 import {
@@ -12,6 +13,7 @@ import { rotateWorkspaceKey, setWorkspaceKey } from './p2p-crypto.service'
 
 const POLL_INTERVAL_MS = 2_000
 const CONNECT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000] as const
+const PEER_RECONNECT_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000] as const
 const KNOWN_STATES = new Set<P2pConnectionState>([
   'idle',
   'signaling',
@@ -28,6 +30,9 @@ const connectInFlight = new Map<string, Promise<P2pConnectionState>>()
 
 const KNOWN_MODES = new Set<P2pConnectionMode>(['lan', 'wan'])
 const peerConnectionModes = new Map<string, P2pConnectionMode>()
+const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const reconnectAttempts = new Map<string, number>()
+const iceRestartInFlight = new Set<string>()
 
 function mapNativeConnection(connection: NativeConnectionInfo): P2pConnectionInfo {
   const state = KNOWN_STATES.has(connection.state as P2pConnectionState)
@@ -56,6 +61,64 @@ export function getPeerConnectionMode(peerDeviceId: string): P2pConnectionMode |
   return peerConnectionModes.get(peerDeviceId)
 }
 
+function schedulePeerReconnect(peerDeviceId: string, workspaceId: string): void {
+  if (reconnectTimers.has(peerDeviceId)) return
+
+  const attempt = reconnectAttempts.get(peerDeviceId) ?? 0
+  const delay =
+    PEER_RECONNECT_DELAYS_MS[Math.min(attempt, PEER_RECONNECT_DELAYS_MS.length - 1)] ?? 30_000
+
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(peerDeviceId)
+    void connectP2pPeer(peerDeviceId, workspaceId)
+      .then((state) => {
+        if (state === 'connected') {
+          reconnectAttempts.delete(peerDeviceId)
+          return
+        }
+        reconnectAttempts.set(peerDeviceId, attempt + 1)
+        schedulePeerReconnect(peerDeviceId, workspaceId)
+      })
+      .catch(() => {
+        reconnectAttempts.set(peerDeviceId, attempt + 1)
+        schedulePeerReconnect(peerDeviceId, workspaceId)
+      })
+  }, delay)
+
+  reconnectTimers.set(peerDeviceId, timer)
+}
+
+async function tryIceRestartBeforeReconnect(
+  peerDeviceId: string,
+  workspaceId: string,
+): Promise<void> {
+  if (iceRestartInFlight.has(peerDeviceId) || reconnectTimers.has(peerDeviceId)) {
+    return
+  }
+
+  if (getPeerConnectionMode(peerDeviceId) === 'wan') {
+    schedulePeerReconnect(peerDeviceId, workspaceId)
+    return
+  }
+
+  iceRestartInFlight.add(peerDeviceId)
+  try {
+    const result = await P2pBridge.connectionRestartIce(peerDeviceId)
+    if (result.state === 'connected') {
+      reconnectAttempts.delete(peerDeviceId)
+      notifyP2pReconnect(workspaceId, peerDeviceId)
+      return
+    }
+  } catch (error) {
+    const message = toErrorMessage(error, 'ICE restart failed')
+    logStructured('p2p', 'warn', `ICE restart failed for ${peerDeviceId.slice(0, 8)}: ${message}`)
+  } finally {
+    iceRestartInFlight.delete(peerDeviceId)
+  }
+
+  schedulePeerReconnect(peerDeviceId, workspaceId)
+}
+
 function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
   const nextByPeer = new Map(connections.map((item) => [item.peerDeviceId, item]))
 
@@ -74,6 +137,12 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
           connection.state,
         )
         if (connection.state === 'connected') {
+          reconnectAttempts.delete(peerDeviceId)
+          const timer = reconnectTimers.get(peerDeviceId)
+          if (timer) {
+            clearTimeout(timer)
+            reconnectTimers.delete(peerDeviceId)
+          }
           notifyP2pReconnect(connection.workspaceId!, peerDeviceId)
           void import('./p2p-member.service').then((module) => {
             module.flushPendingJoinNotification(peerDeviceId, connection.workspaceId ?? undefined)
@@ -81,6 +150,16 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
               void module.reconcileOwnerWorkspaceMembers(connection.workspaceId)
             }
           })
+        } else if (
+          previous?.state === 'connected' &&
+          connection.state === 'reconnecting'
+        ) {
+          void tryIceRestartBeforeReconnect(peerDeviceId, connection.workspaceId)
+        } else if (
+          previous?.state === 'connected' &&
+          connection.state === 'closed'
+        ) {
+          schedulePeerReconnect(peerDeviceId, connection.workspaceId)
         }
       }
     }
@@ -95,6 +174,9 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
       })
       if (previous.workspaceId) {
         handlePeerConnectionChange(previous.workspaceId, peerDeviceId, 'closed')
+        if (previous.state === 'connected') {
+          schedulePeerReconnect(peerDeviceId, previous.workspaceId)
+        }
       }
       void P2pBridge.connectionDisconnect(peerDeviceId).catch(() => undefined)
     }
@@ -116,7 +198,7 @@ async function pollConnections(): Promise<void> {
     await processP2pIncomingMessagesFromPoll()
   } catch (error) {
     const message = toErrorMessage(error, 'Failed to poll P2P connections')
-    console.error(`[p2p] connection poll failed: ${message}`)
+    logStructured('p2p', 'error', `connection poll failed: ${message}`)
   } finally {
     pollInFlight = false
   }
@@ -170,9 +252,7 @@ export async function ensurePeerReadyForWorkspace(
     await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
   } catch (error) {
     const errMessage = toErrorMessage(error, 'rotate failed')
-    console.warn(
-      `[p2p] workspace key rotate skipped for ${peerDeviceId.slice(0, 8)}: ${errMessage}`,
-    )
+    logStructured('p2p', 'warn', `workspace key rotate skipped for ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
   }
 }
 
