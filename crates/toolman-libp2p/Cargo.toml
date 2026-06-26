@@ -3,7 +3,7 @@ name = "toolman-libp2p"
 version = "0.1.0"
 edition = "2021"
 description = "Toolman libp2p network layer (LAN discovery, DHT client, N-API)"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 
 [lib]
 crate-type = ["cdylib"]

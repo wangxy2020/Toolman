@@ -3,7 +3,7 @@ name = "toolman-p2p"
 version = "0.1.0"
 edition = "2021"
 description = "Toolman P2P workspace native core (discovery, WebRTC, sync)"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 
 [lib]
 crate-type = ["cdylib"]

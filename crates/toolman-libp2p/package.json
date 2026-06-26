@@ -2,6 +2,7 @@
   "name": "toolman-libp2p",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "napi": {
     "name": "toolman-libp2p",
     "triples": {

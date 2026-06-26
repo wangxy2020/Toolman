@@ -120,6 +120,12 @@ pnpm --filter @toolman/desktop build
 step "Bake release env (auth / community / P2P secrets)"
 node "$ROOT_DIR/scripts/write-desktop-release-env.mjs"
 
+step "Generate third-party notices"
+node "$ROOT_DIR/scripts/generate-third-party-notices.mjs"
+
+step "Generate build provenance fingerprint"
+node "$ROOT_DIR/scripts/write-build-provenance.mjs"
+
 step "Package desktop app"
 (
   cd "$DESKTOP_DIR"

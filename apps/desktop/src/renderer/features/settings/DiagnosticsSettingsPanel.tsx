@@ -63,6 +63,7 @@ export function DiagnosticsSettingsPanel() {
 
   useEffect(() => {
     void refresh()
+    void window.api.invoke(IpcChannel.AppProvenanceBeacon, { event: 'app.diagnostics.view' })
   }, [refresh])
 
   const setCommunityYjsEnabled = async (enabled: boolean) => {
@@ -332,7 +333,7 @@ export function DiagnosticsSettingsPanel() {
             ) : null}
           </SettingsCollapsibleSection>
 
-          <SettingsSection title={t('settings.diagnostics.p2p.title')}>
+          <SettingsCollapsibleSection title={t('settings.diagnostics.p2p.title')}>
             <SettingsRow label={t('settings.diagnostics.p2p.nativeModule')}>
               {statusBadge(
                 snapshot.p2p.nativeAvailable,
@@ -403,9 +404,9 @@ export function DiagnosticsSettingsPanel() {
               <p className="tm-settings-row-hint">{t('settings.diagnostics.p2p.noConnections')}</p>
             )}
             {snapshot.p2p.error ? <p className="tm-settings-error">{snapshot.p2p.error}</p> : null}
-          </SettingsSection>
+          </SettingsCollapsibleSection>
 
-          <SettingsSection title={t('settings.diagnostics.libp2p.sectionTitle')}>
+          <SettingsCollapsibleSection title={t('settings.diagnostics.libp2p.sectionTitle')}>
             {snapshot.p2p.libp2pRestart.tripped ? (
               <div className="tm-diagnostics-banner tm-diagnostics-banner--error tm-diagnostics-banner--inline">
                 <p>{t('settings.diagnostics.libp2p.trippedInline')}</p>
@@ -478,9 +479,36 @@ export function DiagnosticsSettingsPanel() {
             ) : (
               <p className="tm-settings-row-hint">{t('settings.diagnostics.libp2p.noPeers')}</p>
             )}
-          </SettingsSection>
+          </SettingsCollapsibleSection>
 
-          <SettingsSection title={t('settings.diagnostics.operations.title')}>
+          <SettingsCollapsibleSection title={t('settings.diagnostics.provenance.title')}>
+            <SettingsRow label={t('settings.diagnostics.provenance.copyright')}>
+              <span className="tm-settings-static">{snapshot.provenance.copyrightNotice}</span>
+            </SettingsRow>
+            <SettingsRow label={t('settings.diagnostics.provenance.license')}>
+              <span className="tm-settings-static">{snapshot.provenance.license}</span>
+            </SettingsRow>
+            <SettingsRow label={t('settings.diagnostics.provenance.buildId')}>
+              <span className="tm-settings-static">{snapshot.provenance.buildId}</span>
+            </SettingsRow>
+            <SettingsRow label={t('settings.diagnostics.provenance.buildFingerprint')}>
+              <span className="tm-settings-static tm-settings-static--mono">{snapshot.provenance.buildFingerprint}</span>
+            </SettingsRow>
+            <SettingsRow label={t('settings.diagnostics.provenance.gitCommit')}>
+              <span className="tm-settings-static tm-settings-static--mono">
+                {snapshot.provenance.gitCommit.slice(0, 12)}
+                {snapshot.provenance.gitDirty ? t('settings.diagnostics.provenance.dirty') : ''}
+              </span>
+            </SettingsRow>
+            <SettingsRow label={t('settings.diagnostics.provenance.builtAt')}>
+              <span className="tm-settings-static">{formatTime(Date.parse(snapshot.provenance.builtAt))}</span>
+            </SettingsRow>
+            <SettingsRow label={t('settings.diagnostics.provenance.beaconCount')}>
+              <span className="tm-settings-static">{snapshot.provenance.beaconCount}</span>
+            </SettingsRow>
+          </SettingsCollapsibleSection>
+
+          <SettingsCollapsibleSection title={t('settings.diagnostics.operations.title')}>
             <SettingsRow label={t('settings.diagnostics.operations.appVersion')}>
               <span className="tm-settings-static">{snapshot.operations.appVersion}</span>
             </SettingsRow>
@@ -570,10 +598,10 @@ export function DiagnosticsSettingsPanel() {
             {snapshot.operations.update.notes ? (
               <p className="tm-settings-row-hint">{snapshot.operations.update.notes}</p>
             ) : null}
-          </SettingsSection>
+          </SettingsCollapsibleSection>
 
           {snapshot.recentEvents.length > 0 ? (
-            <SettingsSection title={t('settings.diagnostics.events.section')}>
+            <SettingsCollapsibleSection title={t('settings.diagnostics.events.section')}>
               <ul className="tm-diagnostics-event-list">
                 {snapshot.recentEvents.map((event, index) => (
                   <li key={`${event.at}-${index}`} className={`tm-diagnostics-event tm-diagnostics-event--${event.level}`}>
@@ -583,7 +611,7 @@ export function DiagnosticsSettingsPanel() {
                   </li>
                 ))}
               </ul>
-            </SettingsSection>
+            </SettingsCollapsibleSection>
           ) : null}
         </>
       ) : null}

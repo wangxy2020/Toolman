@@ -2,6 +2,7 @@
   "name": "@toolman/mcp-excel-server",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "description": "Excel lossless review & highlight MCP server (stdio)",
   "type": "module",
   "main": "./dist/excelServer.js",

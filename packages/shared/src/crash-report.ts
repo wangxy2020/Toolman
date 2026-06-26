@@ -16,6 +16,8 @@ export const CrashReportPayloadSchema = z.object({
   message: z.string(),
   stack: z.string().optional(),
   deviceId: z.string().optional(),
+  buildId: z.string().optional(),
+  buildFingerprint: z.string().optional(),
 })
 export type CrashReportPayload = z.infer<typeof CrashReportPayloadSchema>
 

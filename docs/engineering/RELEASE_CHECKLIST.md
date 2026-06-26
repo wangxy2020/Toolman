@@ -15,6 +15,7 @@ See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RE
 
 ## Build & signing
 
+- [ ] Root [LICENSE](./LICENSE) (AGPL-3.0-or-later) and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) present (`pnpm licenses:generate` if deps changed)
 - [ ] Version bumped in `apps/desktop/package.json` and lockfile consistent
 - [ ] `pnpm smoke` green on release branch
 - [ ] `pnpm --filter @toolman/desktop test:e2e` green (macOS recommended)

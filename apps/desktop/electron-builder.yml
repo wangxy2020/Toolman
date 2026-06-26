@@ -1,5 +1,6 @@
 appId: dev.toolman.app
 productName: Toolman
+license: AGPL-3.0-or-later
 directories:
   output: dist
   buildResources: build
@@ -7,6 +8,12 @@ files:
   - out/**/*
   - package.json
 extraResources:
+  - from: ../../LICENSE
+    to: legal/LICENSE
+  - from: ../../NOTICE.md
+    to: legal/NOTICE.md
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: legal/THIRD_PARTY_NOTICES.md
   - from: bin/toolman-community-hub
     to: bin/toolman-community-hub
     filter:
@@ -31,9 +38,9 @@ win:
     - target: portable
       arch:
         - x64
-    - target: nsis
-      arch:
-        - x64
+    # - target: nsis
+    #   arch:
+    #     - x64
   artifactName: Toolman-${version}-${arch}.${ext}
 portable:
   artifactName: Toolman-${version}-${arch}-Portable.${ext}

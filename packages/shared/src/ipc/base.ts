@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ToolmanBuildProvenanceSchema } from './provenance.js'
 
 export const UuidSchema = z.string().uuid()
 export const TimestampSchema = z.number().int().positive()
@@ -66,6 +67,7 @@ export const AppGetInfoOutputSchema = z.object({
   arch: z.string(),
   deviceId: UuidSchema,
   schemaVersion: z.string(),
+  provenance: ToolmanBuildProvenanceSchema,
 })
 
 export const AppGetPathsOutputSchema = z.object({

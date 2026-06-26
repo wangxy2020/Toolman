@@ -1,3 +1,9 @@
+/**
+ * Toolman desktop main process
+ * Copyright (C) 2024–2026 Toolman Contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Source: https://github.com/wangxy2020/Toolman
+ */
 import { loadWorkspaceEnvFiles } from './bootstrap/load-env'
 import { logStructured } from './services/structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
@@ -74,6 +80,7 @@ import {
   bootstrapLocalOperations,
   registerProcessCrashHandlers,
 } from './services/local-operations.service'
+import { bootstrapCopyrightProvenance } from './services/copyright-provenance.service'
 import { bootstrapAppUpdateService } from './services/app-update.service'
 import { bootstrapCrashReportService } from './services/crash-report.service'
 import { recordDiagnosticEvent } from './services/diagnostics-log'
@@ -256,6 +263,7 @@ app.whenReady().then(() => {
   try {
     bootstrapDatabase()
     ensureP2pDeviceIdentity()
+    bootstrapCopyrightProvenance()
     ensureLocalDisplayNameSyncedToP2pMembers()
     void bootstrapP2pIceServers()
       .catch((error) => {

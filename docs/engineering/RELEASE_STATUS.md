@@ -30,7 +30,7 @@
 | 0.1 | `pnpm rc1:preflight` 绿 | ✅ | 2026-06-26 复验通过 |
 | 0.1 | `pnpm rc1:build` dmg 可安装 | ✅ | 未签名，Gatekeeper 需右键打开 |
 | 0.2 | TURN 静默注入（Xirsys → `release.env`） | ✅ | 打包时烘焙；启动自动拉 ICE |
-| 0.3 | WAN 跨 NAT 双机签字 | ⏳ | 单机 LAN ✅；跨网待补 |
+| 0.3 | WAN 跨 NAT 双机签字 | ⏳ | 单机 LAN ✅（含成员重启重连）；跨网待第二台设备 |
 | 0.4 | dogfood ≥7 天 · ≥3 人 | 🔄 | 进行中 |
 | 0.5 | staging OTA + `release:verify-feed` | ☐ | 需 CDN 凭据 |
 
@@ -87,7 +87,7 @@
 | 类别 | 项 | 现状 |
 |------|-----|------|
 | 运维 | macOS 签名/公证、staging OTA | 未完成 |
-| P2P | 跨 NAT WAN 签字、WAN ICE Restart | 待验证 / 待实现 |
+| P2P | 跨 NAT WAN 签字、WAN ICE Restart | 单机 LAN 已验 ✅ · 跨网 / WAN ICE 待第二台设备 |
 | 流程 | dogfood ≥7 天、RC2 外测 | 进行中 |
 | 产品 | 语义搜索 501 占位、真实支付 mock | GA 前需 UI 不误导 |
 
@@ -123,7 +123,7 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 | 2026-06-23 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-24 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-25 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 2026-06-26 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | LAN 群聊通 · preflight 绿 |
+| 2026-06-26 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | LAN 群聊通 · preflight 绿 · 成员重启重连 ✅ |
 | 2026-06-27 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-28 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-29 | | ☐ | ☐ | ☐ | ☐ | ☐ | 退出评审 |
@@ -141,7 +141,10 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 | TURN 静默配置（Xirsys） | ✅ `pnpm rc1:build` 烘焙 `release.env` |
 | 系统诊断 WAN 就绪 | ✅ 设置 → 系统诊断 → P2P |
 | 同机双实例建群/群聊 | ✅ |
+| 成员重启后群主收消息 | ✅ 2026-06-26 复验（跳过 ICE restart，完整重连） |
 | 自动化 smoke / P2P 集成 | ✅ |
+
+**剩余**：跨 NAT 正式验收需第二台电脑（不同网络），见下节。
 
 ### 跨 NAT 正式验收 — ⏳
 

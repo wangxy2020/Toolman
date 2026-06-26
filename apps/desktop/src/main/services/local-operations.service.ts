@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { AppGetDiagnosticsOutput } from '@toolman/shared'
-import { compareSemver } from '@toolman/shared'
+import { compareSemver, getToolmanBuildProvenance } from '@toolman/shared'
 
 export interface LocalUpdateManifest {
   channel: string
@@ -89,6 +89,8 @@ export function recordCrashReport(input: {
           appVersion: app.getVersion(),
           platform: process.platform,
           arch: process.arch,
+          buildId: getToolmanBuildProvenance().buildId,
+          buildFingerprint: getToolmanBuildProvenance().buildFingerprint,
           ...input,
         },
         null,

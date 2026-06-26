@@ -1,3 +1,6 @@
+//! Toolman libp2p bridge
+//! Copyright (C) 2024–2026 Toolman Contributors
+//! SPDX-License-Identifier: AGPL-3.0-or-later
 mod config;
 mod dht_state;
 mod identity;

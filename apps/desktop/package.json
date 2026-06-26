@@ -2,6 +2,7 @@
   "name": "@toolman/desktop",
   "version": "0.2.0-rc.1",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "description": "Toolman desktop AI client",
   "main": "./out/main/index.js",
   "scripts": {
@@ -9,7 +10,7 @@
     "build:p2p": "bash ../../scripts/build-p2p-native.sh",
     "build:libp2p": "bash ../../scripts/build-libp2p-native.sh",
     "build:community-hub": "bash ../../scripts/build-community-hub.sh",
-    "predev": "pnpm build:p2p && pnpm build:libp2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
+    "predev": "node ../../scripts/write-build-provenance.mjs && pnpm build:p2p && pnpm build:libp2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "dist": "pnpm build && pnpm exec electron-builder --config electron-builder.yml --publish never",

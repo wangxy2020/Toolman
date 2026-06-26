@@ -11729,6 +11729,11 @@ html.theme-dark .tm-agent-workdir-browse {
   color: var(--tm-text-secondary);
 }
 
+.tm-settings-static--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  word-break: break-all;
+}
+
 .tm-settings-range-wrap {
   display: flex;
   align-items: center;
@@ -11939,6 +11944,23 @@ html.theme-dark .tm-agent-workdir-browse {
   color: var(--tm-accent);
   font-size: 12px;
   font-weight: 500;
+}
+
+.tm-about-license-badge {
+  margin-left: 6px;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.15s ease;
+}
+
+.tm-about-license-badge:hover {
+  background: color-mix(in srgb, var(--tm-accent) 22%, transparent);
+}
+
+.tm-about-build-id {
+  margin-left: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .tm-about-update-hint {

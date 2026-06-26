@@ -1,6 +1,6 @@
 # Toolman
 
-AI 桌面客户端（Cherry Studio 风格），基于 Electron + React + SQLite。当前为 **Beta**（**RC1 内部 dogfood**：`0.2.0-rc.1`，见 [RC1 手册](docs/engineering/RC1_DOGFOOD.md)）：除多 Provider 对话与知识库外，已包含 **P2P 群组同步、社区 Hub、会员与渠道** 等能力；部分模块仍为占位或本地模拟。
+AI 桌面客户端（Cherry Studio 风格 UI，独立项目），基于 Electron + React + SQLite。当前为 **Beta**（**RC1 内部 dogfood**：`0.2.0-rc.1`，见 [RC1 手册](docs/engineering/RC1_DOGFOOD.md)）：除多 Provider 对话与知识库外，已包含 **P2P 群组同步、社区 Hub、会员与渠道** 等能力；部分模块仍为占位或本地模拟。
 
 ## 环境要求
 
@@ -259,3 +259,18 @@ pnpm --filter @toolman/desktop dev
 - **DB**：better-sqlite3、Drizzle ORM
 - **校验**：Zod（`@toolman/shared`）
 - **构建**：pnpm workspace、Turbo
+
+## 许可证
+
+Copyright © 2024–2026 Toolman Contributors
+
+Toolman 采用 [GNU Affero General Public License v3.0 或更高版本](LICENSE)（SPDX: `AGPL-3.0-or-later`）。
+
+- 完整许可证文本：[LICENSE](./LICENSE)
+- 法律说明：[NOTICE.md](./NOTICE.md)
+- 第三方组件：[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
+- 源代码：https://github.com/wangxy2020/Toolman
+
+根据 AGPL，若你通过网络使用本软件或向用户提供修改版，需向用户提供对应源代码。
+
+UI 风格参考 Cherry Studio，Toolman 为独立项目，与 Cherry Studio 无关联。

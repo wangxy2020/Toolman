@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
+import { getToolmanBuildProvenance } from '@toolman/shared'
 import { getP2pDeviceId } from '../services/p2p/p2p-device-identity.service'
 
 export function getAppInfo() {
@@ -9,6 +10,7 @@ export function getAppInfo() {
     arch: process.arch,
     deviceId: getP2pDeviceId(),
     schemaVersion: '1.0.0-mvp',
+    provenance: getToolmanBuildProvenance(),
   }
 }
 

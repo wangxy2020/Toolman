@@ -2,6 +2,8 @@ import { toErrorMessage } from '@toolman/shared'
 import {IpcChannel,
   AppGetInfoOutputSchema,
   AppGetPathsOutputSchema,
+  AppProvenanceBeaconInputSchema,
+  AppProvenanceBeaconOutputSchema,
   AppUpdateSetAutoInputSchema,
   AppUpdateStatusSchema,
   CrashReportSetUploadInputSchema,
@@ -45,6 +47,17 @@ export type HandlerFn = (input: unknown) => Promise<IpcResult<unknown>>
 
 const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.AppGetInfo]: async () => ipcOk(AppGetInfoOutputSchema.parse(getAppInfo())),
+  [IpcChannel.AppProvenanceBeacon]: async (input) => {
+    const parsed = AppProvenanceBeaconInputSchema.parse(input)
+    const { recordProvenanceBeacon } = await import('../../services/copyright-provenance.service')
+    const provenance = recordProvenanceBeacon(parsed.event)
+    return ipcOk(
+      AppProvenanceBeaconOutputSchema.parse({
+        recorded: true,
+        buildId: provenance.buildId,
+      }),
+    )
+  },
   [IpcChannel.AppGetDiagnostics]: async () => {
     try {
       const { getAppDiagnostics } = await import('../../services/app-diagnostics.service')

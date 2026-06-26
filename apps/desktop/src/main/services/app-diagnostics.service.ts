@@ -13,6 +13,7 @@ import { getHubHealth } from './community/community-ipc.facade'
 import { getCommunityYjsStatus } from './community/community-yjs-bridge.service'
 import { getCommunityCidProviderStatus } from './community/community-cid-provider.service'
 import { listDiagnosticEvents, recordDiagnosticEvent } from './diagnostics-log'
+import { getProvenanceDiagnostics } from './copyright-provenance.service'
 import { getOperationsDiagnostics } from './local-operations.service'
 import { getCrashReportDiagnosticsFields } from './crash-report.service'
 import { P2pBridge } from './p2p/p2p-bridge'
@@ -245,6 +246,7 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
       ...getOperationsDiagnostics(),
       ...getCrashReportDiagnosticsFields(),
     },
+    provenance: getProvenanceDiagnostics(),
     recentEvents: listDiagnosticEvents(30),
   }
 

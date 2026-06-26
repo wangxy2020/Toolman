@@ -5,6 +5,7 @@ export enum IpcChannel {
   AppShellRevealPath = 'app:shell:reveal-path',
   AppGetStorageStats = 'app:storage:stats',
   AppGetDiagnostics = 'app:diagnostics:get',
+  AppProvenanceBeacon = 'app:provenance:beacon',
 
   AppCrashReportGetStatus = 'app:crash-report:status:get',
   AppCrashReportSetUpload = 'app:crash-report:upload:set',

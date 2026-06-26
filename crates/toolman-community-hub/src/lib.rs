@@ -1,3 +1,6 @@
+//! Toolman Community Hub sidecar
+//! Copyright (C) 2024–2026 Toolman Contributors
+//! SPDX-License-Identifier: AGPL-3.0-or-later
 pub mod api;
 pub mod config;
 pub mod db;

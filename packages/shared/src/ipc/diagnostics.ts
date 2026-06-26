@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AppDiagnosticsProvenanceSchema } from './provenance.js'
 
 export const DiagnosticLogLevelSchema = z.enum(['info', 'warn', 'error'])
 export type DiagnosticLogLevel = z.infer<typeof DiagnosticLogLevelSchema>
@@ -139,6 +140,7 @@ export const AppGetDiagnosticsOutputSchema = z.object({
   communityCid: AppDiagnosticsCommunityCidSchema,
   p2p: AppDiagnosticsP2pSchema,
   operations: AppDiagnosticsOperationsSchema,
+  provenance: AppDiagnosticsProvenanceSchema,
   recentEvents: z.array(DiagnosticLogEntrySchema),
 })
 export type AppGetDiagnosticsOutput = z.infer<typeof AppGetDiagnosticsOutputSchema>

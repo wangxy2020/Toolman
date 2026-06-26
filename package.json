@@ -2,6 +2,11 @@
   "name": "toolman",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangxy2020/Toolman.git"
+  },
   "description": "AI productivity client — multi-model chat, knowledge, plugins, and more",
   "scripts": {
     "dev": "turbo run dev",
@@ -33,6 +38,8 @@
     "release:desktop": "bash scripts/build-desktop-release.sh",
     "release:desktop:publish": "bash scripts/publish-update-feed.sh",
     "release:verify-feed": "bash scripts/verify-update-feed.sh",
+    "licenses:generate": "node scripts/generate-third-party-notices.mjs",
+    "provenance:generate": "node scripts/write-build-provenance.mjs",
     "db:generate": "pnpm --filter @toolman/db generate",
     "db:migrate": "pnpm --filter @toolman/db migrate"
   },
