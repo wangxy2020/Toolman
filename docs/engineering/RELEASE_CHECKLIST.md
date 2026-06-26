@@ -4,7 +4,7 @@ Use this checklist before tagging a Release Candidate or General Availability bu
 
 ## RC1 kickoff (internal dogfood)
 
-See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook.
+See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RELEASE_STATUS.md](./RELEASE_STATUS.md)**.
 
 - [ ] `pnpm rc1:preflight` green on release branch
 - [ ] Version is `0.2.0-rc.1` (or current `-rc.N`) in `apps/desktop/package.json`
