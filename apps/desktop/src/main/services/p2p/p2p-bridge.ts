@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+
+import { resolveNativeAddonPath } from '../../bootstrap/native-module-path'
 
 export interface NativeDiscoveryConfig {
   deviceId: string
@@ -143,42 +143,8 @@ export interface P2pNativeModule {
   snapshotInterval(): number
 }
 
-const NAPI_TRIPLE_BY_PLATFORM: Record<string, string> = {
-  'darwin-arm64': 'darwin-arm64',
-  'darwin-x64': 'darwin-x64',
-  'win32-x64': 'win32-x64-msvc',
-  'win32-arm64': 'win32-arm64-msvc',
-  'linux-x64': 'linux-x64-gnu',
-  'linux-arm64': 'linux-arm64-gnu',
-}
-
 function resolveNativeModulePath(): string {
-  const key = `${process.platform}-${process.arch}`
-  const triple = NAPI_TRIPLE_BY_PLATFORM[key]
-  if (!triple) {
-    throw new Error(`Unsupported platform for toolman-p2p: ${key}`)
-  }
-
-  const fileName = `toolman-p2p.${triple}.node`
-  const candidates = [
-    // electron-vite dev: out/main/services/p2p → apps/desktop/native
-    join(__dirname, '..', '..', '..', '..', 'native', fileName),
-    // packaged / copied next to out/main
-    join(__dirname, '..', '..', '..', 'native', fileName),
-    join(__dirname, '..', '..', 'native', fileName),
-    join(process.cwd(), 'native', fileName),
-    join(process.cwd(), 'apps', 'desktop', 'native', fileName),
-  ]
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate
-    }
-  }
-
-  throw new Error(
-    `toolman-p2p native module not found for ${triple}. Run: pnpm build:p2p`,
-  )
+  return resolveNativeAddonPath('toolman-p2p', __dirname, 'pnpm build:p2p')
 }
 
 let cachedNative: P2pNativeModule | null = null

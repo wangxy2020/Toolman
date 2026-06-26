@@ -12183,6 +12183,36 @@ html.theme-dark .tm-agent-workdir-browse {
   color: var(--tm-text);
 }
 
+.tm-display-card--collapsed .tm-display-card-header {
+  border-bottom: none;
+}
+
+.tm-display-card-header--collapsible {
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.tm-display-card-header--collapsible:hover {
+  background: var(--tm-hover);
+}
+
+.tm-display-card-header--collapsible .tm-display-card-title {
+  width: 100%;
+}
+
+.tm-diagnostics-debug-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tm-text-secondary);
+  background: var(--tm-hover);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 .tm-display-card-body {
   padding: 4px 20px 16px;
 }

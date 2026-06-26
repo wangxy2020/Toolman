@@ -50,7 +50,11 @@ import {
   stopCommunityHubPeeringSync,
 } from './services/community/community-hub-peering.service'
 import { Libp2pBridge } from './services/p2p/libp2p-bridge'
-import { startP2pConnectionMonitor, stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
+import { bootstrapP2pIceServers, applyP2pNetworkConfig } from './services/p2p/p2p-network.config'
+import {
+  startP2pConnectionMonitor,
+  stopP2pConnectionMonitor,
+} from './services/p2p/p2p-connection.service'
 import {
   startP2pNetworkChangeMonitor,
   stopP2pNetworkChangeMonitor,
@@ -133,12 +137,14 @@ function logP2pNativeStatus(): void {
 }
 
 function createWindow(): void {
+  const shouldShowImmediately = app.isPackaged
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    show: false,
+    show: shouldShowImmediately,
     title: 'Toolman',
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 11 } }
@@ -243,16 +249,28 @@ app.whenReady().then(() => {
     app.setAppUserModelId('dev.toolman.app')
   }
 
+  // Register IPC before heavy bootstrap so a DB/P2P failure does not leave the UI without handlers.
+  registerIpcHandlers()
+  createWindow()
+
   try {
     bootstrapDatabase()
     ensureP2pDeviceIdentity()
     ensureLocalDisplayNameSyncedToP2pMembers()
-    try {
-      startP2pDiscovery()
-    } catch (error) {
-      const message = toErrorMessage(error, String(error))
-      logStructured('p2p', 'warn', `discovery bootstrap failed: ${message}`)
-    }
+    void bootstrapP2pIceServers()
+      .catch((error) => {
+        const message = toErrorMessage(error, String(error))
+        logStructured('p2p', 'warn', `Xirsys ICE bootstrap failed: ${message}`)
+      })
+      .finally(() => {
+        applyP2pNetworkConfig()
+        try {
+          startP2pDiscovery()
+        } catch (error) {
+          const message = toErrorMessage(error, String(error))
+          logStructured('p2p', 'warn', `discovery bootstrap failed: ${message}`)
+        }
+      })
     try {
       startP2pNetworkManager()
     } catch (error) {
@@ -277,7 +295,6 @@ app.whenReady().then(() => {
     bootstrapMcpPresets()
     bootstrapSkills()
     bootstrapChannels()
-    registerIpcHandlers()
     bootstrapAppUpdateService()
     bootstrapCrashReportService()
     bootstrapP2pSync()
@@ -298,8 +315,6 @@ app.whenReady().then(() => {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
     logStructured('bootstrap', 'error', `failed: ${message}`)
   }
-
-  createWindow()
 
   void bootstrapCommunityHub().then((status) => {
     if (status.running) {

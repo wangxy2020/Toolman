@@ -537,6 +537,7 @@ async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): 
           inviteId: joined.inviteId,
           peerDeviceId,
           subscriptionSku: joined.member.subscriptionSku,
+          remoteDevicePublicKey: joined.member.devicePublicKey,
         },
         { requirePeerTrust: false },
       ).catch((error) => {

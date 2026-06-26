@@ -1,12 +1,10 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { app } from 'electron'
 import {
   P2pMemberRepository,
   P2pWorkspaceRepository,
   hashWorkspaceKey,
-  identities,
   type P2pWorkspaceRow,
 } from '@toolman/db'
 import type { P2pWorkspace, P2pWorkspaceListFilter } from '@toolman/shared'
@@ -30,12 +28,11 @@ import {
   removeWorkspaceKey,
   saveWorkspaceKey,
 } from './p2p-workspace-key.store'
+import { getIdentityDisplayName } from './p2p-member-shared'
 import { appendP2pEvent } from './p2p-event.service'
 import * as p2pConnectionService from './p2p-connection.service'
 import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
 import { applyP2pNetworkConfig } from './p2p-network.config'
-
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
 function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
@@ -43,16 +40,6 @@ function getWorkspaceRepo(): P2pWorkspaceRepository {
 
 function getMemberRepo(): P2pMemberRepository {
   return new P2pMemberRepository(getDatabase())
-}
-
-function getIdentityDisplayName(): string {
-  const db = getDatabase()
-  const row = db
-    .select()
-    .from(identities)
-    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
-    .get()
-  return row?.displayName ?? '本地用户'
 }
 
 function resolveP2pWorkspaceStoragePath(workspaceId: string): string {

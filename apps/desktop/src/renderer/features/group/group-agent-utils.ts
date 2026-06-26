@@ -5,6 +5,7 @@ import type {
   P2pSharedResource,
   Session,
 } from '@toolman/shared'
+import { DEFAULT_SESSION_TITLE } from '@toolman/shared'
 
 export function getAgentSessionPermission(
   resource: P2pSharedResource,
@@ -19,7 +20,7 @@ export function formatAgentSessionPermissionLabel(
   return permission === 'callable' ? '可调用' : '仅阅读'
 }
 
-const PLACEHOLDER_SESSION_TITLES = new Set(['未命名话题', '共享话题', '新对话'])
+const PLACEHOLDER_SESSION_TITLES = new Set(['未命名话题', '共享话题', DEFAULT_SESSION_TITLE])
 
 export function resolveSharedSessionTitle(
   resource: P2pSharedResource,

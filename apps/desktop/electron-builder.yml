@@ -11,6 +11,12 @@ extraResources:
     to: bin/toolman-community-hub
     filter:
       - '**/*'
+  - from: native
+    to: native
+    filter:
+      - '**/*.node'
+  - from: resources/release.env
+    to: config/release.env
   - from: resources/mcp-excel
     to: mcp-excel
     filter:

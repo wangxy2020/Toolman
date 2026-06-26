@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 vi.mock('electron', () => ({
@@ -43,6 +43,10 @@ describe('p2p-network.config', () => {
     delete process.env.TOOLMAN_P2P_TURN_URL
     delete process.env.TOOLMAN_P2P_TURN_USERNAME
     delete process.env.TOOLMAN_P2P_TURN_CREDENTIAL
+    delete process.env.TOOLMAN_P2P_XIRSYS_IDENT
+    delete process.env.TOOLMAN_P2P_XIRSYS_SECRET
+    delete process.env.TOOLMAN_P2P_XIRSYS_CHANNEL
+    delete process.env.TOOLMAN_P2P_XIRSYS_PATH
     if (existsSync(configDir)) {
       rmSync(configDir, { recursive: true, force: true })
     }
@@ -60,7 +64,7 @@ describe('p2p-network.config', () => {
   it('reports WAN not ready when TURN is missing', () => {
     const readiness = getP2pWanNetworkReadiness()
     expect(readiness.ready).toBe(false)
-    expect(readiness.reason).toContain('TURN')
+    expect(readiness.reasonCode).toBe('turn_not_configured')
   })
 
   it('reads TURN config from env', () => {
@@ -70,6 +74,23 @@ describe('p2p-network.config', () => {
     const servers = getP2pIceServers()
     expect(servers.some((server) => String(server.urls).includes('turn.example.com'))).toBe(true)
     expect(getP2pWanNetworkReadiness().ready).toBe(true)
+  })
+
+  it('persists xirsys config when writing ice servers', () => {
+    process.env.TOOLMAN_P2P_XIRSYS_IDENT = 'toolman'
+    process.env.TOOLMAN_P2P_XIRSYS_SECRET = 'secret'
+    process.env.TOOLMAN_P2P_XIRSYS_CHANNEL = 'channel-test'
+    setP2pIceServers([
+      {
+        urls: 'turn:turn.example.com:3478',
+        username: 'user',
+        credential: 'pass',
+      },
+    ])
+    const raw = JSON.parse(readFileSync(join(configDir, 'network.json'), 'utf8')) as {
+      xirsys?: { channel?: string }
+    }
+    expect(raw.xirsys?.channel).toBe('channel-test')
   })
 
   it('persists stun and ice servers to network.json', () => {

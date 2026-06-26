@@ -509,6 +509,7 @@ export const settingsPagesZhCN = {
     refresh: '刷新',
     refreshing: '刷新中…',
     collectedAt: '采集时间：{{time}}',
+    debugOnly: '调试',
     libp2p: {
       trippedBanner:
         'libp2p 网络已触发熔断（连续 {{attempt}} 次重启失败）。{{reason}}',
@@ -533,9 +534,10 @@ export const settingsPagesZhCN = {
     },
     wan: {
       notReadyBanner:
-        '{{reason}}。跨网群组加入需要 TURN 凭据。请配置 userData/p2p/network.json 或运行 pnpm rc1:install-p2p-network，详见 docs/engineering/PRODUCTION_CONFIG.md。',
+        '{{reason}}。跨网群组加入需要 TURN 中继；正式版会在安装时自动配置。若仍显示未就绪，请重启应用或联系支持。',
       defaultReason: '广域网协作未就绪',
       notConfigured: '未配置 TURN',
+      missingCredentials: 'TURN 服务器缺少凭据',
     },
     database: {
       title: '数据库',
@@ -1210,6 +1212,7 @@ export const settingsPagesEn = {
     refresh: 'Refresh',
     refreshing: 'Refreshing…',
     collectedAt: 'Collected at: {{time}}',
+    debugOnly: 'Debug',
     libp2p: {
       trippedBanner:
         'libp2p network circuit breaker tripped ({{attempt}} consecutive restart failures).{{reason}}',
@@ -1234,9 +1237,10 @@ export const settingsPagesEn = {
     },
     wan: {
       notReadyBanner:
-        '{{reason}}. Cross-network group joining requires TURN credentials. Configure userData/p2p/network.json or run pnpm rc1:install-p2p-network — see docs/engineering/PRODUCTION_CONFIG.md.',
+        '{{reason}}. Cross-network group joining requires TURN relay; release builds configure this automatically. If this persists, restart the app or contact support.',
       defaultReason: 'WAN collaboration not ready',
       notConfigured: 'TURN not configured',
+      missingCredentials: 'TURN server is missing credentials',
     },
     database: {
       title: 'Database',

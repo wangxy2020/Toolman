@@ -25,17 +25,19 @@ import {
   parseInviteInput,
   verifyInviteToken,
 } from './p2p-invite.token'
-import { saveWorkspaceKey } from './p2p-workspace-key.store'
+import { saveWorkspaceKey, ensureWorkspaceKeyFromInvite } from './p2p-workspace-key.store'
 import {
   assertPeerTrustedForSync,
   ensureOwnerPeerTrustedForSync,
   isPeerTrusted,
   promptPeerTrustIfNeeded,
+  registerRemoteDevicePublicKey,
   upsertPeerFromDiscovery,
 } from './p2p-peer.service'
 import { appendP2pEvent } from './p2p-event.service'
 import { requestSnapshotFromOwner, syncWithPeer, awaitJoinerEventCatchUp } from './p2p-sync.service'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
+import { ensureMemberConnectsToOwner } from './p2p-member-reconcile.service'
 import {
   assertJoinerEligibleForWorkspace,
   assertRemoteJoinerEligibleForWorkspace,
@@ -92,6 +94,12 @@ function stopBackgroundJoinNotify(key: string): void {
   if (!pending) return
   clearInterval(pending.timer)
   pendingJoinNotifications.delete(key)
+}
+
+function stopAllBackgroundJoinNotifications(): void {
+  for (const key of [...pendingJoinNotifications.keys()]) {
+    stopBackgroundJoinNotify(key)
+  }
 }
 
 function startBackgroundJoinNotify(
@@ -155,12 +163,15 @@ export async function connectToOwnerPeer(
   ownerDeviceId: string,
   workspaceId: string,
   context: string,
+  workspaceKeyB64?: string,
 ): Promise<boolean> {
-  if (!isP2pPeerDiscoverableOnline(ownerDeviceId)) {
-    return false
+  if (!isP2pDiscoveryRunning()) {
+    startP2pDiscovery()
   }
   try {
-    await p2pConnectionService.ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
+    await p2pConnectionService.ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId, {
+      workspaceKeyB64,
+    })
     return p2pConnectionService.isPeerConnected(ownerDeviceId)
   } catch (error) {
     const message = toErrorMessage(error, 'connect owner failed')
@@ -187,17 +198,28 @@ async function isOwnerPeerConnected(ownerDeviceId: string): Promise<boolean> {
 async function tryLanConnectToOwner(
   payload: ReturnType<typeof decodeInviteToken>,
 ): Promise<boolean> {
-  return connectToOwnerPeer(
-    payload.ownerDeviceId,
-    payload.workspaceId,
-    'LAN connect during join failed',
-  )
+  const deadline = Date.now() + 20_000
+  while (Date.now() < deadline) {
+    if (
+      await connectToOwnerPeer(
+        payload.ownerDeviceId,
+        payload.workspaceId,
+        'LAN connect during join failed',
+        payload.workspaceKeyB64,
+      )
+    ) {
+      return true
+    }
+    await sleep(1_000)
+  }
+  return false
 }
 
 async function ensureJoinPeerConnection(
   payload: ReturnType<typeof decodeInviteToken>,
   offerSdp: string | undefined,
 ): Promise<{ connected: boolean; lastError?: string }> {
+  ensureWorkspaceKeyFromInvite(payload)
   applyP2pNetworkConfig()
   if (!isP2pDiscoveryRunning()) {
     startP2pDiscovery()
@@ -251,9 +273,16 @@ async function notifyOwnerOfJoinOnce(
     return true
   }
 
+  ensureWorkspaceKeyFromInvite(payload)
+
   try {
     if (!(await isOwnerPeerConnected(payload.ownerDeviceId))) {
-      await tryLanConnectToOwner(payload)
+      await connectToOwnerPeer(
+        payload.ownerDeviceId,
+        payload.workspaceId,
+        'notify owner connect failed',
+        payload.workspaceKeyB64,
+      )
     }
     if (!(await isOwnerPeerConnected(payload.ownerDeviceId))) {
       return false
@@ -306,6 +335,13 @@ function sleep(ms: number): Promise<void> {
   })
 }
 
+function resolveOwnerDisplayNameFromInvite(
+  payload: ReturnType<typeof decodeInviteToken>,
+  discovered?: { userName: string },
+): string {
+  return payload.ownerDisplayName?.trim() || discovered?.userName?.trim() || '群主'
+}
+
 function ensureOwnerMemberFromInvite(
   payload: ReturnType<typeof decodeInviteToken>,
   workspaceId: string,
@@ -320,9 +356,13 @@ function ensureOwnerMemberFromInvite(
   const discovered = listP2pDiscoveredNodes(false).find(
     (node) => node.deviceId === payload.ownerDeviceId,
   )
-  const displayName = discovered?.userName ?? '群主'
+  const displayName = resolveOwnerDisplayNameFromInvite(payload, discovered)
 
-  ensureLinkedIdentityRow(payload.ownerIdentityId, displayName)
+  ensureLinkedIdentityRow(payload.ownerIdentityId, displayName, payload.ownerPublicKey)
+  registerRemoteDevicePublicKey(workspaceId, payload.ownerDeviceId, payload.ownerPublicKey, {
+    displayName,
+    trusted: true,
+  })
 
   if (existing) {
     if (existing.status !== 'active' || existing.role !== 'owner') {
@@ -406,7 +446,11 @@ function ensureWorkspaceFromInvite(
   const discovered = listP2pDiscoveredNodes(false).find(
     (node) => node.deviceId === payload.ownerDeviceId,
   )
-  ensureLinkedIdentityRow(payload.ownerIdentityId, discovered?.userName ?? '群主')
+  ensureLinkedIdentityRow(
+    payload.ownerIdentityId,
+    resolveOwnerDisplayNameFromInvite(payload, discovered),
+    payload.ownerPublicKey,
+  )
 
   const workspaceRepo = getWorkspaceRepo()
   let workspace = workspaceRepo.findById(payload.workspaceId)
@@ -462,14 +506,15 @@ function scheduleJoinPeerSync(
   member: P2pMember,
 ): void {
   void (async () => {
+    void ensureMemberConnectsToOwner(payload.workspaceId)
+    await finishJoinSync(payload, offerSdp)
+
     try {
       await publishJoinToOwner(payload, member)
     } catch (error) {
       const message = toErrorMessage(error, 'notify owner failed')
       logStructured('p2p', 'warn', `publish join to owner failed: ${message}`)
     }
-
-    await finishJoinSync(payload, offerSdp)
 
     if (payload.ownerDeviceId !== getP2pDeviceInfo().deviceId) {
       try {
@@ -482,9 +527,6 @@ function scheduleJoinPeerSync(
       }
     }
   })()
-  void import('./p2p-member-reconcile.service').then((module) =>
-    module.ensureMemberConnectsToOwner(payload.workspaceId),
-  )
 }
 
 export async function joinP2pWorkspace(rawInput: unknown): Promise<{
@@ -496,6 +538,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   const { token: inviteToken, offerSdp } = parseInviteInput(input.inviteToken)
   const payload = decodeInviteToken(inviteToken)
   verifyInviteToken(payload)
+  stopAllBackgroundJoinNotifications()
   validateLocalInviteRecord(inviteToken, payload)
 
   const device = getP2pDeviceInfo()
@@ -521,6 +564,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   const existing = memberRepo.findByWorkspaceAndDevice(workspace.id, device.deviceId)
 
   if (existing?.status === 'active') {
+    ensureWorkspaceKeyFromInvite(payload)
     const member = mapMemberRow(existing, workspace.id)
     recordJoinOnOwnerSide(inviteToken, payload, existing)
     scheduleJoinPeerSync(payload, offerSdp, member)
@@ -614,6 +658,7 @@ export async function applyRemoteMemberJoin(
     inviteId?: string
     peerDeviceId?: string
     subscriptionSku?: ProductSku | null
+    remoteDevicePublicKey?: string
   },
   options?: { requirePeerTrust?: boolean },
 ): Promise<void> {
@@ -631,6 +676,15 @@ export async function applyRemoteMemberJoin(
   const device = getP2pDeviceInfo()
   if (workspace.ownerDeviceId !== device.deviceId) {
     return
+  }
+
+  if (payload.remoteDevicePublicKey) {
+    registerRemoteDevicePublicKey(
+      payload.workspaceId,
+      peerDeviceId,
+      payload.remoteDevicePublicKey,
+      { displayName: payload.member.displayName },
+    )
   }
 
   const existing = getMemberRepo().findByWorkspaceAndDevice(
@@ -706,7 +760,11 @@ export async function applyRemoteMemberJoin(
   )
 
   const remoteIdentityId = resolveRemoteMemberIdentityId(payload.member)
-  ensureLinkedIdentityRow(remoteIdentityId, payload.member.displayName)
+  ensureLinkedIdentityRow(
+    remoteIdentityId,
+    payload.member.displayName,
+    payload.remoteDevicePublicKey,
+  )
 
   const memberRow = getMemberRepo().create({
     id: payload.member.id,

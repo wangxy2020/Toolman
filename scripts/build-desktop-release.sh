@@ -117,6 +117,9 @@ pnpm --filter @toolman/desktop^... build
 step "Build desktop bundle"
 pnpm --filter @toolman/desktop build
 
+step "Bake release env (auth / community / P2P secrets)"
+node "$ROOT_DIR/scripts/write-desktop-release-env.mjs"
+
 step "Package desktop app"
 (
   cd "$DESKTOP_DIR"

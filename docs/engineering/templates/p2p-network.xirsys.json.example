@@ -1,0 +1,8 @@
+{
+  "xirsys": {
+    "path": "https://global.xirsys.net",
+    "ident": "toolman",
+    "secret": "<xirsys-secret>",
+    "channel": "channelxmq7hfz9"
+  }
+}

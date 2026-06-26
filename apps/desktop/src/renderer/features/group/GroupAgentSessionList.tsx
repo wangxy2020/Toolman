@@ -1,5 +1,7 @@
 import type { P2pSharedResource, Session } from '@toolman/shared'
 import { IconAccess, IconTrash } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
+import { translateSessionTitle } from '../../i18n/system-labels'
 import { formatKnowledgeDocTime } from '../knowledge/knowledge-file-display'
 import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { agentSelectionKey } from './group-agent-selection'
@@ -42,6 +44,8 @@ export function GroupAgentSessionList({
   onOpenSessionMenu,
   onContextMenu,
 }: Props) {
+  const { t } = useI18n()
+
   return (
     <ul className="tm-kb-file-list" onContextMenu={onContextMenu}>
       {sessions.map((session) => {
@@ -49,6 +53,7 @@ export function GroupAgentSessionList({
         const selected = selectedKeys.has(selectionKey)
         const removing = removingSessionId === session.id
         const permission = getAgentSessionPermission(resource, session.id)
+        const displayTitle = translateSessionTitle(session.title, t)
 
         return (
           <li
@@ -65,10 +70,10 @@ export function GroupAgentSessionList({
               <button
                 type="button"
                 className="tm-kb-file-card-title tm-kb-file-card-title--openable"
-                title={session.title}
+                title={displayTitle}
                 onClick={() => onOpenSession?.(buildOpenSessionRequest(session))}
               >
-                {session.title}
+                {displayTitle}
               </button>
               <div className="tm-kb-file-card-meta">
                 {formatKnowledgeDocTime(session.updatedAt ?? session.createdAt)} ·{' '}

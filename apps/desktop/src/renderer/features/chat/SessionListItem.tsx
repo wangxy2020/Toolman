@@ -1,5 +1,7 @@
 import type { Session } from '@toolman/shared'
 import { IconMore } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
+import { translateSessionTitle } from '../../i18n/system-labels'
 import { formatSessionTime, getSessionDisplayTime } from './session-utils'
 
 interface Props {
@@ -10,7 +12,9 @@ interface Props {
 }
 
 export function SessionListItem({ session, isActive, onSelect, onDelete }: Props) {
+  const { t } = useI18n()
   const displayTime = getSessionDisplayTime(session)
+  const displayTitle = translateSessionTitle(session.title, t)
 
   return (
     <div className={`tm-list-item ${isActive ? 'tm-list-item--active' : ''}`}>
@@ -21,7 +25,7 @@ export function SessionListItem({ session, isActive, onSelect, onDelete }: Props
         style={{ border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: 'pointer' }}
         onClick={onSelect}
       >
-        <div className="tm-list-item-title">{session.title}</div>
+        <div className="tm-list-item-title">{displayTitle}</div>
         <div className="tm-list-item-meta">{formatSessionTime(displayTime)}</div>
       </button>
       <button

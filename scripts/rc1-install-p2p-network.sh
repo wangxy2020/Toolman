@@ -72,6 +72,32 @@ fi
 TURN_URL="${TOOLMAN_P2P_TURN_URL:-}"
 TURN_USER="${TOOLMAN_P2P_TURN_USERNAME:-}"
 TURN_CRED="${TOOLMAN_P2P_TURN_CREDENTIAL:-}"
+XIRSYS_IDENT="${TOOLMAN_P2P_XIRSYS_IDENT:-}"
+XIRSYS_SECRET="${TOOLMAN_P2P_XIRSYS_SECRET:-}"
+XIRSYS_CHANNEL="${TOOLMAN_P2P_XIRSYS_CHANNEL:-}"
+XIRSYS_PATH="${TOOLMAN_P2P_XIRSYS_PATH:-https://global.xirsys.net}"
+
+if [[ -n "$XIRSYS_IDENT" && -n "$XIRSYS_SECRET" && -n "$XIRSYS_CHANNEL" ]]; then
+  DEST_DIR="$USER_DATA_DIR/p2p"
+  DEST_FILE="$DEST_DIR/network.json"
+  mkdir -p "$DEST_DIR"
+  node -e "
+const fs = require('node:fs');
+const payload = {
+  xirsys: {
+    path: process.argv[1],
+    ident: process.argv[2],
+    secret: process.argv[3],
+    channel: process.argv[4],
+  },
+};
+fs.writeFileSync(process.argv[5], JSON.stringify(payload, null, 2));
+" "$XIRSYS_PATH" "$XIRSYS_IDENT" "$XIRSYS_SECRET" "$XIRSYS_CHANNEL" "$DEST_FILE"
+  printf '\nInstalled Xirsys config → %s\n' "$DEST_FILE"
+  printf 'Next: launch Toolman with --user-data-dir=%q\n' "$USER_DATA_DIR"
+  printf 'Verify: Settings → 系统诊断 → P2P WAN readiness\n'
+  exit 0
+fi
 
 if [[ -z "$TURN_URL" || -z "$TURN_USER" || -z "$TURN_CRED" ]]; then
   cat >&2 <<EOF

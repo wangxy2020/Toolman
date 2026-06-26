@@ -22,6 +22,7 @@ import {
   shouldInitiatePeerConnection,
 } from './p2p-member-shared'
 import { connectToOwnerPeer, applyRemoteMemberJoin } from './p2p-member-join.service'
+import { loadWorkspaceKey } from './p2p-workspace-key.store'
 
 async function requestMemberSyncFromPeer(
   workspaceId: string,
@@ -34,7 +35,7 @@ async function requestMemberSyncFromPeer(
 
 const ownerConnectInFlight = new Map<string, Promise<void>>()
 const ownerConnectLastRunAt = new Map<string, number>()
-const OWNER_CONNECT_COOLDOWN_MS = 10_000
+const OWNER_CONNECT_COOLDOWN_MS = 5_000
 
 export async function ensureMemberConnectsToOwner(
   workspaceId: string,
@@ -45,6 +46,10 @@ export async function ensureMemberConnectsToOwner(
 
   const device = getP2pDeviceInfo()
   if (workspace.ownerDeviceId === device.deviceId) return
+
+  if (!loadWorkspaceKey(workspaceId)) {
+    return
+  }
 
   const inFlight = ownerConnectInFlight.get(workspaceId)
   if (inFlight) {
@@ -107,24 +112,40 @@ export async function reconcileOwnerWorkspaceMembers(
 }
 
 export async function runOwnerPeerReconcileTick(): Promise<void> {
+  try {
+    await reconcileOwnerPeerConnections()
+  } catch (error) {
+    const message = toErrorMessage(error, 'owner reconcile tick failed')
+    logStructured('p2p', 'warn', `owner reconcile tick failed: ${message}`)
+  }
+}
+
+export async function runMemberOwnerConnectTick(): Promise<void> {
   const device = getP2pDeviceInfo()
-  const workspaces = getWorkspaceRepo().listByOwnerDevice(device.deviceId)
-  for (const workspace of workspaces) {
+  const memberships = getMemberRepo().listActiveMembershipsByDevice(device.deviceId)
+  const workspaceRepo = getWorkspaceRepo()
+
+  for (const membership of memberships) {
+    const workspace = workspaceRepo.findById(membership.workspaceId)
+    if (!workspace || workspace.ownerDeviceId === device.deviceId) continue
+    if (!loadWorkspaceKey(membership.workspaceId)) continue
     try {
-      await reconcileOwnerWorkspaceMembersNow(workspace.id)
+      await ensureMemberConnectsToOwner(membership.workspaceId)
     } catch (error) {
-      const message = toErrorMessage(error, 'owner reconcile tick failed')
-      logStructured('p2p', 'warn', `owner reconcile tick failed for ${workspace.id}: ${message}`)
+      const message = toErrorMessage(error, 'member owner connect tick failed')
+      logStructured(
+        'p2p',
+        'warn',
+        `member owner connect tick failed for ${membership.workspaceId}: ${message}`,
+      )
     }
   }
 }
 
-async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<void> {
-  const workspace = getWorkspaceRepo().findById(workspaceId)
-  if (!workspace) return
-
+async function reconcileOwnerPeerConnections(): Promise<void> {
   const device = getP2pDeviceInfo()
-  if (workspace.ownerDeviceId !== device.deviceId) return
+  const workspaces = getWorkspaceRepo().listByOwnerDevice(device.deviceId)
+  if (workspaces.length === 0) return
 
   applyP2pNetworkConfig()
   if (!isP2pDiscoveryRunning()) {
@@ -132,56 +153,73 @@ async function reconcileOwnerWorkspaceMembersNow(workspaceId: string): Promise<v
   }
   p2pConnectionService.startP2pConnectionMonitor()
 
-  const activeMemberDeviceIds = new Set(
-    getMemberRepo()
-      .listByWorkspace(workspaceId, 'active')
-      .map((item) => item.deviceId),
-  )
+  const peerConnectAttempted = new Set<string>()
 
-  for (const member of getMemberRepo().listByWorkspace(workspaceId, 'active')) {
-    if (member.deviceId === device.deviceId) continue
-    if (!shouldInitiatePeerConnection(device.deviceId, member.deviceId)) continue
-    if (!isP2pPeerDiscoverableOnline(member.deviceId)) continue
-    try {
-      await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspaceId)
-    } catch (error) {
-      const message = toErrorMessage(error, 'connect active member failed')
-      logStructured('p2p', 'warn', `owner connect to member ${member.deviceId} failed: ${message}`)
-    }
-  }
+  for (const workspace of workspaces) {
+    const activeMemberDeviceIds = new Set(
+      getMemberRepo()
+        .listByWorkspace(workspace.id, 'active')
+        .map((item) => item.deviceId),
+    )
 
-  for (const node of listP2pDiscoveredNodes(true)) {
-    if (node.deviceId === device.deviceId || activeMemberDeviceIds.has(node.deviceId)) {
-      continue
+    for (const member of getMemberRepo().listByWorkspace(workspace.id, 'active')) {
+      if (member.deviceId === device.deviceId) continue
+      if (!shouldInitiatePeerConnection(device.deviceId, member.deviceId)) continue
+      if (peerConnectAttempted.has(member.deviceId)) continue
+      if (p2pConnectionService.isPeerConnected(member.deviceId)) continue
+      if (!isP2pPeerDiscoverableOnline(member.deviceId)) continue
+      peerConnectAttempted.add(member.deviceId)
+      try {
+        await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspace.id)
+      } catch (error) {
+        const message = toErrorMessage(error, 'connect active member failed')
+        logStructured('p2p', 'warn', `owner connect to member ${member.deviceId} failed: ${message}`)
+      }
     }
-    if (p2pConnectionService.isPeerConnected(node.deviceId)) {
-      continue
-    }
-    if (!shouldInitiatePeerConnection(device.deviceId, node.deviceId)) {
-      continue
-    }
-    if (!isP2pPeerDiscoverableOnline(node.deviceId)) continue
-    try {
-      await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspaceId)
-    } catch (error) {
-      const message = toErrorMessage(error, 'connect peer failed')
-      logStructured('p2p', 'warn', `owner reconcile connect failed for ${node.deviceId}: ${message}`)
+
+    for (const node of listP2pDiscoveredNodes(true)) {
+      if (node.deviceId === device.deviceId || activeMemberDeviceIds.has(node.deviceId)) {
+        continue
+      }
+      if (peerConnectAttempted.has(node.deviceId)) continue
+      if (p2pConnectionService.isPeerConnected(node.deviceId)) continue
+      if (!shouldInitiatePeerConnection(device.deviceId, node.deviceId)) continue
+      if (!isP2pPeerDiscoverableOnline(node.deviceId)) continue
+      peerConnectAttempted.add(node.deviceId)
+      try {
+        await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspace.id)
+      } catch (error) {
+        const message = toErrorMessage(error, 'connect peer failed')
+        logStructured('p2p', 'warn', `owner reconcile connect failed for ${node.deviceId}: ${message}`)
+      }
     }
   }
 
   const connections = await p2pConnectionService.listP2pConnections()
-  for (const connection of connections) {
-    if (connection.state !== 'connected') continue
-    if (connection.peerDeviceId === device.deviceId) continue
-    if (activeMemberDeviceIds.has(connection.peerDeviceId)) continue
-    if (connection.workspaceId && connection.workspaceId !== workspaceId) continue
-    try {
-      await requestMemberSyncFromPeer(workspaceId, connection.peerDeviceId)
-    } catch (error) {
-      const message = toErrorMessage(error, 'member sync request failed')
-      logStructured('p2p', 'warn', `owner member sync request failed for ${connection.peerDeviceId}: ${message}`)
+  for (const workspace of workspaces) {
+    const activeMemberDeviceIds = new Set(
+      getMemberRepo()
+        .listByWorkspace(workspace.id, 'active')
+        .map((item) => item.deviceId),
+    )
+
+    for (const connection of connections) {
+      if (connection.state !== 'connected') continue
+      if (connection.peerDeviceId === device.deviceId) continue
+      if (activeMemberDeviceIds.has(connection.peerDeviceId)) continue
+      if (connection.workspaceId && connection.workspaceId !== workspace.id) continue
+      try {
+        await requestMemberSyncFromPeer(workspace.id, connection.peerDeviceId)
+      } catch (error) {
+        const message = toErrorMessage(error, 'member sync request failed')
+        logStructured('p2p', 'warn', `owner member sync request failed for ${connection.peerDeviceId}: ${message}`)
+      }
     }
   }
+}
+
+async function reconcileOwnerWorkspaceMembersNow(_workspaceId: string): Promise<void> {
+  await reconcileOwnerPeerConnections()
 }
 
 export async function handleMemberSyncRequest(
@@ -276,6 +314,7 @@ export function handleMemberSyncResponse(
         online: true,
       },
       peerDeviceId,
+      remoteDevicePublicKey: message.member.devicePublicKey,
     },
     { requirePeerTrust: false },
   ).catch((error) => {

@@ -63,6 +63,7 @@ export const AppDiagnosticsP2pSchema = z.object({
     ready: z.boolean(),
     summary: z.string(),
     reason: z.string().optional(),
+    reasonCode: z.enum(['turn_not_configured', 'turn_missing_credentials']).optional(),
   }),
   connections: z.array(AppDiagnosticsP2pConnectionSchema),
   libp2pAvailable: z.boolean(),

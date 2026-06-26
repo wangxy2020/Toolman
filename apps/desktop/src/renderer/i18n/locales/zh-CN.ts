@@ -339,8 +339,9 @@ export const zhCN = {
       displayNamePlaceholder: '在群组中显示的名称',
       inviteRequired: '请输入邀请码或邀请链接',
       joinFailed: '加入失败',
-      wanDefaultWarning: '未配置 TURN，跨网加入群组可能失败。请在设置 → 系统诊断查看 WAN 配置说明。',
-      wanHint: '同局域网可直接加入；跨网需配置 TURN（见 docs/engineering/PRODUCTION_CONFIG.md）。',
+      wanDefaultWarning: '未配置 TURN，跨网加入群组可能失败。请在设置 → 系统诊断查看 WAN 状态。',
+      wanMissingCredentials: 'TURN 服务器缺少凭据，跨网加入群组可能失败。',
+      wanHint: '同局域网可直接加入；跨网由应用自动配置 TURN 中继。',
     },
     knowledgeCreate: {
       title: '添加知识库',

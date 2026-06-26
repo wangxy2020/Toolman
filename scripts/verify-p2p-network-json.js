@@ -8,6 +8,16 @@ if (!path) {
 }
 
 const raw = JSON.parse(fs.readFileSync(path, 'utf8'));
+const xirsys = raw.xirsys;
+const hasXirsys =
+  xirsys &&
+  typeof xirsys.ident === 'string' &&
+  xirsys.ident &&
+  typeof xirsys.secret === 'string' &&
+  xirsys.secret &&
+  typeof xirsys.channel === 'string' &&
+  xirsys.channel;
+
 const servers = raw.iceServers ?? (raw.stunServers ?? []).map((urls) => ({ urls }));
 
 let stun = 0;
@@ -26,9 +36,17 @@ for (const server of servers) {
 }
 
 console.log(`file: ${path}`);
+if (hasXirsys) {
+  console.log(`xirsys: channel=${xirsys.channel} ident=${xirsys.ident}`);
+}
 console.log(
   `iceServers: ${servers.length} (${stun} STUN, ${turn} TURN, ${turnWithCreds} TURN with credentials)`,
 );
+
+if (hasXirsys) {
+  console.log('OK: Xirsys config present — app will fetch ephemeral ICE credentials at startup');
+  process.exit(0);
+}
 
 if (turn === 0) {
   console.error('FAIL: no TURN server configured');

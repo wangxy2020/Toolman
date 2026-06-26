@@ -5,12 +5,17 @@ import { toErrorMessage } from '@toolman/shared'
 import { join } from 'node:path'
 import {P2pIceServerListSchema,
   P2pNetworkIceConfigSchema,
+  P2pXirsysConfigSchema,
   isTurnIceServer,
   resolveP2pIceServers,
   summarizeIceServers,
-  type P2pIceServer } from '@toolman/shared'
+  type P2pIceServer,
+  type P2pXirsysConfig } from '@toolman/shared'
 import { P2pBridge } from './p2p-bridge'
 import { recordDiagnosticEvent } from '../diagnostics-log'
+import { fetchXirsysIceServers } from './p2p-xirsys.service'
+
+let runtimeIceServersOverride: P2pIceServer[] | null = null
 
 function getConfigPath(): string {
   const dir = join(app.getPath('userData'), 'p2p')
@@ -69,7 +74,62 @@ function parseIceServersFromEnv(): P2pIceServer[] | null {
   return servers
 }
 
+function readXirsysConfigFromEnv(): P2pXirsysConfig | null {
+  const ident = process.env.TOOLMAN_P2P_XIRSYS_IDENT?.trim()
+  const secret = process.env.TOOLMAN_P2P_XIRSYS_SECRET?.trim()
+  const channel = process.env.TOOLMAN_P2P_XIRSYS_CHANNEL?.trim()
+  if (!ident || !secret || !channel) {
+    return null
+  }
+
+  const parsed = P2pXirsysConfigSchema.safeParse({
+    path: process.env.TOOLMAN_P2P_XIRSYS_PATH?.trim() || 'https://global.xirsys.net',
+    ident,
+    secret,
+    channel,
+  })
+  return parsed.success ? parsed.data : null
+}
+
+function readXirsysConfigFromFile(): P2pXirsysConfig | null {
+  const parsed = P2pNetworkIceConfigSchema.safeParse(readRawConfig())
+  if (!parsed.success || !parsed.data.xirsys) {
+    return null
+  }
+  const result = P2pXirsysConfigSchema.safeParse(parsed.data.xirsys)
+  return result.success ? result.data : null
+}
+
+function resolveXirsysConfig(): P2pXirsysConfig | null {
+  return readXirsysConfigFromEnv() ?? readXirsysConfigFromFile()
+}
+
+export async function bootstrapP2pIceServers(): Promise<boolean> {
+  const xirsys = resolveXirsysConfig()
+  if (!xirsys) {
+    return false
+  }
+
+  const servers = await fetchXirsysIceServers(xirsys)
+  runtimeIceServersOverride = servers
+  writeNetworkConfig(servers, xirsys)
+  resetWanReadinessLogDedup()
+  logStructured(
+    'p2p',
+    'info',
+    `loaded ICE servers from Xirsys (${summarizeIceServers(servers).summary})`,
+  )
+  return true
+}
+
+export function clearRuntimeIceServersOverrideForTests(): void {
+  runtimeIceServersOverride = null
+}
+
 export function getP2pIceServers(): P2pIceServer[] {
+  if (runtimeIceServersOverride) {
+    return runtimeIceServersOverride
+  }
   try {
     const fromEnv = parseIceServersFromEnv()
     if (fromEnv) {
@@ -89,23 +149,28 @@ export function getP2pStunServers(): string[] {
     .filter((url) => /^stun:/i.test(url))
 }
 
-function writeFileIceServers(iceServers: P2pIceServer[]): P2pIceServer[] {
+function resolveXirsysConfigForPersistence(): P2pXirsysConfig | null {
+  return readXirsysConfigFromEnv() ?? readXirsysConfigFromFile()
+}
+
+function writeNetworkConfig(iceServers: P2pIceServer[], xirsys?: P2pXirsysConfig | null): P2pIceServer[] {
   const normalized = P2pIceServerListSchema.parse(iceServers)
-  writeFileSync(
-    getConfigPath(),
-    JSON.stringify(
-      {
-        iceServers: normalized,
-        stunServers: normalized
-          .flatMap((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]))
-          .filter((url) => /^stun:/i.test(url)),
-      },
-      null,
-      2,
-    ),
-    'utf8',
-  )
+  const xirsysConfig = xirsys ?? resolveXirsysConfigForPersistence()
+  const payload: Record<string, unknown> = {
+    iceServers: normalized,
+    stunServers: normalized
+      .flatMap((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]))
+      .filter((url) => /^stun:/i.test(url)),
+  }
+  if (xirsysConfig) {
+    payload.xirsys = xirsysConfig
+  }
+  writeFileSync(getConfigPath(), JSON.stringify(payload, null, 2), 'utf8')
   return normalized
+}
+
+function writeFileIceServers(iceServers: P2pIceServer[]): P2pIceServer[] {
+  return writeNetworkConfig(iceServers)
 }
 
 export function setP2pStunServers(stunServers: string[]): string[] {
@@ -128,6 +193,7 @@ export function getP2pWanNetworkReadiness(): {
   ready: boolean
   summary: string
   reason?: string
+  reasonCode?: 'turn_not_configured' | 'turn_missing_credentials'
 } {
   const servers = getP2pIceServers()
   const summary = summarizeIceServers(servers)
@@ -140,7 +206,8 @@ export function getP2pWanNetworkReadiness(): {
     return {
       ready: false,
       summary: summary.summary,
-      reason: '未配置 TURN 服务器，广域网协作可能失败',
+      reasonCode: 'turn_not_configured',
+      reason: 'TURN server not configured; WAN collaboration may fail',
     }
   }
 
@@ -148,7 +215,8 @@ export function getP2pWanNetworkReadiness(): {
     return {
       ready: false,
       summary: summary.summary,
-      reason: 'TURN 服务器缺少凭据',
+      reasonCode: 'turn_missing_credentials',
+      reason: 'TURN server is missing credentials',
     }
   }
 

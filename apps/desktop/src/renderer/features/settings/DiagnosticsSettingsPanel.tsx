@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type AppGetDiagnosticsOutput } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
+import { translateP2pWanReadinessReason } from '../../i18n/system-labels'
 import {
   SettingsPageLayout,
   SettingsRow,
   SettingsSection,
+  SettingsCollapsibleSection,
   SettingsToggle,
 } from './SettingsShared'
 import { useCrashReportUpload } from './useCrashReportUpload'
@@ -101,6 +103,9 @@ export function DiagnosticsSettingsPanel() {
 
   const libp2pTripped = snapshot?.p2p.libp2pRestart.tripped ?? false
   const wanNotReady = snapshot?.p2p.wanReadiness.ready === false
+  const wanReadinessReason = snapshot
+    ? translateP2pWanReadinessReason(snapshot.p2p.wanReadiness, t)
+    : ''
 
   return (
     <SettingsPageLayout>
@@ -148,8 +153,7 @@ export function DiagnosticsSettingsPanel() {
           <div className="tm-diagnostics-banner tm-diagnostics-banner--warn" role="status">
             <p>
               {t('settings.diagnostics.wan.notReadyBanner', {
-                reason:
-                  snapshot?.p2p.wanReadiness.reason ?? t('settings.diagnostics.wan.defaultReason'),
+                reason: wanReadinessReason || t('settings.diagnostics.wan.defaultReason'),
               })}
             </p>
           </div>
@@ -164,7 +168,7 @@ export function DiagnosticsSettingsPanel() {
       {snapshot ? (
         <>
           <SettingsSection title={t('settings.diagnostics.database.title')}>
-            <SettingsRow label={t('settings.diagnostics.database.sqlitePath')} hint={snapshot.database.path}>
+            <SettingsRow label={t('settings.diagnostics.database.sqlitePath')}>
               <span className="tm-settings-static">{snapshot.database.path}</span>
             </SettingsRow>
             <SettingsRow label={t('settings.diagnostics.database.size')}>
@@ -230,7 +234,7 @@ export function DiagnosticsSettingsPanel() {
             ) : null}
           </SettingsSection>
 
-          <SettingsSection title={t('settings.diagnostics.yjs.title')}>
+          <SettingsCollapsibleSection title={t('settings.diagnostics.yjs.title')} debugOnly>
             <SettingsRow
               label={t('settings.diagnostics.yjs.featureToggle')}
               hint={t('settings.diagnostics.yjs.featureToggleHint')}
@@ -279,9 +283,9 @@ export function DiagnosticsSettingsPanel() {
             {snapshot.communityYjs.lastError ? (
               <p className="tm-settings-error">{snapshot.communityYjs.lastError}</p>
             ) : null}
-          </SettingsSection>
+          </SettingsCollapsibleSection>
 
-          <SettingsSection title={t('settings.diagnostics.cid.title')}>
+          <SettingsCollapsibleSection title={t('settings.diagnostics.cid.title')} debugOnly>
             <SettingsRow
               label={t('settings.diagnostics.cid.featureToggle')}
               hint={t('settings.diagnostics.cid.featureToggleHint')}
@@ -326,7 +330,7 @@ export function DiagnosticsSettingsPanel() {
             {snapshot.communityCid.lastError ? (
               <p className="tm-settings-error">{snapshot.communityCid.lastError}</p>
             ) : null}
-          </SettingsSection>
+          </SettingsCollapsibleSection>
 
           <SettingsSection title={t('settings.diagnostics.p2p.title')}>
             <SettingsRow label={t('settings.diagnostics.p2p.nativeModule')}>
@@ -355,7 +359,7 @@ export function DiagnosticsSettingsPanel() {
             {!snapshot.p2p.wanReadiness.ready ? (
               <SettingsRow label={t('settings.diagnostics.p2p.wanReady')}>
                 <span className="tm-settings-static" style={{ color: 'var(--tm-warning)' }}>
-                  {snapshot.p2p.wanReadiness.reason ?? t('settings.diagnostics.wan.notConfigured')}
+                  {wanReadinessReason || t('settings.diagnostics.wan.notConfigured')}
                 </span>
               </SettingsRow>
             ) : (

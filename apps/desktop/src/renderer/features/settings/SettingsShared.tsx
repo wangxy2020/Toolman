@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
+import { IconChevronRight } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 
 export function SettingsPageLayout({ children }: { children: ReactNode }) {
@@ -33,6 +35,48 @@ export function SettingsSection({
         {intro ? <p className="tm-settings-intro">{intro}</p> : null}
         {children}
       </div>
+    </section>
+  )
+}
+
+export function SettingsCollapsibleSection({
+  title,
+  intro,
+  defaultCollapsed = true,
+  debugOnly = false,
+  children,
+}: {
+  title: string
+  intro?: string
+  defaultCollapsed?: boolean
+  debugOnly?: boolean
+  children: ReactNode
+}) {
+  const { t } = useI18n()
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
+
+  return (
+    <section className={`tm-display-card${collapsed ? ' tm-display-card--collapsed' : ''}`}>
+      <button
+        type="button"
+        className="tm-display-card-header tm-display-card-header--collapsible"
+        onClick={() => setCollapsed((prev) => !prev)}
+        aria-expanded={!collapsed}
+      >
+        <h3 className="tm-display-card-title">
+          <IconChevronRight size={14} open={!collapsed} />
+          {title}
+          {debugOnly ? (
+            <span className="tm-diagnostics-debug-badge">{t('settings.diagnostics.debugOnly')}</span>
+          ) : null}
+        </h3>
+      </button>
+      {!collapsed ? (
+        <div className="tm-display-card-body">
+          {intro ? <p className="tm-settings-intro">{intro}</p> : null}
+          {children}
+        </div>
+      ) : null}
     </section>
   )
 }

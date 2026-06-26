@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type KnowledgeBase, type KnowledgeSearchResult, type Session } from '@toolman/shared'
 import { IconSearch } from '../icons'
 import { useI18n } from '../../i18n/useI18n'
+import { translateSessionTitle } from '../../i18n/system-labels'
 import { searchNotes, type NotesSearchResult } from '../../features/notes/notes-search'
 import type { NoteItem } from '../../features/notes/notes-storage'
 
@@ -51,9 +52,15 @@ export function GlobalSearchPanel({
   const sessionResults = useMemo(() => {
     if (!lowered) return sessions.slice(0, 8)
     return sessions
-      .filter((session) => session.title.toLowerCase().includes(lowered))
+      .filter((session) => {
+        const displayTitle = translateSessionTitle(session.title, t)
+        return (
+          session.title.toLowerCase().includes(lowered) ||
+          displayTitle.toLowerCase().includes(lowered)
+        )
+      })
       .slice(0, 12)
-  }, [lowered, sessions])
+  }, [lowered, sessions, t])
 
   const noteResults = useMemo<NotesSearchResult[]>(() => {
     if (!trimmed) return []
@@ -150,7 +157,9 @@ export function GlobalSearchPanel({
                     onClose()
                   }}
                 >
-                  <span className="tm-search-result-title">{session.title}</span>
+                  <span className="tm-search-result-title">
+                    {translateSessionTitle(session.title, t)}
+                  </span>
                   <span className="tm-search-result-meta">
                     {t('search.messageCount', { count: session.messageCount })}
                   </span>

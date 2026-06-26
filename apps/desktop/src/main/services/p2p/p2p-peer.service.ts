@@ -38,10 +38,75 @@ function resolveDiscoveredNode(deviceId: string): DiscoveredNode | null {
   return listP2pDiscoveredNodes(false).find((node) => node.deviceId === deviceId) ?? null
 }
 
+function isValidEd25519PublicKeyB64(value: string | null | undefined): value is string {
+  const trimmed = value?.trim()
+  if (!trimmed || trimmed.length < 40) return false
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    return false
+  }
+  try {
+    return Buffer.from(trimmed, 'base64').length === 32
+  } catch {
+    return false
+  }
+}
+
+function findStoredPeerPublicKey(deviceId: string): string | null {
+  const rows = getDatabase()
+    .select({ publicKey: p2pPeerNodes.publicKey })
+    .from(p2pPeerNodes)
+    .where(eq(p2pPeerNodes.deviceId, deviceId))
+    .all()
+
+  for (const row of rows) {
+    if (isValidEd25519PublicKeyB64(row.publicKey)) {
+      return row.publicKey
+    }
+  }
+  return null
+}
+
 export function resolvePeerPublicKey(deviceId: string, fingerprint: string): string {
   const repo = createP2pDeviceIdentityRepository(getDatabase())
   const row = repo.getByDeviceId(deviceId)
+  if (isValidEd25519PublicKeyB64(row?.publicKey)) {
+    return row!.publicKey
+  }
+
+  const fromPeer = findStoredPeerPublicKey(deviceId)
+  if (fromPeer) return fromPeer
+
+  if (isValidEd25519PublicKeyB64(fingerprint)) {
+    return fingerprint
+  }
+
   return row?.publicKey ?? fingerprint
+}
+
+export function registerRemoteDevicePublicKey(
+  workspaceId: string,
+  deviceId: string,
+  publicKey: string,
+  options?: { displayName?: string; trusted?: boolean },
+): void {
+  if (!isValidEd25519PublicKeyB64(publicKey)) return
+
+  const localDeviceId = getP2pDeviceId()
+  if (deviceId === localDeviceId) return
+
+  const node = resolveDiscoveredNode(deviceId)
+  const existing = getPeerRepo().findByWorkspaceAndDevice(workspaceId, deviceId)
+  getPeerRepo().upsert({
+    workspaceId,
+    deviceId,
+    displayName: options?.displayName ?? existing?.displayName ?? node?.userName ?? '成员',
+    deviceName: node?.deviceName ?? existing?.deviceName ?? deviceId.slice(0, 8),
+    publicKey,
+    online: node?.online ?? existing?.online ?? false,
+    lastSeenAt: node ? new Date(node.lastSeenAt) : existing?.lastSeenAt ?? undefined,
+    connectionState: existing?.connectionState ?? null,
+    trusted: options?.trusted ?? existing?.trusted ?? false,
+  })
 }
 
 function resolvePeerDisplayName(workspaceId: string, deviceId: string, fallback: string): string {
@@ -190,19 +255,26 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
   const memberships = memberRepo.listActiveMembershipsByDevice(localDeviceId)
 
   void (async () => {
+    let ownerReconcileQueued = false
     for (const membership of memberships) {
       const workspace = workspaceRepo.findById(membership.workspaceId)
       if (!workspace) continue
 
       const peerIsMember = memberRepo.findByWorkspaceAndDevice(membership.workspaceId, peerDeviceId)
       const peerIsOwner = workspace.ownerDeviceId === peerDeviceId
+      if (workspace.ownerDeviceId === localDeviceId) {
+        if (!ownerReconcileQueued) {
+          ownerReconcileQueued = true
+          const module = await import('./p2p-member.service')
+          void module.runOwnerPeerReconcileTick()
+        }
+        continue
+      }
+
       if (!peerIsMember && !peerIsOwner) continue
 
       try {
-        if (workspace.ownerDeviceId === localDeviceId) {
-          const module = await import('./p2p-member.service')
-          await module.reconcileOwnerWorkspaceMembers(workspace.id, { immediate: true })
-        } else if (peerIsOwner) {
+        if (peerIsOwner) {
           const module = await import('./p2p-member.service')
           await module.ensureMemberConnectsToOwner(workspace.id, { immediate: true })
         } else {

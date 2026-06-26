@@ -18,6 +18,7 @@ import {
   getDefaultSkillIds,
   getDefaultMcpServerIds,
   resolveMcpServerIdsForSkills,
+  isDefaultSessionTitle,
   type ContentBlock,
 } from '@toolman/shared'
 import { createMessageRepository, createSessionRepository, runInTransaction } from '@toolman/db'
@@ -206,7 +207,7 @@ export async function sendMessage(input: unknown) {
     const sessions = createSessionRepository(tx)
     const messages = createMessageRepository(tx)
 
-    if (session.title === '新对话' && session.messageCount === 0) {
+    if (isDefaultSessionTitle(session.title) && session.messageCount === 0) {
       sessions.update(session.id, { title: deriveSessionTitle(userText) })
     }
 

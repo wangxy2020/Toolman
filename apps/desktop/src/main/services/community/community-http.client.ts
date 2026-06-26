@@ -27,6 +27,7 @@ export interface CommunityHealthData {
   db: string
   data_dir?: string
   require_review?: boolean
+  rate_limit_rpm?: number
   user_count?: number
   resource_count?: number
   federation_peering?: boolean

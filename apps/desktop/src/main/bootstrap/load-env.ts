@@ -1,7 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const ENV_FILE_NAMES = ['.env', '.env.local'] as const
+const ENV_FILE_NAMES = ['.env', '.env.local', 'release.env'] as const
+
+const PACKAGED_FORBIDDEN_DEV_ENV_PATTERN =
+  /^(TOOLMAN_.*_DEV_MODE|TOOLMAN_BILLING_MOCK|TENCENT_SMS_DEV_MODE|WECHAT_DEV_MODE)$/
 
 function parseEnvFile(content: string): Record<string, string> {
   const values: Record<string, string> = {}
@@ -33,6 +36,7 @@ function parseEnvFile(content: string): Record<string, string> {
 function applyEnvFile(filePath: string): void {
   const parsed = parseEnvFile(readFileSync(filePath, 'utf8'))
   for (const [key, value] of Object.entries(parsed)) {
+    if (!shouldLoadReleaseEnvKey(key, filePath)) continue
     if (process.env[key] === undefined) {
       process.env[key] = value
     }
@@ -48,7 +52,19 @@ function collectEnvSearchRoots(): string[] {
     join(__dirname, '../../../..'),
   ])
 
+  if (typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0) {
+    roots.add(join(process.resourcesPath, 'config'))
+  }
+
   return [...roots]
+}
+
+function shouldLoadReleaseEnvKey(key: string, filePath: string): boolean {
+  if (!filePath.endsWith('release.env')) return true
+  if (PACKAGED_FORBIDDEN_DEV_ENV_PATTERN.test(key)) return false
+  return /^(TOOLMAN_FIREBASE_|TOOLMAN_AUTHING_|TOOLMAN_TENCENT_|TOOLMAN_WECHAT_|TOOLMAN_AUTH_BUILD_|TOOLMAN_BUILD_REGION|TOOLMAN_COMMUNITY_JWT_SECRET|TOOLMAN_P2P_)/.test(
+    key,
+  )
 }
 
 export function loadWorkspaceEnvFiles(): void {

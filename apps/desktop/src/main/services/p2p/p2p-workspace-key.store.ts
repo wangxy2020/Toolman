@@ -48,6 +48,13 @@ export function saveWorkspaceKey(
   setWorkspaceKey(workspaceId, workspaceKeyBase64, keyVersion)
 }
 
+export function ensureWorkspaceKeyFromInvite(payload: {
+  workspaceId: string
+  workspaceKeyB64: string
+}): void {
+  saveWorkspaceKey(payload.workspaceId, payload.workspaceKeyB64)
+}
+
 export function loadWorkspaceKey(workspaceId: string): string | null {
   const entry = readStore()[workspaceId]
   if (!entry) return null

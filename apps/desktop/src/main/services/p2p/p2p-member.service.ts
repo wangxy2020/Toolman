@@ -27,6 +27,7 @@ import {
   handleMemberSyncResponse,
   reconcileOwnerWorkspaceMembers,
   runOwnerPeerReconcileTick,
+  runMemberOwnerConnectTick,
 } from './p2p-member-reconcile.service'
 
 export { P2pMemberVipRequiredError } from './p2p-workspace-vip-pool.service'
@@ -42,6 +43,7 @@ export {
   handleMemberSyncResponse,
   reconcileOwnerWorkspaceMembers,
   runOwnerPeerReconcileTick,
+  runMemberOwnerConnectTick,
 }
 
 function ensureLocalMemberDisplayNameForWorkspace(workspaceId: string): void {

@@ -5,7 +5,7 @@ import { IconChevronRight, IconPlus, IconTopic } from '../icons'
 import { SidebarRenameInput } from '../../features/notes/SidebarRenameInput'
 import { isGroupProxyAssistant } from '../../features/group/group-agent-utils'
 import { useI18n } from '../../i18n/useI18n'
-import { translateAssistantName } from '../../i18n/system-labels'
+import { translateAssistantName, translateSessionTitle } from '../../i18n/system-labels'
 
 interface Props {
   assistants: Assistant[]
@@ -93,6 +93,7 @@ export function MiddleSidebar({
   const renderSession = (session: Session) => {
     const isActive = activeSessionId === session.id
     const isRenaming = renameSessionId === session.id
+    const displayTitle = translateSessionTitle(session.title, t)
 
     if (isRenaming) {
       return (
@@ -129,12 +130,12 @@ export function MiddleSidebar({
           e.preventDefault()
           setDeleteTarget(session)
         }}
-        title={session.title}
+        title={displayTitle}
       >
         <span className="tm-session-item-icon" aria-hidden="true">
           <IconTopic size={14} />
         </span>
-        <span className="tm-session-item-label">{session.title}</span>
+        <span className="tm-session-item-label">{displayTitle}</span>
       </button>
     )
   }
@@ -235,7 +236,9 @@ export function MiddleSidebar({
       {deleteTarget && (
         <ConfirmDialog
           title={t('sidebar.agent.deleteTopicTitle')}
-          message={t('sidebar.agent.deleteTopicMessage', { title: deleteTarget.title })}
+          message={t('sidebar.agent.deleteTopicMessage', {
+            title: translateSessionTitle(deleteTarget.title, t),
+          })}
           confirmLabel={t('common.delete')}
           cancelLabel={t('common.cancel')}
           danger

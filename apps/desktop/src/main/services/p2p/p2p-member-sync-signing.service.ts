@@ -20,6 +20,7 @@ export interface SignedMemberJoinedWire {
     role: string
     identityId?: string
     subscriptionSku?: ProductSku
+    devicePublicKey?: string
   }
   signerDeviceId: string
   signature: string
@@ -93,6 +94,7 @@ export interface SignedMemberSyncResponseWire {
     displayName: string
     role: string
     identityId?: string
+    devicePublicKey?: string
   }
   signerDeviceId: string
   signature: string
@@ -131,15 +133,19 @@ function buildMemberSyncResponseSignPayload(input: {
 export function signMemberJoinedWireMessage(input: {
   workspaceId: string
   inviteId?: string
-  member: SignedMemberJoinedWire['member']
+  member: Omit<SignedMemberJoinedWire['member'], 'devicePublicKey'>
 }): SignedMemberJoinedWire {
   const device = getP2pDeviceInfo()
   const at = Date.now()
+  const member: SignedMemberJoinedWire['member'] = {
+    ...input.member,
+    devicePublicKey: device.publicKey,
+  }
   const payload = buildMemberJoinedSignPayload({
     workspaceId: input.workspaceId,
     inviteId: input.inviteId,
     at,
-    member: input.member,
+    member,
   })
   return {
     v: 2,
@@ -147,7 +153,7 @@ export function signMemberJoinedWireMessage(input: {
     workspaceId: input.workspaceId,
     inviteId: input.inviteId,
     at,
-    member: input.member,
+    member,
     signerDeviceId: device.deviceId,
     signature: signDeviceMessage(payload),
   }
@@ -155,21 +161,25 @@ export function signMemberJoinedWireMessage(input: {
 
 export function signMemberSyncResponseWireMessage(input: {
   workspaceId: string
-  member: SignedMemberSyncResponseWire['member']
+  member: Omit<SignedMemberSyncResponseWire['member'], 'devicePublicKey'>
 }): SignedMemberSyncResponseWire {
   const device = getP2pDeviceInfo()
   const at = Date.now()
+  const member: SignedMemberSyncResponseWire['member'] = {
+    ...input.member,
+    devicePublicKey: device.publicKey,
+  }
   const payload = buildMemberSyncResponseSignPayload({
     workspaceId: input.workspaceId,
     at,
-    member: input.member,
+    member,
   })
   return {
     v: 2,
     type: 'member.sync_response',
     workspaceId: input.workspaceId,
     at,
-    member: input.member,
+    member,
     signerDeviceId: device.deviceId,
     signature: signDeviceMessage(payload),
   }
@@ -186,7 +196,10 @@ export function verifyMemberJoinedWireMessage(
     return { ok: false, reason: 'member device does not match peer' }
   }
 
-  const publicKey = resolvePeerPublicKey(peerDeviceId, peerDeviceId)
+  const publicKey = resolvePeerPublicKey(
+    peerDeviceId,
+    envelope.member.devicePublicKey ?? peerDeviceId,
+  )
   const payload = buildMemberJoinedSignPayload({
     workspaceId: envelope.workspaceId,
     inviteId: envelope.inviteId,
@@ -212,7 +225,10 @@ export function verifyMemberSyncResponseWireMessage(
     return { ok: false, reason: 'member device does not match peer' }
   }
 
-  const publicKey = resolvePeerPublicKey(peerDeviceId, peerDeviceId)
+  const publicKey = resolvePeerPublicKey(
+    peerDeviceId,
+    envelope.member.devicePublicKey ?? peerDeviceId,
+  )
   const payload = buildMemberSyncResponseSignPayload({
     workspaceId: envelope.workspaceId,
     at: envelope.at,

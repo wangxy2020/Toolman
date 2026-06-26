@@ -11,6 +11,7 @@ export function ensureLinkedIdentityRowInDb(
   db: ToolmanDatabase,
   identityId: string,
   displayName = '远程用户',
+  publicKey?: string | null,
 ): void {
   const trimmedId = identityId.trim()
   if (!trimmedId || trimmedId === getLocalIdentityId()) {
@@ -19,9 +20,20 @@ export function ensureLinkedIdentityRowInDb(
 
   const existing = db.select().from(identities).where(eq(identities.id, trimmedId)).get()
   if (existing) {
-    if (displayName && existing.displayName !== displayName && existing.type === 'linked') {
+    const nextDisplayName =
+      displayName && existing.displayName !== displayName ? displayName : existing.displayName
+    const nextPublicKey =
+      publicKey && existing.publicKey !== publicKey ? publicKey : existing.publicKey
+    if (
+      (nextDisplayName !== existing.displayName || nextPublicKey !== existing.publicKey) &&
+      existing.type === 'linked'
+    ) {
       db.update(identities)
-        .set({ displayName, updatedAt: new Date() })
+        .set({
+          displayName: nextDisplayName,
+          publicKey: nextPublicKey,
+          updatedAt: new Date(),
+        })
         .where(eq(identities.id, trimmedId))
         .run()
     }
@@ -34,6 +46,7 @@ export function ensureLinkedIdentityRowInDb(
       id: trimmedId,
       type: 'linked',
       displayName: displayName.trim() || '远程用户',
+      publicKey: publicKey ?? null,
       registrationStatus: 'guest',
       createdAt: now,
       updatedAt: now,
@@ -41,6 +54,10 @@ export function ensureLinkedIdentityRowInDb(
     .run()
 }
 
-export function ensureLinkedIdentityRow(identityId: string, displayName?: string): void {
-  ensureLinkedIdentityRowInDb(getDatabase(), identityId, displayName)
+export function ensureLinkedIdentityRow(
+  identityId: string,
+  displayName?: string,
+  publicKey?: string | null,
+): void {
+  ensureLinkedIdentityRowInDb(getDatabase(), identityId, displayName, publicKey)
 }

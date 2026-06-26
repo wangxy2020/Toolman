@@ -56,6 +56,9 @@ importers:
       '@toolman/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      apache-arrow:
+        specifier: 18.1.0
+        version: 18.1.0
       authing-js-sdk:
         specifier: ^4.23.55
         version: 4.23.55
@@ -206,6 +209,9 @@ importers:
       '@napi-rs/canvas':
         specifier: ^1.0.0
         version: 1.0.0
+      apache-arrow:
+        specifier: 18.1.0
+        version: 18.1.0
       cheerio:
         specifier: ^1.0.0
         version: 1.2.0

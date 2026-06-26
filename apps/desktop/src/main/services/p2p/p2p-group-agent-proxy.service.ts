@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { logStructured } from '../structured-log.service'
-import { toErrorMessage } from '@toolman/shared'
+import { toErrorMessage, isDefaultSessionTitle } from '@toolman/shared'
 import {P2pAgentOpenSessionInputSchema,
   P2pGroupAgentProxySchema,
   type Message,
@@ -273,7 +273,7 @@ function resolveSharedSessionTitle(
     trimmedFallback &&
     trimmedFallback !== '未命名话题' &&
     trimmedFallback !== '共享话题' &&
-    trimmedFallback !== '新对话'
+    !isDefaultSessionTitle(trimmedFallback)
   ) {
     return trimmedFallback
   }

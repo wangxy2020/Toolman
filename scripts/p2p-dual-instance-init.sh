@@ -62,20 +62,21 @@ configure_workspace_db() {
   local user_name="$3"
   local label="$4"
   local migrate_files="${5:-false}"
+  local identity_id="${6:-00000000-0000-0000-0000-000000000001}"
 
   if [[ ! -f "$db_path" ]]; then
     warn "$label: no toolman.db yet ($db_path) — start the app once, then re-run this script."
     return 0
   fi
 
-  info "$label: configure user root -> $user_root (display name: $user_name)"
-  python3 - "$db_path" "$user_root" "$user_name" "$migrate_files" <<'PY'
+  info "$label: configure user root -> $user_root (display name: $user_name, identity: $identity_id)"
+  python3 - "$db_path" "$user_root" "$user_name" "$migrate_files" "$identity_id" <<'PY'
 import json
 import sqlite3
 import sys
 from pathlib import Path
 
-db_path, user_root, user_name, migrate_files_raw = sys.argv[1:5]
+db_path, user_root, user_name, migrate_files_raw, identity_id = sys.argv[1:6]
 migrate_files = migrate_files_raw.lower() in ("1", "true", "yes")
 user_root = Path(user_root).expanduser().resolve()
 kb_path = user_root / "本地知识库"
@@ -84,8 +85,8 @@ conn = sqlite3.connect(db_path)
 conn.row_factory = sqlite3.Row
 
 conn.execute(
-    "UPDATE identities SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = '00000000-0000-0000-0000-000000000001'",
-    (user_name,),
+    "UPDATE identities SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    (user_name, identity_id),
 )
 
 device_row = conn.execute(
@@ -228,8 +229,8 @@ conn.close()
 PY
 }
 
-configure_workspace_db "$USER_A_DATA/toolman.db" "$USER_A_ROOT" "$USER_A_NAME" "用户 A (node-b)" true
-configure_workspace_db "$USER_B_DATA/toolman.db" "$USER_B_ROOT" "$USER_B_NAME" "用户 B (p2p-b)" false
+configure_workspace_db "$USER_A_DATA/toolman.db" "$USER_A_ROOT" "$USER_A_NAME" "用户 A (node-b)" true "00000000-0000-0000-0000-000000000001"
+configure_workspace_db "$USER_B_DATA/toolman.db" "$USER_B_ROOT" "$USER_B_NAME" "用户 B (p2p-b)" false "00000000-0000-4000-8000-00000000000b"
 
 cat <<EOF
 

@@ -9,10 +9,20 @@ export type P2pIceServer = z.infer<typeof P2pIceServerSchema>
 
 export const P2pIceServerListSchema = z.array(P2pIceServerSchema)
 
+export const P2pXirsysConfigSchema = z.object({
+  path: z.string().min(1).default('https://global.xirsys.net'),
+  ident: z.string().min(1),
+  secret: z.string().min(1),
+  channel: z.string().min(1),
+})
+export type P2pXirsysConfig = z.infer<typeof P2pXirsysConfigSchema>
+
 export const P2pNetworkIceConfigSchema = z.object({
   /** @deprecated Prefer `iceServers`. Kept for existing `network.json` files. */
   stunServers: z.array(z.string().min(1)).optional(),
   iceServers: P2pIceServerListSchema.optional(),
+  /** Fetch ephemeral ICE servers from Xirsys before each session (desktop main process). */
+  xirsys: P2pXirsysConfigSchema.optional(),
 })
 export type P2pNetworkIceConfig = z.infer<typeof P2pNetworkIceConfigSchema>
 

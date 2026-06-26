@@ -358,6 +358,14 @@ impl ConnectionManager {
         let deadline = tokio::time::Instant::now() + timeout;
 
         while tokio::time::Instant::now() < deadline {
+            if let Some((joiner_device_id, answer_sdp)) =
+                Self::poll_invite_answer_signal(&invite_id, &local_device_id)?
+            {
+                return self
+                    .accept_invite_answer(&invite_id, &joiner_device_id, &answer_sdp)
+                    .await;
+            }
+
             let udp_answer = INVITE_UDP_ANSWERS
                 .lock()
                 .ok()
@@ -366,16 +374,10 @@ impl ConnectionManager {
                 if let Ok(mut answers) = INVITE_UDP_ANSWERS.lock() {
                     answers.remove(&invite_id);
                 }
-                let joiner_device_id = Self::resolve_joiner_from_signal(&invite_id, &local_device_id)
-                    .unwrap_or_else(|| "unknown-joiner".to_string());
-                return self
-                    .accept_invite_answer(&invite_id, &joiner_device_id, &answer_sdp)
-                    .await;
-            }
-
-            if let Some((joiner_device_id, answer_sdp)) =
-                Self::poll_invite_answer_signal(&invite_id, &local_device_id)?
-            {
+                let joiner_device_id =
+                    Self::resolve_joiner_from_signal_with_retry(&invite_id, &local_device_id)
+                        .await
+                        .unwrap_or_else(|| "unknown-joiner".to_string());
                 return self
                     .accept_invite_answer(&invite_id, &joiner_device_id, &answer_sdp)
                     .await;
@@ -571,6 +573,20 @@ impl ConnectionManager {
             .map(|(device_id, _)| device_id)
     }
 
+    async fn resolve_joiner_from_signal_with_retry(
+        invite_id: &str,
+        local_device_id: &str,
+    ) -> Option<String> {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        while tokio::time::Instant::now() < deadline {
+            if let Some(device_id) = Self::resolve_joiner_from_signal(invite_id, local_device_id) {
+                return Some(device_id);
+            }
+            tokio::time::sleep(SIGNAL_POLL_INTERVAL).await;
+        }
+        None
+    }
+
     async fn connect_as_offerer(
         &self,
         session: &Arc<AsyncMutex<WebRtcSession>>,
@@ -655,7 +671,7 @@ impl ConnectionManager {
                 workspace_id.as_deref(),
                 local_device_id,
                 &peer_device_id,
-            )
+            )?
         };
 
         session

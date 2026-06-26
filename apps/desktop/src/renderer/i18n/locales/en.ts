@@ -352,8 +352,10 @@ export const en: DeepStringMap<typeof zhCN> = {
       inviteRequired: 'Please enter an invite code or link',
       joinFailed: 'Failed to join group',
       wanDefaultWarning:
-        'TURN is not configured. Joining over WAN may fail. See Settings → Diagnostics for WAN setup.',
-      wanHint: 'LAN join works directly; WAN requires TURN (see docs/engineering/PRODUCTION_CONFIG.md).',
+        'TURN is not configured. Joining over WAN may fail. See Settings → Diagnostics for WAN status.',
+      wanMissingCredentials:
+        'TURN credentials are missing. Joining over WAN may fail. See Settings → Diagnostics for WAN status.',
+      wanHint: 'LAN join works directly; WAN uses TURN relay configured automatically by the app.',
     },
     knowledgeCreate: {
       title: 'Add knowledge base',

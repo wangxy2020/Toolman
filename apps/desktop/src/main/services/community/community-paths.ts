@@ -23,7 +23,13 @@ export function getCommunityHubPortFilePath(): string {
 }
 
 export function resolveCommunityHubBinaryPath(): string | null {
+  const resourceCandidates =
+    typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0
+      ? [join(process.resourcesPath, 'bin', BINARY_NAME)]
+      : []
+
   const candidates = [
+    ...resourceCandidates,
     join(__dirname, '..', '..', '..', 'bin', BINARY_NAME),
     join(__dirname, '..', '..', '..', '..', 'bin', BINARY_NAME),
     join(process.cwd(), 'apps', 'desktop', 'bin', BINARY_NAME),

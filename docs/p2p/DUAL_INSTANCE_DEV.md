@@ -62,6 +62,8 @@
 
 ## 3. 启动两个实例
 
+> **不要混用打包版与 dev 脚本。** `Toolman.app`（默认 `~/Library/Application Support/Toolman`）与 `pnpm dev:p2p:b` 属于不同 profile、不同 P2P 设备密钥策略，且代码版本可能不一致，会导致成员名称错乱、群消息无法送达。单机双开请用 **`dev:p2p:a` + `dev:p2p:b`**，或两个隔离的 RC1 profile（见 [RC1_DOGFOOD.md](../engineering/RC1_DOGFOOD.md)）。
+
 **终端 1 — 用户 A（群主）：**
 
 ```bash
@@ -77,6 +79,19 @@ pnpm dev:p2p:b
 ```
 
 两个窗口需使用**不同账号**登录。
+
+### 3.1 社区出现 `rate limit exceeded`
+
+若界面提示 **Community Hub rate limit exceeded; retry after a short delay**，常见原因是 **打包版 `Toolman.app` 与 `dev:p2p:*` 同时运行**：两者会共用本机 `3721` 端口上的 Hub，打包版默认限流（600 次/分钟），双实例轮询社区接口容易触发 429。
+
+**处理：**
+
+1. **推荐**：完全退出 `Toolman.app`，仅使用 `pnpm dev:p2p:a` + `pnpm dev:p2p:b`（双开脚本已设置 `COMMUNITY_HUB_RATE_LIMIT_RPM=0`）。
+2. 或结束占用 3721 的旧 Hub 后重启 dev 实例：
+   ```bash
+   lsof -ti :3721 | xargs kill -TERM 2>/dev/null || true
+   ```
+3. 重启 `dev:p2p:a`（先启动的一方会拉起无限流的 dev Hub）；`dev:p2p:b` 会附着到该 Hub。
 
 ---
 
@@ -149,6 +164,15 @@ pnpm verify:folders:b
 说明 P2P **设备发现未启动**（ICE 配置传入 `null` 导致原生模块报错）。请**完全退出**两个窗口后重新 `pnpm dev:p2p:a` / `dev:p2p:b`（main 进程改动不会热更新）。
 
 `[toolman-libp2p] outgoing connection error ... Handshake failed` 影响社区联邦（CID/Yjs），**不影响**群组 WebRTC 同步；群组依赖上方的 `discovery_start` 成功。
+
+`TSM AdjustCapsLockLED` / `IMKCFRunLoopWakeUpReliable` 是 macOS 输入法噪音，**与 P2P 无关**，可忽略。
+
+**用户 A 成员列表看不到用户 B**：多为 WebRTC 未连上或 `member.joined` 未送达。请：
+
+1. **完全退出**两个 Electron 窗口后重启 `dev:p2p:a` → `dev:p2p:b`（修改 main / Rust 后必须重启）
+2. 在 **用户 A** 重新生成邀请链接（旧链接可能缺少群主显示名等信息）
+3. 用户 B 用新链接加入；终端应出现 `attached` / `connected` 类 P2P 日志，而非长期 `gave up notifying owner`
+4. 若仍失败：确认 `/tmp/toolman-p2p-beacon/` 下有两个设备的 `.json` 文件（局域网发现正常）
 
 双开脚本已默认 `TOOLMAN_P2P_IDENTITY_STORAGE=file`，每个 `--user-data-dir` 使用独立设备密钥，避免 Keychain 共用。
 

@@ -11,6 +11,7 @@ import type { P2pInvitableMemberRole } from '@toolman/shared'
 import {P2pMemberInviteInputSchema, toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { getIdentityDisplayName } from './p2p-member-shared'
 import { assertCanInvite as assertCanInviteMember } from './p2p-permission.guard'
 import {
   buildInviteUrl,
@@ -100,6 +101,7 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
     ownerDeviceId: workspace.ownerDeviceId,
     ownerIdentityId: workspace.ownerIdentityId,
     ownerPublicKey,
+    ownerDisplayName: getIdentityDisplayName(),
     workspaceKeyB64,
     role: input.role,
     expiresAt,

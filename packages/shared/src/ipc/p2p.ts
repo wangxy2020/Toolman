@@ -66,10 +66,16 @@ export const P2pDeviceGetInfoOutputSchema = z.object({
 
 export type P2pDeviceGetInfoOutput = z.infer<typeof P2pDeviceGetInfoOutputSchema>
 
+export const P2pWanReadinessReasonCodeSchema = z.enum([
+  'turn_not_configured',
+  'turn_missing_credentials',
+])
+
 export const P2pWanReadinessSchema = z.object({
   ready: z.boolean(),
   summary: z.string(),
   reason: z.string().optional(),
+  reasonCode: P2pWanReadinessReasonCodeSchema.optional(),
 })
 
 export const P2pNetworkGetConfigOutputSchema = z.object({

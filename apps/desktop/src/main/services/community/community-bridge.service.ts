@@ -349,6 +349,14 @@ async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null
         continue
       }
 
+      const rateLimitRpm = health.rate_limit_rpm ?? 0
+      if (!app.isPackaged && rateLimitRpm > 0) {
+        log(
+          `skipping attach to hub on port ${port} (rate_limit_rpm=${rateLimitRpm}); dev will spawn an unlimited hub instead`,
+        )
+        continue
+      }
+
       httpClient = client
       currentStatus = {
         running: true,
@@ -425,7 +433,7 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
       COMMUNITY_HUB_REQUIRE_REVIEW:
         process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'true' : 'true'),
       COMMUNITY_HUB_RATE_LIMIT_RPM:
-        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? (app.isPackaged ? '120' : '0'),
+        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? (app.isPackaged ? '600' : '0'),
       RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
     }
 

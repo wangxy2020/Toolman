@@ -13,6 +13,7 @@ import {
 } from '@toolman/db'
 import type { P2pMember, P2pWorkspace } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
+import { getLocalIdentityId } from '../local-identity'
 import * as p2pConnectionService from './p2p-connection.service'
 import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
@@ -40,7 +41,7 @@ export function getIdentityDisplayName(): string {
   const row = db
     .select()
     .from(identities)
-    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .where(eq(identities.id, getLocalIdentityId()))
     .get()
   return row?.displayName ?? '本地用户'
 }

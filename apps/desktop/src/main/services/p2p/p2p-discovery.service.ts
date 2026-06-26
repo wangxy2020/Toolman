@@ -17,20 +17,22 @@ import {
   broadcastP2pDiscoveryNodeOnline,
 } from './p2p-discovery-broadcast'
 import { handlePeerDiscoveryOffline, handlePeerDiscoveryOnline } from './p2p-peer.service'
+import { getLocalIdentityId } from '../local-identity'
 
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 const POLL_INTERVAL_MS = 2_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let ownerReconcileTimer: ReturnType<typeof setInterval> | null = null
+let memberOwnerConnectTimer: ReturnType<typeof setInterval> | null = null
 const OWNER_RECONCILE_INTERVAL_MS = 6_000
+const MEMBER_OWNER_CONNECT_INTERVAL_MS = 6_000
 const knownNodes = new Map<string, DiscoveredNode>()
 
 function getLocalUserName(): string {
   const row = getDatabase()
     .select({ displayName: identities.displayName })
     .from(identities)
-    .where(eq(identities.id, DEFAULT_IDENTITY_ID))
+    .where(eq(identities.id, getLocalIdentityId()))
     .get()
   return row?.displayName ?? '本地用户'
 }
@@ -94,6 +96,20 @@ function stopOwnerReconcileLoop(): void {
   }
 }
 
+function stopMemberOwnerConnectLoop(): void {
+  if (memberOwnerConnectTimer) {
+    clearInterval(memberOwnerConnectTimer)
+    memberOwnerConnectTimer = null
+  }
+}
+
+function startMemberOwnerConnectLoop(): void {
+  if (memberOwnerConnectTimer) return
+  memberOwnerConnectTimer = setInterval(() => {
+    void import('./p2p-member.service').then((module) => module.runMemberOwnerConnectTick())
+  }, MEMBER_OWNER_CONNECT_INTERVAL_MS)
+}
+
 function startOwnerReconcileLoop(): void {
   if (ownerReconcileTimer) return
   ownerReconcileTimer = setInterval(() => {
@@ -133,11 +149,13 @@ export function startP2pDiscovery(): void {
   })
   startPolling()
   startOwnerReconcileLoop()
+  startMemberOwnerConnectLoop()
 }
 
 export function stopP2pDiscovery(): void {
   stopPolling()
   stopOwnerReconcileLoop()
+  stopMemberOwnerConnectLoop()
   P2pBridge.discoveryStop()
 }
 

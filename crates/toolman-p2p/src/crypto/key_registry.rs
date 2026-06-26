@@ -55,21 +55,22 @@ impl WorkspaceKeyRegistry {
         workspace_id: Option<&str>,
         local_device_id: &str,
         peer_device_id: &str,
-    ) -> ([u8; WORKSPACE_KEY_LEN], String, u32) {
+    ) -> Result<([u8; WORKSPACE_KEY_LEN], String, u32), String> {
         if let Some(workspace_id) = workspace_id {
             if let Some(entry) = self.get(workspace_id) {
-                return (
+                return Ok((
                     entry.workspace_key,
                     workspace_id.to_string(),
                     entry.key_version,
-                );
+                ));
             }
-            let bootstrap = derive_pairwise_bootstrap_key(local_device_id, peer_device_id);
-            return (bootstrap, workspace_id.to_string(), 1);
+            return Err(format!(
+                "Workspace key not configured for workspace {workspace_id}"
+            ));
         }
 
         let workspace_scope = format!("pairwise:{local_device_id}:{peer_device_id}");
         let bootstrap = derive_pairwise_bootstrap_key(local_device_id, peer_device_id);
-        (bootstrap, workspace_scope, 1)
+        Ok((bootstrap, workspace_scope, 1))
     }
 }

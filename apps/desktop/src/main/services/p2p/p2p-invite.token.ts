@@ -22,6 +22,7 @@ export interface InviteTokenPayload {
   ownerDeviceId: string
   ownerIdentityId: string
   ownerPublicKey: string
+  ownerDisplayName?: string
   workspaceKeyB64: string
   role: P2pInvitableMemberRole
   expiresAt: number

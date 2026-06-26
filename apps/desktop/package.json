@@ -33,6 +33,7 @@
     "@toolman/knowledge": "workspace:*",
     "@toolman/model-gateway": "workspace:*",
     "@toolman/shared": "workspace:*",
+    "apache-arrow": "18.1.0",
     "authing-js-sdk": "^4.23.55",
     "better-sqlite3": "^11.10.0",
     "chokidar": "^4.0.3",

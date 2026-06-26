@@ -236,8 +236,9 @@ export function isPeerConnected(peerDeviceId: string): boolean {
 export async function ensurePeerReadyForWorkspace(
   peerDeviceId: string,
   workspaceId: string,
+  options?: { workspaceKeyB64?: string },
 ): Promise<void> {
-  const workspaceKey = loadWorkspaceKey(workspaceId)
+  const workspaceKey = options?.workspaceKeyB64 ?? loadWorkspaceKey(workspaceId)
   if (!workspaceKey) {
     throw new Error('群组密钥不存在')
   }

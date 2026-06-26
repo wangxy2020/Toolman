@@ -382,7 +382,7 @@ impl WebRtcSession {
             self.workspace_id.as_deref(),
             local_device_id,
             &self.peer_device_id,
-        );
+        )?;
         self.init_ciphers_with_material(workspace_key, scope_id, key_version)
             .await
     }

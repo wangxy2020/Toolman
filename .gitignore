@@ -11,6 +11,7 @@ target/
 .env.*
 !.env.example
 *.local
+apps/desktop/resources/release.env
 
 # 日志文件
 *.log

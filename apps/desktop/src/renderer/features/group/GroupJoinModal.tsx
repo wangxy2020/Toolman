@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { IpcChannel } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
+import { translateP2pWanReadinessReason } from '../../i18n/system-labels'
 import { GroupMemberLimitModal } from './GroupMemberLimitModal'
 import { P2pJoinError } from './useP2pWorkspaces'
 
@@ -27,7 +28,13 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
       }
       const readiness = config.wanReadiness
       if (!readiness?.ready) {
-        setWanWarning(readiness?.reason ?? t('modals.groupJoin.wanDefaultWarning'))
+        setWanWarning(
+          translateP2pWanReadinessReason(readiness ?? { ready: false }, t, {
+            turnNotConfiguredKey: 'modals.groupJoin.wanDefaultWarning',
+            missingCredentialsKey: 'modals.groupJoin.wanMissingCredentials',
+            fallbackKey: 'modals.groupJoin.wanDefaultWarning',
+          }),
+        )
       }
     })
   }, [t])
