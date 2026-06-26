@@ -92,7 +92,7 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 
 - [x] **P2P 双实例（单机）**：`dev:p2p:a` + `dev:p2p:b` · TURN 诊断就绪 · 建群/文件/群聊通过
 - [ ] **P2P 双实例签字**：`./scripts/p2p-dual-node-e2e.sh` 清单全部 `[x]` 并归档
-- [x] **TURN / WAN 配置（单机预检）**：OpenRelay · [RC1_WAN_SIGNOFF.md §单机预检](./RC1_WAN_SIGNOFF.md)
+- [x] **TURN / WAN 配置（单机预检）**：Xirsys 静默注入 · [RELEASE_STATUS.md §7](./RELEASE_STATUS.md#7-wan--跨-nat-验收)
 - [ ] **WAN 群组（跨 NAT）**：两台跨 NAT 机器 + TURN · 正式签字
 - [ ] **OTA**：About → 检查更新（staging manifest 可用时）
 - [ ] **崩溃上报**：系统诊断开启 opt-in → 触发测试崩溃 → 确认上传或本地留存符合预期
@@ -106,7 +106,7 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 
 ## 6. 缺陷记录
 
-完整模板见 **[RC1_DEFECT_TRACKER.md](./RC1_DEFECT_TRACKER.md)**（汇总看板、主表列头、单条填报模板、状态流转、模块枚举）。
+缺陷与严重度定义见 **[RELEASE_STATUS.md §8](./RELEASE_STATUS.md#8-缺陷跟踪)**；完整模板字段见 [RC1_DOGFOOD.md §6](./RC1_DOGFOOD.md)。
 
 主表摘要（详细字段见模板）：
 

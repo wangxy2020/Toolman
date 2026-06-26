@@ -1,7 +1,7 @@
 # Toolman 生产环境配置
 
 > **用途**：GA 发行包、官方 Hub 与 Desktop 客户端的生产 env 清单  
-> **关联**：[PRODUCTION_RELEASE_PLAN.md](./PRODUCTION_RELEASE_PLAN.md) · 根目录 `.env.production.example`
+> **关联**：[RELEASE_STATUS.md](./RELEASE_STATUS.md) · 根目录 `.env.production.example`
 
 ## 原则
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 1.7 — 10-participant WAN scenario manual checklist (extends RC1_WAN_SIGNOFF).
+# Phase 1.7 — 10-participant WAN scenario manual checklist (extends RELEASE_STATUS §7).
 #
 # Usage:
 #   ./scripts/p2p-wan-10-peer-checklist.sh
@@ -25,7 +25,7 @@ fi
 cat <<'EOF'
 # Toolman P2P — 10 人 WAN 场景验收清单
 
-> 关联：docs/engineering/RC1_WAN_SIGNOFF.md · docs/engineering/GA_DEVELOPMENT_PLAN.md Phase 1.7
+> 关联：docs/engineering/RELEASE_STATUS.md §7
 >
 > **前提**：全员 RC1 Release 包 + 独立 userData + staging TURN 已配置。
 > 将 `[ ]` 改为 `[x]` 并归档至 CI artifact / 团队文档。

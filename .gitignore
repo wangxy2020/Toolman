@@ -5,6 +5,8 @@ out/
 build/
 target/
 .turbo/
+.tmp/
+*.tsbuildinfo
 
 # 环境变量与配置（注意：保留了不忽略 example 的规则）
 .env

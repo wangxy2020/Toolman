@@ -62,7 +62,7 @@ else
   printf 'typecheck OK\n'
 fi
 
-step "Manual dogfood (tick RC1_KICKOFF_STATUS.md)"
+step "Manual dogfood (tick RELEASE_STATUS.md §6)"
 cat <<'EOF'
 Core path (today, Release or dev RC1 profile):
   [ ] Login (CN or Global)
@@ -77,8 +77,8 @@ Depth (once per week):
   [ ] About → check for updates (when staging CDN ready)
   [ ] Crash report opt-in smoke (Diagnostics)
 
-Record in: docs/engineering/RC1_KICKOFF_STATUS.md (daily table)
-Defects:    docs/engineering/RC1_DEFECT_TRACKER.md
+Record in: docs/engineering/RELEASE_STATUS.md (§6 daily table)
+Defects:    docs/engineering/RELEASE_STATUS.md (§8)
 EOF
 
 printf '\nRC1 dogfood day checks complete.\n'

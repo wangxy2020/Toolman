@@ -141,7 +141,7 @@ for dir in "${TARGET_DIRS[@]}"; do
   install_for_dir "$dir"
 done
 
-step "WAN sign-off test (docs/engineering/RC1_WAN_SIGNOFF.md)"
+step "WAN sign-off test (docs/engineering/RELEASE_STATUS.md §7)"
 
 cat <<'EOF'
 Prerequisites:
@@ -161,7 +161,7 @@ Node B (member, other network):
   3. Member panel: 广域网 · 在线 (within 60s)
   4. See file within 30s; chat message within 10s
 
-Record results in docs/engineering/RC1_WAN_SIGNOFF.md (Phase 0.3 sign-off).
+Record results in docs/engineering/RELEASE_STATUS.md (§7 WAN sign-off).
 
 Quick verify after restart:
   Settings → 系统诊断 → P2P → WAN 就绪

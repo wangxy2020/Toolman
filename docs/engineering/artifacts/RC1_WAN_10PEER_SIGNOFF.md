@@ -1,6 +1,6 @@
 # RC1 — 10 人 WAN 场景验收签字表
 
-> **Phase 1.7** · 版本 `0.2.0-rc.1` · 关联 [RC1_WAN_SIGNOFF.md](../RC1_WAN_SIGNOFF.md)
+> **Phase 1.7** · 版本 `0.2.0-rc.1` · 关联 [RELEASE_STATUS.md §7](../RELEASE_STATUS.md#7-wan--跨-nat-验收)
 
 ## A. 环境（维护者填写）
 

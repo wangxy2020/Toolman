@@ -79,4 +79,4 @@ pass "本地执行: pnpm rc1:preflight"
 EOF
 
 echo ""
-echo "归档：完成后将签字表追加到 docs/engineering/RC1_WAN_SIGNOFF.md 或 RC1_DEFECT_TRACKER.md"
+echo "归档：完成后将签字表追加到 docs/engineering/RELEASE_STATUS.md §7 或 §8"
