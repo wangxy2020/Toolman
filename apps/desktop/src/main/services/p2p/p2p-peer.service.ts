@@ -255,6 +255,9 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
   const memberships = memberRepo.listActiveMembershipsByDevice(localDeviceId)
 
   void (async () => {
+    const connectionModule = await import('./p2p-connection.service')
+    await connectionModule.resetStalePeerConnection(peerDeviceId)
+
     let ownerReconcileQueued = false
     for (const membership of memberships) {
       const workspace = workspaceRepo.findById(membership.workspaceId)

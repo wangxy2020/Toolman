@@ -6,6 +6,7 @@ import {
   broadcastP2pConnectionError,
   broadcastP2pConnectionStateChange,
 } from './p2p-connection-broadcast'
+import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
 import { handlePeerConnectionChange } from './p2p-peer.service'
 import { notifyP2pReconnect, applyP2pConnectionSnapshot, processP2pIncomingMessagesFromPoll } from './p2p-sync-lifecycle'
 import { loadWorkspaceKey } from './p2p-workspace-key.store'
@@ -61,6 +62,35 @@ export function getPeerConnectionMode(peerDeviceId: string): P2pConnectionMode |
   return peerConnectionModes.get(peerDeviceId)
 }
 
+function cancelPendingPeerRecovery(peerDeviceId: string): void {
+  const timer = reconnectTimers.get(peerDeviceId)
+  if (timer) {
+    clearTimeout(timer)
+    reconnectTimers.delete(peerDeviceId)
+  }
+  iceRestartInFlight.delete(peerDeviceId)
+}
+
+export async function resetStalePeerConnection(peerDeviceId: string): Promise<void> {
+  cancelPendingPeerRecovery(peerDeviceId)
+  if (isPeerConnected(peerDeviceId)) {
+    return
+  }
+
+  const native = (await P2pBridge.connectionList()).find(
+    (item) => item.peerDeviceId === peerDeviceId,
+  )
+  if (!native) {
+    knownConnections.delete(peerDeviceId)
+    return
+  }
+  if (native.state === 'connected') {
+    return
+  }
+
+  await disconnectP2pPeer(peerDeviceId)
+}
+
 function schedulePeerReconnect(peerDeviceId: string, workspaceId: string): void {
   if (reconnectTimers.has(peerDeviceId)) return
 
@@ -101,6 +131,25 @@ async function tryIceRestartBeforeReconnect(
     return
   }
 
+  // Peer is visible on LAN while we are reconnecting — likely restarted with a fresh
+  // WebRTC stack; ICE restart cannot succeed against an empty remote session.
+  if (isP2pPeerDiscoverableOnline(peerDeviceId)) {
+    await resetStalePeerConnection(peerDeviceId)
+    void connectP2pPeer(peerDeviceId, workspaceId)
+      .then((state) => {
+        if (state === 'connected') {
+          reconnectAttempts.delete(peerDeviceId)
+          notifyP2pReconnect(workspaceId, peerDeviceId)
+        } else {
+          schedulePeerReconnect(peerDeviceId, workspaceId)
+        }
+      })
+      .catch(() => {
+        schedulePeerReconnect(peerDeviceId, workspaceId)
+      })
+    return
+  }
+
   iceRestartInFlight.add(peerDeviceId)
   try {
     const result = await P2pBridge.connectionRestartIce(peerDeviceId)
@@ -116,6 +165,7 @@ async function tryIceRestartBeforeReconnect(
     iceRestartInFlight.delete(peerDeviceId)
   }
 
+  await resetStalePeerConnection(peerDeviceId)
   schedulePeerReconnect(peerDeviceId, workspaceId)
 }
 
@@ -262,6 +312,7 @@ async function connectP2pPeerOnce(
   workspaceId?: string,
 ): Promise<P2pConnectionState> {
   startPolling()
+  await resetStalePeerConnection(peerDeviceId)
 
   if (workspaceId) {
     const workspaceKey = loadWorkspaceKey(workspaceId)

@@ -57,13 +57,12 @@ impl ConnectionManager {
 
         if let Some(entry) = self.sessions.get(peer_device_id) {
             let session = entry.session.lock().await;
-            if session.current_state().await == ConnectionState::Connected {
-                if session.is_transport_ready().await {
-                    return Ok(ConnectionState::Connected);
-                }
-                drop(session);
-                self.disconnect(peer_device_id).await?;
+            let state = session.current_state().await;
+            if state == ConnectionState::Connected && session.is_transport_ready().await {
+                return Ok(ConnectionState::Connected);
             }
+            drop(session);
+            self.disconnect(peer_device_id).await?;
         }
 
         let api = Arc::clone(&WEBRTC_API);

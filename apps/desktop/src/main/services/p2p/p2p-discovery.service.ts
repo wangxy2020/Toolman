@@ -105,6 +105,9 @@ function stopMemberOwnerConnectLoop(): void {
 
 function startMemberOwnerConnectLoop(): void {
   if (memberOwnerConnectTimer) return
+  void import('./p2p-member.service').then((module) =>
+    module.runMemberOwnerConnectTick({ immediate: true }),
+  )
   memberOwnerConnectTimer = setInterval(() => {
     void import('./p2p-member.service').then((module) => module.runMemberOwnerConnectTick())
   }, MEMBER_OWNER_CONNECT_INTERVAL_MS)

@@ -120,7 +120,7 @@ export async function runOwnerPeerReconcileTick(): Promise<void> {
   }
 }
 
-export async function runMemberOwnerConnectTick(): Promise<void> {
+export async function runMemberOwnerConnectTick(options?: { immediate?: boolean }): Promise<void> {
   const device = getP2pDeviceInfo()
   const memberships = getMemberRepo().listActiveMembershipsByDevice(device.deviceId)
   const workspaceRepo = getWorkspaceRepo()
@@ -129,8 +129,11 @@ export async function runMemberOwnerConnectTick(): Promise<void> {
     const workspace = workspaceRepo.findById(membership.workspaceId)
     if (!workspace || workspace.ownerDeviceId === device.deviceId) continue
     if (!loadWorkspaceKey(membership.workspaceId)) continue
+    if (p2pConnectionService.isPeerConnected(workspace.ownerDeviceId)) continue
     try {
-      await ensureMemberConnectsToOwner(membership.workspaceId)
+      await ensureMemberConnectsToOwner(membership.workspaceId, {
+        immediate: options?.immediate ?? false,
+      })
     } catch (error) {
       const message = toErrorMessage(error, 'member owner connect tick failed')
       logStructured(
@@ -170,6 +173,7 @@ async function reconcileOwnerPeerConnections(): Promise<void> {
       if (!isP2pPeerDiscoverableOnline(member.deviceId)) continue
       peerConnectAttempted.add(member.deviceId)
       try {
+        await p2pConnectionService.resetStalePeerConnection(member.deviceId)
         await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspace.id)
       } catch (error) {
         const message = toErrorMessage(error, 'connect active member failed')
@@ -187,6 +191,7 @@ async function reconcileOwnerPeerConnections(): Promise<void> {
       if (!isP2pPeerDiscoverableOnline(node.deviceId)) continue
       peerConnectAttempted.add(node.deviceId)
       try {
+        await p2pConnectionService.resetStalePeerConnection(node.deviceId)
         await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspace.id)
       } catch (error) {
         const message = toErrorMessage(error, 'connect peer failed')
