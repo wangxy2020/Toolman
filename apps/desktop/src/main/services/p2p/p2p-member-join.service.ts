@@ -15,7 +15,7 @@ import {
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import * as p2pConnectionService from './p2p-connection.service'
-import { isP2pDiscoveryRunning, isP2pPeerDiscoverableOnline, listP2pDiscoveredNodes, startP2pDiscovery } from './p2p-discovery.service'
+import { isP2pDiscoveryRunning, listP2pDiscoveredNodes, startP2pDiscovery } from './p2p-discovery.service'
 import { P2pBridge } from './p2p-bridge'
 import { applyP2pNetworkConfig, getP2pWanNetworkReadiness } from './p2p-network.config'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
