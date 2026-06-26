@@ -2,6 +2,7 @@ import type { CommunityUserMeUpdateInput, CommunityUserProfile } from '@toolman/
 import { isRegisteredAuthSession } from '@toolman/shared'
 
 import { getAuthSession } from '../auth-session.service'
+import { syncAuthingUserProfileAfterLogin } from './authing-user-profile.service.js'
 import { getIdentityProfile } from '../identity.service'
 import { exchangeAuthHubToken } from './auth-hub-token.service'
 import { getCommunityHubStatus } from '../community/community-bridge.service'
@@ -40,9 +41,10 @@ export async function syncAuthProfileToCommunityHub(): Promise<CommunityUserProf
   return updateUserMe(patch)
 }
 
-export async function finalizeRegisteredLogin<T extends Awaited<ReturnType<typeof getAuthSession>>>(
-  session: T,
-): Promise<T> {
+export async function finalizeRegisteredLogin(
+  _session: Awaited<ReturnType<typeof getAuthSession>>,
+): Promise<Awaited<ReturnType<typeof getAuthSession>>> {
+  await syncAuthingUserProfileAfterLogin().catch(() => undefined)
   await syncAuthProfileToCommunityHub().catch(() => undefined)
-  return session
+  return getAuthSession()
 }

@@ -6,9 +6,14 @@ const mockGetIdentityProfile = vi.fn()
 const mockExchangeAuthHubToken = vi.fn()
 const mockGetUserMe = vi.fn()
 const mockUpdateUserMe = vi.fn()
+const mockSyncAuthingUserProfileAfterLogin = vi.fn()
 
 vi.mock('../auth-session.service', () => ({
   getAuthSession: () => mockGetAuthSession(),
+}))
+
+vi.mock('./authing-user-profile.service.js', () => ({
+  syncAuthingUserProfileAfterLogin: () => mockSyncAuthingUserProfileAfterLogin(),
 }))
 
 vi.mock('../identity.service', () => ({
@@ -71,6 +76,7 @@ describe('auth-profile-sync.service', () => {
       createdAt: 1,
       updatedAt: 2,
     }))
+    mockSyncAuthingUserProfileAfterLogin.mockResolvedValue(undefined)
   })
 
   it('skips sync for guest sessions', async () => {

@@ -58,4 +58,28 @@ describe('hub-jwt.service', () => {
     expect(verified.payload.registration_status).toBe('guest')
     expect(verified.payload.sku).toBeUndefined()
   })
+
+  it('includes community role when provided', async () => {
+    const secret = 'unit-test-hub-jwt-secret-role'
+
+    const { accessToken } = await mintHubAccessToken({
+      identityId: '00000000-0000-0000-0000-000000000001',
+      registrationStatus: 'registered',
+      sku: 'community',
+      communityRole: 'admin',
+      ttlSeconds: 120,
+      secretOverride: secret,
+    })
+
+    const verified = await jwtVerify(
+      accessToken,
+      new TextEncoder().encode(secret),
+      {
+        issuer: HUB_JWT_ISSUER,
+        audience: HUB_JWT_AUDIENCE,
+      },
+    )
+
+    expect(verified.payload.community_role).toBe('admin')
+  })
 })

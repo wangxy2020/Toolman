@@ -1,6 +1,6 @@
 import { SignJWT } from 'jose'
 
-import type { ProductSku, RegistrationStatus } from '@toolman/shared'
+import type { CommunityUserRole, ProductSku, RegistrationStatus } from '@toolman/shared'
 
 import {
   HUB_JWT_AUDIENCE,
@@ -14,6 +14,7 @@ export interface MintHubAccessTokenInput {
   registrationStatus: RegistrationStatus
   sku?: ProductSku | null
   email?: string | null
+  communityRole?: CommunityUserRole | null
   ttlSeconds?: number
   /** Test-only override to avoid Electron secret storage. */
   secretOverride?: string
@@ -42,6 +43,10 @@ export async function mintHubAccessToken(
   const email = input.email?.trim().toLowerCase()
   if (email && email.includes('@')) {
     payload.email = email
+  }
+  const communityRole = input.communityRole?.trim()
+  if (communityRole) {
+    payload.community_role = communityRole
   }
 
   const accessToken = await new SignJWT(payload)

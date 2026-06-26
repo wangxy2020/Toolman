@@ -4,6 +4,10 @@ import { app, dialog, shell } from 'electron'
 import { purgeAllKnowledgeStorageData } from './knowledge.service'
 import { purgeAllMemoryData } from './memory-entry.service'
 import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import {
+  ensureToolmanUserDocumentFolders,
+  getToolmanUserRootPath,
+} from './toolman-user-documents.service'
 
 const BACKUP_MANIFEST_VERSION = 1
 
@@ -63,9 +67,21 @@ export function getStorageStats() {
 
   const cacheBytes = cacheTargets.reduce((sum, path) => sum + getDirSize(path), 0)
 
+  let userWorkDirectory = ''
+  try {
+    userWorkDirectory = ensureToolmanUserDocumentFolders()
+  } catch {
+    try {
+      userWorkDirectory = getToolmanUserRootPath()
+    } catch {
+      userWorkDirectory = ''
+    }
+  }
+
   return {
     cacheBytes,
     userData,
+    userWorkDirectory,
     logs: join(userData, 'logs'),
     knowledgeBase: ensureKnowledgeDir(),
   }

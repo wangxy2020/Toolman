@@ -1,3 +1,4 @@
+pub mod authing_community_role;
 pub mod dev_test_user_role;
 pub mod admin_management_service;
 pub mod comment_service;

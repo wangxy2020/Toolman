@@ -15,5 +15,9 @@ export interface AuthBindingMetadata {
   email?: string
   phone?: string
   wechatNickname?: string
+  authingRoles?: string[]
+  userType?: string
+  communityRole?: string
+  authingRolesSyncedAt?: number
   [key: string]: unknown
 }

@@ -62,6 +62,7 @@ pub fn resolve_identity_from_headers(
             registration_status: "registered".to_string(),
             sku: None,
             email: None,
+            community_role: None,
         });
     }
 
@@ -75,12 +76,22 @@ pub async fn load_auth_user(state: &AppState, identity: &ResolvedIdentity) -> Re
     let user = repo
         .find_or_create_by_identity_id(&identity.identity_id, None)
         .await?;
-    let user = crate::services::dev_test_user_role::apply_dev_test_user_role(
+    let user = crate::services::authing_community_role::apply_jwt_community_role(
         &repo,
         user,
-        identity.email.as_deref(),
+        identity.community_role.as_deref(),
     )
     .await?;
+    let user = if identity.community_role.is_some() {
+        user
+    } else {
+        crate::services::dev_test_user_role::apply_dev_test_user_role(
+            &repo,
+            user,
+            identity.email.as_deref(),
+        )
+        .await?
+    };
     Ok(AuthUser(user))
 }
 

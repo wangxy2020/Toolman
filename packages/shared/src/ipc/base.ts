@@ -102,6 +102,7 @@ export const AppShellRevealPathOutputSchema = z.object({
 export const AppGetStorageStatsOutputSchema = z.object({
   cacheBytes: z.number().int().nonnegative(),
   userData: z.string(),
+  userWorkDirectory: z.string(),
   logs: z.string(),
   knowledgeBase: z.string(),
 })

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
 import { TimestampSchema, UuidSchema } from './base.js'
+import { AuthUserTypeSchema } from '../auth-user-type.js'
+import { CommunityUserRoleSchema } from './community.js'
 
 export const AuthRegionSchema = z.enum(['cn', 'intl'])
 export type AuthRegion = z.infer<typeof AuthRegionSchema>
@@ -26,6 +28,9 @@ export const AuthBindingSummarySchema = z.object({
   subjectId: z.string().min(1),
   label: z.string().optional(),
   verifiedAt: TimestampSchema,
+  authingRoles: z.array(z.string()).optional(),
+  userType: AuthUserTypeSchema.optional(),
+  communityRole: CommunityUserRoleSchema.optional(),
 })
 export type AuthBindingSummary = z.infer<typeof AuthBindingSummarySchema>
 
@@ -35,6 +40,9 @@ export const AuthSessionSchema = z.object({
   authRegion: AuthRegionSchema.nullable(),
   subscriptionSku: ProductSkuSchema.nullable(),
   entitlements: z.array(z.string()),
+  userType: AuthUserTypeSchema,
+  communityRole: CommunityUserRoleSchema.nullable().optional(),
+  authingRoles: z.array(z.string()),
   displayName: z.string(),
   avatarUrl: z.string().nullable().optional(),
   bindings: z.array(AuthBindingSummarySchema),

@@ -10,9 +10,12 @@ import {
 } from '@toolman/db'
 import {
   AuthSessionSchema,
+  AuthUserTypeSchema,
+  CommunityUserRoleSchema,
   type AuthBindingSummary,
   type AuthProvider,
   type AuthSession,
+  type AuthUserType,
   type ProductSku,
   type RegistrationStatus,
 } from '@toolman/shared'
@@ -82,6 +85,18 @@ function parseBindingMetadata(raw: string): AuthBindingMetadata {
   }
 }
 
+function resolveBindingUserType(raw?: string | null): AuthUserType | undefined {
+  if (!raw?.trim()) return undefined
+  const parsed = AuthUserTypeSchema.safeParse(raw.trim())
+  return parsed.success ? parsed.data : undefined
+}
+
+function resolveBindingCommunityRole(raw?: string | null) {
+  if (!raw?.trim()) return undefined
+  const parsed = CommunityUserRoleSchema.safeParse(raw.trim())
+  return parsed.success ? parsed.data : undefined
+}
+
 export function mapBindingRow(row: AuthBindingRow): AuthBindingSummary {
   const metadata = parseBindingMetadata(row.metadataJson)
   return {
@@ -89,6 +104,29 @@ export function mapBindingRow(row: AuthBindingRow): AuthBindingSummary {
     subjectId: row.subjectId,
     label: metadata.label,
     verifiedAt: row.verifiedAt.getTime(),
+    authingRoles: metadata.authingRoles,
+    userType: resolveBindingUserType(metadata.userType),
+    communityRole: resolveBindingCommunityRole(metadata.communityRole),
+  }
+}
+
+function resolveSessionUserType(input: {
+  registrationStatus: RegistrationStatus
+  isLoggedIn: boolean
+  bindingUserType?: AuthUserType
+}): AuthUserType {
+  if (input.registrationStatus === 'guest' || !input.isLoggedIn) {
+    return 'guest'
+  }
+  return input.bindingUserType ?? 'normal'
+}
+
+function resolvePrimaryBindingProfile(bindings: AuthBindingSummary[]) {
+  const primary = bindings[0]
+  return {
+    userType: primary?.userType,
+    communityRole: primary?.communityRole ?? null,
+    authingRoles: primary?.authingRoles ?? [],
   }
 }
 
@@ -104,12 +142,20 @@ export function buildAuthSessionView(input: {
   session: AuthSessionRow | null
 }): AuthSession {
   const isLoggedIn = Boolean(input.session?.isLoggedIn)
+  const profile = resolvePrimaryBindingProfile(input.bindings)
   return AuthSessionSchema.parse({
     registrationStatus: input.registrationStatus,
     identityId: input.identityId,
     authRegion: input.authRegion ?? null,
     subscriptionSku: input.subscriptionSku ?? null,
     entitlements: input.entitlements ?? [],
+    userType: resolveSessionUserType({
+      registrationStatus: input.registrationStatus,
+      isLoggedIn,
+      bindingUserType: profile.userType,
+    }),
+    communityRole: profile.communityRole,
+    authingRoles: profile.authingRoles,
     displayName: input.displayName,
     avatarUrl: input.avatarUrl ?? null,
     bindings: input.bindings,

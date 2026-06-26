@@ -186,6 +186,8 @@ export const settingsPagesZhCN = {
     restoreConfirm: '恢复将覆盖当前数据库、知识库与笔记数据，是否继续？',
     directories: {
       title: '数据目录',
+      userWork: '用户工作目录',
+      userWorkHint: '工作区、知识库与本地文件保存在此目录',
       appData: '应用数据',
       appLogs: '应用日志',
       knowledgeFiles: '知识库文件',
@@ -898,6 +900,8 @@ export const settingsPagesEn = {
       'Restore will overwrite the current database, knowledge base, and notes. Continue?',
     directories: {
       title: 'Data directories',
+      userWork: 'User work directory',
+      userWorkHint: 'Workspace, knowledge base, and local files are stored here',
       appData: 'App data',
       appLogs: 'App logs',
       knowledgeFiles: 'Knowledge base files',

@@ -24,6 +24,7 @@ export async function exchangeAuthHubToken(): Promise<AuthExchangeHubTokenOutput
     registrationStatus: session.registrationStatus,
     sku: session.subscriptionSku,
     email: resolveSessionEmailForHubToken(),
+    communityRole: session.communityRole ?? null,
   })
 
   const db = getDatabase()

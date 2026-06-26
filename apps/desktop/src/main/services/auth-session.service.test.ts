@@ -35,6 +35,8 @@ describe('buildAuthSessionView', () => {
 
     expect(session.registrationStatus).toBe('guest')
     expect(session.isLoggedIn).toBe(false)
+    expect(session.userType).toBe('guest')
+    expect(session.authingRoles).toEqual([])
     expect(isRegisteredAuthSession(session)).toBe(false)
     expect(canUseCommunityWrite(session)).toBe(false)
     expect(canUseGroupFeatures(session)).toBe(false)
@@ -73,6 +75,7 @@ describe('buildAuthSessionView', () => {
     })
 
     expect(session.subscriptionSku).toBe('community')
+    expect(session.userType).toBe('normal')
     expect(canUseCommunityWrite(session)).toBe(true)
     expect(canUseGroupFeatures(session)).toBe(true)
   })

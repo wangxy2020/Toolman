@@ -17,6 +17,7 @@ import { recoverStaleStreamingMessages } from '../services/agent.service'
 import { syncOllamaProviders, migratePlaintextApiKeys } from '../services/provider.service'
 import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
 import { initAuthSessionStore } from '../services/auth-session.service'
+import { syncAuthingUserProfileAfterLogin } from '../services/auth/authing-user-profile.service'
 import { cleanupMisplacedP2pMirrorKnowledgeBases } from '../services/p2p/p2p-knowledge-cleanup.service'
 import { migrateAllLegacyGroupSavedKnowledgeBases } from '../services/p2p/p2p-group-saved-knowledge-migration.service'
 import { migrateAllDefaultFolderKnowledgeBases } from '../services/knowledge-default-folder-kb.service'
@@ -47,6 +48,7 @@ export function bootstrapDatabase(): void {
   ensureDevIdentityRow(db, localIdentityId, localDisplayName)
   ensureWorkspaceDefaults(db)
   initAuthSessionStore()
+  void syncAuthingUserProfileAfterLogin().catch(() => undefined)
   migratePlaintextApiKeys()
   recoverStaleStreamingMessages()
   ensureFtsIndexReady()

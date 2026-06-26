@@ -36,6 +36,17 @@ export function extractSessionEmail(session: AuthSession | null | undefined): st
   return null
 }
 
+function authUserTypeLabelKey(
+  userType: AuthSession['userType'],
+): UserTypeKey | null {
+  if (userType === 'guest') return null
+  if (userType === 'normal') return 'normal'
+  if (userType === 'vip') return 'vip'
+  if (userType === 'admin') return 'admin'
+  if (userType === 'super_admin') return 'super_admin'
+  return null
+}
+
 export function resolveUserTypeLabel(
   session: AuthSession | null | undefined,
   communityRole?: CommunityUserRole | null,
@@ -49,13 +60,6 @@ export function resolveUserTypeLabel(
     super_admin: t?.('user.labels.role.super_admin') ?? USER_TYPE_LABELS.super_admin,
   } as const
 
-  const email = extractSessionEmail(session)
-  const devType =
-    import.meta.env.DEV && email ? DEV_TEST_USER_TYPE_BY_EMAIL[email] : undefined
-  if (devType) {
-    return labels[devType]
-  }
-
   if (!session || session.registrationStatus === 'guest') {
     return labels.unregistered
   }
@@ -63,9 +67,26 @@ export function resolveUserTypeLabel(
     return labels.normal
   }
 
-  if (communityRole === 'founder') return labels.super_admin
-  if (communityRole === 'admin') return labels.admin
-  if (communityRole === 'enterprise' || session.subscriptionSku === 'pro') {
+  const authingTypeKey = authUserTypeLabelKey(session.userType)
+  if (session.authingRoles.length > 0 && authingTypeKey) {
+    return labels[authingTypeKey]
+  }
+
+  const email = extractSessionEmail(session)
+  const devType =
+    import.meta.env.DEV && email ? DEV_TEST_USER_TYPE_BY_EMAIL[email] : undefined
+  if (devType) {
+    return labels[devType]
+  }
+
+  if (authingTypeKey) {
+    return labels[authingTypeKey]
+  }
+
+  const role = communityRole ?? session.communityRole
+  if (role === 'founder') return labels.super_admin
+  if (role === 'admin') return labels.admin
+  if (role === 'enterprise' || session.subscriptionSku === 'pro') {
     return labels.vip
   }
   return labels.normal

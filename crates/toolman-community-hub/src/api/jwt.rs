@@ -12,6 +12,7 @@ pub struct ResolvedIdentity {
     pub registration_status: String,
     pub sku: Option<String>,
     pub email: Option<String>,
+    pub community_role: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,6 +27,8 @@ struct HubJwtClaims {
     sku: Option<String>,
     #[serde(default)]
     email: Option<String>,
+    #[serde(default)]
+    community_role: Option<String>,
 }
 
 pub fn bearer_token_from_headers(headers: &HeaderMap) -> Option<&str> {
@@ -67,6 +70,10 @@ pub fn validate_hub_jwt(token: &str, secret: &str) -> Result<ResolvedIdentity, A
             .email
             .map(|value| value.trim().to_lowercase())
             .filter(|value| !value.is_empty()),
+        community_role: claims
+            .community_role
+            .map(|value| value.trim().to_lowercase())
+            .filter(|value| !value.is_empty()),
     })
 }
 
@@ -84,6 +91,14 @@ mod tests {
     use super::*;
 
     fn sign_test_token(secret: &str, registration_status: &str) -> String {
+        sign_test_token_with_role(secret, registration_status, None)
+    }
+
+    fn sign_test_token_with_role(
+        secret: &str,
+        registration_status: &str,
+        community_role: Option<&str>,
+    ) -> String {
         let claims = HubJwtClaims {
             sub: "identity-test".to_string(),
             iss: "toolman-desktop".to_string(),
@@ -93,6 +108,7 @@ mod tests {
             registration_status: registration_status.to_string(),
             sku: Some("community".to_string()),
             email: None,
+            community_role: community_role.map(str::to_string),
         };
 
         encode(
@@ -114,12 +130,21 @@ mod tests {
     }
 
     #[test]
+    fn validates_community_role_claim() {
+        let secret = "test-secret-role";
+        let token = sign_test_token_with_role(secret, "registered", Some("admin"));
+        let identity = validate_hub_jwt(&token, secret).expect("valid token");
+        assert_eq!(identity.community_role.as_deref(), Some("admin"));
+    }
+
+    #[test]
     fn rejects_guest_for_registered_only_helper() {
         let identity = ResolvedIdentity {
             identity_id: "guest-id".to_string(),
             registration_status: "guest".to_string(),
             sku: None,
             email: None,
+            community_role: None,
         };
         ensure_registered(&identity).expect_err("guest blocked");
     }

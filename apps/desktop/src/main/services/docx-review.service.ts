@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { extractLlmJsonArray, toErrorMessage } from '@toolman/shared'
-import { basename } from 'node:path'
+import { basename, normalize } from 'node:path'
 
 import type { ChatMessage, ToolDefinition } from '@toolman/model-gateway'
 import { createModelGateway, type ProviderConfig } from '@toolman/model-gateway'
@@ -12,6 +12,8 @@ import {
   requestsDocxParagraphRewrite,
   type DocxWorkingCopy,
 } from './docx-mcp-task.service'
+import { resolveMcpShortToolName } from './document-mcp-task.util'
+import { DOCX_MCP_SERVER_ID } from '@toolman/shared'
 import { executeToolCall, type ToolExecutionContext } from './tool-executor.service'
 import {
   clampDocumentToolBatchStats,
@@ -105,7 +107,8 @@ export function buildDocxAuditSystemPrompt(options?: { userRequest?: string }): 
       ]
 
   return [
-    '你是 Word 文档审查助手。根据对话中 read_document 的文档内容与用户要求，输出结构化审查 issue 列表。',
+    '你是 Word 文档审查助手。根据下方 read_document 工具输出中的文档正文与用户要求，输出结构化审查 issue 列表。',
+    '**主题保真**：必须尊重文档原有主题、体裁与领域（学习笔记、技术说明、报告、叙事文本等均可），不得臆造与原文无关的内容，不得将正文替换为其他主题或体裁。',
     '**只输出 JSON 数组**，不要 Markdown 代码块、不要解释、不要 tool_code、不要伪工具调用。',
     '每个 issue 对象格式：',
     '{',
@@ -127,9 +130,9 @@ export function buildDocxAuditSystemPrompt(options?: { userRequest?: string }): 
     '- 列出所有应处理的问题，不要只给一条',
     '- replacement 应尽量短、贴近原文，避免无必要扩写',
     '- **定位规则（重要）**：每项 issue 必须填写 paragraph_index（read_document 的 block 索引），系统据此锁定段落',
-    '- anchor_text 必须是该 paragraph_index 对应段落内的**原样连续子串**（建议 8～48 字、含足够区分度的关键词），禁止省略号「…」「...」、禁止概括（文档是「发包人」不要写「甲方」）',
-    '- 不要用整段超长文字作 anchor_text；不要用「甲乙双方经友好协商，就…」这类截断概括',
-    '- comment 批注应挂在**与批注主题同一 paragraph_index 的段落**上（如工期问题用工期条款的 index，不要用承包范围段落的 index）',
+    '- anchor_text 必须是该 paragraph_index 对应段落内的**原样连续子串**（建议 8～48 字、含足够区分度的关键词），禁止省略号「…」「...」、禁止概括或改写原文用语',
+    '- 不要用整段超长文字作 anchor_text；不要用截断概括代替原文',
+    '- comment 批注应挂在**与批注主题同一 paragraph_index 的段落**上，不要将某段的批注挂到其他段',
     '- edit_paragraph 时 anchor_text 可填该段简短摘要；replace/comment 仍须用可精确匹配的子串',
     '- paragraph_index 必须来自 read_document 输出中的段落索引',
     '- 对 replace / edit_paragraph，若需说明修改理由，填写 comment（会在替换前写入 Word 批注，锚点为 anchor_text 原文）',
@@ -151,8 +154,103 @@ export function buildDocxAuditUserMessage(options: {
     `用户要求：${options.userRequest.trim() || '全面审查文档，修正错误并添加批注'}`,
     `修订版文件：${options.fileName}`,
     `修订版绝对路径（后续 apply 用）：${options.workingPath}`,
-    `文档正文见上方 read_document 工具输出（含 paragraph_index）。请基于该输出列出全部 issue。${actionHint}`,
+    `文档正文见上方 read_document 工具输出（含 paragraph_index）。请**仅依据该输出与上述用户要求**列出全部 issue，勿引入对话外的假设。${actionHint}`,
   ].join('\n')
+}
+
+function normalizeDocxPath(path: string): string {
+  return normalize(path.trim()).replace(/\\/g, '/')
+}
+
+function isReadDocumentToolName(toolName: string): boolean {
+  return (
+    resolveMcpShortToolName(toolName, DOCX_MCP_SERVER_ID, '__docx_audit_batch__') ===
+    'read_document'
+  )
+}
+
+/** Extract read_document tool output for a working copy from chat messages. */
+export function resolveDocxReadDocumentContent(
+  chatMessages: readonly ChatMessage[],
+  workingPath: string,
+): string | null {
+  const normalizedWorking = normalizeDocxPath(workingPath)
+  const toolResults = new Map<string, string>()
+
+  for (const message of chatMessages) {
+    if (message.role === 'tool' && message.tool_call_id && message.content?.trim()) {
+      toolResults.set(message.tool_call_id, message.content)
+    }
+  }
+
+  let fallback: string | null = null
+
+  for (const message of chatMessages) {
+    if (message.role !== 'assistant' || !message.tool_calls?.length) continue
+
+    for (const call of message.tool_calls) {
+      if (!isReadDocumentToolName(call.name)) continue
+
+      let filePath = ''
+      try {
+        const parsed = JSON.parse(call.arguments ?? '{}') as { file_path?: string }
+        filePath = parsed.file_path?.trim() ?? ''
+      } catch {
+        continue
+      }
+
+      const content = toolResults.get(call.id)?.trim()
+      if (!content) continue
+
+      if (filePath && normalizeDocxPath(filePath) === normalizedWorking) {
+        return content
+      }
+
+      fallback ??= content
+    }
+  }
+
+  return fallback
+}
+
+export function buildIsolatedDocxAuditMessages(options: {
+  userRequest: string
+  workingCopy: DocxWorkingCopy
+  documentContent: string
+  retryHint?: string
+}): ChatMessage[] {
+  const readCallId = 'docx-audit-read'
+  const userContent = [
+    buildDocxAuditUserMessage({
+      userRequest: options.userRequest,
+      workingPath: options.workingCopy.workingPath,
+      fileName: options.workingCopy.fileName,
+    }),
+    options.retryHint?.trim(),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  return [
+    { role: 'system', content: buildDocxAuditSystemPrompt({ userRequest: options.userRequest }) },
+    {
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        {
+          id: readCallId,
+          name: 'read_document',
+          arguments: JSON.stringify({ file_path: options.workingCopy.workingPath }),
+        },
+      ],
+    },
+    {
+      role: 'tool',
+      tool_call_id: readCallId,
+      content: options.documentContent,
+    },
+    { role: 'user', content: userContent },
+  ]
 }
 
 export function buildDocxFinalSummaryPrompt(results: DocxReviewApplyResult[]): string {
@@ -1250,19 +1348,26 @@ async function runDocxAuditPass(options: {
   temperature?: number
   maxTokens?: number
   signal?: AbortSignal
+  retryHint?: string
 }): Promise<{ issues: DocxReviewIssue[]; warnings: string[]; raw: string }> {
-  const auditMessages: ChatMessage[] = [
-    { role: 'system', content: buildDocxAuditSystemPrompt({ userRequest: options.userRequest }) },
-    ...options.chatMessages,
-    {
-      role: 'user',
-      content: buildDocxAuditUserMessage({
-        userRequest: options.userRequest,
-        workingPath: options.workingCopy.workingPath,
-        fileName: options.workingCopy.fileName,
-      }),
-    },
-  ]
+  const documentContent = resolveDocxReadDocumentContent(
+    options.chatMessages,
+    options.workingCopy.workingPath,
+  )
+  if (!documentContent?.trim()) {
+    return {
+      issues: [],
+      warnings: ['未找到 read_document 输出，跳过审查'],
+      raw: '',
+    }
+  }
+
+  const auditMessages = buildIsolatedDocxAuditMessages({
+    userRequest: options.userRequest,
+    workingCopy: options.workingCopy,
+    documentContent,
+    retryHint: options.retryHint,
+  })
 
   const completion = await gateway.chatComplete(options.providerConfig, {
     model: options.model,
@@ -1561,15 +1666,7 @@ export async function runDocxStructuredReviewPipeline(options: {
     if (audit.issues.length === 0) {
       options.onStatus?.(`首次审查未解析到 issue，正在重试…\n`)
       audit = await runDocxAuditPass({
-        chatMessages: [
-          ...options.chatMessages,
-          { role: 'assistant', content: audit.raw },
-          {
-            role: 'user',
-            content:
-              '上次输出无法解析。请仅输出 JSON 数组（不要 Markdown 代码块），每项包含 id、severity、category、action、anchor_text；comment 用于纯批注；replace 需 replacement；edit_paragraph 需 paragraph_index 与 replacement，且仅在用户明确要求整段重写/列表化/重组段落时使用，否则优先 replace。',
-          },
-        ],
+        chatMessages: options.chatMessages,
         providerConfig: options.providerConfig,
         model: options.model,
         userRequest: options.userRequest,
@@ -1577,6 +1674,8 @@ export async function runDocxStructuredReviewPipeline(options: {
         temperature: 0.1,
         maxTokens: options.maxTokens,
         signal: options.signal,
+        retryHint:
+          '上次输出无法解析。请仅输出 JSON 数组（不要 Markdown 代码块），每项包含 id、severity、category、action、anchor_text；comment 用于纯批注；replace 需 replacement；edit_paragraph 需 paragraph_index 与 replacement，且仅在用户明确要求整段重写/列表化/重组段落时使用，否则优先 replace。',
       })
     }
 

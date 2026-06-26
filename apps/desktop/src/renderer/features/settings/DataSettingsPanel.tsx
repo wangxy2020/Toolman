@@ -48,6 +48,7 @@ export function DataSettingsPanel() {
   const [stats, setStats] = useState<{
     cacheBytes: number
     userData: string
+    userWorkDirectory: string
     logs: string
     knowledgeBase: string
   } | null>(null)
@@ -262,6 +263,29 @@ export function DataSettingsPanel() {
         </SettingsSection>
 
         <SettingsSection title={t('settings.data.directories.title')}>
+          <SettingsRow
+            label={t('settings.data.directories.userWork')}
+            hint={t('settings.data.directories.userWorkHint')}
+          >
+            <div className="tm-data-path-control">
+              <span className="tm-data-path" title={stats?.userWorkDirectory}>
+                {statsLoading
+                  ? t('settings.data.loading')
+                  : stats?.userWorkDirectory
+                    ? truncatePath(stats.userWorkDirectory)
+                    : '—'}
+              </span>
+              <button
+                type="button"
+                className="tm-data-btn"
+                disabled={!stats?.userWorkDirectory}
+                onClick={() => stats?.userWorkDirectory && void openPath(stats.userWorkDirectory)}
+              >
+                {t('settings.data.openDir')}
+              </button>
+            </div>
+          </SettingsRow>
+
           <SettingsRow label={t('settings.data.directories.appData')}>
             <div className="tm-data-path-control">
               <span className="tm-data-path" title={stats?.userData}>
