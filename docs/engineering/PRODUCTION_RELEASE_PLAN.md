@@ -294,7 +294,7 @@ P2P 双实例仍用 `./scripts/p2p-dual-node-e2e.sh` 手册验收（见 [RELEASE
 | 2 | R1.1 CDN 发布流水线 + staging 验证脚本 | ✅ |
 | 3 | R1.1 staging CDN 实际上传 + OTA 端到端 | 待做（凭据） |
 | 4 | R2.1 libp2p 异常退出自动 restart | ✅ |
-| 5 | RC1 内部 dogfood（流程，非代码） | **进行中** — [RC1_DOGFOOD.md](./RC1_DOGFOOD.md) |
+| 5 | RC1 内部 dogfood（流程，非代码） | **进行中** — [RC1_DOGFOOD.md](./RC1_DOGFOOD.md) · [RC1_KICKOFF_STATUS.md](./RC1_KICKOFF_STATUS.md) · 单机 WAN 预检 ✅ |
 
 按 M0 → M1 → M2 → M3 → GA 顺序推进，详见各 R 节。
 

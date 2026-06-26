@@ -13,6 +13,7 @@ import { useI18n } from '../../i18n/useI18n'
 import {
   getMcpCategoryDescription,
   getMcpCategoryTitle,
+  resolveMcpServerDescription,
 } from '../../i18n/settings-labels'
 import type { TranslateFn } from '../../i18n/useI18n'
 import { MCP_SERVERS } from '../chat/agent-settings-constants'
@@ -315,7 +316,7 @@ export function McpSettingsPanel() {
       !isBuiltin && !isLocalDb && server.command
         ? [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')
         : null
-    const description = isLocalDb ? t('settings.mcp.servers.localDbDescription') : server.description
+    const description = resolveMcpServerDescription(server.id, server.description, t)
 
     return (
       <div key={server.id} className="tm-mcp-server-card">

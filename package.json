@@ -26,6 +26,7 @@
     "rc1:build": "bash scripts/build-rc1-desktop.sh",
     "rc1:install-p2p-network": "bash scripts/rc1-install-p2p-network.sh",
     "rc1:wan-prep": "bash scripts/rc1-wan-prep.sh",
+    "rc1:dogfood-day": "bash scripts/rc1-dogfood-day.sh",
     "dev:coturn": "bash scripts/dev-coturn-up.sh",
     "rc1:publish-staging": "bash scripts/rc1-publish-staging.sh",
     "rc1:wan-10-checklist": "bash scripts/p2p-wan-10-peer-checklist.sh",

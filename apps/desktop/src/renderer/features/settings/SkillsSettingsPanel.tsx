@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type SkillInfo } from '@toolman/shared'
 import { IconMinus, IconPlus } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
+import { resolveSkillDescription } from '../../i18n/settings-labels'
 import { SettingsPageLayout, SettingsSection } from './SettingsShared'
 
 function sortSkillsByName(skills: SkillInfo[]): SkillInfo[] {
@@ -88,7 +89,7 @@ export function SkillsSettingsPanel() {
                       <span className="tm-skill-badge">{t('settings.skills.builtinBadge')}</span>
                     ) : null}
                   </div>
-                  <div className="tm-mcp-server-desc">{skill.description}</div>
+                  <div className="tm-mcp-server-desc">{resolveSkillDescription(skill, t)}</div>
                 </div>
                 <div className="tm-mcp-server-actions">
                   {!skill.builtin ? (

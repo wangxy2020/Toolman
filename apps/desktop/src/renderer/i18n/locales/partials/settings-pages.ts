@@ -285,6 +285,23 @@ export const settingsPagesZhCN = {
       deleteTitle: '删除MCP服务器',
       testing: '测试中…',
       testConnection: '测试连接',
+      descriptions: {
+        filesystem: '读写本地文件系统（内置）',
+        browser: '浏览网页与抓取内容（内置）',
+        github: '访问 GitHub 仓库与 Issue（内置）',
+        sqlite: '查询本地 SQLite 数据库（内置）',
+        fetch: '官方 fetch MCP，抓取网页 HTML/Markdown/文本/JSON（uvx）',
+        memory: '官方知识图谱记忆 MCP（npx）',
+        python: '官方 Python 执行 MCP（uvx）',
+        'brave-search': 'Brave Search 官方 MCP，需配置 BRAVE_API_KEY',
+        'docx-mcp-server':
+          'Word (.docx/.doc/.wps) 读写、批注、高亮、修订与排版；本地 stdio（npx docx-mcp-server，需 Node.js 20+）',
+        'excel-mcp-server':
+          'Excel (.xlsx/.xls) 无损审核、单元格修改与高亮批注；本地 stdio（内置 excel-mcp-server，需 Node.js 20+）',
+        dify: '检索 Dify 知识库（内置）',
+        hub: '聚合所有 MCP 工具的统一入口（内置）',
+        'local-db': '访问本地 PostgreSQL 数据库',
+      },
     },
     custom: {
       empty: '暂无自定义 MCP 服务器。',
@@ -374,6 +391,12 @@ export const settingsPagesZhCN = {
     intro: '已安装的技能可在智能体设置中按需挂载；运行时会把 SKILL.md 内容注入系统提示。',
     empty: '暂无技能，点击「添加」从本地文件夹安装（需包含 SKILL.md）。',
     builtinBadge: '内置',
+    descriptions: {
+      'find-skills':
+        '当用户询问「怎么做 X」「有没有能做 X 的技能」或想扩展智能体能力时，帮助发现并安装合适的技能。',
+      'skill-creator':
+        '创建新技能、修改并改进现有技能。适用于用户想从零编写技能、编辑或更新已有技能的场景。',
+    },
     delete: {
       confirm: '确定删除技能「{{name}}」？',
       title: '删除技能',
@@ -960,6 +983,23 @@ export const settingsPagesEn = {
       deleteTitle: 'Delete MCP server',
       testing: 'Testing…',
       testConnection: 'Test connection',
+      descriptions: {
+        filesystem: 'Read and write the local filesystem (built-in)',
+        browser: 'Browse the web and extract content (built-in)',
+        github: 'Access GitHub repositories and issues (built-in)',
+        sqlite: 'Query local SQLite databases (built-in)',
+        fetch: 'Official fetch MCP — fetch HTML/Markdown/text/JSON from URLs (uvx)',
+        memory: 'Official knowledge-graph memory MCP (npx)',
+        python: 'Official Python execution MCP (uvx)',
+        'brave-search': 'Official Brave Search MCP — configure BRAVE_API_KEY',
+        'docx-mcp-server':
+          'Word (.docx/.doc/.wps) read/write, comments, highlights, revisions, and layout via local stdio (npx docx-mcp-server, Node.js 20+)',
+        'excel-mcp-server':
+          'Excel (.xlsx/.xls) lossless review, cell edits, and highlight annotations via built-in excel-mcp-server (Node.js 20+)',
+        dify: 'Search Dify knowledge bases (built-in)',
+        hub: 'Unified gateway that aggregates all MCP tools (built-in)',
+        'local-db': 'Access local PostgreSQL database',
+      },
     },
     custom: {
       empty: 'No custom MCP servers yet.',
@@ -1050,6 +1090,12 @@ export const settingsPagesEn = {
       'Installed skills can be attached in agent settings. At runtime, SKILL.md content is injected into the system prompt.',
     empty: 'No skills yet. Click "Add" to install from a local folder (must include SKILL.md).',
     builtinBadge: 'Built-in',
+    descriptions: {
+      'find-skills':
+        'Helps discover and install skills when users ask how to do something, whether a skill exists, or want to extend agent capabilities.',
+      'skill-creator':
+        'Create new skills and improve existing ones — for writing skills from scratch or editing and updating them.',
+    },
     delete: {
       confirm: 'Delete skill "{{name}}"?',
       title: 'Delete skill',

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IpcChannel, type SkillInfo } from '@toolman/shared'
 import { IconPlus, IconSearch } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
+import { resolveSkillDescription } from '../../i18n/settings-labels'
 
 function Toggle({
   checked,
@@ -136,7 +137,7 @@ export function AgentSettingsSkillsTab({ skillIds, onSkillToggle, onInstallSkill
             <div key={skill.id} className="tm-skill-card">
               <div className="tm-skill-card-main">
                 <div className="tm-skill-card-name">{skill.name}</div>
-                <div className="tm-skill-card-desc">{skill.description}</div>
+                <div className="tm-skill-card-desc">{resolveSkillDescription(skill, t)}</div>
                 <div className="tm-skill-card-meta">
                   {skill.builtin ? <span className="tm-skill-badge">{t('agent.skills.builtin')}</span> : null}
                   <span className={`tm-tool-tag ${enabled ? 'tm-tool-tag--on' : 'tm-tool-tag--off'}`}>

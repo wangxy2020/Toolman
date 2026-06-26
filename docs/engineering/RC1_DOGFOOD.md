@@ -90,8 +90,10 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 
 ### 5.2 深度路径（周内至少一次）
 
-- [ ] **P2P 双实例**：`./scripts/p2p-dual-node-e2e.sh` 清单签字
-- [ ] **WAN 群组**：两台跨 NAT 机器 + TURN 加入同一群
+- [x] **P2P 双实例（单机）**：`dev:p2p:a` + `dev:p2p:b` · TURN 诊断就绪 · 建群/文件/群聊通过
+- [ ] **P2P 双实例签字**：`./scripts/p2p-dual-node-e2e.sh` 清单全部 `[x]` 并归档
+- [x] **TURN / WAN 配置（单机预检）**：OpenRelay · [RC1_WAN_SIGNOFF.md §单机预检](./RC1_WAN_SIGNOFF.md)
+- [ ] **WAN 群组（跨 NAT）**：两台跨 NAT 机器 + TURN · 正式签字
 - [ ] **OTA**：About → 检查更新（staging manifest 可用时）
 - [ ] **崩溃上报**：系统诊断开启 opt-in → 触发测试崩溃 → 确认上传或本地留存符合预期
 - [ ] **离线 Hub**：断网后社区只读缓存 + 恢复后同步
@@ -138,9 +140,11 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 ## 9. 命令速查
 
 ```bash
+pnpm rc1:dogfood-day              # 每日轻量检查 + 手册提醒
+pnpm rc1:dogfood-day -- --full    # 含 rc1:preflight
 pnpm rc1:preflight              # 启动前自动化门禁
 pnpm rc1:build                  # RC1 staging Release 包
-pnpm rc1:install-p2p-network    # 写入 RC1 profile 的 TURN network.json
+pnpm rc1:wan-prep -- --all-dev-profiles   # OpenRelay / staging TURN → network.json
 pnpm rc1:publish-staging        # 构建 + 上传 CDN + verify-feed（需凭据）
 pnpm release:verify-feed ...    # 验证 staging OTA
 ./scripts/p2p-dual-node-e2e.sh  # P2P 手册清单

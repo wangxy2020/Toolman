@@ -1,8 +1,18 @@
 import type { ModelCategory, ModelTypeKey } from '../features/settings/provider-model-utils'
 import type { ProviderPreset } from '../features/settings/provider-presets'
-import type { ChannelPlatformId } from '@toolman/shared'
-import { CHANNEL_PLATFORMS } from '@toolman/shared'
+import {
+  BUILTIN_SKILLS,
+  CHANNEL_PLATFORMS,
+  DEFAULT_MCP_SERVER_IDS,
+  MCP_SERVER_IDS,
+  type ChannelPlatformId,
+} from '@toolman/shared'
 import type { TranslateFn } from './I18nProvider'
+
+const PRESET_MCP_SERVER_IDS = new Set<string>([
+  ...(MCP_SERVER_IDS as readonly string[]),
+  ...(DEFAULT_MCP_SERVER_IDS as readonly string[]),
+])
 
 export function getProviderPresetDisplayName(preset: ProviderPreset, t: TranslateFn): string {
   const key = `settings.providers.presets.${preset.id}` as const
@@ -32,6 +42,35 @@ export function getMcpCategoryDescription(categoryId: string, t: TranslateFn): s
   const key = `settings.mcp.categories.${categoryId}.description` as const
   const translated = t(key)
   return translated === key ? '' : translated
+}
+
+export function resolveMcpServerDescription(
+  serverId: string,
+  storedDescription: string | undefined,
+  t: TranslateFn,
+): string {
+  const key = `settings.mcp.servers.descriptions.${serverId}` as const
+  const translated = t(key)
+  if (translated !== key && PRESET_MCP_SERVER_IDS.has(serverId)) {
+    return translated
+  }
+  const trimmed = storedDescription?.trim()
+  if (trimmed) return trimmed
+  return translated !== key ? translated : ''
+}
+
+export function resolveSkillDescription(
+  skill: { id: string; description: string },
+  t: TranslateFn,
+): string {
+  const key = `settings.skills.descriptions.${skill.id}` as const
+  const translated = t(key)
+  const zhDefault = BUILTIN_SKILLS.find((item) => item.id === skill.id)?.description
+  const trimmed = skill.description?.trim()
+  if (translated !== key && (!trimmed || trimmed === zhDefault)) {
+    return translated
+  }
+  return trimmed ?? (translated !== key ? translated : '')
 }
 
 export function getChannelStatusLabel(status: string, t: TranslateFn): string {

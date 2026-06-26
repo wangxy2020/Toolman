@@ -2,27 +2,50 @@
 
 > **Phase 0.3** · 版本 `0.2.0-rc.1` · 关联 [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
-两台机器处于**不同网络**（例如：家庭宽带 vs 手机 4G/5G 热点），且均已配置 TURN（见 [templates/p2p-network.json.example](./templates/p2p-network.json.example) 或 `pnpm rc1:wan-prep`）。
+正式签字要求：两台机器处于**不同网络**（例如：家庭宽带 vs 手机 4G/5G 热点），且均已配置 TURN。
 
-## 准备（Phase 0.2）
+---
 
-**跨 NAT（正式 RC1 签字）** — 需要 staging 凭据：
+## 单机预检（Phase 0.2 + 0.3 部分）— ✅ 已通过
+
+> **环境**：单台 Mac · OpenRelay 测试 TURN · `pnpm dev:p2p:a` / `dev:p2p:b`  
+> **结论**：当前可测项全部通过；**跨 NAT 双机签字待补**（需第二台设备或电脑 + 热点双网络）。
+
+| 项 | 结果 | 说明 |
+|----|------|------|
+| TURN / network.json 注入 | ✅ | `pnpm rc1:wan-prep` · [p2p-network.openrelay.json](./templates/p2p-network.openrelay.json) |
+| 系统诊断 P2P WAN 就绪 | ✅ | 设置 → 系统诊断，无「未配置 TURN」 |
+| 同机双实例建群 / 邀请 / 加群 | ✅ | `/tmp/toolman-node-b` + `/tmp/toolman-p2p-b` |
+| 群文件同步 | ✅ | LAN 路径 |
+| 群聊消息同步 | ✅ | LAN 路径 |
+| 自动化 smoke / P2P 集成 | ✅ | `pnpm smoke` · `test:p2p-integration` |
+| **跨 NAT 加群（广域网 · 在线）** | ⏳ 待补 | 单机无法正式签字 |
+| 断线 / 换网恢复 | ⏳ 待补 | 可选，需双网络环境 |
+
+**预检日期**：2026-06-22  
+**测试执行**：单机维护者（wangxy）
+
+---
+
+## 准备
+
+**当前测试 TURN（OpenRelay，公开凭据，非 GA 生产）**：
 
 ```bash
 cp docs/engineering/templates/env.p2p.turn.example .env.p2p.turn
-# 填写 TOOLMAN_P2P_TURN_CREDENTIAL（向运维索取 turn.toolman.app 密钥）
-pnpm rc1:wan-prep -- --profile rc1
-# 两台机器各执行一次，完全重启 Toolman
+pnpm rc1:wan-prep -- --all-dev-profiles
+# 重启 dev:p2p:a / dev:p2p:b 或 RC1 profile
 ```
 
-**同 LAN 预检（诊断变绿，非跨 NAT 签字）**：
+**跨 NAT 正式签字（待第二台机器）** — staging 或 OpenRelay 均可，两台各执行 `pnpm rc1:wan-prep` 后重启。
 
-```bash
-pnpm dev:coturn          # 需 Docker；或自备 TURN
-pnpm rc1:wan-prep -- --dev-local --all-dev-profiles
-# 重启 dev:p2p:a / dev:p2p:b，系统诊断 → P2P WAN 就绪
-```
+---
 
+## 跨 NAT 正式验收（待签字）
+
+完成每项后将 `[ ]` 改为 `[x]`。
+
+### 环境记录
 
 | 项 | Node A | Node B |
 |----|--------|--------|
@@ -35,10 +58,6 @@ pnpm rc1:wan-prep -- --dev-local --all-dev-profiles
 | TURN 已配置 | ☐ | ☐ |
 | Hub | remote / 离线 | |
 | libp2p 诊断 | 运行中 ☐ | 运行中 ☐ |
-
-## 验收步骤
-
-完成每项后将 `[ ]` 改为 `[x]`。
 
 ### 1. 加群
 
@@ -58,7 +77,7 @@ pnpm rc1:wan-prep -- --dev-local --all-dev-profiles
 - [ ] Node B：切换网络（Wi‑Fi ↔ 热点）或休眠 2 分钟
 - [ ] 恢复后 **≤ 60s** 内重新在线且可收发消息
 
-## 结果
+### 结果
 
 | 项 | 通过 | 失败说明 |
 |----|------|----------|
@@ -67,9 +86,10 @@ pnpm rc1:wan-prep -- --dev-local --all-dev-profiles
 | 群聊同步 | ☐ | |
 | 断线恢复 | ☐ / N/A | |
 
-**总体结论**：☐ 通过 · ☐ 不通过（缺陷 ID：RC1-___）
+**总体结论**：☐ 通过 · ☐ 不通过（缺陷 ID：RC1-___）  
+**当前**：☑ 单机预检通过 · ⏳ 跨 NAT 正式签字未完成
 
-## 签字
+### 签字
 
 | 角色 | 姓名 | 日期 |
 |------|------|------|

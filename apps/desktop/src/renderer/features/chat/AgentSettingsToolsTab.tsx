@@ -3,6 +3,7 @@ import { IpcChannel, type McpServerConfig, type McpStatusItem } from '@toolman/s
 import { IconSearch } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import { getMcpServers, getPreauthTools } from '../../i18n/agent-labels'
+import { resolveMcpServerDescription } from '../../i18n/settings-labels'
 
 function Toggle({
   checked,
@@ -120,7 +121,9 @@ export function AgentSettingsToolsTab({
                     <span className="tm-settings-tool-item-badge">stdio</span>
                   ) : null}
                 </div>
-                <div className="tm-settings-tool-item-desc">{server.description}</div>
+                <div className="tm-settings-tool-item-desc">
+                  {resolveMcpServerDescription(server.id, server.description, t)}
+                </div>
                 <span
                   className={`tm-tool-tag ${connected ? 'tm-tool-tag--on' : 'tm-tool-tag--off'}`}
                   title={statusTitle}
