@@ -162,7 +162,6 @@ cargo test -p toolman-p2p
 | [P2P_ARCHITECTURE.md](./P2P_ARCHITECTURE.md) | 系统架构与设计决策 |
 | [API_SPEC.md](./API_SPEC.md) | IPC / 事件 / 同步协议 |
 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | `p2p_*` 表结构 |
-| [TASKS.md](./TASKS.md) | 开发任务与里程碑 |
 
 ---
 

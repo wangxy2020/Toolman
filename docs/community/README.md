@@ -6,7 +6,6 @@
 | [COMMUNITY_ARCHITECTURE.md](./COMMUNITY_ARCHITECTURE.md) | 系统架构、模块划分、服务划分、资源模型 |
 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | Users、Resources、Reviews、Tasks、Orders 等表设计 |
 | [API_SPEC.md](./API_SPEC.md) | Marketplace / Task / Review / Install / News / Moderation API |
-| [TASKS.md](./TASKS.md) | 开发任务拆分（每项 ≤ 2 人天） |
 
 **状态**: V1 已实现（Renderer UI + Rust Sidecar + IPC Bridge）。
 

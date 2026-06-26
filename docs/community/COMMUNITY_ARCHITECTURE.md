@@ -399,7 +399,7 @@ V1 **不采用** N-API 嵌入。若 sidecar 打包遇阻，V1.1 可评估 N-API 
 |------|------|
 | 数据库设计 | `docs/community/DATABASE_SCHEMA.md` |
 | API 规范 | `docs/community/API_SPEC.md` |
-| 开发任务 | `docs/community/TASKS.md` |
+| 发布进度 | `docs/engineering/RELEASE_STATUS.md` |
 
 ---
 
@@ -415,4 +415,4 @@ V1 **不采用** N-API 嵌入。若 sidecar 打包遇阻，V1.1 可评估 N-API 
 | 4 | **Task 支付** | V1 **仅 Orders 表与状态机**，不对接真实支付通道 |
 | 5 | **Workflow 执行** | V1 **仅导入/存储** LangGraph 包，不实现执行引擎 |
 
-按 `TASKS.md` 从 **Task-001** 开始编码。
+V1 编码已完成；发布与验收进度见 `docs/engineering/RELEASE_STATUS.md`。
