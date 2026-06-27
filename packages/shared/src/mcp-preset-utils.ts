@@ -30,6 +30,12 @@ export function matchOfficialMcpPresetId(server: PresetProbe): OfficialMcpPreset
   if (server.command === 'npx' && joined.includes('@modelcontextprotocol/server-brave-search')) {
     return 'brave-search'
   }
+  if (server.id === 'docx-mcp-server') {
+    return 'docx-mcp-server'
+  }
+  if (server.command === 'node' && args.some((arg) => arg.includes('docxServer.js'))) {
+    return 'docx-mcp-server'
+  }
   if (server.command === 'npx' && args.includes('docx-mcp-server')) {
     return 'docx-mcp-server'
   }

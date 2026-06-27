@@ -39,7 +39,18 @@ describe('mcp-preset-utils official presets', () => {
     ).toBe(true)
   })
 
-  it('matches docx-mcp-server npx preset', () => {
+  it('matches docx-mcp-server bundled preset', () => {
+    expect(
+      matchOfficialMcpPresetId({
+        id: 'docx-mcp-server',
+        type: 'stdio',
+        command: 'node',
+        args: ['/app/resources/mcp-docx/dist/docxServer.js'],
+      }),
+    ).toBe('docx-mcp-server')
+  })
+
+  it('matches legacy docx-mcp-server npx preset', () => {
     expect(
       matchOfficialMcpPresetId({
         id: 'docx-mcp-server',

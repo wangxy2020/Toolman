@@ -1,0 +1,27 @@
+{
+  "name": "@toolman/mcp-docx-server",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Toolman bundled DOCX MCP server (Word read/edit/comment pipeline)",
+  "type": "module",
+  "main": "./dist/docxServer.js",
+  "bin": {
+    "docx-mcp-server": "./dist/docxServer.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/docxServer.js",
+    "dev": "tsx docxServer.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@knorq/docx-mcp-server": "^3.1.0",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -110,6 +110,8 @@ pnpm build:p2p
 pnpm build:libp2p
 pnpm build:community-hub
 pnpm build:excel-mcp-server
+pnpm build:docx-core
+pnpm build:docx-mcp-server
 
 step "Build workspace packages"
 pnpm --filter @toolman/shared build

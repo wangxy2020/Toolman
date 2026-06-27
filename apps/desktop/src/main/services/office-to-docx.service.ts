@@ -2,12 +2,23 @@ import { access, copyFile, mkdir, readdir, rm } from 'node:fs/promises'
 import { toErrorMessage } from '@toolman/shared'
 import { constants } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { platform, tmpdir } from 'node:os'
+import { promisify } from 'node:util'
+import { app } from 'electron'
 
 import { parseFile, resolveFileKind, type SupportedFileKind, writePlainTextDocx } from '@toolman/knowledge'
 
-export type OfficeToDocxMethod = 'copy' | 'libreoffice' | 'microsoft-word' | 'plaintext'
+import { resolveDocxCoreBinaryPath } from './docx-core-paths'
+
+const execFileAsync = promisify(execFile)
+
+export type OfficeToDocxMethod =
+  | 'copy'
+  | 'office-oxide'
+  | 'libreoffice'
+  | 'microsoft-word'
+  | 'plaintext'
 
 export interface OfficeConversionCapabilities {
   libreOffice: boolean
@@ -35,7 +46,7 @@ export function isLegacyWordPath(filePath: string, fileName?: string): boolean {
 }
 
 export function isFormatPreservingConversionMethod(method: OfficeToDocxMethod): boolean {
-  return method === 'copy' || method === 'libreoffice' || method === 'microsoft-word'
+  return method === 'copy' || method === 'office-oxide' || method === 'libreoffice' || method === 'microsoft-word'
 }
 
 export function hasMicrosoftWordInstalled(capabilities: OfficeConversionCapabilities): boolean {
@@ -72,6 +83,8 @@ export function buildLegacyWordConversionStatusMessage(options: {
   const wordInstalled = hasMicrosoftWordInstalled(capabilities)
 
   switch (method) {
+    case 'office-oxide':
+      return `已通过 Rust 格式桥（office_oxide）将「${fileName}」转换为 docx：${workingName}`
     case 'libreoffice':
       return wordInstalled
         ? `已通过 LibreOffice 将「${fileName}」转换为 docx：${workingName}`
@@ -365,6 +378,26 @@ async function convertWithMicrosoftWordWindows(
   }
 }
 
+async function convertWithDocxCore(inputPath: string, outputPath: string): Promise<void> {
+  const binary = resolveDocxCoreBinaryPath()
+  if (!binary) {
+    throw new OfficeToDocxError('未找到 toolman-docx-core')
+  }
+
+  const cacheDir = join(app.getPath('userData'), 'cache', 'docx-conversions')
+  await mkdir(cacheDir, { recursive: true })
+
+  await execFileAsync(
+    binary,
+    ['convert', '--input', inputPath, '--output', outputPath, '--cache-dir', cacheDir],
+    { timeout: 180_000 },
+  )
+
+  if (!(await pathExists(outputPath))) {
+    throw new OfficeToDocxError('toolman-docx-core 未生成 docx 文件')
+  }
+}
+
 async function convertWithPlainText(
   sourcePath: string,
   outputPath: string,
@@ -396,6 +429,12 @@ function buildFormatPreservingConverters(
   capabilities: OfficeConversionCapabilities,
 ): FormatPreservingConverter[] {
   const converters: FormatPreservingConverter[] = [
+    {
+      method: 'office-oxide',
+      available: Boolean(resolveDocxCoreBinaryPath()),
+      convert: convertWithDocxCore,
+      unavailableReason: '未找到 toolman-docx-core',
+    },
     {
       method: 'libreoffice',
       available: capabilities.libreOffice,
@@ -430,7 +469,7 @@ function buildFormatPreservingConverters(
  * - `.docx`：直接复制到 targetDocxPath
  * - `.doc` / `.wps`：转换为 docx 并写入 targetDocxPath（不保留中间副本）
  *
- * 无 Word 时的策略：LibreOffice（保留格式）→ 纯文本 docx（仅 .doc，会丢格式）。
+ * 无 Word 时的策略：Rust office_oxide → LibreOffice（保留格式）→ 纯文本 docx（仅 .doc，会丢格式）。
  * 已装 Word 但自动化失败时：不静默降级为纯文本，需用户授权或手动另存为 .docx。
  */
 export async function materializeDocxForMcp(options: {

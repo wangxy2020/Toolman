@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { McpServerConfig } from '@toolman/shared'
 import { getMcpServer } from './mcp-server-config.service'
 import { resolveMcpServerRuntimeConfig } from './mcp-runtime-config.service'
+import { resolveMcpNodeCommand, resolveMcpNodeEnv } from './mcp-node-runtime'
 import {
   isPostgresMcpConfig,
   postgresMcpConfigFingerprint,
@@ -73,12 +74,18 @@ async function createTransport(config: McpServerConfig): Promise<McpTransport> {
     if (!config.command?.trim()) {
       throw new Error('stdio MCP 服务器缺少 command')
     }
+    const command =
+      config.command === 'node' ? resolveMcpNodeCommand() : config.command
     return new StdioClientTransport({
-      command: config.command,
+      command,
       args: config.args ?? [],
       env: {
-        ...Object.fromEntries(
-          Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] != null),
+        ...resolveMcpNodeEnv(
+          Object.fromEntries(
+            Object.entries(process.env).filter(
+              (entry): entry is [string, string] => entry[1] != null,
+            ),
+          ),
         ),
         ...config.env,
       },

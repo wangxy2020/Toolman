@@ -53,7 +53,7 @@ export async function assertDocxMcpReady(): Promise<number> {
   const state = getMcpClientState(DOCX_MCP_SERVER_ID)
   if (!state?.connected) {
     throw new DocxMcpNotReadyError(
-      `DOCX MCP Server 连接失败：${state?.lastError ?? '请确认 Node.js 20+ 已安装且 npx docx-mcp-server 可运行'}`,
+      `DOCX MCP Server 连接失败：${state?.lastError ?? '请确认内置 DOCX MCP 已正确打包'}`,
     )
   }
 

@@ -16,7 +16,10 @@ import {
   isDuplicateOfficialMcpPreset,
 } from '@toolman/shared'
 import { isPostgresMcpConfig } from './mcp-postgres-verify.service'
+import { resolveDocxMcpServerEntryPath } from './docx-mcp-paths'
+import { repairDocxMcpLaunch, isLegacyDocxMcpLaunch } from './mcp-docx-launch-repair'
 import { resolveExcelMcpServerEntryPath } from './excel-mcp-paths'
+import { resolveMcpNodeCommand } from './mcp-node-runtime'
 
 const CONFIG_FILE = 'mcp-servers.json'
 
@@ -143,15 +146,16 @@ function defaultBraveSearchPreset(): McpServerConfig {
 }
 
 function defaultDocxMcpServerPreset(): McpServerConfig {
+  const entryPath = resolveDocxMcpServerEntryPath()
   return {
     id: 'docx-mcp-server',
-    name: 'DOCX MCP Server',
+    name: 'Toolman DOCX MCP',
     description:
-      'Word (.docx/.doc/.wps) 读写、批注、高亮、修订与排版；本地 stdio（npx docx-mcp-server，需 Node.js 20+）',
+      'Word (.docx/.doc/.wps) 读写、批注、高亮、修订与排版；本地 stdio（内置 docx-mcp-server + Rust 格式桥）',
     type: 'stdio',
     enabled: isDefaultEnabledMcpServer('docx-mcp-server'),
-    command: 'npx',
-    args: ['-y', 'docx-mcp-server'],
+    command: resolveMcpNodeCommand(),
+    args: entryPath ? [entryPath] : [],
     env: {},
     packageSource: 'default',
     longRunning: true,
@@ -168,7 +172,7 @@ function defaultExcelMcpServerPreset(): McpServerConfig {
       'Excel (.xlsx/.xls) 无损审核、单元格修改与高亮批注；本地 stdio（内置 excel-mcp-server，需 Node.js 20+）',
     type: 'stdio',
     enabled: isDefaultEnabledMcpServer('excel-mcp-server'),
-    command: 'node',
+    command: resolveMcpNodeCommand(),
     args: entryPath ? [entryPath] : [],
     env: {},
     packageSource: 'default',
@@ -264,8 +268,13 @@ function mergeSystemMcpServerPreset(system: McpServerConfig, source: McpServerCo
 
   const polluted = launchArgsPolluted(source)
   const presetMatch = matchOfficialMcpPresetId(source) === system.id
+  const docxLegacySource = system.id === 'docx-mcp-server' && isLegacyDocxMcpLaunch(source)
   const useSourceLaunch =
-    !polluted && presetMatch && Boolean(source.command?.trim()) && (source.args?.length ?? 0) > 0
+    !polluted &&
+    presetMatch &&
+    !docxLegacySource &&
+    Boolean(source.command?.trim()) &&
+    (source.args?.length ?? 0) > 0
 
   let merged: McpServerConfig = {
     ...system,
@@ -295,22 +304,16 @@ function mergeSystemMcpServerPreset(system: McpServerConfig, source: McpServerCo
   }
 
   if (system.id === 'docx-mcp-server') {
-    const args = merged.args ?? []
-    const docxBroken = merged.command !== 'npx' || !args.includes('docx-mcp-server')
-    if (docxBroken) {
-      merged = { ...merged, command: 'npx', args: ['-y', 'docx-mcp-server'] }
-    }
+    merged = repairDocxMcpLaunch(merged)
   }
 
   if (system.id === 'excel-mcp-server') {
     const entryPath = resolveExcelMcpServerEntryPath()
     const args = merged.args ?? []
     const excelBroken =
-      merged.command !== 'node' ||
-      args.length === 0 ||
-      !args.some((arg) => arg.includes('excelServer.js'))
+      args.length === 0 || !args.some((arg) => arg.includes('excelServer.js'))
     if (excelBroken && entryPath) {
-      merged = { ...merged, command: 'node', args: [entryPath] }
+      merged = { ...merged, command: resolveMcpNodeCommand(), args: [entryPath] }
     }
   }
 
@@ -360,7 +363,7 @@ function mergeWithDefaultServers(items: McpServerConfig[]): McpServerConfig[] {
     merged.push(custom)
   }
 
-  return merged
+  return merged.map(repairDocxMcpLaunch)
 }
 
 function shouldPersistMergedConfig(before: McpServerConfig[], after: McpServerConfig[]): boolean {

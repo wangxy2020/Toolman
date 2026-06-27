@@ -297,7 +297,7 @@ export const settingsPagesZhCN = {
         python: '官方 Python 执行 MCP（uvx）',
         'brave-search': 'Brave Search 官方 MCP，需配置 BRAVE_API_KEY',
         'docx-mcp-server':
-          'Word (.docx/.doc/.wps) 读写、批注、高亮、修订与排版；本地 stdio（npx docx-mcp-server，需 Node.js 20+）',
+          'Word (.docx/.doc/.wps) 读写、批注、高亮、修订与排版；本地 stdio（内置 docx-mcp-server + Rust 格式桥）',
         'excel-mcp-server':
           'Excel (.xlsx/.xls) 无损审核、单元格修改与高亮批注；本地 stdio（内置 excel-mcp-server，需 Node.js 20+）',
         dify: '检索 Dify 知识库（内置）',
@@ -1013,7 +1013,7 @@ export const settingsPagesEn = {
         python: 'Official Python execution MCP (uvx)',
         'brave-search': 'Official Brave Search MCP — configure BRAVE_API_KEY',
         'docx-mcp-server':
-          'Word (.docx/.doc/.wps) read/write, comments, highlights, revisions, and layout via local stdio (npx docx-mcp-server, Node.js 20+)',
+          'Word (.docx/.doc/.wps) read/write, comments, highlights, revisions, and layout via bundled stdio MCP (docx-mcp-server + Rust format bridge)',
         'excel-mcp-server':
           'Excel (.xlsx/.xls) lossless review, cell edits, and highlight annotations via built-in excel-mcp-server (Node.js 20+)',
         dify: 'Search Dify knowledge bases (built-in)',

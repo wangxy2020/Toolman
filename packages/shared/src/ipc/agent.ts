@@ -75,7 +75,7 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
     paragraphEditsApplied: z.number().int().nonnegative(),
     paragraphEditsFailed: z.number().int().nonnegative(),
     conversionMethod: z
-      .enum(['libreoffice', 'microsoft-word', 'plaintext'])
+      .enum(['office-oxide', 'libreoffice', 'microsoft-word', 'plaintext'])
       .optional(),
     errors: z.array(z.string()).optional(),
     parseWarnings: z.array(z.string()).optional(),

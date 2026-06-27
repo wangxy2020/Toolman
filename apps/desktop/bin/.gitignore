@@ -1,3 +1,5 @@
 # Community Hub sidecar (built via scripts/build-community-hub.sh)
 toolman-community-hub
 toolman-community-hub.exe
+toolman-docx-core
+toolman-docx-core.exe

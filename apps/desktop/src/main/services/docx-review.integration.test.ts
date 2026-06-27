@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { DOCX_MCP_SERVER_ID } from '@toolman/shared'
 
 import { filterDocxMcpToolDefinitions } from './docx-mcp-task.service'
+import { resolveDocxMcpServerEntryPath } from './docx-mcp-paths'
 import * as mcpClientManager from './mcp-client-manager.service'
 import { encodeMcpToolName } from './mcp-tool-utils'
 import { runDocxMcpApplySmokeTest } from './docx-review.service'
@@ -36,9 +37,14 @@ async function connectDocxMcpForTest(): Promise<{
   tools: ToolDefinition[]
   cleanup: () => Promise<void>
 }> {
+  const entryPath = resolveDocxMcpServerEntryPath()
+  if (!entryPath) {
+    throw new Error('内置 DOCX MCP 未构建，请先运行 pnpm build:docx-mcp-server')
+  }
+
   const transport = new StdioClientTransport({
-    command: 'npx',
-    args: ['-y', 'docx-mcp-server'],
+    command: 'node',
+    args: [entryPath],
     env: Object.fromEntries(
       Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] != null),
     ),

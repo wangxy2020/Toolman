@@ -32,6 +32,8 @@ function StatRow({
 
 function conversionMethodLabel(method: SummaryBlock['conversionMethod']): string | null {
   switch (method) {
+    case 'office-oxide':
+      return 'Rust 格式桥转换（office_oxide，保留格式）'
     case 'microsoft-word':
       return 'Microsoft Word 转换（保留格式）'
     case 'libreoffice':

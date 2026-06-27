@@ -51,8 +51,8 @@ export const MCP_SERVERS = [
   { id: 'brave-search', name: 'Brave Search', description: 'Brave Search 官方 MCP（需 API Key）' },
   {
     id: 'docx-mcp-server',
-    name: 'DOCX MCP Server',
-    description: 'Word 文档读写、批注、修订与排版（npx）',
+    name: 'Toolman DOCX MCP',
+    description: 'Word 文档读写、批注、修订与排版（内置）',
   },
   {
     id: 'excel-mcp-server',

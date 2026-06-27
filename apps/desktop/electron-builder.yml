@@ -28,6 +28,14 @@ extraResources:
     to: mcp-excel
     filter:
       - '**/*'
+  - from: resources/mcp-docx
+    to: mcp-docx
+    filter:
+      - '**/*'
+  - from: bin/toolman-docx-core
+    to: bin/toolman-docx-core
+    filter:
+      - '**/*'
 mac:
   target:
     - dmg

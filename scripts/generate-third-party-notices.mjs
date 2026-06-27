@@ -29,6 +29,7 @@ function collectLicenses(cwd, label) {
 const rows = [
   ...collectLicenses(join(ROOT, 'apps/desktop'), 'desktop'),
   ...collectLicenses(join(ROOT, 'mcp-servers/excel'), 'mcp-excel'),
+  ...collectLicenses(join(ROOT, 'mcp-servers/docx'), 'mcp-docx'),
 ].sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope))
 
 const unique = new Map()
