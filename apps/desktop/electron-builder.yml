@@ -39,6 +39,7 @@ extraResources:
 mac:
   target:
     - dmg
+    - zip
   category: public.app-category.productivity
   artifactName: Toolman-${version}-${arch}.${ext}
 win:
@@ -46,9 +47,9 @@ win:
     - target: portable
       arch:
         - x64
-    # - target: nsis
-    #   arch:
-    #     - x64
+    - target: nsis
+      arch:
+        - x64
   artifactName: Toolman-${version}-${arch}.${ext}
 portable:
   artifactName: Toolman-${version}-${arch}-Portable.${ext}

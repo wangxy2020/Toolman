@@ -12,8 +12,9 @@ Base URL（示例）：`https://releases.toolman.app`
     manifest.json                 # About 页检查用（自定义 schema）
     darwin/
       arm64/
-        latest-mac.yml            # electron-updater generic provider
-        Toolman-0.2.0-arm64.dmg
+        latest-mac.yml            # electron-updater generic provider (points at .zip)
+        Toolman-0.2.0-arm64.zip   # macOS OTA 静默更新
+        Toolman-0.2.0-arm64.dmg     # 手动安装 / GitHub Release
       x64/
         latest-mac.yml
         Toolman-0.2.0-x64.dmg
@@ -46,8 +47,9 @@ bash scripts/build-desktop-release.sh
 产物：
 
 - `apps/desktop/dist/Toolman-{version}-{arch}.dmg`
+- `apps/desktop/dist/Toolman-{version}-{arch}.zip`（macOS OTA，`latest-mac.yml` 引用）
 - `apps/desktop/dist/Toolman-{version}-{arch}-Portable.exe`（Windows 免安装）
-- `apps/desktop/dist/Toolman-{version}-{arch}-Setup.exe`（Windows 安装包）
+- `apps/desktop/dist/Toolman-{version}-{arch}-Setup.exe`（Windows 安装包 + OTA）
 - `apps/desktop/dist/latest-mac.yml` 或 `latest.yml`
 - `apps/desktop/dist/staging-manifest.json`
 

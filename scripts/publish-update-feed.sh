@@ -61,7 +61,7 @@ printf 'Feed base URL: %s\n' "$FEED_BASE_URL"
 for file in "$DESKTOP_DIR"/*; do
   base="$(basename "$file")"
   case "$base" in
-    *.dmg | *.exe | *.AppImage | latest*.yml | *.blockmap)
+    *.dmg | *.zip | *.exe | *.AppImage | latest*.yml | *.blockmap)
       upload "$file" "$REMOTE_BASE/$base"
       ;;
   esac

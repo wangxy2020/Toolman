@@ -16,6 +16,7 @@ import {
 } from '../../features/user/firebase-auth.client'
 import type { TranslateFn } from '../../i18n/useI18n'
 import { useI18n } from '../../i18n/useI18n'
+import { isReleaseDesktopBuild, shouldShowAuthDevHints } from '../../env/release-build'
 import { useAuthBuildProfile } from '../../features/user/useAuthBuildProfile'
 import { useAuthProviderConfig } from '../../features/user/useAuthProviderConfig'
 import { inferDefaultAuthRegion } from '../../features/user/user-account-utils'
@@ -98,7 +99,7 @@ export function useUserCenterAuth(options: {
   } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isPackagedApp, setIsPackagedApp] = useState(false)
+  const [isPackagedApp, setIsPackagedApp] = useState(isReleaseDesktopBuild())
 
   useEffect(() => {
     void window.api.invoke(IpcChannel.AppGetInfo).then((result) => {
@@ -180,13 +181,15 @@ export function useUserCenterAuth(options: {
   const authBusy = busy || profileLoading || providerConfigLoading
   const cnAccountIsEmail = isCnEmailAccountInput(account)
 
-  const firebaseConfigHint = isPackagedApp
-    ? t('user.auth.configFirebaseRelease')
-    : t('user.auth.configFirebase')
+  const showDevAuthHints = shouldShowAuthDevHints(isPackagedApp)
 
-  const cnConfigHint = isPackagedApp
-    ? t('user.auth.configCnRelease')
-    : t('user.auth.configCn')
+  const firebaseConfigHint = showDevAuthHints
+    ? t('user.auth.configFirebase')
+    : t('user.auth.configFirebaseRelease')
+
+  const cnConfigHint = showDevAuthHints
+    ? t('user.auth.configCn')
+    : t('user.auth.configCnRelease')
 
   const codeIntent =
     view === 'register' ? 'register' : view === 'forgot_password' ? 'reset' : 'login'

@@ -13,6 +13,7 @@ import { invalidateHubTokenCache } from '../community/community-hub-auth.service
 import { getAuthSession } from '../auth-session.service'
 import { refreshP2pDeviceIdentityBinding } from '../p2p/p2p-device-identity.service'
 import { AuthLoginError } from './auth-login.error.js'
+import { formatAuthProviderNotConfiguredMessage } from './auth-config-message.js'
 import { resetIdentityToGuest } from './auth-persist.service.js'
 import { getFirebaseAuthConfig } from './firebase-auth.config.js'
 import {
@@ -40,7 +41,7 @@ export async function verifyDeleteAccountReauth(
   if (parsed.method === 'firebase_email') {
     const config = getFirebaseAuthConfig()
     if (!config) {
-      throw new AuthLoginError('国际登录未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+      throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('intl'))
     }
 
     const emailBinding = bindings.find((binding) => binding.provider === 'firebase_email')

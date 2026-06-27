@@ -5,6 +5,7 @@
 | 平台 | 格式 | 文件名示例 | 用途 |
 |------|------|-----------|------|
 | macOS | **DMG** | `Toolman-0.2.0-rc.1-arm64.dmg` | 拖拽安装 |
+| macOS | **ZIP**（OTA） | `Toolman-0.2.0-rc.1-arm64.zip` | `electron-updater` 自动更新（随 CI 上传 CDN，GitHub Release 可选） |
 | Windows | **Portable（免安装）** | `Toolman-0.2.0-rc.1-x64-Portable.exe` | 双击即用，无需安装 |
 | Windows | **NSIS 安装包** | `Toolman-0.2.0-rc.1-x64-Setup.exe` | 传统安装 + OTA 自动更新 |
 

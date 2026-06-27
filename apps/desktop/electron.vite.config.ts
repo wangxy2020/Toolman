@@ -39,6 +39,9 @@ export default defineConfig({
     },
   },
   renderer: {
+    define: {
+      __TOOLMAN_RELEASE_BUILD__: JSON.stringify(isReleaseBuild ? '1' : ''),
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer'),

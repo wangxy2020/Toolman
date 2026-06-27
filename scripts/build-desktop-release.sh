@@ -80,7 +80,7 @@ list_release_artifacts() {
   local dist_dir="$2"
   case "$platform" in
     darwin)
-      find "$dist_dir" -maxdepth 1 -type f \( -name '*.dmg' -o -name 'latest-mac.yml' -o -name '*-manifest.json' \) | sort
+      find "$dist_dir" -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name 'latest-mac.yml' -o -name '*-manifest.json' \) | sort
       ;;
     win32)
       find "$dist_dir" -maxdepth 1 -type f \( -name '*.exe' -o -name 'latest.yml' -o -name '*-manifest.json' \) | sort

@@ -9,8 +9,8 @@ import {
 } from 'firebase/auth'
 
 import type { AuthProvider } from '@toolman/shared'
-import { IpcChannel } from '@toolman/shared'
 
+import { shouldShowAuthDevHints } from '../../env/release-build'
 import { getFirebaseWebConfig } from './auth-api.client'
 
 const OAUTH_PROVIDER_STORAGE_KEY = 'toolman:firebase-oauth-provider'
@@ -33,10 +33,8 @@ function buildCredentialProvider(provider: AuthProvider) {
   return appleProvider
 }
 
-async function firebaseNotConfiguredMessage(): Promise<string> {
-  const info = await window.api.invoke(IpcChannel.AppGetInfo)
-  const isPackaged = info?.ok && (info.data as { isPackaged?: boolean })?.isPackaged === true
-  if (isPackaged) {
+function firebaseNotConfiguredMessage(): string {
+  if (!shouldShowAuthDevHints()) {
     return '国际登录暂不可用，请更新到最新版本或联系支持。'
   }
   return 'Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量'
@@ -45,7 +43,7 @@ async function firebaseNotConfiguredMessage(): Promise<string> {
 async function ensureFirebaseAuth(): Promise<Auth> {
   const config = await getFirebaseWebConfig()
   if (!config.configured) {
-    throw new Error(await firebaseNotConfiguredMessage())
+    throw new Error(firebaseNotConfiguredMessage())
   }
 
   if (!firebaseApp) {
