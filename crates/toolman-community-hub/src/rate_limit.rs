@@ -9,6 +9,7 @@ use axum::response::Response;
 
 use crate::api::ApiError;
 use crate::api::HEADER_COMMUNITY_USER_ID;
+use crate::api::hub_token_subject_from_headers;
 use crate::state::AppState;
 
 const MAX_TRACKED_CLIENTS: usize = 10_000;
@@ -101,6 +102,10 @@ pub fn client_rate_limit_key(headers: &HeaderMap) -> String {
         }
     }
 
+    if let Some(subject) = hub_token_subject_from_headers(headers) {
+        return format!("identity:{subject}");
+    }
+
     if let Some(forwarded) = headers.get("x-forwarded-for") {
         if let Ok(value) = forwarded.to_str() {
             if let Some(first) = value.split(',').next() {
@@ -184,6 +189,46 @@ mod tests {
         assert_eq!(
             client_rate_limit_key(&headers),
             "identity:00000000-0000-0000-0000-000000000001"
+        );
+    }
+
+    #[test]
+    fn prefers_bearer_jwt_subject_when_identity_header_missing() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+
+        #[derive(serde::Serialize)]
+        struct Claims {
+            sub: String,
+            iss: String,
+            aud: String,
+            exp: i64,
+            iat: i64,
+            registration_status: String,
+        }
+
+        let claims = Claims {
+            sub: "jwt-identity-42".to_string(),
+            iss: "toolman-desktop".to_string(),
+            aud: "toolman-community-hub".to_string(),
+            exp: chrono::Utc::now().timestamp() + 3600,
+            iat: chrono::Utc::now().timestamp(),
+            registration_status: "registered".to_string(),
+        };
+        let token = encode(
+            &Header::new(jsonwebtoken::Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"test-secret"),
+        )
+        .expect("sign token");
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            format!("Bearer {token}").parse().expect("auth header"),
+        );
+        assert_eq!(
+            client_rate_limit_key(&headers),
+            "identity:jwt-identity-42"
         );
     }
 }

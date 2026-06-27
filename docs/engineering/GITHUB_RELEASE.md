@@ -63,7 +63,11 @@ pnpm release:desktop
 ### 方式一：打 Tag 自动发布（推荐）
 
 1. 确认版本号：`apps/desktop/package.json` → `version`
-2. 在 GitHub **Settings → Secrets → Actions** 配置 **`TOOLMAN_RELEASE_ENV`**（多行文本，内容与本地 `.env.local` 中认证/P2P 相关变量一致，见 [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md)）
+2. 在 GitHub **Settings → Secrets → Actions** 配置 **`TOOLMAN_RELEASE_ENV`**：
+   ```bash
+   pnpm release:print-env   # 从 .env.local / .env.p2p.turn 生成，复制输出到 Secret
+   ```
+   详见 [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md#github-actions--toolman_release_env)
 3. 提交并打 tag（**commit 消息与 tag 同名**，如 `v0.2.0-rc.3`）：
 
 ```bash

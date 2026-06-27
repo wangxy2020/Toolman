@@ -71,15 +71,14 @@ function resolveOwnerPublicKey(ownerDeviceId: string, fallback: string): string 
   return row?.publicKey ?? fallback
 }
 
-export async function createP2pInvite(rawInput: unknown): Promise<{
-  inviteToken: string
-  inviteUrl: string
-  qrData: string
-  expiresAt: number
-}> {
-  const input = P2pMemberInviteInputSchema.parse(rawInput)
-  const { workspace, memberId } = assertCanInvite(input.workspaceId)
-
+function createSignedInviteRecord(input: {
+  workspace: P2pWorkspaceRow
+  memberId: string
+  role: P2pInvitableMemberRole
+  maxUses: number
+  expiresInHours: number
+}): { inviteToken: string; inviteId: string; expiresAt: number } {
+  const { workspace, memberId } = input
   const workspaceKeyB64 = loadWorkspaceKey(workspace.id)
   if (!workspaceKeyB64) {
     throw new Error('群组密钥不可用，无法生成邀请')
@@ -88,9 +87,7 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
   const device = getP2pDeviceInfo()
   const ownerPublicKey = resolveOwnerPublicKey(workspace.ownerDeviceId, device.publicKey)
   const inviteId = randomUUID()
-  const expiresInHours = input.expiresInHours ?? 72
-  const expiresAt = Date.now() + expiresInHours * 60 * 60 * 1000
-  const maxUses = input.maxUses ?? 1
+  const expiresAt = Date.now() + input.expiresInHours * 60 * 60 * 1000
 
   const signed = signInvitePayload({
     v: INVITE_TOKEN_VERSION,
@@ -105,7 +102,7 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
     workspaceKeyB64,
     role: input.role,
     expiresAt,
-    maxUses,
+    maxUses: input.maxUses,
     issuerDeviceId: device.deviceId,
     issuerPublicKey: device.publicKey,
   })
@@ -116,13 +113,49 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
     tokenHash: hashInviteToken(inviteToken),
     role: input.role,
     createdBy: memberId,
-    maxUses,
+    maxUses: input.maxUses,
     expiresAt: new Date(expiresAt),
   })
 
+  return { inviteToken, inviteId, expiresAt }
+}
+
+async function attachInviteOfferHandshake(
+  inviteId: string,
+  workspaceId: string,
+): Promise<string | undefined> {
   await ensureInviteNetworkingReady()
-  const offerSdp = await P2pBridge.inviteCreateOffer(inviteId, workspace.id)
-  beginInviteHandshake(inviteId)
+  try {
+    const offerSdp = await P2pBridge.inviteCreateOffer(inviteId, workspaceId)
+    beginInviteHandshake(inviteId)
+    return offerSdp
+  } catch (error) {
+    const message = toErrorMessage(error, String(error))
+    logStructured('p2p', 'warn', `invite offer skipped (LAN-only invite still works): ${message}`)
+    return undefined
+  }
+}
+
+export async function createP2pInvite(rawInput: unknown): Promise<{
+  inviteToken: string
+  inviteUrl: string
+  qrData: string
+  expiresAt: number
+}> {
+  const input = P2pMemberInviteInputSchema.parse(rawInput)
+  const { workspace, memberId } = assertCanInvite(input.workspaceId)
+
+  const expiresInHours = input.expiresInHours ?? 72
+  const maxUses = input.maxUses ?? 1
+  const { inviteToken, inviteId, expiresAt } = createSignedInviteRecord({
+    workspace,
+    memberId,
+    role: input.role,
+    maxUses,
+    expiresInHours,
+  })
+
+  const offerSdp = await attachInviteOfferHandshake(inviteId, workspace.id)
 
   const inviteUrl = buildInviteUrl(inviteToken, offerSdp)
   return {
@@ -134,11 +167,18 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
 }
 
 export async function createDefaultWorkspaceInvite(workspaceId: string): Promise<string> {
-  const result = await createP2pInvite({
-    workspaceId,
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (!workspace) {
+    throw new Error('群组不存在')
+  }
+
+  const member = assertCanInviteMember(workspaceId)
+  const { inviteToken } = createSignedInviteRecord({
+    workspace,
+    memberId: member.id,
     role: 'member' satisfies P2pInvitableMemberRole,
     maxUses: 1,
     expiresInHours: 72,
   })
-  return result.inviteToken
+  return inviteToken
 }

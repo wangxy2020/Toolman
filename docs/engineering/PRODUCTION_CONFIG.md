@@ -9,6 +9,30 @@
 2. **未配置即拦截**：认证 Provider 未配置时，UI 必须明确报错（已有 `AuthLoginError` 文案），不得静默降级为 dev 账户。
 3. **密钥不入库**：所有 secret 通过 CI/CD 或 OS 密钥链注入，不写入 `.env.production.example` 占位值以外的真实密钥。
 
+### GitHub Actions — `TOOLMAN_RELEASE_ENV`
+
+桌面 **Release Desktop** 工作流在构建前将 Secret **`TOOLMAN_RELEASE_ENV`**（多行文本）写入 `apps/desktop/resources/release.env`，再打进安装包。本地 `.env.local` **不会**随 DMG/Portable 分发。
+
+**生成本地可粘贴内容：**
+
+```bash
+pnpm release:print-env
+```
+
+将终端输出整段复制到：**GitHub → Settings → Secrets and variables → Actions → `TOOLMAN_RELEASE_ENV`**
+
+**至少应包含：**
+
+| 类别 | 必填项 |
+|------|--------|
+| 国内登录 | `TOOLMAN_AUTHING_APP_ID`、`TOOLMAN_AUTHING_APP_SECRET`、`TOOLMAN_AUTHING_APP_HOST` |
+| 国际登录（global 包） | `TOOLMAN_FIREBASE_API_KEY`、`TOOLMAN_FIREBASE_AUTH_DOMAIN`、`TOOLMAN_FIREBASE_PROJECT_ID` |
+| P2P / WAN（二选一） | **Xirsys（推荐）** `TOOLMAN_P2P_XIRSYS_IDENT` + `SECRET` + `CHANNEL`；或 **静态 TURN** `TOOLMAN_P2P_TURN_URL` + `USERNAME` + `CREDENTIAL` |
+
+可选：`TOOLMAN_AUTH_BUILD_REGION=global`、`TOOLMAN_COMMUNITY_JWT_SECRET`、Xirsys 的 `TOOLMAN_P2P_XIRSYS_PATH`。
+
+CI 发布构建会校验上述项；缺 P2P 或登录配置时 **Release Desktop 直接失败**，避免发出无法登录 / 无法建群的安装包。
+
 ---
 
 ## Desktop — `TOOLMAN_*`

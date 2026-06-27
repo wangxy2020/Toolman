@@ -10,6 +10,7 @@ import {
   listCommunityBoardMessages,
 } from './community-api.client'
 import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
+import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
@@ -63,8 +64,10 @@ export function useCommunityMessageBoard() {
         setItems(withUiMockItem([], getUiMockBoardMessage()).map(applyMockMessage))
         setError(null)
       } else {
-        setError(message)
-        setItems([])
+        setError(formatCommunityHubError(message))
+        if (!isCommunityHubRateLimitError(message)) {
+          setItems([])
+        }
       }
     } finally {
       setLoading(false)
@@ -158,6 +161,15 @@ export function useCommunityMessageBoard() {
 
   const replaceMessage = useCallback((updated: CommunityBoardMessage) => {
     setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+  }, [])
+
+  const removeMessage = useCallback((messageId: string) => {
+    setItems((current) => current.filter((item) => item.id !== messageId))
+    setRepliesByMessageId((current) => {
+      const next = { ...current }
+      delete next[messageId]
+      return next
+    })
   }, [])
 
   const like = useCallback(
@@ -265,6 +277,7 @@ export function useCommunityMessageBoard() {
     error,
     setError,
     load,
+    removeMessage,
     submit,
     repliesByMessageId,
     replyDrafts,

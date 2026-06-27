@@ -45,6 +45,27 @@ pub fn bearer_token_from_headers(headers: &HeaderMap) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
+pub fn hub_token_subject_claim(token: &str) -> Option<String> {
+    use base64::Engine;
+
+    let payload = token.split('.').nth(1)?;
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .or_else(|_| base64::engine::general_purpose::STANDARD.decode(payload))
+        .ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
+    value
+        .get("sub")
+        .and_then(|sub| sub.as_str())
+        .map(str::trim)
+        .filter(|sub| !sub.is_empty())
+        .map(str::to_string)
+}
+
+pub fn hub_token_subject_from_headers(headers: &HeaderMap) -> Option<String> {
+    bearer_token_from_headers(headers).and_then(|token| hub_token_subject_claim(token))
+}
+
 pub fn validate_hub_jwt(token: &str, secret: &str) -> Result<ResolvedIdentity, ApiError> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_audience(&["toolman-community-hub"]);

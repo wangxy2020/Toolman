@@ -33,7 +33,9 @@ pub use auth::{
     identity_id_from_headers, load_auth_user, permission_middleware, publish_guard,
     require_permission, AuthUser, HEADER_COMMUNITY_USER_ID,
 };
-pub use jwt::{bearer_token_from_headers, validate_hub_jwt, ResolvedIdentity};
+pub use jwt::{
+    bearer_token_from_headers, hub_token_subject_from_headers, validate_hub_jwt, ResolvedIdentity,
+};
 pub use error::{ApiError, ApiErrorCode};
 
 pub fn router(state: AppState) -> Router {

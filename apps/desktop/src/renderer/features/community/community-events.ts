@@ -7,12 +7,21 @@ export const COMMUNITY_USER_DATA_CHANGED_EVENT = 'toolman.community.user-data.ch
 /** @deprecated Use COMMUNITY_USER_DATA_CHANGED_EVENT */
 export const COMMUNITY_BOARD_CHANGED_EVENT = COMMUNITY_USER_DATA_CHANGED_EVENT
 
+const USER_DATA_CHANGED_DEBOUNCE_MS = 400
+let userDataChangedTimer: number | null = null
+
 export function notifyCommunityNewsSourcesChanged(): void {
   window.dispatchEvent(new Event(COMMUNITY_NEWS_SOURCES_CHANGED_EVENT))
 }
 
 export function notifyCommunityUserDataChanged(): void {
-  window.dispatchEvent(new Event(COMMUNITY_USER_DATA_CHANGED_EVENT))
+  if (userDataChangedTimer !== null) {
+    window.clearTimeout(userDataChangedTimer)
+  }
+  userDataChangedTimer = window.setTimeout(() => {
+    userDataChangedTimer = null
+    window.dispatchEvent(new Event(COMMUNITY_USER_DATA_CHANGED_EVENT))
+  }, USER_DATA_CHANGED_DEBOUNCE_MS)
 }
 
 export function notifyCommunityBoardChanged(): void {

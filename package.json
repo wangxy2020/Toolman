@@ -38,6 +38,7 @@
     "rc1:publish-staging": "bash scripts/rc1-publish-staging.sh",
     "rc1:wan-10-checklist": "bash scripts/p2p-wan-10-peer-checklist.sh",
     "release:desktop": "bash scripts/build-desktop-release.sh",
+    "release:print-env": "node scripts/print-toolman-release-env.mjs",
     "release:desktop:publish": "bash scripts/publish-update-feed.sh",
     "release:verify-feed": "bash scripts/verify-update-feed.sh",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",

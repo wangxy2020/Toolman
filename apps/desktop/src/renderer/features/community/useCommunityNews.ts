@@ -16,6 +16,7 @@ import {
   listRecommendedCommunityNews,
 } from './community-api.client'
 import { formatNewsListError } from './community-news-utils'
+import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
 import { notifyCommunityUserDataChanged } from './community-events'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
@@ -56,11 +57,9 @@ async function fetchEnabledNewsSources(
 
   if (toFetch.length === 0) return
 
-  await Promise.all(
-    toFetch.map((source) =>
-      fetchCommunityNewsSource({ sourceId: source.id }).catch(() => undefined),
-    ),
-  )
+  for (const source of toFetch) {
+    await fetchCommunityNewsSource({ sourceId: source.id }).catch(() => undefined)
+  }
 }
 
 export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
@@ -112,9 +111,11 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
       }
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : '加载资讯失败'
-      setError(formatNewsListError(message))
-      setItems([])
-      if (loadRecommended) setRecommended([])
+      setError(formatNewsListError(formatCommunityHubError(message)))
+      if (!isCommunityHubRateLimitError(message)) {
+        setItems([])
+        if (loadRecommended) setRecommended([])
+      }
     } finally {
       setLoading(false)
     }

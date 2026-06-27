@@ -1,5 +1,7 @@
 import type { MouseEvent } from 'react'
 
+import { isCommunityHubRateLimitError } from './community-hub-error-utils'
+
 export function formatNewsDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -361,6 +363,9 @@ export function formatNewsListError(message: string): string {
   }
   if (message.includes('"validation": "uuid"')) {
     return '资讯数据格式异常，请刷新页面重试'
+  }
+  if (isCommunityHubRateLimitError(message)) {
+    return '社区服务请求过于频繁，请稍后再试'
   }
   return message
 }

@@ -24,8 +24,9 @@ See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RE
 - [ ] Windows: Authenticode signing complete
 - [ ] `TOOLMAN_*_DEV_MODE` unset in release env
 - [ ] `TOOLMAN_BILLING_MOCK=0` for production channel
+- [ ] **`TOOLMAN_RELEASE_ENV`** GitHub Secret 已配置（`pnpm release:print-env` 校验通过，含 Authing/Firebase + Xirsys 或 TURN）
 - [ ] `TOOLMAN_COMMUNITY_HUB_URL` points to staging/production Hub (not `127.0.0.1`)
-- [ ] TURN credentials injected (`TOOLMAN_P2P_TURN_*` or `network.json`)
+- [ ] TURN / Xirsys credentials injected (`TOOLMAN_P2P_XIRSYS_*` or `TOOLMAN_P2P_TURN_*`)
 - [ ] `TOOLMAN_UPDATE_FEED_URL` configured for auto-update manifest
 
 ## Functional smoke (manual)

@@ -433,7 +433,7 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
       COMMUNITY_HUB_REQUIRE_REVIEW:
         process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'true' : 'true'),
       COMMUNITY_HUB_RATE_LIMIT_RPM:
-        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? (app.isPackaged ? '600' : '0'),
+        process.env.COMMUNITY_HUB_RATE_LIMIT_RPM ?? '0',
       RUST_LOG: process.env.RUST_LOG ?? 'toolman_community_hub=info',
     }
 

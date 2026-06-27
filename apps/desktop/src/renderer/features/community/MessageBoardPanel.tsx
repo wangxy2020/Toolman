@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconMessageBoard } from '../../components/icons'
 import { deleteCommunityBoardMessage } from './community-api.client'
 import { notifyCommunityBoardChanged } from './community-events'
+import { formatCommunityHubError } from './community-hub-error-utils'
 import { formatBoardMessageTitle, formatNewsDate, formatNewsPreview } from './community-news-utils'
 import { buildBoardReplyTarget } from './community-comment-utils'
 import { sortCommunityListItems } from './community-list-sort'
@@ -74,11 +75,13 @@ export function MessageBoardPanel() {
       setMessageToDelete(null)
       if (selectedId === messageId) setSelectedId(null)
       if (detailMessageId === messageId) setDetailMessageId(null)
-      await board.load()
+      board.removeMessage(messageId)
       notifyCommunityBoardChanged()
     } catch (deleteError) {
       const message =
-        deleteError instanceof Error ? deleteError.message : t('communityPage.market.deleteMessageFailed')
+        deleteError instanceof Error
+          ? formatCommunityHubError(deleteError.message)
+          : t('communityPage.market.deleteMessageFailed')
       board.setError(message)
     } finally {
       setDeletingId(null)

@@ -308,12 +308,11 @@ export class CommunityHttpClient {
       ? await Promise.resolve(this.resolveAuth())
       : { identityId: this.identityId }
 
+    headers.set(COMMUNITY_HUB_HEADER, auth.identityId)
+
     if (auth.authorization) {
       headers.set('Authorization', auth.authorization)
-      return
     }
-
-    headers.set(COMMUNITY_HUB_HEADER, auth.identityId)
   }
 }
 
