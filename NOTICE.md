@@ -38,6 +38,3 @@ itself.
 Product and service names (Google, Apple, WeChat, Microsoft, OpenAI, etc.)
 referenced in Toolman are trademarks of their respective owners. Toolman is
 not affiliated with or endorsed by those parties unless explicitly stated.
-
-UI style references (e.g. Cherry Studio) indicate design inspiration only;
-Toolman is an independent project.
