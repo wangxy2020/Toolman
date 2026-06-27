@@ -44,12 +44,14 @@ export function SettingsCollapsibleSection({
   intro,
   defaultCollapsed = true,
   debugOnly = false,
+  recommended = false,
   children,
 }: {
   title: string
   intro?: string
   defaultCollapsed?: boolean
   debugOnly?: boolean
+  recommended?: boolean
   children: ReactNode
 }) {
   const { t } = useI18n()
@@ -66,6 +68,9 @@ export function SettingsCollapsibleSection({
         <h3 className="tm-display-card-title">
           <IconChevronRight size={14} open={!collapsed} />
           {title}
+          {recommended ? (
+            <span className="tm-display-badge">{t('common.recommended')}</span>
+          ) : null}
           {debugOnly ? (
             <span className="tm-diagnostics-debug-badge">{t('settings.diagnostics.debugOnly')}</span>
           ) : null}

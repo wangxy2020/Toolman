@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { requiresDeleteReauth, resolveGroupMaxMembers } from '@toolman/shared'
+import { requiresDeleteReauth, GROUP_MAX_MEMBERS_PRO } from '@toolman/shared'
 
 import { ConfirmDialog } from '../ConfirmDialog'
 import { bindAuthProvider, changeAuthPassword, sendAuthSmsCode } from '../../features/user/auth-api.client'
@@ -8,7 +8,7 @@ import { DeleteAccountReauthModal } from '../../features/user/DeleteAccountReaut
 import { useI18n } from '../../i18n/useI18n'
 import type { useUserAccount } from '../../features/user/useUserAccount'
 import { useAuthBuildProfile } from '../../features/user/useAuthBuildProfile'
-import { isRegisteredUser, formatSkuLabel } from '../../features/user/user-account-utils'
+import { isRegisteredUser } from '../../features/user/user-account-utils'
 import type { ProfileSubView } from './types'
 import { UserCenterMembershipPanel } from './UserCenterMembershipPanel'
 
@@ -600,12 +600,6 @@ export function UserCenterAccountPanel({
     },
   ]
 
-  const membershipLabel = formatSkuLabel(authSession, t) ?? t('user.labels.sku.community')
-  const groupMaxMembers = resolveGroupMaxMembers({
-    subscriptionSku: authSession?.subscriptionSku,
-    entitlements: authSession?.entitlements,
-  })
-
   return (
     <>
       <div className="tm-user-center-account-panel tm-user-center-account-panel--centered">
@@ -614,7 +608,7 @@ export function UserCenterAccountPanel({
           <div className="tm-user-center-account-stack">
             <AccountActionBox
               icon={<StarIcon />}
-              label={t('user.account.currentPlan', { sku: membershipLabel, count: groupMaxMembers })}
+              label={t('user.account.currentPlan', { count: GROUP_MAX_MEMBERS_PRO })}
               highlight
               onClick={() => onSubViewChange('upgrade_membership')}
             />

@@ -20,6 +20,8 @@ const baseSession = {
   authRegion: 'intl',
   subscriptionSku: 'community',
   entitlements: [],
+  userType: 'normal',
+  authingRoles: [],
   displayName: 'Test User',
   bindings: [],
   preferredRegion: null,

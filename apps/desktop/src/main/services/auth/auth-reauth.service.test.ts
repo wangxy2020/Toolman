@@ -19,6 +19,8 @@ function registeredSession(lastLoginAt: number | null) {
     authRegion: 'intl' as const,
     subscriptionSku: 'community' as const,
     entitlements: ['community.write'],
+    userType: 'normal' as const,
+    authingRoles: [] as string[],
     displayName: 'User',
     avatarUrl: null,
     bindings: [],

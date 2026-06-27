@@ -4,6 +4,7 @@ import type { MessageSettings } from '../chat/message-settings'
 import type { AppSettings } from './app-settings'
 import { useI18n } from '../../i18n/useI18n'
 import { DataSettingsPanel } from './DataSettingsPanel'
+import { GeneralModelEquipmentPanel } from './GeneralModelEquipmentPanel'
 import { ChannelsSettingsPanel } from './ChannelsSettingsPanel'
 import { McpSettingsPanel } from './McpSettingsPanel'
 import { SkillsSettingsPanel } from './SkillsSettingsPanel'
@@ -96,6 +97,13 @@ export function SettingsPanelContent({
                 onChange={(spellCheckEnabled) => patchApp({ spellCheckEnabled })}
               />
             </SettingsRow>
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('settings.general.modelEquipment.title')}
+            intro={t('settings.general.modelEquipment.intro')}
+          >
+            <GeneralModelEquipmentPanel workspaceId={workspaceId} />
           </SettingsSection>
         </SettingsPageLayout>
       )

@@ -68,7 +68,7 @@ export function resolveUserTypeLabel(
   }
 
   const authingTypeKey = authUserTypeLabelKey(session.userType)
-  if (session.authingRoles.length > 0 && authingTypeKey) {
+  if ((session.authingRoles?.length ?? 0) > 0 && authingTypeKey) {
     return labels[authingTypeKey]
   }
 

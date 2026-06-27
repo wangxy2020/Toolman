@@ -42,8 +42,14 @@ function isChatModel(modelId: string): boolean {
 export function pickDefaultModelId(
   assistants: Assistant[],
   providers: Provider[],
-  preferredModel = 'gemma4:latest',
+  preferredModel?: string,
+  preferredModelId?: string | null,
 ): string | null {
+  const fromSettings = preferredModelId?.trim()
+  if (fromSettings && isModelIdAvailable(fromSettings, providers)) {
+    return fromSettings
+  }
+
   const fromAssistant = assistants[0]?.modelId
   if (fromAssistant) return fromAssistant
 
@@ -64,8 +70,9 @@ export function pickDefaultModelId(
 export function pickDefaultModelIds(
   assistants: Assistant[],
   providers: Provider[],
+  preferredModelId?: string | null,
 ): string[] {
-  const modelId = pickDefaultModelId(assistants, providers)
+  const modelId = pickDefaultModelId(assistants, providers, 'gemma4:latest', preferredModelId)
   return modelId ? [modelId] : []
 }
 
@@ -103,10 +110,11 @@ export function normalizeModelIds(
   modelIds: string[],
   providers: Provider[],
   assistants: Assistant[],
+  preferredModelId?: string | null,
 ): string[] {
   const valid = modelIds.filter((id) => isModelIdAvailable(id, providers))
   if (valid.length > 0) return valid.slice(0, MAX_PARALLEL_MODELS)
-  return pickDefaultModelIds(assistants, providers)
+  return pickDefaultModelIds(assistants, providers, preferredModelId)
 }
 
 export function toggleModelId(current: string[], modelId: string): string[] {

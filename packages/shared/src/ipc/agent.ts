@@ -541,6 +541,15 @@ export const ProviderFetchModelsOutputSchema = z.object({
   models: z.array(ProviderModelSchema),
 })
 
+export const ProviderPullModelInputSchema = z.object({
+  id: UuidSchema,
+  modelId: z.string().min(1),
+})
+export const ProviderPullModelOutputSchema = z.object({
+  modelId: z.string(),
+  success: z.literal(true),
+})
+
 export const ToolApprovalRequestSchema = z.object({
   requestId: z.string().min(1),
   toolName: z.string().min(1),

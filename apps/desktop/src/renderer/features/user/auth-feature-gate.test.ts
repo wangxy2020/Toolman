@@ -17,6 +17,8 @@ const guestSession: AuthSession = {
   authRegion: null,
   subscriptionSku: null,
   entitlements: [],
+  userType: 'guest',
+  authingRoles: [],
   displayName: '本地用户',
   bindings: [],
   isLoggedIn: false,

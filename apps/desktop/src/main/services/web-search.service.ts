@@ -1,6 +1,6 @@
 export async function searchWeb(
   query: string,
-  provider: 'duckduckgo' | 'bing' | 'google' = 'duckduckgo',
+  provider: 'duckduckgo' | 'bing' | 'google' = 'bing',
 ): Promise<string> {
   const trimmed = query.trim()
   if (!trimmed) return '搜索关键词为空。'

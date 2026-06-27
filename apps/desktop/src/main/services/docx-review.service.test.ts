@@ -410,10 +410,18 @@ describe('isolated docx audit context', () => {
     expect(messages).toHaveLength(4)
     expect(messages[0]?.role).toBe('system')
     expect(messages[0]?.content).not.toContain('合同审查专家')
-    expect(messages.some((message) => message.role === 'tool' && message.content?.includes('示例段落'))).toBe(
+    expect(messages.some((message) => {
+      if (message.role !== 'tool') return false
+      const content = message.content
+      return typeof content === 'string' && content.includes('示例段落')
+    })).toBe(
       true,
     )
-    expect(messages.some((message) => message.role === 'user' && message.content?.includes('只修正错别字'))).toBe(
+    expect(messages.some((message) => {
+      if (message.role !== 'user') return false
+      const content = message.content
+      return typeof content === 'string' && content.includes('只修正错别字')
+    })).toBe(
       true,
     )
   })

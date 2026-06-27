@@ -426,7 +426,7 @@ async function buildRuntimeSystemHints(options: {
     try {
       const result = await searchWeb(
         options.userText,
-        options.sendOptions.webSearchProvider ?? 'duckduckgo',
+        options.sendOptions.webSearchProvider ?? 'bing',
       )
       hints.push(buildWebSearchSystemHint(result, options.userText))
     } catch (error) {

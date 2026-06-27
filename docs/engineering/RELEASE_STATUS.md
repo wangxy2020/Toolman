@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.2.0-rc.1` · **通道**：`staging` · **更新**：2026-06-26  
+> **版本**：`0.2.0-rc.1` · **通道**：`staging` · **更新**：2026-06-27  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
@@ -124,7 +124,7 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 | 2026-06-24 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-25 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-26 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | LAN 群聊通 · preflight 绿 · 成员重启重连 ✅ |
-| 2026-06-27 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
+| 2026-06-27 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | DMG · `dev:p2p:a/b` · 登录/对话/知识库/社区/群组正常 |
 | 2026-06-28 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-29 | | ☐ | ☐ | ☐ | ☐ | ☐ | 退出评审 |
 

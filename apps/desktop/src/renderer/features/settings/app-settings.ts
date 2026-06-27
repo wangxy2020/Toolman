@@ -67,6 +67,9 @@ export interface AppSettings {
   memoryEnabled: boolean
   memoryRetentionDays: number
   documentOcrEnabled: boolean
+  defaultChatModelId: string
+  defaultEmbeddingModelRef: string
+  defaultDocProcessorProviderId: string
   automationEnabled: boolean
   spellCheckEnabled: boolean
   anonymousErrorReports: boolean
@@ -86,11 +89,14 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   restoreLastSession: true,
   sendWithEnter: true,
   webSearchEnabled: false,
-  webSearchProvider: 'duckduckgo',
+  webSearchProvider: 'bing',
   kbEnabled: false,
   memoryEnabled: true,
   memoryRetentionDays: 30,
   documentOcrEnabled: true,
+  defaultChatModelId: '',
+  defaultEmbeddingModelRef: '',
+  defaultDocProcessorProviderId: '',
   automationEnabled: false,
   spellCheckEnabled: true,
   anonymousErrorReports: true,
@@ -120,6 +126,9 @@ export function loadAppSettings(): AppSettings {
       ...DEFAULT_APP_SETTINGS,
       ...parsed,
       language: parsed.language === 'en' ? 'en' : 'zh-CN',
+      defaultChatModelId: parsed.defaultChatModelId ?? '',
+      defaultEmbeddingModelRef: parsed.defaultEmbeddingModelRef ?? '',
+      defaultDocProcessorProviderId: parsed.defaultDocProcessorProviderId ?? '',
       navBarPosition: parsed.navBarPosition === 'top' ? 'left' : (parsed.navBarPosition ?? 'left'),
       sidebarVisibleModules: normalized.visible,
       sidebarHiddenModules: normalized.hidden,

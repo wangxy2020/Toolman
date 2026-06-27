@@ -13,7 +13,7 @@ interface UserCenterMembershipPanelProps {
 }
 
 export function UserCenterMembershipPanel({ active, onBack }: UserCenterMembershipPanelProps) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const { proPlan, channel, setChannel, loading, error, message } = useMembershipUpgrade(active)
 
   const channelLabel = channel === 'alipay' ? t('user.membership.alipay') : t('user.membership.wechat')
@@ -41,14 +41,16 @@ export function UserCenterMembershipPanel({ active, onBack }: UserCenterMembersh
             <div className="tm-user-center-membership-plan-head">
               <h3 className="tm-user-center-membership-plan-name">{translateBillingPlanName(proPlan, t)}</h3>
               <span className="tm-user-center-membership-plan-price">
-                {formatMembershipPrice(proPlan.priceCents, t)}
+                {formatMembershipPrice(proPlan.priceCents, language, t)}
                 <small> / {translateBillingPeriodLabel(proPlan.billingPeriodLabel, t)}</small>
               </span>
             </div>
             <ul className="tm-user-center-membership-plan-features">
               <li>{t('user.membership.groupMaxMembers', { count: proPlan.groupMaxMembers })}</li>
               <li>{t('user.membership.keepCommunity')}</li>
-              <li>{t('user.membership.higherGroupLimit')}</li>
+              <li className="tm-user-center-membership-plan-features-spacer" aria-hidden="true">
+                &nbsp;
+              </li>
             </ul>
           </section>
         ) : null}

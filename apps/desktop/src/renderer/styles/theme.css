@@ -11646,6 +11646,54 @@ html.theme-dark .tm-agent-workdir-browse {
   width: 100%;
 }
 
+.tm-general-model-equipment {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tm-model-equipment-install-btn {
+  min-width: 88px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--tm-border);
+  border-radius: 8px;
+  background: var(--tm-bg);
+  color: var(--tm-text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tm-model-equipment-install-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tm-border) 70%, var(--tm-accent));
+  color: var(--tm-accent);
+}
+
+.tm-model-equipment-install-btn:disabled:not(.tm-model-equipment-install-btn--installed) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tm-model-equipment-install-btn--installed {
+  border-color: var(--tm-border-light);
+  background: var(--tm-hover);
+  color: var(--tm-text-muted);
+  opacity: 1;
+  cursor: default;
+}
+
+.tm-model-equipment-error {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: var(--tm-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .tm-settings-section-title {
   margin: 0 0 20px;
   font-size: 20px;
@@ -15024,6 +15072,10 @@ html.theme-dark .tm-mcp-package-source-group {
 .tm-membership-plan-features {
   margin: 10px 0 0;
   padding-left: 18px;
+}
+
+.tm-membership-plan-features-spacer {
+  visibility: hidden;
 }
 
 .tm-membership-channel-tabs {

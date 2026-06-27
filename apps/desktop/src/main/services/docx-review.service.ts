@@ -169,6 +169,15 @@ function isReadDocumentToolName(toolName: string): boolean {
   )
 }
 
+function readMessageTextContent(content: ChatMessage['content'] | undefined): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text ?? '')
+    .join('\n')
+}
+
 /** Extract read_document tool output for a working copy from chat messages. */
 export function resolveDocxReadDocumentContent(
   chatMessages: readonly ChatMessage[],
@@ -178,8 +187,9 @@ export function resolveDocxReadDocumentContent(
   const toolResults = new Map<string, string>()
 
   for (const message of chatMessages) {
-    if (message.role === 'tool' && message.tool_call_id && message.content?.trim()) {
-      toolResults.set(message.tool_call_id, message.content)
+    const text = readMessageTextContent(message.content).trim()
+    if (message.role === 'tool' && message.tool_call_id && text) {
+      toolResults.set(message.tool_call_id, text)
     }
   }
 

@@ -153,7 +153,10 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     }
   },
   [IpcChannel.AppRuntimeSettingsSync]: async (input) => {
-    const patch = input as { documentOcrEnabled?: boolean }
+    const patch = input as {
+      documentOcrEnabled?: boolean
+      defaultDocProcessorProviderId?: string | null
+    }
     return ipcOk(syncRuntimeAppSettings(patch))
   },
   [IpcChannel.AppGetPaths]: async () => ipcOk(AppGetPathsOutputSchema.parse(getAppPaths())),
@@ -364,6 +367,14 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
         message,
         retryable: error instanceof ProviderError ? error.retryable : false,
       })
+    }
+  },
+  [IpcChannel.ProviderPullModel]: async (input) => {
+    try {
+      return ipcOk(await providerService.pullOllamaModel(input))
+    } catch (error) {
+      const message = toErrorMessage(error, 'Pull model failed')
+      return ipcErr({ code: 'PROVIDER_ERROR', message, retryable: false })
     }
   },
   [IpcChannel.ProviderDelete]: async (input) => {

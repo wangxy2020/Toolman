@@ -3,7 +3,7 @@ import { IpcChannel } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
 import { SettingsToggle } from './SettingsShared'
 import { AboutJoinUsModal } from './AboutJoinUsModal'
-import { TOOLMAN_GITHUB_URL, TOOLMAN_SPDX_LICENSE, ABOUT_EXTERNAL_LINK_URLS } from './about-settings.constants'
+import { TOOLMAN_GITHUB_URL, ABOUT_EXTERNAL_LINK_URLS } from './about-settings.constants'
 import { useAppUpdate } from './useAppUpdate'
 
 const ABOUT_LINK_IDS = [
@@ -58,7 +58,6 @@ function resolveAboutLinkUrl(id: AboutLinkId): string | undefined {
 export function AboutSettingsPanel() {
   const { t } = useI18n()
   const [joinModalOpen, setJoinModalOpen] = useState(false)
-  const [buildId, setBuildId] = useState<string | null>(null)
   const {
     status,
     currentVersion,
@@ -88,12 +87,6 @@ export function AboutSettingsPanel() {
 
   useEffect(() => {
     void window.api.invoke(IpcChannel.AppProvenanceBeacon, { event: 'app.about.view' })
-    void window.api.invoke(IpcChannel.AppGetInfo).then((result) => {
-      if (result.ok && result.data && typeof result.data === 'object' && 'provenance' in result.data) {
-        const provenance = (result.data as { provenance?: { buildId?: string } }).provenance
-        if (provenance?.buildId) setBuildId(provenance.buildId)
-      }
-    })
   }, [])
 
   return (
@@ -118,19 +111,6 @@ export function AboutSettingsPanel() {
             <h3 className="tm-about-name">Toolman</h3>
             <p className="tm-about-tagline">{t('settings.about.tagline')}</p>
             <span className="tm-about-version-badge">v{currentVersion}</span>
-            <button
-              type="button"
-              className="tm-about-version-badge tm-about-license-badge"
-              title={t('settings.about.licenseHint')}
-              onClick={() => openExternal(ABOUT_EXTERNAL_LINK_URLS.license)}
-            >
-              {TOOLMAN_SPDX_LICENSE}
-            </button>
-            {buildId ? (
-              <span className="tm-about-version-badge tm-about-build-id" title={t('settings.diagnostics.provenance.buildId')}>
-                {buildId}
-              </span>
-            ) : null}
             {status?.channel ? (
               <span className="tm-about-version-badge"> · {status.channel}</span>
             ) : null}

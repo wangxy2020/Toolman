@@ -1427,6 +1427,11 @@ html.theme-dark .tm-user-center-text-btn--danger:hover:not(:disabled) {
   color: var(--tm-text-secondary);
 }
 
+.tm-user-center-membership-plan-features-spacer,
+.tm-membership-plan-features-spacer {
+  visibility: hidden;
+}
+
 .tm-user-center-membership-channel-row {
   display: flex;
   align-items: center;

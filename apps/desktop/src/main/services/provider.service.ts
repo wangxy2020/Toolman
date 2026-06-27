@@ -10,6 +10,7 @@ import {
   ProviderDeleteInputSchema,
   ProviderFetchModelsInputSchema,
   ProviderListInputSchema,
+  ProviderPullModelInputSchema,
   ProviderSchema,
   ProviderTestInputSchema,
   ProviderUpdateInputSchema,
@@ -25,6 +26,7 @@ import {
   encryptSecret,
   isSecretStorageAvailable,
 } from './secret-store'
+import { resolveDefaultDocProcessorProviderIdFromRuntime } from './runtime-app-settings.service'
 
 const gateway = createModelGateway()
 
@@ -196,6 +198,14 @@ export function listProviders(input: unknown): Provider[] {
 
 /** 文档处理默认使用本地 Ollama 服务商 */
 export function resolveDefaultDocProcessorProviderId(workspaceId: string): string | null {
+  const fromRuntime = resolveDefaultDocProcessorProviderIdFromRuntime()
+  if (fromRuntime) {
+    const row = getProviderRow(fromRuntime)
+    if (row?.isEnabled && row.workspaceId === workspaceId) {
+      return fromRuntime
+    }
+  }
+
   const items = listProviders({ workspaceId, enabledOnly: true })
   const ollama = items.find((provider) => provider.type === 'ollama')
   return ollama?.id ?? null
@@ -348,6 +358,45 @@ export async function fetchProviderModels(input: unknown) {
   }
 
   return { models }
+}
+
+function resolveOllamaNativeBaseUrl(baseUrl?: string | null): string {
+  const raw = (baseUrl ?? 'http://127.0.0.1:11434').replace(/\/$/, '')
+  return raw.replace(/\/v1$/i, '')
+}
+
+export async function pullOllamaModel(input: unknown) {
+  const { id, modelId } = ProviderPullModelInputSchema.parse(input)
+  const row = getProviderRow(id)
+  if (!row) throw new Error('Provider not found')
+
+  const presetId = readPresetId(parseConfig(row.configJson))
+  if (row.type !== 'ollama' && presetId !== 'ollama') {
+    throw new Error('Only Ollama providers support model pull')
+  }
+
+  const config = rowToConfig(row)
+  const response = await fetch(`${resolveOllamaNativeBaseUrl(config.baseUrl)}/api/pull`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: modelId, stream: true }),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`拉取模型失败 (${response.status}): ${detail}`)
+  }
+
+  const reader = response.body?.getReader()
+  if (reader) {
+    while (true) {
+      const { done } = await reader.read()
+      if (done) break
+    }
+  }
+
+  await fetchProviderModels({ id, persist: true })
+  return { modelId, success: true as const }
 }
 
 /** 启动时从本地 Ollama 同步可用对话模型 */

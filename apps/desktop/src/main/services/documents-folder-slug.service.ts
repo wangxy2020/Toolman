@@ -229,6 +229,7 @@ export function syncDocumentsFolderSlugWithAccount(): boolean {
 
 /** Stable ToolmanData subfolder name; guest slug or auth email prefix. */
 export function getDocumentsFolderSlug(): string {
+  if (cachedSlug) return cachedSlug
   const record = getDocumentsFolderSlugRecord()
   cachedSlug = record.slug
   return record.slug

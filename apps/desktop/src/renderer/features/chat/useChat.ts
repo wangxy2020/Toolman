@@ -576,8 +576,10 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
 
   useEffect(() => {
     if (providers.length === 0 && assistants.length === 0) return
-    setSelectedModelIds((prev) => normalizeModelIds(prev, providers, assistants))
-  }, [providers, assistants])
+    setSelectedModelIds((prev) =>
+      normalizeModelIds(prev, providers, assistants, appSettings?.defaultChatModelId),
+    )
+  }, [providers, assistants, appSettings?.defaultChatModelId])
 
   useEffect(() => {
     if (!session.initialized || !session.activeSessionId) return

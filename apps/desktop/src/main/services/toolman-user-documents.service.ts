@@ -162,6 +162,28 @@ export function normalizeFolderPath(path: string): string {
   return join(path).replace(/\\/g, '/')
 }
 
+export function getUserFolderFromToolmanUserPath(path: string): string | null {
+  const normalized = normalizeFolderPath(path)
+  for (const root of listAllToolmanDocumentsRoots()) {
+    const normalizedRoot = normalizeFolderPath(root)
+    if (!normalized.startsWith(`${normalizedRoot}/`)) continue
+    const rest = normalized.slice(normalizedRoot.length + 1)
+    const slashIndex = rest.indexOf('/')
+    if (slashIndex <= 0) continue
+    return rest.slice(0, slashIndex)
+  }
+  return null
+}
+
+export function isStoredPathUnderDifferentUserFolder(
+  path: string,
+  currentUserFolderName: string,
+): boolean {
+  const folder = getUserFolderFromToolmanUserPath(path)
+  if (!folder) return false
+  return folder !== currentUserFolderName
+}
+
 export function isUserScopedToolmanPath(path: string, userFolderName = getToolmanUserFolderName()): boolean {
   const normalized = normalizeFolderPath(path)
   const prefix = normalizeFolderPath(join(getToolmanDocumentsRootPath(), userFolderName))

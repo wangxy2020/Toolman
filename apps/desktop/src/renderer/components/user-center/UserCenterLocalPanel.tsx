@@ -6,7 +6,6 @@ import {
 import type { useUserAccount } from '../../features/user/useUserAccount'
 import { formatAccountStatusLabel, formatBindingSummary } from '../../features/user/user-account-utils'
 import { getAvatarFallbackLabel, shortenId } from '../../features/user/user-avatar-utils'
-import { useP2pNetworkStatus } from '../../features/group/useP2pNetworkStatus'
 import { useI18n } from '../../i18n/useI18n'
 
 interface UserCenterLocalPanelProps {
@@ -82,7 +81,6 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
   const authSession = account.authSession
   const community = account.communityProfile
   const device = identity?.device
-  const { snapshot: networkSnapshot } = useP2pNetworkStatus()
 
   const [displayName, setDisplayName] = useState('')
 
@@ -215,16 +213,6 @@ export function UserCenterLocalPanel({ account }: UserCenterLocalPanelProps) {
               <DeviceMetaRow label={t('user.profile.deviceId')} value={device.deviceId} />
               <DeviceMetaRow label={t('user.profile.identityId')} value={device.identityId} />
               <DeviceMetaRow label={t('user.profile.deviceFingerprint')} value={device.publicKeyFingerprint} shorten />
-              {device.did ? <DeviceMetaRow label="DID" value={device.did} shorten /> : null}
-              {networkSnapshot?.localPeerId ? (
-                <DeviceMetaRow label="libp2p PeerId" value={networkSnapshot.localPeerId} shorten />
-              ) : null}
-              {networkSnapshot ? (
-                <DeviceMetaRow
-                  label={t('user.profile.networkConnection')}
-                  value={`libp2p ${networkSnapshot.libp2pPeerCount} · WebRTC ${networkSnapshot.webrtcConnectedPeers}`}
-                />
-              ) : null}
             </dl>
           ) : null}
         </details>

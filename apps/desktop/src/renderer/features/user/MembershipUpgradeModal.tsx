@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function MembershipUpgradeModal({ open, onClose }: Props) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const {
     proPlan,
     currentSkuLabel,
@@ -67,7 +67,7 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
               <div className="tm-membership-plan-card-head">
                 <h4>{translateBillingPlanName(proPlan, t)}</h4>
                 <span className="tm-membership-plan-price">
-                  {formatMembershipPrice(proPlan.priceCents, t)}
+                  {formatMembershipPrice(proPlan.priceCents, language, t)}
                   <small> / {translateBillingPeriodLabel(proPlan.billingPeriodLabel, t)}</small>
                 </span>
               </div>
@@ -75,7 +75,9 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
               <ul className="tm-membership-plan-features">
                 <li>{t('user.membership.groupMaxMembers', { count: proPlan.groupMaxMembers })}</li>
                 <li>{t('user.membership.keepCommunity')}</li>
-                <li>{t('user.membership.higherGroupLimit')}</li>
+                <li className="tm-membership-plan-features-spacer" aria-hidden="true">
+                  &nbsp;
+                </li>
               </ul>
             </section>
           ) : null}
