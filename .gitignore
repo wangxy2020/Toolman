@@ -3,6 +3,8 @@ node_modules/
 dist/
 out/
 build/
+!apps/desktop/build/
+!apps/desktop/build/**
 target/
 .turbo/
 .tmp/
