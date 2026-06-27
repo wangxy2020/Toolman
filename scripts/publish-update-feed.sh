@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DESKTOP_DIR="$ROOT_DIR/apps/desktop/dist"
+cd "$ROOT_DIR"
+DESKTOP_DIR="apps/desktop/dist"
 
 CHANNEL="${TOOLMAN_UPDATE_CHANNEL:-staging}"
 FEED_BASE_URL="${TOOLMAN_UPDATE_FEED_URL:-https://releases.toolman.app}"

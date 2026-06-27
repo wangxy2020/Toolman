@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DESKTOP_DIR="$ROOT_DIR/apps/desktop"
+cd "$ROOT_DIR"
+DESKTOP_DIR="apps/desktop"
 
 CHANNEL="${TOOLMAN_UPDATE_CHANNEL:-staging}"
 FEED_BASE_URL="${TOOLMAN_UPDATE_FEED_URL:-https://releases.toolman.app}"
@@ -92,7 +93,7 @@ list_release_artifacts() {
 
 PLATFORM="$(resolve_platform)"
 ARCH="$(resolve_arch "$PLATFORM")"
-VERSION="$(node -p "require('$DESKTOP_DIR/package.json').version")"
+VERSION="$(node -p "require('./apps/desktop/package.json').version")"
 PUBLISH_URL="${FEED_BASE_URL%/}/$CHANNEL/$PLATFORM/$ARCH"
 
 export TOOLMAN_RELEASE_BUILD=1
@@ -118,13 +119,13 @@ step "Build desktop bundle"
 pnpm --filter @toolman/desktop build
 
 step "Bake release env (auth / community / P2P secrets)"
-node "$ROOT_DIR/scripts/write-desktop-release-env.mjs"
+node scripts/write-desktop-release-env.mjs
 
 step "Generate third-party notices"
-node "$ROOT_DIR/scripts/generate-third-party-notices.mjs"
+node scripts/generate-third-party-notices.mjs
 
 step "Generate build provenance fingerprint"
-node "$ROOT_DIR/scripts/write-build-provenance.mjs"
+node scripts/write-build-provenance.mjs
 
 step "Package desktop app"
 (
@@ -140,7 +141,7 @@ ARTIFACT="$(find_primary_artifact "$PLATFORM" "$DESKTOP_DIR/dist")"
 MANIFEST_OUT="$DESKTOP_DIR/dist/$CHANNEL-manifest.json"
 
 step "Generate manifest.json"
-node "$ROOT_DIR/scripts/generate-update-manifest.mjs" \
+node scripts/generate-update-manifest.mjs \
   --artifact "$ARTIFACT" \
   --version "$VERSION" \
   --channel "$CHANNEL" \
@@ -165,5 +166,5 @@ if [[ "$DO_PUBLISH" == "1" ]]; then
     TOOLMAN_UPDATE_FEED_URL="$FEED_BASE_URL" \
     TOOLMAN_UPDATE_PLATFORM="$PLATFORM" \
     TOOLMAN_UPDATE_ARCH="$ARCH" \
-    bash "$ROOT_DIR/scripts/publish-update-feed.sh"
+    bash scripts/publish-update-feed.sh
 fi
