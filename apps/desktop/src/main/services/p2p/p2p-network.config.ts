@@ -8,6 +8,7 @@ import {P2pIceServerListSchema,
   P2pXirsysConfigSchema,
   isTurnIceServer,
   resolveP2pIceServers,
+  sanitizeIceServersForWebRtc,
   summarizeIceServers,
   type P2pIceServer,
   type P2pXirsysConfig } from '@toolman/shared'
@@ -104,6 +105,30 @@ function resolveXirsysConfig(): P2pXirsysConfig | null {
   return readXirsysConfigFromEnv() ?? readXirsysConfigFromFile()
 }
 
+export function seedP2pNetworkConfigFromEnvIfNeeded(): void {
+  if (!app.isPackaged) return
+
+  let fromEnv: P2pIceServer[] | null = null
+  try {
+    fromEnv = parseIceServersFromEnv()
+  } catch {
+    return
+  }
+
+  if (!fromEnv?.some((server) => isTurnIceServer(server) && server.username && server.credential)) {
+    return
+  }
+
+  const fileServers = readFileConfig()
+  const fileHasAuthenticatedTurn = fileServers.some(
+    (server) => isTurnIceServer(server) && server.username && server.credential,
+  )
+  if (fileHasAuthenticatedTurn) return
+
+  writeNetworkConfig(fromEnv)
+  logStructured('p2p', 'info', 'seeded network.json ICE servers from release env')
+}
+
 export async function bootstrapP2pIceServers(): Promise<boolean> {
   const xirsys = resolveXirsysConfig()
   if (!xirsys) {
@@ -127,6 +152,10 @@ export function clearRuntimeIceServersOverrideForTests(): void {
 }
 
 export function getP2pIceServers(): P2pIceServer[] {
+  return sanitizeIceServersForWebRtc(getRawP2pIceServers())
+}
+
+function getRawP2pIceServers(): P2pIceServer[] {
   if (runtimeIceServersOverride) {
     return runtimeIceServersOverride
   }
@@ -195,12 +224,33 @@ export function getP2pWanNetworkReadiness(): {
   reason?: string
   reasonCode?: 'turn_not_configured' | 'turn_missing_credentials'
 } {
-  const servers = getP2pIceServers()
-  const summary = summarizeIceServers(servers)
-  const hasTurn = servers.some((server) => isTurnIceServer(server))
-  const turnWithCredentials = servers.some(
+  const rawServers = getRawP2pIceServers()
+  const summary = summarizeIceServers(rawServers)
+  const hasTurn = rawServers.some((server) => isTurnIceServer(server))
+  const turnWithCredentials = rawServers.some(
     (server) => isTurnIceServer(server) && server.username && server.credential,
   )
+  const partialTurnEnv =
+    Boolean(process.env.TOOLMAN_P2P_TURN_URL?.trim()) &&
+    (!process.env.TOOLMAN_P2P_TURN_USERNAME?.trim() || !process.env.TOOLMAN_P2P_TURN_CREDENTIAL?.trim())
+
+  if (hasTurn && !turnWithCredentials) {
+    return {
+      ready: false,
+      summary: summary.summary,
+      reasonCode: 'turn_missing_credentials',
+      reason: 'TURN server is missing credentials',
+    }
+  }
+
+  if (partialTurnEnv) {
+    return {
+      ready: false,
+      summary: summary.summary,
+      reasonCode: 'turn_missing_credentials',
+      reason: 'TURN server is missing credentials',
+    }
+  }
 
   if (!hasTurn) {
     return {
@@ -208,15 +258,6 @@ export function getP2pWanNetworkReadiness(): {
       summary: summary.summary,
       reasonCode: 'turn_not_configured',
       reason: 'TURN server not configured; WAN collaboration may fail',
-    }
-  }
-
-  if (!turnWithCredentials) {
-    return {
-      ready: false,
-      summary: summary.summary,
-      reasonCode: 'turn_missing_credentials',
-      reason: 'TURN server is missing credentials',
     }
   }
 

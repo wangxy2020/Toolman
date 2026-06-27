@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IpcChannel, type KnowledgeFileDedupStreamEvent } from '@toolman/shared'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconExternalLink, IconFile, IconFolder, IconTrash } from '../../components/icons'
 import { useRegisterModulePanelError, useRegisterModulePanelStatus } from '../../components/module-page-status'
 import type { TranslateFn } from '../../i18n/I18nProvider'
@@ -46,6 +47,10 @@ export interface DedupScanState {
 }
 
 type SelectMode = 'all' | 'largest' | 'oldest' | 'smart'
+
+type PendingDedupDelete =
+  | { kind: 'selected'; paths: string[]; message: string }
+  | { kind: 'single'; path: string; message: string }
 
 interface Props {
   workspaceId: string
@@ -133,6 +138,7 @@ export function KnowledgeFileDedupPanel({
   const [selectMode, setSelectMode] = useState<SelectMode>('all')
   const [progress, setProgress] = useState<DedupScanProgress | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<PendingDedupDelete | null>(null)
   const scanStartedAtRef = useRef<number | null>(null)
   const scanGenerationRef = useRef(0)
   const handleScanRef = useRef<() => Promise<void>>(async () => {})
@@ -356,46 +362,36 @@ export function KnowledgeFileDedupPanel({
     setSelectMode('all')
   }
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (!workspaceId || selectedPaths.size === 0) return
-    if (!window.confirm(t('knowledgePage.dedup.deleteSelectedConfirm', { count: selectedPaths.size }))) {
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-
-    const result = await window.api.invoke(IpcChannel.KnowledgeFileDedupDelete, {
-      workspaceId,
-      filePaths: Array.from(selectedPaths),
+    setPendingDelete({
+      kind: 'selected',
+      paths: Array.from(selectedPaths),
+      message: t('knowledgePage.dedup.deleteSelectedConfirm', { count: selectedPaths.size }),
     })
-
-    setLoading(false)
-
-    if (!result.ok) {
-      setError(result.error.message)
-      return
-    }
-
-    const data = result.data as { deleted: number; failed: Array<{ path: string; message: string }> }
-    setSelectedPaths(new Set())
-    await handleScan()
-
-    if (data.failed.length > 0) {
-      setError(t('knowledgePage.dedup.deletePartialResult', { deleted: data.deleted, failed: data.failed.length }))
-    }
   }
 
-  const handleDeleteSingle = async (path: string) => {
+  const handleDeleteSingle = (path: string) => {
     if (!workspaceId) return
-    if (!window.confirm(t('knowledgePage.dedup.deleteOneConfirm'))) return
+    setPendingDelete({
+      kind: 'single',
+      path,
+      message: t('knowledgePage.dedup.deleteOneConfirm'),
+    })
+  }
 
+  const confirmPendingDelete = async () => {
+    if (!workspaceId || !pendingDelete) return
+
+    const target = pendingDelete
+    const filePaths = target.kind === 'selected' ? target.paths : [target.path]
+    setPendingDelete(null)
     setLoading(true)
     setError(null)
 
     const result = await window.api.invoke(IpcChannel.KnowledgeFileDedupDelete, {
       workspaceId,
-      filePaths: [path],
+      filePaths,
     })
 
     setLoading(false)
@@ -405,7 +401,18 @@ export function KnowledgeFileDedupPanel({
       return
     }
 
+    if (target.kind === 'selected') {
+      setSelectedPaths(new Set())
+    }
+
     await handleScan()
+
+    if (target.kind === 'selected') {
+      const data = result.data as { deleted: number; failed: Array<{ path: string; message: string }> }
+      if (data.failed.length > 0) {
+        setError(t('knowledgePage.dedup.deletePartialResult', { deleted: data.deleted, failed: data.failed.length }))
+      }
+    }
   }
 
   const openPath = async (path: string) => {
@@ -542,7 +549,7 @@ export function KnowledgeFileDedupPanel({
                 type="button"
                 className="tm-dedup-delete-btn"
                 disabled={loading || selectedPaths.size === 0}
-                onClick={() => void handleDeleteSelected()}
+                onClick={handleDeleteSelected}
               >
                 {selectedPaths.size > 0
                   ? t('knowledgePage.dedup.deleteCount', { count: selectedPaths.size })
@@ -614,7 +621,7 @@ export function KnowledgeFileDedupPanel({
                           className="tm-dedup-icon-btn tm-dedup-icon-btn--danger"
                           title={t('knowledgePage.dedup.deleteFile')}
                           disabled={loading}
-                          onClick={() => void handleDeleteSingle(row.path)}
+                          onClick={() => handleDeleteSingle(row.path)}
                         >
                           <IconTrash size={15} />
                         </button>
@@ -626,6 +633,18 @@ export function KnowledgeFileDedupPanel({
             </table>
           </div>
         </>
+      ) : null}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title={t('knowledgePage.deleteFile')}
+          message={pendingDelete.message}
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
+          danger
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => void confirmPendingDelete()}
+        />
       ) : null}
     </div>
   )

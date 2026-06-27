@@ -42,6 +42,15 @@ export function isStunIceServer(server: P2pIceServer): boolean {
   )
 }
 
+export function hasCompleteTurnCredentials(server: P2pIceServer): boolean {
+  return Boolean(server.username?.trim() && server.credential?.trim())
+}
+
+/** Drop TURN entries without username+credential so WebRTC does not reject the ICE list. */
+export function sanitizeIceServersForWebRtc(servers: readonly P2pIceServer[]): P2pIceServer[] {
+  return servers.filter((server) => !isTurnIceServer(server) || hasCompleteTurnCredentials(server))
+}
+
 /** Merge legacy STUN-only config with structured ICE entries (dedupe by first URL). */
 export function resolveP2pIceServers(config: P2pNetworkIceConfig): P2pIceServer[] {
   const fromStructured = (config.iceServers ?? []).map((item) => P2pIceServerSchema.parse(item))

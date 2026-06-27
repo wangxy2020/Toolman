@@ -14,6 +14,7 @@ import {
   isWorkspaceVipPoolEnabled,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
+import { logStructured } from '../structured-log.service'
 import { generateWorkspaceKey } from './p2p-crypto.service'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
 import { resolveWorkspaceMaxMembers } from '../auth/entitlement.service'
@@ -169,7 +170,14 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
     },
   })
 
-  const inviteToken = await createDefaultWorkspaceInvite(row.id)
+  const inviteToken = await createDefaultWorkspaceInvite(row.id).catch((error) => {
+    logStructured(
+      'p2p',
+      'warn',
+      `default invite skipped: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    return ''
+  })
   applyP2pNetworkConfig()
   if (!isP2pDiscoveryRunning()) {
     startP2pDiscovery()

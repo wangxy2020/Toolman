@@ -56,7 +56,7 @@ import {
   stopCommunityHubPeeringSync,
 } from './services/community/community-hub-peering.service'
 import { Libp2pBridge } from './services/p2p/libp2p-bridge'
-import { bootstrapP2pIceServers, applyP2pNetworkConfig } from './services/p2p/p2p-network.config'
+import { bootstrapP2pIceServers, applyP2pNetworkConfig, seedP2pNetworkConfigFromEnvIfNeeded } from './services/p2p/p2p-network.config'
 import {
   startP2pConnectionMonitor,
   stopP2pConnectionMonitor,
@@ -265,6 +265,7 @@ app.whenReady().then(() => {
     ensureP2pDeviceIdentity()
     bootstrapCopyrightProvenance()
     ensureLocalDisplayNameSyncedToP2pMembers()
+    seedP2pNetworkConfigFromEnvIfNeeded()
     void bootstrapP2pIceServers()
       .catch((error) => {
         const message = toErrorMessage(error, String(error))

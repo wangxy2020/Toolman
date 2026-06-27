@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 vi.mock('electron', () => ({
@@ -74,6 +74,28 @@ describe('p2p-network.config', () => {
     const servers = getP2pIceServers()
     expect(servers.some((server) => String(server.urls).includes('turn.example.com'))).toBe(true)
     expect(getP2pWanNetworkReadiness().ready).toBe(true)
+  })
+
+  it('omits incomplete TURN from WebRTC ICE list', () => {
+    process.env.TOOLMAN_P2P_TURN_URL = 'turn:turn.example.com:3478'
+    delete process.env.TOOLMAN_P2P_TURN_USERNAME
+    delete process.env.TOOLMAN_P2P_TURN_CREDENTIAL
+    const servers = getP2pIceServers()
+    expect(servers.some((server) => String(server.urls).includes('turn.example.com'))).toBe(false)
+    expect(getP2pWanNetworkReadiness().reasonCode).toBe('turn_missing_credentials')
+  })
+
+  it('sanitizes incomplete TURN from persisted network.json', () => {
+    writeFileSync(
+      join(configDir, 'network.json'),
+      JSON.stringify({
+        iceServers: [{ urls: 'turn:turn.example.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }],
+      }),
+      'utf8',
+    )
+    const servers = getP2pIceServers()
+    expect(servers.some((server) => String(server.urls).includes('turn.example.com'))).toBe(false)
+    expect(getP2pWanNetworkReadiness().reasonCode).toBe('turn_missing_credentials')
   })
 
   it('persists xirsys config when writing ice servers', () => {

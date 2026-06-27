@@ -57,7 +57,7 @@ find_primary_artifact() {
   case "$platform" in
     darwin) pattern="*.dmg" ;;
     win32)
-      match="$(find "$dist_dir" -maxdepth 1 -type f -name '*-Setup.exe' | sort | tail -n 1 || true)"
+      match="$(find "$dist_dir" -maxdepth 1 -type f -name '*-Portable.exe' | sort | tail -n 1 || true)"
       if [[ -n "$match" ]]; then
         printf '%s' "$match"
         return 0
@@ -80,10 +80,10 @@ list_release_artifacts() {
   local dist_dir="$2"
   case "$platform" in
     darwin)
-      find "$dist_dir" -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name 'latest-mac.yml' -o -name '*-manifest.json' \) | sort
+      find "$dist_dir" -maxdepth 1 -type f \( -name '*.dmg' -o -name 'latest-mac.yml' -o -name '*-manifest.json' \) | sort
       ;;
     win32)
-      find "$dist_dir" -maxdepth 1 -type f \( -name '*.exe' -o -name 'latest.yml' -o -name '*-manifest.json' \) | sort
+      find "$dist_dir" -maxdepth 1 -type f \( -name '*-Portable.exe' -o -name 'latest.yml' -o -name '*-manifest.json' \) | sort
       ;;
     linux)
       find "$dist_dir" -maxdepth 1 -type f \( -name '*.AppImage' -o -name 'latest-linux.yml' -o -name '*-manifest.json' \) | sort

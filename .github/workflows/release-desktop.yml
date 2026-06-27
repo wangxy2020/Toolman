@@ -85,7 +85,6 @@ jobs:
           name: desktop-macos-${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
           path: |
             apps/desktop/dist/*.dmg
-            apps/desktop/dist/*.zip
             apps/desktop/dist/latest-mac.yml
             apps/desktop/dist/*-manifest.json
 
@@ -148,7 +147,6 @@ jobs:
           name: desktop-windows-${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
           path: |
             apps/desktop/dist/*-Portable.exe
-            apps/desktop/dist/*-Setup.exe
             apps/desktop/dist/latest.yml
             apps/desktop/dist/*-manifest.json
 
@@ -166,7 +164,7 @@ jobs:
       - name: Flatten artifacts for upload
         run: |
           mkdir -p release-upload
-          find release-artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*-manifest.json' \) -exec cp {} release-upload/ \;
+          find release-artifacts -type f \( -name '*.dmg' -o -name '*-Portable.exe' -o -name '*-manifest.json' \) -exec cp {} release-upload/ \;
           ls -la release-upload/
 
       - name: Create GitHub Release
