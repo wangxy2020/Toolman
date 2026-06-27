@@ -1,6 +1,6 @@
 # Toolman
 
-AI 桌面客户端，基于 Electron + React + SQLite。当前为 **Beta**（RC1：`0.2.0-rc.1`），支持多 Provider 对话、知识库、P2P 群组、社区 Hub 与会员体系；部分模块仍为占位或本地模拟。发布与验收进度见 [RELEASE_STATUS.md](docs/engineering/RELEASE_STATUS.md)。
+AI 桌面客户端，基于 Electron + React + SQLite。当前为 **Beta**（RC1：`0.2.0-rc.1`），秉承本地优先、去中心化、安全至上的理念，它不仅是一个高颜值、高性能的桌面端AI应用工具，更是一个真正将数据所有权完整交还给用户的数字化资产中心。目前支持多模态 智能体、知识库、笔记、P2P 群组、社区 Hub 与会员体系，后续将聚焦于垂直行业的智能办公场景，开发全生命周期项目管理，对照翻译，自动化工作流等。
 
 ## 环境要求
 
