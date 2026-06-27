@@ -161,24 +161,6 @@ impl EventStore {
     }
 
     fn read_last_record(&self, workspace_id: &str) -> Result<Option<WalEventRecord>, String> {
-        if let Some(seq) = self.read_cached_last_seq(workspace_id) {
-            return Ok(Some(WalEventRecord {
-                event_id: String::new(),
-                workspace_id: workspace_id.to_string(),
-                seq,
-                resource_type: String::new(),
-                resource_id: String::new(),
-                operator_id: String::new(),
-                event_type: String::new(),
-                payload_json: String::new(),
-                payload_hash: String::new(),
-                prev_event_hash: None,
-                event_hash: String::new(),
-                timestamp: 0,
-                source_device_id: String::new(),
-            }));
-        }
-
         let path = self.wal_path(workspace_id);
         if !path.exists() {
             return Ok(None);

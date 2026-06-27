@@ -15,7 +15,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
@@ -66,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
@@ -87,7 +87,7 @@ jobs:
         run: cargo test -p toolman-libp2p
 
       - name: Verify ping
-        run: node -e "const m=require('./apps/desktop/native/toolman-p2p.darwin-arm64.node'); if(m.ping()!=='pong') process.exit(1)"
+        run: node -e "const arch=process.platform+'-'+process.arch; const m=require('./apps/desktop/native/toolman-p2p.'+arch+'.node'); if(m.ping()!=='pong') process.exit(1)"
 
       - name: Build desktop for E2E
         run: |
