@@ -1,5 +1,6 @@
 appId: dev.toolman.app
 productName: Toolman
+afterPack: ../../scripts/electron-after-pack-adhoc-sign.mjs
 directories:
   output: dist
   buildResources: build

@@ -134,8 +134,16 @@ bash scripts/build-desktop-release.sh
 
 ## 常见问题
 
-**Q: Gatekeeper 提示「无法验证开发者」？**  
-A: 需 Apple 开发者账号对 DMG 签名 + 公证，或用户右键 → 打开。
+**Q: Gatekeeper 提示「无法验证开发者」或「已损坏，无法打开」？**  
+A: 正式发行需 Apple 开发者账号签名 + 公证。当前 CI 未签名包会在 macOS 上触发 Gatekeeper；若右键打开仍失败，多半是 `.app` 只有残缺签名。在终端执行（路径按实际安装位置修改）：
+
+```bash
+xattr -cr /Applications/Toolman.app
+codesign --force --deep --sign - /Applications/Toolman.app
+open /Applications/Toolman.app
+```
+
+若仍不行，删除旧副本后重新从 DMG 安装，或重启后再试（macOS 可能缓存无效签名）。
 
 **Q: Windows 免安装版数据存在哪？**  
 A: `%APPDATA%\Toolman`（与安装版相同 userData 路径）。
