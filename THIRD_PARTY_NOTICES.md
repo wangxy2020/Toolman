@@ -84,6 +84,7 @@ Each component remains under its own license; full license texts are in upstream
 | @jridgewell/resolve-uri | undefined | MIT | desktop |
 | @jridgewell/sourcemap-codec | undefined | MIT | desktop |
 | @jridgewell/trace-mapping | undefined | MIT | desktop |
+| @knorq/docx-mcp-server | undefined | MIT | desktop |
 | @lancedb/lancedb | undefined | Apache 2.0 | desktop |
 | @lancedb/lancedb-darwin-arm64 | undefined | Apache 2.0 | desktop |
 | @modelcontextprotocol/sdk | undefined | MIT | desktop |
@@ -97,6 +98,7 @@ Each component remains under its own license; full license texts are in upstream
 | @mui/utils | undefined | MIT | desktop |
 | @napi-rs/canvas | undefined | MIT | desktop |
 | @napi-rs/canvas-darwin-arm64 | undefined | MIT | desktop |
+| @nodable/entities | undefined | MIT | desktop |
 | @popperjs/core | undefined | MIT | desktop |
 | @protobufjs/aspromise | undefined | BSD-3-Clause | desktop |
 | @protobufjs/base64 | undefined | BSD-3-Clause | desktop |
@@ -132,6 +134,7 @@ Each component remains under its own license; full license texts are in upstream
 | ajv-formats | undefined | MIT | desktop |
 | ansi-regex | undefined | MIT | desktop |
 | ansi-styles | undefined | MIT | desktop |
+| anynum | undefined | MIT | desktop |
 | apache-arrow | undefined | Apache-2.0 | desktop |
 | archiver | undefined | MIT | desktop |
 | archiver-utils | undefined | MIT | desktop |
@@ -253,6 +256,8 @@ Each component remains under its own license; full license texts are in upstream
 | fast-csv | undefined | MIT | desktop |
 | fast-deep-equal | undefined | MIT | desktop |
 | fast-uri | undefined | BSD-3-Clause | desktop |
+| fast-xml-builder | undefined | MIT | desktop |
+| fast-xml-parser | undefined | MIT | desktop |
 | faye-websocket | undefined | Apache-2.0 | desktop |
 | fd-slicer | undefined | MIT | desktop |
 | file-uri-to-path | undefined | MIT | desktop |
@@ -320,6 +325,7 @@ Each component remains under its own license; full license texts are in upstream
 | is-hexadecimal | undefined | MIT | desktop |
 | is-plain-obj | undefined | MIT | desktop |
 | is-promise | undefined | MIT | desktop |
+| is-unsafe | undefined | MIT | desktop |
 | isarray | undefined | MIT | desktop |
 | isexe | undefined | ISC | desktop |
 | isomorphic.js | undefined | MIT | desktop |
@@ -445,6 +451,7 @@ Each component remains under its own license; full license texts are in upstream
 | parse5-parser-stream | undefined | MIT | desktop |
 | parseurl | undefined | MIT | desktop |
 | path-exists | undefined | MIT | desktop |
+| path-expression-matcher | undefined | MIT | desktop |
 | path-is-absolute | undefined | MIT | desktop |
 | path-key | undefined | MIT | desktop |
 | path-parse | undefined | MIT | desktop |
@@ -523,6 +530,7 @@ Each component remains under its own license; full license texts are in upstream
 | stringify-entities | undefined | MIT | desktop |
 | strip-ansi | undefined | MIT | desktop |
 | strip-json-comments | undefined | MIT | desktop |
+| strnum | undefined | MIT | desktop |
 | style-to-js | undefined | MIT | desktop |
 | style-to-object | undefined | MIT | desktop |
 | stylis | undefined | MIT | desktop |
@@ -576,6 +584,7 @@ Each component remains under its own license; full license texts are in upstream
 | wrap-ansi | undefined | MIT | desktop |
 | wrappy | undefined | ISC | desktop |
 | xlsx | undefined | Apache-2.0 | desktop |
+| xml-naming | undefined | MIT | desktop |
 | xmlbuilder | undefined | MIT | desktop |
 | xmlchars | undefined | MIT | desktop |
 | y18n | undefined | ISC | desktop |
