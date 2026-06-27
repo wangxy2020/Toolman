@@ -1,6 +1,5 @@
 appId: dev.toolman.app
 productName: Toolman
-license: AGPL-3.0-or-later
 directories:
   output: dist
   buildResources: build
