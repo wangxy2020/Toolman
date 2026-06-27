@@ -64,15 +64,16 @@ pnpm release:desktop
 
 1. 确认版本号：`apps/desktop/package.json` → `version`
 2. 在 GitHub **Settings → Secrets → Actions** 配置 **`TOOLMAN_RELEASE_ENV`**（多行文本，内容与本地 `.env.local` 中认证/P2P 相关变量一致，见 [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md)）
-3. 提交并打 tag：
+3. 提交并打 tag（**commit 消息与 tag 同名**，如 `v0.2.0-rc.3`）：
 
 ```bash
 git add apps/desktop/package.json
-git commit -m "chore: bump desktop version to 0.2.0"
-git tag v0.2.0
-git push origin main
-git push origin v0.2.0
+git commit -m "v0.2.0-rc.3"
+git tag -a v0.2.0-rc.3 -m "v0.2.0-rc.3"
+git push origin main && git push origin v0.2.0-rc.3
 ```
+
+> **只跑一个 CI：** 发布 commit 消息以 `v0.` 开头时，常规 **CI** 会自动跳过；仅 **Release Desktop** 因 tag 触发。日常开发 commit 仍走 CI。
 
 3. GitHub Actions `Release Desktop` 工作流会：
    - macOS 构建 **DMG**
@@ -142,6 +143,9 @@ open /Applications/Toolman.app
 ```
 
 若仍不行，删除旧副本后重新从 DMG 安装，或重启后再试（macOS 可能缓存无效签名）。
+
+**Q: 推送 release 时 CI 和 Release Desktop 一起跑？**  
+A: 请用 `v0.x` 作为 release commit 消息（与 tag 一致）。CI 已配置为跳过这类 push，只保留 Release Desktop。
 
 **Q: Windows 免安装版数据存在哪？**  
 A: `%APPDATA%\Toolman`（与安装版相同 userData 路径）。

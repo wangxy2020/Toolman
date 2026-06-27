@@ -5,8 +5,11 @@ on:
     branches: [main, master]
   pull_request:
 
+# Release commits use the tag name as the commit message (e.g. v0.2.0-rc.3).
+# Skip CI on those pushes — Release Desktop already runs on the matching tag.
 jobs:
   check:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'v0.')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -58,6 +61,7 @@ jobs:
         run: cargo test -p toolman-community-hub
 
   p2p-native-macos:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'v0.')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
