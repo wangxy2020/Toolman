@@ -25,7 +25,7 @@ function launchEnv(userDataDir: string): NodeJS.ProcessEnv {
 }
 
 export const test = base.extend<{ electronApp: ElectronApplication; window: Page }>({
-  electronApp: async (_fixtures, use) => {
+  electronApp: async ({}, use) => {
     if (!fs.existsSync(MAIN_ENTRY)) {
       throw new Error(
         `Desktop main bundle missing at ${MAIN_ENTRY}. Run: pnpm --filter @toolman/desktop build`,
