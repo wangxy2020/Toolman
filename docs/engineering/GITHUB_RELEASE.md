@@ -65,7 +65,8 @@ pnpm release:desktop
 ### 方式一：打 Tag 自动发布（推荐）
 
 1. 确认版本号：`apps/desktop/package.json` → `version`
-2. 提交并打 tag：
+2. 在 GitHub **Settings → Secrets → Actions** 配置 **`TOOLMAN_RELEASE_ENV`**（多行文本，内容与本地 `.env.local` 中认证/P2P 相关变量一致，见 [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md)）
+3. 提交并打 tag：
 
 ```bash
 git add apps/desktop/package.json

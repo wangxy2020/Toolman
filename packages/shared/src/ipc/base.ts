@@ -65,6 +65,7 @@ export const AppGetInfoOutputSchema = z.object({
   version: z.string(),
   platform: z.enum(['darwin', 'win32', 'linux']),
   arch: z.string(),
+  isPackaged: z.boolean(),
   deviceId: UuidSchema,
   schemaVersion: z.string(),
   provenance: ToolmanBuildProvenanceSchema,

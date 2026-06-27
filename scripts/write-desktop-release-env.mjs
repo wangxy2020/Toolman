@@ -85,6 +85,12 @@ if (lines.length === 0) {
   console.warn(
     `warning: ${OUT_FILE} is empty — packaged app will show auth config hints until credentials are baked at build time`,
   )
+  if (process.env.TOOLMAN_RELEASE_BUILD === '1' && process.env.CI === 'true') {
+    console.error(
+      'error: release.env is empty in CI. Add GitHub secret TOOLMAN_RELEASE_ENV (multiline auth/P2P env) or pass TOOLMAN_FIREBASE_* / TOOLMAN_AUTHING_* in the workflow.',
+    )
+    process.exit(1)
+  }
 } else {
   console.log(`Wrote ${lines.length} release env keys to apps/desktop/resources/release.env`)
 }

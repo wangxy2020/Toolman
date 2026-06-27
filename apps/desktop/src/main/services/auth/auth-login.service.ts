@@ -17,6 +17,7 @@ import {
 } from '@toolman/shared'
 
 import { assertAuthLoginAllowed } from './auth-build-profile.service.js'
+import { formatAuthProviderNotConfiguredMessage } from './auth-config-message.js'
 import { AuthLoginError } from './auth-login.error.js'
 import { persistAuthLogin, refreshAuthSessionTokens } from './auth-persist.service.js'
 import { getFirebaseAuthConfig } from './firebase-auth.config'
@@ -143,7 +144,7 @@ async function loginWithIntl(parsed: AuthLoginInput): Promise<AuthSession> {
 
   const config = getFirebaseAuthConfig()
   if (!config) {
-    throw new AuthLoginError('Firebase 未配置，请设置 TOOLMAN_FIREBASE_API_KEY 等环境变量')
+    throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('firebase'))
   }
 
   const { result, provider } = await authenticateWithFirebase(parsed, config)
@@ -168,7 +169,7 @@ async function loginWithCn(parsed: AuthLoginInput): Promise<AuthSession> {
   }
 
   if (!isCnAuthAvailable()) {
-    throw new AuthLoginError('国内登录未配置，请设置 TOOLMAN_AUTHING_* 或 TOOLMAN_TENCENT_* 环境变量')
+    throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('cn'))
   }
 
   const rawPayload = parsed.payload ?? {}
@@ -272,7 +273,7 @@ export async function resetAuthPassword(input: AuthResetPasswordInput): Promise<
     assertAuthLoginAllowed('intl', 'firebase_email')
     const config = getFirebaseAuthConfig()
     if (!config) {
-      throw new AuthLoginError('Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+      throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('firebase'))
     }
 
     await firebaseSendPasswordResetEmail(config, parsed.account)
@@ -285,7 +286,7 @@ export async function resetAuthPassword(input: AuthResetPasswordInput): Promise<
   assertAuthLoginAllowed(parsed.region, 'tencent_phone')
 
   if (!isCnAuthAvailable()) {
-    throw new AuthLoginError('国内登录未配置，请设置 TOOLMAN_AUTHING_* 环境变量')
+    throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('cn'))
   }
 
   await resetCnAccountPassword(
@@ -324,7 +325,7 @@ export async function changeAuthPassword(input: AuthChangePasswordInput): Promis
     assertAuthLoginAllowed('intl', 'firebase_email')
     const config = getFirebaseAuthConfig()
     if (!config) {
-      throw new AuthLoginError('Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+      throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('firebase'))
     }
 
     const email = resolveFirebaseEmailFromSession(session)

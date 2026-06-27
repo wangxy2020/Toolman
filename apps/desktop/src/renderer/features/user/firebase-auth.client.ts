@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth'
 
 import type { AuthProvider } from '@toolman/shared'
+import { IpcChannel } from '@toolman/shared'
 
 import { getFirebaseWebConfig } from './auth-api.client'
 
@@ -32,10 +33,19 @@ function buildCredentialProvider(provider: AuthProvider) {
   return appleProvider
 }
 
+async function firebaseNotConfiguredMessage(): Promise<string> {
+  const info = await window.api.invoke(IpcChannel.AppGetInfo)
+  const isPackaged = info?.ok && (info.data as { isPackaged?: boolean })?.isPackaged === true
+  if (isPackaged) {
+    return '国际登录暂不可用，请更新到最新版本或联系支持。'
+  }
+  return 'Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量'
+}
+
 async function ensureFirebaseAuth(): Promise<Auth> {
   const config = await getFirebaseWebConfig()
   if (!config.configured) {
-    throw new Error('Firebase 未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+    throw new Error(await firebaseNotConfiguredMessage())
   }
 
   if (!firebaseApp) {
@@ -100,6 +110,7 @@ export async function consumeFirebaseRedirectLogin(): Promise<{
   idToken: string
 } | null> {
   if (!isElectronRenderer()) return null
+  if (!(await isFirebaseAuthConfigured())) return null
 
   const auth = await ensureFirebaseAuth()
   const result = await getRedirectResult(auth)

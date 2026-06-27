@@ -8,6 +8,7 @@ export function getAppInfo() {
     version: app.getVersion() || '0.1.0',
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     arch: process.arch,
+    isPackaged: app.isPackaged,
     deviceId: getP2pDeviceId(),
     schemaVersion: '1.0.0-mvp',
     provenance: getToolmanBuildProvenance(),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import type { AuthOtpChannel, AuthProvider, AuthRegion } from '@toolman/shared'
+import { IpcChannel } from '@toolman/shared'
 
 import {
   AuthMergeRequiredError,
@@ -97,9 +98,19 @@ export function useUserCenterAuth(options: {
   } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isPackagedApp, setIsPackagedApp] = useState(false)
 
   useEffect(() => {
-    if (!open || profileLoading || providerConfigLoading) return
+    void window.api.invoke(IpcChannel.AppGetInfo).then((result) => {
+      const data = result?.ok ? (result.data as { isPackaged?: boolean }) : null
+      if (typeof data?.isPackaged === 'boolean') {
+        setIsPackagedApp(data.isPackaged)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open || profileLoading || providerConfigLoading || !firebaseConfigured) return
 
     let cancelled = false
     void consumeFirebaseRedirectLogin()
@@ -125,7 +136,7 @@ export function useUserCenterAuth(options: {
     return () => {
       cancelled = true
     }
-  }, [open, profileLoading, providerConfigLoading, onAuthComplete])
+  }, [open, profileLoading, providerConfigLoading, firebaseConfigured, onAuthComplete])
 
   useEffect(() => {
     if (smsCooldown <= 0) return undefined
@@ -169,10 +180,13 @@ export function useUserCenterAuth(options: {
   const authBusy = busy || profileLoading || providerConfigLoading
   const cnAccountIsEmail = isCnEmailAccountInput(account)
 
-  const firebaseConfigHint =
-    t('user.auth.configFirebase')
+  const firebaseConfigHint = isPackagedApp
+    ? t('user.auth.configFirebaseRelease')
+    : t('user.auth.configFirebase')
 
-  const cnConfigHint = t('user.auth.configCn')
+  const cnConfigHint = isPackagedApp
+    ? t('user.auth.configCnRelease')
+    : t('user.auth.configCn')
 
   const codeIntent =
     view === 'register' ? 'register' : view === 'forgot_password' ? 'reset' : 'login'

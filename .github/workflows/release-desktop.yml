@@ -46,6 +46,19 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare release.env
+        env:
+          TOOLMAN_RELEASE_ENV: ${{ secrets.TOOLMAN_RELEASE_ENV }}
+        run: |
+          if [ -n "$TOOLMAN_RELEASE_ENV" ]; then
+            mkdir -p apps/desktop/resources
+            printf '%s\n' "$TOOLMAN_RELEASE_ENV" > "$GITHUB_WORKSPACE/apps/desktop/resources/release.env.pre"
+            echo "TOOLMAN_RELEASE_ENV_FILE=$GITHUB_WORKSPACE/apps/desktop/resources/release.env.pre" >> "$GITHUB_ENV"
+            echo "Prepared release.env from TOOLMAN_RELEASE_ENV"
+          else
+            echo "::warning::TOOLMAN_RELEASE_ENV secret is not set — login will not work in packaged builds"
+          fi
+
       - name: Build desktop release (macOS)
         env:
           TOOLMAN_UPDATE_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
@@ -91,6 +104,20 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Prepare release.env
+        env:
+          TOOLMAN_RELEASE_ENV: ${{ secrets.TOOLMAN_RELEASE_ENV }}
+        shell: bash
+        run: |
+          if [ -n "$TOOLMAN_RELEASE_ENV" ]; then
+            mkdir -p apps/desktop/resources
+            printf '%s\n' "$TOOLMAN_RELEASE_ENV" > "$GITHUB_WORKSPACE/apps/desktop/resources/release.env.pre"
+            echo "TOOLMAN_RELEASE_ENV_FILE=$GITHUB_WORKSPACE/apps/desktop/resources/release.env.pre" >> "$GITHUB_ENV"
+            echo "Prepared release.env from TOOLMAN_RELEASE_ENV"
+          else
+            echo "::warning::TOOLMAN_RELEASE_ENV secret is not set — login will not work in packaged builds"
+          fi
 
       - name: Build desktop release (Windows)
         shell: bash

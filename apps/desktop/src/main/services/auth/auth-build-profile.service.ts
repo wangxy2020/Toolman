@@ -10,6 +10,7 @@ import {
 } from '@toolman/shared'
 
 import { AuthLoginError } from './auth-login.error.js'
+import { formatAuthProviderNotConfiguredMessage } from './auth-config-message.js'
 import { getFirebaseAuthConfig } from './firebase-auth.config.js'
 import { getTencentWebConfig } from './tencent-auth.config.js'
 
@@ -54,11 +55,11 @@ export function assertAuthLoginAllowed(region: AuthRegion, method: AuthProvider)
   }
 
   if (region === 'cn' && !getTencentWebConfig().configured) {
-    throw new AuthLoginError('国内登录未配置，请设置 TOOLMAN_AUTHING_* 或 TOOLMAN_TENCENT_* / TOOLMAN_WECHAT_* 环境变量')
+    throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('cn'))
   }
 
   if (region === 'intl' && !getFirebaseAuthConfig()) {
-    throw new AuthLoginError('国际登录未配置，请设置 TOOLMAN_FIREBASE_* 环境变量')
+    throw new AuthLoginError(formatAuthProviderNotConfiguredMessage('intl'))
   }
 
   throw new AuthLoginError('当前构建不支持该登录方式')
