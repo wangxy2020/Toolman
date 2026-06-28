@@ -82,16 +82,6 @@ pub async fn load_auth_user(state: &AppState, identity: &ResolvedIdentity) -> Re
         identity.community_role.as_deref(),
     )
     .await?;
-    let user = if identity.community_role.is_some() {
-        user
-    } else {
-        crate::services::dev_test_user_role::apply_dev_test_user_role(
-            &repo,
-            user,
-            identity.email.as_deref(),
-        )
-        .await?
-    };
     Ok(AuthUser(user))
 }
 

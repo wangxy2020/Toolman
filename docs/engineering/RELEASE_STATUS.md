@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.2.0-rc.1` · **通道**：`staging` · **更新**：2026-06-27  
+> **版本**：`0.2.0-rc.6` · **通道**：`staging` · **更新**：2026-06-22  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
@@ -17,21 +17,23 @@
 | D4 | 语义搜索 | GA 阶段 Hub 搜索 **全量 Fallback SQLite FTS**，禁止对用户 501 |
 | D5 | 明确不做 | 自动化/工作流、翻译、助手库、代码工具、项目管理、真实支付、QQ/Slack 等 |
 
-**GA 就绪定义**：`RELEASE_CHECKLIST.md` 全勾 · RC1+RC2 完成 P0=0 · 跨 NAT 双机 + 可选 10 人 WAN 签字 · stable OTA · 签名包可安装 · README 去 Beta。
+**开源 RC 就绪定义**（个人开发者 / 开源初期）：`pnpm rc1:preflight` 绿 · P0=0 · adhoc 签名 DMG 可安装（Gatekeeper 需右键打开）· README 标明 Beta。
+
+**GA 就绪定义**（用户规模达标后）：`RELEASE_CHECKLIST.md` 全勾 · RC2 外测完成 · 跨 NAT 双机签字 · stable OTA · **正式签名包** · README 去 Beta。
 
 ---
 
 ## 2. 阶段进度
 
-### Phase 0 — RC1 发布门禁
+### Phase 0 — RC 发布门禁
 
 | # | 任务 | 状态 | 备注 |
 |---|------|------|------|
-| 0.1 | `pnpm rc1:preflight` 绿 | ✅ | 2026-06-26 复验通过 |
-| 0.1 | `pnpm rc1:build` dmg 可安装 | ✅ | 未签名，Gatekeeper 需右键打开 |
+| 0.1 | `pnpm rc1:preflight` 绿 | ✅ | RC6 本地 typecheck + 469 单测绿 |
+| 0.1 | `pnpm rc1:build` dmg 可安装 | ✅ | adhoc 签名；Gatekeeper 需右键打开 |
 | 0.2 | TURN 静默注入（Xirsys → `release.env`） | ✅ | 打包时烘焙；启动自动拉 ICE |
-| 0.3 | WAN 跨 NAT 双机签字 | ⏳ | 单机 LAN ✅（含成员重启重连）；跨网待第二台设备 |
-| 0.4 | dogfood ≥7 天 · ≥3 人 | 🔄 | 进行中 |
+| 0.3 | WAN 跨 NAT 双机签字 | ⏳ | 单机 LAN ✅；跨网待第二台设备 |
+| 0.4 | dogfood ≥7 天 · ≥3 人 | 🔄 | 个人开发者：维护者持续 dogfood |
 | 0.5 | staging OTA + `release:verify-feed` | ☐ | 需 CDN 凭据 |
 
 ### Phase 1 — GA 阻断代码
@@ -62,7 +64,7 @@
 
 | # | 任务 | 状态 |
 |---|------|------|
-| 3.1 | macOS/Windows 签名包 | ☐ |
+| 3.1 | macOS/Windows 正式签名包 | 🚫 **挂起** | 开源初期不做；adhoc + 文档说明 |
 | 3.2 | stable CDN manifest | ☐ |
 | 3.3 | README 去 Beta · 版本 `0.2.0` | ☐ |
 | 3.4 | 回滚演练 | ☐ |
@@ -70,7 +72,18 @@
 
 ---
 
-## 3. 工程优先级（P0–P4）
+## 3. 挂起项（用户规模达标后再做）
+
+| 项 | 原因 | 当前替代 |
+|----|------|----------|
+| macOS 代码签名 + 公证 | 个人开发者 / 开源初期成本 | adhoc 签名 + README 安装说明 |
+| Windows Authenticode | 同上 | Portable 包 + SmartScreen 提示 |
+| 10 人 WAN 签字 | 缺第二台跨网设备 | 单机 LAN + 自动化 smoke |
+| RC2 外测 ≥10 用户 | 待开源社区积累 | 维护者 dogfood |
+
+---
+
+## 4. 工程优先级（P0–P4）
 
 | 优先级 | 主题 | 状态 |
 |--------|------|------|
@@ -82,57 +95,64 @@
 
 ---
 
-## 4. 未闭环项（发布前关注）
+## 5. RC6 变更摘要（相对 rc.5）
 
-| 类别 | 项 | 现状 |
-|------|-----|------|
-| 运维 | macOS 签名/公证、staging OTA | 未完成 |
-| P2P | 跨 NAT WAN 签字、WAN ICE Restart | 单机 LAN 已验 ✅ · 跨网 / WAN ICE 待第二台设备 |
-| 流程 | dogfood ≥7 天、RC2 外测 | 进行中 |
-| 产品 | 语义搜索 501 占位、真实支付 mock | GA 前需 UI 不误导 |
-
-**已具备**：SQLite WAL、libp2p 熔断、P2P 签名/邀请 v2、Blob 断点、TURN 静默配置、416+ desktop 单测。
+| 模块 | 变更 |
+|------|------|
+| 知识库 | 删除文档时同步清理 chunks/向量；重传不再假成功 |
+| Agent | Gemma/Ollama 图片路径、Anthropic 图片块、P2P relay PDF visionPages |
+| 社区/Auth | Authing 角色同步（Management API + session fallback）；移除 dev_test 硬编码 admin |
+| Hub (Rust) | 默认用户 role=user；集成测试 admin 辅助 |
+| model-gateway | Gemma reasoning 折叠；vision 路由修复 |
+| 工程 | typecheck 修复；community-bridge 单测同步 |
 
 ---
 
-## 5. RC1 维护者下一步
+## 6. 未闭环项（开源 RC 发布前关注）
+
+| 类别 | 项 | 现状 |
+|------|-----|------|
+| P2P | 跨 NAT WAN 签字 | 单机 LAN 已验 ✅ · 跨网待第二台设备 |
+| 流程 | dogfood 持续记录 | 维护者进行中 |
+| 产品 | 语义搜索 501 占位、真实支付 mock | RC 阶段 UI 需标注 Beta |
+| 运维 | staging OTA | 可选；GitHub Release 分发 dmg 亦可 |
+
+**已具备**：SQLite WAL、libp2p 熔断、P2P 签名/邀请 v2、Blob 断点、TURN 静默配置、469 desktop 单测。
+
+---
+
+## 7. 维护者下一步（RC6）
 
 | 优先级 | 动作 | 命令 / 文档 |
 |--------|------|-------------|
-| P0 | 每日 dogfood + 填 §6 表 | `pnpm rc1:dogfood-day` |
-| P0 | 每周全量门禁 | `pnpm rc1:dogfood-day -- --full` |
-| P1 | 分发 RC1 dmg | `pnpm rc1:build` · [RC1_DOGFOOD.md §4](./RC1_DOGFOOD.md) |
-| P1 | 跨 NAT 双机签字 | 本文 §7 |
-| P2 | staging OTA | `pnpm rc1:publish-staging` |
-| P2 | macOS 签名 | [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) |
+| P0 | 提交 RC6 补丁 + 打 tag | `git commit` → `git tag v0.2.0-rc.6` |
+| P0 | 本地 preflight 复验 | `pnpm rc1:preflight` |
+| P0 | 构建分发包 | `pnpm rc1:build` |
+| P1 | 每日 dogfood + 填 §8 表 | `pnpm rc1:dogfood-day` |
+| P2 | 跨 NAT 双机签字（有设备时） | 本文 §9 |
+| P2 | staging OTA（有 CDN 时） | `pnpm rc1:publish-staging` |
 
 ```bash
-pnpm rc1:dogfood-day
 pnpm rc1:preflight && pnpm rc1:build
-pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
-./scripts/p2p-dual-node-e2e.sh
+# GitHub Release 上传 apps/desktop/dist/Toolman-0.2.0-rc.6-*.dmg
 ```
 
 ---
 
-## 6. 每日 Dogfood 记录
+## 8. 每日 Dogfood 记录
 
 | 日期 | 参与者 | 登录 | 对话 | 知识库 | 社区 | 群组 | 备注 |
 |------|--------|------|------|--------|------|------|------|
 | 2026-06-22 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | Kickoff |
-| 2026-06-23 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 2026-06-24 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 2026-06-25 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 2026-06-26 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | LAN 群聊通 · preflight 绿 · 成员重启重连 ✅ |
-| 2026-06-27 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | DMG · `dev:p2p:a/b` · 登录/对话/知识库/社区/群组正常 |
-| 2026-06-28 | | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 2026-06-29 | | ☐ | ☐ | ☐ | ☐ | ☐ | 退出评审 |
+| 2026-06-27 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | rc.5 DMG · 全模块正常 |
+| 2026-06-22 | 维护者 | — | — | — | — | — | RC6 准备：修 typecheck/单测 · 知识库删除 · Agent 图片 · Authing admin |
 
 ---
 
-## 7. WAN / 跨 NAT 验收
+## 9. WAN / 跨 NAT 验收
 
-**要求**：两台机器处于不同网络（如 Wi‑Fi vs 4G 热点），安装**同一 RC1 DMG**（含静默 TURN）。
+**要求**：两台机器处于不同网络（如 Wi‑Fi vs 4G 热点），安装**同一 RC dmg**（含静默 TURN）。
 
 ### 单机预检 — ✅
 
@@ -141,7 +161,7 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 | TURN 静默配置（Xirsys） | ✅ `pnpm rc1:build` 烘焙 `release.env` |
 | 系统诊断 WAN 就绪 | ✅ 设置 → 系统诊断 → P2P |
 | 同机双实例建群/群聊 | ✅ |
-| 成员重启后群主收消息 | ✅ 2026-06-26 复验（跳过 ICE restart，完整重连） |
+| 成员重启后群主收消息 | ✅ 2026-06-26 复验 |
 | 自动化 smoke / P2P 集成 | ✅ |
 
 **剩余**：跨 NAT 正式验收需第二台电脑（不同网络），见下节。
@@ -151,7 +171,7 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 | 项 | Node A | Node B |
 |----|--------|--------|
 | 网络 | 例：家庭 Wi‑Fi | 例：4G 热点 |
-| 安装包 | Toolman-0.2.0-rc.1-*.dmg | 同左 |
+| 安装包 | Toolman-0.2.0-rc.6-*.dmg | 同左 |
 
 - [ ] B 跨网加入，成员显示 **广域网 · 在线**（≤60s）
 - [ ] 群聊互发（≤10s）
@@ -162,28 +182,28 @@ pnpm release:verify-feed https://releases.toolman.app staging darwin arm64
 
 ---
 
-## 8. 缺陷跟踪
+## 10. 缺陷跟踪
 
-**RC1 退出门禁**：P0 = 0 · 全部 P1 有 workaround 或排期 · 见 [RC1_DOGFOOD.md §7](./RC1_DOGFOOD.md)
+**RC 退出门禁**：P0 = 0 · 全部 P1 有 workaround 或排期 · 见 [RC1_DOGFOOD.md §7](./RC1_DOGFOOD.md)
 
 | 级别 | 定义 |
 |------|------|
 | **P0** | 崩溃、数据丢失、无法登录、P2P 完全不可用 |
 | **P1** | 核心路径阻断，有 workaround |
-| **P2** | 体验/文案，可带入 RC2 |
+| **P2** | 体验/文案，可带入下一 RC |
 
 | 指标 | 数值 |
 |------|------|
 | 开放 P0 | 0 |
 | 开放 P1 | 0 |
-| 参与者 | 1 |
+| 参与者 | 1（维护者） |
 
 主表列头：`ID · 标题 · 严重度 · 模块 · 报告人 · 负责人 · 状态 · 版本 · 平台 · 环境 · Workaround`  
 ID 格式：`RC1-NNN`。详细模板见 [RC1_DOGFOOD.md §6](./RC1_DOGFOOD.md)。
 
 ---
 
-## 9. 关联文档
+## 11. 关联文档
 
 | 文档 | 用途 |
 |------|------|

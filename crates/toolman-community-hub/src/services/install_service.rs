@@ -366,11 +366,9 @@ mod tests {
         let config = hub_config(data_dir);
         config.bootstrap().expect("bootstrap");
         let mcp_service = McpMarketService::new(config, pool.clone());
-        let admin = UserRepository::new(pool.clone())
-            .find_by_id(DEFAULT_ADMIN_USER_ID)
+        let admin = crate::db::seed::admin_user_for_tests(pool)
             .await
-            .expect("find")
-            .expect("admin");
+            .expect("test admin user");
 
         let draft = mcp_service
             .create_draft(

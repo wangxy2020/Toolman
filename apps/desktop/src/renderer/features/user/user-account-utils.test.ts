@@ -4,6 +4,7 @@ import type { AuthSession } from '@toolman/shared'
 
 import {
   AUTH_PROVIDER_LABELS,
+  communityRoleToUserTypeKey,
   formatAccountStatusLabel,
   formatBindingSummary,
   formatSkuLabel,
@@ -12,7 +13,6 @@ import {
   PRODUCT_SKU_LABELS,
   resolveUserTypeLabel,
   USER_TYPE_LABELS,
-  DEV_TEST_USER_TYPE_BY_EMAIL,
 } from './user-account-utils'
 
 const baseSession = {
@@ -106,14 +106,11 @@ describe('user-account-utils', () => {
     ).toBe('微信 · 小王')
   })
 
-  it('resolves user type labels', () => {
-    expect(
-      resolveUserTypeLabel({
-        ...baseSession,
-        registrationStatus: 'guest',
-        isLoggedIn: false,
-      }),
-    ).toBe(USER_TYPE_LABELS.unregistered)
+  it('maps community roles from Authing sync to user type labels', () => {
+    expect(communityRoleToUserTypeKey('founder')).toBe('super_admin')
+    expect(communityRoleToUserTypeKey('admin')).toBe('admin')
+    expect(communityRoleToUserTypeKey('enterprise')).toBe('vip')
+    expect(communityRoleToUserTypeKey('user')).toBe('normal')
 
     expect(
       resolveUserTypeLabel(
@@ -121,16 +118,23 @@ describe('user-account-utils', () => {
           ...baseSession,
           registrationStatus: 'registered',
           isLoggedIn: true,
-          bindings: [
-            {
-              provider: 'firebase_email',
-              subjectId: 'wxymale@126.com',
-              label: 'wxymale@126.com',
-              verifiedAt: Date.now(),
-            },
-          ],
+          communityRole: 'founder',
         },
         'founder',
+      ),
+    ).toBe(USER_TYPE_LABELS.super_admin)
+
+    expect(
+      resolveUserTypeLabel(
+        {
+          ...baseSession,
+          registrationStatus: 'registered',
+          isLoggedIn: true,
+          communityRole: 'admin',
+          userType: 'admin',
+          authingRoles: ['admin'],
+        },
+        'admin',
       ),
     ).toBe(USER_TYPE_LABELS.admin)
 
@@ -140,20 +144,21 @@ describe('user-account-utils', () => {
           ...baseSession,
           registrationStatus: 'registered',
           isLoggedIn: true,
-          bindings: [
-            {
-              provider: 'firebase_email',
-              subjectId: '31897124@qq.com',
-              label: '31897124@qq.com',
-              verifiedAt: Date.now(),
-            },
-          ],
+          communityRole: 'user',
         },
-        'admin',
+        'user',
       ),
     ).toBe(USER_TYPE_LABELS.normal)
+  })
 
-    expect(DEV_TEST_USER_TYPE_BY_EMAIL['wxymale@126.com']).toBe('admin')
+  it('resolves user type labels for guest users', () => {
+    expect(
+      resolveUserTypeLabel({
+        ...baseSession,
+        registrationStatus: 'guest',
+        isLoggedIn: false,
+      }),
+    ).toBe(USER_TYPE_LABELS.unregistered)
   })
 
   it('detects registered users', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildModelTextFromUserBlocks,
+  buildStoredUserContent,
   contentBlocksHaveDocxAttachments,
   isDocxFileBlock,
   isDocxMcpSourceFileBlock,
@@ -138,5 +139,16 @@ describe('buildModelTextFromUserBlocks', () => {
 
     expect(text).toContain('Excel MCP 结构化审查流水线')
     expect(text).toContain('/tmp/invoice.xlsx')
+  })
+})
+
+describe('buildStoredUserContent', () => {
+  it('includes image labels in stored summary', () => {
+    expect(
+      buildStoredUserContent([
+        { type: 'image', blobHash: 'abc', mimeType: 'image/png', alt: 'chart.png' },
+        { type: 'text', text: '分析一下' },
+      ]),
+    ).toBe('图片：chart.png\n分析一下')
   })
 })

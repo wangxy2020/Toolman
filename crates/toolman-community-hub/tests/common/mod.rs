@@ -35,6 +35,9 @@ impl TestHarness {
         config.bootstrap().expect("bootstrap");
         let state = AppState::new(config, pool.clone());
         let app = router(state);
+        toolman_community_hub::db::seed::admin_user_for_tests(&pool)
+            .await
+            .expect("promote default identity for integration tests");
         Self {
             app,
             pool,

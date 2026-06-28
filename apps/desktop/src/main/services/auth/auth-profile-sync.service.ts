@@ -45,6 +45,7 @@ export async function finalizeRegisteredLogin(
   _session: Awaited<ReturnType<typeof getAuthSession>>,
 ): Promise<Awaited<ReturnType<typeof getAuthSession>>> {
   await syncAuthingUserProfileAfterLogin().catch(() => undefined)
+  await exchangeAuthHubToken().catch(() => undefined)
   await syncAuthProfileToCommunityHub().catch(() => undefined)
   return getAuthSession()
 }

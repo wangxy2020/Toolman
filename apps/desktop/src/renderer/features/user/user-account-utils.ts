@@ -7,7 +7,7 @@ import type {
   CommunityUserRole,
   ProductSku,
 } from '@toolman/shared'
-import type { TranslateFn } from '../../i18n/useI18n'
+import type { TranslateFn } from '../../i18n/I18nProvider'
 
 export const USER_TYPE_LABELS = {
   unregistered: '未注册',
@@ -18,12 +18,6 @@ export const USER_TYPE_LABELS = {
 } as const
 
 export type UserTypeKey = keyof typeof USER_TYPE_LABELS
-
-/** Dev/test email → user type for dual-account QA (keep in sync with hub dev_test_user_role.rs). */
-export const DEV_TEST_USER_TYPE_BY_EMAIL: Record<string, UserTypeKey> = {
-  'wxymale@126.com': 'admin',
-  '31897124@qq.com': 'normal',
-}
 
 export function extractSessionEmail(session: AuthSession | null | undefined): string | null {
   if (!session) return null
@@ -47,6 +41,17 @@ function authUserTypeLabelKey(
   return null
 }
 
+/** Map Authing-synced community role to display user type. */
+export function communityRoleToUserTypeKey(
+  role: CommunityUserRole | null | undefined,
+): UserTypeKey | null {
+  if (role === 'founder') return 'super_admin'
+  if (role === 'admin') return 'admin'
+  if (role === 'enterprise') return 'vip'
+  if (role === 'user' || role === 'guest') return 'normal'
+  return null
+}
+
 export function resolveUserTypeLabel(
   session: AuthSession | null | undefined,
   communityRole?: CommunityUserRole | null,
@@ -67,28 +72,20 @@ export function resolveUserTypeLabel(
     return labels.normal
   }
 
+  const roleKey = communityRoleToUserTypeKey(communityRole ?? session.communityRole)
+  if (roleKey) {
+    return labels[roleKey]
+  }
+
   const authingTypeKey = authUserTypeLabelKey(session.userType)
-  if ((session.authingRoles?.length ?? 0) > 0 && authingTypeKey) {
+  if (authingTypeKey && authingTypeKey !== 'normal') {
     return labels[authingTypeKey]
   }
 
-  const email = extractSessionEmail(session)
-  const devType =
-    import.meta.env.DEV && email ? DEV_TEST_USER_TYPE_BY_EMAIL[email] : undefined
-  if (devType) {
-    return labels[devType]
-  }
-
-  if (authingTypeKey) {
-    return labels[authingTypeKey]
-  }
-
-  const role = communityRole ?? session.communityRole
-  if (role === 'founder') return labels.super_admin
-  if (role === 'admin') return labels.admin
-  if (role === 'enterprise' || session.subscriptionSku === 'pro') {
+  if (session.subscriptionSku === 'pro') {
     return labels.vip
   }
+
   return labels.normal
 }
 

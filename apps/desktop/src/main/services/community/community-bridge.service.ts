@@ -469,8 +469,7 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
       COMMUNITY_HUB_DEFAULT_IDENTITY_ID:
         process.env.COMMUNITY_HUB_DEFAULT_IDENTITY_ID?.trim() || DEFAULT_LOCAL_IDENTITY_ID,
       COMMUNITY_HUB_DEV_TEST_ROLES:
-        process.env.COMMUNITY_HUB_DEV_TEST_ROLES ??
-        (app.isPackaged ? 'false' : 'true'),
+        process.env.COMMUNITY_HUB_DEV_TEST_ROLES ?? 'false',
       COMMUNITY_HUB_JWT_SECRET: jwtSecret,
       COMMUNITY_HUB_REQUIRE_REVIEW:
         process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'true' : 'true'),

@@ -7,8 +7,8 @@ Use this checklist before tagging a Release Candidate or General Availability bu
 See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RELEASE_STATUS.md](./RELEASE_STATUS.md)**.
 
 - [ ] `pnpm rc1:preflight` green on release branch
-- [ ] Version is `0.2.0-rc.1` (or current `-rc.N`) in `apps/desktop/package.json`
-- [ ] `pnpm rc1:build` produces signed/notarized dmg (or document Gatekeeper waiver)
+- [ ] Version is `0.2.0-rc.6` (or current `-rc.N`) in `apps/desktop/package.json`
+- [ ] `pnpm rc1:build` produces adhoc-signed dmg (Gatekeeper: 右键打开；见 README)
 - [ ] Internal distribution list + dedicated `--user-data-dir` instructions sent
 - [ ] Daily dogfood table + defect tracker started (≥ 1 week)
 - [ ] RC1 exit criteria reviewed before RC2
@@ -20,8 +20,8 @@ See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RE
 - [ ] `pnpm smoke` green on release branch
 - [ ] `pnpm --filter @toolman/desktop test:e2e` green (macOS recommended)
 - [ ] `pnpm release:verify-feed https://releases.toolman.app staging` green after staging publish
-- [ ] macOS: code sign + notarization complete
-- [ ] Windows: Authenticode signing complete
+- [ ] ~~macOS: code sign + notarization~~ → **挂起**（开源初期；adhoc 签名 + README 安装说明）
+- [ ] ~~Windows: Authenticode signing~~ → **挂起**（同上；Portable 包分发）
 - [ ] `TOOLMAN_*_DEV_MODE` unset in release env
 - [ ] `TOOLMAN_BILLING_MOCK=0` for production channel
 - [ ] **`TOOLMAN_RELEASE_ENV`** GitHub Secret 已配置（`pnpm release:print-env` 校验通过，含 Authing/Firebase + Xirsys 或 TURN）

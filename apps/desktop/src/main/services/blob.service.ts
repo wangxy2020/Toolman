@@ -204,11 +204,16 @@ export function getBlobDataUrl(hash: string): string {
   if (!meta) {
     throw new Error(`Blob 不存在: ${hash}`)
   }
-  if (!meta.mimeType.startsWith('image/')) {
-    throw new Error('仅支持图片类型 blob')
+  let mimeType = meta.mimeType
+  if (!mimeType.startsWith('image/')) {
+    if (meta.originalName && /\.(png|jpe?g|gif|webp|bmp)$/i.test(meta.originalName)) {
+      mimeType = guessMimeType(meta.originalName)
+    } else {
+      throw new Error('仅支持图片类型 blob')
+    }
   }
   const data = readBlobBytes(hash)
-  return `data:${meta.mimeType};base64,${data.toString('base64')}`
+  return `data:${mimeType};base64,${data.toString('base64')}`
 }
 
 export function getBlobStorageBytes(): number {

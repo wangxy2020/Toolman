@@ -115,12 +115,12 @@ describe('shouldRouteThinkingAsAnswer', () => {
     ).toBe(true)
   })
 
-  it('routes gemma 3/4 reasoning tokens to answer text', () => {
+  it('keeps gemma reasoning in thinking channel when content may follow', () => {
     expect(
       shouldRouteThinkingAsAnswer(
         { type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' },
         'gemma4:26b',
       ),
-    ).toBe(true)
+    ).toBe(false)
   })
 })

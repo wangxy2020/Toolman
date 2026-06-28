@@ -146,7 +146,8 @@ export function resolveOpenAiMaxTokens(
 }
 
 export function shouldRouteThinkingAsAnswer(config: ProviderConfig, model: string): boolean {
-  return config.type === 'ollama' && ollamaRoutesReasoningAsAnswer(model)
+  // glm-ocr 常只输出 reasoning 字段；Gemma 有 reasoning + content 时应分开展示
+  return config.type === 'ollama' && isOcrVisionModelId(model)
 }
 
 /** @deprecated 使用 normalizeDeepSeekModelKey */

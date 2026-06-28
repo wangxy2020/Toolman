@@ -20,6 +20,14 @@ function flattenMessageContent(content: ChatMessage['content']): string {
     .join('\n\n')
 }
 
+export function chatMessagesContainImages(messages: readonly ChatMessage[]): boolean {
+  return messages.some(
+    (message) =>
+      Array.isArray(message.content) &&
+      message.content.some((part) => part.type === 'image_url' && part.image_url?.url),
+  )
+}
+
 export function formatMessagesForOllamaNative(
   messages: ChatMessage[],
 ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
@@ -43,7 +51,8 @@ export function shouldUseOllamaNativeChat(config: ProviderConfig, params: ChatPa
   return (
     config.type === 'ollama' &&
     isGemmaThinkingOllamaModelId(params.model) &&
-    (!params.tools || params.tools.length === 0)
+    (!params.tools || params.tools.length === 0) &&
+    !chatMessagesContainImages(params.messages)
   )
 }
 

@@ -120,7 +120,7 @@ pnpm dev:p2p:b
 | `TOOLMAN_COMMUNITY_DATA_DIR` | `/tmp/toolman-community-shared` | 两实例共用 `community.db` |
 | `TOOLMAN_COMMUNITY_JWT_SECRET` | `toolman-dev-community-jwt-secret` | JWT 密钥必须一致 |
 | `COMMUNITY_HUB_REQUIRE_REVIEW` | `true` | 发布走待审核 |
-| `COMMUNITY_HUB_DEV_TEST_ROLES` | `true` | 仅开发：按邮箱映射 Hub 角色 |
+| `COMMUNITY_HUB_DEV_TEST_ROLES` | 已废弃（管理员仅来自 Authing） | `false` |
 | `TOOLMAN_DEV_IDENTITY_ID` | A=`...001`，B=`...00b` | 各实例本地 identity |
 
 完整步骤见 [docs/p2p/DUAL_INSTANCE_DEV.md](../p2p/DUAL_INSTANCE_DEV.md)。
@@ -148,7 +148,7 @@ pnpm --filter @toolman/desktop test -- src/main/services/community src/main/ipc/
 | `COMMUNITY_HUB_PORT` | 监听端口 | `3721` |
 | `COMMUNITY_HUB_REQUIRE_REVIEW` | 发布需审核 | `false` |
 | `COMMUNITY_HUB_DEFAULT_IDENTITY_ID` | 种子管理员 identity（仅 Hub 自启时） | `00000000-0000-0000-0000-000000000001` |
-| `COMMUNITY_HUB_DEV_TEST_ROLES` | 开发邮箱→Hub 角色映射 | 未设置时：打包版 `false`，开发版 `true` |
+| `COMMUNITY_HUB_DEV_TEST_ROLES` | 已废弃（管理员仅来自 Authing） | `false` |
 | `COMMUNITY_HUB_JWT_SECRET` | Hub JWT 密钥（双开需一致） | 各实例 `userData` 内独立生成 |
 | `TOOLMAN_COMMUNITY_JWT_SECRET` | 覆盖 Hub JWT（双开脚本） | 见 `p2p-community-env.sh` |
 | `RUST_LOG` | Sidecar 日志级别 | `toolman_community_hub=info` |

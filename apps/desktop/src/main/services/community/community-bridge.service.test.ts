@@ -133,6 +133,6 @@ describe('CommunityHttpClient', () => {
     expect(init?.headers).toBeInstanceOf(Headers)
     const headers = init?.headers as Headers
     expect(headers.get('Authorization')).toBe('Bearer hub-token')
-    expect(headers.get('x-community-user-id')).toBeNull()
+    expect(headers.get('x-community-user-id')).toBe('00000000-0000-0000-0000-000000000001')
   })
 })

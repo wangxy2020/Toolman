@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import {
   extractPdfPlainText,
   isPdfExtractedTextInsufficient,
+  mimeTypeForKind,
   parseFile,
   renderPdfPagesToPng,
   resolveFileKind,
@@ -10,7 +11,8 @@ import {
 } from '@toolman/knowledge'
 import type { ContentBlock } from '@toolman/shared'
 import { getModelTypeSupport, isOcrVisionModelId, DOCX_MCP_SERVER_ID, EXCEL_MCP_SERVER_ID } from '@toolman/shared'
-import { parseModelId } from './provider.service'
+import { providerSupportsOpenAiVision } from '@toolman/model-gateway'
+import { getProviderConfig, parseModelId } from './provider.service'
 import { writeBlobFromBuffer } from './blob.service'
 import {
   resolveAttachmentReadPath,
@@ -57,6 +59,16 @@ const PARSE_TEXT_KINDS = new Set<SupportedFileKind>([
 
 const DOCX_MCP_SOURCE_KINDS = new Set<SupportedFileKind>(['docx', 'doc', 'wps'])
 const EXCEL_MCP_SOURCE_KINDS = new Set<SupportedFileKind>(['xlsx', 'xls'])
+
+/** Align with providerSupportsOpenAiVision (e.g. deepseek-v4-pro) and heuristics (gemma/qwen). */
+export function resolveModelSupportsVision(modelId: string): boolean {
+  const { providerId, model } = parseModelId(modelId)
+  const providerConfig = getProviderConfig(providerId)
+  if (providerConfig && providerSupportsOpenAiVision(providerConfig, model)) {
+    return true
+  }
+  return getModelTypeSupport(model).vision
+}
 
 function isLikelyTextFile(name: string): boolean {
   const lower = name.toLowerCase()
@@ -261,6 +273,22 @@ async function prepareFileBlock(
     return { ...block, content: '', delivery: 'excel_tool' }
   }
 
+  if (kind === 'image') {
+    if (!supportsVision) {
+      throw new Error(`「${fileName}」是图片，请切换到支持视觉的模型（如 gemma4:26b、deepseek-v4-pro）后重试。`)
+    }
+    if (!block.blobHash?.trim()) {
+      throw new Error(`图片「${fileName}」尚未就绪，请重新发送。`)
+    }
+    return {
+      type: 'image',
+      blobHash: block.blobHash,
+      mimeType: block.mimeType ?? mimeTypeForKind('image', fileName),
+      path: block.path,
+      alt: fileName,
+    }
+  }
+
   if (isLikelyTextFile(fileName) && kind !== 'pdf') {
     options.onStatus?.(`正在读取「${fileName}」…`)
     const content = readTextFileSnippet(readPath)
@@ -303,7 +331,7 @@ export async function prepareChatAttachmentsForModel(options: {
 }): Promise<ContentBlock[]> {
   const staged = await stageUserContentBlocks(options.blocks)
   const { model } = parseModelId(options.modelId)
-  const supportsVision = getModelTypeSupport(model).vision
+  const supportsVision = resolveModelSupportsVision(options.modelId)
   const ocrChatModel = isOcrVisionModelId(model)
   const docxMcpEnabled = options.mcpServerIds?.includes(DOCX_MCP_SERVER_ID) ?? false
   const excelMcpEnabled = options.mcpServerIds?.includes(EXCEL_MCP_SERVER_ID) ?? false

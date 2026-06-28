@@ -32,6 +32,26 @@ describe('shouldUseOllamaNativeChat', () => {
       ),
     ).toBe(false)
   })
+
+  it('falls back to openai-compatible path when messages contain images', () => {
+    expect(
+      shouldUseOllamaNativeChat(
+        { type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' },
+        {
+          model: 'gemma4:26b',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'describe this' },
+                { type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } },
+              ],
+            },
+          ],
+        },
+      ),
+    ).toBe(false)
+  })
 })
 
 describe('formatMessagesForOllamaNative', () => {

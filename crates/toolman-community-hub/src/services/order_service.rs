@@ -231,11 +231,9 @@ mod tests {
     }
 
     async fn admin_user(pool: &SqlitePool) -> CommunityUser {
-        UserRepository::new(pool.clone())
-            .find_by_id(DEFAULT_ADMIN_USER_ID)
+        crate::db::seed::admin_user_for_tests(pool)
             .await
-            .expect("find admin")
-            .expect("admin")
+            .expect("test admin user")
     }
 
     async fn contractor_user(pool: &SqlitePool) -> CommunityUser {

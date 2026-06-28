@@ -24,8 +24,8 @@ pub fn resolve_default_identity_id() -> String {
 pub async fn seed_default_admin_user(pool: &SqlitePool) -> Result<(), SeedError> {
     let identity_id = resolve_default_identity_id();
 
-    // Founder seed uses a fixed user id. Only run for the default founder identity;
-    // dual-instance dev (user B) must not pass a different identity here.
+    // Bootstrap a community_users row for the default identity only. Role stays `user`
+    // until Authing-synced JWT community_role promotes admin/founder.
     if identity_id != DEFAULT_IDENTITY_ID {
         return Ok(());
     }
@@ -46,30 +46,39 @@ pub async fn seed_default_admin_user(pool: &SqlitePool) -> Result<(), SeedError>
           stats_json,
           created_at,
           updated_at
-        ) VALUES (?1, ?2, ?3, ?4, 1, 1, 1, 0, '{}', ?5, ?5)
+        ) VALUES (?1, ?2, ?3, 'user', 1, 1, 1, 0, '{}', ?4, ?4)
         ON CONFLICT(identity_id) DO NOTHING
         "#,
     )
     .bind(DEFAULT_ADMIN_USER_ID)
     .bind(&identity_id)
     .bind("本地用户")
-    .bind("founder")
     .bind(now)
     .execute(pool)
     .await?;
 
-    sqlx::query(
-        r#"
-        UPDATE community_users
-        SET role = 'founder'
-        WHERE id = ?1
-        "#,
-    )
-    .bind(DEFAULT_ADMIN_USER_ID)
-    .execute(pool)
-    .await?;
-
     Ok(())
+}
+
+/// Promote the seeded default identity to founder for unit/integration tests.
+/// Production admin comes from Authing JWT `community_role`, not this helper.
+pub async fn admin_user_for_tests(
+    pool: &SqlitePool,
+) -> Result<crate::domain::CommunityUser, crate::repositories::UserRepositoryError> {
+    use crate::domain::UserRole;
+    use crate::repositories::UserRepository;
+
+    let repo = UserRepository::new(pool.clone());
+    let user = repo
+        .find_by_id(DEFAULT_ADMIN_USER_ID)
+        .await?
+        .ok_or_else(|| {
+            crate::repositories::UserRepositoryError::NotFound(DEFAULT_ADMIN_USER_ID.to_string())
+        })?;
+    if matches!(user.role, UserRole::Admin | UserRole::Founder) {
+        return Ok(user);
+    }
+    repo.set_role(&user.id, UserRole::Founder).await
 }
 
 pub async fn seed_default_rss_sources(pool: &SqlitePool) -> Result<(), SeedError> {

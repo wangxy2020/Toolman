@@ -4,15 +4,16 @@ import {
   type ResolvedAuthingRoleProfile,
 } from '@toolman/shared'
 
-import { AuthBindingRepository, identities } from '@toolman/db'
+import { AuthBindingRepository, AuthSessionRepository, identities } from '@toolman/db'
 import { eq } from 'drizzle-orm'
 
 import { getDatabase } from '../../bootstrap/database.js'
 import { invalidateHubTokenCache } from '../community/community-hub-auth.service'
 import { getAuthSession } from '../auth-session.service'
+import { decryptSecret } from '../secret-store.js'
 import { getLocalIdentityId } from '../local-identity.js'
 import { getAuthingManagementClient, canFetchAuthingUserRoles } from './authing-management-client.service.js'
-import { isAuthingDevMode } from './authing-auth.config.js'
+import { fetchAuthingUserRolesViaAccessToken } from './authing-session-roles.service.js'
 
 const DEFAULT_COMMUNITY_ENTITLEMENTS = ['community.write']
 
@@ -196,37 +197,73 @@ export function extractAuthingRoleCodes(list: unknown): string[] {
   return roles
 }
 
-export async function fetchAuthingUserRoles(authingUserId: string): Promise<string[]> {
+export async function fetchAuthingUserRoles(
+  authingUserId: string,
+  options?: { accessToken?: string | null },
+): Promise<string[]> {
   const trimmed = authingUserId.trim()
   if (!trimmed || !canFetchAuthingUserRoles()) {
     return []
   }
 
   const client = getAuthingManagementClient()
-  if (!client) {
+  if (client) {
+    try {
+      const roles = await client.users.listRoles(trimmed)
+      const extracted = extractAuthingRoleCodes(roles)
+      if (extracted.length > 0) {
+        return extracted
+      }
+    } catch (error) {
+      console.warn(
+        '[authing-roles] Management API listRoles failed, falling back to session token:',
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
+
+  const accessToken = options?.accessToken?.trim()
+  if (!accessToken) {
     return []
   }
 
   try {
-    const roles = await client.users.listRoles(trimmed)
+    const roles = await fetchAuthingUserRolesViaAccessToken(accessToken, trimmed)
     return extractAuthingRoleCodes(roles)
-  } catch {
+  } catch (error) {
+    console.warn(
+      '[authing-roles] Session token listRoles failed:',
+      error instanceof Error ? error.message : error,
+    )
     return []
   }
+}
+
+function resolveAuthingAccessTokenForIdentity(identityId: string): string | null {
+  const sessionRepo = new AuthSessionRepository(getDatabase())
+  const session = sessionRepo.getCurrent()
+  if (!session?.isLoggedIn || session.identityId !== identityId) {
+    return null
+  }
+  return decryptSecret(session.accessTokenRef ?? session.idTokenRef)
 }
 
 export async function syncAuthingUserProfileForIdentity(options?: {
   identityId?: string
   authingUserId?: string
+  accessToken?: string | null
 }): Promise<ResolvedAuthingRoleProfile | null> {
   const identityId = options?.identityId ?? getLocalIdentityId()
   const authingUserId = options?.authingUserId?.trim()
 
-  if (!authingUserId || isAuthingDevMode()) {
+  if (!authingUserId || !canFetchAuthingUserRoles()) {
     return null
   }
 
-  const authingRoles = await fetchAuthingUserRoles(authingUserId)
+  const authingRoles = await fetchAuthingUserRoles(authingUserId, {
+    accessToken:
+      options?.accessToken ?? resolveAuthingAccessTokenForIdentity(identityId),
+  })
   const profile = resolveAuthingRoleProfile(authingRoles)
   const db = getDatabase()
   const now = new Date()
@@ -280,8 +317,10 @@ export async function syncAuthingUserProfileAfterLogin(): Promise<void> {
     return
   }
 
+  const currentSession = new AuthSessionRepository(getDatabase()).getCurrent()
   await syncAuthingUserProfileForIdentity({
     identityId: session.identityId,
     authingUserId: binding.subjectId,
+    accessToken: decryptSecret(currentSession?.accessTokenRef ?? currentSession?.idTokenRef),
   })
 }

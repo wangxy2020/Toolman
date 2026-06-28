@@ -24,13 +24,12 @@ import {
   type VectorSearchHit,
 } from '@toolman/knowledge'
 import { join } from 'node:path'
+import type { KnowledgeBaseRow } from '@toolman/db'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { getWorkspaceKnowledgeDir } from './knowledge.service'
 import { resolveEmbedConfig, resolveKbScoreThreshold, resolveRerankConfig } from './knowledge-embed.service'
-import { prepareIngestQueue, reconcileStuckLocalFilesDocuments, reindexDocument, reindexKnowledgeBase, startIngestFilePathsInBackground } from './knowledge-ingest.service'
+import { prepareIngestQueue, purgeIndexedDocument, reconcileStuckLocalFilesDocuments, reindexDocument, reindexKnowledgeBase, startIngestFilePathsInBackground } from './knowledge-ingest.service'
 import { searchChunksFts } from './knowledge-fts.service'
-import { removeDocumentVectors } from '@toolman/knowledge'
-import { removeDocumentFts } from './knowledge-fts.service'
 import { deleteKnowledgeFolderFile, isPathInsideFolder } from './knowledge-folder-files.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
 import { assertKnowledgeBaseAcceptsLocalFiles } from './knowledge-kb-kind-guard'
@@ -51,7 +50,7 @@ function inferSourceKind(absolutePath: string | null | undefined): KnowledgeDocu
 }
 
 function deleteManagedKnowledgeFileFromDisk(
-  kb: NonNullable<ReturnType<typeof getKnowledgeBaseRepository>['findRowById']>,
+  kb: KnowledgeBaseRow,
   absolutePath: string | null | undefined,
 ): void {
   if (!absolutePath || inferSourceKind(absolutePath) === 'url') return
@@ -189,7 +188,6 @@ export async function deleteKnowledgeDocument(input: unknown): Promise<boolean> 
   const kb = getKnowledgeBaseRepository().findRowById(data.kbId, data.workspaceId)
   if (!kb) return false
 
-  const embed = resolveEmbedConfig(data.workspaceId, data.kbId)
   const repo = getDocumentRepository()
   const doc = repo.findById(data.documentId, data.kbId)
   if (!doc) return false
@@ -201,16 +199,11 @@ export async function deleteKnowledgeDocument(input: unknown): Promise<boolean> 
     throw new Error(message)
   }
 
-  await removeDocumentVectors(
-    join(getWorkspaceKnowledgeDir(data.workspaceId), 'vectors'),
-    data.kbId,
-    data.documentId,
-    embed.vectorBackend,
-  )
-  removeDocumentFts(data.documentId)
-  repo.clearRegistryForDocumentIds([data.documentId])
-  repo.softDelete(data.documentId, data.kbId)
-  repo.deleteIngestJobByDocumentId(data.documentId)
+  await purgeIndexedDocument({
+    workspaceId: data.workspaceId,
+    kbId: data.kbId,
+    documentId: data.documentId,
+  })
 
   getKnowledgeBaseRepository().update({
     id: data.kbId,

@@ -34,6 +34,7 @@ import {
 import {
   findActiveDocumentById,
   findActiveDocumentByPath,
+  shouldSkipReadyDocument,
 } from './knowledge-document-lifecycle.util'
 
 const MAX_CONCURRENT_INGEST_JOBS = 2
@@ -337,7 +338,7 @@ async function registerStorageOnlyFileAtPath(
     findActiveDocumentByPath(repo, kbId, filePath) ??
     (documentId ? findActiveDocumentById(repo, kbId, documentId) : undefined)
 
-  if (existing?.contentHash === contentHash && existing.status === 'ready') {
+  if (existing?.contentHash === contentHash && shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)) {
     return { outcome: 'skipped', path: filePath }
   }
 
@@ -455,7 +456,10 @@ export async function ingestFileAtPath(
   }
 
   const existingReady = repo.findByPath(kbId, filePath)
-  if (existingReady?.contentHash === contentHash && existingReady.status === 'ready') {
+  if (
+    existingReady &&
+    shouldSkipReadyDocument(repo, kbId, existingReady.id, contentHash, existingReady)
+  ) {
     return { outcome: 'skipped', path: filePath }
   }
 
@@ -676,7 +680,7 @@ export async function ingestUrlDocument(options: {
 
     const existing = findActiveDocumentByPath(repo, kbId, canonicalUrl)
 
-    if (existing?.contentHash === contentHash && existing.status === 'ready') {
+    if (existing && shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)) {
       return { outcome: 'skipped', documentId: existing.id }
     }
 
@@ -836,7 +840,7 @@ export function prepareIngestQueue(options: {
       const contentHash = hashFileBytes(filePath)
       const existing = findActiveDocumentByPath(repo, options.kbId, filePath)
 
-      if (existing?.contentHash === contentHash && existing.status === 'ready') {
+      if (existing && shouldSkipReadyDocument(repo, options.kbId, existing.id, contentHash, existing)) {
         skipped += 1
         continue
       }
@@ -1070,6 +1074,27 @@ export function refreshKbStats(
   })
 }
 
+export async function purgeIndexedDocument(options: {
+  workspaceId: string
+  kbId: string
+  documentId: string
+}): Promise<void> {
+  const repo = getDocumentRepository()
+  const embed = resolveEmbedConfig(options.workspaceId, options.kbId)
+
+  await removeDocumentVectors(
+    join(getWorkspaceKnowledgeDir(options.workspaceId), 'vectors'),
+    options.kbId,
+    options.documentId,
+    embed.vectorBackend,
+  )
+  removeDocumentFts(options.documentId)
+  repo.deleteChunksByDocument(options.documentId, options.kbId)
+  repo.clearRegistryForDocumentIds([options.documentId])
+  repo.deleteIngestJobByDocumentId(options.documentId)
+  repo.softDelete(options.documentId, options.kbId)
+}
+
 export async function handleRemovedFile(options: {
   workspaceId: string
   kbId: string
@@ -1079,15 +1104,11 @@ export async function handleRemovedFile(options: {
   const doc = repo.findByPath(options.kbId, options.filePath)
   if (!doc) return
 
-  const embed = resolveEmbedConfig(options.workspaceId, options.kbId)
-  await removeDocumentVectors(
-    join(getWorkspaceKnowledgeDir(options.workspaceId), 'vectors'),
-    options.kbId,
-    doc.id,
-    embed.vectorBackend,
-  )
-  removeDocumentFts(doc.id)
-  repo.softDelete(doc.id, options.kbId)
+  await purgeIndexedDocument({
+    workspaceId: options.workspaceId,
+    kbId: options.kbId,
+    documentId: doc.id,
+  })
   refreshKbStats(options.workspaceId, options.kbId)
 }
 

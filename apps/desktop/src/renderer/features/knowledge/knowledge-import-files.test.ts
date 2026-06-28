@@ -5,7 +5,7 @@ import {
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
 } from './knowledge-sidebar-types'
-import { buildStoragePathForKb, resolveDefaultKbStoragePath, resolveKnowledgeImportTarget, resolveKnowledgeRootFromDefaultStorage, resolveKnowledgeSectionRoots } from './knowledge-import-files'
+import { resolveDefaultKbStoragePath, resolveKnowledgeImportTarget, resolveKnowledgeRootFromDefaultStorage, resolveKnowledgeSectionRoots } from './knowledge-import-files'
 
 describe('resolveKnowledgeImportTarget', () => {
   it('uses the default-folder subpath for local default folder imports', () => {

@@ -6,14 +6,15 @@ let managementClient: ManagementClient | null = null
 
 export function getAuthingManagementClient(): ManagementClient | null {
   const config = getAuthingConfig()
-  if (!config?.appSecret) {
+  const secret = config?.userPoolSecret?.trim()
+  if (!config || !secret || secret === config.userPoolId) {
     return null
   }
 
   if (!managementClient) {
     managementClient = new ManagementClient({
       userPoolId: config.userPoolId,
-      secret: config.appSecret,
+      secret,
       host: config.appHost,
     })
   }
@@ -26,5 +27,5 @@ export function resetAuthingManagementClientForTests(): void {
 }
 
 export function canFetchAuthingUserRoles(): boolean {
-  return isAuthingConfigured() && Boolean(getAuthingManagementClient())
+  return isAuthingConfigured()
 }

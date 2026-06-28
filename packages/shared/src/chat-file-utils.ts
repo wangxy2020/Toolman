@@ -19,6 +19,7 @@ type UserBlock = {
   blobHash?: string
   delivery?: string
   mimeType?: string
+  alt?: string
 }
 
 export function isDocxFileBlock(block: UserBlock): boolean {
@@ -208,6 +209,10 @@ export function buildStoredUserContent(blocks: UserBlock[]): string {
   for (const block of blocks) {
     if (block.type === 'file' && block.name) {
       lines.push(`附件：${block.name}`)
+    }
+    if (block.type === 'image') {
+      const label = block.alt?.trim() || block.path?.split(/[/\\]/).pop() || '图片'
+      lines.push(`图片：${label}`)
     }
     if (block.type === 'text' && block.text?.trim()) {
       lines.push(block.text.trim())

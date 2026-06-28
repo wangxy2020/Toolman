@@ -581,11 +581,15 @@ export class DocumentRepository {
     )
   }
 
-  replaceChunks(documentId: string, kbId: string, rows: CreateChunkInput[]): void {
+  deleteChunksByDocument(documentId: string, kbId: string): void {
     this.db
       .delete(chunks)
       .where(and(eq(chunks.documentId, documentId), eq(chunks.kbId, kbId)))
       .run()
+  }
+
+  replaceChunks(documentId: string, kbId: string, rows: CreateChunkInput[]): void {
+    this.deleteChunksByDocument(documentId, kbId)
 
     const now = new Date()
     for (const row of rows) {

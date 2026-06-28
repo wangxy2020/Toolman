@@ -113,7 +113,7 @@ mod tests {
         .expect("admin row");
 
         assert_eq!(admin.0, DEFAULT_ADMIN_USER_ID);
-        assert_eq!(admin.1, "founder");
+        assert_eq!(admin.1, "user");
 
         pool.close().await;
         let _ = std::fs::remove_file(db_path);

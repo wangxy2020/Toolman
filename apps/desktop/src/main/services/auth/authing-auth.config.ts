@@ -4,7 +4,10 @@ export interface AuthingConfig {
   appId: string
   /** User pool ID for Management API; falls back to appId when unset. */
   userPoolId: string
+  /** Application secret (AuthenticationClient). */
   appSecret: string
+  /** User pool secret for Management API; falls back to appSecret when unset. */
+  userPoolSecret: string
   appHost: string
   wechatProvider: string
   douyinProvider: string
@@ -43,6 +46,12 @@ export function getAuthingConfig(): AuthingConfig | null {
   const appId = readEnv(['TOOLMAN_AUTHING_APP_ID', 'AUTHING_APP_ID'])
   const userPoolId = readEnv(['TOOLMAN_AUTHING_USER_POOL_ID', 'AUTHING_USER_POOL_ID'])
   const appSecret = readEnv(['TOOLMAN_AUTHING_APP_SECRET', 'AUTHING_APP_SECRET'])
+  const userPoolSecret = readEnv([
+    'TOOLMAN_AUTHING_USER_POOL_SECRET',
+    'AUTHING_USER_POOL_SECRET',
+    'TOOLMAN_AUTHING_APP_SECRET',
+    'AUTHING_APP_SECRET',
+  ])
   const appHost = readEnv(['TOOLMAN_AUTHING_APP_HOST', 'AUTHING_APP_HOST'])
 
   if (!appId || !appHost) {
@@ -51,11 +60,13 @@ export function getAuthingConfig(): AuthingConfig | null {
 
   const portRaw = readEnv(['TOOLMAN_AUTHING_OAUTH_CALLBACK_PORT'])
   const oauthCallbackPort = portRaw ? Number.parseInt(portRaw, 10) : 42873
+  const resolvedUserPoolId = userPoolId ?? appId
 
   return {
     appId,
-    userPoolId: userPoolId ?? appId,
+    userPoolId: resolvedUserPoolId,
     appSecret: appSecret ?? '',
+    userPoolSecret: userPoolSecret ?? '',
     appHost: appHost.replace(/\/$/, ''),
     wechatProvider: readEnv(['TOOLMAN_AUTHING_WECHAT_PROVIDER']) ?? 'wechat:pc',
     douyinProvider: readEnv(['TOOLMAN_AUTHING_DOUYIN_PROVIDER']) ?? 'douyin',

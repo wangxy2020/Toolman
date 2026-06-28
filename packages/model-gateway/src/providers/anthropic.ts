@@ -153,8 +153,52 @@ export async function* streamAnthropic(
 
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
+  | {
+      type: 'image'
+      source: { type: 'base64'; media_type: string; data: string }
+    }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string }
+
+function parseDataImageUrl(url: string): { mediaType: string; data: string } | null {
+  const match = url.trim().match(/^data:([^;]+);base64,(.+)$/i)
+  if (!match?.[1] || !match[2]) return null
+  return { mediaType: match[1], data: match[2] }
+}
+
+function buildAnthropicUserContent(message: ChatMessage): string | AnthropicContentBlock[] {
+  if (message.role !== 'user') return ''
+  if (typeof message.content === 'string') {
+    return message.content
+  }
+
+  const blocks: AnthropicContentBlock[] = []
+  for (const part of message.content) {
+    if (part.type === 'text' && part.text?.trim()) {
+      blocks.push({ type: 'text', text: part.text })
+      continue
+    }
+    if (part.type === 'image_url' && part.image_url?.url) {
+      const parsed = parseDataImageUrl(part.image_url.url)
+      if (parsed) {
+        blocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: parsed.mediaType,
+            data: parsed.data,
+          },
+        })
+      }
+    }
+  }
+
+  if (blocks.length === 0) return ''
+  if (blocks.length === 1 && blocks[0]?.type === 'text') {
+    return blocks[0].text
+  }
+  return blocks
+}
 
 function toAnthropicTools(tools: ToolDefinition[]) {
   return tools.map((tool) => ({
@@ -175,7 +219,7 @@ function parseToolArguments(raw: string): Record<string, unknown> {
   }
 }
 
-function formatAnthropicMessages(messages: ChatMessage[]): Array<{
+export function formatAnthropicMessages(messages: ChatMessage[]): Array<{
   role: 'user' | 'assistant'
   content: string | AnthropicContentBlock[]
 }> {
@@ -225,14 +269,7 @@ function formatAnthropicMessages(messages: ChatMessage[]): Array<{
     }
 
     if (message.role === 'user') {
-      const text =
-        typeof message.content === 'string'
-          ? message.content
-          : message.content
-              .filter((part) => part.type === 'text' && part.text)
-              .map((part) => part.text)
-              .join('\n')
-      merged.push({ role: 'user', content: text })
+      merged.push({ role: 'user', content: buildAnthropicUserContent(message) })
     }
   }
 

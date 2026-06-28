@@ -18,6 +18,8 @@ import { syncOllamaProviders, migratePlaintextApiKeys } from '../services/provid
 import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
 import { initAuthSessionStore } from '../services/auth-session.service'
 import { syncAuthingUserProfileAfterLogin } from '../services/auth/authing-user-profile.service'
+import { exchangeAuthHubToken } from '../services/auth/auth-hub-token.service'
+import { getAuthSession } from '../services/auth-session.service'
 import { cleanupMisplacedP2pMirrorKnowledgeBases } from '../services/p2p/p2p-knowledge-cleanup.service'
 import { migrateAllLegacyGroupSavedKnowledgeBases } from '../services/p2p/p2p-group-saved-knowledge-migration.service'
 import { migrateAllDefaultFolderKnowledgeBases } from '../services/knowledge-default-folder-kb.service'
@@ -48,7 +50,13 @@ export function bootstrapDatabase(): void {
   ensureDevIdentityRow(db, localIdentityId, localDisplayName)
   ensureWorkspaceDefaults(db)
   initAuthSessionStore()
-  void syncAuthingUserProfileAfterLogin().catch(() => undefined)
+  void (async () => {
+    await syncAuthingUserProfileAfterLogin().catch(() => undefined)
+    const session = getAuthSession()
+    if (session.isLoggedIn) {
+      await exchangeAuthHubToken().catch(() => undefined)
+    }
+  })()
   migratePlaintextApiKeys()
   recoverStaleStreamingMessages()
   ensureFtsIndexReady()

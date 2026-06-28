@@ -115,7 +115,18 @@ function assertAttachmentContentResolved(
 }
 
 function buildUserChatMessage(userContentBlocks: ContentBlock[]): ChatMessage | null {
-  const images = userContentBlocks.filter((block) => block.type === 'image')
+  const images = userContentBlocks.flatMap((block) => {
+    if (block.type === 'image' && block.blobHash?.trim()) {
+      return [{ blobHash: block.blobHash, alt: block.alt }]
+    }
+    if (block.type === 'file' && block.blobHash?.trim()) {
+      const name = block.name || block.path || ''
+      if (/\.(png|jpe?g|gif|webp|bmp)$/i.test(name) || block.mimeType?.startsWith('image/')) {
+        return [{ blobHash: block.blobHash, alt: name }]
+      }
+    }
+    return []
+  })
   const visionPageImages = userContentBlocks.flatMap((block) => {
     if (block.type !== 'file' || !block.visionPages?.length) return []
     return block.visionPages.map((page) => ({
@@ -146,7 +157,7 @@ function buildUserChatMessage(userContentBlocks: ContentBlock[]): ChatMessage | 
   }
 
   for (const image of images) {
-    if (image.type !== 'image' || !image.blobHash?.trim()) continue
+    if (!image.blobHash?.trim()) continue
     parts.push({
       type: 'image_url',
       image_url: { url: getBlobDataUrl(image.blobHash) },
@@ -1196,7 +1207,10 @@ export async function runGeneration(opts: {
       }
     }
 
-    if (isOcrVisionModelId(model) && buffers.promoteThinkingToText()) {
+    if (
+      (isOcrVisionModelId(model) || isGemmaThinkingOllamaModelId(model)) &&
+      buffers.promoteThinkingToText()
+    ) {
       persistBlocks(true)
       emit({
         type: 'message.delta',

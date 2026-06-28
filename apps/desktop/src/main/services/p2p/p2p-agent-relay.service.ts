@@ -303,17 +303,28 @@ async function ensureRelayContentBlobs(
   p2pWorkspaceId: string,
   contentBlocks: ContentBlock[],
 ): Promise<void> {
+  const hashes = new Set<string>()
+
   for (const block of contentBlocks) {
-    if (block.type !== 'file' && block.type !== 'image') continue
+    if (block.type === 'file' || block.type === 'image') {
+      const hash = block.blobHash?.trim()
+      if (hash) hashes.add(hash)
+    }
+    if (block.type === 'file' && block.visionPages?.length) {
+      for (const page of block.visionPages) {
+        const hash = page.blobHash?.trim()
+        if (hash) hashes.add(hash)
+      }
+    }
+  }
 
-    const hash = block.blobHash?.trim()
-    if (!hash || blobExists(hash)) continue
+  for (const hash of hashes) {
+    if (blobExists(hash)) continue
 
-    const label = block.type === 'file' ? block.name || '附件' : '图片'
     logStructured('p2p', 'info', `agent relay fetching blob: hash=${hash.slice(0, 12)}… peer=${peerDeviceId}`)
-    const ok = await fetchBlobFromPeers(p2pWorkspaceId, hash, block.mimeType, peerDeviceId)
+    const ok = await fetchBlobFromPeers(p2pWorkspaceId, hash, undefined, peerDeviceId)
     if (!ok) {
-      throw new Error(`附件「${label}」未能从群组成员同步，请让对方重新发送`)
+      throw new Error(`附件未能从群组成员同步（${hash.slice(0, 8)}…），请让对方重新发送`)
     }
   }
 }
