@@ -946,7 +946,9 @@ export function KnowledgeBaseSettingsModal({
                   </select>
                 </div>
 
-                <KnowledgeSearchDebugPanel workspaceId={workspaceId} kbId={kb.id} />
+                {import.meta.env.DEV ? (
+                  <KnowledgeSearchDebugPanel workspaceId={workspaceId} kbId={kb.id} />
+                ) : null}
                 <KnowledgeSourcesPanel workspaceId={workspaceId} onChanged={onSaved} />
                 <KnowledgeIngestJobPanel workspaceId={workspaceId} kbId={kb.id} />
               </div>

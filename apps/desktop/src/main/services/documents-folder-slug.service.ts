@@ -202,7 +202,8 @@ export function getDocumentsFolderSlugRecord(): DocumentsFolderSlugRecord {
     return expected
   }
 
-  // Slug changes are persisted only via syncDocumentsFolderSlugWithAccount (includes folder migration).
+  // Slug changes are persisted only via syncDocumentsFolderSlugWithAccount;
+  // folder migration runs in applyDocumentsFolderSlugAccountSync (knowledge-folder.service).
   if (persisted.slug !== expected.slug || persisted.source !== expected.source) {
     return expected
   }
@@ -210,22 +211,26 @@ export function getDocumentsFolderSlugRecord(): DocumentsFolderSlugRecord {
   return persisted
 }
 
-export function syncDocumentsFolderSlugWithAccount(): boolean {
+export interface DocumentsFolderSlugSyncResult {
+  changed: boolean
+  previousSlug?: string
+  nextSlug?: string
+}
+
+export function syncDocumentsFolderSlugWithAccount(): DocumentsFolderSlugSyncResult {
   resetDocumentsFolderSlugCache()
   const persisted = readPersistedDocumentsFolderSlugRecord()
   const expected = computeExpectedDocumentsFolderSlug()
   if (persisted?.slug === expected.slug && persisted.source === expected.source) {
-    return false
+    return { changed: false }
   }
 
-  if (persisted?.slug && persisted.slug !== expected.slug) {
-    const { migrateToolmanUserFolderBetweenSlugs } =
-      require('./knowledge-folder.service') as typeof import('./knowledge-folder.service')
-    migrateToolmanUserFolderBetweenSlugs(persisted.slug, expected.slug)
-  }
-
+  const previousSlug = persisted?.slug
   writePersistedDocumentsFolderSlugRecord(expected)
-  return true
+  return {
+    changed: true,
+    ...(previousSlug ? { previousSlug, nextSlug: expected.slug } : { nextSlug: expected.slug }),
+  }
 }
 
 /** Stable ToolmanData subfolder name; guest slug or auth email prefix. */

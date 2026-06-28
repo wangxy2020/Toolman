@@ -37,6 +37,7 @@ import {
   broadcastP2pSyncEventApplied,
   broadcastP2pSyncProgress,
 } from './p2p-sync-broadcast'
+import { shouldSetWorkspaceIdleAfterPeerSync } from './p2p-sync-error-state'
 import {
   handleP2pFileChannelMessage,
   getPendingBlobTransferCount,
@@ -1007,6 +1008,8 @@ async function startP2pSyncCore(workspaceId: string): Promise<{
     total: peerDeviceIds.length,
   })
 
+  let syncHadError = false
+
   for (const [index, peerDeviceId] of peerDeviceIds.entries()) {
     try {
       if (!isPeerTrusted(workspaceId, peerDeviceId)) continue
@@ -1019,13 +1022,16 @@ async function startP2pSyncCore(workspaceId: string): Promise<{
         total: peerDeviceIds.length,
       })
     } catch (error) {
+      syncHadError = true
       const errMessage = toErrorMessage(error, 'Sync failed')
       setWorkspaceState(workspaceId, { status: 'error', error: errMessage })
       broadcastP2pSyncError({ workspaceId, code: 'P2P_SYNC_FAILED', message: errMessage })
     }
   }
 
-  setWorkspaceState(workspaceId, { status: 'idle', lastSyncAt: Date.now() })
+  if (shouldSetWorkspaceIdleAfterPeerSync(syncHadError)) {
+    setWorkspaceState(workspaceId, { status: 'idle', lastSyncAt: Date.now() })
+  }
   syncingWorkspaces.delete(workspaceId)
 
   return {

@@ -25,4 +25,15 @@ test.describe('GA critical path', () => {
       window.getByRole('heading', { name: /登录 Toolman 账户|注册 Toolman 账户/ }),
     ).toBeVisible()
   })
+
+  test('navigates to notes module', async ({ window }) => {
+    await navigateTo(window, '笔记')
+    await expect(window.locator('.tm-notes-page, .tm-main')).toBeVisible()
+  })
+
+  test('shows settings about panel with beta notice', async ({ window }) => {
+    await navigateTo(window, '设置')
+    await window.getByRole('button', { name: /关于|About/i }).click()
+    await expect(window.locator('.tm-settings-panel')).toBeVisible()
+  })
 })

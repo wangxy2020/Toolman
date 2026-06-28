@@ -113,14 +113,14 @@ function inferMcpToolCategory(toolName: string): ToolCategory {
   ) {
     return 'write'
   }
-  return 'read'
+  return 'exec'
 }
 
 function resolveToolCategory(toolName: string): ToolCategory {
   if (TOOL_CATEGORIES[toolName]) return TOOL_CATEGORIES[toolName]
   const decoded = decodeMcpToolName(toolName)
   if (decoded) return inferMcpToolCategory(decoded.toolName)
-  return 'read'
+  return 'exec'
 }
 
 export function isDeleteTool(toolName: string): boolean {
@@ -152,6 +152,13 @@ export function evaluateToolPermission(options: {
       return {
         allowed: false,
         reason: `删除工具 ${toolName} 需要人工授权`,
+        requiresApproval: true,
+      }
+    }
+    if (category === 'exec') {
+      return {
+        allowed: false,
+        reason: `执行工具 ${toolName} 需要人工授权`,
         requiresApproval: true,
       }
     }
@@ -200,17 +207,6 @@ export function evaluateToolPermission(options: {
   }
 
   return { allowed: false, reason: `工具 ${toolName} 未被允许`, requiresApproval: false }
-}
-
-/** @deprecated 使用 evaluateToolPermission */
-export function canExecuteTool(options: {
-  toolName: string
-  permissionMode: PermissionMode
-  toolStates: Record<string, boolean>
-  sqlStatement?: string
-}): { allowed: boolean; reason?: string } {
-  const result = evaluateToolPermission(options)
-  return { allowed: result.allowed, reason: result.reason }
 }
 
 function isReadOnlySql(sql: string): boolean {

@@ -10,7 +10,7 @@ export function resolveEffectivePermissionMode(
   permissionMode: PermissionMode,
   autonomousMode: boolean,
 ): PermissionMode {
-  if (autonomousMode) return 'full-auto'
+  if (autonomousMode) return 'auto-edit'
   return permissionMode
 }
 

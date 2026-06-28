@@ -58,6 +58,11 @@ export function MembershipUpgradeModal({ open, onClose }: Props) {
         </header>
 
         <div className="tm-membership-modal-body">
+          {mockMode ? (
+            <div className="tm-diagnostics-banner tm-diagnostics-banner--warn" role="status">
+              <p>{t('user.membership.mockPaymentBanner')}</p>
+            </div>
+          ) : null}
           {loading && !proPlan ? <p className="tm-settings-row-hint">{t('user.membership.loadingPlans')}</p> : null}
           {error ? <p className="tm-settings-error">{error}</p> : null}
           {message ? <p className="tm-membership-modal-message">{message}</p> : null}

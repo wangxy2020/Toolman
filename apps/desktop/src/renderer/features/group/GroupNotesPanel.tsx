@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { canEditSharedResource, IpcChannel, type P2pMemberRole, type P2pSharedResource } from '@toolman/shared'
+import { canEditSharedResource, IpcChannel, type P2pMember, type P2pMemberRole, type P2pSharedResource } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupNotePickerModal } from './GroupNotePickerModal'
 import { GroupNoteActionMenu, type GroupNoteAction } from './GroupNoteActionMenu'
-import { GroupFileContextMenu } from './GroupFileList'
+import { GroupFileContextMenu } from './GroupFileContextMenu'
+import { GroupMemberResourceSection } from './GroupMemberResourceSection'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import type { OpenGroupNoteRequest, SaveGroupNoteAsCopyRequest } from './group-note-open'
 import {
@@ -15,6 +16,7 @@ import {
   resolveSharedNoteNotebookName,
 } from './group-note-utils'
 import { useP2pNotes } from './useP2pNotes'
+import { groupResourcesByMember } from './group-shared-resources-by-member'
 import { useRegisterGroupPanelError } from './group-page-status'
 import type { NoteItem, NotebookItem } from '../notes/notes-storage'
 import { useI18n } from '../../i18n/useI18n'
@@ -27,6 +29,7 @@ interface Props {
   syncFolderPath?: string | null
   canManageGroupResources: boolean
   canWriteWorkspace: boolean
+  members: P2pMember[]
   selfMemberId: string | null
   selfMemberRole: P2pMemberRole | null
   onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
@@ -49,6 +52,7 @@ export function GroupNotesPanel({
   syncFolderPath = null,
   canManageGroupResources,
   canWriteWorkspace,
+  members,
   selfMemberId,
   selfMemberRole,
   onOpenGroupNote,
@@ -191,51 +195,72 @@ export function GroupNotesPanel({
     [canDeleteResource, canManageGroupResources, canWriteWorkspace, p2pNotes.sharedResources],
   )
 
-  const notebookSections = useMemo(() => {
-    const groups = new Map<string, GroupNoteListItem[]>()
-
-    for (const resource of p2pNotes.sharedResources) {
-      const noteId = resource.localResourceId ?? resource.id
-      const note = notesById.get(noteId) ?? null
-      const notebookId =
-        resolveSharedNoteNotebookKey(resource, note) || UNKNOWN_NOTEBOOK_ID
-      const bucket = groups.get(notebookId) ?? []
-      bucket.push({ resource, note })
-      groups.set(notebookId, bucket)
-    }
-
+  const memberNotebookSections = useMemo(() => {
+    const memberGroups = groupResourcesByMember(
+      p2pNotes.sharedResources,
+      members,
+      selfMemberId,
+      t('groupPage.panels.unknownMember'),
+    )
     const notebookOrder = new Map(notebooks.map((item, index) => [item.id, index]))
 
-    return [...groups.entries()]
-      .map(([notebookId, items]) => {
-        const sortedItems = [...items].sort((left, right) => {
-          const leftUpdated = left.note?.updatedAt ?? left.resource.updatedAt
-          const rightUpdated = right.note?.updatedAt ?? right.resource.updatedAt
-          return rightUpdated - leftUpdated
+    return memberGroups.map((memberSection) => {
+      const groups = new Map<string, GroupNoteListItem[]>()
+
+      for (const resource of memberSection.resources) {
+        const noteId = resource.localResourceId ?? resource.id
+        const note = notesById.get(noteId) ?? null
+        const notebookId =
+          resolveSharedNoteNotebookKey(resource, note) || UNKNOWN_NOTEBOOK_ID
+        const sectionKey = `${memberSection.memberId}:${notebookId}`
+        const bucket = groups.get(sectionKey) ?? []
+        bucket.push({ resource, note })
+        groups.set(sectionKey, bucket)
+      }
+
+      const notebookSections = [...groups.entries()]
+        .map(([sectionKey, items]) => {
+          const notebookId = sectionKey.slice(memberSection.memberId.length + 1)
+          const sortedItems = [...items].sort((left, right) => {
+            const leftUpdated = left.note?.updatedAt ?? left.resource.updatedAt
+            const rightUpdated = right.note?.updatedAt ?? right.resource.updatedAt
+            return rightUpdated - leftUpdated
+          })
+
+          const name =
+            notebookId === UNKNOWN_NOTEBOOK_ID
+              ? t('groupPage.panels.unknownNotebook')
+              : resolveSharedNoteNotebookName(
+                  items[0]?.resource ?? { notebookId, notebookName: undefined },
+                  notebookId,
+                  notebooksById,
+                )
+
+          return {
+            sectionKey,
+            notebookId,
+            name,
+            items: sortedItems,
+          }
+        })
+        .sort((left, right) => {
+          const leftOrder = notebookOrder.get(left.notebookId) ?? Number.MAX_SAFE_INTEGER
+          const rightOrder = notebookOrder.get(right.notebookId) ?? Number.MAX_SAFE_INTEGER
+          if (leftOrder !== rightOrder) return leftOrder - rightOrder
+          return left.name.localeCompare(right.name, 'zh-CN')
         })
 
-        const name =
-          notebookId === UNKNOWN_NOTEBOOK_ID
-            ? t('groupPage.panels.unknownNotebook')
-            : resolveSharedNoteNotebookName(
-                items[0]?.resource ?? { notebookId, notebookName: undefined },
-                notebookId,
-                notebooksById,
-              )
+      return {
+        ...memberSection,
+        notebookSections,
+      }
+    })
+  }, [members, notebooks, notebooksById, notesById, p2pNotes.sharedResources, selfMemberId, t])
 
-        return {
-          notebookId,
-          name,
-          items: sortedItems,
-        }
-      })
-      .sort((left, right) => {
-        const leftOrder = notebookOrder.get(left.notebookId) ?? Number.MAX_SAFE_INTEGER
-        const rightOrder = notebookOrder.get(right.notebookId) ?? Number.MAX_SAFE_INTEGER
-        if (leftOrder !== rightOrder) return leftOrder - rightOrder
-        return left.name.localeCompare(right.name, 'zh-CN')
-      })
-  }, [notebooks, notebooksById, notesById, p2pNotes.sharedResources, t])
+  const flatNotebookSections = useMemo(
+    () => memberNotebookSections.flatMap((memberSection) => memberSection.notebookSections),
+    [memberNotebookSections],
+  )
 
   const handleAddNotes = useCallback(
     async (selections: Array<{ notebookId: string; noteIds: string[] }>) => {
@@ -362,9 +387,9 @@ export function GroupNotesPanel({
     setPendingDelete(null)
     setRemovingId(resourceIds[0] ?? null)
     setRemovingNotebookId(
-      notebookSections.find((section) =>
+      flatNotebookSections.find((section) =>
         section.items.some((item) => resourceIds.includes(item.resource.id)),
-      )?.notebookId ?? null,
+      )?.sectionKey ?? null,
     )
     p2pNotes.setError(null)
 
@@ -386,7 +411,7 @@ export function GroupNotesPanel({
       return next
     })
     await p2pNotes.load()
-  }, [notebookSections, pendingDelete, p2pNotes])
+  }, [flatNotebookSections, pendingDelete, p2pNotes])
 
   const handleRemoveNote = useCallback(
     (resourceId: string) => {
@@ -395,8 +420,8 @@ export function GroupNotesPanel({
     [requestDelete],
   )
 
-  const handleSectionKeysChange = useCallback((notebookId: string, resourceIds: string[]) => {
-    setSectionKeysMap((current) => ({ ...current, [notebookId]: resourceIds }))
+  const handleSectionKeysChange = useCallback((sectionKey: string, resourceIds: string[]) => {
+    setSectionKeysMap((current) => ({ ...current, [sectionKey]: resourceIds }))
   }, [])
 
   const handleSelectAll = useCallback(() => {
@@ -461,32 +486,47 @@ export function GroupNotesPanel({
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">
-            {notebookSections.map((section) => (
-              <GroupSharedNotebookSection
-                key={section.notebookId}
-                notebookId={section.notebookId}
-                notebookName={section.name}
-                items={section.items}
-                selectedIds={selectedIds}
-                canDeleteNote={canDeleteResource}
-                removingNotebook={removingNotebookId === section.notebookId}
-                removingId={removingId}
-                onToggleSelect={handleToggleSelect}
-                onToggleSelectSection={handleToggleSelectSection}
-                onRemoveNotebook={() => {
-                  requestRemoveNotebook(
-                    section.notebookId,
-                    section.items.map((item) => item.resource.id),
-                  )
-                }}
-                onRemoveNote={handleRemoveNote}
-                onOpenGroupNote={handleOpenGroupNote}
-                onOpenNoteMenu={(resource, note, anchor) =>
-                  setNoteActionMenu({ ...anchor, resource, note })
-                }
-                onContextMenu={handleContextMenu}
-                onSectionKeysChange={handleSectionKeysChange}
-              />
+            {memberNotebookSections.map((memberSection) => (
+              <GroupMemberResourceSection
+                key={memberSection.memberId}
+                displayName={memberSection.displayName}
+                isSelf={memberSection.isSelf}
+                resourceCount={memberSection.notebookSections.reduce(
+                  (sum, section) => sum + section.items.length,
+                  0,
+                )}
+                selfLabel={t('groupPage.panels.memberSelf')}
+              >
+                {memberSection.notebookSections.map((section) => (
+                  <GroupSharedNotebookSection
+                    key={section.sectionKey}
+                    notebookId={section.notebookId}
+                    notebookName={section.name}
+                    items={section.items}
+                    selectedIds={selectedIds}
+                    canDeleteNote={canDeleteResource}
+                    removingNotebook={removingNotebookId === section.sectionKey}
+                    removingId={removingId}
+                    onToggleSelect={handleToggleSelect}
+                    onToggleSelectSection={handleToggleSelectSection}
+                    onRemoveNotebook={() => {
+                      requestRemoveNotebook(
+                        section.notebookId,
+                        section.items.map((item) => item.resource.id),
+                      )
+                    }}
+                    onRemoveNote={handleRemoveNote}
+                    onOpenGroupNote={handleOpenGroupNote}
+                    onOpenNoteMenu={(resource, note, anchor) =>
+                      setNoteActionMenu({ ...anchor, resource, note })
+                    }
+                    onContextMenu={handleContextMenu}
+                    onSectionKeysChange={(_notebookId, resourceIds) =>
+                      handleSectionKeysChange(section.sectionKey, resourceIds)
+                    }
+                  />
+                ))}
+              </GroupMemberResourceSection>
             ))}
           </div>
         )}

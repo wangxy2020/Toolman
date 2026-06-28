@@ -6,6 +6,7 @@ import { ChatPage } from './features/chat/ChatPage'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useP2pTrustPrompt } from './features/group/useP2pTrustPrompt'
 import { GroupTrustDeviceModal } from './features/group/GroupTrustDeviceModal'
+import { FirstRunWelcomeModal } from './features/onboarding/FirstRunWelcomeModal'
 
 function AppShell({
   appSettings,
@@ -32,6 +33,7 @@ function AppShell({
           }}
         />
       ) : null}
+      <FirstRunWelcomeModal />
     </ErrorBoundary>
   )
 }

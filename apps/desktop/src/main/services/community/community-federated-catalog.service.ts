@@ -7,7 +7,6 @@ import {
   type CidPackageManifest,
   type CommunityResourceItem,
   type CommunityResourceListInput,
-  type CommunityResourceType,
   type FederatedResourceCatalogEntry,
 } from '@toolman/shared'
 

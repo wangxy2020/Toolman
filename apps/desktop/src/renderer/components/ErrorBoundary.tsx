@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useI18n } from '../i18n/useI18n'
+import { reportRendererError } from '../lib/report-renderer-error'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -22,6 +23,11 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('[ui] render error boundary caught', error, info.componentStack)
+    reportRendererError({
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack ?? undefined,
+    })
   }
 
   private handleReset = (): void => {

@@ -10,11 +10,32 @@ import { IpcChannel } from '@toolman/shared'
 import App from './App'
 import { AuthSessionProvider } from './features/user/AuthSessionProvider'
 import { MuiProvider } from './theme/MuiProvider'
+import { reportRendererError } from './lib/report-renderer-error'
 import './index.css'
 
 function ProvenanceBootstrap() {
   useEffect(() => {
     void window.api.invoke(IpcChannel.AppProvenanceBeacon, { event: 'app.renderer.ready' })
+
+    const onError = (event: ErrorEvent) => {
+      reportRendererError({
+        message: event.message,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      })
+    }
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason
+      reportRendererError({
+        message: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+      })
+    }
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onUnhandledRejection)
+    return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onUnhandledRejection)
+    }
   }, [])
   return null
 }

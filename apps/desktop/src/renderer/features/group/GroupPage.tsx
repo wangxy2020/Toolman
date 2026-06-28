@@ -223,6 +223,7 @@ export function GroupPage({
             knowledgeBases={knowledgeBases}
             canManageGroupResources={detail.canManageMembers}
             canWriteWorkspace={detail.canWriteWorkspace}
+            members={detail.members}
             selfMemberId={detail.selfMember?.id ?? null}
             onOpenNote={onOpenNote}
             onOpenGroupNote={onOpenGroupNote}
@@ -240,6 +241,7 @@ export function GroupPage({
             sessions={sessions}
             canManageGroupResources={detail.canManageMembers}
             canWriteWorkspace={detail.canWriteWorkspace}
+            members={detail.members}
             selfMemberId={detail.selfMember?.id ?? null}
             onOpenGroupAgentSession={onOpenGroupAgentSession}
             onReloadAssistants={onReloadAssistants}
@@ -255,6 +257,7 @@ export function GroupPage({
             syncFolderPath={syncFolderPath}
             canManageGroupResources={detail.canManageMembers}
             canWriteWorkspace={detail.canWriteWorkspace}
+            members={detail.members}
             selfMemberId={detail.selfMember?.id ?? null}
             selfMemberRole={detail.selfMember?.role ?? null}
             onOpenGroupNote={onOpenGroupNote}
@@ -270,6 +273,7 @@ export function GroupPage({
             sourceWorkspaceId={sourceWorkspaceId}
             canManageGroupResources={detail.canManageMembers}
             canWriteWorkspace={detail.canWriteWorkspace}
+            members={detail.members}
             selfMemberId={detail.selfMember?.id ?? null}
           />
         )

@@ -60,3 +60,15 @@ export function buildSandboxedBashEnv(userEnv: Record<string, string>): Record<s
 
   return env
 }
+
+/** Safe subset of process env for MCP stdio child processes. */
+export function buildSandboxedInheritedEnv(
+  source: Record<string, string | undefined>,
+): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const key of INHERITED_BASH_ENV_KEYS) {
+    const value = source[key]
+    if (value !== undefined) env[key] = value
+  }
+  return env
+}

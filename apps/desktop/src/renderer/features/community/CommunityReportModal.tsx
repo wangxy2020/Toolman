@@ -5,14 +5,8 @@ import {
   type CommunityReportTargetType,
 } from '@toolman/shared'
 
+import { useI18n } from '../../i18n/useI18n'
 import { createCommunityModerationReport } from './community-api.client'
-
-const COMMUNITY_REPORT_REASON_LABELS: Record<CommunityReportReason, string> = {
-  spam: '垃圾信息',
-  illegal: '违法违规',
-  copyright: '侵权内容',
-  other: '其他',
-}
 
 const REPORT_REASONS: CommunityReportReason[] = ['spam', 'illegal', 'copyright', 'other']
 
@@ -23,6 +17,7 @@ interface Props {
 }
 
 export function CommunityReportModal({ targetType, targetId, onClose }: Props) {
+  const { t } = useI18n()
   const [reason, setReason] = useState<CommunityReportReason>('spam')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -50,7 +45,9 @@ export function CommunityReportModal({ targetType, targetId, onClose }: Props) {
       setSuccess(true)
       window.setTimeout(onClose, 900)
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : '举报失败')
+      setError(
+        submitError instanceof Error ? submitError.message : t('communityPage.reportModal.submitFailed'),
+      )
     } finally {
       setSubmitting(false)
     }
@@ -60,18 +57,20 @@ export function CommunityReportModal({ targetType, targetId, onClose }: Props) {
     <div className="tm-modal-overlay" onClick={onClose}>
       <div className="tm-modal tm-modal--narrow tm-modal--form" onClick={(event) => event.stopPropagation()}>
         <div className="tm-modal-header">
-          <h2 className="tm-modal-title">举报内容</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose} aria-label="关闭">
+          <h2 className="tm-modal-title">{t('communityPage.reportModal.title')}</h2>
+          <button type="button" className="tm-modal-close" onClick={onClose} aria-label={t('common.close')}>
             ×
           </button>
         </div>
 
         <div className="tm-modal-body">
           {error ? <div className="tm-error-bar">{error}</div> : null}
-          {success ? <div className="tm-community-report-success">举报已提交，感谢你的反馈。</div> : null}
+          {success ? (
+            <div className="tm-community-report-success">{t('communityPage.reportModal.success')}</div>
+          ) : null}
 
           <label className="tm-form-field">
-            <span className="tm-form-label">举报原因</span>
+            <span className="tm-form-label">{t('communityPage.reportModal.reasonLabel')}</span>
             <select
               className="tm-form-input"
               value={reason}
@@ -80,28 +79,28 @@ export function CommunityReportModal({ targetType, targetId, onClose }: Props) {
             >
               {REPORT_REASONS.map((item) => (
                 <option key={item} value={item}>
-                  {COMMUNITY_REPORT_REASON_LABELS[item]}
+                  {t(`communityPage.admin.reportReasons.${item}`)}
                 </option>
               ))}
             </select>
           </label>
 
           <label className="tm-form-field">
-            <span className="tm-form-label">补充说明（可选）</span>
+            <span className="tm-form-label">{t('communityPage.reportModal.descriptionLabel')}</span>
             <textarea
               className="tm-form-textarea"
               rows={4}
               value={description}
               disabled={submitting || success}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="请简要说明举报理由…"
+              placeholder={t('communityPage.reportModal.descriptionPlaceholder')}
             />
           </label>
         </div>
 
         <div className="tm-modal-footer">
           <button type="button" className="tm-btn" onClick={onClose} disabled={submitting}>
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -109,7 +108,7 @@ export function CommunityReportModal({ targetType, targetId, onClose }: Props) {
             disabled={submitting || success}
             onClick={() => void handleSubmit()}
           >
-            {submitting ? '提交中…' : '提交举报'}
+            {submitting ? t('communityPage.reportModal.submitting') : t('communityPage.reportModal.submit')}
           </button>
         </div>
       </div>

@@ -24,7 +24,7 @@ vi.mock('./p2p-connection.service', () => ({
   disconnectP2pPeer: vi.fn(async () => undefined),
 }))
 
-vi.mock('./p2p-member.service', () => ({
+vi.mock('./p2p-member-reconcile.service', () => ({
   reconcileOwnerWorkspaceMembers: vi.fn(async () => undefined),
 }))
 

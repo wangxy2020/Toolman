@@ -23,6 +23,7 @@ import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityMessageBoard } from './useCommunityMessageBoard'
 import { useCommunityUser } from './useCommunityUser'
+import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useCommunityPanelStatus } from './community-panel-status'
 import { useI18n } from '../../i18n/useI18n'
@@ -38,6 +39,8 @@ export function MessageBoardPanel() {
   const comments = useCommunityCommentExpansion()
   const board = useCommunityMessageBoard()
   const user = useCommunityUser()
+  const { status: hubStatus } = useCommunityHubConnection()
+  const hubWriteBlocked = hubStatus?.offlineReadOnly === true
   const { requireRegistration, modal } = useRegistrationGate()
 
   useCommunityPanelStatus('community-message-board', {
@@ -101,12 +104,14 @@ export function MessageBoardPanel() {
         title={t('communityPage.panels.messages.title')}
         subtitle={t('communityPage.panels.messages.subtitle')}
         publishLabel={t('communityPage.panels.messages.publish')}
+        publishDisabled={hubWriteBlocked}
         loading={board.loading}
         onRefresh={() => {
           invalidateCommunityListCache('board:')
           void board.load({ force: true })
         }}
         onPublish={() => {
+          if (hubWriteBlocked) return
           if (!requireRegistration('community_write')) return
           setShowPublish(true)
         }}

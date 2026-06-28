@@ -220,8 +220,3 @@ export function listEnabledModels(providers: Provider[]) {
       }),
     )
 }
-
-/** @deprecated 使用 getDisplayModelTypes */
-export function inferModelTypes(model: Pick<ProviderModel, 'id' | 'types'>): ModelTypeState {
-  return getDisplayModelTypes(model)
-}

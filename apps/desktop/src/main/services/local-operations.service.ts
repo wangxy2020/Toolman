@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import type { AppGetDiagnosticsOutput } from '@toolman/shared'
+import type { AppGetDiagnosticsOutput, CrashReportKind } from '@toolman/shared'
 import { compareSemver, getToolmanBuildProvenance } from '@toolman/shared'
 
 export interface LocalUpdateManifest {
@@ -73,7 +73,7 @@ export function appendPersistentDiagnosticLine(line: string): void {
 }
 
 export function recordCrashReport(input: {
-  kind: 'uncaughtException' | 'unhandledRejection' | 'renderProcessGone'
+  kind: CrashReportKind
   message: string
   stack?: string
 }): string | null {

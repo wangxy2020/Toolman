@@ -11,6 +11,7 @@ import {
 } from './loro-note-doc'
 
 import { findSharedResourceForProjection, resolveSharedResourceId } from './p2p-shared-resource-id'
+import { resolveLocalSharedByMemberId } from './p2p-shared-by-member.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -45,6 +46,11 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
   )
   const resourceId = existing?.id ?? resolveSharedResourceId(sharedRepo, noteId, event.workspaceId)
   const metadataJson = buildP2pNoteShareMetadata({ notebookId, notebookName, title })
+  const sharedBy = resolveLocalSharedByMemberId(
+    event.workspaceId,
+    event.operatorId,
+    event.sourceDeviceId,
+  )
   if (!existing) {
     sharedRepo.create({
       id: resourceId,
@@ -52,7 +58,7 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
       resourceType: 'Note',
       localResourceId: noteId,
       name: title,
-      sharedBy: event.operatorId,
+      sharedBy,
       permission,
       metadataJson,
       createdAt: new Date(event.timestamp),
@@ -65,6 +71,7 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
       status: 'active',
       permission,
       metadataJson,
+      ...(existing.sharedBy !== sharedBy ? { sharedBy } : {}),
     })
   }
 

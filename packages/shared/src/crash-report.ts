@@ -4,6 +4,7 @@ export const CrashReportKindSchema = z.enum([
   'uncaughtException',
   'unhandledRejection',
   'renderProcessGone',
+  'rendererError',
 ])
 export type CrashReportKind = z.infer<typeof CrashReportKindSchema>
 
@@ -29,6 +30,13 @@ export const CrashReportUploadStatusSchema = z.object({
   lastUploadError: z.string().nullable(),
 })
 export type CrashReportUploadStatus = z.infer<typeof CrashReportUploadStatusSchema>
+
+export const RendererErrorReportInputSchema = z.object({
+  message: z.string().min(1),
+  stack: z.string().optional(),
+  componentStack: z.string().optional(),
+})
+export type RendererErrorReportInput = z.infer<typeof RendererErrorReportInputSchema>
 
 export const CrashReportSetUploadInputSchema = z.object({
   uploadEnabled: z.boolean(),

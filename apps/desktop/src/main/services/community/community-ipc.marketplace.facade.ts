@@ -46,7 +46,6 @@ import { isCommunityFederationEnabled } from './community-federation.config'
 import { publishFederatedCatalogDeleteWireMessage, publishFederatedCatalogWireMessage } from './community-federation-provider.service'
 import { getManifestFromIndexByResource, scanCommunityPackagesForCidIndex } from './community-cid-index.service'
 import { republishCommunityCidAnnouncements } from './community-cid-provider.service'
-import { CommunityHttpError } from './community-http.client'
 import { invalidateCommunityHubCache } from './community-hub-cache.service'
 import {
   asItems,

@@ -16,6 +16,11 @@ import { getSqliteClient } from '@toolman/db'
 
 let chunkFtsRepo: ReturnType<typeof createChunkFtsRepository> | null = null
 
+/** @internal Resets cached FTS repo between integration tests. */
+export function resetChunkFtsRepositoryForTests(): void {
+  chunkFtsRepo = null
+}
+
 export function getSessionRepository(): SessionRepository {
   return createSessionRepository(getDatabase())
 }

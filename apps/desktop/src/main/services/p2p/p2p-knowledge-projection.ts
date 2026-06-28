@@ -22,6 +22,7 @@ import {
   stripGroupPrefixedName,
 } from './p2p-group-resource-naming'
 import { getActiveWorkspaceMember } from './p2p-permission.guard'
+import { resolveLocalSharedByMemberId } from './p2p-shared-by-member.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -196,6 +197,11 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
 
   const resourceId =
     existing?.id ?? resolveSharedResourceId(sharedRepo, kbId, event.workspaceId)
+  const sharedBy = resolveLocalSharedByMemberId(
+    event.workspaceId,
+    event.operatorId,
+    event.sourceDeviceId,
+  )
   if (!existing) {
     sharedRepo.create({
       id: resourceId,
@@ -203,7 +209,7 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
       resourceType: 'Knowledge',
       localResourceId: kbId,
       name,
-      sharedBy: event.operatorId,
+      sharedBy,
       permission: 'read',
       metadataJson,
       createdAt: new Date(event.timestamp),
@@ -212,13 +218,15 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
   } else if (
     existing.name !== name ||
     existing.metadataJson !== metadataJson ||
-    existing.status !== 'active'
+    existing.status !== 'active' ||
+    existing.sharedBy !== sharedBy
   ) {
     sharedRepo.update({
       id: resourceId,
       name,
       metadataJson,
       status: 'active',
+      sharedBy,
     })
   }
 

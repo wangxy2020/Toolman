@@ -149,20 +149,8 @@ function listActiveWorkspacePeerIds(workspaceId: string): string[] {
     .map((member) => member.deviceId)
 }
 
-function isActiveWorkspacePeer(workspaceId: string, peerDeviceId: string): boolean {
-  const device = getP2pDeviceInfo()
-  if (peerDeviceId === device.deviceId) return true
-  const workspace = new P2pWorkspaceRepository(getDatabase()).findById(workspaceId)
-  if (workspace?.ownerDeviceId === peerDeviceId) return true
-  const member = new P2pMemberRepository(getDatabase()).findByWorkspaceAndDevice(
-    workspaceId,
-    peerDeviceId,
-  )
-  return member?.status === 'active'
-}
-
 function canRequestBlobFromPeer(workspaceId: string, peerDeviceId: string): boolean {
-  return isPeerTrusted(workspaceId, peerDeviceId) || isActiveWorkspacePeer(workspaceId, peerDeviceId)
+  return isPeerTrusted(workspaceId, peerDeviceId)
 }
 
 function canServeBlobToPeer(workspaceId: string, peerDeviceId: string): boolean {

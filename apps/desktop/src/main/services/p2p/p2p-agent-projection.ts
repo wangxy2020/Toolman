@@ -27,6 +27,7 @@ import {
   findSharedResourceForProjection,
   resolveSharedResourceId,
 } from './p2p-shared-resource-id'
+import { resolveLocalSharedByMemberId } from './p2p-shared-by-member.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -74,6 +75,11 @@ function upsertProjectedAgentResource(input: {
   existing: ReturnType<P2pSharedResourceRepository['findById']>
 }): void {
   const sharedRepo = getSharedResourceRepo()
+  const sharedBy = resolveLocalSharedByMemberId(
+    input.event.workspaceId,
+    input.event.operatorId,
+    input.event.sourceDeviceId,
+  )
   if (!input.existing) {
     sharedRepo.create({
       id: input.resourceId,
@@ -81,7 +87,7 @@ function upsertProjectedAgentResource(input: {
       resourceType: 'Agent',
       localResourceId: input.localResourceId,
       name: input.name,
-      sharedBy: input.event.operatorId,
+      sharedBy,
       permission: 'read',
       metadataJson: input.metadataJson,
       createdAt: new Date(input.event.timestamp),
@@ -96,6 +102,7 @@ function upsertProjectedAgentResource(input: {
     status: 'active',
     localResourceId: input.localResourceId,
     metadataJson: input.metadataJson,
+    ...(input.existing.sharedBy !== sharedBy ? { sharedBy } : {}),
   })
 }
 

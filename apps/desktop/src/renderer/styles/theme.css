@@ -4572,6 +4572,57 @@ html.theme-dark .tm-invite-action-btn {
   gap: 20px;
 }
 
+.tm-group-member-resource-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tm-group-member-resource-section + .tm-group-member-resource-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--tm-border) 70%, transparent);
+}
+
+.tm-group-member-resource-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tm-group-member-resource-section-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tm-group-member-resource-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tm-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tm-group-member-resource-section-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--tm-text-secondary);
+}
+
+.tm-group-member-resource-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 42px;
+}
+
 .tm-group-kb-section {
   display: flex;
   flex-direction: column;
@@ -9700,6 +9751,35 @@ html.theme-dark .tm-auth-entry-provider-btn:hover:not(:disabled) {
   font-size: 12px;
   line-height: 1.6;
   color: var(--tm-text-secondary);
+}
+
+.tm-auth-guard-extra {
+  margin-top: 12px;
+  text-align: left;
+}
+
+.tm-auth-guard-steps {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  list-style: disc;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tm-hover) 60%, transparent);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tm-text-secondary);
+}
+
+.tm-auth-guard-steps li + li {
+  margin-top: 6px;
+}
+
+.tm-auth-guard-note {
+  margin: 10px 0 0;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--tm-text-tertiary);
+  text-align: center;
 }
 
 .tm-auth-guard-actions {

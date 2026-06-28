@@ -24,6 +24,7 @@ export interface UpdateP2pSharedResourceInput {
   id: string
   localResourceId?: string | null
   name?: string
+  sharedBy?: string
   permission?: P2pSharedResourceRow['permission']
   contentHash?: string | null
   version?: number
@@ -148,6 +149,7 @@ export class P2pSharedResourceRepository {
         localResourceId:
           input.localResourceId === undefined ? existing.localResourceId : input.localResourceId,
         name: input.name ?? existing.name,
+        sharedBy: input.sharedBy ?? existing.sharedBy,
         permission: input.permission ?? existing.permission,
         contentHash: input.contentHash === undefined ? existing.contentHash : input.contentHash,
         version: input.version ?? existing.version,

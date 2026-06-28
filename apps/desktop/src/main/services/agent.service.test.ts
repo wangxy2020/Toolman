@@ -67,6 +67,6 @@ describe('parseAssistantRuntime', () => {
 
     expect(runtime.toolContext.workingDirectory).toBe('/custom/path')
     expect(runtime.autonomousMode).toBe(true)
-    expect(runtime.effectivePermissionMode).toBe('full-auto')
+    expect(runtime.effectivePermissionMode).toBe('auto-edit')
   })
 })

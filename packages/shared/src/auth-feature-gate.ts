@@ -6,7 +6,15 @@ import {
   canUseGroupFeatures,
 } from './ipc/auth.js'
 
-export type AuthFeature = 'group' | 'community_write' | 'community_read'
+export type AuthFeature = 'group' | 'community_write' | 'community_read' | 'registered'
+
+/** IPC channels that require a registered, logged-in user (destructive or sensitive). */
+export const REGISTERED_USER_IPC_CHANNELS = new Set<IpcChannel>([
+  IpcChannel.AppRestoreData,
+  IpcChannel.AppResetData,
+  IpcChannel.AppDeleteKnowledge,
+  IpcChannel.AgentToolApprovalRespond,
+])
 
 export const AUTH_REGISTRATION_REQUIRED_MESSAGE =
   '此功能需要注册并登录账户。请点击左下角头像进行注册或登录。'
@@ -66,6 +74,15 @@ export function checkAuthFeatureAccess(
     return { allowed: canBrowseCommunityReadOnly(session ?? undefined) }
   }
 
+  if (feature === 'registered') {
+    if (canUseGroupFeatures(session ?? undefined)) return { allowed: true }
+    return {
+      allowed: false,
+      code: 'AUTH_REGISTRATION_REQUIRED',
+      message: AUTH_REGISTRATION_REQUIRED_MESSAGE,
+    }
+  }
+
   if (!session) {
     return {
       allowed: false,
@@ -96,6 +113,7 @@ export function checkAuthFeatureAccess(
 }
 
 export function resolveIpcAuthFeature(channel: IpcChannel): AuthFeature | null {
+  if (REGISTERED_USER_IPC_CHANNELS.has(channel)) return 'registered'
   if (isCommunityWriteChannel(channel)) return 'community_write'
   if (isP2pGatedChannel(channel)) return 'group'
   return null

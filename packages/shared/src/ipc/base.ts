@@ -132,6 +132,7 @@ export const AppRestoreDataOutputSchema = z.object({
   restored: z.boolean(),
   includesKnowledge: z.boolean().optional(),
   notesDataJson: z.string().optional(),
+  requiresRestart: z.boolean().optional(),
 })
 
 export const AppResetDataOutputSchema = z.object({

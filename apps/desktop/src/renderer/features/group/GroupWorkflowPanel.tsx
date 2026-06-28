@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IpcChannel } from '@toolman/shared'
+import { IpcChannel, type P2pMember } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { GroupMemberResourceSection } from './GroupMemberResourceSection'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
 import { useRegisterGroupPanelError } from './group-page-status'
 import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
 import { useP2pWorkflow } from './useP2pWorkflow'
+import { groupResourcesByMember } from './group-shared-resources-by-member'
 import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
@@ -15,6 +17,7 @@ interface Props {
   sourceWorkspaceId: string | null
   canManageGroupResources: boolean
   canWriteWorkspace: boolean
+  members: P2pMember[]
   selfMemberId: string | null
 }
 
@@ -30,6 +33,7 @@ export function GroupWorkflowPanel({
   sourceWorkspaceId,
   canManageGroupResources,
   canWriteWorkspace,
+  members,
   selfMemberId,
 }: Props) {
   const { t } = useI18n()
@@ -82,6 +86,17 @@ export function GroupWorkflowPanel({
       (canManageGroupResources ||
         (selfMemberId != null && resource.sharedBy === selfMemberId)),
     [canManageGroupResources, canWriteWorkspace, selfMemberId],
+  )
+
+  const memberSections = useMemo(
+    () =>
+      groupResourcesByMember(
+        p2pWorkflow.sharedResources,
+        members,
+        selfMemberId,
+        t('groupPage.panels.unknownMember'),
+      ),
+    [members, p2pWorkflow.sharedResources, selfMemberId, t],
   )
 
   const handleAddWorkflows = useCallback(
@@ -160,24 +175,34 @@ export function GroupWorkflowPanel({
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">
-            {p2pWorkflow.sharedResources.map((resource) => (
-              <section key={resource.id} className="tm-group-kb-section">
-                <header className="tm-group-kb-section-header">
-                  <div className="tm-group-kb-section-heading">
-                    <h3 className="tm-group-kb-section-title">{resource.name}</h3>
-                  </div>
-                  {canDeleteResource(resource) ? (
-                    <button
-                      type="button"
-                      className="tm-kb-file-card-action tm-kb-file-card-action--danger"
-                      disabled={removingId === resource.id}
-                      onClick={() => setPendingRemoveId(resource.id)}
-                    >
-                      移除
-                    </button>
-                  ) : null}
-                </header>
-              </section>
+            {memberSections.map((memberSection) => (
+              <GroupMemberResourceSection
+                key={memberSection.memberId}
+                displayName={memberSection.displayName}
+                isSelf={memberSection.isSelf}
+                resourceCount={memberSection.resources.length}
+                selfLabel={t('groupPage.panels.memberSelf')}
+              >
+                {memberSection.resources.map((resource) => (
+                  <section key={resource.id} className="tm-group-kb-section">
+                    <header className="tm-group-kb-section-header">
+                      <div className="tm-group-kb-section-heading">
+                        <h3 className="tm-group-kb-section-title">{resource.name}</h3>
+                      </div>
+                      {canDeleteResource(resource) ? (
+                        <button
+                          type="button"
+                          className="tm-kb-file-card-action tm-kb-file-card-action--danger"
+                          disabled={removingId === resource.id}
+                          onClick={() => setPendingRemoveId(resource.id)}
+                        >
+                          移除
+                        </button>
+                      ) : null}
+                    </header>
+                  </section>
+                ))}
+              </GroupMemberResourceSection>
             ))}
           </div>
         )}

@@ -54,6 +54,7 @@ export const P2pSharedResourceSchema = z.object({
   localResourceId: z.string().nullable().optional(),
   name: z.string().min(1),
   sharedBy: z.string().min(1),
+  sharedByDisplayName: z.string().min(1).optional(),
   permission: P2pSharedResourcePermissionSchema,
   contentHash: z.string().nullable().optional(),
   version: z.number().int().positive(),

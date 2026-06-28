@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
+import { useI18n } from '../../i18n/useI18n'
+
 interface ContextMenuProps {
   x: number
   y: number
@@ -20,12 +22,15 @@ export function GroupFileContextMenu({
   selectedCount,
   enabled = true,
   canDelete,
-  deleteLabel = '移除已勾选',
+  deleteLabel,
   onClose,
   onSelectAll,
   onClearSelection,
   onDeleteSelected,
 }: ContextMenuProps) {
+  const { t } = useI18n()
+  const resolvedDeleteLabel = deleteLabel ?? t('groupPage.fileContextMenu.deleteSelected')
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -41,7 +46,7 @@ export function GroupFileContextMenu({
       <button
         type="button"
         className="tm-group-context-menu-backdrop"
-        aria-label="关闭菜单"
+        aria-label={t('groupPage.fileContextMenu.closeMenu')}
         onClick={onClose}
       />
       <div className="tm-group-context-menu" style={{ top: y, left: x }} role="menu">
@@ -54,7 +59,7 @@ export function GroupFileContextMenu({
             onClose()
           }}
         >
-          全选
+          {t('groupPage.fileContextMenu.selectAll')}
         </button>
         <button
           type="button"
@@ -72,7 +77,7 @@ export function GroupFileContextMenu({
             onClose()
           }}
         >
-          取消
+          {t('groupPage.fileContextMenu.clearSelection')}
         </button>
         <button
           type="button"
@@ -91,7 +96,7 @@ export function GroupFileContextMenu({
             onClose()
           }}
         >
-          {deleteLabel}
+          {resolvedDeleteLabel}
           {selectedCount > 0 ? ` (${selectedCount})` : ''}
         </button>
       </div>

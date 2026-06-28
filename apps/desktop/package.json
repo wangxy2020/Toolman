@@ -20,6 +20,7 @@
     "lint": "pnpm typecheck",
     "test": "vitest run",
     "test:p2p-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
+    "test:knowledge-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/knowledge-ingest.integration.test.ts",
     "test:docx-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/docx-review.integration.test.ts",
     "test:e2e": "bash scripts/run-e2e.sh",
     "test:e2e:quick": "playwright test"

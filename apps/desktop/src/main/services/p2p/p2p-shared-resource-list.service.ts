@@ -6,6 +6,7 @@ import {
 } from './p2p-permission.guard'
 import { getSharedResourceRepo, mapSharedResourceRow } from './knowledge-sync-shared-resource'
 import { reconcileP2pSharedResourcesForWorkspace } from './p2p-shared-resource-reconcile.service'
+import { resolveSharedByMember } from './p2p-shared-by-member.service'
 
 /** 统一读穿投影：事件 → reconcile → p2p_shared_resources → 列表 */
 export function listP2pSharedResourcesForWorkspace(
@@ -28,5 +29,16 @@ export function listP2pSharedResourcesForWorkspace(
     .filter((row) => !input.resourceType || row.resourceType === input.resourceType)
     .filter((row) => (input.status ? row.status === input.status : row.status === 'active'))
 
-  return { resources: rows.map(mapSharedResourceRow) }
+  return {
+    resources: rows.map((row) => {
+      const mapped = mapSharedResourceRow(row)
+      const sharer = resolveSharedByMember(input.workspaceId, mapped.sharedBy)
+      if (!sharer) return mapped
+      return {
+        ...mapped,
+        sharedBy: sharer.id,
+        sharedByDisplayName: sharer.displayName,
+      }
+    }),
+  }
 }

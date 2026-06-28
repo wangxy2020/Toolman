@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { KnowledgeBase, P2pSharedResource } from '@toolman/shared'
+import type { KnowledgeBase, P2pMember, P2pSharedResource } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupKnowledgePickerModal } from './GroupKnowledgePickerModal'
-import { GroupFileContextMenu } from './GroupFileList'
+import { GroupFileContextMenu } from './GroupFileContextMenu'
+import { GroupMemberResourceSection } from './GroupMemberResourceSection'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { useRegisterGroupPanelError } from './group-page-status'
@@ -20,6 +21,7 @@ import { useP2pKnowledge } from './useP2pKnowledge'
 import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
 import { hasShareableKnowledgeBases } from './group-knowledge-picker-utils'
 import { resolveGroupKnowledgeResourceLabel } from './group-knowledge-display'
+import { groupResourcesByMember } from './group-shared-resources-by-member'
 import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
@@ -29,6 +31,7 @@ interface Props {
   knowledgeBases: KnowledgeBase[]
   canManageGroupResources: boolean
   canWriteWorkspace: boolean
+  members: P2pMember[]
   selfMemberId: string | null
   onOpenNote?: (noteId: string) => boolean
   onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
@@ -57,6 +60,7 @@ export function GroupKnowledgePanel({
   knowledgeBases,
   canManageGroupResources,
   canWriteWorkspace,
+  members,
   selfMemberId,
   onOpenNote,
   onOpenGroupNote,
@@ -95,6 +99,17 @@ export function GroupKnowledgePanel({
   const hasShareableKnowledge = useMemo(
     () => hasShareableKnowledgeBases(knowledgeBases, p2pKnowledge.sharedResources),
     [knowledgeBases, p2pKnowledge.sharedResources],
+  )
+
+  const memberSections = useMemo(
+    () =>
+      groupResourcesByMember(
+        p2pKnowledge.sharedResources,
+        members,
+        selfMemberId,
+        t('groupPage.panels.unknownMember'),
+      ),
+    [members, p2pKnowledge.sharedResources, selfMemberId, t],
   )
 
   const canDeleteResource = useCallback(
@@ -587,47 +602,58 @@ export function GroupKnowledgePanel({
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">
-            {p2pKnowledge.sharedResources.map((resource) => {
-              const isResourceOwner =
-                selfMemberId != null && resource.sharedBy === selfMemberId
-              return (
-              <GroupSharedKnowledgeSection
-                key={resource.id}
-                p2pWorkspaceId={p2pWorkspaceId}
-                sourceWorkspaceId={sourceWorkspaceId}
-                workspaceName={workspaceName}
-                resource={resource}
-                sectionTitle={resolveResourceLabel(resource)}
-                isResourceOwner={isResourceOwner}
-                savedDocumentOverrides={savedDocumentOverrides[resource.id]}
-                selectedKeys={selectedKeys}
-                canRemoveFromGroup={canDeleteResource(resource)}
-                canRemoveSaved={canWriteWorkspace && !isResourceOwner}
-                canSelect={canWriteWorkspace}
-                removingKb={removingKbId === resource.id}
-                removingDocumentId={removingDocumentId}
-                onToggleSelect={handleToggleSelect}
-                onToggleSelectSection={handleToggleSelectSection}
-                onRemoveFromGroupKb={() => requestRemoveKb(resource.id)}
-                onRemoveFromGroupDocument={(documentId) =>
-                  handleRemoveDocument(resource.id, documentId)
-                }
-                onRequestRemoveSavedDocuments={(documentIds) =>
-                  requestRemoveSavedDocuments(resource.id, documentIds)
-                }
-                onRequestRemoveSavedSection={() => requestRemoveSavedSection(resource.id)}
-                onSavedDocumentRegistryChange={handleSavedDocumentRegistryChange}
-                onOpenNote={onOpenNote}
-                onOpenGroupNote={onOpenGroupNote}
-                onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
-                onEnsureDocumentSaved={(documentId) =>
-                  handleEnsureDocumentSaved(resource, documentId)
-                }
-                onOpenError={(message) => p2pKnowledge.setError(message)}
-                onContextMenu={handleContextMenu}
-                onSectionKeysChange={handleSectionKeysChange}
-              />
-            )})}
+            {memberSections.map((memberSection) => (
+              <GroupMemberResourceSection
+                key={memberSection.memberId}
+                displayName={memberSection.displayName}
+                isSelf={memberSection.isSelf}
+                resourceCount={memberSection.resources.length}
+                selfLabel={t('groupPage.panels.memberSelf')}
+              >
+                {memberSection.resources.map((resource) => {
+                  const isResourceOwner =
+                    selfMemberId != null && resource.sharedBy === selfMemberId
+                  return (
+                    <GroupSharedKnowledgeSection
+                      key={resource.id}
+                      p2pWorkspaceId={p2pWorkspaceId}
+                      sourceWorkspaceId={sourceWorkspaceId}
+                      workspaceName={workspaceName}
+                      resource={resource}
+                      sectionTitle={resolveResourceLabel(resource)}
+                      isResourceOwner={isResourceOwner}
+                      savedDocumentOverrides={savedDocumentOverrides[resource.id]}
+                      selectedKeys={selectedKeys}
+                      canRemoveFromGroup={canDeleteResource(resource)}
+                      canRemoveSaved={canWriteWorkspace && !isResourceOwner}
+                      canSelect={canWriteWorkspace}
+                      removingKb={removingKbId === resource.id}
+                      removingDocumentId={removingDocumentId}
+                      onToggleSelect={handleToggleSelect}
+                      onToggleSelectSection={handleToggleSelectSection}
+                      onRemoveFromGroupKb={() => requestRemoveKb(resource.id)}
+                      onRemoveFromGroupDocument={(documentId) =>
+                        handleRemoveDocument(resource.id, documentId)
+                      }
+                      onRequestRemoveSavedDocuments={(documentIds) =>
+                        requestRemoveSavedDocuments(resource.id, documentIds)
+                      }
+                      onRequestRemoveSavedSection={() => requestRemoveSavedSection(resource.id)}
+                      onSavedDocumentRegistryChange={handleSavedDocumentRegistryChange}
+                      onOpenNote={onOpenNote}
+                      onOpenGroupNote={onOpenGroupNote}
+                      onOpenGroupKnowledgeMarkdown={onOpenGroupKnowledgeMarkdown}
+                      onEnsureDocumentSaved={(documentId) =>
+                        handleEnsureDocumentSaved(resource, documentId)
+                      }
+                      onOpenError={(message) => p2pKnowledge.setError(message)}
+                      onContextMenu={handleContextMenu}
+                      onSectionKeysChange={handleSectionKeysChange}
+                    />
+                  )
+                })}
+              </GroupMemberResourceSection>
+            ))}
           </div>
         )}
       </div>

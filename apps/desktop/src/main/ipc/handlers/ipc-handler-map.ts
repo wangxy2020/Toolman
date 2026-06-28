@@ -4,11 +4,13 @@ import {IpcChannel,
   AppGetPathsOutputSchema,
   AppProvenanceBeaconInputSchema,
   AppProvenanceBeaconOutputSchema,
+  AppRestoreDataInputSchema,
   AppUpdateSetAutoInputSchema,
   AppUpdateStatusSchema,
   CrashReportSetUploadInputSchema,
   CrashReportUploadResultSchema,
   CrashReportUploadStatusSchema,
+  RendererErrorReportInputSchema,
   ipcOk,
   ipcErr,
   type IpcResult } from '@toolman/shared'
@@ -90,6 +92,18 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.AppCrashReportUploadNow]: async () => {
     const { flushPendingCrashReports } = await import('../../services/crash-report.service')
     return ipcOk(CrashReportUploadResultSchema.parse(await flushPendingCrashReports()))
+  },
+
+  [IpcChannel.AppReportRendererError]: async (input) => {
+    const parsed = RendererErrorReportInputSchema.parse(input)
+    const { recordCrashReport } = await import('../../services/local-operations.service')
+    const stack = [parsed.stack, parsed.componentStack].filter(Boolean).join('\n--- component ---\n')
+    recordCrashReport({
+      kind: 'rendererError',
+      message: parsed.message,
+      stack: stack || undefined,
+    })
+    return ipcOk({ recorded: true })
   },
 
   [IpcChannel.AppUpdateGetStatus]: async () => {
@@ -199,7 +213,7 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
 
   [IpcChannel.AppRestoreData]: async (input) => {
     try {
-      const data = input as { backupPath: string; restoreKnowledge?: boolean }
+      const data = AppRestoreDataInputSchema.parse(input)
       return ipcOk(await restoreAppData(data))
     } catch (error) {
       const message = toErrorMessage(error, 'Restore failed')

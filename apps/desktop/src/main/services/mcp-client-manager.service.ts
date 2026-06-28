@@ -7,6 +7,7 @@ import type { McpServerConfig } from '@toolman/shared'
 import { getMcpServer } from './mcp-server-config.service'
 import { resolveMcpServerRuntimeConfig } from './mcp-runtime-config.service'
 import { resolveMcpNodeCommand, resolveMcpNodeEnv } from './mcp-node-runtime'
+import { buildSandboxedInheritedEnv } from './bash-env.util'
 import {
   isPostgresMcpConfig,
   postgresMcpConfigFingerprint,
@@ -80,13 +81,7 @@ async function createTransport(config: McpServerConfig): Promise<McpTransport> {
       command,
       args: config.args ?? [],
       env: {
-        ...resolveMcpNodeEnv(
-          Object.fromEntries(
-            Object.entries(process.env).filter(
-              (entry): entry is [string, string] => entry[1] != null,
-            ),
-          ),
-        ),
+        ...resolveMcpNodeEnv(buildSandboxedInheritedEnv(process.env)),
         ...config.env,
       },
       cwd: config.cwd,
@@ -390,6 +385,3 @@ export function resetMcpClientsForConfigChange(serverId?: string): void {
   }
   void disconnectAllMcpServers()
 }
-
-/** @deprecated use inspectMcpServer */
-export const inspectStdioMcpServer = inspectMcpServer

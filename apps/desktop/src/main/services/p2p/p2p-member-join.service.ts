@@ -64,7 +64,8 @@ import {
 import type { P2pWorkspace } from '@toolman/shared'
 
 const JOIN_NOTIFY_MAX_ATTEMPTS = 30
-const JOIN_NOTIFY_INTERVAL_MS = 2_000
+const JOIN_NOTIFY_INTERVAL_MS = 1_000
+const JOIN_NOTIFY_RETRY_BASE_MS = 200
 
 export class P2pMemberLimitError extends Error {
   readonly code = 'P2P_MEMBER_LIMIT' as const
@@ -209,7 +210,7 @@ async function tryLanConnectToOwner(
     ) {
       return true
     }
-    await sleep(1_000)
+    await sleep(500)
   }
   return false
 }
@@ -322,7 +323,7 @@ async function tryNotifyOwnerOfJoin(
     if (await notifyOwnerOfJoinOnce(payload, member)) {
       return
     }
-    await sleep(500 * (attempt + 1))
+    await sleep(JOIN_NOTIFY_RETRY_BASE_MS * (attempt + 1))
   }
 
   startBackgroundJoinNotify(payload, member)
@@ -505,10 +506,12 @@ function scheduleJoinPeerSync(
   member: P2pMember,
 ): void {
   void (async () => {
+    const notifyPromise = publishJoinToOwner(payload, member)
+
     await finishJoinSync(payload, offerSdp)
 
     try {
-      await publishJoinToOwner(payload, member)
+      await notifyPromise
     } catch (error) {
       const message = toErrorMessage(error, 'notify owner failed')
       logStructured('p2p', 'warn', `publish join to owner failed: ${message}`)

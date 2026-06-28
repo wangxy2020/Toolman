@@ -1,6 +1,9 @@
 import type { MouseEvent } from 'react'
 
+import { sanitizeNewsArticleHtml } from '../../../main/services/community/community-news-utils.sanitize'
 import { isCommunityHubRateLimitError } from './community-hub-error-utils'
+
+export { sanitizeNewsArticleHtml }
 
 export function formatNewsDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-CN', {
@@ -281,43 +284,6 @@ export function resolveNewsArticleBodyHtml(article: {
   }
 
   return summaryToArticleHtml(summary)
-}
-
-const NEWS_ARTICLE_HTML_MAX_LENGTH = 40_000
-
-export function sanitizeNewsArticleHtml(html: string, baseUrl?: string | null): string {
-  let sanitized = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed[\s\S]*?>/gi, '')
-    .replace(/<link[\s\S]*?>/gi, '')
-    .replace(/<meta[\s\S]*?>/gi, '')
-    .replace(/<base[\s\S]*?>/gi, '')
-    .replace(/<\/?(html|head|body)[^>]*>/gi, '')
-    .replace(/<(button|nav|audio|template|form|svg)\b[\s\S]*?<\/\1>/gi, '')
-    .replace(/<(button|input|select|textarea)\b[^>]*\/?>/gi, '')
-    .replace(/\bon\w+\s*=\s*(["'])[^"']*\1/gi, '')
-
-  const bodyMatch = sanitized.match(/<body[^>]*>([\s\S]*)<\/body>/i)
-  if (bodyMatch?.[1]) {
-    sanitized = bodyMatch[1]
-  }
-
-  if (baseUrl) {
-    sanitized = sanitized.replace(/\bhref=(["'])(\/[^"'#][^"']*)\1/gi, (_match, quote: string, path: string) => {
-      const resolved = resolveArticleHref(path, baseUrl)
-      return resolved ? `href=${quote}${resolved}${quote}` : `href=${quote}#${quote}`
-    })
-  }
-
-  sanitized = sanitized.trim()
-  if (sanitized.length > NEWS_ARTICLE_HTML_MAX_LENGTH) {
-    sanitized = `${sanitized.slice(0, NEWS_ARTICLE_HTML_MAX_LENGTH)}…`
-  }
-
-  return sanitized
 }
 
 export function handleNewsArticleContentClick(event: MouseEvent<HTMLElement>) {

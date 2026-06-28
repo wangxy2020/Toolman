@@ -70,6 +70,18 @@ export class P2pEventRepository {
     return row?.seq ?? 0
   }
 
+  findLatestByOperatorId(workspaceId: string, operatorId: string): P2pEventRow | null {
+    return (
+      this.db
+        .select()
+        .from(p2pEvents)
+        .where(and(eq(p2pEvents.workspaceId, workspaceId), eq(p2pEvents.operatorId, operatorId)))
+        .orderBy(desc(p2pEvents.seq))
+        .limit(1)
+        .get() ?? null
+    )
+  }
+
   list(options: ListP2pEventsOptions & { order?: 'asc' | 'desc' }): P2pEventRow[] {
     const conditions = [eq(p2pEvents.workspaceId, options.workspaceId)]
 

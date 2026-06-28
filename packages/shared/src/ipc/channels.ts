@@ -10,6 +10,7 @@ export enum IpcChannel {
   AppCrashReportGetStatus = 'app:crash-report:status:get',
   AppCrashReportSetUpload = 'app:crash-report:upload:set',
   AppCrashReportUploadNow = 'app:crash-report:upload:now',
+  AppReportRendererError = 'app:crash-report:renderer:report',
 
   AppUpdateGetStatus = 'app:update:status:get',
   AppUpdateCheck = 'app:update:check',

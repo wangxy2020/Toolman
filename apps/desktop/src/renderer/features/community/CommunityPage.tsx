@@ -27,6 +27,7 @@ import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useCommunityHubOfflineStatus } from './useCommunityHubOfflineStatus'
 import { CommunityListSortProvider, useCommunityListSortContext } from './CommunityListSortContext'
 import { CommunityListSortToolbar } from './CommunityListSortToolbar'
+import { CommunityHubOfflineBanner } from './CommunityHubOfflineBanner'
 import { CommunityPlaceholderPanel } from './CommunityPlaceholderPanel'
 import { KnowledgeMarketPanel } from './KnowledgeMarketPanel'
 import { McpMarketPanel } from './McpMarketPanel'
@@ -107,7 +108,7 @@ function CommunityPageHeaderEnd({
 function CommunityPageStatusRegistrar() {
   const { status: hubStatus } = useCommunityHubConnection()
   useCommunityHubOfflineStatus(hubStatus)
-  return null
+  return <CommunityHubOfflineBanner status={hubStatus} />
 }
 
 function CommunityPageStatusArea({ children }: { children: ReactNode }) {

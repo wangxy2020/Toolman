@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.2.0-rc.6` · **通道**：`staging` · **更新**：2026-06-22  
+> **版本**：`0.2.0-rc.6` · **通道**：`staging` · **更新**：2026-06-28  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
@@ -29,7 +29,7 @@
 
 | # | 任务 | 状态 | 备注 |
 |---|------|------|------|
-| 0.1 | `pnpm rc1:preflight` 绿 | ✅ | RC6 本地 typecheck + 469 单测绿 |
+| 0.1 | `pnpm rc1:preflight` 绿 | ✅ | 488 desktop 单测 + knowledge ingest 集成 + smoke 绿 |
 | 0.1 | `pnpm rc1:build` dmg 可安装 | ✅ | adhoc 签名；Gatekeeper 需右键打开 |
 | 0.2 | TURN 静默注入（Xirsys → `release.env`） | ✅ | 打包时烘焙；启动自动拉 ICE |
 | 0.3 | WAN 跨 NAT 双机签字 | ⏳ | 单机 LAN ✅；跨网待第二台设备 |
@@ -52,13 +52,19 @@
 
 | # | 任务 | 状态 |
 |---|------|------|
-| 2.1 | 覆盖率 → 25% | ✅ |
+| 2.1 | 覆盖率 → 30% | ✅ |
 | 2.2 | agent-generation smoke | ✅ |
 | 2.3 | p2p-chaos-smoke.sh | ✅ |
 | 2.4 | ErrorBoundary Knowledge/Notes | ✅ |
 | 2.5 | workspace 事件写 mutex | ✅ |
 | 2.6 | structured log | ✅ |
 | 2.7 | ipc-handler-map 拆分 | ✅ |
+| 2.8 | knowledge ingest 集成测试 | ✅ | `test:knowledge-integration` · smoke 已纳入 |
+| 2.9 | 备份/恢复 manifest 校验 + 扩展范围 | ✅ | p2p-workspaces · notes-attachments · `requiresRestart` |
+| 2.10 | 安全加固（IPC 门控 · MCP 默认 exec · blob trust · CSP） | ✅ |
+| 2.11 | 稳定性（P2P sync 错误态 · notes sync 错误 · 优雅退出 · renderer 崩溃上报） | ✅ |
+| 2.12 | CI ESLint + Windows check + audit 阻断 + husky pre-commit | ✅ |
+| 2.13 | 首次引导 · Hub 离线 UX · 关键 UI i18n · debug 面板 dev-only | ✅ |
 
 ### Phase 3 — GA 发布
 
@@ -99,12 +105,15 @@
 
 | 模块 | 变更 |
 |------|------|
-| 知识库 | 删除文档时同步清理 chunks/向量；重传不再假成功 |
+| 知识库 | 删除文档时同步清理 chunks/向量；重传不再假成功；ingest 后 `refreshKbStats`；ingest 集成测试 |
 | Agent | Gemma/Ollama 图片路径、Anthropic 图片块、P2P relay PDF visionPages |
 | 社区/Auth | Authing 角色同步（Management API + session fallback）；移除 dev_test 硬编码 admin |
 | Hub (Rust) | 默认用户 role=user；集成测试 admin 辅助 |
 | model-gateway | Gemma reasoning 折叠；vision 路由修复 |
-| 工程 | typecheck 修复；community-bridge 单测同步 |
+| 工程 | typecheck 修复；community-bridge 单测同步；MCP manifest `files` 必填；488 单测绿 |
+| 安全/备份 | AppRestoreData Zod · 备份 manifest 校验 · IPC 破坏性门控 · MCP 未知工具默认 exec · P2P blob trust-only · CSP |
+| 稳定性 | P2P sync 错误不再 reset idle · notes sync 错误事件 · 优雅退出 · renderer 崩溃上报 · DB integrity_check |
+| UX | FirstRunWelcomeModal · Hub 离线 banner · 消息板离线阻断 · mock 支付 banner · 关键 UI i18n |
 
 ---
 
@@ -114,10 +123,10 @@
 |------|-----|------|
 | P2P | 跨 NAT WAN 签字 | 单机 LAN 已验 ✅ · 跨网待第二台设备 |
 | 流程 | dogfood 持续记录 | 维护者进行中 |
-| 产品 | 语义搜索 501 占位、真实支付 mock | RC 阶段 UI 需标注 Beta |
+| 产品 | 语义搜索 501 占位、真实支付 mock | RC 阶段 UI 已标注 Beta / mock banner |
 | 运维 | staging OTA | 可选；GitHub Release 分发 dmg 亦可 |
 
-**已具备**：SQLite WAL、libp2p 熔断、P2P 签名/邀请 v2、Blob 断点、TURN 静默配置、469 desktop 单测。
+**已具备**：SQLite WAL、libp2p 熔断、P2P 签名/邀请 v2、Blob 断点、TURN 静默配置、488 desktop 单测、knowledge ingest 集成测试、备份/恢复扩展、安全/稳定性加固、CI ESLint+Windows+audit。
 
 ---
 
@@ -146,7 +155,7 @@ pnpm rc1:preflight && pnpm rc1:build
 | 2026-06-22 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | Kickoff |
 | 2026-06-26 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | LAN 群聊通 · preflight 绿 · 成员重启重连 ✅ |
 | 2026-06-27 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | rc.5 DMG · 全模块正常 |
-| 2026-06-22 | 维护者 | — | — | — | — | — | RC6 准备：修 typecheck/单测 · 知识库删除 · Agent 图片 · Authing admin |
+| 2026-06-28 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | 生产级加固 A/B/C · 488 单测 · ingest 集成 · preflight 绿 |
 
 ---
 

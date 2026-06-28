@@ -9,6 +9,7 @@ import {
 import { ingestKnowledgeDocuments } from './knowledge-document.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
 import { getKnowledgeBaseRepository } from '../db/repos'
+import { logStructured } from './structured-log.service'
 
 interface NoteBlock {
   type: string
@@ -66,7 +67,8 @@ function loadFromDisk(): NotesData {
       notes: Array.isArray(parsed.notes) ? parsed.notes : [],
       syncFolderPath: parsed.syncFolderPath ?? null,
     }
-  } catch {
+  } catch (error) {
+    logStructured('notes', 'warn', `notes-data.json parse failed, resetting: ${String(error)}`)
     return createEmptyData()
   }
 }

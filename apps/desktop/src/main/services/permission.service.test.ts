@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 
-import { evaluateToolPermission, isDeleteTool, parseEnvironmentVariables, resolveWorkingDirectory, canExecuteTool } from './permission.service'
+import { evaluateToolPermission, isDeleteTool, parseEnvironmentVariables, resolveWorkingDirectory } from './permission.service'
 
 describe('isDeleteTool', () => {
   it('detects builtin delete tools', () => {
@@ -16,7 +16,7 @@ describe('isDeleteTool', () => {
 })
 
 describe('evaluateToolPermission autonomous mode', () => {
-  it('allows write and exec tools without approval', () => {
+  it('allows write tools without approval', () => {
     expect(
       evaluateToolPermission({
         toolName: 'mcp__docx__replace_text',
@@ -25,7 +25,9 @@ describe('evaluateToolPermission autonomous mode', () => {
         autonomousMode: true,
       }),
     ).toEqual({ allowed: true })
+  })
 
+  it('requires approval for exec tools', () => {
     expect(
       evaluateToolPermission({
         toolName: 'bash',
@@ -33,7 +35,11 @@ describe('evaluateToolPermission autonomous mode', () => {
         toolStates: {},
         autonomousMode: true,
       }),
-    ).toEqual({ allowed: true })
+    ).toEqual({
+      allowed: false,
+      reason: '执行工具 bash 需要人工授权',
+      requiresApproval: true,
+    })
   })
 
   it('requires approval for delete tools', () => {
@@ -76,16 +82,6 @@ describe('permission helpers', () => {
     expect(resolveWorkingDirectory(undefined)).toBe(homedir())
     expect(resolveWorkingDirectory('/tmp/custom')).toBe('/tmp/custom')
   })
-
-  it('checks canExecuteTool delegates to evaluateToolPermission', () => {
-    expect(
-      canExecuteTool({
-        toolName: 'mcp__docx__replace_text',
-        permissionMode: 'full-auto',
-        toolStates: {},
-      }),
-    ).toEqual({ allowed: true })
-  })
 })
 
 describe('evaluateToolPermission normal mode', () => {
@@ -109,6 +105,20 @@ describe('evaluateToolPermission normal mode', () => {
     ).toEqual({
       allowed: false,
       reason: '写入工具 mcp__docx__replace_text 需要人工授权、预授权或自动编辑/全自动权限模式',
+      requiresApproval: true,
+    })
+  })
+
+  it('requires approval for unknown MCP tools defaulting to exec category', () => {
+    expect(
+      evaluateToolPermission({
+        toolName: 'mcp__custom-server__run_task',
+        permissionMode: 'normal',
+        toolStates: {},
+      }),
+    ).toEqual({
+      allowed: false,
+      reason: '执行工具 mcp__custom-server__run_task 需要人工授权、预授权或全自动权限模式',
       requiresApproval: true,
     })
   })

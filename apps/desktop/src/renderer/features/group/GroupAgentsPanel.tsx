@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { Assistant, P2pSharedResource, Session } from '@toolman/shared'
+import type { Assistant, P2pMember, P2pSharedResource, Session } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupAgentPickerModal } from './GroupAgentPickerModal'
 import {
   GroupAgentSessionActionMenu,
   type GroupAgentSessionAction,
 } from './GroupAgentSessionActionMenu'
-import { GroupFileContextMenu } from './GroupFileList'
+import { GroupFileContextMenu } from './GroupFileContextMenu'
+import { GroupMemberResourceSection } from './GroupMemberResourceSection'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupSharedAgentSection } from './GroupSharedAgentSection'
@@ -17,6 +18,7 @@ import {
   resolveGroupAgentPanelTitle,
 } from './group-agent-utils'
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
+import { groupResourcesByMember } from './group-shared-resources-by-member'
 import { useP2pAgents } from './useP2pAgents'
 import { useRegisterGroupPanelError } from './group-page-status'
 import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
@@ -30,6 +32,7 @@ interface Props {
   sessions: Session[]
   canManageGroupResources: boolean
   canWriteWorkspace: boolean
+  members: P2pMember[]
   selfMemberId: string | null
   onOpenGroupAgentSession?: (request: OpenGroupAgentSessionRequest) => void | Promise<void>
   onReloadAssistants?: () => void | Promise<void>
@@ -49,6 +52,7 @@ export function GroupAgentsPanel({
   sessions,
   canManageGroupResources,
   canWriteWorkspace,
+  members,
   selfMemberId,
   onOpenGroupAgentSession,
   onReloadAssistants,
@@ -385,6 +389,17 @@ export function GroupAgentsPanel({
     [canManagePermission, p2pAgents, sessionActionMenu],
   )
 
+  const memberSections = useMemo(
+    () =>
+      groupResourcesByMember(
+        p2pAgents.sharedResources,
+        members,
+        selfMemberId,
+        t('groupPage.panels.unknownMember'),
+      ),
+    [members, p2pAgents.sharedResources, selfMemberId, t],
+  )
+
   const buildOpenSessionRequest = useCallback(
     (resource: P2pSharedResource, assistant: Assistant | null, session: Session) => {
       const isOwner = selfMemberId != null && resource.sharedBy === selfMemberId
@@ -476,40 +491,50 @@ export function GroupAgentsPanel({
           </div>
         ) : (
           <div className="tm-group-shared-knowledge-list">
-            {p2pAgents.sharedResources.map((resource) => {
-              const assistant = resolveResourceAssistant(resource)
-              return (
-                <GroupSharedAgentSection
-                  key={resource.id}
-                  resource={resource}
-                  workspaceName={workspaceName}
-                  assistant={assistant}
-                  isSharer={selfMemberId != null && resource.sharedBy === selfMemberId}
-                  sessions={sessions}
-                  selectedKeys={selectedKeys}
-                  canDelete={canDeleteResource(resource)}
-                  removingResourceId={removingResourceId}
-                  removingSessionId={removingSessionId}
-                  onToggleSelect={handleToggleSelect}
-                  onToggleSelectSection={handleToggleSelectSection}
-                  onRemoveAgent={() => requestRemoveAgent(resource.id)}
-                  onRemoveSession={(sessionId) => handleRemoveSession(resource.id, sessionId)}
-                  onOpenSession={onOpenGroupAgentSession}
-                  buildOpenSessionRequest={(session) =>
-                    buildOpenSessionRequest(resource, assistant, session)
-                  }
-                  onOpenSessionMenu={(currentResource, sessionId, anchor) =>
-                    setSessionActionMenu({
-                      resource: currentResource,
-                      sessionId,
-                      ...anchor,
-                    })
-                  }
-                  onContextMenu={handleContextMenu}
-                  onSectionKeysChange={handleSectionKeysChange}
-                />
-              )
-            })}
+            {memberSections.map((memberSection) => (
+              <GroupMemberResourceSection
+                key={memberSection.memberId}
+                displayName={memberSection.displayName}
+                isSelf={memberSection.isSelf}
+                resourceCount={memberSection.resources.length}
+                selfLabel={t('groupPage.panels.memberSelf')}
+              >
+                {memberSection.resources.map((resource) => {
+                  const assistant = resolveResourceAssistant(resource)
+                  return (
+                    <GroupSharedAgentSection
+                      key={resource.id}
+                      resource={resource}
+                      workspaceName={workspaceName}
+                      assistant={assistant}
+                      isSharer={selfMemberId != null && resource.sharedBy === selfMemberId}
+                      sessions={sessions}
+                      selectedKeys={selectedKeys}
+                      canDelete={canDeleteResource(resource)}
+                      removingResourceId={removingResourceId}
+                      removingSessionId={removingSessionId}
+                      onToggleSelect={handleToggleSelect}
+                      onToggleSelectSection={handleToggleSelectSection}
+                      onRemoveAgent={() => requestRemoveAgent(resource.id)}
+                      onRemoveSession={(sessionId) => handleRemoveSession(resource.id, sessionId)}
+                      onOpenSession={onOpenGroupAgentSession}
+                      buildOpenSessionRequest={(session) =>
+                        buildOpenSessionRequest(resource, assistant, session)
+                      }
+                      onOpenSessionMenu={(currentResource, sessionId, anchor) =>
+                        setSessionActionMenu({
+                          resource: currentResource,
+                          sessionId,
+                          ...anchor,
+                        })
+                      }
+                      onContextMenu={handleContextMenu}
+                      onSectionKeysChange={handleSectionKeysChange}
+                    />
+                  )
+                })}
+              </GroupMemberResourceSection>
+            ))}
           </div>
         )}
       </div>

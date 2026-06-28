@@ -74,9 +74,6 @@ export function buildSharedKnowledgeDocMetaFromEvents(
   return meta
 }
 
-/** @deprecated Use buildSharedKnowledgeDocMetaFromEvents */
-export const parseSharedKnowledgeDocMetaFromEvents = buildSharedKnowledgeDocMetaFromEvents
-
 const UUID_DOCUMENT_TITLE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[^./\\]+)?$/i
 

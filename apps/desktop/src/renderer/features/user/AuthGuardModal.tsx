@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import { useI18n } from '../../i18n/useI18n'
 
 interface AuthGuardModalProps {
@@ -8,6 +10,8 @@ interface AuthGuardModalProps {
   cancelText?: string
   onConfirm: () => void
   onCancel: () => void
+  icon?: 'lock' | 'welcome'
+  children?: ReactNode
 }
 
 function AuthGuardLockIcon() {
@@ -24,6 +28,20 @@ function AuthGuardLockIcon() {
   )
 }
 
+function AuthGuardWelcomeIcon() {
+  return (
+    <svg className="tm-auth-guard-icon-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3zM5 17l.75 2.25L8 20l-2.25.75L5 23l-.75-2.25L2 20l2.25-.75L5 17zM19 13l.75 2.25L22 16l-2.25.75L19 19l-.75-2.25L16 16l2.25-.75L19 13z"
+      />
+    </svg>
+  )
+}
+
 export function AuthGuardModal({
   isOpen,
   title,
@@ -32,6 +50,8 @@ export function AuthGuardModal({
   cancelText,
   onConfirm,
   onCancel,
+  icon = 'lock',
+  children,
 }: AuthGuardModalProps) {
   const { t } = useI18n()
   const resolvedConfirmText = confirmText ?? t('user.guard.goRegister')
@@ -49,7 +69,7 @@ export function AuthGuardModal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tm-auth-guard-icon" aria-hidden="true">
-          <AuthGuardLockIcon />
+          {icon === 'welcome' ? <AuthGuardWelcomeIcon /> : <AuthGuardLockIcon />}
         </div>
 
         <div className="tm-auth-guard-content">
@@ -57,6 +77,7 @@ export function AuthGuardModal({
             {title}
           </h3>
           <p className="tm-auth-guard-desc">{description}</p>
+          {children ? <div className="tm-auth-guard-extra">{children}</div> : null}
         </div>
 
         <div className="tm-auth-guard-actions">

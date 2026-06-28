@@ -11,6 +11,81 @@ import {
 
 const BACKUP_MANIFEST_VERSION = 1
 
+export interface BackupManifest {
+  version: number
+  createdAt: number
+  includesKnowledge: boolean
+  includesNotes: boolean
+  includesP2pWorkspaces?: boolean
+  includesNotesAttachments?: boolean
+  dbPath: string
+  knowledgePath: string | null
+  notesPath: string | null
+  p2pWorkspacesPath?: string | null
+  notesAttachmentsPath?: string | null
+}
+
+export function validateBackupManifest(manifest: unknown): manifest is BackupManifest {
+  if (!manifest || typeof manifest !== 'object') return false
+  const record = manifest as Record<string, unknown>
+  return (
+    record.version === BACKUP_MANIFEST_VERSION &&
+    typeof record.createdAt === 'number' &&
+    typeof record.includesKnowledge === 'boolean' &&
+    typeof record.includesNotes === 'boolean' &&
+    typeof record.dbPath === 'string' &&
+    record.dbPath.length > 0 &&
+    (record.knowledgePath === null || typeof record.knowledgePath === 'string') &&
+    (record.notesPath === null || typeof record.notesPath === 'string') &&
+    (record.includesP2pWorkspaces === undefined || typeof record.includesP2pWorkspaces === 'boolean') &&
+    (record.includesNotesAttachments === undefined || typeof record.includesNotesAttachments === 'boolean') &&
+    (record.p2pWorkspacesPath === undefined ||
+      record.p2pWorkspacesPath === null ||
+      typeof record.p2pWorkspacesPath === 'string') &&
+    (record.notesAttachmentsPath === undefined ||
+      record.notesAttachmentsPath === null ||
+      typeof record.notesAttachmentsPath === 'string')
+  )
+}
+
+export function readBackupManifest(bundlePath: string): BackupManifest | null {
+  const manifestPath = join(bundlePath, 'manifest.json')
+  if (!existsSync(manifestPath)) return null
+  try {
+    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8')) as unknown
+    return validateBackupManifest(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function assertValidRestoreBackupPath(backupPath: string): void {
+  if (!existsSync(backupPath)) {
+    throw new Error('备份路径不存在')
+  }
+
+  if (statSync(backupPath).isFile()) {
+    if (!backupPath.endsWith('.db')) {
+      throw new Error('单文件备份必须是 .db 文件')
+    }
+    return
+  }
+
+  if (!isBackupBundle(backupPath)) {
+    throw new Error('所选目录不是有效的 Toolman 备份包')
+  }
+
+  const manifest = readBackupManifest(backupPath)
+  if (!manifest) {
+    throw new Error('备份包 manifest.json 无效或缺失')
+  }
+
+  const dbFile = join(backupPath, manifest.dbPath)
+  if (!existsSync(dbFile)) {
+    throw new Error(`备份包中未找到 ${manifest.dbPath}`)
+  }
+}
+
 function getDirSize(targetPath: string): number {
   if (!existsSync(targetPath)) return 0
 
@@ -171,6 +246,20 @@ export async function backupAppData(input?: { notesDataJson?: string }) {
     includesNotes = true
   }
 
+  const p2pWorkspacesDir = join(userData, 'p2p-workspaces')
+  let includesP2pWorkspaces = false
+  if (existsSync(p2pWorkspacesDir)) {
+    cpSync(p2pWorkspacesDir, join(backupRoot, 'p2p-workspaces'), { recursive: true })
+    includesP2pWorkspaces = true
+  }
+
+  const notesAttachmentsDir = join(userData, 'notes-attachments')
+  let includesNotesAttachments = false
+  if (existsSync(notesAttachmentsDir)) {
+    cpSync(notesAttachmentsDir, join(backupRoot, 'notes-attachments'), { recursive: true })
+    includesNotesAttachments = true
+  }
+
   writeFileSync(
     join(backupRoot, 'manifest.json'),
     JSON.stringify(
@@ -179,9 +268,13 @@ export async function backupAppData(input?: { notesDataJson?: string }) {
         createdAt: Date.now(),
         includesKnowledge,
         includesNotes,
+        includesP2pWorkspaces,
+        includesNotesAttachments,
         dbPath: 'toolman.db',
         knowledgePath: includesKnowledge ? 'knowledge' : null,
         notesPath: includesNotes ? 'notes-data.json' : null,
+        p2pWorkspacesPath: includesP2pWorkspaces ? 'p2p-workspaces' : null,
+        notesAttachmentsPath: includesNotesAttachments ? 'notes-attachments' : null,
       },
       null,
       2,
@@ -193,21 +286,21 @@ export async function backupAppData(input?: { notesDataJson?: string }) {
     backupPath: backupRoot,
     includesKnowledge,
     includesNotes,
+    includesP2pWorkspaces,
+    includesNotesAttachments,
     manifestVersion: BACKUP_MANIFEST_VERSION,
   }
 }
 
 export async function restoreAppData(input: { backupPath: string; restoreKnowledge?: boolean }) {
-  if (!existsSync(input.backupPath)) {
-    throw new Error('备份路径不存在')
-  }
+  assertValidRestoreBackupPath(input.backupPath)
 
   const userData = app.getPath('userData')
   const dbPath = join(userData, 'toolman.db')
 
   if (statSync(input.backupPath).isFile()) {
     cpSync(input.backupPath, dbPath)
-    return { restored: true, includesKnowledge: false }
+    return { restored: true, includesKnowledge: false, requiresRestart: true }
   }
 
   const bundleDb = join(input.backupPath, 'toolman.db')
@@ -228,13 +321,31 @@ export async function restoreAppData(input: { backupPath: string; restoreKnowled
     includesKnowledge = true
   }
 
+  const p2pBackup = join(input.backupPath, 'p2p-workspaces')
+  if (existsSync(p2pBackup)) {
+    const p2pDir = join(userData, 'p2p-workspaces')
+    if (existsSync(p2pDir)) {
+      rmSync(p2pDir, { recursive: true, force: true })
+    }
+    cpSync(p2pBackup, p2pDir, { recursive: true })
+  }
+
+  const attachmentsBackup = join(input.backupPath, 'notes-attachments')
+  if (existsSync(attachmentsBackup)) {
+    const attachmentsDir = join(userData, 'notes-attachments')
+    if (existsSync(attachmentsDir)) {
+      rmSync(attachmentsDir, { recursive: true, force: true })
+    }
+    cpSync(attachmentsBackup, attachmentsDir, { recursive: true })
+  }
+
   let notesDataJson: string | undefined
   const notesBackup = join(input.backupPath, 'notes-data.json')
   if (existsSync(notesBackup)) {
     notesDataJson = readFileSync(notesBackup, 'utf8')
   }
 
-  return { restored: true, includesKnowledge, notesDataJson }
+  return { restored: true, includesKnowledge, notesDataJson, requiresRestart: true }
 }
 
 /** Sidecar dirs removed by「重置数据」（minimal reset） */

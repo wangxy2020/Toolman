@@ -631,6 +631,7 @@ export async function ingestFileAtPath(
       void maybeSyncSharedKnowledgeDocument(workspaceId, kbId, docRow.id)
     }
 
+    refreshKbStats(workspaceId, kbId)
     return { outcome: 'ingested', path: filePath }
   } catch (error) {
     const message = toErrorMessage(error, '导入失败')

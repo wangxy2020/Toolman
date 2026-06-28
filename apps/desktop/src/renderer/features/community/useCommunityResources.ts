@@ -22,7 +22,6 @@ import { formatCommunityHubError, isCommunityHubRateLimitError } from './communi
 import {
   COMMUNITY_LIST_POLL_INTERVAL_MS,
   fetchCommunityListCached,
-  invalidateCommunityListCache,
   readCommunityListCache,
 } from './community-list-cache'
 import { COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'

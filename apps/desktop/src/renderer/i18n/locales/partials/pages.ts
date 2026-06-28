@@ -699,6 +699,8 @@ export const groupPageZhCN = {
     empty: '暂无群组{{type}}，点击上方区域添加',
     count: '{{count}} 个{{type}}',
     unknownNotebook: '未知笔记本',
+    unknownMember: '未知成员',
+    memberSelf: '我',
     comingSoon: '{{title}} · 即将推出',
     types: {
       knowledge: '知识库',
@@ -720,6 +722,22 @@ export const groupPageZhCN = {
     ready: '就绪',
     lastSync: '上次同步 {{time}}',
     pendingApproval: '等待群主确认加入；确认前无法查看共享内容与发送消息',
+    p2pDegraded:
+      '群主 P2P 未连接，事件序号已降级；正在尝试连接并同步，连接成功后自动恢复。',
+  },
+  trustDevice: {
+    title: '确认新成员加入',
+    messageIntro: '成员 {{displayName}}（{{deviceName}}）请求加入群组。',
+    messageHint: '请核对下方设备指纹是否与对方显示一致，确认后才允许加入并同步数据。',
+    trustHint: '仅信任你认识的设备。拒绝后将断开连接，且不会同步任何事件。',
+    reject: '拒绝',
+    trust: '信任此设备',
+  },
+  fileContextMenu: {
+    closeMenu: '关闭菜单',
+    selectAll: '全选',
+    clearSelection: '取消',
+    deleteSelected: '移除已勾选',
   },
   settings: {
     tabs: { general: '基本信息', storage: '存储与同步', danger: '危险操作' },
@@ -916,6 +934,8 @@ export const groupPageEn = {
     empty: 'No group {{type}} yet. Click the area above to add.',
     count: '{{count}} {{type}}',
     unknownNotebook: 'Unknown notebook',
+    unknownMember: 'Unknown member',
+    memberSelf: 'Me',
     comingSoon: '{{title}} · Coming soon',
     types: {
       knowledge: 'knowledge bases',
@@ -937,6 +957,22 @@ export const groupPageEn = {
     ready: 'Ready',
     lastSync: 'Last sync {{time}}',
     pendingApproval: 'Waiting for owner approval. Shared content and messaging are unavailable until approved.',
+    p2pDegraded:
+      'Owner P2P is disconnected; event sequencing is degraded. Reconnecting and syncing — will recover automatically when connected.',
+  },
+  trustDevice: {
+    title: 'Confirm new member',
+    messageIntro: '{{displayName}} ({{deviceName}}) is requesting to join the group.',
+    messageHint: 'Verify the device fingerprint below matches what they show before allowing join and sync.',
+    trustHint: 'Only trust devices you recognize. Rejecting disconnects and no events will sync.',
+    reject: 'Reject',
+    trust: 'Trust this device',
+  },
+  fileContextMenu: {
+    closeMenu: 'Close menu',
+    selectAll: 'Select all',
+    clearSelection: 'Clear selection',
+    deleteSelected: 'Remove selected',
   },
   settings: {
     tabs: { general: 'General', storage: 'Storage & sync', danger: 'Danger zone' },
@@ -1143,6 +1179,16 @@ export const communityPageZhCN = {
     favorite: '收藏',
     share: '转发',
     report: '举报',
+  },
+  reportModal: {
+    title: '举报内容',
+    reasonLabel: '举报原因',
+    descriptionLabel: '补充说明（可选）',
+    descriptionPlaceholder: '请简要说明举报理由…',
+    submit: '提交举报',
+    submitting: '提交中…',
+    success: '举报已提交，感谢你的反馈。',
+    submitFailed: '举报失败',
   },
   panels: {
     news: { title: '资讯', subtitle: '查看社区动态、更新公告与 RSS 拉取文章', publish: '发布资讯', rss: 'RSS 源', empty: '暂无资讯文章', loading: '加载资讯…' },
@@ -1712,6 +1758,16 @@ export const communityPageEn = {
   },
   panelRefresh: 'Refresh',
   sort: { createdAt: 'Created', size: 'Size', name: 'Name' },
+  reportModal: {
+    title: 'Report content',
+    reasonLabel: 'Reason',
+    descriptionLabel: 'Additional details (optional)',
+    descriptionPlaceholder: 'Briefly describe why you are reporting…',
+    submit: 'Submit report',
+    submitting: 'Submitting…',
+    success: 'Report submitted. Thank you for your feedback.',
+    submitFailed: 'Report failed',
+  },
   actions: {
     install: 'Install',
     delete: 'Delete',
@@ -2259,4 +2315,46 @@ export const communityPageEn = {
     hotNews: 'Recommended news',
     installCount: '{{count}} installs',
   },
+} as const
+
+export const toolApprovalPageZhCN = {
+  title: {
+    default: '工具调用授权',
+    docxBatch: 'Word 文档编辑授权',
+    excelBatch: 'Excel 表格编辑授权',
+  },
+  queueHint: '待处理 {{count}} 项',
+  batchHint: {
+    excel:
+      '本次将调用 modify_excel_cells / highlight_excel_cells 写入修订版。允许后，本次任务内后续 Excel 编辑工具将自动执行，不再逐项询问。',
+    docx:
+      '本次将依次调用多个 DOCX 编辑工具（批注、替换、段落修改等）。允许后，本次任务内后续 DOCX 工具将自动执行，不再逐项询问。',
+  },
+  permissionHint:
+    '当前权限模式下，写入或执行类工具需要您确认。普通模式下读取类工具会自动放行；点击「允许」后，本次会话内后续写入/执行类工具将自动执行。',
+  noArgs: '（无参数）',
+  reject: '拒绝',
+  allow: '允许',
+  allowAll: '允许本次全部',
+} as const
+
+export const toolApprovalPageEn = {
+  title: {
+    default: 'Tool call approval',
+    docxBatch: 'Word document edit approval',
+    excelBatch: 'Excel spreadsheet edit approval',
+  },
+  queueHint: '{{count}} pending',
+  batchHint: {
+    excel:
+      'This will call modify_excel_cells / highlight_excel_cells to write a revised copy. After approval, further Excel edit tools in this task run automatically without prompts.',
+    docx:
+      'This will call multiple DOCX edit tools (comments, replace, paragraph edits, etc.). After approval, further DOCX tools in this task run automatically without prompts.',
+  },
+  permissionHint:
+    'In the current permission mode, write and execute tools need your confirmation. Read tools auto-approve in normal mode; after you click Allow, further write/execute tools in this session run automatically.',
+  noArgs: '(no arguments)',
+  reject: 'Reject',
+  allow: 'Allow',
+  allowAll: 'Allow all for this task',
 } as const

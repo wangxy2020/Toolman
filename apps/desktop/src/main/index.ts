@@ -353,7 +353,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
+let shutdownPromise: Promise<void> | null = null
+
+async function runGracefulShutdown(): Promise<void> {
   stopAllKnowledgeWatchers()
   stopKnowledgeUrlRefreshScheduler()
   stopP2pDiscovery()
@@ -364,8 +366,17 @@ app.on('before-quit', () => {
   stopCommunityCidProvider()
   stopP2pConnectionMonitor()
   stopP2pNetworkChangeMonitor()
-  void shutdownCommunityHub()
-  void disconnectAllMcpServers()
-  void shutdownChannels()
+  await shutdownCommunityHub().catch(() => undefined)
+  await disconnectAllMcpServers().catch(() => undefined)
+  await shutdownChannels().catch(() => undefined)
   destroyAllBrowserSessions()
+}
+
+app.on('before-quit', (event) => {
+  if (shutdownPromise) return
+  event.preventDefault()
+  shutdownPromise = runGracefulShutdown().finally(() => {
+    shutdownPromise = null
+    app.exit(0)
+  })
 })

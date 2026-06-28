@@ -32,6 +32,9 @@ pnpm --filter @toolman/db test:auth-schema
 step "P2P desktop integration"
 pnpm --filter @toolman/desktop test:p2p-integration
 
+step "Knowledge ingest integration"
+pnpm --filter @toolman/desktop test:knowledge-integration
+
 if command -v cargo >/dev/null 2>&1; then
   step "Community Hub Rust tests"
   cargo test -p toolman-community-hub

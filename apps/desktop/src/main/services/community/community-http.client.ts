@@ -277,7 +277,7 @@ export class CommunityHttpClient {
         lastError = error
         const shouldRetry =
           error instanceof CommunityHttpError &&
-          error.status === 429 &&
+          (error.status === 429 || error.status >= 500) &&
           attempt < maxAttempts - 1
         if (!shouldRetry) {
           throw error

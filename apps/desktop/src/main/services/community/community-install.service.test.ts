@@ -68,6 +68,7 @@ describe('community-install.service', () => {
         transport: 'stdio',
         command: 'npx',
         args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+        files: ['manifest.json'],
       },
       adapter: 'mcp',
       instructions: '由 Main 进程完成实际安装',

@@ -44,7 +44,7 @@ export function GroupPageStatusBar({
     if (showDegraded) {
       return {
         tone: 'warning' as const,
-        text: '群主 P2P 未连接，事件序号已降级；正在尝试连接并同步，连接成功后自动恢复。',
+        text: t('groupPage.status.p2pDegraded'),
       }
     }
 

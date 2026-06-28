@@ -364,12 +364,25 @@ export function migrateToolmanUserFolderBetweenSlugs(
   return migratedWorkspaces
 }
 
+export function applyDocumentsFolderSlugAccountSync(): boolean {
+  const sync = syncDocumentsFolderSlugWithAccount()
+  if (
+    sync.changed &&
+    sync.previousSlug &&
+    sync.nextSlug &&
+    sync.previousSlug !== sync.nextSlug
+  ) {
+    migrateToolmanUserFolderBetweenSlugs(sync.previousSlug, sync.nextSlug)
+  }
+  return sync.changed
+}
+
 /** Migrate legacy paths, create user folders on disk, and persist workspace folder settings. */
 export function bootstrapToolmanUserDocumentLayout(): {
   migratedWorkspaces: number
   userRoot: string
 } {
-  syncDocumentsFolderSlugWithAccount()
+  applyDocumentsFolderSlugAccountSync()
 
   const userRoot = ensureToolmanUserDocumentFolders()
   const migratedWorkspaces = migrateToolmanUserFolderPaths()
@@ -386,16 +399,6 @@ export function bootstrapToolmanUserDocumentLayout(): {
   }
 
   return { migratedWorkspaces, userRoot }
-}
-
-/** @deprecated Use migrateToolmanUserFolderPathsForWorkspace */
-export function migrateLegacyKnowledgeFolderPathForWorkspace(workspaceId: string): boolean {
-  return migrateToolmanUserFolderPathsForWorkspace(workspaceId)
-}
-
-/** @deprecated Use migrateToolmanUserFolderPaths */
-export function migrateLegacyKnowledgeFolderPaths(): number {
-  return migrateToolmanUserFolderPaths()
 }
 
 function ensureWorkspaceFolderSetting(

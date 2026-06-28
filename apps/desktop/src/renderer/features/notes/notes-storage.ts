@@ -215,13 +215,29 @@ export function saveNotesData(data: NotesData): void {
   void syncNotesDataToMain(data)
 }
 
+let lastNotesSyncError: string | null = null
+
+export function getLastNotesSyncError(): string | null {
+  return lastNotesSyncError
+}
+
 async function syncNotesDataToMain(data: NotesData): Promise<void> {
   try {
-    await window.api.invoke(IpcChannel.NotesDataSync, {
+    const result = await window.api.invoke(IpcChannel.NotesDataSync, {
       dataJson: JSON.stringify(data),
     })
-  } catch {
-    // non-fatal for local editing
+    if (!result.ok) {
+      lastNotesSyncError = result.error.message
+      window.dispatchEvent(
+        new CustomEvent('toolman:notes-sync-error', { detail: result.error.message }),
+      )
+      return
+    }
+    lastNotesSyncError = null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    lastNotesSyncError = message
+    window.dispatchEvent(new CustomEvent('toolman:notes-sync-error', { detail: message }))
   }
 }
 

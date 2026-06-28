@@ -5,6 +5,7 @@ import {
   createDatabase,
   runMigrations,
   getMigrationsPath,
+  getSqliteClient,
   seedDefaultData,
   AuthSessionRepository,
   type ToolmanDatabase,
@@ -43,6 +44,17 @@ export function bootstrapDatabase(): void {
 
   const packageRoot = resolveDbPackageRoot()
   runMigrations(db, getMigrationsPath(packageRoot))
+  try {
+    const integrity = getSqliteClient(db).prepare('PRAGMA integrity_check').get() as
+      | { integrity_check?: string }
+      | undefined
+    const result = integrity?.integrity_check ?? 'unknown'
+    if (result !== 'ok') {
+      logStructured('db', 'error', `integrity_check failed: ${result}`)
+    }
+  } catch (error) {
+    logStructured('db', 'warn', `integrity_check skipped: ${toErrorMessage(error, String(error))}`)
+  }
   const localIdentityId = getLocalIdentityId()
   const localDisplayName =
     localIdentityId === '00000000-0000-4000-8000-00000000000b' ? 'P2P 用户 B' : '本地用户'

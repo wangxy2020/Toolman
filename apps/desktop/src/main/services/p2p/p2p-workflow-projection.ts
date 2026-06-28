@@ -14,6 +14,7 @@ import {
   readWorkflowShareMetadata,
   serializeWorkflowShareMetadata,
 } from './p2p-workflow-share-metadata'
+import { resolveLocalSharedByMemberId } from './p2p-shared-by-member.service'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -94,13 +95,18 @@ export function projectWorkflowSharedEvent(event: WorkspaceEvent): void {
   }
 
   if (!existing) {
+    const sharedBy = resolveLocalSharedByMemberId(
+      event.workspaceId,
+      event.operatorId,
+      event.sourceDeviceId,
+    )
     sharedRepo.create({
       id: resourceId,
       workspaceId: event.workspaceId,
       resourceType: 'Workflow',
       localResourceId,
       name,
-      sharedBy: event.operatorId,
+      sharedBy,
       permission: 'read',
       metadataJson,
       createdAt: new Date(event.timestamp),
@@ -109,12 +115,18 @@ export function projectWorkflowSharedEvent(event: WorkspaceEvent): void {
     return
   }
 
+  const sharedBy = resolveLocalSharedByMemberId(
+    event.workspaceId,
+    event.operatorId,
+    event.sourceDeviceId,
+  )
   sharedRepo.update({
     id: resourceId,
     name,
     status: 'active',
     localResourceId,
     metadataJson,
+    ...(existing.sharedBy !== sharedBy ? { sharedBy } : {}),
   })
 }
 
