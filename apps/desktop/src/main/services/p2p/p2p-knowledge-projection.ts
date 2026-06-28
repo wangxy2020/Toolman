@@ -100,16 +100,7 @@ export function protectOwnerSourceKnowledgeBase(
   }
 }
 
-function findSharedKnowledgeResource(
-  sharedRepo: ReturnType<typeof getSharedResourceRepo>,
-  p2pWorkspaceId: string,
-  kbId: string,
-) {
-  return (
-    sharedRepo.findByWorkspaceAndLocalResource(p2pWorkspaceId, kbId, 'Knowledge') ??
-    sharedRepo.findById(kbId)
-  )
-}
+import { findSharedResourceForProjection, resolveSharedResourceId } from './p2p-shared-resource-id'
 
 export function reconcileKnowledgeSharedResources(workspaceId: string): void {
   const terminalByKb = new Map<string, WorkspaceEvent>()
@@ -138,11 +129,19 @@ export function reconcileKnowledgeSharedResources(workspaceId: string): void {
   }
 
   for (const event of terminalByKb.values()) {
-    if (event.eventType === 'Deleted') {
-      projectKnowledgeDeletedEvent(event)
-      continue
+    try {
+      if (event.eventType === 'Deleted') {
+        projectKnowledgeDeletedEvent(event)
+        continue
+      }
+      projectKnowledgeSharedEvent(event)
+    } catch (error) {
+      logStructured(
+        'p2p',
+        'warn',
+        `reconcile knowledge ${event.resourceId}: ${toErrorMessage(error, String(error))}`,
+      )
     }
-    projectKnowledgeSharedEvent(event)
   }
 }
 
@@ -168,7 +167,7 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
   const documentPermissions = parseKnowledgeDocumentPermissionsFromPayload(event.payload)
 
   const sharedRepo = getSharedResourceRepo()
-  const existing = findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId)
+  const existing = findSharedResourceForProjection(sharedRepo, event.workspaceId, kbId, 'Knowledge')
   const existingMetadata = existing?.metadataJson
     ? (() => {
         try {
@@ -195,10 +194,11 @@ export function projectKnowledgeSharedEvent(event: WorkspaceEvent): void {
       : {}),
   })
 
-  const resourceId = existing?.id ?? kbId
+  const resourceId =
+    existing?.id ?? resolveSharedResourceId(sharedRepo, kbId, event.workspaceId)
   if (!existing) {
     sharedRepo.create({
-      id: kbId,
+      id: resourceId,
       workspaceId: event.workspaceId,
       resourceType: 'Knowledge',
       localResourceId: kbId,
@@ -239,7 +239,7 @@ export function projectKnowledgeDeletedEvent(event: WorkspaceEvent): void {
 
   const kbId = readPayloadString(event.payload, 'kb_id') ?? event.resourceId
   const sharedRepo = getSharedResourceRepo()
-  const resource = findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId)
+  const resource = findSharedResourceForProjection(sharedRepo, event.workspaceId, kbId, 'Knowledge')
   if (resource) {
     sharedRepo.update({ id: resource.id, status: 'unshared' })
   }
@@ -284,7 +284,9 @@ export async function applyKnowledgeUpdatedEvent(event: WorkspaceEvent): Promise
 
   if (documentPermissions || documentPermission) {
     const sharedRepo = getSharedResourceRepo()
-    const shared = kbId ? findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId) : null
+    const shared = kbId
+      ? findSharedResourceForProjection(sharedRepo, event.workspaceId, kbId, 'Knowledge')
+      : null
     if (shared) {
       let existingMetadata: {
         description?: string | null
@@ -325,7 +327,7 @@ export async function applyKnowledgeUpdatedEvent(event: WorkspaceEvent): Promise
   }
 
   const sharedRepo = getSharedResourceRepo()
-  const shared = findSharedKnowledgeResource(sharedRepo, event.workspaceId, kbId)
+  const shared = findSharedResourceForProjection(sharedRepo, event.workspaceId, kbId, 'Knowledge')
   const sharedBy = shared?.sharedBy
   const isLocalSharer = isLocalKnowledgeSharer(event.workspaceId, sharedBy)
   const mirrorName = stripGroupPrefixedName(event.workspaceId, shared?.name ?? title)

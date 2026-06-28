@@ -16,7 +16,8 @@ import { listP2pConnections, getKnownP2pConnections, ensurePeerReadyForWorkspace
 import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
-import { applyRemoteMemberJoin, ensureOwnerMemberRecord } from './p2p-member.service'
+import { applyRemoteMemberJoin } from './p2p-member-join.service'
+import { ensureOwnerMemberRecord } from './p2p-member-shared'
 import {
   broadcastP2pGroupChatCleared,
   broadcastP2pGroupChatMessage,

@@ -89,6 +89,15 @@ export class P2pMemberRepository {
       .all()
   }
 
+  listVisibleMembershipsByDevice(deviceId: string): P2pWorkspaceMemberRow[] {
+    return this.db
+      .select()
+      .from(p2pWorkspaceMembers)
+      .where(eq(p2pWorkspaceMembers.deviceId, deviceId))
+      .all()
+      .filter((row) => row.status === 'active' || row.status === 'invited')
+  }
+
   create(input: CreateP2pMemberInput): P2pWorkspaceMemberRow {
     const now = new Date()
     const id = input.id ?? randomUUID()

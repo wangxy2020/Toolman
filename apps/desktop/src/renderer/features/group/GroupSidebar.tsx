@@ -7,11 +7,13 @@ import { translateGroupName } from '../../i18n/system-labels'
 interface Props {
   myGroups: P2pWorkspace[]
   joinedGroups: P2pWorkspace[]
+  pendingJoinCount?: number
   activeId: string | null
   loading?: boolean
   onSelect: (id: string) => void
   onCreate: () => void
   onJoin: () => void
+  onShowPendingJoins?: () => void
 }
 
 function isGroupInList(groups: P2pWorkspace[], activeId: string | null) {
@@ -21,11 +23,13 @@ function isGroupInList(groups: P2pWorkspace[], activeId: string | null) {
 export function GroupSidebar({
   myGroups,
   joinedGroups,
+  pendingJoinCount = 0,
   activeId,
   loading,
   onSelect,
   onCreate,
   onJoin,
+  onShowPendingJoins,
 }: Props) {
   const { t } = useI18n()
   const [myGroupsOpen, setMyGroupsOpen] = useState(true)
@@ -152,29 +156,45 @@ export function GroupSidebar({
             </div>
 
             {joinedGroupsOpen &&
-              (joinedGroups.length === 0 ? (
+              (loading && joinedGroups.length === 0 && pendingJoinCount === 0 ? (
+                <div className="tm-session-empty">{t('common.loading')}</div>
+              ) : joinedGroups.length === 0 && pendingJoinCount === 0 ? (
                 <div className="tm-session-empty">{t('sidebar.group.emptyNoJoined')}</div>
               ) : (
-                joinedGroups.map((group) => (
-                  <button
-                    key={group.id}
-                    type="button"
-                    className={[
-                      'tm-session-item',
-                      'tm-session-item--with-icon',
-                      activeId === group.id ? 'tm-session-item--active' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    onClick={() => onSelect(group.id)}
-                    title={formatGroupLabel(group.name)}
-                  >
-                    <span className="tm-session-item-icon" aria-hidden="true">
-                      <IconFolder size={14} />
-                    </span>
-                    <span className="tm-session-item-label">{formatGroupLabel(group.name)}</span>
-                  </button>
-                ))
+                <>
+                  {pendingJoinCount > 0 ? (
+                    <button
+                      type="button"
+                      className="tm-session-item tm-session-item--with-icon tm-session-item--muted"
+                      onClick={onShowPendingJoins}
+                      title={t('sidebar.group.pendingJoins', { count: pendingJoinCount })}
+                    >
+                      <span className="tm-session-item-label">
+                        {t('sidebar.group.pendingJoins', { count: pendingJoinCount })}
+                      </span>
+                    </button>
+                  ) : null}
+                  {joinedGroups.map((group) => (
+                    <button
+                      key={group.id}
+                      type="button"
+                      className={[
+                        'tm-session-item',
+                        'tm-session-item--with-icon',
+                        activeId === group.id ? 'tm-session-item--active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => onSelect(group.id)}
+                      title={formatGroupLabel(group.name)}
+                    >
+                      <span className="tm-session-item-icon" aria-hidden="true">
+                        <IconFolder size={14} />
+                      </span>
+                      <span className="tm-session-item-label">{formatGroupLabel(group.name)}</span>
+                    </button>
+                  ))}
+                </>
               ))}
           </div>
         </div>

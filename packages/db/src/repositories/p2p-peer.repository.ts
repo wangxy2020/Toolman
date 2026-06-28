@@ -88,6 +88,10 @@ export class P2pPeerRepository {
     return this.findByWorkspaceAndDevice(input.workspaceId, input.deviceId)!
   }
 
+  deleteByWorkspace(workspaceId: string): void {
+    this.db.delete(p2pPeerNodes).where(eq(p2pPeerNodes.workspaceId, workspaceId)).run()
+  }
+
   setTrusted(workspaceId: string, deviceId: string, trusted: boolean): P2pPeerNodeRow | null {
     const existing = this.findByWorkspaceAndDevice(workspaceId, deviceId)
     if (!existing) return null

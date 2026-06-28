@@ -73,7 +73,7 @@ describe('exportCommunityMcpPackage', () => {
     expect(writeCommunityZipPackage).toHaveBeenCalledWith(
       expect.objectContaining({
         files: expect.objectContaining({
-          'mcp.manifest.json': expect.stringContaining('"mcpId": "custom-mcp"'),
+          'mcp.manifest.json': expect.stringMatching(/"files"\s*:\s*\[\s*"mcp\.manifest\.json"\s*\]/),
         }),
       }),
     )

@@ -19,10 +19,11 @@ import { getDatabase } from '../../bootstrap/database'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
 import { writeBlobFromPath } from '../blob.service'
 import { appendP2pEvent } from './p2p-event.service'
-import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
 import { findLatestKnowledgeDocumentContentEvent } from './p2p-knowledge-share-metadata'
-import { ensureP2pKnowledgeBlobCached } from './p2p-knowledge-blob-cache.service'
+import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
+import { fetchAndCacheSharedKnowledgeBlob, ensureP2pKnowledgeBlobCached } from './p2p-knowledge-blob-cache.service'
 import { pushBlobToPeers } from './p2p-blob-transfer.service'
+import { stripGroupPrefixedName, resolvePersonalStorageWorkspaceId } from './p2p-group-resource-naming'
 import { getSharedResourceRepo } from './knowledge-sync-shared-resource'
 import {
   assertCanEditSharedResource,
@@ -30,8 +31,7 @@ import {
   getActiveWorkspaceMember,
 } from './p2p-permission.guard'
 import { getDefaultWorkspace } from '../workspace.service'
-import { resolvePersonalStorageWorkspaceId } from './p2p-group-resource-naming'
-import { ingestFileAtPath } from '../knowledge-ingest.service'
+import { ingestFileAtPath, refreshKbStats } from '../knowledge-ingest.service'
 import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source.service'
 import { restartKnowledgeWatchersForKb } from '../knowledge-watcher.service'
@@ -126,10 +126,18 @@ function ensureUserSavedGroupKnowledgeBase(
   storageWorkspaceId: string,
   p2pWorkspaceId: string,
   groupName: string,
+  sharedFolderName: string,
 ): { kbId: string; storagePath: string } {
   const kbRepo = getKnowledgeBaseRepository()
-  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, undefined, p2pWorkspaceId)
-  const displayName = buildP2pGroupSavedKnowledgeDisplayName(savedMeta.groupName)
+  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(
+    groupName,
+    sharedFolderName,
+    p2pWorkspaceId,
+  )
+  const displayName = buildP2pGroupSavedKnowledgeDisplayName(
+    savedMeta.groupName,
+    savedMeta.sharedFolderName,
+  )
   const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
 
   const workspaceRows = kbRepo.listByWorkspace(storageWorkspaceId)
@@ -138,6 +146,7 @@ function ensureUserSavedGroupKnowledgeBase(
     {
       p2pWorkspaceId,
       groupName,
+      sharedFolderName,
     },
     { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
   )
@@ -189,6 +198,7 @@ async function resolveSharedKnowledgeDocumentContent(input: {
   contentHash: string
   mimeType: string
   sharedBy: string
+  sharedFolderName: string
   contentEvent: WorkspaceEvent
 }> {
   const sharedRepo = getSharedResourceRepo()
@@ -235,8 +245,64 @@ async function resolveSharedKnowledgeDocumentContent(input: {
     contentHash,
     mimeType,
     sharedBy: resource.sharedBy,
+    sharedFolderName: stripGroupPrefixedName(input.workspaceId, resource.name),
     contentEvent,
   }
+}
+
+async function ensureSharedKnowledgeBlobCached(input: {
+  workspaceId: string
+  storageWorkspaceId: string
+  sourceKbId: string
+  documentId: string
+  title: string
+  contentHash: string
+  mimeType: string
+  sharedBy: string
+}): Promise<string | null> {
+  return fetchAndCacheSharedKnowledgeBlob({
+    p2pWorkspaceId: input.workspaceId,
+    storageWorkspaceId: input.storageWorkspaceId,
+    kbId: input.sourceKbId,
+    docId: input.documentId,
+    title: input.title,
+    contentHash: input.contentHash,
+    mimeType: input.mimeType,
+    sharedBy: input.sharedBy,
+  })
+}
+
+async function ensureSharedKnowledgeBlobCachedWithRetry(input: {
+  workspaceId: string
+  storageWorkspaceId: string
+  sourceKbId: string
+  documentId: string
+  title: string
+  contentHash: string
+  mimeType: string
+  sharedBy: string
+}): Promise<string | null> {
+  let cachedPath = await ensureSharedKnowledgeBlobCached(input)
+  if (cachedPath) {
+    return cachedPath
+  }
+
+  await syncMissingSharedKnowledgeDocuments(input.workspaceId)
+  cachedPath = await ensureSharedKnowledgeBlobCached(input)
+  if (cachedPath) {
+    return cachedPath
+  }
+
+  return ensureP2pKnowledgeBlobCached({
+    p2pWorkspaceId: input.workspaceId,
+    storageWorkspaceId: input.storageWorkspaceId,
+    kbId: input.sourceKbId,
+    docId: input.documentId,
+    title: input.title,
+    contentHash: input.contentHash,
+    mimeType: input.mimeType,
+    sharedBy: input.sharedBy,
+  })
 }
 
 export async function materializeP2pKnowledgeDocumentForOpen(rawInput: unknown): Promise<{
@@ -250,11 +316,11 @@ export async function materializeP2pKnowledgeDocumentForOpen(rawInput: unknown):
     throw new Error('工作区未就绪')
   }
 
-  const cachedPath = await ensureP2pKnowledgeBlobCached({
-    p2pWorkspaceId: input.workspaceId,
+  const cachedPath = await ensureSharedKnowledgeBlobCachedWithRetry({
+    workspaceId: input.workspaceId,
     storageWorkspaceId,
-    kbId: content.sourceKbId,
-    docId: input.documentId,
+    sourceKbId: content.sourceKbId,
+    documentId: input.documentId,
     title: content.title,
     contentHash: content.contentHash,
     mimeType: content.mimeType,
@@ -279,31 +345,18 @@ export async function ensureP2pKnowledgeDocumentSaved(rawInput: unknown): Promis
     throw new Error('工作区未就绪')
   }
 
-  let cachedPath = await ensureP2pKnowledgeBlobCached({
-    p2pWorkspaceId: input.workspaceId,
+  const cachedPath = await ensureSharedKnowledgeBlobCachedWithRetry({
+    workspaceId: input.workspaceId,
     storageWorkspaceId,
-    kbId: content.sourceKbId,
-    docId: input.documentId,
+    sourceKbId: content.sourceKbId,
+    documentId: input.documentId,
     title: content.title,
     contentHash: content.contentHash,
     mimeType: content.mimeType,
     sharedBy: content.sharedBy,
   })
   if (!cachedPath) {
-    await syncMissingSharedKnowledgeDocuments(input.workspaceId)
-    cachedPath = await ensureP2pKnowledgeBlobCached({
-      p2pWorkspaceId: input.workspaceId,
-      storageWorkspaceId,
-      kbId: content.sourceKbId,
-      docId: input.documentId,
-      title: content.title,
-      contentHash: content.contentHash,
-      mimeType: content.mimeType,
-      sharedBy: content.sharedBy,
-    })
-  }
-  if (!cachedPath) {
-    throw new Error('文档内容尚未同步到群组，请稍后重试')
+    throw new Error('文档内容尚未从群主同步，请确认 P2P 已连接后重试')
   }
 
   const p2pWorkspace = new P2pWorkspaceRepository(getDatabase()).findById(input.workspaceId)
@@ -320,6 +373,7 @@ export async function ensureP2pKnowledgeDocumentSaved(rawInput: unknown): Promis
     storageWorkspaceId,
     input.workspaceId,
     p2pWorkspace.name,
+    content.sharedFolderName,
   )
 
   const fileExt = extname(cachedPath) || extname(content.title)
@@ -345,6 +399,8 @@ export async function ensureP2pKnowledgeDocumentSaved(rawInput: unknown): Promis
   if (result.outcome === 'failed') {
     throw new Error(result.message ?? '保存文档失败')
   }
+
+  refreshKbStats(storageWorkspaceId, kbId)
 
   const savedDoc = getDocumentRepository().findByPath(kbId, destinationPath)
   if (!savedDoc) {

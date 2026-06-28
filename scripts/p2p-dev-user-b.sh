@@ -19,4 +19,5 @@ fi
 cd "$ROOT_DIR"
 pnpm build:p2p && pnpm build:libp2p
 pnpm --filter @toolman/desktop^... build
-exec pnpm --filter @toolman/desktop exec electron-vite dev -- --user-data-dir="$USER_DATA_DIR"
+exec env TOOLMAN_CONSOLE_LOG_LEVEL="${TOOLMAN_CONSOLE_LOG_LEVEL:-warn}" TOOLMAN_VITE_LOG_LEVEL="${TOOLMAN_VITE_LOG_LEVEL:-warn}" \
+  pnpm --filter @toolman/desktop exec electron-vite dev --logLevel warn -- --user-data-dir="$USER_DATA_DIR"

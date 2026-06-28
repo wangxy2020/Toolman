@@ -1,5 +1,6 @@
 import { P2pSharedResourceRepository, type P2pSharedResourceRow } from '@toolman/db'
 import type { P2pSharedResource } from '@toolman/shared'
+import { parseP2pNoteShareMetadata } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { mapP2pAgentSharedResourceRow } from './agent-share.service'
 import { readKnowledgeShareMetadata } from './p2p-knowledge-share-metadata'
@@ -28,6 +29,18 @@ export function mapSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResour
     updatedAt: row.updatedAt.getTime(),
   }
 
+  if (row.resourceType === 'Note') {
+    const meta = parseP2pNoteShareMetadata(row.metadataJson)
+    if (!meta) {
+      return base
+    }
+    return {
+      ...base,
+      notebookId: meta.notebookId,
+      notebookName: meta.notebookName,
+    }
+  }
+
   if (row.resourceType !== 'Knowledge') {
     return base
   }
@@ -38,5 +51,6 @@ export function mapSharedResourceRow(row: P2pSharedResourceRow): P2pSharedResour
     sharedDocumentIds: metadata.documentIds,
     sharedDocumentPermissions: metadata.documentPermissions,
     sourceWorkspaceId: metadata.sourceWorkspaceId,
+    sourceKbKind: metadata.sourceKbKind,
   }
 }

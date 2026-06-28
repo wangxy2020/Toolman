@@ -269,6 +269,8 @@ pub struct McpManifest {
     pub templates: Vec<Value>,
     #[serde(default)]
     pub config_schema: Value,
+    #[serde(default)]
+    pub files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -308,6 +310,10 @@ impl ResourceManifest for McpManifest {
         if self.transport == "stdio" && self.command.as_ref().is_none_or(|value| value.trim().is_empty())
         {
             return Err(ManifestError::MissingField("command"));
+        }
+
+        if self.files.is_empty() {
+            return Err(ManifestError::MissingField("files"));
         }
 
         Ok(())
@@ -473,7 +479,9 @@ impl CreateResourceInput {
         if self.title.trim().is_empty() {
             return Err(ResourceError::EmptyTitle);
         }
-        validate_manifest_for_type(self.resource_type, &self.manifest)?;
+        if self.status != Some(ResourceStatus::Draft) {
+            validate_manifest_for_type(self.resource_type, &self.manifest)?;
+        }
         Ok(())
     }
 }
@@ -490,7 +498,8 @@ mod tests {
             "mcpId": "filesystem",
             "transport": "stdio",
             "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+            "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+            "files": ["mcp.manifest.json"]
         });
 
         let typed = parse_manifest(ResourceType::Mcp, &manifest).expect("mcp manifest");

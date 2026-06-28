@@ -13,6 +13,8 @@ import {
 } from '../../components/module-page-status'
 import { getModulePageConfig } from '../modules/module-config'
 import { KnowledgeBaseSettingsModal } from './KnowledgeBaseSettingsModal'
+import { SharedKnowledgePanel } from './SharedKnowledgePanel'
+import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
@@ -56,6 +58,7 @@ interface Props {
   section: KnowledgeSidebarSection
   activeId: string | null
   active: KnowledgeBase | null
+  sharedKnowledgeEntries?: SharedKnowledgeEntry[]
   knowledgeFolderPath: string | null
   knowledgeFolderLoading?: boolean
   knowledgeFolderError?: string | null
@@ -84,6 +87,7 @@ export function KnowledgePage({
   section,
   activeId,
   active,
+  sharedKnowledgeEntries = [],
   knowledgeFolderPath,
   knowledgeFolderLoading,
   knowledgeFolderError,
@@ -147,6 +151,13 @@ export function KnowledgePage({
     active?.kind === 'shared' &&
     activeId != null &&
     !isSharedKnowledgeId(activeId)
+
+  const activeSharedEntry = useMemo(() => {
+    if (!activeId || !isSharedKnowledgeId(activeId)) return null
+    return sharedKnowledgeEntries.find((entry) => entry.id === activeId) ?? null
+  }, [activeId, sharedKnowledgeEntries])
+
+  const showingLiveSharedFolder = section === 'shared' && activeSharedEntry != null
 
   const localDefaultKb = useDefaultFolderKnowledgeBase(
     workspaceId,
@@ -506,7 +517,9 @@ export function KnowledgePage({
             ? SYSTEM_DEFAULT_FOLDER_KB_NAME
             : active?.name
           : section === 'shared'
-            ? active?.name
+            ? activeSharedEntry
+              ? `[${activeSharedEntry.workspaceName}] ${activeSharedEntry.resource.name}`
+              : active?.name
           : section === 'file-tools'
             ? activeId === FILE_REGISTRY_TOOL_ID
               ? t('knowledgePage.fileRegistry')
@@ -786,6 +799,11 @@ export function KnowledgePage({
         ) : section === 'shared' ? (
           showingSavedSharedFolder ? (
             renderKnowledgeFilePanel()
+          ) : showingLiveSharedFolder && activeSharedEntry ? (
+            <SharedKnowledgePanel
+              entry={activeSharedEntry}
+              onOpenError={(message) => documents.setError(message)}
+            />
           ) : (
             <div className="tm-module-empty">
               <h2 className="tm-module-empty-title">{t('knowledgePage.sections.shared')}</h2>

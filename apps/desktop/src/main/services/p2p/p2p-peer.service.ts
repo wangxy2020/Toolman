@@ -7,7 +7,7 @@ import {
 } from '@toolman/db'
 import { logStructured } from '../structured-log.service'
 import type { DiscoveredNode, P2pConnectionState } from '@toolman/shared'
-import {P2pMemberTrustDeviceInputSchema, toErrorMessage } from '@toolman/shared'
+import {P2pMemberTrustDeviceInputSchema, toErrorMessage, type P2pPeerTrustRequiredPayload } from '@toolman/shared'
 import { eq } from 'drizzle-orm'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceId } from './p2p-device-identity.service'
@@ -15,8 +15,10 @@ import { isP2pPeerDiscoverableOnline, listP2pDiscoveredNodes } from './p2p-disco
 import { broadcastP2pPeerTrustRequired } from './p2p-peer-broadcast'
 import { P2pBridge } from './p2p-bridge'
 import { notifyP2pPeerConnected } from './p2p-sync-lifecycle'
+import { resolveSharedMembershipWorkspaceId } from './p2p-member-shared'
 
 const promptedPeers = new Set<string>()
+const pendingTrustPrompts = new Map<string, P2pPeerTrustRequiredPayload>()
 
 function peerPromptKey(workspaceId: string, deviceId: string): string {
   return `${workspaceId}:${deviceId}`
@@ -64,6 +66,36 @@ function findStoredPeerPublicKey(deviceId: string): string | null {
     }
   }
   return null
+}
+
+export function resolveWorkspaceIdForPeerConnection(
+  peerDeviceId: string,
+  workspaceId?: string,
+): string | undefined {
+  const sharedWorkspaceId = resolveSharedMembershipWorkspaceId(peerDeviceId)
+  if (sharedWorkspaceId) return sharedWorkspaceId
+
+  if (workspaceId) return workspaceId
+
+  const localDeviceId = getP2pDeviceId()
+  const ownedWorkspaces = getWorkspaceRepo().listByOwnerDevice(localDeviceId)
+  if (ownedWorkspaces.length === 0) return undefined
+
+  for (const workspace of ownedWorkspaces) {
+    const member = getMemberRepo().findByWorkspaceAndDevice(workspace.id, peerDeviceId)
+    if (member?.status === 'invited') return workspace.id
+  }
+
+  for (const workspace of ownedWorkspaces) {
+    const member = getMemberRepo().findByWorkspaceAndDevice(workspace.id, peerDeviceId)
+    if (!member || member.status !== 'active') return workspace.id
+  }
+
+  if (ownedWorkspaces.length === 1) {
+    return ownedWorkspaces[0].id
+  }
+
+  return undefined
 }
 
 export function resolvePeerPublicKey(deviceId: string, fingerprint: string): string {
@@ -193,6 +225,49 @@ export function trustPeerSilentlyForWorkspaceMesh(
   })
 }
 
+export function revokePeerTrustForWorkspace(workspaceId: string, peerDeviceId: string): void {
+  const localDeviceId = getP2pDeviceId()
+  if (peerDeviceId === localDeviceId) return
+  getPeerRepo().setTrusted(workspaceId, peerDeviceId, false)
+}
+
+export function clearPeerTrustPrompt(workspaceId: string, peerDeviceId: string): void {
+  promptedPeers.delete(peerPromptKey(workspaceId, peerDeviceId))
+}
+
+export function prepareJoinPeerTrustPrompt(
+  workspaceId: string,
+  peerDeviceId: string,
+  displayName: string,
+): void {
+  revokePeerTrustForWorkspace(workspaceId, peerDeviceId)
+  clearPeerTrustPrompt(workspaceId, peerDeviceId)
+  registerJoiningPeerForTrust(workspaceId, peerDeviceId, displayName)
+  promptPeerTrustIfNeeded(workspaceId, peerDeviceId, { connected: true })
+}
+
+function registerJoiningPeerForTrust(
+  workspaceId: string,
+  peerDeviceId: string,
+  displayName: string,
+): void {
+  const node = listP2pDiscoveredNodes(false).find((item) => item.deviceId === peerDeviceId)
+  if (node) {
+    upsertPeerFromDiscovery(workspaceId, node, 'connected')
+    return
+  }
+
+  getPeerRepo().upsert({
+    workspaceId,
+    deviceId: peerDeviceId,
+    displayName,
+    deviceName: peerDeviceId.slice(0, 8),
+    publicKey: peerDeviceId,
+    online: true,
+    connectionState: 'connected',
+  })
+}
+
 export function promptPeerTrustIfNeeded(
   workspaceId: string,
   peerDeviceId: string,
@@ -210,12 +285,29 @@ export function promptPeerTrustIfNeeded(
 
   const promptKey = peerPromptKey(workspaceId, peerDeviceId)
   if (promptedPeers.has(promptKey)) return
+
+  let peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  if (!peer) {
+    registerJoiningPeerForTrust(workspaceId, peerDeviceId, '成员')
+    peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  }
+  if (!peer) return
+
   promptedPeers.add(promptKey)
 
   const node = resolveDiscoveredNode(peerDeviceId)
-  const peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
-  if (!peer) return
-
+  logStructured(
+    'p2p',
+    'info',
+    `peer trust prompt: workspace=${workspaceId} peer=${peerDeviceId.slice(0, 8)}`,
+  )
+  pendingTrustPrompts.set(promptKey, {
+    workspaceId,
+    peerDeviceId,
+    displayName: peer.displayName,
+    deviceName: peer.deviceName,
+    publicKeyFingerprint: node?.publicKeyFingerprint ?? peer.publicKey.slice(0, 16),
+  })
   broadcastP2pPeerTrustRequired({
     workspaceId,
     peerDeviceId,
@@ -297,19 +389,20 @@ export function handlePeerConnectionChange(
   peerDeviceId: string,
   state: P2pConnectionState,
 ): void {
-  if (!workspaceId) return
+  const resolvedWorkspaceId = resolveWorkspaceIdForPeerConnection(peerDeviceId, workspaceId)
+  if (!resolvedWorkspaceId) return
 
   const localDeviceId = getP2pDeviceId()
   if (peerDeviceId === localDeviceId) return
 
   const node = resolveDiscoveredNode(peerDeviceId)
   if (node) {
-    upsertPeerFromDiscovery(workspaceId, node, state)
+    upsertPeerFromDiscovery(resolvedWorkspaceId, node, state)
   } else {
     getPeerRepo().upsert({
-      workspaceId,
+      workspaceId: resolvedWorkspaceId,
       deviceId: peerDeviceId,
-      displayName: resolvePeerDisplayName(workspaceId, peerDeviceId, '未知用户'),
+      displayName: resolvePeerDisplayName(resolvedWorkspaceId, peerDeviceId, '未知用户'),
       deviceName: peerDeviceId.slice(0, 8),
       publicKey: peerDeviceId,
       online: state === 'connected',
@@ -319,16 +412,16 @@ export function handlePeerConnectionChange(
 
   if (state !== 'connected') return
 
-  const workspace = getWorkspaceRepo().findById(workspaceId)
-  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  const workspace = getWorkspaceRepo().findById(resolvedWorkspaceId)
+  const member = getMemberRepo().findByWorkspaceAndDevice(resolvedWorkspaceId, peerDeviceId)
   const isOwner = workspace?.ownerDeviceId === localDeviceId
 
   if (!isOwner && member?.status === 'active') {
-    trustPeerSilentlyForWorkspaceMesh(workspaceId, peerDeviceId, member.displayName)
+    trustPeerSilentlyForWorkspaceMesh(resolvedWorkspaceId, peerDeviceId, member.displayName)
     return
   }
 
-  promptPeerTrustIfNeeded(workspaceId, peerDeviceId, { connected: true })
+  promptPeerTrustIfNeeded(resolvedWorkspaceId, peerDeviceId, { connected: true })
 }
 
 export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {
@@ -365,12 +458,16 @@ export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {
   }
 
   const promptKey = peerPromptKey(input.workspaceId, input.peerDeviceId)
+  pendingTrustPrompts.delete(promptKey)
   if (input.trusted) {
     promptedPeers.delete(promptKey)
-    void notifyP2pPeerConnected(input.workspaceId, input.peerDeviceId)
-    void import('./p2p-member-mesh.service').then((module) => {
-      void module.reconcileWorkspaceMemberMesh(input.workspaceId)
-    })
+    void (async () => {
+      const joinModule = await import('./p2p-member-join.service')
+      await joinModule.activateMemberAfterOwnerTrust(input.workspaceId, input.peerDeviceId)
+      await notifyP2pPeerConnected(input.workspaceId, input.peerDeviceId)
+      const meshModule = await import('./p2p-member-mesh.service')
+      void meshModule.reconcileWorkspaceMemberMesh(input.workspaceId)
+    })()
   } else {
     void P2pBridge.connectionDisconnect(input.peerDeviceId)
     promptedPeers.delete(promptKey)
@@ -379,6 +476,17 @@ export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {
   return { trusted: input.trusted }
 }
 
+export function listPendingTrustPrompts(): P2pPeerTrustRequiredPayload[] {
+  return [...pendingTrustPrompts.values()]
+}
+
+export function reemitPendingTrustPromptsToRenderer(): void {
+  for (const payload of pendingTrustPrompts.values()) {
+    broadcastP2pPeerTrustRequired(payload)
+  }
+}
+
 export function resetPeerTrustPrompts(): void {
   promptedPeers.clear()
+  pendingTrustPrompts.clear()
 }

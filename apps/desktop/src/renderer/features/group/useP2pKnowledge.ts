@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { IpcChannel, type P2pKnowledgeDocumentPermission, type P2pSharedResource } from '@toolman/shared'
 import { useDebouncedCallback } from '../../utils/debounce'
 import { GROUP_P2P_UI_TIMING } from './group-p2p-ui-timing'
-import { subscribeKnowledgeResourceListEvents } from './group-p2p-sync-policy'
+import {
+  subscribeGroupResourcePanelRefresh,
+  subscribeKnowledgeResourceListEvents,
+} from './group-p2p-sync-policy'
 
 interface UseP2pKnowledgeOptions {
   workspaceId: string | null
@@ -199,6 +202,11 @@ export function useP2pKnowledge({ workspaceId }: UseP2pKnowledgeOptions) {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    return subscribeGroupResourcePanelRefresh(workspaceId, 'Knowledge', debouncedLoad)
+  }, [debouncedLoad, workspaceId])
 
   useEffect(() => {
     if (!workspaceId) return

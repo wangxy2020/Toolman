@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { IpcChannel, type P2pSharedResource } from '@toolman/shared'
 import { useDebouncedCallback } from '../../utils/debounce'
 import { GROUP_P2P_UI_TIMING } from './group-p2p-ui-timing'
-import { subscribeGroupResourceActivity } from './group-p2p-sync-policy'
+import { subscribeGroupResourceActivity, subscribeGroupResourcePanelRefresh } from './group-p2p-sync-policy'
 
 interface UseP2pNotesOptions {
   workspaceId: string | null
@@ -137,6 +137,11 @@ export function useP2pNotes({ workspaceId }: UseP2pNotesOptions) {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    return subscribeGroupResourcePanelRefresh(workspaceId, 'Note', debouncedLoad)
+  }, [debouncedLoad, workspaceId])
 
   useEffect(() => {
     if (!workspaceId) return

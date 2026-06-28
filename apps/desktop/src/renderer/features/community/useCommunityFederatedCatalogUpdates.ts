@@ -38,14 +38,23 @@ function toResourceItem(entry: NonNullable<ReturnType<typeof FederatedCatalogUpd
 export function useCommunityFederatedCatalogUpdates(
   resourceType: CommunityResourceItem['resourceType'] | undefined,
   onUpsert: (item: CommunityResourceItem) => void,
+  onRemove?: (resourceId: string) => void,
 ): void {
   useEffect(() => {
     const unsubscribe = window.api.subscribe('community:federated:catalog:update', (payload) => {
       const parsed = FederatedCatalogUpdateEventSchema.safeParse(payload)
-      if (!parsed.success || parsed.data.action !== 'upsert' || !parsed.data.entry) return
+      if (!parsed.success) return
+
+      if (parsed.data.action === 'delete') {
+        const resourceId = parsed.data.resourceId
+        if (resourceId) onRemove?.(resourceId)
+        return
+      }
+
+      if (!parsed.data.entry) return
       if (resourceType && parsed.data.entry.resourceType !== resourceType) return
       onUpsert(toResourceItem(parsed.data.entry))
     })
     return unsubscribe
-  }, [onUpsert, resourceType])
+  }, [onRemove, onUpsert, resourceType])
 }

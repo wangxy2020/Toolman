@@ -42,4 +42,22 @@ describe('mapSharedResourceRow', () => {
     const mapped = mapSharedResourceRow({ ...baseRow, resourceType: 'Agent' })
     expect(mapped.resourceType).toBe('Agent')
   })
+
+  it('maps note resources with notebook metadata', () => {
+    const mapped = mapSharedResourceRow({
+      ...baseRow,
+      resourceType: 'Note',
+      localResourceId: 'note-1',
+      name: 'Meeting notes',
+      metadataJson: JSON.stringify({
+        notebookId: 'nb-jofr',
+        notebookName: 'jofr',
+        title: 'Meeting notes',
+      }),
+    })
+    expect(mapped.resourceType).toBe('Note')
+    if (mapped.resourceType !== 'Note') return
+    expect(mapped.notebookId).toBe('nb-jofr')
+    expect(mapped.notebookName).toBe('jofr')
+  })
 })

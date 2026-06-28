@@ -90,7 +90,12 @@ export function resolveKnowledgeBaseStoragePath(
     const groupDir = sanitizeKnowledgeBaseFolderName(groupSaved.groupName)
     if (!groupDir) return null
 
-    const storagePath = join(baseFolder, groupDir)
+    const sharedFolderDir = groupSaved.sharedFolderName
+      ? sanitizeKnowledgeBaseFolderName(groupSaved.sharedFolderName)
+      : ''
+    const storagePath = sharedFolderDir
+      ? join(baseFolder, groupDir, sharedFolderDir)
+      : join(baseFolder, groupDir)
     if (ensure && !existsSync(storagePath)) {
       mkdirSync(storagePath, { recursive: true })
     }

@@ -53,6 +53,8 @@ export interface NoteItem {
   blocks: NoteBlock[]
   starred: boolean
   locked: boolean
+  /** Group share permission lock — cannot be toggled by the user. */
+  groupPermissionLocked?: boolean
   tags: string[]
   versions: NoteVersion[]
   attachments: NoteAttachment[]
@@ -120,6 +122,7 @@ export function normalizeNote(item: Partial<NoteItem>, notebookId: string): Note
     blocks: Array.isArray(item.blocks) ? item.blocks : [],
     starred: Boolean(item.starred),
     locked: Boolean(item.locked),
+    groupPermissionLocked: Boolean(item.groupPermissionLocked),
     tags: Array.isArray(item.tags) ? item.tags.filter((tag) => typeof tag === 'string') : [],
     versions: Array.isArray(item.versions)
       ? item.versions.map((version) => ({

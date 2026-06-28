@@ -5,7 +5,6 @@ import {
   deriveFolderSlugFromAccountLabel,
   deriveFolderSlugFromAuthSubject,
   GUEST_DOCUMENTS_FOLDER_SLUG,
-  guestFolderSlugFromIdentityId,
 } from './documents-folder-slug.service'
 import {
   DEFAULT_LOCAL_IDENTITY_ID,
@@ -35,10 +34,9 @@ describe('documents folder slug derivation', () => {
     expect(deriveFolderSlugFromAccountLabel('31897124@qq.com')).toBe('31897124')
   })
 
-  it('uses 本地用户 for unlogged-in production users', () => {
+  it('uses 本地用户 for unlogged-in users regardless of display name', () => {
     expect(GUEST_DOCUMENTS_FOLDER_SLUG).toBe('本地用户')
     expect(computeGuestDocumentsFolderSlug()).toBe('本地用户')
-    expect(guestFolderSlugFromIdentityId(DEFAULT_LOCAL_IDENTITY_ID)).toBe('本地用户')
   })
 
   it('uses distinct guest folders for dev dual-instance without isolated docs root', () => {
@@ -52,6 +50,7 @@ describe('documents folder slug derivation', () => {
   it('uses 本地用户 when each dev instance has its own TOOLMAN_DOCS_ROOT', () => {
     process.env.TOOLMAN_DEV_IDENTITY_ID = DEFAULT_LOCAL_IDENTITY_ID
     process.env.TOOLMAN_DOCS_ROOT = '/tmp/toolman-p2p-a-docs'
+    // No identity row in test DB — falls back to 本地用户
     expect(computeGuestDocumentsFolderSlug(DEFAULT_LOCAL_IDENTITY_ID)).toBe('本地用户')
 
     process.env.TOOLMAN_DEV_IDENTITY_ID = P2P_DEV_USER_B_IDENTITY_ID

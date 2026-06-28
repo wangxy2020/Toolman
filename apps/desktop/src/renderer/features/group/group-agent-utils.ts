@@ -6,6 +6,7 @@ import type {
   Session,
 } from '@toolman/shared'
 import { DEFAULT_SESSION_TITLE } from '@toolman/shared'
+import { formatGroupVirtualAgentName } from './group-note-utils'
 
 export function getAgentSessionPermission(
   resource: P2pSharedResource,
@@ -43,11 +44,15 @@ export function resolveSharedAgentSessions(
   assistantId: string,
   sessions: Session[],
   assistant?: Assistant | null,
+  options?: { isSharer?: boolean },
 ): Session[] {
   const assistantSessions = sessions.filter((item) => item.assistantId === assistantId)
   const sharedIds = resource.sharedSessionIds
   if (!sharedIds || sharedIds.length === 0) {
     if (assistant && isGroupSharedMirrorAssistant(assistant)) {
+      return []
+    }
+    if (!options?.isSharer) {
       return []
     }
     return assistantSessions.sort(
@@ -97,6 +102,24 @@ export function isGroupProxyAssistant(assistant: {
   parameters?: { p2pGroupProxy?: unknown }
 }): boolean {
   return Boolean(assistant.parameters?.p2pGroupProxy)
+}
+
+export function resolveGroupProxyAssistantDisplayName(assistant: {
+  name: string
+  parameters?: {
+    p2pGroupProxy?: {
+      groupName?: string
+      sharedAgentName?: string
+    }
+  }
+}): string {
+  const proxy = assistant.parameters?.p2pGroupProxy
+  const groupName = proxy?.groupName?.trim()
+  const sharedAgentName = proxy?.sharedAgentName?.trim()
+  if (!groupName || !sharedAgentName) {
+    return assistant.name
+  }
+  return formatGroupVirtualAgentName(groupName, sharedAgentName)
 }
 
 export function isShareableGroupAgentSource(assistant: Assistant): boolean {

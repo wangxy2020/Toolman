@@ -58,3 +58,19 @@ export function buildFederatedCatalogSignedPayload(entry: FederatedResourceCatal
     tagSummary,
   ].join('|')
 }
+
+export const FederatedCatalogDeleteWireMessageSchema = z.object({
+  v: z.literal(1),
+  kind: z.literal('delete'),
+  resourceId: z.string().uuid(),
+  signerDid: z.string().min(1),
+  publicKey: z.string().min(1),
+  deviceId: z.string().uuid(),
+  at: z.number().int().positive(),
+  signature: z.string().min(1),
+})
+export type FederatedCatalogDeleteWireMessage = z.infer<typeof FederatedCatalogDeleteWireMessageSchema>
+
+export function buildFederatedCatalogDeleteSignedPayload(resourceId: string, at: number): string {
+  return ['toolman:federation-catalog-delete:v1', resourceId, String(at)].join('|')
+}

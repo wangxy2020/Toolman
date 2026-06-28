@@ -108,3 +108,24 @@ export function useRegisterModulePanelError(
 export function useModulePagePanelStatuses() {
   return useModulePageStatusContext().panelStatuses
 }
+
+const GROUP_PANEL_STATUS_KEYS = ['agents', 'knowledge', 'notes', 'workflow', 'activity'] as const
+
+/** Clear stale panel errors after join approval (e.g. transient 无权访问 during invited). */
+export function useClearModulePanelErrorsOnMemberActivation(workspaceId: string | null) {
+  const { registerPanelStatus } = useModulePageStatusContext()
+
+  useEffect(() => {
+    if (!workspaceId) return
+
+    const unsub = window.api.subscribe('p2p:member:changed', (payload) => {
+      const data = payload as { workspaceId?: string; activated?: boolean } | undefined
+      if (data?.workspaceId !== workspaceId || !data.activated) return
+      for (const key of GROUP_PANEL_STATUS_KEYS) {
+        registerPanelStatus(key, null)
+      }
+    })
+
+    return unsub
+  }, [registerPanelStatus, workspaceId])
+}

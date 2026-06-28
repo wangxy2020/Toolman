@@ -19,6 +19,7 @@ interface Props {
   sourceWorkspaceId: string | null
   workspaceName: string
   resource: P2pSharedResource
+  sectionTitle?: string
   isResourceOwner: boolean
   savedDocumentOverrides?: Record<string, { savedDocumentId: string; absolutePath: string }>
   selectedKeys: Set<string>
@@ -56,6 +57,7 @@ export function GroupSharedKnowledgeSection({
   sourceWorkspaceId: _sourceWorkspaceId,
   workspaceName,
   resource,
+  sectionTitle,
   isResourceOwner,
   savedDocumentOverrides,
   selectedKeys,
@@ -81,15 +83,16 @@ export function GroupSharedKnowledgeSection({
 }: Props) {
   const [expanded, setExpanded] = useState(true)
   const kbId = resource.localResourceId ?? resource.id
-  const displayName = useMemo(
+  const sharedFolderName = useMemo(
     () => stripP2pGroupPrefixedResourceName(workspaceName, resource.name),
     [resource.name, workspaceName],
   )
+  const displayName = sectionTitle ?? sharedFolderName
   const { localWorkspaceId, savedGroupKbId, panelDocuments, loading, refresh } =
     useSharedKnowledgePanelDocuments({
       p2pWorkspaceId,
       workspaceName,
-      sharedFolderName: displayName,
+      sharedFolderName,
       kbId,
       sharedDocumentIds: resource.sharedDocumentIds,
       isResourceOwner,

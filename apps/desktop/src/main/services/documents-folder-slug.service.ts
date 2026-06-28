@@ -13,7 +13,7 @@ import {
   getLocalIdentityId,
   P2P_DEV_USER_B_IDENTITY_ID,
 } from './local-identity'
-import { sanitizeUserFolderName } from './toolman-user-documents.service'
+import { sanitizeUserFolderName } from './toolman-folder-sanitize'
 
 const DOCUMENTS_FOLDER_SLUG_FILE = 'documents-folder-slug.json'
 
@@ -85,11 +85,9 @@ export function deriveFolderSlugFromAuthSubject(provider: string, subjectId: str
 }
 
 /**
- * Unlogged-in folder name.
- * - Production: 本地用户
- * - dev with isolated TOOLMAN_DOCS_ROOT: 本地用户 (each instance has its own docs root)
- * - dev without TOOLMAN_DOCS_ROOT: 本地用户-a / 本地用户-b
- * - Optional override: TOOLMAN_DOCS_USER_SLUG
+ * Unlogged-in folder name — always 本地用户 (display name is ignored).
+ * Dual P2P dev without isolated TOOLMAN_DOCS_ROOT: 本地用户-a / 本地用户-b.
+ * Optional override: TOOLMAN_DOCS_USER_SLUG.
  */
 export function computeGuestDocumentsFolderSlug(identityId: string = getLocalIdentityId()): string {
   const envOverride = process.env.TOOLMAN_DOCS_USER_SLUG?.trim()
@@ -97,11 +95,7 @@ export function computeGuestDocumentsFolderSlug(identityId: string = getLocalIde
     return sanitizeUserFolderName(envOverride)
   }
 
-  if (process.env.TOOLMAN_DOCS_ROOT?.trim()) {
-    return GUEST_DOCUMENTS_FOLDER_SLUG
-  }
-
-  if (process.env.TOOLMAN_DEV_IDENTITY_ID?.trim()) {
+  if (process.env.TOOLMAN_DEV_IDENTITY_ID?.trim() && !process.env.TOOLMAN_DOCS_ROOT?.trim()) {
     if (identityId === P2P_DEV_USER_B_IDENTITY_ID) {
       return `${GUEST_DOCUMENTS_FOLDER_SLUG}-b`
     }
@@ -208,8 +202,8 @@ export function getDocumentsFolderSlugRecord(): DocumentsFolderSlugRecord {
     return expected
   }
 
+  // Slug changes are persisted only via syncDocumentsFolderSlugWithAccount (includes folder migration).
   if (persisted.slug !== expected.slug || persisted.source !== expected.source) {
-    writePersistedDocumentsFolderSlugRecord(expected)
     return expected
   }
 
@@ -223,6 +217,13 @@ export function syncDocumentsFolderSlugWithAccount(): boolean {
   if (persisted?.slug === expected.slug && persisted.source === expected.source) {
     return false
   }
+
+  if (persisted?.slug && persisted.slug !== expected.slug) {
+    const { migrateToolmanUserFolderBetweenSlugs } =
+      require('./knowledge-folder.service') as typeof import('./knowledge-folder.service')
+    migrateToolmanUserFolderBetweenSlugs(persisted.slug, expected.slug)
+  }
+
   writePersistedDocumentsFolderSlugRecord(expected)
   return true
 }

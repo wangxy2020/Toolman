@@ -17,6 +17,7 @@ import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
 import { copyCommunityShareText } from './community-share-utils'
 import { canDeleteCommunityResource } from './community-user-utils'
 import { deleteCommunityResource, listCommunityResources } from './community-api.client'
+import { invalidateCommunityListCache } from './community-list-cache'
 import { isResourceRejectedLike } from './community-user-center-status'
 import { notifyCommunityUserDataChanged } from './community-events'
 import { isUiMockCommunityId } from './community-ui-mock'
@@ -158,7 +159,9 @@ export function CommunityResourceMarketPanel({
       }
       setResourceToDelete(null)
       if (selectedId === resourceId) setSelectedId(null)
-      await market.load()
+      invalidateCommunityListCache('resources:')
+      await market.load({ force: true })
+      notifyCommunityUserDataChanged()
     } catch (deleteError) {
       const message =
         deleteError instanceof Error ? deleteError.message : t('communityPage.market.deleteResourceFailed')
@@ -176,7 +179,10 @@ export function CommunityResourceMarketPanel({
         subtitle={subtitle}
         publishLabel={publishLabel}
         loading={market.loading}
-        onRefresh={() => void market.load()}
+        onRefresh={() => {
+          invalidateCommunityListCache('resources:')
+          void market.load({ force: true })
+        }}
         onPublish={() => {
           if (!requireRegistration('community_write')) return
           void (async () => {

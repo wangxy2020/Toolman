@@ -269,6 +269,7 @@ export const zhCN = {
       unnamed: '未命名群组',
       emptyNoGroups: '暂无群组，点击上方创建',
       emptyNoJoined: '暂未加入任何群组',
+      pendingJoins: '等待群主确认（{{count}}）',
     },
     community: {
       sections: {
@@ -361,6 +362,17 @@ export const zhCN = {
       wanDefaultWarning: '未配置 TURN，跨网加入群组可能失败。请在设置 → 系统诊断查看 WAN 状态。',
       wanMissingCredentials: 'TURN 服务器缺少凭据，跨网加入群组可能失败。',
       wanHint: '同局域网可直接加入；跨网由应用自动配置 TURN 中继。',
+    },
+    groupJoinApproved: {
+      title: '已成功加入群组',
+      message: '群主已确认你的加入请求，群组「{{name}}」的共享内容正在同步。',
+      confirm: '知道了',
+    },
+    groupJoinPending: {
+      title: '已提交加入申请',
+      message: '已向群主发送加入请求。在群主确认之前，群组不会出现在你的列表中。',
+      confirm: '知道了',
+      cancelRequest: '取消申请',
     },
     knowledgeCreate: {
       title: '添加知识库',

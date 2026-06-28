@@ -6,6 +6,9 @@ import {
 import type { P2pMemberRole, WorkspaceEvent } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { cleanupLocalMemberDeparture } from './p2p-workspace-member-cleanup.service'
+import { revokePeerTrustForWorkspace } from './p2p-peer.service'
+import { activateLocalMemberIfJoiner, triggerJoinerResourceSyncAfterActivation } from './p2p-member-activation.service'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -58,28 +61,30 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
         role,
       })
     }
+    if (deviceId === localDeviceId) {
+      activateLocalMemberIfJoiner({
+        workspaceId: event.workspaceId,
+        deviceId,
+        displayName,
+        role,
+        joinedAt: new Date(event.timestamp),
+      })
+    }
     return
   }
 
   if (existingByDevice) {
-    memberRepo.update({
-      id: existingByDevice.id,
-      displayName,
-      role,
-      status: 'active',
-      joinedAt: new Date(event.timestamp),
-    })
-    void import('./p2p-member-mesh.service').then((module) => {
-      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
-    })
-    return
-  }
-
-  const existingById = memberRepo.findById(event.resourceId)
-  if (existingById) {
-    if (existingById.status !== 'active') {
+    if (deviceId === localDeviceId) {
+      activateLocalMemberIfJoiner({
+        workspaceId: event.workspaceId,
+        deviceId,
+        displayName,
+        role,
+        joinedAt: new Date(event.timestamp),
+      })
+    } else {
       memberRepo.update({
-        id: existingById.id,
+        id: existingByDevice.id,
         displayName,
         role,
         status: 'active',
@@ -92,8 +97,30 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
     return
   }
 
-  // 本地刚加入时已写入成员行，避免重复插入
-  if (deviceId === localDeviceId) {
+  const existingById = memberRepo.findById(event.resourceId)
+  if (existingById) {
+    if (existingById.status !== 'active') {
+      if (deviceId === localDeviceId) {
+        activateLocalMemberIfJoiner({
+          workspaceId: event.workspaceId,
+          deviceId,
+          displayName,
+          role,
+          joinedAt: new Date(event.timestamp),
+        })
+      } else {
+        memberRepo.update({
+          id: existingById.id,
+          displayName,
+          role,
+          status: 'active',
+          joinedAt: new Date(event.timestamp),
+        })
+      }
+    }
+    void import('./p2p-member-mesh.service').then((module) => {
+      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
+    })
     return
   }
 
@@ -107,6 +134,10 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
     status: 'active',
     joinedAt: new Date(event.timestamp),
   })
+
+  if (deviceId === localDeviceId) {
+    triggerJoinerResourceSyncAfterActivation(event.workspaceId)
+  }
 
   void import('./p2p-member-mesh.service').then((module) => {
     void module.reconcileWorkspaceMemberMesh(event.workspaceId)
@@ -128,8 +159,19 @@ export function projectMemberLeftEvent(event: WorkspaceEvent): void {
 
   memberRepo.update({
     id: existing.id,
-    status: 'left',
+    status:
+      typeof event.payload.reason === 'string' && event.payload.reason === 'removed'
+        ? 'removed'
+        : 'left',
   })
+
+  const localDeviceId = getP2pDeviceInfo().deviceId
+  if (existing.deviceId !== localDeviceId) {
+    revokePeerTrustForWorkspace(event.workspaceId, existing.deviceId)
+  }
+  if (existing.deviceId === localDeviceId) {
+    void cleanupLocalMemberDeparture(event.workspaceId)
+  }
 }
 
 export function syncWorkspaceNameFromJoinEvent(event: WorkspaceEvent): void {

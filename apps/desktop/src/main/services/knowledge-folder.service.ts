@@ -23,8 +23,11 @@ import {
   getDefaultWorkspaceFolderPath,
   ensureToolmanUserDocumentFolders,
   getAlternateToolmanDocumentsRoot,
+  getToolmanDocumentsRootPath,
+  getToolmanUserFolderName,
   isNonMigratableFolderPath,
   isAlternateToolmanDocumentsPath,
+  isStoredPathUnderDifferentUserFolder,
   isUserScopedToolmanPath,
   isPathUnderToolmanDocumentsRoot,
   listFlatToolmanPathCandidates,
@@ -32,6 +35,7 @@ import {
   resolveFlatToolmanSubfolder,
   shouldMigrateDocumentsWorkspaceFolder,
 } from './toolman-user-documents.service'
+import { syncDocumentsFolderSlugWithAccount } from './documents-folder-slug.service'
 
 export {
   getDefaultKnowledgeFolderPath,
@@ -44,6 +48,7 @@ export {
   getToolmanDocumentsRootPath,
   getToolmanUserFolderName,
   getToolmanUserRootPath,
+  isStoredPathUnderDifferentUserFolder,
   ensureToolmanUserDocumentFolders,
   TOOLMAN_USER_DOCUMENT_SUBFOLDERS,
 } from './toolman-user-documents.service'
@@ -251,6 +256,9 @@ function shouldMigrateResolvedFolderPath(
   subfolder: string,
   resolvedPath: string,
 ): boolean {
+  if (isStoredPathUnderDifferentUserFolder(resolvedPath, getToolmanUserFolderName())) {
+    return true
+  }
   if (isUserScopedToolmanPath(resolvedPath)) return false
   if (isAlternateToolmanDocumentsPath(resolvedPath)) return true
   if (isPathUnderToolmanDocumentsRoot(resolvedPath, getAlternateToolmanDocumentsRoot())) {
@@ -311,11 +319,58 @@ export function migrateToolmanUserFolderPaths(): number {
   return migrated
 }
 
+/** Move workspace folder settings and on-disk tree when the user folder slug changes. */
+export function migrateToolmanUserFolderBetweenSlugs(
+  previousSlug: string,
+  nextSlug: string,
+): number {
+  if (!previousSlug.trim() || !nextSlug.trim() || previousSlug === nextSlug) {
+    return 0
+  }
+
+  const oldRoot = join(getToolmanDocumentsRootPath(), previousSlug)
+  const newRoot = join(getToolmanDocumentsRootPath(), nextSlug)
+  moveFolderIfNeeded(oldRoot, newRoot)
+
+  let migratedWorkspaces = 0
+  for (const workspace of listWorkspaces()) {
+    const settings = getWorkspace({ id: workspace.id })?.settings ?? {}
+    let workspaceMigrated = false
+
+    for (const spec of WORKSPACE_FOLDER_SETTINGS) {
+      const stored = readWorkspaceSettingString(settings, spec.key)
+      if (!stored?.trim()) continue
+
+      const resolvedPath = resolveStoredFolderPath(stored, spec.defaultPath)
+      const rewritten = replaceFolderPathPrefix(resolvedPath, oldRoot, newRoot)
+      if (!rewritten || rewritten === resolvedPath) continue
+
+      moveFolderIfNeeded(resolvedPath, rewritten)
+      updateWorkspace({
+        id: workspace.id,
+        settings: { [spec.key]: rewritten },
+      })
+      if (!isNonMigratableFolderPath(resolvedPath)) {
+        migrateKnowledgePathReferences(workspace.id, resolvedPath, rewritten)
+      }
+      workspaceMigrated = true
+    }
+
+    if (workspaceMigrated) {
+      migratedWorkspaces += 1
+    }
+  }
+
+  return migratedWorkspaces
+}
+
 /** Migrate legacy paths, create user folders on disk, and persist workspace folder settings. */
 export function bootstrapToolmanUserDocumentLayout(): {
   migratedWorkspaces: number
   userRoot: string
 } {
+  syncDocumentsFolderSlugWithAccount()
+
   const userRoot = ensureToolmanUserDocumentFolders()
   const migratedWorkspaces = migrateToolmanUserFolderPaths()
 

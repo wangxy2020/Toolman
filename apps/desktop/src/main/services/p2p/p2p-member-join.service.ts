@@ -30,14 +30,13 @@ import {
   assertPeerTrustedForSync,
   ensureOwnerPeerTrustedForSync,
   isPeerTrusted,
-  promptPeerTrustIfNeeded,
+  prepareJoinPeerTrustPrompt,
   registerRemoteDevicePublicKey,
-  upsertPeerFromDiscovery,
 } from './p2p-peer.service'
 import { appendP2pEvent } from './p2p-event.service'
 import { requestSnapshotFromOwner, syncWithPeer, awaitJoinerEventCatchUp } from './p2p-sync.service'
+import { reconcileAgentSharedResources } from './p2p-agent-projection'
 import { reconcileWorkspaceMemberMesh } from './p2p-member-mesh.service'
-import { ensureMemberConnectsToOwner } from './p2p-member-reconcile.service'
 import {
   assertJoinerEligibleForWorkspace,
   assertRemoteJoinerEligibleForWorkspace,
@@ -49,6 +48,7 @@ import { getEntitlementContext } from '../auth/entitlement.service'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 import { signMemberJoinedWireMessage } from './p2p-member-sync-signing.service'
 import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
+import { notifyJoinerMemberApproved } from './p2p-member-activation.service'
 import { countWanSdpCandidates } from './wan-transport'
 import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 import {
@@ -57,7 +57,6 @@ import {
   getIdentityDisplayName,
   getInviteRepo,
   getMemberRepo,
-  getPeerRepo,
   getWorkspaceRepo,
   mapMemberRow,
   toWorkspaceDto,
@@ -506,7 +505,6 @@ function scheduleJoinPeerSync(
   member: P2pMember,
 ): void {
   void (async () => {
-    void ensureMemberConnectsToOwner(payload.workspaceId)
     await finishJoinSync(payload, offerSdp)
 
     try {
@@ -567,6 +565,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
     ensureWorkspaceKeyFromInvite(payload)
     const member = mapMemberRow(existing, workspace.id)
     recordJoinOnOwnerSide(inviteToken, payload, existing)
+    reconcileAgentSharedResources(workspace.id)
     scheduleJoinPeerSync(payload, offerSdp, member)
     return {
       workspace: toWorkspaceDto(workspace),
@@ -585,7 +584,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
         id: existing.id,
         displayName,
         role: payload.role,
-        status: 'active',
+        status: 'invited',
         joinedAt: new Date(),
         certJson: memberCertJson,
       }) ?? existing
@@ -596,7 +595,7 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
       deviceId: device.deviceId,
       displayName,
       role: payload.role,
-      status: 'active',
+      status: 'invited',
       joinedAt: new Date(),
       certJson: memberCertJson,
     })
@@ -605,6 +604,9 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   const member = mapMemberRow(memberRow, workspace.id)
   recordJoinOnOwnerSide(inviteToken, payload, memberRow)
 
+  if (memberRow.status === 'active') {
+    reconcileAgentSharedResources(workspace.id)
+  }
   scheduleJoinPeerSync(payload, offerSdp, member)
 
   if (payload.ownerDeviceId === device.deviceId) {
@@ -623,26 +625,79 @@ function resolveRemoteMemberIdentityId(member: P2pMember): string {
   return row?.identityId ?? DEFAULT_IDENTITY_ID
 }
 
-function registerJoiningPeerForTrust(
+export async function activateMemberAfterOwnerTrust(
   workspaceId: string,
   peerDeviceId: string,
-  displayName: string,
-): void {
-  const node = listP2pDiscoveredNodes(false).find((item) => item.deviceId === peerDeviceId)
-  if (node) {
-    upsertPeerFromDiscovery(workspaceId, node, 'connected')
-    return
+): Promise<void> {
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (!workspace) return
+
+  const device = getP2pDeviceInfo()
+  if (workspace.ownerDeviceId !== device.deviceId) return
+
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  if (!member || member.status === 'active') return
+
+  const updated =
+    getMemberRepo().update({
+      id: member.id,
+      status: 'active',
+      joinedAt: member.joinedAt ?? new Date(),
+    }) ?? member
+
+  await appendP2pEvent({
+    workspaceId,
+    resourceType: 'Member',
+    resourceId: updated.id,
+    operatorId: updated.id,
+    eventType: 'Joined',
+    payload: {
+      member_id: updated.id,
+      device_id: updated.deviceId,
+      identity_id: updated.identityId,
+      display_name: updated.displayName,
+      role: updated.role,
+    },
+  })
+
+  try {
+    await notifyJoinerMemberApproved(workspaceId, peerDeviceId, {
+      id: updated.id,
+      deviceId: updated.deviceId,
+      displayName: updated.displayName,
+      role: updated.role,
+      identityId: updated.identityId,
+    })
+  } catch (error) {
+    logStructured(
+      'p2p',
+      'warn',
+      `member.approved notify failed for ${peerDeviceId.slice(0, 8)}: ${toErrorMessage(error, 'member.approved notify failed')}`,
+    )
   }
 
-  getPeerRepo().upsert({
-    workspaceId,
-    deviceId: peerDeviceId,
-    displayName,
-    deviceName: peerDeviceId.slice(0, 8),
-    publicKey: peerDeviceId,
-    online: true,
-    connectionState: 'connected',
-  })
+  try {
+    const syncModule = await import('./p2p-sync.service')
+    const pushed = await syncModule.pushWorkspaceEventsToPeer(workspaceId, peerDeviceId)
+    if (pushed > 0) {
+      logStructured(
+        'p2p',
+        'info',
+        `pushed ${pushed} historical events to ${peerDeviceId.slice(0, 8)} after approval`,
+      )
+    }
+    await syncModule.syncWithPeer(workspaceId, peerDeviceId)
+  } catch (error) {
+    logStructured(
+      'p2p',
+      'warn',
+      `post-approval sync failed for ${peerDeviceId.slice(0, 8)}: ${toErrorMessage(error, 'post-approval sync failed')}`,
+    )
+  }
+
+  broadcastP2pMemberChanged({ workspaceId })
+  reconcileAfterRemoteJoin(workspaceId)
+  maybeActivateWorkspaceVipPool(workspaceId)
 }
 
 function reconcileAfterRemoteJoin(workspaceId: string): void {
@@ -660,7 +715,7 @@ export async function applyRemoteMemberJoin(
     subscriptionSku?: ProductSku | null
     remoteDevicePublicKey?: string
   },
-  options?: { requirePeerTrust?: boolean },
+  options?: { requirePeerTrust?: boolean; allowReactivation?: boolean; forcePendingApproval?: boolean },
 ): Promise<void> {
   const peerDeviceId = payload.peerDeviceId ?? payload.member.deviceId
   if (payload.member.deviceId !== peerDeviceId) {
@@ -691,7 +746,53 @@ export async function applyRemoteMemberJoin(
     payload.workspaceId,
     payload.member.deviceId,
   )
-  if (existing?.status === 'active') {
+
+  const joinerContext = entitlementContextFromJoinerSku(payload.subscriptionSku)
+  assertRemoteJoinerEligibleForWorkspace(workspace, joinerContext)
+  const memberCertJson = buildMemberCertSnapshot(joinerContext)
+
+  const upsertPendingMember = (): P2pWorkspaceMemberRow => {
+    if (existing) {
+      if (existing.status !== 'active' && options?.allowReactivation === false) {
+        return existing
+      }
+      return (
+        getMemberRepo().update({
+          id: existing.id,
+          status: 'invited',
+          role: payload.member.role,
+          displayName: payload.member.displayName,
+          joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
+          certJson: memberCertJson,
+        }) ?? existing
+      )
+    }
+
+    const remoteIdentityId = resolveRemoteMemberIdentityId(payload.member)
+    ensureLinkedIdentityRow(
+      remoteIdentityId,
+      payload.member.displayName,
+      payload.remoteDevicePublicKey,
+    )
+
+    return getMemberRepo().create({
+      id: payload.member.id,
+      workspaceId: payload.workspaceId,
+      identityId: remoteIdentityId,
+      deviceId: payload.member.deviceId,
+      displayName: payload.member.displayName,
+      role: payload.member.role,
+      status: 'invited',
+      joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
+      certJson: memberCertJson,
+    })
+  }
+
+  if (
+    !options?.forcePendingApproval &&
+    existing?.status === 'active' &&
+    isPeerTrusted(payload.workspaceId, peerDeviceId)
+  ) {
     if (
       payload.member.displayName.trim() &&
       existing.displayName !== payload.member.displayName
@@ -702,102 +803,31 @@ export async function applyRemoteMemberJoin(
       })
       broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
     }
-    if (!isPeerTrusted(payload.workspaceId, peerDeviceId)) {
-      registerJoiningPeerForTrust(
-        payload.workspaceId,
-        peerDeviceId,
-        payload.member.displayName,
-      )
-      if (p2pConnectionService.isPeerConnected(peerDeviceId)) {
-        promptPeerTrustIfNeeded(payload.workspaceId, peerDeviceId, { connected: true })
-      }
-    }
     reconcileAfterRemoteJoin(payload.workspaceId)
     return
   }
 
-  const joinerContext = entitlementContextFromJoinerSku(payload.subscriptionSku)
-  assertRemoteJoinerEligibleForWorkspace(workspace, joinerContext)
-
-  const memberCertJson = buildMemberCertSnapshot(joinerContext)
-
   const activeCount = getMemberRepo().countActiveByWorkspace(payload.workspaceId)
-  if (activeCount >= workspace.maxMembers) {
+  if (activeCount >= workspace.maxMembers && existing?.status !== 'active') {
     throw new P2pMemberLimitError(workspace.maxMembers)
   }
 
-  if (existing) {
-    if (existing.status !== 'active') {
-      getMemberRepo().update({
-        id: existing.id,
-        status: 'active',
-        role: payload.member.role,
-        displayName: payload.member.displayName,
-        joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
-        certJson: memberCertJson,
-      })
-      broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
-    }
-    if (!isPeerTrusted(payload.workspaceId, peerDeviceId)) {
-      registerJoiningPeerForTrust(
-        payload.workspaceId,
-        peerDeviceId,
-        payload.member.displayName,
-      )
-      if (p2pConnectionService.isPeerConnected(peerDeviceId)) {
-        promptPeerTrustIfNeeded(payload.workspaceId, peerDeviceId, { connected: true })
-      }
-    }
-    reconcileAfterRemoteJoin(payload.workspaceId)
-    maybeActivateWorkspaceVipPool(payload.workspaceId)
-    return
-  }
-
-  registerJoiningPeerForTrust(
+  upsertPendingMember()
+  prepareJoinPeerTrustPrompt(
     payload.workspaceId,
     peerDeviceId,
     payload.member.displayName,
   )
-
-  const remoteIdentityId = resolveRemoteMemberIdentityId(payload.member)
-  ensureLinkedIdentityRow(
-    remoteIdentityId,
-    payload.member.displayName,
-    payload.remoteDevicePublicKey,
-  )
-
-  const memberRow = getMemberRepo().create({
-    id: payload.member.id,
-    workspaceId: payload.workspaceId,
-    identityId: remoteIdentityId,
-    deviceId: payload.member.deviceId,
-    displayName: payload.member.displayName,
-    role: payload.member.role,
-    status: 'active',
-    joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
-    certJson: memberCertJson,
-  })
-
-  await appendP2pEvent({
-    workspaceId: payload.workspaceId,
-    resourceType: 'Member',
-    resourceId: payload.member.id,
-    operatorId: memberRow.id,
-    eventType: 'Joined',
-    payload: {
-      member_id: memberRow.id,
-      device_id: memberRow.deviceId,
-      identity_id: memberRow.identityId,
-      display_name: memberRow.displayName,
-      role: memberRow.role,
-    },
-  })
-
+  void p2pConnectionService
+    .ensurePeerReadyForWorkspace(peerDeviceId, payload.workspaceId)
+    .catch((error) => {
+      logStructured(
+        'p2p',
+        'warn',
+        `owner connect after join request failed for ${peerDeviceId.slice(0, 8)}: ${toErrorMessage(error, 'owner connect after join request failed')}`,
+      )
+    })
   broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
-
-  if (p2pConnectionService.isPeerConnected(peerDeviceId)) {
-    promptPeerTrustIfNeeded(payload.workspaceId, peerDeviceId, { connected: true })
-  }
 
   if (payload.inviteId) {
     const invite = getInviteRepo().findById(payload.inviteId)
@@ -805,7 +835,4 @@ export async function applyRemoteMemberJoin(
       getInviteRepo().incrementUseCount(invite.id)
     }
   }
-
-  reconcileAfterRemoteJoin(payload.workspaceId)
-  maybeActivateWorkspaceVipPool(payload.workspaceId)
 }

@@ -15,6 +15,7 @@ import {
   prepareCommunityMcpPackage,
   prepareCommunitySkillPackage,
   prepareCommunityWorkflowPackage,
+  prepareCommunityKnowledgePackage,
   patchCommunityResource,
   publishCommunityResource,
 } from './community-api.client'
@@ -157,7 +158,7 @@ export function CommunityResourcePublishModal({
     const data = result.data as { paths: string[] }
     if (data.paths.length === 0) return
     const pickedPath = data.paths[0] ?? ''
-    const autoConvertTypes: CommunityResourceType[] = ['mcp', 'skill', 'workflow']
+    const autoConvertTypes: CommunityResourceType[] = ['mcp', 'skill', 'workflow', 'knowledge']
     if (autoConvertTypes.includes(resourceType)) {
       setPreparingPackage(true)
       setPackageNotice(null)
@@ -170,7 +171,9 @@ export function CommunityResourcePublishModal({
             ? await prepareCommunityMcpPackage(pickedPath, inferredTitle)
             : resourceType === 'skill'
               ? await prepareCommunitySkillPackage(pickedPath, inferredTitle)
-              : await prepareCommunityWorkflowPackage(pickedPath, inferredTitle)
+              : resourceType === 'workflow'
+                ? await prepareCommunityWorkflowPackage(pickedPath, inferredTitle)
+                : await prepareCommunityKnowledgePackage(pickedPath, inferredTitle)
         setPackagePath(prepared.packagePath)
         setPackageNotice(prepared.message ?? t('communityPage.resourcePublish.packageReady'))
         if (!title.trim()) {

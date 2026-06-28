@@ -7,7 +7,6 @@ import {
   P2pNotePushUpdateInputSchema,
   P2pNoteSetPermissionInputSchema,
   P2pNoteShareInputSchema,
-  P2pResourceListInputSchema,
   P2pResourceUnshareInputSchema,
   buildP2pNoteShareMetadata,
   parseP2pNoteShareMetadata,
@@ -15,6 +14,7 @@ import {
 import { getDatabase } from '../../bootstrap/database'
 import { getNoteById, getNotesData, noteToMarkdown, upsertNoteItem } from '../notes-data.service'
 import { appendP2pEvent } from './p2p-event.service'
+import { listP2pSharedResourcesForWorkspace } from './p2p-shared-resource-list.service'
 import {
   findSharedResourceInWorkspace,
   resolveSharedResourceId,
@@ -326,15 +326,7 @@ export async function unshareP2pNote(rawInput: unknown): Promise<{ unshared: tru
 }
 
 export function listP2pSharedNotes(rawInput: unknown): { resources: P2pSharedResource[] } {
-  const input = P2pResourceListInputSchema.parse(rawInput)
-  assertWorkspaceMemberAccess(input.workspaceId)
-
-  const rows = getSharedResourceRepo()
-    .listByWorkspace(input.workspaceId)
-    .filter((row) => row.resourceType === 'Note')
-    .filter((row) => (input.status ? row.status === input.status : row.status === 'active'))
-
-  return { resources: rows.map(mapSharedResourceRow) }
+  return listP2pSharedResourcesForWorkspace(rawInput)
 }
 
 export function listP2pNoteShareTargets(noteId: string): { workspaceIds: string[] } {

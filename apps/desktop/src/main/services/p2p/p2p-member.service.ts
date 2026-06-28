@@ -4,19 +4,23 @@ import {
   type P2pMember,
   type P2pMemberRole,
 } from '@toolman/shared'
-import { listP2pDiscoveredNodes } from './p2p-discovery.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
-import { assertCanManageMembers as assertCanManageMembersGuard } from './p2p-permission.guard'
-import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 import {
-  assertWorkspaceMemberAccess,
+  assertCanManageMembers as assertCanManageMembersGuard,
+  assertWorkspaceMembershipAccess,
+} from './p2p-permission.guard'
+import {
+  ensureOwnerMemberRecord,
   getIdentityDisplayName,
   getMemberRepo,
-  getWorkspaceRepo,
   mapMemberRow,
 } from './p2p-member-shared'
+
+export { ensureOwnerMemberRecord } from './p2p-member-shared'
+import { recordMemberDepartureEvent } from './p2p-member-departure.service'
 import {
   applyRemoteMemberJoin,
+  activateMemberAfterOwnerTrust,
   flushPendingJoinNotification,
   joinP2pWorkspace,
   P2pMemberLimitError,
@@ -32,6 +36,7 @@ import {
 
 export { P2pMemberVipRequiredError } from './p2p-workspace-vip-pool.service'
 export {
+  activateMemberAfterOwnerTrust,
   applyRemoteMemberJoin,
   flushPendingJoinNotification,
   joinP2pWorkspace,
@@ -62,52 +67,8 @@ function assertCanManageMembers(
   return assertCanManageMembersGuard(workspaceId, targetMemberId)
 }
 
-export function ensureOwnerMemberRecord(workspaceId: string): void {
-  const workspace = getWorkspaceRepo().findById(workspaceId)
-  if (!workspace) return
-
-  const device = getP2pDeviceInfo()
-  if (workspace.ownerDeviceId === device.deviceId) {
-    return
-  }
-
-  const memberRepo = getMemberRepo()
-  const existing = memberRepo.findByWorkspaceAndDevice(workspaceId, workspace.ownerDeviceId)
-  if (existing?.status === 'active') {
-    return
-  }
-
-  const discovered = listP2pDiscoveredNodes(false).find(
-    (node) => node.deviceId === workspace.ownerDeviceId,
-  )
-  const displayName = discovered?.userName ?? '群主'
-
-  ensureLinkedIdentityRow(workspace.ownerIdentityId, displayName)
-
-  if (existing) {
-    memberRepo.update({
-      id: existing.id,
-      displayName,
-      role: 'owner',
-      status: 'active',
-      joinedAt: existing.joinedAt ?? new Date(),
-    })
-    return
-  }
-
-  memberRepo.create({
-    workspaceId,
-    identityId: workspace.ownerIdentityId,
-    deviceId: workspace.ownerDeviceId,
-    displayName,
-    role: 'owner',
-    status: 'active',
-    joinedAt: new Date(),
-  })
-}
-
 export function listP2pMembers(workspaceId: string): P2pMember[] {
-  assertWorkspaceMemberAccess(workspaceId)
+  assertWorkspaceMembershipAccess(workspaceId)
   ensureOwnerMemberRecord(workspaceId)
   ensureLocalMemberDisplayNameForWorkspace(workspaceId)
   return getMemberRepo()
@@ -117,16 +78,25 @@ export function listP2pMembers(workspaceId: string): P2pMember[] {
 }
 
 export async function prepareP2pMemberList(workspaceId: string): Promise<P2pMember[]> {
-  assertWorkspaceMemberAccess(workspaceId)
+  assertWorkspaceMembershipAccess(workspaceId)
   ensureOwnerMemberRecord(workspaceId)
   void ensureMemberConnectsToOwner(workspaceId)
   void reconcileOwnerWorkspaceMembers(workspaceId)
   return listP2pMembers(workspaceId)
 }
 
-export function removeP2pMember(rawInput: unknown): void {
+export async function removeP2pMember(rawInput: unknown): Promise<void> {
   const input = P2pMemberRemoveInputSchema.parse(rawInput)
-  const { target } = assertCanManageMembers(input.workspaceId, input.memberId)
+  const { actor, target } = assertCanManageMembers(input.workspaceId, input.memberId)
+
+  await recordMemberDepartureEvent({
+    workspaceId: input.workspaceId,
+    memberId: target.id,
+    operatorId: actor.id,
+    reason: 'removed',
+    displayName: target.displayName,
+    deviceId: target.deviceId,
+  })
 
   getMemberRepo().update({
     id: target.id,

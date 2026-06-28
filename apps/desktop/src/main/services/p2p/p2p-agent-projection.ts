@@ -13,6 +13,8 @@ import {
 } from './agent-share.service'
 import {
   getAssistantRowIncludingDeleted,
+  isBuiltinAssistantId,
+  resolveGroupMirrorImportAssistantId,
   restoreAssistantIfDeleted,
   updateAssistant,
 } from '../assistant.service'
@@ -20,6 +22,11 @@ import {
   cleanupLocalProxySessionsForResource,
   syncLocalProxySessionPermissions,
 } from './p2p-group-agent-proxy.service'
+
+import {
+  findSharedResourceForProjection,
+  resolveSharedResourceId,
+} from './p2p-shared-resource-id'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -36,6 +43,10 @@ function markImportedAssistantAsGroupMirror(input: {
   p2pWorkspaceId: string
   resourceId: string
 }): void {
+  if (isBuiltinAssistantId(input.assistantId)) {
+    return
+  }
+
   restoreAssistantIfDeleted(input.assistantId)
   const existing = getAssistantRowIncludingDeleted(input.assistantId)
   if (!existing) return
@@ -55,7 +66,7 @@ function markImportedAssistantAsGroupMirror(input: {
 }
 
 function upsertProjectedAgentResource(input: {
-  sourceAssistantId: string
+  resourceId: string
   event: WorkspaceEvent
   name: string
   metadataJson: string
@@ -65,7 +76,7 @@ function upsertProjectedAgentResource(input: {
   const sharedRepo = getSharedResourceRepo()
   if (!input.existing) {
     sharedRepo.create({
-      id: input.sourceAssistantId,
+      id: input.resourceId,
       workspaceId: input.event.workspaceId,
       resourceType: 'Agent',
       localResourceId: input.localResourceId,
@@ -80,7 +91,7 @@ function upsertProjectedAgentResource(input: {
   }
 
   sharedRepo.update({
-    id: input.sourceAssistantId,
+    id: input.resourceId,
     name: input.name,
     status: 'active',
     localResourceId: input.localResourceId,
@@ -107,6 +118,24 @@ function shouldProjectAgentMirrorImport(
   return event.sourceDeviceId !== getP2pDeviceInfo().deviceId
 }
 
+function upsertAgentSharedListingOnly(input: {
+  resourceId: string
+  event: WorkspaceEvent
+  name: string
+  metadataJson: string
+  localResourceId: string
+  existing: ReturnType<P2pSharedResourceRepository['findById']>
+}): void {
+  upsertProjectedAgentResource({
+    resourceId: input.resourceId,
+    event: input.event,
+    name: input.name,
+    metadataJson: input.metadataJson,
+    localResourceId: input.localResourceId,
+    existing: input.existing,
+  })
+}
+
 export function projectAgentSharedEvent(event: WorkspaceEvent): void {
   if (event.resourceType !== 'Agent') {
     return
@@ -117,29 +146,32 @@ export function projectAgentSharedEvent(event: WorkspaceEvent): void {
 
   const sourceAssistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
   const name = readPayloadString(event.payload, 'name') ?? '共享智能体'
-  const packageJson = readPayloadString(event.payload, 'package_json')
+  let packageJson = readPayloadString(event.payload, 'package_json')
   const sourceWorkspaceId = readPayloadString(event.payload, 'source_workspace_id')
 
-  if (!packageJson) {
-    return
-  }
-
-  const targetWorkspace = getDefaultWorkspace()
-  if (!targetWorkspace) {
-    return
-  }
-
   const sharedRepo = getSharedResourceRepo()
-  const existing = sharedRepo.findById(sourceAssistantId)
+  const existing = findSharedResourceForProjection(
+    sharedRepo,
+    event.workspaceId,
+    sourceAssistantId,
+    'Agent',
+  )
+  const preferredRowId = event.resourceId || sourceAssistantId
+  const resourceId =
+    existing?.id ?? resolveSharedResourceId(sharedRepo, preferredRowId, event.workspaceId)
+
+  const existingMetadata = existing ? readAgentShareMetadata(existing.metadataJson) : {}
+  if (!packageJson) {
+    packageJson = existingMetadata.packageJson
+  }
 
   const payloadHasSessionIds = Object.prototype.hasOwnProperty.call(event.payload, 'session_ids')
   const sessionIds = resolveAuthoritativeSessionIds(
-    existing ? readAgentShareMetadata(existing.metadataJson).sessionIds : undefined,
+    existingMetadata.sessionIds,
     event.payload,
   )
   const sessionPermissions = parseAgentSessionPermissionsFromPayload(event.payload)
   const sessionTitles = parseAgentSessionTitlesFromPayload(event.payload)
-  const existingMetadata = existing ? readAgentShareMetadata(existing.metadataJson) : {}
   const metadataJson = serializeAgentShareMetadata({
     sourceWorkspaceId,
     packageJson,
@@ -158,6 +190,25 @@ export function projectAgentSharedEvent(event: WorkspaceEvent): void {
     ),
   })
 
+  const listingLocalResourceId = existing?.localResourceId ?? sourceAssistantId
+  upsertAgentSharedListingOnly({
+    resourceId,
+    event,
+    name,
+    metadataJson,
+    localResourceId: listingLocalResourceId,
+    existing,
+  })
+
+  if (!packageJson) {
+    return
+  }
+
+  const targetWorkspace = getDefaultWorkspace()
+  if (!targetWorkspace) {
+    return
+  }
+
   if (payloadHasSessionIds) {
     cleanupLocalProxySessionsForResource(
       sourceAssistantId,
@@ -165,67 +216,56 @@ export function projectAgentSharedEvent(event: WorkspaceEvent): void {
     )
   }
 
-  const projectMirrorImport = shouldProjectAgentMirrorImport(event, existing)
+  const projected = sharedRepo.findById(resourceId)
+  const projectMirrorImport = shouldProjectAgentMirrorImport(event, projected)
 
   if (!projectMirrorImport) {
-    if (existing) {
-      upsertProjectedAgentResource({
-        sourceAssistantId,
-        event,
-        name,
-        metadataJson,
-        localResourceId: existing.localResourceId!,
-        existing,
-      })
-    }
     return
   }
 
+  const projectedMetadata = readAgentShareMetadata(projected?.metadataJson)
   if (
-    existing?.status === 'active' &&
-    existing.workspaceId === event.workspaceId &&
-    existingMetadata.packageJson === packageJson &&
-    existing.localResourceId &&
-    getAssistantRowIncludingDeleted(existing.localResourceId)
+    projected?.status === 'active' &&
+    projected.workspaceId === event.workspaceId &&
+    projectedMetadata.packageJson === packageJson &&
+    projected.localResourceId &&
+    getAssistantRowIncludingDeleted(projected.localResourceId) &&
+    !getAssistantRowIncludingDeleted(projected.localResourceId)?.deletedAt
   ) {
     markImportedAssistantAsGroupMirror({
-      assistantId: existing.localResourceId,
+      assistantId: projected.localResourceId,
       ownerName: name,
       p2pWorkspaceId: event.workspaceId,
       resourceId: sourceAssistantId,
     })
-    upsertProjectedAgentResource({
-      sourceAssistantId,
-      event,
-      name,
-      metadataJson,
-      localResourceId: existing.localResourceId,
-      existing,
-    })
     return
   }
 
-  const { assistantId } = importAgentPackageToWorkspace(
-    targetWorkspace.id,
-    packageJson,
-    existing?.localResourceId ?? undefined,
-  )
+  try {
+    const { assistantId } = importAgentPackageToWorkspace(
+      targetWorkspace.id,
+      packageJson,
+      resolveGroupMirrorImportAssistantId(projected?.localResourceId ?? undefined),
+    )
 
-  markImportedAssistantAsGroupMirror({
-    assistantId,
-    ownerName: name,
-    p2pWorkspaceId: event.workspaceId,
-    resourceId: sourceAssistantId,
-  })
+    markImportedAssistantAsGroupMirror({
+      assistantId,
+      ownerName: name,
+      p2pWorkspaceId: event.workspaceId,
+      resourceId: sourceAssistantId,
+    })
 
-  upsertProjectedAgentResource({
-    sourceAssistantId,
-    event,
-    name,
-    metadataJson,
-    localResourceId: assistantId,
-    existing,
-  })
+    upsertProjectedAgentResource({
+      resourceId,
+      event,
+      name,
+      metadataJson,
+      localResourceId: assistantId,
+      existing: projected,
+    })
+  } catch {
+    // Keep listing-only projection when mirror import fails.
+  }
 }
 
 export function applyAgentUpdatedEvent(event: WorkspaceEvent): void {
@@ -237,7 +277,12 @@ export function applyAgentUpdatedEvent(event: WorkspaceEvent): void {
   const sessionPermissions = parseAgentSessionPermissionsFromPayload(event.payload)
   const sessionTitles = parseAgentSessionTitlesFromPayload(event.payload)
   const sharedRepo = getSharedResourceRepo()
-  const existing = sharedRepo.findById(sourceAssistantId)
+  const existing = findSharedResourceForProjection(
+    sharedRepo,
+    event.workspaceId,
+    sourceAssistantId,
+    'Agent',
+  )
 
   if ((sessionPermissions || sessionTitles) && existing) {
     const metadata = readAgentShareMetadata(existing.metadataJson)
@@ -247,7 +292,7 @@ export function applyAgentUpdatedEvent(event: WorkspaceEvent): void {
       ...(sessionTitles ? { sessionTitles: { ...metadata.sessionTitles, ...sessionTitles } } : {}),
     })
     sharedRepo.update({
-      id: sourceAssistantId,
+      id: existing.id,
       metadataJson,
     })
     if (sessionPermissions) {
@@ -280,7 +325,7 @@ export function applyAgentUpdatedEvent(event: WorkspaceEvent): void {
   const { assistantId } = importAgentPackageToWorkspace(
     targetWorkspace.id,
     packageJson,
-    existing.localResourceId,
+    resolveGroupMirrorImportAssistantId(existing.localResourceId),
   )
 
   markImportedAssistantAsGroupMirror({
@@ -292,7 +337,7 @@ export function applyAgentUpdatedEvent(event: WorkspaceEvent): void {
 
   if (assistantId !== existing.localResourceId) {
     sharedRepo.update({
-      id: sourceAssistantId,
+      id: existing.id,
       localResourceId: assistantId,
     })
   }
@@ -305,20 +350,26 @@ export function projectAgentDeletedEvent(event: WorkspaceEvent): void {
 
   const assistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
   const sharedRepo = getSharedResourceRepo()
-  const resource = sharedRepo.findById(assistantId)
+  const resource = findSharedResourceForProjection(
+    sharedRepo,
+    event.workspaceId,
+    assistantId,
+    'Agent',
+  )
   if (resource) {
     const metadata = readAgentShareMetadata(resource.metadataJson)
     const metadataJson = serializeAgentShareMetadata({
       sourceWorkspaceId: metadata.sourceWorkspaceId,
       packageJson: metadata.packageJson,
     })
-    sharedRepo.update({ id: assistantId, status: 'unshared', metadataJson })
+    sharedRepo.update({ id: resource.id, status: 'unshared', metadataJson })
     cleanupLocalProxySessionsForResource(assistantId)
   }
 }
 
 export function reconcileAgentSharedResources(workspaceId: string): void {
   const terminalByAgent = new Map<string, WorkspaceEvent>()
+  const packageJsonByAgent = new Map<string, string>()
 
   let sinceSeq = 0
   while (true) {
@@ -328,6 +379,17 @@ export function reconcileAgentSharedResources(workspaceId: string): void {
     for (const event of batch) {
       sinceSeq = event.seq
       if (event.resourceType !== 'Agent') continue
+
+      const assistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
+
+      if (event.eventType === 'Updated') {
+        const packageJson = readPayloadString(event.payload, 'package_json')
+        if (packageJson) {
+          packageJsonByAgent.set(assistantId, packageJson)
+        }
+        continue
+      }
+
       if (
         event.eventType !== 'Shared' &&
         event.eventType !== 'Created' &&
@@ -336,7 +398,6 @@ export function reconcileAgentSharedResources(workspaceId: string): void {
         continue
       }
 
-      const assistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
       terminalByAgent.set(assistantId, event)
     }
 
@@ -348,7 +409,14 @@ export function reconcileAgentSharedResources(workspaceId: string): void {
       projectAgentDeletedEvent(event)
       continue
     }
-    projectAgentSharedEvent(event)
+
+    const assistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
+    const packageJson =
+      readPayloadString(event.payload, 'package_json') ?? packageJsonByAgent.get(assistantId)
+    projectAgentSharedEvent({
+      ...event,
+      payload: packageJson ? { ...event.payload, package_json: packageJson } : event.payload,
+    })
   }
 }
 

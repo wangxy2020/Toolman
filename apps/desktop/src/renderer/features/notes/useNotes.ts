@@ -64,16 +64,28 @@ export function useNotes() {
 
       const permission = readNoteUpdatedPermission(event)
       if (permission) {
-        const locked = permission === 'read'
+        const groupPermissionLocked = permission === 'read'
         setData((prev) => {
           const target = prev.notes.find((item) => item.id === noteId)
-          if (!target || !isGroupNotebookId(target.notebookId) || target.locked === locked) {
+          if (
+            !target ||
+            !isGroupNotebookId(target.notebookId) ||
+            (target.locked === groupPermissionLocked &&
+              target.groupPermissionLocked === groupPermissionLocked)
+          ) {
             return prev
           }
           return {
             ...prev,
             notes: prev.notes.map((item) =>
-              item.id === noteId ? { ...item, locked, updatedAt: Date.now() } : item,
+              item.id === noteId
+                ? {
+                    ...item,
+                    locked: groupPermissionLocked,
+                    groupPermissionLocked,
+                    updatedAt: Date.now(),
+                  }
+                : item,
             ),
           }
         })
@@ -313,6 +325,7 @@ export function useNotes() {
     async (request: OpenGroupNoteRequest): Promise<boolean> => {
       const { noteId, workspaceId, workspaceName, title, editable = false } = request
       const locked = !editable
+      const groupPermissionLocked = !editable
       const groupNotebookId = buildGroupNotebookId(workspaceId)
       const groupNotebookName = workspaceName.trim() || '群组笔记'
       const existing = data.notes.find((item) => item.id === noteId)
@@ -336,6 +349,7 @@ export function useNotes() {
                   ...item,
                   notebookId: groupNotebookId,
                   locked,
+                  groupPermissionLocked,
                   updatedAt: Date.now(),
                 }
               : item,
@@ -371,6 +385,7 @@ export function useNotes() {
             title: title || '共享笔记',
             content: '',
             locked,
+            groupPermissionLocked,
           },
           groupNotebookId,
         )
@@ -382,6 +397,7 @@ export function useNotes() {
           notebookId: groupNotebookId,
           title: title || baseNote.title,
           locked,
+          groupPermissionLocked,
         },
         groupNotebookId,
       )
@@ -564,6 +580,7 @@ export function useNotes() {
         ...prev,
         notes: prev.notes.map((item) => {
           if (item.id !== noteId) return item
+          if (item.groupPermissionLocked) return item
           const next: NoteItem = {
             ...item,
             ...patch,
@@ -595,9 +612,10 @@ export function useNotes() {
   const toggleNoteLocked = useCallback((noteId: string) => {
     setData((prev) => ({
       ...prev,
-      notes: prev.notes.map((item) =>
-        item.id === noteId ? { ...item, locked: !item.locked, updatedAt: Date.now() } : item,
-      ),
+      notes: prev.notes.map((item) => {
+        if (item.id !== noteId || item.groupPermissionLocked) return item
+        return { ...item, locked: !item.locked, updatedAt: Date.now() }
+      }),
     }))
   }, [])
 
@@ -756,11 +774,19 @@ export function useNotes() {
   const syncGroupNoteLock = useCallback((noteId: string, locked: boolean) => {
     setData((prev) => {
       const note = prev.notes.find((item) => item.id === noteId)
-      if (!note || note.locked === locked) return prev
+      const groupPermissionLocked = locked
+      if (
+        !note ||
+        (note.locked === locked && note.groupPermissionLocked === groupPermissionLocked)
+      ) {
+        return prev
+      }
       return {
         ...prev,
         notes: prev.notes.map((item) =>
-          item.id === noteId ? { ...item, locked, updatedAt: Date.now() } : item,
+          item.id === noteId
+            ? { ...item, locked, groupPermissionLocked, updatedAt: Date.now() }
+            : item,
         ),
       }
     })

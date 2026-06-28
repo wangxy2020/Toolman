@@ -6,7 +6,7 @@ import { logStructured } from '../structured-log.service'
 import { applyP2pNetworkConfig } from './p2p-network.config'
 import { stopP2pDiscovery, startP2pDiscovery } from './p2p-discovery.service'
 import { listP2pConnections, disconnectP2pPeer } from './p2p-connection.service'
-import { reconcileOwnerWorkspaceMembers } from './p2p-member.service'
+import { reconcileOwnerWorkspaceMembers } from './p2p-member-reconcile.service'
 import { P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 

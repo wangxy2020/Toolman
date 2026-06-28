@@ -3,7 +3,7 @@ import type { Assistant, Session } from '@toolman/shared'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { IconChevronRight, IconPlus, IconTopic } from '../icons'
 import { SidebarRenameInput } from '../../features/notes/SidebarRenameInput'
-import { isGroupProxyAssistant } from '../../features/group/group-agent-utils'
+import { isGroupProxyAssistant, resolveGroupProxyAssistantDisplayName } from '../../features/group/group-agent-utils'
 import { useI18n } from '../../i18n/useI18n'
 import { translateAssistantName, translateSessionTitle } from '../../i18n/system-labels'
 
@@ -18,6 +18,13 @@ interface Props {
   onDeleteSession: (id: string) => void
   onDeleteAssistant: (id: string) => void
   onAddAssistant: () => void
+}
+
+function resolveAssistantSidebarName(assistant: Assistant, t: ReturnType<typeof useI18n>['t']): string {
+  if (isGroupProxyAssistant(assistant)) {
+    return resolveGroupProxyAssistantDisplayName(assistant)
+  }
+  return translateAssistantName(assistant.name, t)
 }
 
 function normalizeSessionTitle(next: string, fallback: string): string {
@@ -196,17 +203,21 @@ export function MiddleSidebar({
                       }
                     }}
                   >
-                    {translateAssistantName(assistant.name, t)}
+                    {resolveAssistantSidebarName(assistant, t)}
                   </button>
                   <div className="tm-assistant-actions">
-                    <button
-                      type="button"
-                      className="tm-assistant-action-btn"
-                      title={t('sidebar.agent.newTopic')}
-                      onClick={() => onCreateSession(assistant.id)}
-                    >
-                      <IconPlus size={14} />
-                    </button>
+                    {!isGroupProxyAssistant(assistant) ? (
+                      <button
+                        type="button"
+                        className="tm-assistant-action-btn"
+                        title={t('sidebar.agent.newTopic')}
+                        onClick={() => onCreateSession(assistant.id)}
+                      >
+                        <IconPlus size={14} />
+                      </button>
+                    ) : (
+                      <div className="tm-assistant-actions tm-assistant-actions--placeholder" aria-hidden="true" />
+                    )}
                   </div>
                 </div>
 

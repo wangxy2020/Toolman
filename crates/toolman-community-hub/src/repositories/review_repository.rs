@@ -412,7 +412,8 @@ mod tests {
                     "mcpId": "rated-mcp",
                     "transport": "stdio",
                     "command": "echo",
-                    "tools": []
+                    "tools": [],
+                    "files": ["mcp.manifest.json"]
                 }),
             })
             .await

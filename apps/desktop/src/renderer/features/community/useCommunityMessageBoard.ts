@@ -12,10 +12,12 @@ import {
 import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
 import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
 import {
+  COMMUNITY_LIST_POLL_INTERVAL_MS,
   fetchCommunityListCached,
   invalidateCommunityListCache,
   readCommunityListCache,
 } from './community-list-cache'
+import { COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
@@ -57,13 +59,14 @@ export function useCommunityMessageBoard() {
 
   useCommunityYjsBoardUpdates(setItems)
 
-  const load = useCallback(async (options?: { force?: boolean }) => {
+  const load = useCallback(async (options?: { force?: boolean; background?: boolean }) => {
+    const background = options?.background === true
     const cached = !options?.force
       ? readCommunityListCache<Awaited<ReturnType<typeof listCommunityBoardMessages>>>(
           BOARD_LIST_CACHE_KEY,
         )
       : null
-    if (!cached?.items.length) {
+    if (!background && !cached?.items.length) {
       setLoading(true)
     }
     setError(null)
@@ -281,11 +284,20 @@ export function useCommunityMessageBoard() {
   }, [load])
 
   useEffect(() => {
-    const reload = () => {
+    const reloadInBackground = () => {
+      void load({ force: true, background: true })
+    }
+    const reloadOnSessionChange = () => {
       void load()
     }
-    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
-    return () => window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
+    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reloadOnSessionChange)
+    window.addEventListener(COMMUNITY_USER_DATA_CHANGED_EVENT, reloadInBackground)
+    const timer = window.setInterval(reloadInBackground, COMMUNITY_LIST_POLL_INTERVAL_MS)
+    return () => {
+      window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reloadOnSessionChange)
+      window.removeEventListener(COMMUNITY_USER_DATA_CHANGED_EVENT, reloadInBackground)
+      window.clearInterval(timer)
+    }
   }, [load])
 
   return {

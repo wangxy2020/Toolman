@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react'
 import type { KnowledgeBase } from '@toolman/shared'
-import { isP2pSharedKnowledgeMirrorDescription, resolveGroupSavedKnowledgeSidebarLabel } from '@toolman/shared'
+import {
+  findGroupSavedKnowledgeBaseId,
+  isP2pSharedKnowledgeMirrorDescription,
+  resolveGroupSavedKnowledgeSidebarLabel,
+  stripP2pGroupPrefixedResourceName,
+} from '@toolman/shared'
 import { IconChevronRight, IconCopy, IconFile, IconFolder, IconGlobe, IconPlus } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { getModulePageConfig } from '../modules/module-config'
 import { useI18n } from '../../i18n/useI18n'
 import { getKnowledgeSidebarSectionLabel } from '../../i18n/knowledge-sidebar-labels'
+import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
+import { useEffect, useMemo, useState } from 'react'
 import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
@@ -21,6 +27,7 @@ import { KnowledgeSidebarMenuItem } from './KnowledgeSidebarMenuItem'
 
 interface Props {
   items: KnowledgeBase[]
+  sharedKnowledgeEntries?: SharedKnowledgeEntry[]
   activeId: string | null
   activeSection: KnowledgeSidebarSection
   loading?: boolean
@@ -37,6 +44,7 @@ interface Props {
 
 export function KnowledgeSidebar({
   items,
+  sharedKnowledgeEntries = [],
   activeId,
   activeSection,
   loading,
@@ -67,6 +75,30 @@ export function KnowledgeSidebar({
       !isP2pSharedKnowledgeMirrorDescription(item.description) &&
       item.documentCount > 0,
   )
+
+  const liveSharedEntries = useMemo(() => {
+    return sharedKnowledgeEntries.filter((entry) => {
+      const sharedFolderName = stripP2pGroupPrefixedResourceName(
+        entry.workspaceName,
+        entry.resource.name,
+      )
+      const savedId = findGroupSavedKnowledgeBaseId(
+        savedSharedItems.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          name: item.name,
+          description: item.description ?? null,
+        })),
+        {
+          p2pWorkspaceId: entry.p2pWorkspaceId,
+          groupName: entry.workspaceName,
+          sharedFolderName,
+        },
+        { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
+      )
+      return savedId == null
+    })
+  }, [savedSharedItems, sharedKnowledgeEntries])
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
     () => new Set(['local', 'network', 'shared', 'local-files']),
   )
@@ -231,12 +263,31 @@ export function KnowledgeSidebar({
 
                 {isOpen && section.id === 'shared' ? (
                   <>
-                    {loading && savedSharedItems.length === 0 ? (
+                    {loading && savedSharedItems.length === 0 && liveSharedEntries.length === 0 ? (
                       <div className="tm-session-empty">{t('common.loading')}</div>
                     ) : null}
-                    {!loading && savedSharedItems.length === 0 ? (
+                    {!loading &&
+                    savedSharedItems.length === 0 &&
+                    liveSharedEntries.length === 0 ? (
                       <div className="tm-session-empty">{t('sidebar.knowledge.noFolders')}</div>
                     ) : null}
+                    {liveSharedEntries.map((entry) => {
+                      const folderName = stripP2pGroupPrefixedResourceName(
+                        entry.workspaceName,
+                        entry.resource.name,
+                      )
+                      const label = `[${entry.workspaceName}] ${folderName}`
+                      return (
+                        <KnowledgeSidebarMenuItem
+                          key={entry.id}
+                          icon={<IconGlobe size={14} />}
+                          label={label}
+                          active={entry.id === activeId && activeSection === 'shared'}
+                          title={`${label}（群组共享，保存到本地后可删除本地副本）`}
+                          onClick={() => onSelect(entry.id)}
+                        />
+                      )
+                    })}
                     {savedSharedItems.map((item) => {
                       const sharedLabel = resolveGroupSavedKnowledgeSidebarLabel(item)
                       return (
@@ -250,12 +301,8 @@ export function KnowledgeSidebar({
                           documents: item.documentCount,
                         })}
                         onClick={() => onSelect(item.id)}
-                        deletable={isDeletableKnowledgeBase(item.name)}
-                        onRequestDelete={
-                          isDeletableKnowledgeBase(item.name)
-                            ? () => setDeleteTarget(item)
-                            : undefined
-                        }
+                        deletable
+                        onRequestDelete={() => setDeleteTarget(item)}
                       />
                       )
                     })}

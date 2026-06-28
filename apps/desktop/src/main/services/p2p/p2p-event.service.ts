@@ -12,7 +12,10 @@ import { getDatabase } from '../../bootstrap/database'
 import { P2pBridge } from './p2p-bridge'
 import { broadcastP2pEventAppended } from './p2p-event-broadcast'
 import { projectP2pEvent } from './p2p-event-projector'
-import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
+import {
+  assertWorkspaceMemberAccess,
+  assertWorkspaceMembershipAccess,
+} from './p2p-permission.guard'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import {
   applySequencingToAppend,
@@ -252,6 +255,8 @@ function appendP2pEventRow(
   }
 }
 
+const ACTIVITY_LOG_EXCLUDED_RESOURCE_TYPES = new Set(['GroupChat'])
+
 export function listP2pEvents(rawInput: {
   workspaceId: string
   resourceType?: P2pResourceType
@@ -260,7 +265,7 @@ export function listP2pEvents(rawInput: {
   limit?: number
   offset?: number
 }): { events: WorkspaceEvent[]; total: number; hasMore: boolean } {
-  assertWorkspaceMemberAccess(rawInput.workspaceId)
+  assertWorkspaceMembershipAccess(rawInput.workspaceId)
 
   const limit = Math.min(rawInput.limit ?? 50, 200)
   const offset = rawInput.offset ?? 0
@@ -271,19 +276,22 @@ export function listP2pEvents(rawInput: {
     resourceId: rawInput.resourceId,
     sinceSeq: rawInput.sinceSeq,
   })
-  const rows = repo.list({
-    workspaceId: rawInput.workspaceId,
-    resourceType: rawInput.resourceType,
-    resourceId: rawInput.resourceId,
-    sinceSeq: rawInput.sinceSeq,
-    limit,
-    offset,
-    order: 'desc',
-  })
+  const rows = repo
+    .list({
+      workspaceId: rawInput.workspaceId,
+      resourceType: rawInput.resourceType,
+      resourceId: rawInput.resourceId,
+      sinceSeq: rawInput.sinceSeq,
+      limit: Math.min(limit * 3, 200),
+      offset,
+      order: 'desc',
+    })
+    .filter((row) => !ACTIVITY_LOG_EXCLUDED_RESOURCE_TYPES.has(row.resourceType))
+    .slice(0, limit)
 
   return {
     events: rows.map(mapEventRow),
-    total,
+    total: rows.length < limit ? offset + rows.length : total,
     hasMore: offset + rows.length < total,
   }
 }
@@ -293,7 +301,7 @@ export function getP2pEvent(eventId: string): WorkspaceEvent {
   if (!row) {
     throw new Error('事件不存在')
   }
-  assertWorkspaceMemberAccess(row.workspaceId)
+  assertWorkspaceMembershipAccess(row.workspaceId)
   return mapEventRow(row)
 }
 
@@ -327,7 +335,7 @@ function resolveSeqSlotConflictLocal(
 }
 
 export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent | null {
-  assertWorkspaceMemberAccess(input.workspaceId)
+  assertWorkspaceMembershipAccess(input.workspaceId)
   const repo = getEventRepo()
 
   const existingById = repo.findById(input.eventId)
@@ -402,7 +410,7 @@ export function applyRemoteP2pEvent(input: RemoteP2pEventInput): WorkspaceEvent 
 }
 
 export function getWorkspaceLatestSeq(workspaceId: string): number {
-  assertWorkspaceMemberAccess(workspaceId)
+  assertWorkspaceMembershipAccess(workspaceId)
   return getEventRepo().getLatestSeq(workspaceId)
 }
 
@@ -411,7 +419,7 @@ export function listWorkspaceEventsSince(
   sinceSeq: number,
   limit = 200,
 ): WorkspaceEvent[] {
-  assertWorkspaceMemberAccess(workspaceId)
+  assertWorkspaceMembershipAccess(workspaceId)
   const rows = getEventRepo().list({
     workspaceId,
     sinceSeq,

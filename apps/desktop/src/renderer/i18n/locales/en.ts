@@ -276,6 +276,7 @@ export const en: DeepStringMap<typeof zhCN> = {
       unnamed: 'Untitled group',
       emptyNoGroups: 'No groups yet. Click above to create one.',
       emptyNoJoined: 'You have not joined any groups yet',
+      pendingJoins: 'Awaiting owner approval ({{count}})',
     },
     community: {
       sections: {
@@ -375,6 +376,18 @@ export const en: DeepStringMap<typeof zhCN> = {
       wanMissingCredentials:
         'TURN credentials are missing. Joining over WAN may fail. See Settings → Diagnostics for WAN status.',
       wanHint: 'LAN join works directly; WAN uses TURN relay configured automatically by the app.',
+    },
+    groupJoinApproved: {
+      title: 'Joined group successfully',
+      message: 'The owner approved your request. Shared content in "{{name}}" is syncing now.',
+      confirm: 'Got it',
+    },
+    groupJoinPending: {
+      title: 'Join request submitted',
+      message:
+        'Your request was sent to the group owner. The group will not appear in your list until they approve it.',
+      confirm: 'Got it',
+      cancelRequest: 'Cancel request',
     },
     knowledgeCreate: {
       title: 'Add knowledge base',

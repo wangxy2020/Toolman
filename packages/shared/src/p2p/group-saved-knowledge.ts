@@ -1,6 +1,5 @@
 export interface P2pGroupSavedKnowledgeMeta {
   groupName: string
-  /** @deprecated Kept for legacy metadata; no longer used for display or storage layout. */
   sharedFolderName?: string
   p2pWorkspaceId?: string
 }
@@ -23,17 +22,32 @@ export function sanitizeP2pGroupSavedFolderSegment(name: string, fallback: strin
 
 export function normalizeP2pGroupSavedKnowledgeMeta(
   groupName: string,
-  _sharedFolderName?: string,
+  sharedFolderName?: string,
   p2pWorkspaceId?: string,
 ): P2pGroupSavedKnowledgeMeta {
+  const normalizedGroupName = sanitizeP2pGroupSavedFolderSegment(groupName, '群组')
+  const normalizedSharedFolderName = sharedFolderName?.trim()
+    ? sanitizeP2pGroupSavedFolderSegment(sharedFolderName, '知识库')
+    : undefined
   return {
-    groupName: sanitizeP2pGroupSavedFolderSegment(groupName, '群组'),
+    groupName: normalizedGroupName,
+    ...(normalizedSharedFolderName ? { sharedFolderName: normalizedSharedFolderName } : {}),
     ...(p2pWorkspaceId ? { p2pWorkspaceId } : {}),
   }
 }
 
-export function buildP2pGroupSavedKnowledgeDisplayName(groupName: string): string {
-  return sanitizeP2pGroupSavedFolderSegment(groupName, '群组')
+export function buildP2pGroupSavedKnowledgeDisplayName(
+  groupName: string,
+  sharedFolderName?: string,
+): string {
+  const normalizedGroupName = sanitizeP2pGroupSavedFolderSegment(groupName, '群组')
+  const normalizedSharedFolderName = sharedFolderName?.trim()
+    ? sanitizeP2pGroupSavedFolderSegment(sharedFolderName, '知识库')
+    : undefined
+  if (!normalizedSharedFolderName) {
+    return normalizedGroupName
+  }
+  return `[${normalizedGroupName}] ${normalizedSharedFolderName}`
 }
 
 export function resolveGroupSavedKnowledgeSidebarLabel(kb: {
@@ -41,7 +55,12 @@ export function resolveGroupSavedKnowledgeSidebarLabel(kb: {
   description?: string | null
 }): string {
   const meta = parseP2pGroupSavedKnowledgeMeta(kb.description)
-  if (meta) return meta.groupName
+  if (meta) {
+    if (meta.sharedFolderName) {
+      return `[${meta.groupName}] ${meta.sharedFolderName}`
+    }
+    return meta.groupName
+  }
 
   const bracketMatch = kb.name.trim().match(/^\[([^\]]+)\]/)
   if (bracketMatch?.[1]) {
@@ -77,14 +96,26 @@ export function findGroupSavedKnowledgeBaseId(
   if (input.p2pWorkspaceId) {
     const byWorkspace = sharedBases.find((item) => {
       const meta = parseP2pGroupSavedKnowledgeMeta(item.description)
-      return meta != null && meta.p2pWorkspaceId === input.p2pWorkspaceId
+      if (meta == null || meta.p2pWorkspaceId !== input.p2pWorkspaceId) {
+        return false
+      }
+      if (savedMeta.sharedFolderName) {
+        return meta.sharedFolderName === savedMeta.sharedFolderName
+      }
+      return !meta.sharedFolderName
     })
     if (byWorkspace) return byWorkspace.id
   }
 
   const byMeta = sharedBases.find((item) => {
     const meta = parseP2pGroupSavedKnowledgeMeta(item.description)
-    return meta != null && meta.groupName === savedMeta.groupName
+    if (meta == null || meta.groupName !== savedMeta.groupName) {
+      return false
+    }
+    if (savedMeta.sharedFolderName) {
+      return meta.sharedFolderName === savedMeta.sharedFolderName
+    }
+    return !meta.sharedFolderName
   })
   if (byMeta) return byMeta.id
 

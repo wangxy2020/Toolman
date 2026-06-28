@@ -220,6 +220,9 @@ export function applyWorkspaceSnapshotState(
     throw new Error('群组不存在')
   }
 
+  const localDeviceId = getP2pDeviceInfo().deviceId
+  const localMemberBefore = memberRepo.findByWorkspaceAndDevice(workspaceId, localDeviceId)
+
   workspaceRepo.update({
     id: workspaceId,
     name: state.workspace.name,
@@ -261,6 +264,17 @@ export function applyWorkspaceSnapshotState(
       role: member.role as 'owner' | 'admin' | 'member' | 'readonly',
       status: member.status as 'active' | 'invited' | 'left' | 'removed',
       joinedAt: new Date(),
+    })
+  }
+
+  const localMemberAfter = memberRepo.findByWorkspaceAndDevice(workspaceId, localDeviceId)
+  if (
+    workspace.ownerDeviceId !== localDeviceId &&
+    localMemberAfter?.status === 'active' &&
+    localMemberBefore?.status !== 'active'
+  ) {
+    void import('./p2p-sync.service').then((module) => {
+      module.scheduleJoinerEventCatchUp(workspaceId)
     })
   }
 }

@@ -27,6 +27,25 @@ use crate::state::{
 
 const PROTOCOL_VERSION: &str = "/toolman/libp2p/1.0.0";
 
+fn libp2p_verbose_logs() -> bool {
+    matches!(
+        std::env::var("TOOLMAN_LIBP2P_VERBOSE").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
+}
+
+fn is_benign_pubsub_error(error: &impl std::fmt::Display) -> bool {
+    error.to_string().contains("InsufficientPeers")
+}
+
+fn is_benign_outgoing_connection_error(error: &impl std::fmt::Display) -> bool {
+    let message = error.to_string();
+    message.contains("Handshake failed")
+        || message.contains("input error")
+        || message.contains("Connection refused")
+        || message.contains("Connection reset")
+}
+
 #[derive(NetworkBehaviour)]
 pub(crate) struct ToolmanBehaviour {
     mdns: mdns::tokio::Behaviour,
@@ -143,7 +162,9 @@ fn handle_swarm_command(swarm: &mut libp2p::Swarm<ToolmanBehaviour>, command: Sw
         SwarmCommand::PubsubPublish { topic, data } => {
             let ident = gossipsub::IdentTopic::new(topic);
             if let Err(error) = swarm.behaviour_mut().gossipsub.publish(ident, data) {
-                eprintln!("[toolman-libp2p] pubsub publish failed: {error}");
+                if libp2p_verbose_logs() || !is_benign_pubsub_error(&error) {
+                    eprintln!("[toolman-libp2p] pubsub publish failed: {error}");
+                }
             }
         }
         SwarmCommand::DhtProvide(cid) => {
@@ -315,10 +336,12 @@ fn handle_swarm_event(
             remove_peer(snapshot, &peer_id.to_string());
         }
         SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-            if let Some(peer_id) = peer_id {
-                eprintln!(
-                    "[toolman-libp2p] outgoing connection error to {peer_id}: {error}"
-                );
+            if libp2p_verbose_logs() || !is_benign_outgoing_connection_error(&error) {
+                if let Some(peer_id) = peer_id {
+                    eprintln!(
+                        "[toolman-libp2p] outgoing connection error to {peer_id}: {error}"
+                    );
+                }
             }
         }
         _ => {}

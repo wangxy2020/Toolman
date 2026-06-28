@@ -81,19 +81,21 @@ export function NotesHeaderActions({
       >
         <IconStar size={16} filled={note.starred} />
       </button>
-      <button
-        type="button"
-        className={[
-          'tm-chat-header-settings-btn',
-          note.locked ? 'tm-chat-header-settings-btn--active' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        title={note.locked ? t('notesPage.header.unlock') : t('notesPage.header.lock')}
-        onClick={() => onToggleLocked(note.id)}
-      >
-        <IconLock size={16} locked={note.locked} />
-      </button>
+      {note.groupPermissionLocked ? null : (
+        <button
+          type="button"
+          className={[
+            'tm-chat-header-settings-btn',
+            note.locked ? 'tm-chat-header-settings-btn--active' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          title={note.locked ? t('notesPage.header.unlock') : t('notesPage.header.lock')}
+          onClick={() => onToggleLocked(note.id)}
+        >
+          <IconLock size={16} locked={note.locked} />
+        </button>
+      )}
       <button
         type="button"
         className="tm-chat-header-settings-btn"

@@ -1,9 +1,10 @@
-import type { P2pKnowledgeDocumentPermission, WorkspaceEvent } from '@toolman/shared'
+import type { KnowledgeBaseKind, P2pKnowledgeDocumentPermission, WorkspaceEvent } from '@toolman/shared'
 import { listWorkspaceEventsSince } from './p2p-event.service'
 
 export interface KnowledgeShareMetadata {
   description?: string | null
   sourceWorkspaceId?: string
+  sourceKbKind?: KnowledgeBaseKind
   documentIds?: string[]
   documentPermissions?: Record<string, P2pKnowledgeDocumentPermission>
 }
@@ -25,6 +26,13 @@ export function readKnowledgeShareMetadata(metadataJson: string): KnowledgeShare
       description: parsed.description ?? null,
       sourceWorkspaceId:
         typeof parsed.sourceWorkspaceId === 'string' ? parsed.sourceWorkspaceId : undefined,
+      sourceKbKind:
+        parsed.sourceKbKind === 'local' ||
+        parsed.sourceKbKind === 'network' ||
+        parsed.sourceKbKind === 'local_files' ||
+        parsed.sourceKbKind === 'shared'
+          ? parsed.sourceKbKind
+          : undefined,
       documentIds: Array.isArray(parsed.documentIds)
         ? parsed.documentIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
         : undefined,
@@ -40,6 +48,7 @@ export function buildKnowledgeShareMetadata(parts: KnowledgeShareMetadata): stri
   const payload: KnowledgeShareMetadata = {
     description: parts.description ?? null,
     sourceWorkspaceId: parts.sourceWorkspaceId,
+    sourceKbKind: parts.sourceKbKind,
   }
   if (parts.documentIds && parts.documentIds.length > 0) {
     payload.documentIds = parts.documentIds

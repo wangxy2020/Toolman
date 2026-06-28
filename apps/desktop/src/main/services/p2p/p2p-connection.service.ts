@@ -7,7 +7,7 @@ import {
   broadcastP2pConnectionStateChange,
 } from './p2p-connection-broadcast'
 import { isP2pPeerDiscoverableOnline } from './p2p-discovery.service'
-import { handlePeerConnectionChange } from './p2p-peer.service'
+import { handlePeerConnectionChange, resolveWorkspaceIdForPeerConnection } from './p2p-peer.service'
 import { notifyP2pReconnect, applyP2pConnectionSnapshot, processP2pIncomingMessagesFromPoll } from './p2p-sync-lifecycle'
 import { loadWorkspaceKey } from './p2p-workspace-key.store'
 import { rotateWorkspaceKey, setWorkspaceKey } from './p2p-crypto.service'
@@ -180,36 +180,40 @@ function syncConnectionEvents(connections: P2pConnectionInfo[]): void {
         state: connection.state,
         workspaceId: connection.workspaceId,
       })
-      if (connection.workspaceId) {
-        handlePeerConnectionChange(
-          connection.workspaceId,
-          peerDeviceId,
-          connection.state,
-        )
-        if (connection.state === 'connected') {
-          reconnectAttempts.delete(peerDeviceId)
-          const timer = reconnectTimers.get(peerDeviceId)
-          if (timer) {
-            clearTimeout(timer)
-            reconnectTimers.delete(peerDeviceId)
-          }
-          notifyP2pReconnect(connection.workspaceId!, peerDeviceId)
+      const resolvedWorkspaceId = resolveWorkspaceIdForPeerConnection(
+        peerDeviceId,
+        connection.workspaceId,
+      )
+      handlePeerConnectionChange(resolvedWorkspaceId, peerDeviceId, connection.state)
+      if (connection.state === 'connected') {
+        reconnectAttempts.delete(peerDeviceId)
+        const timer = reconnectTimers.get(peerDeviceId)
+        if (timer) {
+          clearTimeout(timer)
+          reconnectTimers.delete(peerDeviceId)
+        }
+        if (resolvedWorkspaceId) {
+          notifyP2pReconnect(resolvedWorkspaceId, peerDeviceId)
           void import('./p2p-member.service').then((module) => {
-            module.flushPendingJoinNotification(peerDeviceId, connection.workspaceId ?? undefined)
-            if (connection.workspaceId) {
-              void module.reconcileOwnerWorkspaceMembers(connection.workspaceId)
-            }
+            module.flushPendingJoinNotification(peerDeviceId, resolvedWorkspaceId)
+            void module.reconcileOwnerWorkspaceMembers(resolvedWorkspaceId)
           })
-        } else if (
-          previous?.state === 'connected' &&
-          connection.state === 'reconnecting'
-        ) {
-          void tryIceRestartBeforeReconnect(peerDeviceId, connection.workspaceId)
-        } else if (
-          previous?.state === 'connected' &&
-          connection.state === 'closed'
-        ) {
-          schedulePeerReconnect(peerDeviceId, connection.workspaceId)
+        }
+      } else if (
+        previous?.state === 'connected' &&
+        connection.state === 'reconnecting'
+      ) {
+        const restartWorkspaceId = resolvedWorkspaceId ?? connection.workspaceId
+        if (restartWorkspaceId) {
+          void tryIceRestartBeforeReconnect(peerDeviceId, restartWorkspaceId)
+        }
+      } else if (
+        previous?.state === 'connected' &&
+        connection.state === 'closed'
+      ) {
+        const reconnectWorkspaceId = resolvedWorkspaceId ?? connection.workspaceId
+        if (reconnectWorkspaceId) {
+          schedulePeerReconnect(peerDeviceId, reconnectWorkspaceId)
         }
       }
     }
@@ -288,19 +292,21 @@ export async function ensurePeerReadyForWorkspace(
   workspaceId: string,
   options?: { workspaceKeyB64?: string },
 ): Promise<void> {
-  const workspaceKey = options?.workspaceKeyB64 ?? loadWorkspaceKey(workspaceId)
+  const resolvedWorkspaceId =
+    resolveWorkspaceIdForPeerConnection(peerDeviceId, workspaceId) ?? workspaceId
+  const workspaceKey = options?.workspaceKeyB64 ?? loadWorkspaceKey(resolvedWorkspaceId)
   if (!workspaceKey) {
     throw new Error('群组密钥不存在')
   }
 
-  setWorkspaceKey(workspaceId, workspaceKey, 1)
-  const state = await connectP2pPeer(peerDeviceId, workspaceId)
+  setWorkspaceKey(resolvedWorkspaceId, workspaceKey, 1)
+  const state = await connectP2pPeer(peerDeviceId, resolvedWorkspaceId)
   if (state !== 'connected') {
     throw new Error(`对端未连接 (${state})`)
   }
 
   try {
-    await rotateWorkspaceKey(workspaceId, workspaceKey, 1)
+    await rotateWorkspaceKey(resolvedWorkspaceId, workspaceKey, 1)
   } catch (error) {
     const errMessage = toErrorMessage(error, 'rotate failed')
     logStructured('p2p', 'warn', `workspace key rotate skipped for ${peerDeviceId.slice(0, 8)}: ${errMessage}`)
@@ -331,9 +337,7 @@ async function connectP2pPeerOnce(
       state,
       workspaceId,
     })
-    if (workspaceId) {
-      handlePeerConnectionChange(workspaceId, peerDeviceId, state)
-    }
+    handlePeerConnectionChange(workspaceId, peerDeviceId, state)
     return state
   } catch (error) {
     const message = toErrorMessage(error, 'Failed to connect peer')
@@ -350,6 +354,8 @@ export async function connectP2pPeer(
   peerDeviceId: string,
   workspaceId?: string,
 ): Promise<P2pConnectionState> {
+  const resolvedWorkspaceId = resolveWorkspaceIdForPeerConnection(peerDeviceId, workspaceId)
+
   const inFlight = connectInFlight.get(peerDeviceId)
   if (inFlight) {
     return inFlight
@@ -359,7 +365,7 @@ export async function connectP2pPeer(
     let lastError: unknown = null
     for (let attempt = 0; attempt < CONNECT_RETRY_DELAYS_MS.length; attempt += 1) {
       try {
-        const state = await connectP2pPeerOnce(peerDeviceId, workspaceId)
+        const state = await connectP2pPeerOnce(peerDeviceId, resolvedWorkspaceId)
         if (state === 'connected') {
           return state
         }

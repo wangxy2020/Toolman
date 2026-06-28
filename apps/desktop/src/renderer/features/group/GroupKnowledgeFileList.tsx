@@ -132,7 +132,7 @@ export function GroupKnowledgeFileList({
           if (isOpenableLocalPath(doc.absolutePath)) {
             return doc.absolutePath
           }
-          if (!isResourceOwner || !onMaterializeDocument) return null
+          if (!onMaterializeDocument) return null
           setMaterializingDocumentId(doc.id)
           try {
             return await onMaterializeDocument(doc.id, doc.absolutePath)
@@ -163,11 +163,7 @@ export function GroupKnowledgeFileList({
           }
           if (isMarkdown && onOpenGroupKnowledgeMarkdown) {
             if (!absolutePath) {
-              onOpenError?.(
-                isResourceOwner
-                  ? '文档尚未同步到本地，请稍后重试'
-                  : '请先保存至共享知识库后再打开',
-              )
+              onOpenError?.('请先保存至共享知识库后再打开')
               return
             }
             void onOpenGroupKnowledgeMarkdown({
@@ -186,11 +182,7 @@ export function GroupKnowledgeFileList({
           if (isOpenableLocalPath(absolutePath)) {
             void openLocalFile(absolutePath, onOpenError)
           } else if (!materializing) {
-            onOpenError?.(
-              isResourceOwner
-                ? '文档尚未同步到本地，请稍后重试'
-                : '请先保存至共享知识库后再打开',
-            )
+            onOpenError?.('请先保存至共享知识库后再打开')
           }
         }
 

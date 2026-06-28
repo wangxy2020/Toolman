@@ -32,3 +32,10 @@ export async function prepareCommunityWorkflowPackage(input: unknown) {
   )
   return preparePackage(input)
 }
+
+export async function prepareCommunityKnowledgePackage(input: unknown) {
+  const { prepareCommunityKnowledgePackage: preparePackage } = await import(
+    './community-knowledge-package-import.service'
+  )
+  return preparePackage(input)
+}

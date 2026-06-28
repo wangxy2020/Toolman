@@ -43,6 +43,7 @@ import {
   P2pMemberUpdateRoleOutputSchema,
   P2pMemberTrustDeviceInputSchema,
   P2pMemberTrustDeviceOutputSchema,
+  P2pMemberListPendingTrustPromptsOutputSchema,
   P2pEventListInputSchema,
   P2pEventListOutputSchema,
   P2pEventGetInputSchema,
@@ -99,6 +100,9 @@ import {
   P2pGroupChatDeleteOutputSchema,
   P2pGroupChatClearInputSchema,
   P2pGroupChatClearOutputSchema,
+  P2pWorkflowShareInputSchema,
+  P2pWorkflowShareOutputSchema,
+  P2pWorkflowListLocalOutputSchema,
 } from '@toolman/shared'
 import { P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
@@ -109,6 +113,7 @@ import * as p2pDeviceIdentityService from '../services/p2p/p2p-device-identity.s
 import * as p2pWorkspaceService from '../services/p2p/p2p-workspace.service'
 import * as p2pInviteService from '../services/p2p/p2p-invite.service'
 import * as p2pMemberService from '../services/p2p/p2p-member.service'
+import { P2pMemberLimitError } from '../services/p2p/p2p-member-join.service'
 import * as p2pPeerService from '../services/p2p/p2p-peer.service'
 import * as p2pEventService from '../services/p2p/p2p-event.service'
 import * as p2pSyncService from '../services/p2p/p2p-sync.service'
@@ -117,6 +122,8 @@ import * as p2pNoteSyncService from '../services/p2p/note-sync.service'
 import * as p2pAgentShareService from '../services/p2p/agent-share.service'
 import * as p2pGroupAgentProxyService from '../services/p2p/p2p-group-agent-proxy.service'
 import * as p2pGroupChatService from '../services/p2p/p2p-group-chat.service'
+import * as p2pWorkflowSyncService from '../services/p2p/workflow-sync-share.service'
+import { listP2pSharedResourcesForWorkspace } from '../services/p2p/p2p-shared-resource-list.service'
 import {
   applyP2pNetworkConfig,
   getP2pIceServers,
@@ -317,7 +324,12 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
         await p2pWorkspaceService.ensureDefaultOwnedP2pWorkspace()
       }
       const workspaces = p2pWorkspaceService.listP2pWorkspaces(filter)
-      return ipcOk(P2pWorkspaceListOutputSchema.parse({ workspaces }))
+      return ipcOk(
+        P2pWorkspaceListOutputSchema.parse({
+          workspaces,
+          pendingJoinIds: p2pWorkspaceService.listPendingP2pJoinRequestIds(),
+        }),
+      )
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to list workspaces')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
@@ -351,7 +363,7 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pWorkspaceDelete]: async (input) => {
     try {
       const parsed = P2pWorkspaceDeleteInputSchema.parse(input)
-      p2pWorkspaceService.deleteP2pWorkspace(parsed.id)
+      await p2pWorkspaceService.deleteP2pWorkspace(parsed.id)
       return ipcOk(P2pWorkspaceDeleteOutputSchema.parse({ deleted: true }))
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to delete workspace')
@@ -363,7 +375,7 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pWorkspaceLeave]: async (input) => {
     try {
       const parsed = P2pWorkspaceLeaveInputSchema.parse(input)
-      p2pWorkspaceService.leaveP2pWorkspace(parsed.id)
+      await p2pWorkspaceService.leaveP2pWorkspace(parsed.id)
       return ipcOk(P2pWorkspaceLeaveOutputSchema.parse({ left: true }))
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to leave workspace')
@@ -413,7 +425,7 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const result = await p2pMemberService.joinP2pWorkspace(parsed)
       return ipcOk(P2pMemberJoinOutputSchema.parse(result))
     } catch (error) {
-      if (error instanceof p2pMemberService.P2pMemberLimitError) {
+      if (error instanceof P2pMemberLimitError) {
         return ipcErr({ code: 'P2P_MEMBER_LIMIT', message: error.message, retryable: false })
       }
       if (error instanceof p2pMemberService.P2pMemberVipRequiredError) {
@@ -432,7 +444,7 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pMemberRemove]: async (input) => {
     try {
       const parsed = P2pMemberRemoveInputSchema.parse(input)
-      p2pMemberService.removeP2pMember(parsed)
+      await p2pMemberService.removeP2pMember(parsed)
       return ipcOk(P2pMemberRemoveOutputSchema.parse({ removed: true }))
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to remove member')
@@ -462,6 +474,19 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       const errMessage = toErrorMessage(error, 'Failed to trust device')
       const code = errMessage.includes('信任') ? 'P2P_TRUST_REQUIRED' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pMemberListPendingTrustPrompts]: async () => {
+    try {
+      return ipcOk(
+        P2pMemberListPendingTrustPromptsOutputSchema.parse({
+          prompts: p2pPeerService.listPendingTrustPrompts(),
+        }),
+      )
+    } catch (error) {
+      const errMessage = toErrorMessage(error, 'Failed to list pending trust prompts')
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: true })
     }
   },
 
@@ -544,7 +569,9 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pSyncCatchUp]: async (input) => {
     try {
       const parsed = P2pSyncCatchUpInputSchema.parse(input)
-      await p2pSyncService.awaitJoinerEventCatchUp(parsed.workspaceId)
+      await p2pSyncService.awaitJoinerEventCatchUp(parsed.workspaceId, {
+        force: parsed.force,
+      })
       return ipcOk(P2pSyncCatchUpOutputSchema.parse({ caughtUp: true }))
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to catch up events')
@@ -880,7 +907,9 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
           ? await p2pNoteSyncService.unshareP2pNote(parsed)
           : resource.resourceType === 'Agent'
             ? await p2pAgentShareService.unshareP2pAgent(parsed)
-            : await p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
+            : resource.resourceType === 'Workflow'
+              ? await p2pWorkflowSyncService.unshareP2pWorkflow(parsed)
+              : await p2pKnowledgeSyncService.unshareP2pKnowledge(parsed)
       return ipcOk(P2pResourceUnshareOutputSchema.parse(result))
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to unshare resource')
@@ -896,15 +925,38 @@ export const p2pIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.P2pResourceList]: async (input) => {
     try {
       const parsed = P2pResourceListInputSchema.parse(input)
-      const result =
-        parsed.resourceType === 'Note'
-          ? p2pNoteSyncService.listP2pSharedNotes(parsed)
-          : p2pKnowledgeSyncService.listP2pSharedResources(parsed)
+      const result = listP2pSharedResourcesForWorkspace(parsed)
       return ipcOk(P2pResourceListOutputSchema.parse(result))
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to list shared resources')
       const code = errMessage.includes('无权') ? 'P2P_FORBIDDEN' : 'INTERNAL_ERROR'
       return ipcErr({ code, message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pWorkflowShare]: async (input) => {
+    try {
+      const parsed = P2pWorkflowShareInputSchema.parse(input)
+      const result = await p2pWorkflowSyncService.shareP2pWorkflow(parsed)
+      return ipcOk(P2pWorkflowShareOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage = toErrorMessage(error, 'Failed to share workflow')
+      const code = errMessage.includes('无权') || errMessage.includes('只读')
+        ? 'P2P_FORBIDDEN'
+        : errMessage.includes('不存在')
+          ? 'NOT_FOUND'
+          : 'INTERNAL_ERROR'
+      return ipcErr({ code, message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pWorkflowListLocal]: async () => {
+    try {
+      const result = p2pWorkflowSyncService.listLocalP2pWorkflowShareTargets()
+      return ipcOk(P2pWorkflowListLocalOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage = toErrorMessage(error, 'Failed to list local workflows')
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
     }
   },
 }

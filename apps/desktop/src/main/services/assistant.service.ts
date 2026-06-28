@@ -109,6 +109,58 @@ export function getAssistantRowIncludingDeleted(id: string) {
   return db.select().from(assistants).where(eq(assistants.id, id)).get() ?? null
 }
 
+export function isBuiltinAssistantId(assistantId: string): boolean {
+  return getAssistantRowIncludingDeleted(assistantId)?.isBuiltin === true
+}
+
+/** Group mirror import must never overwrite built-in assistants (e.g. 通用智能体). */
+export function resolveGroupMirrorImportAssistantId(
+  existingAssistantId?: string,
+): string | undefined {
+  if (!existingAssistantId || isBuiltinAssistantId(existingAssistantId)) {
+    return undefined
+  }
+  return existingAssistantId
+}
+
+const BUILTIN_ASSISTANT_NAME = '通用智能体'
+const BUILTIN_ASSISTANT_DESCRIPTION = '默认 AI 对话智能体'
+
+/** Strip group mirror/proxy flags from a built-in assistant and restore its default identity. */
+export function releaseBuiltinAssistantFromGroupScope(
+  assistantId: string,
+  p2pWorkspaceId: string,
+): void {
+  const existing = getAssistantRowIncludingDeleted(assistantId)
+  if (!existing?.isBuiltin) return
+
+  restoreAssistantIfDeleted(assistantId)
+  const row = getAssistantRowIncludingDeleted(assistantId)
+  if (!row) return
+
+  const params = JSON.parse(row.parametersJson) as Record<string, unknown>
+  const mirror = params.p2pGroupSharedMirror as { p2pWorkspaceId?: string } | undefined
+  const proxy = params.p2pGroupProxy as { p2pWorkspaceId?: string } | undefined
+  if (mirror?.p2pWorkspaceId !== p2pWorkspaceId && proxy?.p2pWorkspaceId !== p2pWorkspaceId) {
+    return
+  }
+
+  const nextParams = { ...params }
+  if (mirror?.p2pWorkspaceId === p2pWorkspaceId) {
+    delete nextParams.p2pGroupSharedMirror
+  }
+  if (proxy?.p2pWorkspaceId === p2pWorkspaceId) {
+    delete nextParams.p2pGroupProxy
+  }
+
+  updateAssistant({
+    id: assistantId,
+    name: BUILTIN_ASSISTANT_NAME,
+    description: BUILTIN_ASSISTANT_DESCRIPTION,
+    parameters: nextParams,
+  })
+}
+
 export function restoreAssistantIfDeleted(id: string): boolean {
   const row = getAssistantRowIncludingDeleted(id)
   if (!row) return false

@@ -25,14 +25,18 @@ import { createDefaultWorkspaceInvite } from './p2p-invite.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import {
   loadAllWorkspaceKeys,
-  removeWorkspaceKey,
   saveWorkspaceKey,
 } from './p2p-workspace-key.store'
 import { getIdentityDisplayName } from './p2p-member-shared'
 import { appendP2pEvent } from './p2p-event.service'
-import * as p2pConnectionService from './p2p-connection.service'
+import { startP2pConnectionMonitor } from './p2p-connection.service'
 import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
 import { applyP2pNetworkConfig } from './p2p-network.config'
+import { recordMemberDepartureEvent } from './p2p-member-departure.service'
+import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
+import { cleanupLocalMemberDeparture } from './p2p-workspace-member-cleanup.service'
+import { replicateLocalP2pEvent } from './p2p-sync.service'
+import { finalizeLocalWorkspaceDissolve } from './p2p-workspace-projection'
 
 function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
@@ -85,10 +89,13 @@ function assertWorkspaceAccess(workspaceId: string): P2pWorkspaceRow {
   if (!row) {
     throw new Error('群组不存在')
   }
+  if (row.status === 'dissolved') {
+    throw new Error('群组不存在')
+  }
 
   const device = getP2pDeviceInfo()
   const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, device.deviceId)
-  if (!member || member.status !== 'active') {
+  if (!member || (member.status !== 'active' && member.status !== 'invited')) {
     throw new Error('无权访问该群组')
   }
 
@@ -174,7 +181,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   if (!isP2pDiscoveryRunning()) {
     startP2pDiscovery()
   }
-  p2pConnectionService.startP2pConnectionMonitor()
+  startP2pConnectionMonitor()
 
   return {
     workspace: toWorkspaceDto(row),
@@ -214,7 +221,7 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
   const joined = memberships
     .filter((member) => !ownedIds.has(member.workspaceId))
     .map((member) => workspaceRepo.findById(member.workspaceId))
-    .filter((row): row is P2pWorkspaceRow => row !== null)
+    .filter((row): row is P2pWorkspaceRow => row !== null && row.status !== 'dissolved')
 
   let rows: P2pWorkspaceRow[]
   switch (filter) {
@@ -244,6 +251,18 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
     .map((row) => toWorkspaceDto(row))
 }
 
+/** Pending join requests (invited, not yet approved by owner). IDs only — no workspace names. */
+export function listPendingP2pJoinRequestIds(): string[] {
+  const device = getP2pDeviceInfo()
+  const ownedIds = new Set(
+    getWorkspaceRepo().listByOwnerDevice(device.deviceId).map((row) => row.id),
+  )
+  return getMemberRepo()
+    .listVisibleMembershipsByDevice(device.deviceId)
+    .filter((member) => member.status === 'invited' && !ownedIds.has(member.workspaceId))
+    .map((member) => member.workspaceId)
+}
+
 export function getP2pWorkspace(id: string): P2pWorkspace {
   maybeActivateWorkspaceVipPool(id)
   const row = assertWorkspaceAccess(id)
@@ -271,19 +290,34 @@ export function updateP2pWorkspace(rawInput: unknown): P2pWorkspace {
   return toWorkspaceDto(updated)
 }
 
-export function deleteP2pWorkspace(id: string): void {
+export async function deleteP2pWorkspace(id: string): Promise<void> {
   assertOwner(id)
-  const deleted = getWorkspaceRepo().softDelete(id)
-  if (!deleted) {
-    throw new Error('群组不存在')
+  const device = getP2pDeviceInfo()
+  const ownerMember = getMemberRepo().findByWorkspaceAndDevice(id, device.deviceId)
+  if (!ownerMember) {
+    throw new Error('群主成员记录不存在')
   }
-  removeWorkspaceKey(id)
+
+  const event = await appendP2pEvent({
+    workspaceId: id,
+    resourceType: 'Workspace',
+    resourceId: id,
+    operatorId: ownerMember.id,
+    eventType: 'Deleted',
+    payload: { reason: 'dissolved' },
+  })
+
+  await replicateLocalP2pEvent(event)
+  await finalizeLocalWorkspaceDissolve(id)
 }
 
-export function leaveP2pWorkspace(id: string): void {
-  const row = assertWorkspaceAccess(id)
-  const device = getP2pDeviceInfo()
+export async function leaveP2pWorkspace(id: string): Promise<void> {
+  const row = getWorkspaceRepo().findById(id)
+  if (!row) {
+    throw new Error('群组不存在')
+  }
 
+  const device = getP2pDeviceInfo()
   if (row.ownerDeviceId === device.deviceId) {
     throw new Error('群主不能退出群组，请解散群组')
   }
@@ -292,10 +326,26 @@ export function leaveP2pWorkspace(id: string): void {
   if (!member) {
     throw new Error('你不是该群组成员')
   }
+  if (member.status === 'left' || member.status === 'removed') {
+    return
+  }
+
+  if (member.status === 'active') {
+    await recordMemberDepartureEvent({
+      workspaceId: id,
+      memberId: member.id,
+      operatorId: member.id,
+      reason: 'left',
+      displayName: member.displayName,
+      deviceId: member.deviceId,
+    })
+  } else {
+    broadcastP2pMemberChanged({ workspaceId: id })
+  }
 
   getMemberRepo().update({
     id: member.id,
     status: 'left',
   })
-  removeWorkspaceKey(id)
+  await cleanupLocalMemberDeparture(id)
 }

@@ -1,6 +1,17 @@
 import { resolve } from 'node:path'
+import type { RollupLog } from 'rollup'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+function suppressKnownRollupWarnings(warning: RollupLog, warn: (warning: RollupLog) => void): void {
+  if (
+    typeof warning.message === 'string' &&
+    warning.message.includes('dynamic import will not move module into another chunk')
+  ) {
+    return
+  }
+  warn(warning)
+}
 
 const isReleaseBuild = process.env.TOOLMAN_RELEASE_BUILD === '1'
 const bakedUpdateFeedUrl =
@@ -16,7 +27,9 @@ export default defineConfig({
       __TOOLMAN_UPDATE_CHANNEL__: JSON.stringify(bakedUpdateChannel),
     },
     build: {
+      reportCompressedSize: false,
       rollupOptions: {
+        onwarn: suppressKnownRollupWarnings,
         input: {
           index: resolve('src/main/index.ts'),
           'workers/parse-file.worker': resolve('src/main/workers/parse-file.worker.ts'),
@@ -33,6 +46,12 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    build: {
+      reportCompressedSize: false,
+      rollupOptions: {
+        onwarn: suppressKnownRollupWarnings,
+      },
+    },
     resolve: {
       alias: {
         '@preload': resolve('src/preload'),
@@ -42,6 +61,9 @@ export default defineConfig({
   renderer: {
     define: {
       __TOOLMAN_RELEASE_BUILD__: JSON.stringify(isReleaseBuild ? '1' : ''),
+    },
+    build: {
+      reportCompressedSize: false,
     },
     resolve: {
       alias: {

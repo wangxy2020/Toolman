@@ -15,6 +15,8 @@ import { getAuthSession } from '../auth-session.service'
 import { getLocalIdentityId } from '../local-identity'
 import { bindP2pDeviceToIdentity, refreshP2pDeviceIdentityBinding } from '../p2p/p2p-device-identity.service'
 import { AuthLoginError } from './auth-login.error.js'
+import { syncDocumentsFolderSlugWithAccount } from '../documents-folder-slug.service'
+import { bootstrapToolmanUserDocumentLayout } from '../knowledge-folder.service'
 
 export interface PersistAuthLoginInput {
   region: AuthRegion
@@ -110,7 +112,11 @@ export function persistAuthLogin(input: PersistAuthLoginInput): AuthSession {
 
   invalidateHubTokenCache()
   bindP2pDeviceToIdentity(identityId)
-  return getAuthSession()
+  const session = getAuthSession()
+  if (syncDocumentsFolderSlugWithAccount()) {
+    bootstrapToolmanUserDocumentLayout()
+  }
+  return session
 }
 
 export function refreshAuthSessionTokens(input: {

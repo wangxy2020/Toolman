@@ -177,6 +177,13 @@ export async function prepareCommunityWorkflowPackage(
   return invokeIpc(IpcChannel.CommunityWorkflowPackagePrepare, { packagePath, title })
 }
 
+export async function prepareCommunityKnowledgePackage(
+  packagePath: string,
+  title?: string,
+): Promise<{ packagePath: string; normalized: boolean; message?: string }> {
+  return invokeIpc(IpcChannel.CommunityKnowledgePackagePrepare, { packagePath, title })
+}
+
 export async function deleteCommunityResource(id: string): Promise<{ deleted: boolean }> {
   return invokeIpc(IpcChannel.CommunityResourceDelete, { id })
 }

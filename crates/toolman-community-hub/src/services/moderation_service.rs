@@ -1245,7 +1245,8 @@ mod tests {
                     "transport": "stdio",
                     "command": "npx",
                     "tools": [],
-                    "templates": [{ "name": "default", "config": {} }]
+                    "templates": [{ "name": "default", "config": {} }],
+                    "files": ["mcp.manifest.json"]
                 }),
             })
             .await
@@ -1385,7 +1386,8 @@ mod tests {
             "transport": "stdio",
             "command": "npx",
             "tools": [{ "name": "ping", "description": "Ping" }],
-            "templates": [{ "name": "default", "config": {} }]
+            "templates": [{ "name": "default", "config": {} }],
+            "files": ["mcp.manifest.json"]
         })
         .to_string();
         let package_bytes = build_test_package(ResourceType::Mcp, &manifest, &[]);

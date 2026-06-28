@@ -48,10 +48,10 @@ import { useCommunityUser } from '../community/useCommunityUser'
 import { isCommunitySessionActive } from '../user/community-session'
 import { GroupCreateModal } from '../group/GroupCreateModal'
 import { GroupJoinModal } from '../group/GroupJoinModal'
+import { GroupJoinPendingModal } from '../group/GroupJoinPendingModal'
+import { GroupJoinApprovedModal } from '../group/GroupJoinApprovedModal'
 import { GroupInviteModal } from '../group/GroupInviteModal'
 import { useP2pWorkspaces } from '../group/useP2pWorkspaces'
-import { useP2pTrustPrompt } from '../group/useP2pTrustPrompt'
-import { GroupTrustDeviceModal } from '../group/GroupTrustDeviceModal'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { MembershipUpgradeModal } from '../user/MembershipUpgradeModal'
 import { KnowledgePage } from '../knowledge/KnowledgePage'
@@ -81,6 +81,7 @@ import {
 import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { useI18n } from '../../i18n/useI18n'
 import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
+import { useAllP2pSharedKnowledge } from '../knowledge/useAllP2pSharedKnowledge'
 
 interface ChatPageProps {
   appSettings: AppSettings
@@ -101,6 +102,8 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   const [showKnowledgeCreate, setShowKnowledgeCreate] = useState(false)
   const [showGroupCreate, setShowGroupCreate] = useState(false)
   const [showGroupJoin, setShowGroupJoin] = useState(false)
+  const [showGroupJoinPending, setShowGroupJoinPending] = useState(false)
+  const [pendingJoinCancelId, setPendingJoinCancelId] = useState<string | null>(null)
   const [showGroupInvite, setShowGroupInvite] = useState(false)
   const [showMembershipUpgrade, setShowMembershipUpgrade] = useState(false)
   const [knowledgeSection, setKnowledgeSection] = useState<KnowledgeSidebarSection>('local')
@@ -125,8 +128,10 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   const knowledge = useKnowledgeBases({ workspaceId })
+  const p2pSharedKnowledge = useAllP2pSharedKnowledge({
+    enabled: activeView === 'knowledge',
+  })
   const p2pWorkspaces = useP2pWorkspaces({ enabled: registrationGate.canUseGroup })
-  const p2pTrust = useP2pTrustPrompt()
   const knowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'local')
   const networkKnowledgeFolder = useKnowledgeDefaultFolder(workspaceId, 'network')
   const localFilesFolder = useKnowledgeDefaultFolder(workspaceId, 'local_files')
@@ -317,8 +322,19 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   )
 
   const handleP2pWorkspaceLeft = useCallback(() => {
+    if (p2pWorkspaces.activeId) {
+      p2pWorkspaces.removeWorkspace(p2pWorkspaces.activeId)
+    }
     void p2pWorkspaces.load()
-  }, [p2pWorkspaces.load])
+    void Promise.all([chat.loadAssistants(), chat.loadSessions()])
+    setActiveView('agent')
+  }, [
+    chat.loadAssistants,
+    chat.loadSessions,
+    p2pWorkspaces.activeId,
+    p2pWorkspaces.load,
+    p2pWorkspaces.removeWorkspace,
+  ])
 
   const handleToggleMessageSettings = useCallback(() => {
     setShowMessageSettings((v) => !v)
@@ -577,9 +593,10 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
         {showContentSidebar && activeView === 'knowledge' && (
           <KnowledgeSidebar
             items={knowledge.items}
+            sharedKnowledgeEntries={p2pSharedKnowledge.entries}
             activeId={knowledge.activeId}
             activeSection={knowledgeSection}
-            loading={knowledge.loading}
+            loading={knowledge.loading || p2pSharedKnowledge.loading}
             onSelect={(id) => {
               const item = knowledge.items.find((kb) => kb.id === id)
               knowledge.setActiveId(id)
@@ -615,10 +632,13 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
                 const firstSaved = knowledge.items.find(
                   (item) =>
                     item.kind === 'shared' &&
-                    !isP2pSharedKnowledgeMirrorDescription(item.description),
+                    !isP2pSharedKnowledgeMirrorDescription(item.description) &&
+                    item.documentCount > 0,
                 )
                 if (firstSaved) {
                   knowledge.setActiveId(firstSaved.id)
+                } else if (p2pSharedKnowledge.entries[0]) {
+                  knowledge.setActiveId(p2pSharedKnowledge.entries[0].id)
                 }
               } else if (section === 'local-files') {
                 knowledge.setActiveId(DEFAULT_LOCAL_FILES_FOLDER_ID)
@@ -686,6 +706,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
           <GroupSidebar
             myGroups={p2pWorkspaces.myGroups}
             joinedGroups={p2pWorkspaces.joinedGroups}
+            pendingJoinCount={p2pWorkspaces.pendingJoinIds.length}
             activeId={p2pWorkspaces.activeId}
             loading={p2pWorkspaces.loading}
             onSelect={p2pWorkspaces.setActiveId}
@@ -696,6 +717,10 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
             onJoin={() => {
               if (!registrationGate.requireRegistration('group')) return
               setShowGroupJoin(true)
+            }}
+            onShowPendingJoins={() => {
+              setPendingJoinCancelId(p2pWorkspaces.pendingJoinIds[0] ?? null)
+              setShowGroupJoinPending(true)
             }}
           />
         )}
@@ -782,6 +807,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
             section={knowledgeSection}
             activeId={knowledge.activeId}
             active={knowledge.active}
+            sharedKnowledgeEntries={p2pSharedKnowledge.entries}
             knowledgeFolderPath={knowledgeFolder.path}
             knowledgeFolderLoading={knowledgeFolder.loading}
             knowledgeFolderError={knowledgeFolder.error}
@@ -981,12 +1007,42 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
         <GroupJoinModal
           onClose={() => setShowGroupJoin(false)}
           onSubmit={async (input) => {
-            await p2pWorkspaces.join(input)
+            const result = await p2pWorkspaces.join(input)
+            if (result.isPending) {
+              setPendingJoinCancelId(result.workspace.id)
+              setShowGroupJoinPending(true)
+              return
+            }
             setActiveView('group')
           }}
           onUpgradeMembership={() => setShowMembershipUpgrade(true)}
         />
       )}
+      {showGroupJoinPending ? (
+        <GroupJoinPendingModal
+          onClose={() => {
+            setShowGroupJoinPending(false)
+            setPendingJoinCancelId(null)
+          }}
+          onCancelRequest={async () => {
+            const workspaceId =
+              pendingJoinCancelId ?? p2pWorkspaces.pendingJoinIds[0] ?? null
+            if (!workspaceId) return
+            await p2pWorkspaces.cancelPendingJoin(workspaceId)
+            setShowGroupJoinPending(false)
+            setPendingJoinCancelId(null)
+          }}
+        />
+      ) : null}
+      {p2pWorkspaces.joinApprovedNotice ? (
+        <GroupJoinApprovedModal
+          workspaceName={p2pWorkspaces.joinApprovedNotice.workspaceName}
+          onClose={() => {
+            p2pWorkspaces.dismissJoinApprovedNotice()
+            setActiveView('group')
+          }}
+        />
+      ) : null}
       <MembershipUpgradeModal
         open={showMembershipUpgrade}
         onClose={() => setShowMembershipUpgrade(false)}
@@ -996,18 +1052,6 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
           workspaceId={p2pWorkspaces.active.id}
           workspaceName={p2pWorkspaces.active.name}
           onClose={() => setShowGroupInvite(false)}
-        />
-      )}
-      {p2pTrust.prompt && (
-        <GroupTrustDeviceModal
-          prompt={p2pTrust.prompt}
-          error={p2pTrust.error}
-          onTrust={async () => {
-            await p2pTrust.respond(true)
-          }}
-          onReject={async () => {
-            await p2pTrust.respond(false)
-          }}
         />
       )}
       <ToolApprovalModal />

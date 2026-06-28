@@ -46,6 +46,7 @@ function resolveSavedGroupKnowledgeBaseId(
   knowledgeBases: KnowledgeBase[],
   workspaceName: string,
   p2pWorkspaceId: string,
+  sharedFolderName?: string,
 ): string | null {
   return findGroupSavedKnowledgeBaseId(
     knowledgeBases.map((kb) => ({
@@ -57,6 +58,7 @@ function resolveSavedGroupKnowledgeBaseId(
     {
       p2pWorkspaceId,
       groupName: workspaceName,
+      sharedFolderName,
     },
     { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
   )
@@ -65,6 +67,7 @@ function resolveSavedGroupKnowledgeBaseId(
 export function useSharedKnowledgePanelDocuments({
   p2pWorkspaceId,
   workspaceName,
+  sharedFolderName,
   kbId,
   sharedDocumentIds,
   isResourceOwner = false,
@@ -105,9 +108,10 @@ export function useSharedKnowledgePanelDocuments({
         data.items,
         workspaceName,
         p2pWorkspaceId,
+        sharedFolderName,
       ),
     )
-  }, [localWorkspaceId, p2pWorkspaceId, workspaceName])
+  }, [localWorkspaceId, p2pWorkspaceId, sharedFolderName, workspaceName])
 
   useEffect(() => {
     void loadSavedGroupKbId()

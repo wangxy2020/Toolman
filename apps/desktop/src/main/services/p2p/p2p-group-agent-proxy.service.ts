@@ -27,10 +27,15 @@ import {
   readAgentShareMetadata,
   readSharedAgentModelId,
 } from './agent-share.service'
-import { buildGroupVirtualAgentName } from './p2p-group-resource-naming'
+import {
+  resolveGroupProxyAssistantDisplayName,
+  resolveP2pWorkspaceName,
+  stripGroupPrefixedName,
+} from './p2p-group-resource-naming'
+import { resolveAgentRelayResourceId, findAgentSharedResourceInWorkspace } from './p2p-shared-resource-id'
 import { fetchRemoteSessionHistory } from './p2p-agent-relay.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
-import { ensureOwnerMemberRecord } from './p2p-member.service'
+import { ensureOwnerMemberRecord } from './p2p-member-shared'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 
 function getMemberRepo(): P2pMemberRepository {
@@ -45,13 +50,6 @@ function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
 }
 
-function buildProxyAssistantName(
-  p2pWorkspaceId: string,
-  groupName: string,
-  sharedAgentName: string,
-): string {
-  return buildGroupVirtualAgentName(p2pWorkspaceId, sharedAgentName, groupName)
-}
 
 function readSessionProxyMetadata(metadataJson: string): P2pGroupAgentProxy | null {
   try {
@@ -90,7 +88,12 @@ function readSessionProxyMetadata(metadataJson: string): P2pGroupAgentProxy | nu
     let referencedModelId =
       typeof partial.referencedModelId === 'string' ? partial.referencedModelId : ''
     if (!referencedModelId.trim()) {
-      referencedModelId = resolveSharedAgentModelId('', resourceId)
+      referencedModelId = resolveSharedAgentModelId(
+        '',
+        p2pWorkspaceId,
+        resourceId,
+        sourceAssistantId,
+      )
     }
 
     const repaired = P2pGroupAgentProxySchema.safeParse({
@@ -111,18 +114,30 @@ function readSessionProxyMetadata(metadataJson: string): P2pGroupAgentProxy | nu
   }
 }
 
+function proxyResourceMatches(
+  proxy: P2pGroupAgentProxy,
+  relayResourceId: string,
+  legacyResourceId?: string,
+): boolean {
+  if (proxy.resourceId === relayResourceId || proxy.sourceAssistantId === relayResourceId) {
+    return true
+  }
+  return Boolean(legacyResourceId && proxy.resourceId === legacyResourceId)
+}
+
 function findProxySession(
   workspaceId: string,
-  resourceId: string,
+  relayResourceId: string,
   sourceSessionId: string,
+  legacyResourceId?: string,
 ): string | null {
   const rows = getSessionRepository().listRows({ workspaceId, limit: 10_000 })
   for (const row of rows) {
     const proxy = readSessionProxyMetadata(row.metadataJson)
     if (
       proxy &&
-      proxy.resourceId === resourceId &&
-      proxy.sourceSessionId === sourceSessionId
+      proxy.sourceSessionId === sourceSessionId &&
+      proxyResourceMatches(proxy, relayResourceId, legacyResourceId)
     ) {
       return row.id
     }
@@ -130,13 +145,23 @@ function findProxySession(
   return null
 }
 
-function findProxyAssistant(workspaceId: string, resourceId: string, p2pWorkspaceId: string) {
+function findProxyAssistant(
+  workspaceId: string,
+  relayResourceId: string,
+  p2pWorkspaceId: string,
+  legacyResourceId?: string,
+) {
   const assistants = listAssistants({ workspaceId, pinnedOnly: false })
   return (
     assistants.find((item) => {
       const proxy = item.parameters.p2pGroupProxy
       return (
-        proxy?.resourceId === resourceId && proxy.p2pWorkspaceId === p2pWorkspaceId
+        proxy?.p2pWorkspaceId === p2pWorkspaceId &&
+        proxyResourceMatches(
+          proxy as P2pGroupAgentProxy,
+          relayResourceId,
+          legacyResourceId,
+        )
       )
     }) ?? null
   )
@@ -144,10 +169,16 @@ function findProxyAssistant(workspaceId: string, resourceId: string, p2pWorkspac
 
 function findOrRestoreProxyAssistant(
   workspaceId: string,
-  resourceId: string,
+  relayResourceId: string,
   p2pWorkspaceId: string,
+  legacyResourceId?: string,
 ) {
-  const active = findProxyAssistant(workspaceId, resourceId, p2pWorkspaceId)
+  const active = findProxyAssistant(
+    workspaceId,
+    relayResourceId,
+    p2pWorkspaceId,
+    legacyResourceId,
+  )
   if (active) return active
 
   const db = getDatabase()
@@ -160,17 +191,32 @@ function findOrRestoreProxyAssistant(
   for (const row of rows) {
     if (!row.deletedAt) continue
     const params = JSON.parse(row.parametersJson) as Record<string, unknown>
-    const proxy = params.p2pGroupProxy as
-      | { resourceId?: string; p2pWorkspaceId?: string }
-      | undefined
-    if (proxy?.resourceId !== resourceId || proxy.p2pWorkspaceId !== p2pWorkspaceId) {
+    const proxy = params.p2pGroupProxy as P2pGroupAgentProxy | undefined
+    if (
+      !proxy ||
+      proxy.p2pWorkspaceId !== p2pWorkspaceId ||
+      !proxyResourceMatches(proxy, relayResourceId, legacyResourceId)
+    ) {
       continue
     }
     restoreAssistantIfDeleted(row.id)
-    return findProxyAssistant(workspaceId, resourceId, p2pWorkspaceId)
+    return findProxyAssistant(workspaceId, relayResourceId, p2pWorkspaceId, legacyResourceId)
   }
 
   return null
+}
+
+function normalizeGroupAgentProxy(proxy: P2pGroupAgentProxy): P2pGroupAgentProxy {
+  const relayResourceId = resolveAgentRelayResourceId(
+    getSharedResourceRepo(),
+    proxy.p2pWorkspaceId,
+    proxy.resourceId,
+    proxy.sourceAssistantId,
+  )
+  if (relayResourceId === proxy.resourceId) {
+    return proxy
+  }
+  return { ...proxy, resourceId: relayResourceId }
 }
 
 function buildProxySessionMetadata(input: {
@@ -254,9 +300,19 @@ function isLocalOwner(ownerDeviceId: string): boolean {
   return ownerDeviceId === getP2pDeviceInfo().deviceId
 }
 
-function resolveSharedAgentModelId(referencedModelId: string, resourceId: string): string {
+function resolveSharedAgentModelId(
+  referencedModelId: string,
+  p2pWorkspaceId: string,
+  relayResourceId: string,
+  sourceAssistantId?: string,
+): string {
   const normalizedInput = normalizeAssistantModelId(referencedModelId)
-  const resource = getSharedResourceRepo().findById(resourceId)
+  const resource = findAgentSharedResourceInWorkspace(
+    getSharedResourceRepo(),
+    p2pWorkspaceId,
+    relayResourceId,
+    sourceAssistantId,
+  )
   const metadata = readAgentShareMetadata(resource?.metadataJson)
   const fromPackage = readSharedAgentModelId(metadata)
   if (fromPackage) return fromPackage
@@ -264,9 +320,11 @@ function resolveSharedAgentModelId(referencedModelId: string, resourceId: string
 }
 
 function resolveSharedSessionTitle(
-  resourceId: string,
+  p2pWorkspaceId: string,
+  relayResourceId: string,
   sourceSessionId: string,
   fallbackTitle: string,
+  sourceAssistantId?: string,
 ): string {
   const trimmedFallback = fallbackTitle.trim()
   if (
@@ -278,7 +336,12 @@ function resolveSharedSessionTitle(
     return trimmedFallback
   }
 
-  const resource = getSharedResourceRepo().findById(resourceId)
+  const resource = findAgentSharedResourceInWorkspace(
+    getSharedResourceRepo(),
+    p2pWorkspaceId,
+    relayResourceId,
+    sourceAssistantId,
+  )
   const metadata = readAgentShareMetadata(resource?.metadataJson)
   return metadata.sessionTitles?.[sourceSessionId]?.trim() || trimmedFallback || '未命名话题'
 }
@@ -330,13 +393,34 @@ function findSiblingProxyMeta(
   return null
 }
 
+export function inheritGroupProxySessionMetadata(
+  workspaceId: string,
+  assistantId: string | null | undefined,
+): Record<string, unknown> | undefined {
+  if (!assistantId) return undefined
+  const assistant = getAssistantRow(assistantId)
+  const proxyParams = assistant?.parameters?.p2pGroupProxy as
+    | { resourceId?: string; p2pWorkspaceId?: string }
+    | undefined
+  if (!proxyParams?.resourceId || !proxyParams.p2pWorkspaceId) {
+    return undefined
+  }
+  const sibling = findSiblingProxyMeta(
+    workspaceId,
+    proxyParams.resourceId,
+    proxyParams.p2pWorkspaceId,
+  )
+  if (!sibling) return undefined
+  return { p2pGroupAgent: sibling }
+}
+
 export function resolveProxyMetaForSend(
   metadataJson: string,
   assistant: ReturnType<typeof getAssistantRow>,
 ): P2pGroupAgentProxy | null {
   const fromSession = readP2pGroupAgentFromSessionRow(metadataJson)
   if (fromSession) {
-    return fromSession
+    return normalizeGroupAgentProxy(normalizeP2pGroupAgentProxyOwnerDevice(fromSession))
   }
 
   const proxyParams = assistant?.parameters?.p2pGroupProxy
@@ -355,7 +439,18 @@ export function resolveProxyMetaForSend(
   const sourceSessionId =
     typeof partial.sourceSessionId === 'string' ? partial.sourceSessionId : null
 
-  const resource = getSharedResourceRepo().findById(proxyParams.resourceId)
+  const relayResourceId = resolveAgentRelayResourceId(
+    getSharedResourceRepo(),
+    proxyParams.p2pWorkspaceId,
+    proxyParams.resourceId,
+    proxyParams.sourceAssistantId,
+  )
+  const resource = findAgentSharedResourceInWorkspace(
+    getSharedResourceRepo(),
+    proxyParams.p2pWorkspaceId,
+    proxyParams.resourceId,
+    proxyParams.sourceAssistantId,
+  )
   if (!resource?.sharedBy) {
     return null
   }
@@ -363,11 +458,11 @@ export function resolveProxyMetaForSend(
   if (!sourceSessionId && assistant?.workspaceId) {
     const sibling = findSiblingProxyMeta(
       assistant.workspaceId,
-      proxyParams.resourceId,
+      relayResourceId,
       proxyParams.p2pWorkspaceId,
     )
     if (sibling) {
-      return sibling
+      return normalizeGroupAgentProxy(sibling)
     }
     return null
   }
@@ -389,12 +484,14 @@ export function resolveProxyMetaForSend(
       : typeof proxyParams.referencedModelId === 'string'
         ? proxyParams.referencedModelId
         : assistant?.modelId ?? '',
-    proxyParams.resourceId,
+    proxyParams.p2pWorkspaceId,
+    relayResourceId,
+    proxyParams.sourceAssistantId,
   )
 
   const repaired = normalizeP2pGroupAgentProxyOwnerDevice({
     p2pWorkspaceId: proxyParams.p2pWorkspaceId,
-    resourceId: proxyParams.resourceId,
+    resourceId: relayResourceId,
     sourceAssistantId: proxyParams.sourceAssistantId,
     sourceSessionId,
     ownerMemberId:
@@ -406,7 +503,7 @@ export function resolveProxyMetaForSend(
     referencedModelId,
   })
 
-  return repaired
+  return normalizeGroupAgentProxy(repaired)
 }
 
 export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
@@ -422,29 +519,53 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
     throw new Error('工作区未就绪')
   }
 
+  const sharedRepo = getSharedResourceRepo()
+  const relayResourceId = resolveAgentRelayResourceId(
+    sharedRepo,
+    input.p2pWorkspaceId,
+    input.resourceId,
+    input.sourceAssistantId,
+  )
+  const legacyResourceId =
+    input.resourceId !== relayResourceId ? input.resourceId : undefined
+
   const ownerDeviceId = resolveOwnerDeviceId(input.ownerMemberId, input.p2pWorkspaceId)
   const sessionTitle = resolveSharedSessionTitle(
-    input.resourceId,
+    input.p2pWorkspaceId,
+    relayResourceId,
     input.sourceSessionId,
     input.sessionTitle,
+    input.sourceAssistantId,
   )
-  const proxyModelId = resolveSharedAgentModelId(input.referencedModelId, input.resourceId)
+  const proxyModelId = resolveSharedAgentModelId(
+    input.referencedModelId,
+    input.p2pWorkspaceId,
+    relayResourceId,
+    input.sourceAssistantId,
+  )
+  const canonicalGroupName = resolveP2pWorkspaceName(input.p2pWorkspaceId) ?? input.groupName
+  const plainSharedAgentName = stripGroupPrefixedName(input.p2pWorkspaceId, input.sharedAgentName)
+  const expectedAssistantName = resolveGroupProxyAssistantDisplayName(
+    input.p2pWorkspaceId,
+    input.sharedAgentName,
+  )
   const proxyMetaInput = {
     p2pWorkspaceId: input.p2pWorkspaceId,
-    resourceId: input.resourceId,
+    resourceId: relayResourceId,
     sourceAssistantId: input.sourceAssistantId,
     sourceSessionId: input.sourceSessionId,
     ownerMemberId: input.ownerMemberId,
     ownerDeviceId,
     permission: input.permission,
-    groupName: input.groupName,
-    sharedAgentName: input.sharedAgentName,
+    groupName: canonicalGroupName,
+    sharedAgentName: plainSharedAgentName,
     referencedModelId: proxyModelId,
   }
   const existingSessionId = findProxySession(
     personalWorkspace.id,
-    input.resourceId,
+    relayResourceId,
     input.sourceSessionId,
+    legacyResourceId,
   )
 
   if (existingSessionId) {
@@ -454,25 +575,29 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
       if (getAssistantRow(existing.assistantId)) {
         const existingAssistant = findOrRestoreProxyAssistant(
           personalWorkspace.id,
-          input.resourceId,
+          relayResourceId,
           input.p2pWorkspaceId,
+          legacyResourceId,
         )
         if (existingAssistant) {
           const existingProxy = existingAssistant.parameters.p2pGroupProxy
+          const repairedProxy = existingProxy
+            ? {
+                ...existingProxy,
+                resourceId: relayResourceId,
+                referencedModelId: proxyModelId,
+              }
+            : undefined
           if (
             existingAssistant.modelId !== proxyModelId ||
-            existingProxy?.referencedModelId !== proxyModelId
+            existingProxy?.referencedModelId !== proxyModelId ||
+            existingProxy?.resourceId !== relayResourceId
           ) {
             updateAssistant({
               id: existingAssistant.id,
               modelId: proxyModelId,
-              parameters: existingProxy
-                ? {
-                    p2pGroupProxy: {
-                      ...existingProxy,
-                      referencedModelId: proxyModelId,
-                    },
-                  }
+              parameters: repairedProxy
+                ? { p2pGroupProxy: repairedProxy }
                 : undefined,
             })
           }
@@ -487,7 +612,8 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
           try {
             await syncProxySessionHistory(existingSessionId, {
               p2pWorkspaceId: input.p2pWorkspaceId,
-              resourceId: input.resourceId,
+              resourceId: relayResourceId,
+              sourceAssistantId: input.sourceAssistantId,
               sourceSessionId: input.sourceSessionId,
               ownerDeviceId,
               sessionTitle,
@@ -504,49 +630,41 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
 
   let assistant = findOrRestoreProxyAssistant(
     personalWorkspace.id,
-    input.resourceId,
+    relayResourceId,
     input.p2pWorkspaceId,
-  )
-
-  const expectedAssistantName = buildProxyAssistantName(
-    input.p2pWorkspaceId,
-    input.groupName,
-    input.sharedAgentName,
+    legacyResourceId,
   )
 
   if (assistant) {
-    if (assistant.name !== expectedAssistantName) {
+    const existingProxy = assistant.parameters.p2pGroupProxy
+    const repairedProxy = existingProxy
+      ? {
+          ...existingProxy,
+          resourceId: relayResourceId,
+          sourceAssistantId: input.sourceAssistantId,
+          groupName: canonicalGroupName,
+          sharedAgentName: plainSharedAgentName,
+          referencedModelId: proxyModelId,
+        }
+      : undefined
+    if (
+      assistant.name !== expectedAssistantName ||
+      assistant.modelId !== proxyModelId ||
+      existingProxy?.referencedModelId !== proxyModelId ||
+      existingProxy?.resourceId !== relayResourceId
+    ) {
       updateAssistant({
         id: assistant.id,
         name: expectedAssistantName,
-      })
-      assistant = { ...assistant, name: expectedAssistantName }
-    }
-    const existingProxy = assistant.parameters.p2pGroupProxy
-    if (assistant.modelId !== proxyModelId || existingProxy?.referencedModelId !== proxyModelId) {
-      updateAssistant({
-        id: assistant.id,
         modelId: proxyModelId,
-        parameters: existingProxy
-          ? {
-              p2pGroupProxy: {
-                ...existingProxy,
-                referencedModelId: proxyModelId,
-              },
-            }
-          : undefined,
+        ...(repairedProxy ? { parameters: { p2pGroupProxy: repairedProxy } } : {}),
       })
       assistant = {
         ...assistant,
+        name: expectedAssistantName,
         modelId: proxyModelId,
-        parameters: existingProxy
-          ? {
-              ...assistant.parameters,
-              p2pGroupProxy: {
-                ...existingProxy,
-                referencedModelId: proxyModelId,
-              },
-            }
+        parameters: repairedProxy
+          ? { ...assistant.parameters, p2pGroupProxy: repairedProxy }
           : assistant.parameters,
       }
     }
@@ -562,10 +680,10 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
         mcpServerIds: [],
         p2pGroupProxy: {
           p2pWorkspaceId: input.p2pWorkspaceId,
-          resourceId: input.resourceId,
+          resourceId: relayResourceId,
           sourceAssistantId: input.sourceAssistantId,
-          groupName: input.groupName,
-          sharedAgentName: input.sharedAgentName,
+          groupName: canonicalGroupName,
+          sharedAgentName: plainSharedAgentName,
           referencedModelId: proxyModelId,
         },
       },
@@ -604,7 +722,8 @@ export async function openP2pGroupAgentSession(rawInput: unknown): Promise<{
     try {
       await syncProxySessionHistory(sessionId, {
         p2pWorkspaceId: input.p2pWorkspaceId,
-        resourceId: input.resourceId,
+        resourceId: relayResourceId,
+        sourceAssistantId: input.sourceAssistantId,
         sourceSessionId: input.sourceSessionId,
         ownerDeviceId,
         sessionTitle,
@@ -623,6 +742,7 @@ async function syncProxySessionHistory(
   opts: {
     p2pWorkspaceId: string
     resourceId: string
+    sourceAssistantId: string
     sourceSessionId: string
     ownerDeviceId: string
     sessionTitle: string
@@ -632,6 +752,7 @@ async function syncProxySessionHistory(
     ownerDeviceId: opts.ownerDeviceId,
     p2pWorkspaceId: opts.p2pWorkspaceId,
     resourceId: opts.resourceId,
+    sourceAssistantId: opts.sourceAssistantId,
     sourceSessionId: opts.sourceSessionId,
   })
 
@@ -705,10 +826,17 @@ export function syncGroupProxyAssistantModels(workspaceId: string): void {
     if (row.deletedAt) continue
 
     const params = JSON.parse(row.parametersJson) as Record<string, unknown>
-    const proxy = params.p2pGroupProxy as { resourceId?: string } | undefined
-    if (!proxy?.resourceId) continue
+    const proxy = params.p2pGroupProxy as
+      | { resourceId?: string; p2pWorkspaceId?: string; sourceAssistantId?: string }
+      | undefined
+    if (!proxy?.resourceId || !proxy.p2pWorkspaceId) continue
 
-    const expectedModelId = resolveSharedAgentModelId(row.modelId, proxy.resourceId)
+    const expectedModelId = resolveSharedAgentModelId(
+      row.modelId,
+      proxy.p2pWorkspaceId,
+      proxy.resourceId,
+      proxy.sourceAssistantId,
+    )
     if (row.modelId !== expectedModelId) {
       updateAssistant({
         id: row.id,

@@ -36,11 +36,14 @@ import {
 } from './community-resource-type.config'
 import {
   buildFederatedCatalogEntryFromResource,
+  hasFederatedCatalogEntry,
   listFederatedCatalogResources,
   mergeHubAndFederatedResourceLists,
+  removeFederatedCatalogEntry,
 } from './community-federated-catalog.service'
+import { CommunityHttpError } from './community-http.client'
 import { isCommunityFederationEnabled } from './community-federation.config'
-import { publishFederatedCatalogWireMessage } from './community-federation-provider.service'
+import { publishFederatedCatalogDeleteWireMessage, publishFederatedCatalogWireMessage } from './community-federation-provider.service'
 import { getManifestFromIndexByResource, scanCommunityPackagesForCidIndex } from './community-cid-index.service'
 import { republishCommunityCidAnnouncements } from './community-cid-provider.service'
 import { CommunityHttpError } from './community-http.client'
@@ -154,6 +157,15 @@ export async function publishResource(input: unknown) {
         title: prepareTitle,
       })
       packagePath = prepared.packagePath
+    } else if (resourceType === 'knowledge') {
+      const { prepareCommunityKnowledgePackage: preparePackage } = await import(
+        './community-knowledge-package-import.service'
+      )
+      const prepared = await preparePackage({
+        packagePath: parsed.packagePath,
+        title: prepareTitle,
+      })
+      packagePath = prepared.packagePath
     }
     const packageBytes = await readFile(packagePath)
     const uploadName =
@@ -205,9 +217,24 @@ export async function patchResource(input: unknown) {
 
 export async function deleteResource(input: unknown) {
   const parsed = CommunityResourceDeleteInputSchema.parse(input)
-  await withRefreshedHubClient((client) =>
-    client.delete<unknown>(`/api/v1/marketplace/resources/${parsed.id}`),
-  )
+  const inFederatedCatalog = hasFederatedCatalogEntry(parsed.id)
+
+  try {
+    await withRefreshedHubClient((client) =>
+      client.delete<unknown>(`/api/v1/marketplace/resources/${parsed.id}`),
+    )
+  } catch (error) {
+    const hubMissing =
+      error instanceof CommunityHttpError && error.status === 404
+    if (!hubMissing || !inFederatedCatalog) {
+      throw error
+    }
+  }
+
+  removeFederatedCatalogEntry(parsed.id)
+  if (isCommunityFederationEnabled()) {
+    publishFederatedCatalogDeleteWireMessage(parsed.id)
+  }
   invalidateCommunityHubCache('marketplace-resources')
   return CommunityResourceDeleteOutputSchema.parse({ deleted: true })
 }

@@ -109,6 +109,7 @@ export {
   prepareCommunityMcpPackage,
   prepareCommunitySkillPackage,
   prepareCommunityWorkflowPackage,
+  prepareCommunityKnowledgePackage,
 } from './community-ipc.packages.facade'
 
 export {

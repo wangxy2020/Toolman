@@ -97,6 +97,7 @@ import {
   prepareCommunityMcpPackage,
   prepareCommunitySkillPackage,
   prepareCommunityWorkflowPackage,
+  prepareCommunityKnowledgePackage,
   publishResource,
   publishTask,
   rejectTaskDelivery,
@@ -196,6 +197,9 @@ export const communityHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   ),
   [IpcChannel.CommunityWorkflowPackagePrepare]: communityHandler((input) =>
     prepareCommunityWorkflowPackage(input),
+  ),
+  [IpcChannel.CommunityKnowledgePackagePrepare]: communityHandler((input) =>
+    prepareCommunityKnowledgePackage(input),
   ),
   [IpcChannel.CommunityResourcePatch]: communityHandler((input) => patchResource(input)),
   [IpcChannel.CommunityResourcePackageReviewOpen]: communityHandler((input) =>

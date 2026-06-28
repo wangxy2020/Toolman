@@ -22,6 +22,12 @@ import {
   syncWorkspaceNameFromJoinEvent,
 } from './p2p-member-projection'
 import { projectWorkspaceUpdatedFromEvent } from './p2p-workspace-vip-pool.service'
+import { projectWorkspaceDeletedEvent } from './p2p-workspace-projection'
+import {
+  applyWorkflowUpdatedEvent,
+  projectWorkflowDeletedEvent,
+  projectWorkflowSharedEvent,
+} from './p2p-workflow-projection'
 import { projectGroupChatEvent } from './p2p-group-chat-projector'
 
 type EventProjector = (event: WorkspaceEvent) => void
@@ -33,6 +39,7 @@ const RESOURCE_PROJECTORS: Record<string, EventProjector> = {
   Note: projectNoteEvent,
   Agent: projectAgentEvent,
   GroupChat: projectGroupChatEvent,
+  Workflow: projectWorkflowEvent,
 }
 
 export function projectP2pEvent(event: WorkspaceEvent): void {
@@ -42,6 +49,10 @@ export function projectP2pEvent(event: WorkspaceEvent): void {
 function projectWorkspaceEvent(event: WorkspaceEvent): void {
   if (event.eventType === 'Updated') {
     projectWorkspaceUpdatedFromEvent(event)
+    return
+  }
+  if (event.eventType === 'Deleted') {
+    projectWorkspaceDeletedEvent(event)
   }
 }
 
@@ -76,6 +87,16 @@ function projectNoteEvent(event: WorkspaceEvent): void {
     Created: projectNoteSharedEvent,
     Updated: applyNoteUpdatedEvent,
     Deleted: projectNoteDeletedEvent,
+  }
+  handlers[event.eventType]?.(event)
+}
+
+function projectWorkflowEvent(event: WorkspaceEvent): void {
+  const handlers: Partial<Record<WorkspaceEvent['eventType'], (evt: WorkspaceEvent) => void>> = {
+    Shared: projectWorkflowSharedEvent,
+    Created: projectWorkflowSharedEvent,
+    Updated: applyWorkflowUpdatedEvent,
+    Deleted: projectWorkflowDeletedEvent,
   }
   handlers[event.eventType]?.(event)
 }

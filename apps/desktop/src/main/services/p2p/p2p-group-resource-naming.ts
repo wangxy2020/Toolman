@@ -34,3 +34,18 @@ export function buildGroupVirtualAgentName(
   if (agentName.startsWith(prefix)) return agentName
   return `${prefix}${agentName}`
 }
+
+/** Canonical proxy assistant title: strip any existing group prefix, then apply DB group name. */
+export function resolveGroupProxyAssistantDisplayName(
+  p2pWorkspaceId: string,
+  sharedAgentName: string,
+): string {
+  const groupName = resolveP2pWorkspaceName(p2pWorkspaceId)?.trim()
+  let plainName = sharedAgentName.trim()
+  plainName = stripP2pGroupPrefixedResourceName(groupName, plainName)
+  if (/^\[[^\]]+\]\s+/.test(plainName)) {
+    plainName = plainName.replace(/^\[[^\]]+\]\s+/, '')
+  }
+  const prefix = groupName ? `[${groupName}] ` : '[群组] '
+  return `${prefix}${plainName}`
+}

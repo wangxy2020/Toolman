@@ -105,6 +105,14 @@ export function useP2pSyncStatus(workspaceId: string | null) {
     const handleCompleted = (payload: unknown) => {
       const data = payload as { workspaceId?: string }
       if (data.workspaceId !== workspaceId) return
+      setState((prev) => ({ ...prev, error: null }))
+      void refresh()
+    }
+
+    const handleMemberActivated = (payload: unknown) => {
+      const data = payload as { workspaceId?: string; activated?: boolean }
+      if (data.workspaceId !== workspaceId || !data.activated) return
+      setState((prev) => ({ ...prev, error: null }))
       void refresh()
     }
 
@@ -120,6 +128,7 @@ export function useP2pSyncStatus(workspaceId: string | null) {
 
     const unsubError = window.api.subscribe('p2p:sync:error', handleError)
     const unsubCompleted = window.api.subscribe('p2p:sync:completed', handleCompleted)
+    const unsubMember = window.api.subscribe('p2p:member:changed', handleMemberActivated)
     const unsubProgress = window.api.subscribe('p2p:sync:progress', handleProgress)
 
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -142,6 +151,7 @@ export function useP2pSyncStatus(workspaceId: string | null) {
     return () => {
       unsubError()
       unsubCompleted()
+      unsubMember()
       unsubProgress()
       unsubConnection()
       unsubOnline()

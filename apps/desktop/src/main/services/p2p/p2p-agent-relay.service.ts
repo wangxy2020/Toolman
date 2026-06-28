@@ -24,6 +24,7 @@ import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { readAgentShareMetadata } from './agent-share.service'
 import { assertPeerTrustedForSync } from './p2p-peer.service'
 import { fetchBlobFromPeers } from './p2p-blob-transfer.service'
+import { findAgentSharedResourceInWorkspace, resolveAgentRelayResourceId } from './p2p-shared-resource-id'
 import { registerP2pSyncHandlers } from './p2p-sync-lifecycle'
 import {
   measureAgentRelayEnvelopeBytes,
@@ -263,8 +264,12 @@ function assertRelayAccess(
     throw new Error('无权访问该群组智能体')
   }
 
-  const resource = getSharedResourceRepo().findById(resourceId)
-  if (!resource || resource.status !== 'active' || resource.resourceType !== 'Agent') {
+  const resource = findAgentSharedResourceInWorkspace(
+    getSharedResourceRepo(),
+    p2pWorkspaceId,
+    resourceId,
+  )
+  if (!resource || resource.status !== 'active') {
     throw new Error('共享智能体不存在')
   }
 
@@ -334,9 +339,17 @@ export async function fetchRemoteSessionHistory(input: {
   p2pWorkspaceId: string
   resourceId: string
   sourceSessionId: string
+  sourceAssistantId?: string
 }): Promise<{ title: string; messages: Message[] }> {
   await assertPeerTrustedForSync(input.p2pWorkspaceId, input.ownerDeviceId)
   await ensurePeerConnected(input.ownerDeviceId, input.p2pWorkspaceId)
+
+  const relayResourceId = resolveAgentRelayResourceId(
+    getSharedResourceRepo(),
+    input.p2pWorkspaceId,
+    input.resourceId,
+    input.sourceAssistantId,
+  )
 
   const requestId = randomUUID()
   const responsePromise = waitForRelayResponse(requestId)
@@ -346,7 +359,7 @@ export async function fetchRemoteSessionHistory(input: {
     type: 'fetch',
     requestId,
     p2pWorkspaceId: input.p2pWorkspaceId,
-    resourceId: input.resourceId,
+    resourceId: relayResourceId,
     sourceSessionId: input.sourceSessionId,
   })
 
@@ -370,15 +383,23 @@ export async function relayProxySendMessage(input: {
     throw new Error('该话题为只读')
   }
 
+  const relayResourceId = resolveAgentRelayResourceId(
+    getSharedResourceRepo(),
+    input.proxy.p2pWorkspaceId,
+    input.proxy.resourceId,
+    input.proxy.sourceAssistantId,
+  )
+  const proxy = { ...input.proxy, resourceId: relayResourceId }
+
   const localDeviceId = getP2pDeviceInfo().deviceId
   const requestId = randomUUID()
   const relayMessage: Extract<AgentRelayMessage, { type: 'send' }> = {
     v: 1,
     type: 'send',
     requestId,
-    p2pWorkspaceId: input.proxy.p2pWorkspaceId,
-    resourceId: input.proxy.resourceId,
-    sourceSessionId: input.proxy.sourceSessionId,
+    p2pWorkspaceId: proxy.p2pWorkspaceId,
+    resourceId: proxy.resourceId,
+    sourceSessionId: proxy.sourceSessionId,
     memberSessionId: input.sessionId,
     memberUserMessageId: input.memberUserMessageId,
     memberAssistantMessageId: input.memberAssistantMessageId,
@@ -386,8 +407,8 @@ export async function relayProxySendMessage(input: {
     modelIds: input.modelIds,
   }
 
-  if (input.proxy.ownerDeviceId === localDeviceId) {
-    logStructured('p2p', 'info', `agent relay send start (local): sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`)
+  if (proxy.ownerDeviceId === localDeviceId) {
+    logStructured('p2p', 'info', `agent relay send start (local): sourceSessionId=${proxy.sourceSessionId} memberSessionId=${input.sessionId}`)
     await runOwnerRelaySend(localDeviceId, relayMessage, { deliverStreamLocally: true })
     return {
       userMessageId: input.memberUserMessageId,
@@ -395,14 +416,14 @@ export async function relayProxySendMessage(input: {
     }
   }
 
-  await assertPeerTrustedForSync(input.proxy.p2pWorkspaceId, input.proxy.ownerDeviceId)
-  await ensurePeerConnected(input.proxy.ownerDeviceId, input.proxy.p2pWorkspaceId)
+  await assertPeerTrustedForSync(proxy.p2pWorkspaceId, proxy.ownerDeviceId)
+  await ensurePeerConnected(proxy.ownerDeviceId, proxy.p2pWorkspaceId)
 
-  logStructured('p2p', 'info', `agent relay send start: ownerDeviceId=${input.proxy.ownerDeviceId} sourceSessionId=${input.proxy.sourceSessionId} memberSessionId=${input.sessionId}`)
+  logStructured('p2p', 'info', `agent relay send start: ownerDeviceId=${proxy.ownerDeviceId} sourceSessionId=${proxy.sourceSessionId} memberSessionId=${input.sessionId}`)
 
   const responsePromise = waitForRelayResponse(requestId)
 
-  await sendRelayMessage(input.proxy.ownerDeviceId, relayMessage)
+  await sendRelayMessage(proxy.ownerDeviceId, relayMessage)
 
   const response = await responsePromise
   if (response.type !== 'send_ok') {

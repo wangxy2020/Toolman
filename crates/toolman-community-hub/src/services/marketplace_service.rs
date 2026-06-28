@@ -480,7 +480,8 @@ fn draft_manifest_for_type(resource_type: ResourceType) -> Value {
             "mcpId": format!("draft-{}", Uuid::new_v4()),
             "transport": "stdio",
             "command": "echo",
-            "tools": []
+            "tools": [],
+            "files": ["mcp.manifest.json"]
         }),
         ResourceType::Skill => json!({
             "schemaVersion": 1,
@@ -571,7 +572,8 @@ mod tests {
                     "mcpId": "low",
                     "transport": "stdio",
                     "command": "echo",
-                    "tools": []
+                    "tools": [],
+                    "files": ["mcp.manifest.json"]
                 }),
             })
             .await
@@ -597,7 +599,8 @@ mod tests {
                     "mcpId": "high",
                     "transport": "stdio",
                     "command": "echo",
-                    "tools": []
+                    "tools": [],
+                    "files": ["mcp.manifest.json"]
                 }),
             })
             .await

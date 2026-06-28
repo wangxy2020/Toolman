@@ -157,6 +157,7 @@ export const P2pWorkspaceListInputSchema = z.object({
 
 export const P2pWorkspaceListOutputSchema = z.object({
   workspaces: z.array(P2pWorkspaceSchema),
+  pendingJoinIds: z.array(UuidSchema),
 })
 
 export const P2pWorkspaceGetInputSchema = z.object({
@@ -275,6 +276,10 @@ export const P2pPeerTrustRequiredPayloadSchema = z.object({
 
 export type P2pPeerTrustRequiredPayload = z.infer<typeof P2pPeerTrustRequiredPayloadSchema>
 
+export const P2pMemberListPendingTrustPromptsOutputSchema = z.object({
+  prompts: z.array(P2pPeerTrustRequiredPayloadSchema),
+})
+
 // --- Sync ---
 
 export const P2pSyncWorkspaceInputSchema = z.object({
@@ -317,6 +322,7 @@ export const P2pSyncForceOutputSchema = z.object({
 
 export const P2pSyncCatchUpInputSchema = z.object({
   workspaceId: UuidSchema,
+  force: z.boolean().optional(),
 })
 
 export const P2pSyncCatchUpOutputSchema = z.object({
@@ -592,6 +598,29 @@ export const P2pNoteListShareTargetsInputSchema = z.object({
 
 export const P2pNoteListShareTargetsOutputSchema = z.object({
   workspaceIds: z.array(UuidSchema),
+})
+
+// --- Workflow ---
+
+export const P2pWorkflowShareInputSchema = z.object({
+  workspaceId: UuidSchema,
+  workflowId: z.string().min(1).max(64),
+  sourceWorkspaceId: UuidSchema.optional(),
+  permission: z.enum(['read', 'write']).optional(),
+})
+
+export const P2pWorkflowShareOutputSchema = z.object({
+  sharedResource: P2pSharedResourceSchema,
+})
+
+export const P2pWorkflowListLocalOutputSchema = z.object({
+  workflows: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string().optional(),
+    }),
+  ),
 })
 
 // --- Push event payloads (subscribe) ---

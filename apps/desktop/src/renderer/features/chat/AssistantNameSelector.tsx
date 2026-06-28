@@ -1,6 +1,8 @@
 import type { Assistant } from '@toolman/shared'
 import { IconChevronDown } from '../../components/icons'
+import { resolveGroupProxyAssistantDisplayName, isGroupProxyAssistant } from '../../features/group/group-agent-utils'
 import { useI18n } from '../../i18n/useI18n'
+import { translateAssistantName } from '../../i18n/system-labels'
 
 interface Props {
   assistant: Assistant | null
@@ -9,7 +11,11 @@ interface Props {
 
 export function AssistantNameSelector({ assistant, onOpenSettings }: Props) {
   const { t } = useI18n()
-  const name = assistant?.name ?? t('agent.fallbackName')
+  const name = assistant
+    ? isGroupProxyAssistant(assistant)
+      ? resolveGroupProxyAssistantDisplayName(assistant)
+      : translateAssistantName(assistant.name, t)
+    : t('agent.fallbackName')
 
   return (
     <button

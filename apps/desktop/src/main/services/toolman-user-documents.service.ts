@@ -1,34 +1,12 @@
 import { existsSync, mkdirSync } from 'node:fs'
-import os from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { app } from 'electron'
-import { identities } from '@toolman/db'
-import { getDatabase } from '../bootstrap/database'
+import { getDocumentsFolderSlug } from './documents-folder-slug.service'
 
-const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
-
-export function sanitizeUserFolderName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) return '本地用户'
-  const sanitized = trimmed.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim()
-  return sanitized || '本地用户'
-}
+export { sanitizeUserFolderName } from './toolman-folder-sanitize'
 
 export function getToolmanUserFolderName(): string {
-  try {
-    const row = getDatabase()
-      .select({ displayName: identities.displayName })
-      .from(identities)
-      .where(eq(identities.id, DEFAULT_IDENTITY_ID))
-      .get()
-    if (row?.displayName?.trim()) {
-      return sanitizeUserFolderName(row.displayName)
-    }
-  } catch {
-    // Database may not be ready in some test contexts.
-  }
-  return sanitizeUserFolderName(os.userInfo().username)
+  return getDocumentsFolderSlug()
 }
 
 const TOOLMAN_DOCUMENTS_DIR = 'Toolman'

@@ -34,7 +34,54 @@ describe('prepareCommunityMcpPackage', () => {
     expect(readFileSync(result.packagePath).subarray(0, 2).toString()).toBe('PK')
   })
 
-  it('passes through zip that already contains manifest and checksums', async () => {
+  it('includes files in generated manifest', async () => {
+    const zipPath = createZipWithPackageJson('files-mcp', {
+      name: 'demo-mcp',
+      version: '1.0.0',
+      bin: 'index.js',
+    })
+
+    const result = await prepareCommunityMcpPackage({
+      packagePath: zipPath,
+      title: 'Files MCP',
+    })
+
+    const manifestJson = execFileSync('unzip', ['-p', result.packagePath, 'mcp.manifest.json'], {
+      encoding: 'utf8',
+    })
+    const manifest = JSON.parse(manifestJson)
+    expect(manifest.files).toEqual(expect.arrayContaining(['package.json', 'mcp.manifest.json']))
+  })
+
+  it('repacks zip that has manifest but missing files field', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'toolman-mcp-missing-files-test-'))
+    const bundle = join(root, 'bundle')
+    mkdirSync(bundle, { recursive: true })
+    const manifest = {
+      schemaVersion: 1,
+      mcpId: 'ready-mcp',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'demo-mcp'],
+      templates: [{ name: 'default', config: {} }],
+    }
+    const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`
+    writeFileSync(join(bundle, 'mcp.manifest.json'), manifestJson, 'utf8')
+    const manifestHash = createHash('sha256')
+      .update(manifestJson)
+      .digest('hex')
+    writeFileSync(join(bundle, 'SHA256SUMS'), `${manifestHash}  mcp.manifest.json\n`, 'utf8')
+    const zipPath = join(root, 'missing-files.zip')
+    execFileSync('zip', ['-r', zipPath, '.'], { cwd: bundle })
+
+    const result = await prepareCommunityMcpPackage({ packagePath: zipPath })
+    expect(result.normalized).toBe(true)
+    expect(result.packagePath.endsWith('.toolman-mcp')).toBe(true)
+
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('passes through zip that already contains manifest, files, and checksums', async () => {
     const root = mkdtempSync(join(tmpdir(), 'toolman-mcp-ready-test-'))
     const bundle = join(root, 'bundle')
     mkdirSync(bundle, { recursive: true })
@@ -45,6 +92,7 @@ describe('prepareCommunityMcpPackage', () => {
       command: 'npx',
       args: ['-y', 'demo-mcp'],
       templates: [{ name: 'default', config: {} }],
+      files: ['mcp.manifest.json'],
     }
     const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`
     writeFileSync(join(bundle, 'mcp.manifest.json'), manifestJson, 'utf8')

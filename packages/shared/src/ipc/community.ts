@@ -311,6 +311,15 @@ export type CommunityWorkflowPackagePrepareOutput = z.infer<
   typeof CommunityWorkflowPackagePrepareOutputSchema
 >
 
+export const CommunityKnowledgePackagePrepareInputSchema = CommunityMcpPackagePrepareInputSchema
+export type CommunityKnowledgePackagePrepareInput = z.infer<
+  typeof CommunityKnowledgePackagePrepareInputSchema
+>
+export const CommunityKnowledgePackagePrepareOutputSchema = CommunityMcpPackagePrepareOutputSchema
+export type CommunityKnowledgePackagePrepareOutput = z.infer<
+  typeof CommunityKnowledgePackagePrepareOutputSchema
+>
+
 export const CommunityResourceInteractionInputSchema = z.object({
   resourceId: UuidSchema,
 })

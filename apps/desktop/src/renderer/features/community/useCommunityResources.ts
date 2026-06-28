@@ -20,9 +20,12 @@ import {
 import { notifyCommunityUserDataChanged } from './community-events'
 import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
 import {
+  COMMUNITY_LIST_POLL_INTERVAL_MS,
   fetchCommunityListCached,
+  invalidateCommunityListCache,
   readCommunityListCache,
 } from './community-list-cache'
+import { COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'
 import { useCommunityFederatedCatalogUpdates } from './useCommunityFederatedCatalogUpdates'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
@@ -87,11 +90,12 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
   >(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async (options?: { force?: boolean }) => {
+  const load = useCallback(async (options?: { force?: boolean; background?: boolean }) => {
+    const background = options?.background === true
     const cached = !options?.force
       ? readCommunityListCache<Awaited<ReturnType<typeof listCommunityResources>>>(cacheKey)
       : null
-    if (!cached?.items.length) {
+    if (!background && !cached?.items.length) {
       setLoading(true)
     }
     setError(null)
@@ -277,21 +281,36 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     void load()
   }, [autoLoad, load])
 
-  useCommunityFederatedCatalogUpdates(resourceType, (item) => {
-    setItems((current) => {
-      const next = current.filter((entry) => entry.id !== item.id)
-      next.unshift(item)
-      return next
-    })
-  })
+  useCommunityFederatedCatalogUpdates(
+    resourceType,
+    (item) => {
+      setItems((current) => {
+        const next = current.filter((entry) => entry.id !== item.id)
+        next.unshift(item)
+        return next
+      })
+    },
+    (resourceId) => {
+      setItems((current) => current.filter((entry) => entry.id !== resourceId))
+    },
+  )
 
   useEffect(() => {
     if (!autoLoad) return
-    const reload = () => {
+    const reloadInBackground = () => {
+      void load({ force: true, background: true })
+    }
+    const reloadOnSessionChange = () => {
       void load()
     }
-    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
-    return () => window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reload)
+    window.addEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reloadOnSessionChange)
+    window.addEventListener(COMMUNITY_USER_DATA_CHANGED_EVENT, reloadInBackground)
+    const timer = window.setInterval(reloadInBackground, COMMUNITY_LIST_POLL_INTERVAL_MS)
+    return () => {
+      window.removeEventListener(COMMUNITY_SESSION_CHANGED_EVENT, reloadOnSessionChange)
+      window.removeEventListener(COMMUNITY_USER_DATA_CHANGED_EVENT, reloadInBackground)
+      window.clearInterval(timer)
+    }
   }, [autoLoad, load])
 
   useEffect(() => {

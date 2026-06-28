@@ -202,7 +202,8 @@ impl McpMarketService {
             "mcpId": draft_mcp_id,
             "transport": "stdio",
             "command": "echo",
-            "tools": []
+            "tools": [],
+            "files": ["mcp.manifest.json"]
         });
 
         ResourceRepository::new(self.pool.clone())
@@ -343,6 +344,7 @@ impl McpMarketService {
             tools: Vec::new(),
             templates: Vec::new(),
             config_schema: Value::Null,
+            files: vec!["mcp.manifest.json".to_string()],
         });
 
         let author = UserRepository::new(self.pool.clone())
@@ -462,7 +464,8 @@ mod tests {
                 { "name": "read_file", "description": "Read a file" },
                 { "name": "write_file", "description": "Write a file" }
             ],
-            "templates": [{ "name": "default", "config": {} }]
+            "templates": [{ "name": "default", "config": {} }],
+            "files": ["mcp.manifest.json"]
         })
         .to_string()
     }

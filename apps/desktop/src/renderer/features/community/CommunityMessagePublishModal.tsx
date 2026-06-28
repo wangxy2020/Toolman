@@ -8,6 +8,7 @@ import {
   patchCommunityBoardMessage,
 } from './community-api.client'
 import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
+import { invalidateCommunityListCache } from './community-list-cache'
 import {
   CommunityPublishModalError,
   CommunityPublishModalFooterActions,
@@ -94,6 +95,7 @@ export function CommunityMessagePublishModal({
     try {
       if (resumeMessage) {
         await patchCommunityBoardMessage(resumeMessage.id, messageBody)
+        invalidateCommunityListCache('board:')
         notifyCommunityUserDataChanged()
         notifyCommunityBoardChanged()
         onCreated?.(
@@ -104,6 +106,7 @@ export function CommunityMessagePublishModal({
       }
 
       await createCommunityBoardMessage({ body: messageBody })
+      invalidateCommunityListCache('board:')
       notifyCommunityUserDataChanged()
       notifyCommunityBoardChanged()
       onCreated?.(t('communityPage.messagePublish.successPublish'))

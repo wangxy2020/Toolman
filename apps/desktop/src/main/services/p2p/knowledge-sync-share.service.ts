@@ -6,12 +6,12 @@ import {
   P2pKnowledgeRemoveDocumentsInputSchema,
   P2pKnowledgeSetDocumentPermissionInputSchema,
   P2pKnowledgeShareInputSchema,
-  P2pResourceListInputSchema,
   P2pResourceUnshareInputSchema,
 } from '@toolman/shared'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
 import { appendP2pEvent } from './p2p-event.service'
 import { protectOwnerSourceKnowledgeBase } from './p2p-knowledge-projection'
+import { listP2pSharedResourcesForWorkspace } from './p2p-shared-resource-list.service'
 import {
   buildKnowledgeShareMetadata,
   mergeSharedDocumentIds,
@@ -26,7 +26,6 @@ import {
 import {
   assertCanManageSharedResource,
   assertCanShareResource,
-  assertWorkspaceMemberAccess,
 } from './p2p-permission.guard'
 import { getDefaultWorkspace } from '../workspace.service'
 import { stripGroupPrefixedName } from './p2p-group-resource-naming'
@@ -78,6 +77,7 @@ export async function shareP2pKnowledge(rawInput: unknown): Promise<{ sharedReso
   const metadataJson = buildKnowledgeShareMetadata({
     description: kb.description,
     sourceWorkspaceId,
+    sourceKbKind: kb.kind,
     documentIds: sharedDocumentIds,
     documentPermissions: existingMetadata.documentPermissions,
   })
@@ -203,6 +203,7 @@ export async function removeP2pKnowledgeDocuments(
   const metadataJson = buildKnowledgeShareMetadata({
     description: metadata.description,
     sourceWorkspaceId: metadata.sourceWorkspaceId,
+    sourceKbKind: metadata.sourceKbKind,
     documentIds: nextIds,
     documentPermissions: metadata.documentPermissions
       ? Object.fromEntries(
@@ -294,6 +295,7 @@ export async function setP2pKnowledgeDocumentPermission(rawInput: unknown): Prom
   const metadataJson = buildKnowledgeShareMetadata({
     description: metadata.description,
     sourceWorkspaceId: metadata.sourceWorkspaceId,
+    sourceKbKind: metadata.sourceKbKind,
     documentIds: metadata.documentIds,
     documentPermissions,
   })
@@ -321,21 +323,7 @@ export async function setP2pKnowledgeDocumentPermission(rawInput: unknown): Prom
 }
 
 export function listP2pSharedResources(rawInput: unknown): { resources: P2pSharedResource[] } {
-  const input = P2pResourceListInputSchema.parse(rawInput)
-  assertWorkspaceMemberAccess(input.workspaceId)
-
-  const sharedRepo = getSharedResourceRepo()
-  const rows = input.resourceType
-    ? sharedRepo
-        .listByWorkspace(input.workspaceId)
-        .filter((row) => row.resourceType === input.resourceType)
-    : sharedRepo.listByWorkspace(input.workspaceId)
-
-  const resources = rows
-    .filter((row) => (input.status ? row.status === input.status : row.status === 'active'))
-    .map(mapSharedResourceRow)
-
-  return { resources }
+  return listP2pSharedResourcesForWorkspace(rawInput)
 }
 
 export async function maybeSyncSharedKnowledgeDocument(

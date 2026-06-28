@@ -24,7 +24,8 @@ pub fn sample_mcp_manifest_json() -> String {
         "transport": "stdio",
         "command": "npx",
         "tools": [{ "name": "ping", "description": "Ping" }],
-        "templates": [{ "name": "default", "config": {} }]
+        "templates": [{ "name": "default", "config": {} }],
+        "files": ["mcp.manifest.json"]
     })
     .to_string()
 }

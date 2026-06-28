@@ -17,7 +17,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { createHash, randomUUID } from 'node:crypto'
 import { hashFileBytes } from '@toolman/knowledge'
-import { P2pMemberRepository, P2pSharedResourceRepository } from '@toolman/db'
+import { P2pMemberRepository, P2pSharedResourceRepository, P2pWorkspaceRepository } from '@toolman/db'
 import {
   blobExists,
   ensureBlobRecord,
@@ -26,11 +26,15 @@ import {
   writeBlobFromPath,
 } from '../blob.service'
 import { getDatabase } from '../../bootstrap/database'
-import { getDocumentRepository } from '../../db/repos'
+import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
 import { P2pBridge } from './p2p-bridge'
-import { ensurePeerReadyForWorkspace, listP2pConnections } from './p2p-connection.service'
+import {
+  ensurePeerReadyForWorkspace,
+  isPeerConnected,
+  listP2pConnections,
+} from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
-import { assertPeerTrustedForSync, isPeerTrusted } from './p2p-peer.service'
+import { isPeerTrusted } from './p2p-peer.service'
 import {
   broadcastP2pSyncCompleted,
   broadcastP2pSyncProgress,
@@ -47,6 +51,7 @@ import {
   listBlobReceiveSessions,
   saveBlobReceiveSession,
 } from './p2p-blob-session-store'
+import { readKnowledgeShareMetadata } from './p2p-knowledge-share-metadata'
 
 const MAX_CONCURRENT_BLOB_SENDS = 2
 let activeBlobSends = 0
@@ -142,6 +147,36 @@ function listActiveWorkspacePeerIds(workspaceId: string): string[] {
     .listByWorkspace(workspaceId, 'active')
     .filter((member) => member.deviceId !== device.deviceId)
     .map((member) => member.deviceId)
+}
+
+function isActiveWorkspacePeer(workspaceId: string, peerDeviceId: string): boolean {
+  const device = getP2pDeviceInfo()
+  if (peerDeviceId === device.deviceId) return true
+  const workspace = new P2pWorkspaceRepository(getDatabase()).findById(workspaceId)
+  if (workspace?.ownerDeviceId === peerDeviceId) return true
+  const member = new P2pMemberRepository(getDatabase()).findByWorkspaceAndDevice(
+    workspaceId,
+    peerDeviceId,
+  )
+  return member?.status === 'active'
+}
+
+function canRequestBlobFromPeer(workspaceId: string, peerDeviceId: string): boolean {
+  return isPeerTrusted(workspaceId, peerDeviceId) || isActiveWorkspacePeer(workspaceId, peerDeviceId)
+}
+
+function canServeBlobToPeer(workspaceId: string, peerDeviceId: string): boolean {
+  return canRequestBlobFromPeer(workspaceId, peerDeviceId)
+}
+
+const DEFAULT_BLOB_REQUEST_TIMEOUT_MS = 60_000
+const SAVE_BLOB_REQUEST_TIMEOUT_MS = 25_000
+const BLOB_CONNECT_TIMEOUT_MS = 8_000
+
+export type FetchBlobFromPeersOptions = {
+  requestTimeoutMs?: number
+  skipConnect?: boolean
+  connectTimeoutMs?: number
 }
 
 function sleep(ms: number): Promise<void> {
@@ -405,19 +440,41 @@ async function tryRecoverBlobFromSharedKnowledge(
 
   const sharedRepo = new P2pSharedResourceRepository(getDatabase())
   const docRepo = getDocumentRepository()
+  const kbRepo = getKnowledgeBaseRepository()
+
+  const tryDocument = (doc: {
+    absolutePath?: string | null
+    contentHash?: string | null
+    blobHash?: string | null
+  }): boolean => {
+    if (doc.blobHash !== contentHash && doc.contentHash !== contentHash) return false
+    if (!doc.absolutePath || !existsSync(doc.absolutePath)) return false
+    try {
+      if (hashFileBytes(doc.absolutePath) !== contentHash) return false
+      writeBlobFromPath(doc.absolutePath)
+      return blobExists(contentHash)
+    } catch {
+      return false
+    }
+  }
 
   for (const resource of sharedRepo.listByWorkspace(workspaceId)) {
     if (resource.resourceType !== 'Knowledge' || resource.status !== 'active') continue
     const kbId = resource.localResourceId ?? resource.id
-    for (const doc of docRepo.listByKb(kbId)) {
-      if (doc.blobHash !== contentHash && doc.contentHash !== contentHash) continue
-      if (!doc.absolutePath || !existsSync(doc.absolutePath)) continue
-      try {
-        if (hashFileBytes(doc.absolutePath) !== contentHash) continue
-        writeBlobFromPath(doc.absolutePath)
-        return blobExists(contentHash)
-      } catch {
-        continue
+    const metadata = readKnowledgeShareMetadata(resource.metadataJson)
+    const kbIds = new Set<string>([kbId])
+
+    if (metadata.sourceWorkspaceId) {
+      for (const kb of kbRepo.listByWorkspace(metadata.sourceWorkspaceId)) {
+        kbIds.add(kb.id)
+      }
+    }
+
+    for (const searchKbId of kbIds) {
+      for (const doc of docRepo.listByKb(searchKbId)) {
+        if (tryDocument(doc)) {
+          return true
+        }
       }
     }
   }
@@ -425,11 +482,47 @@ async function tryRecoverBlobFromSharedKnowledge(
   return false
 }
 
+function listBlobFetchPeerCandidates(
+  workspaceId: string,
+  preferredPeerDeviceId: string | undefined,
+  connections: Awaited<ReturnType<typeof listP2pConnections>>,
+): string[] {
+  const device = getP2pDeviceInfo()
+  const workspace = new P2pWorkspaceRepository(getDatabase()).findById(workspaceId)
+  const ordered: string[] = []
+  const seen = new Set<string>()
+  const add = (peerDeviceId?: string | null) => {
+    if (!peerDeviceId || peerDeviceId === device.deviceId || seen.has(peerDeviceId)) return
+    seen.add(peerDeviceId)
+    ordered.push(peerDeviceId)
+  }
+
+  add(preferredPeerDeviceId)
+  add(workspace?.ownerDeviceId)
+  for (const peerDeviceId of listActiveWorkspacePeerIds(workspaceId)) {
+    add(peerDeviceId)
+  }
+  for (const connection of connections) {
+    if (connection.state === 'connected') {
+      add(connection.peerDeviceId)
+    }
+  }
+
+  return ordered
+}
+
 async function handleBlobRequest(
   peerDeviceId: string,
   message: Extract<FileChannelMessage, { type: 'blob.request' }>,
 ): Promise<void> {
-  assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
+  if (!canServeBlobToPeer(message.workspaceId, peerDeviceId)) {
+    await sendFileMessage(peerDeviceId, {
+      type: 'blob.not_found',
+      requestId: message.requestId,
+      contentHash: message.contentHash,
+    })
+    return
+  }
 
   if (!blobExists(message.contentHash)) {
     await tryRecoverBlobFromSharedKnowledge(message.workspaceId, message.contentHash)
@@ -569,17 +662,19 @@ async function requestBlobFromPeer(
   peerDeviceId: string,
   contentHash: string,
   mimeType?: string,
+  requestTimeoutMs = DEFAULT_BLOB_REQUEST_TIMEOUT_MS,
 ): Promise<boolean> {
-  if (!isPeerTrusted(workspaceId, peerDeviceId)) {
+  if (!canRequestBlobFromPeer(workspaceId, peerDeviceId)) {
+    logStructured(
+      'p2p',
+      'warn',
+      `blob request skipped for ${peerDeviceId.slice(0, 8)}: peer not authorized in ${workspaceId.slice(0, 8)}`,
+    )
     return false
   }
 
-  const connections = await listP2pConnections()
-  const connected = connections.some(
-    (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
-  )
-  if (!connected) {
-    await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
+  if (!isPeerConnected(peerDeviceId)) {
+    return false
   }
 
   const requestId = randomUUID()
@@ -588,7 +683,7 @@ async function requestBlobFromPeer(
       pendingFetchResolvers.delete(requestId)
       receiveSessions.delete(requestId)
       resolve(false)
-    }, 60_000)
+    }, requestTimeoutMs)
 
     pendingFetchResolvers.set(requestId, {
       resolve: (value) => {
@@ -624,6 +719,7 @@ export async function fetchBlobFromPeers(
   contentHash: string,
   mimeType?: string,
   preferredPeerDeviceId?: string,
+  options?: FetchBlobFromPeersOptions,
 ): Promise<boolean> {
   if (!contentHash || blobExists(contentHash)) {
     return true
@@ -631,42 +727,49 @@ export async function fetchBlobFromPeers(
 
   const fetchKey = `${workspaceId}:${contentHash}`
   if (inFlightFetches.has(fetchKey)) {
-    return waitForBlob(contentHash)
+    return waitForBlob(contentHash, options?.requestTimeoutMs ?? DEFAULT_BLOB_REQUEST_TIMEOUT_MS)
   }
   inFlightFetches.add(fetchKey)
 
   try {
-    const device = getP2pDeviceInfo()
-    const memberPeerIds = new Set(listActiveWorkspacePeerIds(workspaceId))
-    const connections = await listP2pConnections()
-    const peers = connections
-      .filter(
-        (item) =>
-          item.state === 'connected' &&
-          item.peerDeviceId !== device.deviceId &&
-          memberPeerIds.has(item.peerDeviceId),
-      )
-      .map((item) => item.peerDeviceId)
-
-    const peerOrder = preferredPeerDeviceId
-      ? [preferredPeerDeviceId, ...peers.filter((peer) => peer !== preferredPeerDeviceId)]
-      : peers
+    let connections = await listP2pConnections()
+    const peerOrder = listBlobFetchPeerCandidates(
+      workspaceId,
+      preferredPeerDeviceId,
+      connections,
+    )
+    const requestTimeoutMs = options?.requestTimeoutMs ?? DEFAULT_BLOB_REQUEST_TIMEOUT_MS
+    const connectTimeoutMs = options?.connectTimeoutMs ?? BLOB_CONNECT_TIMEOUT_MS
 
     for (const peerDeviceId of peerOrder) {
       try {
-        await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
+        if (!isPeerConnected(peerDeviceId)) {
+          if (options?.skipConnect) {
+            continue
+          }
+          await Promise.race([
+            ensurePeerReadyForWorkspace(peerDeviceId, workspaceId).catch(() => undefined),
+            sleep(connectTimeoutMs),
+          ])
+          connections = await listP2pConnections()
+          if (!isPeerConnected(peerDeviceId)) {
+            continue
+          }
+        }
+
         const ok = await requestBlobFromPeer(
           workspaceId,
           peerDeviceId,
           contentHash,
           mimeType,
+          requestTimeoutMs,
         )
         if (ok && blobExists(contentHash)) {
           return true
         }
       } catch (error) {
         const message = toErrorMessage(error, String(error))
-        logStructured('p2p', 'warn', `blob fetch from ${peerDeviceId} failed: ${message}`)
+        logStructured('p2p', 'warn', `blob fetch from ${peerDeviceId.slice(0, 8)} failed: ${message}`)
       }
     }
 
@@ -674,6 +777,18 @@ export async function fetchBlobFromPeers(
   } finally {
     inFlightFetches.delete(fetchKey)
   }
+}
+
+export async function fetchKnowledgeBlobForSave(
+  workspaceId: string,
+  contentHash: string,
+  mimeType: string | undefined,
+  preferredPeerDeviceId: string | undefined,
+): Promise<boolean> {
+  return fetchBlobFromPeers(workspaceId, contentHash, mimeType, preferredPeerDeviceId, {
+    requestTimeoutMs: SAVE_BLOB_REQUEST_TIMEOUT_MS,
+    connectTimeoutMs: BLOB_CONNECT_TIMEOUT_MS,
+  })
 }
 
 const BLOB_PUSH_PEER_TIMEOUT_MS = 15_000
@@ -697,7 +812,7 @@ export async function pushBlobToPeers(
 
   await Promise.all(
     peers.map(async (peer) => {
-      if (!isPeerTrusted(workspaceId, peer.peerDeviceId)) return
+      if (!canRequestBlobFromPeer(workspaceId, peer.peerDeviceId)) return
       try {
         await Promise.race([
           (async () => {
@@ -757,6 +872,8 @@ function restoreReceiveSessionFromDisk(
 }
 
 export async function resumeInterruptedBlobTransfers(): Promise<void> {
+  const restoredSummaries: string[] = []
+
   for (const persisted of listBlobReceiveSessions()) {
     if (blobExists(persisted.contentHash)) {
       deleteBlobReceiveSession(persisted.transferId)
@@ -776,7 +893,9 @@ export async function resumeInterruptedBlobTransfers(): Promise<void> {
     }
 
     receiveSessions.set(persisted.transferId, session)
-    logStructured('p2p', 'info', `restored partial blob receive ${persisted.contentHash.slice(0, 8)} (${session.receivedCount}/${session.totalChunks} chunks)`)
+    restoredSummaries.push(
+      `${persisted.contentHash.slice(0, 8)} (${session.receivedCount}/${session.totalChunks})`,
+    )
     void fetchBlobFromPeers(
       persisted.workspaceId,
       persisted.contentHash,
@@ -785,6 +904,17 @@ export async function resumeInterruptedBlobTransfers(): Promise<void> {
     ).catch((error) => {
       logStructured('p2p', 'warn', `blob resume fetch failed for ${persisted.contentHash.slice(0, 8)}: ${toErrorMessage(error, 'blob resume fetch failed')}`)
     })
+  }
+
+  if (restoredSummaries.length > 0) {
+    const unique = [...new Set(restoredSummaries)]
+    const detail =
+      unique.length === 1 ? unique[0]! : `${unique.length} unique blob(s)`
+    logStructured(
+      'p2p',
+      'info',
+      `restored ${restoredSummaries.length} partial blob receive session(s): ${detail}`,
+    )
   }
 }
 

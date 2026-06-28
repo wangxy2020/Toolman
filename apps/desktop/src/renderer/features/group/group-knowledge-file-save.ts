@@ -26,13 +26,6 @@ export async function ensureGroupKnowledgeDocumentSaved(
 ): Promise<
   { absolutePath: string; savedDocumentId: string } | { error: string }
 > {
-  const catchUp = await window.api.invoke(IpcChannel.P2pSyncCatchUp, {
-    workspaceId: p2pWorkspaceId,
-  })
-  if (!catchUp.ok) {
-    return { error: catchUp.error.message }
-  }
-
   const result = await window.api.invoke(IpcChannel.P2pKnowledgeEnsureDocumentSaved, {
     workspaceId: p2pWorkspaceId,
     resourceId,

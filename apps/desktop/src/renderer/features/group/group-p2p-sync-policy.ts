@@ -23,8 +23,11 @@ const RESOURCE_MUTATIONS = new Set(['Shared', 'Created', 'Updated', 'Deleted'])
 
 const bootstrappedWorkspaceIds = new Set<string>()
 
-export async function bootstrapGroupWorkspace(workspaceId: string): Promise<boolean> {
-  const result = await window.api.invoke(IpcChannel.P2pSyncCatchUp, { workspaceId })
+export async function bootstrapGroupWorkspace(workspaceId: string, options?: { force?: boolean }): Promise<boolean> {
+  const result = await window.api.invoke(IpcChannel.P2pSyncCatchUp, {
+    workspaceId,
+    ...(options?.force ? { force: true } : {}),
+  })
   if (!result.ok) {
     console.warn(`[group-p2p] bootstrap failed: ${result.error.message}`)
     return false
@@ -46,7 +49,35 @@ export function ensureGroupWorkspaceBootstrapped(workspaceId: string | null): vo
 /** 入群成功后强制 bootstrap（新成员补全历史活动与文件） */
 export async function bootstrapGroupWorkspaceAfterJoin(workspaceId: string): Promise<void> {
   bootstrappedWorkspaceIds.delete(workspaceId)
-  await bootstrapGroupWorkspace(workspaceId)
+  await bootstrapGroupWorkspace(workspaceId, { force: true })
+}
+
+export function subscribeGroupResourcePanelRefresh(
+  workspaceId: string,
+  resourceType: GroupSharedResourceType,
+  reload: () => void,
+): () => void {
+  const scheduleReload = (payload?: unknown) => {
+    const data = payload as { workspaceId?: string } | undefined
+    if (data?.workspaceId && data.workspaceId !== workspaceId) return
+    reload()
+  }
+
+  const unsubMember = window.api.subscribe('p2p:member:changed', scheduleReload)
+  const unsubSync = window.api.subscribe('p2p:sync:completed', scheduleReload)
+  const unsubEvent = window.api.subscribe('p2p:event:appended', (payload) => {
+    const data = payload as { workspaceId?: string; resourceType?: string } | undefined
+    if (data?.workspaceId !== workspaceId) return
+    if (data?.resourceType === resourceType || data?.resourceType === 'Member') {
+      scheduleReload(payload)
+    }
+  })
+
+  return () => {
+    unsubMember()
+    unsubSync()
+    unsubEvent()
+  }
 }
 
 export function createGroupPanelRefreshHandler(

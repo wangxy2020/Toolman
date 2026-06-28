@@ -143,7 +143,7 @@ async function syncPeerCatalog(
     let imported = 0
     let latestUpdatedAt = updatedAfter
     for (const entry of page.items) {
-      if (upsertFederatedCatalogEntry(entry, { source: 'hub-peer', peerHubUrl: normalized })) {
+      if (upsertFederatedCatalogEntry(entry, { source: 'hub-peer', peerHubUrl: normalized, origin: 'hub-peer' })) {
         imported += 1
       }
       latestUpdatedAt = Math.max(latestUpdatedAt, entry.updatedAt)

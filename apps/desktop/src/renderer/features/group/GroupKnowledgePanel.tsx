@@ -19,6 +19,7 @@ import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './
 import { useP2pKnowledge } from './useP2pKnowledge'
 import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
 import { hasShareableKnowledgeBases } from './group-knowledge-picker-utils'
+import { resolveGroupKnowledgeResourceLabel } from './group-knowledge-display'
 import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
@@ -77,6 +78,12 @@ export function GroupKnowledgePanel({
     Record<string, Record<string, { savedDocumentId: string; absolutePath: string }>>
   >({})
   const p2pKnowledge = useP2pKnowledge({ workspaceId: p2pWorkspaceId })
+
+  const resolveResourceLabel = useCallback(
+    (resource: P2pSharedResource) =>
+      resolveGroupKnowledgeResourceLabel(resource, knowledgeBases, t),
+    [knowledgeBases, t],
+  )
 
   useRegisterGroupPanelError('knowledge', p2pKnowledge.error, () => p2pKnowledge.setError(null))
 
@@ -156,10 +163,10 @@ export function GroupKnowledgePanel({
       setPendingDelete({
         kind: 'kb',
         groups: [{ resourceId, documentIds: [] }],
-        message: `确定从群组中移除知识库「${resource.name}」吗？`,
+        message: `确定从群组中移除知识库「${resolveResourceLabel(resource)}」吗？`,
       })
     },
-    [canDeleteResource, p2pKnowledge],
+    [canDeleteResource, p2pKnowledge, resolveResourceLabel],
   )
 
   const requestRemoveDocuments = useCallback(
@@ -184,10 +191,10 @@ export function GroupKnowledgePanel({
       setPendingDelete({
         kind: 'documents',
         groups: [{ resourceId, documentIds }],
-        message: `确定从群组知识库「${resource.name}」中移除${preview}${suffix}吗？`,
+        message: `确定从群组知识库「${resolveResourceLabel(resource)}」中移除${preview}${suffix}吗？`,
       })
     },
-    [canDeleteResource, p2pKnowledge],
+    [canDeleteResource, p2pKnowledge, resolveResourceLabel],
   )
 
   const handleSavedDocumentRegistryChange = useCallback(
@@ -590,6 +597,7 @@ export function GroupKnowledgePanel({
                 sourceWorkspaceId={sourceWorkspaceId}
                 workspaceName={workspaceName}
                 resource={resource}
+                sectionTitle={resolveResourceLabel(resource)}
                 isResourceOwner={isResourceOwner}
                 savedDocumentOverrides={savedDocumentOverrides[resource.id]}
                 selectedKeys={selectedKeys}

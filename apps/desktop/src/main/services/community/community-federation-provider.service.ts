@@ -1,5 +1,6 @@
 import {
   FEDERATION_CATALOG_TOPIC,
+  FederatedCatalogDeleteWireMessageSchema,
   FederatedCatalogWireMessageSchema,
   cidWireTopic,
 } from '@toolman/shared'
@@ -14,13 +15,15 @@ import {
 } from './community-federation.config'
 import {
   getCommunityFederationSigningStats,
+  signFederatedCatalogDeleteWireMessage,
   signFederatedCatalogWireMessage,
+  verifyFederatedCatalogDeleteWireMessage,
   verifyFederatedCatalogWireMessage,
 } from './community-federation-signing.service'
 import {
   getFederatedCatalogStats,
+  removeFederatedCatalogEntry,
   upsertFederatedCatalogEntry,
-  upsertFederatedCatalogFromCidManifest,
 } from './community-federated-catalog.service'
 
 let started = false
@@ -38,6 +41,14 @@ function subscribeFederationTopics(): void {
   }
 }
 
+function publishCatalogWire(payload: unknown): void {
+  if (!Libp2pBridge.isAvailable() || !Libp2pBridge.networkIsRunning()) return
+  Libp2pBridge.pubsubPublish(
+    FEDERATION_CATALOG_TOPIC,
+    Buffer.from(JSON.stringify(payload), 'utf8'),
+  )
+}
+
 export function publishFederatedCatalogWireMessage(
   entry: Parameters<typeof signFederatedCatalogWireMessage>[0],
 ): void {
@@ -46,16 +57,28 @@ export function publishFederatedCatalogWireMessage(
 
   try {
     const wire = signFederatedCatalogWireMessage(entry)
-    Libp2pBridge.pubsubPublish(
-      FEDERATION_CATALOG_TOPIC,
-      Buffer.from(JSON.stringify(wire), 'utf8'),
-    )
-    upsertFederatedCatalogEntry(entry)
+    publishCatalogWire(wire)
+    upsertFederatedCatalogEntry(entry, { origin: 'catalog' })
     recordDiagnosticEvent('community-federation', 'info', `published catalog ${entry.id}`)
   } catch (error) {
     const message = toErrorMessage(error, String(error))
     lastError = message
     recordDiagnosticEvent('community-federation', 'warn', `publish failed: ${message}`)
+  }
+}
+
+export function publishFederatedCatalogDeleteWireMessage(resourceId: string): void {
+  if (!isCommunityFederationEnabled()) return
+  if (!Libp2pBridge.isAvailable() || !Libp2pBridge.networkIsRunning()) return
+
+  try {
+    const wire = signFederatedCatalogDeleteWireMessage(resourceId)
+    publishCatalogWire(wire)
+    recordDiagnosticEvent('community-federation', 'info', `published catalog delete ${resourceId}`)
+  } catch (error) {
+    const message = toErrorMessage(error, String(error))
+    lastError = message
+    recordDiagnosticEvent('community-federation', 'warn', `publish delete failed: ${message}`)
   }
 }
 
@@ -66,9 +89,19 @@ export function handleCommunityFederationPubsubMessage(topic: string, data: Buff
 function handleFederationInboxMessage(topic: string, data: Buffer): void {
   if (topic === FEDERATION_CATALOG_TOPIC) {
     try {
-      const parsed = FederatedCatalogWireMessageSchema.parse(JSON.parse(data.toString('utf8')))
+      const raw = JSON.parse(data.toString('utf8'))
+      const deleteParsed = FederatedCatalogDeleteWireMessageSchema.safeParse(raw)
+      if (deleteParsed.success) {
+        if (!verifyFederatedCatalogDeleteWireMessage(deleteParsed.data)) return
+        if (removeFederatedCatalogEntry(deleteParsed.data.resourceId)) {
+          catalogMessagesReceived += 1
+        }
+        return
+      }
+
+      const parsed = FederatedCatalogWireMessageSchema.parse(raw)
       if (!verifyFederatedCatalogWireMessage(parsed)) return
-      if (upsertFederatedCatalogEntry(parsed.entry)) {
+      if (upsertFederatedCatalogEntry(parsed.entry, { origin: 'catalog' })) {
         catalogMessagesReceived += 1
       }
     } catch {
@@ -81,7 +114,7 @@ function handleFederationInboxMessage(topic: string, data: Buffer): void {
     try {
       const parsed = JSON.parse(data.toString('utf8'))
       if (verifyCidWireAnnounce(parsed)) {
-        upsertFederatedCatalogFromCidManifest(parsed.manifest, parsed.signerDid)
+        // CID announce is handled by the CID provider for DHT lookups only.
       }
     } catch {
       // ignore malformed CID announce fallback

@@ -24,10 +24,12 @@ import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { withWorkspaceEventWrite } from './p2p-workspace-event-mutex'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
 import { ensurePeerReadyForWorkspace, isPeerConnected, listP2pConnections } from './p2p-connection.service'
+import { loadAllWorkspaceKeys, loadWorkspaceKey } from './p2p-workspace-key.store'
 import {
   assertPeerTrustedForSync,
   ensureOwnerPeerTrustedForSync,
   isPeerTrusted,
+  promptPeerTrustIfNeeded,
 } from './p2p-peer.service'
 import {
   broadcastP2pSyncCompleted,
@@ -41,10 +43,18 @@ import {
   syncMissingWorkspaceBlobs,
 } from './p2p-blob-transfer.service'
 import { syncMissingSharedKnowledgeDocuments } from './p2p-knowledge-projection'
-import { reconcileAgentSharedResources } from './p2p-agent-projection'
+import { reconcileP2pSharedResourcesForWorkspace } from './p2p-shared-resource-reconcile.service'
+
+export { reconcileP2pSharedResourcesForWorkspace } from './p2p-shared-resource-reconcile.service'
 import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
 import { reconcileGroupChatProjection } from './p2p-group-chat-projector'
-import { applyRemoteMemberJoin, ensureMemberConnectsToOwner, handleMemberSyncRequest, handleMemberSyncResponse } from './p2p-member.service'
+import { applyRemoteMemberJoin } from './p2p-member-join.service'
+import {
+  ensureMemberConnectsToOwner,
+  handleMemberSyncRequest,
+  handleMemberSyncResponse,
+} from './p2p-member-reconcile.service'
+import { handleMemberApprovedWire } from './p2p-member-activation.service'
 import {
   verifyMemberJoinedWireMessage,
   type SignedMemberJoinedWire,
@@ -259,7 +269,10 @@ async function sendSyncHello(peerDeviceId: string, workspaceId: string): Promise
 }
 
 async function handleSyncHello(peerDeviceId: string, message: SyncHelloMessage): Promise<void> {
-  assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
+  if (!isPeerTrusted(message.workspaceId, peerDeviceId)) {
+    promptPeerTrustIfNeeded(message.workspaceId, peerDeviceId, { connected: true })
+    return
+  }
 
   const device = getP2pDeviceInfo()
   const latestSeq = getWorkspaceLatestSeq(message.workspaceId)
@@ -425,6 +438,10 @@ async function handleEventsBatchReplication(
     error: undefined,
   })
 
+  if (message.events.length > 0) {
+    reconcileSharedResourcesAfterSync(message.workspaceId)
+  }
+
   if (applied <= 0) return
 
   reconcileGroupChatAfterSync(message.workspaceId)
@@ -433,6 +450,10 @@ async function handleEventsBatchReplication(
     eventsApplied: applied,
     filesFetched: 0,
   })
+}
+
+function reconcileSharedResourcesAfterSync(workspaceId: string): void {
+  reconcileP2pSharedResourcesForWorkspace(workspaceId)
 }
 
 function reconcileGroupChatAfterSync(workspaceId: string): void {
@@ -539,7 +560,7 @@ async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): 
           subscriptionSku: joined.member.subscriptionSku,
           remoteDevicePublicKey: joined.member.devicePublicKey,
         },
-        { requirePeerTrust: false },
+        { requirePeerTrust: false, forcePendingApproval: true },
       ).catch((error) => {
         logStructured('p2p', 'warn', `member.joined apply failed: ${toErrorMessage(error, 'member.joined apply failed')}`)
       })
@@ -562,6 +583,9 @@ async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): 
       return
     case 'member.sync_response':
       handleMemberSyncResponse(peerDeviceId, message as SignedMemberSyncResponseWire)
+      return
+    case 'member.approved':
+      handleMemberApprovedWire(peerDeviceId, message)
       return
     default:
       return
@@ -616,6 +640,38 @@ export async function processP2pIncomingMessages(): Promise<void> {
   }
 }
 
+const REPLICATION_SETTLE_INTERVAL_MS = 200
+const REPLICATION_SETTLE_IDLE_ROUNDS = 6
+const REPLICATION_SETTLE_MAX_WAIT_MS = 8000
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+/** sync.hello 仅发送握手；轮询 drain 直至事件批次处理完毕或超时 */
+async function settleInboundReplication(workspaceId: string): Promise<void> {
+  const deadline = Date.now() + REPLICATION_SETTLE_MAX_WAIT_MS
+  let idleRounds = 0
+  let lastSeq = getWorkspaceLatestSeq(workspaceId)
+
+  while (Date.now() < deadline && idleRounds < REPLICATION_SETTLE_IDLE_ROUNDS) {
+    const seqBefore = getWorkspaceLatestSeq(workspaceId)
+    await processP2pIncomingMessages()
+    const seqAfter = getWorkspaceLatestSeq(workspaceId)
+
+    if (seqAfter === seqBefore && seqAfter === lastSeq) {
+      idleRounds += 1
+    } else {
+      idleRounds = 0
+      lastSeq = seqAfter
+    }
+
+    await sleepMs(REPLICATION_SETTLE_INTERVAL_MS)
+  }
+}
+
 export async function syncWithPeer(workspaceId: string, peerDeviceId: string): Promise<void> {
   assertRegisteredForP2p()
   const device = getP2pDeviceInfo()
@@ -667,7 +723,60 @@ async function catchUpFromMeshPeers(workspaceId: string): Promise<number> {
   return syncedPeers
 }
 
+async function ensureWorkspaceKeyForCatchUp(workspaceId: string): Promise<boolean> {
+  if (loadWorkspaceKey(workspaceId)) return true
+  loadAllWorkspaceKeys()
+  return Boolean(loadWorkspaceKey(workspaceId))
+}
+
+async function requestMissingEventsFromPeer(
+  workspaceId: string,
+  peerDeviceId: string,
+): Promise<void> {
+  if (!isPeerTrusted(workspaceId, peerDeviceId)) return
+
+  const sinceSeq = getWorkspaceLatestSeq(workspaceId)
+  await sendReplicationMessage(peerDeviceId, {
+    type: 'events.request',
+    workspaceId,
+    sinceSeq,
+  })
+}
+
+/** 群主在成员激活后主动推送尚未同步的历史事件（不依赖 sync.hello 往返） */
+export async function pushWorkspaceEventsToPeer(
+  workspaceId: string,
+  peerDeviceId: string,
+): Promise<number> {
+  assertRegisteredForP2p()
+  if (!isLocalWorkspaceOwner(workspaceId)) return 0
+  if (!isPeerTrusted(workspaceId, peerDeviceId)) return 0
+
+  try {
+    await ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
+  } catch (error) {
+    logStructured(
+      'p2p',
+      'warn',
+      `push events to ${peerDeviceId.slice(0, 8)} failed: ${toErrorMessage(error, 'connect failed')}`,
+    )
+    return 0
+  }
+
+  const cursor = getPeerCursor(workspaceId, peerDeviceId)
+  const sinceSeq = cursorLastSent(cursor)
+  const latestSeq = getWorkspaceLatestSeq(workspaceId)
+  if (sinceSeq >= latestSeq) return 0
+
+  return sendEventsBatch(peerDeviceId, workspaceId, sinceSeq)
+}
+
 async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string): Promise<void> {
+  if (!(await ensureWorkspaceKeyForCatchUp(workspaceId))) {
+    logStructured('p2p', 'warn', `joiner catch-up skipped: workspace key missing for ${workspaceId}`)
+    return
+  }
+
   const connections = await listP2pConnections()
   const ownerOnline = isOwnerPeerConnected(workspaceId, connections)
 
@@ -675,8 +784,9 @@ async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string)
     ensureOwnerPeerTrustedForSync(workspaceId, ownerDeviceId)
     await (isPeerConnected(ownerDeviceId)
       ? ensurePeerReadyForWorkspace(ownerDeviceId, workspaceId)
-      : ensureMemberConnectsToOwner(workspaceId))
+      : ensureMemberConnectsToOwner(workspaceId, { immediate: true }))
     await syncWithPeer(workspaceId, ownerDeviceId)
+    await requestMissingEventsFromPeer(workspaceId, ownerDeviceId)
   } else {
     const syncedPeers = await catchUpFromMeshPeers(workspaceId)
     if (syncedPeers === 0) {
@@ -684,11 +794,19 @@ async function runJoinerEventCatchUp(workspaceId: string, ownerDeviceId: string)
     }
   }
 
+  await settleInboundReplication(workspaceId)
+
   await syncMissingWorkspaceBlobs(workspaceId)
-  reconcileAgentSharedResources(workspaceId)
+  reconcileSharedResourcesAfterSync(workspaceId)
   await syncMissingSharedKnowledgeDocuments(workspaceId)
   await reconcileWorkspaceMemberMesh(workspaceId)
   reconcileGroupChatAfterSync(workspaceId)
+
+  broadcastP2pSyncCompleted({
+    workspaceId,
+    eventsApplied: 0,
+    filesFetched: 0,
+  })
 }
 
 export function scheduleJoinerEventCatchUp(workspaceId: string): void {
@@ -722,7 +840,10 @@ export function scheduleJoinerEventCatchUp(workspaceId: string): void {
   )
 }
 
-export async function awaitJoinerEventCatchUp(workspaceId: string): Promise<void> {
+export async function awaitJoinerEventCatchUp(
+  workspaceId: string,
+  options?: { force?: boolean },
+): Promise<void> {
   assertRegisteredForP2p()
   const workspace = getWorkspaceRepo().findById(workspaceId)
   if (!workspace) return
@@ -733,13 +854,13 @@ export async function awaitJoinerEventCatchUp(workspaceId: string): Promise<void
   const existing = joinerCatchUpInFlight.get(workspaceId)
   if (existing) {
     await existing
-    return
-  }
-
-  const pending = joinerCatchUpScheduled.get(workspaceId)
-  if (pending) {
-    clearTimeout(pending)
-    joinerCatchUpScheduled.delete(workspaceId)
+    if (!options?.force) return
+  } else {
+    const pending = joinerCatchUpScheduled.get(workspaceId)
+    if (pending) {
+      clearTimeout(pending)
+      joinerCatchUpScheduled.delete(workspaceId)
+    }
   }
 
   const promise = runJoinerEventCatchUp(workspaceId, workspace.ownerDeviceId)

@@ -17,10 +17,10 @@ export function GroupTrustDeviceModal({ prompt, error, onTrust, onReject }: Prop
   return (
     <div className="tm-modal-overlay">
       <div className="tm-confirm-dialog" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <h2 className="tm-confirm-dialog-title">确认对端设备</h2>
+        <h2 className="tm-confirm-dialog-title">确认新成员加入</h2>
         <p className="tm-confirm-dialog-message">
-          首次连接到设备 <strong>{prompt.displayName}</strong>（{prompt.deviceName}）。
-          请核对下方指纹是否与对方设备显示一致。
+          成员 <strong>{prompt.displayName}</strong>（{prompt.deviceName}）请求加入群组。
+          请核对下方设备指纹是否与对方显示一致，确认后才允许加入并同步数据。
         </p>
 
         {error && <div className="tm-error-bar">{error}</div>}

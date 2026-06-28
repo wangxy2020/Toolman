@@ -533,7 +533,8 @@ mod tests {
             "mcpId": "filesystem",
             "transport": "stdio",
             "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+            "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+            "files": ["mcp.manifest.json"]
         })
     }
 

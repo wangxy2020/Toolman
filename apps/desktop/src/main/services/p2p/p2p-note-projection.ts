@@ -3,11 +3,14 @@ import { P2pSharedResourceRepository } from '@toolman/db'
 import { buildP2pNoteShareMetadata } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getNoteById, upsertNoteItem } from '../notes-data.service'
+import { listWorkspaceEventsSince } from './p2p-event.service'
 import {
   applyLoroOplog,
   getTextFromLoroDoc,
   initLoroDocFromText,
 } from './loro-note-doc'
+
+import { findSharedResourceForProjection, resolveSharedResourceId } from './p2p-shared-resource-id'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -34,11 +37,17 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
     readPayloadString(event.payload, 'permission') === 'write' ? 'write' : 'read'
 
   const sharedRepo = getSharedResourceRepo()
-  const existing = sharedRepo.findById(noteId)
+  const existing = findSharedResourceForProjection(
+    sharedRepo,
+    event.workspaceId,
+    noteId,
+    'Note',
+  )
+  const resourceId = existing?.id ?? resolveSharedResourceId(sharedRepo, noteId, event.workspaceId)
   const metadataJson = buildP2pNoteShareMetadata({ notebookId, notebookName, title })
   if (!existing) {
     sharedRepo.create({
-      id: noteId,
+      id: resourceId,
       workspaceId: event.workspaceId,
       resourceType: 'Note',
       localResourceId: noteId,
@@ -49,10 +58,11 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
       createdAt: new Date(event.timestamp),
       updatedAt: new Date(event.timestamp),
     })
-  } else if (existing.status === 'active') {
+  } else {
     sharedRepo.update({
-      id: noteId,
+      id: resourceId,
       name: title,
+      status: 'active',
       permission,
       metadataJson,
     })
@@ -81,9 +91,14 @@ export function projectNoteDeletedEvent(event: WorkspaceEvent): void {
 
   const noteId = readPayloadString(event.payload, 'note_id') ?? event.resourceId
   const sharedRepo = getSharedResourceRepo()
-  const resource = sharedRepo.findById(noteId)
+  const resource = findSharedResourceForProjection(
+    sharedRepo,
+    event.workspaceId,
+    noteId,
+    'Note',
+  )
   if (resource) {
-    sharedRepo.update({ id: noteId, status: 'unshared' })
+    sharedRepo.update({ id: resource.id, status: 'unshared' })
   }
 }
 
@@ -150,4 +165,40 @@ export function ensureNoteLoroFromContent(
   content: string,
 ): void {
   initLoroDocFromText(workspaceId, noteId, content)
+}
+
+export function reconcileNoteSharedResources(workspaceId: string): void {
+  const terminalByNote = new Map<string, WorkspaceEvent>()
+
+  let sinceSeq = 0
+  while (true) {
+    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
+    if (batch.length === 0) break
+
+    for (const event of batch) {
+      sinceSeq = event.seq
+      if (event.resourceType !== 'Note') continue
+      if (
+        event.eventType !== 'Shared' &&
+        event.eventType !== 'Created' &&
+        event.eventType !== 'Deleted'
+      ) {
+        continue
+      }
+
+      const noteId =
+        typeof event.payload.note_id === 'string' ? event.payload.note_id : event.resourceId
+      terminalByNote.set(noteId, event)
+    }
+
+    if (batch.length < 200) break
+  }
+
+  for (const event of terminalByNote.values()) {
+    if (event.eventType === 'Deleted') {
+      projectNoteDeletedEvent(event)
+      continue
+    }
+    projectNoteSharedEvent(event)
+  }
 }

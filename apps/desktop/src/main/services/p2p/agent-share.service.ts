@@ -23,6 +23,7 @@ import {
   createAssistant,
   getAssistantRowIncludingDeleted,
   listAssistants,
+  resolveGroupMirrorImportAssistantId,
   restoreAssistantIfDeleted,
   updateAssistant,
 } from '../assistant.service'
@@ -306,11 +307,12 @@ export function importAgentPackageToWorkspace(
 ): { assistantId: string } {
   const parsed = AgentPackageSchema.parse(JSON.parse(packageJson))
   const parameters = packageToAssistantParameters(parsed.assistant)
+  const mirrorTargetId = resolveGroupMirrorImportAssistantId(existingAssistantId)
 
-  if (existingAssistantId) {
-    restoreAssistantIfDeleted(existingAssistantId)
+  if (mirrorTargetId) {
+    restoreAssistantIfDeleted(mirrorTargetId)
     const updated = updateAssistant({
-      id: existingAssistantId,
+      id: mirrorTargetId,
       name: parsed.assistant.name,
       systemPrompt: parsed.assistant.systemPrompt,
       modelId: normalizeAssistantModelId(parsed.assistant.modelId),
@@ -452,7 +454,7 @@ export async function shareP2pAgent(rawInput: unknown): Promise<{ sharedResource
   await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
-    resourceId: assistant.id,
+    resourceId: resource.id,
     operatorId: member.id,
     eventType: 'Shared',
     payload: {
@@ -511,7 +513,7 @@ export async function removeP2pAgentSessions(
     await appendP2pEvent({
       workspaceId: input.workspaceId,
       resourceType: 'Agent',
-      resourceId: assistantId,
+      resourceId: resource.id,
       operatorId: member.id,
       eventType: 'Deleted',
       payload: {
@@ -544,7 +546,7 @@ export async function removeP2pAgentSessions(
   await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
-    resourceId: assistantId,
+    resourceId: resource.id,
     operatorId: member.id,
     eventType: 'Shared',
     payload: {
@@ -615,7 +617,7 @@ export async function setP2pAgentSessionPermission(rawInput: unknown): Promise<{
   await appendP2pEvent({
     workspaceId: input.workspaceId,
     resourceType: 'Agent',
-    resourceId: assistantId,
+    resourceId: resource.id,
     operatorId: member.id,
     eventType: 'Updated',
     payload: {

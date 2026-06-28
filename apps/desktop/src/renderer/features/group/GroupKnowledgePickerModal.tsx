@@ -8,6 +8,7 @@ import {
 import type { GroupPickerGroup, GroupPickerSelection } from './group-resource-picker-types'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
 import { listShareableKnowledgeBases, buildSharedDocumentMap } from './group-knowledge-picker-utils'
+import { resolveGroupKnowledgeBaseLabel } from './group-knowledge-display'
 
 interface Props {
   knowledgeBases: KnowledgeBase[]
@@ -55,7 +56,7 @@ export function GroupKnowledgePickerModal({
 
       return {
         id: kb.id,
-        name: kb.name,
+        name: resolveGroupKnowledgeBaseLabel(kb, t),
         description: `${remainingCount} 篇可添加文档${
           kb.description?.trim() ? ` · ${kb.description.trim()}` : ''
         }`,
@@ -64,7 +65,7 @@ export function GroupKnowledgePickerModal({
         items: visibleItems,
       }
     })
-  }, [availableBases, loadedDocs, sharedDocumentMap])
+  }, [availableBases, loadedDocs, sharedDocumentMap, t])
 
   const loadDocuments = useCallback(
     async (knowledgeBaseId: string) => {

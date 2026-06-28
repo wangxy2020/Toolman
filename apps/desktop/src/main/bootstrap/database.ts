@@ -241,6 +241,44 @@ function ensureWorkspaceDefaults(database: ToolmanDatabase) {
       .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
       .run()
   }
+
+  const latestAssistant = database
+    .select()
+    .from(assistants)
+    .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
+    .get()
+
+  if (latestAssistant?.isBuiltin) {
+    let parametersJson = latestAssistant.parametersJson
+    try {
+      const params = JSON.parse(latestAssistant.parametersJson) as Record<string, unknown>
+      if (params.p2pGroupSharedMirror || params.p2pGroupProxy) {
+        delete params.p2pGroupSharedMirror
+        delete params.p2pGroupProxy
+        parametersJson = JSON.stringify(params)
+      }
+    } catch {
+      // keep existing parametersJson
+    }
+
+    if (
+      latestAssistant.deletedAt ||
+      latestAssistant.name !== '通用智能体' ||
+      parametersJson !== latestAssistant.parametersJson
+    ) {
+      database
+        .update(assistants)
+        .set({
+          deletedAt: null,
+          name: '通用智能体',
+          description: '默认 AI 对话智能体',
+          parametersJson,
+          updatedAt: now,
+        })
+        .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
+        .run()
+    }
+  }
 }
 
 function resolveDbPackageRoot(): string {

@@ -1,7 +1,9 @@
 import {
+  buildFederatedCatalogDeleteSignedPayload,
   buildFederatedCatalogSignedPayload,
   deriveDidFromPublicKeyB64,
   verifyDidMatchesPublicKey,
+  type FederatedCatalogDeleteWireMessage,
   type FederatedCatalogWireMessage,
   type FederatedResourceCatalogEntry,
 } from '@toolman/shared'
@@ -56,6 +58,51 @@ export function verifyFederatedCatalogWireMessage(message: FederatedCatalogWireM
       'community-federation',
       'warn',
       `catalog verify failed for ${message.entry.id}`,
+    )
+  }
+  return valid
+}
+
+export function signFederatedCatalogDeleteWireMessage(resourceId: string): FederatedCatalogDeleteWireMessage {
+  const device = getP2pDeviceInfo()
+  const signerDid = deriveDidFromPublicKeyB64(device.publicKey)
+  const at = Date.now()
+  const payload = buildFederatedCatalogDeleteSignedPayload(resourceId, at)
+  const signature = signDeviceMessage(payload)
+
+  return {
+    v: 1,
+    kind: 'delete',
+    resourceId,
+    signerDid,
+    publicKey: device.publicKey,
+    deviceId: device.deviceId,
+    at,
+    signature,
+  }
+}
+
+export function verifyFederatedCatalogDeleteWireMessage(
+  message: FederatedCatalogDeleteWireMessage,
+): boolean {
+  if (isDidBlocked(message.signerDid)) {
+    verifyFailures += 1
+    return false
+  }
+
+  if (!verifyDidMatchesPublicKey(message.signerDid, message.publicKey)) {
+    verifyFailures += 1
+    return false
+  }
+
+  const payload = buildFederatedCatalogDeleteSignedPayload(message.resourceId, message.at)
+  const valid = verifyDeviceMessage(payload, message.signature, message.publicKey)
+  if (!valid) {
+    verifyFailures += 1
+    recordDiagnosticEvent(
+      'community-federation',
+      'warn',
+      `catalog delete verify failed for ${message.resourceId}`,
     )
   }
   return valid

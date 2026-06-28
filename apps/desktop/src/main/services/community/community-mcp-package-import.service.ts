@@ -2,8 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 
-import { McpMarketManifestSchema } from './adapters/mcp-market.adapter'
-import { MCP_MANIFEST_FILENAME, slugifyMcpId } from './community-mcp-manifest.util'
+import { MCP_MANIFEST_FILENAME, slugifyMcpId, syncMcpManifestFiles } from './community-mcp-manifest.util'
 import {
   assertZipSource,
   isCommunityReadyPackage,
@@ -138,7 +137,13 @@ export async function prepareCommunityMcpPackage(
     tryReturnReadyPackage(packageRoot) {
       if (!isCommunityReadyPackage(packageRoot, MCP_MANIFEST_FILENAME)) return null
       try {
-        McpMarketManifestSchema.parse(readJsonFile(join(packageRoot, MCP_MANIFEST_FILENAME)))
+        const existing = readJsonFile<Record<string, unknown>>(join(packageRoot, MCP_MANIFEST_FILENAME))
+        if (!existing) return null
+        const hasFiles =
+          Array.isArray(existing.files) &&
+          existing.files.some((item) => typeof item === 'string' && item.trim().length > 0)
+        if (!hasFiles) return null
+        syncMcpManifestFiles(packageRoot, existing)
         return {
           packagePath: sourcePath,
           normalized: false,
@@ -155,18 +160,18 @@ export async function prepareCommunityMcpPackage(
           throw new Error('mcp.manifest.json 无法解析，请检查 JSON 格式')
         }
         return {
-          manifest: McpMarketManifestSchema.parse(existing) as Record<string, unknown>,
+          manifest: syncMcpManifestFiles(packageRoot, existing as Record<string, unknown>),
           generated: false,
-          messageWhenNormalized: '已补全 SHA256SUMS 并转换为 .toolman-mcp 社区包。',
+          messageWhenNormalized: '已补全 manifest files 与 SHA256SUMS，并转换为 .toolman-mcp 社区包。',
           messageWhenGenerated:
             '已从外部 MCP zip 自动生成 mcp.manifest.json 与 SHA256SUMS，并转换为 .toolman-mcp 社区包。',
         }
       }
 
       return {
-        manifest: inferManifest(packageRoot, title),
+        manifest: syncMcpManifestFiles(packageRoot, inferManifest(packageRoot, title)),
         generated: true,
-        messageWhenNormalized: '已补全 SHA256SUMS 并转换为 .toolman-mcp 社区包。',
+        messageWhenNormalized: '已补全 manifest files 与 SHA256SUMS，并转换为 .toolman-mcp 社区包。',
         messageWhenGenerated:
           '已从外部 MCP zip 自动生成 mcp.manifest.json 与 SHA256SUMS，并转换为 .toolman-mcp 社区包。',
       }

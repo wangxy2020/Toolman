@@ -21,7 +21,8 @@ import { GroupSettingsModal } from './GroupSettingsModal'
 import { GroupMemberLimitWarningModal } from './GroupMemberLimitWarningModal'
 import { useGroupMemberLimitWarning } from './useGroupMemberLimitWarning'
 import { GroupPageStatusBar } from './GroupPageStatusBar'
-import { GroupPageStatusProvider } from './group-page-status'
+import { GroupJoinApprovedModal } from './GroupJoinApprovedModal'
+import { GroupPageStatusProvider, useClearGroupPanelErrorsOnMemberActivation } from './group-page-status'
 import { useP2pWorkspace } from './useP2pWorkspace'
 import { useP2pEvents } from './useP2pEvents'
 import { useP2pSyncStatus } from './useP2pSyncStatus'
@@ -54,6 +55,11 @@ const GROUP_NESTED_SCROLL_ACTIONS = new Set([
   'notes',
   'workflow',
 ])
+
+function GroupPagePanelErrorReset({ workspaceId }: { workspaceId: string | null }) {
+  useClearGroupPanelErrorsOnMemberActivation(workspaceId)
+  return null
+}
 
 interface Props {
   workspace: P2pWorkspace | null
@@ -257,7 +263,16 @@ export function GroupPage({
           />
         )
       case 'workflow':
-        return <GroupWorkflowPanel workspaceName={workspaceName} />
+        return (
+          <GroupWorkflowPanel
+            p2pWorkspaceId={workspace.id}
+            workspaceName={workspaceName}
+            sourceWorkspaceId={sourceWorkspaceId}
+            canManageGroupResources={detail.canManageMembers}
+            canWriteWorkspace={detail.canWriteWorkspace}
+            selfMemberId={detail.selfMember?.id ?? null}
+          />
+        )
       default:
         return null
     }
@@ -350,6 +365,7 @@ export function GroupPage({
       ) : null}
 
       <GroupPageStatusProvider>
+        <GroupPagePanelErrorReset workspaceId={workspace?.id ?? null} />
         <div
           className={[
             'tm-module-content',
@@ -373,6 +389,7 @@ export function GroupPage({
             syncError={syncStatus.error}
             showSyncIndicator={syncStatus.showSyncIndicator}
             showDegraded={syncStatus.isDegraded && !detail.isOwner && !syncStatus.error}
+            isMembershipPending={detail.isMembershipPending}
             lastSyncAt={syncStatus.lastSyncAt}
           />
         ) : null}
@@ -412,6 +429,13 @@ export function GroupPage({
           maxMembers={displayWorkspace.maxMembers}
           onClose={memberLimitWarning.dismiss}
           onUpgrade={onUpgradeMembership}
+        />
+      ) : null}
+
+      {detail.joinApprovedNotice ? (
+        <GroupJoinApprovedModal
+          workspaceName={translateGroupName(detail.joinApprovedNotice.workspaceName, t)}
+          onClose={detail.dismissJoinApprovedNotice}
         />
       ) : null}
     </main>

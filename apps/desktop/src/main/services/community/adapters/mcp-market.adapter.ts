@@ -22,6 +22,7 @@ export const McpMarketManifestSchema = z.object({
   tools: z.array(McpToolManifestSchema).optional(),
   templates: z.array(McpTemplateSchema).optional(),
   configSchema: z.record(z.unknown()).optional(),
+  files: z.array(z.string().min(1)).min(1),
 })
 
 export type McpMarketManifest = z.infer<typeof McpMarketManifestSchema>

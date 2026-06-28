@@ -23,6 +23,19 @@ interface FederatedCatalogStore {
 interface StoredFederatedCatalogEntry extends FederatedResourceCatalogEntry {
   source?: 'p2p' | 'hub-peer'
   peerHubUrl?: string
+  /** How the row entered the local catalog. CID announce fallbacks are not marketplace listings. */
+  origin?: 'catalog' | 'hub-peer' | 'cid-fallback'
+}
+
+function isLegacyCidFallbackEntry(entry: StoredFederatedCatalogEntry): boolean {
+  if (entry.origin === 'catalog' || entry.origin === 'hub-peer') return false
+  if (entry.origin === 'cid-fallback') return true
+  const title = entry.title.trim()
+  return entry.description === '' && (title === entry.id || /^[0-9a-f-]{36}$/i.test(title))
+}
+
+function isMarketplaceFederatedEntry(entry: StoredFederatedCatalogEntry): boolean {
+  return !isLegacyCidFallbackEntry(entry)
 }
 
 let cache: Map<string, StoredFederatedCatalogEntry> | null = null
@@ -47,16 +60,26 @@ function loadStore(): Map<string, StoredFederatedCatalogEntry> {
 
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as FederatedCatalogStore
+    let removedLegacy = false
     for (const entry of parsed.entries ?? []) {
       const validated = FederatedResourceCatalogEntrySchema.safeParse(entry)
       if (validated.success) {
         const stored = entry as StoredFederatedCatalogEntry
-        map.set(validated.data.id, {
+        const normalized: StoredFederatedCatalogEntry = {
           ...validated.data,
           source: stored.source,
           peerHubUrl: stored.peerHubUrl,
-        })
+          origin: stored.origin,
+        }
+        if (!isMarketplaceFederatedEntry(normalized)) {
+          removedLegacy = true
+          continue
+        }
+        map.set(validated.data.id, normalized)
       }
+    }
+    if (removedLegacy) {
+      persistStore(map)
     }
   } catch {
     // ignore corrupt catalog file
@@ -76,9 +99,17 @@ function persistStore(map: Map<string, StoredFederatedCatalogEntry>): void {
 
 export function upsertFederatedCatalogEntry(
   entry: FederatedResourceCatalogEntry,
-  options?: { source?: 'p2p' | 'hub-peer'; peerHubUrl?: string },
+  options?: {
+    source?: 'p2p' | 'hub-peer'
+    peerHubUrl?: string
+    origin?: StoredFederatedCatalogEntry['origin']
+  },
 ): boolean {
   const validated = FederatedResourceCatalogEntrySchema.parse(entry)
+  const origin = options?.origin ?? (options?.source === 'hub-peer' ? 'hub-peer' : 'catalog')
+  if (origin === 'cid-fallback') {
+    return false
+  }
   const map = loadStore()
   const existing = map.get(validated.id)
   if (existing && existing.updatedAt > validated.updatedAt) {
@@ -89,6 +120,7 @@ export function upsertFederatedCatalogEntry(
     ...validated,
     source: options?.source ?? existing?.source ?? 'p2p',
     peerHubUrl: options?.peerHubUrl ?? existing?.peerHubUrl,
+    origin,
   })
   persistStore(map)
   if ((options?.source ?? existing?.source ?? 'p2p') === 'p2p') {
@@ -119,32 +151,11 @@ export function buildFederatedCatalogEntryFromResource(
 }
 
 export function upsertFederatedCatalogFromCidManifest(
-  manifest: CidPackageManifest,
-  signerDid: string,
+  _manifest: CidPackageManifest,
+  _signerDid: string,
 ): boolean {
-  if (!manifest.resourceId || !manifest.resourceType) return false
-
-  const now = manifest.at ?? Date.now()
-  const entry = FederatedResourceCatalogEntrySchema.parse({
-    id: manifest.resourceId,
-    title: manifest.name,
-    description: '',
-    author: {
-      id: manifest.deviceId ?? '00000000-0000-0000-0000-000000000001',
-      displayName: signerDid.slice(0, 24),
-    },
-    version: manifest.version,
-    tags: [],
-    category: '',
-    resourceType: manifest.resourceType as CommunityResourceType,
-    resourceSize: manifest.sizeBytes,
-    rootCid: manifest.rootCid,
-    license: '',
-    createdAt: now,
-    updatedAt: now,
-  })
-
-  return upsertFederatedCatalogEntry(entry)
+  // CID announce is for package distribution only — never add marketplace list rows.
+  return false
 }
 
 function toCommunityResourceItem(entry: StoredFederatedCatalogEntry): CommunityResourceItem {
@@ -213,6 +224,7 @@ export function listFederatedCatalogResources(
 ): CommunityResourceItem[] {
   const map = loadStore()
   let items = [...map.values()]
+    .filter((entry) => isMarketplaceFederatedEntry(entry))
     .filter((entry) => matchesQuery(entry, input))
     .map(toCommunityResourceItem)
 
@@ -247,6 +259,19 @@ export function mergeHubAndFederatedResourceLists(
   }
 
   return [...merged.values()]
+}
+
+export function hasFederatedCatalogEntry(id: string): boolean {
+  return loadStore().has(id)
+}
+
+export function removeFederatedCatalogEntry(id: string): boolean {
+  const map = loadStore()
+  if (!map.has(id)) return false
+  map.delete(id)
+  persistStore(map)
+  broadcastFederatedCatalogUpdate({ action: 'delete', resourceId: id })
+  return true
 }
 
 export function getFederatedCatalogStats() {

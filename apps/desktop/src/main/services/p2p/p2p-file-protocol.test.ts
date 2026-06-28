@@ -39,7 +39,16 @@ describe('p2p-file-protocol', () => {
     expect(parsed).toMatchObject(message)
   })
 
-  it('returns null for invalid payloads', () => {
-    expect(parseFileChannelMessage(Buffer.from('{'))).toBeNull()
+  it('keeps encoded chunk messages under the SCTP size limit', () => {
+    const chunk = Buffer.alloc(P2P_BLOB_CHUNK_SIZE, 0xab)
+    const encoded = encodeFileChannelMessage({
+      type: 'blob.chunk',
+      requestId: '00000000-0000-4000-8000-000000000001',
+      contentHash: 'c'.repeat(64),
+      index: 0,
+      totalChunks: 99,
+      data: chunk.toString('base64'),
+    })
+    expect(encoded.byteLength).toBeLessThan(65_536)
   })
 })

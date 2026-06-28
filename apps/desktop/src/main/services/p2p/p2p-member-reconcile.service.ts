@@ -19,7 +19,7 @@ import { checkReplayGuard } from './p2p-replay-guard.service'
 import {
   getMemberRepo,
   getWorkspaceRepo,
-  shouldInitiatePeerConnection,
+  resolveSharedMembershipWorkspaceId,
 } from './p2p-member-shared'
 import { connectToOwnerPeer, applyRemoteMemberJoin } from './p2p-member-join.service'
 import { loadWorkspaceKey } from './p2p-workspace-key.store'
@@ -122,7 +122,7 @@ export async function runOwnerPeerReconcileTick(): Promise<void> {
 
 export async function runMemberOwnerConnectTick(options?: { immediate?: boolean }): Promise<void> {
   const device = getP2pDeviceInfo()
-  const memberships = getMemberRepo().listActiveMembershipsByDevice(device.deviceId)
+  const memberships = getMemberRepo().listVisibleMembershipsByDevice(device.deviceId)
   const workspaceRepo = getWorkspaceRepo()
 
   for (const membership of memberships) {
@@ -158,45 +158,53 @@ async function reconcileOwnerPeerConnections(): Promise<void> {
 
   const peerConnectAttempted = new Set<string>()
 
+  const attemptOwnerConnect = async (workspaceId: string, peerDeviceId: string, context: string) => {
+    if (peerDeviceId === device.deviceId) return
+    if (peerConnectAttempted.has(peerDeviceId)) return
+    if (p2pConnectionService.isPeerConnected(peerDeviceId)) return
+    if (!isP2pPeerDiscoverableOnline(peerDeviceId)) return
+    peerConnectAttempted.add(peerDeviceId)
+    try {
+      await p2pConnectionService.resetStalePeerConnection(peerDeviceId)
+      await p2pConnectionService.ensurePeerReadyForWorkspace(peerDeviceId, workspaceId)
+    } catch (error) {
+      const message = toErrorMessage(error, context)
+      logStructured('p2p', 'warn', `${context} for ${peerDeviceId.slice(0, 8)}: ${message}`)
+    }
+  }
+
   for (const workspace of workspaces) {
     const activeMemberDeviceIds = new Set(
       getMemberRepo()
         .listByWorkspace(workspace.id, 'active')
         .map((item) => item.deviceId),
     )
+    const invitedMemberDeviceIds = new Set(
+      getMemberRepo()
+        .listByWorkspace(workspace.id, 'invited')
+        .map((item) => item.deviceId),
+    )
 
     for (const member of getMemberRepo().listByWorkspace(workspace.id, 'active')) {
-      if (member.deviceId === device.deviceId) continue
-      if (!shouldInitiatePeerConnection(device.deviceId, member.deviceId)) continue
-      if (peerConnectAttempted.has(member.deviceId)) continue
-      if (p2pConnectionService.isPeerConnected(member.deviceId)) continue
-      if (!isP2pPeerDiscoverableOnline(member.deviceId)) continue
-      peerConnectAttempted.add(member.deviceId)
-      try {
-        await p2pConnectionService.resetStalePeerConnection(member.deviceId)
-        await p2pConnectionService.ensurePeerReadyForWorkspace(member.deviceId, workspace.id)
-      } catch (error) {
-        const message = toErrorMessage(error, 'connect active member failed')
-        logStructured('p2p', 'warn', `owner connect to member ${member.deviceId} failed: ${message}`)
-      }
+      await attemptOwnerConnect(workspace.id, member.deviceId, 'owner connect to active member failed')
+    }
+
+    for (const member of getMemberRepo().listByWorkspace(workspace.id, 'invited')) {
+      await attemptOwnerConnect(workspace.id, member.deviceId, 'owner connect to invited member failed')
     }
 
     for (const node of listP2pDiscoveredNodes(true)) {
       if (node.deviceId === device.deviceId || activeMemberDeviceIds.has(node.deviceId)) {
         continue
       }
-      if (peerConnectAttempted.has(node.deviceId)) continue
-      if (p2pConnectionService.isPeerConnected(node.deviceId)) continue
-      if (!shouldInitiatePeerConnection(device.deviceId, node.deviceId)) continue
-      if (!isP2pPeerDiscoverableOnline(node.deviceId)) continue
-      peerConnectAttempted.add(node.deviceId)
-      try {
-        await p2pConnectionService.resetStalePeerConnection(node.deviceId)
-        await p2pConnectionService.ensurePeerReadyForWorkspace(node.deviceId, workspace.id)
-      } catch (error) {
-        const message = toErrorMessage(error, 'connect peer failed')
-        logStructured('p2p', 'warn', `owner reconcile connect failed for ${node.deviceId}: ${message}`)
+      if (invitedMemberDeviceIds.has(node.deviceId)) {
+        continue
       }
+      const sharedWorkspaceId = resolveSharedMembershipWorkspaceId(node.deviceId)
+      if (sharedWorkspaceId && sharedWorkspaceId !== workspace.id) {
+        continue
+      }
+      await attemptOwnerConnect(workspace.id, node.deviceId, 'owner reconcile connect failed')
     }
   }
 
@@ -246,7 +254,7 @@ export async function handleMemberSyncRequest(
     scope: `member-sync-req:${message.workspaceId}`,
     signerId: peerDeviceId,
     at: message.at,
-    payloadHash: String(message.at),
+    payloadHash: message.signature,
   })
   if (!replay.ok) {
     logStructured('p2p', 'warn', `dropped replay member.sync_request from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`)
@@ -260,7 +268,10 @@ export async function handleMemberSyncRequest(
 
   const device = getP2pDeviceInfo()
   const memberRow = getMemberRepo().findByWorkspaceAndDevice(message.workspaceId, device.deviceId)
-  if (!memberRow || memberRow.status !== 'active') {
+  if (
+    !memberRow ||
+    (memberRow.status !== 'active' && memberRow.status !== 'invited')
+  ) {
     return
   }
 
@@ -315,13 +326,13 @@ export function handleMemberSyncResponse(
         deviceId: message.member.deviceId,
         displayName: message.member.displayName,
         role: message.member.role as P2pMember['role'],
-        status: 'active',
+        status: 'invited',
         online: true,
       },
       peerDeviceId,
       remoteDevicePublicKey: message.member.devicePublicKey,
     },
-    { requirePeerTrust: false },
+    { requirePeerTrust: false, allowReactivation: false, forcePendingApproval: true },
   ).catch((error) => {
     logStructured('p2p', 'warn', `member.sync_response apply failed: ${toErrorMessage(error, 'member.sync_response apply failed')}`)
   })

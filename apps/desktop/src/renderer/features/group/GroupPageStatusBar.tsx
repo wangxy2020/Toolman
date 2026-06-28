@@ -8,6 +8,7 @@ interface Props {
   syncError: string | null
   showSyncIndicator: boolean
   showDegraded: boolean
+  isMembershipPending?: boolean
   lastSyncAt?: number
 }
 
@@ -20,6 +21,7 @@ export function GroupPageStatusBar({
   syncError,
   showSyncIndicator,
   showDegraded,
+  isMembershipPending = false,
   lastSyncAt,
 }: Props) {
   const { t } = useI18n()
@@ -30,8 +32,11 @@ export function GroupPageStatusBar({
     if (syncError) {
       return { tone: 'error' as const, text: t('groupPage.status.syncError', { message: syncError }) }
     }
+    if (isMembershipPending) {
+      return { tone: 'warning' as const, text: t('groupPage.status.pendingApproval') }
+    }
     return null
-  }, [syncError])
+  }, [isMembershipPending, syncError, t])
 
   const fallback = useMemo(() => {
     if (hasPanelStatus) return null

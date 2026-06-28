@@ -28,6 +28,29 @@ export function getActiveWorkspaceMember(workspaceId: string): P2pWorkspaceMembe
   return member
 }
 
+function isVisibleMembershipStatus(status: P2pWorkspaceMemberRow['status']): boolean {
+  return status === 'active' || status === 'invited'
+}
+
+export function getWorkspaceMembership(workspaceId: string): P2pWorkspaceMemberRow | null {
+  const device = getP2pDeviceInfo()
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, device.deviceId)
+  if (!member || !isVisibleMembershipStatus(member.status)) {
+    return null
+  }
+  return member
+}
+
+/** 读取群信息 / 成员列表 / 接收同步事件（含待审批的 invited） */
+export function assertWorkspaceMembershipAccess(workspaceId: string): P2pWorkspaceMemberRow {
+  const member = getWorkspaceMembership(workspaceId)
+  if (!member) {
+    throw new P2pPermissionError('无权访问该群组')
+  }
+  return member
+}
+
+/** 写入、共享资源列表、聊天发送等（仅 active） */
 export function assertWorkspaceMemberAccess(workspaceId: string): P2pWorkspaceMemberRow {
   return getActiveWorkspaceMember(workspaceId)
 }

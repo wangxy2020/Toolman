@@ -131,7 +131,7 @@ export function NotesPage({
             key={note.id}
             note={note}
             notes={notes}
-            locked={note.locked}
+            locked={note.locked || Boolean(note.groupPermissionLocked)}
             editorSettings={editorSettings}
             messageSettings={messageSettings}
             onUpdate={(patch) => onUpdateNote(note.id, patch)}

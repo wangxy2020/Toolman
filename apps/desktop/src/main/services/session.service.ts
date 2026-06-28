@@ -15,6 +15,7 @@ import { assistants } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 import { toIpcSession } from '../mappers/chat'
+import { inheritGroupProxySessionMetadata } from './p2p/p2p-group-agent-proxy.service'
 
 export function createSession(input: unknown): Session {
   const data = SessionCreateInputSchema.parse(input)
@@ -37,7 +38,7 @@ export function createSession(input: unknown): Session {
     assistantId: assistantId ?? null,
     title: data.title,
     type: data.type,
-    metadata: data.metadata,
+    metadata: data.metadata ?? inheritGroupProxySessionMetadata(data.workspaceId, assistantId),
   })
 
   return toIpcSession(sessions.findRowById(row.id)!)

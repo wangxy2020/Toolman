@@ -11,7 +11,11 @@ import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupSharedAgentSection } from './GroupSharedAgentSection'
 import { agentSelectionKey, parseAgentSelectionKey } from './group-agent-selection'
-import { getAgentSessionPermission, isShareableGroupAgentSource } from './group-agent-utils'
+import {
+  getAgentSessionPermission,
+  isShareableGroupAgentSource,
+  resolveGroupAgentPanelTitle,
+} from './group-agent-utils'
 import type { OpenGroupAgentSessionRequest } from './group-agent-open'
 import { useP2pAgents } from './useP2pAgents'
 import { useRegisterGroupPanelError } from './group-page-status'
@@ -51,6 +55,7 @@ export function GroupAgentsPanel({
 }: Props) {
   const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
+  const [openingPicker, setOpeningPicker] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [removingResourceId, setRemovingResourceId] = useState<string | null>(null)
   const [removingSessionId, setRemovingSessionId] = useState<string | null>(null)
@@ -105,12 +110,29 @@ export function GroupAgentsPanel({
           (item) => (item.localResourceId ?? item.id) === assistant.id,
         )
         if (!resource) return true
-        if (!resource.sharedSessionIds) return false
-        const assistantSessions = sessions.filter((item) => item.assistantId === assistant.id)
-        return assistantSessions.some((session) => !resource.sharedSessionIds!.includes(session.id))
+        const sharedSessionIds = resource.sharedSessionIds
+        if (!sharedSessionIds || sharedSessionIds.length === 0) {
+          return false
+        }
+        return true
       }),
-    [p2pAgents.sharedResources, sessions, shareableAssistants],
+    [p2pAgents.sharedResources, shareableAssistants],
   )
+
+  const addAgentsDisabledReason = useMemo(() => {
+    if (p2pAgents.sharing) return null
+    if (!canWriteWorkspace) return 'readonly' as const
+    if (!sourceWorkspaceId) return 'workspace' as const
+    if (shareableAssistants.length === 0) return 'noAgents' as const
+    if (!hasShareableAgents) return 'allShared' as const
+    return null
+  }, [
+    canWriteWorkspace,
+    hasShareableAgents,
+    p2pAgents.sharing,
+    shareableAssistants.length,
+    sourceWorkspaceId,
+  ])
 
   const canDeleteResource = useCallback(
     (resource: { sharedBy: string }) =>
@@ -368,11 +390,11 @@ export function GroupAgentsPanel({
       const isOwner = selfMemberId != null && resource.sharedBy === selfMemberId
       return {
         p2pWorkspaceId,
-        resourceId: resource.id,
+        resourceId: resource.localResourceId ?? resource.id,
         sourceSessionId: session.id,
         sessionTitle: session.title,
         groupName: workspaceName,
-        sharedAgentName: resource.name,
+        sharedAgentName: resolveGroupAgentPanelTitle(resource, assistant),
         permission: getAgentSessionPermission(resource, session.id),
         ownerMemberId: resource.sharedBy,
         sourceAssistantId: assistant?.id ?? resource.localResourceId ?? resource.id,
@@ -405,21 +427,43 @@ export function GroupAgentsPanel({
           type="button"
           className="tm-kb-file-dropzone"
           disabled={
+            openingPicker ||
             p2pAgents.sharing ||
             !canWriteWorkspace ||
             !sourceWorkspaceId ||
             !hasShareableAgents
           }
-          onClick={() => setShowPicker(true)}
+          onClick={() => {
+            void (async () => {
+              setOpeningPicker(true)
+              try {
+                await onReloadAssistants?.()
+                setShowPicker(true)
+              } finally {
+                setOpeningPicker(false)
+              }
+            })()
+          }}
         >
           <span className="tm-kb-file-dropzone-title">
-            {p2pAgents.sharing
+            {openingPicker || p2pAgents.sharing
               ? t('groupPage.panels.adding', { type: t('groupPage.panels.types.agents') })
               : t('groupPage.panels.clickAdd', { type: t('groupPage.panels.types.agents') })}
           </span>
           <span className="tm-kb-file-dropzone-hint">
-            {t('groupPage.panels.pickHint', { type: t('groupPage.panels.types.agents') })}
+            {addAgentsDisabledReason === 'noAgents'
+              ? t('groupPage.panels.addDisabledNoAgents')
+              : addAgentsDisabledReason === 'allShared'
+                ? t('groupPage.panels.addDisabledAllShared')
+                : addAgentsDisabledReason === 'readonly'
+                  ? t('groupPage.panels.addDisabledReadonly')
+                  : t('groupPage.panels.pickHint', { type: t('groupPage.panels.types.agents') })}
           </span>
+          {addAgentsDisabledReason === 'noAgents' ? (
+            <span className="tm-kb-file-dropzone-hint">
+              {t('groupPage.panels.sharePermissionHint')}
+            </span>
+          ) : null}
         </button>
 
         {p2pAgents.loading && p2pAgents.sharedResources.length === 0 ? (
@@ -440,6 +484,7 @@ export function GroupAgentsPanel({
                   resource={resource}
                   workspaceName={workspaceName}
                   assistant={assistant}
+                  isSharer={selfMemberId != null && resource.sharedBy === selfMemberId}
                   sessions={sessions}
                   selectedKeys={selectedKeys}
                   canDelete={canDeleteResource(resource)}
@@ -498,6 +543,7 @@ export function GroupAgentsPanel({
           assistants={shareableAssistants}
           sessions={sessions}
           sharedResources={p2pAgents.sharedResources}
+          sourceWorkspaceId={sourceWorkspaceId}
           onClose={() => setShowPicker(false)}
           onConfirm={handleAddAgents}
         />

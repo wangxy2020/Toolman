@@ -11,7 +11,7 @@
     "build:libp2p": "bash ../../scripts/build-libp2p-native.sh",
     "build:community-hub": "bash ../../scripts/build-community-hub.sh",
     "predev": "node ../../scripts/write-build-provenance.mjs && pnpm build:p2p && pnpm build:libp2p && pnpm build:community-hub && pnpm --filter @toolman/desktop^... build",
-    "dev": "electron-vite dev",
+    "dev": "TOOLMAN_CONSOLE_LOG_LEVEL=warn TOOLMAN_VITE_LOG_LEVEL=warn electron-vite dev --logLevel warn",
     "build": "electron-vite build",
     "dist": "pnpm build && pnpm exec electron-builder --config electron-builder.yml --publish never",
     "dist:release": "bash ../../scripts/build-desktop-release.sh",

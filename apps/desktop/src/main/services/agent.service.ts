@@ -21,7 +21,7 @@ import {
   isDefaultSessionTitle,
   type ContentBlock,
 } from '@toolman/shared'
-import { createMessageRepository, createSessionRepository, runInTransaction } from '@toolman/db'
+import { createMessageRepository, createSessionRepository, runInTransaction, type SessionRow } from '@toolman/db'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 import { getDatabase } from '../bootstrap/database'
 import { toIpcMessage } from '../mappers/chat'
@@ -145,6 +145,59 @@ export function listMessages(input: unknown) {
   })
 
   return { items: rows.map(toIpcMessage) }
+}
+
+function resolveCallableGroupProxyMeta(
+  session: SessionRow,
+  assistant: ReturnType<typeof getAssistantRow>,
+) {
+  const proxyMeta = resolveProxyMetaForSend(session.metadataJson, assistant)
+  if (proxyMeta) {
+    persistRepairedSessionProxyMetadata(session.id, session.metadataJson, proxyMeta)
+  } else if (assistant?.parameters?.p2pGroupProxy) {
+    logStructured(
+      'p2p',
+      'warn',
+      `group proxy assistant without relay metadata: sessionId=${session.id} assistantId=${assistant.id}`,
+    )
+  }
+  return proxyMeta?.permission === 'callable' ? proxyMeta : null
+}
+
+function dispatchGroupProxyRelay(input: {
+  proxyMeta: NonNullable<ReturnType<typeof resolveCallableGroupProxyMeta>>
+  sessionId: string
+  contentBlocks: ContentBlock[]
+  modelIds: string[]
+  userMessageId: string
+  assistantMessageId: string
+}): void {
+  void relayProxySendMessage({
+    proxy: input.proxyMeta,
+    sessionId: input.sessionId,
+    contentBlocks: input.contentBlocks,
+    modelIds: input.modelIds,
+    memberUserMessageId: input.userMessageId,
+    memberAssistantMessageId: input.assistantMessageId,
+  }).catch((error) => {
+    const errMessage = toErrorMessage(error, '发送消息失败')
+    const ipcError = {
+      code: 'INTERNAL_ERROR' as const,
+      message: errMessage,
+      retryable: true,
+    }
+    getMessageRepository().update(input.assistantMessageId, {
+      status: 'failed',
+      error: ipcError,
+    })
+    broadcastStreamEvent({
+      type: 'message.error',
+      sessionId: input.sessionId,
+      messageId: input.assistantMessageId,
+      error: ipcError,
+      timestamp: Date.now(),
+    })
+  })
 }
 
 export async function sendMessage(input: unknown) {
@@ -395,6 +448,23 @@ export async function regenerateMessage(input: unknown) {
     sessions.touch(data.sessionId, modelIds.length - deleteIds.length)
   })
 
+  const proxyMeta = resolveCallableGroupProxyMeta(session, assistant)
+  if (proxyMeta) {
+    dispatchGroupProxyRelay({
+      proxyMeta,
+      sessionId: data.sessionId,
+      contentBlocks: userContentBlocks,
+      modelIds,
+      userMessageId: userRow.id,
+      assistantMessageId: assistantMessageIds[0]!,
+    })
+    return {
+      userMessageId: userRow.id,
+      assistantMessageIds,
+      userContentBlocks,
+    }
+  }
+
   for (let i = 0; i < modelIds.length; i++) {
     const assistantMessageId = assistantMessageIds[i]!
     const modelId = modelIds[i]!
@@ -500,6 +570,23 @@ export async function editUserMessage(input: unknown) {
 
     sessions.touch(data.sessionId, modelIds.length - deleteIds.length)
   })
+
+  const proxyMeta = resolveCallableGroupProxyMeta(session, assistant)
+  if (proxyMeta) {
+    dispatchGroupProxyRelay({
+      proxyMeta,
+      sessionId: data.sessionId,
+      contentBlocks: stagedBlocks,
+      modelIds,
+      userMessageId: userRow.id,
+      assistantMessageId: assistantMessageIds[0]!,
+    })
+    return {
+      userMessageId: userRow.id,
+      assistantMessageIds,
+      userContentBlocks: stagedBlocks,
+    }
+  }
 
   for (let i = 0; i < modelIds.length; i++) {
     const assistantMessageId = assistantMessageIds[i]!

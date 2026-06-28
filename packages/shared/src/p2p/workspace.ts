@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { TimestampSchema, UuidSchema } from '../ipc/base.js'
+import { KnowledgeBaseKindSchema } from '../ipc/knowledge.js'
 import {
   P2pConnectionModeSchema,
   P2pConnectionStateSchema,
@@ -66,6 +67,7 @@ export const P2pSharedResourceSchema = z.object({
     .optional(),
   sharedModelId: z.string().min(1).optional(),
   sourceWorkspaceId: UuidSchema.optional(),
+  sourceKbKind: KnowledgeBaseKindSchema.optional(),
   notebookId: z.string().min(1).optional(),
   notebookName: z.string().min(1).optional(),
   createdAt: TimestampSchema,

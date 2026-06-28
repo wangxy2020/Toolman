@@ -201,6 +201,7 @@ export enum IpcChannel {
   P2pMemberRemove = 'p2p:member:remove',
   P2pMemberUpdateRole = 'p2p:member:update-role',
   P2pMemberTrustDevice = 'p2p:member:trust-device',
+  P2pMemberListPendingTrustPrompts = 'p2p:member:list-pending-trust-prompts',
 
   P2pSyncStart = 'p2p:sync:start',
   P2pSyncStop = 'p2p:sync:stop',
@@ -238,6 +239,9 @@ export enum IpcChannel {
   P2pNoteSetPermission = 'p2p:note:set-permission',
   P2pNoteListShareTargets = 'p2p:note:list-share-targets',
 
+  P2pWorkflowShare = 'p2p:workflow:share',
+  P2pWorkflowListLocal = 'p2p:workflow:list-local',
+
   CommunityHubHealth = 'community:hub:health',
   CommunityHubStatus = 'community:hub:status',
   CommunityHubConfigGet = 'community:hub:config:get',
@@ -263,6 +267,7 @@ export enum IpcChannel {
   CommunityMcpPackagePrepare = 'community:mcp-package:prepare',
   CommunitySkillPackagePrepare = 'community:skill-package:prepare',
   CommunityWorkflowPackagePrepare = 'community:workflow-package:prepare',
+  CommunityKnowledgePackagePrepare = 'community:knowledge-package:prepare',
   CommunityResourcePatch = 'community:resource:patch',
   CommunityResourcePackageReviewOpen = 'community:resource:package-review-open',
   CommunityResourcePackageReviewDownload = 'community:resource:package-review-download',

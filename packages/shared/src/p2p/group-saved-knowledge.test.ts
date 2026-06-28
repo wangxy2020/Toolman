@@ -8,21 +8,26 @@ import {
 } from './group-saved-knowledge.js'
 
 describe('group-saved-knowledge', () => {
-  it('normalizes group metadata without shared folder segment', () => {
+  it('normalizes group metadata with shared folder segment', () => {
     expect(normalizeP2pGroupSavedKnowledgeMeta('测试群', '默认文件夹')).toEqual({
       groupName: '测试群',
+      sharedFolderName: '默认文件夹',
     })
   })
 
   it('stores p2p workspace id in metadata when provided', () => {
     expect(normalizeP2pGroupSavedKnowledgeMeta('测试群', '默认文件夹', 'ws-1')).toEqual({
       groupName: '测试群',
+      sharedFolderName: '默认文件夹',
       p2pWorkspaceId: 'ws-1',
     })
   })
 
-  it('uses group name as display name', () => {
+  it('uses group and shared folder in display name', () => {
     expect(buildP2pGroupSavedKnowledgeDisplayName('测试群')).toBe('测试群')
+    expect(buildP2pGroupSavedKnowledgeDisplayName('测试群', '默认文件夹')).toBe(
+      '[测试群] 默认文件夹',
+    )
   })
 
   it('round-trips description metadata', () => {
@@ -55,10 +60,10 @@ describe('group-saved-knowledge', () => {
       resolveGroupSavedKnowledgeSidebarLabel({
         name: '[测试群] 默认文件夹',
         description: JSON.stringify({
-          groupSavedKnowledge: normalizeP2pGroupSavedKnowledgeMeta('测试群', undefined, 'ws-1'),
+          groupSavedKnowledge: normalizeP2pGroupSavedKnowledgeMeta('测试群', '默认文件夹', 'ws-1'),
         }),
       }),
-    ).toBe('测试群')
+    ).toBe('[测试群] 默认文件夹')
     expect(
       resolveGroupSavedKnowledgeSidebarLabel({
         name: '[测试群] 默认文件夹',

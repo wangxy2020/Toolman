@@ -51,6 +51,12 @@ const handlers: Partial<Record<IpcChannel, HandlerFn>> = {
     const parsed = AppProvenanceBeaconInputSchema.parse(input)
     const { recordProvenanceBeacon } = await import('../../services/copyright-provenance.service')
     const provenance = recordProvenanceBeacon(parsed.event)
+    if (parsed.event === 'app.renderer.ready') {
+      const { reemitPendingTrustPromptsToRenderer } = await import(
+        '../../services/p2p/p2p-peer.service'
+      )
+      reemitPendingTrustPromptsToRenderer()
+    }
     return ipcOk(
       AppProvenanceBeaconOutputSchema.parse({
         recorded: true,

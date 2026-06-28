@@ -17,6 +17,7 @@ interface Props {
   canDelete: boolean
   removingResourceId?: string | null
   removingSessionId?: string | null
+  isSharer?: boolean
   onToggleSelect: (selectionKey: string) => void
   onToggleSelectSection: (selectionKeys: string[]) => void
   onRemoveAgent: () => void
@@ -49,6 +50,7 @@ export function GroupSharedAgentSection({
   canDelete,
   removingResourceId,
   removingSessionId,
+  isSharer = false,
   onToggleSelect,
   onToggleSelectSection,
   onRemoveAgent,
@@ -64,8 +66,8 @@ export function GroupSharedAgentSection({
   const title = resolveGroupAgentPanelTitle(resource, assistant)
 
   const panelSessions = useMemo(
-    () => resolveSharedAgentSessions(resource, assistantId, sessions, assistant),
-    [assistant, assistantId, resource, sessions],
+    () => resolveSharedAgentSessions(resource, assistantId, sessions, assistant, { isSharer }),
+    [assistant, assistantId, isSharer, resource, sessions],
   )
 
   const sectionSelectionKeys = useMemo(

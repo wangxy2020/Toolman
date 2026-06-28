@@ -1,5 +1,8 @@
 const DEFAULT_TTL_MS = 30_000
 
+/** Background poll interval for community list panels (message board, markets). */
+export const COMMUNITY_LIST_POLL_INTERVAL_MS = 60_000
+
 interface CacheEntry<T> {
   data: T
   fetchedAt: number

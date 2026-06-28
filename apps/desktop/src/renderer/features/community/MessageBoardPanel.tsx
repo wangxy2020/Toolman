@@ -102,7 +102,10 @@ export function MessageBoardPanel() {
         subtitle={t('communityPage.panels.messages.subtitle')}
         publishLabel={t('communityPage.panels.messages.publish')}
         loading={board.loading}
-        onRefresh={() => void board.load()}
+        onRefresh={() => {
+          invalidateCommunityListCache('board:')
+          void board.load({ force: true })
+        }}
         onPublish={() => {
           if (!requireRegistration('community_write')) return
           setShowPublish(true)
@@ -171,7 +174,10 @@ export function MessageBoardPanel() {
       {showPublish ? (
         <CommunityMessagePublishModal
           onClose={() => setShowPublish(false)}
-          onCreated={() => void board.load()}
+          onCreated={() => {
+            invalidateCommunityListCache('board:')
+            void board.load({ force: true })
+          }}
         />
       ) : null}
 

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { McpServerConfig } from '@toolman/shared'
 
 import { getMcpServer } from '../mcp-server-config.service'
-import { slugifyMcpId } from './community-mcp-manifest.util'
+import { MCP_MANIFEST_FILENAME, slugifyMcpId, syncMcpManifestFiles } from './community-mcp-manifest.util'
 import { writeCommunityZipPackage } from './community-package-zip.util'
 
 const ExportInputSchema = z.object({
@@ -59,7 +59,11 @@ export async function exportCommunityMcpPackage(input: unknown): Promise<{ packa
   }
 
   const manifest = buildMcpMarketManifestFromServer(server)
-  const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`
+  const manifestWithFiles = syncMcpManifestFiles('', {
+    ...manifest,
+    files: [MCP_MANIFEST_FILENAME],
+  })
+  const manifestJson = `${JSON.stringify(manifestWithFiles, null, 2)}\n`
   const safeName =
     server.name.trim().replace(/[^\w\u4e00-\u9fff.-]+/g, '_').slice(0, 64) || slugifyMcpId(server.id)
 

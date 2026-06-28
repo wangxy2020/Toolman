@@ -6,6 +6,9 @@ interface UseP2pEventsOptions {
 }
 
 function mergeEventsDesc(current: WorkspaceEvent[], incoming: WorkspaceEvent): WorkspaceEvent[] {
+  if (incoming.resourceType === 'GroupChat') {
+    return current
+  }
   if (current.some((item) => item.eventId === incoming.eventId)) {
     return current
   }
@@ -40,7 +43,7 @@ export function useP2pEvents({ workspaceId }: UseP2pEventsOptions) {
     }
 
     const data = result.data as { events: WorkspaceEvent[] }
-    setEvents(data.events)
+    setEvents(data.events.filter((event) => event.resourceType !== 'GroupChat'))
   }, [workspaceId])
 
   useEffect(() => {

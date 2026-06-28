@@ -573,7 +573,8 @@ mod tests {
             "schemaVersion": 1,
             "mcpId": "browser",
             "transport": "stdio",
-            "command": "npx"
+            "command": "npx",
+            "files": ["mcp.manifest.json"]
         })
     }
 
@@ -662,7 +663,8 @@ mod tests {
                 "schemaVersion": 1,
                 "mcpId": "browser",
                 "transport": "stdio",
-                "command": "npx"
+                "command": "npx",
+                "files": ["mcp.manifest.json"]
             }),
         })
         .await
