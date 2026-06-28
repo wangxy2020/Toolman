@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { resolve } from 'node:path'
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { ToolmanDatabase } from '../index.js'
 import {
@@ -423,6 +424,14 @@ export class DocumentRepository {
     this.db.delete(ingestJobs).where(eq(ingestJobs.documentId, documentId)).run()
   }
 
+  findIngestJobByDocumentId(documentId: string): typeof ingestJobs.$inferSelect | undefined {
+    return this.db
+      .select()
+      .from(ingestJobs)
+      .where(eq(ingestJobs.documentId, documentId))
+      .get()
+  }
+
   listActiveDocumentIdsByKb(kbId: string): string[] {
     return this.listByKb(kbId).map((row) => row.id)
   }
@@ -436,13 +445,14 @@ export class DocumentRepository {
     documentId?: string | null
   }) {
     const now = new Date()
+    const normalizedPath = resolve(input.absolutePath)
     const existing = this.db
       .select()
       .from(fileRegistry)
       .where(
         and(
           eq(fileRegistry.workspaceId, input.workspaceId),
-          eq(fileRegistry.absolutePath, input.absolutePath),
+          eq(fileRegistry.absolutePath, normalizedPath),
         ),
       )
       .get()
@@ -468,7 +478,7 @@ export class DocumentRepository {
       .values({
         id,
         workspaceId: input.workspaceId,
-        absolutePath: input.absolutePath,
+        absolutePath: normalizedPath,
         contentHash: input.contentHash,
         sizeBytes: input.sizeBytes,
         mtimeMs: input.mtimeMs,
@@ -480,7 +490,73 @@ export class DocumentRepository {
     return id
   }
 
+  renameFileRegistryPath(
+    workspaceId: string,
+    oldAbsolutePath: string,
+    newAbsolutePath: string,
+  ): void {
+    const oldPath = resolve(oldAbsolutePath)
+    const newPath = resolve(newAbsolutePath)
+    if (oldPath === newPath) return
+
+    const existing = this.findRegistryByPath(workspaceId, oldPath)
+    if (!existing) return
+
+    const conflict = this.findRegistryByPath(workspaceId, newPath)
+    if (conflict && conflict.id !== existing.id) {
+      this.db.delete(fileRegistry).where(eq(fileRegistry.id, existing.id)).run()
+      return
+    }
+
+    this.db
+      .update(fileRegistry)
+      .set({ absolutePath: newPath, updatedAt: new Date() })
+      .where(eq(fileRegistry.id, existing.id))
+      .run()
+  }
+
+  reconcileFileRegistryPaths(workspaceId: string): number {
+    const rows = this.db
+      .select()
+      .from(fileRegistry)
+      .where(eq(fileRegistry.workspaceId, workspaceId))
+      .all()
+
+    let fixed = 0
+    for (const row of rows) {
+      if (!row.documentId) continue
+
+      const doc = this.db
+        .select()
+        .from(documents)
+        .where(eq(documents.id, row.documentId))
+        .get()
+      if (!doc?.absolutePath || doc.deletedAt) continue
+
+      const registryPath = resolve(row.absolutePath)
+      const docPath = resolve(doc.absolutePath)
+      if (registryPath === docPath) continue
+
+      const canonical = this.findRegistryByPath(workspaceId, docPath)
+      if (canonical && canonical.id !== row.id) {
+        this.db.delete(fileRegistry).where(eq(fileRegistry.id, row.id)).run()
+        fixed += 1
+        continue
+      }
+
+      this.db
+        .update(fileRegistry)
+        .set({ absolutePath: docPath, updatedAt: new Date() })
+        .where(eq(fileRegistry.id, row.id))
+        .run()
+      fixed += 1
+    }
+
+    return fixed
+  }
+
   findRegistryByPath(workspaceId: string, absolutePath: string) {
+    const normalizedPath = resolve(absolutePath)
     return (
       this.db
         .select()
@@ -488,7 +564,7 @@ export class DocumentRepository {
         .where(
           and(
             eq(fileRegistry.workspaceId, workspaceId),
-            eq(fileRegistry.absolutePath, absolutePath),
+            eq(fileRegistry.absolutePath, normalizedPath),
           ),
         )
         .get() ?? null
@@ -507,9 +583,8 @@ export class DocumentRepository {
 
   replaceChunks(documentId: string, kbId: string, rows: CreateChunkInput[]): void {
     this.db
-      .update(chunks)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(chunks.documentId, documentId), eq(chunks.kbId, kbId), isNull(chunks.deletedAt)))
+      .delete(chunks)
+      .where(and(eq(chunks.documentId, documentId), eq(chunks.kbId, kbId)))
       .run()
 
     const now = new Date()

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { IpcChannel, type KnowledgeDocument } from '@toolman/shared'
-import { IconCheck, IconFile, IconGlobe, IconRefresh, IconTrash } from '../../components/icons'
+import { IconCheck, IconFile, IconGlobe, IconRefresh, IconTrash, IconX } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import {
   formatKnowledgeDocTime,
@@ -21,6 +21,7 @@ export interface KnowledgeFilePanelItem {
   sizeBytes?: number | null
   mimeType?: string | null
   status?: KnowledgeDocument['status'] | 'pending'
+  ingestProgress?: number | null
   chunkCount?: number
   errorMessage?: string | null
   absolutePath?: string | null
@@ -43,6 +44,7 @@ interface Props {
   onOpenAddUrl?: () => void
   onAddUrl?: (url: string) => void | Promise<void>
   onReindexDocument?: (id: string) => void
+  onCancelIngestDocument?: (id: string) => void
   onDeleteDocument?: (id: string) => void
   onOpenNote?: (noteId: string) => boolean
   onOpenMarkdownFile?: (doc: KnowledgeFilePanelItem) => boolean | void
@@ -130,6 +132,7 @@ export function KnowledgeBaseFilePanel({
   onOpenAddUrl,
   onAddUrl,
   onReindexDocument,
+  onCancelIngestDocument,
   onDeleteDocument,
   onOpenNote,
   onOpenMarkdownFile,
@@ -271,7 +274,7 @@ export function KnowledgeBaseFilePanel({
             const extension = getKnowledgeDocExtension(doc.title, doc.mimeType)
             const status = doc.status ?? 'ready'
             const processing = isKnowledgeDocProcessing(status)
-            const statusLabel = getKnowledgeDocStatusLabel(status, t)
+            const statusLabel = getKnowledgeDocStatusLabel(status, t, doc.ingestProgress)
             const selected = selectedIds?.has(doc.id) ?? false
             const selectionEnabled = Boolean(onToggleSelect)
             const isUrlDoc = isUrlMode || doc.sourceKind === 'url'
@@ -380,7 +383,7 @@ export function KnowledgeBaseFilePanel({
                   ) : null}
                 </div>
 
-                {showIndexActions && (onReindexDocument || onDeleteDocument) ? (
+                {showIndexActions && (onReindexDocument || onCancelIngestDocument || onDeleteDocument) ? (
                   <div className="tm-kb-file-card-actions">
                     {onReindexDocument ? (
                       <button
@@ -391,6 +394,19 @@ export function KnowledgeBaseFilePanel({
                         onClick={() => onReindexDocument(doc.id)}
                       >
                         <IconRefresh size={16} className={processing ? 'tm-kb-file-card-action--spin' : undefined} />
+                      </button>
+                    ) : null}
+                    {processing && onCancelIngestDocument ? (
+                      <button
+                        type="button"
+                        className="tm-kb-file-card-action tm-kb-file-card-action--cancel"
+                        title={t('knowledgePage.filePanel.cancelIngest')}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onCancelIngestDocument(doc.id)
+                        }}
+                      >
+                        <IconX size={14} />
                       </button>
                     ) : null}
                     <span

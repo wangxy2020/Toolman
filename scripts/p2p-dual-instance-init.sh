@@ -13,12 +13,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -n "${TOOLMAN_DOCS_ROOT:-}" ]]; then
   DOCS_ROOT="$TOOLMAN_DOCS_ROOT"
-elif [[ -d "$ROOT_DIR/.git" || -f "$ROOT_DIR/pnpm-workspace.yaml" ]]; then
-  DOCS_ROOT="$HOME/Documents/ToolmanData"
-elif [[ -d "$HOME/Documents/Toolman/.git" || -f "$HOME/Documents/Toolman/pnpm-workspace.yaml" ]]; then
-  DOCS_ROOT="$HOME/Documents/ToolmanData"
 else
-  DOCS_ROOT="$HOME/Documents/Toolman"
+  DOCS_ROOT="$HOME/Documents/ToolmanData"
 fi
 
 USER_A_DATA="${TOOLMAN_P2P_USER_A_DATA:-/tmp/toolman-node-b}"

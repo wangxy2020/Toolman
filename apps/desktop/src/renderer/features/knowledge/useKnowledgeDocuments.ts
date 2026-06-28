@@ -8,6 +8,7 @@ import { isKnowledgeDocProcessing } from './knowledge-file-display'
 
 export function useKnowledgeDocuments(workspaceId: string | null, kbId: string | null) {
   const [items, setItems] = useState<KnowledgeDocument[]>([])
+  const [ingestProgressById, setIngestProgressById] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,13 +61,35 @@ export function useKnowledgeDocuments(workspaceId: string | null, kbId: string |
           next[index] = {
             ...next[index]!,
             status: event.stage,
-            errorMessage: event.errorMessage ?? next[index]!.errorMessage,
+            errorMessage:
+              event.stage === 'failed'
+                ? (event.errorMessage ?? next[index]!.errorMessage ?? null)
+                : event.errorMessage !== undefined
+                  ? event.errorMessage
+                  : null,
             updatedAt: Date.now(),
           }
           return next
         })
 
+        if (event.progress != null) {
+          setIngestProgressById((current) => {
+            const isRestart = event.stage === 'parsing' || event.stage === 'queued'
+            const prev = isRestart ? 0 : (current[event.documentId] ?? 0)
+            const next = isRestart ? event.progress! : Math.max(prev, event.progress!)
+            if (!isRestart && current[event.documentId] === next) {
+              return current
+            }
+            return { ...current, [event.documentId]: next }
+          })
+        }
+
         if (event.stage === 'ready' || event.stage === 'failed') {
+          setIngestProgressById((current) => {
+            const next = { ...current }
+            delete next[event.documentId]
+            return next
+          })
           void load()
         }
       },
@@ -175,8 +198,31 @@ export function useKnowledgeDocuments(workspaceId: string | null, kbId: string |
     }
   }, [workspaceId, kbId, load])
 
+  const cancelIngest = useCallback(
+    async (documentId: string) => {
+      if (!workspaceId || !kbId) return false
+
+      setError(null)
+      const result = await window.api.invoke(IpcChannel.KnowledgeIngestJobCancel, {
+        workspaceId,
+        kbId,
+        documentId,
+      })
+
+      if (!result.ok) {
+        setError(result.error.message)
+        return false
+      }
+
+      await load()
+      return true
+    },
+    [workspaceId, kbId, load],
+  )
+
   return {
     items,
+    ingestProgressById,
     loading,
     ingesting,
     error,
@@ -186,5 +232,6 @@ export function useKnowledgeDocuments(workspaceId: string | null, kbId: string |
     remove,
     reindex,
     reindexAll,
+    cancelIngest,
   }
 }

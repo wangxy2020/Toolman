@@ -38,7 +38,7 @@ import {
   sortKnowledgeFilePanelItems,
   type KnowledgeFileSortField,
 } from './knowledge-file-sort'
-import { importFilesToKnowledgeStorage, resolveKnowledgeImportTarget, ensureDefaultFolderKb } from './knowledge-import-files'
+import { importFilesToKnowledgeStorage, resolveKnowledgeImportTarget, resolveKnowledgeSectionRoots, ensureDefaultFolderKb } from './knowledge-import-files'
 import { resolveKnowledgeFilesForChat } from './knowledge-chat-files'
 import { useDefaultFolderKnowledgeBase } from './useDefaultFolderKnowledgeBase'
 import { useKnowledgeDocuments } from './useKnowledgeDocuments'
@@ -180,6 +180,26 @@ export function KnowledgePage({
     localFilesDefaultKb.kb,
   ])
 
+  const sectionRoots = useMemo(
+    () =>
+      resolveKnowledgeSectionRoots({
+        knowledgeFolderPath,
+        networkKnowledgeFolderPath,
+        localFilesFolderPath,
+        localDefaultKbStoragePath: localDefaultKb.folderPath,
+        networkDefaultKbStoragePath: networkDefaultKb.folderPath,
+        localFilesDefaultKbStoragePath: localFilesDefaultKb.folderPath,
+      }),
+    [
+      knowledgeFolderPath,
+      networkKnowledgeFolderPath,
+      localFilesFolderPath,
+      localDefaultKb.folderPath,
+      networkDefaultKb.folderPath,
+      localFilesDefaultKb.folderPath,
+    ],
+  )
+
   const importTarget = useMemo(
     () =>
       resolveKnowledgeImportTarget({
@@ -192,10 +212,9 @@ export function KnowledgePage({
         defaultFolderKbId: localDefaultKb.kbId,
         defaultNetworkFolderKbId: networkDefaultKb.kbId,
         defaultLocalFilesKbId: localFilesDefaultKb.kbId,
-        knowledgeFolderPath: knowledgeFolderPath ?? localDefaultKb.folderPath,
-        networkKnowledgeFolderPath:
-          networkKnowledgeFolderPath ?? networkDefaultKb.folderPath,
-        localFilesFolderPath: localFilesFolderPath ?? localFilesDefaultKb.folderPath,
+        knowledgeFolderPath: sectionRoots.local,
+        networkKnowledgeFolderPath: sectionRoots.network,
+        localFilesFolderPath: sectionRoots.localFiles,
       }),
     [
       workspaceId,
@@ -203,23 +222,21 @@ export function KnowledgePage({
       activeId,
       active,
       localDefaultKb.kbId,
-      localDefaultKb.folderPath,
       networkDefaultKb.kbId,
-      networkDefaultKb.folderPath,
       localFilesDefaultKb.kbId,
-      localFilesDefaultKb.folderPath,
-      knowledgeFolderPath,
-      networkKnowledgeFolderPath,
-      localFilesFolderPath,
+      sectionRoots,
     ],
   )
 
   const documents = useKnowledgeDocuments(workspaceId, importTarget.kbId)
 
   const panelDocuments = useMemo(() => {
-    const items = documents.items.map(knowledgeDocumentToPanelItem)
+    const items = documents.items.map((doc) => ({
+      ...knowledgeDocumentToPanelItem(doc),
+      ingestProgress: documents.ingestProgressById[doc.id] ?? null,
+    }))
     return sortKnowledgeFilePanelItems(items, sortField, sortAscending)
-  }, [documents.items, sortField, sortAscending])
+  }, [documents.ingestProgressById, documents.items, sortField, sortAscending])
 
   const chatAttachableFiles = useMemo(
     () => resolveKnowledgeFilesForChat(panelDocuments, selectedIds),
@@ -279,9 +296,10 @@ export function KnowledgePage({
     setSortAscending(field === 'name')
   }
 
-  const deleteFileMessageSuffix = importTarget.vectorized
-    ? '删除后无法恢复。'
-    : '本地文件夹中的副本也会一并删除，且无法恢复。'
+  const deleteFileMessageSuffix =
+    section === 'network'
+      ? '删除后无法恢复。'
+      : '程序记录与知识库文件夹中的副本都会删除，且无法恢复。'
 
   const requestDeleteDocuments = (ids: string[]) => {
     if (ids.length === 0) return
@@ -322,6 +340,11 @@ export function KnowledgePage({
   }
 
   const handleImportFiles = async (paths: string[]) => {
+    if (section === 'network') {
+      documents.setError('网络知识库仅支持添加网页 URL，不能导入本地文件')
+      return
+    }
+
     let kbId = importTarget.kbId
     let storagePath = importTarget.storagePath
 
@@ -383,6 +406,10 @@ export function KnowledgePage({
   }
 
   const handleAddUrl = async (url: string) => {
+    if (section === 'local' || section === 'local-files') {
+      throw new Error('本地知识库仅支持上传文件，网页请添加到网络知识库')
+    }
+
     if (!workspaceId || !importTarget.kbId) {
       throw new Error('知识库未就绪，请稍候再试')
     }
@@ -613,6 +640,7 @@ export function KnowledgePage({
         documents.setError(error instanceof Error ? error.message : '网页导入失败')
       })}
       onReindexDocument={(id) => void documents.reindex(id).then(() => onKbChanged?.())}
+      onCancelIngestDocument={(id) => void documents.cancelIngest(id).then(() => onKbChanged?.())}
       onDeleteDocument={(id) => void handleDeleteDocument(id)}
       onOpenNote={onOpenNote}
       onContextMenu={handleContextMenu}

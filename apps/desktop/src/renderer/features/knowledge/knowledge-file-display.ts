@@ -75,12 +75,18 @@ export function isKnowledgeDocProcessing(status: KnowledgeDocumentDisplayStatus)
 export function getKnowledgeDocStatusLabel(
   status: KnowledgeDocumentDisplayStatus,
   t: TranslateFn,
+  progress?: number | null,
 ): string {
   const key =
     status in DOC_STATUS_KEYS
       ? DOC_STATUS_KEYS[status as keyof typeof DOC_STATUS_KEYS]
       : 'processing'
-  return t(`knowledgePage.docStatus.${key}`)
+  const label = t(`knowledgePage.docStatus.${key}`)
+  if (progress != null && progress >= 0 && isKnowledgeDocProcessing(status)) {
+    const percent = Math.min(100, Math.max(0, Math.round(progress)))
+    return `${label} ${percent}%`
+  }
+  return label
 }
 
 const DOC_STATUS_KEYS = {

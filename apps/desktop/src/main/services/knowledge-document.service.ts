@@ -31,8 +31,9 @@ import { prepareIngestQueue, reconcileStuckLocalFilesDocuments, reindexDocument,
 import { searchChunksFts } from './knowledge-fts.service'
 import { removeDocumentVectors } from '@toolman/knowledge'
 import { removeDocumentFts } from './knowledge-fts.service'
-import { deleteKnowledgeFolderFile } from './knowledge-folder-files.service'
+import { deleteKnowledgeFolderFile, isPathInsideFolder } from './knowledge-folder-files.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
+import { assertKnowledgeBaseAcceptsLocalFiles } from './knowledge-kb-kind-guard'
 
 function parseErrorJson(value: string | null): string | null {
   if (!value) return null
@@ -47,6 +48,22 @@ function parseErrorJson(value: string | null): string | null {
 function inferSourceKind(absolutePath: string | null | undefined): KnowledgeDocument['sourceKind'] {
   if (!absolutePath) return 'file'
   return absolutePath.startsWith('http://') || absolutePath.startsWith('https://') ? 'url' : 'file'
+}
+
+function deleteManagedKnowledgeFileFromDisk(
+  kb: NonNullable<ReturnType<typeof getKnowledgeBaseRepository>['findRowById']>,
+  absolutePath: string | null | undefined,
+): void {
+  if (!absolutePath || inferSourceKind(absolutePath) === 'url') return
+  if (kb.kind === 'shared' || kb.kind === 'network') return
+
+  const storagePath = resolveKnowledgeBaseStoragePath(kb, { ensure: false })
+  if (!storagePath || !isPathInsideFolder(storagePath, absolutePath)) return
+
+  deleteKnowledgeFolderFile({
+    folderPath: storagePath,
+    filePath: absolutePath,
+  })
 }
 
 function toDocument(
@@ -145,6 +162,7 @@ export async function ingestKnowledgeDocuments(input: unknown) {
   if (!kb) {
     throw new Error('知识库不存在')
   }
+  assertKnowledgeBaseAcceptsLocalFiles(kb)
 
   const prepared = prepareIngestQueue({
     workspaceId: data.workspaceId,
@@ -176,19 +194,11 @@ export async function deleteKnowledgeDocument(input: unknown): Promise<boolean> 
   const doc = repo.findById(data.documentId, data.kbId)
   if (!doc) return false
 
-  if (kb.kind === 'local_files' && doc.absolutePath) {
-    const folderPath = resolveKnowledgeBaseStoragePath(kb)
-    if (folderPath) {
-      try {
-        deleteKnowledgeFolderFile({
-          folderPath,
-          filePath: doc.absolutePath,
-        })
-      } catch (error) {
-        const message = toErrorMessage(error, '删除本地文件失败')
-        throw new Error(message)
-      }
-    }
+  try {
+    deleteManagedKnowledgeFileFromDisk(kb, doc.absolutePath)
+  } catch (error) {
+    const message = toErrorMessage(error, '删除本地文件失败')
+    throw new Error(message)
   }
 
   await removeDocumentVectors(

@@ -17,11 +17,12 @@ export interface OcrPageRecognizer {
 
 export interface PdfExtractOptions {
   preferPdfJs?: boolean
-  /** strict：文本不足时走 OCR；lenient：有任意提取文本则直接用于聊天附件 */
-  textQuality?: 'strict' | 'lenient'
+  /** strict：文本不足时走 OCR；lenient：有任意提取文本则直接用于聊天附件；prefer-extracted：知识库优先使用已提取文本 */
+  textQuality?: 'strict' | 'lenient' | 'prefer-extracted'
   ocr?: {
     recognizePage: OcrPageRecognizer
     maxPages?: number
+    onProgress?: (currentPage: number, totalPages: number) => void
   }
 }
 
@@ -87,6 +88,7 @@ async function extractWithVisionOcr(
       }),
     )
     if (text) parts.push(text)
+    ocr.onProgress?.(page.pageNumber, totalPages)
   }
 
   const combined = parts.join('\n\n').trim()
@@ -132,6 +134,13 @@ export async function extractPdfPlainText(
   }
 
   if (resolvedOptions.textQuality === 'lenient' && bestText.trim()) {
+    return bestText
+  }
+
+  if (
+    resolvedOptions.textQuality === 'prefer-extracted' &&
+    bestText.trim().length >= 500
+  ) {
     return bestText
   }
 

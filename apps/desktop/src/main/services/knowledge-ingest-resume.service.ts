@@ -1,5 +1,7 @@
 import {
   ingestUrlDocument,
+  reconcileProcessingDocumentsWithoutIngestJob,
+  recoverInterruptedIngestJobsOnStartup,
   refreshKbStats,
   recoverStaleIngestJobs,
   startIngestFilePathsInBackground,
@@ -14,6 +16,8 @@ function isUrlPath(path: string | null | undefined): boolean {
 
 export function resumePendingIngestJobs(): void {
   const repo = getDocumentRepository()
+  recoverInterruptedIngestJobsOnStartup()
+  reconcileProcessingDocumentsWithoutIngestJob()
   recoverStaleIngestJobs()
   const pending = repo.listResumableDocuments()
 

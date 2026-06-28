@@ -1,3 +1,9 @@
+import {
+  maxEmbedCharsForText,
+  resolveEmbedTokenBudget,
+  splitTextForEmbedding,
+} from './embed-limits.js'
+
 export interface ChunkConfig {
   chunkSize: number
   chunkOverlap: number
@@ -12,7 +18,14 @@ export interface TextChunk {
 }
 
 export function approxTokenCount(text: string): number {
-  return Math.max(1, Math.ceil(text.trim().length / 4))
+  const trimmed = text.trim()
+  if (!trimmed) return 0
+
+  const cjk = (
+    trimmed.match(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff]/g) ?? []
+  ).length
+  const other = trimmed.length - cjk
+  return Math.max(1, Math.ceil(cjk + other / 4))
 }
 
 export function chunkText(text: string, config: ChunkConfig): TextChunk[] {
@@ -54,7 +67,7 @@ async function chunkSemantic(
   config: ChunkConfig,
   embedBatch: (texts: string[]) => Promise<number[][]>,
 ): Promise<TextChunk[]> {
-  const units = splitSemanticUnits(text)
+  const units = splitSemanticUnits(text, config)
   if (units.length === 0) return []
   if (units.length === 1) {
     return chunkFixed(units[0]!, config)
@@ -103,18 +116,24 @@ async function chunkSemantic(
   return chunks
 }
 
-function splitSemanticUnits(text: string): string[] {
+function splitSemanticUnits(text: string, config: ChunkConfig): string[] {
   const paragraphs = text
     .split(/\n{2,}/)
     .map((item) => item.trim())
     .filter(Boolean)
 
-  if (paragraphs.length > 1) return paragraphs
+  const units =
+    paragraphs.length > 1
+      ? paragraphs
+      : text
+          .split(/(?<=[.!?。！？])\s+/)
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
 
-  return text
-    .split(/(?<=[.!?。！？])\s+/)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
+  if (units.length === 0) return []
+
+  const unitBudget = Math.min(config.chunkSize, resolveEmbedTokenBudget(config.chunkSize))
+  return units.flatMap((unit) => splitTextForEmbedding(unit, unitBudget, config.chunkOverlap))
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -139,11 +158,20 @@ function chunkMarkdown(text: string, config: ChunkConfig): TextChunk[] {
   let index = 0
 
   for (const section of sections) {
-    const sectionChunks = chunkFixed(section.body, config, {
+    const headingPrefix = section.heading ? `${section.heading}\n\n` : ''
+    const headingTokens = approxTokenCount(headingPrefix)
+    const bodyConfig: ChunkConfig =
+      headingTokens > 0
+        ? {
+            ...config,
+            chunkSize: Math.max(64, config.chunkSize - headingTokens),
+          }
+        : config
+    const sectionChunks = chunkFixed(section.body, bodyConfig, {
       heading: section.heading,
     })
     for (const chunk of sectionChunks) {
-      const prefix = section.heading ? `${section.heading}\n\n` : ''
+      const prefix = headingPrefix
       chunks.push({
         ...chunk,
         index: index++,
@@ -193,8 +221,11 @@ function chunkFixed(
   config: ChunkConfig,
   metadata?: Record<string, unknown>,
 ): TextChunk[] {
-  const charSize = config.chunkSize * 4
-  const charOverlap = config.chunkOverlap * 4
+  const charSize = maxEmbedCharsForText(text, config.chunkSize)
+  const charOverlap = Math.min(
+    maxEmbedCharsForText(text, config.chunkOverlap),
+    Math.floor(charSize / 4),
+  )
   if (text.length <= charSize) {
     return [
       {
@@ -211,7 +242,22 @@ function chunkFixed(
   let index = 0
 
   while (start < text.length) {
-    const end = Math.min(start + charSize, text.length)
+    let end = Math.min(start + charSize, text.length)
+    if (end < text.length) {
+      const window = text.slice(start, end)
+      const breakAt = Math.max(
+        window.lastIndexOf('\n\n'),
+        window.lastIndexOf('\n'),
+        window.lastIndexOf('。'),
+        window.lastIndexOf('！'),
+        window.lastIndexOf('？'),
+        window.lastIndexOf('. '),
+      )
+      if (breakAt > charSize * 0.5) {
+        end = start + breakAt + 1
+      }
+    }
+
     const slice = text.slice(start, end).trim()
     if (slice) {
       chunks.push({

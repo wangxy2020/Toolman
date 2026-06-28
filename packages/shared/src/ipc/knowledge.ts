@@ -618,6 +618,7 @@ export const KnowledgeIngestStreamEventSchema = z.object({
   kbId: UuidSchema,
   documentId: UuidSchema,
   stage: KnowledgeDocumentStatusSchema,
+  progress: z.number().int().min(0).max(100).optional(),
   errorMessage: z.string().nullable().optional(),
 })
 

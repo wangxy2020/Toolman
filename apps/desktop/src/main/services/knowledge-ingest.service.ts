@@ -19,20 +19,34 @@ import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { getWorkspaceKnowledgeDir } from './knowledge.service'
 import { resolveChunkConfig, resolveEmbedConfig } from './knowledge-embed.service'
 import { buildKnowledgeParseOptions, knowledgeIngestSupportsFile } from './knowledge-parse-options.service'
+import { assertKnowledgeBaseAcceptsUrls } from './knowledge-kb-kind-guard'
 import { broadcastKnowledgeIngestEvent } from './knowledge-ingest-broadcast'
 import { removeDocumentFts, syncDocumentFts } from './knowledge-fts.service'
 import { maybeSyncSharedKnowledgeDocument } from './p2p/knowledge-sync.service'
-import { assertIngestNotCancelled, clearIngestCancel, isIngestCancelled } from './knowledge-ingest-manager.service'
+import { clearIngestCancel, isIngestCancelled, assertIngestStillActive } from './knowledge-ingest-manager.service'
 import { parseFileInWorker, shouldParseInWorker } from './parse-file-worker.service'
 import { withTimeout } from '../utils/async-timeout'
+import {
+  resolveEmbedTimeoutMs,
+  resolveParseTimeoutMs,
+  STALE_INGEST_MS,
+} from './knowledge-ingest-timeouts'
 import {
   findActiveDocumentById,
   findActiveDocumentByPath,
 } from './knowledge-document-lifecycle.util'
 
-const PARSE_TIMEOUT_MS = 20 * 60 * 1000
-const EMBED_TIMEOUT_MS = 15 * 60 * 1000
 const MAX_CONCURRENT_INGEST_JOBS = 2
+
+const ACTIVE_INGEST_STAGES = new Set([
+  'queued',
+  'parsing',
+  'chunking',
+  'embedding',
+  'indexing',
+])
+
+const IN_FLIGHT_INGEST_STAGES = new Set(['parsing', 'chunking', 'embedding', 'indexing'])
 
 let activeIngestJobs = 0
 const ingestJobWaiters: Array<() => void> = []
@@ -88,6 +102,7 @@ function emitIngestStage(options: {
   kbId: string
   documentId: string
   stage: KnowledgeDocument['status']
+  progress?: number
   errorMessage?: string | null
 }) {
   broadcastKnowledgeIngestEvent({
@@ -96,7 +111,8 @@ function emitIngestStage(options: {
     kbId: options.kbId,
     documentId: options.documentId,
     stage: options.stage,
-    errorMessage: options.errorMessage ?? undefined,
+    progress: options.progress,
+    ...(options.errorMessage !== undefined ? { errorMessage: options.errorMessage } : {}),
   })
 }
 
@@ -112,6 +128,20 @@ function updateDocumentStage(
     patch?: Parameters<DocumentRepository['update']>[2]
   },
 ) {
+  if (isIngestCancelled(options.documentId) && options.stage !== 'failed') {
+    return
+  }
+  if (options.stage !== 'failed') {
+    const current = repo.findById(options.documentId, options.kbId)
+    if (current?.status === 'failed') {
+      const restarting =
+        options.stage === 'parsing' || options.errorMessage === null
+      if (!restarting) {
+        return
+      }
+    }
+  }
+
   repo.update(options.documentId, options.kbId, {
     ...options.patch,
     status: options.stage,
@@ -137,8 +167,33 @@ function updateDocumentStage(
     kbId: options.kbId,
     documentId: options.documentId,
     stage: options.stage,
+    progress: options.progress ?? STAGE_PROGRESS[options.stage] ?? 0,
     errorMessage: options.errorMessage,
   })
+}
+
+function buildIngestProgressHandlers(
+  repo: DocumentRepository,
+  ctx: { workspaceId: string; kbId: string; documentId: string },
+) {
+  return {
+    onOcrProgress: (currentPage: number, totalPages: number) => {
+      if (totalPages <= 0) return
+      updateDocumentStage(repo, {
+        ...ctx,
+        stage: 'parsing',
+        progress: 20 + Math.floor((currentPage / totalPages) * 19),
+      })
+    },
+    onEmbedProgress: (completed: number, total: number) => {
+      if (total <= 0) return
+      updateDocumentStage(repo, {
+        ...ctx,
+        stage: 'embedding',
+        progress: 65 + Math.floor((completed / total) * 19),
+      })
+    },
+  }
 }
 
 function recordIngestFailure(
@@ -196,6 +251,7 @@ function ensureIngestDocument(
   if (documentId) {
     const existing = findActiveDocumentById(repo, kbId, documentId)
     if (existing) {
+      clearIngestCancel(existing.id)
       updateDocumentStage(repo, {
         workspaceId,
         kbId,
@@ -216,17 +272,19 @@ function ensureIngestDocument(
       status: 'parsing',
       absolutePath: filePath,
     })
-    emitIngestStage({
+    updateDocumentStage(repo, {
       workspaceId,
       kbId,
       documentId: created.id,
       stage: 'parsing',
+      errorMessage: null,
     })
     return created
   }
 
   const existing = findActiveDocumentByPath(repo, kbId, filePath)
   if (existing) {
+    clearIngestCancel(existing.id)
     updateDocumentStage(repo, {
       workspaceId,
       kbId,
@@ -246,11 +304,12 @@ function ensureIngestDocument(
     status: 'parsing',
     absolutePath: filePath,
   })
-  emitIngestStage({
+  updateDocumentStage(repo, {
     workspaceId,
     kbId,
     documentId: created.id,
     stage: 'parsing',
+    errorMessage: null,
   })
   return created
 }
@@ -369,6 +428,12 @@ export async function ingestFileAtPath(
   }
 
   const repo = getDocumentRepository()
+
+  if (kb && kb.kind === 'network') {
+    const message = '网络知识库仅支持网页 URL，不能导入本地文件'
+    recordIngestFailure(repo, workspaceId, kbId, filePath, message)
+    return { outcome: 'failed', path: filePath, message }
+  }
   const vectorsDir = join(getWorkspaceKnowledgeDir(workspaceId), 'vectors')
 
   if (isIgnoredKnowledgeIngestFile(filePath)) {
@@ -405,11 +470,14 @@ export async function ingestFileAtPath(
   )
 
   try {
-    assertIngestNotCancelled(docRow.id)
+    assertIngestStillActive(repo, docRow.id, kbId)
 
     const embed = resolveEmbedConfig(workspaceId, kbId)
     const chunkConfig = resolveChunkConfig(kbId, workspaceId)
     const parseOptions = buildKnowledgeParseOptions(workspaceId, kbId)
+    const progressCtx = { workspaceId, kbId, documentId: docRow.id }
+    const { onOcrProgress, onEmbedProgress } = buildIngestProgressHandlers(repo, progressCtx)
+    const parseOptionsWithProgress = { ...parseOptions, onOcrProgress }
 
     await removeDocumentVectors(vectorsDir, kbId, docRow.id, embed.vectorBackend)
 
@@ -419,18 +487,20 @@ export async function ingestFileAtPath(
       documentId: docRow.id,
       stage: 'parsing',
     })
-    assertIngestNotCancelled(docRow.id)
+    assertIngestStillActive(repo, docRow.id, kbId)
 
     let result: IngestFileResult
     const ocrEnabled = Boolean(parseOptions.ocr?.enabled)
+    const fileSizeBytes = statSync(filePath).size
+    const parseTimeoutMs = resolveParseTimeoutMs(fileSizeBytes)
 
     if (shouldParseInWorker(filePath, ocrEnabled)) {
       const parsed = await withTimeout(
-        parseFileInWorker(filePath, parseOptions),
-        PARSE_TIMEOUT_MS,
+        parseFileInWorker(filePath, parseOptionsWithProgress, parseTimeoutMs),
+        parseTimeoutMs,
         '文件解析超时，请检查文件是否损坏或过大',
       )
-      assertIngestNotCancelled(docRow.id)
+      assertIngestStillActive(repo, docRow.id, kbId)
       updateDocumentStage(repo, {
         workspaceId,
         kbId,
@@ -443,6 +513,7 @@ export async function ingestFileAtPath(
         documentId: docRow.id,
         stage: 'embedding',
       })
+      const embedTimeoutMs = resolveEmbedTimeoutMs(parsed.plainText.length)
       result = await withTimeout(
         ingestContent({
           sourceKey: filePath,
@@ -458,17 +529,18 @@ export async function ingestFileAtPath(
           embedModel: embed.embedModel,
           vectorsDir,
           vectorBackend: embed.vectorBackend,
+          onEmbedProgress,
         }),
-        EMBED_TIMEOUT_MS,
+        embedTimeoutMs,
         '向量化超时，请检查嵌入模型服务是否可用',
       )
     } else {
       const parsed = await withTimeout(
-        parseFile(filePath, parseOptions),
-        PARSE_TIMEOUT_MS,
+        parseFile(filePath, parseOptionsWithProgress),
+        parseTimeoutMs,
         '文件解析超时，可能是加密 PDF 或扫描件 OCR 耗时过长',
       )
-      assertIngestNotCancelled(docRow.id)
+      assertIngestStillActive(repo, docRow.id, kbId)
       updateDocumentStage(repo, {
         workspaceId,
         kbId,
@@ -481,6 +553,7 @@ export async function ingestFileAtPath(
         documentId: docRow.id,
         stage: 'embedding',
       })
+      const embedTimeoutMs = resolveEmbedTimeoutMs(parsed.plainText.length)
       result = await withTimeout(
         ingestContent({
           sourceKey: filePath,
@@ -496,13 +569,14 @@ export async function ingestFileAtPath(
           embedModel: embed.embedModel,
           vectorsDir,
           vectorBackend: embed.vectorBackend,
+          onEmbedProgress,
         }),
-        EMBED_TIMEOUT_MS,
+        embedTimeoutMs,
         '向量化超时，请检查嵌入模型服务是否可用',
       )
     }
 
-    assertIngestNotCancelled(docRow.id)
+    assertIngestStillActive(repo, docRow.id, kbId)
 
     updateDocumentStage(repo, {
       workspaceId,
@@ -525,6 +599,7 @@ export async function ingestFileAtPath(
       kbId,
       result.chunks.map((chunk) => ({ id: chunk.id, text: chunk.text })),
     )
+    assertIngestStillActive(repo, docRow.id, kbId)
     updateDocumentStage(repo, {
       workspaceId,
       kbId,
@@ -555,6 +630,12 @@ export async function ingestFileAtPath(
     return { outcome: 'ingested', path: filePath }
   } catch (error) {
     const message = toErrorMessage(error, '导入失败')
+    if (message === '索引任务已取消') {
+      const current = repo.findById(docRow.id, kbId)
+      if (current?.status === 'failed') {
+        return { outcome: 'failed', path: filePath, message }
+      }
+    }
     updateDocumentStage(repo, {
       workspaceId,
       kbId,
@@ -575,6 +656,16 @@ export async function ingestUrlDocument(options: {
   sourceId?: string | null
 }): Promise<{ outcome: 'ingested' | 'skipped' | 'failed'; documentId?: string; message?: string }> {
   const { workspaceId, kbId, url, sourceId } = options
+  const kb = getKnowledgeBaseRepository().findRowById(kbId, workspaceId)
+  if (kb) {
+    try {
+      assertKnowledgeBaseAcceptsUrls(kb)
+    } catch (error) {
+      const message = toErrorMessage(error, 'URL 导入失败')
+      return { outcome: 'failed', message }
+    }
+  }
+
   const repo = getDocumentRepository()
   const vectorsDir = join(getWorkspaceKnowledgeDir(workspaceId), 'vectors')
 
@@ -591,10 +682,12 @@ export async function ingestUrlDocument(options: {
 
     const embed = resolveEmbedConfig(workspaceId, kbId)
     const chunkConfig = resolveChunkConfig(kbId, workspaceId)
+    const progressCtx = { workspaceId, kbId, documentId: '' as string }
 
     let docRow: KnowledgeDocument
     if (existing) {
       await removeDocumentVectors(vectorsDir, kbId, existing.id, embed.vectorBackend)
+      progressCtx.documentId = existing.id
       updateDocumentStage(repo, {
         workspaceId,
         kbId,
@@ -614,6 +707,7 @@ export async function ingestUrlDocument(options: {
         absolutePath: canonicalUrl,
         mimeType: fetched.mimeType,
       })
+      progressCtx.documentId = docRow.id
       emitIngestStage({
         workspaceId,
         kbId,
@@ -622,6 +716,9 @@ export async function ingestUrlDocument(options: {
       })
     }
 
+    const { onEmbedProgress } = buildIngestProgressHandlers(repo, progressCtx)
+    const embedTimeoutMs = resolveEmbedTimeoutMs(fetched.plainText.length)
+
     const snapshotPath = join(
       getWorkspaceKnowledgeDir(workspaceId),
       'snapshots',
@@ -629,20 +726,25 @@ export async function ingestUrlDocument(options: {
     )
     writeFileSync(snapshotPath, fetched.html, 'utf8')
 
-    const result: IngestFileResult = await ingestUrlContent({
-      url: canonicalUrl,
-      title: fetched.title,
-      plainText: fetched.plainText,
-      mimeType: fetched.mimeType,
-      contentHash,
-      kbId,
-      documentId: docRow.id,
-      chunkConfig,
-      embedOptions: embed.embedOptions,
-      embedModel: embed.embedModel,
-      vectorsDir,
-      vectorBackend: embed.vectorBackend,
-    })
+    const result: IngestFileResult = await withTimeout(
+      ingestUrlContent({
+        url: canonicalUrl,
+        title: fetched.title,
+        plainText: fetched.plainText,
+        mimeType: fetched.mimeType,
+        contentHash,
+        kbId,
+        documentId: docRow.id,
+        chunkConfig,
+        embedOptions: embed.embedOptions,
+        embedModel: embed.embedModel,
+        vectorsDir,
+        vectorBackend: embed.vectorBackend,
+        onEmbedProgress,
+      }),
+      embedTimeoutMs,
+      '向量化超时，请检查嵌入模型服务是否可用',
+    )
 
     repo.replaceChunks(
       docRow.id,
@@ -702,6 +804,22 @@ export function prepareIngestQueue(options: {
   let skipped = 0
   const failed: Array<{ path: string; message: string }> = []
 
+  if (kb?.kind === 'network') {
+    const message = '网络知识库仅支持网页 URL，不能导入本地文件'
+    for (const filePath of options.filePaths) {
+      if (isIgnoredKnowledgeIngestFile(filePath)) {
+        skipped += 1
+        continue
+      }
+      recordIngestFailure(repo, options.workspaceId, options.kbId, filePath, message)
+      failed.push({ path: filePath, message })
+    }
+    if (failed.length > 0) {
+      refreshKbStats(options.workspaceId, options.kbId)
+    }
+    return { filePaths: pending, skipped, failed }
+  }
+
   for (const filePath of options.filePaths) {
     if (isIgnoredKnowledgeIngestFile(filePath)) {
       skipped += 1
@@ -742,11 +860,12 @@ export function prepareIngestQueue(options: {
           status: 'queued',
           absolutePath: filePath,
         })
-        emitIngestStage({
+        updateDocumentStage(repo, {
           workspaceId: options.workspaceId,
           kbId: options.kbId,
           documentId: created.id,
           stage: 'queued',
+          errorMessage: null,
         })
       }
 
@@ -835,7 +954,61 @@ export async function ingestFilePaths(options: {
   return { ingested, skipped, failed }
 }
 
-const STALE_INGEST_MS = 2 * 60 * 60 * 1000
+export function recoverInterruptedIngestJobsOnStartup(): number {
+  const repo = getDocumentRepository()
+  const pending = repo.listResumableDocuments()
+  let recovered = 0
+  const message =
+    '应用已退出，索引任务中断。请在设置 → 索引任务中点击重试，或点击文件旁的重新向量化。'
+
+  for (const { job, document } of pending) {
+    if (!IN_FLIGHT_INGEST_STAGES.has(job.stage)) continue
+
+    updateDocumentStage(repo, {
+      workspaceId: job.workspaceId,
+      kbId: job.kbId,
+      documentId: document.id,
+      stage: 'failed',
+      errorMessage: message,
+    })
+    recovered += 1
+  }
+
+  if (recovered > 0) {
+    logStructured('knowledge', 'info', `recovered ${recovered} interrupted ingest jobs on startup`)
+  }
+
+  return recovered
+}
+
+export function reconcileProcessingDocumentsWithoutIngestJob(): number {
+  const docRepo = getDocumentRepository()
+  const kbRepo = getKnowledgeBaseRepository()
+  let fixed = 0
+  const message = '索引任务状态异常，请重新向量化'
+
+  for (const kb of kbRepo.listAllActive()) {
+    for (const doc of docRepo.listByKb(kb.id)) {
+      if (!doc.status || !ACTIVE_INGEST_STAGES.has(doc.status)) continue
+      if (docRepo.findIngestJobByDocumentId(doc.id)) continue
+
+      updateDocumentStage(docRepo, {
+        workspaceId: kb.workspaceId,
+        kbId: kb.id,
+        documentId: doc.id,
+        stage: 'failed',
+        errorMessage: message,
+      })
+      fixed += 1
+    }
+  }
+
+  if (fixed > 0) {
+    logStructured('knowledge', 'warn', `reconciled ${fixed} processing documents without ingest jobs`)
+  }
+
+  return fixed
+}
 
 export function recoverStaleIngestJobs(): number {
   const repo = getDocumentRepository()
@@ -958,6 +1131,7 @@ export async function reindexDocument(options: {
     kbId: options.kbId,
     filePath: path,
     sourceId: doc.sourceId,
+    documentId: options.documentId,
   })
 
   refreshKbStats(options.workspaceId, options.kbId, {

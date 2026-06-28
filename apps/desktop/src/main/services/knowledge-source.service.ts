@@ -14,6 +14,7 @@ import { scanDirectory } from '@toolman/knowledge'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { ingestFilePaths, ingestUrlDocument } from './knowledge-ingest.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
+import { assertKnowledgeBaseAcceptsUrls } from './knowledge-kb-kind-guard'
 import { ensureKnowledgeBaseStorageSource } from './knowledge-kb-storage-source.service'
 import { copyScannedFilesToStorage } from './knowledge-storage-copy.service'
 import { resolveKnowledgeWatchConfig } from './knowledge-watch-config.service'
@@ -143,6 +144,7 @@ export async function addKnowledgeUrl(input: unknown) {
   if (!kb) {
     throw new Error('知识库不存在')
   }
+  assertKnowledgeBaseAcceptsUrls(kb)
 
   const url = data.url.trim()
   const docRepo = getDocumentRepository()

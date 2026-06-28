@@ -14,6 +14,7 @@ export interface ParseFileOcrOptions {
   recognizePage: OcrPageRecognizer
   recognizeImage: (input: { buffer: Buffer; mimeType: string }) => Promise<string>
   maxPdfPages?: number
+  onProgress?: (currentPage: number, totalPages: number) => void
 }
 
 export interface ParseFileOptions {
@@ -22,7 +23,8 @@ export interface ParseFileOptions {
   /** 当文件路径无扩展名（如 blob 暂存）时显式指定类型 */
   kind?: SupportedFileKind
   /** 聊天附件等场景：有文本则跳过 OCR，加快响应 */
-  pdfTextQuality?: 'strict' | 'lenient'
+  pdfTextQuality?: 'strict' | 'lenient' | 'prefer-extracted'
+  onOcrProgress?: (currentPage: number, totalPages: number) => void
 }
 
 export async function parseFile(filePath: string, options?: ParseFileOptions): Promise<ParsedDocument> {
@@ -51,6 +53,7 @@ export async function parseFile(filePath: string, options?: ParseFileOptions): P
             ? {
                 recognizePage: options.ocr.recognizePage,
                 maxPages: options.ocr.maxPdfPages,
+                onProgress: options.onOcrProgress ?? options.ocr.onProgress,
               }
             : undefined,
       })

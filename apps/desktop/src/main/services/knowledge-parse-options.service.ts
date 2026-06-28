@@ -13,7 +13,10 @@ export function buildKnowledgeParseOptions(
   kbId: string,
 ): ParseFileOptions {
   const docProcessor = resolveDocProcessorConfig(workspaceId, kbId)
-  const options: ParseFileOptions = { enhanced: docProcessor.enhanced }
+  const options: ParseFileOptions = {
+    enhanced: docProcessor.enhanced,
+    pdfTextQuality: 'prefer-extracted',
+  }
 
   if (!isDocumentOcrEnabled()) {
     return options

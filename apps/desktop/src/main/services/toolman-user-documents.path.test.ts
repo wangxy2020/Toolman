@@ -10,6 +10,23 @@ describe('toolman user document path helpers', () => {
     vi.doUnmock('electron')
   })
 
+  it('uses ToolmanData as documents root for packaged and dev builds', async () => {
+    vi.doMock('electron', () => ({
+      app: {
+        getPath: (name: string) => (name === 'documents' ? '/Users/demo/Documents' : '/tmp'),
+        isPackaged: true,
+      },
+    }))
+
+    const {
+      getToolmanDocumentsRootPath,
+      getAlternateToolmanDocumentsRoot,
+    } = await import('./toolman-user-documents.service')
+
+    expect(getToolmanDocumentsRootPath()).toBe('/Users/demo/Documents/ToolmanData')
+    expect(getAlternateToolmanDocumentsRoot()).toBe('/Users/demo/Documents/Toolman')
+  })
+
   it('detects stale workspace paths under a different user folder', async () => {
     vi.doMock('electron', () => ({
       app: {

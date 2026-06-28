@@ -41,49 +41,24 @@ export function getToolmanDocumentsRootPath(): string {
   }
 
   const documents = app.getPath('documents')
-  const toolmanRoot = join(documents, TOOLMAN_DOCUMENTS_DIR)
-  const toolmanDataRoot = join(documents, TOOLMAN_DATA_DOCUMENTS_DIR)
-
-  if (shouldUseToolmanDataDocumentsRoot(toolmanRoot)) {
-    return toolmanDataRoot
-  }
-
-  return toolmanRoot
+  return join(documents, TOOLMAN_DATA_DOCUMENTS_DIR)
 }
 
-/** The other Documents root kept for legacy path detection and one-time migration. */
+/** Legacy Documents root kept for one-time migration from older installs. */
 export function getAlternateToolmanDocumentsRoot(): string {
   const documents = app.getPath('documents')
-  const active = getToolmanDocumentsRootPath()
-  const toolmanRoot = join(documents, TOOLMAN_DOCUMENTS_DIR)
-  const toolmanDataRoot = join(documents, TOOLMAN_DATA_DOCUMENTS_DIR)
-  return normalizeFolderPath(active) === normalizeFolderPath(toolmanDataRoot)
-    ? toolmanRoot
-    : toolmanDataRoot
+  return join(documents, TOOLMAN_DOCUMENTS_DIR)
 }
 
 /** All roots that may contain legacy flat or user-scoped Toolman folders. */
 export function listAllToolmanDocumentsRoots(): string[] {
-  const active = getToolmanDocumentsRootPath()
-  const alternate = getAlternateToolmanDocumentsRoot()
-  if (normalizeFolderPath(active) === normalizeFolderPath(alternate)) {
-    return [active]
-  }
-  return [active, alternate]
-}
-
-function shouldUseToolmanDataDocumentsRoot(toolmanRoot: string): boolean {
-  if (!app.isPackaged) {
-    return true
-  }
-  return isDevRepositoryRoot(toolmanRoot)
-}
-
-function isDevRepositoryRoot(path: string): boolean {
-  return (
-    existsSync(join(path, '.git')) ||
-    existsSync(join(path, 'pnpm-workspace.yaml'))
-  )
+  const documents = app.getPath('documents')
+  const roots = [
+    getToolmanDocumentsRootPath(),
+    join(documents, TOOLMAN_DOCUMENTS_DIR),
+    join(documents, TOOLMAN_DATA_DOCUMENTS_DIR),
+  ]
+  return [...new Set(roots.map((root) => normalizeFolderPath(root)))]
 }
 
 export function isPathUnderToolmanDocumentsRoot(
@@ -104,7 +79,7 @@ export function isAlternateToolmanDocumentsPath(
   return normalized === prefix || normalized.startsWith(`${prefix}/`)
 }
 
-/** ~/Documents/Toolman/{username}/ */
+/** ~/Documents/ToolmanData/{username}/ */
 export function getToolmanUserRootPath(): string {
   return join(getToolmanDocumentsRootPath(), getToolmanUserFolderName())
 }
@@ -190,7 +165,7 @@ export function isUserScopedToolmanPath(path: string, userFolderName = getToolma
   return normalized === prefix || normalized.startsWith(`${prefix}/`)
 }
 
-/** Detect flat Toolman paths like ~/Documents/Toolman/本地知识库 or ~/Documents/Toolman/用户1本地知识库 */
+/** Detect flat legacy paths like ~/Documents/Toolman/本地知识库 or ~/Documents/ToolmanData/用户1本地知识库 */
 export function resolveFlatToolmanSubfolder(path: string): string | null {
   const normalized = normalizeFolderPath(path)
 

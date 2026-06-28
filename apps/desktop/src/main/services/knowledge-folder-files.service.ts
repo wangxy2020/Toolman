@@ -23,6 +23,8 @@ function isPathInsideFolder(folderPath: string, filePath: string): boolean {
   return target === root || target.startsWith(`${root}${sep}`)
 }
 
+export { isPathInsideFolder }
+
 export function listKnowledgeFolderFiles(input: unknown) {
   const data = KnowledgeFolderListFilesInputSchema.parse(input)
   const folderPath = data.folderPath.trim()
@@ -70,7 +72,7 @@ export function importKnowledgeFolderFiles(input: unknown) {
         continue
       }
 
-      const destinationPath = join(folderPath, basename(sourcePath))
+      const destinationPath = resolve(join(folderPath, basename(sourcePath)))
       if (existsSync(destinationPath)) {
         skipped += 1
         continue

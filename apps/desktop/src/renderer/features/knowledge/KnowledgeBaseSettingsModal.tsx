@@ -19,7 +19,7 @@ import { KnowledgeSearchDebugPanel } from './KnowledgeSearchDebugPanel'
 import { KnowledgeSourcesPanel } from './KnowledgeSourcesPanel'
 import { KnowledgeIngestJobPanel } from './KnowledgeIngestJobPanel'
 import { MemoryEntryPanel } from './MemoryEntryPanel'
-import { SYSTEM_DEFAULT_FOLDER_KB_NAMES } from './knowledge-sidebar-types'
+import { SYSTEM_DEFAULT_FOLDER_KB_NAME, SYSTEM_DEFAULT_FOLDER_KB_NAMES } from './knowledge-sidebar-types'
 import { useI18n } from '../../i18n/useI18n'
 import { translateKnowledgeFolderName } from '../../i18n/system-labels'
 
@@ -264,20 +264,26 @@ export function KnowledgeBaseSettingsModal({
     if (isLocalFilesKb) {
       const base = localFilesRootFolder.path
       if (!base) return null
-      if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) return base
+      if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) {
+        return buildStoragePathForKb(base, SYSTEM_DEFAULT_FOLDER_KB_NAME) || null
+      }
       return buildStoragePathForKb(base, kb.name) || null
     }
 
     if (isLocalKb) {
       const base = localRootFolder.path
       if (!base) return null
-      if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) return base
+      if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) {
+        return buildStoragePathForKb(base, SYSTEM_DEFAULT_FOLDER_KB_NAME) || null
+      }
       return buildStoragePathForKb(base, kb.name) || null
     }
 
     const base = networkRootFolder.path
     if (!base) return null
-    if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) return base
+    if (SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name)) {
+      return buildStoragePathForKb(base, SYSTEM_DEFAULT_FOLDER_KB_NAME) || null
+    }
     return buildStoragePathForKb(base, kb.name) || null
   }, [
     isLocalKb,

@@ -5721,6 +5721,7 @@ html.theme-dark .tm-invite-action-btn {
 
 .tm-kb-file-card-status-text--processing {
   color: var(--tm-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .tm-kb-file-card-status-text--ready {
@@ -5764,6 +5765,15 @@ html.theme-dark .tm-invite-action-btn {
 
 .tm-kb-file-card-action--danger:hover:not(:disabled) {
   color: #dc2626;
+  background: #fef2f2;
+}
+
+.tm-kb-file-card-action--cancel {
+  color: #dc2626;
+}
+
+.tm-kb-file-card-action--cancel:hover:not(:disabled) {
+  color: #b91c1c;
   background: #fef2f2;
 }
 

@@ -11,6 +11,7 @@ export function listKnowledgeFileRegistry(input: unknown): KnowledgeFileRegistry
   const repo = getDocumentRepository()
 
   repo.pruneOrphanedFileRegistry(data.workspaceId)
+  repo.reconcileFileRegistryPaths(data.workspaceId)
 
   return repo
     .listFileRegistryByWorkspace(data.workspaceId, { limit: data.limit })

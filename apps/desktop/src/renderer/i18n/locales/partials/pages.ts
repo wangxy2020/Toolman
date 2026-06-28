@@ -105,6 +105,7 @@ export const knowledgePageZhCN = {
     invalidUrl: '请拖拽有效的网页链接',
     selectFile: '选择文件',
     deleteFile: '删除文件',
+    cancelIngest: '停止索引',
   },
   contextMenu: {
     closeMenu: '关闭菜单',
@@ -347,6 +348,7 @@ export const knowledgePageEn = {
     invalidUrl: 'Drop a valid web page link',
     selectFile: 'Select file',
     deleteFile: 'Delete file',
+    cancelIngest: 'Stop indexing',
   },
   contextMenu: {
     closeMenu: 'Close menu',

@@ -170,6 +170,7 @@ function migrateSystemKnowledgeBaseStorageLayout(
     }
     if (existsSync(dest)) {
       docRepo.update(doc.id, kbId, { absolutePath: dest })
+      docRepo.renameFileRegistryPath(workspaceId, resolved, dest)
     }
   }
 
@@ -209,10 +210,8 @@ function resolveDefaultFolderKnowledgeBase(
 
   let existing =
     items.find((item) => item.name === name && item.kind === kind) ??
-    items.find((item) => item.name === name) ??
     (legacyName
-      ? items.find((item) => item.name === legacyName && item.kind === kind) ??
-        items.find((item) => item.name === legacyName)
+      ? items.find((item) => item.name === legacyName && item.kind === kind)
       : null)
 
   if (existing && existing.name !== name) {
@@ -222,6 +221,10 @@ function resolveDefaultFolderKnowledgeBase(
       name,
     })
     existing = { ...existing, name }
+  }
+
+  if (existing && existing.kind !== kind) {
+    return null
   }
 
   return existing
@@ -297,12 +300,14 @@ export function ensureDefaultFolderKnowledgeBase(input: unknown) {
         : ensureWorkspaceKnowledgeFolder({ workspaceId: data.workspaceId })
 
   const existing = resolveDefaultFolderKnowledgeBase(data.workspaceId, data.kind)
-  const kb = existing ?? createKnowledgeBase({
-    workspaceId: data.workspaceId,
-    name,
-    description: '默认文件夹知识库',
-    kind: data.kind,
-  })
+  const kb =
+    existing ??
+    createKnowledgeBase({
+      workspaceId: data.workspaceId,
+      name,
+      description: '默认文件夹知识库',
+      kind: data.kind,
+    })
 
   purgeLegacyDefaultDiskFoldersForKind(data.workspaceId, folderPath, data.kind)
   removeLegacyKnowledgeBaseRows(data.workspaceId, data.kind)

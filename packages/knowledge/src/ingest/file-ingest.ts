@@ -6,7 +6,7 @@ import { openKbVectorStore } from '../vector/create-vector-store.js'
 import type { VectorBackend } from '../vector/types.js'
 import { getKbVectorStorePath } from '../vector/file-vector-store.js'
 import type { ChunkConfig } from '../chunking/text-chunker.js'
-import type { EmbedOptions } from '../embedding/ollama-embedder.js'
+import type { EmbedOptions, EmbedProgressCallback } from '../embedding/ollama-embedder.js'
 import type { ParseFileOptions } from '../parsers/parse-file.js'
 import { ingestContent } from './content-ingest.js'
 
@@ -99,6 +99,7 @@ export async function ingestUrlContent(input: {
   embedModel: string
   vectorsDir: string
   vectorBackend?: VectorBackend
+  onEmbedProgress?: EmbedProgressCallback
 }): Promise<IngestFileResult> {
   return ingestContent({
     sourceKey: input.url,
@@ -114,5 +115,6 @@ export async function ingestUrlContent(input: {
     embedModel: input.embedModel,
     vectorsDir: input.vectorsDir,
     vectorBackend: input.vectorBackend,
+    onEmbedProgress: input.onEmbedProgress,
   })
 }

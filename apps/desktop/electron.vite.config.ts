@@ -27,6 +27,7 @@ export default defineConfig({
       alias: {
         '@main': resolve('src/main'),
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
+        '@toolman/knowledge': resolve('../../packages/knowledge/src/index.ts'),
       },
     },
   },

@@ -1,10 +1,10 @@
 import { parentPort } from 'node:worker_threads'
 import { toErrorMessage } from '@toolman/shared'
-import { hashFileBytes, parseFile } from '@toolman/knowledge'
+import { hashFileBytes, parseFile, type ParseFileOptions } from '@toolman/knowledge'
 
 interface ParseFileWorkerRequest {
   filePath: string
-  enhanced?: boolean
+  parseOptions?: Pick<ParseFileOptions, 'enhanced' | 'pdfTextQuality'>
 }
 
 interface ParseFileWorkerSuccess {
@@ -27,7 +27,7 @@ parentPort?.on('message', (request: ParseFileWorkerRequest) => {
   void (async () => {
     try {
       const contentHash = hashFileBytes(request.filePath)
-      const parsed = await parseFile(request.filePath, { enhanced: request.enhanced })
+      const parsed = await parseFile(request.filePath, request.parseOptions)
       const response: ParseFileWorkerResponse = {
         ok: true,
         contentHash,
