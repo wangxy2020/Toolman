@@ -174,34 +174,53 @@ export function CommunityPage({
 
         <CommunityPageStatusArea>
           <div className="tm-module-content">
-        {effectiveAction === 'recommend' ? (
-          <RecommendPanel />
-        ) : effectiveAction === 'mcp' ? (
-          <McpMarketPanel />
-        ) : effectiveAction === 'news' ? (
-          <NewsCenterPanel />
-        ) : effectiveAction === 'messages' ? (
-          <MessageBoardPanel />
-        ) : effectiveAction === 'skills' ? (
-          <SkillsMarketPanel />
-        ) : effectiveAction === 'workflow' ? (
-          <WorkflowMarketPanel />
-        ) : effectiveAction === 'tasks' ? (
-          <TaskMarketPanel />
-        ) : effectiveAction === 'knowledge' ? (
-          <KnowledgeMarketPanel />
-        ) : effectiveAction === 'subscribe' ? (
-          <UserCenterPanel />
-        ) : effectiveAction === 'management' ? (
-          <AdminModerationPanel />
-        ) : panel ? (
-          <CommunityPlaceholderPanel title={panel.title} hint={panel.hint} icon={panel.icon} />
-        ) : (
-          <div className="tm-module-empty">
-            <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
-            <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
-          </div>
-        )}
+            <div hidden={effectiveAction !== 'recommend'} aria-hidden={effectiveAction !== 'recommend'}>
+              <RecommendPanel />
+            </div>
+            <div hidden={effectiveAction !== 'mcp'} aria-hidden={effectiveAction !== 'mcp'}>
+              <McpMarketPanel />
+            </div>
+            <div hidden={effectiveAction !== 'news'} aria-hidden={effectiveAction !== 'news'}>
+              <NewsCenterPanel />
+            </div>
+            <div hidden={effectiveAction !== 'messages'} aria-hidden={effectiveAction !== 'messages'}>
+              <MessageBoardPanel />
+            </div>
+            <div hidden={effectiveAction !== 'skills'} aria-hidden={effectiveAction !== 'skills'}>
+              <SkillsMarketPanel />
+            </div>
+            <div hidden={effectiveAction !== 'workflow'} aria-hidden={effectiveAction !== 'workflow'}>
+              <WorkflowMarketPanel />
+            </div>
+            <div hidden={effectiveAction !== 'tasks'} aria-hidden={effectiveAction !== 'tasks'}>
+              <TaskMarketPanel />
+            </div>
+            <div hidden={effectiveAction !== 'knowledge'} aria-hidden={effectiveAction !== 'knowledge'}>
+              <KnowledgeMarketPanel />
+            </div>
+            <div hidden={effectiveAction !== 'subscribe'} aria-hidden={effectiveAction !== 'subscribe'}>
+              <UserCenterPanel />
+            </div>
+            {effectiveAction === 'management' ? <AdminModerationPanel /> : null}
+            {effectiveAction !== 'recommend' &&
+            effectiveAction !== 'mcp' &&
+            effectiveAction !== 'news' &&
+            effectiveAction !== 'messages' &&
+            effectiveAction !== 'skills' &&
+            effectiveAction !== 'workflow' &&
+            effectiveAction !== 'tasks' &&
+            effectiveAction !== 'knowledge' &&
+            effectiveAction !== 'subscribe' &&
+            effectiveAction !== 'management' ? (
+              panel ? (
+                <CommunityPlaceholderPanel title={panel.title} hint={panel.hint} icon={panel.icon} />
+              ) : (
+                <div className="tm-module-empty">
+                  <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
+                  <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
+                </div>
+              )
+            ) : null}
           </div>
         </CommunityPageStatusArea>
       </main>

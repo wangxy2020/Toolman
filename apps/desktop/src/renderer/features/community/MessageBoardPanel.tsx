@@ -7,6 +7,7 @@ import { IconMessageBoard } from '../../components/icons'
 import { deleteCommunityBoardMessage } from './community-api.client'
 import { notifyCommunityBoardChanged } from './community-events'
 import { formatCommunityHubError } from './community-hub-error-utils'
+import { invalidateCommunityListCache } from './community-list-cache'
 import { formatBoardMessageTitle, formatNewsDate, formatNewsPreview } from './community-news-utils'
 import { buildBoardReplyTarget } from './community-comment-utils'
 import { sortCommunityListItems } from './community-list-sort'
@@ -76,6 +77,7 @@ export function MessageBoardPanel() {
       if (selectedId === messageId) setSelectedId(null)
       if (detailMessageId === messageId) setDetailMessageId(null)
       board.removeMessage(messageId)
+      invalidateCommunityListCache('board:')
       notifyCommunityBoardChanged()
     } catch (deleteError) {
       const message =

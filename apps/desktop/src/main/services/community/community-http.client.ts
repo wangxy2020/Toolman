@@ -45,6 +45,30 @@ export class CommunityHttpError extends Error {
   }
 }
 
+const MAX_CONCURRENT_COMMUNITY_REQUESTS = 4
+let activeCommunityRequests = 0
+const pendingCommunityRequests: Array<() => void> = []
+
+async function acquireCommunityRequestSlot(): Promise<void> {
+  if (activeCommunityRequests < MAX_CONCURRENT_COMMUNITY_REQUESTS) {
+    activeCommunityRequests += 1
+    return
+  }
+
+  await new Promise<void>((resolve) => {
+    pendingCommunityRequests.push(() => {
+      activeCommunityRequests += 1
+      resolve()
+    })
+  })
+}
+
+function releaseCommunityRequestSlot(): void {
+  activeCommunityRequests = Math.max(0, activeCommunityRequests - 1)
+  const next = pendingCommunityRequests.shift()
+  next?.()
+}
+
 export function isCommunityFetchNetworkError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const message = error.message.toLowerCase()
@@ -71,6 +95,13 @@ export function isCommunityFetchNetworkError(error: unknown): boolean {
 
 export function humanizeCommunityFetchError(error: unknown): string {
   if (error instanceof CommunityHttpError) {
+    if (
+      error.status === 429 ||
+      error.code === 'RATE_LIMITED' ||
+      error.message.toLowerCase().includes('rate limit')
+    ) {
+      return '社区服务请求过于频繁，请稍后再试'
+    }
     return error.message
   }
   if (isCommunityFetchNetworkError(error)) {
@@ -251,7 +282,7 @@ export class CommunityHttpClient {
         if (!shouldRetry) {
           throw error
         }
-        await sleepMs(800 * (attempt + 1))
+        await sleepMs(1200 * (attempt + 1))
       }
     }
 
@@ -267,40 +298,45 @@ export class CommunityHttpClient {
       authenticated?: boolean
     } = { method: 'GET' },
   ): Promise<T> {
-    const url = this.resolveUrl(path)
+    await acquireCommunityRequestSlot()
+    try {
+      const url = this.resolveUrl(path)
 
-    const headers = new Headers({
-      Accept: 'application/json',
-    })
-    if (init.contentType) {
-      headers.set('Content-Type', init.contentType)
-      if (init.body instanceof Buffer) {
-        headers.set('Content-Length', String(init.body.length))
+      const headers = new Headers({
+        Accept: 'application/json',
+      })
+      if (init.contentType) {
+        headers.set('Content-Type', init.contentType)
+        if (init.body instanceof Buffer) {
+          headers.set('Content-Length', String(init.body.length))
+        }
+      } else if (init.body !== undefined && !(init.body instanceof FormData)) {
+        headers.set('Content-Type', 'application/json')
       }
-    } else if (init.body !== undefined && !(init.body instanceof FormData)) {
-      headers.set('Content-Type', 'application/json')
-    }
-    if (init.authenticated !== false) {
-      await this.applyAuthHeaders(headers)
-    }
-
-    const response = await this.fetchImpl(url, {
-      method: init.method,
-      headers,
-      body: init.body instanceof Buffer ? new Uint8Array(init.body) : init.body,
-    }).catch((error: unknown) => {
-      if (isCommunityFetchNetworkError(error)) {
-        throw new CommunityHttpError(
-          humanizeCommunityFetchError(error),
-          0,
-          'HUB_CONNECTION_FAILED',
-        )
+      if (init.authenticated !== false) {
+        await this.applyAuthHeaders(headers)
       }
-      throw error
-    })
 
-    const text = await response.text()
-    return parseCommunityApiResponse<T>(text, response.status)
+      const response = await this.fetchImpl(url, {
+        method: init.method,
+        headers,
+        body: init.body instanceof Buffer ? new Uint8Array(init.body) : init.body,
+      }).catch((error: unknown) => {
+        if (isCommunityFetchNetworkError(error)) {
+          throw new CommunityHttpError(
+            humanizeCommunityFetchError(error),
+            0,
+            'HUB_CONNECTION_FAILED',
+          )
+        }
+        throw error
+      })
+
+      const text = await response.text()
+      return parseCommunityApiResponse<T>(text, response.status)
+    } finally {
+      releaseCommunityRequestSlot()
+    }
   }
 
   private async applyAuthHeaders(headers: Headers): Promise<void> {

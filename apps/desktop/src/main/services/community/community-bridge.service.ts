@@ -326,6 +326,44 @@ async function connectRemoteCommunityHub(baseUrl: string): Promise<CommunityHubS
   }
 }
 
+async function stopCommunityHubProcessByPid(pid: number): Promise<void> {
+  if (pid <= 0) return
+  if (childProcess?.pid === pid) {
+    await stopCommunityHub()
+    return
+  }
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 2_000)
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' }).on('close', () => {
+        clearTimeout(timeout)
+        resolve()
+      })
+      return
+    }
+
+    try {
+      process.kill(pid, 'SIGTERM')
+    } catch {
+      clearTimeout(timeout)
+      resolve()
+      return
+    }
+
+    setTimeout(() => {
+      try {
+        process.kill(pid, 0)
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // process already exited
+      }
+      clearTimeout(timeout)
+      resolve()
+    }, 500)
+  })
+}
+
 async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null> {
   const binaryPath = resolveCommunityHubBinaryPath()
   const portCandidates = new Set<number>()
@@ -350,10 +388,14 @@ async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null
       }
 
       const rateLimitRpm = health.rate_limit_rpm ?? 0
-      if (!app.isPackaged && rateLimitRpm > 0) {
+      if (rateLimitRpm > 0) {
         log(
-          `skipping attach to hub on port ${port} (rate_limit_rpm=${rateLimitRpm}); dev will spawn an unlimited hub instead`,
+          `skipping attach to hub on port ${port} (rate_limit_rpm=${rateLimitRpm}); will spawn an unlimited hub instead`,
         )
+        if (portFile?.port === port && portFile.pid) {
+          await stopCommunityHubProcessByPid(portFile.pid)
+          await removeCommunityHubPortFile()
+        }
         continue
       }
 
@@ -593,6 +635,18 @@ async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
     try {
       const health = await client.health()
       if (health.status === 'healthy') {
+        if ((health.rate_limit_rpm ?? 0) > 0) {
+          log(
+            `replacing rate-limited community hub sidecar (rate_limit_rpm=${health.rate_limit_rpm})`,
+          )
+          if (childProcess?.pid === portFile.pid) {
+            await stopCommunityHub()
+          } else if (portFile.pid) {
+            await stopCommunityHubProcessByPid(portFile.pid)
+            await removeCommunityHubPortFile()
+          }
+          return
+        }
         return
       }
     } catch {

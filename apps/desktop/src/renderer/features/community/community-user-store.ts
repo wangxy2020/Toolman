@@ -9,6 +9,12 @@ let cachedProfile: CommunityUserProfile | null = null
 let cachedAt = 0
 let inflight: Promise<CommunityUserProfile | null> | null = null
 
+export function peekCommunityUserProfile(): CommunityUserProfile | null {
+  if (!cachedProfile) return null
+  if (Date.now() - cachedAt >= PROFILE_CACHE_TTL_MS) return null
+  return cachedProfile
+}
+
 export function invalidateCommunityUserProfile(): void {
   cachedProfile = null
   cachedAt = 0

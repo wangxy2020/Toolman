@@ -5,8 +5,10 @@ import { type CommunityUserProfile } from '@toolman/shared'
 import {
   invalidateCommunityUserProfile,
   loadCommunityUserProfile,
+  peekCommunityUserProfile,
   subscribeCommunityUserProfile,
 } from './community-user-store'
+import { formatCommunityHubError } from './community-hub-error-utils'
 
 export function useCommunityUser(autoLoad = true) {
   const [profile, setProfile] = useState<CommunityUserProfile | null>(null)
@@ -14,6 +16,12 @@ export function useCommunityUser(autoLoad = true) {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    const cached = peekCommunityUserProfile()
+    if (cached) {
+      setProfile(cached)
+      return cached
+    }
+
     setLoading(true)
     setError(null)
     try {
@@ -22,7 +30,7 @@ export function useCommunityUser(autoLoad = true) {
       return user
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : '加载用户信息失败'
-      setError(message)
+      setError(formatCommunityHubError(message))
       setProfile(null)
       throw loadError
     } finally {

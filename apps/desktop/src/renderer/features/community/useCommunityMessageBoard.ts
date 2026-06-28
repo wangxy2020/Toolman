@@ -11,6 +11,11 @@ import {
 } from './community-api.client'
 import { notifyCommunityBoardChanged, notifyCommunityUserDataChanged } from './community-events'
 import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
+import {
+  fetchCommunityListCached,
+  invalidateCommunityListCache,
+  readCommunityListCache,
+} from './community-list-cache'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
@@ -29,6 +34,8 @@ import { useCommunityYjsBoardUpdates } from './useCommunityYjsUpdates'
 function applyMockMessage(message: CommunityBoardMessage): CommunityBoardMessage {
   return applyUiMockInteractionToMessage(message)
 }
+
+const BOARD_LIST_CACHE_KEY = 'board:messages:root'
 
 export function useCommunityMessageBoard() {
   const [items, setItems] = useState<CommunityBoardMessage[]>([])
@@ -50,11 +57,22 @@ export function useCommunityMessageBoard() {
 
   useCommunityYjsBoardUpdates(setItems)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (options?: { force?: boolean }) => {
+    const cached = !options?.force
+      ? readCommunityListCache<Awaited<ReturnType<typeof listCommunityBoardMessages>>>(
+          BOARD_LIST_CACHE_KEY,
+        )
+      : null
+    if (!cached?.items.length) {
+      setLoading(true)
+    }
     setError(null)
     try {
-      const list = await listCommunityBoardMessages()
+      const list = options?.force
+        ? await listCommunityBoardMessages()
+        : await fetchCommunityListCached(BOARD_LIST_CACHE_KEY, () => listCommunityBoardMessages(), {
+            force: options?.force,
+          })
       setItems(
         withUiMockItem(list.items, getUiMockBoardMessage()).map(applyMockMessage),
       )
@@ -86,7 +104,7 @@ export function useCommunityMessageBoard() {
       setRepliesByMessageId((prev) => ({ ...prev, [messageId]: list.items }))
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : '加载回复失败'
-      setError(message)
+      setError(formatCommunityHubError(message))
     } finally {
       setReplyLoadingIds((prev) => {
         const next = new Set(prev)
@@ -105,7 +123,8 @@ export function useCommunityMessageBoard() {
     try {
       await createCommunityBoardMessage({ body })
       setDraft('')
-      await load()
+      invalidateCommunityListCache('board:')
+      await load({ force: true })
       notifyCommunityBoardChanged()
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : '发布留言失败'
@@ -126,7 +145,8 @@ export function useCommunityMessageBoard() {
       try {
         await createCommunityBoardMessage({ body, parentId: messageId })
         setReplyDrafts((prev) => ({ ...prev, [messageId]: '' }))
-        await Promise.all([load(), loadReplies(messageId)])
+        invalidateCommunityListCache('board:')
+        await Promise.all([load({ force: true }), loadReplies(messageId)])
         notifyCommunityBoardChanged()
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : '回复失败'

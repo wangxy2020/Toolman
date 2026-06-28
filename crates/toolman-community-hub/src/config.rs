@@ -263,7 +263,8 @@ fn resolve_rate_limit_rpm() -> u64 {
         }
         warn!(value = %value, "invalid {ENV_RATE_LIMIT_RPM}, using default");
     }
-    DEFAULT_RATE_LIMIT_RPM
+    // Desktop sidecar binds loopback only; throttling local IPC traffic breaks UX.
+    0
 }
 
 fn resolve_semantic_search_enabled() -> bool {

@@ -17,6 +17,10 @@ import {
 } from './community-api.client'
 import { formatNewsListError } from './community-news-utils'
 import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
+import {
+  fetchCommunityListCached,
+  readCommunityListCache,
+} from './community-list-cache'
 import { notifyCommunityUserDataChanged } from './community-events'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
@@ -65,6 +69,7 @@ async function fetchEnabledNewsSources(
 export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
   const { query, autoLoad = true, loadRecommended = false, autoLoadDetail = false } = options
   const listInput = useMemo(() => ({ ...query }), [query])
+  const cacheKey = useMemo(() => `news:${JSON.stringify(listInput)}`, [listInput])
 
   const [items, setItems] = useState<CommunityNewsArticle[]>([])
   const [recommended, setRecommended] = useState<CommunityNewsArticle[]>([])
@@ -79,19 +84,26 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (loadOptions?: LoadCommunityNewsOptions) => {
-    setLoading(true)
+    const force = Boolean(loadOptions?.fetchFeeds)
+    const cached = !force
+      ? readCommunityListCache<Awaited<ReturnType<typeof listCommunityNewsArticles>>>(cacheKey)
+      : null
+    if (!cached?.items.length) {
+      setLoading(true)
+    }
     setError(null)
     try {
       if (loadOptions?.fetchFeeds) {
         await fetchEnabledNewsSources('all-enabled')
       }
 
-      let list = await listCommunityNewsArticles(listInput)
-
-      if (!loadOptions?.fetchFeeds && list.items.length === 0) {
-        await fetchEnabledNewsSources('needs-initial-fetch')
-        list = await listCommunityNewsArticles(listInput)
-      }
+      const list = force
+        ? await listCommunityNewsArticles(listInput)
+        : await fetchCommunityListCached(
+            cacheKey,
+            () => listCommunityNewsArticles(listInput),
+            { force: loadOptions?.fetchFeeds },
+          )
 
       const recommendedList = loadRecommended
         ? (await listRecommendedCommunityNews()).items
@@ -119,7 +131,7 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [autoLoadDetail, listInput, loadRecommended])
+  }, [autoLoadDetail, cacheKey, listInput, loadRecommended])
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true)

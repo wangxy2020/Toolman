@@ -18,6 +18,11 @@ import {
   listCommunityResources,
 } from './community-api.client'
 import { notifyCommunityUserDataChanged } from './community-events'
+import { formatCommunityHubError, isCommunityHubRateLimitError } from './community-hub-error-utils'
+import {
+  fetchCommunityListCached,
+  readCommunityListCache,
+} from './community-list-cache'
 import { useCommunityFederatedCatalogUpdates } from './useCommunityFederatedCatalogUpdates'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
@@ -65,6 +70,10 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
     }),
     [query, resourceType],
   )
+  const cacheKey = useMemo(
+    () => `resources:${JSON.stringify(listInput)}`,
+    [listInput],
+  )
 
   const [items, setItems] = useState<CommunityResourceItem[]>([])
   const [detail, setDetail] = useState<CommunityResourceDetail | null>(null)
@@ -78,11 +87,22 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
   >(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (options?: { force?: boolean }) => {
+    const cached = !options?.force
+      ? readCommunityListCache<Awaited<ReturnType<typeof listCommunityResources>>>(cacheKey)
+      : null
+    if (!cached?.items.length) {
+      setLoading(true)
+    }
     setError(null)
     try {
-      const list = await listCommunityResources(listInput)
+      const list = options?.force
+        ? await listCommunityResources(listInput)
+        : await fetchCommunityListCached(
+            cacheKey,
+            () => listCommunityResources(listInput),
+            { force: options?.force },
+          )
       const mockType = resourceType ?? 'mcp'
       setItems(
         withUiMockItem(list.items, getUiMockResource(mockType)).map(applyUiMockInteractionToResource),
@@ -102,13 +122,15 @@ export function useCommunityResources(options: UseCommunityResourcesOptions = {}
         )
         setError(null)
       } else {
-        setError(message)
-        setItems([])
+        setError(formatCommunityHubError(message))
+        if (!isCommunityHubRateLimitError(message)) {
+          setItems([])
+        }
       }
     } finally {
       setLoading(false)
     }
-  }, [autoLoadDetail, listInput, resourceType])
+  }, [autoLoadDetail, cacheKey, listInput, resourceType])
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true)
