@@ -3,7 +3,7 @@ import { isAuthingConfigured, isAuthingDevMode } from './authing-auth.config.js'
 import { formatAuthingServiceError } from './authing-error-utils.js'
 import { getAuthingClient } from './authing-client.service.js'
 import { assertMatchingPasswords, assertValidPasswordLength } from './authing-password-utils.js'
-import { parseCnAuthAccount, type ParsedCnAuthAccount } from './cn-account-utils.js'
+import { parseCnAuthAccount } from './cn-account-utils.js'
 
 function phoneCountryCode(phone: string): string {
   return phone.startsWith('+86') ? '+86' : '+86'
@@ -67,8 +67,4 @@ export async function resetCnAccountPassword(
     }
     throw new AuthLoginError(formatResetPasswordError(error))
   }
-}
-
-export function describeCnResetAccountChannel(account: ParsedCnAuthAccount): string {
-  return account.channel === 'email' ? '邮箱' : '手机'
 }

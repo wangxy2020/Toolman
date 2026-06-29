@@ -17,13 +17,12 @@ use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::offer_answer_options::RTCOfferOptions;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
 
 use super::types::{
     ConnectionInfo, ConnectionMode, ConnectionState, SharedDataChannel, SharedPeerConnection,
     EVENTS_CHANNEL_LABEL, FILES_CHANNEL_LABEL, HANDSHAKE_PING, HANDSHAKE_PONG,
 };
-use crate::crypto::{ChannelCipherSet, WorkspaceKeyRegistry, WORKSPACE_KEY_LEN};
+use crate::crypto::{ChannelCipherSet, WORKSPACE_KEY_LEN};
 use crate::state::configured_ice_server_entries;
 
 const MAX_INCOMING_QUEUE_MESSAGES: usize = 512;
@@ -373,20 +372,6 @@ impl WebRtcSession {
         Ok(())
     }
 
-    pub async fn init_ciphers(
-        &self,
-        local_device_id: &str,
-        registry: &WorkspaceKeyRegistry,
-    ) -> Result<(), String> {
-        let (workspace_key, scope_id, key_version) = registry.resolve_workspace_material(
-            self.workspace_id.as_deref(),
-            local_device_id,
-            &self.peer_device_id,
-        )?;
-        self.init_ciphers_with_material(workspace_key, scope_id, key_version)
-            .await
-    }
-
     pub async fn rotate_ciphers_if_workspace(
         &self,
         workspace_id: &str,
@@ -631,10 +616,6 @@ impl WebRtcSession {
 
     pub async fn set_connection_mode(&self, mode: ConnectionMode) {
         *self.connection_mode.lock().await = Some(mode);
-    }
-
-    pub async fn connection_mode(&self) -> Option<ConnectionMode> {
-        self.connection_mode.lock().await.clone()
     }
 
     pub async fn info_snapshot(&self) -> ConnectionInfo {

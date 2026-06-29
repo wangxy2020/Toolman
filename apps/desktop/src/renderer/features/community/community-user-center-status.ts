@@ -6,10 +6,6 @@ import {
   getCommunityTaskStatusLabel,
 } from '../../i18n/community-status-labels'
 
-export function isTaskRejectedLike(task: CommunityTaskItem): boolean {
-  return task.status === 'rejected'
-}
-
 export function isResourceRejectedLike(item: CommunityResourceItem): boolean {
   return item.status === 'rejected'
 }

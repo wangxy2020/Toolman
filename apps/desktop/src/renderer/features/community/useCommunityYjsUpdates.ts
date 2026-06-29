@@ -3,7 +3,6 @@ import {
   CommunityBoardMessageSchema,
   CommunityYjsUpdateEventSchema,
   type CommunityBoardMessage,
-  type CommunityYjsDomain,
   type CommunityYjsUpdateEvent,
 } from '@toolman/shared'
 
@@ -35,18 +34,4 @@ export function useCommunityYjsBoardUpdates(
     })
     return unsubscribe
   }, [setItems])
-}
-
-export function useCommunityYjsDomainUpdates(
-  domain: CommunityYjsDomain,
-  onUpdate: (event: CommunityYjsUpdateEvent) => void,
-) {
-  useEffect(() => {
-    const unsubscribe = window.api.subscribe('community:yjs:update', (payload) => {
-      const parsed = CommunityYjsUpdateEventSchema.safeParse(payload)
-      if (!parsed.success || parsed.data.domain !== domain) return
-      onUpdate(parsed.data)
-    })
-    return unsubscribe
-  }, [domain, onUpdate])
 }

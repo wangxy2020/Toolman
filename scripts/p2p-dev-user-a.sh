@@ -11,6 +11,7 @@ source "$ROOT_DIR/scripts/p2p-community-env.sh"
 export TOOLMAN_DEV_IDENTITY_ID="${TOOLMAN_DEV_IDENTITY_ID:-00000000-0000-0000-0000-000000000001}"
 
 cd "$ROOT_DIR"
+node "$ROOT_DIR/scripts/write-build-provenance.mjs"
 pnpm build:p2p && pnpm build:libp2p
 pnpm --filter @toolman/desktop^... build
 exec env TOOLMAN_CONSOLE_LOG_LEVEL="${TOOLMAN_CONSOLE_LOG_LEVEL:-warn}" TOOLMAN_VITE_LOG_LEVEL="${TOOLMAN_VITE_LOG_LEVEL:-warn}" \

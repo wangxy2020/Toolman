@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::channel_cipher::{
-    derive_pairwise_bootstrap_key, ChannelCipherSet, WORKSPACE_KEY_LEN,
+    derive_pairwise_bootstrap_key, WORKSPACE_KEY_LEN,
 };
 
 #[derive(Clone)]

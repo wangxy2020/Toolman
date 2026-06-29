@@ -4,7 +4,6 @@ import type { TranslateFn } from '../../i18n/I18nProvider'
 import {
   buildCommunityResourcePublishSuccessMessage,
   buildCommunityTaskPublishSuccessMessage,
-  getCommunityResourceStatusLabel,
 } from '../../i18n/community-status-labels'
 
 export function buildResourcePublishSuccessMessage(
@@ -13,13 +12,6 @@ export function buildResourcePublishSuccessMessage(
   t: TranslateFn,
 ): string {
   return buildCommunityResourcePublishSuccessMessage(status, requireReview, t)
-}
-
-export function getResourceUserCenterStatusLabel(
-  status: CommunityResourceStatus,
-  t: TranslateFn,
-): string {
-  return getCommunityResourceStatusLabel(status, t)
 }
 
 export function buildTaskPublishSuccessMessage(

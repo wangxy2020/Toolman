@@ -9,11 +9,13 @@ import {
   type NotesEditorSettings,
   type NotesOpenMode,
 } from './notes-editor-settings'
+import { NotesSettingsModalStorageTab } from './NotesSettingsModalStorageTab'
 import {
   getDefaultNotesWorkingDirectory,
   normalizeStoredWorkingDirectory,
   resolveNotesWorkingDirectory,
 } from './notes-path-utils'
+import { NotesSettingsToggle, SETTINGS_TABS, type SettingsTab } from './notes-settings-modal-components'
 
 interface Props {
   settings: NotesEditorSettings
@@ -22,34 +24,6 @@ interface Props {
   onApply: (settings: NotesEditorSettings, workingDirectory: string | null) => void
   onExportBackup: () => void
   onImportBackup: (raw: string) => void
-}
-
-type SettingsTab = 'storage' | 'editor' | 'display'
-
-const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: 'storage', label: 'storage' },
-  { id: 'editor', label: 'editor' },
-  { id: 'display', label: 'display' },
-]
-
-function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      className={`tm-agent-toggle ${checked ? 'tm-agent-toggle--on' : ''}`}
-      onClick={() => onChange(!checked)}
-    >
-      <span className="tm-agent-toggle-thumb" />
-    </button>
-  )
 }
 
 export function NotesSettingsModal({
@@ -176,70 +150,19 @@ export function NotesSettingsModal({
 
           <div className="tm-notes-settings-modal-content">
             {activeTab === 'storage' ? (
-              <div className="tm-notes-settings-form">
-                <div className="tm-notes-settings-section-head">
-                  <span className="tm-notes-settings-section-title">{t('notesPage.settings.dataSection')}</span>
-                  <button
-                    type="button"
-                    className="tm-notes-settings-link-btn"
-                    onClick={handleResetDirectory}
-                  >
-                    {t('notesPage.settings.resetDefault')}
-                  </button>
-                </div>
-
-                <div className="tm-notes-settings-field-block">
-                  <label className="tm-notes-settings-label" htmlFor="notes-settings-directory">
-                    {t('notesPage.settings.workingDirectory')}
-                  </label>
-                  <div className="tm-notes-settings-workdir-group">
-                    <input
-                      id="notes-settings-directory"
-                      className="tm-notes-settings-workdir-input"
-                      value={draftWorkingDirectory}
-                      placeholder={defaultWorkingDirectory || t('common.loading')}
-                      title={draftWorkingDirectory}
-                      onChange={(event) => {
-                        setDirectoryTouched(true)
-                        setDraftWorkingDirectory(event.target.value)
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="tm-notes-settings-workdir-browse"
-                      onClick={() => void handlePickDirectory()}
-                    >
-                      {t('notesPage.settings.select')}
-                    </button>
-                  </div>
-                  <p className="tm-notes-settings-hint">
-                    {t('notesPage.settings.migrateHint')}
-                  </p>
-                </div>
-
-                <div className="tm-notes-settings-divider-block">
-                  <span className="tm-notes-settings-label">{t('notesPage.settings.backup')}</span>
-                  <div className="tm-notes-settings-action-row">
-                    <button
-                      type="button"
-                      className="tm-notes-settings-inline-btn"
-                      onClick={onExportBackup}
-                    >
-                      {t('notesPage.settings.exportJson')}
-                    </button>
-                    <button
-                      type="button"
-                      className="tm-notes-settings-inline-btn"
-                      onClick={handleImportBackup}
-                    >
-                      {t('notesPage.settings.importJson')}
-                    </button>
-                  </div>
-                  <p className="tm-notes-settings-hint">
-                    {t('notesPage.settings.backupHint')}
-                  </p>
-                </div>
-              </div>
+              <NotesSettingsModalStorageTab
+                t={t}
+                draftWorkingDirectory={draftWorkingDirectory}
+                defaultWorkingDirectory={defaultWorkingDirectory}
+                onDirectoryChange={(value) => {
+                  setDirectoryTouched(true)
+                  setDraftWorkingDirectory(value)
+                }}
+                onPickDirectory={() => void handlePickDirectory()}
+                onResetDirectory={handleResetDirectory}
+                onExportBackup={onExportBackup}
+                onImportBackup={handleImportBackup}
+              />
             ) : null}
 
             {activeTab === 'editor' ? (
@@ -283,7 +206,7 @@ export function NotesSettingsModal({
                         {t('notesPage.settings.outlineHint')}
                       </p>
                     </div>
-                    <Toggle
+                    <NotesSettingsToggle
                       checked={draftSettings.showOutline}
                       onChange={(showOutline) => patchSettings({ showOutline })}
                     />
@@ -296,7 +219,7 @@ export function NotesSettingsModal({
                         {t('notesPage.settings.narrowColumnHint')}
                       </p>
                     </div>
-                    <Toggle
+                    <NotesSettingsToggle
                       checked={draftSettings.narrowColumn}
                       onChange={(narrowColumn) => patchSettings({ narrowColumn })}
                     />

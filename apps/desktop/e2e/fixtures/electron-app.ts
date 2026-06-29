@@ -25,6 +25,8 @@ function launchEnv(userDataDir: string): NodeJS.ProcessEnv {
 }
 
 export const test = base.extend<{ electronApp: ElectronApplication; window: Page }>({
+  // Playwright fixture with no injected dependencies.
+  // eslint-disable-next-line no-empty-pattern -- intentional empty destructure
   electronApp: async ({}, use) => {
     if (!fs.existsSync(MAIN_ENTRY)) {
       throw new Error(

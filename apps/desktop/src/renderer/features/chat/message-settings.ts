@@ -92,11 +92,6 @@ export const MESSAGE_STYLE_OPTIONS: { value: MessageStyle; label: string }[] = [
   { value: 'detailed', label: '详细' },
 ]
 
-export const CONVERSATION_NAV_OPTIONS: { value: ConversationNavButtons; label: string }[] = [
-  { value: 'hidden', label: '不显示' },
-  { value: 'visible', label: '显示' },
-]
-
 export const MATH_ENGINE_OPTIONS: { value: MathEngine; label: string }[] = [
   { value: 'katex', label: 'KaTeX' },
   { value: 'mathjax', label: 'MathJax' },

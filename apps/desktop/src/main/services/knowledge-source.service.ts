@@ -280,10 +280,6 @@ export function removeKnowledgeSource(input: unknown): boolean {
   return true
 }
 
-export function removeKnowledgeWatchFolder(input: unknown): boolean {
-  return removeKnowledgeSource(input)
-}
-
 export function getKnowledgeWatchStatusForKb(workspaceId: string, kbId: string) {
   return getKnowledgeWatchStatus().filter(
     (item) => item.workspaceId === workspaceId && item.kbId === kbId,

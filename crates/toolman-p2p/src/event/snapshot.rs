@@ -1,7 +1,6 @@
 use sha2::{Digest, Sha256};
 
 pub const SNAPSHOT_INTERVAL: u64 = 500;
-pub const SNAPSHOT_RETAIN_COUNT: usize = 3;
 
 pub fn compress_json(json: &str) -> Result<Vec<u8>, String> {
     zstd::encode_all(json.as_bytes(), 3).map_err(|error| error.to_string())
@@ -38,6 +37,7 @@ mod tests {
 
     #[test]
     fn snapshot_constants_are_sane() {
+        const SNAPSHOT_RETAIN_COUNT: usize = 3;
         assert!(SNAPSHOT_INTERVAL >= 100);
         assert!(SNAPSHOT_RETAIN_COUNT >= 1);
     }

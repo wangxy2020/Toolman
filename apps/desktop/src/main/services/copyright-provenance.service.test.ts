@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/toolman-test',
+    getVersion: () => '0.2.0-rc.7',
   },
 }))
 
@@ -29,5 +30,19 @@ describe('copyright-provenance.service', () => {
     expect(diagnostics.buildId).toHaveLength(16)
     expect(diagnostics.beaconCount).toBeGreaterThanOrEqual(1)
     expect(diagnostics.lastBeaconEvent).toBe('app.start')
+  })
+
+  it('does not duplicate one-shot beacons in the same process', async () => {
+    const { bootstrapCopyrightProvenance, recordProvenanceBeacon, getProvenanceDiagnostics } =
+      await import('./copyright-provenance.service')
+
+    bootstrapCopyrightProvenance()
+    bootstrapCopyrightProvenance()
+    recordProvenanceBeacon('app.renderer.ready')
+    recordProvenanceBeacon('app.renderer.ready')
+
+    const diagnostics = getProvenanceDiagnostics()
+    expect(diagnostics.beaconCount).toBe(2)
+    expect(diagnostics.lastBeaconEvent).toBe('app.renderer.ready')
   })
 })

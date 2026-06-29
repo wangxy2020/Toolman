@@ -1,5 +1,4 @@
 import { eq } from 'drizzle-orm'
-import { app } from 'electron'
 import os from 'node:os'
 import { existsSync } from 'node:fs'
 import { identities } from '@toolman/db'
@@ -112,8 +111,4 @@ export function updateIdentityProfile(input: unknown): IdentityProfile {
   }
 
   return mapIdentityRow()
-}
-
-export function getIdentityAvatarStorageDir(): string {
-  return app.getPath('userData')
 }

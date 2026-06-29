@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mockListRoles = vi.fn()
-const mockFetchViaAccessToken = vi.fn()
+const { mockListRoles, mockFetchViaAccessToken, mockExtractTokenRoles } = vi.hoisted(() => ({
+  mockListRoles: vi.fn(),
+  mockFetchViaAccessToken: vi.fn(),
+  mockExtractTokenRoles: vi.fn(() => [] as string[]),
+}))
 
 vi.mock('./authing-management-client.service.js', () => ({
   canFetchAuthingUserRoles: () => true,
   getAuthingManagementClient: () => ({
     users: { listRoles: mockListRoles },
   }),
+}))
+
+vi.mock('./authing-token-utils.js', () => ({
+  resolveAuthingUserIdFromAccessToken: (_token: string | null | undefined, fallback: string) => fallback,
+  extractAuthingRolesFromAccessToken: mockExtractTokenRoles,
 }))
 
 vi.mock('./authing-session-roles.service.js', () => ({
@@ -20,6 +28,8 @@ describe('fetchAuthingUserRoles', () => {
   beforeEach(() => {
     mockListRoles.mockReset()
     mockFetchViaAccessToken.mockReset()
+    mockExtractTokenRoles.mockReset()
+    mockExtractTokenRoles.mockReturnValue([])
   })
 
   it('returns management API roles when available', async () => {
@@ -49,6 +59,16 @@ describe('fetchAuthingUserRoles', () => {
 
     expect(roles).toContain('founder')
     expect(mockFetchViaAccessToken).toHaveBeenCalledWith('token-abc', 'user-1')
+  })
+
+  it('uses jwt role claims before session graphql fallback', async () => {
+    mockListRoles.mockResolvedValue({ list: [] })
+    mockExtractTokenRoles.mockReturnValue(['admin'])
+
+    const roles = await fetchAuthingUserRoles('user-1', { accessToken: 'token-abc' })
+
+    expect(roles).toContain('admin')
+    expect(mockFetchViaAccessToken).not.toHaveBeenCalled()
   })
 })
 

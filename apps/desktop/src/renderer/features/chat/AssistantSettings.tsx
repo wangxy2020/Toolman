@@ -6,6 +6,11 @@ import { buildModelOptions, modelNameFromId, providerNameFromModelId } from './m
 import { useSystemPaths } from './useSystemPaths'
 import { getWorkspaceFolderPath } from './workspace-utils'
 import {
+  AssistantSettingsHelpHint,
+  AssistantSettingsRequiredMark,
+  AssistantSettingsToggle,
+} from './assistant-settings-components'
+import {
   DEFAULT_PERMISSION_MODE,
   type PermissionMode,
 } from './agent-settings-constants'
@@ -16,42 +21,6 @@ interface Props {
   providers: Provider[]
   onClose: () => void
   onSaved?: (assistant: Assistant) => void | Promise<void>
-}
-
-function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      className={`tm-agent-toggle ${checked ? 'tm-agent-toggle--on' : ''}`}
-      onClick={() => onChange(!checked)}
-    >
-      <span className="tm-agent-toggle-thumb" />
-    </button>
-  )
-}
-
-function HelpHint({ title }: { title: string }) {
-  return (
-    <span className="tm-agent-help" title={title} aria-label={title}>
-      ⓘ
-    </span>
-  )
-}
-
-function RequiredMark() {
-  return (
-    <span className="tm-agent-required" aria-hidden="true">
-      *
-    </span>
-  )
 }
 
 export function AssistantSettings({ workspaceId, workspace, providers, onClose, onSaved }: Props) {
@@ -165,7 +134,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
               <div className="tm-agent-setting-row">
                 <label className="tm-agent-setting-label" htmlFor="add-agent-name">
                   {t('common.name')}
-                  <RequiredMark />
+                  <AssistantSettingsRequiredMark />
                 </label>
                 <input
                   id="add-agent-name"
@@ -181,8 +150,8 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                   <label className="tm-agent-setting-label" htmlFor="add-agent-model">
                     {t('agent.fields.model')}
                   </label>
-                  <RequiredMark />
-                  <HelpHint title={t('agent.fields.modelHintCreate')} />
+                  <AssistantSettingsRequiredMark />
+                  <AssistantSettingsHelpHint title={t('agent.fields.modelHintCreate')} />
                 </div>
                 <select
                   id="add-agent-model"
@@ -206,15 +175,15 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
               <div className="tm-agent-setting-row">
                 <div className="tm-agent-setting-label-group">
                   <span className="tm-agent-setting-label">{t('agent.fields.autonomousMode')}</span>
-                  <HelpHint title={t('agent.fields.autonomousModeHint')} />
+                  <AssistantSettingsHelpHint title={t('agent.fields.autonomousModeHint')} />
                 </div>
-                <Toggle checked={autonomousMode} onChange={setAutonomousMode} />
+                <AssistantSettingsToggle checked={autonomousMode} onChange={setAutonomousMode} />
               </div>
 
               <div className="tm-agent-setting-row tm-agent-setting-row--top">
                 <label className="tm-agent-setting-label" htmlFor="add-agent-permission">
                   {t('agent.permissionTab.title')}
-                  <RequiredMark />
+                  <AssistantSettingsRequiredMark />
                 </label>
                 <div className="tm-agent-setting-block">
                   <select
@@ -271,7 +240,7 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                   <label className="tm-agent-setting-label" htmlFor="add-agent-env">
                     {t('agent.fields.envVars')}
                   </label>
-                  <HelpHint title={t('agent.fields.envVarsHint')} />
+                  <AssistantSettingsHelpHint title={t('agent.fields.envVarsHint')} />
                 </div>
                 <div className="tm-agent-setting-block">
                   <textarea

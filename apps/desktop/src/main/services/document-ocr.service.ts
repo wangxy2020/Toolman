@@ -170,16 +170,6 @@ export async function ocrImageBuffer(
   return recognizeImageBuffer(buffer, mimeType, workspaceId, kbId)
 }
 
-export async function ocrImageFile(
-  filePath: string,
-  mimeType: string,
-  workspaceId: string,
-  kbId?: string,
-): Promise<string> {
-  const { readFileSync } = await import('node:fs')
-  return recognizeImageBuffer(readFileSync(filePath), mimeType, workspaceId, kbId)
-}
-
 export async function ocrPdfPagePng(
   png: Buffer,
   pageNumber: number,

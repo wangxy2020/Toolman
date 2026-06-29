@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   AppDiagnosticsProvenanceSchema,
   getToolmanBuildProvenance,
+  TOOLMAN_ONE_SHOT_BEACON_EVENTS,
   type AppDiagnosticsProvenance,
   type ProvenanceBeaconEvent,
   type ToolmanBuildProvenance,
@@ -19,6 +20,9 @@ let lastBeaconAt: number | null = null
 let lastBeaconEvent: ProvenanceBeaconEvent | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let bootstrapped = false
+
+const recordedOneShotBeacons = new Set<ProvenanceBeaconEvent>()
+const oneShotBeaconEvents = new Set<ProvenanceBeaconEvent>(TOOLMAN_ONE_SHOT_BEACON_EVENTS)
 
 function provenanceLogPath(): string {
   const dir = join(app.getPath('userData'), 'diagnostics')
@@ -57,12 +61,32 @@ function appendProvenanceRecord(
   }
 }
 
+function resolveRuntimeAppVersion(bakedVersion: string): string {
+  try {
+    const runtimeVersion = app.getVersion()?.trim()
+    if (runtimeVersion) {
+      return runtimeVersion
+    }
+  } catch {
+    // unit tests / non-electron
+  }
+  return bakedVersion
+}
+
+function withRuntimeVersion(provenance: ToolmanBuildProvenance): ToolmanBuildProvenance {
+  const version = resolveRuntimeAppVersion(provenance.version)
+  if (version === provenance.version) {
+    return provenance
+  }
+  return { ...provenance, version }
+}
+
 export function getToolmanBuildProvenanceSnapshot(): ToolmanBuildProvenance {
-  return getToolmanBuildProvenance()
+  return withRuntimeVersion(getToolmanBuildProvenance())
 }
 
 export function getProvenanceDiagnostics(): AppDiagnosticsProvenance {
-  const provenance = getToolmanBuildProvenance()
+  const provenance = getToolmanBuildProvenanceSnapshot()
   return AppDiagnosticsProvenanceSchema.parse({
     ...provenance,
     sessionStartedAt,
@@ -73,7 +97,15 @@ export function getProvenanceDiagnostics(): AppDiagnosticsProvenance {
 }
 
 export function recordProvenanceBeacon(event: ProvenanceBeaconEvent): ToolmanBuildProvenance {
-  const provenance = getToolmanBuildProvenance()
+  const provenance = getToolmanBuildProvenanceSnapshot()
+  const isOneShot = oneShotBeaconEvents.has(event)
+  if (isOneShot && recordedOneShotBeacons.has(event)) {
+    return provenance
+  }
+  if (isOneShot) {
+    recordedOneShotBeacons.add(event)
+  }
+
   beaconCount += 1
   lastBeaconAt = Date.now()
   lastBeaconEvent = event

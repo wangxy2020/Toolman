@@ -13,3 +13,9 @@ export {
   getToolmanBuildProvenance,
   type ToolmanBuildProvenanceSnapshot,
 } from './build-provenance.js'
+
+export {
+  TOOLMAN_ONE_SHOT_BEACON_EVENTS,
+  TOOLMAN_REPEATABLE_BEACON_EVENTS,
+  TOOLMAN_PROVENANCE_REGISTRY,
+} from './registry.js'

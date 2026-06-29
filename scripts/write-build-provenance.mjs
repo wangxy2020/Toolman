@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_FILE = join(ROOT, 'packages/shared/src/provenance/build-provenance.generated.ts')
 const DESKTOP_PKG = join(ROOT, 'apps/desktop/package.json')
+const COPYRIGHT_META = join(ROOT, 'packages/shared/src/provenance/copyright.meta.json')
 
 function runGit(args, fallback = '') {
   try {
@@ -34,10 +35,11 @@ const version = readVersion()
 const gitCommit = runGit('rev-parse HEAD', 'unknown')
 const gitDirty = runGit('status --porcelain').length > 0
 const builtAt = new Date().toISOString()
-const copyrightNotice = 'Copyright (C) 2024–2026 Toolman Contributors'
-const license = 'AGPL-3.0-or-later'
-const repository = 'https://github.com/wangxy2020/Toolman'
-const product = 'Toolman'
+const copyrightMeta = JSON.parse(readFileSync(COPYRIGHT_META, 'utf8'))
+const product = copyrightMeta.product
+const copyrightNotice = `Copyright (C) ${copyrightMeta.copyrightYears} ${copyrightMeta.copyrightHolder}`
+const license = copyrightMeta.license
+const repository = copyrightMeta.repository
 
 const fingerprintMaterial = [
   product,

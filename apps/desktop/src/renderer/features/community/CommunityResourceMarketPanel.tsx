@@ -16,16 +16,15 @@ import { CommunityListPanelShell } from './CommunityListPanelShell'
 import { CommunityResourcePublishModal } from './CommunityResourcePublishModal'
 import { copyCommunityShareText } from './community-share-utils'
 import { canDeleteCommunityResource } from './community-user-utils'
-import { deleteCommunityResource, listCommunityResources } from './community-api.client'
 import { invalidateCommunityListCache } from './community-list-cache'
-import { isResourceRejectedLike } from './community-user-center-status'
 import { notifyCommunityUserDataChanged } from './community-events'
-import { isUiMockCommunityId } from './community-ui-mock'
+import { confirmCommunityResourceDelete } from './community-resource-market-delete'
 import { useCommunityListSortContext } from './CommunityListSortContext'
 import { useCommunityCommentExpansion } from './useCommunityCommentExpansion'
 import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useCommunityResources } from './useCommunityResources'
 import { useCommunityUser } from './useCommunityUser'
+import { openCommunityResourcePublish } from './community-resource-market-publish'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useCommunityPanelStatus } from './community-panel-status'
 import { useRegisterModulePanelStatus } from '../../components/module-page-status'
@@ -148,28 +147,17 @@ export function CommunityResourceMarketPanel({
   }
 
   const handleConfirmDelete = async () => {
-    if (!resourceToDelete) return
-
-    const resourceId = resourceToDelete.id
-    setBusyItemId(resourceId)
-    setBusyAction('delete')
-    try {
-      if (!isUiMockCommunityId(resourceId)) {
-        await deleteCommunityResource(resourceId)
-      }
-      setResourceToDelete(null)
-      if (selectedId === resourceId) setSelectedId(null)
-      invalidateCommunityListCache('resources:')
-      await market.load({ force: true })
-      notifyCommunityUserDataChanged()
-    } catch (deleteError) {
-      const message =
-        deleteError instanceof Error ? deleteError.message : t('communityPage.market.deleteResourceFailed')
-      market.setError(message)
-    } finally {
-      setBusyItemId(null)
-      setBusyAction(null)
-    }
+    await confirmCommunityResourceDelete({
+      resourceToDelete,
+      selectedId,
+      setResourceToDelete,
+      setSelectedId,
+      setBusyItemId,
+      setBusyAction,
+      onReload: () => market.load({ force: true }),
+      onSetError: market.setError,
+      t,
+    })
   }
 
   return (
@@ -186,34 +174,14 @@ export function CommunityResourceMarketPanel({
         onPublish={() => {
           if (!requireRegistration('community_write')) return
           void (async () => {
-            setPublishNotice(null)
-            const profile = user.profile
-            if (!profile?.id) {
-              setResumePublish(null)
-              setShowPublish(true)
-              return
-            }
-            try {
-              const mine = await listCommunityResources({
-                resourceType,
-                authorId: profile.id,
-                limit: 50,
-              })
-              const pending = mine.items.find((item) => item.status === 'pending_review')
-              if (pending) {
-                setPublishNotice(
-                  t('communityPage.market.pendingResourceReview', { title: pending.title }),
-                )
-                return
-              }
-              const draft = mine.items.find((item) => item.status === 'draft')
-              const rejected = mine.items.find((item) => isResourceRejectedLike(item))
-              setResumePublish(rejected ?? draft ?? null)
-              setShowPublish(true)
-            } catch {
-              setResumePublish(null)
-              setShowPublish(true)
-            }
+            await openCommunityResourcePublish({
+              resourceType,
+              profileId: user.profile?.id,
+              setPublishNotice,
+              setResumePublish,
+              setShowPublish,
+              t,
+            })
           })()
         }}
         publishDisabled={publishDisabled}

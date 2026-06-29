@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { P2pMember, P2pMemberRole } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { IconMoreHorizontal, IconPlus } from '../../components/icons'
-import { getGroupConnectionModeLabel, getGroupMemberRoleLabel } from '../../i18n/group-member-labels'
+import { IconPlus } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import { GroupMemberContextMenu } from './GroupMemberContextMenu'
 import { canManageTargetMember } from './group-member-utils'
+import { GroupMembersMenuMemberItem } from './GroupMembersMenuMemberItem'
 
 interface Props {
   open: boolean
@@ -21,16 +21,6 @@ interface Props {
   onInvite?: () => void
   onRemoveMember?: (memberId: string) => Promise<void>
   onUpdateMemberRole?: (memberId: string, role: P2pMemberRole) => Promise<void>
-}
-
-function shortDeviceId(deviceId: string): string {
-  if (deviceId.length <= 16) return deviceId
-  return `${deviceId.slice(0, 8)}…${deviceId.slice(-4)}`
-}
-
-function memberInitial(name: string): string {
-  const trimmed = name.trim()
-  return trimmed ? trimmed.slice(0, 1).toUpperCase() : '?'
 }
 
 function isPortaledGroupMemberOverlayTarget(target: Node): boolean {
@@ -209,75 +199,17 @@ export function GroupMembersMenu({
           ) : (
             <ul className="tm-group-member-list tm-group-members-menu-list">
               {activeMembers.map((member) => {
-                const manageable =
-                  canManage &&
-                  canManageTargetMember(selfMemberRole ?? undefined, member, selfMemberId)
-
                 return (
-                  <li
+                  <GroupMembersMenuMemberItem
                     key={member.id}
-                    className="tm-group-member-card tm-group-member-card--compact"
-                    onContextMenu={manageable ? (event) => openManageMenu(event, member) : undefined}
-                  >
-                    <span className="tm-group-member-avatar" aria-hidden="true">
-                      {memberInitial(member.displayName)}
-                    </span>
-                    <div className="tm-group-member-meta">
-                      <span className="tm-group-member-name">
-                        {member.displayName}
-                        {member.id === selfMemberId ? (
-                          <span className="tm-group-member-you">{t('groupPage.members.you')}</span>
-                        ) : null}
-                      </span>
-                      <span className="tm-group-member-device" title={member.deviceId}>
-                        {shortDeviceId(member.deviceId)}
-                      </span>
-                    </div>
-                    <div className="tm-group-member-end">
-                      <span
-                        className={[
-                          'tm-group-member-role',
-                          member.role === 'owner' ? 'tm-group-member-role--owner' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                      >
-                        {getGroupMemberRoleLabel(member.role, t)}
-                      </span>
-                      <div className="tm-group-member-status-row">
-                        <span
-                          className={[
-                            'tm-group-member-status',
-                            member.online ? 'tm-group-member-status--online' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          title={member.online ? t('groupPage.members.online') : t('groupPage.members.offline')}
-                        >
-                          {member.online
-                            ? member.id === selfMemberId
-                              ? t('groupPage.members.localOnline')
-                              : member.connectionMode
-                                ? t('groupPage.members.connectionOnline', {
-                                    mode: getGroupConnectionModeLabel(member.connectionMode, t),
-                                  })
-                                : t('groupPage.members.online')
-                            : t('groupPage.members.offline')}
-                        </span>
-                        {manageable ? (
-                          <button
-                            type="button"
-                            className="tm-group-member-manage-btn"
-                            title={t('groupPage.members.manageMember')}
-                            disabled={actionBusy}
-                            onClick={(event) => openManageMenu(event, member)}
-                          >
-                            <IconMoreHorizontal size={16} />
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </li>
+                    member={member}
+                    selfMemberId={selfMemberId}
+                    selfMemberRole={selfMemberRole}
+                    canManage={canManage}
+                    actionBusy={actionBusy}
+                    t={t}
+                    onOpenManageMenu={openManageMenu}
+                  />
                 )
               })}
             </ul>

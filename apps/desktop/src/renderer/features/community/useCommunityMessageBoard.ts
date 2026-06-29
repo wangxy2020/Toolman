@@ -21,7 +21,6 @@ import { COMMUNITY_USER_DATA_CHANGED_EVENT } from './community-events'
 import { COMMUNITY_SESSION_CHANGED_EVENT } from '../user/community-session'
 import {
   COMMUNITY_UI_MOCK_ENABLED,
-  COMMUNITY_UI_MOCK_IDS,
   getUiMockBoardMessage,
   withUiMockItem,
 } from './community-ui-mock'
@@ -32,6 +31,7 @@ import {
   toggleUiMockLike,
 } from './community-ui-mock-interactions'
 import { useCommunityYjsBoardUpdates } from './useCommunityYjsUpdates'
+import { runCommunityMessageBoardInteraction } from './community-message-board-interactions'
 
 function applyMockMessage(message: CommunityBoardMessage): CommunityBoardMessage {
   return applyUiMockInteractionToMessage(message)
@@ -120,7 +120,6 @@ export function useCommunityMessageBoard() {
   const submit = useCallback(async () => {
     const body = draft.trim()
     if (!body) return
-
     setSubmitting(true)
     setError(null)
     try {
@@ -197,84 +196,56 @@ export function useCommunityMessageBoard() {
 
   const like = useCallback(
     async (messageId: string) => {
-      setInteractionId(messageId)
-      setInteractionAction('like')
-      setError(null)
-      try {
-        if (COMMUNITY_UI_MOCK_ENABLED && messageId === COMMUNITY_UI_MOCK_IDS.message) {
-          toggleUiMockLike(messageId)
-          setItems((current) =>
-            current.map((item) => (item.id === messageId ? applyMockMessage(item) : item)),
-          )
-          notifyCommunityUserDataChanged()
-          return
-        }
-        const updated = await likeCommunityBoardMessage(messageId)
-        replaceMessage(updated)
-        notifyCommunityUserDataChanged()
-      } catch (interactionError) {
-        const message = interactionError instanceof Error ? interactionError.message : '点赞失败'
-        setError(message)
-      } finally {
-        setInteractionId(null)
-        setInteractionAction(null)
-      }
+      await runCommunityMessageBoardInteraction({
+        messageId,
+        action: 'like',
+        runMockToggle: () => toggleUiMockLike(messageId),
+        runServerCall: () => likeCommunityBoardMessage(messageId),
+        setItems,
+        replaceMessage,
+        setInteractionId,
+        setInteractionAction,
+        setError,
+        notifyCommunityUserDataChanged,
+        onErrorMessage: '点赞失败',
+      })
     },
     [replaceMessage],
   )
-
   const dislike = useCallback(
     async (messageId: string) => {
-      setInteractionId(messageId)
-      setInteractionAction('dislike')
-      setError(null)
-      try {
-        if (COMMUNITY_UI_MOCK_ENABLED && messageId === COMMUNITY_UI_MOCK_IDS.message) {
-          toggleUiMockDislike(messageId)
-          setItems((current) =>
-            current.map((item) => (item.id === messageId ? applyMockMessage(item) : item)),
-          )
-          notifyCommunityUserDataChanged()
-          return
-        }
-        const updated = await dislikeCommunityBoardMessage(messageId)
-        replaceMessage(updated)
-        notifyCommunityUserDataChanged()
-      } catch (interactionError) {
-        const message = interactionError instanceof Error ? interactionError.message : '点踩失败'
-        setError(message)
-      } finally {
-        setInteractionId(null)
-        setInteractionAction(null)
-      }
+      await runCommunityMessageBoardInteraction({
+        messageId,
+        action: 'dislike',
+        runMockToggle: () => toggleUiMockDislike(messageId),
+        runServerCall: () => dislikeCommunityBoardMessage(messageId),
+        setItems,
+        replaceMessage,
+        setInteractionId,
+        setInteractionAction,
+        setError,
+        notifyCommunityUserDataChanged,
+        onErrorMessage: '点踩失败',
+      })
     },
     [replaceMessage],
   )
 
   const favorite = useCallback(
     async (messageId: string) => {
-      setInteractionId(messageId)
-      setInteractionAction('favorite')
-      setError(null)
-      try {
-        if (COMMUNITY_UI_MOCK_ENABLED && messageId === COMMUNITY_UI_MOCK_IDS.message) {
-          toggleUiMockFavorite(messageId)
-          setItems((current) =>
-            current.map((item) => (item.id === messageId ? applyMockMessage(item) : item)),
-          )
-          notifyCommunityUserDataChanged()
-          return
-        }
-        const updated = await favoriteCommunityBoardMessage(messageId)
-        replaceMessage(updated)
-        notifyCommunityUserDataChanged()
-      } catch (interactionError) {
-        const message = interactionError instanceof Error ? interactionError.message : '收藏失败'
-        setError(message)
-      } finally {
-        setInteractionId(null)
-        setInteractionAction(null)
-      }
+      await runCommunityMessageBoardInteraction({
+        messageId,
+        action: 'favorite',
+        runMockToggle: () => toggleUiMockFavorite(messageId),
+        runServerCall: () => favoriteCommunityBoardMessage(messageId),
+        setItems,
+        replaceMessage,
+        setInteractionId,
+        setInteractionAction,
+        setError,
+        notifyCommunityUserDataChanged,
+        onErrorMessage: '收藏失败',
+      })
     },
     [replaceMessage],
   )

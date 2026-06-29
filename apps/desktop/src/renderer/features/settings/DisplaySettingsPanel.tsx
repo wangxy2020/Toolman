@@ -1,228 +1,29 @@
 import { useCallback } from 'react'
 import type { MessageSettings } from '../chat/message-settings'
-import { useI18n } from '../../i18n/useI18n'
-import { getNavModuleLabel } from '../../i18n/nav-labels'
 import { messageFontSizePx } from '../chat/message-settings'
 import {
   resetSidebarModules,
   THEME_COLOR_PRESETS,
   type AppFontFamily,
   type AppSettings,
-  type AppTheme,
-  type NavBarPosition,
 } from './app-settings'
 import { getNavModuleDef, LOCKED_NAV_MODULE, ALL_MENU_MODULES_ORDERED, type NavModuleId } from './nav-modules'
-import { SettingsRow, SettingsSection, SettingsToggle } from './SettingsShared'
-import { IconMoon, IconMonitor, IconRefresh, IconSun } from '../../components/nav-module-icons'
+import { SettingsToggle } from './SettingsShared'
+import { useI18n } from '../../i18n/useI18n'
+import {
+  DisplayCard,
+  DisplayRow,
+  MenuModuleColumn,
+  NavPositionSegment,
+  ThemeSegment,
+  ZoomControl,
+} from './display-settings-components'
 
 interface Props {
   appSettings: AppSettings
   messageSettings: MessageSettings
   onAppSettingsChange: (patch: Partial<AppSettings>) => void
   onMessageSettingsChange: (patch: Partial<MessageSettings>) => void
-}
-
-function DisplayRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return <SettingsRow label={label}>{children}</SettingsRow>
-}
-
-function DisplayCard({
-  title,
-  badge,
-  action,
-  children,
-}: {
-  title: string
-  badge?: boolean
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <SettingsSection title={title} badge={badge} action={action}>
-      {children}
-    </SettingsSection>
-  )
-}
-
-function ThemeSegment({
-  value,
-  onChange,
-}: {
-  value: AppTheme
-  onChange: (theme: AppTheme) => void
-}) {
-  const { t } = useI18n()
-  const options: { value: AppTheme; label: string; icon: React.ReactNode }[] = [
-    { value: 'light', label: t('theme.light'), icon: <IconSun size={14} /> },
-    { value: 'dark', label: t('theme.dark'), icon: <IconMoon size={14} /> },
-    { value: 'system', label: t('theme.system'), icon: <IconMonitor size={14} /> },
-  ]
-
-  return (
-    <div className="tm-segmented">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          className={`tm-segmented-item ${value === opt.value ? 'tm-segmented-item--active' : ''}`}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.icon}
-          <span>{opt.label}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function NavPositionSegment({
-  value,
-  onChange,
-}: {
-  value: NavBarPosition
-  onChange: (position: NavBarPosition) => void
-}) {
-  const { t } = useI18n()
-  const options: { value: NavBarPosition; label: string; disabled?: boolean }[] = [
-    { value: 'left', label: t('settings.display.navLeft') },
-    { value: 'top', label: t('settings.display.navTop'), disabled: true },
-  ]
-
-  return (
-    <div className="tm-segmented">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          className={[
-            'tm-segmented-item',
-            value === opt.value ? 'tm-segmented-item--active' : '',
-            opt.disabled ? 'tm-segmented-item--disabled' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          disabled={opt.disabled}
-          title={opt.disabled ? t('common.unavailable') : undefined}
-          onClick={() => {
-            if (opt.disabled) return
-            onChange(opt.value)
-          }}
-        >
-          <span>{opt.label}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function ZoomControl({
-  value,
-  onChange,
-}: {
-  value: number
-  onChange: (zoom: number) => void
-}) {
-  const { t } = useI18n()
-  const step = 10
-  const min = 80
-  const max = 150
-
-  return (
-    <div className="tm-zoom-control">
-      <button
-        type="button"
-        className="tm-zoom-btn"
-        disabled={value <= min}
-        onClick={() => onChange(Math.max(min, value - step))}
-        aria-label={t('settings.display.zoomOut')}
-      >
-        −
-      </button>
-      <span className="tm-zoom-value">{value}%</span>
-      <button
-        type="button"
-        className="tm-zoom-btn"
-        disabled={value >= max}
-        onClick={() => onChange(Math.min(max, value + step))}
-        aria-label={t('settings.display.zoomIn')}
-      >
-        +
-      </button>
-      <button
-        type="button"
-        className="tm-zoom-btn tm-zoom-btn--icon"
-        onClick={() => onChange(100)}
-        title={t('settings.display.zoomReset')}
-        aria-label={t('settings.display.zoomReset')}
-      >
-        <IconRefresh size={14} />
-      </button>
-    </div>
-  )
-}
-
-function MenuModuleItem({
-  moduleId,
-  showClose,
-  onClose,
-}: {
-  moduleId: NavModuleId
-  showClose: boolean
-  onClose?: () => void
-}) {
-  const { t } = useI18n()
-  const def = getNavModuleDef(moduleId)
-  const Icon = def.icon
-  const label = getNavModuleLabel(moduleId, t)
-
-  return (
-    <div className="tm-menu-module-item">
-      {showClose && onClose && (
-        <button
-          type="button"
-          className="tm-menu-module-close"
-          title={t('common.remove')}
-          aria-label={`${t('common.remove')} ${label}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onClose()
-          }}
-        >
-          ×
-        </button>
-      )}
-      <Icon size={18} />
-      <span>{label}</span>
-    </div>
-  )
-}
-
-function MenuModuleColumn({
-  title,
-  modules,
-  canClose,
-  onCloseItem,
-}: {
-  title: string
-  modules: NavModuleId[]
-  canClose: (id: NavModuleId) => boolean
-  onCloseItem: (id: NavModuleId) => void
-}) {
-  return (
-    <div className="tm-menu-module-column">
-      <div className="tm-menu-module-column-title">{title}</div>
-      <div className="tm-menu-module-list">
-        {modules.map((id) => (
-          <MenuModuleItem
-            key={id}
-            moduleId={id}
-            showClose={canClose(id)}
-            onClose={() => onCloseItem(id)}
-          />
-        ))}
-      </div>
-    </div>
-  )
 }
 
 export function DisplaySettingsPanel({

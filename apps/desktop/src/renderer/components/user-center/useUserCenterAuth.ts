@@ -1,69 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import type { AuthOtpChannel, AuthProvider, AuthRegion } from '@toolman/shared'
+import type { AuthOtpChannel, AuthRegion } from '@toolman/shared'
 import { IpcChannel } from '@toolman/shared'
 
-import {
-  AuthMergeRequiredError,
-  loginAuth,
-  resetAuthPassword,
-  sendAuthSmsCode,
-} from '../../features/user/auth-api.client'
+import { loginAuth } from '../../features/user/auth-api.client'
 import {
   consumeFirebaseRedirectLogin,
   formatFirebaseAuthError,
-  signInWithFirebaseOAuth,
 } from '../../features/user/firebase-auth.client'
-import type { TranslateFn } from '../../i18n/useI18n'
 import { useI18n } from '../../i18n/useI18n'
 import { isReleaseDesktopBuild, shouldShowAuthDevHints } from '../../env/release-build'
 import { useAuthBuildProfile } from '../../features/user/useAuthBuildProfile'
 import { useAuthProviderConfig } from '../../features/user/useAuthProviderConfig'
 import { inferDefaultAuthRegion } from '../../features/user/user-account-utils'
 import type { ViewMode } from './types'
+import { createUserCenterAuthActions } from './useUserCenterAuthActions'
+import { isCnEmailAccountInput } from './useUserCenterAuthLabels'
 
-export function isCnEmailAccountInput(value: string): boolean {
-  return value.trim().includes('@')
-}
-
-export function cnPrimaryActionLabel(view: ViewMode, account: string, t?: TranslateFn): string {
-  if (view === 'register') {
-    return isCnEmailAccountInput(account)
-      ? (t?.('user.auth.registerEmail') ?? '邮箱注册')
-      : (t?.('user.auth.registerPhone') ?? '手机号注册')
-  }
-  return isCnEmailAccountInput(account)
-    ? (t?.('user.auth.loginEmail') ?? '邮箱登录')
-    : (t?.('user.auth.loginPhone') ?? '手机号登录')
-}
-
-export function viewTitle(view: ViewMode, t?: TranslateFn): string {
-  switch (view) {
-    case 'register':
-      return t?.('user.auth.titleRegister') ?? '注册 Toolman 账户'
-    case 'forgot_password':
-      return t?.('user.auth.titleForgotPassword') ?? '找回密码'
-    case 'profile':
-      return t?.('user.auth.titleProfile') ?? '账户中心'
-    default:
-      return t?.('user.auth.titleLogin') ?? '登录 Toolman 账户'
-  }
-}
-
-export function viewSubtitle(view: ViewMode, t?: TranslateFn, region: AuthRegion = 'cn'): string {
-  switch (view) {
-    case 'register':
-      return t?.('user.auth.subtitleRegister') ?? '使用手机号或邮箱注册，验证码验证后即可完成。'
-    case 'forgot_password':
-      return region === 'intl'
-        ? (t?.('user.auth.subtitleForgotPasswordIntl') ?? '输入注册邮箱，我们将发送密码重置链接。')
-        : (t?.('user.auth.subtitleForgotPasswordCn') ?? '通过注册手机号或邮箱接收验证码，设置新密码。')
-    case 'profile':
-      return t?.('user.auth.subtitleProfile') ?? '管理个人资料、安全绑定与账户设置。'
-    default:
-      return t?.('user.auth.subtitleLogin') ?? '加入我们，解锁全部功能，你的电脑将如虎添翼。'
-  }
-}
+export {
+  cnPrimaryActionLabel,
+  isCnEmailAccountInput,
+  viewSubtitle,
+  viewTitle,
+} from './useUserCenterAuthLabels'
 
 export function useUserCenterAuth(options: {
   open: boolean
@@ -203,115 +162,46 @@ export function useUserCenterAuth(options: {
     setDevHint(null)
   }
 
-  const sendVerificationCode = async () => {
-    setSendingCode(true)
-    setError(null)
-    try {
-      const result = await sendAuthSmsCode({
-        account: account.trim(),
-        region: 'cn',
-        intent: codeIntent,
-      })
-      setOtpChannel(result.channel)
-      setOtpExpiresMinutes(Math.max(1, Math.round((result.expiresInSeconds ?? 120) / 60)))
-      setSmsCooldown(result.retryAfterSeconds)
-      setDevHint(result.devHint ?? null)
-    } catch (sendError) {
-      const message = sendError instanceof Error ? sendError.message : t('user.errors.sendCodeFailed')
-      setError(message)
-    } finally {
-      setSendingCode(false)
-    }
-  }
-
-  const submitResetPassword = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      if (region === 'intl') {
-        const result = await resetAuthPassword({
-          region: 'intl',
-          account: email.trim(),
-        })
-        resetFormFields()
-        setDevHint(result.message ?? t('user.auth.hintResetEmailSent'))
-        return
-      }
-
-      await resetAuthPassword({
-        region: 'cn',
-        account: account.trim(),
-        code: smsCode.trim(),
+  const { sendVerificationCode, submitResetPassword, submit } = useMemo(
+    () =>
+      createUserCenterAuthActions({
+        view,
+        region,
+        email,
         password,
         confirmPassword,
-      })
-      resetFormFields()
-      setDevHint(t('user.auth.hintPasswordReset'))
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : t('user.errors.resetPasswordFailed'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const submit = async (method: AuthProvider) => {
-    setBusy(true)
-    setError(null)
-    try {
-      if (method === 'firebase_google' || method === 'firebase_apple') {
-        const idToken = await signInWithFirebaseOAuth(method)
-        await loginAuth({
-          region: 'intl',
-          method,
-          payload: { idToken },
-        })
-      } else if (method === 'tencent_wechat' && mergeState) {
-        await loginAuth({
-          region: 'cn',
-          method: 'tencent_wechat',
-          payload: {
-            mergeToken: mergeState.mergeToken,
-            phone: account.trim(),
-            code: smsCode.trim(),
-          },
-        })
-      } else {
-        const intent = view === 'register' ? 'register' : 'login'
-        await loginAuth({
-          region,
-          method,
-          payload:
-            method === 'firebase_email'
-              ? { email: email.trim(), password, intent }
-              : method === 'tencent_phone'
-                ? view === 'register'
-                  ? {
-                      account: account.trim(),
-                      code: smsCode.trim(),
-                      password,
-                      confirmPassword,
-                      intent: 'register' as const,
-                    }
-                  : cnAccountIsEmail
-                    ? { account: account.trim(), password, intent: 'login' as const }
-                    : { account: account.trim(), code: smsCode.trim(), intent: 'login' as const }
-                : undefined,
-        })
-      }
-      onAuthComplete()
-    } catch (submitError) {
-      if (submitError instanceof AuthMergeRequiredError) {
-        setMergeState(submitError.details)
-        setError(null)
-        return
-      }
-      const message =
-        submitError instanceof Error ? formatFirebaseAuthError(submitError) : t('user.errors.loginFailed')
-      setError(message)
-    } finally {
-      setBusy(false)
-    }
-  }
+        account,
+        smsCode,
+        cnAccountIsEmail,
+        mergeState,
+        codeIntent,
+        t,
+        onAuthComplete,
+        setBusy,
+        setError,
+        setSendingCode,
+        setOtpChannel,
+        setOtpExpiresMinutes,
+        setSmsCooldown,
+        setDevHint,
+        setMergeState,
+        resetFormFields,
+      }),
+    [
+      view,
+      region,
+      email,
+      password,
+      confirmPassword,
+      account,
+      smsCode,
+      cnAccountIsEmail,
+      mergeState,
+      codeIntent,
+      t,
+      onAuthComplete,
+    ],
+  )
 
   return {
     profile,

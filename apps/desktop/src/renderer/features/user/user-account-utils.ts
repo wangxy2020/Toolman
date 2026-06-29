@@ -19,17 +19,6 @@ export const USER_TYPE_LABELS = {
 
 export type UserTypeKey = keyof typeof USER_TYPE_LABELS
 
-export function extractSessionEmail(session: AuthSession | null | undefined): string | null {
-  if (!session) return null
-  for (const binding of session.bindings) {
-    const label = binding.label?.trim()
-    if (label && label.includes('@')) {
-      return label.toLowerCase()
-    }
-  }
-  return null
-}
-
 function authUserTypeLabelKey(
   userType: AuthSession['userType'],
 ): UserTypeKey | null {

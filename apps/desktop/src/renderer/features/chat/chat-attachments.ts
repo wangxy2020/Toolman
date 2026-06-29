@@ -100,7 +100,3 @@ export function getUserVisibleText(blocks: ContentBlock[]): string {
     .join('\n')
     .trim()
 }
-
-export function contentBlocksHaveAttachments(blocks: ContentBlock[]): boolean {
-  return blocks.some((block) => block.type === 'file' || block.type === 'image')
-}

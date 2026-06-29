@@ -1,6 +1,6 @@
 use napi_derive::napi;
 
-use crate::discovery::{DiscoveryConfig, NodeDiscoveryService};
+use crate::discovery::DiscoveryConfig;
 use crate::state::DISCOVERY;
 
 #[napi(object)]

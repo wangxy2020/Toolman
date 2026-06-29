@@ -1,64 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IconChevronRight } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
-import { computeGroupPickerSelectionCount } from './group-resource-picker-count'
-import type { GroupPickerGroup, GroupPickerSelection } from './group-resource-picker-types'
+import { GroupResourcePickerModalList } from './GroupResourcePickerModalList'
+import type { GroupResourcePickerModalProps } from './useGroupResourcePickerModal'
+import { useGroupResourcePickerModal } from './useGroupResourcePickerModal'
 
-function itemKey(groupId: string, itemId: string) {
-  return `${groupId}:${itemId}`
-}
-
-function GroupPickerCheckbox({
-  checked,
-  indeterminate,
-  small,
-  disabled,
-  onChange,
-}: {
-  checked: boolean
-  indeterminate?: boolean
-  small?: boolean
-  disabled?: boolean
-  onChange: () => void
-}) {
-  return (
-    <label
-      className={[
-        'tm-group-resource-picker-check',
-        small ? 'tm-group-resource-picker-check--small' : '',
-        checked ? 'tm-group-resource-picker-check--checked' : '',
-        indeterminate ? 'tm-group-resource-picker-check--indeterminate' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <input
-        type="checkbox"
-        className="tm-group-resource-picker-check-input"
-        checked={checked}
-        disabled={disabled}
-        onChange={onChange}
-      />
-      <span className="tm-group-resource-picker-check-box" aria-hidden="true">
-        {checked ? '✓' : indeterminate ? '−' : ''}
-      </span>
-    </label>
-  )
-}
-
-interface Props {
-  title: string
-  hint: string
-  confirmLabel?: string
-  groups: GroupPickerGroup[]
-  loading?: boolean
-  loadingGroupId?: string | null
-  error?: string | null
-  onClose: () => void
-  onConfirm: (selection: GroupPickerSelection[]) => Promise<void>
-  onGroupExpand?: (groupId: string) => void
-}
+export type { GroupResourcePickerModalProps } from './useGroupResourcePickerModal'
 
 export function GroupResourcePickerModal({
   title,
@@ -71,221 +16,37 @@ export function GroupResourcePickerModal({
   onClose,
   onConfirm,
   onGroupExpand,
-}: Props) {
+}: GroupResourcePickerModalProps) {
   const { t } = useI18n()
-  const resolvedConfirmLabel = confirmLabel ?? t('groupPage.picker.add')
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
-  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set())
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const picker = useGroupResourcePickerModal({
+    title,
+    hint,
+    confirmLabel,
+    groups,
+    loading,
+    loadingGroupId,
+    error: externalError,
+    onClose,
+    onConfirm,
+    onGroupExpand,
+  })
 
-  const selectableGroups = useMemo(
-    () => groups.filter((group) => !group.disabled),
-    [groups],
-  )
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
-  const getSelectableItems = useCallback((group: GroupPickerGroup) => {
-    return group.items.filter((item) => !item.disabled && !item.displayOnly)
-  }, [])
-
-  const isGroupFullySelected = useCallback(
-    (group: GroupPickerGroup) => {
-      const items = getSelectableItems(group)
-      if (items.length === 0) return selectedGroupIds.has(group.id)
-      return items.every((item) => selectedKeys.has(itemKey(group.id, item.id)))
-    },
-    [getSelectableItems, selectedGroupIds, selectedKeys],
-  )
-
-  const isGroupPartiallySelected = useCallback(
-    (group: GroupPickerGroup) => {
-      const items = getSelectableItems(group)
-      if (items.length === 0) return false
-      const selectedCount = items.filter((item) =>
-        selectedKeys.has(itemKey(group.id, item.id)),
-      ).length
-      return selectedCount > 0 && selectedCount < items.length
-    },
-    [getSelectableItems, selectedKeys],
-  )
-
-  const toggleGroup = useCallback(
-    (group: GroupPickerGroup) => {
-      if (group.disabled) return
-      const items = getSelectableItems(group)
-      const fullySelected = isGroupFullySelected(group)
-
-      if (items.length === 0) {
-        setSelectedGroupIds((current) => {
-          const next = new Set(current)
-          if (fullySelected) next.delete(group.id)
-          else next.add(group.id)
-          return next
-        })
-        return
-      }
-
-      setSelectedGroupIds((current) => {
-        const next = new Set(current)
-        next.delete(group.id)
-        return next
-      })
-
-      setSelectedKeys((current) => {
-        const next = new Set(current)
-        if (fullySelected) {
-          for (const item of items) next.delete(itemKey(group.id, item.id))
-        } else {
-          for (const item of items) next.add(itemKey(group.id, item.id))
-        }
-        return next
-      })
-    },
-    [getSelectableItems, isGroupFullySelected],
-  )
-
-  const toggleItem = useCallback((groupId: string, itemId: string) => {
-    const key = itemKey(groupId, itemId)
-    setSelectedGroupIds((current) => {
-      if (!current.has(groupId)) return current
-      const next = new Set(current)
-      next.delete(groupId)
-      return next
-    })
-    setSelectedKeys((current) => {
-      const next = new Set(current)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }, [])
-
-  const toggleExpanded = useCallback(
-    (groupId: string) => {
-      setExpandedIds((current) => {
-        const next = new Set(current)
-        const willExpand = !next.has(groupId)
-        if (willExpand) {
-          next.add(groupId)
-          onGroupExpand?.(groupId)
-        } else {
-          next.delete(groupId)
-        }
-        return next
-      })
-    },
-    [onGroupExpand],
-  )
-
-  useEffect(() => {
-    if (selectedGroupIds.size === 0) return
-
-    const keysToAdd: string[] = []
-    const groupIdsToClear: string[] = []
-
-    for (const group of selectableGroups) {
-      if (!selectedGroupIds.has(group.id)) continue
-      const items = getSelectableItems(group)
-      if (items.length === 0) continue
-      for (const item of items) {
-        keysToAdd.push(itemKey(group.id, item.id))
-      }
-      groupIdsToClear.push(group.id)
-    }
-
-    if (keysToAdd.length === 0) return
-
-    setSelectedKeys((current) => {
-      const next = new Set(current)
-      for (const key of keysToAdd) next.add(key)
-      return next
-    })
-    setSelectedGroupIds((current) => {
-      const next = new Set(current)
-      for (const groupId of groupIdsToClear) next.delete(groupId)
-      return next
-    })
-  }, [getSelectableItems, groups, selectableGroups, selectedGroupIds])
-
-  const selectionCount = useMemo(
-    () =>
-      computeGroupPickerSelectionCount({
-        groups: selectableGroups,
-        selectedGroupIds,
-        selectedKeys,
-      }),
-    [selectableGroups, selectedGroupIds, selectedKeys],
-  )
-
-  const buildSelection = useCallback((): GroupPickerSelection[] => {
-    const result: GroupPickerSelection[] = []
-    const processedGroupIds = new Set<string>()
-
-    for (const group of selectableGroups) {
-      processedGroupIds.add(group.id)
-      const items = getSelectableItems(group)
-      if (items.length === 0) {
-        if (selectedGroupIds.has(group.id)) {
-          result.push({ groupId: group.id, itemIds: [] })
-        }
-        continue
-      }
-
-      const selectedItemIds = items
-        .filter((item) => selectedKeys.has(itemKey(group.id, item.id)))
-        .map((item) => item.id)
-
-      if (selectedItemIds.length > 0) {
-        result.push({ groupId: group.id, itemIds: selectedItemIds })
-      } else if (selectedGroupIds.has(group.id)) {
-        result.push({
-          groupId: group.id,
-          itemIds: items.map((item) => item.id),
-        })
-      }
-    }
-
-    for (const groupId of selectedGroupIds) {
-      if (processedGroupIds.has(groupId)) continue
-      result.push({ groupId, itemIds: [] })
-    }
-
-    return result
-  }, [getSelectableItems, selectableGroups, selectedGroupIds, selectedKeys])
-
-  const combinedError = error ?? externalError
-
-  const handleConfirm = async () => {
-    const selection = buildSelection()
-    if (selection.length === 0) {
-      setError(
-        selectionCount > 0
-          ? t('groupPage.picker.selectionUnavailable')
-          : t('groupPage.picker.selectFirst'),
-      )
-      return
-    }
-
-    setBusy(true)
-    setError(null)
-    try {
-      await onConfirm(selection)
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('groupPage.picker.addFailed'))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const {
+    resolvedConfirmLabel,
+    selectableGroups,
+    busy,
+    combinedError,
+    selectionCount,
+    expandedIds,
+    selectedKeys,
+    getSelectableItems,
+    isGroupFullySelected,
+    isGroupPartiallySelected,
+    toggleGroup,
+    toggleItem,
+    toggleExpanded,
+    handleConfirm,
+  } = picker
 
   return (
     <div className="tm-modal-overlay" onClick={onClose}>
@@ -295,7 +56,12 @@ export function GroupResourcePickerModal({
       >
         <header className="tm-modal-header">
           <h2 className="tm-modal-title">{title}</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose} aria-label={t('groupPage.picker.close')}>
+          <button
+            type="button"
+            className="tm-modal-close"
+            onClick={onClose}
+            aria-label={t('groupPage.picker.close')}
+          >
             ×
           </button>
         </header>
@@ -306,135 +72,19 @@ export function GroupResourcePickerModal({
           ) : selectableGroups.length === 0 ? (
             <p className="tm-kb-file-panel-empty">{t('groupPage.picker.empty')}</p>
           ) : (
-            <div className="tm-group-resource-picker-scroll">
-              <ul className="tm-group-resource-picker-list">
-              {groups.map((group) => {
-                const expanded = expandedIds.has(group.id)
-                const fullySelected = isGroupFullySelected(group)
-                const partiallySelected = isGroupPartiallySelected(group)
-                const selectableItems = getSelectableItems(group)
-
-                return (
-                  <li
-                    key={group.id}
-                    className={[
-                      'tm-group-resource-picker-group',
-                      group.disabled ? 'tm-group-resource-picker-group--disabled' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    <div className="tm-group-resource-picker-group-header">
-                      <button
-                        type="button"
-                        className="tm-group-resource-picker-expand"
-                        aria-expanded={expanded}
-                        onClick={() => toggleExpanded(group.id)}
-                      >
-                        <IconChevronRight open={expanded} />
-                      </button>
-                      <button
-                        type="button"
-                        className="tm-group-resource-picker-group-main"
-                        disabled={group.disabled}
-                        onClick={() => toggleExpanded(group.id)}
-                      >
-                        <span className="tm-group-resource-picker-group-name">{group.name}</span>
-                        {group.description ? (
-                          <span className="tm-group-resource-picker-group-desc">
-                            {group.description}
-                          </span>
-                        ) : null}
-                      </button>
-                      <GroupPickerCheckbox
-                        checked={fullySelected}
-                        indeterminate={partiallySelected}
-                        disabled={
-                          group.disabled ||
-                          (selectableItems.length === 0 &&
-                            (group.items.length > 0
-                              ? !group.groupSelectable
-                              : !group.groupSelectable || (group.selectableCount ?? 0) === 0))
-                        }
-                        onChange={() => toggleGroup(group)}
-                      />
-                    </div>
-
-                    {expanded ? (
-                      <ul className="tm-group-resource-picker-items">
-                        {loadingGroupId === group.id ? (
-                          <li className="tm-group-resource-picker-item tm-group-resource-picker-item--loading">
-                            {t('groupPage.picker.loading')}
-                          </li>
-                        ) : group.items.length === 0 ? (
-                          <li className="tm-group-resource-picker-item tm-group-resource-picker-item--empty">
-                            {t('groupPage.picker.noSubItems')}
-                          </li>
-                        ) : (
-                          group.items.map((item) => {
-                            const checked = selectedKeys.has(itemKey(group.id, item.id))
-                            if (item.displayOnly) {
-                              return (
-                                <li
-                                  key={item.id}
-                                  className="tm-group-resource-picker-item tm-group-resource-picker-item--display-only"
-                                >
-                                  <div className="tm-group-resource-picker-item-main">
-                                    <span className="tm-group-resource-picker-item-name">
-                                      {item.name}
-                                    </span>
-                                    {item.meta ? (
-                                      <span className="tm-group-resource-picker-item-meta">
-                                        {item.meta}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </li>
-                              )
-                            }
-
-                            return (
-                              <li
-                                key={item.id}
-                                className={[
-                                  'tm-group-resource-picker-item',
-                                  item.disabled ? 'tm-group-resource-picker-item--disabled' : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' ')}
-                              >
-                                <button
-                                  type="button"
-                                  className="tm-group-resource-picker-item-main"
-                                  disabled={item.disabled || group.disabled}
-                                  onClick={() => toggleItem(group.id, item.id)}
-                                >
-                                  <span className="tm-group-resource-picker-item-name">
-                                    {item.name}
-                                  </span>
-                                  {item.meta ? (
-                                    <span className="tm-group-resource-picker-item-meta">
-                                      {item.meta}
-                                    </span>
-                                  ) : null}
-                                </button>
-                                <GroupPickerCheckbox
-                                  small
-                                  checked={checked}
-                                  disabled={item.disabled || group.disabled}
-                                  onChange={() => toggleItem(group.id, item.id)}
-                                />
-                              </li>
-                            )
-                          })
-                        )}
-                      </ul>
-                    ) : null}
-                  </li>
-                )
-              })}
-              </ul>
-            </div>
+            <GroupResourcePickerModalList
+              t={t}
+              groups={groups}
+              loadingGroupId={loadingGroupId}
+              expandedIds={expandedIds}
+              selectedKeys={selectedKeys}
+              getSelectableItems={getSelectableItems}
+              isGroupFullySelected={isGroupFullySelected}
+              isGroupPartiallySelected={isGroupPartiallySelected}
+              toggleGroup={toggleGroup}
+              toggleItem={toggleItem}
+              toggleExpanded={toggleExpanded}
+            />
           )}
           {combinedError ? <p className="tm-form-error">{combinedError}</p> : null}
         </div>

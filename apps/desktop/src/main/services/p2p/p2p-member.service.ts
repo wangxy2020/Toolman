@@ -19,21 +19,23 @@ import {
 export { ensureOwnerMemberRecord } from './p2p-member-shared'
 import { recordMemberDepartureEvent } from './p2p-member-departure.service'
 import { fireAndForget } from '../../lib/fire-and-forget'
+import { P2pMemberLimitError } from './p2p-member-join/errors'
+import { flushPendingJoinNotification } from './p2p-member-join/join-notify'
+import { joinP2pWorkspace } from './p2p-member-join/join-workspace'
 import {
-  applyRemoteMemberJoin,
   activateMemberAfterOwnerTrust,
-  flushPendingJoinNotification,
-  joinP2pWorkspace,
-  P2pMemberLimitError,
-} from './p2p-member-join.service'
+  applyRemoteMemberJoin,
+} from './p2p-member-join/remote-join'
 import {
   ensureMemberConnectsToOwner,
+  reconcileOwnerWorkspaceMembers,
+  runMemberOwnerConnectTick,
+  runOwnerPeerReconcileTick,
+} from './p2p-member-reconcile-owner'
+import {
   handleMemberSyncRequest,
   handleMemberSyncResponse,
-  reconcileOwnerWorkspaceMembers,
-  runOwnerPeerReconcileTick,
-  runMemberOwnerConnectTick,
-} from './p2p-member-reconcile.service'
+} from './p2p-member-reconcile-sync'
 
 export { P2pMemberVipRequiredError } from './p2p-workspace-vip-pool.service'
 export {

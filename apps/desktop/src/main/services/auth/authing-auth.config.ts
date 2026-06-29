@@ -14,6 +14,8 @@ export interface AuthingConfig {
   oauthCallbackPort: number
 }
 
+const DEFAULT_AUTHING_MANAGEMENT_HOST = 'https://core.authing.cn'
+
 function readEnv(keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = process.env[key]?.trim()
@@ -32,6 +34,15 @@ function readPositiveIntEnv(keys: readonly string[], fallback: number): number {
     }
   }
   return fallback
+}
+
+export function resolveAuthingManagementHost(): string {
+  const explicit = readEnv(['TOOLMAN_AUTHING_MANAGEMENT_HOST', 'AUTHING_MANAGEMENT_HOST'])
+  if (explicit) {
+    return explicit.replace(/\/$/, '')
+  }
+  // Management GraphQL 不能用应用登录域名（{app}.authing.cn），否则会超时。
+  return DEFAULT_AUTHING_MANAGEMENT_HOST
 }
 
 export function getAuthingOtpTtlSeconds(fallbackSeconds: number): number {

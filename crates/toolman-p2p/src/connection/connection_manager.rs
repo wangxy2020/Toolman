@@ -332,14 +332,7 @@ impl ConnectionManager {
         });
 
         let offer_with_signal = append_toolman_signal_port(&offer_sdp, signal_port);
-        let handshake = PendingInviteHandshake {
-            invite_id: invite_id.clone(),
-            workspace_id,
-            offer_sdp: offer_with_signal.clone(),
-            session,
-            answer_sdp: std::sync::Mutex::new(None),
-            answer_notify: tokio::sync::Notify::new(),
-        };
+        let handshake = PendingInviteHandshake { session };
         PENDING_INVITES
             .lock()
             .await
@@ -703,7 +696,6 @@ impl ConnectionManager {
         signal_type: &str,
     ) -> Result<SignalMessage, String> {
         let deadline = tokio::time::Instant::now() + CONNECT_TIMEOUT;
-        let mut seen_nonce: Option<String> = None;
 
         while tokio::time::Instant::now() < deadline {
             let properties = {
@@ -718,9 +710,7 @@ impl ConnectionManager {
                     if signal.target_device_id == local_device_id
                         && signal.signal_type == signal_type
                         && signal.nonce.starts_with("ice-restart-")
-                        && seen_nonce.as_deref() != Some(signal.nonce.as_str())
                     {
-                        seen_nonce = Some(signal.nonce.clone());
                         return Ok(signal);
                     }
                 }
@@ -740,7 +730,6 @@ impl ConnectionManager {
         signal_type: &str,
     ) -> Result<SignalMessage, String> {
         let deadline = tokio::time::Instant::now() + CONNECT_TIMEOUT;
-        let mut seen_nonce: Option<String> = None;
 
         while tokio::time::Instant::now() < deadline {
             let properties = {
@@ -754,9 +743,7 @@ impl ConnectionManager {
                 if let Some(signal) = parse_signal(peer_device_id, &props) {
                     if signal.target_device_id == local_device_id
                         && signal.signal_type == signal_type
-                        && seen_nonce.as_deref() != Some(signal.nonce.as_str())
                     {
-                        seen_nonce = Some(signal.nonce.clone());
                         return Ok(signal);
                     }
                 }

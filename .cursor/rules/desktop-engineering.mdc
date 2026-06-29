@@ -1,0 +1,66 @@
+---
+description: Toolman 工程规范（SRP 拆分、facade 兼容、循环依赖、质量门禁）
+globs: apps/desktop/src/**/*.{ts,tsx},packages/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Desktop 工程规范
+
+## 单文件行数
+
+- **目标**：生产代码单文件 **< 300 行**（测试文件尽量也遵守，可按领域拆成 `*.parse.test.ts` 等）。
+- **超出时必拆**，不要在一个 PR 里顺手改无关逻辑。
+
+## Main 进程拆分（facade 模式）
+
+- 大服务拆成子目录或 `*-operations.ts` / `*-utils.ts`；**原路径保留为薄 facade**，`export` 全部 public API。
+- Facade 通常 **≤ 40 行**，只做 re-export，不写业务逻辑。
+- **禁止** React Hook；业务放 service / operations 纯函数。
+
+```ts
+// ✅ agent.service.ts（facade）
+export { runAgent, stopAgent } from './agent/runtime'
+export type { AgentState } from './agent/types'
+
+// ❌ 在 facade 里实现逻辑或从子模块 import 后再被该子模块 import（见下）
+```
+
+## Renderer 拆分
+
+- 页面/面板：**UI 组件轻薄**；状态与副作用进 `useXxx*.ts`；纯逻辑进 `*-operations.ts` / `*-utils.ts`。
+- 保持原有 **Props 与 export 路径** 不变。
+
+## Facade 与 Rollup 循环依赖（重要）
+
+子模块 ↔ facade 互引时，经 facade 重导出会在打包时产生 **chunk 环**（`reexported through module …`）。
+
+- **集群内部**互调：直接 `import` **实现模块**，不要经 facade。
+- **集群外部**（IPC handler、其他领域）：继续 `import` facade 路径。
+
+```ts
+// ❌ p2p-member.service.ts → p2p-member-join.service.ts → remote-join.ts → …
+import { joinP2pWorkspace } from './p2p-member-join.service'
+
+// ✅ 同集群内直连
+import { joinP2pWorkspace } from './p2p-member-join/join-workspace'
+```
+
+## IPC 与共享类型
+
+- Channel / Zod schema：**只加在** `packages/shared/src/ipc/`，main 与 renderer 共用。
+- Renderer **禁止**直接依赖 `@toolman/db` 或 native 模块。
+
+## 改动纪律
+
+- **最小 diff**：只改任务相关代码；匹配现有命名、import 风格、注释密度。
+- 未请求不写测试；写了就要有意义。
+- Main 改动后 dev 需**完全退出 Electron 再启**（main 不 HMR）。
+
+## 交付前验证
+
+```bash
+pnpm --filter @toolman/desktop typecheck
+pnpm --filter @toolman/desktop test
+```
+
+触及 core 流程时再跑：`bash scripts/smoke-critical-paths.sh`

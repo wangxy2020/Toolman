@@ -1,6 +1,10 @@
 import { ManagementClient } from 'authing-js-sdk'
 
-import { getAuthingConfig, isAuthingConfigured } from './authing-auth.config.js'
+import {
+  getAuthingConfig,
+  isAuthingConfigured,
+  resolveAuthingManagementHost,
+} from './authing-auth.config.js'
 
 let managementClient: ManagementClient | null = null
 
@@ -15,7 +19,7 @@ export function getAuthingManagementClient(): ManagementClient | null {
     managementClient = new ManagementClient({
       userPoolId: config.userPoolId,
       secret,
-      host: config.appHost,
+      host: resolveAuthingManagementHost(),
     })
   }
 

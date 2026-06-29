@@ -16,6 +16,7 @@ use libp2p::{identity, Multiaddr, PeerId, SwarmBuilder};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::NetworkConfig;
+use crate::dial_address::prefer_loopback_for_same_host_dial;
 use crate::dht_state::{push_provider_result, take_provider_lookup_cid, track_provider_lookup, DhtProviderResult};
 use crate::identity::load_libp2p_keypair;
 use crate::pubsub::SwarmCommand;
@@ -44,6 +45,7 @@ fn is_benign_outgoing_connection_error(error: &impl std::fmt::Display) -> bool {
         || message.contains("input error")
         || message.contains("Connection refused")
         || message.contains("Connection reset")
+        || message.contains("Address already in use")
 }
 
 #[derive(NetworkBehaviour)]
@@ -247,7 +249,8 @@ fn handle_swarm_event(
                             if peer_id == *swarm.local_peer_id() {
                                 continue;
                             }
-                            let _ = swarm.dial(multiaddr);
+                            let dial_addr = prefer_loopback_for_same_host_dial(multiaddr);
+                            let _ = swarm.dial(dial_addr);
                         }
                     }
                     mdns::Event::Expired(list) => {

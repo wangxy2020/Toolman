@@ -9,44 +9,12 @@ import {
   isMarkdownKnowledgeDocument,
 } from '../knowledge/knowledge-file-display'
 import { resolveNoteIdFromKnowledgeDocument } from '../knowledge/knowledge-note-link'
-import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './group-note-open'
 import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { knowledgeSelectionKey } from './group-knowledge-selection'
 import {
   getGroupKnowledgeStatusLabel,
-  type GroupKnowledgePanelItem,
 } from './group-knowledge-panel-item'
-
-interface Props {
-  resourceId: string
-  p2pWorkspaceId: string
-  workspaceName: string
-  isResourceOwner: boolean
-  documents: GroupKnowledgePanelItem[]
-  selectedKeys: Set<string>
-  canRemoveFromGroup: boolean
-  canRemoveSaved: boolean
-  canSelect: boolean
-  removingDocumentId?: string | null
-  onToggleSelect: (selectionKey: string) => void
-  onRemoveFromGroup: (documentId: string) => void
-  onRemoveSaved: (documentId: string) => void
-  onOpenNote?: (noteId: string) => boolean
-  onOpenGroupNote?: (request: OpenGroupNoteRequest) => void | Promise<void>
-  onOpenGroupKnowledgeMarkdown?: (
-    request: OpenGroupKnowledgeMarkdownRequest,
-  ) => void | Promise<void>
-  onMaterializeDocument?: (
-    documentId: string,
-    currentPath?: string | null,
-  ) => Promise<string | null>
-  onEnsureDocumentSaved?: (
-    documentId: string,
-    currentPath?: string | null,
-  ) => Promise<{ absolutePath: string; savedDocumentId: string } | null>
-  onOpenError?: (message: string) => void
-  onContextMenu?: (event: React.MouseEvent) => void
-}
+import type { GroupKnowledgeFileListProps as Props } from './group-knowledge-file-list-types'
 
 function isOpenableLocalPath(path: string | null | undefined): path is string {
   if (!path) return false

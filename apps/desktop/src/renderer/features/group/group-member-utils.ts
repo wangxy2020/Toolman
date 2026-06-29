@@ -1,12 +1,5 @@
 import { canManageWorkspaceMembers, type P2pMember, type P2pMemberRole } from '@toolman/shared'
 
-export const MEMBER_ROLE_LABELS: Record<P2pMemberRole, string> = {
-  owner: '群主',
-  admin: '管理员',
-  member: '成员',
-  readonly: '只读',
-}
-
 export function canManageTargetMember(
   actorRole: P2pMemberRole | undefined,
   target: P2pMember,

@@ -43,11 +43,6 @@ export function formatMessageTime(timestamp: number): string {
   return `${month}/${day} ${hours}:${minutes}`
 }
 
-export function formatTokenUsage(usage: Message['tokenUsage']): string | null {
-  if (!usage) return null
-  return `Tokens: ${usage.total} ↑${usage.prompt} ↓${usage.completion}`
-}
-
 export function formatUserTokens(message: Message): string {
   if (message.tokenUsage) return `Tokens: ${message.tokenUsage.total}`
   const text = getMessageText(message)
@@ -61,8 +56,4 @@ export function formatAssistantTokens(message: Message): string {
   const text = getMessageText(message)
   const completion = Math.max(1, Math.ceil(text.length / 4))
   return `Tokens: ${completion} ↓${completion}`
-}
-
-export async function copyMessageText(text: string): Promise<void> {
-  await navigator.clipboard.writeText(text)
 }

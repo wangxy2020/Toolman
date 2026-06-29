@@ -51,11 +51,6 @@ export function exportNoteAsMarkdown(note: { title: string; content: string }): 
   URL.revokeObjectURL(url)
 }
 
-export async function copyNoteMarkdown(note: { title: string; content: string }): Promise<void> {
-  const markdown = `# ${note.title}\n\n${note.content}`.trimEnd()
-  await navigator.clipboard.writeText(markdown)
-}
-
 export function printNote(note: { title: string; content: string }): void {
   const html = `
     <html><head><title>${note.title}</title>

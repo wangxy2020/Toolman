@@ -48,6 +48,7 @@ export default tseslint.config(
     },
     rules: {
       'no-console': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 )

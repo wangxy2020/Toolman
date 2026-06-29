@@ -220,7 +220,3 @@ export function logoutAuthSession(): AuthSession {
   }
   return session
 }
-
-export function assertAuthFeatureImplemented(feature: string): never {
-  throw new Error(`${feature} 尚未实现（Task-005+）`)
-}

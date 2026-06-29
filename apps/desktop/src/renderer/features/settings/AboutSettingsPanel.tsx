@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { IpcChannel } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
+import { recordProvenanceBeacon } from '../../lib/record-provenance-beacon'
 import { SettingsToggle } from './SettingsShared'
 import { AboutJoinUsModal } from './AboutJoinUsModal'
 import { TOOLMAN_GITHUB_URL, ABOUT_EXTERNAL_LINK_URLS } from './about-settings.constants'
@@ -86,7 +86,7 @@ export function AboutSettingsPanel() {
   const showStatusHint = updateStatusHint && status?.phase !== 'idle'
 
   useEffect(() => {
-    void window.api.invoke(IpcChannel.AppProvenanceBeacon, { event: 'app.about.view' })
+    recordProvenanceBeacon('app.about.view')
   }, [])
 
   return (

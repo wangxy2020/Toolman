@@ -1,6 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -141,15 +141,6 @@ impl EventStore {
             .join("workspaces")
             .join(workspace_id)
             .join("events.wal.last_seq")
-    }
-
-    fn read_cached_last_seq(&self, workspace_id: &str) -> Option<u64> {
-        let path = self.last_seq_path(workspace_id);
-        if !path.exists() {
-            return None;
-        }
-        let raw = fs::read_to_string(&path).ok()?;
-        raw.trim().parse::<u64>().ok()
     }
 
     fn write_cached_last_seq(&self, workspace_id: &str, seq: u64) -> Result<(), String> {

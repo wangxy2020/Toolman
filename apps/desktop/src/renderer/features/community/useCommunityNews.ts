@@ -35,6 +35,7 @@ import {
   toggleUiMockFavorite,
   toggleUiMockLike,
 } from './community-ui-mock-interactions'
+import { applyNewsInteractionResult } from './community-news-interaction-utils'
 
 export interface UseCommunityNewsOptions {
   query?: CommunityNewsListInput
@@ -170,17 +171,7 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
       }
       const result = await favoriteCommunityNewsArticle(articleId)
       setItems((current) =>
-        current.map((item): CommunityNewsArticle =>
-          item.id === articleId
-            ? {
-                ...item,
-                likeCount: result.likeCount ?? item.likeCount,
-                favoriteCount: result.favoriteCount ?? item.favoriteCount,
-                dislikeCount: result.dislikeCount ?? item.dislikeCount,
-                favoritedByMe: result.favorited ?? item.favoritedByMe,
-              }
-            : item,
-        ),
+        current.map((item) => applyNewsInteractionResult(item, articleId, result)),
       )
       notifyCommunityUserDataChanged()
     } catch (interactionError) {
@@ -210,17 +201,7 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
       }
       const result = await likeCommunityNewsArticle(articleId)
       setItems((current) =>
-        current.map((item): CommunityNewsArticle => {
-          if (item.id !== articleId) return item
-          return {
-            ...item,
-            likeCount: result.likeCount ?? item.likeCount,
-            favoriteCount: result.favoriteCount ?? item.favoriteCount,
-            dislikeCount: result.dislikeCount ?? item.dislikeCount,
-            likedByMe: result.liked ?? item.likedByMe,
-            dislikedByMe: result.disliked ?? (result.liked === true ? false : item.dislikedByMe),
-          }
-        }),
+        current.map((item) => applyNewsInteractionResult(item, articleId, result)),
       )
       notifyCommunityUserDataChanged()
     } catch (interactionError) {
@@ -250,17 +231,7 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
       }
       const result = await dislikeCommunityNewsArticle(articleId)
       setItems((current) =>
-        current.map((item): CommunityNewsArticle => {
-          if (item.id !== articleId) return item
-          return {
-            ...item,
-            likeCount: result.likeCount ?? item.likeCount,
-            favoriteCount: result.favoriteCount ?? item.favoriteCount,
-            dislikeCount: result.dislikeCount ?? item.dislikeCount,
-            likedByMe: result.liked ?? (result.disliked === true ? false : item.likedByMe),
-            dislikedByMe: result.disliked ?? item.dislikedByMe,
-          }
-        }),
+        current.map((item) => applyNewsInteractionResult(item, articleId, result)),
       )
       notifyCommunityUserDataChanged()
     } catch (interactionError) {

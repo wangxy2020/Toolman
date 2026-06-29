@@ -1,0 +1,53 @@
+---
+description: 代码指纹、版权注释、程序埋点 — 单一管道，禁止重复注册
+globs: apps/desktop/**/*.{ts,tsx,html},packages/shared/src/provenance/**,scripts/write-build-provenance.mjs
+alwaysApply: false
+---
+
+# 指纹 / 版权 / 埋点（Provenance）
+
+**已有完整管道，禁止另起炉灶。** 扩展前先查 `TOOLMAN_PROVENANCE_REGISTRY`（`packages/shared/src/provenance/registry.ts`）。
+
+## 版权元数据（单一来源）
+
+| 用途 | 路径 |
+|------|------|
+| 机器可读 | `packages/shared/src/provenance/copyright.meta.json` |
+| TS 常量 | `packages/shared/src/provenance/copyright.ts`（由 meta 派生） |
+| 文件头模板 | `TOOLMAN_COPYRIGHT_HEADER` |
+
+- 改版权年份、许可证、仓库 URL：**只改** `copyright.meta.json`，再跑 `pnpm provenance:generate`。
+- **不要**在 `write-build-provenance.mjs`、About 页、NOTICE 等处硬编码重复字符串（NOTICE 可保留人类可读副本，数值以 meta 为准）。
+
+## 构建指纹（build fingerprint）
+
+- 生成：`scripts/write-build-provenance.mjs` → `build-provenance.generated.ts`
+- 触发：`pnpm provenance:generate`；`predev` / release / p2p-dev 脚本已挂钩。
+- **不要**手写 `buildId` / `buildFingerprint` 或第二套 hash 逻辑。
+
+## 会话埋点（beacons）
+
+| 事件 | 触发点 | 重复策略 |
+|------|--------|----------|
+| `app.start` | `bootstrapCopyrightProvenance()` — main | 每进程一次 |
+| `app.renderer.ready` | `main.tsx` → `recordProvenanceBeacon` | 每进程一次 |
+| `app.diagnostics.view` | `useDiagnosticsSettings` | 每进程一次 |
+| `app.about.view` | `AboutSettingsPanel` | 每进程一次 |
+| `app.session.heartbeat` | main 定时器 | 可重复（6h） |
+
+- Schema / IPC：`packages/shared/src/ipc/provenance.ts`，channel `AppProvenanceBeacon`。
+- Main 记录：`copyright-provenance.service.ts`（去重 + 写 `{userData}/diagnostics/provenance.jsonl`）。
+- Renderer **必须**经 `apps/desktop/src/renderer/lib/record-provenance-beacon.ts` 调用，**禁止**在其它组件直接 `invoke(AppProvenanceBeacon, …)`。
+- **禁止**第二套 bootstrap、重复 heartbeat、或散落 analytics 写 provenance 日志。
+
+## 新入口文件版权头
+
+主进程 / renderer 根入口保留块注释头，内容与 `TOOLMAN_COPYRIGHT_HEADER` 一致（Electron 入口无法 runtime 注入）。Rust crate 根 `lib.rs` 同理。
+
+## 自检
+
+```bash
+pnpm provenance:generate
+pnpm --filter @toolman/desktop typecheck
+pnpm --filter @toolman/desktop test copyright-provenance
+```

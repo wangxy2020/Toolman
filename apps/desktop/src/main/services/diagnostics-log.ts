@@ -1,4 +1,8 @@
 import type { DiagnosticLogEntry, DiagnosticLogLevel } from '@toolman/shared'
+import {
+  consoleDedupKey,
+  formatDiagnosticForConsole,
+} from './diagnostics-log-format'
 import { appendPersistentDiagnosticLine } from './local-operations.service'
 
 const MAX_ENTRIES = 80
@@ -14,7 +18,10 @@ const INFO_CONSOLE_ALLOWLIST: Array<{
   subsystem: string
   matches: (message: string) => boolean
 }> = [
-  { subsystem: 'provenance', matches: () => true },
+  {
+    subsystem: 'provenance',
+    matches: (message) => !message.startsWith('app.session.heartbeat'),
+  },
   { subsystem: 'community.hub', matches: (message) => message.startsWith('ready at') },
   { subsystem: 'p2p', matches: (message) => message.startsWith('peer trust prompt:') },
 ]
@@ -48,20 +55,22 @@ function shouldEmitToConsole(entry: DiagnosticLogEntry): boolean {
   return shouldEmitInfoToConsole(entry.subsystem, entry.message)
 }
 
-function emitToConsole(payload: string, level: DiagnosticLogLevel): void {
+function emitToConsole(entry: DiagnosticLogEntry): void {
+  const line = formatDiagnosticForConsole(entry)
+  const dedupKey = consoleDedupKey(entry)
   const now = Date.now()
-  if (payload === lastConsolePayload && now - lastConsoleAt < 1500) {
+  if (dedupKey === lastConsolePayload && now - lastConsoleAt < 1500) {
     return
   }
-  lastConsolePayload = payload
+  lastConsolePayload = dedupKey
   lastConsoleAt = now
 
-  if (level === 'error') {
-    console.error(payload)
-  } else if (level === 'warn') {
-    console.warn(payload)
+  if (entry.level === 'error') {
+    console.error(line)
+  } else if (entry.level === 'warn') {
+    console.warn(line)
   } else {
-    console.info(payload)
+    console.info(line)
   }
 }
 
@@ -84,7 +93,7 @@ export function recordDiagnosticEvent(
   const payload = JSON.stringify({ type: 'toolman.diagnostic', ...entry })
   appendPersistentDiagnosticLine(payload)
   if (shouldEmitToConsole(entry)) {
-    emitToConsole(payload, level)
+    emitToConsole(entry)
   }
 }
 
@@ -95,4 +104,6 @@ export function listDiagnosticEvents(limit = 30): DiagnosticLogEntry[] {
 
 export function clearDiagnosticEvents(): void {
   buffer.length = 0
+  lastConsolePayload = ''
+  lastConsoleAt = 0
 }

@@ -1,31 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  decodeJwtPayload,
-  looksLikeEmailSubject,
-  resolveAuthingUserIdFromAccessToken,
-} from './authing-token-utils.js'
+import { extractAuthingRolesFromAccessToken } from './authing-token-utils.js'
 
 function encodePayload(payload: Record<string, unknown>): string {
-  return Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  return `${header}.${body}.`
 }
 
-describe('authing-token-utils', () => {
-  it('decodes jwt payload sub claim', () => {
-    const token = `header.${encodePayload({ sub: 'authing-user-123' })}.sig`
-    expect(resolveAuthingUserIdFromAccessToken(token, 'user@example.com')).toBe('authing-user-123')
+describe('extractAuthingRolesFromAccessToken', () => {
+  it('reads string role arrays from token claims', () => {
+    const token = encodePayload({ sub: 'user-1', roles: ['admin', 'user'] })
+    expect(extractAuthingRolesFromAccessToken(token)).toEqual(['admin', 'user'])
   })
 
-  it('falls back to binding subject when token is missing', () => {
-    expect(resolveAuthingUserIdFromAccessToken(null, 'binding-subject')).toBe('binding-subject')
-  })
-
-  it('detects email-shaped subjects', () => {
-    expect(looksLikeEmailSubject('wxymale@126.com')).toBe(true)
-    expect(looksLikeEmailSubject('authing-user-123')).toBe(false)
-  })
-
-  it('returns null for malformed jwt', () => {
-    expect(decodeJwtPayload('not-a-jwt')).toBeNull()
+  it('reads role objects with code/name', () => {
+    const token = encodePayload({
+      roles: [{ code: 'admin', name: '管理员' }],
+    })
+    expect(extractAuthingRolesFromAccessToken(token)).toEqual(['admin', '管理员'])
   })
 })

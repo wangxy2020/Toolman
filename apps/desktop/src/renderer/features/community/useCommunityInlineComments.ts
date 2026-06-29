@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CommunityComment, CommunityCommentTargetType } from '@toolman/shared'
 
 import {
-  countCommunityComments,
   createCommunityComment,
   deleteCommunityComment,
   listCommunityComments,
@@ -156,17 +155,4 @@ export function useCommunityInlineComments(
     submit,
     remove,
   }
-}
-
-export async function fetchCommunityCommentCount(target: CommunityCommentTarget): Promise<number> {
-  if (isUiMockCommentTarget(target)) {
-    return listUiMockComments(target).length
-  }
-
-  const result = await countCommunityComments({
-    targetType: target.targetType,
-    targetId: target.targetId,
-    parentId: target.parentId ?? undefined,
-  })
-  return result.count
 }

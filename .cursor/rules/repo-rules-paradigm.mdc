@@ -1,0 +1,22 @@
+---
+description: Paradigm for repo_rules globalScan, rule registration, and test delivery
+globs: "**/repo_rules/**,**/src/rules/**,**/rules/index.ts,**/rule-adapter*"
+alwaysApply: false
+---
+
+# repo_rules 范式
+
+## globalScan 与 includeDirectories
+
+- `includeDirectories` **为空** → 全仓库扫描（离线全量诊断）。
+- `includeDirectories` **非空** → 按 glob 相对路径匹配扫描范围。
+- **调用方必须在构造壳或工厂参数里显式传入** `includeDirectories` / globs；**不要**依赖默认 `[]` 当作「精确范围扫描」。
+
+## 新增 / 修改规则清单
+
+1. 先列出 `src/rules/*` 与脚本中的 `RULES_INFOS` / `getRuleInfoList` / `rules/*.ts` 等来源，对照避免漏默认规则。
+2. 新规则须：
+   - 在 `rules/index.ts` 导出；
+   - 在 `rule-adapter` 等注册；
+   - 出现在测试 / snapshot / **默认规则清单**（如 `defaultRules`）。
+3. 改完后跑 `python repo_rules/run_rule_test.py`，**全绿再交付**。

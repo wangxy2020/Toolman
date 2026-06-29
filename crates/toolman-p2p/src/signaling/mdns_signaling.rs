@@ -4,7 +4,6 @@ const CHUNK_SIZE: usize = 200;
 
 #[derive(Clone, Debug)]
 pub struct SignalMessage {
-    pub from_device_id: String,
     pub target_device_id: String,
     pub signal_type: String,
     pub sdp: String,
@@ -40,7 +39,7 @@ pub fn clear_signaling_properties() -> HashMap<String, String> {
 }
 
 pub fn parse_signal(
-    from_device_id: &str,
+    _from_device_id: &str,
     properties: &HashMap<String, String>,
 ) -> Option<SignalMessage> {
     let target_device_id = properties.get("sig_target")?.trim();
@@ -64,7 +63,6 @@ pub fn parse_signal(
     }
 
     Some(SignalMessage {
-        from_device_id: from_device_id.to_string(),
         target_device_id: target_device_id.to_string(),
         signal_type: signal_type.to_string(),
         sdp,

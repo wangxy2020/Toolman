@@ -1,34 +1,5 @@
 export type PermissionMode = 'normal' | 'plan' | 'auto-edit' | 'full-auto'
 
-export const PERMISSION_MODES: {
-  id: PermissionMode
-  title: string
-  description: string
-  warning?: string
-}[] = [
-  {
-    id: 'normal',
-    title: '普通模式',
-    description: '可自由读取文件，编辑或执行命令前会询问。',
-  },
-  {
-    id: 'plan',
-    title: '计划模式',
-    description: '只能读取文件和制定计划，不能编辑文件或执行命令。',
-  },
-  {
-    id: 'auto-edit',
-    title: '自动编辑模式',
-    description: '可自由读取和编辑文件，执行命令前会询问。',
-  },
-  {
-    id: 'full-auto',
-    title: '全自动模式',
-    description: '可执行任何操作，无需询问。请谨慎使用。',
-    warning: '危险：所有工具都会在无审批情况下执行。',
-  },
-]
-
 export const PREAUTH_TOOLS = [
   {
     id: 'bash',

@@ -15,11 +15,3 @@ export function markGroupMemberLimitWarningShown(workspaceId: string): void {
     // ignore quota errors
   }
 }
-
-export function clearGroupMemberLimitWarning(workspaceId: string): void {
-  try {
-    localStorage.removeItem(`${STORAGE_PREFIX}${workspaceId}`)
-  } catch {
-    // ignore
-  }
-}

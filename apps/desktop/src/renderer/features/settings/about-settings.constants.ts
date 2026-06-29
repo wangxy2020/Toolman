@@ -1,7 +1,5 @@
 export const TOOLMAN_GITHUB_URL = 'https://github.com/wangxy2020/Toolman'
 
-export const TOOLMAN_SPDX_LICENSE = 'AGPL-3.0-or-later'
-
 export const TOOLMAN_LICENSE_URL = `${TOOLMAN_GITHUB_URL}/blob/main/LICENSE`
 export const TOOLMAN_THIRD_PARTY_NOTICES_URL = `${TOOLMAN_GITHUB_URL}/blob/main/THIRD_PARTY_NOTICES.md`
 export const TOOLMAN_SOURCE_URL = TOOLMAN_GITHUB_URL

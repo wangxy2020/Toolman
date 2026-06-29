@@ -17,6 +17,7 @@ if [[ ! -f "$CHANNEL_CONFIG" ]]; then
 fi
 
 cd "$ROOT_DIR"
+node "$ROOT_DIR/scripts/write-build-provenance.mjs"
 pnpm build:p2p && pnpm build:libp2p
 pnpm --filter @toolman/desktop^... build
 exec env TOOLMAN_CONSOLE_LOG_LEVEL="${TOOLMAN_CONSOLE_LOG_LEVEL:-warn}" TOOLMAN_VITE_LOG_LEVEL="${TOOLMAN_VITE_LOG_LEVEL:-warn}" \

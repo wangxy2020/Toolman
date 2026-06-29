@@ -177,9 +177,3 @@ export async function saveMemory(
 
   return entry
 }
-
-export function formatMemoryList(workspaceId: string, assistantId?: string): string {
-  const items = listMemories(workspaceId, { assistantId })
-  if (items.length === 0) return '暂无长期记忆。'
-  return items.map((item, index) => `${index + 1}. ${item}`).join('\n')
-}

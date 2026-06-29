@@ -7,18 +7,6 @@ export function buildLocalDocxMarkdownLink(path: string): string {
   return `[${name}](${LOCAL_FILE_LINK_SCHEME}${encodeURIComponent(path)})`
 }
 
-export function buildDocxFileLinksMarkdown(paths: readonly string[]): string {
-  const unique = [...new Set(paths.map((path) => path.trim()).filter(Boolean))]
-  if (unique.length === 0) return ''
-
-  return [
-    '## 修订版文件（点击打开）',
-    '',
-    ...unique.map((path) => `- ${buildLocalDocxMarkdownLink(path)}`),
-    '',
-  ].join('\n')
-}
-
 const FAKE_TOOL_CODE_RE = /<\s*tool_code\s*>[\s\S]*?<\s*\/\s*tool_code\s*>/gi
 const FAKE_MCP_CODE_BLOCK_RE = /```[^\n]*\n[\s\S]*?\bmcp__[\s\S]*?```/gi
 const FAKE_MCP_CALL_LINE_RE = /^\s*mcp__[\w-]+__[\w_]+\([\s\S]*?\)\s*$/gm

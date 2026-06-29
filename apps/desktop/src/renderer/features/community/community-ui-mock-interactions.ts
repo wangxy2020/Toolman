@@ -257,8 +257,3 @@ export function applyUiMockInteractionToMessage(item: CommunityBoardMessage): Co
     favoritedByMe: snapshot.state.favorited,
   }
 }
-
-export function getUiMockResourceItemState(resourceId: string): CommunityCardActionState {
-  const snapshot = readUiMockInteraction(resourceId)
-  return snapshot?.state ?? {}
-}

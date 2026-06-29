@@ -1,14 +1,15 @@
 /** Canonical Toolman copyright & license metadata (AGPL-3.0-or-later). */
+import meta from './copyright.meta.json'
 
-export const TOOLMAN_PRODUCT_NAME = 'Toolman' as const
+export const TOOLMAN_PRODUCT_NAME = meta.product as 'Toolman'
 
-export const TOOLMAN_COPYRIGHT_HOLDER = 'Toolman Contributors'
+export const TOOLMAN_COPYRIGHT_HOLDER = meta.copyrightHolder
 
-export const TOOLMAN_COPYRIGHT_YEARS = '2024–2026'
+export const TOOLMAN_COPYRIGHT_YEARS = meta.copyrightYears
 
-export const TOOLMAN_SPDX_LICENSE = 'AGPL-3.0-or-later'
+export const TOOLMAN_SPDX_LICENSE = meta.license
 
-export const TOOLMAN_SOURCE_REPOSITORY = 'https://github.com/wangxy2020/Toolman'
+export const TOOLMAN_SOURCE_REPOSITORY = meta.repository
 
 export const TOOLMAN_COPYRIGHT_NOTICE =
   `Copyright (C) ${TOOLMAN_COPYRIGHT_YEARS} ${TOOLMAN_COPYRIGHT_HOLDER}`

@@ -16,7 +16,3 @@ export function decodeMcpToolName(
     toolName: rest.slice(sep + 2),
   }
 }
-
-export function isMcpToolName(toolName: string): boolean {
-  return toolName.startsWith(MCP_TOOL_PREFIX)
-}

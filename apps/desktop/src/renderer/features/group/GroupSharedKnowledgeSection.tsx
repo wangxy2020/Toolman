@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { stripP2pGroupPrefixedResourceName, type P2pSharedResource } from '@toolman/shared'
-import { IconChevronRight, IconTrash } from '../../components/icons'
-import { GroupFileSelectCheckbox } from './GroupFileSelectCheckbox'
 import { GroupKnowledgeFileList } from './GroupKnowledgeFileList'
 import { knowledgeSelectionKey } from './group-knowledge-selection'
 import type { OpenGroupKnowledgeMarkdownRequest, OpenGroupNoteRequest } from './group-note-open'
 import { useSharedKnowledgePanelDocuments } from './useSharedKnowledgePanelDocuments'
 import { materializeGroupKnowledgeDocument } from './group-knowledge-file-save'
+import { GroupSharedKnowledgeSectionHeader } from './GroupSharedKnowledgeSectionHeader'
 
 export interface GroupKnowledgeSavedDocumentRegistry {
   workspaceId: string
@@ -232,48 +231,22 @@ export function GroupSharedKnowledgeSection({
 
   return (
     <section className="tm-group-kb-section">
-      <header className="tm-group-kb-section-header">
-        <button
-          type="button"
-          className="tm-group-kb-section-expand"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}
-        >
-          <IconChevronRight open={expanded} />
-        </button>
-
-        <button
-          type="button"
-          className="tm-group-kb-section-heading"
-          onClick={() => setExpanded((current) => !current)}
-        >
-          <h3 className="tm-group-kb-section-title">{displayName}</h3>
-          <p className="tm-group-kb-section-meta">{panelDocuments.length} 篇文档</p>
-        </button>
-
-        {showSectionActions ? (
-          <div className="tm-group-kb-section-actions">
-            {(canRemoveFromGroup || canRemoveSaved) ? (
-              <button
-                type="button"
-                className="tm-kb-file-card-action tm-kb-file-card-action--danger"
-                title={sectionRemoveTitle}
-                disabled={sectionRemoveDisabled}
-                onClick={handleSectionRemove}
-              >
-                <IconTrash size={16} />
-              </button>
-            ) : null}
-            {canSelect ? (
-              <GroupFileSelectCheckbox
-                checked={sectionFullySelected}
-                title={sectionPartiallySelected ? '部分选中' : '选择知识库内全部文件'}
-                onChange={() => onToggleSelectSection(sectionSelectionKeys)}
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </header>
+      <GroupSharedKnowledgeSectionHeader
+        expanded={expanded}
+        displayName={displayName}
+        documentCount={panelDocuments.length}
+        showSectionActions={showSectionActions}
+        canRemoveFromGroup={canRemoveFromGroup}
+        canRemoveSaved={canRemoveSaved}
+        canSelect={canSelect}
+        sectionRemoveTitle={sectionRemoveTitle}
+        sectionRemoveDisabled={Boolean(sectionRemoveDisabled)}
+        sectionFullySelected={sectionFullySelected}
+        sectionPartiallySelected={sectionPartiallySelected}
+        onToggleExpanded={() => setExpanded((current) => !current)}
+        onSectionRemove={handleSectionRemove}
+        onToggleSelectSection={() => onToggleSelectSection(sectionSelectionKeys)}
+      />
 
       {expanded ? (
         !localWorkspaceId ? (

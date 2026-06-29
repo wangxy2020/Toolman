@@ -1,43 +1,7 @@
 import {
   type CommunityModerationReportResolveInput,
-  type CommunityReportReason,
-  type CommunityReportStatus,
   type CommunityReportTargetType,
 } from '@toolman/shared'
-
-export const MODERATION_REPORT_REASON_LABELS: Record<CommunityReportReason, string> = {
-  spam: '垃圾信息',
-  illegal: '违法违规',
-  copyright: '侵权内容',
-  other: '其他',
-}
-
-export const MODERATION_REPORT_STATUS_LABELS: Record<CommunityReportStatus, string> = {
-  open: '待处理',
-  reviewing: '审核中',
-  resolved: '已处理',
-  dismissed: '已驳回',
-}
-
-export const MODERATION_TARGET_TYPE_LABELS: Record<CommunityReportTargetType, string> = {
-  resource: '资源',
-  news: '资讯',
-  comment: '留言',
-  user: '用户',
-  task: '任务',
-}
-
-export const MODERATION_REPORT_RESOLVE_ACTION_LABELS: Record<
-  CommunityModerationReportResolveInput['action'],
-  string
-> = {
-  suspend_resource: '下架资源',
-  suspend_and_ban_author: '下架并封禁作者',
-  ban_user: '封禁用户',
-  delete_comment: '删除留言',
-  cancel_task: '取消任务',
-  dismiss_report: '驳回举报',
-}
 
 export const MODERATION_TAB_LABELS = {
   reports: '举报队列',
@@ -57,8 +21,6 @@ export const REVIEW_SUB_TAB_LABELS = {
 } as const
 
 export type ReviewSubTab = keyof typeof REVIEW_SUB_TAB_LABELS
-
-export type ModerationTab = keyof typeof MODERATION_TAB_LABELS
 
 export const MODERATION_CATEGORY_LABELS = {
   resources: '资源',

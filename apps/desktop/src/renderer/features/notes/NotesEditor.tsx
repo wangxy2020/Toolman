@@ -1,38 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IconChevronDown } from '../../components/icons'
-import { getNotesSlashCommands } from '../../i18n/notes-editor-labels'
-import { useI18n } from '../../i18n/useI18n'
 import {
   InputPopupMenu,
   InputPopupMenuList,
 } from '../chat/InputPopupMenu'
 import type { MessageSettings } from '../chat/message-settings'
-import { countNoteCharacters, detectSlashQuery, scrollTextareaToLine, syncTextareaHeight } from './note-editor-utils'
-import {
-  filterNotesSlashCommands,
-  type NotesSlashCommandItem,
-} from './notes-slash-commands'
-import { markdownToBlocks } from './notes-blocks'
 import { NotesBlockEditor } from './NotesBlockEditor'
 import { NotesInteractivePreview } from './NotesInteractivePreview'
-import { NotesEditorToolbar, type NoteToolbarActionKey } from './NotesEditorToolbar'
+import { NotesEditorToolbar } from './NotesEditorToolbar'
 import { NotesOutlinePanel } from './NotesOutlinePanel'
-import { extractNoteOutline, type NoteOutlineItem } from './notes-outline'
-import {
-  resolveInitialPreviewMode,
-  type NotesEditorSettings,
-} from './notes-editor-settings'
+import type { NotesEditorSettings } from './notes-editor-settings'
+import type { NotesEditorPreviewMode } from './notes-editor-types'
 import type { NoteItem } from './notes-storage'
-import { isGroupNotebookId } from '../group/group-note-utils'
+import { syncTextareaHeight } from './note-editor-utils'
 import { NotesTagsEditor } from './NotesTagsEditor'
-import { useNoteEditorActions } from './useNoteEditorActions'
-
-type PreviewMode = 'edit' | 'preview'
-
-type EditorSnapshot = {
-  title: string
-  content: string
-}
+import { useNotesEditor } from './useNotesEditor'
 
 interface Props {
   note: NoteItem
@@ -61,366 +42,15 @@ export function NotesEditor({
   onImportAttachment,
   onToggleOutline,
 }: Props) {
-  const { t } = useI18n()
-  const slashCommands = useMemo(() => getNotesSlashCommands(t), [t])
-  const previewModeLabels = useMemo(
-    (): Record<PreviewMode, string> => ({
-      edit: t('notesPage.openModes.editOnly'),
-      preview: t('notesPage.openModes.livePreview'),
-    }),
-    [t],
-  )
-  const bodyRef = useRef<HTMLTextAreaElement>(null)
-  const titleRef = useRef<HTMLTextAreaElement>(null)
-  const editPaneRef = useRef<HTMLDivElement>(null)
-  const previewPaneRef = useRef<HTMLDivElement>(null)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>(() =>
-    resolveInitialPreviewMode(editorSettings),
-  )
-  const [modeMenuOpen, setModeMenuOpen] = useState(false)
-  const modeMenuRef = useRef<HTMLDivElement>(null)
-  const [past, setPast] = useState<EditorSnapshot[]>([])
-  const [future, setFuture] = useState<EditorSnapshot[]>([])
-  const skipHistoryRef = useRef(false)
-  const [slashMenuOpen, setSlashMenuOpen] = useState(false)
-  const [slashActiveIndex, setSlashActiveIndex] = useState(0)
-  const [slashReplaceStart, setSlashReplaceStart] = useState(0)
-
-  const pushHistorySnapshot = useCallback(() => {
-    setPast((prev) => [...prev.slice(-49), { title: note.title, content: note.content }])
-    setFuture([])
-  }, [note.content, note.title])
-
-  const handleContentChange = useCallback(
-    (value: string) => {
-      if (locked) return
-      if (!skipHistoryRef.current) {
-        pushHistorySnapshot()
-      } else {
-        skipHistoryRef.current = false
-      }
-      onUpdate({ content: value })
-    },
-    [locked, onUpdate, pushHistorySnapshot],
-  )
-
-  const { runAction, runSlashAction, runImage, runLink } = useNoteEditorActions({
-    bodyRef,
-    disabled: locked,
-    onContentChange: handleContentChange,
-    importAttachment: onImportAttachment,
+  const editor = useNotesEditor({
+    note,
+    notes,
+    locked,
+    editorSettings,
+    onUpdate,
+    onSelectNote,
+    onImportAttachment,
   })
-
-  useEffect(() => {
-    if (locked) {
-      setPreviewMode('preview')
-    } else if (isGroupNotebookId(note.notebookId)) {
-      setPreviewMode('edit')
-    } else {
-      setPreviewMode(resolveInitialPreviewMode(editorSettings))
-    }
-    setPast([])
-    setFuture([])
-    setSlashMenuOpen(false)
-  }, [note.id, editorSettings, locked, note.notebookId])
-
-  const syncTitleHeight = useCallback(() => {
-    const title = titleRef.current
-    if (!title) return
-    syncTextareaHeight(title)
-  }, [])
-
-  useEffect(() => {
-    syncTitleHeight()
-  }, [note.title, syncTitleHeight])
-
-  useEffect(() => {
-    const title = titleRef.current
-    const pane = editPaneRef.current
-    if (!title || !pane) return
-
-    const observer = new ResizeObserver(() => {
-      syncTitleHeight()
-    })
-    observer.observe(pane)
-    return () => observer.disconnect()
-  }, [syncTitleHeight])
-
-  const applySnapshot = useCallback(
-    (snapshot: EditorSnapshot) => {
-      skipHistoryRef.current = true
-      onUpdate(snapshot)
-    },
-    [onUpdate],
-  )
-
-  useEffect(() => {
-    if (!modeMenuOpen) return
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!modeMenuRef.current?.contains(event.target as Node)) {
-        setModeMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [modeMenuOpen])
-
-  const slashCandidates = useMemo(() => {
-    if (!slashMenuOpen) return []
-    const textarea = bodyRef.current
-    if (!textarea) return slashCommands
-    const detected = detectSlashQuery(note.content, textarea.selectionStart)
-    if (!detected) return slashCommands
-    return filterNotesSlashCommands(detected.query, slashCommands)
-  }, [note.content, slashCommands, slashMenuOpen])
-
-  useEffect(() => {
-    if (!slashMenuOpen) return
-    setSlashActiveIndex(0)
-  }, [slashCandidates.length, slashMenuOpen])
-
-  const updateSlashMenu = useCallback(
-    (value: string, cursor: number) => {
-      const detected = detectSlashQuery(value, cursor)
-      if (detected) {
-        setSlashReplaceStart(detected.replaceStart)
-        setSlashMenuOpen(true)
-        return
-      }
-      setSlashMenuOpen(false)
-    },
-    [],
-  )
-
-  const removeSlashToken = useCallback(() => {
-    const textarea = bodyRef.current
-    if (!textarea) return
-    const cursor = textarea.selectionStart
-    const next = `${note.content.slice(0, slashReplaceStart)}${note.content.slice(cursor)}`
-    skipHistoryRef.current = true
-    onUpdate({ content: next })
-    requestAnimationFrame(() => {
-      textarea.focus()
-      textarea.setSelectionRange(slashReplaceStart, slashReplaceStart)
-    })
-  }, [note.content, onUpdate, slashReplaceStart])
-
-  const runSlashCommand = useCallback(
-    async (item: NotesSlashCommandItem) => {
-      setSlashMenuOpen(false)
-      removeSlashToken()
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => resolve())
-        })
-      })
-      if (item.action === 'image') {
-        await runImage()
-        return
-      }
-      if (item.action === 'link') {
-        runLink()
-        return
-      }
-      runSlashAction(item.action)
-    },
-    [removeSlashToken, runImage, runLink, runSlashAction],
-  )
-
-  const charCount = useMemo(
-    () => countNoteCharacters(note.title, note.content),
-    [note.title, note.content],
-  )
-
-  const handleTitleChange = useCallback(
-    (value: string) => {
-      if (locked) return
-      if (!skipHistoryRef.current) {
-        pushHistorySnapshot()
-      } else {
-        skipHistoryRef.current = false
-      }
-      onUpdate({ title: value })
-    },
-    [locked, onUpdate, pushHistorySnapshot],
-  )
-
-  const handleBodyChange = useCallback(
-    (value: string) => {
-      handleContentChange(value)
-      const textarea = bodyRef.current
-      if (!textarea) return
-      updateSlashMenu(value, textarea.selectionStart)
-    },
-    [handleContentChange, updateSlashMenu],
-  )
-
-  const handleUndo = useCallback(() => {
-    const previous = past[past.length - 1]
-    if (!previous) return
-    setPast((items) => items.slice(0, -1))
-    setFuture((items) => [{ title: note.title, content: note.content }, ...items])
-    applySnapshot(previous)
-    setSlashMenuOpen(false)
-  }, [applySnapshot, note.content, note.title, past])
-
-  const handleRedo = useCallback(() => {
-    const next = future[0]
-    if (!next) return
-    setFuture((items) => items.slice(1))
-    setPast((items) => [...items, { title: note.title, content: note.content }])
-    applySnapshot(next)
-    setSlashMenuOpen(false)
-  }, [applySnapshot, future, note.content, note.title])
-
-  const handleToolbarAction = useCallback(
-    (key: NoteToolbarActionKey) => {
-      if (!runAction(key)) return
-      setSlashMenuOpen(false)
-    },
-    [runAction],
-  )
-
-  const handleBodyKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (slashMenuOpen && slashCandidates.length > 0) {
-        if (event.key === 'ArrowDown') {
-          event.preventDefault()
-          setSlashActiveIndex((index) => (index + 1) % slashCandidates.length)
-          return
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault()
-          setSlashActiveIndex(
-            (index) => (index - 1 + slashCandidates.length) % slashCandidates.length,
-          )
-          return
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          const item = slashCandidates[slashActiveIndex]
-          if (item) void runSlashCommand(item)
-          return
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          setSlashMenuOpen(false)
-          return
-        }
-      }
-
-      const mod = event.metaKey || event.ctrlKey
-      if (!mod || locked) return
-
-      if (event.key.toLowerCase() === 'z' && event.shiftKey) {
-        event.preventDefault()
-        handleRedo()
-        return
-      }
-      if (event.key.toLowerCase() === 'z') {
-        event.preventDefault()
-        handleUndo()
-        return
-      }
-      if (event.key.toLowerCase() === 'y') {
-        event.preventDefault()
-        handleRedo()
-        return
-      }
-
-      const shortcutMap: Record<string, NoteToolbarActionKey> = {
-        b: 'bold',
-        i: 'italic',
-        u: 'underline',
-      }
-      const action = shortcutMap[event.key.toLowerCase()]
-      if (action) {
-        event.preventDefault()
-        handleToolbarAction(action)
-        return
-      }
-      if (event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        runLink()
-      }
-    },
-    [
-      handleRedo,
-      handleToolbarAction,
-      handleUndo,
-      locked,
-      runLink,
-      runSlashCommand,
-      slashActiveIndex,
-      slashCandidates,
-      slashMenuOpen,
-    ],
-  )
-
-  const handleToggleTask = useCallback(
-    (lineIndex: number, checked: boolean) => {
-      if (locked) return
-      const lines = note.content.split('\n')
-      let taskCounter = -1
-      for (let i = 0; i < lines.length; i++) {
-        if (!/^- \[[ xX]\] /.test(lines[i])) continue
-        taskCounter += 1
-        if (taskCounter !== lineIndex) continue
-        lines[i] = checked
-          ? lines[i].replace(/^- \[ \] /, '- [x] ')
-          : lines[i].replace(/^- \[[xX]\] /, '- [ ] ')
-        break
-      }
-      const next = lines.join('\n')
-      if (next !== note.content) onUpdate({ content: next })
-    },
-    [locked, note.content, onUpdate],
-  )
-
-  const blockItems =
-    (note.blocks?.length ?? 0) > 0 ? note.blocks! : markdownToBlocks(note.content ?? '')
-
-  const outlineItems = useMemo(
-    () =>
-      extractNoteOutline(note.title, note.content, {
-        blocks: blockItems,
-        editorMode: note.editorMode,
-      }),
-    [blockItems, note.content, note.editorMode, note.title],
-  )
-
-  const handleOutlineSelect = useCallback(
-    (item: NoteOutlineItem) => {
-      if (item.target === 'title') {
-        const title = titleRef.current
-        if (!title) return
-        title.focus()
-        title.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        return
-      }
-
-      if (item.target === 'block' && item.blockId) {
-        const block = editPaneRef.current?.querySelector<HTMLElement>(
-          `[data-block-id="${item.blockId}"]`,
-        )
-        block?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        block?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
-        return
-      }
-
-      if (item.lineIndex >= 0 && bodyRef.current) {
-        scrollTextareaToLine(bodyRef.current, item.lineIndex)
-        return
-      }
-
-      const heading = previewPaneRef.current?.querySelector<HTMLElement>(`#${item.id}`)
-      heading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    },
-    [],
-  )
-
-  const showEditor = previewMode === 'edit'
-  const showPreview = previewMode === 'preview'
 
   return (
     <div
@@ -428,24 +58,24 @@ export function NotesEditor({
       style={{ ['--tm-notes-font-size' as string]: `${editorSettings.fontSize}px` }}
     >
       <NotesEditorToolbar
-        bodyRef={bodyRef}
+        bodyRef={editor.bodyRef}
         disabled={locked}
-        onRunAction={handleToolbarAction}
-        onRunImage={runImage}
-        onRunLink={runLink}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        canUndo={past.length > 0}
-        canRedo={future.length > 0}
+        onRunAction={editor.handleToolbarAction}
+        onRunImage={editor.runImage}
+        onRunLink={editor.runLink}
+        onUndo={editor.handleUndo}
+        onRedo={editor.handleRedo}
+        canUndo={editor.past.length > 0}
+        canRedo={editor.future.length > 0}
         showOutline={editorSettings.showOutline}
         onToggleOutline={onToggleOutline}
       />
 
       <div className="tm-notes-editor-layout">
         <div className="tm-notes-editor-main">
-        {showEditor ? (
+        {editor.showEditor ? (
           <div
-            ref={editPaneRef}
+            ref={editor.editPaneRef}
             className={[
               'tm-notes-editor-pane tm-notes-editor-pane--edit tm-notes-editor-pane--slash',
               editorSettings.narrowColumn ? 'tm-notes-editor-pane--narrow' : '',
@@ -455,15 +85,15 @@ export function NotesEditor({
           >
             <div className="tm-notes-editor-title-wrap">
               <textarea
-                ref={titleRef}
+                ref={editor.titleRef}
                 className="tm-notes-editor-title"
                 value={note.title}
                 readOnly={locked}
-                placeholder={t('notesPage.editor.untitled')}
+                placeholder={editor.t('notesPage.editor.untitled')}
                 rows={1}
                 cols={1}
                 onChange={(event) => {
-                  handleTitleChange(event.target.value)
+                  editor.handleTitleChange(event.target.value)
                   syncTextareaHeight(event.target)
                 }}
                 onKeyDown={(event) => {
@@ -488,52 +118,52 @@ export function NotesEditor({
             ) : null}
             {note.editorMode === 'blocks' ? (
               <NotesBlockEditor
-                blocks={blockItems}
+                blocks={editor.blockItems}
                 locked={locked}
                 onChange={(blocks) => onUpdate({ blocks, editorMode: 'blocks' })}
               />
             ) : (
               <textarea
-                ref={bodyRef}
+                ref={editor.bodyRef}
                 className="tm-notes-editor-body"
                 value={note.content}
                 readOnly={locked}
-                placeholder={t('notesPage.editor.slashPlaceholder')}
-                onChange={(event) => handleBodyChange(event.target.value)}
-                onKeyDown={handleBodyKeyDown}
+                placeholder={editor.t('notesPage.editor.slashPlaceholder')}
+                onChange={(event) => editor.handleBodyChange(event.target.value)}
+                onKeyDown={editor.handleBodyKeyDown}
                 onClick={() => {
-                  const textarea = bodyRef.current
+                  const textarea = editor.bodyRef.current
                   if (!textarea) return
-                  updateSlashMenu(note.content, textarea.selectionStart)
+                  editor.updateSlashMenu(note.content, textarea.selectionStart)
                 }}
               />
             )}
             <InputPopupMenu
-              title={t('notesPage.editor.commandsTitle')}
-              open={slashMenuOpen && slashCandidates.length > 0}
-              onClose={() => setSlashMenuOpen(false)}
+              title={editor.t('notesPage.editor.commandsTitle')}
+              open={editor.slashMenuOpen && editor.slashCandidates.length > 0}
+              onClose={() => editor.setSlashMenuOpen(false)}
             >
               <InputPopupMenuList
-                items={slashCandidates.map((item) => ({
+                items={editor.slashCandidates.map((item) => ({
                   id: item.id,
                   command: item.command,
                   description: item.description,
                   showIcon: false,
                 }))}
-                activeIndex={slashActiveIndex}
-                onActiveIndexChange={setSlashActiveIndex}
+                activeIndex={editor.slashActiveIndex}
+                onActiveIndexChange={editor.setSlashActiveIndex}
                 onSelect={(index) => {
-                  const item = slashCandidates[index]
-                  if (item) void runSlashCommand(item)
+                  const item = editor.slashCandidates[index]
+                  if (item) void editor.runSlashCommand(item)
                 }}
               />
             </InputPopupMenu>
           </div>
         ) : null}
 
-        {showPreview ? (
+        {editor.showPreview ? (
           <div
-            ref={previewPaneRef}
+            ref={editor.previewPaneRef}
             className={[
               'tm-notes-editor-pane tm-notes-editor-pane--preview',
               editorSettings.narrowColumn ? 'tm-notes-editor-pane--narrow' : '',
@@ -547,51 +177,51 @@ export function NotesEditor({
               notes={notes}
               messageSettings={messageSettings}
               onNavigateNote={onSelectNote}
-              onToggleTask={handleToggleTask}
+              onToggleTask={editor.handleToggleTask}
             />
           </div>
         ) : null}
         </div>
 
         {editorSettings.showOutline ? (
-          <NotesOutlinePanel items={outlineItems} onSelect={handleOutlineSelect} />
+          <NotesOutlinePanel items={editor.outlineItems} onSelect={editor.handleOutlineSelect} />
         ) : null}
       </div>
 
       <footer className="tm-notes-statusbar">
         <span className="tm-notes-statusbar-count">
-          {t('notesPage.editor.charCount', { count: charCount })}
+          {editor.t('notesPage.editor.charCount', { count: editor.charCount })}
         </span>
-        <div className="tm-notes-statusbar-mode" ref={modeMenuRef}>
+        <div className="tm-notes-statusbar-mode" ref={editor.modeMenuRef}>
           <button
             type="button"
             className="tm-notes-statusbar-mode-btn"
-            onClick={() => setModeMenuOpen((open) => !open)}
+            onClick={() => editor.setModeMenuOpen((open) => !open)}
           >
             <span className="tm-notes-statusbar-mode-icon">A</span>
-            <span>{previewModeLabels[previewMode]}</span>
+            <span>{editor.previewModeLabels[editor.previewMode]}</span>
             <IconChevronDown size={12} className="tm-notes-statusbar-mode-chevron" />
           </button>
-          {modeMenuOpen ? (
+          {editor.modeMenuOpen ? (
             <div className="tm-notes-statusbar-mode-menu" role="menu">
-              {(Object.keys(previewModeLabels) as PreviewMode[]).map((mode) => (
+              {(Object.keys(editor.previewModeLabels) as NotesEditorPreviewMode[]).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   role="menuitemradio"
-                  aria-checked={previewMode === mode}
+                  aria-checked={editor.previewMode === mode}
                   className={[
                     'tm-notes-statusbar-mode-item',
-                    previewMode === mode ? 'tm-notes-statusbar-mode-item--active' : '',
+                    editor.previewMode === mode ? 'tm-notes-statusbar-mode-item--active' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   onClick={() => {
-                    setPreviewMode(mode)
-                    setModeMenuOpen(false)
+                    editor.setPreviewMode(mode)
+                    editor.setModeMenuOpen(false)
                   }}
                 >
-                  {previewModeLabels[mode]}
+                  {editor.previewModeLabels[mode]}
                 </button>
               ))}
             </div>

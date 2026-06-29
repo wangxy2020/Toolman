@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { z } from 'zod'
 
 import { getKnowledgeBaseRepository } from '../../db/repos'
-import { listKnowledgeDocuments } from '../knowledge-document.service'
+import { listKnowledgeDocuments } from '../knowledge-document/list-ingest'
 
 const ExportInputSchema = z.object({
   kbId: z.string().min(1),

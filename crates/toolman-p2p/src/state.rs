@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tokio::sync::{Mutex as AsyncMutex, Notify};
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::connection::webrtc_session::WebRtcSession;
 use crate::connection::ConnectionManager;
@@ -36,12 +36,7 @@ pub static ICE_SERVERS: Lazy<Mutex<Vec<IceServerEntry>>> =
     Lazy::new(|| Mutex::new(default_ice_servers()));
 
 pub struct PendingInviteHandshake {
-    pub invite_id: String,
-    pub workspace_id: Option<String>,
-    pub offer_sdp: String,
     pub session: std::sync::Arc<AsyncMutex<WebRtcSession>>,
-    pub answer_sdp: Mutex<Option<String>>,
-    pub answer_notify: Notify,
 }
 
 pub static PENDING_INVITES: Lazy<AsyncMutex<HashMap<String, PendingInviteHandshake>>> =

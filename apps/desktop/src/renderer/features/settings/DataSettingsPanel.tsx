@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useState } from 'react'
-import { IpcChannel } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useI18n } from '../../i18n/useI18n'
 import {
@@ -7,215 +5,25 @@ import {
   SettingsRow,
   SettingsSection,
 } from './SettingsShared'
-import { loadNotesData } from '../notes/notes-storage'
-
-function IconSave({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-      <polyline points="17 21 17 13 7 13 7 21" />
-      <polyline points="7 3 7 8 15 8" />
-    </svg>
-  )
-}
-
-function IconFolderOpen({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)}MB`
-}
-
-function truncatePath(path: string, max = 34): string {
-  if (path.length <= max) return path
-  return `${path.slice(0, max)}…`
-}
-
-type PendingConfirm =
-  | { kind: 'deleteKnowledge' }
-  | { kind: 'clearCache' }
-  | { kind: 'resetData' }
-  | { kind: 'restore'; backupPath: string }
+import { IconFolderOpen, IconSave } from './data-settings-icons'
+import { formatBytes, truncatePath } from './data-settings-utils'
+import { useDataSettingsPanel } from './useDataSettingsPanel'
 
 export function DataSettingsPanel() {
   const { t } = useI18n()
-  const [stats, setStats] = useState<{
-    cacheBytes: number
-    userData: string
-    userWorkDirectory: string
-    logs: string
-    knowledgeBase: string
-  } | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
-
-  const loadStats = useCallback(async () => {
-    setStatsLoading(true)
-    const result = await window.api.invoke(IpcChannel.AppGetStorageStats)
-    setStatsLoading(false)
-    if (!result.ok) {
-      setError(result.error.message)
-      return
-    }
-    setStats(result.data as typeof stats)
-    setError(null)
-  }, [])
-
-  useEffect(() => {
-    void loadStats()
-  }, [loadStats])
-
-  const openPath = async (path: string) => {
-    const result = await window.api.invoke(IpcChannel.AppShellOpenPath, { path })
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    const data = result.data as { opened: boolean; error?: string }
-    if (!data.opened && data.error) setMessage(data.error)
-  }
-
-  const handleBackup = async () => {
-    setBusy(true)
-    setMessage(null)
-    const notesData = loadNotesData()
-    const result = await window.api.invoke(IpcChannel.AppBackupData, {
-      notesDataJson: JSON.stringify(notesData),
-    })
-    setBusy(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    const data = result.data as {
-      backupPath: string
-      includesKnowledge?: boolean
-      includesNotes?: boolean
-    }
-    const parts = [t('settings.data.backupParts.database')]
-    if (data.includesKnowledge) parts.push(t('settings.data.backupParts.knowledge'))
-    if (data.includesNotes) parts.push(t('settings.data.backupParts.notes'))
-    setMessage(
-      t('settings.data.messages.backupSuccess', {
-        path: data.backupPath,
-        parts: parts.join('、'),
-      }),
-    )
-  }
-
-  const handleRestore = async (backupPath: string) => {
-    setBusy(true)
-    setMessage(null)
-    const result = await window.api.invoke(IpcChannel.AppRestoreData, {
-      backupPath,
-      restoreKnowledge: true,
-    })
-    setBusy(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    const data = result.data as {
-      restored: boolean
-      includesKnowledge?: boolean
-      notesDataJson?: string
-    }
-    if (data.notesDataJson) {
-      window.dispatchEvent(new CustomEvent('toolman:notes-restore', { detail: data.notesDataJson }))
-    }
-    const parts = [t('settings.data.backupParts.database')]
-    if (data.includesKnowledge) parts.push(t('settings.data.backupParts.knowledge'))
-    if (data.notesDataJson) parts.push(t('settings.data.backupParts.notes'))
-    setMessage(t('settings.data.messages.restoreSuccess', { parts: parts.join('、') }))
-  }
-
-  const handleDeleteKnowledge = async () => {
-    setBusy(true)
-    const result = await window.api.invoke(IpcChannel.AppDeleteKnowledge)
-    setBusy(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    await loadStats()
-    setMessage(t('settings.data.messages.deleteKnowledge'))
-  }
-
-  const handleClearCache = async () => {
-    setBusy(true)
-    const result = await window.api.invoke(IpcChannel.AppClearCache)
-    setBusy(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    await loadStats()
-    setMessage(t('settings.data.messages.clearCache'))
-  }
-
-  const handleReset = async () => {
-    setBusy(true)
-    const result = await window.api.invoke(IpcChannel.AppResetData)
-    setBusy(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      return
-    }
-    await loadStats()
-    const data = result.data as { cleared?: string[]; memoryEntriesDeleted?: number }
-    const memoryCount = data.memoryEntriesDeleted ?? 0
-    const clearedItems = data.cleared ?? []
-    if (memoryCount === 0 && clearedItems.length === 0) {
-      setMessage(t('settings.data.messages.resetRestart'))
-    } else {
-      const segments: string[] = []
-      if (memoryCount > 0) {
-        segments.push(t('settings.data.messages.resetMemory', { count: memoryCount }))
-      }
-      if (clearedItems.length > 0) {
-        segments.push(t('settings.data.messages.resetCleared', { items: clearedItems.join('、') }))
-      }
-      setMessage(segments.join(''))
-    }
-  }
-
-  const handlePickRestore = async () => {
-    const pick = await window.api.invoke(IpcChannel.DialogSelectFolder, {})
-    if (!pick.ok) return
-    const folder = (pick.data as { path: string | null }).path
-    if (!folder) return
-    setPendingConfirm({ kind: 'restore', backupPath: folder })
-  }
-
-  const handleConfirm = () => {
-    if (!pendingConfirm) return
-    const action = pendingConfirm
-    setPendingConfirm(null)
-
-    if (action.kind === 'restore') {
-      void handleRestore(action.backupPath)
-      return
-    }
-    if (action.kind === 'deleteKnowledge') {
-      void handleDeleteKnowledge()
-      return
-    }
-    if (action.kind === 'clearCache') {
-      void handleClearCache()
-      return
-    }
-    void handleReset()
-  }
+  const {
+    stats,
+    statsLoading,
+    busy,
+    error,
+    message,
+    pendingConfirm,
+    setPendingConfirm,
+    openPath,
+    handleBackup,
+    handlePickRestore,
+    handleConfirm,
+  } = useDataSettingsPanel()
 
   const confirmDialog = pendingConfirm
     ? {
@@ -259,7 +67,7 @@ export function DataSettingsPanel() {
                 type="button"
                 className="tm-data-btn"
                 disabled={busy}
-                onClick={() => void handleBackup()}
+                onClick={() => void handleBackup(t)}
               >
                 <IconSave />
                 {t('settings.data.fullBackup')}
@@ -372,7 +180,6 @@ export function DataSettingsPanel() {
             </button>
           </SettingsRow>
         </SettingsSection>
-
       </div>
 
       {confirmDialog ? (
@@ -383,7 +190,7 @@ export function DataSettingsPanel() {
           cancelLabel={t('common.cancel')}
           danger={confirmDialog.danger}
           onCancel={() => setPendingConfirm(null)}
-          onConfirm={handleConfirm}
+          onConfirm={() => handleConfirm(t)}
         />
       ) : null}
     </SettingsPageLayout>

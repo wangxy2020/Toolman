@@ -165,6 +165,8 @@ pnpm verify:folders:b
 
 `[toolman-libp2p] outgoing connection error ... Handshake failed` 影响社区联邦（CID/Yjs），**不影响**群组 WebRTC 同步；群组依赖上方的 `discovery_start` 成功。
 
+同机双开时若曾出现 `Address already in use (os error 48)`，多为 mDNS 用局域网 IP 拨号本机另一实例导致；当前版本会自动改写为 `127.0.0.1` 拨号。修改 Rust 后需重新 `pnpm build:libp2p` 并完全重启两个窗口。
+
 `TSM AdjustCapsLockLED` / `IMKCFRunLoopWakeUpReliable` 是 macOS 输入法噪音，**与 P2P 无关**，可忽略。
 
 **用户 A 成员列表看不到用户 B**：多为 WebRTC 未连上或 `member.joined` 未送达。请：

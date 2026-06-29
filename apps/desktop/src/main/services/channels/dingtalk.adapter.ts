@@ -3,74 +3,12 @@ import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import type { ImChannelConfig } from '@toolman/shared'
 import type { ChannelAdapter, ChannelAdapterContext, ChannelRuntimeStatus } from './adapter.types'
-
-interface DingTalkAccessTokenResponse {
-  accessToken?: string
-  expireIn?: number
-}
-
-interface DingTalkConnectionResponse {
-  endpoint?: string
-  ticket?: string
-}
-
-interface DingTalkBotMessage {
-  msgtype?: string
-  text?: { content?: string }
-  conversationId?: string
-  conversationType?: string
-  senderStaffId?: string
-  senderNick?: string
-  sessionWebhook?: string
-  sessionWebhookExpiredTime?: number
-}
-
-interface DingTalkStreamFrame {
-  specVersion?: string
-  type?: string
-  headers?: Record<string, string>
-  data?: string
-}
-
-async function fetchAccessToken(appKey: string, appSecret: string): Promise<string> {
-  const response = await fetch('https://api.dingtalk.com/v1.0/oauth2/accessToken', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appKey, appSecret }),
-  })
-
-  const data = (await response.json()) as DingTalkAccessTokenResponse
-  if (!response.ok || !data.accessToken) {
-    throw new Error('获取钉钉 access token 失败，请检查 AppKey 与 AppSecret')
-  }
-  return data.accessToken
-}
-
-async function openStreamConnection(
-  accessToken: string,
-  clientId: string,
-  clientSecret: string,
-): Promise<DingTalkConnectionResponse> {
-  const response = await fetch('https://api.dingtalk.com/v1.0/gateway/connections/open', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-acs-dingtalk-access-token': accessToken,
-    },
-    body: JSON.stringify({
-      clientId,
-      clientSecret,
-      subscriptions: [{ type: 'CALLBACK', topic: '/v1.0/im/bot/messages/get' }],
-      localConnection: true,
-    }),
-  })
-
-  const data = (await response.json()) as DingTalkConnectionResponse & { message?: string }
-  if (!response.ok || !data.endpoint || !data.ticket) {
-    throw new Error(data.message ?? '打开钉钉 Stream 连接失败，请确认已启用 Stream 模式机器人')
-  }
-  return data
-}
+import {
+  fetchDingTalkAccessToken,
+  openDingTalkStreamConnection,
+  type DingTalkBotMessage,
+  type DingTalkStreamFrame,
+} from './dingtalk/dingtalk.api'
 
 export class DingtalkChannelAdapter implements ChannelAdapter {
   readonly platform = 'dingtalk' as const
@@ -126,8 +64,8 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
     }
 
     try {
-      const accessToken = await fetchAccessToken(appKey, appSecret)
-      await openStreamConnection(accessToken, appKey, appSecret)
+      const accessToken = await fetchDingTalkAccessToken(appKey, appSecret)
+      await openDingTalkStreamConnection(accessToken, appKey, appSecret)
       return { ok: true, message: '钉钉凭据验证通过（Stream 模式）' }
     } catch (error) {
       return {
@@ -158,8 +96,8 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
     }
 
     try {
-      const accessToken = await fetchAccessToken(appKey, appSecret)
-      const connection = await openStreamConnection(accessToken, appKey, appSecret)
+      const accessToken = await fetchDingTalkAccessToken(appKey, appSecret)
+      const connection = await openDingTalkStreamConnection(accessToken, appKey, appSecret)
       const endpoint = connection.endpoint!.includes('?')
         ? `${connection.endpoint}&ticket=${connection.ticket}`
         : `${connection.endpoint}?ticket=${connection.ticket}`
@@ -276,7 +214,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
 
     const appKey = config.appId.trim()
     const appSecret = config.appSecret.trim()
-    const accessToken = await fetchAccessToken(appKey, appSecret)
+    const accessToken = await fetchDingTalkAccessToken(appKey, appSecret)
     const chatId = message.conversationId ?? message.senderStaffId
     if (!chatId) return
 

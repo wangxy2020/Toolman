@@ -22,10 +22,6 @@ export function clearToolApprovalScope(scopeKey: string): void {
   grantedScopes.delete(scopeKey.trim())
 }
 
-export function clearToolApprovalScopes(): void {
-  grantedScopes.clear()
-}
-
 export function buildSessionToolApprovalScopeKey(sessionId: string): string {
   return `session-tools:${sessionId}`
 }

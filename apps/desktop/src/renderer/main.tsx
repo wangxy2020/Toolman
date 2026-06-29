@@ -6,16 +6,16 @@
  */
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { IpcChannel } from '@toolman/shared'
 import App from './App'
 import { AuthSessionProvider } from './features/user/AuthSessionProvider'
 import { MuiProvider } from './theme/MuiProvider'
 import { reportRendererError } from './lib/report-renderer-error'
+import { recordProvenanceBeacon } from './lib/record-provenance-beacon'
 import './index.css'
 
 function ProvenanceBootstrap() {
   useEffect(() => {
-    void window.api.invoke(IpcChannel.AppProvenanceBeacon, { event: 'app.renderer.ready' })
+    recordProvenanceBeacon('app.renderer.ready')
 
     const onError = (event: ErrorEvent) => {
       reportRendererError({

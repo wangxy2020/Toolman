@@ -109,10 +109,6 @@ export function computeGuestDocumentsFolderSlug(identityId: string = getLocalIde
   return GUEST_DOCUMENTS_FOLDER_SLUG
 }
 
-export function guestFolderSlugFromIdentityId(identityId: string = getLocalIdentityId()): string {
-  return computeGuestDocumentsFolderSlug(identityId)
-}
-
 function isAuthSessionLoggedIn(): boolean {
   try {
     const session = new AuthSessionRepository(getDatabase()).getCurrent()

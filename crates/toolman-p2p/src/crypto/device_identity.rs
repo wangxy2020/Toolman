@@ -246,19 +246,6 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-fn load_key_pair() -> Result<Ed25519KeyPair, String> {
-    let pkcs8 = load_pkcs8_from_keychain()?;
-    Ed25519KeyPair::from_pkcs8(pkcs8.as_ref())
-        .map_err(|_| "Stored device private key is invalid Ed25519 PKCS#8".to_string())
-}
-
-pub fn sign_message(message: &str) -> Result<String, String> {
-    load_key_pair().and_then(|key_pair| {
-        let signature = key_pair.sign(message.as_bytes());
-        Ok(STANDARD.encode(signature.as_ref()))
-    })
-}
-
 pub fn verify_message(
     message: &str,
     signature_b64: &str,

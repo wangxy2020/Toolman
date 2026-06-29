@@ -1,7 +1,6 @@
 import {
   getWebhookPort,
   listImChannelConfigsPublic,
-  migrateRendererChannelConfigs,
   upsertImChannelConfig,
 } from './channel-config.service'
 import { logStructured } from './structured-log.service'
@@ -47,16 +46,6 @@ export function listImChannelStatuses() {
 
 export function getImChannelWebhookInfo() {
   return getChannelWebhookInfo()
-}
-
-export function migrateImChannelsFromRenderer(
-  items: Parameters<typeof migrateRendererChannelConfigs>[0],
-) {
-  const migrated = migrateRendererChannelConfigs(items)
-  if (migrated > 0) {
-    void reloadChannelManager()
-  }
-  return { migrated }
 }
 
 export async function shutdownChannels(): Promise<void> {

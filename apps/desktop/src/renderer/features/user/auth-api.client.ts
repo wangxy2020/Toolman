@@ -6,8 +6,6 @@ import {
   type AuthBindProviderOutput,
   type AuthDeleteAccountInput,
   type AuthDeleteAccountOutput,
-  type AuthExchangeHubTokenInput,
-  type AuthExchangeHubTokenOutput,
   type AuthMergeRequiredDetails,
   type AuthGetFirebaseConfigOutput,
   type AuthGetBuildProfileOutput,
@@ -150,13 +148,5 @@ export async function bindAuthProvider(
 ): Promise<AuthBindProviderOutput> {
   return unwrap(
     (await window.api.invoke(IpcChannel.AuthBindProvider, input)) as IpcResult<AuthBindProviderOutput>,
-  )
-}
-
-export async function exchangeAuthHubToken(
-  input: AuthExchangeHubTokenInput = {},
-): Promise<AuthExchangeHubTokenOutput> {
-  return unwrap(
-    (await window.api.invoke(IpcChannel.AuthExchangeHubToken, input)) as IpcResult<AuthExchangeHubTokenOutput>,
   )
 }

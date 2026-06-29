@@ -21,7 +21,7 @@ export function loadQuickPhrases(): QuickPhrase[] {
   }
 }
 
-export function saveQuickPhrases(phrases: QuickPhrase[]): void {
+function saveQuickPhrases(phrases: QuickPhrase[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(phrases))
 }
 

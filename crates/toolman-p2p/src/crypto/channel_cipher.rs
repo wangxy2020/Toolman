@@ -154,10 +154,6 @@ impl ChannelCipherSet {
         }
         Err(format!("Unknown key version: {key_version}"))
     }
-
-    pub fn current_key_version(&self) -> u32 {
-        self.current.key_version()
-    }
 }
 
 pub fn derive_pairwise_bootstrap_key(local_device_id: &str, peer_device_id: &str) -> [u8; 32] {
@@ -200,15 +196,15 @@ fn parse_envelope(envelope: &[u8]) -> Result<(u32, [u8; NONCE_LEN], &[u8]), Stri
     Ok((key_version, nonce, ciphertext))
 }
 
-pub fn is_encrypted_envelope(data: &[u8]) -> bool {
-    data.len() >= ENVELOPE_HEADER_LEN + TAG_LEN
-        && data.starts_with(&ENVELOPE_MAGIC)
-        && data[2] == ENVELOPE_VERSION_ENCRYPTED
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn is_encrypted_envelope(data: &[u8]) -> bool {
+        data.len() >= ENVELOPE_HEADER_LEN + TAG_LEN
+            && data.starts_with(&ENVELOPE_MAGIC)
+            && data[2] == ENVELOPE_VERSION_ENCRYPTED
+    }
 
     #[test]
     fn encrypt_decrypt_round_trip() {

@@ -35,29 +35,3 @@ export function preprocessWikiLinks(content: string, notes: NoteItem[]): string 
     return `[${label}](note://${resolved.id})`
   })
 }
-
-export function getBacklinks(noteId: string, notes: NoteItem[]): NoteItem[] {
-  const current = notes.find((note) => note.id === noteId)
-  if (!current) return []
-
-  return notes.filter((candidate) => {
-    if (candidate.id === noteId) return false
-    const targets = extractWikiLinkTargets(candidate.content)
-    return targets.some((target) => {
-      const resolved = resolveWikiLinkTarget(target, notes)
-      return resolved?.id === noteId
-    })
-  })
-}
-
-export function getOutlinks(note: NoteItem, notes: NoteItem[]): NoteItem[] {
-  const seen = new Set<string>()
-  const result: NoteItem[] = []
-  for (const target of extractWikiLinkTargets(note.content)) {
-    const resolved = resolveWikiLinkTarget(target, notes)
-    if (!resolved || seen.has(resolved.id)) continue
-    seen.add(resolved.id)
-    result.push(resolved)
-  }
-  return result
-}

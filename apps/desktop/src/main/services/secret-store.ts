@@ -25,7 +25,3 @@ export function decryptSecret(encoded: string | null | undefined): string | null
     return null
   }
 }
-
-export function hasStoredSecret(encoded: string | null | undefined): boolean {
-  return Boolean(encoded)
-}

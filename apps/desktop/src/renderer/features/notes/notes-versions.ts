@@ -21,13 +21,3 @@ export function appendNoteVersion(note: NoteItem): NoteVersion[] {
 
   return [version, ...versions].slice(0, MAX_NOTE_VERSIONS)
 }
-
-export function formatVersionLabel(version: NoteVersion): string {
-  const date = new Date(version.createdAt)
-  return date.toLocaleString('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}

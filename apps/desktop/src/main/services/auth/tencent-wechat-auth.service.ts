@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { AuthBindingRepository, type AuthBindingMetadata } from '@toolman/db'
-import type { AuthBindProviderInput, AuthProvider, AuthSession } from '@toolman/shared'
+import type { AuthBindProviderInput, AuthSession } from '@toolman/shared'
 
 import { getDatabase } from '../../bootstrap/database'
 import { getAuthSession } from '../auth-session.service'
@@ -148,8 +148,4 @@ export async function bindAuthProvider(input: AuthBindProviderInput): Promise<Au
   }
 
   throw new AuthLoginError('暂不支持绑定该登录方式')
-}
-
-export function hasAuthBinding(provider: AuthProvider, identityId: string = getLocalIdentityId()): boolean {
-  return getIdentityBindings(identityId).some((binding) => binding.provider === provider)
 }

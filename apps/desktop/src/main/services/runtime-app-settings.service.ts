@@ -15,10 +15,6 @@ export function syncRuntimeAppSettings(patch: Partial<RuntimeAppSettings>): Runt
   return runtimeSettings
 }
 
-export function getRuntimeAppSettings(): RuntimeAppSettings {
-  return runtimeSettings
-}
-
 export function isDocumentOcrEnabled(): boolean {
   return runtimeSettings.documentOcrEnabled
 }

@@ -8905,15 +8905,6 @@ html.theme-light .tm-input-tool--active {
   cursor: not-allowed;
 }
 
-.tm-icon-slash {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  line-height: 1;
-  font-family: inherit;
-}
-
 .tm-input-resize-handle {
   position: absolute;
   top: 6px;

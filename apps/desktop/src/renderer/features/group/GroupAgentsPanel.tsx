@@ -1,429 +1,64 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { Assistant, P2pMember, P2pSharedResource, Session } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { GroupAgentPickerModal } from './GroupAgentPickerModal'
-import {
-  GroupAgentSessionActionMenu,
-  type GroupAgentSessionAction,
-} from './GroupAgentSessionActionMenu'
+import { GroupAgentSessionActionMenu } from './GroupAgentSessionActionMenu'
 import { GroupFileContextMenu } from './GroupFileContextMenu'
 import { GroupMemberResourceSection } from './GroupMemberResourceSection'
 import { GroupPanelHeader } from './GroupPanelHeader'
 import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupSharedAgentSection } from './GroupSharedAgentSection'
-import { agentSelectionKey, parseAgentSelectionKey } from './group-agent-selection'
-import {
-  getAgentSessionPermission,
-  isShareableGroupAgentSource,
-  resolveGroupAgentPanelTitle,
-} from './group-agent-utils'
-import type { OpenGroupAgentSessionRequest } from './group-agent-open'
-import { groupResourcesByMember } from './group-shared-resources-by-member'
-import { useP2pAgents } from './useP2pAgents'
-import { useRegisterGroupPanelError } from './group-page-status'
-import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
-import { useI18n } from '../../i18n/useI18n'
+import type { GroupAgentsPanelProps } from './group-agents-panel-types'
+import { useGroupAgentsPanel } from './useGroupAgentsPanel'
 
-interface Props {
-  p2pWorkspaceId: string
-  workspaceName: string
-  sourceWorkspaceId: string | null
-  assistants: Assistant[]
-  sessions: Session[]
-  canManageGroupResources: boolean
-  canWriteWorkspace: boolean
-  members: P2pMember[]
-  selfMemberId: string | null
-  onOpenGroupAgentSession?: (request: OpenGroupAgentSessionRequest) => void | Promise<void>
-  onReloadAssistants?: () => void | Promise<void>
-}
+export type { GroupAgentsPanelProps } from './group-agents-panel-types'
 
-interface PendingDelete {
-  kind: 'agent' | 'sessions'
-  groups: Array<{ resourceId: string; sessionIds: string[] }>
-  message: string
-}
-
-export function GroupAgentsPanel({
-  p2pWorkspaceId,
-  workspaceName,
-  sourceWorkspaceId,
-  assistants,
-  sessions,
-  canManageGroupResources,
-  canWriteWorkspace,
-  members,
-  selfMemberId,
-  onOpenGroupAgentSession,
-  onReloadAssistants,
-}: Props) {
-  const { t } = useI18n()
-  const [showPicker, setShowPicker] = useState(false)
-  const [openingPicker, setOpeningPicker] = useState(false)
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
-  const [removingResourceId, setRemovingResourceId] = useState<string | null>(null)
-  const [removingSessionId, setRemovingSessionId] = useState<string | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const [sessionActionMenu, setSessionActionMenu] = useState<{
-    resource: P2pSharedResource
-    sessionId: string
-    x: number
-    y: number
-    align: 'bottom-start'
-  } | null>(null)
-  const [sectionKeysMap, setSectionKeysMap] = useState<Record<string, string[]>>({})
-  const p2pAgents = useP2pAgents({
-    workspaceId: p2pWorkspaceId,
-    onContentActivity: onReloadAssistants,
-  })
-
-  useRegisterGroupPanelError('agents', p2pAgents.error, () => p2pAgents.setError(null))
-
-  const handleRefresh = useMemo(
-    () => createGroupPanelRefreshHandler(p2pWorkspaceId, () => p2pAgents.load()),
-    [p2pAgents.load, p2pWorkspaceId],
-  )
-
-  const assistantsById = useMemo(
-    () => new Map(assistants.map((item) => [item.id, item])),
-    [assistants],
-  )
-
-  const shareableAssistants = useMemo(
-    () => assistants.filter((assistant) => isShareableGroupAgentSource(assistant)),
-    [assistants],
-  )
-
-  const resolveResourceAssistant = useCallback(
-    (resource: P2pSharedResource): Assistant | null => {
-      const preferredId = resource.localResourceId ?? resource.id
-      const direct = assistantsById.get(preferredId) ?? null
-      if (direct && isShareableGroupAgentSource(direct)) {
-        return direct
-      }
-      return shareableAssistants.find((item) => item.id === preferredId) ?? null
-    },
-    [assistantsById, shareableAssistants],
-  )
-
-  const hasShareableAgents = useMemo(
-    () =>
-      shareableAssistants.some((assistant) => {
-        const resource = p2pAgents.sharedResources.find(
-          (item) => (item.localResourceId ?? item.id) === assistant.id,
-        )
-        if (!resource) return true
-        const sharedSessionIds = resource.sharedSessionIds
-        if (!sharedSessionIds || sharedSessionIds.length === 0) {
-          return false
-        }
-        return true
-      }),
-    [p2pAgents.sharedResources, shareableAssistants],
-  )
-
-  const addAgentsDisabledReason = useMemo(() => {
-    if (p2pAgents.sharing) return null
-    if (!canWriteWorkspace) return 'readonly' as const
-    if (!sourceWorkspaceId) return 'workspace' as const
-    if (shareableAssistants.length === 0) return 'noAgents' as const
-    if (!hasShareableAgents) return 'allShared' as const
-    return null
-  }, [
-    canWriteWorkspace,
-    hasShareableAgents,
-    p2pAgents.sharing,
-    shareableAssistants.length,
+export function GroupAgentsPanel(props: GroupAgentsPanelProps) {
+  const { sessions } = props
+  const panel = useGroupAgentsPanel(props)
+  const {
+    t,
+    workspaceName,
     sourceWorkspaceId,
-  ])
-
-  const canDeleteResource = useCallback(
-    (resource: { sharedBy: string }) =>
-      canWriteWorkspace &&
-      (canManageGroupResources ||
-        (selfMemberId != null && resource.sharedBy === selfMemberId)),
-    [canManageGroupResources, canWriteWorkspace, selfMemberId],
-  )
-
-  const canManagePermission = useCallback(
-    (resource: { sharedBy: string }) =>
-      canWriteWorkspace &&
-      (canManageGroupResources ||
-        (selfMemberId != null && resource.sharedBy === selfMemberId)),
-    [canManageGroupResources, canWriteWorkspace, selfMemberId],
-  )
-
-  const canManageAgents = useMemo(
-    () =>
-      canWriteWorkspace &&
-      (canManageGroupResources ||
-        p2pAgents.sharedResources.some((resource) => canDeleteResource(resource))),
-    [canDeleteResource, canManageGroupResources, canWriteWorkspace, p2pAgents.sharedResources],
-  )
-
-  const handleAddAgents = useCallback(
-    async (selections: Array<{ assistantId: string; sessionIds?: string[] }>) => {
-      if (!sourceWorkspaceId) {
-        throw new Error('工作区未就绪')
-      }
-
-      for (const selection of selections) {
-        const ok = await p2pAgents.shareAgent(
-          selection.assistantId,
-          sourceWorkspaceId,
-          selection.sessionIds,
-        )
-        if (!ok) {
-          throw new Error(p2pAgents.error ?? '添加智能体失败')
-        }
-      }
-
-      await p2pAgents.load()
-    },
-    [p2pAgents, sourceWorkspaceId],
-  )
-
-  const handleToggleSelect = useCallback((selectionKey: string) => {
-    setSelectedKeys((current) => {
-      const next = new Set(current)
-      if (next.has(selectionKey)) next.delete(selectionKey)
-      else next.add(selectionKey)
-      return next
-    })
-  }, [])
-
-  const handleToggleSelectSection = useCallback((selectionKeys: string[]) => {
-    setSelectedKeys((current) => {
-      const allSelected =
-        selectionKeys.length > 0 && selectionKeys.every((key) => current.has(key))
-      const next = new Set(current)
-      if (allSelected) {
-        for (const key of selectionKeys) next.delete(key)
-      } else {
-        for (const key of selectionKeys) next.add(key)
-      }
-      return next
-    })
-  }, [])
-
-  const requestRemoveAgent = useCallback(
-    (resourceId: string) => {
-      const resource = p2pAgents.sharedResources.find((item) => item.id === resourceId)
-      if (!resource || !canDeleteResource(resource)) {
-        p2pAgents.setError(t('groupPage.confirm.errors.noPermissionAgent'))
-        return
-      }
-
-      setPendingDelete({
-        kind: 'agent',
-        groups: [{ resourceId, sessionIds: [] }],
-        message: t('groupPage.confirm.agents.removeAgent', { name: resource.name }),
-      })
-    },
-    [canDeleteResource, p2pAgents],
-  )
-
-  const requestRemoveSessions = useCallback(
-    (resourceId: string, sessionIds: string[]) => {
-      const resource = p2pAgents.sharedResources.find((item) => item.id === resourceId)
-      if (!resource || !canDeleteResource(resource)) {
-        p2pAgents.setError(t('groupPage.confirm.errors.noPermissionTopics'))
-        return
-      }
-
-      const suffix =
-        sessionIds.length > 2
-          ? ` 等 ${sessionIds.length} 个话题`
-          : sessionIds.length > 1
-            ? ''
-            : ''
-      const preview =
-        sessionIds.length > 2
-          ? `${sessionIds.length} 个话题`
-          : `${sessionIds.length} 个共享话题`
-
-      setPendingDelete({
-        kind: 'sessions',
-        groups: [{ resourceId, sessionIds }],
-        message: t('groupPage.confirm.agents.removeTopics', {
-          name: resource.name,
-          preview,
-          suffix,
-        }),
-      })
-    },
-    [canDeleteResource, p2pAgents],
-  )
-
-  const handleRemoveSession = useCallback(
-    (resourceId: string, sessionId: string) => {
-      requestRemoveSessions(resourceId, [sessionId])
-    },
-    [requestRemoveSessions],
-  )
-
-  const confirmDelete = useCallback(async () => {
-    if (!pendingDelete) return
-
-    const current = pendingDelete
-    setPendingDelete(null)
-
-    if (current.kind === 'agent') {
-      const resourceId = current.groups[0]?.resourceId
-      if (!resourceId) return
-
-      setRemovingResourceId(resourceId)
-      p2pAgents.setError(null)
-
-      const ok = await p2pAgents.unshareAgent(resourceId)
-      setRemovingResourceId(null)
-
-      if (!ok) {
-        await p2pAgents.load()
-        return
-      }
-
-      setSelectedKeys((keys) => {
-        const next = new Set(keys)
-        for (const key of keys) {
-          if (key.startsWith(`${resourceId}:`)) next.delete(key)
-        }
-        return next
-      })
-      await p2pAgents.load()
-      return
-    }
-
-    setRemovingSessionId(current.groups[0]?.sessionIds[0] ?? null)
-    p2pAgents.setError(null)
-
-    for (const group of current.groups) {
-      const ok = await p2pAgents.removeSessions(group.resourceId, group.sessionIds)
-      if (!ok) {
-        setRemovingSessionId(null)
-        await p2pAgents.load()
-        return
-      }
-    }
-
-    setRemovingSessionId(null)
-    setSelectedKeys((keys) => {
-      const next = new Set(keys)
-      for (const group of current.groups) {
-        for (const sessionId of group.sessionIds) {
-          next.delete(agentSelectionKey(group.resourceId, sessionId))
-        }
-      }
-      return next
-    })
-    await p2pAgents.load()
-  }, [pendingDelete, p2pAgents])
-
-  const handleSectionKeysChange = useCallback((resourceId: string, keys: string[]) => {
-    setSectionKeysMap((current) => ({ ...current, [resourceId]: keys }))
-  }, [])
-
-  const handleSelectAll = useCallback(() => {
-    const next = new Set<string>()
-    for (const keys of Object.values(sectionKeysMap)) {
-      for (const key of keys) next.add(key)
-    }
-    setSelectedKeys(next)
-  }, [sectionKeysMap])
-
-  const handleClearSelection = useCallback(() => {
-    setSelectedKeys(new Set())
-  }, [])
-
-  const handleDeleteSelected = useCallback(() => {
-    const grouped = new Map<string, string[]>()
-    for (const key of selectedKeys) {
-      const parsed = parseAgentSelectionKey(key)
-      if (!parsed) continue
-      const bucket = grouped.get(parsed.resourceId) ?? []
-      bucket.push(parsed.sessionId)
-      grouped.set(parsed.resourceId, bucket)
-    }
-
-    if (grouped.size === 0) return
-
-    if (grouped.size === 1) {
-      const [resourceId, sessionIds] = [...grouped.entries()][0]!
-      requestRemoveSessions(resourceId, sessionIds)
-      return
-    }
-
-    const total = [...grouped.values()].reduce((sum, ids) => sum + ids.length, 0)
-    setPendingDelete({
-      kind: 'sessions',
-      groups: [...grouped.entries()].map(([resourceId, sessionIds]) => ({
-        resourceId,
-        sessionIds,
-      })),
-      message: t('groupPage.confirm.agents.removeSelectedTopics', { count: total }),
-    })
-  }, [requestRemoveSessions, selectedKeys])
-
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      if (!canManageAgents) return
-      event.preventDefault()
-      setContextMenu({ x: event.clientX, y: event.clientY })
-    },
-    [canManageAgents],
-  )
-
-  const handleSessionAction = useCallback(
-    async (action: GroupAgentSessionAction) => {
-      if (!sessionActionMenu) return
-      if (!canManagePermission(sessionActionMenu.resource)) return
-
-      const ok = await p2pAgents.setSessionPermission(
-        sessionActionMenu.resource.id,
-        sessionActionMenu.sessionId,
-        action,
-      )
-      if (!ok) {
-        p2pAgents.setError(p2pAgents.error ?? '设置话题权限失败')
-        return
-      }
-      setSessionActionMenu(null)
-    },
-    [canManagePermission, p2pAgents, sessionActionMenu],
-  )
-
-  const memberSections = useMemo(
-    () =>
-      groupResourcesByMember(
-        p2pAgents.sharedResources,
-        members,
-        selfMemberId,
-        t('groupPage.panels.unknownMember'),
-      ),
-    [members, p2pAgents.sharedResources, selfMemberId, t],
-  )
-
-  const buildOpenSessionRequest = useCallback(
-    (resource: P2pSharedResource, assistant: Assistant | null, session: Session) => {
-      const isOwner = selfMemberId != null && resource.sharedBy === selfMemberId
-      return {
-        p2pWorkspaceId,
-        resourceId: resource.localResourceId ?? resource.id,
-        sourceSessionId: session.id,
-        sessionTitle: session.title,
-        groupName: workspaceName,
-        sharedAgentName: resolveGroupAgentPanelTitle(resource, assistant),
-        permission: getAgentSessionPermission(resource, session.id),
-        ownerMemberId: resource.sharedBy,
-        sourceAssistantId: assistant?.id ?? resource.localResourceId ?? resource.id,
-        referencedModelId: resource.sharedModelId ?? assistant?.modelId ?? 'openai/gpt-4o-mini',
-        isOwner,
-        localSessionId: isOwner ? session.id : undefined,
-      } satisfies OpenGroupAgentSessionRequest
-    },
-    [p2pWorkspaceId, selfMemberId, workspaceName],
-  )
+    selfMemberId,
+    canWriteWorkspace,
+    p2pAgents,
+    showPicker,
+    setShowPicker,
+    openingPicker,
+    selectedKeys,
+    removingResourceId,
+    removingSessionId,
+    pendingDelete,
+    setPendingDelete,
+    contextMenu,
+    setContextMenu,
+    sessionActionMenu,
+    setSessionActionMenu,
+    handleRefresh,
+    hasShareableAgents,
+    addAgentsDisabledReason,
+    memberSections,
+    resolveResourceAssistant,
+    canDeleteResource,
+    canManagePermission,
+    canManageAgents,
+    handleToggleSelect,
+    handleToggleSelectSection,
+    handleSectionKeysChange,
+    requestRemoveAgent,
+    handleRemoveSession,
+    confirmDelete,
+    handleSelectAll,
+    handleClearSelection,
+    handleDeleteSelected,
+    handleContextMenu,
+    handleAddAgents,
+    handleOpenPicker,
+    handleSessionAction,
+    buildOpenSessionRequest,
+    resolveSessionPermission,
+    onOpenGroupAgentSession,
+    shareableAssistants,
+  } = panel
 
   return (
     <div className="tm-group-member-panel tm-group-resource-panel">
@@ -452,17 +87,7 @@ export function GroupAgentsPanel({
             !sourceWorkspaceId ||
             !hasShareableAgents
           }
-          onClick={() => {
-            void (async () => {
-              setOpeningPicker(true)
-              try {
-                await onReloadAssistants?.()
-                setShowPicker(true)
-              } finally {
-                setOpeningPicker(false)
-              }
-            })()
-          }}
+          onClick={handleOpenPicker}
         >
           <span className="tm-kb-file-dropzone-title">
             {openingPicker || p2pAgents.sharing
@@ -587,9 +212,8 @@ export function GroupAgentsPanel({
           x={sessionActionMenu.x}
           y={sessionActionMenu.y}
           align={sessionActionMenu.align}
-          permission={getAgentSessionPermission(
-            p2pAgents.sharedResources.find((item) => item.id === sessionActionMenu.resource.id) ??
-              sessionActionMenu.resource,
+          permission={resolveSessionPermission(
+            sessionActionMenu.resource.id,
             sessionActionMenu.sessionId,
           )}
           canSetPermission={canManagePermission(sessionActionMenu.resource)}

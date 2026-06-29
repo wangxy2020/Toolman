@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { app } from 'electron'
 import { eq } from 'drizzle-orm'
@@ -214,24 +214,4 @@ export function getBlobDataUrl(hash: string): string {
   }
   const data = readBlobBytes(hash)
   return `data:${mimeType};base64,${data.toString('base64')}`
-}
-
-export function getBlobStorageBytes(): number {
-  const dir = getBlobsDir()
-  if (!existsSync(dir)) return 0
-
-  let total = 0
-  const stack = [dir]
-  while (stack.length > 0) {
-    const current = stack.pop()!
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const fullPath = join(current, entry.name)
-      if (entry.isDirectory()) {
-        stack.push(fullPath)
-      } else if (entry.isFile()) {
-        total += statSync(fullPath).size
-      }
-    }
-  }
-  return total
 }

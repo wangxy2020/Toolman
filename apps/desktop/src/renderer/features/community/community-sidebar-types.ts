@@ -37,19 +37,3 @@ export const COMMUNITY_SECTION_TO_ACTION: Record<CommunitySidebarSection, string
   mine: 'subscribe',
   management: 'management',
 }
-
-export const COMMUNITY_ACTION_TO_SECTION: Partial<Record<string, CommunitySidebarSection>> = {
-  news: 'news',
-  messages: 'messages',
-  knowledge: 'knowledge',
-  mcp: 'mcp',
-  skills: 'skills',
-  workflow: 'workflow',
-  tasks: 'tasks',
-  subscribe: 'mine',
-  management: 'management',
-}
-
-export function communitySectionLabel(section: CommunitySidebarSection): string {
-  return COMMUNITY_SIDEBAR_SECTIONS.find((item) => item.id === section)?.label ?? '资讯'
-}
