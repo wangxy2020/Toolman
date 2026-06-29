@@ -47,6 +47,8 @@ export interface ListSessionsQuery {
   workspaceId: string
   limit?: number
   offset?: number
+  /** Keyset cursor: `{sortTimeMs}:{sessionId}` where sortTime is COALESCE(lastMessageAt, createdAt). */
+  cursor?: string
   includeDeleted?: boolean
   type?: 'chat' | 'meeting' | 'multi_model'
   assistantId?: string

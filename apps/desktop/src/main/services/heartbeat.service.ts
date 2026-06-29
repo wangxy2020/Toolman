@@ -8,6 +8,7 @@ const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
 const lastHeartbeatAt = new Map<string, number>()
 const inFlightHeartbeats = new Set<string>()
 let schedulerStarted = false
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 export function startHeartbeatScheduler(workspaceId: string = DEFAULT_WORKSPACE_ID): void {
   if (schedulerStarted) return
@@ -20,9 +21,17 @@ export function startHeartbeatScheduler(workspaceId: string = DEFAULT_WORKSPACE_
     }
   }
 
-  setInterval(() => {
+  heartbeatTimer = setInterval(() => {
     void runHeartbeatTick(workspaceId)
   }, 60_000)
+}
+
+export function stopHeartbeatScheduler(): void {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+  schedulerStarted = false
 }
 
 async function runHeartbeatTick(workspaceId: string): Promise<void> {

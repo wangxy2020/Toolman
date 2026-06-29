@@ -1,21 +1,14 @@
 import type { P2pEventType, P2pResourceType, ProductSku, WorkspaceEvent } from '@toolman/shared'
+import {
+  P2pEventPayloadSchema,
+  RemoteWorkspaceEventWireSchema,
+  type RemoteWorkspaceEventWire,
+} from '@toolman/shared'
+import type { RemoteP2pEventInput } from './p2p-event.service'
 
 export const P2P_REPLICATION_VERSION = 1
 
-export interface RemoteWorkspaceEventWire {
-  eventId: string
-  workspaceId: string
-  seq: number
-  resourceType: P2pResourceType
-  resourceId: string
-  operatorId: string
-  eventType: P2pEventType
-  payloadJson: string
-  payloadHash: string
-  prevEventHash?: string | null
-  timestamp: number
-  sourceDeviceId: string
-}
+export type { RemoteWorkspaceEventWire }
 
 export interface SnapshotWire {
   id: string
@@ -188,18 +181,31 @@ export function workspaceEventToWire(event: WorkspaceEvent): RemoteWorkspaceEven
   }
 }
 
-export function wireToRemoteInput(wire: RemoteWorkspaceEventWire) {
+export function wireToRemoteInput(wire: RemoteWorkspaceEventWire): RemoteP2pEventInput | null {
+  const parsedWire = RemoteWorkspaceEventWireSchema.safeParse(wire)
+  if (!parsedWire.success) return null
+
+  let payload: Record<string, unknown>
+  try {
+    const raw = JSON.parse(parsedWire.data.payloadJson)
+    const payloadResult = P2pEventPayloadSchema.safeParse(raw)
+    if (!payloadResult.success) return null
+    payload = payloadResult.data
+  } catch {
+    return null
+  }
+
   return {
-    eventId: wire.eventId,
-    workspaceId: wire.workspaceId,
-    seq: wire.seq,
-    resourceType: wire.resourceType,
-    resourceId: wire.resourceId,
-    operatorId: wire.operatorId,
-    eventType: wire.eventType,
-    payload: JSON.parse(wire.payloadJson) as Record<string, unknown>,
-    prevEventHash: wire.prevEventHash ?? null,
-    timestamp: wire.timestamp,
-    sourceDeviceId: wire.sourceDeviceId,
+    eventId: parsedWire.data.eventId,
+    workspaceId: parsedWire.data.workspaceId,
+    seq: parsedWire.data.seq,
+    resourceType: parsedWire.data.resourceType,
+    resourceId: parsedWire.data.resourceId,
+    operatorId: parsedWire.data.operatorId,
+    eventType: parsedWire.data.eventType,
+    payload,
+    prevEventHash: parsedWire.data.prevEventHash ?? null,
+    timestamp: parsedWire.data.timestamp,
+    sourceDeviceId: parsedWire.data.sourceDeviceId,
   }
 }

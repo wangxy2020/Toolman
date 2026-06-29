@@ -11,12 +11,12 @@ import {
 
 describe('p2p-sync-protocol', () => {
   const sampleEvent: WorkspaceEvent = {
-    eventId: 'evt-1',
-    workspaceId: 'ws-1',
+    eventId: '00000000-0000-4000-8000-000000000001',
+    workspaceId: '00000000-0000-4000-8000-000000000002',
     seq: 3,
     resourceType: 'Knowledge',
     resourceId: 'kb-1',
-    operatorId: 'op-1',
+    operatorId: '00000000-0000-4000-8000-000000000003',
     eventType: 'Shared',
     payload: { kb_id: 'kb-1' },
     timestamp: 1_700_000_000_000,
@@ -45,14 +45,23 @@ describe('p2p-sync-protocol', () => {
     const parsed = parseReplicationMessage(encodeReplicationMessage(message))
     expect(parsed?.type).toBe('events.batch')
     if (parsed?.type !== 'events.batch') return
-    expect(parsed.events[0]?.eventId).toBe('evt-1')
+    expect(parsed.events[0]?.eventId).toBe('00000000-0000-4000-8000-000000000001')
   })
 
   it('converts wire events back to remote input', () => {
     const wire = workspaceEventToWire(sampleEvent)
     const input = wireToRemoteInput(wire)
-    expect(input.payload).toEqual({ kb_id: 'kb-1' })
-    expect(input.seq).toBe(3)
+    expect(input).not.toBeNull()
+    expect(input?.payload).toEqual({ kb_id: 'kb-1' })
+    expect(input?.seq).toBe(3)
+  })
+
+  it('returns null for invalid wire events', () => {
+    const input = wireToRemoteInput({
+      ...workspaceEventToWire(sampleEvent),
+      eventId: 'not-a-uuid',
+    })
+    expect(input).toBeNull()
   })
 
   it('returns null for invalid payloads', () => {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, desc, eq, isNull, like } from 'drizzle-orm'
+import { and, desc, eq, isNull, like, lt, or, sql } from 'drizzle-orm'
 import type { ToolmanDatabase } from '../index.js'
 import { sessions } from '../schema/session.js'
 import type {
@@ -9,6 +9,19 @@ import type {
   UpdateSessionInput,
 } from '../types/chat.js'
 import type { SessionRow } from '../types/rows.js'
+
+export function parseSessionListCursor(cursor: string): { sortTime: number; id: string } | null {
+  const sep = cursor.lastIndexOf(':')
+  if (sep <= 0) return null
+  const sortTime = Number(cursor.slice(0, sep))
+  const id = cursor.slice(sep + 1)
+  if (!Number.isFinite(sortTime) || id.length === 0) return null
+  return { sortTime, id }
+}
+
+function sessionSortTimeExpr() {
+  return sql`COALESCE(${sessions.lastMessageAt}, ${sessions.createdAt})`
+}
 
 function toSession(row: SessionRow): Session {
   return {
@@ -70,6 +83,20 @@ export class SessionRepository {
     if (query.type) conditions.push(eq(sessions.type, query.type))
     if (query.assistantId) conditions.push(eq(sessions.assistantId, query.assistantId))
     if (query.query) conditions.push(like(sessions.title, `%${query.query}%`))
+    if (query.cursor) {
+      const parsed = parseSessionListCursor(query.cursor)
+      if (parsed) {
+        conditions.push(
+          or(
+            sql`${sessionSortTimeExpr()} < ${parsed.sortTime}`,
+            and(
+              sql`${sessionSortTimeExpr()} = ${parsed.sortTime}`,
+              lt(sessions.id, parsed.id),
+            ),
+          )!,
+        )
+      }
+    }
 
     return this.db
       .select()
@@ -87,11 +114,9 @@ export class SessionRepository {
     const items = hasMore ? rows.slice(0, query.limit) : rows
     const last = items[items.length - 1]
     const nextCursor =
-      hasMore && last?.lastMessageAt
-        ? `${last.lastMessageAt.getTime()}:${last.id}`
-        : hasMore && last
-          ? `${last.createdAt.getTime()}:${last.id}`
-          : undefined
+      hasMore && last
+        ? `${(last.lastMessageAt ?? last.createdAt).getTime()}:${last.id}`
+        : undefined
 
     return { items, nextCursor }
   }

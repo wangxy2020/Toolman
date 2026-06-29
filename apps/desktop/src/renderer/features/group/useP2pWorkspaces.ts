@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { IpcChannel, type P2pMember, type P2pWorkspace } from '@toolman/shared'
+import {
+  IpcChannel,
+  P2pEventAppendedPushSchema,
+  P2pMemberChangedPushSchema,
+  P2pWorkspaceDissolvedPushSchema,
+  type P2pMember,
+  type P2pWorkspace,
+} from '@toolman/shared'
+import { invokeIpc } from '../../lib/ipc-client'
+import { reportRendererError } from '../../lib/report-renderer-error'
 import { bootstrapGroupWorkspaceAfterJoin } from './group-p2p-sync-policy'
 
 export type P2pJoinResult = {
@@ -185,37 +194,44 @@ export function useP2pWorkspaces(options: UseP2pWorkspacesOptions = {}) {
     }
 
     const unsubMember = window.api.subscribe('p2p:member:changed', (payload) => {
-      const data = payload as { workspaceId?: string; activated?: boolean } | undefined
+      const parsed = P2pMemberChangedPushSchema.safeParse(payload)
+      const data = parsed.success ? parsed.data : undefined
       if (data?.activated && data.workspaceId) {
         void (async () => {
-          const workspaceResult = await window.api.invoke(IpcChannel.P2pWorkspaceGet, {
-            id: data.workspaceId!,
-          })
-          if (workspaceResult.ok) {
-            const workspace = (workspaceResult.data as { workspace: P2pWorkspace }).workspace
-            setJoinApprovedNotice({ workspaceName: workspace.name })
-            setActiveId(workspace.id)
-            void bootstrapGroupWorkspaceAfterJoin(workspace.id)
+          try {
+            const workspaceResult = await invokeIpc(IpcChannel.P2pWorkspaceGet, {
+              id: data.workspaceId!,
+            })
+            setJoinApprovedNotice({ workspaceName: workspaceResult.workspace.name })
+            setActiveId(workspaceResult.workspace.id)
+            void bootstrapGroupWorkspaceAfterJoin(workspaceResult.workspace.id)
+            await load()
+          } catch (error) {
+            reportRendererError({
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            })
           }
-          await load()
         })()
         return
       }
       void load()
     })
-    const unsubDissolved = window.api.subscribe('p2p:workspace:dissolved', handleDissolved)
-    const unsubEvent = window.api.subscribe('p2p:event:appended', (payload) => {
-      const event = payload as {
-        resourceType?: string
-        eventType?: string
-        workspaceId?: string
+    const unsubDissolved = window.api.subscribe('p2p:workspace:dissolved', (payload) => {
+      const parsed = P2pWorkspaceDissolvedPushSchema.safeParse(payload)
+      if (parsed.success) {
+        handleDissolved(parsed.data)
       }
+    })
+    const unsubEvent = window.api.subscribe('p2p:event:appended', (payload) => {
+      const event = P2pEventAppendedPushSchema.safeParse(payload)
       if (
-        event.resourceType === 'Workspace' &&
-        event.eventType === 'Deleted' &&
-        event.workspaceId
+        event.success &&
+        event.data.resourceType === 'Workspace' &&
+        event.data.eventType === 'Deleted' &&
+        event.data.workspaceId
       ) {
-        handleDissolved({ workspaceId: event.workspaceId })
+        handleDissolved({ workspaceId: event.data.workspaceId })
       }
     })
     return () => {

@@ -1,3 +1,4 @@
+import { invokeIpc } from '../../lib/ipc-client'
 import { IpcChannel } from '@toolman/shared'
 import type { KnowledgeFilePanelItem } from '../knowledge/KnowledgeBaseFilePanel'
 
@@ -167,24 +168,13 @@ export async function loadAllP2pKnowledgeEvents(
   let offset = 0
 
   while (true) {
-    const result = await window.api.invoke(IpcChannel.P2pEventList, {
+    const data = await invokeIpc(IpcChannel.P2pEventList, {
       workspaceId: p2pWorkspaceId,
       resourceType: 'Knowledge',
       limit: 200,
       offset,
     })
-    if (!result.ok) {
-      throw new Error(result.error.message)
-    }
 
-    const data = result.data as {
-      events: Array<{
-        eventType: string
-        timestamp: number
-        payload?: Record<string, unknown>
-      }>
-      hasMore: boolean
-    }
     allEvents.push(...data.events)
     if (!data.hasMore || data.events.length === 0) {
       break

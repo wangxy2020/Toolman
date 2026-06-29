@@ -406,6 +406,8 @@ export const AssistantSchema = z.object({
 
 export type Assistant = z.infer<typeof AssistantSchema>
 
+export const AssistantParametersSchema = AssistantSchema.shape.parameters
+
 export const AssistantListInputSchema = z.object({
   workspaceId: UuidSchema,
   pinnedOnly: z.boolean().default(false),

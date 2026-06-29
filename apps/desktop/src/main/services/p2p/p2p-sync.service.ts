@@ -400,7 +400,9 @@ async function handleEventsBatch(
 
   for (const wire of sorted) {
     try {
-      const event = applyRemoteP2pEvent(wireToRemoteInput(wire))
+      const remoteInput = wireToRemoteInput(wire)
+      if (!remoteInput) continue
+      const event = applyRemoteP2pEvent(remoteInput)
       getCursorRepo().updateReceivedSeq(message.workspaceId, peerDeviceId, wire.seq)
       if (!event) continue
 
@@ -502,10 +504,14 @@ async function handleReplicationMessage(peerDeviceId: string, payload: Buffer): 
         )
       }
       return
-    case 'events.proposed':
-      applyRemoteP2pEvent(wireToRemoteInput(message.event))
+    case 'events.proposed': {
+      const remoteInput = wireToRemoteInput(message.event)
+      if (remoteInput) {
+        applyRemoteP2pEvent(remoteInput)
+      }
       handleRemoteEventProposed(message)
       return
+    }
     case 'events.propose_rejected':
       handleRemoteEventProposalRejected(message)
       return

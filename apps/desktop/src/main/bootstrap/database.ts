@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { fireAndForget } from '../lib/fire-and-forget'
 import { logStructured } from '../services/structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {
@@ -62,17 +63,17 @@ export function bootstrapDatabase(): void {
   ensureDevIdentityRow(db, localIdentityId, localDisplayName)
   ensureWorkspaceDefaults(db)
   initAuthSessionStore()
-  void (async () => {
+  fireAndForget('bootstrap', (async () => {
     await syncAuthingUserProfileAfterLogin().catch(() => undefined)
     const session = getAuthSession()
     if (session.isLoggedIn) {
       await exchangeAuthHubToken().catch(() => undefined)
     }
-  })()
+  })())
   migratePlaintextApiKeys()
   recoverStaleStreamingMessages()
   ensureFtsIndexReady()
-  void syncOllamaProviders(DEFAULT_WORKSPACE_ID)
+  fireAndForget('bootstrap', syncOllamaProviders(DEFAULT_WORKSPACE_ID))
   try {
     const { migratedWorkspaces, userRoot } = bootstrapToolmanUserDocumentLayout()
     if (migratedWorkspaces > 0) {

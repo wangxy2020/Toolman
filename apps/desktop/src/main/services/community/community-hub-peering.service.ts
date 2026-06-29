@@ -11,9 +11,11 @@ import {
   type FederatedResourceCatalogEntry,
   type FederationPeerSyncState,
   type FederationSyncStateStore,
+  toErrorMessage,
 } from '@toolman/shared'
 
 import { recordDiagnosticEvent } from '../diagnostics-log'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { fromApiJson } from './community-case'
 import { upsertFederatedCatalogEntry } from './community-federated-catalog.service'
 import { verifyFederatedCatalogWireMessage } from './community-federation-signing.service'
@@ -212,6 +214,12 @@ export async function runCommunityHubPeeringSync(): Promise<void> {
 
     store.lastUpstreamSyncAt = Date.now()
     persistSyncState(store)
+  } catch (error) {
+    recordDiagnosticEvent(
+      'community-federation',
+      'error',
+      `hub-peer sync failed: ${toErrorMessage(error, String(error))}`,
+    )
   } finally {
     syncInFlight = false
   }
@@ -229,15 +237,15 @@ export function startCommunityHubPeeringSync(): void {
   if (peerUrls.length === 0) return
 
   const intervalMs = readCommunityFederationConfig().syncIntervalMs
-  void (async () => {
+  fireAndForget('community-federation', (async () => {
     await runCommunityHubPeeringSync()
     const { syncLibp2pBootstrapFromPeerHubs } = await import(
       './community-libp2p-bootstrap-sync.service'
     )
     await syncLibp2pBootstrapFromPeerHubs()
-  })()
+  })())
   syncTimer = setInterval(() => {
-    void runCommunityHubPeeringSync()
+    fireAndForget('community-federation', runCommunityHubPeeringSync())
   }, intervalMs)
 }
 

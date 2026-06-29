@@ -19,6 +19,7 @@ import {
   getDefaultMcpServerIds,
   resolveMcpServerIdsForSkills,
   isDefaultSessionTitle,
+  AssistantParametersSchema,
   type ContentBlock,
 } from '@toolman/shared'
 import { createMessageRepository, createSessionRepository, runInTransaction, type SessionRow } from '@toolman/db'
@@ -91,7 +92,8 @@ export function parseAssistantRuntime(
     toolStates: (params.toolStates as Record<string, boolean> | undefined) ?? {},
     mcpServerIds: resolveRuntimeMcpServerIds(skillIds, baseMcpServerIds),
     skillIds,
-    sessionRoundLimit: (params.sessionRoundLimit as number | undefined) ?? 100,
+    sessionRoundLimit:
+      AssistantParametersSchema.shape.sessionRoundLimit.parse(params.sessionRoundLimit) ?? 100,
     temperature: params.temperature as number | undefined,
     maxTokens: params.maxTokens as number | undefined,
     assistantId: assistant?.id,

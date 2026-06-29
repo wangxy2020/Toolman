@@ -34,11 +34,13 @@ export async function bootstrapCommunityYjsFromHub(): Promise<void> {
     ])
 
     for (const message of board.items) {
+      const parsed = CommunityBoardMessageSchema.safeParse(message)
+      if (!parsed.success) continue
       upsertLwwEntity(
         'board',
-        message.id,
-        message as unknown as Record<string, unknown>,
-        { updatedAt: message.updatedAt },
+        parsed.data.id,
+        parsed.data as unknown as Record<string, unknown>,
+        { updatedAt: parsed.data.updatedAt },
         YJS_ORIGIN_BOOTSTRAP,
       )
     }

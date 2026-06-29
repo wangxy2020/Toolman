@@ -2,6 +2,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { join } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import { purgeAllKnowledgeStorageData } from './knowledge.service'
+import { fireAndForget } from '../lib/fire-and-forget'
 import { purgeAllMemoryData } from './memory-entry.service'
 import { assertPathWithinAllowedRoots } from './path-sandbox.service'
 import {
@@ -208,7 +209,7 @@ export function deleteKnowledgeFiles() {
     rmSync(dir, { recursive: true, force: true })
   }
   mkdirSync(dir, { recursive: true })
-  void purgeAllKnowledgeStorageData()
+  fireAndForget('knowledge', purgeAllKnowledgeStorageData())
 }
 
 export async function backupAppData(input?: { notesDataJson?: string }) {

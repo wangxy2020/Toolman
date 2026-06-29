@@ -6,6 +6,7 @@ import {
   p2pPeerNodes,
 } from '@toolman/db'
 import { logStructured } from '../structured-log.service'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import type { DiscoveredNode, P2pConnectionState } from '@toolman/shared'
 import {P2pMemberTrustDeviceInputSchema, toErrorMessage, type P2pPeerTrustRequiredPayload } from '@toolman/shared'
 import { eq } from 'drizzle-orm'
@@ -346,7 +347,7 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
   const workspaceRepo = getWorkspaceRepo()
   const memberships = memberRepo.listActiveMembershipsByDevice(localDeviceId)
 
-  void (async () => {
+  fireAndForget('p2p', (async () => {
     const connectionModule = await import('./p2p-connection.service')
     await connectionModule.resetStalePeerConnection(peerDeviceId)
 
@@ -381,7 +382,7 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
         logStructured('p2p', 'warn', `discovery online reconnect failed for ${peerDeviceId.slice(0, 8)} in ${workspace.id}: ${message}`)
       }
     }
-  })()
+  })())
 }
 
 export function handlePeerConnectionChange(
@@ -461,13 +462,13 @@ export function trustP2pPeerDevice(rawInput: unknown): { trusted: boolean } {
   pendingTrustPrompts.delete(promptKey)
   if (input.trusted) {
     promptedPeers.delete(promptKey)
-    void (async () => {
+    fireAndForget('p2p', (async () => {
       const joinModule = await import('./p2p-member-join.service')
       await joinModule.activateMemberAfterOwnerTrust(input.workspaceId, input.peerDeviceId)
       await notifyP2pPeerConnected(input.workspaceId, input.peerDeviceId)
       const meshModule = await import('./p2p-member-mesh.service')
       void meshModule.reconcileWorkspaceMemberMesh(input.workspaceId)
-    })()
+    })())
   } else {
     void P2pBridge.connectionDisconnect(input.peerDeviceId)
     promptedPeers.delete(promptKey)

@@ -103,3 +103,10 @@ export function bootstrapCopyrightProvenance(): void {
   recordProvenanceBeacon('app.start')
   scheduleSessionHeartbeat()
 }
+
+export function stopCopyrightProvenance(): void {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}

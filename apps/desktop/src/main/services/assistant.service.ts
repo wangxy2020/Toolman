@@ -5,6 +5,7 @@ import {
   AssistantDeleteInputSchema,
   AssistantDuplicateInputSchema,
   AssistantListInputSchema,
+  AssistantParametersSchema,
   AssistantSchema,
   AssistantUpdateInputSchema,
   type Assistant,
@@ -13,54 +14,17 @@ import { assistants } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { getSessionRepository } from '../db/repos'
 
+function parseAssistantParameters(raw: Record<string, unknown>) {
+  const result = AssistantParametersSchema.safeParse(raw)
+  if (result.success) return result.data
+  return AssistantParametersSchema.parse({ temperature: 0.7 })
+}
+
 function mergeParameters(
   existing: Record<string, unknown>,
   patch?: Record<string, unknown>,
 ) {
-  const next = { ...existing, ...patch }
-  return {
-    temperature: (next.temperature as number | undefined) ?? 0.7,
-    topP: next.topP as number | undefined,
-    maxTokens: next.maxTokens as number | undefined,
-    workingDirectory: next.workingDirectory as string | undefined,
-    autonomousMode: next.autonomousMode as boolean | undefined,
-    heartbeatEnabled: next.heartbeatEnabled as boolean | undefined,
-    heartbeatIntervalMinutes: next.heartbeatIntervalMinutes as number | undefined,
-    permissionMode: next.permissionMode as
-      | 'normal'
-      | 'plan'
-      | 'auto-edit'
-      | 'full-auto'
-      | undefined,
-    toolStates: next.toolStates as Record<string, boolean> | undefined,
-    mcpServerIds: next.mcpServerIds as string[] | undefined,
-    skillIds: next.skillIds as string[] | undefined,
-    kbTopK: next.kbTopK as number | undefined,
-    kbScoreThreshold: next.kbScoreThreshold as number | undefined,
-    kbSettings: next.kbSettings as
-      | Record<string, { topK?: number; scoreThreshold?: number }>
-      | undefined,
-    sessionRoundLimit: next.sessionRoundLimit as number | undefined,
-    environmentVariables: next.environmentVariables as string | undefined,
-    translationLanguages: next.translationLanguages as
-      | ['zh' | 'en', 'zh' | 'en']
-      | undefined,
-    p2pGroupProxy: next.p2pGroupProxy as
-      | {
-          p2pWorkspaceId: string
-          resourceId: string
-          sourceAssistantId: string
-          groupName: string
-          sharedAgentName: string
-        }
-      | undefined,
-    p2pGroupSharedMirror: next.p2pGroupSharedMirror as
-      | {
-          p2pWorkspaceId: string
-          resourceId: string
-        }
-      | undefined,
-  }
+  return parseAssistantParameters({ ...existing, ...patch })
 }
 
 function parseKbIdsFromPatch(patch?: Record<string, unknown>): string[] | undefined {
@@ -90,7 +54,7 @@ function toAssistant(row: typeof assistants.$inferSelect): Assistant {
     systemPrompt: row.systemPrompt,
     modelId: row.modelId,
     parameters: {
-      ...mergeParameters(params),
+      ...parseAssistantParameters(params),
       kbIds: kbIds.length > 0 ? kbIds : undefined,
     },
     isBuiltin: row.isBuiltin,

@@ -18,6 +18,7 @@ import {
 
 export { ensureOwnerMemberRecord } from './p2p-member-shared'
 import { recordMemberDepartureEvent } from './p2p-member-departure.service'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import {
   applyRemoteMemberJoin,
   activateMemberAfterOwnerTrust,
@@ -80,8 +81,8 @@ export function listP2pMembers(workspaceId: string): P2pMember[] {
 export async function prepareP2pMemberList(workspaceId: string): Promise<P2pMember[]> {
   assertWorkspaceMembershipAccess(workspaceId)
   ensureOwnerMemberRecord(workspaceId)
-  void ensureMemberConnectsToOwner(workspaceId)
-  void reconcileOwnerWorkspaceMembers(workspaceId)
+  fireAndForget('p2p', ensureMemberConnectsToOwner(workspaceId))
+  fireAndForget('p2p', reconcileOwnerWorkspaceMembers(workspaceId))
   return listP2pMembers(workspaceId)
 }
 

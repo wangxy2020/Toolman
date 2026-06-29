@@ -53,6 +53,7 @@ export function listSessions(input: unknown) {
     type: data.type,
     assistantId: data.assistantId,
     query: data.query,
+    cursor: data.pagination?.cursor,
     limit,
   })
 

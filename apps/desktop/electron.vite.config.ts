@@ -39,6 +39,7 @@ export default defineConfig({
     resolve: {
       alias: {
         '@main': resolve('src/main'),
+        // Bundle workspace packages from source in main; predev builds dist for tsc (see package.json predev).
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
         '@toolman/knowledge': resolve('../../packages/knowledge/src/index.ts'),
       },

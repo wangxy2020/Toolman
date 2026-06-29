@@ -1,3 +1,4 @@
+import { invokeIpc } from '../../lib/ipc-client'
 import { IpcChannel, type Session } from '@toolman/shared'
 
 const SESSION_LIST_PAGE_SIZE = 100
@@ -11,7 +12,7 @@ export async function listAllAssistantSessions(
   let cursor: string | undefined
 
   for (;;) {
-    const result = await window.api.invoke(IpcChannel.SessionList, {
+    const data = await invokeIpc(IpcChannel.SessionList, {
       workspaceId,
       assistantId,
       pagination: {
@@ -20,11 +21,6 @@ export async function listAllAssistantSessions(
       },
     })
 
-    if (!result.ok) {
-      throw new Error(result.error.message)
-    }
-
-    const data = result.data as { items: Session[]; nextCursor?: string }
     items.push(...data.items)
     if (!data.nextCursor) break
     cursor = data.nextCursor

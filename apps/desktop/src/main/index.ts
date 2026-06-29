@@ -22,7 +22,7 @@ import { bootstrapDatabase } from './bootstrap/database'
 import { bootstrapSkills } from './services/skills-facade.service'
 import { bootstrapMcpPresets } from './services/mcp-server-config.service'
 import { bootstrapChannels, shutdownChannels } from './services/im-channel.facade.service'
-import { startHeartbeatScheduler } from './services/heartbeat.service'
+import { startHeartbeatScheduler, stopHeartbeatScheduler } from './services/heartbeat.service'
 import { disconnectAllMcpServers } from './services/mcp-client-manager.service'
 import { destroyAllBrowserSessions } from './services/browser-cdp.service'
 import { bootstrapKnowledgeWatchers, stopAllKnowledgeWatchers } from './services/knowledge-watcher.service'
@@ -80,7 +80,7 @@ import {
   bootstrapLocalOperations,
   registerProcessCrashHandlers,
 } from './services/local-operations.service'
-import { bootstrapCopyrightProvenance } from './services/copyright-provenance.service'
+import { bootstrapCopyrightProvenance, stopCopyrightProvenance } from './services/copyright-provenance.service'
 import { bootstrapAppUpdateService } from './services/app-update.service'
 import { bootstrapCrashReportService } from './services/crash-report.service'
 import { recordDiagnosticEvent } from './services/diagnostics-log'
@@ -356,6 +356,8 @@ app.on('window-all-closed', () => {
 let shutdownPromise: Promise<void> | null = null
 
 async function runGracefulShutdown(): Promise<void> {
+  stopHeartbeatScheduler()
+  stopCopyrightProvenance()
   stopAllKnowledgeWatchers()
   stopKnowledgeUrlRefreshScheduler()
   stopP2pDiscovery()
