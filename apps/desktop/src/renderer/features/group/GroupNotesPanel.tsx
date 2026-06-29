@@ -319,7 +319,7 @@ export function GroupNotesPanel({
       })
 
       if (deletableIds.length === 0) {
-        p2pNotes.setError('无权移除所选笔记')
+        p2pNotes.setError(t('groupPage.confirm.errors.noPermissionNotes'))
         return
       }
 
@@ -341,7 +341,7 @@ export function GroupNotesPanel({
 
       setPendingDelete({
         resourceIds: deletableIds,
-        message: `确定从群组中移除「${preview}」${suffix}吗？`,
+        message: t('groupPage.confirm.notes.removeNote', { preview, suffix }),
       })
     },
     [canDeleteResource, notesById, p2pNotes],
@@ -368,13 +368,16 @@ export function GroupNotesPanel({
       }).length
 
       if (deletableCount === 0) {
-        p2pNotes.setError('无权移除该笔记本下的笔记')
+        p2pNotes.setError(t('groupPage.confirm.errors.noPermissionNotebook'))
         return
       }
 
       requestDelete(
         resourceIds,
-        `确定从群组中移除笔记本「${notebookName}」下的 ${deletableCount} 篇笔记吗？`,
+        t('groupPage.confirm.notes.removeNotebook', {
+          name: notebookName,
+          count: deletableCount,
+        }),
       )
     },
     [canDeleteResource, notebooksById, notesById, p2pNotes, requestDelete],
@@ -547,9 +550,9 @@ export function GroupNotesPanel({
 
       {pendingDelete ? (
         <ConfirmDialog
-          title="移除群组笔记"
+          title={t('groupPage.confirm.notes.removeTitle')}
           message={pendingDelete.message}
-          confirmLabel="移除"
+          confirmLabel={t('groupPage.confirm.remove')}
           danger
           onCancel={() => {
             setPendingDelete(null)

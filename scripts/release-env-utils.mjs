@@ -150,6 +150,12 @@ export function validateReleaseEnv(values) {
     warnings.push('未设置 TOOLMAN_COMMUNITY_JWT_SECRET（嵌入式 Hub / JWT 缓存可能受限）')
   }
 
+  if (authing && !values.get('TOOLMAN_AUTHING_USER_POOL_SECRET')?.trim()) {
+    warnings.push(
+      '未设置 TOOLMAN_AUTHING_USER_POOL_SECRET：发行包将依赖登录 token 同步 Authing 角色；建议在 GitHub TOOLMAN_RELEASE_ENV 中配置用户池密钥以确保管理员等角色可靠识别',
+    )
+  }
+
   return { ok: errors.length === 0, errors, warnings }
 }
 

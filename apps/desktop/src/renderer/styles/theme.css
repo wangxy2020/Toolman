@@ -13771,6 +13771,21 @@ html[data-nav-position='top'] .tm-sidebar {
   gap: 8px;
 }
 
+.tm-data-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+}
+
+.tm-data-status-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+
 .tm-data-btn {
   display: inline-flex;
   align-items: center;

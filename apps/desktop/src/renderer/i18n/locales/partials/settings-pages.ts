@@ -184,6 +184,10 @@ export const settingsPagesZhCN = {
     fullBackup: '完整备份',
     restore: '恢复',
     restoreConfirm: '恢复将覆盖当前数据库、知识库与笔记数据，是否继续？',
+    statusLabel: '数据状态',
+    statusCache: '缓存 {{size}}',
+    statusAppData: '应用数据 {{path}}',
+    statusWorkDir: '工作目录 {{path}}',
     directories: {
       title: '数据目录',
       userWork: '用户工作目录',
@@ -233,6 +237,11 @@ export const settingsPagesZhCN = {
           '· 模型配置、账户与消息附件（toolman.db、storage/）',
         ].join('\n'),
         confirmLabel: '重置',
+      },
+      restore: {
+        title: '恢复数据',
+        message: '恢复将覆盖当前数据库、知识库与笔记数据，是否继续？',
+        confirmLabel: '恢复',
       },
     },
     messages: {
@@ -898,6 +907,10 @@ export const settingsPagesEn = {
     restore: 'Restore',
     restoreConfirm:
       'Restore will overwrite the current database, knowledge base, and notes. Continue?',
+    statusLabel: 'Data status',
+    statusCache: 'Cache {{size}}',
+    statusAppData: 'App data {{path}}',
+    statusWorkDir: 'Work directory {{path}}',
     directories: {
       title: 'Data directories',
       userWork: 'User work directory',
@@ -947,6 +960,12 @@ export const settingsPagesEn = {
           '· Model config, accounts, and message attachments (toolman.db, storage/)',
         ].join('\n'),
         confirmLabel: 'Reset',
+      },
+      restore: {
+        title: 'Restore data',
+        message:
+          'Restore will overwrite the current database, knowledge base, and notes. Continue?',
+        confirmLabel: 'Restore',
       },
     },
     messages: {

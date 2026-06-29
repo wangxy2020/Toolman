@@ -21,7 +21,7 @@ import { KnowledgeIngestJobPanel } from './KnowledgeIngestJobPanel'
 import { MemoryEntryPanel } from './MemoryEntryPanel'
 import { SYSTEM_DEFAULT_FOLDER_KB_NAME, SYSTEM_DEFAULT_FOLDER_KB_NAMES } from './knowledge-sidebar-types'
 import { useI18n } from '../../i18n/useI18n'
-import { translateKnowledgeFolderName } from '../../i18n/system-labels'
+import { translateKnowledgeFolderName, translateKnowledgeBaseDescription } from '../../i18n/system-labels'
 
 interface Props {
   workspaceId: string
@@ -215,6 +215,13 @@ export function KnowledgeBaseSettingsModal({
 
   const [name, setName] = useState(kb.name)
   const [description, setDescription] = useState(kb.description ?? '')
+  const descriptionDisplay = useMemo(
+    () =>
+      defaultFolderKind
+        ? translateKnowledgeBaseDescription(description, t)
+        : description,
+    [defaultFolderKind, description, t],
+  )
   const [embeddingRef, setEmbeddingRef] = useState('')
   const [docProcessorProviderId, setDocProcessorProviderId] = useState(
     kb.embedConfig.docProcessorProviderId ?? '',
@@ -673,8 +680,9 @@ export function KnowledgeBaseSettingsModal({
                   <textarea
                     id="kb-settings-description"
                     className="tm-kb-settings-textarea"
-                    value={description}
+                    value={descriptionDisplay}
                     onChange={(event) => setDescription(event.target.value)}
+                    readOnly={Boolean(defaultFolderKind)}
                     rows={2}
                   />
                 </div>

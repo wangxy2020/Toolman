@@ -31,9 +31,10 @@ test.describe('GA critical path', () => {
     await expect(window.locator('.tm-notes-page, .tm-main')).toBeVisible()
   })
 
-  test('shows settings about panel with beta notice', async ({ window }) => {
+  test('shows settings about panel', async ({ window }) => {
     await navigateTo(window, '设置')
-    await window.getByRole('button', { name: /关于|About/i }).click()
-    await expect(window.locator('.tm-settings-panel')).toBeVisible()
+    await window.getByRole('button', { name: /关于我们|About us|About/i }).click()
+    await expect(window.locator('.tm-about-settings')).toBeVisible()
+    await expect(window.getByRole('heading', { name: /关于我们|About us/i })).toBeVisible()
   })
 })

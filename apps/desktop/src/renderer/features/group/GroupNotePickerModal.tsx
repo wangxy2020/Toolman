@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import type { GroupPickerGroup } from './group-resource-picker-types'
 import { GroupResourcePickerModal } from './GroupResourcePickerModal'
 import type { NoteItem, NotebookItem } from '../notes/notes-storage'
+import { useI18n } from '../../i18n/useI18n'
+import { translateNotebookName } from '../../i18n/system-labels'
 
 interface Props {
   notebooks: NotebookItem[]
@@ -18,6 +20,7 @@ export function GroupNotePickerModal({
   onClose,
   onConfirm,
 }: Props) {
+  const { t } = useI18n()
   const groups = useMemo<GroupPickerGroup[]>(() => {
     const result: GroupPickerGroup[] = []
 
@@ -29,8 +32,8 @@ export function GroupNotePickerModal({
 
       result.push({
         id: notebook.id,
-        name: notebook.name,
-        description: `${notebookNotes.length} 篇笔记`,
+        name: translateNotebookName(notebook.name, t),
+        description: t('groupPage.picker.note.noteCount', { count: notebookNotes.length }),
         groupSelectable: true,
         items: notebookNotes.map((note) => ({
           id: note.id,
@@ -41,13 +44,13 @@ export function GroupNotePickerModal({
     }
 
     return result
-  }, [notebooks, notes, sharedNoteIds])
+  }, [notebooks, notes, sharedNoteIds, t])
 
   return (
     <GroupResourcePickerModal
-      title="选择笔记"
-      hint="展开笔记本可查看笔记，勾选笔记本将全选其中笔记，也可单独勾选笔记。"
-      confirmLabel="添加"
+      title={t('groupPage.picker.note.title')}
+      hint={t('groupPage.picker.note.hint')}
+      confirmLabel={t('groupPage.picker.add')}
       groups={groups}
       onClose={onClose}
       onConfirm={async (selection) => {
@@ -66,7 +69,7 @@ export function GroupNotePickerModal({
           .filter((item) => item.noteIds.length > 0)
 
         if (payload.length === 0) {
-          throw new Error('没有可添加的笔记')
+          throw new Error(t('groupPage.picker.note.noneAvailable'))
         }
 
         await onConfirm(payload)

@@ -14,6 +14,9 @@ import { decryptSecret } from '../secret-store.js'
 import { getLocalIdentityId } from '../local-identity.js'
 import { getAuthingManagementClient, canFetchAuthingUserRoles } from './authing-management-client.service.js'
 import { fetchAuthingUserRolesViaAccessToken } from './authing-session-roles.service.js'
+import {
+  resolveAuthingUserIdFromAccessToken,
+} from './authing-token-utils.js'
 
 const DEFAULT_COMMUNITY_ENTITLEMENTS = ['community.write']
 
@@ -206,29 +209,34 @@ export async function fetchAuthingUserRoles(
     return []
   }
 
+  const accessToken = options?.accessToken?.trim() ?? null
+  const resolvedUserId = resolveAuthingUserIdFromAccessToken(accessToken, trimmed)
+  const roleLookupIds = [...new Set([resolvedUserId, trimmed].filter(Boolean))]
+
   const client = getAuthingManagementClient()
   if (client) {
-    try {
-      const roles = await client.users.listRoles(trimmed)
-      const extracted = extractAuthingRoleCodes(roles)
-      if (extracted.length > 0) {
-        return extracted
+    for (const lookupId of roleLookupIds) {
+      try {
+        const roles = await client.users.listRoles(lookupId)
+        const extracted = extractAuthingRoleCodes(roles)
+        if (extracted.length > 0) {
+          return extracted
+        }
+      } catch (error) {
+        console.warn(
+          '[authing-roles] Management API listRoles failed, trying next id or session token:',
+          error instanceof Error ? error.message : error,
+        )
       }
-    } catch (error) {
-      console.warn(
-        '[authing-roles] Management API listRoles failed, falling back to session token:',
-        error instanceof Error ? error.message : error,
-      )
     }
   }
 
-  const accessToken = options?.accessToken?.trim()
   if (!accessToken) {
     return []
   }
 
   try {
-    const roles = await fetchAuthingUserRolesViaAccessToken(accessToken, trimmed)
+    const roles = await fetchAuthingUserRolesViaAccessToken(accessToken, resolvedUserId)
     return extractAuthingRoleCodes(roles)
   } catch (error) {
     console.warn(

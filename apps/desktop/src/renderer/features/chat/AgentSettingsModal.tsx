@@ -3,6 +3,7 @@ import { IpcChannel, type Assistant, type Provider, type Session, type Workspace
 import {
   isGroupProxyAssistant,
   resolveGroupProxyAssistantModelId,
+  resolveGroupProxyAssistantDisplayName,
 } from '../group/group-agent-utils'
 import { AgentSettingsAdvancedTab } from './AgentSettingsAdvancedTab'
 import { AgentSettingsKnowledgeTab } from './AgentSettingsKnowledgeTab'
@@ -27,6 +28,12 @@ import {
 import type { TranslationLanguage } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
 import { getAgentSettingsTabs } from '../../i18n/agent-labels'
+import {
+  translateAssistantName,
+  translateAssistantDescription,
+  translateGroupFormattedAgentName,
+  translateSystemPrompt,
+} from '../../i18n/system-labels'
 
 type SettingsTab = 'basic' | 'prompt' | 'permission' | 'tools' | 'skills' | 'knowledge' | 'advanced'
 
@@ -142,6 +149,37 @@ export function AgentSettingsModal({
   )
 
   const modelOptions = useMemo(() => buildModelOptions(providers), [providers])
+  const displayAssistantName = useMemo(
+    () =>
+      groupProxyMode
+        ? translateGroupFormattedAgentName(resolveGroupProxyAssistantDisplayName(assistant), t)
+        : translateAssistantName(assistant.name, t),
+    [assistant, groupProxyMode, t],
+  )
+  const displayName = useMemo(
+    () =>
+      groupProxyMode
+        ? translateGroupFormattedAgentName(name, t)
+        : translateAssistantName(name, t),
+    [groupProxyMode, name, t],
+  )
+  const settingsTitleName = useMemo(() => {
+    const trimmed = name.trim()
+    if (groupProxyMode || !trimmed || trimmed === assistant.name) {
+      return displayAssistantName
+    }
+    return groupProxyMode
+      ? translateGroupFormattedAgentName(trimmed, t)
+      : translateAssistantName(trimmed, t)
+  }, [assistant.name, displayAssistantName, groupProxyMode, name, t])
+  const displaySystemPrompt = useMemo(
+    () => translateSystemPrompt(systemPrompt, t),
+    [systemPrompt, t],
+  )
+  const displayDescription = useMemo(
+    () => translateAssistantDescription(description, t),
+    [description, t],
+  )
   const sharedModelLabel = useMemo(
     () => formatModelDisplayLabel(displayModelId, providers),
     [displayModelId, providers],
@@ -286,7 +324,7 @@ export function AgentSettingsModal({
         <header className="tm-agent-modal-header">
           <h3 id="agent-settings-title" className="tm-agent-modal-title">
             <span className="tm-agent-modal-title-dot" aria-hidden="true" />
-            {t('agent.settingsTitle', { name: name.trim() || assistant.name })}
+            {t('agent.settingsTitle', { name: settingsTitleName })}
           </h3>
           <button
             type="button"
@@ -330,10 +368,12 @@ export function AgentSettingsModal({
                   <input
                     id="agent-settings-name"
                     className="tm-agent-setting-input"
-                    value={name}
+                    value={displayName}
                     onChange={(e) => setName(e.target.value)}
                     onBlur={() => {
-                      if (name.trim() && name !== assistant.name) void save({ name: name.trim() })
+                      const trimmed = name.trim()
+                      if (!trimmed || trimmed === assistant.name) return
+                      void save({ name: trimmed })
                     }}
                   />
                 </div>
@@ -504,7 +544,7 @@ export function AgentSettingsModal({
                     id="agent-settings-description"
                     className="tm-agent-setting-textarea"
                     rows={4}
-                    value={description}
+                    value={displayDescription}
                     placeholder={t('agent.optional')}
                     onChange={(e) => setDescription(e.target.value)}
                     onBlur={() => {
@@ -524,7 +564,7 @@ export function AgentSettingsModal({
                   <textarea
                     className="tm-agent-setting-textarea"
                     rows={10}
-                    value={systemPrompt}
+                    value={displaySystemPrompt}
                     onChange={(e) => setSystemPrompt(e.target.value)}
                     onBlur={() => {
                       if (systemPrompt !== assistant.systemPrompt) {

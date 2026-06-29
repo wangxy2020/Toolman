@@ -7,7 +7,7 @@ Use this checklist before tagging a Release Candidate or General Availability bu
 See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RELEASE_STATUS.md](./RELEASE_STATUS.md)**.
 
 - [ ] `pnpm rc1:preflight` green on release branch
-- [ ] Version is `0.2.0-rc.6` (or current `-rc.N`) in `apps/desktop/package.json`
+- [ ] Version is `0.2.0-rc.7` (or current `-rc.N`) in `apps/desktop/package.json`
 - [ ] `pnpm rc1:build` produces adhoc-signed dmg (Gatekeeper: 右键打开；见 README)
 - [ ] Internal distribution list + dedicated `--user-data-dir` instructions sent
 - [ ] Daily dogfood table + defect tracker started (≥ 1 week)

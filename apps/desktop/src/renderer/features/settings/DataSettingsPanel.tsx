@@ -42,6 +42,7 @@ type PendingConfirm =
   | { kind: 'deleteKnowledge' }
   | { kind: 'clearCache' }
   | { kind: 'resetData' }
+  | { kind: 'restore'; backupPath: string }
 
 export function DataSettingsPanel() {
   const { t } = useI18n()
@@ -112,18 +113,11 @@ export function DataSettingsPanel() {
     )
   }
 
-  const handleRestore = async () => {
-    const pick = await window.api.invoke(IpcChannel.DialogSelectFolder, {})
-    if (!pick.ok) return
-    const folder = (pick.data as { path: string | null }).path
-    if (!folder) return
-
-    if (!window.confirm(t('settings.data.restoreConfirm'))) return
-
+  const handleRestore = async (backupPath: string) => {
     setBusy(true)
     setMessage(null)
     const result = await window.api.invoke(IpcChannel.AppRestoreData, {
-      backupPath: folder,
+      backupPath,
       restoreKnowledge: true,
     })
     setBusy(false)
@@ -195,11 +189,23 @@ export function DataSettingsPanel() {
     }
   }
 
+  const handlePickRestore = async () => {
+    const pick = await window.api.invoke(IpcChannel.DialogSelectFolder, {})
+    if (!pick.ok) return
+    const folder = (pick.data as { path: string | null }).path
+    if (!folder) return
+    setPendingConfirm({ kind: 'restore', backupPath: folder })
+  }
+
   const handleConfirm = () => {
     if (!pendingConfirm) return
     const action = pendingConfirm
     setPendingConfirm(null)
 
+    if (action.kind === 'restore') {
+      void handleRestore(action.backupPath)
+      return
+    }
     if (action.kind === 'deleteKnowledge') {
       void handleDeleteKnowledge()
       return
@@ -231,6 +237,12 @@ export function DataSettingsPanel() {
           confirmLabel: t('settings.data.confirm.resetData.confirmLabel'),
           danger: true,
         },
+        restore: {
+          title: t('settings.data.confirm.restore.title'),
+          message: t('settings.data.confirm.restore.message'),
+          confirmLabel: t('settings.data.confirm.restore.confirmLabel'),
+          danger: true,
+        },
       }[pendingConfirm.kind]
     : null
 
@@ -238,7 +250,10 @@ export function DataSettingsPanel() {
     <SettingsPageLayout>
       <div className="tm-data-settings">
         <SettingsSection title={t('settings.data.title')}>
-          <SettingsRow label={t('settings.data.backupRestore')}>
+          <SettingsRow
+            label={t('settings.data.backupRestore')}
+            hint={message ?? error ?? undefined}
+          >
             <div className="tm-data-actions">
               <button
                 type="button"
@@ -253,7 +268,7 @@ export function DataSettingsPanel() {
                 type="button"
                 className="tm-data-btn"
                 disabled={busy}
-                onClick={() => void handleRestore()}
+                onClick={() => void handlePickRestore()}
               >
                 <IconFolderOpen />
                 {t('settings.data.restore')}
@@ -358,8 +373,6 @@ export function DataSettingsPanel() {
           </SettingsRow>
         </SettingsSection>
 
-        {error ? <div className="tm-settings-error">{error}</div> : null}
-        {message ? <p className="tm-settings-msg">{message}</p> : null}
       </div>
 
       {confirmDialog ? (

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { IpcChannel, type KnowledgeBase, type KnowledgeDocument, type P2pSharedResource } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
+import { translateKnowledgeBaseDescription } from '../../i18n/system-labels'
 import {
   formatKnowledgeFileSize,
   getKnowledgeDocStatusLabel,
@@ -57,9 +58,11 @@ export function GroupKnowledgePickerModal({
       return {
         id: kb.id,
         name: resolveGroupKnowledgeBaseLabel(kb, t),
-        description: `${remainingCount} 篇可添加文档${
-          kb.description?.trim() ? ` · ${kb.description.trim()}` : ''
-        }`,
+        description:
+          t('groupPage.picker.knowledge.addableDocuments', { count: remainingCount }) +
+          (kb.description?.trim()
+            ? ` · ${translateKnowledgeBaseDescription(kb.description.trim(), t)}`
+            : ''),
         groupSelectable: loadedItems == null && remainingCount > 0,
         selectableCount: remainingCount,
         items: visibleItems,
@@ -105,7 +108,7 @@ export function GroupKnowledgePickerModal({
           [knowledgeBaseId]: items,
         }))
       } catch (error) {
-        const message = error instanceof Error ? error.message : '加载文档失败'
+        const message = error instanceof Error ? error.message : t('groupPage.picker.knowledge.loadDocumentsFailed')
         setLoadError(message)
         setLoadedDocs((current) => ({
           ...current,
@@ -115,7 +118,7 @@ export function GroupKnowledgePickerModal({
         setLoadingGroupId(null)
       }
     },
-    [loadedDocs, sharedDocumentMap, sourceWorkspaceId],
+    [loadedDocs, sharedDocumentMap, sourceWorkspaceId, t],
   )
 
   const handleConfirm = useCallback(
@@ -142,19 +145,19 @@ export function GroupKnowledgePickerModal({
       }
 
       if (payload.length === 0) {
-        throw new Error('没有可添加的文档，请勾选已就绪的文件或整个知识库')
+        throw new Error(t('groupPage.picker.knowledge.noDocuments'))
       }
 
       await onConfirm(payload)
     },
-    [loadedDocs, onConfirm],
+    [loadedDocs, onConfirm, t],
   )
 
   return (
     <GroupResourcePickerModal
-      title="选择知识库"
-      hint="展开知识库可查看未共享文档，勾选知识库将全选可添加文件，也可单独勾选文档。"
-      confirmLabel="添加"
+      title={t('groupPage.picker.knowledge.title')}
+      hint={t('groupPage.picker.knowledge.hint')}
+      confirmLabel={t('groupPage.picker.add')}
       groups={groups}
       loadingGroupId={loadingGroupId}
       error={loadError}

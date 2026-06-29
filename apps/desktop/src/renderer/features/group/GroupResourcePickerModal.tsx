@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IconChevronRight } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import { computeGroupPickerSelectionCount } from './group-resource-picker-count'
 import type { GroupPickerGroup, GroupPickerSelection } from './group-resource-picker-types'
 
@@ -62,7 +63,7 @@ interface Props {
 export function GroupResourcePickerModal({
   title,
   hint,
-  confirmLabel = '添加',
+  confirmLabel,
   groups,
   loading = false,
   loadingGroupId = null,
@@ -71,6 +72,8 @@ export function GroupResourcePickerModal({
   onConfirm,
   onGroupExpand,
 }: Props) {
+  const { t } = useI18n()
+  const resolvedConfirmLabel = confirmLabel ?? t('groupPage.picker.add')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set())
@@ -266,8 +269,8 @@ export function GroupResourcePickerModal({
     if (selection.length === 0) {
       setError(
         selectionCount > 0
-          ? '所选内容已不可用，请重新选择'
-          : '请先选择要添加的内容',
+          ? t('groupPage.picker.selectionUnavailable')
+          : t('groupPage.picker.selectFirst'),
       )
       return
     }
@@ -278,7 +281,7 @@ export function GroupResourcePickerModal({
       await onConfirm(selection)
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '添加失败')
+      setError(err instanceof Error ? err.message : t('groupPage.picker.addFailed'))
     } finally {
       setBusy(false)
     }
@@ -292,16 +295,16 @@ export function GroupResourcePickerModal({
       >
         <header className="tm-modal-header">
           <h2 className="tm-modal-title">{title}</h2>
-          <button type="button" className="tm-modal-close" onClick={onClose} aria-label="关闭">
+          <button type="button" className="tm-modal-close" onClick={onClose} aria-label={t('groupPage.picker.close')}>
             ×
           </button>
         </header>
         <div className="tm-modal-body">
           <p className="tm-form-hint">{hint}</p>
           {loading && groups.length === 0 ? (
-            <p className="tm-kb-file-panel-empty">加载中…</p>
+            <p className="tm-kb-file-panel-empty">{t('groupPage.picker.loading')}</p>
           ) : selectableGroups.length === 0 ? (
-            <p className="tm-kb-file-panel-empty">暂无可添加的内容</p>
+            <p className="tm-kb-file-panel-empty">{t('groupPage.picker.empty')}</p>
           ) : (
             <div className="tm-group-resource-picker-scroll">
               <ul className="tm-group-resource-picker-list">
@@ -361,11 +364,11 @@ export function GroupResourcePickerModal({
                       <ul className="tm-group-resource-picker-items">
                         {loadingGroupId === group.id ? (
                           <li className="tm-group-resource-picker-item tm-group-resource-picker-item--loading">
-                            加载中…
+                            {t('groupPage.picker.loading')}
                           </li>
                         ) : group.items.length === 0 ? (
                           <li className="tm-group-resource-picker-item tm-group-resource-picker-item--empty">
-                            暂无子项
+                            {t('groupPage.picker.noSubItems')}
                           </li>
                         ) : (
                           group.items.map((item) => {
@@ -437,7 +440,7 @@ export function GroupResourcePickerModal({
         </div>
         <footer className="tm-modal-footer">
           <button type="button" className="tm-btn tm-btn--ghost" onClick={onClose}>
-            取消
+            {t('groupPage.picker.cancel')}
           </button>
           <button
             type="button"
@@ -445,7 +448,9 @@ export function GroupResourcePickerModal({
             disabled={busy || selectionCount === 0}
             onClick={() => void handleConfirm()}
           >
-            {busy ? '添加中…' : `${confirmLabel}${selectionCount > 0 ? ` (${selectionCount})` : ''}`}
+            {busy
+              ? t('groupPage.picker.adding')
+              : `${resolvedConfirmLabel}${selectionCount > 0 ? ` (${selectionCount})` : ''}`}
           </button>
         </footer>
       </div>

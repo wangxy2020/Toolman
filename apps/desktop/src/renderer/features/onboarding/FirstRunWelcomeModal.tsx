@@ -30,7 +30,6 @@ export function FirstRunWelcomeModal() {
       isOpen={open}
       icon="welcome"
       title={t('onboarding.title')}
-      description={t('onboarding.description')}
       cancelText={t('onboarding.later')}
       confirmText={t('onboarding.getStarted')}
       onCancel={() => setOpen(false)}
@@ -44,7 +43,6 @@ export function FirstRunWelcomeModal() {
         <li>{t('onboarding.stepKnowledge')}</li>
         <li>{t('onboarding.stepGroup')}</li>
       </ul>
-      <p className="tm-auth-guard-note">{t('onboarding.betaHint')}</p>
     </AuthGuardModal>
   )
 }

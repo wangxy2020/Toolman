@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.2.0-rc.6` · **通道**：`staging` · **更新**：2026-06-28  
+> **版本**：`0.2.0-rc.7` · **通道**：`staging` · **更新**：2026-06-28  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
@@ -101,7 +101,18 @@
 
 ---
 
-## 5. RC6 变更摘要（相对 rc.5）
+## 5. RC7 变更摘要（相对 rc.6）
+
+| 模块 | 变更 |
+|------|------|
+| 发布 | `package.json` 对齐 `0.2.0-rc.7`；Husky pre-commit 去除弃用 shim |
+| 引导 | 欢迎弹窗移除 Beta 说明段落 |
+| 设置 | 数据备份/恢复确认对话框；数据状态展示在备份区块下 |
+| 群组 | 面板确认框与错误 i18n；知识库「移除已勾选」可用性修复 |
+| 认证 | 发行包 Authing 角色同步：JWT `sub` 解析 + 多 id 回退 |
+| E2E | 设置「关于我们」导航用例修复 |
+
+## 6. RC6 变更摘要（相对 rc.5）
 
 | 模块 | 变更 |
 |------|------|

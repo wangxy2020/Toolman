@@ -196,7 +196,7 @@ export function GroupWorkflowPanel({
                           disabled={removingId === resource.id}
                           onClick={() => setPendingRemoveId(resource.id)}
                         >
-                          移除
+                          {t('groupPage.confirm.remove')}
                         </button>
                       ) : null}
                     </header>
@@ -210,9 +210,9 @@ export function GroupWorkflowPanel({
 
       {showPicker ? (
         <GroupResourcePickerModal
-          title="选择工作流"
-          hint="勾选要添加到群组的工作流。"
-          confirmLabel="添加"
+          title={t('groupPage.picker.workflow.title')}
+          hint={t('groupPage.picker.workflow.hint')}
+          confirmLabel={t('groupPage.picker.add')}
           groups={pickerGroups}
           onClose={() => setShowPicker(false)}
           onConfirm={async (selections) => {
@@ -223,9 +223,9 @@ export function GroupWorkflowPanel({
 
       {pendingRemoveId ? (
         <ConfirmDialog
-          title="移除工作流"
-          message="确定从群组中移除该工作流吗？"
-          confirmLabel="移除"
+          title={t('groupPage.confirm.workflow.removeTitle')}
+          message={t('groupPage.confirm.workflow.removeMessage')}
+          confirmLabel={t('groupPage.confirm.workflow.removeBtn')}
           onConfirm={() => void confirmRemove()}
           onCancel={() => setPendingRemoveId(null)}
         />

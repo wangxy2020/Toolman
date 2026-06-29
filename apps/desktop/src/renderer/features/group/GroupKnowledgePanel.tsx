@@ -171,14 +171,16 @@ export function GroupKnowledgePanel({
     (resourceId: string) => {
       const resource = p2pKnowledge.sharedResources.find((item) => item.id === resourceId)
       if (!resource || !canDeleteResource(resource)) {
-        p2pKnowledge.setError('无权移除该知识库')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.noPermissionKb'))
         return
       }
 
       setPendingDelete({
         kind: 'kb',
         groups: [{ resourceId, documentIds: [] }],
-        message: `确定从群组中移除知识库「${resolveResourceLabel(resource)}」吗？`,
+        message: t('groupPage.confirm.knowledge.removeKb', {
+          name: resolveResourceLabel(resource),
+        }),
       })
     },
     [canDeleteResource, p2pKnowledge, resolveResourceLabel],
@@ -188,7 +190,7 @@ export function GroupKnowledgePanel({
     (resourceId: string, documentIds: string[]) => {
       const resource = p2pKnowledge.sharedResources.find((item) => item.id === resourceId)
       if (!resource || !canDeleteResource(resource)) {
-        p2pKnowledge.setError('无权移除所选文件')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.noPermissionFiles'))
         return
       }
 
@@ -206,7 +208,11 @@ export function GroupKnowledgePanel({
       setPendingDelete({
         kind: 'documents',
         groups: [{ resourceId, documentIds }],
-        message: `确定从群组知识库「${resolveResourceLabel(resource)}」中移除${preview}${suffix}吗？`,
+        message: t('groupPage.confirm.knowledge.removeFiles', {
+          name: resolveResourceLabel(resource),
+          preview,
+          suffix,
+        }),
       })
     },
     [canDeleteResource, p2pKnowledge, resolveResourceLabel],
@@ -238,17 +244,30 @@ export function GroupKnowledgePanel({
     [savedDocRegistry],
   )
 
+  const canDeleteSelected = useMemo(() => {
+    if (selectedKeys.size === 0) return false
+    for (const key of selectedKeys) {
+      const parsed = parseKnowledgeSelectionKey(key)
+      if (!parsed) continue
+      const resource = p2pKnowledge.sharedResources.find((item) => item.id === parsed.resourceId)
+      if (resource && canDeleteResource(resource)) return true
+      const savedIds = resolveSavedDocumentIds(parsed.resourceId, [parsed.documentId])
+      if (savedIds.length > 0) return true
+    }
+    return false
+  }, [canDeleteResource, p2pKnowledge.sharedResources, resolveSavedDocumentIds, selectedKeys])
+
   const requestRemoveSavedDocuments = useCallback(
     (resourceId: string, p2pDocumentIds: string[]) => {
       const registry = savedDocRegistry[resourceId]
       if (!registry) {
-        p2pKnowledge.setError('暂无可移除的已保存文件')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.noSavedFiles'))
         return
       }
 
       const savedDocumentIds = resolveSavedDocumentIds(resourceId, p2pDocumentIds)
       if (savedDocumentIds.length === 0) {
-        p2pKnowledge.setError('所选文件尚未保存至共享知识库')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.filesNotSaved'))
         return
       }
 
@@ -268,23 +287,23 @@ export function GroupKnowledgePanel({
             savedDocumentIds,
           },
         ],
-        message: `确定从共享知识库中移除${preview}吗？群组中的共享列表不会受影响。`,
+        message: t('groupPage.confirm.knowledge.removeSavedPreview', { preview }),
       })
     },
-    [p2pKnowledge, resolveSavedDocumentIds, savedDocRegistry],
+    [p2pKnowledge, resolveSavedDocumentIds, savedDocRegistry, t],
   )
 
   const requestRemoveSavedSection = useCallback(
     (resourceId: string) => {
       const registry = savedDocRegistry[resourceId]
       if (!registry) {
-        p2pKnowledge.setError('暂无可移除的已保存文件')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.noSavedFiles'))
         return
       }
 
       const savedDocumentIds = Object.values(registry.savedByP2pDocumentId)
       if (savedDocumentIds.length === 0) {
-        p2pKnowledge.setError('该知识库下暂无已保存文件')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.noSavedFiles'))
         return
       }
 
@@ -299,10 +318,12 @@ export function GroupKnowledgePanel({
             savedDocumentIds,
           },
         ],
-        message: `确定从共享知识库中移除该文件夹下全部 ${savedDocumentIds.length} 个已保存文件吗？群组中的共享列表不会受影响。`,
+        message: t('groupPage.confirm.knowledge.removeSavedSection', {
+          count: savedDocumentIds.length,
+        }),
       })
     },
-    [p2pKnowledge, savedDocRegistry],
+    [p2pKnowledge, savedDocRegistry, t],
   )
 
   const handleRemoveDocument = useCallback(
@@ -447,7 +468,7 @@ export function GroupKnowledgePanel({
     }
 
     if (groupRemoveEntries.length > 0 && savedRemoveEntries.length > 0) {
-      p2pKnowledge.setError('请分别操作群组移除与已保存副本移除')
+      p2pKnowledge.setError(t('groupPage.confirm.errors.mixedRemoveKinds'))
       return
     }
 
@@ -474,7 +495,7 @@ export function GroupKnowledgePanel({
       })
 
       if (savedGroups.length === 0) {
-        p2pKnowledge.setError('所选文件尚未保存至共享知识库')
+        p2pKnowledge.setError(t('groupPage.confirm.errors.filesNotSaved'))
         return
       }
 
@@ -483,7 +504,7 @@ export function GroupKnowledgePanel({
         kind: 'saved-documents',
         groups: savedRemoveEntries,
         savedGroups,
-        message: `确定从共享知识库中移除已勾选的 ${total} 个已保存文件吗？群组中的共享列表不会受影响。`,
+        message: t('groupPage.confirm.knowledge.removeSavedSelected', { count: total }),
       })
       return
     }
@@ -498,7 +519,7 @@ export function GroupKnowledgePanel({
     setPendingDelete({
       kind: 'documents',
       groups: groupRemoveEntries,
-      message: `确定从群组中移除已勾选的 ${total} 个文件吗？`,
+      message: t('groupPage.confirm.knowledge.removeGroupSelected', { count: total }),
     })
   }, [
     canDeleteResource,
@@ -508,14 +529,17 @@ export function GroupKnowledgePanel({
     resolveSavedDocumentIds,
     savedDocRegistry,
     selectedKeys,
+    t,
   ])
 
   const deleteSelectedLabel = useMemo(() => {
     const hasGroupDelete = p2pKnowledge.sharedResources.some((resource) =>
       canDeleteResource(resource),
     )
-    return hasGroupDelete ? '移除已勾选' : '移除已保存'
-  }, [canDeleteResource, p2pKnowledge.sharedResources])
+    return hasGroupDelete
+      ? t('groupPage.fileContextMenu.deleteSelected')
+      : t('groupPage.fileContextMenu.deleteSaved')
+  }, [canDeleteResource, p2pKnowledge.sharedResources, t])
 
   const handleContextMenu = useCallback(
     (event: React.MouseEvent) => {
@@ -664,7 +688,7 @@ export function GroupKnowledgePanel({
           y={contextMenu.y}
           selectedCount={selectedKeys.size}
           enabled={canWriteWorkspace}
-          canDelete={selectedKeys.size > 0}
+          canDelete={canDeleteSelected}
           deleteLabel={deleteSelectedLabel}
           onClose={() => setContextMenu(null)}
           onSelectAll={handleSelectAll}
@@ -677,14 +701,14 @@ export function GroupKnowledgePanel({
         <ConfirmDialog
           title={
             pendingDelete.kind === 'kb'
-              ? '移除知识库'
+              ? t('groupPage.confirm.removeKbTitle')
               : pendingDelete.kind === 'saved-documents' ||
                   pendingDelete.kind === 'saved-section'
-                ? '移除已保存副本'
-                : '移除共享文件'
+                ? t('groupPage.confirm.removeSavedCopyTitle')
+                : t('groupPage.confirm.removeSharedFileTitle')
           }
           message={pendingDelete.message}
-          confirmLabel="移除"
+          confirmLabel={t('groupPage.confirm.remove')}
           danger
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => void confirmDelete()}

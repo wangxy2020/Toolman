@@ -211,14 +211,14 @@ export function GroupAgentsPanel({
     (resourceId: string) => {
       const resource = p2pAgents.sharedResources.find((item) => item.id === resourceId)
       if (!resource || !canDeleteResource(resource)) {
-        p2pAgents.setError('无权移除该智能体')
+        p2pAgents.setError(t('groupPage.confirm.errors.noPermissionAgent'))
         return
       }
 
       setPendingDelete({
         kind: 'agent',
         groups: [{ resourceId, sessionIds: [] }],
-        message: `确定从群组中移除智能体「${resource.name}」吗？`,
+        message: t('groupPage.confirm.agents.removeAgent', { name: resource.name }),
       })
     },
     [canDeleteResource, p2pAgents],
@@ -228,7 +228,7 @@ export function GroupAgentsPanel({
     (resourceId: string, sessionIds: string[]) => {
       const resource = p2pAgents.sharedResources.find((item) => item.id === resourceId)
       if (!resource || !canDeleteResource(resource)) {
-        p2pAgents.setError('无权移除所选话题')
+        p2pAgents.setError(t('groupPage.confirm.errors.noPermissionTopics'))
         return
       }
 
@@ -246,7 +246,11 @@ export function GroupAgentsPanel({
       setPendingDelete({
         kind: 'sessions',
         groups: [{ resourceId, sessionIds }],
-        message: `确定从群组智能体「${resource.name}」中移除${preview}${suffix}吗？`,
+        message: t('groupPage.confirm.agents.removeTopics', {
+          name: resource.name,
+          preview,
+          suffix,
+        }),
       })
     },
     [canDeleteResource, p2pAgents],
@@ -357,7 +361,7 @@ export function GroupAgentsPanel({
         resourceId,
         sessionIds,
       })),
-      message: `确定从群组中移除已勾选的 ${total} 个话题吗？`,
+      message: t('groupPage.confirm.agents.removeSelectedTopics', { count: total }),
     })
   }, [requestRemoveSessions, selectedKeys])
 
@@ -554,9 +558,13 @@ export function GroupAgentsPanel({
 
       {pendingDelete ? (
         <ConfirmDialog
-          title={pendingDelete.kind === 'agent' ? '移除群组智能体' : '移除共享话题'}
+          title={
+            pendingDelete.kind === 'agent'
+              ? t('groupPage.confirm.agents.removeAgentTitle')
+              : t('groupPage.confirm.agents.removeTopicTitle')
+          }
           message={pendingDelete.message}
-          confirmLabel="移除"
+          confirmLabel={t('groupPage.confirm.remove')}
           danger
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => void confirmDelete()}

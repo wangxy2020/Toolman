@@ -5,7 +5,7 @@ import { useI18n } from '../../i18n/useI18n'
 interface AuthGuardModalProps {
   isOpen: boolean
   title: string
-  description: string
+  description?: string
   confirmText?: string
   cancelText?: string
   onConfirm: () => void
@@ -76,7 +76,7 @@ export function AuthGuardModal({
           <h3 id="auth-guard-title" className="tm-auth-guard-title">
             {title}
           </h3>
-          <p className="tm-auth-guard-desc">{description}</p>
+          {description ? <p className="tm-auth-guard-desc">{description}</p> : null}
           {children ? <div className="tm-auth-guard-extra">{children}</div> : null}
         </div>
 

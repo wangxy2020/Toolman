@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Assistant, P2pSharedResource, Session } from '@toolman/shared'
 import { modelNameFromId } from '../chat/model-utils'
 import { formatKnowledgeDocTime } from '../knowledge/knowledge-file-display'
+import { useI18n } from '../../i18n/useI18n'
+import { translateAssistantName, translateAssistantDescription, translateSessionTitle } from '../../i18n/system-labels'
 import { listAllAssistantSessions } from './group-assistant-session-list'
 import { isShareableGroupAgentSource } from './group-agent-utils'
 import type { GroupPickerGroup } from './group-resource-picker-types'
@@ -73,6 +75,7 @@ export function GroupAgentPickerModal({
   onClose,
   onConfirm,
 }: Props) {
+  const { t } = useI18n()
   const [sessionsByAssistantId, setSessionsByAssistantId] = useState(() =>
     groupSessionsByAssistant(sessions),
   )
@@ -112,13 +115,13 @@ export function GroupAgentPickerModal({
           return next
         })
       } catch (error) {
-        const message = error instanceof Error ? error.message : '加载话题失败'
+        const message = error instanceof Error ? error.message : t('groupPage.picker.agent.loadSessionsFailed')
         setLoadError(message)
       } finally {
         setLoadingGroupId(null)
       }
     },
-    [sourceWorkspaceId],
+    [sourceWorkspaceId, t],
   )
 
   useEffect(() => {
@@ -156,32 +159,34 @@ export function GroupAgentPickerModal({
 
       const modelLabel = assistant.modelId ? modelNameFromId(assistant.modelId) : null
       const descriptionParts = [
-        `${availableSessions.length} 个可添加话题`,
-        assistant.description?.trim(),
+        t('groupPage.picker.agent.addableTopics', { count: availableSessions.length }),
+        assistant.description?.trim()
+          ? translateAssistantDescription(assistant.description.trim(), t)
+          : null,
         modelLabel,
       ].filter(Boolean)
 
       result.push({
         id: assistant.id,
-        name: assistant.name,
+        name: translateAssistantName(assistant.name, t),
         description: descriptionParts.join(' · '),
         groupSelectable: availableSessions.length === 0,
         items: availableSessions.map((session) => ({
           id: session.id,
-          name: session.title,
+          name: translateSessionTitle(session.title, t),
           meta: formatKnowledgeDocTime(session.updatedAt ?? session.createdAt),
         })),
       })
     }
 
     return result
-  }, [assistants, sessionsByAssistantId, sharedSessionMap])
+  }, [assistants, sessionsByAssistantId, sharedSessionMap, t])
 
   return (
     <GroupResourcePickerModal
-      title="选择智能体"
-      hint="展开智能体可查看未共享话题，勾选智能体或话题将添加到群组。"
-      confirmLabel="添加"
+      title={t('groupPage.picker.agent.title')}
+      hint={t('groupPage.picker.agent.hint')}
+      confirmLabel={t('groupPage.picker.add')}
       groups={groups}
       loadingGroupId={loadingGroupId}
       error={loadError}
@@ -193,7 +198,7 @@ export function GroupAgentPickerModal({
           sessionIds: itemIds.length > 0 ? itemIds : undefined,
         }))
         if (payload.length === 0) {
-          throw new Error('请先选择要添加的智能体或话题')
+          throw new Error(t('groupPage.picker.agent.selectFirst'))
         }
         await onConfirm(payload)
       }}
