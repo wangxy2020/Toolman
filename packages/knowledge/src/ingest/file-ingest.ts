@@ -9,6 +9,7 @@ import type { ChunkConfig } from '../chunking/text-chunker.js'
 import type { EmbedOptions, EmbedProgressCallback } from '../embedding/ollama-embedder.js'
 import type { ParseFileOptions } from '../parsers/parse-file.js'
 import { ingestContent } from './content-ingest.js'
+import type { IngestContentInput } from './content-ingest.js'
 
 export interface IngestFileInput {
   filePath: string
@@ -100,6 +101,7 @@ export async function ingestUrlContent(input: {
   vectorsDir: string
   vectorBackend?: VectorBackend
   onEmbedProgress?: EmbedProgressCallback
+  onIndexedChunkBatch?: IngestContentInput['onIndexedChunkBatch']
 }): Promise<IngestFileResult> {
   return ingestContent({
     sourceKey: input.url,
@@ -116,5 +118,6 @@ export async function ingestUrlContent(input: {
     vectorsDir: input.vectorsDir,
     vectorBackend: input.vectorBackend,
     onEmbedProgress: input.onEmbedProgress,
+    onIndexedChunkBatch: input.onIndexedChunkBatch,
   })
 }

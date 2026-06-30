@@ -33,6 +33,7 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           'workers/parse-file.worker': resolve('src/main/workers/parse-file.worker.ts'),
+          'workers/db.worker': resolve('src/main/workers/db.worker.ts'),
         },
       },
     },
@@ -42,6 +43,7 @@ export default defineConfig({
         // Bundle workspace packages from source in main; predev builds dist for tsc (see package.json predev).
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
         '@toolman/knowledge': resolve('../../packages/knowledge/src/index.ts'),
+        '@toolman/db': resolve('../../packages/db/src/index.ts'),
       },
     },
   },

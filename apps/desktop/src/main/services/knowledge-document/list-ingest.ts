@@ -75,7 +75,7 @@ export async function ingestKnowledgeDocuments(input: unknown) {
   }
   assertKnowledgeBaseAcceptsLocalFiles(kb)
 
-  const prepared = prepareIngestQueue({
+  const prepared = await prepareIngestQueue({
     workspaceId: data.workspaceId,
     kbId: data.kbId,
     filePaths: data.filePaths,

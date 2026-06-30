@@ -1,5 +1,5 @@
 import { toErrorMessage } from '@toolman/shared'
-import { hashFileBytes, isIgnoredKnowledgeIngestFile } from '@toolman/knowledge'
+import { hashFileStream, isIgnoredKnowledgeIngestFile } from '@toolman/knowledge'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { knowledgeIngestSupportsFile } from './knowledge-parse-options.service'
 import { logStructured } from './structured-log.service'
@@ -35,7 +35,7 @@ function releaseIngestJobSlot(): void {
   if (next) next()
 }
 
-export function prepareIngestQueue(options: {
+export async function prepareIngestQueue(options: {
   workspaceId: string
   kbId: string
   filePaths: string[]
@@ -76,7 +76,7 @@ export function prepareIngestQueue(options: {
     }
 
     try {
-      const contentHash = hashFileBytes(filePath)
+      const contentHash = await hashFileStream(filePath)
       const existing = findActiveDocumentByPath(repo, options.kbId, filePath)
 
       if (existing && shouldSkipReadyDocument(repo, options.kbId, existing.id, contentHash, existing)) {

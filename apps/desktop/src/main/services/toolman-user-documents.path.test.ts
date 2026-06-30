@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 describe('toolman user document path helpers', () => {
@@ -23,8 +24,8 @@ describe('toolman user document path helpers', () => {
       getAlternateToolmanDocumentsRoot,
     } = await import('./toolman-user-documents.service')
 
-    expect(getToolmanDocumentsRootPath()).toBe('/Users/demo/Documents/ToolmanData')
-    expect(getAlternateToolmanDocumentsRoot()).toBe('/Users/demo/Documents/Toolman')
+    expect(getToolmanDocumentsRootPath()).toBe(join('/Users/demo/Documents', 'ToolmanData'))
+    expect(getAlternateToolmanDocumentsRoot()).toBe(join('/Users/demo/Documents', 'Toolman'))
   })
 
   it('detects stale workspace paths under a different user folder', async () => {

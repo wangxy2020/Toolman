@@ -1,6 +1,6 @@
 {
   "name": "@toolman/desktop",
-  "version": "0.2.0-rc.10",
+  "version": "0.2.0-rc.11",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "description": "Toolman desktop AI client",
@@ -35,6 +35,7 @@
     "@toolman/knowledge": "workspace:*",
     "@toolman/model-gateway": "workspace:*",
     "@toolman/shared": "workspace:*",
+    "adm-zip": "^0.5.16",
     "apache-arrow": "18.1.0",
     "authing-js-sdk": "^4.23.55",
     "better-sqlite3": "^11.10.0",
@@ -59,6 +60,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
     "@playwright/test": "^1.52.0",
+    "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.13",
     "@types/qrcode": "^1.5.5",
     "@types/react-dom": "^19.1.6",

@@ -14,6 +14,14 @@ export interface ChunkFtsHit {
   score: number
 }
 
+export const FTS_INSERT_BATCH_SIZE = 200
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve)
+  })
+}
+
 function buildFtsMatchQuery(query: string): string | null {
   const tokens = query
     .trim()
@@ -28,20 +36,51 @@ function buildFtsMatchQuery(query: string): string | null {
 export class ChunkFtsRepository {
   constructor(private readonly sqlite: Database.Database) {}
 
-  replaceDocumentChunks(documentId: string, rows: ChunkFtsRow[]): void {
-    this.sqlite.prepare('DELETE FROM chunks_fts WHERE document_id = ?').run(documentId)
-
+  private insertRowsBatched(rows: ChunkFtsRow[]): void {
     if (rows.length === 0) return
 
     const insert = this.sqlite.prepare(
       'INSERT INTO chunks_fts (chunk_id, kb_id, document_id, text) VALUES (?, ?, ?, ?)',
     )
-    const insertMany = this.sqlite.transaction((batch: ChunkFtsRow[]) => {
-      for (const row of batch) {
-        insert.run(row.chunkId, row.kbId, row.documentId, row.text)
-      }
-    })
-    insertMany(rows)
+
+    for (let offset = 0; offset < rows.length; offset += FTS_INSERT_BATCH_SIZE) {
+      const batch = rows.slice(offset, offset + FTS_INSERT_BATCH_SIZE)
+      const insertBatch = this.sqlite.transaction((chunkRows: ChunkFtsRow[]) => {
+        for (const row of chunkRows) {
+          insert.run(row.chunkId, row.kbId, row.documentId, row.text)
+        }
+      })
+      insertBatch(batch)
+    }
+  }
+
+  replaceDocumentChunks(documentId: string, rows: ChunkFtsRow[]): void {
+    this.sqlite.prepare('DELETE FROM chunks_fts WHERE document_id = ?').run(documentId)
+    this.insertRowsBatched(rows)
+  }
+
+  async replaceDocumentChunksAsync(documentId: string, rows: ChunkFtsRow[]): Promise<void> {
+    this.sqlite.prepare('DELETE FROM chunks_fts WHERE document_id = ?').run(documentId)
+    if (rows.length === 0) return
+
+    const insert = this.sqlite.prepare(
+      'INSERT INTO chunks_fts (chunk_id, kb_id, document_id, text) VALUES (?, ?, ?, ?)',
+    )
+
+    for (let offset = 0; offset < rows.length; offset += FTS_INSERT_BATCH_SIZE) {
+      const batch = rows.slice(offset, offset + FTS_INSERT_BATCH_SIZE)
+      const insertBatch = this.sqlite.transaction((chunkRows: ChunkFtsRow[]) => {
+        for (const row of chunkRows) {
+          insert.run(row.chunkId, row.kbId, row.documentId, row.text)
+        }
+      })
+      insertBatch(batch)
+      await yieldToEventLoop()
+    }
+  }
+
+  appendDocumentChunks(rows: ChunkFtsRow[]): void {
+    this.insertRowsBatched(rows)
   }
 
   removeDocument(documentId: string): void {
@@ -65,17 +104,27 @@ export class ChunkFtsRepository {
 
   rebuildAll(rows: ChunkFtsRow[]): void {
     this.clearAll()
+    this.insertRowsBatched(rows)
+  }
+
+  async rebuildAllAsync(rows: ChunkFtsRow[]): Promise<void> {
+    this.clearAll()
     if (rows.length === 0) return
 
     const insert = this.sqlite.prepare(
       'INSERT INTO chunks_fts (chunk_id, kb_id, document_id, text) VALUES (?, ?, ?, ?)',
     )
-    const insertMany = this.sqlite.transaction((batch: ChunkFtsRow[]) => {
-      for (const row of batch) {
-        insert.run(row.chunkId, row.kbId, row.documentId, row.text)
-      }
-    })
-    insertMany(rows)
+
+    for (let offset = 0; offset < rows.length; offset += FTS_INSERT_BATCH_SIZE) {
+      const batch = rows.slice(offset, offset + FTS_INSERT_BATCH_SIZE)
+      const insertBatch = this.sqlite.transaction((chunkRows: ChunkFtsRow[]) => {
+        for (const row of chunkRows) {
+          insert.run(row.chunkId, row.kbId, row.documentId, row.text)
+        }
+      })
+      insertBatch(batch)
+      await yieldToEventLoop()
+    }
   }
 
   search(kbIds: string[], query: string, limit: number): ChunkFtsHit[] {

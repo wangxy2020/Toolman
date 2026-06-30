@@ -1,7 +1,8 @@
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { compareSemver } from '@toolman/shared'
 
-const USER_DATA = '/tmp/toolman-test-userdata'
+const USER_DATA = join('/tmp', 'toolman-test-userdata')
 
 vi.mock('electron', () => ({
   app: {
@@ -42,10 +43,10 @@ describe('local-operations path helpers', () => {
       updateManifestPath,
     } = await import('./local-operations.service')
 
-    expect(diagnosticsDir()).toBe(`${USER_DATA}/diagnostics`)
-    expect(crashReportDir()).toBe(`${USER_DATA}/diagnostics/crashes`)
-    expect(diagnosticsLogPath()).toBe(`${USER_DATA}/diagnostics/events.jsonl`)
-    expect(updateManifestPath()).toBe(`${USER_DATA}/updates/manifest.json`)
+    expect(diagnosticsDir()).toBe(join(USER_DATA, 'diagnostics'))
+    expect(crashReportDir()).toBe(join(USER_DATA, 'diagnostics', 'crashes'))
+    expect(diagnosticsLogPath()).toBe(join(USER_DATA, 'diagnostics', 'events.jsonl'))
+    expect(updateManifestPath()).toBe(join(USER_DATA, 'updates', 'manifest.json'))
   })
 
   it('reports updateAvailable when manifest version is newer', async () => {

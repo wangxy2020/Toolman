@@ -1,10 +1,13 @@
-import { execFileSync } from 'node:child_process'
+import AdmZip from 'adm-zip'
 import {
+  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -12,7 +15,7 @@ import {
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { sha256Hex } from './community-package-zip.util'
+import { hashFileBytes } from '@toolman/knowledge'
 
 export const COMMUNITY_CHECKSUMS_FILENAME = 'SHA256SUMS'
 
@@ -56,14 +59,24 @@ export function writeChecksumsFile(bundleRoot: string): void {
     (file) => file !== COMMUNITY_CHECKSUMS_FILENAME,
   )
   const checksumLines = relativeFiles.map((relativePath) => {
-    const bytes = readFileSync(join(bundleRoot, relativePath))
-    return `${sha256Hex(bytes)}  ${relativePath}`
+    return `${hashFileBytes(join(bundleRoot, relativePath))}  ${relativePath}`
   })
   writeFileSync(join(bundleRoot, COMMUNITY_CHECKSUMS_FILENAME), `${checksumLines.join('\n')}\n`, 'utf8')
 }
 
 export function zipDirectory(sourceDir: string, zipPath: string): void {
-  execFileSync('zip', ['-r', zipPath, '.'], { cwd: sourceDir })
+  const zip = new AdmZip()
+  zip.addLocalFolder(sourceDir, '')
+  zip.writeZip(zipPath)
+}
+
+export function readZipEntryText(zipPath: string, entryPath: string): string {
+  const zip = new AdmZip(zipPath)
+  const entry = zip.getEntry(entryPath)
+  if (!entry) {
+    throw new Error(`Missing zip entry: ${entryPath}`)
+  }
+  return entry.getData().toString('utf8')
 }
 
 export function repackDirectory(input: {
@@ -81,10 +94,7 @@ export function repackDirectory(input: {
     zipDirectory(bundleRoot, zipPath)
   } catch (error) {
     rmSync(stagingRoot, { recursive: true, force: true })
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(`系统未找到 zip 命令，无法打包${input.zipCommandLabel ?? '资源'}`)
-    }
-    throw error
+    throw new Error(`无法打包${input.zipCommandLabel ?? '资源'}`, { cause: error })
   }
   return { packagePath: zipPath, stagingRoot }
 }
@@ -92,11 +102,9 @@ export function repackDirectory(input: {
 export function extractZip(archivePath: string, destDir: string, label = '压缩包'): void {
   mkdirSync(destDir, { recursive: true })
   try {
-    execFileSync('unzip', ['-q', archivePath, '-d', destDir])
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(`系统未找到 unzip 命令，无法解析${label}`)
-    }
+    const zip = new AdmZip(archivePath)
+    zip.extractAllTo(destDir, true)
+  } catch {
     throw new Error(`无法解压${label}，请确认文件是有效的 zip`)
   }
 }
@@ -144,15 +152,20 @@ export function safeZipBaseName(sourcePath: string, fallbackTitle?: string, fall
   return safe || fallback
 }
 
-export function assertZipSource(sourcePath: string, label: string): Buffer {
+export function assertZipSource(sourcePath: string, label: string): void {
   if (!existsSync(sourcePath)) {
     throw new Error('资源包文件不存在')
   }
-  const bytes = readFileSync(sourcePath)
-  if (!looksLikeZip(bytes)) {
-    throw new Error(`${label}必须是 zip 格式`)
+  const header = Buffer.alloc(4)
+  const fd = openSync(sourcePath, 'r')
+  try {
+    const bytesRead = readSync(fd, header, 0, 4, 0)
+    if (!looksLikeZip(header.subarray(0, bytesRead))) {
+      throw new Error(`${label}必须是 zip 格式`)
+    }
+  } finally {
+    closeSync(fd)
   }
-  return bytes
 }
 
 export interface CommunityPackageImportRunOptions {

@@ -2,7 +2,7 @@ import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { toErrorMessage } from '@toolman/shared'
 import {
-  hashFileBytes,
+  hashFileStream,
   isIgnoredKnowledgeIngestFile,
   removeDocumentVectors,
 } from '@toolman/knowledge'
@@ -26,7 +26,6 @@ import {
   type IngestFileAtPathOptions,
   type IngestFileAtPathResult,
 } from './knowledge-ingest-shared'
-import { syncDocumentFts } from './knowledge-fts.service'
 import { parseAndEmbedFile } from './knowledge-ingest-file-pipeline'
 
 export async function registerStorageOnlyFileAtPath(
@@ -41,7 +40,7 @@ export async function registerStorageOnlyFileAtPath(
 
   let contentHash: string
   try {
-    contentHash = hashFileBytes(filePath)
+    contentHash = await hashFileStream(filePath)
   } catch (error) {
     const message = toErrorMessage(error, '无法读取文件')
     recordIngestFailure(repo, workspaceId, kbId, filePath, message)
@@ -130,7 +129,7 @@ export async function ingestFileAtPath(
 
   let contentHash: string
   try {
-    contentHash = hashFileBytes(filePath)
+    contentHash = await hashFileStream(filePath)
   } catch (error) {
     const message = toErrorMessage(error, '无法读取文件')
     recordIngestFailure(repo, workspaceId, kbId, filePath, message)
@@ -196,11 +195,6 @@ export async function ingestFileAtPath(
         documentId: docRow.id,
         kbId,
       })),
-    )
-    syncDocumentFts(
-      docRow.id,
-      kbId,
-      result.chunks.map((chunk) => ({ id: chunk.id, text: chunk.text })),
     )
     assertIngestStillActive(repo, docRow.id, kbId)
     updateDocumentStage(repo, {

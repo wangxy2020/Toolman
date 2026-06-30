@@ -1,10 +1,10 @@
-import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { describe, expect, it } from 'vitest'
 
+import { zipDirectory } from './community-package-import.util'
 import { prepareCommunitySkillPackage } from './community-skill-package-import.service'
 
 function createSkillZip(): string {
@@ -21,7 +21,7 @@ description: Demo community skill
     'utf8',
   )
   const zipPath = join(root, 'demo-skill.zip')
-  execFileSync('zip', ['-r', zipPath, 'SKILL.md'], { cwd: root })
+  zipDirectory(root, zipPath)
   return zipPath
 }
 

@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import { hashFileBytes } from '@toolman/knowledge'
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
-import { blobExists, readBlobBytes, writeBlobFromPath } from '../blob.service'
+import { blobExists, copyBlobToPath, writeBlobFromPath } from '../blob.service'
 import { getDatabase } from '../../bootstrap/database'
 import { getWorkspaceKnowledgeDir } from '../knowledge.service'
 import {
@@ -99,7 +99,7 @@ function writeCachedKnowledgeBlobFile(
   })
 
   mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, readBlobBytes(input.contentHash))
+  copyBlobToPath(input.contentHash, filePath)
   return filePath
 }
 

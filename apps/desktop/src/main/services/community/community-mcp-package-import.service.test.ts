@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,13 +5,14 @@ import { tmpdir } from 'node:os'
 
 import { describe, expect, it } from 'vitest'
 
+import { readZipEntryText, zipDirectory } from './community-package-import.util'
 import { prepareCommunityMcpPackage } from './community-mcp-package-import.service'
 
 function createZipWithPackageJson(name: string, packageJson: Record<string, unknown>): string {
   const root = mkdtempSync(join(tmpdir(), 'toolman-mcp-import-test-'))
   writeFileSync(join(root, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8')
   const zipPath = join(root, `${name}.zip`)
-  execFileSync('zip', ['-r', zipPath, 'package.json'], { cwd: root })
+  zipDirectory(root, zipPath)
   return zipPath
 }
 
@@ -46,10 +46,7 @@ describe('prepareCommunityMcpPackage', () => {
       title: 'Files MCP',
     })
 
-    const manifestJson = execFileSync('unzip', ['-p', result.packagePath, 'mcp.manifest.json'], {
-      encoding: 'utf8',
-    })
-    const manifest = JSON.parse(manifestJson)
+    const manifest = JSON.parse(readZipEntryText(result.packagePath, 'mcp.manifest.json'))
     expect(manifest.files).toEqual(expect.arrayContaining(['package.json', 'mcp.manifest.json']))
   })
 
@@ -72,7 +69,7 @@ describe('prepareCommunityMcpPackage', () => {
       .digest('hex')
     writeFileSync(join(bundle, 'SHA256SUMS'), `${manifestHash}  mcp.manifest.json\n`, 'utf8')
     const zipPath = join(root, 'missing-files.zip')
-    execFileSync('zip', ['-r', zipPath, '.'], { cwd: bundle })
+    zipDirectory(bundle, zipPath)
 
     const result = await prepareCommunityMcpPackage({ packagePath: zipPath })
     expect(result.normalized).toBe(true)
@@ -101,7 +98,7 @@ describe('prepareCommunityMcpPackage', () => {
       .digest('hex')
     writeFileSync(join(bundle, 'SHA256SUMS'), `${manifestHash}  mcp.manifest.json\n`, 'utf8')
     const zipPath = join(root, 'ready.zip')
-    execFileSync('zip', ['-r', zipPath, '.'], { cwd: bundle })
+    zipDirectory(bundle, zipPath)
 
     const result = await prepareCommunityMcpPackage({ packagePath: zipPath })
     expect(result.normalized).toBe(false)

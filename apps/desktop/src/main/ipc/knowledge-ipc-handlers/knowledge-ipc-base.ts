@@ -82,7 +82,7 @@ export const knowledgeBaseIpcHandlers: KnowledgeHandlerMap = {
 
   [IpcChannel.KnowledgeFtsRebuild]: async () => {
     try {
-      return ipcOk(rebuildKnowledgeFtsIndex())
+      return ipcOk(await rebuildKnowledgeFtsIndex())
     } catch (error) {
       const message = toErrorMessage(error, 'FTS rebuild failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })

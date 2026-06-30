@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { recoverStaleStreamingMessages } from '../services/agent.service'
 import { syncOllamaProviders, migratePlaintextApiKeys } from '../services/provider.service'
 import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
+import { initDbWorker } from '../services/db-worker.service'
 import { initAuthSessionStore } from '../services/auth-session.service'
 import { syncAuthingUserProfileAfterLogin } from '../services/auth/authing-user-profile.service'
 import { exchangeAuthHubToken } from '../services/auth/auth-hub-token.service'
@@ -39,6 +40,7 @@ export function getDatabase(): ToolmanDatabase {
 
 export function bootstrapDatabase(): void {
   const dbPath = join(app.getPath('userData'), 'toolman.db')
+  initDbWorker(dbPath)
   db = createDatabase(dbPath)
 
   const packageRoot = resolveDbPackageRoot()

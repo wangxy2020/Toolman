@@ -22,7 +22,7 @@ import {
   refreshKbStats,
   updateDocumentStage,
 } from './knowledge-ingest-shared'
-import { syncDocumentFts } from './knowledge-fts.service'
+import { appendDocumentFts, removeDocumentFts } from './knowledge-fts.service'
 
 export async function ingestUrlDocument(options: {
   workspaceId: string
@@ -101,6 +101,8 @@ export async function ingestUrlDocument(options: {
     )
     writeFileSync(snapshotPath, fetched.html, 'utf8')
 
+    removeDocumentFts(docRow.id)
+
     const result: IngestFileResult = await withTimeout(
       ingestUrlContent({
         url: canonicalUrl,
@@ -116,6 +118,13 @@ export async function ingestUrlDocument(options: {
         vectorsDir,
         vectorBackend: embed.vectorBackend,
         onEmbedProgress,
+        onIndexedChunkBatch: async (chunks) => {
+          await appendDocumentFts(
+            docRow.id,
+            kbId,
+            chunks.map((chunk) => ({ id: chunk.id, text: chunk.text })),
+          )
+        },
       }),
       embedTimeoutMs,
       '向量化超时，请检查嵌入模型服务是否可用',
@@ -129,11 +138,6 @@ export async function ingestUrlDocument(options: {
         documentId: docRow.id,
         kbId,
       })),
-    )
-    syncDocumentFts(
-      docRow.id,
-      kbId,
-      result.chunks.map((chunk) => ({ id: chunk.id, text: chunk.text })),
     )
     updateDocumentStage(repo, {
       workspaceId,

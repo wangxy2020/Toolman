@@ -14,6 +14,12 @@ import { openKbVectorStore } from '../vector/create-vector-store.js'
 import type { VectorBackend } from '../vector/types.js'
 import type { VectorRecord } from '../vector/cosine.js'
 
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve)
+  })
+}
+
 export interface IngestContentInput {
   sourceKey: string
   title: string
@@ -29,6 +35,9 @@ export interface IngestContentInput {
   vectorsDir: string
   vectorBackend?: VectorBackend
   onEmbedProgress?: EmbedProgressCallback
+  onIndexedChunkBatch?: (
+    chunks: IngestContentResult['chunks'],
+  ) => void | Promise<void>
 }
 
 export interface IngestContentResult {
@@ -46,6 +55,7 @@ export interface IngestContentResult {
 }
 
 const LARGE_TEXT_CHAR_THRESHOLD = 2_000_000
+const EMBED_UPSERT_BATCH_SIZE = 32
 
 function resolveChunkConfigForText(plainText: string, chunkConfig: ChunkConfig): ChunkConfig {
   let strategy = chunkConfig.strategy
@@ -94,13 +104,12 @@ function normalizeChunksForEmbedding(
   return normalized
 }
 
-async function embedChunksWithRetry(
+async function normalizeChunksWithRetry(
   embedOptions: IngestContentInput['embedOptions'],
   embedModel: string,
   rawChunks: TextChunk[],
   chunkConfig: ChunkConfig,
-  onEmbedProgress?: IngestContentInput['onEmbedProgress'],
-): Promise<{ chunks: TextChunk[]; vectors: number[][] }> {
+): Promise<TextChunk[]> {
   let embedTokenBudget = resolveEmbedTokenBudget(chunkConfig.chunkSize)
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -118,12 +127,8 @@ async function embedChunksWithRetry(
     )
 
     try {
-      const vectors = await embedTexts(
-        embedOptions,
-        chunks.map((chunk) => chunk.text),
-        onEmbedProgress,
-      )
-      return { chunks, vectors }
+      await embedTexts(embedOptions, chunks.slice(0, 1).map((chunk) => chunk.text))
+      return chunks
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (!isEmbedContextLengthError(message) || embedTokenBudget <= 128) {
@@ -136,6 +141,40 @@ async function embedChunksWithRetry(
   throw new Error(
     'Embedding API 400: 文本分段过长，超过嵌入模型上下文限制。请减小知识库「分段大小」后重建索引。',
   )
+}
+
+function toChunkRows(
+  input: IngestContentInput,
+  chunks: TextChunk[],
+): IngestContentResult['chunks'] {
+  return chunks.map((chunk) => ({
+    id: `${input.documentId}:${chunk.index}`,
+    chunkIndex: chunk.index,
+    text: chunk.text,
+    tokenCount: chunk.tokenCount,
+    metadataJson: JSON.stringify({
+      sourceKey: input.sourceKey,
+      kind: input.kind,
+      ...(chunk.metadata ?? {}),
+    }),
+  }))
+}
+
+function toVectorRecords(
+  input: IngestContentInput,
+  chunkRows: IngestContentResult['chunks'],
+  vectors: number[][],
+): VectorRecord[] {
+  return chunkRows.map((row, index) => ({
+    chunkId: row.id,
+    documentId: input.documentId,
+    kbId: input.kbId,
+    vector: vectors[index]!,
+    metadata: {
+      filePath: input.sourceKey,
+      title: input.title,
+    },
+  }))
 }
 
 export async function ingestContent(input: IngestContentInput): Promise<IngestContentResult> {
@@ -160,52 +199,51 @@ export async function ingestContent(input: IngestContentInput): Promise<IngestCo
     throw new Error('内容为空，无法索引')
   }
 
-  const { chunks, vectors } = await embedChunksWithRetry(
+  const normalizedChunks = await normalizeChunksWithRetry(
     input.embedOptions,
     input.embedModel,
     rawChunks,
     chunkConfig,
-    input.onEmbedProgress,
   )
-
-  const chunkRows = chunks.map((chunk) => ({
-    id: `${input.documentId}:${chunk.index}`,
-    chunkIndex: chunk.index,
-    text: chunk.text,
-    tokenCount: chunk.tokenCount,
-    metadataJson: JSON.stringify({
-      sourceKey: input.sourceKey,
-      kind: input.kind,
-      ...(chunk.metadata ?? {}),
-    }),
-  }))
-
-  const vectorRecords: VectorRecord[] = chunkRows.map((row, index) => ({
-    chunkId: row.id,
-    documentId: input.documentId,
-    kbId: input.kbId,
-    vector: vectors[index]!,
-    metadata: {
-      filePath: input.sourceKey,
-      title: input.title,
-    },
-  }))
 
   const store = await openKbVectorStore({
     vectorsDir: input.vectorsDir,
     kbId: input.kbId,
     backend: input.vectorBackend,
   })
-  await store.upsert(vectorRecords, {
-    dimension: vectors[0]?.length ?? 0,
-    model: input.embedModel,
-  })
+
+  const allChunkRows: IngestContentResult['chunks'] = []
+  let completed = 0
+
+  for (let offset = 0; offset < normalizedChunks.length; offset += EMBED_UPSERT_BATCH_SIZE) {
+    const batchChunks = normalizedChunks.slice(offset, offset + EMBED_UPSERT_BATCH_SIZE)
+    const vectors = await embedTexts(
+      input.embedOptions,
+      batchChunks.map((chunk) => chunk.text),
+    )
+    const chunkRows = toChunkRows(input, batchChunks)
+    const vectorRecords = toVectorRecords(input, chunkRows, vectors)
+
+    await store.upsert(vectorRecords, {
+      dimension: vectors[0]?.length ?? 0,
+      model: input.embedModel,
+    })
+
+    if (input.onIndexedChunkBatch) {
+      await input.onIndexedChunkBatch(chunkRows)
+    }
+
+    allChunkRows.push(...chunkRows)
+    completed += batchChunks.length
+    input.onEmbedProgress?.(completed, normalizedChunks.length)
+    await yieldToEventLoop()
+  }
 
   return {
     title: input.title,
     contentHash: input.contentHash,
     mimeType: input.mimeType,
-    chunks: chunkRows,
-    chunkCount: chunkRows.length,
+    chunks: allChunkRows,
+    chunkCount: allChunkRows.length,
   }
 }

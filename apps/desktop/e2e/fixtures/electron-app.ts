@@ -24,6 +24,15 @@ function launchEnv(userDataDir: string): NodeJS.ProcessEnv {
   }
 }
 
+async function dismissBlockingModals(window: Page): Promise<void> {
+  const overlay = window.locator('.tm-modal-overlay--auth-guard')
+  const laterButton = window.getByRole('button', { name: /稍后再说|Later/i })
+  if (await overlay.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await laterButton.click()
+    await overlay.waitFor({ state: 'hidden', timeout: 5000 })
+  }
+}
+
 export const test = base.extend<{ electronApp: ElectronApplication; window: Page }>({
   // Playwright fixture with no injected dependencies.
   // eslint-disable-next-line no-empty-pattern -- intentional empty destructure
@@ -53,6 +62,7 @@ export const test = base.extend<{ electronApp: ElectronApplication; window: Page
   window: async ({ electronApp }, use) => {
     const window = await electronApp.firstWindow()
     await window.waitForLoadState('domcontentloaded')
+    await dismissBlockingModals(window)
     await use(window)
   },
 })

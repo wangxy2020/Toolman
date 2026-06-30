@@ -51,13 +51,21 @@ resolve_arch() {
 find_primary_artifact() {
   local platform="$1"
   local dist_dir="$2"
+  local version="${3:-}"
   local pattern=""
   local match=""
 
   case "$platform" in
     darwin) pattern="*.dmg" ;;
     win32)
-      match="$(find "$dist_dir" -maxdepth 1 -type f -name '*-Portable.exe' | sort | tail -n 1 || true)"
+      if [[ -n "$version" ]]; then
+        match="$(find "$dist_dir" -maxdepth 1 -type f -name "Toolman-${version}*-Portable.exe" | head -n 1 || true)"
+        if [[ -n "$match" ]]; then
+          printf '%s' "$match"
+          return 0
+        fi
+      fi
+      match="$(find "$dist_dir" -maxdepth 1 -type f -name '*-Portable.exe' | head -n 1 || true)"
       if [[ -n "$match" ]]; then
         printf '%s' "$match"
         return 0
@@ -67,7 +75,23 @@ find_primary_artifact() {
     linux) pattern="*.AppImage" ;;
   esac
 
-  match="$(find "$dist_dir" -maxdepth 1 -type f -name "$pattern" | sort | tail -n 1 || true)"
+  if [[ -n "$version" ]]; then
+    match="$(find "$dist_dir" -maxdepth 1 -type f -name "Toolman-${version}*${pattern#\*}" | head -n 1 || true)"
+    if [[ -n "$match" ]]; then
+      printf '%s' "$match"
+      return 0
+    fi
+  fi
+
+  # Fallback: newest artifact by mtime (lexicographic sort breaks rc.10 < rc.7).
+  match="$(
+    find "$dist_dir" -maxdepth 1 -type f -name "$pattern" -print0 2>/dev/null \
+      | xargs -0 stat -f '%m %N' 2>/dev/null \
+      | sort -rn \
+      | head -n 1 \
+      | cut -d' ' -f2- \
+      || true
+  )"
   if [[ -z "$match" ]]; then
     echo "no release artifact matching $pattern under $dist_dir" >&2
     exit 1
@@ -139,7 +163,7 @@ step "Package desktop app"
   fi
 )
 
-ARTIFACT="$(find_primary_artifact "$PLATFORM" "$DESKTOP_DIR/dist")"
+ARTIFACT="$(find_primary_artifact "$PLATFORM" "$DESKTOP_DIR/dist" "$VERSION")"
 MANIFEST_OUT="$DESKTOP_DIR/dist/$CHANNEL-manifest.json"
 
 step "Generate manifest.json"

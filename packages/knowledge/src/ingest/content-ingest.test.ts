@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { ingestContent } from './content-ingest.js'
 
 vi.mock('../embedding/ollama-embedder.js', () => ({
-  embedTexts: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
+  embedTexts: vi.fn().mockImplementation(async (_options: unknown, texts: string[]) =>
+    texts.map(() => [0.1, 0.2, 0.3]),
+  ),
 }))
 
 vi.mock('../vector/create-vector-store.js', () => ({

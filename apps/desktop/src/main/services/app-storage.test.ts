@@ -1,7 +1,15 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { restoreAppData } from './app-storage/backup-restore'
+import {
+  assertValidRestoreBackupPath,
+  isBackupBundle,
+  readBackupManifest,
+} from './app-storage/stats'
+import { validateBackupManifest } from './app-storage/types'
 
 const USER_DATA = join(tmpdir(), 'toolman-app-storage-test')
 
@@ -48,12 +56,9 @@ describe('app-storage backup helpers', () => {
     bundleRoot = join(tmpdir(), `toolman-backup-${Date.now()}`)
     rmSync(bundleRoot, { recursive: true, force: true })
     mkdirSync(bundleRoot, { recursive: true })
-    vi.resetModules()
   })
 
-  it('detects backup bundles and single db files', async () => {
-    const { isBackupBundle } = await import('./app-storage.service')
-
+  it('detects backup bundles and single db files', () => {
     expect(isBackupBundle('/missing/path')).toBe(false)
 
     const dbOnly = join(bundleRoot, 'toolman.db')
@@ -70,9 +75,7 @@ describe('app-storage backup helpers', () => {
     expect(isBackupBundle(manifestDir)).toBe(true)
   })
 
-  it('validates backup manifest shape', async () => {
-    const { validateBackupManifest, readBackupManifest } = await import('./app-storage.service')
-
+  it('validates backup manifest shape', () => {
     expect(
       validateBackupManifest({
         version: 1,
@@ -105,8 +108,6 @@ describe('app-storage backup helpers', () => {
   })
 
   it('rejects invalid restore paths', async () => {
-    const { assertValidRestoreBackupPath, restoreAppData } = await import('./app-storage.service')
-
     expect(() => assertValidRestoreBackupPath('/missing/backup')).toThrow('备份路径不存在')
 
     const invalidDir = join(bundleRoot, 'invalid-bundle')
@@ -158,7 +159,6 @@ describe('app-storage backup helpers', () => {
       'utf8',
     )
 
-    const { restoreAppData } = await import('./app-storage.service')
     const result = await restoreAppData({ backupPath: validBundle })
 
     expect(result).toEqual({
@@ -167,7 +167,6 @@ describe('app-storage backup helpers', () => {
       notesDataJson: undefined,
       requiresRestart: true,
     })
-    const { readFileSync } = await import('node:fs')
     expect(readFileSync(join(USER_DATA, 'toolman.db'), 'utf8')).toBe('restored-db')
   })
 })

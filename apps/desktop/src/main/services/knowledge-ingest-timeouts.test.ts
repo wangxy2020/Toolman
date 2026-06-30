@@ -11,5 +11,6 @@ describe('knowledge ingest timeouts', () => {
     expect(resolveEmbedTimeoutMs(50_000)).toBe(10 * 60 * 1000 + 30 * 1000)
     expect(resolveEmbedTimeoutMs(5_000_000)).toBeGreaterThan(10 * 60 * 1000)
     expect(resolveEmbedTimeoutMs(500_000_000)).toBeLessThanOrEqual(2 * 60 * 60 * 1000)
+    expect(resolveEmbedTimeoutMs(50_000, 128)).toBeGreaterThan(resolveEmbedTimeoutMs(50_000))
   })
 })

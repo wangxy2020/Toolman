@@ -1,9 +1,19 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { basename, join } from 'node:path'
 import { app } from 'electron'
 import { eq } from 'drizzle-orm'
 import { blobs } from '@toolman/db'
+import { copyFileChunkedSync, FILE_IO_CHUNK_SIZE, hashFileBytes } from '@toolman/knowledge'
 import { getDatabase } from '../bootstrap/database'
 
 export function getBlobsDir(): string {
@@ -59,27 +69,27 @@ export function getBlobStoragePath(hash: string): string {
   return blobFilePath(hash)
 }
 
-export function ensureBlobRecord(hash: string, mimeType: string, sizeBytes: number): BlobRecord {
-  const targetPath = blobFilePath(hash)
-  if (!existsSync(targetPath)) {
-    throw new Error(`Blob 文件不存在: ${hash}`)
-  }
-
+function upsertBlobMetadata(input: {
+  hash: string
+  mimeType: string
+  sizeBytes: number
+  originalName?: string | null
+}): BlobRecord {
   const db = getDatabase()
-  const existing = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
+  const existing = db.select().from(blobs).where(eq(blobs.hash, input.hash)).get()
   if (!existing) {
     db.insert(blobs)
       .values({
-        hash,
-        mimeType,
-        sizeBytes,
-        originalName: null,
+        hash: input.hash,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        originalName: input.originalName ?? null,
         createdAt: new Date(),
       })
       .run()
   }
 
-  const row = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
+  const row = db.select().from(blobs).where(eq(blobs.hash, input.hash)).get()
   if (!row) {
     throw new Error('写入 blob 元数据失败')
   }
@@ -91,6 +101,15 @@ export function ensureBlobRecord(hash: string, mimeType: string, sizeBytes: numb
     originalName: row.originalName,
     createdAt: row.createdAt.getTime(),
   }
+}
+
+export function ensureBlobRecord(hash: string, mimeType: string, sizeBytes: number): BlobRecord {
+  const targetPath = blobFilePath(hash)
+  if (!existsSync(targetPath)) {
+    throw new Error(`Blob 文件不存在: ${hash}`)
+  }
+
+  return upsertBlobMetadata({ hash, mimeType, sizeBytes, originalName: null })
 }
 
 export function writeBlobFromBuffer(data: Buffer, mimeType: string): BlobRecord {
@@ -101,32 +120,12 @@ export function writeBlobFromBuffer(data: Buffer, mimeType: string): BlobRecord 
     writeFileSync(targetPath, data)
   }
 
-  const db = getDatabase()
-  const existing = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
-  if (!existing) {
-    db.insert(blobs)
-      .values({
-        hash,
-        mimeType,
-        sizeBytes: data.byteLength,
-        originalName: null,
-        createdAt: new Date(),
-      })
-      .run()
-  }
-
-  const row = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
-  if (!row) {
-    throw new Error('写入 blob 元数据失败')
-  }
-
-  return {
-    hash: row.hash,
-    mimeType: row.mimeType,
-    sizeBytes: row.sizeBytes,
-    originalName: row.originalName,
-    createdAt: row.createdAt.getTime(),
-  }
+  return upsertBlobMetadata({
+    hash,
+    mimeType,
+    sizeBytes: data.byteLength,
+    originalName: null,
+  })
 }
 
 export function writeBlobFromPath(sourcePath: string): BlobRecord {
@@ -134,43 +133,22 @@ export function writeBlobFromPath(sourcePath: string): BlobRecord {
     throw new Error(`文件不存在: ${sourcePath}`)
   }
 
-  const data = readFileSync(sourcePath)
-  const hash = sha256Hex(data)
+  const hash = hashFileBytes(sourcePath)
   const mimeType = guessMimeType(sourcePath)
-  const sizeBytes = data.byteLength
+  const sizeBytes = statSync(sourcePath).size
   const originalName = basename(sourcePath)
   const targetPath = blobFilePath(hash)
 
   if (!existsSync(targetPath)) {
-    writeFileSync(targetPath, data)
+    copyFileChunkedSync(sourcePath, targetPath)
   }
 
-  const db = getDatabase()
-  const existing = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
-  if (!existing) {
-    db.insert(blobs)
-      .values({
-        hash,
-        mimeType,
-        sizeBytes,
-        originalName,
-        createdAt: new Date(),
-      })
-      .run()
-  }
-
-  const row = db.select().from(blobs).where(eq(blobs.hash, hash)).get()
-  if (!row) {
-    throw new Error('写入 blob 元数据失败')
-  }
-
-  return {
-    hash: row.hash,
-    mimeType: row.mimeType,
-    sizeBytes: row.sizeBytes,
-    originalName: row.originalName,
-    createdAt: row.createdAt.getTime(),
-  }
+  return upsertBlobMetadata({
+    hash,
+    mimeType,
+    sizeBytes,
+    originalName,
+  })
 }
 
 export function getBlobMeta(hash: string): BlobRecord | null {
@@ -191,12 +169,40 @@ export function blobExists(hash: string): boolean {
   return existsSync(blobFilePath(hash))
 }
 
-export function readBlobBytes(hash: string): Buffer {
+export function readBlobBytes(hash: string, maxBytes = 16 * 1024 * 1024): Buffer {
   const path = blobFilePath(hash)
   if (!existsSync(path)) {
     throw new Error(`Blob 不存在: ${hash}`)
   }
-  return readFileSync(path)
+
+  const sizeBytes = statSync(path).size
+  if (sizeBytes > maxBytes) {
+    throw new Error(`Blob 过大 (${sizeBytes} bytes)，请使用流式读取`)
+  }
+  const fd = openSync(path, 'r')
+  const buffer = Buffer.alloc(sizeBytes)
+  try {
+    const bytesRead = readSync(fd, buffer, 0, sizeBytes, 0)
+    return buffer.subarray(0, bytesRead)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+export function createBlobReadStream(hash: string) {
+  const path = blobFilePath(hash)
+  if (!existsSync(path)) {
+    throw new Error(`Blob 不存在: ${hash}`)
+  }
+  return createReadStream(path, { highWaterMark: FILE_IO_CHUNK_SIZE })
+}
+
+export function copyBlobToPath(hash: string, targetPath: string): void {
+  const sourcePath = blobFilePath(hash)
+  if (!existsSync(sourcePath)) {
+    throw new Error(`Blob 不存在: ${hash}`)
+  }
+  copyFileChunkedSync(sourcePath, targetPath)
 }
 
 export function getBlobDataUrl(hash: string): string {

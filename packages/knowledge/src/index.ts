@@ -11,7 +11,8 @@ export {
   isSupportedKnowledgeFile,
   isSupportedKnowledgeFile as isSupportedTextFile,
 } from './parsers/file-type.js'
-export { hashFileBytes, hashFileBytes as hashFile } from './utils/file-hash.js'
+export { hashFileBytes, hashFileBytes as hashFile, hashFileStream } from './utils/file-hash.js'
+export { copyFileChunkedSync, FILE_IO_CHUNK_SIZE } from './utils/file-io.js'
 export { hashText } from './utils/content-hash.js'
 export {
   ingestFile,
