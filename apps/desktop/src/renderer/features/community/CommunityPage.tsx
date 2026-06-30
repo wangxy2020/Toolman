@@ -174,7 +174,7 @@ export function CommunityPage({
         </header>
 
         <CommunityPageStatusArea>
-          <div className="tm-module-content">
+          <div className="tm-module-content tm-community-module-content">
             <div hidden={effectiveAction !== 'recommend'} aria-hidden={effectiveAction !== 'recommend'}>
               <RecommendPanel />
             </div>

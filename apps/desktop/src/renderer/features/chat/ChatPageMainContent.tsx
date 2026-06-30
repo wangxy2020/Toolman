@@ -4,6 +4,7 @@ import { ChatPageKnowledgeView } from './ChatPageKnowledgeView'
 import { ChatPageNotesView } from './ChatPageNotesView'
 import { ChatPageGroupView } from './ChatPageGroupView'
 import { ChatPageCommunityView } from './ChatPageCommunityView'
+import { ChatPageProjectsView } from './ChatPageProjectsView'
 import { ChatPageModuleView } from './ChatPageModuleView'
 import { ChatPageSettingsView } from './ChatPageSettingsView'
 
@@ -63,6 +64,7 @@ type ChatPageMainContentProps = Pick<
   | 'setShowMembershipUpgrade'
   | 'communityAction'
   | 'communitySidebarSection'
+  | 'projectSidebarTab'
   | 'settingsSection'
   | 'updateMessageSettings'
   | 'resetSettings'
@@ -91,6 +93,10 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
 
   if (activeView === 'community') {
     return <ChatPageCommunityView {...props} />
+  }
+
+  if (activeView === 'projects') {
+    return <ChatPageProjectsView activeTab={props.projectSidebarTab} />
   }
 
   if (isModuleView(activeView)) {

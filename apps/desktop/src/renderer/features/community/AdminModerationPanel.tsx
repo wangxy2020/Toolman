@@ -43,8 +43,10 @@ export function AdminModerationPanel() {
           title={t('communityPage.panels.management.title')}
           subtitle={t('communityPage.panels.management.subtitle')}
         />
-        <div className="tm-user-center-feed">
-          <div className="tm-user-center-empty">{t('communityPage.admin.needPermission')}</div>
+        <div className="tm-kb-file-panel tm-community-user-center-body">
+          <div className="tm-user-center-feed">
+            <div className="tm-user-center-empty">{t('communityPage.admin.needPermission')}</div>
+          </div>
         </div>
       </div>
     )
@@ -52,27 +54,27 @@ export function AdminModerationPanel() {
 
   return (
     <div className="tm-community-market tm-community-user-center">
-      <div className="tm-user-center-overview">
-        <CommunityPanelHeader
-          title={t('communityPage.panels.management.title')}
-          subtitle={isFounder ? t('communityPage.admin.founderConsole') : t('communityPage.admin.adminConsole')}
-          titleExtra={
-            profileRole ? (
-              <span className="tm-user-center-role-badge">
-                {getCommunityUserRoleLabel(profileRole, t)}
-              </span>
-            ) : null
-          }
-          actions={
-            <CommunityPanelRefreshButton
-              title={t('communityPage.admin.scanNow')}
-              loading={moderation.loading}
-              disabled={moderation.loading || moderation.acting}
-              onClick={handleRefresh}
-            />
-          }
-        />
+      <CommunityPanelHeader
+        title={t('communityPage.panels.management.title')}
+        subtitle={isFounder ? t('communityPage.admin.founderConsole') : t('communityPage.admin.adminConsole')}
+        titleExtra={
+          profileRole ? (
+            <span className="tm-user-center-role-badge">
+              {getCommunityUserRoleLabel(profileRole, t)}
+            </span>
+          ) : null
+        }
+        actions={
+          <CommunityPanelRefreshButton
+            title={t('communityPage.admin.scanNow')}
+            loading={moderation.loading}
+            disabled={moderation.loading || moderation.acting}
+            onClick={handleRefresh}
+          />
+        }
+      />
 
+      <div className="tm-kb-file-panel tm-community-user-center-body">
         <div
           className="tm-user-center-stat-grid"
           style={{ ['--tm-stat-cols' as string]: categoryStatCards.length }}
@@ -101,19 +103,19 @@ export function AdminModerationPanel() {
             )
           })}
         </div>
-      </div>
 
-      <div className="tm-user-center-feed">
-        <div className="tm-user-center-feed-meta">
-          <span>{t('communityPage.admin.listCount', { count: activeListCount })}</span>
-          <span>
-            {t('communityPage.admin.lastScan', { time: scannedAtLabel })}
-            {moderation.loading ? t('communityPage.admin.scanning') : ''}
-          </span>
-        </div>
+        <div className="tm-user-center-feed">
+          <div className="tm-user-center-feed-meta">
+            <span>{t('communityPage.admin.listCount', { count: activeListCount })}</span>
+            <span>
+              {t('communityPage.admin.lastScan', { time: scannedAtLabel })}
+              {moderation.loading ? t('communityPage.admin.scanning') : ''}
+            </span>
+          </div>
 
-        <div className="tm-user-center-feed-body">
-          <AdminModerationFeedBody panel={panel} setPending={setPending} />
+          <div className="tm-user-center-feed-body">
+            <AdminModerationFeedBody panel={panel} setPending={setPending} />
+          </div>
         </div>
       </div>
 

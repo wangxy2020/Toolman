@@ -16278,11 +16278,24 @@ html.theme-dark .tm-notes-toolbar {
 }
 
 /* Community marketplace */
+.tm-community-module-content {
+  overflow: hidden;
+}
+
+.tm-community-module-content > div:not([hidden]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .tm-community-market {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   padding: 20px 24px 24px;
   gap: 12px;
 }
@@ -17528,6 +17541,8 @@ html.theme-dark .tm-community-publish-interval-input {
   flex: 1;
   min-height: 0;
   gap: 12px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .tm-community-list-panel-body .tm-kb-file-list {
@@ -17900,9 +17915,24 @@ html.theme-dark .tm-community-publish-interval-input {
 
 /* Community user center */
 .tm-community-user-center {
-  gap: 24px;
+  gap: 12px;
   min-height: 0;
+  overflow: hidden;
   user-select: none;
+}
+
+.tm-community-user-center-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.tm-community-user-center-body .tm-user-center-feed {
+  flex: 1;
+  min-height: 0;
 }
 
 .tm-user-center-overview {
@@ -17991,6 +18021,7 @@ html.theme-dark .tm-community-publish-interval-input {
 
 .tm-user-center-bio {
   margin: 0;
+  flex-shrink: 0;
   font-size: 13px;
   line-height: 1.6;
   color: var(--tm-text-secondary);
@@ -18077,8 +18108,7 @@ html.theme-dark .tm-community-publish-interval-input {
   gap: 12px;
   min-height: 0;
   flex: 1;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
 }
 
 .tm-user-center-feed-meta {
@@ -18094,7 +18124,9 @@ html.theme-dark .tm-community-publish-interval-input {
 
 .tm-user-center-feed-body {
   min-height: 0;
-  flex: 1 0 auto;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .tm-user-center-feed-list,
@@ -18659,6 +18691,10 @@ html.theme-light .tm-community-card-action--active.tm-community-card-action--dis
 
 .tm-community-recommend-content {
   gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .tm-community-user-list {
@@ -18696,9 +18732,6 @@ html.theme-light .tm-community-card-action--active.tm-community-card-action--dis
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
   align-content: start;
 }
 

@@ -4,6 +4,7 @@ import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
 import { NotesSidebar } from '../notes/NotesSidebar'
 import { CommunitySidebar } from '../community/CommunitySidebar'
 import { GroupSidebar } from '../group/GroupSidebar'
+import { ProjectSidebar } from '../project-manager/ProjectSidebar'
 import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 import {
   COMMUNITY_SECTION_TO_ACTION,
@@ -43,6 +44,8 @@ type ChatPageSidebarsProps = Pick<
   | 'setShowGroupJoin'
   | 'setPendingJoinCancelId'
   | 'setShowGroupJoinPending'
+  | 'projectSidebarTab'
+  | 'setProjectSidebarTab'
 >
 
 export function ChatPageSidebars({
@@ -67,6 +70,8 @@ export function ChatPageSidebars({
   setShowGroupJoin,
   setPendingJoinCancelId,
   setShowGroupJoinPending,
+  projectSidebarTab,
+  setProjectSidebarTab,
 }: ChatPageSidebarsProps) {
   if (!showContentSidebar) return null
 
@@ -200,6 +205,15 @@ export function ChatPageSidebars({
 
   if (activeView === 'workflow') {
     return <ModuleSidebar view={activeView} />
+  }
+
+  if (activeView === 'projects') {
+    return (
+      <ProjectSidebar
+        activeTab={projectSidebarTab}
+        onSelectTab={setProjectSidebarTab}
+      />
+    )
   }
 
   if (activeView === 'group') {

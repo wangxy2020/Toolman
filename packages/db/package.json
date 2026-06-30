@@ -24,8 +24,8 @@
     "test:auth-schema": "bash scripts/run-with-electron-node.sh scripts/auth-schema-smoke.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
-    "drizzle-orm": "^0.44.2"
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

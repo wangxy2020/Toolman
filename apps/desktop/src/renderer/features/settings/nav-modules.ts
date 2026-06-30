@@ -112,7 +112,8 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     id: 'projects',
     label: '项目管理',
     icon: IconProjects,
-    available: false,
+    view: 'projects',
+    available: true,
     closable: true,
   },
 }

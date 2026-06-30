@@ -1,0 +1,9 @@
+21:import { projectManagementRevisionService } from '@main/services/projectManagement/ProjectManagementRevisionService'
+28:import { normalizeEpcSlashCommands } from '@shared/epcCommercialSlash'
+34:} from '@shared/epcCommercialTypes'
+38:  PM_REVISION_AGENT_INSTRUCTIONS
+39:} from '@shared/projectManagementRevision'
+276:      ? `\n\n${PM_REVISION_AGENT_INSTRUCTIONS}`
+402:            const snapshot = projectManagementRevisionService.snapshotPmDataFile(resolved)
+438:        await projectManagementRevisionService.recordPmDataFileWriteDiff({
+446:        projectManagementRevisionService.cleanupRevisionSnapshot(snapshot)

@@ -55,6 +55,14 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
     contentEmptyHint:
       '浏览与安装 MCP、技能、工作流与知识资源，参与社区任务、资讯与留言互动。',
   },
+  projects: {
+    title: '项目管理',
+    addLabel: '新建项目',
+    headerSegments: ['全部项目'],
+    sidebarEmptyHint: '在左侧选择模块查看 MOCK 看板',
+    contentEmptyTitle: '项目管理',
+    contentEmptyHint: '成本与计划管理看板已接入 MOCK 数据；EPC 工作流将在后续阶段启用。',
+  },
 }
 
 export function getModulePageConfig(view: ModuleView, t?: TranslateFn): ModulePageConfig {

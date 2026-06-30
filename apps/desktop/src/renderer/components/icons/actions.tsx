@@ -162,3 +162,44 @@ export function IconHelp({ size = 14, className }: IconProps) {
     </svg>
   )
 }
+
+export function IconChartBar({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <line x1="4" y1="20" x2="4" y2="12" />
+      <line x1="10" y1="20" x2="10" y2="8" />
+      <line x1="16" y1="20" x2="16" y2="4" />
+      <line x1="22" y1="20" x2="22" y2="14" />
+    </svg>
+  )
+}
+
+export function IconDatabase({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+      <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
+    </svg>
+  )
+}

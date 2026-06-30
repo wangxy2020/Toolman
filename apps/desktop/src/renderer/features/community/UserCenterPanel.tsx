@@ -14,30 +14,30 @@ export function UserCenterPanel() {
 
   return (
     <div className="tm-community-market tm-community-user-center">
-      <div className="tm-user-center-overview">
-        <CommunityPanelHeader
-          title={t('communityPage.panels.mine.title')}
-          subtitle={
-            profile
-              ? translateCommunityDisplayName(profile.displayName, t)
-              : t('communityPage.panels.mine.subtitle')
-          }
-          titleExtra={
-            profile ? (
-              <span className="tm-user-center-role-badge">
-                {getCommunityUserRoleLabel(profile.role, t)}
-              </span>
-            ) : null
-          }
-          actions={
-            <CommunityPanelRefreshButton
-              loading={center.loading}
-              disabled={center.loading}
-              onClick={() => void center.load()}
-            />
-          }
-        />
+      <CommunityPanelHeader
+        title={t('communityPage.panels.mine.title')}
+        subtitle={
+          profile
+            ? translateCommunityDisplayName(profile.displayName, t)
+            : t('communityPage.panels.mine.subtitle')
+        }
+        titleExtra={
+          profile ? (
+            <span className="tm-user-center-role-badge">
+              {getCommunityUserRoleLabel(profile.role, t)}
+            </span>
+          ) : null
+        }
+        actions={
+          <CommunityPanelRefreshButton
+            loading={center.loading}
+            disabled={center.loading}
+            onClick={() => void center.load()}
+          />
+        }
+      />
 
+      <div className="tm-kb-file-panel tm-community-user-center-body">
         <div
           className="tm-user-center-stat-grid"
           style={{ ['--tm-stat-cols' as string]: USER_CENTER_SECTIONS.length }}
@@ -67,23 +67,23 @@ export function UserCenterPanel() {
             )
           })}
         </div>
-      </div>
 
-      {profile?.bio ? <p className="tm-user-center-bio">{profile.bio}</p> : null}
+        {profile?.bio ? <p className="tm-user-center-bio">{profile.bio}</p> : null}
 
-      <div className="tm-user-center-feed">
-        <div className="tm-user-center-feed-meta">
-          {profile ? (
-            <>
-              <span>{t('communityPage.mine.listCount', { count: activeCount })}</span>
-              <span>{t('communityPage.mine.sortByLatest')}</span>
-            </>
-          ) : (
-            <span>{t('communityPage.mine.loginToView')}</span>
-          )}
-        </div>
-        <div className="tm-user-center-feed-body">
-          <UserCenterSectionContent panel={panel} />
+        <div className="tm-user-center-feed">
+          <div className="tm-user-center-feed-meta">
+            {profile ? (
+              <>
+                <span>{t('communityPage.mine.listCount', { count: activeCount })}</span>
+                <span>{t('communityPage.mine.sortByLatest')}</span>
+              </>
+            ) : (
+              <span>{t('communityPage.mine.loginToView')}</span>
+            )}
+          </div>
+          <div className="tm-user-center-feed-body">
+            <UserCenterSectionContent panel={panel} />
+          </div>
         </div>
       </div>
 

@@ -1,0 +1,4 @@
+84:      preloadHeavyRoute('/project-manager')
+89:        preloadHeavyRoute('/project-manager')
+170:    project_manager: <Briefcase size={18} className="icon" />,
+185:    project_manager: '/project-manager',

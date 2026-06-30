@@ -10,8 +10,10 @@ import {
 import { isCommunityModerator } from '../community/community-user-utils'
 import { isCommunitySessionActive } from '../user/community-session'
 import type { KnowledgeSidebarSection } from '../knowledge/knowledge-sidebar-types'
+import type { ProjectSidebarMenuTab } from '../project-manager/projectSidebarMenuConfig'
 import type { AppSettings } from '../settings/app-settings'
 import { loadDefaultWorkspace } from './chat-page-handlers'
+import { appViewFromLocationHash, syncLocationHashForAppView } from '../../navigation/app-view-hash'
 
 type NotesApi = {
   ensureDefaultSelection: () => void
@@ -38,6 +40,8 @@ export function useChatPageNavigation(
   const [communityAction, setCommunityAction] = useState(
     COMMUNITY_SECTION_TO_ACTION[DEFAULT_COMMUNITY_SIDEBAR_SECTION],
   )
+  const [projectSidebarTab, setProjectSidebarTab] =
+    useState<ProjectSidebarMenuTab>('cost_management')
   const prevActiveViewRef = useRef(activeView)
 
   useEffect(() => {
@@ -49,6 +53,20 @@ export function useChatPageNavigation(
     } else {
       document.documentElement.classList.add('platform-linux')
     }
+  }, [])
+
+  useEffect(() => {
+    const viewFromHash = appViewFromLocationHash(window.location.hash)
+    if (viewFromHash) {
+      setActiveView(viewFromHash)
+    }
+
+    const onHashChange = () => {
+      const view = appViewFromLocationHash(window.location.hash)
+      if (view) setActiveView(view)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
   useEffect(() => {
@@ -87,6 +105,7 @@ export function useChatPageNavigation(
     if (view === 'agent') setSettingsSection(undefined)
     if (view !== 'settings') setSettingsSection(undefined)
     setActiveView(view)
+    syncLocationHashForAppView(view)
   }, [])
 
   const handleToggleSidebar = useCallback(() => {
@@ -113,6 +132,8 @@ export function useChatPageNavigation(
     setCommunitySidebarSection,
     communityAction,
     setCommunityAction,
+    projectSidebarTab,
+    setProjectSidebarTab,
     showContentSidebar,
     isTopNav,
     chromeSearchTitle,

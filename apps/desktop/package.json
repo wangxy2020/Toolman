@@ -36,9 +36,10 @@
     "@toolman/model-gateway": "workspace:*",
     "@toolman/shared": "workspace:*",
     "adm-zip": "^0.5.16",
+    "antd": "^6.5.0",
     "apache-arrow": "18.1.0",
     "authing-js-sdk": "^4.23.55",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
     "electron-updater": "^6.6.2",
     "firebase": "^11.10.0",
@@ -46,6 +47,8 @@
     "jose": "^6.2.3",
     "katex": "^0.17.0",
     "loro-crdt": "^1.13.4",
+    "lucide-react": "^1.22.0",
+    "motion": "^12.42.1",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -55,6 +58,7 @@
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "styled-components": "^6.4.3",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
@@ -64,13 +68,14 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/qrcode": "^1.5.5",
     "@types/react-dom": "^19.1.6",
+    "@types/styled-components": "^5.1.36",
     "@vitejs/plugin-react": "^4.5.2",
-    "electron": "^36.5.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "electron": "^39.8.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^3.2.4",
-    "@vitest/coverage-v8": "^3.2.4"
+    "vitest": "^3.2.4"
   }
 }

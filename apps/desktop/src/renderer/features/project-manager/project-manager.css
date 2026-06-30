@@ -1,0 +1,17 @@
+/* PM dashboards (styled-components) read Cherry-style tokens; map Toolman theme here. */
+.tm-project-manager-page {
+  --color-background: var(--tm-bg);
+  --color-background-soft: var(--tm-sidebar-bg);
+  --color-background-mute: var(--tm-hover);
+  --color-border: var(--tm-border);
+  --color-text: var(--tm-text);
+  --color-text-secondary: var(--tm-text-secondary);
+  --color-text-tertiary: var(--tm-text-muted);
+  --color-primary: var(--tm-accent);
+}
+
+.tm-sidebar-add.tm-sidebar-add--active {
+  border-color: var(--tm-accent);
+  color: var(--tm-accent);
+  background: var(--tm-accent-light);
+}

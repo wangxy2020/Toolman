@@ -71,6 +71,8 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               setShowGroupJoin={page.setShowGroupJoin}
               setPendingJoinCancelId={page.setPendingJoinCancelId}
               setShowGroupJoinPending={page.setShowGroupJoinPending}
+              projectSidebarTab={page.projectSidebarTab}
+              setProjectSidebarTab={page.setProjectSidebarTab}
             />
             <ChatPageMainContent
               activeView={page.activeView}
@@ -127,6 +129,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               setShowMembershipUpgrade={page.setShowMembershipUpgrade}
               communityAction={page.communityAction}
               communitySidebarSection={page.communitySidebarSection}
+              projectSidebarTab={page.projectSidebarTab}
               settingsSection={page.settingsSection}
               updateMessageSettings={page.updateMessageSettings}
               resetSettings={page.resetSettings}

@@ -44,5 +44,13 @@ export const modulesEn = {
       contentEmptyHint:
         'Browse and install MCP, skills, workflows, and knowledge resources; join tasks, news, and discussions.',
     },
+    projects: {
+      title: 'Projects',
+      addLabel: 'New project',
+      headerAll: 'All projects',
+      sidebarEmptyHint: 'Pick a module on the left to view MOCK dashboards.',
+      contentEmptyTitle: 'Project management',
+      contentEmptyHint: 'Cost and schedule dashboards use MOCK data; EPC workflows arrive in a later phase.',
+    },
   },
 } as const
