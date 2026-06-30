@@ -12,6 +12,9 @@ import {
 
 import { findSharedResourceForProjection, resolveSharedResourceId } from './p2p-shared-resource-id'
 import { resolveLocalSharedByMemberId } from './p2p-shared-by-member.service'
+import {
+  resolveProjectedGroupNoteNotebookId,
+} from './note-notebook-placement'
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
@@ -32,7 +35,7 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
 
   const noteId = readPayloadString(event.payload, 'note_id') ?? event.resourceId
   const title = readPayloadString(event.payload, 'title') ?? '共享笔记'
-  const notebookId = readPayloadString(event.payload, 'notebook_id') ?? 'notebook-default'
+  const ownerNotebookId = readPayloadString(event.payload, 'notebook_id') ?? 'notebook-default'
   const notebookName = readPayloadString(event.payload, 'notebook_name') ?? '笔记本'
   const permission =
     readPayloadString(event.payload, 'permission') === 'write' ? 'write' : 'read'
@@ -45,11 +48,16 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
     'Note',
   )
   const resourceId = existing?.id ?? resolveSharedResourceId(sharedRepo, noteId, event.workspaceId)
-  const metadataJson = buildP2pNoteShareMetadata({ notebookId, notebookName, title })
+  const metadataJson = buildP2pNoteShareMetadata({ notebookId: ownerNotebookId, notebookName, title })
   const sharedBy = resolveLocalSharedByMemberId(
     event.workspaceId,
     event.operatorId,
     event.sourceDeviceId,
+  )
+  const notebookId = resolveProjectedGroupNoteNotebookId(
+    event.workspaceId,
+    sharedBy,
+    ownerNotebookId,
   )
   if (!existing) {
     sharedRepo.create({
@@ -75,7 +83,15 @@ export function projectNoteSharedEvent(event: WorkspaceEvent): void {
     })
   }
 
-  if (getNoteById(noteId)) {
+  const existingNote = getNoteById(noteId)
+  if (existingNote) {
+    if (existingNote.notebookId !== notebookId) {
+      upsertNoteItem({
+        ...existingNote,
+        notebookId,
+        updatedAt: Math.max(existingNote.updatedAt ?? 0, event.timestamp),
+      })
+    }
     return
   }
 
@@ -122,9 +138,14 @@ export function applyNoteUpdatedEvent(event: WorkspaceEvent): void {
 
   const sharedRepo = getSharedResourceRepo()
   if (permission === 'read' || permission === 'write') {
-    const resource = sharedRepo.findById(noteId)
+    const resource = findSharedResourceForProjection(
+      sharedRepo,
+      event.workspaceId,
+      noteId,
+      'Note',
+    )
     if (resource) {
-      sharedRepo.update({ id: noteId, permission })
+      sharedRepo.update({ id: resource.id, permission })
     }
     if (!oplogBase64 && contentFromPayload == null) {
       return
@@ -135,16 +156,29 @@ export function applyNoteUpdatedEvent(event: WorkspaceEvent): void {
     return
   }
 
-  const shared = sharedRepo.findById(noteId)
-  let notebookId = 'notebook-default'
-  if (shared) {
-    try {
-      const metadata = JSON.parse(shared.metadataJson) as { notebookId?: string }
-      if (metadata.notebookId) notebookId = metadata.notebookId
-    } catch {
-      // ignore
-    }
-  }
+  const shared = findSharedResourceForProjection(
+    sharedRepo,
+    event.workspaceId,
+    noteId,
+    'Note',
+  )
+  const ownerNotebookId = shared
+    ? (() => {
+        try {
+          const metadata = JSON.parse(shared.metadataJson) as { notebookId?: string }
+          return metadata.notebookId ?? 'notebook-default'
+        } catch {
+          return 'notebook-default'
+        }
+      })()
+    : 'notebook-default'
+  const notebookId = shared
+    ? resolveProjectedGroupNoteNotebookId(
+        event.workspaceId,
+        shared.sharedBy,
+        ownerNotebookId,
+      )
+    : 'notebook-default'
 
   const doc = oplogBase64
     ? applyLoroOplog(event.workspaceId, noteId, oplogBase64)

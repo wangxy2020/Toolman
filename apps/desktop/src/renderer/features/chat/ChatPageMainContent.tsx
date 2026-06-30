@@ -42,7 +42,6 @@ type ChatPageMainContentProps = Pick<
   | 'workspaceId'
   | 'knowledgeSection'
   | 'knowledge'
-  | 'p2pSharedKnowledge'
   | 'knowledgeFolder'
   | 'networkKnowledgeFolder'
   | 'localFilesFolder'

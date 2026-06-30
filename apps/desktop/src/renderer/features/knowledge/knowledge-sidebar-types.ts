@@ -1,8 +1,10 @@
-import type { KnowledgeBaseKind } from '@toolman/shared'
+import {
+  isP2pSharedKnowledgeMirrorDescription,
+  type KnowledgeBase,
+  type KnowledgeBaseKind,
+} from '@toolman/shared'
 
 export type KnowledgeSidebarSection = 'local' | 'network' | 'shared' | 'local-files' | 'file-tools'
-
-export const SHARED_KNOWLEDGE_ID_PREFIX = '__shared_kb__'
 
 export const DEFAULT_KNOWLEDGE_FOLDER_ID = '__default_knowledge_folder__'
 export const DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID = '__default_network_knowledge_folder__'
@@ -34,32 +36,18 @@ export const KNOWLEDGE_VIRTUAL_FOLDER_IDS = new Set([
 ])
 
 export function isKnowledgeVirtualFolderId(id: string | null): boolean {
-  return id != null && (KNOWLEDGE_VIRTUAL_FOLDER_IDS.has(id) || isSharedKnowledgeId(id))
-}
-
-export function buildSharedKnowledgeId(p2pWorkspaceId: string, resourceId: string): string {
-  return `${SHARED_KNOWLEDGE_ID_PREFIX}:${p2pWorkspaceId}:${resourceId}`
-}
-
-export function parseSharedKnowledgeId(
-  id: string,
-): { p2pWorkspaceId: string; resourceId: string } | null {
-  if (!id.startsWith(`${SHARED_KNOWLEDGE_ID_PREFIX}:`)) return null
-  const rest = id.slice(SHARED_KNOWLEDGE_ID_PREFIX.length + 1)
-  const sep = rest.indexOf(':')
-  if (sep <= 0) return null
-  return {
-    p2pWorkspaceId: rest.slice(0, sep),
-    resourceId: rest.slice(sep + 1),
-  }
-}
-
-export function isSharedKnowledgeId(id: string | null): boolean {
-  return id != null && id.startsWith(`${SHARED_KNOWLEDGE_ID_PREFIX}:`)
+  return id != null && KNOWLEDGE_VIRTUAL_FOLDER_IDS.has(id)
 }
 
 export function isDeletableKnowledgeBase(name: string): boolean {
   return !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(name)
+}
+
+/** Saved group copies under 共享知识库 — local user data, deletable from sidebar. */
+export function isDeletableSavedSharedKnowledgeBase(
+  item: Pick<KnowledgeBase, 'kind' | 'description'>,
+): boolean {
+  return item.kind === 'shared' && !isP2pSharedKnowledgeMirrorDescription(item.description)
 }
 
 export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{

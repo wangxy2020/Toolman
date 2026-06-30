@@ -11,6 +11,11 @@ import { MESSAGE_VIRTUAL_SCROLL_THRESHOLD } from './message-panel.constants'
 import type { MessagePanelProps, MessageTranslation } from './message-panel-types'
 import { groupMessages } from './message-panel-utils'
 import type { MessageTurnViewProps } from './MessagePanelTurnView'
+import {
+  buildMessagePanelScrollKey,
+  buildStreamScrollKey,
+  isScrollContainerNearBottom,
+} from './message-panel-scroll'
 
 export function useMessagePanel({
   messages,
@@ -47,20 +52,24 @@ export function useMessagePanel({
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const turns = useMemo(() => groupMessages(messages), [messages])
   const useVirtualScroll = messages.length > MESSAGE_VIRTUAL_SCROLL_THRESHOLD
-  const streamScrollKey = useMemo(() => {
-    const tail = messages[messages.length - 1]
-    if (!tail) return ''
-    let textLength = 0
-    let thinkingLength = 0
-    for (const block of tail.contentBlocks) {
-      if (block.type === 'text') textLength += block.text.length
-      if (block.type === 'thinking') thinkingLength += block.text.length
-    }
-    return `${tail.id}:${tail.status}:${textLength}:${thinkingLength}`
-  }, [messages])
+  const messagePanelScrollKey = useMemo(() => buildMessagePanelScrollKey(messages), [messages])
+  const streamScrollKey = useMemo(() => buildStreamScrollKey(messages), [messages])
+  const streamScrollRafRef = useRef<number | null>(null)
+
+  const getScrollContainer = useCallback((): HTMLElement | null => {
+    const root = messagesContainerRef.current
+    if (!root) return null
+    if (!useVirtualScroll) return root
+    return root.querySelector<HTMLElement>('[data-virtuoso-scroller]') ?? root
+  }, [useVirtualScroll])
 
   const scrollMessagesToBottom = useCallback(
-    (behavior: ScrollBehavior = 'auto') => {
+    (behavior: ScrollBehavior = 'auto', options?: { onlyIfNearBottom?: boolean }) => {
+      if (options?.onlyIfNearBottom) {
+        const container = getScrollContainer()
+        if (container && !isScrollContainerNearBottom(container)) return
+      }
+
       if (useVirtualScroll) {
         if (turns.length === 0) return
         virtuosoRef.current?.scrollToIndex({
@@ -79,7 +88,7 @@ export function useMessagePanel({
 
       bottomRef.current?.scrollIntoView({ behavior })
     },
-    [turns.length, useVirtualScroll],
+    [getScrollContainer, turns.length, useVirtualScroll],
   )
   const languages = useMemo(
     () => normalizeTranslationLanguages(translationLanguages),
@@ -106,14 +115,30 @@ export function useMessagePanel({
   useEffect(() => {
     if (loading || messages.length === 0) return
     scrollMessagesToBottom('smooth')
-  }, [messages, visibleTranslationIds, loading, scrollMessagesToBottom])
+  }, [messagePanelScrollKey, visibleTranslationIds, loading, messages.length, scrollMessagesToBottom])
 
   useEffect(() => {
     if (loading || messages.length === 0) return
     const tail = messages[messages.length - 1]
     if (!tail || tail.status !== 'streaming') return
-    scrollMessagesToBottom('smooth')
-  }, [streamScrollKey, loading, messages.length, scrollMessagesToBottom])
+    // Virtuoso followOutput handles long histories; manual smooth scroll fights it.
+    if (useVirtualScroll) return
+
+    if (streamScrollRafRef.current !== null) {
+      cancelAnimationFrame(streamScrollRafRef.current)
+    }
+    streamScrollRafRef.current = requestAnimationFrame(() => {
+      streamScrollRafRef.current = null
+      scrollMessagesToBottom('auto', { onlyIfNearBottom: true })
+    })
+
+    return () => {
+      if (streamScrollRafRef.current !== null) {
+        cancelAnimationFrame(streamScrollRafRef.current)
+        streamScrollRafRef.current = null
+      }
+    }
+  }, [streamScrollKey, loading, messages.length, scrollMessagesToBottom, useVirtualScroll])
 
   const handleTranslateMessage = useCallback(
     async (message: Message) => {

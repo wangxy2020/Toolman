@@ -5,6 +5,8 @@ import { loadSystemPaths } from '../chat/useSystemPaths'
 import { markdownToBlocks } from './notes-blocks'
 import { readNoteUpdatedContent, readNoteUpdatedNoteId, readNoteUpdatedPermission } from './p2p-note-events'
 import { syncNotesToFolder } from './notes-import-export'
+import { fetchGroupNotePlacements } from './fetch-group-note-placements'
+import { reconcileGroupSharedNotesInData } from './notes-group-placement'
 import { resolveNotesWorkingDirectory } from './notes-path-utils'
 import {
   DEFAULT_NOTEBOOK_ID,
@@ -28,6 +30,39 @@ type UseNotesSyncParams = {
   importNotesBackup: (raw: string) => void
 }
 
+async function mergeNotesFromMain(localData: NotesData): Promise<NotesData> {
+  const loadResult = await window.api.invoke(IpcChannel.NotesDataLoad, {})
+  let nextData = localData
+  if (loadResult.ok) {
+    const payload = loadResult.data as { dataJson: string }
+    try {
+      const mainData = normalizeData(JSON.parse(payload.dataJson) as Partial<NotesData>)
+      nextData = mergeNotesData(localData, mainData)
+    } catch {
+      nextData = localData
+    }
+  }
+  return nextData
+}
+
+async function reconcileNotesPlacement(data: NotesData): Promise<NotesData> {
+  const { placements, selfMemberIdByWorkspace } = await fetchGroupNotePlacements()
+  return reconcileGroupSharedNotesInData(data, placements, selfMemberIdByWorkspace)
+}
+
+async function syncAndReloadNotes(data: NotesData): Promise<NotesData> {
+  await window.api.invoke(IpcChannel.NotesDataSync, {
+    dataJson: JSON.stringify(data),
+  })
+  const loadResult = await window.api.invoke(IpcChannel.NotesDataLoad, {})
+  if (!loadResult.ok) return data
+  try {
+    return normalizeData(JSON.parse((loadResult.data as { dataJson: string }).dataJson) as Partial<NotesData>)
+  } catch {
+    return data
+  }
+}
+
 export function useNotesSync({
   data,
   setData,
@@ -40,7 +75,20 @@ export function useNotesSync({
   useEffect(() => {
     const handleP2pNoteEvent = (payload: unknown) => {
       const event = payload as WorkspaceEvent
-      if (event.resourceType !== 'Note' || event.eventType !== 'Updated') return
+      if (event.resourceType !== 'Note') return
+
+      if (event.eventType === 'Shared' || event.eventType === 'Created') {
+        void (async () => {
+          const localData = loadNotesData()
+          let nextData = await mergeNotesFromMain(localData)
+          nextData = await reconcileNotesPlacement(nextData)
+          nextData = await syncAndReloadNotes(nextData)
+          setData(nextData)
+        })()
+        return
+      }
+
+      if (event.eventType !== 'Updated') return
 
       const noteId = readNoteUpdatedNoteId(event)
       if (!noteId) return
@@ -83,7 +131,7 @@ export function useNotesSync({
         const target = prev.notes.find((item) => item.id === noteId)
         if (!target || target.content === merged) return prev
 
-        return {
+        const withContent = {
           ...prev,
           notes: prev.notes.map((item) => {
             if (item.id !== noteId) return item
@@ -98,7 +146,13 @@ export function useNotesSync({
             )
           }),
         }
+        return withContent
       })
+
+      void (async () => {
+        const { placements, selfMemberIdByWorkspace } = await fetchGroupNotePlacements()
+        setData((prev) => reconcileGroupSharedNotesInData(prev, placements, selfMemberIdByWorkspace))
+      })()
     }
 
     const unsubscribeAppended = window.api.subscribe('p2p:event:appended', handleP2pNoteEvent)
@@ -134,31 +188,19 @@ export function useNotesSync({
 
     void (async () => {
       const localData = loadNotesData()
-      const loadResult = await window.api.invoke(IpcChannel.NotesDataLoad, {})
       if (cancelled) return
 
-      let nextData = localData
-      if (loadResult.ok) {
-        const payload = loadResult.data as { dataJson: string }
-        try {
-          const mainData = normalizeData(JSON.parse(payload.dataJson) as Partial<NotesData>)
-          nextData = mergeNotesData(localData, mainData)
-        } catch {
-          nextData = localData
-        }
-      }
+      let nextData = await mergeNotesFromMain(localData)
+      nextData = await reconcileNotesPlacement(nextData)
+      nextData = await syncAndReloadNotes(nextData)
+      if (cancelled) return
 
       setData(nextData)
       setActiveNoteId((prev) => {
         if (prev && nextData.notes.some((item) => item.id === prev)) return prev
         return getFirstNoteInNotebook(nextData.notes, DEFAULT_NOTEBOOK_ID)?.id ?? null
       })
-      if (!cancelled) {
-        setHydrated(true)
-      }
-      await window.api.invoke(IpcChannel.NotesDataSync, {
-        dataJson: JSON.stringify(nextData),
-      })
+      setHydrated(true)
     })()
 
     return () => {

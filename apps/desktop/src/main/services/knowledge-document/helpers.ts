@@ -1,6 +1,7 @@
 import {
   KnowledgeDocumentSchema,
   type KnowledgeDocument,
+  isP2pSharedKnowledgeMirrorDescription,
 } from '@toolman/shared'
 import { isIgnoredKnowledgeIngestFile } from '@toolman/knowledge'
 import type { KnowledgeBaseRow } from '@toolman/db'
@@ -28,7 +29,9 @@ export function deleteManagedKnowledgeFileFromDisk(
   absolutePath: string | null | undefined,
 ): void {
   if (!absolutePath || inferSourceKind(absolutePath) === 'url') return
-  if (kb.kind === 'shared' || kb.kind === 'network') return
+  if (kb.kind === 'network' || isP2pSharedKnowledgeMirrorDescription(kb.description)) {
+    return
+  }
 
   const storagePath = resolveKnowledgeBaseStoragePath(kb, { ensure: false })
   if (!storagePath || !isPathInsideFolder(storagePath, absolutePath)) return

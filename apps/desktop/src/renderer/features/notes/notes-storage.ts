@@ -1,3 +1,4 @@
+import { isGroupNotebookId } from '@toolman/shared'
 import { IpcChannel } from '@toolman/shared'
 
 export const DEFAULT_NOTEBOOK_ID = 'notebook-default'
@@ -172,6 +173,29 @@ function pickNewerNote(left: NoteItem, right: NoteItem): NoteItem {
   return left.updatedAt >= right.updatedAt ? left : right
 }
 
+function mergeNotePair(local: NoteItem, remote: NoteItem): NoteItem {
+  const newer = pickNewerNote(local, remote)
+  const older = newer === local ? remote : local
+  const groupNotebookId = isGroupNotebookId(local.notebookId)
+    ? local.notebookId
+    : isGroupNotebookId(remote.notebookId)
+      ? remote.notebookId
+      : null
+
+  if (!groupNotebookId) {
+    return newer
+  }
+
+  return {
+    ...newer,
+    notebookId: groupNotebookId,
+    locked: newer.locked || older.locked,
+    groupPermissionLocked: Boolean(
+      newer.groupPermissionLocked ?? older.groupPermissionLocked,
+    ),
+  }
+}
+
 export function mergeNotesData(local: NotesData, remote: NotesData): NotesData {
   const notebookMap = new Map<string, NotebookItem>()
   for (const notebook of remote.notebooks) {
@@ -190,7 +214,7 @@ export function mergeNotesData(local: NotesData, remote: NotesData): NotesData {
   }
   for (const note of local.notes) {
     const existing = noteMap.get(note.id)
-    noteMap.set(note.id, existing ? pickNewerNote(note, existing) : note)
+    noteMap.set(note.id, existing ? mergeNotePair(note, existing) : note)
   }
 
   return normalizeData({

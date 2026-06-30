@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import type { SystemPaths } from '../chat/useSystemPaths'
 import type { KnowledgeFilePanelItem } from './KnowledgeBaseFilePanel'
 import type { KnowledgeSidebarSection } from './knowledge-sidebar-types'
-import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
 export type SettingsTarget = 'kb' | null
 
@@ -17,7 +16,6 @@ export interface KnowledgePageProps {
   section: KnowledgeSidebarSection
   activeId: string | null
   active: KnowledgeBase | null
-  sharedKnowledgeEntries?: SharedKnowledgeEntry[]
   knowledgeFolderPath: string | null
   knowledgeFolderLoading?: boolean
   knowledgeFolderError?: string | null

@@ -15,7 +15,6 @@ import {
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
-  isSharedKnowledgeId,
 } from './knowledge-sidebar-types'
 import { resolveBreadcrumbItemName } from './knowledge-page-operations'
 import type {
@@ -30,7 +29,6 @@ export function useKnowledgePageState({
   section,
   activeId,
   active,
-  sharedKnowledgeEntries = [],
   knowledgeFolderPath,
   knowledgeFolderLoading,
   networkKnowledgeFolderPath,
@@ -64,17 +62,7 @@ export function useKnowledgePageState({
   const showingDefaultLocalFilesFolder =
     section === 'local-files' && activeId === DEFAULT_LOCAL_FILES_FOLDER_ID
   const showingSavedSharedFolder =
-    section === 'shared' &&
-    active?.kind === 'shared' &&
-    activeId != null &&
-    !isSharedKnowledgeId(activeId)
-
-  const activeSharedEntry = useMemo(() => {
-    if (!activeId || !isSharedKnowledgeId(activeId)) return null
-    return sharedKnowledgeEntries.find((entry) => entry.id === activeId) ?? null
-  }, [activeId, sharedKnowledgeEntries])
-
-  const showingLiveSharedFolder = section === 'shared' && activeSharedEntry != null
+    section === 'shared' && active?.kind === 'shared' && activeId != null
 
   const localDefaultKb = useDefaultFolderKnowledgeBase(
     workspaceId,
@@ -166,7 +154,6 @@ export function useKnowledgePageState({
     section,
     activeId,
     active,
-    activeSharedEntry,
     fileRegistryLabel: t('knowledgePage.fileRegistry'),
     fileDedupLabel: t('knowledgePage.fileDedup'),
   })
@@ -241,7 +228,6 @@ export function useKnowledgePageState({
     section,
     active,
     activeId,
-    activeSharedEntry,
     settingsTarget,
     showAddUrlModal,
     setShowAddUrlModal,
@@ -258,7 +244,6 @@ export function useKnowledgePageState({
     showingDefaultNetworkFolder,
     showingDefaultLocalFilesFolder,
     showingSavedSharedFolder,
-    showingLiveSharedFolder,
     localDefaultKb,
     networkDefaultKb,
     localFilesDefaultKb,

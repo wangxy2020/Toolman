@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { buildGroupNotebookId } from '@toolman/shared'
 import {
   buildNoteTitle,
   buildNotebookName,
   createEmptyNote,
   DEFAULT_NOTEBOOK_ID,
+  mergeNotesData,
   normalizeData,
   normalizeTag,
 } from './notes-storage'
@@ -24,6 +26,47 @@ describe('normalizeData', () => {
     expect(data.notes).toHaveLength(1)
     expect(data.notes[0]?.title).toBe('A')
     expect(data.syncFolderPath).toBe('/tmp/notes')
+  })
+})
+
+describe('mergeNotesData', () => {
+  it('keeps group notebook placement when remote copy is newer but uses default notebook', () => {
+    const groupNotebookId = buildGroupNotebookId('ws-1')
+    const noteId = 'note-shared-1'
+    const localNote = {
+      ...createEmptyNote(groupNotebookId, '共享笔记'),
+      id: noteId,
+      groupPermissionLocked: true,
+      locked: true,
+      updatedAt: 100,
+    }
+    const remoteNote = {
+      ...createEmptyNote(DEFAULT_NOTEBOOK_ID, '共享笔记'),
+      id: noteId,
+      updatedAt: 200,
+    }
+
+    const merged = mergeNotesData(
+      {
+        notebooks: [
+          { id: DEFAULT_NOTEBOOK_ID, name: '默认笔记本', isDefault: true },
+          { id: groupNotebookId, name: '测试群' },
+        ],
+        notes: [localNote],
+        syncFolderPath: null,
+      },
+      {
+        notebooks: [{ id: DEFAULT_NOTEBOOK_ID, name: '默认笔记本', isDefault: true }],
+        notes: [remoteNote],
+        syncFolderPath: null,
+      },
+    )
+
+    expect(merged.notes).toHaveLength(1)
+    expect(merged.notes[0]?.notebookId).toBe(groupNotebookId)
+    expect(merged.notes[0]?.locked).toBe(true)
+    expect(merged.notes[0]?.groupPermissionLocked).toBe(true)
+    expect(merged.notebooks.some((item) => item.id === groupNotebookId)).toBe(true)
   })
 })
 

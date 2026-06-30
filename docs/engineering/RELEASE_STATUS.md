@@ -1,6 +1,6 @@
 # Toolman 发布状态总览
 
-> **版本**：`0.2.0-rc.7` · **通道**：`staging` · **更新**：2026-06-28  
+> **版本**：`0.2.0-rc.10` · **通道**：`staging` · **更新**：2026-06-28  
 > **保留文档**：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) · [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md) · [RC1_DOGFOOD.md](./RC1_DOGFOOD.md)
 
 本文档合并原 Phase/Plan/Status/Kickoff/WAN 签字/缺陷跟踪等工程文档，避免多份重复维护。
@@ -29,7 +29,7 @@
 
 | # | 任务 | 状态 | 备注 |
 |---|------|------|------|
-| 0.1 | `pnpm rc1:preflight` 绿 | ✅ | 488 desktop 单测 + knowledge ingest 集成 + smoke 绿 |
+| 0.1 | `pnpm rc1:preflight` 绿 | ✅ | 513 desktop 单测 + knowledge ingest 集成 + smoke 绿 |
 | 0.1 | `pnpm rc1:build` dmg 可安装 | ✅ | adhoc 签名；Gatekeeper 需右键打开 |
 | 0.2 | TURN 静默注入（Xirsys → `release.env`） | ✅ | 打包时烘焙；启动自动拉 ICE |
 | 0.3 | WAN 跨 NAT 双机签字 | ⏳ | 单机 LAN ✅；跨网待第二台设备 |
@@ -101,7 +101,17 @@
 
 ---
 
-## 5. RC7 变更摘要（相对 rc.6）
+## 5. RC10 变更摘要（相对 rc.9）
+
+| 模块 | 变更 |
+|------|------|
+| 群组笔记 | 接收方笔记固定归入「群组名称」笔记本；启动/P2P 同步/重启后自动校正归属 |
+| 共享知识库 | 磁盘路径统一为 `共享知识库/群名/`；侧边栏可右键删除本地副本；移除地球图标实时预览 |
+| 聊天 | 流式生成时滚动防抖，长列表不再抖动 |
+| 工具授权 | 补全中英文 i18n（拒绝/允许/允许全部） |
+| 工程 | 513 单测；`group-notebook` / `group-note-placement` 共享逻辑 |
+
+## 6. RC7 变更摘要（相对 rc.6）
 
 | 模块 | 变更 |
 |------|------|
@@ -137,24 +147,23 @@
 | 产品 | 语义搜索 501 占位、真实支付 mock | RC 阶段 UI 已标注 Beta / mock banner |
 | 运维 | staging OTA | 可选；GitHub Release 分发 dmg 亦可 |
 
-**已具备**：SQLite WAL、libp2p 熔断、P2P 签名/邀请 v2、Blob 断点、TURN 静默配置、488 desktop 单测、knowledge ingest 集成测试、备份/恢复扩展、安全/稳定性加固、CI ESLint+Windows+audit。
+**已具备**：SQLite WAL、libp2p 熔断、P2P 签名/邀请 v2、Blob 断点、TURN 静默配置、513 desktop 单测、knowledge ingest 集成测试、备份/恢复扩展、安全/稳定性加固、CI ESLint+Windows+audit。
 
 ---
 
-## 7. 维护者下一步（RC6）
+## 7. 维护者下一步（RC10）
 
 | 优先级 | 动作 | 命令 / 文档 |
 |--------|------|-------------|
-| P0 | 提交 RC6 补丁 + 打 tag | `git commit` → `git tag v0.2.0-rc.6` |
-| P0 | 本地 preflight 复验 | `pnpm rc1:preflight` |
-| P0 | 构建分发包 | `pnpm rc1:build` |
+| P0 | 打 tag 并构建分发包 | `git tag v0.2.0-rc.10` → `pnpm rc1:build` |
+| P0 | 双机验收群组笔记/共享知识库 | dev:p2p:a + dev:p2p:b |
 | P1 | 每日 dogfood + 填 §8 表 | `pnpm rc1:dogfood-day` |
 | P2 | 跨 NAT 双机签字（有设备时） | 本文 §9 |
 | P2 | staging OTA（有 CDN 时） | `pnpm rc1:publish-staging` |
 
 ```bash
 pnpm rc1:preflight && pnpm rc1:build
-# GitHub Release 上传 apps/desktop/dist/Toolman-0.2.0-rc.6-*.dmg
+# GitHub Release 上传 apps/desktop/dist/Toolman-0.2.0-rc.10-*.dmg
 ```
 
 ---
@@ -166,7 +175,7 @@ pnpm rc1:preflight && pnpm rc1:build
 | 2026-06-22 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | Kickoff |
 | 2026-06-26 | 维护者 | ☐ | ☐ | ☐ | ☐ | ☑ | LAN 群聊通 · preflight 绿 · 成员重启重连 ✅ |
 | 2026-06-27 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | rc.5 DMG · 全模块正常 |
-| 2026-06-28 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | 生产级加固 A/B/C · 488 单测 · ingest 集成 · preflight 绿 |
+| 2026-06-28 | 维护者 | ☑ | ☑ | ☑ | ☑ | ☑ | rc.10：群组笔记归属 · 共享知识库路径/删除 · 流式滚动 · 513 单测 · preflight 绿 |
 
 ---
 

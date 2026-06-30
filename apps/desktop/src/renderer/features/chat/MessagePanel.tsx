@@ -56,7 +56,7 @@ export function MessagePanel(props: MessagePanelProps) {
   if (useVirtualScroll) {
     return (
       <>
-        <div className="tm-messages tm-messages--virtualized">
+        <div className="tm-messages tm-messages--virtualized" ref={messagesContainerRef}>
           <Virtuoso
             ref={virtuosoRef}
             className="tm-messages-virtuoso"

@@ -56,9 +56,6 @@ export function resolveGroupSavedKnowledgeSidebarLabel(kb: {
 }): string {
   const meta = parseP2pGroupSavedKnowledgeMeta(kb.description)
   if (meta) {
-    if (meta.sharedFolderName) {
-      return `[${meta.groupName}] ${meta.sharedFolderName}`
-    }
     return meta.groupName
   }
 
@@ -96,13 +93,7 @@ export function findGroupSavedKnowledgeBaseId(
   if (input.p2pWorkspaceId) {
     const byWorkspace = sharedBases.find((item) => {
       const meta = parseP2pGroupSavedKnowledgeMeta(item.description)
-      if (meta == null || meta.p2pWorkspaceId !== input.p2pWorkspaceId) {
-        return false
-      }
-      if (savedMeta.sharedFolderName) {
-        return meta.sharedFolderName === savedMeta.sharedFolderName
-      }
-      return !meta.sharedFolderName
+      return meta != null && meta.p2pWorkspaceId === input.p2pWorkspaceId
     })
     if (byWorkspace) return byWorkspace.id
   }
@@ -115,7 +106,7 @@ export function findGroupSavedKnowledgeBaseId(
     if (savedMeta.sharedFolderName) {
       return meta.sharedFolderName === savedMeta.sharedFolderName
     }
-    return !meta.sharedFolderName
+    return true
   })
   if (byMeta) return byMeta.id
 

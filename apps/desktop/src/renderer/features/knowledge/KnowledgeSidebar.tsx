@@ -1,12 +1,12 @@
 import type { KnowledgeBase } from '@toolman/shared'
-import { IconChevronRight, IconPlus } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { IconChevronRight, IconPlus } from '../../components/icons'
 import { getModulePageConfig } from '../modules/module-config'
 import { useI18n } from '../../i18n/useI18n'
 import { getKnowledgeSidebarSectionLabel } from '../../i18n/knowledge-sidebar-labels'
-import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 import { useState } from 'react'
-import { KNOWLEDGE_SIDEBAR_SECTIONS, type KnowledgeSidebarSection } from './knowledge-sidebar-types'
+import { KNOWLEDGE_SIDEBAR_SECTIONS, type KnowledgeSidebarSection, isDeletableSavedSharedKnowledgeBase } from './knowledge-sidebar-types'
+import { KnowledgeSidebarContextMenu } from './KnowledgeSidebarContextMenu'
 import {
   KnowledgeSidebarSectionBody,
   useKnowledgeSidebarExpansion,
@@ -15,7 +15,6 @@ import {
 
 interface Props {
   items: KnowledgeBase[]
-  sharedKnowledgeEntries?: SharedKnowledgeEntry[]
   activeId: string | null
   activeSection: KnowledgeSidebarSection
   loading?: boolean
@@ -32,7 +31,6 @@ interface Props {
 
 export function KnowledgeSidebar({
   items,
-  sharedKnowledgeEntries = [],
   activeId,
   activeSection,
   loading,
@@ -48,10 +46,15 @@ export function KnowledgeSidebar({
 }: Props) {
   const { t } = useI18n()
   const config = getModulePageConfig('knowledge', t)
-  const { localItems, networkItems, localFilesItems, savedSharedItems, liveSharedEntries } =
-    useKnowledgeSidebarItems(items, sharedKnowledgeEntries)
+  const { localItems, networkItems, localFilesItems, savedSharedItems } =
+    useKnowledgeSidebarItems(items)
   const { expanded, toggleExpanded, expandSection } = useKnowledgeSidebarExpansion(activeId, activeSection)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeBase | null>(null)
+  const [deleteContextMenu, setDeleteContextMenu] = useState<{
+    item: KnowledgeBase
+    x: number
+    y: number
+  } | null>(null)
 
   const suppressContextMenu = (event: React.MouseEvent) => {
     event.preventDefault()
@@ -128,7 +131,6 @@ export function KnowledgeSidebar({
                     networkItems={networkItems}
                     localFilesItems={localFilesItems}
                     savedSharedItems={savedSharedItems}
-                    liveSharedEntries={liveSharedEntries}
                     defaultFolderLabel={defaultFolderLabel}
                     onSelect={onSelect}
                     onSelectDefaultFolder={onSelectDefaultFolder}
@@ -136,7 +138,13 @@ export function KnowledgeSidebar({
                     onSelectDefaultLocalFilesFolder={onSelectDefaultLocalFilesFolder}
                     onSelectFileRegistry={onSelectFileRegistry}
                     onSelectFileDedup={onSelectFileDedup}
-                    onRequestDelete={setDeleteTarget}
+                    onRequestDelete={(item, event) => {
+                      setDeleteContextMenu({
+                        item,
+                        x: event.clientX,
+                        y: event.clientY,
+                      })
+                    }}
                   />
                 ) : null}
               </div>
@@ -145,10 +153,28 @@ export function KnowledgeSidebar({
         </div>
       </div>
 
+      {deleteContextMenu ? (
+        <KnowledgeSidebarContextMenu
+          x={deleteContextMenu.x}
+          y={deleteContextMenu.y}
+          onClose={() => setDeleteContextMenu(null)}
+          onDelete={() => {
+            setDeleteTarget(deleteContextMenu.item)
+            setDeleteContextMenu(null)
+          }}
+        />
+      ) : null}
+
       {deleteTarget ? (
         <ConfirmDialog
           title={t('sidebar.knowledge.deleteTitle')}
-          message={t('sidebar.knowledge.deleteMessage', { name: deleteTarget.name })}
+          message={
+            isDeletableSavedSharedKnowledgeBase(deleteTarget)
+              ? t('sidebar.knowledge.sharedDeleteMessage', {
+                  name: deleteTarget.name,
+                })
+              : t('sidebar.knowledge.deleteMessage', { name: deleteTarget.name })
+          }
           confirmLabel={t('common.delete')}
           cancelLabel={t('common.cancel')}
           danger

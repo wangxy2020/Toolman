@@ -7229,6 +7229,7 @@ html.theme-dark .tm-dedup-error {
   flex-direction: column;
   gap: 28px;
   background: var(--tm-bg);
+  overflow-anchor: none;
 }
 
 .tm-messages--virtualized {
@@ -7639,6 +7640,7 @@ html.theme-dark .tm-dedup-error {
 
 .tm-thinking-block-duration {
   margin-left: auto;
+  min-width: 3.2ch;
   font-variant-numeric: tabular-nums;
   color: var(--tm-text-secondary);
   flex-shrink: 0;

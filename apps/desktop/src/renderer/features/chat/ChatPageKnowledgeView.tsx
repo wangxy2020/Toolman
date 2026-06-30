@@ -6,7 +6,6 @@ export type ChatPageKnowledgeViewProps = Pick<
   | 'workspaceId'
   | 'knowledgeSection'
   | 'knowledge'
-  | 'p2pSharedKnowledge'
   | 'knowledgeFolder'
   | 'networkKnowledgeFolder'
   | 'localFilesFolder'
@@ -19,7 +18,6 @@ export function ChatPageKnowledgeView({
   workspaceId,
   knowledgeSection,
   knowledge,
-  p2pSharedKnowledge,
   knowledgeFolder,
   networkKnowledgeFolder,
   localFilesFolder,
@@ -33,7 +31,6 @@ export function ChatPageKnowledgeView({
       section={knowledgeSection}
       activeId={knowledge.activeId}
       active={knowledge.active}
-      sharedKnowledgeEntries={p2pSharedKnowledge.entries}
       knowledgeFolderPath={knowledgeFolder.path}
       knowledgeFolderLoading={knowledgeFolder.loading}
       knowledgeFolderError={knowledgeFolder.error}

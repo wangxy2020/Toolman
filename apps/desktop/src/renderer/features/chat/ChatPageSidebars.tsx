@@ -29,7 +29,6 @@ type ChatPageSidebarsProps = Pick<
   | 'handleDeleteAssistant'
   | 'setShowAssistants'
   | 'knowledge'
-  | 'p2pSharedKnowledge'
   | 'knowledgeSection'
   | 'setKnowledgeSection'
   | 'setShowKnowledgeCreate'
@@ -54,7 +53,6 @@ export function ChatPageSidebars({
   handleDeleteAssistant,
   setShowAssistants,
   knowledge,
-  p2pSharedKnowledge,
   knowledgeSection,
   setKnowledgeSection,
   setShowKnowledgeCreate,
@@ -93,10 +91,9 @@ export function ChatPageSidebars({
     return (
       <KnowledgeSidebar
         items={knowledge.items}
-        sharedKnowledgeEntries={p2pSharedKnowledge.entries}
         activeId={knowledge.activeId}
         activeSection={knowledgeSection}
-        loading={knowledge.loading || p2pSharedKnowledge.loading}
+        loading={knowledge.loading}
         onSelect={(id) => {
           const item = knowledge.items.find((kb) => kb.id === id)
           knowledge.setActiveId(id)
@@ -137,8 +134,6 @@ export function ChatPageSidebars({
             )
             if (firstSaved) {
               knowledge.setActiveId(firstSaved.id)
-            } else if (p2pSharedKnowledge.entries[0]) {
-              knowledge.setActiveId(p2pSharedKnowledge.entries[0].id)
             }
           } else if (section === 'local-files') {
             knowledge.setActiveId(DEFAULT_LOCAL_FILES_FOLDER_ID)

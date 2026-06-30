@@ -1,19 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import {
-  findGroupSavedKnowledgeBaseId,
-  isP2pSharedKnowledgeMirrorDescription,
-  stripP2pGroupPrefixedResourceName,
-} from '@toolman/shared'
+import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
 import type { KnowledgeBase } from '@toolman/shared'
 import type { KnowledgeSidebarSection } from './knowledge-sidebar-types'
 import { SYSTEM_DEFAULT_FOLDER_KB_NAMES } from './knowledge-sidebar-types'
-import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
-export function useKnowledgeSidebarItems(
-  items: KnowledgeBase[],
-  sharedKnowledgeEntries: SharedKnowledgeEntry[],
-) {
+export function useKnowledgeSidebarItems(items: KnowledgeBase[]) {
   const localItems = items.filter(
     (item) => item.kind === 'local' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
   )
@@ -30,31 +22,7 @@ export function useKnowledgeSidebarItems(
       item.documentCount > 0,
   )
 
-  const liveSharedEntries = useMemo(() => {
-    return sharedKnowledgeEntries.filter((entry) => {
-      const sharedFolderName = stripP2pGroupPrefixedResourceName(
-        entry.workspaceName,
-        entry.resource.name,
-      )
-      const savedId = findGroupSavedKnowledgeBaseId(
-        savedSharedItems.map((item) => ({
-          id: item.id,
-          kind: item.kind,
-          name: item.name,
-          description: item.description ?? null,
-        })),
-        {
-          p2pWorkspaceId: entry.p2pWorkspaceId,
-          groupName: entry.workspaceName,
-          sharedFolderName,
-        },
-        { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
-      )
-      return savedId == null
-    })
-  }, [savedSharedItems, sharedKnowledgeEntries])
-
-  return { localItems, networkItems, localFilesItems, savedSharedItems, liveSharedEntries }
+  return { localItems, networkItems, localFilesItems, savedSharedItems }
 }
 
 export function useKnowledgeSidebarExpansion(activeId: string | null, activeSection: KnowledgeSidebarSection) {

@@ -67,7 +67,7 @@ function resolveSavedGroupKnowledgeBaseId(
 export function useSharedKnowledgePanelDocuments({
   p2pWorkspaceId,
   workspaceName,
-  sharedFolderName,
+  sharedFolderName: _sharedFolderName,
   kbId,
   sharedDocumentIds,
   isResourceOwner = false,
@@ -108,10 +108,9 @@ export function useSharedKnowledgePanelDocuments({
         data.items,
         workspaceName,
         p2pWorkspaceId,
-        sharedFolderName,
       ),
     )
-  }, [localWorkspaceId, p2pWorkspaceId, sharedFolderName, workspaceName])
+  }, [localWorkspaceId, p2pWorkspaceId, workspaceName])
 
   useEffect(() => {
     void loadSavedGroupKbId()

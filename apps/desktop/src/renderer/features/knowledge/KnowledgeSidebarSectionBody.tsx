@@ -1,7 +1,6 @@
 import type { KnowledgeBase } from '@toolman/shared'
 import {
   resolveGroupSavedKnowledgeSidebarLabel,
-  stripP2pGroupPrefixedResourceName,
 } from '@toolman/shared'
 
 import { IconCopy, IconFile, IconFolder, IconGlobe } from '../../components/icons'
@@ -14,9 +13,9 @@ import {
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
   isDeletableKnowledgeBase,
+  isDeletableSavedSharedKnowledgeBase,
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
-import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
 interface SectionBodyProps {
   section: KnowledgeSidebarSection
@@ -27,7 +26,6 @@ interface SectionBodyProps {
   networkItems: KnowledgeBase[]
   localFilesItems: KnowledgeBase[]
   savedSharedItems: KnowledgeBase[]
-  liveSharedEntries: SharedKnowledgeEntry[]
   defaultFolderLabel: string
   onSelect: (id: string) => void
   onSelectDefaultFolder: () => void
@@ -35,7 +33,7 @@ interface SectionBodyProps {
   onSelectDefaultLocalFilesFolder: () => void
   onSelectFileRegistry: () => void
   onSelectFileDedup: () => void
-  onRequestDelete: (item: KnowledgeBase) => void
+  onRequestDelete: (item: KnowledgeBase, event: React.MouseEvent) => void
 }
 
 export function KnowledgeSidebarSectionBody({
@@ -47,7 +45,6 @@ export function KnowledgeSidebarSectionBody({
   networkItems,
   localFilesItems,
   savedSharedItems,
-  liveSharedEntries,
   defaultFolderLabel,
   onSelect,
   onSelectDefaultFolder,
@@ -81,9 +78,10 @@ export function KnowledgeSidebarSectionBody({
               chunks: item.chunkCount,
             })}
             onClick={() => onSelect(item.id)}
-            deletable={isDeletableKnowledgeBase(item.name)}
-            onRequestDelete={
-              isDeletableKnowledgeBase(item.name) ? () => onRequestDelete(item) : undefined
+            onContextMenu={
+              isDeletableKnowledgeBase(item.name)
+                ? (event) => onRequestDelete(item, event)
+                : undefined
             }
           />
         ))}
@@ -113,9 +111,10 @@ export function KnowledgeSidebarSectionBody({
               chunks: item.chunkCount,
             })}
             onClick={() => onSelect(item.id)}
-            deletable={isDeletableKnowledgeBase(item.name)}
-            onRequestDelete={
-              isDeletableKnowledgeBase(item.name) ? () => onRequestDelete(item) : undefined
+            onContextMenu={
+              isDeletableKnowledgeBase(item.name)
+                ? (event) => onRequestDelete(item, event)
+                : undefined
             }
           />
         ))}
@@ -126,31 +125,15 @@ export function KnowledgeSidebarSectionBody({
   if (section === 'shared') {
     return (
       <>
-        {loading && savedSharedItems.length === 0 && liveSharedEntries.length === 0 ? (
+        {loading && savedSharedItems.length === 0 ? (
           <div className="tm-session-empty">{t('common.loading')}</div>
         ) : null}
-        {!loading && savedSharedItems.length === 0 && liveSharedEntries.length === 0 ? (
+        {!loading && savedSharedItems.length === 0 ? (
           <div className="tm-session-empty">{t('sidebar.knowledge.noFolders')}</div>
         ) : null}
-        {liveSharedEntries.map((entry) => {
-          const folderName = stripP2pGroupPrefixedResourceName(
-            entry.workspaceName,
-            entry.resource.name,
-          )
-          const label = `[${entry.workspaceName}] ${folderName}`
-          return (
-            <KnowledgeSidebarMenuItem
-              key={entry.id}
-              icon={<IconGlobe size={14} />}
-              label={label}
-              active={entry.id === activeId && activeSection === 'shared'}
-              title={`${label}（群组共享，保存到本地后可删除本地副本）`}
-              onClick={() => onSelect(entry.id)}
-            />
-          )
-        })}
         {savedSharedItems.map((item) => {
           const sharedLabel = resolveGroupSavedKnowledgeSidebarLabel(item)
+          const canDelete = isDeletableSavedSharedKnowledgeBase(item)
           return (
             <KnowledgeSidebarMenuItem
               key={item.id}
@@ -162,8 +145,7 @@ export function KnowledgeSidebarSectionBody({
                 documents: item.documentCount,
               })}
               onClick={() => onSelect(item.id)}
-              deletable
-              onRequestDelete={() => onRequestDelete(item)}
+              onContextMenu={canDelete ? (event) => onRequestDelete(item, event) : undefined}
             />
           )
         })}
@@ -192,9 +174,10 @@ export function KnowledgeSidebarSectionBody({
               count: item.documentCount,
             })}
             onClick={() => onSelect(item.id)}
-            deletable={isDeletableKnowledgeBase(item.name)}
-            onRequestDelete={
-              isDeletableKnowledgeBase(item.name) ? () => onRequestDelete(item) : undefined
+            onContextMenu={
+              isDeletableKnowledgeBase(item.name)
+                ? (event) => onRequestDelete(item, event)
+                : undefined
             }
           />
         ))}

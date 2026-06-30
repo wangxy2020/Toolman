@@ -11,4 +11,9 @@ export const toolApprovalPageEn = {
     docx:
       'This will call multiple DOCX edit tools (comments, replace, paragraph edits, etc.). After approval, further DOCX tools in this task run automatically without prompts.',
   },
+  permissionHint: 'The agent wants to call the following tool. Approve to continue.',
+  noArgs: '(no arguments)',
+  reject: 'Reject',
+  allow: 'Allow',
+  allowAll: 'Allow all',
 } as const

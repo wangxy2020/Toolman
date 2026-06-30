@@ -3,7 +3,6 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
 import { ModulePageStatusProvider } from '../../components/module-page-status'
 import { KnowledgeBaseSettingsModal } from './KnowledgeBaseSettingsModal'
-import { SharedKnowledgePanel } from './SharedKnowledgePanel'
 import { KnowledgeAddUrlModal } from './KnowledgeAddUrlModal'
 import { KnowledgeFileDedupPanel } from './KnowledgeFileDedupPanel'
 import { KnowledgeFileRegistryPanel } from './KnowledgeFileRegistryPanel'
@@ -33,13 +32,13 @@ export function KnowledgePage(props: KnowledgePageProps) {
 
   const page = useKnowledgePage(props)
   const {
-    t, config, error, active, loading, activeSharedEntry, documents,
+    t, config, error, active, loading, documents,
     settingsTarget, showAddUrlModal, setShowAddUrlModal, selectedIds,
     contextMenu, setContextMenu, sortField, sortAscending, dedupFolderPath,
     setDedupFolderPath, dedupScanState, setDedupScanState, dedupRefreshToken,
     pendingDelete, setPendingDelete, isFileDedupView, isFileRegistryView,
     showingDefaultFolder, showingDefaultNetworkFolder, showingDefaultLocalFilesFolder,
-    showingSavedSharedFolder, showingLiveSharedFolder, localDefaultKb,
+    showingSavedSharedFolder, localDefaultKb,
     networkDefaultKb, localFilesDefaultKb, panelDocuments, chatAttachableFiles,
     sectionLabel, breadcrumbItemName, settingsEnabled, settingsKb, statusFallback,
     importReady, showFileToolbar, isNetworkKbView, panelLoading, importTarget,
@@ -118,11 +117,6 @@ export function KnowledgePage(props: KnowledgePageProps) {
             ) : section === 'shared' ? (
               showingSavedSharedFolder ? (
                 <KnowledgePageSharedFilePanel {...filePanelProps} />
-              ) : showingLiveSharedFolder && activeSharedEntry ? (
-                <SharedKnowledgePanel
-                  entry={activeSharedEntry}
-                  onOpenError={(message) => documents.setError(message)}
-                />
               ) : (
                 <div className="tm-module-empty">
                   <h2 className="tm-module-empty-title">{t('knowledgePage.sections.shared')}</h2>

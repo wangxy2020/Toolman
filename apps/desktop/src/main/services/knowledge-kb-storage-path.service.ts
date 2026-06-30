@@ -23,6 +23,14 @@ function sanitizeKnowledgeBaseFolderName(name: string): string {
     .trim()
 }
 
+/** Relative folder name under 共享知识库 for a saved group copy. */
+export function resolveGroupSavedKnowledgeStorageDir(
+  meta: Pick<import('@toolman/shared').P2pGroupSavedKnowledgeMeta, 'groupName'>,
+): string | null {
+  const groupDir = sanitizeKnowledgeBaseFolderName(meta.groupName)
+  return groupDir || null
+}
+
 function resolveWorkspaceRootFolder(
   workspaceId: string,
   kind: KnowledgeFolderKind,
@@ -87,15 +95,10 @@ export function resolveKnowledgeBaseStoragePath(
 
   const groupSaved = parseP2pGroupSavedKnowledgeMeta(kb.description)
   if (groupSaved && kind === 'shared') {
-    const groupDir = sanitizeKnowledgeBaseFolderName(groupSaved.groupName)
+    const groupDir = resolveGroupSavedKnowledgeStorageDir(groupSaved)
     if (!groupDir) return null
 
-    const sharedFolderDir = groupSaved.sharedFolderName
-      ? sanitizeKnowledgeBaseFolderName(groupSaved.sharedFolderName)
-      : ''
-    const storagePath = sharedFolderDir
-      ? join(baseFolder, groupDir, sharedFolderDir)
-      : join(baseFolder, groupDir)
+    const storagePath = join(baseFolder, groupDir)
     if (ensure && !existsSync(storagePath)) {
       mkdirSync(storagePath, { recursive: true })
     }

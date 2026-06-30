@@ -7,7 +7,6 @@ import { useP2pWorkspaces } from '../group/useP2pWorkspaces'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useKnowledgeBases } from '../knowledge/useKnowledgeBases'
 import { useKnowledgeDefaultFolder } from '../knowledge/useKnowledgeDefaultFolder'
-import { useAllP2pSharedKnowledge } from '../knowledge/useAllP2pSharedKnowledge'
 import { useNotes } from '../notes/useNotes'
 import { useI18n } from '../../i18n/useI18n'
 import type { ChatPageProps } from './chat-page-types'
@@ -30,9 +29,6 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   const systemPaths = useSystemPaths()
 
   const knowledge = useKnowledgeBases({ workspaceId: navigation.workspaceId })
-  const p2pSharedKnowledge = useAllP2pSharedKnowledge({
-    enabled: navigation.activeView === 'knowledge',
-  })
   const p2pWorkspaces = useP2pWorkspaces({ enabled: registrationGate.canUseGroup })
   const knowledgeFolder = useKnowledgeDefaultFolder(navigation.workspaceId, 'local')
   const networkKnowledgeFolder = useKnowledgeDefaultFolder(navigation.workspaceId, 'network')
@@ -65,7 +61,6 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     systemPaths,
     ...crossModule,
     knowledge,
-    p2pSharedKnowledge,
     p2pWorkspaces,
     knowledgeFolder,
     networkKnowledgeFolder,

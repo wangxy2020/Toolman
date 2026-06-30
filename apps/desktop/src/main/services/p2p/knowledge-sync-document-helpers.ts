@@ -20,6 +20,13 @@ import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source.service'
 import { restartKnowledgeWatchersForKb } from '../knowledge-watcher.service'
+import { ensureWorkspaceSharedKnowledgeFolder } from '../knowledge-folder.service'
+import {
+  migrateDocumentsInKbToStoragePath,
+  moveRootLevelFiles,
+  removeEmptyDirectory,
+} from './p2p-group-saved-knowledge-migration-fs'
+import { collectLegacyStoragePaths } from './p2p-group-saved-knowledge-migration-recover'
 
 export function sanitizeKnowledgeDocumentFileName(name: string): string {
   const trimmed = name.trim()
@@ -31,18 +38,11 @@ export function ensureUserSavedGroupKnowledgeBase(
   storageWorkspaceId: string,
   p2pWorkspaceId: string,
   groupName: string,
-  sharedFolderName: string,
+  _sharedFolderName?: string,
 ): { kbId: string; storagePath: string } {
   const kbRepo = getKnowledgeBaseRepository()
-  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(
-    groupName,
-    sharedFolderName,
-    p2pWorkspaceId,
-  )
-  const displayName = buildP2pGroupSavedKnowledgeDisplayName(
-    savedMeta.groupName,
-    savedMeta.sharedFolderName,
-  )
+  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, undefined, p2pWorkspaceId)
+  const displayName = buildP2pGroupSavedKnowledgeDisplayName(savedMeta.groupName)
   const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
 
   const workspaceRows = kbRepo.listByWorkspace(storageWorkspaceId)
@@ -51,20 +51,48 @@ export function ensureUserSavedGroupKnowledgeBase(
     {
       p2pWorkspaceId,
       groupName,
-      sharedFolderName,
     },
     { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
   )
 
   let kbRow = existingId ? kbRepo.findRowById(existingId, storageWorkspaceId) : null
-  if (kbRow && !parseP2pGroupSavedKnowledgeMeta(kbRow.description)?.p2pWorkspaceId) {
-    kbRepo.update({
-      id: kbRow.id,
-      workspaceId: storageWorkspaceId,
-      name: displayName,
-      description,
-    })
-    kbRow = kbRepo.findRowById(kbRow.id, storageWorkspaceId) ?? kbRow
+  if (kbRow) {
+    const sharedRoot = ensureWorkspaceSharedKnowledgeFolder({ workspaceId: storageWorkspaceId })
+    const legacyMeta = parseP2pGroupSavedKnowledgeMeta(kbRow.description)
+    const canonicalDescription = buildP2pGroupSavedKnowledgeDescription(savedMeta)
+    const needsMetaUpdate =
+      kbRow.name !== displayName ||
+      kbRow.description !== canonicalDescription ||
+      legacyMeta?.sharedFolderName != null ||
+      !legacyMeta?.p2pWorkspaceId
+
+    if (needsMetaUpdate) {
+      kbRepo.update({
+        id: kbRow.id,
+        workspaceId: storageWorkspaceId,
+        name: displayName,
+        description: canonicalDescription,
+      })
+      kbRow = kbRepo.findRowById(kbRow.id, storageWorkspaceId) ?? kbRow
+    }
+
+    const targetStoragePath = resolveKnowledgeBaseStoragePath(
+      {
+        workspaceId: storageWorkspaceId,
+        name: kbRow.name,
+        kind: kbRow.kind,
+        description: kbRow.description ?? canonicalDescription,
+      },
+      { ensure: true },
+    )
+    if (targetStoragePath && legacyMeta) {
+      for (const legacyPath of collectLegacyStoragePaths(sharedRoot, kbRow.name, legacyMeta)) {
+        if (legacyPath === targetStoragePath) continue
+        moveRootLevelFiles(legacyPath, targetStoragePath)
+        removeEmptyDirectory(legacyPath)
+      }
+      migrateDocumentsInKbToStoragePath(kbRow.id, storageWorkspaceId, targetStoragePath)
+    }
   }
 
   kbRow =

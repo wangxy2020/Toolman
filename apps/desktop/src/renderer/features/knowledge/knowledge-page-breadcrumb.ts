@@ -3,12 +3,10 @@ import {
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
   FILE_REGISTRY_TOOL_ID,
-  isSharedKnowledgeId,
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
   type KnowledgeSidebarSection,
 } from './knowledge-sidebar-types'
 import type { KnowledgeFilePanelItem } from './KnowledgeBaseFilePanel'
-import type { SharedKnowledgeEntry } from './useAllP2pSharedKnowledge'
 
 export function getDeleteFileMessageSuffix(section: KnowledgeSidebarSection): string {
   return section === 'network'
@@ -33,7 +31,6 @@ export interface BreadcrumbParams {
   section: KnowledgeSidebarSection
   activeId: string | null
   active: { name: string } | null
-  activeSharedEntry: SharedKnowledgeEntry | null
   fileRegistryLabel: string
   fileDedupLabel: string
 }
@@ -42,7 +39,6 @@ export function resolveBreadcrumbItemName({
   section,
   activeId,
   active,
-  activeSharedEntry,
   fileRegistryLabel,
   fileDedupLabel,
 }: BreadcrumbParams): string | undefined {
@@ -60,9 +56,6 @@ export function resolveBreadcrumbItemName({
       : active?.name
   }
   if (section === 'shared') {
-    if (activeSharedEntry) {
-      return `[${activeSharedEntry.workspaceName}] ${activeSharedEntry.resource.name}`
-    }
     return active?.name
   }
   if (section === 'file-tools') {
@@ -70,11 +63,4 @@ export function resolveBreadcrumbItemName({
     return fileDedupLabel
   }
   return undefined
-}
-
-export function isLiveSharedKnowledgeEntry(
-  section: KnowledgeSidebarSection,
-  activeId: string | null,
-): boolean {
-  return section === 'shared' && activeId != null && isSharedKnowledgeId(activeId)
 }

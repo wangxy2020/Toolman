@@ -6,8 +6,7 @@ interface Props {
   active?: boolean
   title?: string
   onClick: () => void
-  deletable?: boolean
-  onRequestDelete?: () => void
+  onContextMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void
 }
 
 export function KnowledgeSidebarMenuItem({
@@ -16,14 +15,13 @@ export function KnowledgeSidebarMenuItem({
   active,
   title,
   onClick,
-  deletable = false,
-  onRequestDelete,
+  onContextMenu,
 }: Props) {
   const handleContextMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!onContextMenu) return
     event.preventDefault()
-    if (deletable && onRequestDelete) {
-      onRequestDelete()
-    }
+    event.stopPropagation()
+    onContextMenu(event)
   }
 
   return (

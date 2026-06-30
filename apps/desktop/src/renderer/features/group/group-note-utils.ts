@@ -1,18 +1,12 @@
 import type { P2pSharedResource, P2pSharedResourcePermission } from '@toolman/shared'
+import { isGroupNotebookId } from '@toolman/shared'
 
-export const GROUP_NOTEBOOK_ID_PREFIX = 'group-notebook:'
-export const GROUP_KB_NOTE_ID_PREFIX = 'group-kb:'
+export { buildGroupNotebookId, isGroupNotebookId } from '@toolman/shared'
 
-export function buildGroupNotebookId(workspaceId: string): string {
-  return `${GROUP_NOTEBOOK_ID_PREFIX}${workspaceId}`
-}
+const GROUP_KB_NOTE_ID_PREFIX = 'group-kb:'
 
 export function buildGroupKnowledgeNoteId(documentId: string): string {
   return `${GROUP_KB_NOTE_ID_PREFIX}${documentId}`
-}
-
-export function isGroupNotebookId(notebookId: string): boolean {
-  return notebookId.startsWith(GROUP_NOTEBOOK_ID_PREFIX)
 }
 
 export function formatGroupVirtualAgentName(groupName: string, agentName: string): string {

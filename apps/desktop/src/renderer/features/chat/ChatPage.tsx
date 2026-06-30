@@ -57,7 +57,6 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               handleDeleteAssistant={page.handleDeleteAssistant}
               setShowAssistants={page.setShowAssistants}
               knowledge={page.knowledge}
-              p2pSharedKnowledge={page.p2pSharedKnowledge}
               knowledgeSection={page.knowledgeSection}
               setKnowledgeSection={page.setKnowledgeSection}
               setShowKnowledgeCreate={page.setShowKnowledgeCreate}
@@ -107,7 +106,6 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               workspaceId={page.workspaceId}
               knowledgeSection={page.knowledgeSection}
               knowledge={page.knowledge}
-              p2pSharedKnowledge={page.p2pSharedKnowledge}
               knowledgeFolder={page.knowledgeFolder}
               networkKnowledgeFolder={page.networkKnowledgeFolder}
               localFilesFolder={page.localFilesFolder}
