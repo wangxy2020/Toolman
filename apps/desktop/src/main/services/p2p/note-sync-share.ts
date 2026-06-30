@@ -21,6 +21,7 @@ import {
   getLoroDoc,
   getTextFromLoroDoc,
   initLoroDocFromText,
+  markLoroVersionSynced,
   setLoroDocText,
 } from './loro-note-doc'
 import {
@@ -166,6 +167,12 @@ export async function pushP2pNoteUpdate(rawInput: unknown): Promise<{ event: Wor
   })
 
   const doc = getLoroDoc(input.workspaceId, input.noteId)
+  const loroText = getTextFromLoroDoc(doc)
+  if (loroText === input.content) {
+    markLoroVersionSynced(input.workspaceId, input.noteId)
+    throw new Error('笔记内容未变化')
+  }
+
   setLoroDocText(doc, input.content)
   const oplogBase64 = exportPendingLoroOplog(input.workspaceId, input.noteId)
   if (!oplogBase64) {

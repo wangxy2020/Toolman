@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('./p2p-event.service', () => ({
-  listWorkspaceEventsSince: vi.fn(() => []),
-}))
-
 import {
   buildKnowledgeShareMetadata,
   findLatestKnowledgeDocumentContentEvent,
@@ -12,38 +8,80 @@ import {
   readKnowledgeShareMetadata,
 } from './p2p-knowledge-share-metadata'
 
+vi.mock('./p2p-event.service', () => ({
+  listWorkspaceEventsSince: vi.fn(() => [
+    {
+      seq: 1,
+      resourceType: 'Knowledge',
+      eventType: 'Updated',
+      payload: { kb_id: 'kb-1', doc_id: 'doc-1', content_hash: 'hash-1' },
+    },
+    {
+      seq: 2,
+      resourceType: 'Knowledge',
+      eventType: 'Updated',
+      payload: { kb_id: 'kb-1', doc_id: 'doc-2', content_hash: 'hash-2' },
+    },
+  ]),
+}))
+
 describe('p2p-knowledge-share-metadata', () => {
-  it('reads and builds share metadata', () => {
-    const json = buildKnowledgeShareMetadata({
-      description: 'Team docs',
-      sourceWorkspaceId: 'ws-src',
-      documentIds: ['doc-1', 'doc-2'],
-      documentPermissions: { 'doc-1': 'read', 'doc-2': 'savable' },
+  it('round-trips knowledge share metadata', () => {
+    const metadata = buildKnowledgeShareMetadata({
+      description: 'demo kb',
+      sourceWorkspaceId: 'ws-1',
+      sourceKbKind: 'local',
+      documentIds: ['doc-1'],
+      documentPermissions: { 'doc-1': 'read' },
     })
-    const parsed = readKnowledgeShareMetadata(json)
-    expect(parsed.description).toBe('Team docs')
-    expect(parsed.documentIds).toEqual(['doc-1', 'doc-2'])
-    expect(parsed.documentPermissions).toEqual({ 'doc-1': 'read', 'doc-2': 'savable' })
+
+    expect(readKnowledgeShareMetadata(metadata)).toEqual({
+      description: 'demo kb',
+      sourceWorkspaceId: 'ws-1',
+      sourceKbKind: 'local',
+      documentIds: ['doc-1'],
+      documentPermissions: { 'doc-1': 'read' },
+    })
   })
 
-  it('returns empty metadata for invalid json', () => {
-    expect(readKnowledgeShareMetadata('{bad')).toEqual({})
+  it('filters invalid knowledge metadata values', () => {
+    expect(
+      readKnowledgeShareMetadata(
+        JSON.stringify({
+          sourceKbKind: 'invalid',
+          documentIds: ['ok', '', 1],
+          documentPermissions: { good: 'read', bad: 'write' },
+        }),
+      ),
+    ).toEqual({
+      description: null,
+      documentIds: ['ok'],
+      documentPermissions: { good: 'read' },
+    })
   })
 
-  it('merges shared document ids', () => {
+  it('mergeSharedDocumentIds deduplicates incoming ids', () => {
     expect(mergeSharedDocumentIds(['a'], ['b', 'a'])).toEqual(['a', 'b'])
     expect(mergeSharedDocumentIds(['a'], undefined)).toEqual(['a'])
+    expect(mergeSharedDocumentIds(undefined, [])).toBeUndefined()
   })
 
-  it('parses document permissions from event payload', () => {
+  it('parseKnowledgeDocumentPermissionsFromPayload keeps valid permissions only', () => {
     expect(
       parseKnowledgeDocumentPermissionsFromPayload({
-        document_permissions: { 'doc-1': 'read', 'doc-2': 'invalid' },
+        document_permissions: { 'doc-1': 'savable', 'doc-2': 'admin' },
       }),
-    ).toEqual({ 'doc-1': 'read' })
+    ).toEqual({ 'doc-1': 'savable' })
+    expect(parseKnowledgeDocumentPermissionsFromPayload({})).toBeUndefined()
+    expect(parseKnowledgeDocumentPermissionsFromPayload({ document_permissions: [] })).toBeUndefined()
   })
 
-  it('finds no content event when store is empty', () => {
-    expect(findLatestKnowledgeDocumentContentEvent('ws-1', 'kb-1', 'doc-1')).toBeNull()
+  it('findLatestKnowledgeDocumentContentEvent returns the newest matching event', () => {
+    const latest = findLatestKnowledgeDocumentContentEvent('ws-1', 'kb-1', 'doc-1')
+    expect(latest?.payload).toEqual({
+      kb_id: 'kb-1',
+      doc_id: 'doc-1',
+      content_hash: 'hash-1',
+    })
   })
 })

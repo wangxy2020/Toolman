@@ -15,6 +15,8 @@ export function useLoroNoteSync({ noteId, content, onRemoteContent }: Options) {
   const pushTimerRef = useRef<number | null>(null)
   const applyingRemoteRef = useRef(false)
   const lastContentRef = useRef(content)
+  const lastPushedContentRef = useRef<string | null>(null)
+  const activeNoteIdRef = useRef<string | null>(null)
   const onRemoteContentRef = useRef(onRemoteContent)
 
   useEffect(() => {
@@ -73,7 +75,26 @@ export function useLoroNoteSync({ noteId, content, onRemoteContent }: Options) {
   }, [flushPush, noteId])
 
   useEffect(() => {
-    if (!noteId) return
+    if (!noteId) {
+      activeNoteIdRef.current = null
+      lastPushedContentRef.current = null
+      return
+    }
+
+    if (noteId !== activeNoteIdRef.current) {
+      activeNoteIdRef.current = noteId
+      lastPushedContentRef.current = content
+      return
+    }
+
+    if (applyingRemoteRef.current) {
+      lastPushedContentRef.current = content
+      return
+    }
+
+    if (content === lastPushedContentRef.current) return
+
+    lastPushedContentRef.current = content
     schedulePush()
   }, [content, noteId, schedulePush])
 
@@ -92,6 +113,7 @@ export function useLoroNoteSync({ noteId, content, onRemoteContent }: Options) {
 
       applyingRemoteRef.current = true
       lastContentRef.current = merged
+      lastPushedContentRef.current = merged
       onRemoteContentRef.current(merged)
       window.setTimeout(() => {
         applyingRemoteRef.current = false

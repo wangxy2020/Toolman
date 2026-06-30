@@ -7,6 +7,8 @@ export const LORO_NOTE_TEXT_KEY = 'content'
 
 const docCache = new Map<string, LoroDoc>()
 const versionCache = new Map<string, VersionVector>()
+/** Last text that was synced/exported; Loro version vectors alone cannot detect no-op pending state. */
+const syncedTextCache = new Map<string, string>()
 const MAX_LORO_DOC_CACHE = 32
 
 function touchLoroDocCache(key: string, doc: LoroDoc): LoroDoc {
@@ -19,6 +21,7 @@ function touchLoroDocCache(key: string, doc: LoroDoc): LoroDoc {
     if (!oldest) break
     docCache.delete(oldest)
     versionCache.delete(oldest)
+    syncedTextCache.delete(oldest)
   }
   return doc
 }
@@ -85,6 +88,7 @@ export function getLoroDoc(workspaceId: string, noteId: string): LoroDoc {
 
   docCache.set(key, doc)
   versionCache.set(key, doc.version())
+  syncedTextCache.set(key, getTextFromLoroDoc(doc))
   return touchLoroDocCache(key, doc)
 }
 
@@ -92,8 +96,16 @@ export function initLoroDocFromText(workspaceId: string, noteId: string, text: s
   const doc = createLoroDocFromText(text)
   const key = docKey(workspaceId, noteId)
   versionCache.set(key, doc.version())
+  syncedTextCache.set(key, text)
   persistLoroDoc(workspaceId, noteId, doc)
   return touchLoroDocCache(key, doc)
+}
+
+export function markLoroVersionSynced(workspaceId: string, noteId: string): void {
+  const key = docKey(workspaceId, noteId)
+  const doc = docCache.get(key) ?? getLoroDoc(workspaceId, noteId)
+  versionCache.set(key, doc.version())
+  syncedTextCache.set(key, getTextFromLoroDoc(doc))
 }
 
 export function exportPendingLoroOplog(
@@ -104,11 +116,15 @@ export function exportPendingLoroOplog(
   const doc = docCache.get(key)
   if (!doc) return null
 
+  const currentText = getTextFromLoroDoc(doc)
+  if (currentText === syncedTextCache.get(key)) return null
+
   const from = versionCache.get(key)
   const bytes = from ? doc.export({ mode: 'update', from }) : doc.export({ mode: 'update' })
   if (bytes.length === 0) return null
 
   versionCache.set(key, doc.version())
+  syncedTextCache.set(key, currentText)
   return Buffer.from(bytes).toString('base64')
 }
 
@@ -128,7 +144,9 @@ export function applyLoroOplog(
 ): LoroDoc {
   const doc = getLoroDoc(workspaceId, noteId)
   importLoroOplogBase64(doc, oplogBase64)
-  versionCache.set(docKey(workspaceId, noteId), doc.version())
+  const key = docKey(workspaceId, noteId)
+  versionCache.set(key, doc.version())
+  syncedTextCache.set(key, getTextFromLoroDoc(doc))
   persistLoroDoc(workspaceId, noteId, doc)
   return doc
 }
@@ -137,4 +155,5 @@ export function clearLoroDocCache(workspaceId: string, noteId: string): void {
   const key = docKey(workspaceId, noteId)
   docCache.delete(key)
   versionCache.delete(key)
+  syncedTextCache.delete(key)
 }

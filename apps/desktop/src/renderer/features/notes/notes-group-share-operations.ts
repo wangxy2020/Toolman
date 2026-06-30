@@ -38,20 +38,26 @@ export function mergeGroupSharedNoteIntoData(
   const existing = prev.notes.find((item) => item.id === noteId)
 
   if (existing) {
+    const needsNotePatch =
+      existing.notebookId !== groupNotebookId ||
+      existing.locked !== locked ||
+      existing.groupPermissionLocked !== groupPermissionLocked
+
     return {
       ...prev,
       notebooks: ensureGroupNotebook(prev.notebooks, groupNotebookId, groupNotebookName),
-      notes: prev.notes.map((item) =>
-        item.id === noteId
-          ? {
-              ...item,
-              notebookId: groupNotebookId,
-              locked,
-              groupPermissionLocked,
-              updatedAt: Date.now(),
-            }
-          : item,
-      ),
+      notes: needsNotePatch
+        ? prev.notes.map((item) =>
+            item.id === noteId
+              ? {
+                  ...item,
+                  notebookId: groupNotebookId,
+                  locked,
+                  groupPermissionLocked,
+                }
+              : item,
+          )
+        : prev.notes,
     }
   }
 
