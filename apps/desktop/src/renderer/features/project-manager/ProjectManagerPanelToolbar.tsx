@@ -7,6 +7,7 @@ import {
   IconFile,
   IconSliders,
 } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import type { ProjectManagerPanelView } from './projectManagerPanelView'
 
 interface Props {
@@ -16,21 +17,32 @@ interface Props {
 
 const VIEW_ITEMS: {
   key: ProjectManagerPanelView
-  title: string
+  titleKey: string
   icon: ReactNode
 }[] = [
-  { key: 'stats', title: '统计', icon: <IconChartBar size={16} /> },
-  { key: 'agent', title: '智能体', icon: <IconAgent size={16} /> },
-  { key: 'files', title: '文件', icon: <IconFile size={16} /> },
-  { key: 'database', title: '数据库', icon: <IconDatabase size={16} /> },
-  { key: 'settings', title: '设置', icon: <IconSliders size={16} /> },
+  { key: 'stats', titleKey: 'projectManagerPage.toolbar.stats', icon: <IconChartBar size={16} /> },
+  { key: 'agent', titleKey: 'projectManagerPage.toolbar.agent', icon: <IconAgent size={16} /> },
+  { key: 'files', titleKey: 'projectManagerPage.toolbar.files', icon: <IconFile size={16} /> },
+  {
+    key: 'database',
+    titleKey: 'projectManagerPage.toolbar.database',
+    icon: <IconDatabase size={16} />,
+  },
+  {
+    key: 'settings',
+    titleKey: 'projectManagerPage.toolbar.settings',
+    icon: <IconSliders size={16} />,
+  },
 ]
 
 export function ProjectManagerPanelToolbar({ activeView, onSelectView }: Props) {
+  const { t } = useI18n()
+
   return (
     <>
       {VIEW_ITEMS.map((item) => {
         const isActive = activeView === item.key
+        const title = t(item.titleKey)
         return (
           <button
             key={item.key}
@@ -41,11 +53,10 @@ export function ProjectManagerPanelToolbar({ activeView, onSelectView }: Props) 
             ]
               .filter(Boolean)
               .join(' ')}
-            title={item.title}
-            aria-label={item.title}
+            title={title}
+            aria-label={title}
             aria-pressed={isActive}
-            onClick={() => onSelectView(item.key)}
-          >
+            onClick={() => onSelectView(item.key)}>
             {item.icon}
           </button>
         )

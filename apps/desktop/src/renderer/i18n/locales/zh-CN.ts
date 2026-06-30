@@ -7,6 +7,7 @@ import {
   groupPageZhCN,
   knowledgePageZhCN,
   notesPageZhCN,
+  projectManagerPageZhCN,
   toolApprovalPageZhCN,
 } from './partials/pages'
 import { coreZhCN } from './partials/core'
@@ -22,4 +23,5 @@ export const zhCN = {
   groupPage: groupPageZhCN,
   communityPage: communityPageZhCN,
   toolApprovalPage: toolApprovalPageZhCN,
+  projectManagerPage: projectManagerPageZhCN,
 } as const

@@ -1,4 +1,4 @@
-/** 左侧菜单栏可配置的 Tab（不含固定的「自定义」入口） */
+/** Configurable sidebar tabs (excluding fixed Customize entry). */
 export const CONFIGURABLE_SIDEBAR_MENU_KEYS = [
   'all_projects',
   'urgent_tasks',
@@ -13,24 +13,48 @@ export const CONFIGURABLE_SIDEBAR_MENU_KEYS = [
 
 export type ConfigurableSidebarMenuKey = (typeof CONFIGURABLE_SIDEBAR_MENU_KEYS)[number]
 
-export type ProjectSidebarMenuTab = ConfigurableSidebarMenuKey | 'add_project_set'
+export type ProjectSidebarMenuTab = ConfigurableSidebarMenuKey | 'customize_menu'
 
-export const PROJECT_SIDEBAR_CUSTOM_TAB: ProjectSidebarMenuTab = 'add_project_set'
+export const PROJECT_SIDEBAR_CUSTOM_TAB: ProjectSidebarMenuTab = 'customize_menu'
 
-export const isConfigurableSidebarMenuKey = (tab: ProjectSidebarMenuTab): tab is ConfigurableSidebarMenuKey =>
-  tab !== PROJECT_SIDEBAR_CUSTOM_TAB
+/** Phase 1: only cost/schedule dashboards are implemented; hide other tabs by default. */
+export const PLACEHOLDER_SIDEBAR_MENU_KEYS: ConfigurableSidebarMenuKey[] = [
+  'all_projects',
+  'urgent_tasks',
+  'key_projects',
+  'resource_management',
+  'security_management',
+  'quality_management',
+  'archive_management',
+]
 
-export const PROJECT_SIDEBAR_MENU_LABELS: Record<ConfigurableSidebarMenuKey, string> = {
-  all_projects: '工作台',
-  urgent_tasks: '待办',
-  key_projects: '综合管理',
-  progress_management: '计划管理',
-  cost_management: '成本管理',
-  resource_management: '资源管理',
-  security_management: '安全质量',
-  quality_management: '测量试验',
-  archive_management: '档案管理',
+export const SIDEBAR_MENU_I18N_KEY: Record<ConfigurableSidebarMenuKey, string> = {
+  all_projects: 'projectManagerPage.sidebar.allProjects',
+  urgent_tasks: 'projectManagerPage.sidebar.urgentTasks',
+  key_projects: 'projectManagerPage.sidebar.keyProjects',
+  progress_management: 'projectManagerPage.sidebar.progressManagement',
+  cost_management: 'projectManagerPage.sidebar.costManagement',
+  resource_management: 'projectManagerPage.sidebar.resourceManagement',
+  security_management: 'projectManagerPage.sidebar.securityManagement',
+  quality_management: 'projectManagerPage.sidebar.qualityManagement',
+  archive_management: 'projectManagerPage.sidebar.archiveManagement',
 }
+
+export const PANEL_SUBTITLE_I18N_KEY: Record<ConfigurableSidebarMenuKey, string> = {
+  all_projects: 'projectManagerPage.panel.subtitles.allProjects',
+  urgent_tasks: 'projectManagerPage.panel.subtitles.urgentTasks',
+  key_projects: 'projectManagerPage.panel.subtitles.keyProjects',
+  progress_management: 'projectManagerPage.panel.subtitles.progressManagement',
+  cost_management: 'projectManagerPage.panel.subtitles.costManagement',
+  resource_management: 'projectManagerPage.panel.subtitles.resourceManagement',
+  security_management: 'projectManagerPage.panel.subtitles.securityManagement',
+  quality_management: 'projectManagerPage.panel.subtitles.qualityManagement',
+  archive_management: 'projectManagerPage.panel.subtitles.archiveManagement',
+}
+
+export const isConfigurableSidebarMenuKey = (
+  tab: ProjectSidebarMenuTab,
+): tab is ConfigurableSidebarMenuKey => tab !== PROJECT_SIDEBAR_CUSTOM_TAB
 
 export const DEFAULT_SIDEBAR_MENU_ORDER: ConfigurableSidebarMenuKey[] = [...CONFIGURABLE_SIDEBAR_MENU_KEYS]
 
@@ -64,7 +88,10 @@ const normalizeOrder = (order: unknown): ConfigurableSidebarMenuKey[] => {
   return normalized
 }
 
-const normalizeHidden = (hidden: unknown, order: ConfigurableSidebarMenuKey[]): ConfigurableSidebarMenuKey[] => {
+const normalizeHidden = (
+  hidden: unknown,
+  order: ConfigurableSidebarMenuKey[],
+): ConfigurableSidebarMenuKey[] => {
   if (!Array.isArray(hidden)) {
     return []
   }
@@ -83,7 +110,7 @@ const normalizeHidden = (hidden: unknown, order: ConfigurableSidebarMenuKey[]): 
 
 export const getDefaultSidebarMenuPreferences = (): ProjectSidebarMenuPreferences => ({
   order: [...DEFAULT_SIDEBAR_MENU_ORDER],
-  hidden: [],
+  hidden: [...PLACEHOLDER_SIDEBAR_MENU_KEYS],
 })
 
 export const readProjectSidebarMenuPreferences = (): ProjectSidebarMenuPreferences => {
@@ -101,7 +128,9 @@ export const readProjectSidebarMenuPreferences = (): ProjectSidebarMenuPreferenc
   }
 }
 
-export const writeProjectSidebarMenuPreferences = (preferences: ProjectSidebarMenuPreferences): void => {
+export const writeProjectSidebarMenuPreferences = (
+  preferences: ProjectSidebarMenuPreferences,
+): void => {
   try {
     const order = normalizeOrder(preferences.order)
     const hidden = normalizeHidden(preferences.hidden, order)
@@ -111,7 +140,9 @@ export const writeProjectSidebarMenuPreferences = (preferences: ProjectSidebarMe
   }
 }
 
-export const getVisibleSidebarMenuKeys = (preferences: ProjectSidebarMenuPreferences): ConfigurableSidebarMenuKey[] => {
+export const getVisibleSidebarMenuKeys = (
+  preferences: ProjectSidebarMenuPreferences,
+): ConfigurableSidebarMenuKey[] => {
   const order = normalizeOrder(preferences.order)
   const hidden = new Set(normalizeHidden(preferences.hidden, order))
   return order.filter((key) => !hidden.has(key))

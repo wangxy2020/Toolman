@@ -1,4 +1,4 @@
-/* PM dashboards (styled-components) read Cherry-style tokens; map Toolman theme here. */
+/* PM dashboards use --color-* aliases mapped to Toolman theme tokens. */
 .tm-project-manager-page {
   --color-background: var(--tm-bg);
   --color-background-soft: var(--tm-sidebar-bg);
@@ -14,4 +14,433 @@
   border-color: var(--tm-accent);
   color: var(--tm-accent);
   background: var(--tm-accent-light);
+}
+
+.tm-pm-dashboard {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tm-pm-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1400px) {
+  .tm-pm-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .tm-pm-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tm-pm-kpi-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 0.5px solid var(--color-border);
+  background: var(--color-background);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  min-height: 88px;
+}
+
+.tm-pm-kpi-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-background-soft);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.tm-pm-kpi-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tm-pm-kpi-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.tm-pm-kpi-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.tm-pm-kpi-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+}
+
+.tm-pm-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 500;
+}
+
+.tm-pm-trend--up {
+  color: #16a34a;
+}
+
+.tm-pm-trend--down {
+  color: #2563eb;
+}
+
+.tm-pm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tm-pm-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tm-pm-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tm-pm-section-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.tm-pm-project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.tm-pm-project-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 0.5px solid var(--color-border);
+  background: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.2s ease;
+}
+
+.tm-pm-project-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.tm-pm-project-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tm-pm-project-code {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-family: ui-monospace, monospace;
+}
+
+.tm-pm-project-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.tm-pm-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.tm-pm-status--normal {
+  color: #15803d;
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+}
+
+.tm-pm-status--warning {
+  color: #b45309;
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+}
+
+.tm-pm-status--critical {
+  color: #b91c1c;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+}
+
+.tm-pm-metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tm-pm-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tm-pm-metric-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.tm-pm-metric-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tm-pm-metric-value--warn {
+  color: #dc2626;
+}
+
+.tm-pm-progress-track {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tm-pm-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.tm-pm-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-background-mute);
+  overflow: hidden;
+}
+
+.tm-pm-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-primary) 0%, #3b82f6 100%);
+}
+
+.tm-pm-project-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.tm-pm-project-meta span {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--color-background-soft);
+}
+
+.tm-pm-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .tm-pm-insight-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tm-pm-insight-card {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 0.5px solid var(--color-border);
+  background: linear-gradient(135deg, var(--color-background-soft) 0%, var(--color-background) 100%);
+}
+
+.tm-pm-insight-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.tm-pm-insight-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.tm-pm-insight-desc {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.tm-pm-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  border-radius: 12px;
+  border: 0.5px dashed var(--color-border);
+  background: var(--color-background-soft);
+}
+
+/* Sidebar menu settings */
+.tm-pm-settings {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.tm-pm-settings-inner {
+  display: flex;
+  width: 100%;
+  max-width: 720px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tm-pm-settings-card {
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  padding: 12px;
+}
+
+.tm-pm-settings-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tm-pm-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tm-pm-settings-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: var(--list-item-border-radius, 8px);
+  border: 0.5px solid var(--color-border);
+  background: var(--color-background-soft);
+}
+
+.tm-pm-settings-drag {
+  display: inline-flex;
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  opacity: 0.6;
+}
+
+.tm-pm-settings-label {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.tm-pm-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tm-pm-settings-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tm-pm-settings-icon-btn:hover:not(:disabled) {
+  background: var(--color-background-mute);
+  color: var(--color-text);
+}
+
+.tm-pm-settings-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tm-pm-settings-hint {
+  border: 0.5px dashed var(--color-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--color-background-soft);
+}
+
+.tm-pm-settings-hint-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tm-pm-settings-hint-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tm-pm-settings-toggle-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  min-width: 28px;
+  text-align: center;
+}
+
+.tm-pm-settings-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

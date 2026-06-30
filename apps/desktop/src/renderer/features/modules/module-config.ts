@@ -59,9 +59,9 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
     title: '项目管理',
     addLabel: '新建项目',
     headerSegments: ['全部项目'],
-    sidebarEmptyHint: '在左侧选择模块查看 MOCK 看板',
+    sidebarEmptyHint: '在左侧选择「成本管理」或「计划管理」查看看板',
     contentEmptyTitle: '项目管理',
-    contentEmptyHint: '成本与计划管理看板已接入 MOCK 数据；EPC 工作流将在后续阶段启用。',
+    contentEmptyHint: '成本与计划 MOCK 看板已接入；其余模块与 EPC 工作流将在后续阶段启用。',
   },
 }
 

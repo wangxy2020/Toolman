@@ -1,10 +1,11 @@
 import { useEffect, useMemo } from 'react'
 
 import { IconPlus } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   isConfigurableSidebarMenuKey,
   PROJECT_SIDEBAR_CUSTOM_TAB,
-  PROJECT_SIDEBAR_MENU_LABELS,
+  SIDEBAR_MENU_I18N_KEY,
   type ProjectSidebarMenuTab,
 } from './projectSidebarMenuConfig'
 import { useProjectSidebarMenuPreferences } from './useProjectSidebarMenuPreferences'
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function ProjectSidebar({ activeTab, onSelectTab }: Props) {
+  const { t } = useI18n()
   const { preferences, visibleMenuKeys } = useProjectSidebarMenuPreferences()
 
   const menus = useMemo(
@@ -25,9 +27,9 @@ export function ProjectSidebar({ activeTab, onSelectTab }: Props) {
         .filter((key) => visibleMenuKeys.includes(key))
         .map((key) => ({
           key,
-          label: PROJECT_SIDEBAR_MENU_LABELS[key],
+          label: t(SIDEBAR_MENU_I18N_KEY[key]),
         })),
-    [preferences.order, visibleMenuKeys],
+    [preferences.order, t, visibleMenuKeys],
   )
 
   useEffect(() => {
@@ -51,10 +53,9 @@ export function ProjectSidebar({ activeTab, onSelectTab }: Props) {
           className={['tm-sidebar-add', isCustomActive ? 'tm-sidebar-add--active' : '']
             .filter(Boolean)
             .join(' ')}
-          onClick={() => onSelectTab(PROJECT_SIDEBAR_CUSTOM_TAB)}
-        >
+          onClick={() => onSelectTab(PROJECT_SIDEBAR_CUSTOM_TAB)}>
           <IconPlus />
-          自定义
+          {t('projectManagerPage.sidebar.customize')}
         </button>
 
         <div className="tm-sidebar-list">
@@ -69,8 +70,7 @@ export function ProjectSidebar({ activeTab, onSelectTab }: Props) {
                     isActive ? 'tm-assistant-row--active' : '',
                   ]
                     .filter(Boolean)
-                    .join(' ')}
-                >
+                    .join(' ')}>
                   <span
                     className="tm-assistant-expand tm-assistant-expand--placeholder"
                     aria-hidden="true"
@@ -85,8 +85,7 @@ export function ProjectSidebar({ activeTab, onSelectTab }: Props) {
                       .join(' ')}
                     onClick={() => {
                       if (menu.key !== activeTab) onSelectTab(menu.key)
-                    }}
-                  >
+                    }}>
                     {menu.label}
                   </button>
                   <div

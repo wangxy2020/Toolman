@@ -8,6 +8,7 @@ import {
   groupPageEn,
   knowledgePageEn,
   notesPageEn,
+  projectManagerPageEn,
   toolApprovalPageEn,
 } from './partials/pages'
 import { coreEn } from './partials/core'
@@ -27,4 +28,5 @@ export const en: DeepStringMap<typeof zhCN> = {
   groupPage: groupPageEn,
   communityPage: communityPageEn,
   toolApprovalPage: toolApprovalPageEn,
+  projectManagerPage: projectManagerPageEn,
 }

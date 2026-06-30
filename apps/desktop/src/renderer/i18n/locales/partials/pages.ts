@@ -19,3 +19,5 @@ export const communityPageZhCN = { ...communityPageHubZhCN, ...communityPageMark
 export const communityPageEn = { ...communityPageHubEn, ...communityPageMarketEn, ...communityPageUserEn } as const
 export { toolApprovalPageZhCN } from './pages/tool-approval.zh-CN'
 export { toolApprovalPageEn } from './pages/tool-approval.en'
+export { projectManagerPageZhCN } from './pages/project-manager.zh-CN'
+export { projectManagerPageEn } from './pages/project-manager.en'

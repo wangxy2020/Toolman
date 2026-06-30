@@ -48,9 +48,9 @@ export const modulesEn = {
       title: 'Projects',
       addLabel: 'New project',
       headerAll: 'All projects',
-      sidebarEmptyHint: 'Pick a module on the left to view MOCK dashboards.',
+      sidebarEmptyHint: 'Select Cost or Schedule on the left to view dashboards',
       contentEmptyTitle: 'Project management',
-      contentEmptyHint: 'Cost and schedule dashboards use MOCK data; EPC workflows arrive in a later phase.',
+      contentEmptyHint: 'Cost and schedule MOCK dashboards are available; other modules and EPC workflows arrive later.',
     },
   },
 } as const
