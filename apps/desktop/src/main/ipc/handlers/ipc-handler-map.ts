@@ -2,6 +2,7 @@ import type { IpcChannel } from '@toolman/shared'
 import { knowledgeIpcHandlers } from '../knowledge-ipc-handlers'
 import { p2pIpcHandlers } from '../p2p-ipc-handlers'
 import { communityHandlers } from '../community-handlers'
+import { epcIpcHandlers } from './ipc-handler-map/ipc-handler-epc'
 import { appIpcHandlers } from './ipc-handler-map/ipc-handler-app'
 import { workspaceIpcHandlers } from './ipc-handler-map/ipc-handler-workspace'
 import { dialogNotesIpcHandlers } from './ipc-handler-map/ipc-handler-dialog-notes'
@@ -18,4 +19,5 @@ export const ipcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   ...integrationsIpcHandlers,
   ...p2pIpcHandlers,
   ...communityHandlers,
+  ...epcIpcHandlers,
 }

@@ -18,6 +18,14 @@ export const projectManagerPageZhCN = {
     database: '数据库',
     settings: '设置',
   },
+  agent: {
+    loading: '正在连接 EPC 智能体…',
+    noModel: '请先在智能体中配置可用模型，再使用项目管理智能体。',
+    notLinked:
+      '未能连接智能体「{{assistant}}」下的「{{session}}」话题。请检查模型配置后重试。',
+    workdirHint: '请在「项目管理」智能体设置中配置工作目录（EPC 项目文件夹路径）。',
+    noteFallbackTitle: '对话摘录',
+  },
   panel: {
     customizeTitle: '自定义',
     customizeSubtitle: '配置项目管理左侧菜单的显示与顺序',

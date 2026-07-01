@@ -3,6 +3,8 @@ import type { PendingAttachment } from './chat-attachments'
 import { MessageInput } from './MessageInput'
 import { MessagePanel } from './MessagePanel'
 import type { MessageSettings } from './message-settings'
+import type { QuickPhrase } from './quick-phrases'
+import type { SlashCommandItem } from './slash-commands'
 import type { useChat } from './useChat'
 
 type ChatController = ReturnType<typeof useChat>
@@ -31,6 +33,9 @@ interface ChatComposerProps {
   onSaveToNote: (messageId: string) => void
   onCreateSession: () => void
   onClearSession: () => void
+  onSend?: (contentBlocks: ContentBlock[]) => void | Promise<void>
+  loadQuickPhrasesFn?: () => QuickPhrase[]
+  extraSlashCommands?: SlashCommandItem[]
 }
 
 export function ChatComposer({
@@ -51,6 +56,9 @@ export function ChatComposer({
   onSaveToNote,
   onCreateSession,
   onClearSession,
+  onSend,
+  loadQuickPhrasesFn,
+  extraSlashCommands,
 }: ChatComposerProps) {
   return (
     <>
@@ -93,9 +101,17 @@ export function ChatComposer({
           onUpdateAppSettings({ webSearchEnabled: !appSettings.webSearchEnabled })
         }
         onToggleKb={() => onUpdateAppSettings({ kbEnabled: !appSettings.kbEnabled })}
-        onSend={(contentBlocks: ContentBlock[]) => void chat.sendMessage(contentBlocks)}
+        onSend={(contentBlocks: ContentBlock[]) => {
+          if (onSend) {
+            void onSend(contentBlocks)
+            return
+          }
+          void chat.sendMessage(contentBlocks)
+        }}
         onAbort={() => void chat.abortStreaming()}
         onError={chat.setError}
+        loadQuickPhrasesFn={loadQuickPhrasesFn}
+        extraSlashCommands={extraSlashCommands}
       />
     </>
   )

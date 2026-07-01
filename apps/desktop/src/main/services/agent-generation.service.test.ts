@@ -74,6 +74,10 @@ vi.mock('./stream-broadcast', () => ({
   broadcastStreamEvent,
 }))
 
+vi.mock('./session.service', () => ({
+  getSession: () => null,
+}))
+
 import { runGeneration } from './agent-generation.service'
 
 const assistant = {

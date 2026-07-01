@@ -15,6 +15,8 @@ import {
 } from '../../components/nav-module-icons'
 import type { AppView } from '../../types/app-view'
 
+export type ModuleTier = 'core' | 'extension'
+
 export type NavModuleId =
   | 'agent'
   | 'knowledge'
@@ -34,6 +36,7 @@ export interface NavModuleDef {
   label: string
   icon: ComponentType<{ size?: number }>
   view?: AppView
+  tier: ModuleTier
   available: boolean
   closable: boolean
 }
@@ -44,6 +47,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '智能体',
     icon: IconAgent,
     view: 'agent',
+    tier: 'core',
     available: true,
     closable: false,
   },
@@ -52,6 +56,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '知识库',
     icon: IconKnowledge,
     view: 'knowledge',
+    tier: 'core',
     available: true,
     closable: true,
   },
@@ -60,6 +65,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '笔记',
     icon: IconNotes,
     view: 'notes',
+    tier: 'core',
     available: true,
     closable: true,
   },
@@ -68,6 +74,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '自动化',
     icon: IconWorkflow,
     view: 'workflow',
+    tier: 'extension',
     available: false,
     closable: true,
   },
@@ -76,6 +83,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '群组',
     icon: IconGroup,
     view: 'group',
+    tier: 'core',
     available: true,
     closable: true,
   },
@@ -84,6 +92,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '社区',
     icon: IconCommunity,
     view: 'community',
+    tier: 'core',
     available: true,
     closable: true,
   },
@@ -91,6 +100,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     id: 'translate',
     label: '翻译',
     icon: IconTranslateNav,
+    tier: 'extension',
     available: false,
     closable: true,
   },
@@ -98,6 +108,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     id: 'assistant-lib',
     label: '助手库',
     icon: IconAssistantLib,
+    tier: 'extension',
     available: false,
     closable: true,
   },
@@ -105,6 +116,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     id: 'code-tools',
     label: '代码工具',
     icon: IconCodeTools,
+    tier: 'extension',
     available: false,
     closable: true,
   },
@@ -113,6 +125,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     label: '项目管理',
     icon: IconProjects,
     view: 'projects',
+    tier: 'extension',
     available: true,
     closable: true,
   },

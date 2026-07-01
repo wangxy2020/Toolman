@@ -35,6 +35,7 @@ export function KnowledgePageHeader({
                   <button
                     type="button"
                     className="tm-dedup-header-icon-btn"
+                    title={t('knowledgePage.refreshScan')}
                     aria-label={t('knowledgePage.refreshScan')}
                     onClick={onDedupRefresh}
                   >
@@ -44,6 +45,7 @@ export function KnowledgePageHeader({
                 <button
                   type="button"
                   className="tm-dedup-header-icon-btn"
+                  title={t('knowledgePage.parentFolder')}
                   aria-label={t('knowledgePage.parentFolder')}
                   disabled={dedupScanning || !getParentPath(dedupFolderPath)}
                   onClick={onDedupGoParent}

@@ -109,6 +109,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
 
     const { hints: runtimeHints, kbResults } = await withAbortSignal(
       buildRuntimeSystemHints({
+        sessionId,
         assistant,
         runtime,
         userText: generationText,

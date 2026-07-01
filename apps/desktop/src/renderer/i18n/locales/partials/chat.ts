@@ -92,6 +92,7 @@ export const chatZhCN = {
     selectModels: '选择模型（最多 {{max}} 个，已选 {{count}}）',
   },
   workspaceFolder: '点击选择工作区文件夹',
+  codeEditorSelector: '代码编辑器：{{editor}}',
   messages: {
     emptyTitle: '开始对话',
     emptyHint: '在这里输入消息，按 {{shortcut}} 发送',
@@ -193,6 +194,7 @@ export const chatEn = {
     selectModels: 'Select models (max {{max}}, selected {{count}})',
   },
   workspaceFolder: 'Click to select workspace folder',
+  codeEditorSelector: 'Code editor: {{editor}}',
   messages: {
     emptyTitle: 'Start a conversation',
     emptyHint: 'Type a message here · {{shortcut}} to send',

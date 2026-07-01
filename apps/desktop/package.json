@@ -1,6 +1,6 @@
 {
   "name": "@toolman/desktop",
-  "version": "0.3.0-rc.1",
+  "version": "0.3.0-rc.2",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "description": "Toolman desktop AI client",
@@ -41,6 +41,7 @@
     "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
     "electron-updater": "^6.6.2",
+    "exceljs": "^4.4.0",
     "firebase": "^11.10.0",
     "highlight.js": "^11.11.1",
     "jose": "^6.2.3",

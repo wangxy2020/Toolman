@@ -1,17 +1,23 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 
 import { ModulePageStatusProvider } from '../../components/module-page-status'
 import { useI18n } from '../../i18n/useI18n'
+import type { ProjectManagementAgentPanelProps } from '../project-manager/ProjectManagementAgentPanel'
 import type { ProjectSidebarMenuTab } from '../project-manager/projectSidebarMenuConfig'
 
 const LazyProjectManagerPage = lazy(() => import('../project-manager'))
 
-interface Props {
+export type ChatPageProjectsViewProps = {
   activeTab: ProjectSidebarMenuTab
+  agentContext: Omit<ProjectManagementAgentPanelProps, 'activeTab'> | null
 }
 
-export function ChatPageProjectsView({ activeTab }: Props) {
+export function ChatPageProjectsView({ activeTab, agentContext }: ChatPageProjectsViewProps) {
   const { t } = useI18n()
+  const pageProps = useMemo(
+    () => ({ activeTab, agentContext }),
+    [activeTab, agentContext],
+  )
 
   return (
     <ModulePageStatusProvider>
@@ -23,7 +29,7 @@ export function ChatPageProjectsView({ activeTab }: Props) {
             </div>
           </main>
         }>
-        <LazyProjectManagerPage activeTab={activeTab} />
+        <LazyProjectManagerPage {...pageProps} />
       </Suspense>
     </ModulePageStatusProvider>
   )

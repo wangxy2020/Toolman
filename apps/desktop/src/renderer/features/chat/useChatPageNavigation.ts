@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CommunityUserRole, Workspace } from '@toolman/shared'
 import type { AppView } from '../../types/app-view'
+import { guardAppView } from '../modules/module-registry'
 import type { SettingsSectionId } from '../settings/settings-nav'
 import {
   COMMUNITY_SECTION_TO_ACTION,
@@ -58,16 +59,35 @@ export function useChatPageNavigation(
   useEffect(() => {
     const viewFromHash = appViewFromLocationHash(window.location.hash)
     if (viewFromHash) {
-      setActiveView(viewFromHash)
+      const resolved = guardAppView(viewFromHash, appSettings.sidebarVisibleModules)
+      setActiveView(resolved)
+      if (resolved !== viewFromHash) {
+        syncLocationHashForAppView(resolved)
+      }
     }
 
     const onHashChange = () => {
       const view = appViewFromLocationHash(window.location.hash)
-      if (view) setActiveView(view)
+      if (!view) return
+      const resolved = guardAppView(view, appSettings.sidebarVisibleModules)
+      setActiveView(resolved)
+      if (resolved !== view) {
+        syncLocationHashForAppView(resolved)
+      }
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
+  }, [appSettings.sidebarVisibleModules])
+
+  useEffect(() => {
+    setActiveView((prev) => {
+      const resolved = guardAppView(prev, appSettings.sidebarVisibleModules)
+      if (resolved !== prev) {
+        syncLocationHashForAppView(resolved)
+      }
+      return resolved
+    })
+  }, [appSettings.sidebarVisibleModules])
 
   useEffect(() => {
     void (async () => {
@@ -99,14 +119,19 @@ export function useChatPageNavigation(
   const handleOpenSettings = useCallback((section?: SettingsSectionId) => {
     setSettingsSection(section)
     setActiveView('settings')
+    syncLocationHashForAppView('settings')
   }, [])
 
-  const handleNavigate = useCallback((view: AppView) => {
-    if (view === 'agent') setSettingsSection(undefined)
-    if (view !== 'settings') setSettingsSection(undefined)
-    setActiveView(view)
-    syncLocationHashForAppView(view)
-  }, [])
+  const handleNavigate = useCallback(
+    (view: AppView) => {
+      const resolved = guardAppView(view, appSettings.sidebarVisibleModules)
+      if (resolved === 'agent') setSettingsSection(undefined)
+      if (resolved !== 'settings') setSettingsSection(undefined)
+      setActiveView(resolved)
+      syncLocationHashForAppView(resolved)
+    },
+    [appSettings.sidebarVisibleModules],
+  )
 
   const handleToggleSidebar = useCallback(() => {
     setSidebarVisible((v) => !v)

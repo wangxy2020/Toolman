@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { loadQuickPhrases, type QuickPhrase } from './quick-phrases'
-import { getGroupSlashCommands, SLASH_COMMANDS } from './slash-commands'
+import { getGroupSlashCommands, SLASH_COMMANDS, type SlashCommandItem } from './slash-commands'
 import type { InputPopupMenuItemData } from './InputPopupMenu'
 import type { TranslateFn } from '../../i18n/I18nProvider'
 
@@ -14,6 +14,8 @@ export function useMessageInputMenus({
   phraseMenuOpen,
   setSlashActiveIndex,
   setPhraseActiveIndex,
+  loadQuickPhrasesFn,
+  extraSlashCommands = [],
 }: {
   toolbarMode: 'agent' | 'group'
   groupIsOwner: boolean
@@ -24,10 +26,15 @@ export function useMessageInputMenus({
   phraseMenuOpen: boolean
   setSlashActiveIndex: (index: number) => void
   setPhraseActiveIndex: (index: number) => void
+  loadQuickPhrasesFn?: () => QuickPhrase[]
+  extraSlashCommands?: SlashCommandItem[]
 }) {
   const slashCommands = useMemo(
-    () => (toolbarMode === 'group' ? getGroupSlashCommands(groupIsOwner) : SLASH_COMMANDS),
-    [groupIsOwner, toolbarMode],
+    () => [
+      ...(toolbarMode === 'group' ? getGroupSlashCommands(groupIsOwner) : SLASH_COMMANDS),
+      ...(toolbarMode === 'agent' ? extraSlashCommands : []),
+    ],
+    [extraSlashCommands, groupIsOwner, toolbarMode],
   )
   const localizedSlashCommands = useMemo(
     () =>
@@ -59,8 +66,8 @@ export function useMessageInputMenus({
   )
 
   useEffect(() => {
-    setQuickPhrases(loadQuickPhrases())
-  }, [setQuickPhrases])
+    setQuickPhrases(loadQuickPhrasesFn ? loadQuickPhrasesFn() : loadQuickPhrases())
+  }, [loadQuickPhrasesFn, setQuickPhrases])
 
   useEffect(() => {
     if (slashMenuOpen) setSlashActiveIndex(0)

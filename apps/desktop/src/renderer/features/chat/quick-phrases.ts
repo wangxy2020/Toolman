@@ -2,6 +2,8 @@ export interface QuickPhrase {
   id: string
   label: string
   text: string
+  builtin?: boolean
+  builtinRevision?: number
 }
 
 const STORAGE_KEY = 'toolman:quick-phrases'

@@ -44,6 +44,8 @@ export function useMessageInput(props: MessageInputProps) {
     onError,
     toolbarMode = 'agent',
     groupIsOwner = false,
+    loadQuickPhrasesFn,
+    extraSlashCommands = [],
   } = props
 
   const { t } = useI18n()
@@ -73,6 +75,8 @@ export function useMessageInput(props: MessageInputProps) {
     phraseMenuOpen,
     setSlashActiveIndex,
     setPhraseActiveIndex,
+    loadQuickPhrasesFn,
+    extraSlashCommands,
   })
 
   const { stagePathsAsAttachments, handleUploadFiles } = useMessageInputAttachments({

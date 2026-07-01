@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Workspace } from '@toolman/shared'
 import { IconChevronDown, IconCodeEditor } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
 import {
   CODE_EDITOR_OPTIONS,
   getCodeEditorId,
@@ -14,9 +15,12 @@ interface Props {
 }
 
 export function CodeEditorSelector({ workspace, onChange }: Props) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const editorId = getCodeEditorId(workspace?.settings)
+  const editorLabel = getCodeEditorLabel(editorId)
+  const selectorTitle = t('chat.codeEditorSelector', { editor: editorLabel })
 
   useEffect(() => {
     if (!open) return
@@ -32,7 +36,8 @@ export function CodeEditorSelector({ workspace, onChange }: Props) {
       <button
         type="button"
         className="tm-chat-header-editor-btn"
-        title={`编码程序：${getCodeEditorLabel(editorId)}`}
+        title={selectorTitle}
+        aria-label={selectorTitle}
         onClick={() => setOpen((v) => !v)}
       >
         <IconCodeEditor editorId={editorId} size={16} />

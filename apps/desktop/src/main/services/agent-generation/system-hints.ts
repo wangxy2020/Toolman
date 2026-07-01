@@ -4,6 +4,8 @@ import {
   EXCEL_MCP_SERVER_ID,
   isDocxMcpSourceFileBlock,
   isExcelMcpSourceFileBlock,
+  parseProjectManagementSessionMetadata,
+  buildProjectManagementRuntimeHint,
 } from '@toolman/shared'
 import { isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
 import { buildToolSystemHint } from '../mcp-status.service'
@@ -24,6 +26,7 @@ import {
 } from '../knowledge-document.service'
 import { parseModelId } from '../provider.service'
 import { resolveAttachmentReadPath } from '../resolve-user-content-blocks.service'
+import { getSession } from '../session.service'
 import type { BuildRuntimeSystemHintsOptions } from './types'
 
 export async function buildRuntimeSystemHints(
@@ -31,6 +34,16 @@ export async function buildRuntimeSystemHints(
 ): Promise<{ hints: string[]; kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> }> {
   const hints: string[] = []
   let kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> = []
+
+  if (options.sessionId) {
+    const session = getSession({ id: options.sessionId })
+    if (session) {
+      const projectManagement = parseProjectManagementSessionMetadata(session.metadata)
+      if (projectManagement) {
+        hints.push(buildProjectManagementRuntimeHint(projectManagement.tab))
+      }
+    }
+  }
 
   const hasInlineAttachment = options.userContentBlocks?.some(
     (block) =>

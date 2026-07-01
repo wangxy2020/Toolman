@@ -4,6 +4,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { ChatPageMainContent } from './ChatPageMainContent'
 import { ChatPageModals } from './ChatPageModals'
 import { ChatPageSidebars } from './ChatPageSidebars'
+import { ProjectSidebarMenuPreferencesProvider } from '../project-manager/useProjectSidebarMenuPreferences'
 import { useChatPage } from './useChatPage'
 import type { ChatPageProps } from './chat-page-types'
 
@@ -48,6 +49,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
             />
           )}
 
+          <ProjectSidebarMenuPreferencesProvider>
           <div className="tm-body-main">
             <ChatPageSidebars
               showContentSidebar={page.showContentSidebar}
@@ -137,6 +139,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               isModuleView={page.isModuleView}
             />
           </div>
+          </ProjectSidebarMenuPreferencesProvider>
         </div>
 
         <ChatPageModals

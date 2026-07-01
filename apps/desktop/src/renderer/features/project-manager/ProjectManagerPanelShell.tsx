@@ -9,7 +9,12 @@ interface Props {
   children: ReactNode
 }
 
-export function ProjectManagerPanelShell({ title, subtitle, actions, children }: Props) {
+export function ProjectManagerPanelShell({
+  title,
+  subtitle,
+  actions,
+  children,
+}: Props) {
   return (
     <div className="tm-community-market tm-community-list-panel">
       <CommunityPanelHeader title={title} subtitle={subtitle} actions={actions} />

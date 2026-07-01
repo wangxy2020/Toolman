@@ -8,7 +8,6 @@ import { getWorkspaceFolderPath } from './workspace-utils'
 import {
   AssistantSettingsHelpHint,
   AssistantSettingsRequiredMark,
-  AssistantSettingsToggle,
 } from './assistant-settings-components'
 import {
   DEFAULT_PERMISSION_MODE,
@@ -28,7 +27,6 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
   const systemPaths = useSystemPaths()
   const [name, setName] = useState(t('agent.newAssistant'))
   const [modelId, setModelId] = useState('')
-  const [autonomousMode, setAutonomousMode] = useState(false)
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(DEFAULT_PERMISSION_MODE)
   const [workingDirectory, setWorkingDirectory] = useState('')
   const [environmentVariables, setEnvironmentVariables] = useState('')
@@ -72,7 +70,6 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
 
     const parameters = {
       permissionMode,
-      autonomousMode,
       ...(workingDirectory ? { workingDirectory } : {}),
       ...(environmentVariables.trim() ? { environmentVariables: environmentVariables.trim() } : {}),
     }
@@ -170,14 +167,6 @@ export function AssistantSettings({ workspaceId, workspace, providers, onClose, 
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="tm-agent-setting-row">
-                <div className="tm-agent-setting-label-group">
-                  <span className="tm-agent-setting-label">{t('agent.fields.autonomousMode')}</span>
-                  <AssistantSettingsHelpHint title={t('agent.fields.autonomousModeHint')} />
-                </div>
-                <AssistantSettingsToggle checked={autonomousMode} onChange={setAutonomousMode} />
               </div>
 
               <div className="tm-agent-setting-row tm-agent-setting-row--top">

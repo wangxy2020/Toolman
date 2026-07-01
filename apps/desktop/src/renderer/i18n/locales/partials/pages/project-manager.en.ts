@@ -18,6 +18,14 @@ export const projectManagerPageEn = {
     database: 'Database',
     settings: 'Settings',
   },
+  agent: {
+    loading: 'Connecting EPC agent…',
+    noModel: 'Configure an available model in Agents before using the project management agent.',
+    notLinked:
+      'Could not connect to topic "{{session}}" under agent "{{assistant}}". Check model settings and retry.',
+    workdirHint: 'Set a working directory on the Project Management agent (EPC project folder path).',
+    noteFallbackTitle: 'Chat excerpt',
+  },
   panel: {
     customizeTitle: 'Customize',
     customizeSubtitle: 'Configure sidebar menu visibility and order',

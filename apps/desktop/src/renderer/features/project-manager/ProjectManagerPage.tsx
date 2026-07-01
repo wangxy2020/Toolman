@@ -7,6 +7,11 @@ import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
 import { getModulePageConfig } from '../modules/module-config'
 import { useI18n } from '../../i18n/useI18n'
 import ProjectManagementDashboard from './ProjectManagementDashboard'
+import {
+  ProjectManagementAgentPanel,
+  type ProjectManagementAgentPanelProps,
+} from './ProjectManagementAgentPanel'
+import { isProjectManagementAgentTab } from './projectManagementAgentLink'
 import { ProjectManagerPanelShell } from './ProjectManagerPanelShell'
 import { ProjectManagerPanelToolbar } from './ProjectManagerPanelToolbar'
 import type { ProjectManagerPanelView } from './projectManagerPanelView'
@@ -21,9 +26,10 @@ import { useProjectSidebarMenuPreferences } from './useProjectSidebarMenuPrefere
 
 interface Props {
   activeTab: import('./projectSidebarMenuConfig').ProjectSidebarMenuTab
+  agentContext: Omit<ProjectManagementAgentPanelProps, 'activeTab'> | null
 }
 
-const ProjectManagerPage: FC<Props> = ({ activeTab }) => {
+const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   const { t } = useI18n()
   const config = getModulePageConfig('projects', t)
 
@@ -64,6 +70,12 @@ const ProjectManagerPage: FC<Props> = ({ activeTab }) => {
     setPanelView('stats')
   }, [activeTab])
 
+  const showAgentPanel =
+    panelView === 'agent' &&
+    isConfigurableSidebarMenuKey(activeTab) &&
+    isProjectManagementAgentTab(activeTab) &&
+    agentContext != null
+
   const panelBody = (() => {
     if (showSidebarMenuSettings) {
       return (
@@ -90,6 +102,10 @@ const ProjectManagerPage: FC<Props> = ({ activeTab }) => {
       )
     }
 
+    if (showAgentPanel) {
+      return <ProjectManagementAgentPanel activeTab={activeTab} {...agentContext} />
+    }
+
     const reservedKey = panelView as Exclude<ProjectManagerPanelView, 'stats'>
     return (
       <div className="tm-kb-file-panel-empty">
@@ -98,8 +114,18 @@ const ProjectManagerPage: FC<Props> = ({ activeTab }) => {
     )
   })()
 
+  const mainClassName = [
+    'tm-main',
+    showAgentPanel && agentContext?.messageSettings.useSerifFont ? 'tm-main--serif' : '',
+    showAgentPanel ? 'tm-project-manager-page--agent' : 'tm-project-manager-page',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <main className="tm-main tm-project-manager-page">
+    <main
+      className={mainClassName}
+      style={showAgentPanel ? agentContext?.messagePanelStyle : undefined}>
       <header className="tm-chat-header">
         <div className="tm-chat-breadcrumb">
           <span className="tm-model-pill tm-module-pill">{config.title}</span>
@@ -118,25 +144,31 @@ const ProjectManagerPage: FC<Props> = ({ activeTab }) => {
         ) : null}
       </header>
 
-      <div className="tm-module-content tm-community-module-content">
-        <ProjectManagerPanelShell
-          title={activeMenuLabel}
-          subtitle={panelSubtitle}
-          actions={
-            showSidebarMenuSettings ? (
-              <CommunityPanelSecondaryButton
-                title={t('projectManagerPage.panel.resetDefaults')}
-                ariaLabel={t('projectManagerPage.panel.resetDefaults')}
-                onClick={resetToDefaults}>
-                <RotateCcw size={16} />
-                <span>{t('projectManagerPage.panel.resetDefaults')}</span>
-              </CommunityPanelSecondaryButton>
-            ) : undefined
-          }>
-          {panelBody}
-        </ProjectManagerPanelShell>
-      </div>
-      <ModulePageStatusBar />
+      {showAgentPanel ? (
+        panelBody
+      ) : (
+        <>
+          <div className="tm-module-content tm-community-module-content">
+            <ProjectManagerPanelShell
+              title={activeMenuLabel}
+              subtitle={panelSubtitle}
+              actions={
+                showSidebarMenuSettings ? (
+                  <CommunityPanelSecondaryButton
+                    title={t('projectManagerPage.panel.resetDefaults')}
+                    ariaLabel={t('projectManagerPage.panel.resetDefaults')}
+                    onClick={resetToDefaults}>
+                    <RotateCcw size={16} />
+                    <span>{t('projectManagerPage.panel.resetDefaults')}</span>
+                  </CommunityPanelSecondaryButton>
+                ) : undefined
+              }>
+              {panelBody}
+            </ProjectManagerPanelShell>
+          </div>
+          <ModulePageStatusBar />
+        </>
+      )}
     </main>
   )
 }

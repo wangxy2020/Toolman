@@ -37,6 +37,7 @@ export type RunGenerationOptions = {
 }
 
 export type BuildRuntimeSystemHintsOptions = {
+  sessionId?: string
   assistant: ReturnType<typeof getAssistantRow>
   runtime: ReturnType<typeof parseAssistantRuntime>
   userText: string

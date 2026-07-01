@@ -444,3 +444,18 @@
   align-items: center;
   gap: 6px;
 }
+
+.tm-project-manager-page--agent {
+  /* Match agent module main: chat fills below module breadcrumb header. */
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tm-pm-agent-panel-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

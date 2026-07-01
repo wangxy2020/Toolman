@@ -1,0 +1,11 @@
+diff --git a/lib/lazystream.js b/lib/lazystream.js
+index d9f6170965b3d5ece94b094cee180791c74814a9..11a2f6ce2f327f8cc72e6ba87a5f2f87a65f757a 100644
+--- a/lib/lazystream.js
++++ b/lib/lazystream.js	
+@@ -1,5 +1,5 @@
+ var util = require('util');
+-var PassThrough = require('readable-stream/passthrough');
++var PassThrough = require('stream').PassThrough;
+ 
+ module.exports = {
+   Readable: Readable,

@@ -1,6 +1,8 @@
 import type { ContentBlock, TranslationLanguage } from '@toolman/shared'
 import type { PendingAttachment } from './chat-attachments'
 import type { SendShortcut } from './message-settings'
+import type { QuickPhrase } from './quick-phrases'
+import type { SlashCommandItem } from './slash-commands'
 
 export interface MessageInputProps {
   disabled: boolean
@@ -26,6 +28,8 @@ export interface MessageInputProps {
   onError?: (message: string | null) => void
   toolbarMode?: 'agent' | 'group'
   groupIsOwner?: boolean
+  loadQuickPhrasesFn?: () => QuickPhrase[]
+  extraSlashCommands?: SlashCommandItem[]
 }
 
 export const INPUT_MIN_HEIGHT = 66

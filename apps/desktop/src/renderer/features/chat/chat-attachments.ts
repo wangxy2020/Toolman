@@ -1,4 +1,5 @@
 import type { ContentBlock } from '@toolman/shared'
+import { isEpcAgentContextText } from '../project-management-epc/epc-user-content-blocks'
 
 export interface PendingAttachment {
   path: string
@@ -57,7 +58,7 @@ export function getUserMessageCopyText(blocks: ContentBlock[]): string {
     if (block.type === 'image' && block.alt) {
       lines.push(`图片：${block.alt}`)
     }
-    if (block.type === 'text' && block.text.trim()) {
+    if (block.type === 'text' && block.text.trim() && !isEpcAgentContextText(block.text)) {
       lines.push(block.text.trim())
     }
   }
@@ -97,6 +98,7 @@ export function getUserVisibleText(blocks: ContentBlock[]): string {
   return blocks
     .filter((block) => block.type === 'text')
     .map((block) => (block.type === 'text' ? block.text : ''))
+    .filter((text) => text.trim() && !isEpcAgentContextText(text))
     .join('\n')
     .trim()
 }

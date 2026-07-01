@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import {
   type ConfigurableSidebarMenuKey,
@@ -9,7 +17,18 @@ import {
   writeProjectSidebarMenuPreferences,
 } from './projectSidebarMenuConfig'
 
-export const useProjectSidebarMenuPreferences = () => {
+export interface ProjectSidebarMenuPreferencesValue {
+  preferences: ProjectSidebarMenuPreferences
+  visibleMenuKeys: ConfigurableSidebarMenuKey[]
+  setMenuVisible: (key: ConfigurableSidebarMenuKey, visible: boolean) => void
+  moveMenu: (key: ConfigurableSidebarMenuKey, direction: 'up' | 'down') => void
+  resetToDefaults: () => void
+}
+
+const ProjectSidebarMenuPreferencesContext =
+  createContext<ProjectSidebarMenuPreferencesValue | null>(null)
+
+function useProjectSidebarMenuPreferencesState(): ProjectSidebarMenuPreferencesValue {
   const [preferences, setPreferences] = useState<ProjectSidebarMenuPreferences>(() =>
     readProjectSidebarMenuPreferences(),
   )
@@ -69,4 +88,23 @@ export const useProjectSidebarMenuPreferences = () => {
     moveMenu,
     resetToDefaults,
   }
+}
+
+export function ProjectSidebarMenuPreferencesProvider({ children }: { children: ReactNode }) {
+  const value = useProjectSidebarMenuPreferencesState()
+  return (
+    <ProjectSidebarMenuPreferencesContext.Provider value={value}>
+      {children}
+    </ProjectSidebarMenuPreferencesContext.Provider>
+  )
+}
+
+export const useProjectSidebarMenuPreferences = (): ProjectSidebarMenuPreferencesValue => {
+  const context = useContext(ProjectSidebarMenuPreferencesContext)
+  if (!context) {
+    throw new Error(
+      'useProjectSidebarMenuPreferences must be used within ProjectSidebarMenuPreferencesProvider',
+    )
+  }
+  return context
 }

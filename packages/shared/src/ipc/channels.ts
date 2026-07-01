@@ -352,6 +352,20 @@ export enum IpcChannel {
   CommunityAdminSearch = 'community:admin:search',
   CommunityAdminAppoint = 'community:admin:appoint',
   CommunityAdminRevoke = 'community:admin:revoke',
+
+  EpcCommercial_GetMachineId = 'epc-commercial:get-machine-id',
+  EpcCommercial_GetLicenseStatus = 'epc-commercial:get-license-status',
+  EpcCommercial_ExecuteIpcAlignment = 'epc-commercial:execute-ipc-alignment',
+  EpcCommercial_ExecuteWorkspaceIpcWorkflow = 'epc-commercial:execute-workspace-ipc-workflow',
+  EpcCommercial_ExecuteWorkspaceBoqFormatWorkflow = 'epc-commercial:execute-workspace-boq-format-workflow',
+  EpcCommercial_ExecuteWorkspaceShippingCiWorkflow = 'epc-commercial:execute-workspace-shipping-ci-workflow',
+  EpcCommercial_ExecuteWorkspacePaymentWorkflow = 'epc-commercial:execute-workspace-payment-workflow',
+  EpcCommercial_ExportErrorAudit = 'epc-commercial:export-error-audit',
+  EpcCommercial_ReadWorkflowLog = 'epc-commercial:read-workflow-log',
+  EpcCommercial_AppendWorkflowLog = 'epc-commercial:append-workflow-log',
+  EpcCommercial_AppendPaymentDataPatch = 'epc-commercial:append-payment-data-patch',
+  EpcCommercial_ApplyPaymentDataOverrides = 'epc-commercial:apply-payment-data-overrides',
+  EpcCommercial_PropagatePmDataAfterEdit = 'epc-commercial:propagate-pm-data-after-edit',
 }
 
 /** P2P 推送事件（通过 window.api.subscribe 订阅，非 ipcMain.handle） */

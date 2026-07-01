@@ -96,7 +96,30 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
   }
 
   if (activeView === 'projects') {
-    return <ChatPageProjectsView activeTab={props.projectSidebarTab} />
+    return (
+      <ChatPageProjectsView
+        activeTab={props.projectSidebarTab}
+        agentContext={{
+          workspaceId: props.workspaceId,
+          chat: props.chat,
+          messageSettings: props.messageSettings,
+          messagePanelStyle: props.messagePanelStyle,
+          defaultModelId: props.defaultModelId,
+          translationLanguages: props.translationLanguages,
+          groupProxyReadOnly: props.groupProxyReadOnly,
+          appSettings: props.appSettings,
+          systemPaths: props.systemPaths,
+          agentPrefillText: props.agentPrefillText,
+          agentPrefillAttachments: props.agentPrefillAttachments,
+          chatPrefillRevision: props.chatPrefillRevision,
+          handleEditUserMessage: props.handleEditUserMessage,
+          handlePrefillConsumed: props.handlePrefillConsumed,
+          updateAppSettings: props.updateAppSettings,
+          notes: props.notes,
+          setActiveView: props.setActiveView,
+        }}
+      />
+    )
   }
 
   if (isModuleView(activeView)) {

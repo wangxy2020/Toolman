@@ -17,6 +17,7 @@ Each component remains under its own license; full license texts are in upstream
 | @babel/template | undefined | MIT | desktop |
 | @babel/traverse | undefined | MIT | desktop |
 | @babel/types | undefined | MIT | desktop |
+| @e965/xlsx | undefined | Apache-2.0 | desktop |
 | @emotion/babel-plugin | undefined | MIT | desktop |
 | @emotion/cache | undefined | MIT | desktop |
 | @emotion/hash | undefined | MIT | desktop |
@@ -129,7 +130,8 @@ Each component remains under its own license; full license texts are in upstream
 | @ungap/structured-clone | undefined | ISC | desktop |
 | @xmldom/xmldom | undefined | MIT | desktop |
 | accepts | undefined | MIT | desktop |
-| adler-32 | undefined | Apache-2.0 | desktop |
+| adm-zip | undefined | MIT | desktop |
+| agent-base | undefined | MIT | desktop |
 | ajv | undefined | MIT | desktop |
 | ajv-formats | undefined | MIT | desktop |
 | ansi-regex | undefined | MIT | desktop |
@@ -168,7 +170,6 @@ Each component remains under its own license; full license texts are in upstream
 | callsites | undefined | MIT | desktop |
 | camelcase | undefined | MIT | desktop |
 | ccount | undefined | MIT | desktop |
-| cfb | undefined | Apache-2.0 | desktop |
 | chainsaw | undefined | MIT/X11 | desktop |
 | chalk | undefined | MIT | desktop |
 | chalk-template | undefined | MIT | desktop |
@@ -182,7 +183,6 @@ Each component remains under its own license; full license texts are in upstream
 | chownr | undefined | ISC | desktop |
 | cliui | undefined | ISC | desktop |
 | clsx | undefined | MIT | desktop |
-| codepage | undefined | Apache-2.0 | desktop |
 | color-convert | undefined | MIT | desktop |
 | color-name | undefined | MIT | desktop |
 | combined-stream | undefined | MIT | desktop |
@@ -270,7 +270,7 @@ Each component remains under its own license; full license texts are in upstream
 | follow-redirects | undefined | MIT | desktop |
 | form-data | undefined | MIT | desktop |
 | forwarded | undefined | MIT | desktop |
-| frac | undefined | Apache-2.0 | desktop |
+| framer-motion | undefined | MIT | desktop |
 | fresh | undefined | MIT | desktop |
 | fs-constants | undefined | MIT | desktop |
 | fs-extra | undefined | MIT | desktop |
@@ -305,6 +305,7 @@ Each component remains under its own license; full license texts are in upstream
 | htmlparser2 | undefined | MIT | desktop |
 | http-errors | undefined | MIT | desktop |
 | http-parser-js | undefined | MIT | desktop |
+| https-proxy-agent | undefined | MIT | desktop |
 | iconv-lite | undefined | MIT | desktop |
 | idb | undefined | ISC | desktop |
 | ieee754 | undefined | BSD-3-Clause | desktop |
@@ -370,6 +371,7 @@ Each component remains under its own license; full license texts are in upstream
 | lop | undefined | BSD-2-Clause | desktop |
 | loro-crdt | undefined | MIT | desktop |
 | lowlight | undefined | MIT | desktop |
+| lucide-react | undefined | ISC | desktop |
 | mammoth | undefined | BSD-2-Clause | desktop |
 | markdown-table | undefined | MIT | desktop |
 | math-intrinsics | undefined | MIT | desktop |
@@ -427,6 +429,9 @@ Each component remains under its own license; full license texts are in upstream
 | minimist | undefined | MIT | desktop |
 | mkdirp | undefined | MIT | desktop |
 | mkdirp-classic | undefined | MIT | desktop |
+| motion | undefined | MIT | desktop |
+| motion-dom | undefined | MIT | desktop |
+| motion-utils | undefined | MIT | desktop |
 | ms | undefined | MIT | desktop |
 | napi-build-utils | undefined | MIT | desktop |
 | negotiator | undefined | MIT | desktop |
@@ -523,7 +528,6 @@ Each component remains under its own license; full license texts are in upstream
 | source-map | undefined | BSD-3-Clause | desktop |
 | space-separated-tokens | undefined | MIT | desktop |
 | sprintf-js | undefined | BSD-3-Clause | desktop |
-| ssf | undefined | Apache-2.0 | desktop |
 | statuses | undefined | MIT | desktop |
 | string_decoder | undefined | MIT | desktop |
 | string-width | undefined | MIT | desktop |
@@ -577,13 +581,10 @@ Each component remains under its own license; full license texts are in upstream
 | whatwg-mimetype | undefined | MIT | desktop |
 | which | undefined | ISC | desktop |
 | which-module | undefined | ISC | desktop |
-| wmf | undefined | Apache-2.0 | desktop |
-| word | undefined | Apache-2.0 | desktop |
 | word-extractor | undefined | MIT | desktop |
 | wordwrapjs | undefined | MIT | desktop |
 | wrap-ansi | undefined | MIT | desktop |
 | wrappy | undefined | ISC | desktop |
-| xlsx | undefined | Apache-2.0 | desktop |
 | xml-naming | undefined | MIT | desktop |
 | xmlbuilder | undefined | MIT | desktop |
 | xmlchars | undefined | MIT | desktop |
