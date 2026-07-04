@@ -18,6 +18,10 @@ vi.mock('../../provider.service', () => ({
   parseModelId: vi.fn(() => ({ providerId: 'openai', model: 'gpt-test' })),
 }))
 
+vi.mock('../../assistant.service', () => ({
+  getAssistantRow: vi.fn(() => null),
+}))
+
 vi.mock('../store', () => ({
   getAgentTask: vi.fn(),
   updateAgentTaskRecord: vi.fn(),
@@ -35,7 +39,7 @@ vi.mock('../task-event.service', () => ({
 }))
 
 vi.mock('./planner-tool-utils', () => ({
-  buildPlannerAvailableToolsHint: vi.fn(() => ''),
+  buildPlannerAvailableToolsHint: vi.fn(() => '可用工具: fs_write'),
   normalizePlannerToolName: (name: string) => name,
   normalizePlannerToolArgs: (_toolName: string, args: Record<string, unknown>) => args,
   normalizePlannerToolStep: (toolName: string, argsJson: string) => ({ toolName, argsJson }),
