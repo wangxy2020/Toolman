@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
-import { IpcChannel } from '@toolman/shared'
+import { IpcChannel, isTerminalTaskStatus } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 import { useSessionManager } from './useSessionManager'
 import type { AppSettings } from '../settings/app-settings'
 import { useChatProviders } from './useChatProviders'
@@ -10,6 +11,7 @@ import {
 import { useChatSend } from './useChatSend'
 
 export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
+  const { t } = useI18n()
   const session = useSessionManager(workspaceId, {
     restoreLastSession: appSettings?.restoreLastSession,
   })
@@ -29,6 +31,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     setSending: (sending: boolean) => void
     buildSendOptionsForSession: ReturnType<typeof useChatSend>['buildSendOptionsForSession']
     effectiveModelIds: string[]
+    autonomousTaskMode: boolean
   } | null>(null)
 
   const handleSelectSessionRef = useRef<(sessionId: string) => Promise<void>>(async () => {})
@@ -43,6 +46,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         mcpServerIds: [],
       },
     handleSelectSession: (sessionId) => handleSelectSessionRef.current(sessionId),
+    getAutonomousTaskMode: () => sendStateRef.current?.autonomousTaskMode === true,
   })
 
   const sendState = useChatSend(session, streamingRefs, {
@@ -61,6 +65,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     setSending: sendState.setSending,
     buildSendOptionsForSession: sendState.buildSendOptionsForSession,
     effectiveModelIds: sendState.effectiveModelIds,
+    autonomousTaskMode: sendState.autonomousTaskMode,
   }
 
   const handleSelectSession = useCallback(
@@ -157,6 +162,55 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     [providersState.error, session.error],
   )
 
+  const autonomousTaskToggleTitle = useMemo(() => {
+    if (!sendState.longTaskEnabled) {
+      return t('chat.input.longTaskRequiresSettings')
+    }
+
+    if (
+      sendState.sessionTaskBindingLocked &&
+      !sendState.autonomousTaskMode
+    ) {
+      return t('chat.input.autonomousTaskBindingLocked')
+    }
+
+    const boundTask = sendState.boundTask
+    const sessionActiveTaskId = sendState.sessionActiveTaskId
+    if (
+      boundTask &&
+      sessionActiveTaskId &&
+      sessionActiveTaskId === boundTask.id &&
+      !isTerminalTaskStatus(boundTask.status)
+    ) {
+      return t('chat.input.autonomousTaskCancelUnbind')
+    }
+
+    return t('chat.input.longTaskModeActive')
+  }, [
+    sendState.autonomousTaskMode,
+    sendState.boundTask,
+    sendState.longTaskEnabled,
+    sendState.sessionActiveTaskId,
+    sendState.sessionTaskBindingLocked,
+    t,
+  ])
+
+  const longTaskToggleDisabled = useMemo(() => {
+    if (!sendState.longTaskEnabled || !sendState.autonomousTaskMode) return false
+    const { boundTask, sessionActiveTaskId } = sendState
+    const runningBound =
+      boundTask &&
+      sessionActiveTaskId &&
+      sessionActiveTaskId === boundTask.id &&
+      !isTerminalTaskStatus(boundTask.status)
+    return !runningBound
+  }, [
+    sendState.autonomousTaskMode,
+    sendState.boundTask,
+    sendState.longTaskEnabled,
+    sendState.sessionActiveTaskId,
+  ])
+
   return {
     sessions: session.sessions,
     activeSession: session.activeSession,
@@ -181,6 +235,16 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     deleteAssistant,
     sendMessage: sendState.sendMessage,
     abortStreaming: sendState.abortStreaming,
+    autonomousTaskMode: sendState.autonomousTaskMode,
+    setAutonomousTaskMode: sendState.setAutonomousTaskMode,
+    toggleAutonomousTask: sendState.toggleAutonomousTask,
+    autonomousTaskToggleTitle,
+    longTaskEnabled: sendState.longTaskEnabled,
+    longTaskToggleDisabled,
+    taskModeActive: sendState.taskModeActive,
+    sessionActiveTaskId: sendState.sessionActiveTaskId,
+    sessionTaskBindingLocked: sendState.sessionTaskBindingLocked,
+    boundTask: sendState.boundTask,
     deleteMessage: messagesState.deleteMessage,
     regenerateMessage: messagesState.regenerateMessage,
     beginEditUserMessage: messagesState.beginEditUserMessage,

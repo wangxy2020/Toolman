@@ -186,9 +186,6 @@ export const isProjectManagementDataPath = (filePath: string, workspaceRoot: str
   )
 }
 
-/** @deprecated 使用 isProjectManagementDataPath */
-export const isEpcEditableDataFilePath = isProjectManagementDataPath
-
 export const PM_REVISION_AGENT_INSTRUCTIONS = `## 项目管理数据修订层（必须遵守）
 
 工作区修订文件：\`.cherry-studio/project-management/revisions.json\`

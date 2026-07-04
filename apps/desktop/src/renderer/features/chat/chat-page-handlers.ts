@@ -91,6 +91,23 @@ export async function updateAssistantModel(
   return { ok: true }
 }
 
+export async function updateAssistantWorkingDirectory(
+  assistant: Assistant,
+  workingDirectory: string | undefined,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await window.api.invoke(IpcChannel.AssistantUpdate, {
+    id: assistant.id,
+    parameters: {
+      ...assistant.parameters,
+      workingDirectory,
+    },
+  })
+  if (!result.ok) {
+    return { ok: false, error: result.error.message }
+  }
+  return { ok: true }
+}
+
 export async function updateWorkspaceSettings(
   workspaceId: string,
   settings: Record<string, unknown>,

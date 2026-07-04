@@ -27,7 +27,7 @@ describe('evaluateToolPermission autonomous mode', () => {
     ).toEqual({ allowed: true })
   })
 
-  it('requires approval for exec tools', () => {
+  it('allows exec tools without approval', () => {
     expect(
       evaluateToolPermission({
         toolName: 'bash',
@@ -35,11 +35,18 @@ describe('evaluateToolPermission autonomous mode', () => {
         toolStates: {},
         autonomousMode: true,
       }),
-    ).toEqual({
-      allowed: false,
-      reason: '执行工具 bash 需要人工授权',
-      requiresApproval: true,
-    })
+    ).toEqual({ allowed: true })
+  })
+
+  it('allows MCP run_python_code without approval', () => {
+    expect(
+      evaluateToolPermission({
+        toolName: 'mcp__excel-mcp-server__run_python_code',
+        permissionMode: 'normal',
+        toolStates: {},
+        autonomousMode: true,
+      }),
+    ).toEqual({ allowed: true })
   })
 
   it('requires approval for delete tools', () => {
@@ -49,6 +56,42 @@ describe('evaluateToolPermission autonomous mode', () => {
         permissionMode: 'normal',
         toolStates: {},
         autonomousMode: true,
+      }),
+    ).toEqual({
+      allowed: false,
+      reason: '删除工具 fs_delete 需要人工授权',
+      requiresApproval: true,
+    })
+  })
+})
+
+describe('evaluateToolPermission auto-edit mode', () => {
+  it('allows MCP run_python_code without approval', () => {
+    expect(
+      evaluateToolPermission({
+        toolName: 'mcp__excel-mcp-server__run_python_code',
+        permissionMode: 'auto-edit',
+        toolStates: {},
+      }),
+    ).toEqual({ allowed: true })
+  })
+
+  it('allows bash without approval', () => {
+    expect(
+      evaluateToolPermission({
+        toolName: 'bash',
+        permissionMode: 'auto-edit',
+        toolStates: {},
+      }),
+    ).toEqual({ allowed: true })
+  })
+
+  it('requires approval for delete tools', () => {
+    expect(
+      evaluateToolPermission({
+        toolName: 'fs_delete',
+        permissionMode: 'auto-edit',
+        toolStates: {},
       }),
     ).toEqual({
       allowed: false,

@@ -133,14 +133,28 @@ export async function executeFsGrep(args: Record<string, unknown>, context: Tool
 
 export async function executeFsEdit(args: Record<string, unknown>, context: ToolExecutionContext) {
   const pathArg = String(args.path ?? '')
-  const oldText = String(args.oldText ?? '')
   const newText = String(args.newText ?? '')
-  if (!pathArg || !oldText) throw new Error('缺少 path 或 oldText')
+  const append = args.append === true
+  if (!pathArg) throw new Error('缺少 path')
 
   const filePath = sandboxFor(context).resolveInside(pathArg)
+
+  if (append) {
+    if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+      throw new Error('追加模式要求目标文件已存在')
+    }
+    const existing = readFileSync(filePath, 'utf-8')
+    writeFileSync(filePath, existing + newText, 'utf-8')
+    return `已追加内容到文件: ${filePath}`
+  }
+
+  const oldText = String(args.oldText ?? '')
+  if (!oldText) throw new Error('缺少 oldText（若要追加内容请设置 append: true）')
+
   const content = readFileSync(filePath, 'utf-8')
   if (!content.includes(oldText)) {
-    throw new Error('未在文件中找到要替换的文本')
+    const preview = content.length > 400 ? `${content.slice(0, 400)}...` : content
+    throw new Error(`未在文件中找到要替换的文本。当前文件内容：\n${preview}`)
   }
   writeFileSync(filePath, content.replace(oldText, newText), 'utf-8')
   return `已更新文件: ${filePath}`

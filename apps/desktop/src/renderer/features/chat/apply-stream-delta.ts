@@ -13,6 +13,14 @@ export function applyStreamDelta(blocks: ContentBlock[], delta: StreamDelta): Co
 
   if (delta.type === 'text') {
     const index = findLastTextBlockIndex(next)
+    if (delta.replace) {
+      if (index >= 0) {
+        next[index] = { type: 'text', text: delta.text }
+        return next
+      }
+      return [...next, { type: 'text', text: delta.text }]
+    }
+
     if (index >= 0) {
       const current = next[index]
       if (current?.type === 'text') {
@@ -30,7 +38,9 @@ export function applyStreamDelta(blocks: ContentBlock[], delta: StreamDelta): Co
     if (existingIndex >= 0) {
       const current = next[existingIndex]
       if (current?.type === 'thinking') {
-        if (delta.text) {
+        if (delta.replace) {
+          thinkingText = delta.text
+        } else if (delta.text) {
           thinkingText = current.text + delta.text
         } else {
           thinkingText = current.text

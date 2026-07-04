@@ -1,9 +1,8 @@
 import { ipcMain } from 'electron'
-import { toErrorMessage, ipcErr } from '@toolman/shared'
+import { toErrorMessage, ipcErr, IpcChannel } from '@toolman/shared'
 import { ipcHandlers } from './handlers/ipc-handler-map'
 import { wrapHandlerWithAuthGate, mapAuthGateError } from './auth-gate'
 import { logStructured } from '../services/structured-log.service'
-import type { IpcChannel } from '@toolman/shared'
 import type { HandlerFn } from './handlers/ipc-handler-map'
 
 export function registerIpcHandlers(): void {
@@ -11,6 +10,11 @@ export function registerIpcHandlers(): void {
   let skipped = 0
 
   for (const [channel, handler] of Object.entries(ipcHandlers) as [IpcChannel, HandlerFn][]) {
+    if (!channel || channel === ('undefined' as IpcChannel)) {
+      skipped += 1
+      logStructured('ipc', 'warn', `skip invalid channel key`)
+      continue
+    }
     if (typeof handler !== 'function') {
       skipped += 1
       logStructured('ipc', 'warn', `skip missing handler: ${channel}`)
@@ -40,5 +44,20 @@ export function registerIpcHandlers(): void {
     registered += 1
   }
 
-  logStructured('ipc', 'info', `registered ${registered} handlers${skipped > 0 ? ` (${skipped} skipped)` : ''}`)
+  const requiredTranslationChannels = [
+    IpcChannel.TranslationDocumentParsePages,
+    IpcChannel.TranslationDocumentRenderPage,
+    IpcChannel.FileReadBinary,
+  ] as const
+  for (const channel of requiredTranslationChannels) {
+    if (typeof ipcHandlers[channel] !== 'function') {
+      logStructured('ipc', 'error', `required translation handler missing: ${channel}`)
+    }
+  }
+
+  logStructured(
+    'ipc',
+    'info',
+    `registered ${registered} handlers${skipped > 0 ? ` (${skipped} skipped)` : ''}`,
+  )
 }

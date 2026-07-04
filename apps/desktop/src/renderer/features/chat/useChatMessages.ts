@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { IpcChannel, type ContentBlock, type Message } from '@toolman/shared'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { IpcChannel, parseMessageTaskId, type ContentBlock, type Message, type TaskEvent } from '@toolman/shared'
 import { contentBlocksToPendingAttachments, getUserVisibleText } from './chat-attachments'
 import type { ChatSendOptions } from './useChatSend'
 import type { useSessionManager } from './useSessionManager'
@@ -20,10 +20,18 @@ export function useChatMessages(
     effectiveModelIds: string[]
     buildSendOptions: (contentBlocks?: ContentBlock[]) => ChatSendOptions
     handleSelectSession: (sessionId: string) => Promise<void>
+    getAutonomousTaskMode?: () => boolean
   },
 ) {
   const { streamingIds, suppressAbortError } = streamingRefs
-  const { setSending, setError, effectiveModelIds, buildSendOptions, handleSelectSession } = deps
+  const {
+    setSending,
+    setError,
+    effectiveModelIds,
+    buildSendOptions,
+    handleSelectSession,
+    getAutonomousTaskMode,
+  } = deps
 
   const [messages, setMessages] = useState<Message[]>([])
   const [messagesLoading, setMessagesLoading] = useState(false)
@@ -32,10 +40,13 @@ export function useChatMessages(
     messageId: string
   } | null>(null)
   const [editingUserMessageId, setEditingUserMessageId] = useState<string | null>(null)
+  const loadSeqRef = useRef(0)
 
   const loadMessages = useCallback(async (sessionId: string) => {
+    const seq = ++loadSeqRef.current
     setMessagesLoading(true)
     const result = await window.api.invoke(IpcChannel.MessageList, { sessionId })
+    if (seq !== loadSeqRef.current) return
     setMessagesLoading(false)
     if (!result.ok) {
       setError(result.error.message)
@@ -78,6 +89,19 @@ export function useChatMessages(
     })
     return unsubscribe
   }, [session.activeSessionId, session.loadSessions, loadMessages])
+
+  useEffect(() => {
+    if (!session.activeSessionId) return
+
+    const unsubscribe = window.api.subscribe(IpcChannel.TaskStream, (payload) => {
+      const event = payload as TaskEvent
+      if (event.type !== 'task.finished') return
+      if (event.sessionId !== session.activeSessionId) return
+      void loadMessages(session.activeSessionId!)
+    })
+
+    return unsubscribe
+  }, [session.activeSessionId, loadMessages])
 
   useEffect(() => {
     return subscribeChatMessageStream(session, streamingRefs, {
@@ -142,7 +166,14 @@ export function useChatMessages(
       const userMessage = target.parentMessageId
         ? messages.find((message) => message.id === target.parentMessageId)
         : null
-      const sendOptions = buildSendOptions(userMessage?.contentBlocks)
+      const messageTaskId =
+        getAutonomousTaskMode?.() === true
+          ? parseMessageTaskId(userMessage?.metadata)
+          : undefined
+      const sendOptions = {
+        ...buildSendOptions(userMessage?.contentBlocks),
+        ...(messageTaskId ? { taskId: messageTaskId } : {}),
+      }
 
       try {
         const result = await window.api.invoke(IpcChannel.MessageRegenerate, {
@@ -194,6 +225,7 @@ export function useChatMessages(
       messages,
       effectiveModelIds,
       buildSendOptions,
+      getAutonomousTaskMode,
       setError,
       setSending,
       streamingIds,

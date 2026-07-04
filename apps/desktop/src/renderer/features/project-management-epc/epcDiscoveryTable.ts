@@ -9,12 +9,6 @@ export const EPC_DISCOVERY_QUEUE_COLUMN_PERCENT = 12
 /** 分类列最小宽度（约 4 个汉字），窄屏时可横向滚动 */
 export const EPC_DISCOVERY_QUEUE_COLUMN_MIN_WIDTH_PX = 104
 
-/** @deprecated 使用 EPC_DISCOVERY_QUEUE_COLUMN_MIN_WIDTH_PX */
-export const EPC_DISCOVERY_QUEUE_COLUMN_WIDTH_PX = EPC_DISCOVERY_QUEUE_COLUMN_MIN_WIDTH_PX
-
-/** @deprecated 使用 EPC_DISCOVERY_FILE_NAME_COLUMN_PERCENT */
-export const EPC_DISCOVERY_FILE_NAME_COLUMN_WIDTH_PX = 240
-
 export interface EpcDiscoveryTableRow {
   fileName: string
   queueLabel: string

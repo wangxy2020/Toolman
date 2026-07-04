@@ -104,6 +104,54 @@ export const FileReadForChatOutputSchema = z.object({
     .optional(),
 })
 
+export const FileReadBinaryInputSchema = z.object({
+  path: z.string().min(1),
+  maxBytes: z.number().int().positive().optional(),
+})
+
+export const FileReadBinaryOutputSchema = z.object({
+  fileName: z.string(),
+  mimeType: z.string(),
+  base64: z.string(),
+  byteLength: z.number().int().nonnegative(),
+})
+
+export const TranslationDocumentParsePagesInputSchema = z.object({
+  path: z.string().min(1),
+  startPage: z.number().int().positive(),
+  endPage: z.number().int().positive(),
+})
+
+export const TranslationDocumentPageSchema = z.object({
+  pageNumber: z.number().int().positive(),
+  text: z.string(),
+})
+
+export const TranslationDocumentParsePagesOutputSchema = z.object({
+  totalPages: z.number().int().nonnegative(),
+  pages: z.array(TranslationDocumentPageSchema),
+  kind: z.enum(['pdf', 'word', 'excel', 'unknown']),
+  /** PDF page size in points (page 1); used to align FitH preview slots. */
+  pageWidth: z.number().nonnegative().optional(),
+  pageHeight: z.number().nonnegative().optional(),
+})
+
+export const TranslationDocumentRenderPageInputSchema = z.object({
+  path: z.string().min(1),
+  pageNumber: z.number().int().positive(),
+  /** CSS pixel width of the preview column. */
+  targetWidth: z.number().positive(),
+})
+
+export const TranslationDocumentRenderPageOutputSchema = z.object({
+  totalPages: z.number().int().nonnegative(),
+  pageNumber: z.number().int().positive(),
+  base64: z.string(),
+  mimeType: z.enum(['image/png', 'image/jpeg']),
+  width: z.number().positive(),
+  height: z.number().positive(),
+})
+
 export const ChatStageAttachmentsInputSchema = z.object({
   paths: z.array(z.string()).min(1),
 })

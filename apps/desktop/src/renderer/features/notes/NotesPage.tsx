@@ -3,6 +3,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { useI18n } from '../../i18n/useI18n'
 import { translateNotebookName } from '../../i18n/system-labels'
 import { IconSliders } from '../../components/icons'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import type { MessageSettings } from '../chat/message-settings'
 import { NotesEditor } from './NotesEditor'
 import { NotesHeaderActions } from './NotesHeaderActions'
@@ -113,14 +114,12 @@ export function NotesPage({
               onIngestNote={onIngestNote}
             />
           ) : (
-            <button
-              type="button"
-              className="tm-chat-header-settings-btn"
-              title={t('notesPage.settingsTitle')}
+            <HeaderIconButton
+              label={t('notesPage.settingsTitle')}
               onClick={() => setSettingsOpen(true)}
             >
               <IconSliders size={16} />
-            </button>
+            </HeaderIconButton>
           )}
         </div>
       </header>

@@ -3,7 +3,7 @@ import type { ChatMessage } from '@toolman/model-gateway'
 import type { Message } from '@toolman/shared'
 import { ProviderError } from '@toolman/model-gateway'
 import type { parseAssistantRuntime } from '../agent.service'
-import { evaluateToolPermission, isDeleteTool } from '../permission.service'
+import { evaluateToolPermission } from '../permission.service'
 import {
   requestToolApproval,
   grantToolApprovalScope,
@@ -92,9 +92,7 @@ export async function runToolLoop(options: {
 
           let result: string
           if (!permission.allowed && permission.requiresApproval) {
-            const skipApproval =
-              hasToolApprovalScope(options.sessionApprovalScopeKey) &&
-              !(runtime.autonomousMode && isDeleteTool(call.name))
+            const skipApproval = hasToolApprovalScope(options.sessionApprovalScopeKey)
 
             if (skipApproval) {
               try {
@@ -112,9 +110,7 @@ export async function runToolLoop(options: {
                   ? 'Error: 工具调用授权超时，请在弹出的「工具调用授权」窗口中点击允许'
                   : 'Error: 用户拒绝了工具调用'
               } else {
-                if (!runtime.autonomousMode || !isDeleteTool(call.name)) {
-                  grantToolApprovalScope(options.sessionApprovalScopeKey)
-                }
+                grantToolApprovalScope(options.sessionApprovalScopeKey)
                 try {
                   result = await executeToolCall(call.name, call.arguments, runtime.toolContext)
                 } catch (error) {

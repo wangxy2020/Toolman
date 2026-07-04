@@ -7,6 +7,7 @@ import {
   IconFile,
   IconSliders,
 } from '../../components/icons'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import type { ProjectManagerPanelView } from './projectManagerPanelView'
 
@@ -44,21 +45,15 @@ export function ProjectManagerPanelToolbar({ activeView, onSelectView }: Props) 
         const isActive = activeView === item.key
         const title = t(item.titleKey)
         return (
-          <button
+          <HeaderIconButton
             key={item.key}
-            type="button"
-            className={[
-              'tm-chat-header-settings-btn',
-              isActive ? 'tm-chat-header-settings-btn--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            title={title}
-            aria-label={title}
+            label={title}
+            active={isActive}
             aria-pressed={isActive}
-            onClick={() => onSelectView(item.key)}>
+            onClick={() => onSelectView(item.key)}
+          >
             {item.icon}
-          </button>
+          </HeaderIconButton>
         )
       })}
     </>

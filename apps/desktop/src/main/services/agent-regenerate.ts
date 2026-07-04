@@ -5,21 +5,24 @@ import {
   MessageEditUserInputSchema,
   MessageRegenerateInputSchema,
 } from '@toolman/shared'
+
 import { createMessageRepository, createSessionRepository, runInTransaction } from '@toolman/db'
 
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 import { getDatabase } from '../bootstrap/database'
 import { getAssistantRow } from './assistant.service'
-import { runGeneration } from './agent-generation.service'
+import { dispatchAssistantResponse } from './agent-dispatch'
 import { stageUserContentBlocks } from './resolve-user-content-blocks.service'
-import { isDocumentOcrEnabled } from './runtime-app-settings.service'
-import { abortMessage, abortControllers } from './agent-state'
+import { abortMessage } from './agent-state'
 import { dispatchGroupProxyRelay, resolveCallableGroupProxyMeta } from './agent-group-proxy'
 import {
   parseAssistantRuntime,
   resolveRuntimeMcpServerIds,
-  shouldEnableTools,
 } from './agent-runtime'
+
+function readMessageTaskId(_metadataJson: string, optionsTaskId?: string): string | undefined {
+  return optionsTaskId
+}
 
 export async function regenerateMessage(input: unknown) {
   const data = MessageRegenerateInputSchema.parse(input)
@@ -77,8 +80,6 @@ export async function regenerateMessage(input: unknown) {
     runtime.skillIds,
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
-  const memoryEnabled = data.options?.memoryEnabled ?? false
-  const kbEnabled = data.options?.kbEnabled ?? false
 
   const modelIds =
     data.modelIds ??
@@ -129,35 +130,21 @@ export async function regenerateMessage(input: unknown) {
     }
   }
 
-  for (let i = 0; i < modelIds.length; i++) {
-    const assistantMessageId = assistantMessageIds[i]!
-    const modelId = modelIds[i]!
+  const taskId = readMessageTaskId(userRow.metadataJson, data.options?.taskId)
 
-    void runGeneration({
-      sessionId: data.sessionId,
-      assistantMessageId,
-      userMessageId: userRow.id,
-      modelId,
-      assistant,
-      workspaceId: session.workspaceId,
-      userText,
-      userContentBlocks,
-      enableTools: shouldEnableTools(data.options, assistant, mcpServerIds, userContentBlocks),
-      mcpServerIds,
-      abortControllers,
-      sendOptions: {
-        webSearchEnabled: data.options?.webSearchEnabled,
-        webSearchProvider: data.options?.webSearchProvider,
-        memoryEnabled,
-        memoryRetentionDays: data.options?.memoryRetentionDays,
-        kbEnabled,
-        kbIds: data.options?.kbIds,
-        kbTopK: data.options?.kbTopK,
-        kbScoreThreshold: data.options?.kbScoreThreshold,
-        documentOcrEnabled: data.options?.documentOcrEnabled ?? isDocumentOcrEnabled(),
-      },
-    })
-  }
+  dispatchAssistantResponse({
+    taskId,
+    sessionId: data.sessionId,
+    assistantMessageIds,
+    modelIds,
+    userMessageId: userRow.id,
+    userText,
+    userContentBlocks,
+    assistant,
+    workspaceId: session.workspaceId,
+    mcpServerIds,
+    sendOptions: data.options,
+  })
 
   return { userMessageId: userRow.id, assistantMessageIds }
 }
@@ -196,8 +183,6 @@ export async function editUserMessage(input: unknown) {
     runtime.skillIds,
     data.options?.mcpServerIds ?? runtime.mcpServerIds,
   )
-  const memoryEnabled = data.options?.memoryEnabled ?? false
-  const kbEnabled = data.options?.kbEnabled ?? false
 
   const modelIds =
     data.modelIds ?? (assistant ? [assistant.modelId] : [])
@@ -252,35 +237,21 @@ export async function editUserMessage(input: unknown) {
     }
   }
 
-  for (let i = 0; i < modelIds.length; i++) {
-    const assistantMessageId = assistantMessageIds[i]!
-    const modelId = modelIds[i]!
+  const taskId = readMessageTaskId(userRow.metadataJson, data.options?.taskId)
 
-    void runGeneration({
-      sessionId: data.sessionId,
-      assistantMessageId,
-      userMessageId: userRow.id,
-      modelId,
-      assistant,
-      workspaceId: session.workspaceId,
-      userText,
-      userContentBlocks: stagedBlocks,
-      enableTools: shouldEnableTools(data.options, assistant, mcpServerIds, stagedBlocks),
-      mcpServerIds,
-      abortControllers,
-      sendOptions: {
-        webSearchEnabled: data.options?.webSearchEnabled,
-        webSearchProvider: data.options?.webSearchProvider,
-        memoryEnabled,
-        memoryRetentionDays: data.options?.memoryRetentionDays,
-        kbEnabled,
-        kbIds: data.options?.kbIds,
-        kbTopK: data.options?.kbTopK,
-        kbScoreThreshold: data.options?.kbScoreThreshold,
-        documentOcrEnabled: data.options?.documentOcrEnabled ?? isDocumentOcrEnabled(),
-      },
-    })
-  }
+  dispatchAssistantResponse({
+    taskId,
+    sessionId: data.sessionId,
+    assistantMessageIds,
+    modelIds,
+    userMessageId: userRow.id,
+    userText,
+    userContentBlocks: stagedBlocks,
+    assistant,
+    workspaceId: session.workspaceId,
+    mcpServerIds,
+    sendOptions: data.options,
+  })
 
   return {
     userMessageId: userRow.id,

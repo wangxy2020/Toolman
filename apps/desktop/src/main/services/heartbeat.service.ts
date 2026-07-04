@@ -1,7 +1,10 @@
+import { parseSessionActiveTaskId } from '@toolman/shared'
+
 import { listAssistants } from './assistant.service'
 import { logStructured } from './structured-log.service'
 import { sendMessage } from './agent.service'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
+import { runTaskSchedulerTickWithPeriodic } from './task-runtime/task-queue/task-scheduler.service'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
 
@@ -61,6 +64,33 @@ async function runHeartbeatTick(workspaceId: string): Promise<void> {
       .listRows({ sessionId: session.id })
       .some((row) => row.status === 'streaming')
     if (hasActiveStream) continue
+
+    const sessionMetadata = (() => {
+      try {
+        const parsed = JSON.parse(session.metadataJson) as unknown
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : {}
+      } catch {
+        return {}
+      }
+    })()
+    const activeTaskId = parseSessionActiveTaskId(sessionMetadata)
+    const schedulerResult = runTaskSchedulerTickWithPeriodic({
+      assistantId: assistant.id,
+      workspaceId,
+      sessionId: session.id,
+      sessionMetadata,
+    })
+    if (schedulerResult === 'scheduled') {
+      lastHeartbeatAt.set(assistant.id, now)
+      logStructured(
+        'heartbeat',
+        'info',
+        `task scheduler tick: assistant=${assistant.id} session=${session.id} task=${activeTaskId ?? 'none'}`,
+      )
+      continue
+    }
 
     lastHeartbeatAt.set(assistant.id, now)
     inFlightHeartbeats.add(assistant.id)

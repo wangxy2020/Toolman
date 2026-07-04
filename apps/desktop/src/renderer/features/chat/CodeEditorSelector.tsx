@@ -36,7 +36,6 @@ export function CodeEditorSelector({ workspace, onChange }: Props) {
       <button
         type="button"
         className="tm-chat-header-editor-btn"
-        title={selectorTitle}
         aria-label={selectorTitle}
         onClick={() => setOpen((v) => !v)}
       >

@@ -10,7 +10,7 @@
 | 翻译模块 | `nav-modules.ts` (`translate`) | 导航项已定义，不可点击 |
 | 助手库模块 | `nav-modules.ts` (`assistant-lib`) | 导航项已定义，不可点击 |
 | 代码工具模块 | `nav-modules.ts` (`code-tools`) | 导航项已定义，不可点击 |
-| 项目管理模块 | `nav-modules.ts` (`projects`) | 导航项已定义，不可点击 |
+| 项目管理模块 | `nav-modules.ts` (`projects`, `available: true`) | 已实现；默认在「隐藏图标」池，需在 设置 → 显示 中启用 |
 | 顶栏导航布局 | `renderer/features/settings/display-settings-components.tsx` | 「顶部导航」选项 `disabled: true`，仅支持侧边栏布局 |
 
 ## IM 渠道集成

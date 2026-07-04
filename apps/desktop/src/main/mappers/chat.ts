@@ -37,6 +37,12 @@ export function toIpcMessage(row: MessageRow): Message {
     contentBlocks: parseDbJson(row.contentBlocksJson, 'message content blocks'),
     error: row.errorJson ? parseDbJson(row.errorJson, 'message error') : null,
     tokenUsage: row.tokenUsageJson ? parseDbJson(row.tokenUsageJson, 'message token usage') : null,
+    metadata: (() => {
+      const parsed = parseDbJson(row.metadataJson, 'message metadata')
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : undefined
+    })(),
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   })

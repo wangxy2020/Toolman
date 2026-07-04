@@ -2,9 +2,14 @@ import { readFileSync } from 'node:fs'
 import pdfParse from 'pdf-parse'
 import { loadPdfjsDocument } from './pdfjs-options.js'
 import { isPdfExtractedTextInsufficient } from './pdf-text-quality.js'
-import { renderPdfPagesToPng } from './render-pdf-pages.js'
+import { getCachedPdfDocument, renderPdfPagesToPng } from './render-pdf-pages.js'
 
-type PdfTextItem = { str?: string }
+type PdfTextItem = { str?: string; transform?: number[] }
+
+export interface PdfPageText {
+  pageNumber: number
+  text: string
+}
 
 export interface OcrPageRecognizer {
   (input: {
@@ -43,6 +48,31 @@ async function extractWithPdfParse(buffer: Buffer): Promise<{ text: string; page
   }
 }
 
+function extractPageTextWithLayout(items: PdfTextItem[]): string {
+  const lines: Array<{ y: number; parts: Array<{ x: number; text: string }> }> = []
+
+  for (const item of items) {
+    const text = typeof item.str === 'string' ? item.str : ''
+    if (!text) continue
+    const x = item.transform?.[4] ?? 0
+    const y = Math.round((item.transform?.[5] ?? 0) * 2) / 2
+    let line = lines.find((entry) => Math.abs(entry.y - y) < 2)
+    if (!line) {
+      line = { y, parts: [] }
+      lines.push(line)
+    }
+    line.parts.push({ x, text })
+  }
+
+  lines.sort((left, right) => right.y - left.y)
+  return lines
+    .map((line) => {
+      line.parts.sort((left, right) => left.x - right.x)
+      return line.parts.map((part) => part.text).join('')
+    })
+    .join('\n')
+}
+
 async function extractWithPdfJs(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
   const document = await loadPdfjsDocument(buffer)
   const parts: string[] = []
@@ -50,12 +80,7 @@ async function extractWithPdfJs(buffer: Buffer): Promise<{ text: string; pageCou
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
     const page = await document.getPage(pageNumber)
     const content = await page.getTextContent()
-    const pageText = content.items
-      .map((item) => {
-        const textItem = item as PdfTextItem
-        return typeof textItem.str === 'string' ? textItem.str : ''
-      })
-      .join(' ')
+    const pageText = extractPageTextWithLayout(content.items as PdfTextItem[])
     const normalized = normalizePdfText(pageText)
     if (normalized) parts.push(normalized)
   }
@@ -64,6 +89,43 @@ async function extractWithPdfJs(buffer: Buffer): Promise<{ text: string; pageCou
     text: parts.join('\n\n').trim(),
     pageCount: document.numPages,
   }
+}
+
+/** Extract plain text for an inclusive 1-based page range. */
+export async function extractPdfPageTexts(
+  filePath: string,
+  startPage: number,
+  endPage: number,
+): Promise<{
+  totalPages: number
+  pages: PdfPageText[]
+  /** PDF-point size of page 1 (used to match FitH layout). */
+  pageWidth: number
+  pageHeight: number
+}> {
+  const document = await getCachedPdfDocument(filePath)
+  const totalPages = document.numPages
+  if (totalPages < 1) {
+    return { totalPages: 0, pages: [], pageWidth: 0, pageHeight: 0 }
+  }
+
+  const firstPage = await document.getPage(1)
+  const viewport = firstPage.getViewport({ scale: 1 })
+  const pageWidth = viewport.width
+  const pageHeight = viewport.height
+
+  const from = Math.max(1, Math.min(Math.floor(startPage), totalPages))
+  const to = Math.max(from, Math.min(Math.floor(endPage), totalPages))
+  const pages: PdfPageText[] = []
+
+  for (let pageNumber = from; pageNumber <= to; pageNumber += 1) {
+    const page = pageNumber === 1 ? firstPage : await document.getPage(pageNumber)
+    const content = await page.getTextContent()
+    const text = normalizePdfText(extractPageTextWithLayout(content.items as PdfTextItem[]))
+    pages.push({ pageNumber, text })
+  }
+
+  return { totalPages, pages, pageWidth, pageHeight }
 }
 
 async function extractWithVisionOcr(

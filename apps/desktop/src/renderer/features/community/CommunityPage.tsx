@@ -14,6 +14,7 @@ import {
   IconWorkflow,
 } from '../../components/icons'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
 import { ModulePageStatusProvider } from '../../components/module-page-status'
@@ -92,15 +93,9 @@ function CommunityPageHeaderEnd({
         />
       ) : null}
       <CommunityModerationCategoryNav />
-      <button
-        type="button"
-        className="tm-chat-header-settings-btn"
-        title={t('communityPage.settings')}
-        aria-label={t('communityPage.settings')}
-        onClick={onOpenSettings}
-      >
+      <HeaderIconButton label={t('communityPage.settings')} onClick={onOpenSettings}>
         <IconSliders size={16} />
-      </button>
+      </HeaderIconButton>
     </>
   )
 }

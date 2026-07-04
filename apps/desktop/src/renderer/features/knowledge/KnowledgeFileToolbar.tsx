@@ -1,4 +1,5 @@
 import { IconAgent, IconSort } from '../../components/icons'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import {
   getKnowledgeFileSortOptions,
@@ -26,16 +27,13 @@ export function KnowledgeFileToolbar({
   return (
     <div className="tm-kb-file-toolbar">
       {onChatWithFiles ? (
-        <button
-          type="button"
-          className="tm-chat-header-settings-btn"
-          title={t('knowledgePage.toolbar.chatWithFiles')}
-          aria-label={t('knowledgePage.toolbar.chatWithFiles')}
+        <HeaderIconButton
+          label={t('knowledgePage.toolbar.chatWithFiles')}
           disabled={chatDisabled}
           onClick={onChatWithFiles}
         >
           <IconAgent size={16} />
-        </button>
+        </HeaderIconButton>
       ) : null}
       <div className="tm-kb-file-toolbar-sort">
         {sortOptions.map((option) => {

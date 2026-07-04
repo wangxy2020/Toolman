@@ -43,6 +43,14 @@ export const settingsCoreZhCN = {
           ollamaOffline: '请先安装并启动 Ollama，再安装模型。',
         },
       },
+      agentRuntime: {
+        title: '智能体运行时',
+      },
+      plannerModel: {
+        label: '规划模型',
+        hint: '长任务规划阶段使用的模型。留空则与对话模型相同。',
+        sameAsDefault: '与对话模型相同',
+      },
     },
     display: {
       title: '显示设置',

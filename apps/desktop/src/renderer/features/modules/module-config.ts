@@ -63,6 +63,14 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
     contentEmptyTitle: '项目管理',
     contentEmptyHint: '成本与计划 MOCK 看板已接入；其余模块与 EPC 工作流将在后续阶段启用。',
   },
+  translate: {
+    title: '翻译',
+    addLabel: '新建对照',
+    headerSegments: ['对照翻译'],
+    sidebarEmptyHint: '暂无对照记录，点击上方新建',
+    contentEmptyTitle: '翻译',
+    contentEmptyHint: '在左侧选择对照翻译，在右侧编辑原文与译文。',
+  },
 }
 
 export function getModulePageConfig(view: ModuleView, t?: TranslateFn): ModulePageConfig {

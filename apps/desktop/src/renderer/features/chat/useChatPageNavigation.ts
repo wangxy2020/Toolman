@@ -11,6 +11,10 @@ import {
 import { isCommunityModerator } from '../community/community-user-utils'
 import { isCommunitySessionActive } from '../user/community-session'
 import type { KnowledgeSidebarSection } from '../knowledge/knowledge-sidebar-types'
+import {
+  DEFAULT_TRANSLATION_SECTION,
+  type TranslationSidebarSection,
+} from '../translation/translation-sidebar-types'
 import type { ProjectSidebarMenuTab } from '../project-manager/projectSidebarMenuConfig'
 import type { AppSettings } from '../settings/app-settings'
 import { loadDefaultWorkspace } from './chat-page-handlers'
@@ -43,6 +47,9 @@ export function useChatPageNavigation(
   )
   const [projectSidebarTab, setProjectSidebarTab] =
     useState<ProjectSidebarMenuTab>('cost_management')
+  const [translationSection, setTranslationSection] =
+    useState<TranslationSidebarSection>(DEFAULT_TRANSLATION_SECTION)
+  const [translationWorkspaceKey, setTranslationWorkspaceKey] = useState(0)
   const prevActiveViewRef = useRef(activeView)
 
   useEffect(() => {
@@ -159,6 +166,10 @@ export function useChatPageNavigation(
     setCommunityAction,
     projectSidebarTab,
     setProjectSidebarTab,
+    translationSection,
+    setTranslationSection,
+    translationWorkspaceKey,
+    setTranslationWorkspaceKey,
     showContentSidebar,
     isTopNav,
     chromeSearchTitle,

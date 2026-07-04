@@ -1,4 +1,5 @@
 import { IconSliders } from '../icons'
+import { HeaderIconButton } from './HeaderIconButton'
 import { getModulePageConfig } from '../../features/modules/module-config'
 import { useI18n } from '../../i18n/useI18n'
 import type { ModuleView } from '../../types/app-view'
@@ -26,14 +27,9 @@ export function ModulePageHeader({ view }: Props) {
       </div>
 
       <div className="tm-chat-header-end">
-        <button
-          type="button"
-          className="tm-chat-header-settings-btn"
-          title={`${config.title} · ${t('nav.settings')}`}
-          disabled
-        >
+        <HeaderIconButton label={`${config.title} · ${t('nav.settings')}`} disabled>
           <IconSliders size={16} />
-        </button>
+        </HeaderIconButton>
       </div>
     </header>
   )

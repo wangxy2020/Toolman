@@ -54,6 +54,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
             <ChatPageSidebars
               showContentSidebar={page.showContentSidebar}
               activeView={page.activeView}
+              setActiveView={page.setActiveView}
               sidebarAssistants={page.sidebarAssistants}
               chat={page.chat}
               handleDeleteAssistant={page.handleDeleteAssistant}
@@ -64,6 +65,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               setShowKnowledgeCreate={page.setShowKnowledgeCreate}
               notes={page.notes}
               setNotesIngestTarget={page.setNotesIngestTarget}
+              setStatusMessage={page.setStatusMessage}
               communitySidebarSection={page.communitySidebarSection}
               setCommunitySidebarSection={page.setCommunitySidebarSection}
               setCommunityAction={page.setCommunityAction}
@@ -75,6 +77,10 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               setShowGroupJoinPending={page.setShowGroupJoinPending}
               projectSidebarTab={page.projectSidebarTab}
               setProjectSidebarTab={page.setProjectSidebarTab}
+              translationSection={page.translationSection}
+              setTranslationSection={page.setTranslationSection}
+              setTranslationWorkspaceKey={page.setTranslationWorkspaceKey}
+              translation={page.translation}
             />
             <ChatPageMainContent
               activeView={page.activeView}
@@ -83,6 +89,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               activeAssistant={page.activeAssistant}
               workspace={page.workspace}
               chat={page.chat}
+              agentTaskPanel={page.agentTaskPanel}
               headerModelIds={page.headerModelIds}
               handleModelChange={page.handleModelChange}
               handleSelectWorkspaceFolder={page.handleSelectWorkspaceFolder}
@@ -132,6 +139,9 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               communityAction={page.communityAction}
               communitySidebarSection={page.communitySidebarSection}
               projectSidebarTab={page.projectSidebarTab}
+              translationSection={page.translationSection}
+              translationWorkspaceKey={page.translationWorkspaceKey}
+              translation={page.translation}
               settingsSection={page.settingsSection}
               updateMessageSettings={page.updateMessageSettings}
               resetSettings={page.resetSettings}
@@ -158,6 +168,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
           setShowAgentSettings={page.setShowAgentSettings}
           activeAssistant={page.activeAssistant}
           workspace={page.workspace}
+          setWorkspace={page.setWorkspace}
           showAssistants={page.showAssistants}
           setShowAssistants={page.setShowAssistants}
           handleAssistantCreated={page.handleAssistantCreated}

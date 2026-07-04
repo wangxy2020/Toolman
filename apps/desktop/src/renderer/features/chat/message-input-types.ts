@@ -19,6 +19,14 @@ export interface MessageInputProps {
   onClearSession?: () => void
   onToggleWebSearch?: () => void
   onToggleKb?: () => void
+  autonomousTaskMode?: boolean
+  taskModeActive?: boolean
+  longTaskEnabled?: boolean
+  longTaskToggleDisabled?: boolean
+  autonomousTaskToggleTitle?: string
+  sessionActiveTaskId?: string | null
+  sessionTaskBindingLocked?: boolean
+  onToggleAutonomousTask?: () => void | Promise<void>
   prefillText?: string | null
   prefillAttachments?: PendingAttachment[] | null
   prefillRevision?: number

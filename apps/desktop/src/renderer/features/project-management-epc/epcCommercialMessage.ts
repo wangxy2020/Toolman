@@ -1,8 +1,6 @@
 import {
   EPC_COMMERCIAL_AGENT_NARRATION_MARKER,
-  EPC_COMMERCIAL_COMMAND_TEMPLATE,
   EPC_COMMERCIAL_DEFAULT_QUICK_PHRASE_ID,
-  EPC_COMMERCIAL_IPC_REPORT_MARKER,
   EPC_COMMERCIAL_QUICK_PHRASE_CONTENT,
   EPC_COMMERCIAL_QUICK_PHRASE_TITLE,
   EPC_COMMERCIAL_REPORT_TITLE,
@@ -75,29 +73,6 @@ export const normalizeEpcSlashCommandInput = (command: string): string => {
   return firstLine
 }
 
-export const isEpcCommercialCommand = (text: string): boolean => {
-  const firstLine = normalizeEpcSlashCommandInput(text)
-  return EPC_COMMAND_LINE_PATTERN.test(firstLine)
-}
-
-/** @deprecated 使用 ipcTokenToPeriod */
-export const schxTokenToPeriod = ipcTokenToPeriod
-
-/** 是否为工作 4 斜杠命令（含模板与 `epc … to boq` 变体） */
-export const isEpcWork4IpcSlashCommand = (command: string): boolean => {
-  const normalized = normalizeEpcSlashCommandInput(command)
-  if (!normalized) {
-    return false
-  }
-  if (normalized === normalizeEpcSlashCommandInput(EPC_COMMERCIAL_COMMAND_TEMPLATE)) {
-    return true
-  }
-  return EPC_COMMAND_LINE_PATTERN.test(normalized)
-}
-
-/** 斜杠命令选中后填入输入框（仅命令，简洁展示；回车后再按快捷短语工作流执行） */
-export const buildEpcWork4IpcSlashCommandFillText = (): string => EPC_COMMERCIAL_COMMAND_TEMPLATE
-
 /**
  * 发给引擎与智能体汇报的「用户请求」：快捷短语全量工作流用内置正文；数据表更新类指令不在此处理。
  */
@@ -117,9 +92,6 @@ export const getEpcCommercialWorkflowUserRequest = (
   }
   return trimmed
 }
-
-/** @deprecated 使用 getEpcCommercialWorkflowUserRequest */
-export const getEpcCommercialCanonicalUserVisibleText = getEpcCommercialWorkflowUserRequest
 
 /** 解析工作 4 执行命令（可在多行正文中任意一行） */
 export const parseEpcCommercialCommandInput = (
@@ -201,9 +173,6 @@ export const resolveEpcCommercialWorkLaunch = (
     workflowUserRequest: getEpcCommercialWorkflowUserRequest(trimmed, options)
   }
 }
-
-/** @deprecated 使用 parseEpcCommercialCommandInput */
-export const parseEpcCommercialSlashInput = parseEpcCommercialCommandInput
 
 const normalizeWorkflowText = (text: string): string => text.trim().replace(/\r\n/g, '\n')
 
@@ -376,54 +345,4 @@ export const parseEpcCommercialWorkflowInput = (
   }
 
   return { matched: true, period, masterPricePath }
-}
-
-export const buildIpcAlignmentReportMessageContent = (report: IpcAlignmentReport): string => {
-  return `${EPC_COMMERCIAL_IPC_REPORT_MARKER}\n${JSON.stringify(report)}`
-}
-
-/** 仅引擎写入的 marker+JSON 块（非大模型混排正文）才渲染结构化卡片 */
-export const isEpcCommercialStructuredReportContent = (content: string): boolean => {
-  if (!content.startsWith(EPC_COMMERCIAL_IPC_REPORT_MARKER)) {
-    return false
-  }
-  const body = content.slice(EPC_COMMERCIAL_IPC_REPORT_MARKER.length).trim()
-  if (!body.startsWith('{')) {
-    return false
-  }
-  try {
-    JSON.parse(body)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export type EpcCommercialReportPayload =
-  | { kind: 'report'; report: IpcAlignmentReport }
-  | { kind: 'error'; errorMessage: string; report?: IpcAlignmentReport }
-
-export const buildEpcCommercialErrorContent = (errorMessage: string, report?: IpcAlignmentReport): string => {
-  return `${EPC_COMMERCIAL_IPC_REPORT_MARKER}\n${JSON.stringify({ errorMessage, ...report })}`
-}
-
-export const parseEpcCommercialPayloadFromContent = (content: string): EpcCommercialReportPayload | null => {
-  if (!isEpcCommercialStructuredReportContent(content)) {
-    return null
-  }
-  const json = content.slice(EPC_COMMERCIAL_IPC_REPORT_MARKER.length).trim()
-  try {
-    const parsed = JSON.parse(json) as IpcAlignmentReport & { errorMessage?: string }
-    if (parsed.errorMessage) {
-      const hasStep1 = (parsed.discoveredFiles?.length ?? 0) > 0
-      return {
-        kind: 'error',
-        errorMessage: parsed.errorMessage,
-        report: hasStep1 ? (parsed as IpcAlignmentReport) : undefined
-      }
-    }
-    return { kind: 'report', report: parsed as IpcAlignmentReport }
-  } catch {
-    return null
-  }
 }

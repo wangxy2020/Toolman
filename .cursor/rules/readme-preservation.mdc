@@ -1,0 +1,29 @@
+---
+description: README 手写文案保护；发布/升级时只同步版本号与命令
+globs: README.md,docs/engineering/RELEASE*.md,docs/engineering/README_MAINTENANCE.md,scripts/sync-readme-version.mjs
+alwaysApply: false
+---
+
+# README 维护约定
+
+根目录 `README.md` 含维护者手写的功能介绍与产品说明，**禁止在发布、升级、备份恢复或版本 bump 时重写这些段落**。
+
+## 禁止修改（`<!-- toolman:user-content:start -->` … `end` 之间）
+
+- 功能介绍、产品定位、Beta 限制等**中文描述**
+- 不要「润色」、不要恢复成旧模板、不要删减用户已写内容
+
+## 允许修改
+
+1. **版本号**：仅更新 `<!-- toolman:version -->` … `<!-- /toolman:version -->` 内的 semver；或运行 `pnpm readme:sync-version`
+2. **命令与技术块**：仅更新 `<!-- toolman:commands:start -->` … `end` 内的安装命令、命令表、故障排查代码块、环境要求中的版本号
+3. **工程文档**：`docs/engineering/RELEASE_STATUS.md`、`RELEASE_CHECKLIST.md` 中的版本/checklist 可随发布更新
+
+## 发布流程
+
+```bash
+# 先 bump apps/desktop/package.json，再同步 README 版本（不改用户文案）
+pnpm readme:sync-version
+```
+
+不要用手动 search-replace 整段替换 README 首段或功能介绍。

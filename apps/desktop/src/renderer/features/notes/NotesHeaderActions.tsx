@@ -7,6 +7,7 @@ import {
   IconSliders,
   IconStar,
 } from '../../components/icons'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import { exportNoteAsMarkdown, printNote } from './notes-import-export'
 import type { NoteItem } from './notes-storage'
@@ -33,77 +34,49 @@ export function NotesHeaderActions({
   return (
     <div className="tm-chat-header-end">
       {onChatWithNote ? (
-        <button
-          type="button"
-          className="tm-chat-header-settings-btn"
-          title={t('notesPage.header.chatWithNote')}
+        <HeaderIconButton
+          label={t('notesPage.header.chatWithNote')}
           onClick={() => onChatWithNote(note.id)}
         >
           <IconAgent size={16} />
-        </button>
+        </HeaderIconButton>
       ) : null}
       {onIngestNote ? (
-        <button
-          type="button"
-          className="tm-chat-header-settings-btn"
-          title={t('notesPage.header.addToKnowledge')}
+        <HeaderIconButton
+          label={t('notesPage.header.addToKnowledge')}
           onClick={() => onIngestNote(note.id, note.title)}
         >
           <IconKnowledge size={16} />
-        </button>
+        </HeaderIconButton>
       ) : null}
-      <button
-        type="button"
-        className="tm-chat-header-settings-btn"
-        title={t('notesPage.header.exportMarkdown')}
+      <HeaderIconButton
+        label={t('notesPage.header.exportMarkdown')}
         onClick={() => exportNoteAsMarkdown(note)}
       >
         <IconDownload size={16} />
-      </button>
-      <button
-        type="button"
-        className="tm-chat-header-settings-btn"
-        title={t('notesPage.header.printPdf')}
-        onClick={() => printNote(note)}
-      >
+      </HeaderIconButton>
+      <HeaderIconButton label={t('notesPage.header.printPdf')} onClick={() => printNote(note)}>
         <IconPrint size={16} />
-      </button>
-      <button
-        type="button"
-        className={[
-          'tm-chat-header-settings-btn',
-          note.starred ? 'tm-chat-header-settings-btn--active' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        title={note.starred ? t('notesPage.header.unstar') : t('notesPage.header.star')}
+      </HeaderIconButton>
+      <HeaderIconButton
+        label={note.starred ? t('notesPage.header.unstar') : t('notesPage.header.star')}
+        active={note.starred}
         onClick={() => onToggleStarred(note.id)}
       >
         <IconStar size={16} filled={note.starred} />
-      </button>
+      </HeaderIconButton>
       {note.groupPermissionLocked ? null : (
-        <button
-          type="button"
-          className={[
-            'tm-chat-header-settings-btn',
-            note.locked ? 'tm-chat-header-settings-btn--active' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          title={note.locked ? t('notesPage.header.unlock') : t('notesPage.header.lock')}
+        <HeaderIconButton
+          label={note.locked ? t('notesPage.header.unlock') : t('notesPage.header.lock')}
+          active={note.locked}
           onClick={() => onToggleLocked(note.id)}
         >
           <IconLock size={16} locked={note.locked} />
-        </button>
+        </HeaderIconButton>
       )}
-      <button
-        type="button"
-        className="tm-chat-header-settings-btn"
-        title={t('notesPage.header.noteSettings')}
-        onClick={onOpenSettings}
-      >
+      <HeaderIconButton label={t('notesPage.header.noteSettings')} onClick={onOpenSettings}>
         <IconSliders size={16} />
-      </button>
+      </HeaderIconButton>
     </div>
   )
 }

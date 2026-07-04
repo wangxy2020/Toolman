@@ -23,8 +23,6 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
     setModelId,
     workingDirectory,
     effectiveWorkingDirectory,
-    autonomousMode,
-    setAutonomousMode,
     heartbeatEnabled,
     setHeartbeatEnabled,
     heartbeatInterval,
@@ -128,33 +126,18 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
         </div>
       </div>
 
-      <div className="tm-agent-toggle-card">
-        <div className="tm-agent-toggle-card-item">
-          <span className="tm-agent-toggle-card-label">
-            {t('agent.fields.autonomousMode')}
-            <AgentSettingsHelpHint title={t('agent.fields.autonomousModeHint')} />
-          </span>
-          <AgentSettingsToggle
-            checked={autonomousMode}
-            onChange={(value) => {
-              setAutonomousMode(value)
-              void save({ parameters: { ...getParameters(), autonomousMode: value } })
-            }}
-          />
+      <div className="tm-agent-setting-row">
+        <div className="tm-agent-setting-label-group">
+          <span className="tm-agent-setting-label">{t('agent.fields.heartbeat')}</span>
+          <AgentSettingsHelpHint title={t('agent.fields.heartbeatHint')} />
         </div>
-        <div className="tm-agent-toggle-card-item">
-          <span className="tm-agent-toggle-card-label">
-            {t('agent.fields.heartbeat')}
-            <AgentSettingsHelpHint title={t('agent.fields.heartbeatHint')} />
-          </span>
-          <AgentSettingsToggle
-            checked={heartbeatEnabled}
-            onChange={(value) => {
-              setHeartbeatEnabled(value)
-              void save({ parameters: { ...getParameters(), heartbeatEnabled: value } })
-            }}
-          />
-        </div>
+        <AgentSettingsToggle
+          checked={heartbeatEnabled}
+          onChange={(value) => {
+            setHeartbeatEnabled(value)
+            void save({ parameters: { ...getParameters(), heartbeatEnabled: value } })
+          }}
+        />
       </div>
 
       <div className="tm-agent-setting-row">

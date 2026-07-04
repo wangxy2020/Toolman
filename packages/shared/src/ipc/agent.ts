@@ -85,11 +85,17 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
 export type ContentBlock = z.infer<typeof ContentBlockSchema>
 
 export const StreamDeltaSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({
+    type: z.literal('text'),
+    text: z.string(),
+    /** When true, replace the last text block instead of appending. */
+    replace: z.boolean().optional(),
+  }),
   z.object({
     type: z.literal('thinking'),
     text: z.string(),
     durationSeconds: z.number().int().nonnegative().optional(),
+    replace: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('tool'),
@@ -203,6 +209,7 @@ export const MessageSchema = z.object({
       total: z.number().int(),
     })
     .nullable(),
+  metadata: z.record(z.unknown()).optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 })
@@ -239,6 +246,7 @@ export const MessageSendInputSchema = z.object({
       documentOcrEnabled: z.boolean().optional(),
       isHeartbeat: z.boolean().optional(),
       isChannelMessage: z.boolean().optional(),
+      taskId: UuidSchema.optional(),
     })
     .optional(),
 })
@@ -363,6 +371,7 @@ export const AssistantSchema = z.object({
     maxTokens: z.number().int().positive().optional(),
     workingDirectory: z.string().optional(),
     autonomousMode: z.boolean().optional(),
+    longTaskMode: z.boolean().optional(),
     heartbeatEnabled: z.boolean().optional(),
     heartbeatIntervalMinutes: z.number().int().min(1).optional(),
     permissionMode: z.enum(['normal', 'plan', 'auto-edit', 'full-auto']).optional(),
@@ -382,6 +391,7 @@ export const AssistantSchema = z.object({
       .optional(),
     sessionRoundLimit: z.number().int().min(1).optional(),
     environmentVariables: z.string().optional(),
+    plannerModelId: z.string().min(1).optional(),
     translationLanguages: TranslationLanguagesSchema.optional(),
     p2pGroupProxy: z
       .object({

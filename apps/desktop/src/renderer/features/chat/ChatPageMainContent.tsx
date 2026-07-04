@@ -6,6 +6,7 @@ import { ChatPageGroupView } from './ChatPageGroupView'
 import { ChatPageCommunityView } from './ChatPageCommunityView'
 import { ChatPageProjectsView } from './ChatPageProjectsView'
 import { ChatPageModuleView } from './ChatPageModuleView'
+import { ChatPageTranslateView } from './ChatPageTranslateView'
 import { ChatPageSettingsView } from './ChatPageSettingsView'
 
 type ChatPageMainContentProps = Pick<
@@ -16,6 +17,7 @@ type ChatPageMainContentProps = Pick<
   | 'activeAssistant'
   | 'workspace'
   | 'chat'
+  | 'agentTaskPanel'
   | 'headerModelIds'
   | 'handleModelChange'
   | 'handleSelectWorkspaceFolder'
@@ -65,6 +67,9 @@ type ChatPageMainContentProps = Pick<
   | 'communityAction'
   | 'communitySidebarSection'
   | 'projectSidebarTab'
+  | 'translationSection'
+  | 'translationWorkspaceKey'
+  | 'translation'
   | 'settingsSection'
   | 'updateMessageSettings'
   | 'resetSettings'
@@ -118,6 +123,19 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
           notes: props.notes,
           setActiveView: props.setActiveView,
         }}
+      />
+    )
+  }
+
+  if (activeView === 'translate') {
+    return (
+      <ChatPageTranslateView
+        workspaceId={props.workspaceId}
+        translationSection={props.translationSection}
+        translationWorkspaceKey={props.translationWorkspaceKey}
+        translation={props.translation}
+        providers={props.chat.providers}
+        translationLanguages={props.translationLanguages}
       />
     )
   }

@@ -1,3 +1,8 @@
+import {
+  DialogSelectFilesOutputSchema,
+  IpcChannel,
+  isP2pSharedKnowledgeMirrorDescription,
+} from '@toolman/shared'
 import { MiddleSidebar } from '../../components/layout/MiddleSidebar'
 import { ModuleSidebar } from '../../components/layout/ModuleSidebar'
 import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
@@ -5,7 +10,16 @@ import { NotesSidebar } from '../notes/NotesSidebar'
 import { CommunitySidebar } from '../community/CommunitySidebar'
 import { GroupSidebar } from '../group/GroupSidebar'
 import { ProjectSidebar } from '../project-manager/ProjectSidebar'
-import { isP2pSharedKnowledgeMirrorDescription } from '@toolman/shared'
+import { TranslationSidebar } from '../translation/TranslationSidebar'
+import {
+  buildContrastExportContent,
+  buildDocumentExportContent,
+  hasContrastExportContent,
+  hasDocumentExportContent,
+} from '../translation/translation-export'
+import { isTranslationDocumentPath } from '../translation/translation-document-utils'
+import { DEFAULT_TRANSLATION_SECTION } from '../translation/translation-sidebar-types'
+import { useI18n } from '../../i18n/useI18n'
 import {
   COMMUNITY_SECTION_TO_ACTION,
   type CommunitySidebarSection,
@@ -25,6 +39,7 @@ type ChatPageSidebarsProps = Pick<
   ChatPageState,
   | 'showContentSidebar'
   | 'activeView'
+  | 'setActiveView'
   | 'sidebarAssistants'
   | 'chat'
   | 'handleDeleteAssistant'
@@ -35,6 +50,7 @@ type ChatPageSidebarsProps = Pick<
   | 'setShowKnowledgeCreate'
   | 'notes'
   | 'setNotesIngestTarget'
+  | 'setStatusMessage'
   | 'communitySidebarSection'
   | 'setCommunitySidebarSection'
   | 'setCommunityAction'
@@ -46,11 +62,16 @@ type ChatPageSidebarsProps = Pick<
   | 'setShowGroupJoinPending'
   | 'projectSidebarTab'
   | 'setProjectSidebarTab'
+  | 'translationSection'
+  | 'setTranslationSection'
+  | 'setTranslationWorkspaceKey'
+  | 'translation'
 >
 
 export function ChatPageSidebars({
   showContentSidebar,
   activeView,
+  setActiveView,
   sidebarAssistants,
   chat,
   handleDeleteAssistant,
@@ -61,6 +82,7 @@ export function ChatPageSidebars({
   setShowKnowledgeCreate,
   notes,
   setNotesIngestTarget,
+  setStatusMessage,
   communitySidebarSection,
   setCommunitySidebarSection,
   setCommunityAction,
@@ -72,7 +94,13 @@ export function ChatPageSidebars({
   setShowGroupJoinPending,
   projectSidebarTab,
   setProjectSidebarTab,
+  translationSection,
+  setTranslationSection,
+  setTranslationWorkspaceKey,
+  translation,
 }: ChatPageSidebarsProps) {
+  const { t } = useI18n()
+
   if (!showContentSidebar) return null
 
   if (activeView === 'agent') {
@@ -198,6 +226,102 @@ export function ChatPageSidebars({
         onSelectSection={(section: CommunitySidebarSection) => {
           setCommunitySidebarSection(section)
           setCommunityAction(COMMUNITY_SECTION_TO_ACTION[section])
+        }}
+      />
+    )
+  }
+
+  if (activeView === 'translate') {
+    return (
+      <TranslationSidebar
+        activeSection={translationSection}
+        onSelectSection={setTranslationSection}
+        contrasts={translation.contrasts}
+        documents={translation.documents}
+        activeContrastId={translation.activeContrastId}
+        activeDocumentId={translation.activeDocumentId}
+        renameContrastId={translation.renameContrastId}
+        renameDocumentId={translation.renameDocumentId}
+        onSelectContrast={(contrastId) => {
+          translation.selectContrast(contrastId)
+          setTranslationSection(DEFAULT_TRANSLATION_SECTION)
+          setTranslationWorkspaceKey((value) => value + 1)
+        }}
+        onSelectDocument={(documentId) => {
+          translation.selectDocument(documentId)
+          setTranslationSection('documents')
+          setTranslationWorkspaceKey((value) => value + 1)
+        }}
+        onStartRenameContrast={translation.startRenameContrast}
+        onStartRenameDocument={translation.startRenameDocument}
+        onRenameContrast={translation.renameContrast}
+        onRenameDocument={translation.renameDocument}
+        onCancelRenameContrast={translation.cancelRenameContrast}
+        onCancelRenameDocument={translation.cancelRenameDocument}
+        onDeleteContrast={(contrastId) => {
+          translation.deleteContrast(contrastId)
+          setTranslationWorkspaceKey((value) => value + 1)
+        }}
+        onDeleteDocument={(documentId) => {
+          translation.deleteDocument(documentId)
+          setTranslationWorkspaceKey((value) => value + 1)
+        }}
+        onAddContrastToNotes={(contrast) => {
+          if (!hasContrastExportContent(contrast)) {
+            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
+            return
+          }
+          const title = contrast.title || t('translationPage.sidebar.untitledContrast')
+          notes.createNoteFromMessage(title, buildContrastExportContent(contrast))
+          setActiveView('notes')
+          setStatusMessage(t('translationPage.sidebar.addedToNotes', { title }))
+        }}
+        onAddDocumentToNotes={(document) => {
+          if (!hasDocumentExportContent(document)) {
+            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
+            return
+          }
+          const title = document.title || document.fileName
+          notes.createNoteFromMessage(title, buildDocumentExportContent(document))
+          setActiveView('notes')
+          setStatusMessage(t('translationPage.sidebar.addedToNotes', { title }))
+        }}
+        onAddContrastToKnowledge={(contrast) => {
+          if (!hasContrastExportContent(contrast)) {
+            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
+            return
+          }
+          const title = contrast.title || t('translationPage.sidebar.untitledContrast')
+          const noteId = notes.createNoteFromMessage(title, buildContrastExportContent(contrast))
+          setNotesIngestTarget({ noteIds: [noteId], noteTitle: title })
+        }}
+        onAddDocumentToKnowledge={(document) => {
+          if (!hasDocumentExportContent(document)) {
+            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
+            return
+          }
+          const title = document.title || document.fileName
+          const noteId = notes.createNoteFromMessage(title, buildDocumentExportContent(document))
+          setNotesIngestTarget({ noteIds: [noteId], noteTitle: title })
+        }}
+        onCreateContrast={() => {
+          translation.createNewContrast()
+          setTranslationSection(DEFAULT_TRANSLATION_SECTION)
+          setTranslationWorkspaceKey((value) => value + 1)
+        }}
+        onOpenDocument={() => {
+          setTranslationSection('documents')
+          void (async () => {
+            const result = await window.api.invoke(IpcChannel.DialogSelectFiles, {
+              multiple: false,
+            })
+            if (!result.ok) return
+            const { paths } = DialogSelectFilesOutputSchema.parse(result.data)
+            const filePath = paths[0]
+            if (!filePath || !isTranslationDocumentPath(filePath)) return
+            translation.openDocument(filePath)
+            setTranslationWorkspaceKey((value) => value + 1)
+          })()
         }}
       />
     )

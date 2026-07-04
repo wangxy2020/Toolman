@@ -54,6 +54,7 @@ export function MessageInput(props: MessageInputProps) {
         <textarea
           ref={textareaRef}
           className="tm-input-field"
+          data-testid="chat-message-input"
           placeholder={placeholder}
           value={text}
           disabled={disabled}

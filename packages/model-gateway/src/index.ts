@@ -49,11 +49,15 @@ export class DefaultModelGateway implements ModelGateway {
 
       let content = ''
       let usage: ChatCompletionResult['usage']
+      let finishReason: string | undefined
       for await (const chunk of this.resolveStream(config, params)) {
         if (chunk.type === 'text-delta' && chunk.text) content += chunk.text
-        if (chunk.type === 'done' && chunk.usage) usage = chunk.usage
+        if (chunk.type === 'done') {
+          if (chunk.usage) usage = chunk.usage
+          if (chunk.finishReason) finishReason = chunk.finishReason
+        }
       }
-      return { content, toolCalls: [], usage }
+      return { content, toolCalls: [], usage, finishReason }
     }
 
     if (OPENAI_COMPAT_TYPES.includes(config.type)) {
@@ -61,11 +65,15 @@ export class DefaultModelGateway implements ModelGateway {
         let content = ''
         const toolCalls: ChatCompletionResult['toolCalls'] = []
         let usage: ChatCompletionResult['usage']
+        let finishReason: string | undefined
         for await (const chunk of streamOllamaNativeChat(config, params)) {
           if (chunk.type === 'text-delta' && chunk.text) content += chunk.text
-          if (chunk.type === 'done' && chunk.usage) usage = chunk.usage
+          if (chunk.type === 'done') {
+            if (chunk.usage) usage = chunk.usage
+            if (chunk.finishReason) finishReason = chunk.finishReason
+          }
         }
-        return { content, toolCalls, usage }
+        return { content, toolCalls, usage, finishReason }
       }
       return chatCompleteOpenAiCompatible(config, params)
     }

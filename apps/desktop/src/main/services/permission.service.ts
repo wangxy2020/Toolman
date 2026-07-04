@@ -155,13 +155,6 @@ export function evaluateToolPermission(options: {
         requiresApproval: true,
       }
     }
-    if (category === 'exec') {
-      return {
-        allowed: false,
-        reason: `执行工具 ${toolName} 需要人工授权`,
-        requiresApproval: true,
-      }
-    }
     return { allowed: true }
   }
 
@@ -191,8 +184,17 @@ export function evaluateToolPermission(options: {
     return { allowed: true }
   }
 
-  if (permissionMode === 'auto-edit' && category === 'write') {
-    return { allowed: true }
+  if (permissionMode === 'auto-edit') {
+    if (isDeleteTool(toolName)) {
+      return {
+        allowed: false,
+        reason: `删除工具 ${toolName} 需要人工授权`,
+        requiresApproval: true,
+      }
+    }
+    if (category === 'write' || category === 'exec') {
+      return { allowed: true }
+    }
   }
 
   if (category === 'write' || category === 'exec') {

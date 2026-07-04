@@ -31,8 +31,6 @@ export const agentZhCN = {
     workingDirectoryUnset: '未设置工作目录',
     workingDirectoryDefault: '未指定时将自动创建默认工作目录',
     restoreWorkspaceDefault: '恢复工作区默认',
-    autonomousMode: '自动编辑模式',
-    autonomousModeHint: '开启后智能体可自主执行更多操作',
     heartbeat: '启用心跳',
     heartbeatHint: '定期触发智能体后台检查任务',
     heartbeatInterval: '间隔 (分钟)',
@@ -72,6 +70,12 @@ export const agentZhCN = {
     title: '权限模式',
     autonomousActive: '已开启自主模式，实际生效为「全自动模式」：写入与执行类工具无需逐项授权。',
     effectiveNormal: '当前生效：{{mode}}。读取类工具自动放行；写入与执行类工具每次需授权（Bash 预授权开启时除外）。',
+    effectiveLongTask: '当前生效：长任务模式。发送消息将走规划器多步执行（Plan → Execute → Reflect）。',
+    longTaskMode: {
+      title: '长任务模式',
+      description:
+        '由规划器分解多步任务，在后台按 Plan → Execute → Reflect 执行（L2 任务运行时）。',
+    },
   },
   tools: {
     mcpServers: 'MCP 服务器',
@@ -168,8 +172,6 @@ export const agentEn = {
     workingDirectoryUnset: 'No working directory set',
     workingDirectoryDefault: 'A default directory will be created if unset',
     restoreWorkspaceDefault: 'Restore workspace default',
-    autonomousMode: 'Auto-edit mode',
-    autonomousModeHint: 'Allows the agent to run more actions autonomously',
     heartbeat: 'Enable heartbeat',
     heartbeatHint: 'Periodically trigger background agent checks',
     heartbeatInterval: 'Interval (minutes)',
@@ -210,6 +212,13 @@ export const agentEn = {
     autonomousActive: 'Autonomous mode is on; effective mode is Full auto: write/execute tools need no approval.',
     effectiveNormal:
       'Effective: {{mode}}. Read tools auto-allow; write/execute tools require approval each time (except pre-authorized Bash).',
+    effectiveLongTask:
+      'Effective: Long task mode. Messages use the multi-step planner runtime (Plan → Execute → Reflect).',
+    longTaskMode: {
+      title: 'Long task mode',
+      description:
+        'Multi-step tasks run in the background via Plan → Execute → Reflect (L2 task runtime).',
+    },
   },
   tools: {
     mcpServers: 'MCP servers',

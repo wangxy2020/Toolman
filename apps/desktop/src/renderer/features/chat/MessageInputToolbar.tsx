@@ -8,7 +8,9 @@ import {
   IconShortcut,
   IconTerminalPrompt,
 } from '../../components/icons'
+import { IconTaskList } from '../../components/icons/rich-text'
 import { EmojiPickerPopup } from './EmojiPickerPopup'
+import { InputToolButton } from './InputToolButton'
 import { MessageInputResizeHandle } from './MessageInputResizeHandle'
 import type { useMessageInput } from './useMessageInput'
 
@@ -23,6 +25,12 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
     onCreateSession,
     onToggleWebSearch,
     onToggleKb,
+    autonomousTaskMode,
+    autonomousTaskToggleTitle,
+    longTaskEnabled = false,
+    longTaskToggleDisabled = false,
+    onToggleAutonomousTask,
+    sessionTaskBindingLocked = false,
     toolbarMode,
     text,
     emojiMenuOpen,
@@ -43,28 +51,20 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
   return (
     <div className="tm-input-toolbar">
       {toolbarMode === 'agent' ? (
-        <button
-          type="button"
-          className="tm-input-tool"
+        <InputToolButton
+          label={t('chat.input.newTopic')}
           disabled={!onCreateSession}
-          title={t('chat.input.newTopic')}
           onClick={() => onCreateSession?.()}
         >
           <IconNewTopic />
-        </button>
+        </InputToolButton>
       ) : null}
       {toolbarMode === 'group' ? (
         <span className="tm-input-tool-anchor" ref={emojiAnchorRef}>
-          <button
-            type="button"
-            className={[
-              'tm-input-tool',
-              emojiMenuOpen ? 'tm-input-tool--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+          <InputToolButton
+            label={t('chat.input.emoji')}
+            active={emojiMenuOpen}
             disabled={disabled}
-            title={t('chat.input.emoji')}
             onClick={() => {
               setSlashMenuOpen(false)
               setPhraseMenuOpen(false)
@@ -72,7 +72,7 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
             }}
           >
             <IconEmoji />
-          </button>
+          </InputToolButton>
           <EmojiPickerPopup
             open={emojiMenuOpen}
             anchorRef={emojiAnchorRef}
@@ -81,65 +81,60 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
           />
         </span>
       ) : null}
-      <button
-        type="button"
-        className="tm-input-tool"
-        title={t('chat.input.uploadFile')}
+      <InputToolButton
+        label={t('chat.input.uploadFile')}
         onClick={() => void handleUploadFiles()}
       >
         <IconPaperclip />
-      </button>
+      </InputToolButton>
       {toolbarMode === 'agent' ? (
         <>
-          <button
-            type="button"
-            className={[
-              'tm-input-tool',
-              webSearchEnabled ? 'tm-input-tool--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            title={webSearchEnabled ? t('chat.input.webSearchOff') : t('chat.input.webSearchOn')}
+          <InputToolButton
+            label={webSearchEnabled ? t('chat.input.webSearchOff') : t('chat.input.webSearchOn')}
+            active={webSearchEnabled}
             onClick={() => onToggleWebSearch?.()}
           >
             <IconGlobe />
-          </button>
-          <button
-            type="button"
-            className={[
-              'tm-input-tool',
-              kbEnabled ? 'tm-input-tool--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            title={kbEnabled ? t('chat.input.kbSearchOff') : t('chat.input.kbSearchOn')}
+          </InputToolButton>
+          <InputToolButton
+            label={kbEnabled ? t('chat.input.kbSearchOff') : t('chat.input.kbSearchOn')}
+            active={kbEnabled}
             onClick={() => onToggleKb?.()}
           >
             <IconKnowledge size={18} />
-          </button>
+          </InputToolButton>
+          <InputToolButton
+            label={autonomousTaskToggleTitle ?? t('chat.input.autonomousTaskOn')}
+            active={autonomousTaskMode}
+            disabled={
+              disabled ||
+              !longTaskEnabled ||
+              longTaskToggleDisabled ||
+              !onToggleAutonomousTask ||
+              sessionTaskBindingLocked
+            }
+            data-testid="autonomous-task-toggle"
+            onClick={() => void onToggleAutonomousTask?.()}
+          >
+            <IconTaskList size={18} />
+          </InputToolButton>
         </>
       ) : null}
-      <button
-        type="button"
-        className={['tm-input-tool', slashMenuOpen ? 'tm-input-tool--active' : '']
-          .filter(Boolean)
-          .join(' ')}
+      <InputToolButton
+        label={t('chat.input.slashCommands')}
+        active={slashMenuOpen}
         disabled={disabled}
-        title={t('chat.input.slashCommands')}
         onClick={() => {
           setPhraseMenuOpen(false)
           setSlashMenuOpen((open) => !open)
         }}
       >
         <IconTerminalPrompt />
-      </button>
-      <button
-        type="button"
-        className={['tm-input-tool', phraseMenuOpen ? 'tm-input-tool--active' : '']
-          .filter(Boolean)
-          .join(' ')}
+      </InputToolButton>
+      <InputToolButton
+        label={t('chat.input.quickPhrases')}
+        active={phraseMenuOpen}
         disabled={disabled}
-        title={t('chat.input.quickPhrases')}
         onClick={() => {
           setSlashMenuOpen(false)
           setPhraseMenuOpen((open) => {
@@ -153,16 +148,14 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
         }}
       >
         <IconShortcut />
-      </button>
-      <button
-        type="button"
-        className="tm-input-tool"
+      </InputToolButton>
+      <InputToolButton
+        label={t('chat.input.clear')}
         disabled={disabled || !text.trim()}
-        title={t('chat.input.clear')}
         onClick={clearInput}
       >
         <IconClear />
-      </button>
+      </InputToolButton>
       <MessageInputResizeHandle onResizeStart={handleResizeStart} />
     </div>
   )

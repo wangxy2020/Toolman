@@ -35,15 +35,16 @@ export const BUILTIN_MCP_TOOL_DEFS: Record<string, ToolDefinition[]> = {
       type: 'function',
       function: {
         name: 'fs_edit',
-        description: '对文件进行精确字符串替换编辑',
+        description: '编辑本地文件：精确替换（oldText→newText），或 append:true 在文件末尾追加内容',
         parameters: {
           type: 'object',
           properties: {
             path: { type: 'string', description: '文件路径' },
-            oldText: { type: 'string', description: '要被替换的原文本' },
-            newText: { type: 'string', description: '替换后的新文本' },
+            oldText: { type: 'string', description: '要被替换的原文本（append 模式下可省略）' },
+            newText: { type: 'string', description: '替换后的新文本，或 append 模式下要追加的内容' },
+            append: { type: 'boolean', description: '为 true 时在文件末尾追加 newText，无需 oldText' },
           },
-          required: ['path', 'oldText', 'newText'],
+          required: ['path', 'newText'],
         },
       },
     },

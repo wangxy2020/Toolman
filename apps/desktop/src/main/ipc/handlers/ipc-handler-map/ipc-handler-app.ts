@@ -158,6 +158,7 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     const patch = input as {
       documentOcrEnabled?: boolean
       defaultDocProcessorProviderId?: string | null
+      plannerModelId?: string | null
     }
     return ipcOk(syncRuntimeAppSettings(patch))
   },

@@ -40,7 +40,7 @@ export function MessageSettingsPanel({ settings, onChange, onReset, onClose }: P
         <header className="tm-message-settings-header">
           <div className="tm-message-settings-header-title">
             <IconSliders size={16} />
-            <h3>{t('chat.systemPreferences')}</h3>
+            <h3>{t('chat.messageSettings')}</h3>
           </div>
           <button
             type="button"

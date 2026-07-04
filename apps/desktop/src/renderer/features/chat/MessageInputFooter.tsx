@@ -60,6 +60,7 @@ export function MessageInputFooter({
             <button
               type="button"
               className="tm-send-btn"
+              data-testid="chat-send-button"
               disabled={disabled || !canSend}
               title={t('chat.input.send')}
               onClick={handleSubmit}

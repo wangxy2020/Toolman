@@ -1,4 +1,5 @@
 import { IconSliders } from '../../components/icons'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { translateGroupName } from '../../i18n/system-labels'
 import type { UseGroupPageResult } from './useGroupPage'
 
@@ -44,37 +45,27 @@ export function GroupPageHeader({
           const isActive = isMembersMenu ? membersMenuOpen : effectiveAction === action.key
 
           return (
-            <button
+            <HeaderIconButton
               key={action.key}
               ref={isMembersMenu ? membersButtonRef : undefined}
-              type="button"
-              className={[
-                'tm-chat-header-settings-btn',
-                isActive ? 'tm-chat-header-settings-btn--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              title={action.title}
-              aria-label={action.title}
+              label={action.title}
+              active={isActive}
               aria-pressed={isActive}
               aria-expanded={isMembersMenu ? membersMenuOpen : undefined}
               onClick={() => handleHeaderActionClick(action.key)}
             >
               {action.icon}
-            </button>
+            </HeaderIconButton>
           )
         })}
 
-        <button
-          type="button"
-          className="tm-chat-header-settings-btn"
-          title={t('groupPage.settingsTitle')}
-          aria-label={t('groupPage.settingsTitle')}
+        <HeaderIconButton
+          label={t('groupPage.settingsTitle')}
           disabled={!workspace}
           onClick={handleOpenSettings}
         >
           <IconSliders size={16} />
-        </button>
+        </HeaderIconButton>
       </div>
     </header>
   )

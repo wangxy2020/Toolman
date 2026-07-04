@@ -14,6 +14,7 @@ import {
 } from './md-table-alignment'
 import { LocalFilePathLink } from './LocalFilePathLink'
 import { LOCAL_FILE_LINK_SCHEME, sanitizeAssistantMarkdown } from './sanitize-assistant-markdown'
+import { prepareStreamingMarkdown } from './streaming-markdown'
 import type { CodeStyle, MessageSettings } from './message-settings'
 import 'katex/dist/katex.min.css'
 
@@ -27,28 +28,35 @@ function resolveCodeStyle(codeStyle: CodeStyle): Exclude<CodeStyle, 'auto'> {
   return codeStyle === 'auto' ? 'github' : codeStyle
 }
 
-function resolveLocalDocxPath(href: string): string | null {
+function decodeToolmanLocalPath(href: string): string {
+  const raw = href.slice(LOCAL_FILE_LINK_SCHEME.length)
+  try {
+    return decodeURIComponent(raw).replace(/^[`'"]+|[`'"]+$/g, '').trim()
+  } catch {
+    return raw.replace(/^[`'"]+|[`'"]+$/g, '').trim()
+  }
+}
+
+function resolveLocalOfficePath(href: string): string | null {
   if (href.startsWith(LOCAL_FILE_LINK_SCHEME)) {
-    const raw = href.slice(LOCAL_FILE_LINK_SCHEME.length)
-    try {
-      const decoded = decodeURIComponent(raw)
-      if (decoded.trim()) return decoded
-    } catch {
-      // fall through
-    }
-    if (raw.trim()) return raw
+    const decoded = decodeToolmanLocalPath(href)
+    if (!decoded) return null
+    if (/^\/[^?\#]*\.(?:xlsx?|csv|docx?|pdf)$/i.test(decoded)) return decoded
+    if (/^[A-Za-z]:\\[^?\#]*\.(?:xlsx?|csv|docx?|pdf)$/i.test(decoded)) return decoded
+    return null
   }
 
   if (href.startsWith('file://')) {
     try {
-      return decodeURI(href.replace(/^file:\/\//i, ''))
+      const decoded = decodeURI(href.replace(/^file:\/\//i, ''))
+      if (/\.(?:xlsx?|csv|docx?|pdf)$/i.test(decoded)) return decoded
     } catch {
       return null
     }
   }
 
   const localhostMatch = href.match(
-    /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/(.+\.docx(?:[?#].*)?)$/i,
+    /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/(.+\.(?:docx|xlsx?)(?:[?#].*)?)$/i,
   )
   if (localhostMatch) {
     try {
@@ -65,10 +73,9 @@ function resolveLocalDocxPath(href: string): string | null {
     decoded = href
   }
 
-  if (/^\/[^?\#]*\.docx$/i.test(decoded)) return decoded
-  if (/^[A-Za-z]:\\[^?\#]*\.docx$/i.test(decoded)) return decoded
+  if (/^\/[^?\#]*\.(?:xlsx?|csv|docx?|pdf)$/i.test(decoded)) return decoded
+  if (/^[A-Za-z]:\\[^?\#]*\.(?:xlsx?|csv|docx?|pdf)$/i.test(decoded)) return decoded
 
-  // 相对路径如「修订版_xxx.docx」——无法唯一定位，不当作可打开路径
   return null
 }
 
@@ -76,10 +83,10 @@ function isLocalhostDevServerHref(href: string): boolean {
   return /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$|\?|#)/i.test(href)
 }
 
-function isNonNavigableDocxHref(href: string, label: string): boolean {
+function isNonNavigableOfficeHref(href: string, label: string): boolean {
   if (isLocalhostDevServerHref(href)) return true
-  if (/^[^/\\]+\.docx$/i.test(href.trim())) return true
-  if (/^[^/\\]+\.docx$/i.test(label.trim()) && !/^https?:\/\//i.test(href)) return true
+  if (/^[^/\\]+\.(?:docx|xlsx?)$/i.test(href.trim())) return true
+  if (/^[^/\\]+\.(?:docx|xlsx?)$/i.test(label.trim()) && !/^https?:\/\//i.test(href)) return true
   return false
 }
 
@@ -149,15 +156,23 @@ interface Props {
   text: string
   settings: MessageSettings
   sanitizeAssistant?: boolean
+  streaming?: boolean
 }
 
-export function MessageMarkdown({ text, settings, sanitizeAssistant = false }: Props) {
+export function MessageMarkdown({
+  text,
+  settings,
+  sanitizeAssistant = false,
+  streaming = false,
+}: Props) {
   const [themeReady, setThemeReady] = useState(false)
   const codeStyle = resolveCodeStyle(settings.codeStyle)
-  const renderedText = useMemo(
-    () => (sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text),
-    [sanitizeAssistant, text],
-  )
+  const renderedText = useMemo(() => {
+    if (streaming) {
+      return prepareStreamingMarkdown(text, sanitizeAssistant)
+    }
+    return sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text
+  }, [sanitizeAssistant, streaming, text])
 
   useEffect(() => {
     let cancelled = false
@@ -214,21 +229,21 @@ export function MessageMarkdown({ text, settings, sanitizeAssistant = false }: P
       },
       a({ href, children, ...props }) {
         if (href) {
-          const localPath = resolveLocalDocxPath(href)
+          const localPath = resolveLocalOfficePath(href)
           if (localPath) {
             return <LocalFilePathLink path={localPath} action="open" />
           }
 
           const label = String(children ?? '')
-          if (isNonNavigableDocxHref(href, label)) {
+          if (isNonNavigableOfficeHref(href, label)) {
             return (
-              <span className="tm-md-docx-filename" title="请使用消息下方「用 Word 打开」">
+              <span className="tm-md-docx-filename" title="请使用消息下方「打开文件」">
                 {children}
               </span>
             )
           }
 
-          if (/\.docx(?:[?#]|$)/i.test(href)) {
+          if (/\.(?:docx|xlsx?)(?:[?#]|$)/i.test(href)) {
             return <span className="tm-md-docx-filename">{children}</span>
           }
         }
@@ -285,9 +300,10 @@ export function MessageMarkdown({ text, settings, sanitizeAssistant = false }: P
     <div
       className={[
         'tm-md',
+        streaming ? 'tm-md--streaming' : '',
         settings.messageStyle === 'concise' ? 'tm-md--concise' : '',
         settings.messageStyle === 'detailed' ? 'tm-md--detailed' : '',
-        themeReady ? 'tm-md--themed' : '',
+        themeReady || streaming ? 'tm-md--themed' : '',
       ]
         .filter(Boolean)
         .join(' ')}

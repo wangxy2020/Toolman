@@ -8,18 +8,19 @@ import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useKnowledgeBases } from '../knowledge/useKnowledgeBases'
 import { useKnowledgeDefaultFolder } from '../knowledge/useKnowledgeDefaultFolder'
 import { useNotes } from '../notes/useNotes'
+import { useTranslationRecords } from '../translation/useTranslationRecords'
 import { useI18n } from '../../i18n/useI18n'
 import type { ChatPageProps } from './chat-page-types'
 import { useChatPageNavigation } from './useChatPageNavigation'
 import { useChatPageModals } from './useChatPageModals'
 import { useChatPageCrossModule } from './useChatPageCrossModule'
+import { useAgentTaskPanel } from './tasks/useAgentTaskPanel'
 
 export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   const { t } = useI18n()
   const communityUser = useCommunityUser()
   const registrationGate = useRegistrationGate()
   const notes = useNotes()
-
   const navigation = useChatPageNavigation(appSettings, notes, communityUser, t)
   const modals = useChatPageModals(navigation.activeView)
 
@@ -46,6 +47,20 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     messageSettings,
   })
 
+  const translation = useTranslationRecords(
+    navigation.workspaceId,
+    t('translationPage.sidebar.untitledContrast'),
+    crossModule.translationLanguages,
+  )
+
+  const agentTaskPanel = useAgentTaskPanel({
+    workspaceId: chat.activeSession?.workspaceId ?? navigation.workspaceId,
+    sessionId: chat.activeSessionId,
+    assistantId: crossModule.activeAssistant?.id,
+    sessionActiveTaskId: chat.sessionActiveTaskId,
+    messages: chat.messages,
+  })
+
   return {
     t,
     appSettings,
@@ -60,12 +75,14 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     resetSettings,
     systemPaths,
     ...crossModule,
+    agentTaskPanel,
     knowledge,
     p2pWorkspaces,
     knowledgeFolder,
     networkKnowledgeFolder,
     localFilesFolder,
     notes,
+    translation,
     registrationGate,
     communityUser,
     isModuleView,

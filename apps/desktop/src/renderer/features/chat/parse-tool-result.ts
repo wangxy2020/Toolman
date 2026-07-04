@@ -153,6 +153,9 @@ function parseDocxMcpResult(text: string): ParsedToolResult | null {
 export function parseToolResult(toolName: string, raw: string): ParsedToolResult {
   const text = raw.trim()
   if (!text) return { type: 'text' }
+  if (/<[｜|]{1,2}DSML[｜|]{1,2}/i.test(text)) {
+    return { type: 'text' }
+  }
 
   const shortName = normalizeToolName(toolName)
   if (shortName === 'fs_list') return parseFsList(text)
@@ -201,6 +204,10 @@ export function summarizeToolResult(parsed: ParsedToolResult, raw = ''): string 
 
   const trimmed = raw.trim()
   if (!trimmed) return null
+
+  if (/<[｜|]{1,2}DSML[｜|]{1,2}/i.test(trimmed)) {
+    return '模型返回了未执行的工具调用文本（已隐藏）'
+  }
 
   if (/^\d+$/.test(trimmed)) {
     return `输出结果：${trimmed}`

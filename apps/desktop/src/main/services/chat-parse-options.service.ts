@@ -10,12 +10,14 @@ export function buildChatParseOptions(
   workspaceId: string,
   input?: BuildChatParseOptionsInput,
 ): ParseFileOptions {
+  const ocrDisabled = input?.documentOcrEnabled === false
   const options: ParseFileOptions = {
     enhanced: true,
-    pdfTextQuality: 'strict',
+    // When OCR is off (e.g. translation preview), return best-effort text instead of failing.
+    pdfTextQuality: ocrDisabled ? 'lenient' : 'strict',
   }
 
-  if (input?.documentOcrEnabled !== false) {
+  if (!ocrDisabled) {
     const ocr = buildChatPdfOcrOptions(workspaceId)
     if (ocr) {
       options.ocr = ocr

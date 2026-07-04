@@ -22,7 +22,7 @@ export function useChatPageCrossModule(deps: {
   const assistant = useChatPageAssistant(deps.chat, deps.messageSettings)
   const interop = useChatPageInterop({
     ...deps,
-    activeAssistantId: assistant.activeAssistant?.id,
+    activeAssistant: assistant.activeAssistant ?? undefined,
   })
 
   return {

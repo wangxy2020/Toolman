@@ -42,6 +42,25 @@ export function IconRefresh({ size = 16, className }: IconProps) {
   )
 }
 
+export function IconArrowLeftRight({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M8 3 4 7l4 4" />
+      <path d="M4 7h16" />
+      <path d="m16 21 4-4-4-4" />
+      <path d="M20 17H4" />
+    </svg>
+  )
+}
+
 export function IconEdit({ size = 16, className }: IconProps) {
   return (
     <svg
@@ -59,9 +78,17 @@ export function IconEdit({ size = 16, className }: IconProps) {
   )
 }
 
-export function IconClear({ size = 18 }: IconProps) {
+export function IconClear({ size = 18, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className={className}
+    >
       <path d="M3 6h18" />
       <path d="M8 6V4h8v2" />
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />

@@ -108,6 +108,7 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
                 text={block.text}
                 settings={settings}
                 sanitizeAssistant
+                streaming={streaming}
               />
             )
           }
@@ -122,7 +123,9 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
             return (
               <LocalFileLinksBlock
                 key={`local-file-links-${index}`}
+                title={block.title}
                 paths={block.paths}
+                compact={block.title === '生成的文件'}
               />
             )
           }
@@ -161,6 +164,7 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
             text={segment.text}
             settings={settings}
             sanitizeAssistant
+            streaming={streaming}
           />
         )
       })}

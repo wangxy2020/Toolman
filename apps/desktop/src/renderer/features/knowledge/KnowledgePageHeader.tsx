@@ -1,6 +1,7 @@
 import { useI18n } from '../../i18n/useI18n'
 import { translateKnowledgeFolderName } from '../../i18n/system-labels'
 import { IconFolderPlus, IconRefresh, IconChevronUp, IconSliders } from '../../components/icons'
+import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { getModulePageConfig } from '../modules/module-config'
 import { getParentPath } from './knowledge-dedup-utils'
 import type { KnowledgePageHeaderProps } from './knowledge-page-types'
@@ -35,23 +36,35 @@ export function KnowledgePageHeader({
                   <button
                     type="button"
                     className="tm-dedup-header-icon-btn"
-                    title={t('knowledgePage.refreshScan')}
                     aria-label={t('knowledgePage.refreshScan')}
                     onClick={onDedupRefresh}
                   >
                     <IconRefresh size={14} />
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="tm-dedup-header-icon-btn"
-                  title={t('knowledgePage.parentFolder')}
-                  aria-label={t('knowledgePage.parentFolder')}
-                  disabled={dedupScanning || !getParentPath(dedupFolderPath)}
-                  onClick={onDedupGoParent}
-                >
-                  <IconChevronUp size={14} />
-                </button>
+                {(() => {
+                  const parentLabel = t('knowledgePage.parentFolder')
+                  const parentDisabled = dedupScanning || !getParentPath(dedupFolderPath)
+                  const parentButton = (
+                    <button
+                      type="button"
+                      className="tm-dedup-header-icon-btn"
+                      aria-label={parentLabel}
+                      disabled={parentDisabled}
+                      onClick={onDedupGoParent}
+                    >
+                      <IconChevronUp size={14} />
+                    </button>
+                  )
+
+                  return parentDisabled ? (
+                    <span className="tm-header-icon-tooltip-wrap" data-tooltip={parentLabel}>
+                      {parentButton}
+                    </span>
+                  ) : (
+                    parentButton
+                  )
+                })()}
                 <span className="tm-dedup-header-path" title={dedupFolderPath}>
                   {dedupFolderPath}
                 </span>
@@ -92,15 +105,13 @@ export function KnowledgePageHeader({
             <span>{t('knowledgePage.selectFolder')}</span>
           </button>
         ) : (
-          <button
-            type="button"
-            className="tm-chat-header-settings-btn"
-            title={t('knowledgePage.settingsTitle', { title: config.title })}
+          <HeaderIconButton
+            label={t('knowledgePage.settingsTitle', { title: config.title })}
             disabled={!settingsEnabled}
             onClick={onOpenSettings}
           >
             <IconSliders size={16} />
-          </button>
+          </HeaderIconButton>
         )}
       </div>
     </header>

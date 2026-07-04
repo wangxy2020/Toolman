@@ -41,11 +41,14 @@ export interface ChatParams {
   maxTokens?: number
   signal?: AbortSignal
   tools?: ToolDefinition[]
+  /** Merged into provider request body (e.g. disable thinking for translation). */
+  extraBody?: Record<string, unknown>
 }
 
 export interface ChatCompletionResult {
   content: string
   toolCalls: ToolCall[]
+  finishReason?: string
   usage?: {
     prompt: number
     completion: number
@@ -62,6 +65,7 @@ export interface ModelInfo {
 export interface StreamChunk {
   type: 'text-delta' | 'reasoning-delta' | 'done' | 'error'
   text?: string
+  finishReason?: string
   usage?: {
     prompt: number
     completion: number

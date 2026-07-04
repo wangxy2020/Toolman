@@ -107,6 +107,9 @@ export enum IpcChannel {
   DialogSaveFile = 'dialog:save-file',
 
   FileReadForChat = 'file:read-for-chat',
+  FileReadBinary = 'file:read-binary',
+  TranslationDocumentParsePages = 'translation:document:parse-pages',
+  TranslationDocumentRenderPage = 'translation:document:render-page',
   ChatStageAttachments = 'file:chat-stage-attachments',
 
   NotesAttachmentImport = 'notes:attachment:import',
@@ -151,6 +154,23 @@ export enum IpcChannel {
   MessageSessionReload = 'agent:message:session-reload',
   AgentToolApprovalRequest = 'agent:tool-approval:request',
   AgentToolApprovalRespond = 'agent:tool-approval:respond',
+
+  TaskCreate = 'agent:task:create',
+  TaskGet = 'agent:task:get',
+  TaskList = 'agent:task:list',
+  TaskControl = 'agent:task:control',
+  TaskReleaseSessionBinding = 'agent:task:release-session-binding',
+  TaskArtifactRegister = 'agent:task:artifact:register',
+  TaskArtifactList = 'agent:task:artifact:list',
+  TaskArtifactGet = 'agent:task:artifact:get',
+  TaskArtifactDelete = 'agent:task:artifact:delete',
+  TaskStream = 'agent:task:stream',
+  TaskEventList = 'agent:task:event:list',
+  TaskEventClear = 'agent:task:event:clear',
+  TaskExecute = 'agent:task:execute',
+  TaskPlan = 'agent:task:plan',
+  TaskReflect = 'agent:task:reflect',
+  TaskRun = 'agent:task:run',
 
   McpStatusList = 'mcp:status:list',
   McpServerList = 'mcp:server:list',
@@ -394,6 +414,7 @@ export const SUBSCRIBE_CHANNELS = [
   IpcChannel.MessageStream,
   IpcChannel.MessageSessionReload,
   IpcChannel.KnowledgeIngestStream,
+  IpcChannel.TaskStream,
 ] as const
 
 export type SubscribeChannel = (typeof SUBSCRIBE_CHANNELS)[number]

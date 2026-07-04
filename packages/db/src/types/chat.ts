@@ -65,6 +65,7 @@ export interface CreateMessageInput {
   contentBlocks?: Array<{ type: string; text?: string }>
   /** 为 false 时不更新 session.messageCount（批量插入时用） */
   touchSession?: boolean
+  metadata?: Record<string, unknown>
 }
 
 export interface UpdateMessageInput {

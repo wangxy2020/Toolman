@@ -19,6 +19,7 @@ import {
 import type { AgentSettingsModalProps, SettingsTab } from './agent-settings-modal-types'
 import { buildAgentSettingsParameters } from './agent-settings-modal-state'
 import { useAgentSettingsFormState } from './useAgentSettingsFormState'
+import { updateWorkspaceSettings } from './chat-page-handlers'
 
 export function useAgentSettingsModal({
   assistant,
@@ -26,6 +27,7 @@ export function useAgentSettingsModal({
   providers,
   activeSession = null,
   onSaved,
+  onWorkspaceUpdated,
 }: AgentSettingsModalProps) {
   const { t } = useI18n()
   const systemPaths = useSystemPaths()
@@ -45,6 +47,7 @@ export function useAgentSettingsModal({
     modelId,
     workingDirectory,
     autonomousMode,
+    longTaskMode,
     heartbeatEnabled,
     heartbeatInterval,
     permissionMode,
@@ -132,6 +135,16 @@ export function useAgentSettingsModal({
     [assistant.id, onSaved],
   )
 
+  const syncWorkspaceFolder = useCallback(
+    async (path: string | undefined) => {
+      if (!workspace?.id) return
+      const updateResult = await updateWorkspaceSettings(workspace.id, { folderPath: path })
+      if (!updateResult.ok) return
+      onWorkspaceUpdated?.(updateResult.workspace)
+    },
+    [onWorkspaceUpdated, workspace?.id],
+  )
+
   const handleSelectWorkingDirectory = async () => {
     const pickResult = await window.api.invoke(IpcChannel.DialogSelectFolder, {
       defaultPath: workingDirectory || getWorkspaceFolderPath(workspace, systemPaths) || undefined,
@@ -141,11 +154,13 @@ export function useAgentSettingsModal({
     if (!path) return
     formSetters.setWorkingDirectory(path)
     void save({ parameters: { ...getParameters(), workingDirectory: path } })
+    void syncWorkspaceFolder(path)
   }
 
   const handleRemoveWorkingDirectory = () => {
     formSetters.setWorkingDirectory('')
     void save({ parameters: { ...getParameters(), workingDirectory: undefined } })
+    void syncWorkspaceFolder(undefined)
   }
 
   const updateTranslationLanguage = (index: 0 | 1, value: TranslationLanguage) => {
@@ -184,6 +199,7 @@ export function useAgentSettingsModal({
     workingDirectory,
     effectiveWorkingDirectory,
     autonomousMode,
+    longTaskMode,
     heartbeatEnabled,
     heartbeatInterval,
     permissionMode,

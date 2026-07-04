@@ -70,6 +70,7 @@ export class MessageRepository {
         content: input.content,
         contentBlocksJson: toContentBlocks(input.content, contentBlocks),
         status: input.status ?? 'completed',
+        metadataJson: JSON.stringify(input.metadata ?? {}),
         createdAt: now,
         updatedAt: now,
       })
@@ -95,6 +96,7 @@ export class MessageRepository {
       content: input.content,
       contentBlocksJson: toContentBlocks(input.content, contentBlocks),
       status: input.status ?? 'completed',
+      metadataJson: JSON.stringify(input.metadata ?? {}),
       createdAt: now,
       updatedAt: now,
     }

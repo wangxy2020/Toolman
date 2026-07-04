@@ -29,6 +29,26 @@ import { resolveAttachmentReadPath } from '../resolve-user-content-blocks.servic
 import { getSession } from '../session.service'
 import type { BuildRuntimeSystemHintsOptions } from './types'
 
+function looksLikeDirectoryExportGoal(text: string): boolean {
+  const goal = text.trim()
+  if (!goal) return false
+  const wantsListing = /目录|文件夹|文件列表|文件目录|扫描|整理|listing|directory|清单|子文件夹|子目录/.test(goal)
+  const wantsSpreadsheet = /excel|xlsx|xls|csv|表格|导出|生成.*表/.test(goal)
+  return wantsListing && wantsSpreadsheet
+}
+
+function buildDirectoryExportToolHint(): string {
+  return [
+    '## 目录扫描并导出表格',
+    '用户要求扫描目录并生成 Excel/CSV 清单。务必完整执行，不要在中途仅用文字总结代替文件。',
+    '1. **fs_list 只列一层**；递归扫描子文件夹请用 `fs_glob`（如 `**/*`）或 **bash + python3**（os.walk / pathlib.rglob）。',
+    '2. 任务**未完成** until 已用 **fs_write** 写 .csv，或 **bash + openpyxl** 写 .xlsx 到当前工作目录。',
+    '3. 仅调用 fs_list/fs_glob **不能结束**；看到列表后必须继续汇总并写文件。',
+    '4. 若用户指定列名（如序号、文件名称、项目目录、文档资料），输出必须包含这些列。',
+    '5. 工具路径用相对工作目录（`.` 或子目录名），不要用 `/Users/...` 绝对路径。',
+  ].join('\n')
+}
+
 export async function buildRuntimeSystemHints(
   options: BuildRuntimeSystemHintsOptions,
 ): Promise<{ hints: string[]; kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> }> {
@@ -182,6 +202,9 @@ export async function buildRuntimeSystemHints(
         '使用 fs_glob、fs_list、fs_read 等工具时，默认从此目录搜索文件。',
       ].join('\n'),
     )
+    if (looksLikeDirectoryExportGoal(options.userText)) {
+      hints.push(buildDirectoryExportToolHint())
+    }
   }
 
   const compactSystemHints = (() => {

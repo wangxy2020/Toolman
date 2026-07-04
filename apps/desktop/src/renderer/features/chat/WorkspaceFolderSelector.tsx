@@ -1,18 +1,31 @@
 import type { Workspace } from '@toolman/shared'
 import { IconChevronDown } from '../../components/icons'
 import { useSystemPaths } from './useSystemPaths'
-import { getFolderDisplayName, getWorkspaceFolderLabel, getWorkspaceFolderPath } from './workspace-utils'
+import {
+  getEffectiveWorkingDirectory,
+  getFolderDisplayName,
+} from './workspace-utils'
 
 interface Props {
   workspace: Workspace | null
+  workingDirectory?: string
   onSelectFolder: () => void
   readOnly?: boolean
 }
 
-export function WorkspaceFolderSelector({ workspace, onSelectFolder, readOnly = false }: Props) {
+export function WorkspaceFolderSelector({
+  workspace,
+  workingDirectory,
+  onSelectFolder,
+  readOnly = false,
+}: Props) {
   const systemPaths = useSystemPaths()
-  const label = getWorkspaceFolderLabel(workspace, systemPaths)
-  const folderPath = getWorkspaceFolderPath(workspace, systemPaths)
+  const folderPath = getEffectiveWorkingDirectory(workingDirectory, workspace, systemPaths)
+  const label = folderPath
+    ? getFolderDisplayName(folderPath, systemPaths)
+    : workspace
+      ? workspace.name
+      : '未选择工作区'
   const displayTitle = folderPath ? getFolderDisplayName(folderPath, systemPaths) : '点击选择工作区文件夹'
 
   if (readOnly) {

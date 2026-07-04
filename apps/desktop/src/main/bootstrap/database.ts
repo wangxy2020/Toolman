@@ -11,6 +11,7 @@ import {
 } from '@toolman/db'
 import { app } from 'electron'
 import { join } from 'node:path'
+import { bootstrapTaskRuntimeLegacyMigration, bootstrapTaskRuntimeWorkspaces, bootstrapTaskWorker } from '../services/task-runtime/bootstrap'
 import { recoverStaleStreamingMessages } from '../services/agent.service'
 import { syncOllamaProviders, migratePlaintextApiKeys } from '../services/provider.service'
 import { ensureFtsIndexReady } from '../services/knowledge-fts.service'
@@ -71,6 +72,9 @@ export function bootstrapDatabase(): void {
     }
   })())
   migratePlaintextApiKeys()
+  bootstrapTaskRuntimeLegacyMigration()
+  bootstrapTaskRuntimeWorkspaces()
+  bootstrapTaskWorker()
   recoverStaleStreamingMessages()
   ensureFtsIndexReady()
   fireAndForget('bootstrap', syncOllamaProviders(DEFAULT_WORKSPACE_ID))

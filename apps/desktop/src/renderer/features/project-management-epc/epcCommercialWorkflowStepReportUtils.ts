@@ -385,13 +385,6 @@ export const formatWorkflowStepFooterMarkdown = (
   return [`${formatBoldStepStatus(ok)} ${detail}`]
 }
 
-/** @deprecated 使用分步骤 formatWorkflowStepFooterLine */
-export const getSteps2to5FooterParts = (report: IpcAlignmentReport): StepFooterParts => getStep2FooterParts(report)
-
-/** @deprecated 使用分步骤 formatWorkflowStepFooterLine */
-export const formatSteps2to5FooterLine = (report: IpcAlignmentReport, workflowError?: string): string =>
-  formatWorkflowStepFooterLine(2, report, workflowError)
-
 export const formatWorkflowStepsMarkdown = (report: IpcAlignmentReport, workflowError?: string): string[] => {
   const lines: string[] = []
   for (let i = 1; i < EPC_COMMERCIAL_WORKFLOW_STEPS.length; i++) {

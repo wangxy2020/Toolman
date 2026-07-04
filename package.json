@@ -44,6 +44,7 @@
     "release:verify-feed": "bash scripts/verify-update-feed.sh",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "provenance:generate": "node scripts/write-build-provenance.mjs",
+    "readme:sync-version": "node scripts/sync-readme-version.mjs",
     "db:generate": "pnpm --filter @toolman/db generate",
     "db:migrate": "pnpm --filter @toolman/db migrate",
     "prepare": "husky"

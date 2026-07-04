@@ -100,8 +100,9 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     id: 'translate',
     label: '翻译',
     icon: IconTranslateNav,
+    view: 'translate',
     tier: 'extension',
-    available: false,
+    available: true,
     closable: true,
   },
   'assistant-lib': {

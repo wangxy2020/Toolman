@@ -20,6 +20,20 @@ describe('sanitizeAssistantMarkdown', () => {
     expect(sanitizeAssistantMarkdown(raw)).toBe('已完成审核。\n\n请查看结果。')
   })
 
+  it('removes DSML tool call markup', () => {
+    const raw = [
+      '共 31 行输出',
+      '',
+      '<｜｜DSML｜｜tool_calls>',
+      '<｜｜DSML｜｜invoke name="mcp__excel-mcp-server__read_excel">',
+      '<｜｜DSML｜｜parameter name="filePath" string="true">/tmp/a.xlsx</｜｜DSML｜｜parameter>',
+      '</｜｜DSML｜｜invoke>',
+      '</｜｜DSML｜｜tool_calls>',
+    ].join('\n')
+
+    expect(sanitizeAssistantMarkdown(raw)).toBe('共 31 行输出')
+  })
+
   it('removes placeholder file links and linkifies real docx paths', () => {
     const raw = [
       '文件链接：[可点击的带批注文件链接]',
@@ -69,12 +83,11 @@ describe('linkifyLocalDocxPaths', () => {
     expect(sanitized).toBe('修订版文件：见下方链接')
   })
 
-  it('replaces bold revision file inline markdown links', () => {
+  it('removes relative toolman-local markdown links', () => {
     const sanitized = sanitizeAssistantMarkdown(
-      '**修订版文件：** [修订版_a.docx](http://localhost:5173)',
+      '✅ 文件已生成！ 路径：[demo.xlsx](toolman-local://demo.xlsx)',
     )
-    expect(sanitized).toBe('**修订版文件：** 修订版_a.docx')
-    expect(sanitized).not.toContain('localhost')
+    expect(sanitized).toBe('✅ 文件已生成！ 路径：demo.xlsx')
     expect(sanitized).not.toContain('](')
   })
 })

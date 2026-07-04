@@ -17,6 +17,7 @@ export type AgentSettingsFormState = {
   modelId: string
   workingDirectory: string
   autonomousMode: boolean
+  longTaskMode: boolean
   heartbeatEnabled: boolean
   heartbeatInterval: number
   permissionMode: PermissionMode
@@ -45,6 +46,7 @@ export function buildAgentSettingsFormState(
     modelId: displayModelId,
     workingDirectory: assistant.parameters.workingDirectory ?? '',
     autonomousMode: assistant.parameters.autonomousMode ?? false,
+    longTaskMode: assistant.parameters.longTaskMode ?? false,
     heartbeatEnabled: assistant.parameters.heartbeatEnabled ?? false,
     heartbeatInterval: assistant.parameters.heartbeatIntervalMinutes ?? 30,
     permissionMode: assistant.parameters.permissionMode ?? DEFAULT_PERMISSION_MODE,
@@ -73,6 +75,7 @@ export function buildAgentSettingsParameters(
     maxTokens: state.maxTokens.trim() ? Number(state.maxTokens) || undefined : undefined,
     workingDirectory: state.workingDirectory || undefined,
     autonomousMode: state.autonomousMode,
+    longTaskMode: state.longTaskMode || undefined,
     heartbeatEnabled: state.heartbeatEnabled,
     heartbeatIntervalMinutes: state.heartbeatInterval,
     permissionMode: state.permissionMode,

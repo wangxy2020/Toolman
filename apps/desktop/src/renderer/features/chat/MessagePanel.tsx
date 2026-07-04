@@ -1,10 +1,12 @@
+import { memo } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { MessageDeleteConfirmPopover } from './MessageDeleteConfirmPopover'
 import { MessagePanelTurnView } from './MessagePanelTurnView'
+import { areMessagePanelPropsEqual } from './message-panel-props'
 import type { MessagePanelProps } from './message-panel-types'
 import { useMessagePanel } from './useMessagePanel'
 
-export function MessagePanel(props: MessagePanelProps) {
+export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps) {
   const panel = useMessagePanel(props)
   const {
     resolvedEmptyTitle,
@@ -100,9 +102,9 @@ export function MessagePanel(props: MessagePanelProps) {
             {...turnViewProps}
           />
         ))}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="tm-messages-scroll-anchor" aria-hidden="true" />
       </div>
       {deleteConfirmPopover}
     </>
   )
-}
+}, areMessagePanelPropsEqual)

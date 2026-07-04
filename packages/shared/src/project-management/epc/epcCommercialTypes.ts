@@ -107,11 +107,7 @@ export {
 
 export type { EpcWorkflowWorkKind } from './epcWorkflowLog.js'
 export {
-  EPC_DATA_UPDATE_AGENT_MARKER,
   EPC_WORK5_DATA_OVERRIDES_RELATIVE,
-  isEpcDataTableUpdateRequest,
-  isEpcEditableDataFilePath,
-  parsePaymentPatchFromUserText
 } from './epcDataUpdate.js'
 export {
   EPC_WORK4_WORKFLOW_LOG_FILE,

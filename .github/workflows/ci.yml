@@ -47,6 +47,9 @@ jobs:
       - name: Docx integration
         run: pnpm --filter @toolman/desktop test:docx-integration
 
+      - name: Task runtime integration
+        run: pnpm --filter @toolman/desktop test:task-integration
+
       - name: Dependency audit
         run: pnpm audit --audit-level=high
 

@@ -101,6 +101,14 @@ export function ChatComposer({
           onUpdateAppSettings({ webSearchEnabled: !appSettings.webSearchEnabled })
         }
         onToggleKb={() => onUpdateAppSettings({ kbEnabled: !appSettings.kbEnabled })}
+        autonomousTaskMode={chat.autonomousTaskMode}
+        taskModeActive={chat.taskModeActive}
+        longTaskEnabled={chat.longTaskEnabled}
+        longTaskToggleDisabled={chat.longTaskToggleDisabled}
+        autonomousTaskToggleTitle={chat.autonomousTaskToggleTitle}
+        sessionActiveTaskId={chat.sessionActiveTaskId}
+        sessionTaskBindingLocked={chat.sessionTaskBindingLocked}
+        onToggleAutonomousTask={() => void chat.toggleAutonomousTask()}
         onSend={(contentBlocks: ContentBlock[]) => {
           if (onSend) {
             void onSend(contentBlocks)

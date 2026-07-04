@@ -448,9 +448,3 @@ export const formatDiscoveredAlignedMarkdown = (files: DiscoveredAlignedWorkbook
     }))
   )
 }
-
-/** @deprecated 使用 formatWork5Step1Section + formatWork5Steps2to5Markdown */
-export const formatPaymentWorkflowStepsMarkdown = (
-  report: PaymentWorkflowReport,
-  workflowError?: string
-): string[] => [formatWork5Step1Section(report, workflowError), '', ...formatWork5Steps2to5Markdown(report, workflowError)]

@@ -19,7 +19,7 @@ export function resolveRuntimeMcpServerIds(skillIds: string[], mcpServerIds: str
   return filterEnabledMcpServerIds(resolveMcpServerIdsForSkills(skillIds, mcpServerIds))
 }
 
-function resolveAssistantWorkingDirectory(
+export function resolveAssistantWorkingDirectory(
   assistant: ReturnType<typeof getAssistantRow>,
   workspaceId?: string,
 ): string | undefined {

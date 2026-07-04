@@ -16,4 +16,5 @@ export interface AgentSettingsModalProps {
   activeSession?: Session | null
   onClose: () => void
   onSaved?: () => void
+  onWorkspaceUpdated?: (workspace: Workspace) => void
 }

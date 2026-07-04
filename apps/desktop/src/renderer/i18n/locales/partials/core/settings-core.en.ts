@@ -43,6 +43,14 @@ export const settingsCoreEn = {
           ollamaOffline: 'Install and launch Ollama before installing models.',
         },
       },
+      agentRuntime: {
+        title: 'Agent runtime',
+      },
+      plannerModel: {
+        label: 'Planner model',
+        hint: 'Model used for long-task planning. Empty means same as the chat model.',
+        sameAsDefault: 'Same as chat model',
+      },
     },
     display: {
       title: 'Display',

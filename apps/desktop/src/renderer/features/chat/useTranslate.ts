@@ -10,6 +10,8 @@ interface TranslateOptions {
   text: string
   modelId: string
   translationLanguages?: [TranslationLanguage, TranslationLanguage]
+  /** When false, use configured language pair as-is. Default true. */
+  autoDetectSource?: boolean
 }
 
 export function useTranslate() {
@@ -22,8 +24,11 @@ export function useTranslate() {
     }
 
     const languages = normalizeTranslationLanguages(options.translationLanguages)
-    const sourceLanguage = detectSourceLanguage(text)
-    const targetLanguage = resolveTranslationTarget(text, languages)
+    const autoDetectSource = options.autoDetectSource !== false
+    const sourceLanguage = autoDetectSource ? detectSourceLanguage(text) : languages[0]
+    const targetLanguage = autoDetectSource
+      ? resolveTranslationTarget(text, languages)
+      : languages[1]
 
     setTranslating(true)
     try {

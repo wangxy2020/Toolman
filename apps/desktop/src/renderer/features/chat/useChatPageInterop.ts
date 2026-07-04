@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
-import { IpcChannel, type P2pWorkspace, type Workspace } from '@toolman/shared'
-import { getWorkspaceFolderPath } from './workspace-utils'
+import { IpcChannel, type Assistant, type P2pWorkspace, type Workspace } from '@toolman/shared'
+import { getEffectiveWorkingDirectory } from './workspace-utils'
 import type { CodeEditorId } from './code-editor-options'
 import type {
   OpenGroupKnowledgeMarkdownRequest,
@@ -19,6 +19,7 @@ import type { useSystemPaths } from './useSystemPaths'
 import {
   openGroupAgentSession,
   stageKnowledgeFilesForChat,
+  updateAssistantWorkingDirectory,
   updateWorkspaceSettings,
 } from './chat-page-handlers'
 
@@ -36,7 +37,7 @@ export function useChatPageInterop(deps: {
   workspace: Workspace | null
   setWorkspace: (workspace: Workspace) => void
   setActiveView: (view: AppView) => void
-  activeAssistantId?: string
+  activeAssistant?: Assistant
 }) {
   const {
     chat,
@@ -47,7 +48,7 @@ export function useChatPageInterop(deps: {
     workspace,
     setWorkspace,
     setActiveView,
-    activeAssistantId,
+    activeAssistant,
   } = deps
 
   const [agentPrefillText, setAgentPrefillText] = useState<string | null>(null)
@@ -59,7 +60,12 @@ export function useChatPageInterop(deps: {
   const handleSelectWorkspaceFolder = useCallback(async () => {
     if (!workspaceId) return
 
-    const defaultPath = getWorkspaceFolderPath(workspace, systemPaths) ?? undefined
+    const defaultPath =
+      getEffectiveWorkingDirectory(
+        activeAssistant?.parameters.workingDirectory,
+        workspace,
+        systemPaths,
+      ) || undefined
     const pickResult = await window.api.invoke(IpcChannel.DialogSelectFolder, { defaultPath })
     if (!pickResult.ok) {
       chat.setError(pickResult.error.message)
@@ -75,7 +81,16 @@ export function useChatPageInterop(deps: {
       return
     }
     setWorkspace(updateResult.workspace)
-  }, [workspace, workspaceId, systemPaths, chat, setWorkspace])
+
+    if (activeAssistant) {
+      const assistantResult = await updateAssistantWorkingDirectory(activeAssistant, path)
+      if (!assistantResult.ok) {
+        chat.setError(assistantResult.error)
+        return
+      }
+      await chat.loadAssistants()
+    }
+  }, [activeAssistant, workspace, workspaceId, systemPaths, chat, setWorkspace])
 
   const handleCodeEditorChange = useCallback(
     async (editorId: CodeEditorId) => {
@@ -138,10 +153,10 @@ export function useChatPageInterop(deps: {
       setChatPrefillRevision((value) => value + 1)
       setActiveView('agent')
       if (!chat.activeSessionId) {
-        void chat.createSession(activeAssistantId)
+        void chat.createSession(activeAssistant?.id)
       }
     },
-    [activeAssistantId, chat, notes.notes, setActiveView],
+    [activeAssistant?.id, chat, notes.notes, setActiveView],
   )
 
   const handleChatWithKnowledgeFiles = useCallback(
@@ -158,13 +173,13 @@ export function useChatPageInterop(deps: {
         setChatPrefillRevision((value) => value + 1)
         setActiveView('agent')
         if (!chat.activeSessionId) {
-          void chat.createSession(activeAssistantId)
+          void chat.createSession(activeAssistant?.id)
         }
       } catch (error) {
         chat.setError(error instanceof Error ? error.message : '准备知识库附件失败')
       }
     },
-    [activeAssistantId, chat, setActiveView],
+    [activeAssistant?.id, chat, setActiveView],
   )
 
   const handleOpenNote = useCallback(

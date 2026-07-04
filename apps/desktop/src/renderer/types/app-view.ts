@@ -6,6 +6,7 @@ export type AppView =
   | 'group'
   | 'community'
   | 'projects'
+  | 'translate'
   | 'settings'
 
 export type ModuleView = Exclude<AppView, 'agent' | 'settings'>
@@ -17,6 +18,7 @@ export const MODULE_VIEWS: ModuleView[] = [
   'group',
   'community',
   'projects',
+  'translate',
 ]
 
 export function isModuleView(view: AppView): view is ModuleView {

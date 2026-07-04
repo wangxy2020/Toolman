@@ -5,6 +5,7 @@ import type { AppSettings } from './app-settings'
 import { useI18n } from '../../i18n/useI18n'
 import { DataSettingsPanel } from './DataSettingsPanel'
 import { GeneralModelEquipmentPanel } from './GeneralModelEquipmentPanel'
+import { PlannerModelSettingsRow } from './PlannerModelSettingsRow'
 import { ChannelsSettingsPanel } from './ChannelsSettingsPanel'
 import { McpSettingsPanel } from './McpSettingsPanel'
 import { SkillsSettingsPanel } from './SkillsSettingsPanel'
@@ -97,6 +98,14 @@ export function SettingsPanelContent({
                 onChange={(spellCheckEnabled) => patchApp({ spellCheckEnabled })}
               />
             </SettingsRow>
+          </SettingsSection>
+
+          <SettingsSection title={t('settings.general.agentRuntime.title')}>
+            <PlannerModelSettingsRow
+              workspaceId={workspaceId}
+              plannerModelId={appSettings.plannerModelId}
+              onChange={(plannerModelId) => patchApp({ plannerModelId })}
+            />
           </SettingsSection>
 
           <SettingsSection

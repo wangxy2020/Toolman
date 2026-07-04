@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   buildStoredUserContent,
+  buildMessageTaskMetadata,
   MessageSendInputSchema,
   isDefaultSessionTitle,
 } from '@toolman/shared'
@@ -17,8 +18,13 @@ import { relayProxySendMessage } from './p2p/p2p-agent-relay.service'
 import { stageUserContentBlocks } from './resolve-user-content-blocks.service'
 import { isDocumentOcrEnabled } from './runtime-app-settings.service'
 import { toErrorMessage } from '@toolman/shared'
-import { broadcastStreamEvent } from './stream-broadcast'
+import { broadcastStreamEvent, broadcastSessionMessagesReload } from './stream-broadcast'
 import { abortControllers } from './agent-state'
+import {
+  runChatTaskOrchestration,
+  skipExtraAssistantMessages,
+} from './task-runtime/chat-task-send.service'
+import { clearStaleTerminalSessionBinding } from './task-runtime/session-bind'
 import {
   deriveSessionTitle,
   parseAssistantRuntime,
@@ -79,6 +85,13 @@ export async function sendMessage(input: unknown) {
   const stagedBlocks = await stageUserContentBlocks(data.contentBlocks)
   const userText = buildStoredUserContent(stagedBlocks)
 
+  const taskId = data.options?.taskId
+  if (!taskId && clearStaleTerminalSessionBinding(data.sessionId)) {
+    broadcastSessionMessagesReload(data.sessionId)
+  }
+
+  const userMessageMetadata = taskId ? buildMessageTaskMetadata(taskId) : undefined
+
   const userMessageId = randomUUID()
   const assistantMessageIds: string[] = modelIds.map(() => randomUUID())
 
@@ -98,6 +111,7 @@ export async function sendMessage(input: unknown) {
       contentBlocks: stagedBlocks,
       status: 'completed',
       touchSession: false,
+      metadata: userMessageMetadata,
     })
 
     for (let i = 0; i < modelIds.length; i++) {
@@ -145,6 +159,24 @@ export async function sendMessage(input: unknown) {
         timestamp: Date.now(),
       })
     })
+    return { userMessageId, assistantMessageIds, userContentBlocks: stagedBlocks }
+  }
+
+  if (taskId) {
+    skipExtraAssistantMessages({
+      sessionId: data.sessionId,
+      assistantMessageIds: assistantMessageIds.slice(1),
+    })
+
+    void runChatTaskOrchestration({
+      taskId,
+      sessionId: data.sessionId,
+      assistantMessageId: assistantMessageIds[0]!,
+      modelId: modelIds[0]!,
+      userText,
+      abortControllers,
+    })
+
     return { userMessageId, assistantMessageIds, userContentBlocks: stagedBlocks }
   }
 

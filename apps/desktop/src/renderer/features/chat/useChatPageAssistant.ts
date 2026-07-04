@@ -58,9 +58,13 @@ export function useChatPageAssistant(
 
   const translationLanguages = activeAssistant?.parameters.translationLanguages
 
-  const messagePanelStyle: CSSProperties = {
-    '--tm-message-font-size': `${messageFontSizePx(messageSettings.messageFontSize)}px`,
-  } as CSSProperties
+  const messagePanelStyle = useMemo(
+    () =>
+      ({
+        '--tm-message-font-size': `${messageFontSizePx(messageSettings.messageFontSize)}px`,
+      }) as CSSProperties,
+    [messageSettings.messageFontSize],
+  )
 
   const handleModelChange = useCallback(
     (modelIds: string[]) => {

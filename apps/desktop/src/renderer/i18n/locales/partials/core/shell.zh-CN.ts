@@ -68,6 +68,7 @@ export const shellZhCN = {
     chat: '主界面出错',
     group: '群组页面出错',
     community: '社区页面出错',
+    translate: '翻译页面出错',
     pageLoad: '页面加载出错',
     unknown: '发生未知错误，请重试或重启应用。',
   },

@@ -70,6 +70,7 @@ export interface AppSettings {
   defaultChatModelId: string
   defaultEmbeddingModelRef: string
   defaultDocProcessorProviderId: string
+  plannerModelId: string
   automationEnabled: boolean
   spellCheckEnabled: boolean
   anonymousErrorReports: boolean
@@ -97,6 +98,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultChatModelId: '',
   defaultEmbeddingModelRef: '',
   defaultDocProcessorProviderId: '',
+  plannerModelId: '',
   automationEnabled: false,
   spellCheckEnabled: true,
   anonymousErrorReports: true,

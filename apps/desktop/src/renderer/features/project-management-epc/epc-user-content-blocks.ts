@@ -21,9 +21,3 @@ export function buildEpcUserContentBlocks(
   }
   return blocks
 }
-
-export function getUserVisibleTextBlocks(blocks: ContentBlock[]): ContentBlock[] {
-  return blocks.filter(
-    (block) => block.type !== 'text' || !isEpcAgentContextText(block.text),
-  )
-}

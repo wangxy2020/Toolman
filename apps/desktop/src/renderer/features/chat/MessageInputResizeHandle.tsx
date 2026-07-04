@@ -7,8 +7,7 @@ export function MessageInputResizeHandle({ onResizeStart }: { onResizeStart: (st
       className="tm-input-resize-handle"
       role="separator"
       aria-orientation="vertical"
-      aria-label={t('chat.input.resizeHandle')}
-      title={t('chat.input.resizeHandleTitle')}
+      aria-label={t('chat.input.resizeHandleTitle')}
       onPointerDown={(e) => {
         e.preventDefault()
         onResizeStart(e.clientY)

@@ -115,7 +115,9 @@ export function MessagePanelAssistantMessage({
           />
         )}
 
-        {message.status !== 'streaming' && (
+        {message.status === 'streaming' ? (
+          <div className="tm-stream-footer tm-stream-footer--placeholder" aria-hidden="true" />
+        ) : (
           <div className="tm-stream-footer">
             <div className="tm-stream-actions">
               <MessagePanelActionButton

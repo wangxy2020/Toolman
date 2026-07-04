@@ -122,10 +122,15 @@ async function pingOpenAiChat(config: ProviderConfig): Promise<void> {
   }
 }
 
-function mergeExtraBody(config: ProviderConfig, model: string): Record<string, unknown> {
+function mergeExtraBody(
+  config: ProviderConfig,
+  model: string,
+  paramsExtra?: Record<string, unknown>,
+): Record<string, unknown> {
   return {
     ...resolveDeepSeekExtraBody(config, model),
     ...resolveOllamaExtraBody(config, model),
+    ...paramsExtra,
   }
 }
 
@@ -155,7 +160,7 @@ export async function* streamOpenAiCompatible(
     temperature: params.temperature ?? 0.7,
     max_tokens: resolveOpenAiMaxTokens(config, params.model, params.maxTokens),
     stream: true,
-    ...mergeExtraBody(config, params.model),
+    ...mergeExtraBody(config, params.model, params.extraBody),
   }
 
   if (supportsUsageInStream(config)) {
@@ -181,6 +186,54 @@ export async function* streamOpenAiCompatible(
   const decoder = new TextDecoder()
   let buffer = ''
   let usage: StreamChunk['usage']
+  let finishReason: string | undefined
+
+  const consumeSseLine = function* (line: string): Generator<StreamChunk> {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) return
+
+    const data = trimmed.slice(5).trim()
+    if (data === '[DONE]') return
+
+    try {
+      const parsed = JSON.parse(data) as {
+        choices?: Array<{
+          delta?: {
+            content?: string
+            reasoning_content?: string
+            reasoning?: string
+            thinking?: string
+          }
+          finish_reason?: string | null
+        }>
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+      }
+
+      const choice = parsed.choices?.[0]
+      if (choice?.finish_reason) {
+        finishReason = choice.finish_reason
+      }
+
+      const delta = choice?.delta
+      const reasoning = delta?.reasoning_content ?? delta?.reasoning ?? delta?.thinking
+      for (const chunk of yieldTextOrReasoning(reasoning ?? '', routeThinkingAsAnswer)) {
+        yield chunk
+      }
+
+      const text = delta?.content
+      if (text) yield { type: 'text-delta', text }
+
+      if (parsed.usage) {
+        usage = {
+          prompt: parsed.usage.prompt_tokens ?? 0,
+          completion: parsed.usage.completion_tokens ?? 0,
+          total: parsed.usage.total_tokens ?? 0,
+        }
+      }
+    } catch {
+      // skip malformed chunk
+    }
+  }
 
   while (true) {
     const { done, value } = await reader.read()
@@ -191,48 +244,18 @@ export async function* streamOpenAiCompatible(
     buffer = lines.pop() ?? ''
 
     for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed.startsWith('data:')) continue
-
-      const data = trimmed.slice(5).trim()
-      if (data === '[DONE]') continue
-
-      try {
-        const parsed = JSON.parse(data) as {
-          choices?: Array<{
-            delta?: {
-              content?: string
-              reasoning_content?: string
-              reasoning?: string
-              thinking?: string
-            }
-          }>
-          usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-        }
-
-        const delta = parsed.choices?.[0]?.delta
-        const reasoning = delta?.reasoning_content ?? delta?.reasoning ?? delta?.thinking
-        for (const chunk of yieldTextOrReasoning(reasoning ?? '', routeThinkingAsAnswer)) {
-          yield chunk
-        }
-
-        const text = delta?.content
-        if (text) yield { type: 'text-delta', text }
-
-        if (parsed.usage) {
-          usage = {
-            prompt: parsed.usage.prompt_tokens ?? 0,
-            completion: parsed.usage.completion_tokens ?? 0,
-            total: parsed.usage.total_tokens ?? 0,
-          }
-        }
-      } catch {
-        // skip malformed chunk
-      }
+      yield* consumeSseLine(line)
     }
   }
 
-  yield { type: 'done', usage }
+  buffer += decoder.decode()
+  if (buffer.trim()) {
+    for (const line of buffer.split('\n')) {
+      yield* consumeSseLine(line)
+    }
+  }
+
+  yield { type: 'done', usage, finishReason }
 }
 
 function parseToolCalls(message: {
@@ -335,7 +358,7 @@ export async function chatCompleteOpenAiCompatible(
     temperature: params.temperature ?? 0.7,
     max_tokens: resolveOpenAiMaxTokens(config, params.model, params.maxTokens),
     stream: false,
-    ...mergeExtraBody(config, params.model),
+    ...mergeExtraBody(config, params.model, params.extraBody),
   }
 
   if (params.tools?.length) {
@@ -365,11 +388,13 @@ export async function chatCompleteOpenAiCompatible(
           function?: { name?: string; arguments?: string }
         }>
       }
+      finish_reason?: string | null
     }>
     usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
   }
 
-  const message = data.choices?.[0]?.message
+  const choice = data.choices?.[0]
+  const message = choice?.message
   const mainContent = typeof message?.content === 'string' ? message.content : ''
   const fallbackContent =
     message?.reasoning_content?.trim() || message?.thinking?.trim() || ''
@@ -386,6 +411,7 @@ export async function chatCompleteOpenAiCompatible(
   return {
     content,
     toolCalls: parseToolCalls(message ?? {}),
+    finishReason: choice?.finish_reason ?? undefined,
     usage,
   }
 }

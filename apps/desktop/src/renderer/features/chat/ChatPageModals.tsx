@@ -31,6 +31,7 @@ type ChatPageModalsProps = Pick<
   | 'setShowAgentSettings'
   | 'activeAssistant'
   | 'workspace'
+  | 'setWorkspace'
   | 'showAssistants'
   | 'setShowAssistants'
   | 'handleAssistantCreated'
@@ -71,6 +72,7 @@ export function ChatPageModals({
   setShowAgentSettings,
   activeAssistant,
   workspace,
+  setWorkspace,
   showAssistants,
   setShowAssistants,
   handleAssistantCreated,
@@ -141,6 +143,7 @@ export function ChatPageModals({
           activeSession={chat.activeSession}
           onClose={() => setShowAgentSettings(false)}
           onSaved={() => void chat.loadAssistants()}
+          onWorkspaceUpdated={setWorkspace}
         />
       )}
 

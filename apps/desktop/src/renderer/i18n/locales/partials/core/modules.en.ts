@@ -52,5 +52,13 @@ export const modulesEn = {
       contentEmptyTitle: 'Project management',
       contentEmptyHint: 'Cost and schedule MOCK dashboards are available; other modules and EPC workflows arrive later.',
     },
+    translate: {
+      title: 'Translate',
+      addLabel: 'New session',
+      headerAll: 'Side-by-side',
+      sidebarEmptyHint: 'No translation sessions yet. Click above to create one.',
+      contentEmptyTitle: 'Translate',
+      contentEmptyHint: 'Select side-by-side translation on the left, then edit source and target text.',
+    },
   },
 } as const

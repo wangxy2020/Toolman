@@ -1,5 +1,6 @@
 import {
   IpcChannel,
+  buildMessageTaskMetadata,
   type ContentBlock,
   type Message,
 } from '@toolman/shared'
@@ -27,6 +28,7 @@ export async function sendEditedUserMessage(
   ctx: ChatSendContext,
   editingMessageId: string,
   contentBlocks: ContentBlock[],
+  sendOptionsOverride?: ChatSendOptions,
 ): Promise<void> {
   const {
     session,
@@ -51,7 +53,7 @@ export async function sendEditedUserMessage(
   setSending(true)
   setError(null)
 
-  const sendOptions = buildSendOptions(contentBlocks)
+  const sendOptions = sendOptionsOverride ?? buildSendOptions(contentBlocks)
   const cutoff = target.createdAt
   const now = Date.now()
   const tempAssistantIds = effectiveModelIds.map(() => crypto.randomUUID() as Message['id'])
@@ -191,6 +193,7 @@ export async function sendNewUserMessage(
     tokenUsage: null,
     createdAt: now,
     updatedAt: now,
+    ...(sendOptions.taskId ? { metadata: buildMessageTaskMetadata(sendOptions.taskId) } : {}),
   }
 
   const optimisticAssistantMsgs: Message[] = tempAssistantIds.map((id, index) => ({
@@ -217,7 +220,10 @@ export async function sendNewUserMessage(
       sessionId: session.activeSessionId,
       contentBlocks,
       modelIds: effectiveModelIds,
-      options: sendOptions,
+      options: {
+        ...sendOptions,
+        taskId: sendOptions.taskId,
+      },
     })
 
     if (!result.ok) {
@@ -261,6 +267,9 @@ export async function sendNewUserMessage(
             ...message,
             id: data.userMessageId,
             contentBlocks: data.userContentBlocks ?? contentBlocks,
+            ...(sendOptions.taskId
+              ? { metadata: buildMessageTaskMetadata(sendOptions.taskId) }
+              : {}),
           }
         }
         const assistantIndex = tempAssistantIdSet.has(message.id)

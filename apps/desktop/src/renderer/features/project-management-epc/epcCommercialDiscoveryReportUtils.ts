@@ -1,6 +1,6 @@
 import type { DiscoveredFileQueue, DiscoveredWorkbook } from '@toolman/shared'
 
-import { EPC_DISCOVERY_QUEUE_COLUMN_WIDTH_PX, formatEpcDiscoveryTableHtml } from './epcDiscoveryTable'
+import { formatEpcDiscoveryTableHtml } from './epcDiscoveryTable'
 
 const QUEUE_SORT: Record<DiscoveredFileQueue, number> = {
   masterContract: 0,
@@ -15,9 +15,6 @@ export const DISCOVERED_QUEUE_LABELS: Record<DiscoveredFileQueue, string> = {
   notRequired: '无需处理',
   alreadyProcessed: '已处理',
 }
-
-/** @deprecated 使用 EPC_DISCOVERY_QUEUE_COLUMN_WIDTH_PX */
-export const DISCOVERED_QUEUE_COLUMN_WIDTH = EPC_DISCOVERY_QUEUE_COLUMN_WIDTH_PX
 
 export interface DiscoveredScanSummary {
   folderCount: number

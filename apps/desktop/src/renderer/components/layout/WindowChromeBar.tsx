@@ -27,7 +27,6 @@ export function WindowChromeBar({
         <button
           type="button"
           className="tm-window-chrome-btn"
-          title={sidebarTitle}
           aria-label={sidebarTitle}
           onClick={onToggleSidebar}
         >
@@ -42,7 +41,6 @@ export function WindowChromeBar({
           <button
             type="button"
             className="tm-window-chrome-btn"
-            title={resolvedSearchTitle}
             aria-label={resolvedSearchTitle}
             onClick={onOpenSearch}
           >

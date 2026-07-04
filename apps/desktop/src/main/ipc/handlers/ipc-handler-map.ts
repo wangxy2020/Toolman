@@ -7,6 +7,7 @@ import { appIpcHandlers } from './ipc-handler-map/ipc-handler-app'
 import { workspaceIpcHandlers } from './ipc-handler-map/ipc-handler-workspace'
 import { dialogNotesIpcHandlers } from './ipc-handler-map/ipc-handler-dialog-notes'
 import { integrationsIpcHandlers } from './ipc-handler-map/ipc-handler-integrations'
+import { translationIpcHandlers } from '../translation-ipc-handlers'
 import type { HandlerFn } from './ipc-handler-map/types'
 
 export type { HandlerFn } from './ipc-handler-map/types'
@@ -16,6 +17,7 @@ export const ipcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   ...knowledgeIpcHandlers,
   ...workspaceIpcHandlers,
   ...dialogNotesIpcHandlers,
+  ...translationIpcHandlers,
   ...integrationsIpcHandlers,
   ...p2pIpcHandlers,
   ...communityHandlers,

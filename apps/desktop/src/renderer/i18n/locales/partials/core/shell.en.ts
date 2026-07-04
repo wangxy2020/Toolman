@@ -68,6 +68,7 @@ export const shellEn = {
     chat: 'Main interface error',
     group: 'Groups page error',
     community: 'Community page error',
+    translate: 'Translation page error',
     pageLoad: 'Page failed to load',
     unknown: 'An unknown error occurred. Please retry or restart the app.',
   },
