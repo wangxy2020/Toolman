@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
 
 export const E2E_DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
@@ -11,6 +11,18 @@ export interface E2eAgentTask {
   title: string
   status: string
   metadata?: Record<string, unknown>
+}
+
+/** Scope list rows to the popup list — detail cards reuse the same test id. */
+export function sidebarTaskListItem(sidebar: Locator, taskId: string): Locator {
+  return sidebar.locator('.tm-agent-tasks-popup-list').getByTestId(`task-list-item-${taskId}`)
+}
+
+export function sidebarTaskListItemByTitle(sidebar: Locator, title: string): Locator {
+  return sidebar
+    .locator('.tm-agent-tasks-popup-list')
+    .locator('[data-testid^="task-list-item-"]')
+    .filter({ hasText: title })
 }
 
 export async function createAgentTaskViaIpc(

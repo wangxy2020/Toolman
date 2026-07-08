@@ -5,6 +5,8 @@ import {
   enableLongTaskModeViaIpc,
   getAgentTaskViaIpc,
   openAgentTasksMenu,
+  sidebarTaskListItem,
+  sidebarTaskListItemByTitle,
 } from './fixtures/task-runtime'
 
 test.describe('Task runtime production E2E', () => {
@@ -15,7 +17,7 @@ test.describe('Task runtime production E2E', () => {
     const menu = window.getByTestId('agent-tasks-menu')
     const sidebar = await openAgentTasksMenu(window)
 
-    const listItem = sidebar.getByTestId(`task-list-item-${task.id}`)
+    const listItem = sidebarTaskListItem(sidebar, task.id)
     await expect(listItem).toBeVisible({ timeout: 15_000 })
     await expect(listItem).toContainText(title)
 
@@ -41,7 +43,7 @@ test.describe('Task runtime production E2E', () => {
 
     const menu = window.getByTestId('agent-tasks-menu')
     const sidebar = await openAgentTasksMenu(window)
-    const listItem = sidebar.getByTestId(`task-list-item-${task.id}`)
+    const listItem = sidebarTaskListItem(sidebar, task.id)
     await expect(listItem).toBeVisible({ timeout: 15_000 })
     await listItem.click()
 
@@ -69,9 +71,7 @@ test.describe('Task runtime production E2E', () => {
     await expect(window.getByTestId('task-detail-panel')).toHaveCount(0)
 
     const sidebar = await openAgentTasksMenu(window)
-    await expect(
-      sidebar.locator('[data-testid^="task-list-item-"]').filter({ hasText: title }),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(sidebarTaskListItemByTitle(sidebar, title)).toBeVisible({ timeout: 15_000 })
   })
 
   test('stores resolved working directory metadata on task create', async ({ window }) => {
@@ -93,13 +93,13 @@ test.describe('Task runtime production E2E', () => {
 
     const menu = window.getByTestId('agent-tasks-menu')
     const sidebar = await openAgentTasksMenu(window)
-    await expect(sidebar.getByTestId(`task-list-item-${activeTask.id}`)).toBeVisible({
+    await expect(sidebarTaskListItem(sidebar, activeTask.id)).toBeVisible({
       timeout: 15_000,
     })
-    await expect(sidebar.getByTestId(`task-list-item-${doneTask.id}`)).toHaveCount(0)
+    await expect(sidebarTaskListItem(sidebar, doneTask.id)).toHaveCount(0)
 
     await menu.getByTestId('task-filter-all').click()
-    await expect(sidebar.getByTestId(`task-list-item-${doneTask.id}`)).toBeVisible()
+    await expect(sidebarTaskListItem(sidebar, doneTask.id)).toBeVisible()
     await expect(menu.getByTestId('task-filter-active')).toBeVisible()
     await expect(menu.getByTestId('task-filter-done')).toBeVisible()
   })

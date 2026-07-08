@@ -179,7 +179,7 @@ async function callPlannerModel(
 
 export async function runTaskPlanner(input: unknown, options: TaskPlannerOptions = {}): Promise<AgentTask> {
   const data = TaskPlanInputSchema.parse(input)
-  let task = getAgentTask(data.taskId)
+  const task = getAgentTask(data.taskId)
   if (!task) {
     throw new PlannerError('任务不存在', 'NOT_FOUND')
   }

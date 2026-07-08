@@ -314,7 +314,7 @@ export async function performTaskReflection(
 
 export async function runTaskReflection(input: unknown, options: TaskReflectionOptions = {}): Promise<TaskReflectionOutput> {
   const data = TaskReflectInputSchema.parse(input)
-  let task = getAgentTask(data.taskId)
+  const task = getAgentTask(data.taskId)
   if (!task) {
     throw new ReflectionError('任务不存在', 'NOT_FOUND')
   }

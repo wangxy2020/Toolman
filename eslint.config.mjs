@@ -18,6 +18,8 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/*.tsbuildinfo',
       'apps/desktop/native/**',
+      'vendor/**',
+      'apps/desktop/scripts/**',
     ],
   },
   js.configs.recommended,

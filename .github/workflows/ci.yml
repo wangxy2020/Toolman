@@ -94,6 +94,8 @@ jobs:
         run: pnpm --filter @toolman/desktop typecheck
 
       - name: Unit tests
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm --filter @toolman/desktop test
 
   p2p-native-macos:

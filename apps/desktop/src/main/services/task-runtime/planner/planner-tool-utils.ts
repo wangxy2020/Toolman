@@ -142,6 +142,10 @@ export function normalizePlannerToolName(toolName: string): string {
   return trimmed
 }
 
+function toPosixPath(value: string): string {
+  return value.replace(/\\/g, '/')
+}
+
 function normalizePlannerPathArg(value: string, workingDirectory: string): string {
   const trimmed = value.trim()
   if (!trimmed || trimmed === '.') return trimmed
@@ -150,19 +154,19 @@ function normalizePlannerPathArg(value: string, workingDirectory: string): strin
   if (isAbsolute(trimmed)) {
     const rel = relative(wd, resolve(trimmed))
     if (!rel.startsWith('..') && !isAbsolute(rel)) {
-      return rel || '.'
+      return toPosixPath(rel || '.')
     }
     if (trimmed.match(/^\/[^/]+$/)) {
       return trimmed.slice(1)
     }
-    return trimmed
+    return toPosixPath(trimmed)
   }
 
   if (trimmed.startsWith('/')) {
     return trimmed.replace(/^\/+/, '')
   }
 
-  return trimmed
+  return toPosixPath(trimmed)
 }
 
 export function normalizePlannerToolArgs(
