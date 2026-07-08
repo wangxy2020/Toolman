@@ -11,4 +11,4 @@ export {
   fetchProviderModels,
 } from './provider/crud'
 export { pullOllamaModel, syncOllamaProviders } from './provider/ollama'
-export { parseModelId, formatModelId } from '@toolman/model-gateway'
+export { parseModelId } from '@toolman/model-gateway'

@@ -98,6 +98,12 @@ describe('resolveOllamaExtraBody', () => {
     ).toEqual({ think: false })
   })
 
+  it('disables think mode for qwen3 models', () => {
+    expect(
+      resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'qwen3.5:9b'),
+    ).toEqual({ think: false })
+  })
+
   it('leaves unrelated ollama models unchanged', () => {
     expect(
       resolveOllamaExtraBody({ type: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1' }, 'llama3.2:latest'),

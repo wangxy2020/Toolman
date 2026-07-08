@@ -18,6 +18,7 @@
     "build:excel-mcp-server": "bash scripts/build-excel-mcp-server.sh",
     "build:docx-core": "bash scripts/build-docx-core.sh",
     "build:docx-mcp-server": "bash scripts/build-docx-mcp-server.sh",
+    "vendor:odl": "bash scripts/sync-opendataloader-pdf-source.sh && pnpm add @opendataloader/pdf@file:../../vendor/open-data-loader-pdf/node/opendataloader-pdf --filter @toolman/opendataloader",
     "epc:build": "bash scripts/build-epc-commercial.sh",
     "p2p:dual-init": "bash scripts/p2p-dual-instance-init.sh",
     "dev:p2p:a": "bash scripts/p2p-dev-user-a.sh",

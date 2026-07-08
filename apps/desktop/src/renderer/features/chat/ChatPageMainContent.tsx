@@ -136,6 +136,8 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
         translation={props.translation}
         providers={props.chat.providers}
         translationLanguages={props.translationLanguages}
+        notes={props.notes}
+        setActiveView={props.setActiveView}
       />
     )
   }

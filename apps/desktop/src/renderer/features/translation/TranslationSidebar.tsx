@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconChevronRight, IconPlus } from '../../components/icons'
@@ -70,8 +70,17 @@ export function TranslationSidebar({
   const { t } = useI18n()
   const config = getModulePageConfig('translate', t)
   const [expanded, setExpanded] = useState<Set<TranslationSidebarSection>>(
-    () => new Set([DEFAULT_TRANSLATION_SECTION, 'documents']),
+    () => new Set([DEFAULT_TRANSLATION_SECTION]),
   )
+
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.add(activeSection)
+      if (activeDocumentId) next.add('documents')
+      return next
+    })
+  }, [activeDocumentId, activeSection])
   const [contrastContextMenu, setContrastContextMenu] = useState<{
     x: number
     y: number

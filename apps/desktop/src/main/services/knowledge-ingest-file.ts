@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { toErrorMessage } from '@toolman/shared'
 import {
   hashFileStream,
@@ -28,76 +28,37 @@ import {
 } from './knowledge-ingest-shared'
 import { parseAndEmbedFile } from './knowledge-ingest-file-pipeline'
 
-export async function registerStorageOnlyFileAtPath(
-  options: IngestFileAtPathOptions,
-): Promise<IngestFileAtPathResult> {
-  const { workspaceId, kbId, filePath, sourceId, documentId } = options
-  const repo = getDocumentRepository()
+/** Same path can be queued by UI ingest and folder watcher copy — coalesce to one run. */
+const ingestInflightByPath = new Map<string, Promise<IngestFileAtPathResult>>()
 
-  if (isIgnoredKnowledgeIngestFile(filePath)) {
-    return { outcome: 'skipped', path: filePath }
-  }
-
-  let contentHash: string
-  try {
-    contentHash = await hashFileStream(filePath)
-  } catch (error) {
-    const message = toErrorMessage(error, '无法读取文件')
-    recordIngestFailure(repo, workspaceId, kbId, filePath, message)
-    return { outcome: 'failed', path: filePath, message }
-  }
-
-  const existing =
-    findActiveDocumentByPath(repo, kbId, filePath) ??
-    (documentId ? findActiveDocumentById(repo, kbId, documentId) : undefined)
-
-  if (existing?.contentHash === contentHash && shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)) {
-    return { outcome: 'skipped', path: filePath }
-  }
-
-  const title = filePath.split(/[/\\]/).pop() ?? filePath
-  const docRow = existing
-    ? (repo.update(existing.id, kbId, {
-        title,
-        contentHash,
-        absolutePath: filePath,
-        status: 'ready',
-        errorJson: null,
-      }),
-      repo.findById(existing.id, kbId) ?? existing)
-    : repo.create({
-        id: documentId,
-        kbId,
-        sourceId: sourceId ?? null,
-        title,
-        contentHash,
-        status: 'ready',
-        absolutePath: filePath,
-      })
-
-  const stat = statSync(filePath)
-  repo.upsertFileRegistry({
-    workspaceId,
-    absolutePath: filePath,
-    contentHash,
-    sizeBytes: stat.size,
-    mtimeMs: stat.mtimeMs,
-    documentId: docRow.id,
-  })
-
-  repo.deleteIngestJobByDocumentId(docRow.id)
-
-  emitIngestStage({
-    workspaceId,
-    kbId,
-    documentId: docRow.id,
-    stage: 'ready',
-  })
-
-  return { outcome: 'ingested', path: filePath }
+function ingestCoalesceKey(workspaceId: string, kbId: string, filePath: string): string {
+  return `${workspaceId}\0${kbId}\0${filePath}`
 }
 
 export async function ingestFileAtPath(
+  options: IngestFileAtPathOptions,
+): Promise<IngestFileAtPathResult> {
+  const key = ingestCoalesceKey(options.workspaceId, options.kbId, options.filePath)
+  const inflight = ingestInflightByPath.get(key)
+  if (inflight) {
+    console.info(
+      `[knowledge-ingest] coalesce duplicate ingest for ${basename(options.filePath)} (UI + folder watcher)`,
+    )
+    return inflight
+  }
+
+  const promise = ingestFileAtPathOnce(options)
+  ingestInflightByPath.set(key, promise)
+  try {
+    return await promise
+  } finally {
+    if (ingestInflightByPath.get(key) === promise) {
+      ingestInflightByPath.delete(key)
+    }
+  }
+}
+
+async function ingestFileAtPathOnce(
   options: IngestFileAtPathOptions,
 ): Promise<IngestFileAtPathResult> {
   const { workspaceId, kbId, filePath, sourceId, documentId, skipP2pSync } = options
@@ -245,4 +206,73 @@ export async function ingestFileAtPath(
   } finally {
     clearIngestCancel(docRow.id)
   }
+}
+
+export async function registerStorageOnlyFileAtPath(
+  options: IngestFileAtPathOptions,
+): Promise<IngestFileAtPathResult> {
+  const { workspaceId, kbId, filePath, sourceId, documentId } = options
+  const repo = getDocumentRepository()
+
+  if (isIgnoredKnowledgeIngestFile(filePath)) {
+    return { outcome: 'skipped', path: filePath }
+  }
+
+  let contentHash: string
+  try {
+    contentHash = await hashFileStream(filePath)
+  } catch (error) {
+    const message = toErrorMessage(error, '无法读取文件')
+    recordIngestFailure(repo, workspaceId, kbId, filePath, message)
+    return { outcome: 'failed', path: filePath, message }
+  }
+
+  const existing =
+    findActiveDocumentByPath(repo, kbId, filePath) ??
+    (documentId ? findActiveDocumentById(repo, kbId, documentId) : undefined)
+
+  if (existing?.contentHash === contentHash && shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)) {
+    return { outcome: 'skipped', path: filePath }
+  }
+
+  const title = filePath.split(/[/\\]/).pop() ?? filePath
+  const docRow = existing
+    ? (repo.update(existing.id, kbId, {
+        title,
+        contentHash,
+        absolutePath: filePath,
+        status: 'ready',
+        errorJson: null,
+      }),
+      repo.findById(existing.id, kbId) ?? existing)
+    : repo.create({
+        id: documentId,
+        kbId,
+        sourceId: sourceId ?? null,
+        title,
+        contentHash,
+        status: 'ready',
+        absolutePath: filePath,
+      })
+
+  const stat = statSync(filePath)
+  repo.upsertFileRegistry({
+    workspaceId,
+    absolutePath: filePath,
+    contentHash,
+    sizeBytes: stat.size,
+    mtimeMs: stat.mtimeMs,
+    documentId: docRow.id,
+  })
+
+  repo.deleteIngestJobByDocumentId(docRow.id)
+
+  emitIngestStage({
+    workspaceId,
+    kbId,
+    documentId: docRow.id,
+    stage: 'ready',
+  })
+
+  return { outcome: 'ingested', path: filePath }
 }

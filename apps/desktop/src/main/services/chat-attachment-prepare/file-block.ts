@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import {
   extractPdfPlainText,
-  isPdfExtractedTextInsufficient,
   mimeTypeForKind,
   parseFile,
   renderPdfPagesToPng,
@@ -14,6 +13,11 @@ import { DOCX_MCP_SERVER_ID, EXCEL_MCP_SERVER_ID } from '@toolman/shared'
 import { writeBlobFromBuffer } from '../blob.service'
 import { resolveAttachmentReadPath } from '../resolve-user-content-blocks.service'
 import { CHAT_OCR_MAX_PAGES } from '../document-ocr.service'
+import {
+  isPdfExtractedTextInsufficient,
+  parseChatPdfAttachment,
+  shouldUseOpenDataLoaderForPdf,
+} from '../document-parser.service'
 import { buildChatPdfOcrOptions } from '../knowledge-parse-options.service'
 import { isDocumentOcrEnabled } from '../runtime-app-settings.service'
 import { throwIfAborted, withAbortSignal } from '../../utils/abort-signal'
@@ -142,6 +146,27 @@ export async function preparePdfBlock(
   }
 
   options.onStatus?.(`正在提取「${fileName}」文本…`)
+
+  if (options.workspaceId && shouldUseOpenDataLoaderForPdf(readPath)) {
+    try {
+      const parsed = await withAbortSignal(
+        parseChatPdfAttachment({
+          filePath: readPath,
+          workspaceId: options.workspaceId,
+          documentOcrEnabled: options.documentOcrEnabled,
+          timeoutMs: CHAT_OCR_TIMEOUT_MS,
+        }),
+        options.signal,
+      )
+      const normalized = parsed.plainText.trim()
+      if (normalized && !isPdfExtractedTextInsufficient(normalized, parsed.totalPages)) {
+        return { ...block, content: truncateForChat(normalized), delivery: 'text' }
+      }
+    } catch {
+      // fall through to builtin quick extract / OCR / vision
+    }
+  }
+
   let extractedText = ''
   try {
     extractedText = await withAbortSignal(tryQuickPdfText(readPath), options.signal)

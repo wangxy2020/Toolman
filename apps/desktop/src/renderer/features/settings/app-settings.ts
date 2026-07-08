@@ -37,6 +37,8 @@ export function appThemeLabel(theme: AppTheme, t?: (key: string) => string): str
 }
 
 import type { NavModuleId } from './nav-modules'
+import type { OdlHybridSettings, PdfParserBackend } from '@toolman/shared'
+import { DEFAULT_ODL_HYBRID_SETTINGS, normalizeOdlHybridSettings } from '@toolman/shared'
 import {
   DEFAULT_HIDDEN_NAV_MODULES,
   DEFAULT_VISIBLE_NAV_MODULES,
@@ -67,6 +69,8 @@ export interface AppSettings {
   memoryEnabled: boolean
   memoryRetentionDays: number
   documentOcrEnabled: boolean
+  pdfParserBackend: PdfParserBackend
+  odlHybrid: OdlHybridSettings
   defaultChatModelId: string
   defaultEmbeddingModelRef: string
   defaultDocProcessorProviderId: string
@@ -95,6 +99,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   memoryEnabled: true,
   memoryRetentionDays: 30,
   documentOcrEnabled: true,
+  pdfParserBackend: 'opendataloader',
+  odlHybrid: { ...DEFAULT_ODL_HYBRID_SETTINGS },
   defaultChatModelId: '',
   defaultEmbeddingModelRef: '',
   defaultDocProcessorProviderId: '',
@@ -131,6 +137,9 @@ export function loadAppSettings(): AppSettings {
       defaultChatModelId: parsed.defaultChatModelId ?? '',
       defaultEmbeddingModelRef: parsed.defaultEmbeddingModelRef ?? '',
       defaultDocProcessorProviderId: parsed.defaultDocProcessorProviderId ?? '',
+      pdfParserBackend:
+        parsed.pdfParserBackend === 'opendataloader' ? 'opendataloader' : 'builtin',
+      odlHybrid: normalizeOdlHybridSettings(parsed.odlHybrid),
       navBarPosition: parsed.navBarPosition === 'top' ? 'left' : (parsed.navBarPosition ?? 'left'),
       sidebarVisibleModules: normalized.visible,
       sidebarHiddenModules: normalized.hidden,

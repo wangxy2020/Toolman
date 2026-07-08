@@ -36,15 +36,16 @@ export function useChatProviders(
     setProviders(items)
   }, [workspaceId])
 
-  const loadAssistants = useCallback(async () => {
-    if (!workspaceId) return
+  const loadAssistants = useCallback(async (): Promise<Assistant[]> => {
+    if (!workspaceId) return []
     const result = await window.api.invoke(IpcChannel.AssistantList, { workspaceId })
     if (!result.ok) {
       setError(result.error.message)
-      return
+      return []
     }
     const items = result.data as Assistant[]
     setAssistants(items)
+    return items
   }, [workspaceId])
 
   useEffect(() => {

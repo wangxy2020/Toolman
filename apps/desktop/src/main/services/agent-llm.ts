@@ -16,7 +16,9 @@ const TRANSLATION_LANGUAGE_LABELS = {
 
 const TRANSLATE_TIMEOUT_MS = 60_000
 /** Below this size, always use a single model call. */
-const SINGLE_SHOT_MAX_CHARS = 4000
+const SINGLE_SHOT_MAX_CHARS = 6000
+/** Max concurrent segment requests per translate call. */
+const SEGMENT_CONCURRENCY = 3
 
 function detectJoinSeparator(text: string): '\n' | '\n\n' {
   return /\n\s*\n/.test(text) ? '\n\n' : '\n'
@@ -52,10 +54,7 @@ async function translateSegment(options: {
   const maxTokens = Math.min(2048, Math.max(512, lineCount * 48))
   const controller = new AbortController()
   const abortTimer = setTimeout(() => controller.abort(), TRANSLATE_TIMEOUT_MS)
-  const extraBody =
-    providerConfig.type === 'ollama'
-      ? { think: false, options: { num_predict: maxTokens, temperature: 0.1 } }
-      : undefined
+  const extraBody = providerConfig.type === 'ollama' ? { think: false } : undefined
 
   let result
   try {
@@ -97,6 +96,34 @@ async function translateSegment(options: {
   return output
 }
 
+async function translateSegmentsParallel(options: {
+  segments: string[]
+  model: string
+  providerConfig: NonNullable<ReturnType<typeof getProviderConfig>>
+  targetLabel: string
+}): Promise<string[]> {
+  const { segments, model, providerConfig, targetLabel } = options
+  const results = new Array<string>(segments.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < segments.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await translateSegment({
+        text: segments[index]!,
+        model,
+        providerConfig,
+        targetLabel,
+      })
+    }
+  }
+
+  const workerCount = Math.min(SEGMENT_CONCURRENCY, segments.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
+}
+
 export async function translateText(input: unknown) {
   const data = MessageTranslateInputSchema.parse(input)
   const { providerId, model } = parseModelId(data.modelId)
@@ -121,16 +148,12 @@ export async function translateText(input: unknown) {
     throw new ProviderError('没有可翻译的内容')
   }
 
-  const translatedParts: string[] = []
-  for (let index = 0; index < segments.length; index += 1) {
-    const part = await translateSegment({
-      text: segments[index]!,
-      model,
-      providerConfig,
-      targetLabel,
-    })
-    translatedParts.push(part)
-  }
+  const translatedParts = await translateSegmentsParallel({
+    segments,
+    model,
+    providerConfig,
+    targetLabel,
+  })
 
   return {
     text: translatedParts.join(detectJoinSeparator(sourceText)),

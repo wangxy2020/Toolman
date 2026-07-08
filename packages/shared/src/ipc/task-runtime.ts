@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { PdfParserBackendSchema } from '../document-parser.js'
+import { OdlHybridSettingsPatchSchema } from '../odl-hybrid.js'
 import {
   AgentTaskSchema,
   TaskStatusSchema,
@@ -192,12 +194,15 @@ export type { TaskReflectionResult } from '../task-runtime/reflection.js'
 
 export const RuntimeAppSettingsSyncInputSchema = z.object({
   documentOcrEnabled: z.boolean().optional(),
+  pdfParserBackend: PdfParserBackendSchema.optional(),
+  odlHybrid: OdlHybridSettingsPatchSchema.optional(),
   defaultDocProcessorProviderId: z.string().nullable().optional(),
   plannerModelId: z.string().nullable().optional(),
 })
 
 export const RuntimeAppSettingsSchema = z.object({
   documentOcrEnabled: z.boolean(),
+  pdfParserBackend: PdfParserBackendSchema,
   defaultDocProcessorProviderId: z.string().nullable(),
   plannerModelId: z.string().nullable(),
 })

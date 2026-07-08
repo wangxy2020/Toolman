@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { loadPdfjsDocument } from './pdfjs-options.js'
+import { whitenRenderedPageCanvas } from './pdf-left-margin-whiten.js'
 
 export interface RenderedPdfPage {
   pageNumber: number
@@ -36,8 +37,15 @@ export async function renderPdfPagesToPng(
 
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
     const page = await document.getPage(pageNumber)
-    const viewport = page.getViewport({ scale: renderScale })
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+    // glm-ocr rejects oversized images; keep OCR pages within ~1800px on the long side.
+    const baseViewport = page.getViewport({ scale: 1 })
+    const ocrMaxDim = 1800
+    const scale =
+      purpose === 'ocr'
+        ? Math.min(renderScale, ocrMaxDim / Math.max(baseViewport.width, baseViewport.height, 1))
+        : renderScale
+    const viewport = page.getViewport({ scale })
+    let canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
     const context = canvas.getContext('2d')
     await page.render({ canvasContext: context, viewport, canvas }).promise
 
@@ -52,6 +60,17 @@ export async function renderPdfPagesToPng(
         data[index + 2] = enhanced
       }
       context.putImageData(imageData, 0, 0)
+      whitenRenderedPageCanvas(canvas)
+
+      const longSide = Math.max(canvas.width, canvas.height)
+      if (longSide > ocrMaxDim) {
+        const resizeScale = ocrMaxDim / longSide
+        const width = Math.max(1, Math.round(canvas.width * resizeScale))
+        const height = Math.max(1, Math.round(canvas.height * resizeScale))
+        const resized = createCanvas(width, height)
+        resized.getContext('2d').drawImage(canvas, 0, 0, width, height)
+        canvas = resized
+      }
     }
 
     const usePng = purpose === 'ocr' || purpose === 'vision' || renderScale >= 2
@@ -63,6 +82,64 @@ export async function renderPdfPagesToPng(
   }
 
   return { totalPages, pages }
+}
+
+/** Render one PDF page for OCR (uses document cache; keeps long side ≤ 1800px). */
+export async function renderPdfPageForOcr(
+  filePath: string,
+  pageNumber: number,
+): Promise<{ totalPages: number; page: RenderedPdfPage }> {
+  const document = await getCachedPdfDocument(filePath)
+  const totalPages = document.numPages
+  if (totalPages < 1) {
+    throw new Error('PDF has no pages')
+  }
+
+  const safePage = Math.max(1, Math.min(Math.floor(pageNumber), totalPages))
+  const page = await document.getPage(safePage)
+  const renderScale = resolveRenderScale('ocr')
+  const ocrMaxDim = 1800
+  const baseViewport = page.getViewport({ scale: 1 })
+  const scale = Math.min(
+    renderScale,
+    ocrMaxDim / Math.max(baseViewport.width, baseViewport.height, 1),
+  )
+  const viewport = page.getViewport({ scale })
+  const { createCanvas } = await import('@napi-rs/canvas')
+  let canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+  const context = canvas.getContext('2d')
+  await page.render({ canvasContext: context, viewport, canvas }).promise
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+  const { data } = imageData
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = 0.299 * data[index]! + 0.587 * data[index + 1]! + 0.114 * data[index + 2]!
+    const enhanced = Math.min(255, Math.max(0, (gray - 128) * 1.35 + 128))
+    data[index] = enhanced
+    data[index + 1] = enhanced
+    data[index + 2] = enhanced
+  }
+  context.putImageData(imageData, 0, 0)
+  whitenRenderedPageCanvas(canvas)
+
+  const longSide = Math.max(canvas.width, canvas.height)
+  if (longSide > ocrMaxDim) {
+    const resizeScale = ocrMaxDim / longSide
+    const width = Math.max(1, Math.round(canvas.width * resizeScale))
+    const height = Math.max(1, Math.round(canvas.height * resizeScale))
+    const resized = createCanvas(width, height)
+    resized.getContext('2d').drawImage(canvas, 0, 0, width, height)
+    canvas = resized
+  }
+
+  return {
+    totalPages,
+    page: {
+      pageNumber: safePage,
+      png: canvas.toBuffer('image/png'),
+      mimeType: 'image/png',
+    },
+  }
 }
 
 type CachedPdfDocument = {

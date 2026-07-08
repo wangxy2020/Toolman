@@ -142,7 +142,13 @@ export function ChatPageModals({
           providers={chat.providers}
           activeSession={chat.activeSession}
           onClose={() => setShowAgentSettings(false)}
-          onSaved={() => void chat.loadAssistants()}
+          onSaved={async () => {
+            const items = await chat.loadAssistants()
+            const updated = items.find((item) => item.id === activeAssistant.id)
+            if (updated?.modelId) {
+              chat.setSelectedModelIds([updated.modelId])
+            }
+          }}
           onWorkspaceUpdated={setWorkspace}
         />
       )}

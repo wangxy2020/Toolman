@@ -1,6 +1,7 @@
 import {
   AssistantParametersSchema,
   ModelIdSchema,
+  type Assistant,
   type TaskTokenBudgetPreset,
   inferTaskTokenBudgetPreset,
 } from '@toolman/shared'
@@ -10,11 +11,17 @@ import { parseModelId } from '../provider.service'
 import { getProviderRow } from '../provider/crud'
 import { resolvePlannerModelIdFromRuntime } from '../runtime-app-settings.service'
 
-export function parseAssistantParametersJson(parametersJson: string): Record<string, unknown> {
+const DEFAULT_ASSISTANT_PARAMETERS = AssistantParametersSchema.parse({})
+
+export function parseAssistantParametersJson(
+  parametersJson: string | null | undefined,
+): Assistant['parameters'] {
+  if (!parametersJson?.trim()) return { ...DEFAULT_ASSISTANT_PARAMETERS }
   try {
-    return JSON.parse(parametersJson) as Record<string, unknown>
+    const parsed = AssistantParametersSchema.safeParse(JSON.parse(parametersJson))
+    return parsed.success ? parsed.data : { ...DEFAULT_ASSISTANT_PARAMETERS }
   } catch {
-    return {}
+    return { ...DEFAULT_ASSISTANT_PARAMETERS }
   }
 }
 
@@ -57,10 +64,8 @@ export function resolveTaskPlannerModelId(options: {
   if (options.assistantId) {
     const assistant = getAssistantRow(options.assistantId)
     if (assistant) {
-      const params = AssistantParametersSchema.safeParse(
-        parseAssistantParametersJson(assistant.parametersJson),
-      )
-      const fromAssistant = params.success ? params.data.plannerModelId?.trim() : undefined
+      const params = parseAssistantParametersJson(assistant.parametersJson)
+      const fromAssistant = params.plannerModelId?.trim()
       if (fromAssistant) {
         ModelIdSchema.parse(fromAssistant)
         return fromAssistant
@@ -102,10 +107,8 @@ export function resolveTaskPlannerModelCandidates(options: {
   if (options.assistantId) {
     const assistant = getAssistantRow(options.assistantId)
     if (assistant) {
-      const params = AssistantParametersSchema.safeParse(
-        parseAssistantParametersJson(assistant.parametersJson),
-      )
-      push(params.success ? params.data.plannerModelId : undefined)
+      const params = parseAssistantParametersJson(assistant.parametersJson)
+      push(params.plannerModelId)
       push(assistant.modelId)
     }
   }

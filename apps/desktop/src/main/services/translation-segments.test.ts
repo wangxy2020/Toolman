@@ -34,12 +34,12 @@ describe('splitTranslationSegments', () => {
   })
 
   it('batches long blank-line paragraphs into size-limited segments', () => {
-    const block = 'A'.repeat(500)
+    const block = 'A'.repeat(800)
     const source = [block, '', block, '', block].join('\n')
     const segments = splitTranslationSegments(source)
     expect(segments.length).toBeGreaterThan(1)
     for (const segment of segments) {
-      expect(segment.length).toBeLessThanOrEqual(1200)
+      expect(segment.length).toBeLessThanOrEqual(2000)
     }
     expect(segments.join('\n\n').replace(/\n\n/g, '\n\n')).toContain(block)
   })
@@ -51,7 +51,7 @@ describe('splitTranslationSegments', () => {
     expect(segments.length).toBeGreaterThan(1)
     expect(segments.join(' ')).toBe(paragraph)
     for (const segment of segments) {
-      expect(segment.length).toBeLessThanOrEqual(1200)
+      expect(segment.length).toBeLessThanOrEqual(2000)
     }
   })
 })

@@ -116,23 +116,11 @@ export function ensureWorkspaceDefaults(database: ToolmanDatabase) {
 
   const needsAssistantMigration =
     assistant &&
-    (needsProviderMigration ||
-      assistant.modelId.includes('gpt-4') ||
-      !assistant.modelId.startsWith(`${DEFAULT_PROVIDER_ID}:`))
+    (assistant.modelId.includes('gpt-4') ||
+      assistant.modelId.includes('gpt-3') ||
+      !assistant.modelId.includes(':'))
 
   if (needsAssistantMigration) {
-    database
-      .update(assistants)
-      .set({
-        modelId: defaultModelId,
-        updatedAt: now,
-      })
-      .where(eq(assistants.id, DEFAULT_ASSISTANT_ID))
-      .run()
-  } else if (
-    assistant &&
-    assistant.modelId === `${DEFAULT_PROVIDER_ID}:gemma4:26b`
-  ) {
     database
       .update(assistants)
       .set({

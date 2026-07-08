@@ -7,6 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react'
+import { renderMarkdownHtmlBreaks } from './markdown-html-breaks'
 
 function normalizeHeaderLabel(value: string): string {
   return value.trim().replace(/\s+/g, '').toLowerCase()
@@ -123,7 +124,7 @@ function MarkdownTableCell({
 
   return (
     <Tag className={centered ? 'tm-md-table-cell--center' : undefined} {...props}>
-      {children}
+      {renderMarkdownHtmlBreaks(children)}
     </Tag>
   )
 }

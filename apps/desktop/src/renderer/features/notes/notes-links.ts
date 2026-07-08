@@ -2,18 +2,6 @@ import type { NoteItem } from './notes-storage'
 
 const WIKI_LINK_RE = /\[\[([^[\]]+)\]\]/g
 
-export function extractWikiLinkTargets(content: string): string[] {
-  if (!content) return []
-  const targets: string[] = []
-  for (const match of content.matchAll(WIKI_LINK_RE)) {
-    const raw = match[1]?.trim()
-    if (!raw) continue
-    const target = raw.split('|')[0]?.trim()
-    if (target) targets.push(target)
-  }
-  return targets
-}
-
 export function resolveWikiLinkTarget(target: string, notes: NoteItem[]): NoteItem | null {
   const byId = notes.find((note) => note.id === target)
   if (byId) return byId

@@ -8,6 +8,10 @@ import {
   resolveFileKind,
 } from '@toolman/knowledge'
 import { buildChatParseOptions } from '../chat-parse-options.service'
+import {
+  parseChatPdfAttachment,
+  shouldUseOpenDataLoaderForPdf,
+} from '../document-parser.service'
 import { tryGetIndexedPlainText } from '../indexed-document-text.service'
 import { isDocumentOcrEnabled } from '../runtime-app-settings.service'
 import { withTimeout } from '../../utils/async-timeout'
@@ -66,6 +70,29 @@ export async function parseChatFileAttachment(
         name: fileName,
         content: text,
         mimeType: mimeTypeForKind(kind, sourcePath),
+        ...(truncated ? { truncated: true } : {}),
+      }
+    }
+
+    if (kind === 'pdf' && workspaceId && shouldUseOpenDataLoaderForPdf(sourcePath)) {
+      const parsed = await withTimeout(
+        parseChatPdfAttachment({
+          filePath: readPath,
+          workspaceId,
+          documentOcrEnabled,
+          timeoutMs: CHAT_PARSE_TIMEOUT_MS,
+        }),
+        CHAT_PARSE_TIMEOUT_MS,
+        '文件解析超时，OpenDataLoader 处理扫描件可能需要较长时间，请稍后重试',
+      )
+      const { text, truncated } = truncateText(parsed.plainText.trim(), maxBytes)
+      if (!text) {
+        throw new Error('未能从文件中提取到文本内容')
+      }
+      return {
+        name: fileName,
+        content: text,
+        mimeType: mimeTypeForKind('pdf', sourcePath),
         ...(truncated ? { truncated: true } : {}),
       }
     }

@@ -1,5 +1,7 @@
 import {
   isGemmaThinkingOllamaModelId,
+  isOcrVisionModelId,
+  isQwenThinkingOllamaModelId,
   resolveOpenAiMaxTokens,
 } from '../model-aliases.js'
 import type { ChatMessage, ChatParams, ProviderConfig, StreamChunk } from '../types.js'
@@ -20,6 +22,27 @@ function flattenMessageContent(content: ChatMessage['content']): string {
     .join('\n\n')
 }
 
+/** Strip data-URL prefix; Ollama native API expects raw base64 in `images`. */
+export function extractBase64ImagesFromContent(content: ChatMessage['content']): string[] {
+  if (typeof content === 'string') return []
+  const images: string[] = []
+  for (const part of content) {
+    if (part.type !== 'image_url' || !part.image_url?.url) continue
+    const url = part.image_url.url.trim()
+    // Prefer indexOf over regex — huge base64 payloads can break RegExp matching.
+    const marker = ';base64,'
+    const markerIndex = url.indexOf(marker)
+    const base64 = (markerIndex >= 0 ? url.slice(markerIndex + marker.length) : url).replace(
+      /\s+/g,
+      '',
+    )
+    // Reject values that still look like a data-URL (would cause "illegal base64 data").
+    if (!base64 || base64.startsWith('data:') || /[^A-Za-z0-9+/=]/.test(base64)) continue
+    images.push(base64)
+  }
+  return images
+}
+
 export function chatMessagesContainImages(messages: readonly ChatMessage[]): boolean {
   return messages.some(
     (message) =>
@@ -28,10 +51,14 @@ export function chatMessagesContainImages(messages: readonly ChatMessage[]): boo
   )
 }
 
-export function formatMessagesForOllamaNative(
-  messages: ChatMessage[],
-): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-  const formatted: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = []
+export type OllamaNativeMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  images?: string[]
+}
+
+export function formatMessagesForOllamaNative(messages: ChatMessage[]): OllamaNativeMessage[] {
+  const formatted: OllamaNativeMessage[] = []
 
   for (const message of messages) {
     if (message.role === 'tool') continue
@@ -40,20 +67,39 @@ export function formatMessagesForOllamaNative(
     }
 
     const content = flattenMessageContent(message.content)
-    if (!content.trim() && message.role !== 'assistant') continue
-    formatted.push({ role: message.role, content })
+    const images = extractBase64ImagesFromContent(message.content)
+    if (!content.trim() && images.length === 0 && message.role !== 'assistant') continue
+
+    const entry: OllamaNativeMessage = {
+      role: message.role,
+      content: content.trim() || (images.length > 0 ? 'Text Recognition:' : ''),
+    }
+    if (images.length > 0) {
+      entry.images = images
+    }
+    formatted.push(entry)
   }
 
   return formatted
 }
 
+/**
+ * Use Ollama native /api/chat for:
+ * - Gemma / Qwen3 thinking models (text-only; avoids /v1 empty-content + reasoning bug)
+ * - OCR models like glm-ocr (require native `images` field, not OpenAI image_url)
+ */
 export function shouldUseOllamaNativeChat(config: ProviderConfig, params: ChatParams): boolean {
-  return (
-    config.type === 'ollama' &&
-    isGemmaThinkingOllamaModelId(params.model) &&
-    (!params.tools || params.tools.length === 0) &&
-    !chatMessagesContainImages(params.messages)
-  )
+  if (config.type !== 'ollama') return false
+  if (params.tools && params.tools.length > 0) return false
+
+  if (isOcrVisionModelId(params.model)) return true
+
+  if (isGemmaThinkingOllamaModelId(params.model) || isQwenThinkingOllamaModelId(params.model)) {
+    // Vision via /v1 may work; keep text-only on native path.
+    return !chatMessagesContainImages(params.messages)
+  }
+
+  return false
 }
 
 export async function* streamOllamaNativeChat(
@@ -62,6 +108,7 @@ export async function* streamOllamaNativeChat(
 ): AsyncGenerator<StreamChunk> {
   const baseUrl = resolveOllamaNativeBaseUrl(config)
   const numPredict = resolveOpenAiMaxTokens(config, params.model, params.maxTokens) ?? 4096
+  const isOcr = isOcrVisionModelId(params.model)
 
   const response = await providerFetch(config, `${baseUrl}/api/chat`, {
     method: 'POST',
@@ -72,9 +119,11 @@ export async function* streamOllamaNativeChat(
       stream: true,
       think: false,
       options: {
-        temperature: params.temperature ?? 0.7,
+        temperature: params.temperature ?? (isOcr ? 0 : 0.7),
         num_predict: numPredict,
-        repeat_penalty: 1.12,
+        // glm-ocr needs a larger context for vision tokens.
+        ...(isOcr ? { num_ctx: 10240 } : {}),
+        ...(!isOcr ? { repeat_penalty: 1.12 } : {}),
       },
     }),
     signal: params.signal,
@@ -114,7 +163,8 @@ export async function* streamOllamaNativeChat(
           eval_count?: number
         }
 
-        const text = parsed.message?.content
+        // glm-ocr may put text in thinking/reasoning-like fields on some builds.
+        const text = parsed.message?.content || (isOcr ? parsed.message?.thinking : undefined)
         if (text) {
           yield { type: 'text-delta', text }
         }

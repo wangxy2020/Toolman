@@ -1,4 +1,5 @@
 import { chunkText, chunkTextAsync, approxTokenCount, type ChunkConfig, type TextChunk } from '../chunking/text-chunker.js'
+import { chunkPdfText } from '../chunking/pdf-chunker.js'
 import {
   EMBED_CHUNK_TOKEN_HARD_CAP,
   isEmbedContextLengthError,
@@ -186,15 +187,17 @@ export async function ingestContent(input: IngestContentInput): Promise<IngestCo
   const chunkConfig = resolveChunkConfigForText(plainText, input.chunkConfig)
 
   const rawChunks =
-    chunkConfig.strategy === 'semantic'
-      ? await chunkTextAsync(plainText, chunkConfig, (texts) => {
-          const budget = resolveEmbedTokenBudget(chunkConfig.chunkSize)
-          const safeTexts = texts.map(
-            (text) => splitTextForEmbedding(text, budget, 0, input.embedModel)[0] ?? text,
-          )
-          return embedTexts(input.embedOptions, safeTexts)
-        })
-      : chunkText(plainText, chunkConfig)
+    input.kind === 'pdf'
+      ? chunkPdfText(plainText, chunkConfig)
+      : chunkConfig.strategy === 'semantic'
+        ? await chunkTextAsync(plainText, chunkConfig, (texts) => {
+            const budget = resolveEmbedTokenBudget(chunkConfig.chunkSize)
+            const safeTexts = texts.map(
+              (text) => splitTextForEmbedding(text, budget, 0, input.embedModel)[0] ?? text,
+            )
+            return embedTexts(input.embedOptions, safeTexts)
+          })
+        : chunkText(plainText, chunkConfig)
   if (rawChunks.length === 0) {
     throw new Error('内容为空，无法索引')
   }

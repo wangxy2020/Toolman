@@ -41,7 +41,6 @@ export {
 
 export {
   resolveCommentAnchorCandidates,
-  resolveCommentAnchorText,
 } from './docx-review-anchors-resolve'
 
 export { collectExplanationCommentIssues, applyDocxReviewIssues } from './docx-review-apply'

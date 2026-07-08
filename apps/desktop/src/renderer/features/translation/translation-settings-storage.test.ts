@@ -22,6 +22,7 @@ describe('normalizeTranslationSettings', () => {
       languages: ['en', 'zh'],
       autoDetectSource: false,
       autoSaveAfterTranslate: true,
+      pdfParserBackend: 'opendataloader',
     })
   })
 

@@ -91,7 +91,7 @@ export const LOCAL_KNOWLEDGE_TOOL_DEFS: ToolDefinition[] = [
     function: {
       name: 'search_local_knowledge',
       description:
-        '在当前工作区的本地知识库中检索内容。未指定 kbId 时，仅检索当前智能体已绑定的知识库；若未绑定则检索工作区内全部知识库。',
+        '在当前工作区的本地知识库中检索已嵌入的文档分块（含 PDF 扫描件 OCR 文本）。未指定 kbId 时，仅检索当前智能体已绑定的知识库；若未绑定则检索工作区内全部知识库。询问某一页时请把文件名与页码写入 query（如「The-Little-Prince.pdf 第6页」）。不要用 fs_glob/fs_read 代替此工具。',
       parameters: {
         type: 'object',
         properties: {

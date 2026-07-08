@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type MemoryEntry } from '@toolman/shared'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useI18n } from '../../i18n/useI18n'
 
 interface Props {
@@ -27,6 +28,9 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
+  const [confirmState, setConfirmState] = useState<
+    { type: 'delete'; entryId: string } | { type: 'clear' } | null
+  >(null)
 
   const formatMemorySource = (source: MemoryEntry['source']) => {
     switch (source) {
@@ -64,7 +68,6 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
   }, [load])
 
   const handleDelete = async (entryId: string) => {
-    if (!window.confirm(t('knowledgePage.memory.deleteConfirm'))) return
     const result = await window.api.invoke(IpcChannel.MemoryEntryDelete, {
       workspaceId,
       entryId,
@@ -78,7 +81,6 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
 
   const handleClearAll = async () => {
     if (items.length === 0) return
-    if (!window.confirm(t('knowledgePage.memory.clearConfirm'))) return
 
     setClearing(true)
     setError(null)
@@ -98,6 +100,17 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
     await load()
   }
 
+  const handleConfirmDialog = async () => {
+    if (!confirmState) return
+    const pending = confirmState
+    setConfirmState(null)
+    if (pending.type === 'delete') {
+      await handleDelete(pending.entryId)
+      return
+    }
+    await handleClearAll()
+  }
+
   return (
     <div className="tm-kb-memory-panel">
       <div className="tm-kb-memory-panel-head">
@@ -106,7 +119,7 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
           type="button"
           className="tm-kb-memory-panel-clear"
           disabled={loading || clearing || items.length === 0}
-          onClick={() => void handleClearAll()}
+          onClick={() => setConfirmState({ type: 'clear' })}
         >
           {t('knowledgePage.memory.clearAll')}
         </button>
@@ -136,13 +149,33 @@ export function MemoryEntryPanel({ workspaceId, onCountChange }: Props) {
                 className="tm-kb-memory-entry-delete"
                 aria-label={t('knowledgePage.memory.deleteAria')}
                 disabled={clearing}
-                onClick={() => void handleDelete(item.id)}
+                onClick={() => setConfirmState({ type: 'delete', entryId: item.id })}
               >
                 <MemoryDeleteIcon />
               </button>
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {confirmState ? (
+        <ConfirmDialog
+          title={
+            confirmState.type === 'clear'
+              ? t('knowledgePage.memory.clearTitle')
+              : t('knowledgePage.memory.deleteTitle')
+          }
+          message={
+            confirmState.type === 'clear'
+              ? t('knowledgePage.memory.clearConfirm')
+              : t('knowledgePage.memory.deleteConfirm')
+          }
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
+          danger
+          onCancel={() => setConfirmState(null)}
+          onConfirm={() => void handleConfirmDialog()}
+        />
       ) : null}
     </div>
   )

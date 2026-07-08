@@ -39,6 +39,11 @@ function isChatModel(modelId: string): boolean {
   return !/bge|embed|nomic/i.test(modelId)
 }
 
+/** Pinned assistant first — matches chat session default selection. */
+export function resolvePrimaryAssistant(assistants: Assistant[]): Assistant | undefined {
+  return assistants.find((assistant) => assistant.isPinned) ?? assistants[0]
+}
+
 export function pickDefaultModelId(
   assistants: Assistant[],
   providers: Provider[],
@@ -50,12 +55,17 @@ export function pickDefaultModelId(
     return fromSettings
   }
 
-  const fromAssistant = assistants[0]?.modelId
+  const fromAssistant = resolvePrimaryAssistant(assistants)?.modelId
+  if (fromAssistant && isModelIdAvailable(fromAssistant, providers)) {
+    return fromAssistant
+  }
   if (fromAssistant) return fromAssistant
 
-  for (const provider of providers) {
-    const preferred = provider.models.find((m) => m.id === preferredModel)
-    if (preferred) return formatModelId(provider.id, preferred.id)
+  if (preferredModel) {
+    for (const provider of providers) {
+      const match = provider.models.find((m) => m.id === preferredModel)
+      if (match) return formatModelId(provider.id, match.id)
+    }
   }
 
   for (const provider of providers) {
@@ -72,7 +82,7 @@ export function pickDefaultModelIds(
   providers: Provider[],
   preferredModelId?: string | null,
 ): string[] {
-  const modelId = pickDefaultModelId(assistants, providers, 'gemma4:latest', preferredModelId)
+  const modelId = pickDefaultModelId(assistants, providers, undefined, preferredModelId)
   return modelId ? [modelId] : []
 }
 
@@ -112,7 +122,18 @@ export function normalizeModelIds(
   assistants: Assistant[],
   preferredModelId?: string | null,
 ): string[] {
+  const assistantModelId = resolvePrimaryAssistant(assistants)?.modelId?.trim()
   const valid = modelIds.filter((id) => isModelIdAvailable(id, providers))
+
+  if (
+    assistantModelId &&
+    isModelIdAvailable(assistantModelId, providers) &&
+    valid.length === 1 &&
+    valid[0] !== assistantModelId
+  ) {
+    return [assistantModelId]
+  }
+
   if (valid.length > 0) return valid.slice(0, MAX_PARALLEL_MODELS)
   return pickDefaultModelIds(assistants, providers, preferredModelId)
 }

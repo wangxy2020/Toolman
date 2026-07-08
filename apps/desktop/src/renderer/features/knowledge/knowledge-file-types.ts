@@ -44,11 +44,6 @@ export function countKnowledgeFilesByType(paths: string[]): KnowledgeFileTypeCou
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, 'zh-CN'))
 }
 
-export function formatKnowledgeFileTypeSummary(counts: KnowledgeFileTypeCount[]): string {
-  if (counts.length === 0) return ''
-  return counts.map((item) => `${item.label} ${item.count}`).join('、')
-}
-
 export function getCommonParentPath(paths: string[]): string {
   if (paths.length === 0) return ''
 

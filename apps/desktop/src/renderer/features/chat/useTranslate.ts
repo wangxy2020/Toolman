@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { IpcChannel, type TranslationLanguage } from '@toolman/shared'
 import {
   detectSourceLanguage,
@@ -16,6 +16,7 @@ interface TranslateOptions {
 
 export function useTranslate() {
   const [translating, setTranslating] = useState(false)
+  const inflightRef = useRef(0)
 
   const translate = useCallback(async (options: TranslateOptions) => {
     const text = options.text.trim()
@@ -30,6 +31,7 @@ export function useTranslate() {
       ? resolveTranslationTarget(text, languages)
       : languages[1]
 
+    inflightRef.current += 1
     setTranslating(true)
     try {
       const result = await window.api.invoke(IpcChannel.MessageTranslate, {
@@ -49,7 +51,8 @@ export function useTranslate() {
         targetLanguage: TranslationLanguage
       }
     } finally {
-      setTranslating(false)
+      inflightRef.current = Math.max(0, inflightRef.current - 1)
+      setTranslating(inflightRef.current > 0)
     }
   }, [])
 

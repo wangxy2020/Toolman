@@ -211,6 +211,33 @@ export function TranslationSettingsModal({
               <div className="tm-agent-setting-row">
                 <div className="tm-agent-setting-label-group">
                   <span className="tm-agent-setting-label">
+                    {t('translationPage.settings.pdfParserBackend')}
+                  </span>
+                  <AgentSettingsHelpHint title={t('translationPage.settings.pdfParserHint')} />
+                </div>
+                <div className="tm-translation-settings-control">
+                  <select
+                    className="tm-agent-model-select tm-settings-select--pdf-parser"
+                    value={draft.pdfParserBackend}
+                    onChange={(event) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        pdfParserBackend:
+                          event.target.value === 'opendataloader' ? 'opendataloader' : 'builtin',
+                      }))
+                    }
+                  >
+                    <option value="opendataloader">
+                      {t('translationPage.settings.pdfParserOpenDataLoader')}
+                    </option>
+                    <option value="builtin">{t('translationPage.settings.pdfParserBuiltin')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="tm-agent-setting-row">
+                <div className="tm-agent-setting-label-group">
+                  <span className="tm-agent-setting-label">
                     {t('translationPage.settings.autoSaveAfterTranslate')}
                   </span>
                   <AgentSettingsHelpHint

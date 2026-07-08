@@ -70,16 +70,6 @@ export function getDefaultKnowledgeFolderPath(): string {
   return join(getToolmanUserRootPath(), '本地知识库')
 }
 
-/** Previous flat default before per-user nesting. */
-export function getFlatDefaultKnowledgeFolderPath(): string {
-  return join(getToolmanDocumentsRootPath(), '本地知识库')
-}
-
-/** Previous default before renaming to 本地知识库. */
-export function getLegacyDefaultKnowledgeFolderPath(): string {
-  return join(getToolmanDocumentsRootPath(), '知识库')
-}
-
 export function getDefaultNetworkKnowledgeFolderPath(): string {
   return join(getToolmanUserRootPath(), '网络知识库')
 }

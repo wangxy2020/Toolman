@@ -1,7 +1,7 @@
 import { isSupportedKnowledgeFile, type ParseFileOptions } from '@toolman/knowledge'
 import {
   CHAT_OCR_MAX_PAGES,
-  MAX_OCR_PAGES,
+  KNOWLEDGE_MAX_OCR_PAGES,
   createPdfOcrRecognizer,
   ocrImageBuffer,
 } from './document-ocr.service'
@@ -15,7 +15,8 @@ export function buildKnowledgeParseOptions(
   const docProcessor = resolveDocProcessorConfig(workspaceId, kbId)
   const options: ParseFileOptions = {
     enhanced: docProcessor.enhanced,
-    pdfTextQuality: 'prefer-extracted',
+    // strict: scanned PDFs must go through OCR even when a low-quality text layer exists.
+    pdfTextQuality: 'strict',
   }
 
   if (!isDocumentOcrEnabled()) {
@@ -24,7 +25,7 @@ export function buildKnowledgeParseOptions(
 
   options.ocr = {
     enabled: true,
-    maxPdfPages: MAX_OCR_PAGES,
+    maxPdfPages: KNOWLEDGE_MAX_OCR_PAGES,
     recognizePage: createPdfOcrRecognizer(workspaceId, { kbId }),
     recognizeImage: async ({ buffer, mimeType }) =>
       ocrImageBuffer(buffer, mimeType, workspaceId, kbId),

@@ -24,7 +24,14 @@ const INFO_CONSOLE_ALLOWLIST: Array<{
   },
   { subsystem: 'community.hub', matches: (message) => message.startsWith('ready at') },
   { subsystem: 'p2p', matches: (message) => message.startsWith('peer trust prompt:') },
+  {
+    subsystem: 'odl-hybrid',
+    matches: (message) => message === 'ODL Hybrid OCR service started',
+  },
 ]
+
+/** Subsystems whose warn/error lines stay in the diagnostic buffer but never print to the dev terminal. */
+const CONSOLE_SILENT_SUBSYSTEMS = new Set(['odl-hybrid'])
 
 const buffer: DiagnosticLogEntry[] = []
 let lastConsolePayload = ''
@@ -45,6 +52,10 @@ function shouldEmitInfoToConsole(subsystem: string, message: string): boolean {
 }
 
 function shouldEmitToConsole(entry: DiagnosticLogEntry): boolean {
+  if (CONSOLE_SILENT_SUBSYSTEMS.has(entry.subsystem)) {
+    if (entry.level !== 'info') return false
+    return shouldEmitInfoToConsole(entry.subsystem, entry.message)
+  }
   if (entry.level === 'error' || entry.level === 'warn') {
     return true
   }

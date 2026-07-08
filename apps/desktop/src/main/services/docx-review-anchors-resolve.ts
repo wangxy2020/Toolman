@@ -168,14 +168,3 @@ export async function resolveCommentAnchorCandidates(options: {
     verifiedAnchors: verified,
   })
 }
-
-export async function resolveCommentAnchorText(options: {
-  workingPath: string
-  anchorText: string
-  paragraphIndex?: number
-  tools: ToolDefinition[]
-  toolContext: ToolExecutionContext
-}): Promise<string> {
-  const candidates = await resolveCommentAnchorCandidates(options)
-  return candidates[0] ?? options.anchorText
-}

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useChat } from './useChat'
 import { useMessageSettings } from './useMessageSettings'
 import { useSystemPaths } from './useSystemPaths'
@@ -9,6 +10,7 @@ import { useKnowledgeBases } from '../knowledge/useKnowledgeBases'
 import { useKnowledgeDefaultFolder } from '../knowledge/useKnowledgeDefaultFolder'
 import { useNotes } from '../notes/useNotes'
 import { useTranslationRecords } from '../translation/useTranslationRecords'
+import { DEFAULT_TRANSLATION_SECTION } from '../translation/translation-sidebar-types'
 import { useI18n } from '../../i18n/useI18n'
 import type { ChatPageProps } from './chat-page-types'
 import { useChatPageNavigation } from './useChatPageNavigation'
@@ -52,6 +54,22 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     t('translationPage.sidebar.untitledContrast'),
     crossModule.translationLanguages,
   )
+
+  const prevActiveViewRef = useRef(navigation.activeView)
+  useEffect(() => {
+    const previous = prevActiveViewRef.current
+    prevActiveViewRef.current = navigation.activeView
+    if (navigation.activeView !== 'translate' || previous === 'translate') return
+
+    navigation.setTranslationSection(DEFAULT_TRANSLATION_SECTION)
+    translation.enterContrastSection()
+    navigation.setTranslationWorkspaceKey((value) => value + 1)
+  }, [
+    navigation.activeView,
+    navigation.setTranslationSection,
+    navigation.setTranslationWorkspaceKey,
+    translation.enterContrastSection,
+  ])
 
   const agentTaskPanel = useAgentTaskPanel({
     workspaceId: chat.activeSession?.workspaceId ?? navigation.workspaceId,

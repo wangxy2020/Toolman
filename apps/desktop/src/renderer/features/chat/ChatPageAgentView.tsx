@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { IpcChannel } from '@toolman/shared'
 import { ChatComposer } from './ChatComposer'
 import { ChatHeader } from './ChatHeader'
 import { MessageSettingsPanel } from './MessageSettingsPanel'
@@ -89,10 +88,7 @@ export function ChatPageAgentView({
 
   const handleTaskMenuReload = useCallback(() => {
     void agentTaskPanel.reload()
-    if (chat.sessionActiveTaskId) {
-      void window.api.invoke(IpcChannel.TaskGet, { taskId: chat.sessionActiveTaskId })
-    }
-  }, [agentTaskPanel, chat.sessionActiveTaskId])
+  }, [agentTaskPanel])
 
   const handleTaskMenuSilentReload = useCallback(() => {
     void agentTaskPanel.reload({ silent: true })

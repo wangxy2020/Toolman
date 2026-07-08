@@ -134,6 +134,9 @@ export function useChatPageNavigation(
       const resolved = guardAppView(view, appSettings.sidebarVisibleModules)
       if (resolved === 'agent') setSettingsSection(undefined)
       if (resolved !== 'settings') setSettingsSection(undefined)
+      if (resolved === 'translate') {
+        setTranslationSection(DEFAULT_TRANSLATION_SECTION)
+      }
       setActiveView(resolved)
       syncLocationHashForAppView(resolved)
     },

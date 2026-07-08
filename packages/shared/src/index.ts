@@ -1,3 +1,6 @@
+export * from './document-parser.js'
+export * from './odl-hybrid.js'
+export * from './ocr-preview-quality.js'
 export * from './ipc/index.js'
 export * from './app-update.js'
 export * from './crash-report.js'

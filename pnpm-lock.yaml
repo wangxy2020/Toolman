@@ -67,6 +67,9 @@ importers:
       '@toolman/model-gateway':
         specifier: workspace:*
         version: link:../../packages/model-gateway
+      '@toolman/opendataloader':
+        specifier: workspace:*
+        version: link:../../packages/opendataloader
       '@toolman/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -312,6 +315,19 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/opendataloader:
+    dependencies:
+      '@opendataloader/pdf':
+        specifier: file:../../vendor/open-data-loader-pdf/node/opendataloader-pdf
+        version: file:vendor/open-data-loader-pdf/node/opendataloader-pdf
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@25.9.3)(tsx@4.22.4)
 
   packages/shared:
     dependencies:
@@ -1361,6 +1377,7 @@ packages:
   '@lancedb/lancedb@0.17.0':
     resolution: {integrity: sha512-AgQ4dqHBjoEpVdND5tmzhy0OJxwP4gJnEjOz3jVh7ip+8EYhR44wO6XbEhpxvvGfXyyepDrulo3bpL1323eNSg==}
     engines: {node: '>= 18'}
+    cpu: [x64, arm64]
     os: [darwin, linux, win32]
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
@@ -1555,6 +1572,11 @@ packages:
     resolution: {integrity: sha512-mJd2Z5TjYWq/ttPLLGqArdtnC74J6bOzg4rMDnN+p1xTacZ2yPRCk2y0oSWQtygLR9YVQXgOcONrwtnk3JupxQ==}
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
     deprecated: This functionality has been moved to @npmcli/fs
+
+  '@opendataloader/pdf@file:vendor/open-data-loader-pdf/node/opendataloader-pdf':
+    resolution: {directory: vendor/open-data-loader-pdf/node/opendataloader-pdf, type: directory}
+    engines: {node: '>=20.19.0'}
+    hasBin: true
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -2436,6 +2458,10 @@ packages:
   command-line-usage@7.0.4:
     resolution: {integrity: sha512-85UdvzTNx/+s5CkSgBm/0hzP80RFHAa7PsfeADE5ezZF3uHz3/Tqj9gIKGT9PTtpycc3Ua64T0oVulGfKxzfqg==}
     engines: {node: '>=12.20.0'}
+
+  commander@14.0.3:
+    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
+    engines: {node: '>=20'}
 
   commander@5.1.0:
     resolution: {integrity: sha512-P0CysNDQ7rtVw4QIQtm+MRxV66vKFSvlsQvGYXZWR3qFU0jlMKHZZZgw8e+8DSah4UDKMqnknRDQz+xuQXQ/Zg==}
@@ -6383,6 +6409,10 @@ snapshots:
       mkdirp: 1.0.4
       rimraf: 3.0.2
 
+  '@opendataloader/pdf@file:vendor/open-data-loader-pdf/node/opendataloader-pdf':
+    dependencies:
+      commander: 14.0.3
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -7386,6 +7416,8 @@ snapshots:
       chalk-template: 0.4.0
       table-layout: 4.1.1
       typical: 7.3.0
+
+  commander@14.0.3: {}
 
   commander@5.1.0: {}
 

@@ -1,3 +1,4 @@
+import { ImChannelTestInputSchema } from '@toolman/shared'
 import {
   getWebhookPort,
   listImChannelConfigsPublic,
@@ -36,8 +37,8 @@ export async function saveImChannel(input: unknown) {
 }
 
 export async function testImChannel(input: unknown) {
-  const { platform } = input as { platform: string }
-  return testChannelConnection(platform as never)
+  const { platform } = ImChannelTestInputSchema.parse(input)
+  return testChannelConnection(platform)
 }
 
 export function listImChannelStatuses() {

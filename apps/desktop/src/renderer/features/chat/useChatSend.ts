@@ -255,6 +255,10 @@ export function useChatSend(
       const modelId = resolveGroupProxyAssistantModelId(activeAssistant, session.activeSession)
       return modelId ? [modelId] : selectedModelIds
     }
+    const assistantModelId = activeAssistant?.modelId?.trim()
+    if (assistantModelId && selectedModelIds.length <= 1) {
+      return [assistantModelId]
+    }
     return selectedModelIds
   }, [activeAssistant, groupProxyMode, selectedModelIds, session.activeSession])
 

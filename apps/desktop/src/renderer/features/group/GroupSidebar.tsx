@@ -33,7 +33,7 @@ export function GroupSidebar({
 }: Props) {
   const { t } = useI18n()
   const [myGroupsOpen, setMyGroupsOpen] = useState(true)
-  const [joinedGroupsOpen, setJoinedGroupsOpen] = useState(true)
+  const [joinedGroupsOpen, setJoinedGroupsOpen] = useState(false)
   const isMyGroupsActive = isGroupInList(myGroups, activeId)
   const isJoinedGroupsActive = isGroupInList(joinedGroups, activeId)
 

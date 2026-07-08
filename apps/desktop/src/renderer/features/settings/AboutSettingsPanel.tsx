@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import toolmanIconUrl from '../../../../build/icon.png'
 import { useI18n } from '../../i18n/useI18n'
 import { recordProvenanceBeacon } from '../../lib/record-provenance-beacon'
 import { SettingsToggle } from './SettingsShared'
@@ -106,7 +107,7 @@ export function AboutSettingsPanel() {
         </div>
 
         <div className="tm-about-hero">
-          <div className="tm-about-logo">T</div>
+          <img src={toolmanIconUrl} alt="" className="tm-about-logo" />
           <div className="tm-about-hero-text">
             <h3 className="tm-about-name">Toolman</h3>
             <p className="tm-about-tagline">{t('settings.about.tagline')}</p>

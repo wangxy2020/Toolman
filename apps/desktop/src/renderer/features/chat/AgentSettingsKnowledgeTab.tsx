@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IpcChannel, type KnowledgeBase } from '@toolman/shared'
-import { SYSTEM_DEFAULT_FOLDER_KB_NAMES } from '../knowledge/knowledge-sidebar-types'
+import { resolveGroupKnowledgeBaseLabel } from '../group/group-knowledge-display'
+import { filterAgentBindableKnowledgeBases } from '../knowledge/agent-knowledge-bind'
 import { useI18n } from '../../i18n/useI18n'
 
 function Toggle({
@@ -75,11 +76,7 @@ export function AgentSettingsKnowledgeTab({
     }
 
     const data = result.data as { items: KnowledgeBase[] }
-    setItems(
-      data.items.filter(
-        (kb) => !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(kb.name) && kb.kind !== 'local_files',
-      ),
-    )
+    setItems(filterAgentBindableKnowledgeBases(data.items))
     setError(null)
   }, [workspaceId])
 
@@ -88,7 +85,7 @@ export function AgentSettingsKnowledgeTab({
   }, [load])
 
   return (
-    <div className="tm-agent-tab-panel">
+    <div className="tm-agent-tab-panel tm-agent-tab-panel--knowledge">
       {error ? <div className="tm-settings-error">{error}</div> : null}
 
       <div className="tm-agent-tab-head">
@@ -143,7 +140,7 @@ export function AgentSettingsKnowledgeTab({
             <div key={kb.id} className="tm-skill-card tm-skill-card--stacked">
               <div className="tm-skill-card-row">
                 <div className="tm-skill-card-main">
-                  <div className="tm-skill-card-name">{kb.name}</div>
+                  <div className="tm-skill-card-name">{resolveGroupKnowledgeBaseLabel(kb, t)}</div>
                   {kb.description ? (
                     <div className="tm-skill-card-desc">{kb.description}</div>
                   ) : null}

@@ -1,16 +1,34 @@
 import type { TranslationLanguage } from '@toolman/shared'
 import type { DocumentPageState, DocumentPageStatus } from './useDocumentPageTranslation'
+import {
+  isPdfPageMarkerOnly,
+  sanitizeParsePreviewContent,
+} from './translation-page-source-quality'
 
 export interface CachedPageText {
   sourceText: string
   translatedText: string
+  parsedMarkdown?: string
   status: Extract<DocumentPageStatus, 'done' | 'empty' | 'idle'>
+}
+
+export interface CachedParsePage {
+  translatedText: string
+  parsedMarkdown?: string
+  status: Extract<DocumentPageStatus, 'parsed' | 'empty'>
 }
 
 const sourceTextCache = new Map<string, string>()
 const pageTextCache = new Map<string, CachedPageText>()
+const parsePageCache = new Map<string, CachedParsePage>()
 const pageImageCache = new Map<string, string>()
 const MAX_IMAGE_CACHE = 24
+const MAX_PARSE_PAGE_CACHE = 2000
+const MAX_TRANSLATION_PAGE_CACHE = 2000
+
+export function parsePageCacheKey(documentId: string, pageNumber: number): string {
+  return `${documentId}::parse:v5::${pageNumber}`
+}
 
 export function sourceTextCacheKey(filePath: string, pageNumber: number): string {
   return `${filePath}::${pageNumber}`
@@ -47,7 +65,32 @@ export function getCachedPageText(key: string): CachedPageText | null {
 }
 
 export function setCachedPageText(key: string, value: CachedPageText): void {
+  pageTextCache.delete(key)
   pageTextCache.set(key, value)
+  while (pageTextCache.size > MAX_TRANSLATION_PAGE_CACHE) {
+    const oldest = pageTextCache.keys().next().value
+    if (!oldest) break
+    pageTextCache.delete(oldest)
+  }
+}
+
+export function getCachedParsePage(documentId: string, pageNumber: number): CachedParsePage | null {
+  return parsePageCache.get(parsePageCacheKey(documentId, pageNumber)) ?? null
+}
+
+export function setCachedParsePage(
+  documentId: string,
+  pageNumber: number,
+  value: CachedParsePage,
+): void {
+  const key = parsePageCacheKey(documentId, pageNumber)
+  parsePageCache.delete(key)
+  parsePageCache.set(key, value)
+  while (parsePageCache.size > MAX_PARSE_PAGE_CACHE) {
+    const oldest = parsePageCache.keys().next().value
+    if (!oldest) break
+    parsePageCache.delete(oldest)
+  }
 }
 
 export function getCachedPageImage(key: string): string | null {
@@ -98,6 +141,16 @@ export function hydratePagesFromCache(options: {
       ? pageTextCacheKey(documentId, pageNumber, modelId, languages, autoDetectSource)
       : null
     const cachedPage = textKey ? getCachedPageText(textKey) : null
+    const cachedParse = getCachedParsePage(documentId, pageNumber)
+
+    if (cachedPage?.status === 'empty') {
+      return {
+        pageNumber,
+        sourceText: '',
+        translatedText: '',
+        status: 'idle' as const,
+      }
+    }
 
     if (cachedPage?.status === 'done' && cachedPage.translatedText.trim()) {
       const resolvedSource = cachedPage.sourceText || sourceText
@@ -106,16 +159,33 @@ export function hydratePagesFromCache(options: {
         pageNumber,
         sourceText: resolvedSource,
         translatedText: cachedPage.translatedText,
+        parsedMarkdown: cachedPage.parsedMarkdown,
         status: 'done' as const,
       }
     }
 
-    if (cachedPage?.status === 'empty') {
+    if (cachedParse?.status === 'parsed') {
+      const sanitized = sanitizeParsePreviewContent(
+        cachedParse.translatedText,
+        cachedParse.parsedMarkdown,
+      )
+      const hasContent =
+        (sanitized.markdown.trim() && !isPdfPageMarkerOnly(sanitized.markdown)) ||
+        (sanitized.text.trim() && !isPdfPageMarkerOnly(sanitized.text))
+      if (!hasContent) {
+        return {
+          pageNumber,
+          sourceText: sourceText.trim() ? sourceText : '',
+          translatedText: '',
+          status: 'idle' as const,
+        }
+      }
       return {
         pageNumber,
-        sourceText: cachedPage.sourceText || sourceText,
-        translatedText: '',
-        status: 'empty' as const,
+        sourceText: sourceText.trim() ? sourceText : '',
+        translatedText: sanitized.text,
+        parsedMarkdown: sanitized.markdown,
+        status: 'parsed' as const,
       }
     }
 
@@ -145,21 +215,34 @@ export function cachePageState(
   modelId: string | null,
   languages: [TranslationLanguage, TranslationLanguage],
   autoDetectSource: boolean,
-  page: Pick<DocumentPageState, 'pageNumber' | 'sourceText' | 'translatedText' | 'status'>,
+  page: Pick<
+    DocumentPageState,
+    'pageNumber' | 'sourceText' | 'translatedText' | 'parsedMarkdown' | 'status'
+  >,
 ): void {
   if (page.sourceText.trim()) {
     setCachedSourceText(filePath, page.pageNumber, page.sourceText)
   }
 
+  if (page.status === 'parsed') {
+    setCachedParsePage(documentId, page.pageNumber, {
+      translatedText: page.translatedText,
+      parsedMarkdown: page.parsedMarkdown,
+      status: 'parsed',
+    })
+    return
+  }
+
   if (!modelId) return
-  if (page.status !== 'done' && page.status !== 'empty' && page.status !== 'idle') return
+  if (page.status !== 'done' && page.status !== 'idle') return
 
   setCachedPageText(
     pageTextCacheKey(documentId, page.pageNumber, modelId, languages, autoDetectSource),
     {
       sourceText: page.sourceText,
       translatedText: page.translatedText,
-      status: page.status === 'done' || page.status === 'empty' ? page.status : 'idle',
+      parsedMarkdown: page.parsedMarkdown,
+      status: page.status === 'done' ? page.status : 'idle',
     },
   )
 }

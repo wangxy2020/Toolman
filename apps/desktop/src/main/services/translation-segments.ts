@@ -1,4 +1,4 @@
-const MAX_SEGMENT_CHARS = 1200
+const MAX_SEGMENT_CHARS = 2000
 
 /**
  * Split source text into model-call segments.

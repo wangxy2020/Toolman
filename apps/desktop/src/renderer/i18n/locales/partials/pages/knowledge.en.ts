@@ -167,6 +167,8 @@ export const knowledgePageEn = {
     hint: 'Cross-session memory saved by agents; deleting does not affect indexed knowledge documents.',
     loading: 'Loading…',
     empty: 'No long-term memory yet',
+    deleteTitle: 'Delete long-term memory',
+    clearTitle: 'Clear long-term memory',
     deleteConfirm: 'Delete this long-term memory entry?',
     clearConfirm: 'Clear all long-term memory? This cannot be undone.',
     deleteAria: 'Delete memory',

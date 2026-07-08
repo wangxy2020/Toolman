@@ -27,7 +27,7 @@ export function useKnowledgeSidebarItems(items: KnowledgeBase[]) {
 
 export function useKnowledgeSidebarExpansion(activeId: string | null, activeSection: KnowledgeSidebarSection) {
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
-    () => new Set(['local', 'network', 'shared', 'local-files']),
+    () => new Set(['local']),
   )
 
   useEffect(() => {

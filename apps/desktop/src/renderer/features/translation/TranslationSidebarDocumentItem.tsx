@@ -1,5 +1,7 @@
 import type { MouseEvent } from 'react'
 import { IconFile } from '../../components/icons'
+import { useI18n } from '../../i18n/useI18n'
+import { countRestorableSnapshots } from './document-page-snapshots'
 import { SidebarRenameInput } from '../notes/SidebarRenameInput'
 import { normalizeRenameTitle, type TranslationDocumentItem } from './translation-storage'
 
@@ -24,6 +26,9 @@ export function TranslationSidebarDocumentItem({
   onCancelRename,
   onContextMenu,
 }: Props) {
+  const { t } = useI18n()
+  const savedPageCount = countRestorableSnapshots(document.pageSnapshots)
+
   if (isRenaming) {
     return (
       <SidebarRenameInput
@@ -54,11 +59,21 @@ export function TranslationSidebarDocumentItem({
         onStartRename()
       }}
       onContextMenu={(event) => onContextMenu(event, document)}
+      title={
+        savedPageCount > 0
+          ? t('translationPage.documents.sidebarSavedPages', { count: String(savedPageCount) })
+          : document.title
+      }
     >
       <span className="tm-session-item-icon" aria-hidden="true">
         <IconFile size={14} />
       </span>
-      <span className="tm-session-item-label">{document.title}</span>
+      <span className="tm-session-item-label">
+        {document.title}
+        {savedPageCount > 0 ? (
+          <span className="tm-session-item-meta"> · {savedPageCount}</span>
+        ) : null}
+      </span>
     </button>
   )
 }

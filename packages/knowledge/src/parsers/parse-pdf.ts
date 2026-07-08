@@ -1,14 +1,16 @@
 import { readFileSync } from 'node:fs'
 import pdfParse from 'pdf-parse'
 import { loadPdfjsDocument } from './pdfjs-options.js'
+import { formatPdfPageMarker } from './pdf-page-markers.js'
 import { isPdfExtractedTextInsufficient } from './pdf-text-quality.js'
-import { getCachedPdfDocument, renderPdfPagesToPng } from './render-pdf-pages.js'
+import { getCachedPdfDocument, renderPdfPageForOcr } from './render-pdf-pages.js'
 
 type PdfTextItem = { str?: string; transform?: number[] }
 
 export interface PdfPageText {
   pageNumber: number
   text: string
+  markdown?: string
 }
 
 export interface OcrPageRecognizer {
@@ -27,7 +29,8 @@ export interface PdfExtractOptions {
   ocr?: {
     recognizePage: OcrPageRecognizer
     maxPages?: number
-    onProgress?: (currentPage: number, totalPages: number) => void
+    /** currentPage = completed pages; inProgress=true means page currentPage+1 is running. */
+    onProgress?: (currentPage: number, totalPages: number, inProgress?: boolean) => void
   }
 }
 
@@ -82,7 +85,9 @@ async function extractWithPdfJs(buffer: Buffer): Promise<{ text: string; pageCou
     const content = await page.getTextContent()
     const pageText = extractPageTextWithLayout(content.items as PdfTextItem[])
     const normalized = normalizePdfText(pageText)
-    if (normalized) parts.push(normalized)
+    if (normalized) {
+      parts.push(`${formatPdfPageMarker(pageNumber, document.numPages)}\n${normalized}`)
+    }
   }
 
   return {
@@ -91,11 +96,37 @@ async function extractWithPdfJs(buffer: Buffer): Promise<{ text: string; pageCou
   }
 }
 
+/** PDF page count and page-1 dimensions (points), without text extraction or OCR. */
+export async function extractPdfDocumentInfo(filePath: string): Promise<{
+  totalPages: number
+  pageWidth: number
+  pageHeight: number
+}> {
+  const document = await getCachedPdfDocument(filePath)
+  const totalPages = document.numPages
+  if (totalPages < 1) {
+    return { totalPages: 0, pageWidth: 0, pageHeight: 0 }
+  }
+
+  const firstPage = await document.getPage(1)
+  const viewport = firstPage.getViewport({ scale: 1 })
+  return {
+    totalPages,
+    pageWidth: viewport.width,
+    pageHeight: viewport.height,
+  }
+}
+
 /** Extract plain text for an inclusive 1-based page range. */
 export async function extractPdfPageTexts(
   filePath: string,
   startPage: number,
   endPage: number,
+  options?: {
+    ocr?: {
+      recognizePage: OcrPageRecognizer
+    }
+  },
 ): Promise<{
   totalPages: number
   pages: PdfPageText[]
@@ -121,7 +152,23 @@ export async function extractPdfPageTexts(
   for (let pageNumber = from; pageNumber <= to; pageNumber += 1) {
     const page = pageNumber === 1 ? firstPage : await document.getPage(pageNumber)
     const content = await page.getTextContent()
-    const text = normalizePdfText(extractPageTextWithLayout(content.items as PdfTextItem[]))
+    let text = normalizePdfText(extractPageTextWithLayout(content.items as PdfTextItem[]))
+
+    if (
+      options?.ocr?.recognizePage &&
+      isPdfExtractedTextInsufficient(text, 1)
+    ) {
+      const { page: rendered } = await renderPdfPageForOcr(filePath, pageNumber)
+      text = normalizePdfText(
+        await options.ocr.recognizePage({
+          png: rendered.png,
+          mimeType: rendered.mimeType,
+          pageNumber: rendered.pageNumber,
+          totalPages,
+        }),
+      )
+    }
+
     pages.push({ pageNumber, text })
   }
 
@@ -132,25 +179,34 @@ async function extractWithVisionOcr(
   filePath: string,
   ocr: NonNullable<PdfExtractOptions['ocr']>,
 ): Promise<string> {
-  const { totalPages, pages } = await renderPdfPagesToPng(
-    filePath,
-    ocr.maxPages ?? 40,
-    undefined,
-    'ocr',
-  )
-  const parts: string[] = []
+  // Page-by-page: render → OCR → report progress (avoids long silent "render all pages" phase).
+  const document = await getCachedPdfDocument(filePath)
+  const totalPages = document.numPages
+  const pageCount = Math.min(totalPages, ocr.maxPages ?? 40)
+  if (pageCount < 1) {
+    throw new Error('PDF has no pages')
+  }
 
-  for (const page of pages) {
+  const parts: string[] = []
+  ocr.onProgress?.(0, pageCount)
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    // Signal "working on page N" before the slow render/OCR so UI leaves 20%.
+    ocr.onProgress?.(pageNumber - 1, pageCount, true)
+
+    const { page } = await renderPdfPageForOcr(filePath, pageNumber)
     const text = normalizePdfText(
       await ocr.recognizePage({
         png: page.png,
         mimeType: page.mimeType,
         pageNumber: page.pageNumber,
-        totalPages,
+        totalPages: pageCount,
       }),
     )
-    if (text) parts.push(text)
-    ocr.onProgress?.(page.pageNumber, totalPages)
+    if (text) {
+      parts.push(`${formatPdfPageMarker(pageNumber, pageCount)}\n${text}`)
+    }
+    ocr.onProgress?.(pageNumber, pageCount, false)
   }
 
   const combined = parts.join('\n\n').trim()
@@ -158,8 +214,8 @@ async function extractWithVisionOcr(
     throw new Error('OCR 未从 PDF 页面中识别到文字内容')
   }
 
-  if (totalPages > pages.length) {
-    return `${combined}\n\n[已 OCR 前 ${pages.length}/${totalPages} 页，其余页面未处理]`
+  if (totalPages > pageCount) {
+    return `${combined}\n\n[已 OCR 前 ${pageCount}/${totalPages} 页，其余页面未处理]`
   }
 
   return combined
@@ -178,11 +234,13 @@ export async function extractPdfPlainText(
     : [extractWithPdfParse, extractWithPdfJs]
 
   let bestText = ''
+  let bestPageCount = 1
   for (const attempt of attempts) {
     try {
       const result = await attempt(buffer)
       if (result.text.length > bestText.length) {
         bestText = result.text
+        bestPageCount = Math.max(1, result.pageCount)
       }
       if (
         result.text &&
@@ -199,9 +257,12 @@ export async function extractPdfPlainText(
     return bestText
   }
 
+  // Only skip OCR when extracted text is both long enough and quality-sufficient.
+  // Scanned PDFs often have empty or garbage text layers — those must go through OCR.
   if (
     resolvedOptions.textQuality === 'prefer-extracted' &&
-    bestText.trim().length >= 500
+    bestText.trim().length >= 500 &&
+    !isPdfExtractedTextInsufficient(bestText, bestPageCount)
   ) {
     return bestText
   }
@@ -216,6 +277,6 @@ export async function extractPdfPlainText(
   }
 
   throw new Error(
-    'PDF 未提取到文本内容。若为扫描件，请在「设置」中开启「文档 OCR 识别」，并确保已配置支持视觉的模型（如 Ollama 视觉模型）。',
+    'PDF 未提取到文本内容。若为扫描件，请在「设置」中开启「文档 OCR 识别」，安装 glm-ocr:latest，并在知识库「文档处理」中选择 Ollama。',
   )
 }

@@ -17,17 +17,31 @@ import {
   TranslationContrastView,
   type TranslationContrastViewHandle,
 } from './TranslationContrastView'
-import { TranslationDocumentWorkspace } from './TranslationDocumentWorkspace'
+import {
+  TranslationDocumentWorkspace,
+  type TranslationDocumentWorkspaceHandle,
+  DOCUMENT_PAGE_ZOOM_DEFAULT,
+} from './TranslationDocumentWorkspace'
 import { TranslationPageHeader } from './TranslationPageHeader'
 import { TranslationSettingsModal } from './TranslationSettingsModal'
 import { isTranslationDocumentPath } from './translation-document-utils'
+import {
+  buildDocumentPageSnapshots,
+  aggregateSnapshotSourceText,
+  aggregateSnapshotTargetText,
+  countRestorableSnapshots,
+} from './document-page-snapshots'
+import {
+  buildDocumentExportContent,
+  hasDocumentExportContent,
+} from './translation-export'
 import type { TranslationSettings } from './translation-settings-storage'
 import { useTranslationSettings } from './useTranslationSettings'
 import type {
   SaveTranslationContrastInput,
   SaveTranslationDocumentInput,
 } from './useTranslationRecords'
-import type { TranslationContrastItem, TranslationDocumentItem } from './translation-storage'
+import type { TranslationContrastItem, TranslationDocumentItem, TranslationDocumentPageSnapshot } from './translation-storage'
 import type { TranslationSidebarSection } from './translation-sidebar-types'
 
 export interface TranslationPageProps {
@@ -39,6 +53,7 @@ export interface TranslationPageProps {
   activeDocument: TranslationDocumentItem | null
   onSaveContrast: (input: SaveTranslationContrastInput) => string | null
   onSaveDocument: (input: SaveTranslationDocumentInput) => string | null
+  onSaveDocumentToNotes?: (title: string, content: string) => void
   onOpenDocumentPath: (filePath: string) => void
   onUpdateDocumentSourceText: (documentId: string, sourceText: string) => void
   onClearActiveDocument: () => void
@@ -53,6 +68,7 @@ export function TranslationPage({
   activeDocument,
   onSaveContrast,
   onSaveDocument,
+  onSaveDocumentToNotes,
   onOpenDocumentPath,
   onUpdateDocumentSourceText,
   onClearActiveDocument,
@@ -79,17 +95,47 @@ export function TranslationPage({
   const [error, setError] = useState<string | null>(null)
   const [saveHint, setSaveHint] = useState<string | null>(null)
   const [documentBusy, setDocumentBusy] = useState(false)
+  const [documentParsing, setDocumentParsing] = useState(false)
+  const [documentParseProgress, setDocumentParseProgress] = useState<{
+    completed: number
+    total: number
+    percent: number
+  } | null>(null)
   const [documentError, setDocumentError] = useState<string | null>(null)
-  const [translateRequestId, setTranslateRequestId] = useState(0)
+  const [documentTotalPages, setDocumentTotalPages] = useState(0)
+  const [documentCurrentPage, setDocumentCurrentPage] = useState(1)
   const contrastViewRef = useRef<TranslationContrastViewHandle | null>(null)
+  const documentWorkspaceRef = useRef<TranslationDocumentWorkspaceHandle | null>(null)
+  const livePageSnapshotsRef = useRef<TranslationDocumentPageSnapshot[]>([])
+  const showStatus = useCallback((message: string) => {
+    setSaveHint(message)
+    window.setTimeout(() => setSaveHint(null), 2000)
+  }, [])
+  const registerDocumentActions = useCallback(
+    (actions: TranslationDocumentWorkspaceHandle | null) => {
+      documentWorkspaceRef.current = actions
+    },
+    [],
+  )
+  const handlePageSnapshotsChange = useCallback((snapshots: TranslationDocumentPageSnapshot[]) => {
+    livePageSnapshotsRef.current = snapshots
+  }, [])
 
   const activeDocumentId = activeDocument?.id ?? null
   const activeDocumentLanguages = activeDocument?.languages
+  const activeDocumentSource = activeDocument?.sourceText ?? ''
   const activeDocumentTarget = activeDocument?.targetText ?? ''
   const activeContrastId = activeContrast?.id ?? null
   const activeContrastSource = activeContrast?.sourceText ?? ''
   const activeContrastTarget = activeContrast?.targetText ?? ''
   const activeContrastLanguages = activeContrast?.languages
+
+  useEffect(() => {
+    if (!activeDocumentId) {
+      setDocumentTotalPages(0)
+      setDocumentCurrentPage(1)
+    }
+  }, [activeDocumentId])
 
   useEffect(() => {
     if (isDocuments) {
@@ -98,10 +144,11 @@ export function TranslationPage({
           activeDocumentLanguages ?? settings.languages ?? translationLanguages,
         ),
       )
+      setSourceText(activeDocumentSource)
       setTargetText(activeDocumentTarget)
       if (!activeDocumentId) {
-        setSourceText('')
         setDocumentBusy(false)
+        setDocumentParsing(false)
         setDocumentError(null)
       }
       return
@@ -122,6 +169,7 @@ export function TranslationPage({
     activeContrastTarget,
     activeDocumentId,
     activeDocumentLanguages,
+    activeDocumentSource,
     activeDocumentTarget,
     isDocuments,
     settings.languages,
@@ -129,14 +177,28 @@ export function TranslationPage({
   ])
 
   useEffect(() => {
+    if (!isDocuments || !activeDocumentId) return
+    const restoredPages = countRestorableSnapshots(activeDocument?.pageSnapshots)
+    if (restoredPages > 0) {
+      showStatus(
+        t('translationPage.documents.restoredFromSave', { count: String(restoredPages) }),
+      )
+    }
+  }, [activeDocument?.pageSnapshots, activeDocumentId, isDocuments, showStatus, t])
+
+  useEffect(() => {
     if (!isDocuments || !activeDocumentId || !sourceText.trim()) return
-    onUpdateDocumentSourceText(activeDocumentId, sourceText)
+    const timer = window.setTimeout(() => {
+      onUpdateDocumentSourceText(activeDocumentId, sourceText)
+    }, 2000)
+    return () => window.clearTimeout(timer)
   }, [activeDocumentId, isDocuments, onUpdateDocumentSourceText, sourceText])
 
   // Never leave the translate icon spinning after leaving document mode.
   useEffect(() => {
     if (!isDocuments) {
       setDocumentBusy(false)
+      setDocumentParsing(false)
       setDocumentError(null)
     }
   }, [isDocuments])
@@ -163,14 +225,20 @@ export function TranslationPage({
   const canTranslate = isDocuments
     ? Boolean(modelId && activeDocument)
     : Boolean(modelId)
+  const canParse = isDocuments ? Boolean(activeDocument) : false
   const canSave = isDocuments
-    ? Boolean(workspaceId && activeDocument)
+    ? Boolean(workspaceId && activeDocument && (sourceText.trim() || targetText.trim()))
     : Boolean(workspaceId && (sourceText.trim() || targetText.trim()))
-
-  const showStatus = useCallback((message: string) => {
-    setSaveHint(message)
-    window.setTimeout(() => setSaveHint(null), 2000)
-  }, [])
+  const canSaveToNotes = isDocuments
+    ? Boolean(
+        activeDocument &&
+          hasDocumentExportContent({
+            ...activeDocument,
+            sourceText,
+            targetText,
+          }),
+      )
+    : false
 
   const handleSwapLanguages = useCallback(() => {
     setLanguages((prev) => [prev[1], prev[0]])
@@ -184,6 +252,7 @@ export function TranslationPage({
     setError(null)
     setSaveHint(null)
     setDocumentBusy(false)
+    setDocumentParsing(false)
     setDocumentError(null)
     if (isDocuments) {
       setSourceText('')
@@ -198,9 +267,29 @@ export function TranslationPage({
   const handleSave = useCallback(() => {
     if (!canSave) return
     if (isDocuments) {
-      const savedId = onSaveDocument({ targetText, languages })
+      const pageSnapshots =
+        documentWorkspaceRef.current?.getPageSnapshots() ??
+        livePageSnapshotsRef.current ??
+        buildDocumentPageSnapshots([])
+      if (pageSnapshots.length === 0) {
+        setError(t('translationPage.documents.saveNoSnapshots'))
+        return
+      }
+      const resolvedSource =
+        aggregateSnapshotSourceText(pageSnapshots).trim() || sourceText.trim()
+      const resolvedTarget =
+        aggregateSnapshotTargetText(pageSnapshots).trim() || targetText.trim()
+
+      const savedId = onSaveDocument({
+        sourceText: resolvedSource,
+        targetText: resolvedTarget,
+        languages,
+        pageSnapshots,
+      })
       if (!savedId) return
-      showStatus(t('translationPage.documents.saved'))
+      showStatus(
+        `${t('translationPage.documents.saved')} ${t('translationPage.documents.savedHint')}`,
+      )
       return
     }
     const savedId = onSaveContrast({
@@ -216,6 +305,26 @@ export function TranslationPage({
     languages,
     onSaveContrast,
     onSaveDocument,
+    showStatus,
+    sourceText,
+    t,
+    targetText,
+  ])
+
+  const handleSaveToNotes = useCallback(() => {
+    if (!canSaveToNotes || !activeDocument || !onSaveDocumentToNotes) return
+    const liveDocument = { ...activeDocument, sourceText, targetText }
+    if (!hasDocumentExportContent(liveDocument)) {
+      setError(t('translationPage.sidebar.exportEmpty'))
+      return
+    }
+    const title = activeDocument.title || activeDocument.fileName
+    onSaveDocumentToNotes(title, buildDocumentExportContent(liveDocument))
+    showStatus(t('translationPage.documents.savedToNotes', { title }))
+  }, [
+    activeDocument,
+    canSaveToNotes,
+    onSaveDocumentToNotes,
     showStatus,
     sourceText,
     t,
@@ -251,6 +360,22 @@ export function TranslationPage({
     }
   }, [activeDocument?.filePath])
 
+  const handleParse = useCallback(() => {
+    setError(null)
+    if (!activeDocument) {
+      setError(t('translationPage.documents.needDocument'))
+      return
+    }
+    if (documentParsing) {
+      documentWorkspaceRef.current?.stopParse()
+      return
+    }
+    const started = documentWorkspaceRef.current?.startParse()
+    if (started === false) {
+      setError(t('translationPage.documents.parseNotReady'))
+    }
+  }, [activeDocument, documentParsing, t])
+
   const handleTranslate = useCallback(async () => {
     setError(null)
 
@@ -260,7 +385,14 @@ export function TranslationPage({
         setError(t('translationPage.documents.needDocument'))
         return
       }
-      setTranslateRequestId((value) => value + 1)
+      if (documentBusy) {
+        documentWorkspaceRef.current?.stopTranslation()
+        return
+      }
+      const started = documentWorkspaceRef.current?.startTranslation()
+      if (started === false) {
+        setError(t('translationPage.documents.translateNotReady'))
+      }
       return
     }
 
@@ -307,6 +439,8 @@ export function TranslationPage({
     }
   }, [
     activeDocument,
+    documentBusy,
+    documentParsing,
     isDocuments,
     languages,
     modelId,
@@ -342,9 +476,20 @@ export function TranslationPage({
         }
       : saveHint
         ? { tone: 'info' as const, text: saveHint }
-        : isDocuments && documentBusy
-          ? { tone: 'muted' as const, text: t('translationPage.documents.pageTranslating') }
-          : !isDocuments && translating
+        : isDocuments && documentParsing && documentParseProgress
+          ? {
+              tone: 'muted' as const,
+              text: t('translationPage.documents.parseProgress', {
+                percent: String(documentParseProgress.percent),
+                completed: String(documentParseProgress.completed),
+                total: String(documentParseProgress.total),
+              }),
+            }
+          : isDocuments && documentParsing
+          ? { tone: 'muted' as const, text: t('translationPage.documents.parsePreviewRunning') }
+          : isDocuments && documentBusy
+            ? { tone: 'muted' as const, text: t('translationPage.documents.pageTranslating') }
+            : !isDocuments && translating
             ? {
                 tone: 'muted' as const,
                 text: t('translationPage.workspace.translatingWithModel', {
@@ -360,16 +505,23 @@ export function TranslationPage({
           section={section}
           sectionLabel={sectionLabel}
           translating={isDocuments ? documentBusy : translating}
+          parsing={isDocuments ? documentParsing : false}
           canTranslate={canTranslate}
+          canParse={canParse}
           canSave={canSave}
+          canSaveToNotes={canSaveToNotes}
           canOpenExternally={Boolean(activeDocument?.filePath)}
+          documentTotalPages={documentTotalPages}
+          documentCurrentPage={documentCurrentPage}
           onSave={handleSave}
+          onSaveToNotes={isDocuments ? handleSaveToNotes : undefined}
           onSwapLanguages={handleSwapLanguages}
+          onParse={() => void handleParse()}
           onTranslate={() => void handleTranslate()}
           onClear={handleClear}
           onOpenSettings={() => setSettingsOpen(true)}
-          onOpenDocument={() => void handleOpenDocument()}
           onOpenExternally={() => void handleOpenExternally()}
+          onJumpToPage={(pageNumber) => documentWorkspaceRef.current?.scrollToPage(pageNumber)}
         />
 
         <ModulePageStatusProvider>
@@ -381,16 +533,27 @@ export function TranslationPage({
               </div>
             ) : isDocuments ? (
               <TranslationDocumentWorkspace
+                ref={documentWorkspaceRef}
+                workspaceId={workspaceId}
                 modelId={modelId}
                 activeDocument={activeDocument}
                 languages={languages}
                 autoDetectSource={settings.autoDetectSource}
+                pdfParserBackend={settings.pdfParserBackend}
                 onOpenDocument={() => void handleOpenDocument()}
                 onTargetTextChange={setTargetText}
                 onSourceTextChange={setSourceText}
                 onBusyChange={setDocumentBusy}
+                onParsingChange={setDocumentParsing}
+                onParseProgressChange={setDocumentParseProgress}
+                onPageSnapshotsChange={handlePageSnapshotsChange}
                 onErrorChange={setDocumentError}
-                translateRequestId={translateRequestId}
+                onPageMetaChange={({ totalPages, currentPage }) => {
+                  setDocumentTotalPages(totalPages)
+                  setDocumentCurrentPage(currentPage)
+                }}
+                pageZoom={DOCUMENT_PAGE_ZOOM_DEFAULT}
+                onRegisterActions={registerDocumentActions}
               />
             ) : (
               <TranslationContrastView

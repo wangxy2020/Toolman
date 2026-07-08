@@ -4,12 +4,18 @@ import type { AppSettings } from './app-settings'
 export async function syncRuntimeAppSettingsToMain(
   settings: Pick<
     AppSettings,
-    'documentOcrEnabled' | 'defaultDocProcessorProviderId' | 'plannerModelId'
+    | 'documentOcrEnabled'
+    | 'pdfParserBackend'
+    | 'odlHybrid'
+    | 'defaultDocProcessorProviderId'
+    | 'plannerModelId'
   >,
 ) {
   try {
     await window.api.invoke(IpcChannel.AppRuntimeSettingsSync, {
       documentOcrEnabled: settings.documentOcrEnabled,
+      pdfParserBackend: settings.pdfParserBackend,
+      odlHybrid: settings.odlHybrid,
       defaultDocProcessorProviderId: settings.defaultDocProcessorProviderId.trim() || null,
       plannerModelId: settings.plannerModelId.trim() || null,
     })

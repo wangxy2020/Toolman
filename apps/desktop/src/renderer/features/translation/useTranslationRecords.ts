@@ -15,6 +15,7 @@ import {
   uniqueTitle,
   type TranslationData,
   type TranslationDocumentItem,
+  type TranslationDocumentPageSnapshot,
 } from './translation-storage'
 
 export interface SaveTranslationContrastInput {
@@ -24,8 +25,10 @@ export interface SaveTranslationContrastInput {
 }
 
 export interface SaveTranslationDocumentInput {
+  sourceText: string
   targetText: string
   languages: [TranslationLanguage, TranslationLanguage]
+  pageSnapshots?: TranslationDocumentPageSnapshot[]
 }
 
 export function useTranslationRecords(
@@ -50,6 +53,11 @@ export function useTranslationRecords(
   useEffect(() => {
     saveTranslationData(data)
   }, [data])
+
+  useEffect(() => {
+    setActiveDocumentId(null)
+    setRenameDocumentId(null)
+  }, [workspaceId])
 
   const contrasts = useMemo(() => {
     if (!workspaceId) return []
@@ -147,6 +155,14 @@ export function useTranslationRecords(
     setActiveDocumentId(null)
     setRenameDocumentId(null)
   }, [])
+
+  /** Landing state when opening the translate module from navigation. */
+  const enterContrastSection = useCallback(() => {
+    setRenameContrastId(null)
+    setRenameDocumentId(null)
+    setActiveDocumentId(null)
+    setActiveContrastId(contrasts[0]?.id ?? null)
+  }, [contrasts])
 
   const startRenameContrast = useCallback((contrastId: string) => {
     setRenameContrastId(contrastId)
@@ -247,25 +263,36 @@ export function useTranslationRecords(
   const saveDocument = useCallback(
     (input: SaveTranslationDocumentInput): string | null => {
       if (!workspaceId || !activeDocumentId) return null
+      const hasSnapshots = Boolean(input.pageSnapshots && input.pageSnapshots.length > 0)
+      if (!input.sourceText.trim() && !input.targetText.trim() && !hasSnapshots) return null
 
       const now = Date.now()
-      setData((prev) => ({
-        ...prev,
-        documents: prev.documents.map((item) =>
-          item.id === activeDocumentId
-            ? normalizeDocument(
-                {
-                  ...item,
-                  targetText: input.targetText,
-                  languages: input.languages,
-                  updatedAt: now,
-                },
-                workspaceId,
-              )
-            : item,
-        ),
-      }))
-      return activeDocumentId
+      let saved = false
+      setData((prev) => {
+        const existing = prev.documents.find((item) => item.id === activeDocumentId)
+        if (!existing) return prev
+
+        saved = true
+        return {
+          ...prev,
+          documents: prev.documents.map((item) =>
+            item.id === activeDocumentId
+              ? normalizeDocument(
+                  {
+                    ...item,
+                    sourceText: input.sourceText || item.sourceText,
+                    targetText: input.targetText || item.targetText,
+                    pageSnapshots: hasSnapshots ? input.pageSnapshots : item.pageSnapshots,
+                    languages: input.languages,
+                    updatedAt: now,
+                  },
+                  workspaceId,
+                )
+              : item,
+          ),
+        }
+      })
+      return saved ? activeDocumentId : null
     },
     [activeDocumentId, workspaceId],
   )
@@ -277,14 +304,7 @@ export function useTranslationRecords(
         ...prev,
         documents: prev.documents.map((item) =>
           item.id === documentId
-            ? normalizeDocument(
-                {
-                  ...item,
-                  sourceText,
-                  updatedAt: Date.now(),
-                },
-                workspaceId,
-              )
+            ? normalizeDocument({ ...item, sourceText }, workspaceId)
             : item,
         ),
       }))
@@ -324,6 +344,7 @@ export function useTranslationRecords(
     selectContrast,
     selectDocument,
     clearActiveDocument,
+    enterContrastSection,
     startRenameContrast,
     startRenameDocument,
     cancelRenameContrast,

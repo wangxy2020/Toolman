@@ -15,6 +15,9 @@ import {
   buildSkillsSystemHint,
   buildWebSearchSystemHint,
   buildKnowledgeSystemHint,
+  buildKnowledgeEnabledHint,
+  buildKnowledgeEmptySearchHint,
+  buildKnowledgeUnavailableHint,
   loadSoulMd,
 } from '../agent-runtime.service'
 import { resolveWorkingDirectory } from '../permission.service'
@@ -23,8 +26,10 @@ import { searchWeb } from '../web-search.service'
 import {
   resolveEffectiveKbIds,
   searchKnowledgeForChat,
+  getAssistantKbIds,
 } from '../knowledge-document.service'
 import { parseModelId } from '../provider.service'
+import { getProviderRow } from '../provider/crud'
 import { resolveAttachmentReadPath } from '../resolve-user-content-blocks.service'
 import { getSession } from '../session.service'
 import type { BuildRuntimeSystemHintsOptions } from './types'
@@ -49,11 +54,32 @@ function buildDirectoryExportToolHint(): string {
   ].join('\n')
 }
 
+/** Prevent stale assistant self-introductions after the user switches models mid-session. */
+export function buildRuntimeModelIdentityHint(modelId: string): string | null {
+  try {
+    const { providerId, model } = parseModelId(modelId)
+    const providerName = getProviderRow(providerId)?.name?.trim()
+    const label = providerName ? `${model}（${providerName}）` : model
+    return [
+      '## 当前推理模型',
+      `本条回复由 ${label} 生成。`,
+      '用户询问你的模型名称、开发者或版本时，必须按**当前推理模型**如实回答，不要复述对话历史中其他模型留下的自我介绍。',
+    ].join('\n')
+  } catch {
+    return null
+  }
+}
+
 export async function buildRuntimeSystemHints(
   options: BuildRuntimeSystemHintsOptions,
 ): Promise<{ hints: string[]; kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> }> {
   const hints: string[] = []
   let kbResults: Awaited<ReturnType<typeof searchKnowledgeForChat>> = []
+
+  if (options.modelId?.trim()) {
+    const identityHint = buildRuntimeModelIdentityHint(options.modelId)
+    if (identityHint) hints.push(identityHint)
+  }
 
   if (options.sessionId) {
     const session = getSession({ id: options.sessionId })
@@ -259,6 +285,7 @@ export async function buildRuntimeSystemHints(
     })
 
     if (kbIds.length > 0) {
+      hints.push(buildKnowledgeEnabledHint())
       try {
         const assistantParams = options.assistant
           ? (JSON.parse(options.assistant.parametersJson) as Record<string, unknown>)
@@ -279,12 +306,21 @@ export async function buildRuntimeSystemHints(
         })
         kbResults = results
         const knowledgeHint = buildKnowledgeSystemHint(results, options.userText)
-        if (knowledgeHint) hints.push(knowledgeHint)
+        if (knowledgeHint) {
+          hints.push(knowledgeHint)
+        } else {
+          hints.push(buildKnowledgeEmptySearchHint(options.userText))
+        }
       } catch (error) {
         hints.push(
           `## 知识库检索\n检索失败：${toErrorMessage(error, '未知错误')}。请基于已有知识回答。`,
         )
       }
+    } else {
+      const hasBoundKbIds =
+        (options.sendOptions?.kbIds?.length ?? 0) > 0 ||
+        getAssistantKbIds(options.assistant).length > 0
+      hints.push(buildKnowledgeUnavailableHint({ hasBoundKbIds }))
     }
   }
 

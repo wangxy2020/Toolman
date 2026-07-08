@@ -7,6 +7,7 @@ import {
 } from '../knowledge-document.service'
 import { readNoteData, searchNotesData } from '../notes-data.service'
 import { getAssistantRow } from '../assistant.service'
+import { parseAssistantParametersJson } from '../task-runtime/resolve-models'
 import { BUILTIN_MCP_TOOL_DEFS } from '../tool-registry'
 import { getMcpServer } from '../mcp-server-config.service'
 import { listMcpServerTools } from '../mcp-client-manager.service'
@@ -154,8 +155,8 @@ export async function executeSearchLocalKnowledge(
   const topK = typeof args.topK === 'number' ? args.topK : 6
   const assistant = context.assistantId ? getAssistantRow(context.assistantId) : null
   const assistantParams = assistant
-    ? (JSON.parse(assistant.parametersJson) as Record<string, unknown>)
-    : {}
+    ? parseAssistantParametersJson(assistant.parametersJson)
+    : parseAssistantParametersJson(null)
   const effectiveKbIds = kbIdArg
     ? [kbIdArg]
     : resolveEffectiveKbIds({
@@ -171,11 +172,9 @@ export async function executeSearchLocalKnowledge(
     workspaceId: context.workspaceId,
     query,
     kbIds: effectiveKbIds,
-    topK: typeof assistantParams.kbTopK === 'number' ? assistantParams.kbTopK : topK,
-    scoreThreshold: assistantParams.kbScoreThreshold as number | undefined,
-    kbSettings: assistantParams.kbSettings as
-      | Record<string, { topK?: number; scoreThreshold?: number }>
-      | undefined,
+    topK: assistantParams.kbTopK ?? topK,
+    scoreThreshold: assistantParams.kbScoreThreshold,
+    kbSettings: assistantParams.kbSettings,
   })
 
   if (results.length === 0) return '未找到相关内容。'

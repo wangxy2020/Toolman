@@ -40,14 +40,6 @@ const UNIX_DOCX_PATH_RE = /(?<![[(<])(\/(?:[^\s[\]()<>,"']+\/)*[^\s[\]()<>,"']+\
 const WIN_DOCX_PATH_RE =
   /(?<![[(<])([A-Za-z]:\\(?:[^\s[\]()<>,"']+\\)*[^\s[\]()<>,"']+\.docx)(?![\])>])/gi
 
-export function stripOfficeFileMarkdownLinks(text: string): string {
-  return text
-    .replace(RELATIVE_TOOLMAN_LOCAL_LINK_RE, '$1')
-    .replace(RELATIVE_OFFICE_LINK_RE, '$1')
-    .replace(RELATIVE_DOCX_LINK_RE, '$1')
-    .replace(/[`'"]/g, '')
-}
-
 export function sanitizeAssistantMarkdown(
   text: string,
   options?: { trim?: boolean },

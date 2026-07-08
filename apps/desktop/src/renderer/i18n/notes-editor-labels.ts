@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import type { NoteToolbarActionKey } from '../features/notes/NotesEditorToolbar'
 import type {
   NotesSlashAction,
@@ -65,13 +64,4 @@ export function getNotesSlashCommands(t: TranslateFn): NotesSlashCommandItem[] {
     { id: 'math', command: '/公式', description: descriptions.math, action: 'math' },
     { id: 'divider', command: '/分隔', description: descriptions.divider, action: 'divider' },
   ]
-}
-
-export type NotesToolbarItem = {
-  key: NoteToolbarActionKey
-  title: string
-  label: ReactNode
-  variant?: 'text' | 'icon' | 'heading' | 'body'
-  dividerAfter?: boolean
-  async?: boolean
 }

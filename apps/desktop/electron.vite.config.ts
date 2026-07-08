@@ -44,6 +44,8 @@ export default defineConfig({
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
         '@toolman/knowledge': resolve('../../packages/knowledge/src/index.ts'),
         '@toolman/db': resolve('../../packages/db/src/index.ts'),
+        '@toolman/model-gateway': resolve('../../packages/model-gateway/src/index.ts'),
+        '@toolman/opendataloader': resolve('../../packages/opendataloader/src/index.ts'),
       },
     },
   },
@@ -64,6 +66,15 @@ export default defineConfig({
   renderer: {
     define: {
       __TOOLMAN_RELEASE_BUILD__: JSON.stringify(isReleaseBuild ? '1' : ''),
+    },
+    optimizeDeps: {
+      // Main-process packages; never pre-bundle native .node bindings for the renderer.
+      exclude: [
+        '@toolman/knowledge',
+        '@toolman/opendataloader',
+        '@lancedb/lancedb',
+        '@napi-rs/canvas',
+      ],
     },
     build: {
       reportCompressedSize: false,

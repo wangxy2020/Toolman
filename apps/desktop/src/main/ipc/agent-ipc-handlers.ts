@@ -1,5 +1,5 @@
 import { toErrorMessage, IpcChannel, ipcOk, ipcErr, type IpcResult } from '@toolman/shared'
-import { AssistantDeleteInputSchema } from '@toolman/shared'
+import { AssistantDeleteInputSchema, AssistantListInputSchema } from '@toolman/shared'
 import { ProviderError } from '@toolman/model-gateway'
 import * as sessionService from '../services/session.service'
 import * as agentService from '../services/agent.service'
@@ -102,18 +102,10 @@ export const agentIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.MessageDelete]: async (input) => ipcOk({ deleted: agentService.deleteMessage(input) }),
 
   [IpcChannel.AssistantList]: async (input) => {
-    const workspaceId =
-      typeof input === 'object' &&
-      input != null &&
-      'workspaceId' in input &&
-      typeof (input as { workspaceId?: unknown }).workspaceId === 'string'
-        ? (input as { workspaceId: string }).workspaceId
-        : null
-    if (workspaceId) {
-      p2pAgentShareService.sanitizeOwnerSourceAgentMirrorFlags(workspaceId)
-      p2pGroupAgentProxyService.syncGroupProxyAssistantModels(workspaceId)
-    }
-    return ipcOk(assistantService.listAssistants(input))
+    const data = AssistantListInputSchema.parse(input)
+    p2pAgentShareService.sanitizeOwnerSourceAgentMirrorFlags(data.workspaceId)
+    p2pGroupAgentProxyService.syncGroupProxyAssistantModels(data.workspaceId)
+    return ipcOk(assistantService.listAssistants(data))
   },
   [IpcChannel.AssistantCreate]: async (input) => ipcOk(assistantService.createAssistant(input)),
   [IpcChannel.AssistantUpdate]: async (input) => {

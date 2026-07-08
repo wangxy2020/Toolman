@@ -10,6 +10,7 @@ import { stopCommunityHubPeeringSync } from './services/community/community-hub-
 import { stopCommunityCidProvider } from './services/community/community-cid-provider.service'
 import { stopP2pConnectionMonitor } from './services/p2p/p2p-connection.service'
 import { stopP2pNetworkChangeMonitor } from './services/p2p/p2p-network-change.service'
+import { shutdownOdlHybridServer } from './services/odl-hybrid-server-manager.service'
 import { shutdownCommunityHub } from './services/community/community-bridge.service'
 import { shutdownChannels } from './services/im-channel.facade.service'
 import { stopHeartbeatScheduler } from './services/heartbeat.service'
@@ -29,6 +30,7 @@ export async function runGracefulShutdown(): Promise<void> {
   stopP2pConnectionMonitor()
   stopP2pNetworkChangeMonitor()
   await shutdownCommunityHub().catch(() => undefined)
+  await shutdownOdlHybridServer().catch(() => undefined)
   await disconnectAllMcpServers().catch(() => undefined)
   await shutdownChannels().catch(() => undefined)
   destroyAllBrowserSessions()

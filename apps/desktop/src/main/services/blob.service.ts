@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
   closeSync,
-  createReadStream,
   existsSync,
   mkdirSync,
   openSync,
@@ -13,7 +12,7 @@ import { basename, join } from 'node:path'
 import { app } from 'electron'
 import { eq } from 'drizzle-orm'
 import { blobs } from '@toolman/db'
-import { copyFileChunkedSync, FILE_IO_CHUNK_SIZE, hashFileBytes } from '@toolman/knowledge'
+import { copyFileChunkedSync, hashFileBytes } from '@toolman/knowledge'
 import { getDatabase } from '../bootstrap/database'
 
 export function getBlobsDir(): string {
@@ -187,14 +186,6 @@ export function readBlobBytes(hash: string, maxBytes = 16 * 1024 * 1024): Buffer
   } finally {
     closeSync(fd)
   }
-}
-
-export function createBlobReadStream(hash: string) {
-  const path = blobFilePath(hash)
-  if (!existsSync(path)) {
-    throw new Error(`Blob 不存在: ${hash}`)
-  }
-  return createReadStream(path, { highWaterMark: FILE_IO_CHUNK_SIZE })
 }
 
 export function copyBlobToPath(hash: string, targetPath: string): void {

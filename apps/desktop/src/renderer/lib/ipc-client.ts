@@ -1,3 +1,4 @@
+import type { IpcResult } from '@toolman/shared'
 import {
   IpcChannel,
   IPC_CHANNEL_CONTRACT,
@@ -28,4 +29,33 @@ export async function invokeIpc<C extends IpcContractChannel>(
     throw new IpcInvokeError(result.error.message, result.error.code)
   }
   return contract.output.parse(result.data) as IpcContractOutput<C>
+}
+
+/** Best-effort IPC invoke that never throws and always returns an IpcResult envelope. */
+export async function safeInvoke(
+  channel: IpcChannel,
+  input?: unknown,
+): Promise<IpcResult<unknown>> {
+  try {
+    return await window.api.invoke(channel, input)
+  } catch (error) {
+    console.warn(`[ipc] ${channel} invoke failed:`, error)
+    return {
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : String(error),
+        retryable: false,
+      },
+    }
+  }
+}
+
+/** Fire-and-forget IPC with invoke/result error logging. */
+export function fireAndForgetInvoke(channel: IpcChannel, input?: unknown): void {
+  void safeInvoke(channel, input).then((result) => {
+    if (!result.ok) {
+      console.warn(`[ipc] ${channel} returned error:`, result.error.message)
+    }
+  })
 }

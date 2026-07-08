@@ -11,7 +11,6 @@ import {
   taskFilesDirFromRoot,
   taskSnapshotPathFromRoot,
 } from '@toolman/shared'
-import { AssistantParametersSchema } from '@toolman/shared'
 
 import { resolveAssistantWorkingDirectory } from '../agent-runtime'
 import { getAssistantRow } from '../assistant.service'
@@ -39,10 +38,8 @@ export function resolveTaskWorkspaceRootPath(options: {
   if (options.assistantId) {
     const assistant = getAssistantRow(options.assistantId)
     if (assistant) {
-      const params = AssistantParametersSchema.safeParse(
-        parseAssistantParametersJson(assistant.parametersJson),
-      )
-      const workingDirectory = params.success ? params.data.workingDirectory?.trim() : undefined
+      const params = parseAssistantParametersJson(assistant.parametersJson)
+      const workingDirectory = params.workingDirectory?.trim()
       if (workingDirectory) {
         return join(workingDirectory, '.toolman', 'tasks', options.taskId)
       }

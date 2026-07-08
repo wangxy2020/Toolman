@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, type RefObject } from 'react'
 import { useI18n } from '../../i18n/useI18n'
+import { TranslationDocumentTranslatedText } from './TranslationDocumentTranslatedText'
 import type { DocumentPageState } from './useDocumentPageTranslation'
 
 interface Props {
@@ -45,7 +46,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
       </header>
       <div className="tm-translation-doc-page-card-body">
         {page.translatedText ? (
-          <pre className="tm-translation-doc-page-card-text">{page.translatedText}</pre>
+          <TranslationDocumentTranslatedText text={page.translatedText} />
         ) : page.status === 'error' ? (
           <p className="tm-translation-doc-page-card-placeholder tm-translation-doc-page-card-placeholder--error">
             {page.error || t('translationPage.documents.pageError')}

@@ -14,7 +14,7 @@ export interface ParseFileOcrOptions {
   recognizePage: OcrPageRecognizer
   recognizeImage: (input: { buffer: Buffer; mimeType: string }) => Promise<string>
   maxPdfPages?: number
-  onProgress?: (currentPage: number, totalPages: number) => void
+  onProgress?: (currentPage: number, totalPages: number, inProgress?: boolean) => void
 }
 
 export interface ParseFileOptions {
@@ -24,7 +24,7 @@ export interface ParseFileOptions {
   kind?: SupportedFileKind
   /** 聊天附件等场景：有文本则跳过 OCR，加快响应 */
   pdfTextQuality?: 'strict' | 'lenient' | 'prefer-extracted'
-  onOcrProgress?: (currentPage: number, totalPages: number) => void
+  onOcrProgress?: (currentPage: number, totalPages: number, inProgress?: boolean) => void
 }
 
 export async function parseFile(filePath: string, options?: ParseFileOptions): Promise<ParsedDocument> {

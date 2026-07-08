@@ -49,12 +49,17 @@ export function useChatPageAssistant(
     if (groupProxyMode && activeAssistantModelId) {
       return [activeAssistantModelId]
     }
+    if (activeAssistantModelId && chat.selectedModelIds.length <= 1) {
+      return [activeAssistantModelId]
+    }
     return chat.selectedModelIds
   }, [activeAssistantModelId, chat.selectedModelIds, groupProxyMode])
 
   const defaultModelId = groupProxyMode
     ? activeAssistantModelId
-    : (chat.selectedModelIds[0] ?? activeAssistantModelId ?? null)
+    : (activeAssistantModelId && chat.selectedModelIds.length <= 1
+        ? activeAssistantModelId
+        : (chat.selectedModelIds[0] ?? activeAssistantModelId ?? null))
 
   const translationLanguages = activeAssistant?.parameters.translationLanguages
 

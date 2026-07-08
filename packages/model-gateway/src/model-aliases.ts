@@ -107,6 +107,9 @@ const OCR_VISION_MODEL = /glm[-_]ocr/i
 /** Gemma 3/4 via Ollama /v1 streaming puts all tokens in reasoning with empty content (ollama#15288). */
 const GEMMA_THINKING_OLLAMA_MODEL = /gemma[-_]?(?:3|4)/i
 
+/** Qwen3 via Ollama /v1 often leaves content empty and fills reasoning/thinking instead. */
+const QWEN_THINKING_OLLAMA_MODEL = /qwen3/i
+
 export function isOcrVisionModelId(model: string): boolean {
   return OCR_VISION_MODEL.test(model.trim().toLowerCase())
 }
@@ -120,8 +123,16 @@ export function isGemmaThinkingOllamaModelId(model: string): boolean {
   return false
 }
 
+export function isQwenThinkingOllamaModelId(model: string): boolean {
+  return QWEN_THINKING_OLLAMA_MODEL.test(model.trim().toLowerCase())
+}
+
 function ollamaRoutesReasoningAsAnswer(model: string): boolean {
-  return isOcrVisionModelId(model) || isGemmaThinkingOllamaModelId(model)
+  return (
+    isOcrVisionModelId(model) ||
+    isGemmaThinkingOllamaModelId(model) ||
+    isQwenThinkingOllamaModelId(model)
+  )
 }
 
 /** Ollama 视觉/OCR 与 Gemma 3/4：关闭 think；Gemma 仍会在 /v1 流式里走 reasoning 字段，由 shouldRouteThinkingAsAnswer 兜底 */

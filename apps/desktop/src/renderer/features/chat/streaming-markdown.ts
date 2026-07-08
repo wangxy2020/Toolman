@@ -1,4 +1,5 @@
 import { sanitizeAssistantMarkdown } from './sanitize-assistant-markdown'
+import { normalizeMarkdownHtmlLineBreaksOutsideTables } from './markdown-html-breaks'
 
 /** Close unclosed markdown constructs so partial stream text renders like the final output. */
 export function stabilizeIncompleteMarkdown(text: string): string {
@@ -19,5 +20,5 @@ export function stabilizeIncompleteMarkdown(text: string): string {
 
 export function prepareStreamingMarkdown(text: string, sanitize = false): string {
   const base = sanitize ? sanitizeAssistantMarkdown(text, { trim: false }) : text
-  return stabilizeIncompleteMarkdown(base)
+  return stabilizeIncompleteMarkdown(normalizeMarkdownHtmlLineBreaksOutsideTables(base))
 }

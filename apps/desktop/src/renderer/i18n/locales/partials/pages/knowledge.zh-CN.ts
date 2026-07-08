@@ -166,6 +166,8 @@ export const knowledgePageZhCN = {
     hint: '对话中由智能体保存的跨会话记忆，删除后不会影响已索引的知识库文档。',
     loading: '加载中…',
     empty: '暂无长期记忆',
+    deleteTitle: '删除长期记忆',
+    clearTitle: '清空长期记忆',
     deleteConfirm: '确定删除这条长期记忆吗？',
     clearConfirm: '确定清空全部长期记忆吗？此操作不可撤销。',
     deleteAria: '删除记忆',

@@ -106,6 +106,42 @@ export function buildWebSearchSystemHint(searchResult: string, query: string): s
   ].join('\n\n')
 }
 
+export function buildKnowledgeEnabledHint(): string {
+  return [
+    '## 本地知识库（已开启）',
+    '回答文档内容问题时：',
+    '1. **优先**使用下方自动注入的「知识库检索结果」，或调用 `search_local_knowledge` 工具补充检索。',
+    '2. **禁止**使用 fs_glob、fs_list、fs_read 在工作目录或「本地知识库」文件夹中查找/读取 PDF、DOCX 等原文件；磁盘上的文件是二进制或未索引副本，无法替代已嵌入的分块。',
+    '3. 询问某一页时，检索 query 应包含文件名与页码，例如「The-Little-Prince.pdf 第6页」。',
+  ].join('\n')
+}
+
+export function buildKnowledgeEmptySearchHint(query: string): string {
+  return [
+    '## 知识库检索',
+    `针对「${query}」未自动检索到足够相关的内容。`,
+    '请调用 `search_local_knowledge`，用文件名、页码或关键句再次检索后再回答。',
+    '**禁止**使用 fs_glob / fs_read 在磁盘上查找 PDF 原文件；正文只能通过知识库分块获取。',
+  ].join('\n')
+}
+
+export function buildKnowledgeUnavailableHint(options: {
+  hasBoundKbIds: boolean
+}): string {
+  if (options.hasBoundKbIds) {
+    return [
+      '## 本地知识库',
+      '已开启知识库检索，但智能体绑定的知识库不可用（可能已删除或不支持向量检索）。',
+      '请在智能体设置 → 知识库中重新绑定，或调用 list_local_knowledges 查看可用知识库。',
+    ].join('\n')
+  }
+  return [
+    '## 本地知识库',
+    '已开启知识库检索，但当前工作区没有可检索的知识库（需 local / network 类型且已完成嵌入）。',
+    '请在「知识库」模块导入文档并完成索引，或在智能体设置中绑定已有知识库。',
+  ].join('\n')
+}
+
 export function buildKnowledgeSystemHint(
   results: Array<{
     documentTitle: string
@@ -130,6 +166,8 @@ export function buildKnowledgeSystemHint(
     `查询：${query}`,
     `找到 ${results.length} 条相关内容：`,
     body,
-    '请优先基于以上知识库内容回答；若内容不足以回答，请明确说明并补充通用知识。',
+    '若用户问题指定了文件名或页码，**只使用标题/来源匹配该文件且页码一致的分块**作答，忽略其他文档的检索结果。',
+    '请**直接基于以上分块内容**回答，不要调用 fs_glob / fs_read 去读取来源 PDF 原文件。',
+    '若内容不足以回答，可调用 `search_local_knowledge` 补充检索，或明确说明索引中缺少该内容。',
   ].join('\n\n')
 }

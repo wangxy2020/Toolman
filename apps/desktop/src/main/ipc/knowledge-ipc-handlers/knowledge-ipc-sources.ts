@@ -1,4 +1,4 @@
-import { toErrorMessage, IpcChannel, ipcOk, ipcErr } from '@toolman/shared'
+import { toErrorMessage, IpcChannel, ipcOk, ipcErr, KnowledgeWatchStatusInputSchema } from '@toolman/shared'
 import * as knowledgeDocumentService from '../../services/knowledge-document.service'
 import * as knowledgeSourceService from '../../services/knowledge-source.service'
 import * as knowledgeFileRegistryService from '../../services/knowledge-file-registry.service'
@@ -72,7 +72,7 @@ export const knowledgeSourceIpcHandlers: KnowledgeHandlerMap = {
   },
 
   [IpcChannel.KnowledgeWatchStatus]: async (input) => {
-    const data = input as { workspaceId: string; kbId: string }
+    const data = KnowledgeWatchStatusInputSchema.parse(input)
     return ipcOk({
       items: knowledgeSourceService.getKnowledgeWatchStatusForKb(data.workspaceId, data.kbId),
     })

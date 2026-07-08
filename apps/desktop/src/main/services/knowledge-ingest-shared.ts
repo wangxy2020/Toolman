@@ -123,17 +123,42 @@ export function updateDocumentStage(
   })
 }
 
+const PARSING_PROGRESS_MAX = 39
+
+/** Slow heartbeat while ODL/Hybrid or other non-OCR parsers run (parsing band 20–39). */
+export function createParsingProgressPulse(
+  repo: DocumentRepository,
+  ctx: { workspaceId: string; kbId: string; documentId: string },
+  intervalMs = 3000,
+): () => void {
+  let progress = STAGE_PROGRESS.parsing
+  const timer = setInterval(() => {
+    if (progress >= PARSING_PROGRESS_MAX) return
+    progress += 1
+    updateDocumentStage(repo, { ...ctx, stage: 'parsing', progress })
+  }, intervalMs)
+  return () => clearInterval(timer)
+}
+
 export function buildIngestProgressHandlers(
   repo: DocumentRepository,
   ctx: { workspaceId: string; kbId: string; documentId: string },
 ) {
   return {
-    onOcrProgress: (currentPage: number, totalPages: number) => {
+    onOcrProgress: (currentPage: number, totalPages: number, inProgress?: boolean) => {
       if (totalPages <= 0) return
+      // parsing band: 20–39. Show movement as soon as OCR starts (not only after page 1 finishes).
+      const completedRatio = currentPage / totalPages
+      const workingBoost = inProgress && currentPage < totalPages ? 0.5 / totalPages : 0
+      const progress = Math.min(
+        PARSING_PROGRESS_MAX,
+        STAGE_PROGRESS.parsing +
+          Math.max(inProgress || currentPage > 0 ? 1 : 0, Math.floor((completedRatio + workingBoost) * 19)),
+      )
       updateDocumentStage(repo, {
         ...ctx,
         stage: 'parsing',
-        progress: 20 + Math.floor((currentPage / totalPages) * 19),
+        progress,
       })
     },
     onEmbedProgress: (completed: number, total: number) => {

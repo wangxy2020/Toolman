@@ -120,11 +120,38 @@ export const TranslationDocumentParsePagesInputSchema = z.object({
   path: z.string().min(1),
   startPage: z.number().int().positive(),
   endPage: z.number().int().positive(),
+  workspaceId: z.string().uuid().optional(),
+  /** When true, return page count and dimensions only (no text extraction / OCR). */
+  metadataOnly: z.boolean().optional(),
+  /** Translation settings override; app document-processing setting is used as fallback. */
+  pdfParserBackend: z.enum(['builtin', 'opendataloader']).optional(),
+  /** OpenDataLoader text preview only — no OCR or pdf.js fallback. */
+  odlPreviewOnly: z.boolean().optional(),
+  /** Parse the full PDF with one ODL JVM run; slice pages from the cached document. */
+  fullDocument: z.boolean().optional(),
+  /** OCR backfill only — read ODL cache, run vision OCR on empty pages in range. */
+  ocrBackfillOnly: z.boolean().optional(),
+  /** Full-document ODL via hybrid server when local ODL produced no markdown (scanned PDFs). */
+  odlHybridBackfill: z.boolean().optional(),
+  /** Local ODL warm only — no Hybrid (fast scan detection). */
+  odlWarmOnly: z.boolean().optional(),
+  /** Clear cached ODL document before parse (parse button first batch). */
+  odlPreviewReset: z.boolean().optional(),
+  /**
+   * Hybrid OCR for the requested page range only — merge into session cache.
+   * Used for progressive parse preview (IMA-style first pages in seconds).
+   */
+  odlProgressiveBatch: z.boolean().optional(),
+  /** Skip local JVM warm on later progressive batches (scan already detected). */
+  odlSkipLocalWarm: z.boolean().optional(),
+  /** Renderer-side IPC timeout budget for this request. */
+  timeoutMs: z.number().int().positive().optional(),
 })
 
 export const TranslationDocumentPageSchema = z.object({
   pageNumber: z.number().int().positive(),
   text: z.string(),
+  markdown: z.string().optional(),
 })
 
 export const TranslationDocumentParsePagesOutputSchema = z.object({
@@ -134,6 +161,11 @@ export const TranslationDocumentParsePagesOutputSchema = z.object({
   /** PDF page size in points (page 1); used to align FitH preview slots. */
   pageWidth: z.number().nonnegative().optional(),
   pageHeight: z.number().nonnegative().optional(),
+  /** Hybrid OCR enabled in settings but local hybrid server is not reachable. */
+  hybridUnavailable: z.boolean().optional(),
+  hybridUnavailableUrl: z.string().optional(),
+  /** Local ODL had no text — Hybrid OCR was used or will be used for this PDF. */
+  odlScanDetected: z.boolean().optional(),
 })
 
 export const TranslationDocumentRenderPageInputSchema = z.object({

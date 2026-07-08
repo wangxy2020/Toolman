@@ -1,4 +1,5 @@
 import { IpcChannel } from '@toolman/shared'
+import { fireAndForgetInvoke } from '../../lib/ipc-client'
 import { IconFile, IconFolder } from '../../components/icons'
 import { splitPathParts } from './parse-tool-result'
 
@@ -31,7 +32,7 @@ export function LocalFilePathLink({
         .join(' ')}
       title={path}
       onClick={() =>
-        void window.api.invoke(
+        fireAndForgetInvoke(
           action === 'reveal' ? IpcChannel.AppShellRevealPath : IpcChannel.AppShellOpenPath,
           { path },
         )

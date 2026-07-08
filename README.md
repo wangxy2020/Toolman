@@ -55,6 +55,7 @@ pnpm --filter @toolman/desktop dev
 | 社区 Hub | [docs/community/](docs/community/) |
 | 账户与认证 | [docs/auth/](docs/auth/) |
 | RC1 内测 | [docs/engineering/RC1_DOGFOOD.md](docs/engineering/RC1_DOGFOOD.md) |
+| OpenDataLoader PDF | [docs/engineering/OPENDATALOADER_PDF.md](docs/engineering/OPENDATALOADER_PDF.md) |
 | 发布与 OTA | [docs/engineering/](docs/engineering/) |
 
 ## 故障排查

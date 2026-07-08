@@ -1,4 +1,4 @@
-import type { TranslationLanguage } from '@toolman/shared'
+import type { PdfParserBackend, TranslationLanguage } from '@toolman/shared'
 import {
   DEFAULT_TRANSLATION_LANGUAGES,
   normalizeTranslationLanguages,
@@ -17,6 +17,8 @@ export interface TranslationSettings {
   autoDetectSource: boolean
   /** Persist the active contrast after a successful translation. */
   autoSaveAfterTranslate: boolean
+  /** Primary PDF parser for document translation (app settings used as fallback). */
+  pdfParserBackend: PdfParserBackend
 }
 
 export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
@@ -24,6 +26,7 @@ export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
   languages: [...DEFAULT_TRANSLATION_LANGUAGES],
   autoDetectSource: true,
   autoSaveAfterTranslate: false,
+  pdfParserBackend: 'opendataloader',
 }
 
 export function normalizeTranslationSettings(
@@ -37,6 +40,8 @@ export function normalizeTranslationSettings(
     languages: normalizeTranslationLanguages(raw?.languages),
     autoDetectSource: raw?.autoDetectSource !== false,
     autoSaveAfterTranslate: raw?.autoSaveAfterTranslate === true,
+    pdfParserBackend:
+      raw?.pdfParserBackend === 'builtin' ? 'builtin' : 'opendataloader',
   }
 }
 

@@ -40,6 +40,42 @@ export function shouldParseInWorker(filePath: string, ocrEnabled = false): boole
   }
 }
 
+/** Worker structured-clone turns Buffer into Uint8Array — restore a real Buffer for OCR. */
+function normalizeWorkerOcrPageInput(input: unknown): {
+  png: Buffer
+  mimeType?: string
+  pageNumber: number
+  totalPages: number
+} {
+  const record = (input && typeof input === 'object' ? input : {}) as {
+    png?: Buffer | Uint8Array | ArrayBuffer | { type?: string; data?: number[] }
+    mimeType?: string
+    pageNumber?: number
+    totalPages?: number
+  }
+
+  const pngValue = record.png
+  let png: Buffer
+  if (Buffer.isBuffer(pngValue)) {
+    png = pngValue
+  } else if (pngValue instanceof ArrayBuffer) {
+    png = Buffer.from(pngValue)
+  } else if (ArrayBuffer.isView(pngValue)) {
+    png = Buffer.from(pngValue.buffer, pngValue.byteOffset, pngValue.byteLength)
+  } else if (pngValue && typeof pngValue === 'object' && Array.isArray(pngValue.data)) {
+    png = Buffer.from(pngValue.data)
+  } else {
+    throw new Error('OCR page image payload is missing or invalid')
+  }
+
+  return {
+    png,
+    mimeType: record.mimeType,
+    pageNumber: record.pageNumber ?? 1,
+    totalPages: record.totalPages ?? 1,
+  }
+}
+
 type WorkerOutboundMessage =
   | {
       type: 'ocr-request'
@@ -53,6 +89,12 @@ type WorkerOutboundMessage =
       kind: 'image'
       mimeType: string
       buffer: ArrayBuffer
+    }
+  | {
+      type: 'ocr-progress'
+      currentPage: number
+      totalPages: number
+      inProgress?: boolean
     }
   | {
       type: 'parse-result'
@@ -118,19 +160,38 @@ export function parseFileInWorker(
     }, 30_000)
 
     worker.on('message', (message: WorkerOutboundMessage) => {
+      if (message.type === 'ocr-progress') {
+        touchProgress()
+        options?.onOcrProgress?.(message.currentPage, message.totalPages, message.inProgress)
+        return
+      }
+
       if (message.type === 'ocr-request') {
         touchProgress()
         void (async () => {
           try {
-            const text =
-              message.kind === 'page'
-                ? (await options?.ocr?.recognizePage?.(message.input as never)) ?? ''
-                : (
-                    await options?.ocr?.recognizeImage?.({
-                      buffer: Buffer.from(message.buffer),
-                      mimeType: message.mimeType,
-                    })
-                  ) ?? ''
+            let text = ''
+            if (message.kind === 'page') {
+              const input = normalizeWorkerOcrPageInput(message.input)
+              // Backup progress update in case worker onProgress was missed.
+              options?.onOcrProgress?.(input.pageNumber - 1, input.totalPages, true)
+              text = (await options?.ocr?.recognizePage?.(input)) ?? ''
+              options?.onOcrProgress?.(input.pageNumber, input.totalPages, false)
+            } else {
+              text =
+                (await options?.ocr?.recognizeImage?.({
+                  buffer: Buffer.from(message.buffer),
+                  mimeType: message.mimeType,
+                })) ?? ''
+            }
+            if (settled) {
+              worker.postMessage({
+                type: 'ocr-response',
+                requestId: message.requestId,
+                text: '',
+              })
+              return
+            }
             worker.postMessage({
               type: 'ocr-response',
               requestId: message.requestId,

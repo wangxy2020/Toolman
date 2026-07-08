@@ -4,8 +4,6 @@ export {
   getDefaultNetworkKnowledgeFolderPath,
   getDefaultSharedKnowledgeFolderPath,
   getDefaultWorkspaceFolderPath,
-  getFlatDefaultKnowledgeFolderPath,
-  getLegacyDefaultKnowledgeFolderPath,
   getToolmanDocumentsRootPath,
   getToolmanUserFolderName,
   getToolmanUserRootPath,

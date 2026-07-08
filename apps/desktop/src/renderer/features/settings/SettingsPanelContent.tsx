@@ -203,8 +203,105 @@ export function SettingsPanelContent({
             />
           </SettingsRow>
           <SettingsRow label={t('settings.documents.pdfParser')}>
-            <span className="tm-settings-static">{t('settings.documents.builtInParser')}</span>
+            <select
+              className="tm-settings-select tm-settings-select--pdf-parser"
+              value={appSettings.pdfParserBackend}
+              onChange={(event) =>
+                patchApp({
+                  pdfParserBackend:
+                    event.target.value === 'opendataloader' ? 'opendataloader' : 'builtin',
+                })
+              }
+            >
+              <option value="builtin">{t('settings.documents.builtInParser')}</option>
+              <option value="opendataloader">{t('settings.documents.openDataLoaderParser')}</option>
+            </select>
           </SettingsRow>
+          <SettingsRow
+            label={t('settings.documents.odlHybrid')}
+            hint={t('settings.documents.odlHybridHint')}
+          >
+            <SettingsToggle
+              checked={appSettings.odlHybrid.enabled}
+              onChange={(enabled) =>
+                patchApp({
+                  odlHybrid: { ...appSettings.odlHybrid, enabled },
+                  ...(enabled ? { pdfParserBackend: 'opendataloader' as const } : {}),
+                })
+              }
+            />
+          </SettingsRow>
+          {appSettings.odlHybrid.enabled ? (
+                <>
+                  <SettingsRow label={t('settings.documents.odlHybridBackend')}>
+                    <select
+                      className="tm-settings-select tm-settings-select--pdf-parser"
+                      value={appSettings.odlHybrid.backend}
+                      onChange={(event) =>
+                        patchApp({
+                          odlHybrid: {
+                            ...appSettings.odlHybrid,
+                            backend:
+                              event.target.value === 'docling-fast' ? 'docling-fast' : 'hancom-ai',
+                          },
+                        })
+                      }
+                    >
+                      <option value="docling-fast">
+                        {t('settings.documents.odlHybridBackendDocling')}
+                      </option>
+                      <option value="hancom-ai">
+                        {t('settings.documents.odlHybridBackendHancom')}
+                      </option>
+                    </select>
+                  </SettingsRow>
+                  <SettingsRow label={t('settings.documents.odlHybridUrl')}>
+                    <SettingsInput
+                      value={appSettings.odlHybrid.url}
+                      onChange={(url) =>
+                        patchApp({ odlHybrid: { ...appSettings.odlHybrid, url } })
+                      }
+                    />
+                  </SettingsRow>
+                  <SettingsRow label={t('settings.documents.odlHybridMode')}>
+                    <select
+                      className="tm-settings-select tm-settings-select--pdf-parser"
+                      value={appSettings.odlHybrid.mode}
+                      onChange={(event) =>
+                        patchApp({
+                          odlHybrid: {
+                            ...appSettings.odlHybrid,
+                            mode: event.target.value === 'full' ? 'full' : 'auto',
+                          },
+                        })
+                      }
+                    >
+                      <option value="auto">{t('settings.documents.odlHybridModeAuto')}</option>
+                      <option value="full">{t('settings.documents.odlHybridModeFull')}</option>
+                    </select>
+                  </SettingsRow>
+                  {appSettings.odlHybrid.backend === 'hancom-ai' ? (
+                    <SettingsRow label={t('settings.documents.odlHybridOcrStrategy')}>
+                      <select
+                        className="tm-settings-select tm-settings-select--pdf-parser"
+                        value={appSettings.odlHybrid.hancomAiOcrStrategy}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          const hancomAiOcrStrategy =
+                            value === 'off' || value === 'force' ? value : 'auto'
+                          patchApp({
+                            odlHybrid: { ...appSettings.odlHybrid, hancomAiOcrStrategy },
+                          })
+                        }}
+                      >
+                        <option value="off">{t('settings.documents.odlHybridOcrOff')}</option>
+                        <option value="auto">{t('settings.documents.odlHybridOcrAuto')}</option>
+                        <option value="force">{t('settings.documents.odlHybridOcrForce')}</option>
+                      </select>
+                    </SettingsRow>
+                  ) : null}
+                </>
+          ) : null}
         </SettingsSection>
       )
 

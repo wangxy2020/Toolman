@@ -273,14 +273,6 @@ export async function loginWithAuthingDouyinOAuth(): Promise<AuthSession> {
   })
 }
 
-export async function shutdownAuthingOAuthServer(): Promise<void> {
-  if (!callbackServer) return
-  await new Promise<void>((resolve) => {
-    callbackServer?.close(() => resolve())
-  })
-  callbackServer = null
-}
-
 export function resetAuthingOAuthStateForTests(): void {
   pendingStates.clear()
   oauthInFlight = false

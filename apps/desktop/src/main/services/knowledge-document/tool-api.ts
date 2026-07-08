@@ -2,10 +2,23 @@ import type { KnowledgeSearchResult } from '@toolman/shared'
 import {
   KnowledgeDocumentReindexInputSchema,
   KnowledgeKbReindexInputSchema,
+  isVectorizedKnowledgeBaseKind,
 } from '@toolman/shared'
 import { getKnowledgeBaseRepository } from '../../db/repos'
 import { reindexDocument, reindexKnowledgeBase } from '../knowledge-ingest.service'
 import { searchKnowledge } from './search'
+
+function listSearchableKbIds(workspaceId: string): string[] {
+  return getKnowledgeBaseRepository()
+    .listByWorkspace(workspaceId)
+    .filter((kb) => isVectorizedKnowledgeBaseKind(kb.kind))
+    .map((kb) => kb.id)
+}
+
+function filterSearchableKbIds(workspaceId: string, kbIds: string[]): string[] {
+  const searchable = new Set(listSearchableKbIds(workspaceId))
+  return kbIds.filter((id) => searchable.has(id))
+}
 
 export function formatLocalKnowledgeList(
   items: Array<{ id: string; name: string; documentCount: number; chunkCount: number }>,
@@ -22,6 +35,7 @@ export function formatLocalKnowledgeList(
 export function listKnowledgeBasesForTool(workspaceId: string) {
   return getKnowledgeBaseRepository()
     .listByWorkspace(workspaceId)
+    .filter((kb) => isVectorizedKnowledgeBaseKind(kb.kind))
     .map((kb) => ({
       id: kb.id,
       name: kb.name,
@@ -85,17 +99,15 @@ export function resolveEffectiveKbIds(options: {
   overrideKbIds?: string[]
 }): string[] {
   if (options.overrideKbIds?.length) {
-    return options.overrideKbIds
+    return filterSearchableKbIds(options.workspaceId, options.overrideKbIds)
   }
 
   const assistantKbIds = getAssistantKbIds(options.assistant)
   if (assistantKbIds.length > 0) {
-    return assistantKbIds
+    return filterSearchableKbIds(options.workspaceId, assistantKbIds)
   }
 
-  return getKnowledgeBaseRepository()
-    .listByWorkspace(options.workspaceId)
-    .map((kb) => kb.id)
+  return listSearchableKbIds(options.workspaceId)
 }
 
 export async function reindexKnowledgeDocument(input: unknown) {

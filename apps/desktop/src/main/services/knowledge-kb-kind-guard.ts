@@ -1,10 +1,5 @@
 import type { KnowledgeBaseRow } from '@toolman/db'
 
-export function isUrlKnowledgePath(path: string | null | undefined): boolean {
-  if (!path) return false
-  return path.startsWith('http://') || path.startsWith('https://')
-}
-
 export function assertKnowledgeBaseAcceptsLocalFiles(kb: Pick<KnowledgeBaseRow, 'kind'>): void {
   if (kb.kind === 'network') {
     throw new Error('网络知识库仅支持网页 URL，不能导入本地文件')

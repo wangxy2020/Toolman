@@ -4,6 +4,7 @@ import {
   DEFAULT_KNOWLEDGE_EMBED_CONFIG,
   enrichProviderModel,
   getModelTypeSupport,
+  isOcrVisionModelId,
   type ProviderModel,
 } from '@toolman/shared'
 import { getKnowledgeBaseRepository } from '../db/repos'
@@ -29,7 +30,7 @@ function buildOcrUserPrompt(pageNumber: number, totalPages: number): string {
   return `请逐字提取第 ${pageNumber}/${totalPages} 页图片中的全部可见文字，只输出识别结果，不要添加任何说明。`
 }
 
-export const MAX_OCR_PAGES = 40
+export const KNOWLEDGE_MAX_OCR_PAGES = 200
 export const CHAT_OCR_MAX_PAGES = 10
 const OCR_PAGE_TIMEOUT_MS = 5 * 60 * 1000
 const CHAT_OCR_PAGE_TIMEOUT_MS = 2 * 60 * 1000
@@ -40,6 +41,21 @@ interface ResolvedOcrVisionModel {
   modelId: string
 }
 
+const ocrVisionModelCache = new Map<string, ResolvedOcrVisionModel | null>()
+
+function getCachedOcrVisionModel(
+  workspaceId: string,
+  kbId?: string,
+): ResolvedOcrVisionModel | null {
+  const key = `${workspaceId}::${kbId ?? ''}`
+  if (ocrVisionModelCache.has(key)) {
+    return ocrVisionModelCache.get(key) ?? null
+  }
+  const resolved = resolveOcrVisionModelUncached(workspaceId, kbId)
+  ocrVisionModelCache.set(key, resolved)
+  return resolved
+}
+
 function parseEmbedConfig(embedConfigJson: string) {
   try {
     return KnowledgeEmbedConfigSchema.parse(JSON.parse(embedConfigJson))
@@ -48,6 +64,10 @@ function parseEmbedConfig(embedConfigJson: string) {
   }
 }
 
+/** Dedicated OCR / VL models — prefer over chat models that only match broad name heuristics. */
+const STRICT_VISION_MODEL =
+  /vision|vl-|vl_|llava|minicpm-v|qwen.*vl|gpt-4o|gpt-4-turbo|claude-3|glm-4v|glm[-_]ocr/i
+
 function isVisionModel(model: ProviderModel): boolean {
   if (!isChatModelId(model.id)) return false
   const enriched = enrichProviderModel(model)
@@ -55,14 +75,28 @@ function isVisionModel(model: ProviderModel): boolean {
   return Boolean(enriched.types?.vision ?? support.vision)
 }
 
-function pickVisionModel(models: ProviderModel[]): string | null {
-  for (const model of models) {
-    if (isVisionModel(model)) return model.id
-  }
-  return null
+function isStrictVisionModelId(modelId: string): boolean {
+  return isOcrVisionModelId(modelId) || STRICT_VISION_MODEL.test(modelId.toLowerCase())
 }
 
-function resolveOcrVisionModel(
+/**
+ * Prefer dedicated OCR models (glm-ocr), then real VL models, then any vision-tagged model.
+ * Avoids picking text chat models like qwen3.5:9b / gemma4 that only match broad name heuristics.
+ */
+export function pickOcrVisionModelId(models: ProviderModel[]): string | null {
+  const candidates = models.filter(isVisionModel)
+  if (candidates.length === 0) return null
+
+  const ocr = candidates.find((model) => isOcrVisionModelId(model.id))
+  if (ocr) return ocr.id
+
+  const strict = candidates.find((model) => isStrictVisionModelId(model.id))
+  if (strict) return strict.id
+
+  return candidates[0]?.id ?? null
+}
+
+function resolveOcrVisionModelUncached(
   workspaceId: string,
   kbId?: string,
 ): ResolvedOcrVisionModel | null {
@@ -76,7 +110,10 @@ function resolveOcrVisionModel(
     preferredProviderId = resolveWorkspaceDocProcessorContext(workspaceId).providerId
   }
 
-  const tryProvider = (providerId: string): ResolvedOcrVisionModel | null => {
+  const tryProvider = (
+    providerId: string,
+    preferOcrOnly: boolean,
+  ): ResolvedOcrVisionModel | null => {
     const row = getProviderRow(providerId)
     if (!row || !row.isEnabled || row.workspaceId !== workspaceId) return null
     const config = getProviderConfig(providerId)
@@ -84,27 +121,145 @@ function resolveOcrVisionModel(
     const models = (JSON.parse(row.modelsJson) as ProviderModel[]).map((model) =>
       enrichProviderModel(model),
     )
-    const modelId = pickVisionModel(models)
+    const modelId = preferOcrOnly
+      ? models.find((model) => isVisionModel(model) && isOcrVisionModelId(model.id))?.id ?? null
+      : pickOcrVisionModelId(models)
     if (!modelId) return null
     return { providerId, providerType: config.type, modelId }
   }
 
-  if (preferredProviderId) {
-    const resolved = tryProvider(preferredProviderId)
+  const providerList = listProviders({ workspaceId, enabledOnly: true })
+  const orderedProviderIds = [
+    ...(preferredProviderId ? [preferredProviderId] : []),
+    ...providerList.map((provider) => provider.id).filter((id) => id !== preferredProviderId),
+  ]
+
+  // Pass 1: dedicated OCR models (glm-ocr) on preferred provider, then others.
+  for (const providerId of orderedProviderIds) {
+    const resolved = tryProvider(providerId, true)
     if (resolved) return resolved
   }
 
-  const providerList = listProviders({ workspaceId, enabledOnly: true })
-  for (const provider of providerList) {
-    const resolved = tryProvider(provider.id)
+  // Pass 2: any suitable vision model.
+  for (const providerId of orderedProviderIds) {
+    const resolved = tryProvider(providerId, false)
     if (resolved) return resolved
   }
 
   return null
 }
 
+function normalizeOcrText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:markdown|text)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+}
+
+/**
+ * Worker structured-clone turns Buffer into Uint8Array.
+ * Uint8Array#toString('base64') ignores the encoding and returns "137,80,78,71,..."
+ * which Ollama rejects as "illegal base64 data at input byte 3".
+ */
+export function toOcrImageBase64(
+  image: Buffer | Uint8Array | ArrayBuffer | { type?: string; data?: number[] },
+): string {
+  if (Buffer.isBuffer(image)) {
+    return image.toString('base64')
+  }
+  if (image instanceof ArrayBuffer) {
+    return Buffer.from(image).toString('base64')
+  }
+  if (ArrayBuffer.isView(image)) {
+    return Buffer.from(image.buffer, image.byteOffset, image.byteLength).toString('base64')
+  }
+  if (image && typeof image === 'object' && Array.isArray(image.data)) {
+    return Buffer.from(image.data).toString('base64')
+  }
+  throw new Error('Invalid image buffer for OCR')
+}
+
+/**
+ * glm-ocr works best with Ollama `/api/generate` + `images: [rawBase64]`.
+ * Never pass data-URLs or Uint8Array.toString() output.
+ */
+async function recognizeWithOllamaNative(
+  config: NonNullable<ReturnType<typeof getProviderConfig>>,
+  modelId: string,
+  imageBuffer: Buffer | Uint8Array | ArrayBuffer,
+  timeoutMs: number,
+): Promise<string> {
+  const baseUrl = (config.baseUrl ?? 'http://127.0.0.1:11434').replace(/\/$/, '').replace(/\/v1$/i, '')
+  const imageBase64 = toOcrImageBase64(imageBuffer)
+
+  // Prefer /api/generate for glm-ocr (official ollama_generate mode).
+  const useGenerate = isOcrVisionModelId(modelId)
+  const url = useGenerate ? `${baseUrl}/api/generate` : `${baseUrl}/api/chat`
+  const body = useGenerate
+    ? {
+        model: modelId.trim(),
+        prompt: 'Text Recognition:',
+        images: [imageBase64],
+        stream: false,
+        options: {
+          temperature: 0,
+          num_ctx: 10240,
+          num_predict: 8192,
+        },
+      }
+    : {
+        model: modelId.trim(),
+        stream: false,
+        messages: [
+          {
+            role: 'user',
+            content: 'Text Recognition:',
+            images: [imageBase64],
+          },
+        ],
+        options: {
+          temperature: 0,
+          num_ctx: 10240,
+          num_predict: 8192,
+        },
+      }
+
+  const response = await withTimeout(
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    timeoutMs,
+    'OCR 视觉模型响应超时，请检查 Ollama 是否可用',
+  )
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => response.statusText)
+    throw new Error(`Ollama 请求失败 (${response.status}): ${detail}`)
+  }
+
+  const payload = (await response.json()) as {
+    response?: string
+    message?: { content?: string; thinking?: string }
+    error?: string
+  }
+  if (payload.error) {
+    throw new Error(`Ollama 请求失败: ${payload.error}`)
+  }
+
+  const text = normalizeOcrText(
+    payload.response || payload.message?.content || payload.message?.thinking || '',
+  )
+  if (!text) {
+    throw new Error('视觉模型未返回可识别的文字内容')
+  }
+  return text
+}
+
 async function recognizeImageBuffer(
-  buffer: Buffer,
+  buffer: Buffer | Uint8Array | ArrayBuffer,
   mimeType: string,
   workspaceId: string,
   kbId?: string,
@@ -114,10 +269,10 @@ async function recognizeImageBuffer(
     timeoutMs?: number
   },
 ): Promise<string> {
-  const resolved = resolveOcrVisionModel(workspaceId, kbId)
+  const resolved = getCachedOcrVisionModel(workspaceId, kbId)
   if (!resolved) {
     throw new Error(
-      '未找到可用的视觉模型。请在知识库设置中选择文档处理 Provider，并确保该 Provider 已配置支持视觉的模型。',
+      '未找到可用的 OCR / 视觉模型。请安装 glm-ocr:latest（ollama pull glm-ocr:latest），在知识库「文档处理」中选择 Ollama，并在设置中开启「文档 OCR 识别」。',
     )
   }
 
@@ -126,11 +281,24 @@ async function recognizeImageBuffer(
     throw new Error('OCR Provider 不可用或已禁用')
   }
 
-  const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+  const timeoutMs = options?.timeoutMs ?? OCR_PAGE_TIMEOUT_MS
+
+  // Ollama OCR models (glm-ocr): always use native images[] API with raw base64.
+  if (resolved.providerType === 'ollama' && isOcrVisionModelId(resolved.modelId)) {
+    return recognizeWithOllamaNative(config, resolved.modelId, buffer, timeoutMs)
+  }
+
+  if (resolved.providerType === 'ollama') {
+    // Other Ollama vision models also prefer native images[] over OpenAI data-URLs.
+    return recognizeWithOllamaNative(config, resolved.modelId, buffer, timeoutMs)
+  }
+
+  const dataUrl = `data:${mimeType};base64,${toOcrImageBase64(buffer)}`
   const userPrompt =
     options?.pageNumber && options?.totalPages
       ? buildOcrUserPrompt(options.pageNumber, options.totalPages)
       : '请逐字提取图片中的全部可见文字，只输出识别结果，不要添加任何说明。'
+
   const result = await withTimeout(
     gateway.chatComplete(
       { type: resolved.providerType, baseUrl: config.baseUrl, apiKey: config.apiKey },
@@ -150,11 +318,11 @@ async function recognizeImageBuffer(
         maxTokens: 8192,
       },
     ),
-    options?.timeoutMs ?? OCR_PAGE_TIMEOUT_MS,
+    timeoutMs,
     'OCR 视觉模型响应超时，请检查 Provider 是否可用',
   )
 
-  const text = result.content.trim()
+  const text = normalizeOcrText(result.content)
   if (!text) {
     throw new Error('视觉模型未返回可识别的文字内容')
   }
@@ -162,7 +330,7 @@ async function recognizeImageBuffer(
 }
 
 export async function ocrImageBuffer(
-  buffer: Buffer,
+  buffer: Buffer | Uint8Array | ArrayBuffer,
   mimeType: string,
   workspaceId: string,
   kbId?: string,
@@ -171,7 +339,7 @@ export async function ocrImageBuffer(
 }
 
 export async function ocrPdfPagePng(
-  png: Buffer,
+  png: Buffer | Uint8Array | ArrayBuffer | { type?: string; data?: number[] },
   pageNumber: number,
   totalPages: number,
   workspaceId: string,
@@ -179,7 +347,12 @@ export async function ocrPdfPagePng(
   mimeType = 'image/png',
   options?: { chat?: boolean },
 ): Promise<string> {
-  return recognizeImageBuffer(png, mimeType, workspaceId, kbId, {
+  // Normalize worker-cloned buffers before any encoding.
+  const bytes =
+    Buffer.isBuffer(png) || png instanceof ArrayBuffer || ArrayBuffer.isView(png)
+      ? png
+      : Buffer.from((png as { data: number[] }).data ?? [])
+  return recognizeImageBuffer(bytes, mimeType, workspaceId, kbId, {
     pageNumber,
     totalPages,
     timeoutMs: options?.chat ? CHAT_OCR_PAGE_TIMEOUT_MS : OCR_PAGE_TIMEOUT_MS,
@@ -196,7 +369,7 @@ export function createPdfOcrRecognizer(
     totalPages,
     mimeType,
   }: {
-    png: Buffer
+    png: Buffer | Uint8Array | ArrayBuffer | { type?: string; data?: number[] }
     pageNumber: number
     totalPages: number
     mimeType?: string

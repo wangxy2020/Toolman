@@ -56,6 +56,15 @@ describe('diagnostics-log', () => {
     expect(console.info).toHaveBeenCalledTimes(1)
   })
 
+  it('prints only ODL Hybrid OCR startup to console', () => {
+    recordDiagnosticEvent('odl-hybrid', 'info', 'provisioning ODL Hybrid venv at /tmp/venv')
+    recordDiagnosticEvent('odl-hybrid', 'warn', 'ODL Hybrid failed health check')
+    recordDiagnosticEvent('odl-hybrid', 'info', 'ODL Hybrid OCR service started')
+    expect(console.info).toHaveBeenCalledTimes(1)
+    expect(console.info).toHaveBeenCalledWith('[odl-hybrid] ODL Hybrid OCR service started')
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
   it('clears buffered events', () => {
     recordDiagnosticEvent('app', 'error', 'boom')
     clearDiagnosticEvents()

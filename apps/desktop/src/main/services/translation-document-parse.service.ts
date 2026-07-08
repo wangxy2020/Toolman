@@ -1,5 +1,5 @@
 import { basename, extname } from 'node:path'
-import { extractPdfPageTexts, parseFile } from '@toolman/knowledge'
+import { parseFile } from '@toolman/knowledge'
 import {
   TranslationDocumentParsePagesInputSchema,
   TranslationDocumentParsePagesOutputSchema,
@@ -7,7 +7,10 @@ import {
   ipcOk,
   toErrorMessage,
 } from '@toolman/shared'
+import { parsePdfDocument, clearOdlPreviewCache } from './document-parser.service'
 import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+
+const nonPdfPlainTextCache = new Map<string, string>()
 
 function detectKind(filePath: string): 'pdf' | 'word' | 'excel' | 'unknown' {
   const ext = extname(filePath).toLowerCase()
@@ -26,14 +29,54 @@ export async function parseTranslationDocumentPages(input: unknown) {
     const endPage = Math.max(data.startPage, data.endPage)
 
     if (kind === 'pdf') {
-      const result = await extractPdfPageTexts(filePath, startPage, endPage)
+      if (data.odlPreviewReset) {
+        clearOdlPreviewCache(filePath)
+      }
+      const result = await parsePdfDocument({
+        filePath,
+        profile: data.metadataOnly ? 'metadata' : 'translation',
+        pageRange: data.metadataOnly ? undefined : { start: startPage, end: endPage },
+        workspaceId: data.workspaceId,
+        pdfParserBackend: data.odlPreviewOnly ? 'opendataloader' : data.pdfParserBackend,
+        odlPreviewOnly: data.odlPreviewOnly,
+        fullDocument: data.fullDocument,
+        ocrBackfillOnly: data.ocrBackfillOnly,
+        odlHybridBackfill: data.odlHybridBackfill,
+        odlPreviewReset: data.odlPreviewReset,
+        odlWarmOnly: data.odlWarmOnly,
+        odlProgressiveBatch: data.odlProgressiveBatch,
+        odlSkipLocalWarm: data.odlSkipLocalWarm,
+        ...(data.timeoutMs ? { timeoutMs: data.timeoutMs } : {}),
+      })
+
+      const hybridMeta = result as {
+        hybridUnavailable?: boolean
+        hybridUnavailableUrl?: string
+        odlScanDetected?: boolean
+      }
+
       return ipcOk(
         TranslationDocumentParsePagesOutputSchema.parse({
           totalPages: result.totalPages,
-          pages: result.pages,
+          pages: result.pages.map((page) => {
+            const markdown = page.markdown?.trim() ?? page.text?.trim() ?? ''
+            const text = page.text?.trim() ?? markdown
+            return {
+              pageNumber: page.pageNumber,
+              text,
+              ...(markdown || text ? { markdown: markdown || text } : {}),
+            }
+          }),
           kind,
           pageWidth: result.pageWidth,
           pageHeight: result.pageHeight,
+          ...(hybridMeta.hybridUnavailable
+            ? {
+                hybridUnavailable: true,
+                hybridUnavailableUrl: hybridMeta.hybridUnavailableUrl,
+              }
+            : {}),
+          ...(hybridMeta.odlScanDetected ? { odlScanDetected: true } : {}),
         }),
       )
     }
@@ -49,10 +92,15 @@ export async function parseTranslationDocumentPages(input: unknown) {
       )
     }
 
-    const parsed = await parseFile(filePath, {
-      enhanced: true,
-      pdfTextQuality: 'lenient',
-    })
+    const parsed = nonPdfPlainTextCache.get(filePath)
+      ? { plainText: nonPdfPlainTextCache.get(filePath)! }
+      : await parseFile(filePath, {
+          enhanced: true,
+          pdfTextQuality: 'lenient',
+        })
+    if (!nonPdfPlainTextCache.has(filePath)) {
+      nonPdfPlainTextCache.set(filePath, parsed.plainText)
+    }
     return ipcOk(
       TranslationDocumentParsePagesOutputSchema.parse({
         totalPages: 1,

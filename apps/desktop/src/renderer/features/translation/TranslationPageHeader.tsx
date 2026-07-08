@@ -1,8 +1,10 @@
+import { useEffect, useState, type FormEvent } from 'react'
 import {
   IconArrowLeftRight,
   IconClear,
+  IconDownload,
   IconExternalLink,
-  IconFile,
+  IconParse,
   IconSaveNote,
   IconSliders,
   IconTranslate,
@@ -16,42 +18,106 @@ interface Props {
   section: TranslationSidebarSection
   sectionLabel: string
   translating: boolean
+  parsing: boolean
   canTranslate: boolean
+  canParse: boolean
   canSave: boolean
+  canSaveToNotes?: boolean
   canOpenExternally?: boolean
+  documentTotalPages?: number
+  documentCurrentPage?: number
   onSave: () => void
+  onSaveToNotes?: () => void
   onSwapLanguages: () => void
+  onParse: () => void
   onTranslate: () => void
   onClear: () => void
   onOpenSettings: () => void
-  onOpenDocument?: () => void
   onOpenExternally?: () => void
+  onJumpToPage?: (pageNumber: number) => void
+}
+
+function TranslationDocumentPageJump({
+  totalPages,
+  currentPage,
+  onJumpToPage,
+}: {
+  totalPages: number
+  currentPage: number
+  onJumpToPage: (pageNumber: number) => void
+}) {
+  const { t } = useI18n()
+  const [value, setValue] = useState(String(currentPage))
+  const enterHint = t('translationPage.documents.pageJumpEnterHint')
+
+  useEffect(() => {
+    setValue(String(currentPage))
+  }, [currentPage, totalPages])
+
+  const submit = (event?: FormEvent) => {
+    event?.preventDefault()
+    const page = Number.parseInt(value, 10)
+    if (!Number.isFinite(page) || page < 1 || page > totalPages) return
+    onJumpToPage(page)
+  }
+
+  return (
+    <form className="tm-translation-page-jump" onSubmit={submit}>
+      <label className="tm-translation-page-jump-field" title={enterHint}>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          className="tm-translation-page-jump-input"
+          aria-label={t('translationPage.documents.pageJumpLabel')}
+          title={enterHint}
+        />
+        <span className="tm-translation-page-jump-total" title={enterHint}>
+          {t('translationPage.documents.pageJumpOf', { total: String(totalPages) })}
+        </span>
+      </label>
+    </form>
+  )
 }
 
 export function TranslationPageHeader({
   section,
   sectionLabel,
   translating,
+  parsing,
   canTranslate,
+  canParse,
   canSave,
+  canSaveToNotes = false,
   canOpenExternally = false,
+  documentTotalPages = 0,
+  documentCurrentPage = 1,
   onSave,
+  onSaveToNotes,
   onSwapLanguages,
+  onParse,
   onTranslate,
   onClear,
   onOpenSettings,
-  onOpenDocument,
   onOpenExternally,
+  onJumpToPage,
 }: Props) {
   const { t } = useI18n()
   const config = getModulePageConfig('translate', t)
   const isDocuments = section === 'documents'
+  const parseLabel = parsing
+    ? t('translationPage.documents.parsePreviewStop')
+    : t('translationPage.documents.parsePreview')
   const translateLabel = translating
-    ? t('translationPage.workspace.translating')
+    ? t('translationPage.documents.translateStop')
     : t('translationPage.workspace.translate')
 
   return (
-    <header className="tm-chat-header">
+    <header
+      className={`tm-chat-header${isDocuments ? ' tm-chat-header--translation-doc' : ''}`}
+    >
       <div className="tm-chat-breadcrumb">
         <span className="tm-model-pill tm-module-pill">{config.title}</span>
         <span className="tm-module-breadcrumb-group">
@@ -60,7 +126,24 @@ export function TranslationPageHeader({
         </span>
       </div>
 
+      {isDocuments && documentTotalPages > 0 && onJumpToPage ? (
+        <TranslationDocumentPageJump
+          totalPages={documentTotalPages}
+          currentPage={documentCurrentPage}
+          onJumpToPage={onJumpToPage}
+        />
+      ) : null}
+
       <div className="tm-chat-header-end">
+        {isDocuments && onSaveToNotes ? (
+          <HeaderIconButton
+            label={t('translationPage.documents.saveToNotes')}
+            disabled={!canSaveToNotes}
+            onClick={onSaveToNotes}
+          >
+            <IconSaveNote size={16} />
+          </HeaderIconButton>
+        ) : null}
         <HeaderIconButton
           label={
             isDocuments
@@ -70,24 +153,16 @@ export function TranslationPageHeader({
           disabled={!canSave}
           onClick={onSave}
         >
-          <IconSaveNote size={16} />
+          {isDocuments ? <IconDownload size={16} /> : <IconSaveNote size={16} />}
         </HeaderIconButton>
         {isDocuments ? (
-          <>
-            <HeaderIconButton
-              label={t('translationPage.documents.openExternally')}
-              disabled={!canOpenExternally}
-              onClick={onOpenExternally}
-            >
-              <IconExternalLink size={16} />
-            </HeaderIconButton>
-            <HeaderIconButton
-              label={t('translationPage.documents.open')}
-              onClick={onOpenDocument}
-            >
-              <IconFile size={16} />
-            </HeaderIconButton>
-          </>
+          <HeaderIconButton
+            label={t('translationPage.documents.openExternally')}
+            disabled={!canOpenExternally}
+            onClick={onOpenExternally}
+          >
+            <IconExternalLink size={16} />
+          </HeaderIconButton>
         ) : (
           <HeaderIconButton
             label={t('translationPage.workspace.swapLanguages')}
@@ -99,11 +174,21 @@ export function TranslationPageHeader({
         <HeaderIconButton label={t('translationPage.workspace.clear')} onClick={onClear}>
           <IconClear size={16} />
         </HeaderIconButton>
+        {isDocuments ? (
+            <HeaderIconButton
+            label={parseLabel}
+            active={parsing}
+            disabled={!canParse || (translating && !parsing)}
+            onClick={onParse}
+          >
+            <IconParse size={16} className={parsing ? 'tm-icon-spin' : undefined} />
+          </HeaderIconButton>
+        ) : null}
         <HeaderIconButton
           label={translateLabel}
           accent
           active={translating}
-          disabled={!canTranslate || translating}
+          disabled={!canTranslate || (parsing && !translating)}
           onClick={onTranslate}
         >
           <IconTranslate size={16} className={translating ? 'tm-icon-spin' : undefined} />

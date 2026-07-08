@@ -37,6 +37,16 @@ describe('formatDiagnosticForConsole', () => {
     expect(line).toBe('[community] Hub ready at http://127.0.0.1:62086')
   })
 
+  it('formats ODL Hybrid OCR startup with subsystem prefix', () => {
+    const line = formatDiagnosticForConsole({
+      at: 1,
+      subsystem: 'odl-hybrid',
+      level: 'info',
+      message: 'ODL Hybrid OCR service started',
+    })
+    expect(line).toBe('[odl-hybrid] ODL Hybrid OCR service started')
+  })
+
   it('prefixes warn and error levels', () => {
     expect(
       formatDiagnosticForConsole({

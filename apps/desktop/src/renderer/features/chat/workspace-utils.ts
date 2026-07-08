@@ -65,20 +65,6 @@ export function getFolderDisplayName(path: string, systemPaths?: SystemPaths | n
   return localizeBasename(basename)
 }
 
-export function getWorkspaceFolderLabel(
-  workspace: Workspace | null,
-  systemPaths?: SystemPaths | null,
-): string {
-  if (!workspace) return '未选择工作区'
-
-  const folderPath = getWorkspaceFolderPath(workspace, systemPaths)
-  if (folderPath) {
-    return getFolderDisplayName(folderPath, systemPaths)
-  }
-
-  return workspace.name
-}
-
 export function getEffectiveWorkingDirectory(
   assistantWorkingDirectory: string | undefined,
   workspace: Workspace | null,

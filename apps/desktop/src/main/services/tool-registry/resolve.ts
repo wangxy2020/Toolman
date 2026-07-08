@@ -108,11 +108,3 @@ export async function resolveToolDefinitions(
 
   return tools
 }
-
-export async function hasConfiguredTools(
-  mcpServerIds: string[],
-  options?: ResolveToolOptions,
-): Promise<boolean> {
-  const tools = await resolveToolDefinitions(mcpServerIds, options)
-  return tools.length > PREAUTH_TOOL_DEFS.length
-}

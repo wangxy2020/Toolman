@@ -14,6 +14,7 @@ import {
 } from './md-table-alignment'
 import { LocalFilePathLink } from './LocalFilePathLink'
 import { LOCAL_FILE_LINK_SCHEME, sanitizeAssistantMarkdown } from './sanitize-assistant-markdown'
+import { normalizeMarkdownHtmlLineBreaksOutsideTables } from './markdown-html-breaks'
 import { prepareStreamingMarkdown } from './streaming-markdown'
 import type { CodeStyle, MessageSettings } from './message-settings'
 import 'katex/dist/katex.min.css'
@@ -171,7 +172,8 @@ export function MessageMarkdown({
     if (streaming) {
       return prepareStreamingMarkdown(text, sanitizeAssistant)
     }
-    return sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text
+    const base = sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text
+    return normalizeMarkdownHtmlLineBreaksOutsideTables(base)
   }, [sanitizeAssistant, streaming, text])
 
   useEffect(() => {

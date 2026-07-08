@@ -1,5 +1,6 @@
 import { TranslationPage } from '../translation/TranslationPage'
 import type { ChatPageState } from './useChatPage'
+import type { AppView } from '../../types/app-view'
 
 export type ChatPageTranslateViewProps = Pick<
   ChatPageState,
@@ -10,6 +11,8 @@ export type ChatPageTranslateViewProps = Pick<
   | 'translation'
 > & {
   providers: ChatPageState['chat']['providers']
+  notes: ChatPageState['notes']
+  setActiveView: (view: AppView) => void
 }
 
 export function ChatPageTranslateView({
@@ -19,6 +22,8 @@ export function ChatPageTranslateView({
   providers,
   translationLanguages,
   translation,
+  notes,
+  setActiveView,
 }: ChatPageTranslateViewProps) {
   return (
     <TranslationPage
@@ -31,6 +36,10 @@ export function ChatPageTranslateView({
       activeDocument={translation.activeDocument}
       onSaveContrast={translation.saveContrast}
       onSaveDocument={translation.saveDocument}
+      onSaveDocumentToNotes={(title, content) => {
+        notes.createNoteFromMessage(title, content)
+        setActiveView('notes')
+      }}
       onOpenDocumentPath={translation.openDocument}
       onUpdateDocumentSourceText={translation.updateDocumentSourceText}
       onClearActiveDocument={translation.clearActiveDocument}

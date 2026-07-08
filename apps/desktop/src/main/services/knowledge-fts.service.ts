@@ -2,7 +2,6 @@ import { getChunkFtsRepository, getDocumentRepository } from '../db/repos'
 import {
   appendDocumentChunksInWorker,
   rebuildFtsIndexInWorker,
-  replaceDocumentChunksInWorker,
 } from './db-worker.service'
 
 const FTS_WORKER_ROW_THRESHOLD = 100
@@ -18,22 +17,6 @@ function toFtsRows(
     documentId,
     text: row.text,
   }))
-}
-
-export async function syncDocumentFts(
-  documentId: string,
-  kbId: string,
-  chunkRows: Array<{ id: string; text: string }>,
-): Promise<void> {
-  const rows = toFtsRows(documentId, kbId, chunkRows)
-  if (rows.length >= FTS_WORKER_ROW_THRESHOLD) {
-    const workerTask = replaceDocumentChunksInWorker(documentId, rows)
-    if (workerTask) {
-      await workerTask
-      return
-    }
-  }
-  await getChunkFtsRepository().replaceDocumentChunksAsync(documentId, rows)
 }
 
 export function removeDocumentFts(documentId: string): void {

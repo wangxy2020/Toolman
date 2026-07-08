@@ -19,16 +19,6 @@ export const DEFAULT_NOTES_EDITOR_SETTINGS: NotesEditorSettings = {
   showOutline: true,
 }
 
-export const NOTES_DEFAULT_VIEW_OPTIONS: { value: NotesDefaultView; label: string }[] = [
-  { value: 'edit', label: '编辑模式' },
-  { value: 'preview', label: '预览模式' },
-]
-
-export const NOTES_DEFAULT_EDIT_VIEW_OPTIONS: { value: NotesDefaultEditView; label: string }[] = [
-  { value: 'edit', label: '仅编辑' },
-  { value: 'preview', label: '实时预览' },
-]
-
 /** Unified open mode shown in settings (maps to defaultView + defaultEditView). */
 export type NotesOpenMode = 'edit-only' | 'live-preview' | 'preview-only'
 

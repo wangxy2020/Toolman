@@ -94,10 +94,3 @@ export function rebuildFtsIndexInWorker(rows: ChunkFtsRow[]): Promise<void> | nu
 export function appendDocumentChunksInWorker(rows: ChunkFtsRow[]): Promise<void> | null {
   return runDbWorkerOp('fts.appendDocumentChunks', { rows }, requireDbPath())
 }
-
-export async function shutdownDbWorker(): Promise<void> {
-  if (!worker) return
-  const activeWorker = worker
-  worker = null
-  await activeWorker.terminate()
-}

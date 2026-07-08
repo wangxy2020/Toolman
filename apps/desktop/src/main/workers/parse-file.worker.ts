@@ -38,6 +38,13 @@ interface OcrResponse {
   text: string
 }
 
+interface OcrProgressEvent {
+  type: 'ocr-progress'
+  currentPage: number
+  totalPages: number
+  inProgress?: boolean
+}
+
 interface ParseFileWorkerSuccess {
   type: 'parse-result'
   ok: true
@@ -65,17 +72,30 @@ function createOcrProxy(parseOptions?: WorkerParseFileOptions): ParseFileOptions
   return {
     enabled: true,
     maxPdfPages: parseOptions.ocr.maxPdfPages,
+    onProgress: (currentPage: number, totalPages: number, inProgress?: boolean) => {
+      parentPort?.postMessage({
+        type: 'ocr-progress',
+        currentPage,
+        totalPages,
+        inProgress: Boolean(inProgress),
+      } satisfies OcrProgressEvent)
+    },
     recognizePage: async (input) => {
       const requestId = nextRequestId
       nextRequestId += 1
-      return await new Promise<string>((resolve) => {
+      return await new Promise<string>((resolve, reject) => {
         ocrPending.set(requestId, resolve)
-        parentPort?.postMessage({
-          type: 'ocr-request',
-          requestId,
-          kind: 'page',
-          input,
-        } satisfies OcrPageRequest)
+        try {
+          parentPort?.postMessage({
+            type: 'ocr-request',
+            requestId,
+            kind: 'page',
+            input,
+          } satisfies OcrPageRequest)
+        } catch (error) {
+          ocrPending.delete(requestId)
+          reject(error)
+        }
       })
     },
     recognizeImage: async ({ buffer, mimeType }) => {
@@ -85,18 +105,23 @@ function createOcrProxy(parseOptions?: WorkerParseFileOptions): ParseFileOptions
         buffer.byteOffset,
         buffer.byteOffset + buffer.byteLength,
       ) as ArrayBuffer
-      return await new Promise<string>((resolve) => {
+      return await new Promise<string>((resolve, reject) => {
         ocrPending.set(requestId, resolve)
-        parentPort?.postMessage(
-          {
-            type: 'ocr-request',
-            requestId,
-            kind: 'image',
-            mimeType,
-            buffer: arrayBuffer,
-          } satisfies OcrImageRequest,
-          [arrayBuffer],
-        )
+        try {
+          parentPort?.postMessage(
+            {
+              type: 'ocr-request',
+              requestId,
+              kind: 'image',
+              mimeType,
+              buffer: arrayBuffer,
+            } satisfies OcrImageRequest,
+            [arrayBuffer],
+          )
+        } catch (error) {
+          ocrPending.delete(requestId)
+          reject(error)
+        }
       })
     },
   }

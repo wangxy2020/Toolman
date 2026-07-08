@@ -17,8 +17,6 @@ import { executeToolCall, type ToolExecutionContext } from './tool-executor.serv
 
 export const EXCEL_MCP_BATCH_TOOL_NAME = '__excel_mcp_batch__'
 
-const EXCEL_MCP_READ_TOOL_NAMES = new Set(['read_excel', 'review_excel'])
-
 export class ExcelMcpNotReadyError extends Error {
   constructor(message: string) {
     super(message)
@@ -123,12 +121,6 @@ export function isExcelMcpToolName(toolName: string): boolean {
       resolveExcelMcpShortToolName(toolName),
     )
   )
-}
-
-export function isExcelMcpEditToolName(toolName: string): boolean {
-  if (!isExcelMcpToolName(toolName) || toolName === EXCEL_MCP_BATCH_TOOL_NAME) return false
-  const shortName = resolveExcelMcpShortToolName(toolName)
-  return !EXCEL_MCP_READ_TOOL_NAMES.has(shortName)
 }
 
 export function filterExcelMcpToolDefinitions(tools: ToolDefinition[]): ToolDefinition[] {

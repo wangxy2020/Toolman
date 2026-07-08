@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type RefObject } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import {
   IpcChannel,
   TranslationDocumentRenderPageOutputSchema,
@@ -10,6 +10,9 @@ import {
   setCachedPageImage,
 } from './document-page-cache'
 import { splitTranslationParagraphs } from './translation-paragraphs'
+import { TranslationDocumentMarkdown } from './TranslationDocumentMarkdown'
+import { TranslationDocumentTranslatedText } from './TranslationDocumentTranslatedText'
+import { emptyPageMessageKey, HYBRID_UNAVAILABLE_ERROR, hasDisplayableParsePreviewContent, isRichMarkdownPreview } from './translation-page-source-quality'
 import type { PageDisplayBox } from './TranslationDocumentWorkspace'
 import type { DocumentPageState } from './useDocumentPageTranslation'
 
@@ -19,7 +22,11 @@ interface Props {
   filePath: string
   isPdf: boolean
   pageBox: PageDisplayBox
+  /** PDF page height / width; reserves consistent preview height before render. */
+  pageAspect: number | null
   hasModel: boolean
+  parseArmed: boolean
+  translationArmed: boolean
   scrollRootRef: RefObject<HTMLElement | null>
   onEnsurePage: (pageNumber: number) => void
 }
@@ -46,12 +53,27 @@ const DocumentPageCard = memo(function DocumentPageCard({
   page,
   totalPages,
   hasModel,
+  parseArmed,
 }: {
   page: DocumentPageState
   totalPages: number
   hasModel: boolean
+  parseArmed: boolean
 }) {
   const { t } = useI18n()
+  const markdownText = (page.parsedMarkdown ?? page.translatedText).trim()
+  const translationText = page.translatedText.trim()
+  const hasPreview = hasDisplayableParsePreviewContent(translationText, page.parsedMarkdown)
+  const previewMode =
+    hasPreview &&
+    (page.status === 'parsed' || page.status === 'parsing' || parseArmed)
+  const displayText = previewMode ? markdownText || translationText : translationText
+  const useRichPreview =
+    previewMode &&
+    isRichMarkdownPreview(
+      page.parsedMarkdown?.trim() ? page.parsedMarkdown : translationText,
+      page.parsedMarkdown,
+    )
 
   return (
     <article className="tm-translation-doc-page-card">
@@ -63,37 +85,53 @@ const DocumentPageCard = memo(function DocumentPageCard({
           })}
         </span>
         <span className="tm-translation-doc-page-card-status">
-          {page.status === 'loading-source' || page.status === 'translating'
-            ? t('translationPage.documents.pageTranslating')
-            : page.status === 'error'
-              ? t('translationPage.documents.pageError')
-              : page.status === 'empty'
-                ? t('translationPage.documents.pageEmpty')
-                : page.status === 'done'
-                  ? t('translationPage.documents.pageDone')
-                  : t('translationPage.documents.pagePending')}
+          {page.status === 'parsing'
+            ? t('translationPage.documents.pageParsing')
+            : page.status === 'loading-source' || page.status === 'translating'
+              ? t('translationPage.documents.pageTranslating')
+              : page.status === 'error'
+                ? t('translationPage.documents.pageError')
+                : page.status === 'empty'
+                  ? t(`translationPage.documents.${emptyPageMessageKey(page.error)}`)
+                  : page.status === 'parsed'
+                    ? t('translationPage.documents.pageParsed')
+                    : page.status === 'done'
+                      ? t('translationPage.documents.pageDone')
+                      : t('translationPage.documents.pagePending')}
         </span>
       </header>
       <div className="tm-translation-doc-page-card-body">
-        {page.translatedText ? (
-          <pre className="tm-translation-doc-page-card-text">{page.translatedText}</pre>
+        {displayText ? (
+          useRichPreview ? (
+            <TranslationDocumentMarkdown text={displayText} />
+          ) : (
+            <TranslationDocumentTranslatedText text={displayText} />
+          )
         ) : page.status === 'error' ? (
           <p className="tm-translation-doc-page-card-placeholder tm-translation-doc-page-card-placeholder--error">
-            {page.error || t('translationPage.documents.pageError')}
+            {page.error === HYBRID_UNAVAILABLE_ERROR
+              ? t(`translationPage.documents.${emptyPageMessageKey(page.error)}`)
+              : page.error || t('translationPage.documents.pageError')}
           </p>
         ) : page.status === 'empty' ? (
           <p className="tm-translation-doc-page-card-placeholder">
-            {t('translationPage.documents.pageEmpty')}
+            {t(`translationPage.documents.${emptyPageMessageKey(page.error)}`)}
           </p>
-        ) : page.status === 'loading-source' || page.status === 'translating' ? (
+        ) : page.status === 'parsing' ||
+          page.status === 'loading-source' ||
+          page.status === 'translating' ? (
           <p className="tm-translation-doc-page-card-placeholder">
-            {t('translationPage.documents.pageTranslating')}
+            {page.status === 'parsing'
+              ? t('translationPage.documents.pageParsing')
+              : t('translationPage.documents.pageTranslating')}
           </p>
         ) : (
           <p className="tm-translation-doc-page-card-placeholder">
-            {hasModel
-              ? t('translationPage.documents.pageClickTranslate')
-              : t('translationPage.workspace.noModel')}
+            {parseArmed
+              ? t('translationPage.documents.pageClickParse')
+              : hasModel
+                ? t('translationPage.documents.pageClickTranslate')
+                : t('translationPage.workspace.noModel')}
           </p>
         )}
       </div>
@@ -101,19 +139,29 @@ const DocumentPageCard = memo(function DocumentPageCard({
   )
 })
 
+function resolvePdfPreviewAspectStyle(pageAspect: number | null): CSSProperties {
+  if (pageAspect && pageAspect > 0) {
+    return { aspectRatio: `1 / ${pageAspect}` }
+  }
+  return { aspectRatio: '612 / 792' }
+}
+
 function PdfPageImage({
   filePath,
   pageNumber,
   pageBox,
+  pageAspect,
   active,
 }: {
   filePath: string
   pageNumber: number
   pageBox: PageDisplayBox
+  pageAspect: number | null
   active: boolean
 }) {
   const { t } = useI18n()
   const renderWidth = resolveRenderWidth(pageBox.width)
+  const aspectStyle = resolvePdfPreviewAspectStyle(pageAspect)
   const cacheKey = pageImageCacheKey(filePath, pageNumber, renderWidth)
   const [src, setSrc] = useState<string | null>(() => getCachedPageImage(cacheKey))
   const [error, setError] = useState<string | null>(null)
@@ -172,7 +220,10 @@ function PdfPageImage({
 
   if (error) {
     return (
-      <div className="tm-translation-doc-page-image-status tm-translation-doc-page-image-status--error">
+      <div
+        className="tm-translation-doc-page-image-slot tm-translation-doc-page-image-status tm-translation-doc-page-image-status--error"
+        style={aspectStyle}
+      >
         <p>{error}</p>
       </div>
     )
@@ -180,7 +231,11 @@ function PdfPageImage({
 
   if (!src) {
     return (
-      <div className="tm-translation-doc-page-image-status" role="status">
+      <div
+        className="tm-translation-doc-page-image-slot tm-translation-doc-page-image-status"
+        style={aspectStyle}
+        role="status"
+      >
         <p>
           {loading || active
             ? t('translationPage.documents.loadingPreview')
@@ -191,18 +246,20 @@ function PdfPageImage({
   }
 
   return (
-    <div className="tm-translation-doc-page-image-wrap">
-      <img
-        className="tm-translation-doc-page-image"
-        src={src}
-        alt={t('translationPage.documents.pageLabel', {
-          page: String(pageNumber),
-          total: '',
-        })}
-        draggable={false}
-        decoding="async"
-        loading="lazy"
-      />
+    <div className="tm-translation-doc-page-image-slot" style={aspectStyle}>
+      <div className="tm-translation-doc-page-image-wrap">
+        <img
+          className="tm-translation-doc-page-image"
+          src={src}
+          alt={t('translationPage.documents.pageLabel', {
+            page: String(pageNumber),
+            total: '',
+          })}
+          draggable={false}
+          decoding="async"
+          loading="lazy"
+        />
+      </div>
     </div>
   )
 }
@@ -229,7 +286,10 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   filePath,
   isPdf,
   pageBox,
+  pageAspect,
   hasModel,
+  parseArmed,
+  translationArmed,
   scrollRootRef,
   onEnsurePage,
 }: Props) {
@@ -251,8 +311,9 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
         for (const entry of entries) {
           if (entry.isIntersecting) {
             setActive(true)
-            onEnsurePage(page.pageNumber)
-            if (page.pageNumber < totalPages) onEnsurePage(page.pageNumber + 1)
+            if (translationArmed || parseArmed) {
+              onEnsurePage(page.pageNumber)
+            }
           } else {
             // Release render priority for off-screen pages (images stay cached).
             setActive(false)
@@ -263,7 +324,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
     )
     observer.observe(row)
     return () => observer.disconnect()
-  }, [filePath, onEnsurePage, page.pageNumber, scrollRootRef, totalPages])
+  }, [filePath, onEnsurePage, page.pageNumber, parseArmed, scrollRootRef, translationArmed])
 
   return (
     <div ref={rowRef} className="tm-translation-doc-row" data-page-number={page.pageNumber}>
@@ -274,6 +335,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
               filePath={filePath}
               pageNumber={page.pageNumber}
               pageBox={pageBox}
+              pageAspect={pageAspect}
               active={active}
             />
           ) : (
@@ -286,7 +348,12 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
 
       <section className="tm-translation-doc-row-pane tm-translation-doc-row-pane--target">
         <div className="tm-translation-doc-row-frame tm-translation-doc-row-frame--target">
-          <DocumentPageCard page={page} totalPages={totalPages} hasModel={hasModel} />
+          <DocumentPageCard
+            page={page}
+            totalPages={totalPages}
+            hasModel={hasModel}
+            parseArmed={parseArmed}
+          />
         </div>
       </section>
     </div>

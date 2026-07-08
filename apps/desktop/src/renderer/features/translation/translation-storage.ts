@@ -8,6 +8,16 @@ import {
 
 export const TRANSLATION_STORAGE_KEY = 'toolman:translation-data'
 
+export type TranslationDocumentPageSnapshotStatus = 'idle' | 'parsed' | 'done' | 'empty'
+
+export interface TranslationDocumentPageSnapshot {
+  pageNumber: number
+  sourceText: string
+  translatedText: string
+  parsedMarkdown?: string
+  status: TranslationDocumentPageSnapshotStatus
+}
+
 export interface TranslationContrastItem {
   id: string
   workspaceId: string
@@ -29,6 +39,8 @@ export interface TranslationDocumentItem {
   /** Extracted plain text from the source document. */
   sourceText: string
   targetText: string
+  /** Per-page parse / translation cache for reopen without re-running pipelines. */
+  pageSnapshots?: TranslationDocumentPageSnapshot[]
   languages: [TranslationLanguage, TranslationLanguage]
   createdAt: number
   updatedAt: number
@@ -45,6 +57,56 @@ export function createContrastId(): string {
 
 export function createDocumentId(): string {
   return `document-${crypto.randomUUID()}`
+}
+
+function normalizePageSnapshots(
+  raw: unknown,
+): TranslationDocumentPageSnapshot[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+
+  const snapshots = raw
+    .map((item): TranslationDocumentPageSnapshot | null => {
+      if (!item || typeof item !== 'object') return null
+      const record = item as Partial<TranslationDocumentPageSnapshot>
+      const pageNumber =
+        typeof record.pageNumber === 'number' && Number.isFinite(record.pageNumber)
+          ? Math.floor(record.pageNumber)
+          : 0
+      if (pageNumber < 1) return null
+
+      const sourceText = typeof record.sourceText === 'string' ? record.sourceText : ''
+      const translatedText = typeof record.translatedText === 'string' ? record.translatedText : ''
+      const parsedMarkdown =
+        typeof record.parsedMarkdown === 'string' ? record.parsedMarkdown : undefined
+      const status: TranslationDocumentPageSnapshotStatus =
+        record.status === 'parsed' ||
+        record.status === 'done' ||
+        record.status === 'empty' ||
+        record.status === 'idle'
+          ? record.status
+          : 'idle'
+
+      if (
+        status !== 'empty' &&
+        !sourceText.trim() &&
+        !translatedText.trim() &&
+        !parsedMarkdown?.trim()
+      ) {
+        return null
+      }
+
+      return {
+        pageNumber,
+        sourceText,
+        translatedText,
+        ...(parsedMarkdown !== undefined ? { parsedMarkdown } : {}),
+        status,
+      }
+    })
+    .filter((item): item is TranslationDocumentPageSnapshot => item !== null)
+    .sort((left, right) => left.pageNumber - right.pageNumber)
+
+  return snapshots.length > 0 ? snapshots : undefined
 }
 
 export function normalizeContrast(
@@ -88,6 +150,7 @@ export function normalizeDocument(
     kind,
     sourceText: typeof item.sourceText === 'string' ? item.sourceText : '',
     targetText: typeof item.targetText === 'string' ? item.targetText : '',
+    pageSnapshots: normalizePageSnapshots(item.pageSnapshots),
     languages: normalizeTranslationLanguages(item.languages),
     createdAt: item.createdAt ?? item.updatedAt ?? now,
     updatedAt: item.updatedAt ?? now,
@@ -126,7 +189,11 @@ export function loadTranslationData(): TranslationData {
 }
 
 export function saveTranslationData(data: TranslationData): void {
-  localStorage.setItem(TRANSLATION_STORAGE_KEY, JSON.stringify(normalizeTranslationData(data)))
+  try {
+    localStorage.setItem(TRANSLATION_STORAGE_KEY, JSON.stringify(normalizeTranslationData(data)))
+  } catch (error) {
+    console.error('[translation-storage] failed to persist translation data', error)
+  }
 }
 
 export function createEmptyContrastItem(

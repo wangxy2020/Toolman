@@ -1,17 +1,21 @@
 import { toErrorMessage } from '@toolman/shared'
 import {
   IpcChannel,
+  AppBackupDataInputSchema,
   AppGetInfoOutputSchema,
   AppGetPathsOutputSchema,
   AppProvenanceBeaconInputSchema,
   AppProvenanceBeaconOutputSchema,
   AppRestoreDataInputSchema,
+  AppShellOpenPathInputSchema,
+  AppShellRevealPathInputSchema,
   AppUpdateSetAutoInputSchema,
   AppUpdateStatusSchema,
   CrashReportSetUploadInputSchema,
   CrashReportUploadResultSchema,
   CrashReportUploadStatusSchema,
   RendererErrorReportInputSchema,
+  RuntimeAppSettingsSyncInputSchema,
   ipcOk,
   ipcErr,
 } from '@toolman/shared'
@@ -155,28 +159,18 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     }
   },
   [IpcChannel.AppRuntimeSettingsSync]: async (input) => {
-    const patch = input as {
-      documentOcrEnabled?: boolean
-      defaultDocProcessorProviderId?: string | null
-      plannerModelId?: string | null
-    }
+    const patch = RuntimeAppSettingsSyncInputSchema.parse(input)
     return ipcOk(syncRuntimeAppSettings(patch))
   },
   [IpcChannel.AppGetPaths]: async () => ipcOk(AppGetPathsOutputSchema.parse(getAppPaths())),
 
   [IpcChannel.AppShellOpenPath]: async (input) => {
-    const { path } = (input as { path: string }) ?? {}
-    if (!path) {
-      return ipcErr({ code: 'VALIDATION_ERROR', message: 'path is required', retryable: false })
-    }
+    const { path } = AppShellOpenPathInputSchema.parse(input)
     return ipcOk(await openPathInShell(path))
   },
 
   [IpcChannel.AppShellRevealPath]: async (input) => {
-    const { path } = (input as { path: string }) ?? {}
-    if (!path) {
-      return ipcErr({ code: 'VALIDATION_ERROR', message: 'path is required', retryable: false })
-    }
+    const { path } = AppShellRevealPathInputSchema.parse(input)
     return ipcOk(revealPathInShell(path))
   },
 
@@ -186,7 +180,7 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
 
   [IpcChannel.AppBackupData]: async (input) => {
     try {
-      const data = input as { notesDataJson?: string } | undefined
+      const data = AppBackupDataInputSchema.parse(input)
       return ipcOk(await backupAppData(data))
     } catch (error) {
       const message = toErrorMessage(error, 'Backup failed')

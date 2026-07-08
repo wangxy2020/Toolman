@@ -2,7 +2,6 @@ import {
   getDefaultSkillIds,
   getDefaultMcpServerIds,
   resolveMcpServerIdsForSkills,
-  AssistantParametersSchema,
   shouldEnableToolsWithAttachments,
   type ContentBlock,
 } from '@toolman/shared'
@@ -14,6 +13,7 @@ import { filterEnabledSkillIds } from './skill.service'
 import { type ToolExecutionContext } from './tool-executor.service'
 import { getAssistantRow } from './assistant.service'
 import { getWorkspace } from './workspace.service'
+import { parseAssistantParametersJson } from './task-runtime/resolve-models'
 
 export function resolveRuntimeMcpServerIds(skillIds: string[], mcpServerIds: string[]): string[] {
   return filterEnabledMcpServerIds(resolveMcpServerIdsForSkills(skillIds, mcpServerIds))
@@ -23,8 +23,8 @@ export function resolveAssistantWorkingDirectory(
   assistant: ReturnType<typeof getAssistantRow>,
   workspaceId?: string,
 ): string | undefined {
-  const params = assistant ? (JSON.parse(assistant.parametersJson) as Record<string, unknown>) : {}
-  const configured = params.workingDirectory as string | undefined
+  const params = assistant ? parseAssistantParametersJson(assistant.parametersJson) : parseAssistantParametersJson(null)
+  const configured = params.workingDirectory
   if (configured?.trim()) return configured.trim()
 
   if (workspaceId) {
@@ -40,35 +40,34 @@ export function parseAssistantRuntime(
   assistant: ReturnType<typeof getAssistantRow>,
   workspaceId?: string,
 ) {
-  const params = assistant ? (JSON.parse(assistant.parametersJson) as Record<string, unknown>) : {}
+  const params = assistant ? parseAssistantParametersJson(assistant.parametersJson) : parseAssistantParametersJson(null)
   const isGroupProxyShell = Boolean(params.p2pGroupProxy)
   const permissionMode = (params.permissionMode as PermissionMode | undefined) ?? 'normal'
   const autonomousMode = Boolean(params.autonomousMode)
   const workingDirectory = resolveAssistantWorkingDirectory(assistant, workspaceId)
   const skillIds = filterEnabledSkillIds(
     isGroupProxyShell
-      ? ((params.skillIds as string[] | undefined) ?? [])
-      : ((params.skillIds as string[] | undefined) ?? getDefaultSkillIds()),
+      ? (params.skillIds ?? [])
+      : (params.skillIds ?? getDefaultSkillIds()),
   )
   const baseMcpServerIds = isGroupProxyShell
-    ? ((params.mcpServerIds as string[] | undefined) ?? [])
-    : ((params.mcpServerIds as string[] | undefined) ?? getDefaultMcpServerIds())
+    ? (params.mcpServerIds ?? [])
+    : (params.mcpServerIds ?? getDefaultMcpServerIds())
   return {
     permissionMode,
     autonomousMode,
     effectivePermissionMode: resolveEffectivePermissionMode(permissionMode, autonomousMode),
-    toolStates: (params.toolStates as Record<string, boolean> | undefined) ?? {},
+    toolStates: params.toolStates ?? {},
     mcpServerIds: resolveRuntimeMcpServerIds(skillIds, baseMcpServerIds),
     skillIds,
-    sessionRoundLimit:
-      AssistantParametersSchema.shape.sessionRoundLimit.parse(params.sessionRoundLimit) ?? 100,
-    temperature: params.temperature as number | undefined,
-    maxTokens: params.maxTokens as number | undefined,
+    sessionRoundLimit: params.sessionRoundLimit ?? 100,
+    temperature: params.temperature,
+    maxTokens: params.maxTokens,
     assistantId: assistant?.id,
     workspaceId,
     toolContext: {
       workingDirectory,
-      environmentVariables: params.environmentVariables as string | undefined,
+      environmentVariables: params.environmentVariables,
       workspaceId,
       assistantId: assistant?.id,
     } as ToolExecutionContext,

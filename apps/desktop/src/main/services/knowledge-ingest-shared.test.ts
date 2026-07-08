@@ -4,6 +4,7 @@ import {
   ACTIVE_INGEST_STAGES,
   buildDocumentTitle,
   buildIngestProgressHandlers,
+  createParsingProgressPulse,
   IN_FLIGHT_INGEST_STAGES,
   recordIngestFailure,
   STAGE_PROGRESS,
@@ -82,6 +83,28 @@ describe('knowledge-ingest-shared', () => {
     )
   })
 
+  it('createParsingProgressPulse advances parsing progress until stopped', () => {
+    vi.useFakeTimers()
+    const repo = {
+      findById: vi.fn(() => null),
+      update: vi.fn(),
+      upsertIngestJob: vi.fn(),
+    }
+    const stop = createParsingProgressPulse(repo as never, {
+      workspaceId: 'ws-1',
+      kbId: 'kb-1',
+      documentId: 'doc-1',
+    }, 1000)
+
+    vi.advanceTimersByTime(3000)
+    expect(repo.upsertIngestJob).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: 'parsing', progress: 23 }),
+    )
+
+    stop()
+    vi.useRealTimers()
+  })
+
   it('buildIngestProgressHandlers maps ocr and embed progress', () => {
     const repo = {
       findById: vi.fn(() => null),
@@ -94,12 +117,18 @@ describe('knowledge-ingest-shared', () => {
       documentId: 'doc-1',
     })
 
+    handlers.onOcrProgress(0, 2, true)
     handlers.onOcrProgress(1, 2)
     handlers.onEmbedProgress(1, 2)
 
-    expect(repo.update).toHaveBeenCalledTimes(2)
+    expect(repo.update).toHaveBeenCalledTimes(3)
     expect(repo.upsertIngestJob).toHaveBeenCalledWith(
       expect.objectContaining({ stage: 'embedding' }),
+    )
+    expect(repo.update).toHaveBeenCalledWith(
+      'doc-1',
+      'kb-1',
+      expect.objectContaining({ status: 'parsing' }),
     )
   })
 
