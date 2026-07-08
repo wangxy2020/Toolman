@@ -43,6 +43,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup OpenDataLoader vendor
+        uses: ./.github/actions/setup-odl-vendor
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -101,6 +104,9 @@ jobs:
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup OpenDataLoader vendor
+        uses: ./.github/actions/setup-odl-vendor
 
       - name: Install
         run: pnpm install --frozen-lockfile

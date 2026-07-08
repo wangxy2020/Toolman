@@ -1,0 +1,54 @@
+name: Setup OpenDataLoader vendor
+description: "Clone and build donatomm/open-data-loader-pdf for the pnpm file dependency"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    - name: Cache ODL vendor tree
+      uses: actions/cache@v4
+      id: odl-vendor-cache
+      with:
+        path: vendor/open-data-loader-pdf
+        key: odl-vendor-${{ runner.os }}-${{ hashFiles('scripts/sync-opendataloader-pdf-source.sh') }}-main
+
+    - name: Install Maven (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y maven
+
+    - name: Install Maven (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        if ! command -v mvn >/dev/null 2>&1; then
+          brew install maven
+        fi
+
+    - name: Install Maven (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
+          choco install maven -y
+        }
+
+    - name: Vendor OpenDataLoader PDF
+      if: steps.odl-vendor-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        ODL_PDF_REF: main
+      run: bash scripts/sync-opendataloader-pdf-source.sh
+
+    - name: Verify ODL vendor package
+      shell: bash
+      run: |
+        test -f vendor/open-data-loader-pdf/node/opendataloader-pdf/package.json || {
+          echo "::error::vendor/open-data-loader-pdf/node/opendataloader-pdf is missing after setup"
+          exit 1
+        }
