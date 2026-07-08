@@ -25,6 +25,7 @@
     "test:agent-task-schema": "bash scripts/run-with-electron-node.sh scripts/agent-task-schema-smoke.ts"
   },
   "dependencies": {
+    "@toolman/shared": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2"
   },
