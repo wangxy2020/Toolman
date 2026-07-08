@@ -35,6 +35,8 @@ if [[ ! -d "$NODE_PKG" ]]; then
   exit 1
 fi
 
+bash "$ROOT/scripts/pin-opendataloader-verapdf.sh" "$VENDOR_DIR"
+
 echo "[vendor:odl] Building Java CLI (skip tests for vendoring) ..."
 cd "$VENDOR_DIR/java"
 mvn -B clean package -P release -DskipTests

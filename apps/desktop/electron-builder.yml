@@ -14,10 +14,11 @@ extraResources:
     to: legal/NOTICE.md
   - from: ../../THIRD_PARTY_NOTICES.md
     to: legal/THIRD_PARTY_NOTICES.md
-  - from: bin/toolman-community-hub
-    to: bin/toolman-community-hub
+  - from: bin
+    to: bin
     filter:
-      - '**/*'
+      - toolman-community-hub*
+      - toolman-docx-core*
   - from: native
     to: native
     filter:
@@ -30,10 +31,6 @@ extraResources:
       - '**/*'
   - from: resources/mcp-docx
     to: mcp-docx
-    filter:
-      - '**/*'
-  - from: bin/toolman-docx-core
-    to: bin/toolman-docx-core
     filter:
       - '**/*'
 mac:

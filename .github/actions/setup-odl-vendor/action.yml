@@ -15,7 +15,7 @@ runs:
       id: odl-vendor-cache
       with:
         path: vendor/open-data-loader-pdf
-        key: odl-vendor-${{ runner.os }}-${{ hashFiles('scripts/sync-opendataloader-pdf-source.sh') }}-main
+        key: odl-vendor-${{ runner.os }}-${{ hashFiles('scripts/sync-opendataloader-pdf-source.sh', 'scripts/pin-opendataloader-verapdf.sh') }}-main-v2
 
     - name: Install Maven (Linux)
       if: runner.os == 'Linux'
@@ -39,16 +39,33 @@ runs:
         }
 
     - name: Vendor OpenDataLoader PDF
-      if: steps.odl-vendor-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         ODL_PDF_REF: main
-      run: bash scripts/sync-opendataloader-pdf-source.sh
+      run: |
+        ODL_PKG="vendor/open-data-loader-pdf/node/opendataloader-pdf"
+        ODL_JAR="$ODL_PKG/lib/opendataloader-pdf-cli.jar"
+        ODL_DIST="$ODL_PKG/dist/index.js"
+        if [[ -f "$ODL_JAR" && -f "$ODL_DIST" ]]; then
+          echo "ODL vendor build artifacts present; skipping sync"
+          exit 0
+        fi
+        echo "ODL vendor incomplete; running sync"
+        bash scripts/sync-opendataloader-pdf-source.sh
 
     - name: Verify ODL vendor package
       shell: bash
       run: |
-        test -f vendor/open-data-loader-pdf/node/opendataloader-pdf/package.json || {
-          echo "::error::vendor/open-data-loader-pdf/node/opendataloader-pdf is missing after setup"
+        ODL_PKG="vendor/open-data-loader-pdf/node/opendataloader-pdf"
+        test -f "$ODL_PKG/package.json" || {
+          echo "::error::$ODL_PKG/package.json is missing after setup"
+          exit 1
+        }
+        test -f "$ODL_PKG/lib/opendataloader-pdf-cli.jar" || {
+          echo "::error::$ODL_PKG/lib/opendataloader-pdf-cli.jar is missing after setup"
+          exit 1
+        }
+        test -f "$ODL_PKG/dist/index.js" || {
+          echo "::error::$ODL_PKG/dist/index.js is missing after setup"
           exit 1
         }

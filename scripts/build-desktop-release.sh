@@ -86,7 +86,13 @@ find_primary_artifact() {
   # Fallback: newest artifact by mtime (lexicographic sort breaks rc.10 < rc.7).
   match="$(
     find "$dist_dir" -maxdepth 1 -type f -name "$pattern" -print0 2>/dev/null \
-      | xargs -0 stat -f '%m %N' 2>/dev/null \
+      | while IFS= read -r -d '' file; do
+          if stat --version >/dev/null 2>&1; then
+            printf '%s %s\n' "$(stat -c '%Y' "$file")" "$file"
+          else
+            printf '%s %s\n' "$(stat -f '%m' "$file")" "$file"
+          fi
+        done \
       | sort -rn \
       | head -n 1 \
       | cut -d' ' -f2- \
