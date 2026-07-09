@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   normalizeMarkdownHtmlLineBreaksOutsideTables,
+  normalizeStreamingHtmlLineBreaks,
   renderMarkdownHtmlBreaks,
 } from './markdown-html-breaks'
 
@@ -15,6 +16,15 @@ describe('normalizeMarkdownHtmlLineBreaksOutsideTables', () => {
   it('keeps <br> inside markdown table rows', () => {
     const input = '| A | B |\n| --- | --- |\n| 上行<br>下行 | 继续 |'
     expect(normalizeMarkdownHtmlLineBreaksOutsideTables(input)).toBe(input)
+  })
+})
+
+describe('normalizeStreamingHtmlLineBreaks', () => {
+  it('replaces <br> in table rows with inline separators', () => {
+    const input = '| A | B |\n| --- | --- |\n| 上行<br>下行 | 继续 |'
+    expect(normalizeStreamingHtmlLineBreaks(input)).toBe(
+      '| A | B |\n| --- | --- |\n| 上行 · 下行 | 继续 |',
+    )
   })
 })
 

@@ -16,7 +16,7 @@ import {
 } from '../tool-approval.service'
 import { resolveToolDefinitions } from '../tool-registry'
 import { getProviderConfig, parseModelId } from '../provider.service'
-import { ProviderError, isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
+import { ProviderError, isGemmaThinkingOllamaModelId, isQwenThinkingOllamaModelId } from '@toolman/model-gateway'
 import { throwIfAborted, withAbortSignal } from '../../utils/abort-signal'
 import { prepareGenerationAttachments } from './attachment-prepare'
 import {
@@ -198,7 +198,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
 
     const preferGemmaOllamaStreamOnly =
       providerConfig.type === 'ollama' &&
-      isGemmaThinkingOllamaModelId(model) &&
+      (isGemmaThinkingOllamaModelId(model) || isQwenThinkingOllamaModelId(model)) &&
       !docxTaskActive &&
       !excelTaskActive
 

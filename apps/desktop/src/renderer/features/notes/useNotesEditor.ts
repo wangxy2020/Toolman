@@ -4,14 +4,15 @@ import { useI18n } from '../../i18n/useI18n'
 import { isGroupNotebookId } from '../group/group-note-utils'
 import {
   countNoteCharacters,
-  scrollTextareaToLine,
   syncTextareaHeight,
 } from './note-editor-utils'
 import { markdownToBlocks } from './notes-blocks'
+import type { NotesBodyEditorHandle } from './NotesRichBodyEditor'
 import {
   resolveInitialPreviewMode,
   type NotesEditorSettings,
 } from './notes-editor-settings'
+import type { NoteToolbarActionKey } from './NotesEditorToolbar'
 import type { NotesEditorPreviewMode } from './notes-editor-types'
 import { toggleNoteTaskLine } from './notes-editor-types'
 import { extractNoteOutline, type NoteOutlineItem } from './notes-outline'
@@ -44,12 +45,13 @@ export function useNotesEditor({
   const previewModeLabels = useMemo(
     (): Record<NotesEditorPreviewMode, string> => ({
       edit: t('notesPage.openModes.editOnly'),
-      preview: t('notesPage.openModes.livePreview'),
+      split: t('notesPage.openModes.livePreview'),
+      preview: t('notesPage.openModes.preview'),
     }),
     [t],
   )
 
-  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const bodyRef = useRef<NotesBodyEditorHandle>(null)
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const editPaneRef = useRef<HTMLDivElement>(null)
   const previewPaneRef = useRef<HTMLDivElement>(null)
@@ -126,9 +128,9 @@ export function useNotesEditor({
   const handleBodyChange = useCallback(
     (value: string) => {
       history.handleContentChange(value)
-      const textarea = bodyRef.current
-      if (!textarea) return
-      slash.updateSlashMenu(value, textarea.selectionStart)
+      const editor = bodyRef.current
+      if (!editor) return
+      slash.updateSlashMenu(value, editor.getSelectionOffset())
     },
     [bodyRef, history, slash],
   )
@@ -144,7 +146,7 @@ export function useNotesEditor({
   }, [history, slash])
 
   const handleToolbarAction = useCallback(
-    (key: Parameters<typeof slash.handleToolbarAction>[0]) => {
+    (key: NoteToolbarActionKey) => {
       slash.handleToolbarAction(key)
     },
     [slash],
@@ -204,7 +206,7 @@ export function useNotesEditor({
     }
 
     if (item.lineIndex >= 0 && bodyRef.current) {
-      scrollTextareaToLine(bodyRef.current, item.lineIndex)
+      bodyRef.current.scrollToLine(item.lineIndex)
       return
     }
 
@@ -234,8 +236,8 @@ export function useNotesEditor({
     charCount: countNoteCharacters(note.title, note.content),
     blockItems,
     outlineItems,
-    showEditor: previewMode === 'edit',
-    showPreview: previewMode === 'preview',
+    showEditor: previewMode === 'edit' || previewMode === 'split',
+    showPreview: previewMode === 'preview' || previewMode === 'split',
     handleTitleChange: history.handleTitleChange,
     handleBodyChange,
     handleBodyKeyDown,

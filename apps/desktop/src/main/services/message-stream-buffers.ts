@@ -10,6 +10,8 @@ type ToolBuffer = {
   status: 'running' | 'done' | 'failed'
 }
 
+const PREPARING_STATUS_LINE = /^(正在准备|正在连接|正在读取|正在执行|等待|修订版)/
+
 export class MessageStreamBuffers {
   private text = ''
   private thinking = ''
@@ -21,8 +23,11 @@ export class MessageStreamBuffers {
   private readonly tools: ToolBuffer[] = []
 
   appendText(chunk: string): void {
-    if (chunk && this.thinking && this.thinkingDurationSeconds === null) {
-      this.finalizeThinkingDuration()
+    if (chunk) {
+      this.stripPreparingStatusFromThinking()
+      if (this.thinking && this.thinkingDurationSeconds === null) {
+        this.finalizeThinkingDuration()
+      }
     }
     this.text += chunk
   }
@@ -35,10 +40,26 @@ export class MessageStreamBuffers {
   }
 
   appendThinking(chunk: string): void {
-    if (chunk && this.thinkingStartedAt === null) {
+    if (!chunk) return
+    this.stripPreparingStatusFromThinking()
+    if (this.thinkingStartedAt === null) {
       this.thinkingStartedAt = Date.now()
     }
     this.thinking += chunk
+  }
+
+  stripPreparingStatusFromThinking(): void {
+    if (!this.thinking) return
+    const lines = this.thinking.split('\n')
+    const kept = lines.filter((line) => {
+      const trimmed = line.trim()
+      return trimmed && !PREPARING_STATUS_LINE.test(trimmed)
+    })
+    if (kept.length === lines.filter((line) => line.trim()).length) return
+    this.thinking = kept.join('\n')
+    if (!this.thinking.trim()) {
+      this.thinkingStartedAt = null
+    }
   }
 
   clearThinking(): void {

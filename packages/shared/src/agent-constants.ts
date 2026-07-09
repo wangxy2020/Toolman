@@ -66,6 +66,7 @@ export const REMOVED_MCP_SERVER_IDS = ['toolman-office'] as const
 /** 默认启用的 MCP 服务器（全局配置与新建智能体） */
 export const DEFAULT_ENABLED_MCP_SERVER_IDS = [
   'filesystem',
+  'browser',
   'fetch',
   'local-db',
   'memory',

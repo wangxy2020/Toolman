@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { alignTargetParagraphsToSource } from './translation-align'
+import { readContrastParagraphs } from './translation-contrast-dom'
 import {
   alignTranslationParagraphs,
   joinTranslationParagraphs,
@@ -34,32 +35,20 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function normalizeSourceBlocks(column: HTMLElement) {
-  Array.from(column.children).forEach((block, index) => {
-    const element = block as HTMLElement
-    element.dataset.paraIndex = String(index)
-    element.classList.add('tm-translation-contrast-para')
-  })
-}
-
-function readParagraphs(column: HTMLElement): string[] {
-  normalizeSourceBlocks(column)
-  const blocks = Array.from(column.querySelectorAll<HTMLElement>(':scope > [data-para-index]'))
-  if (blocks.length === 0) {
-    const text = (column.innerText ?? '').replace(/\u00a0/g, '').trimEnd()
-    return text ? [text] : ['']
-  }
-  return blocks.map((node) => (node.innerText ?? '').replace(/\u00a0/g, '').replace(/\n$/, ''))
-}
-
-function buildParagraphHtml(paragraphs: string[]): string {
+function buildParagraphHtml(paragraphs: string[], placeholder?: string): string {
   return paragraphs
-    .map(
-      (text, index) =>
-        `<p data-para-index="${index}" class="tm-translation-contrast-para">${
-          text ? escapeHtml(text).replace(/\n/g, '<br>') : '&nbsp;'
-        }</p>`,
-    )
+    .map((text, index) => {
+      const isEmpty = !text
+      const placeholderAttr =
+        isEmpty && index === 0 && placeholder
+          ? ` data-placeholder="${escapeHtml(placeholder)}"`
+          : ''
+      return `<p data-para-index="${index}" class="tm-translation-contrast-para${
+        isEmpty ? ' tm-translation-contrast-para--empty' : ''
+      }"${placeholderAttr}>${
+        text ? escapeHtml(text).replace(/\n/g, '<br>') : '&nbsp;'
+      }</p>`
+    })
     .join('')
 }
 
@@ -76,11 +65,13 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
     const sourceParagraphsRef = useRef<string[]>(splitTranslationParagraphs(sourceText))
     const [sourceRenderKey, setSourceRenderKey] = useState(0)
 
+    const sourcePlaceholder = t('translationPage.workspace.sourcePlaceholder')
+
     useImperativeHandle(ref, () => ({
       getSourceText: () => {
         const sourceCol = sourceColRef.current
         if (!sourceCol) return sourceText
-        return joinTranslationParagraphs(readParagraphs(sourceCol))
+        return joinTranslationParagraphs(readContrastParagraphs(sourceCol, sourcePlaceholder))
       },
     }))
 
@@ -101,8 +92,9 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
     useLayoutEffect(() => {
       const sourceCol = sourceColRef.current
       if (!sourceCol) return
-      sourceCol.innerHTML = buildParagraphHtml(sourceParagraphsRef.current)
-    }, [sourceRenderKey])
+      sourceCol.innerHTML = buildParagraphHtml(sourceParagraphsRef.current, sourcePlaceholder)
+      readContrastParagraphs(sourceCol, sourcePlaceholder)
+    }, [sourcePlaceholder, sourceRenderKey])
 
     // Target text changes: refresh right column only, then pad right-side spacing.
     useLayoutEffect(() => {
@@ -120,11 +112,15 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
       const observer = new ResizeObserver(() => {
         alignTargetParagraphsToSource(sourceCol, targetCol)
       })
+      observer.observe(sourceCol)
       observer.observe(targetCol)
       return () => observer.disconnect()
     }, [targetText, sourceRenderKey])
 
     const showTargetPlaceholder = !targetText.trim()
+    const placeholderText = modelId
+      ? t('translationPage.workspace.targetPlaceholder')
+      : t('translationPage.workspace.noModel')
 
     return (
       <div className="tm-translation-contrast">
@@ -139,7 +135,6 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
               role="textbox"
               aria-multiline="true"
               aria-label={t('translationPage.workspace.sourceLabel')}
-              data-placeholder={t('translationPage.workspace.sourcePlaceholder')}
               onFocus={() => {
                 sourceFocusedRef.current = true
               }}
@@ -150,7 +145,9 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
                 const sourceCol = sourceColRef.current
                 const targetCol = targetColRef.current
                 if (!sourceCol) return
-                const next = joinTranslationParagraphs(readParagraphs(sourceCol))
+                const next = joinTranslationParagraphs(
+                  readContrastParagraphs(sourceCol, sourcePlaceholder),
+                )
                 lastSyncedSourceRef.current = next
                 onSourceTextChange(next)
                 if (targetCol) alignTargetParagraphsToSource(sourceCol, targetCol)
@@ -166,23 +163,26 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
               className="tm-translation-contrast-col tm-translation-contrast-col--target"
               aria-label={t('translationPage.workspace.targetLabel')}
             >
-              {showTargetPlaceholder ? (
-                <p className="tm-translation-contrast-para tm-translation-contrast-para--placeholder">
-                  {modelId
-                    ? t('translationPage.workspace.targetPlaceholder')
-                    : t('translationPage.workspace.noModel')}
-                </p>
-              ) : (
-                targetRows.map((row, index) => (
+              {targetRows.map((row, index) => (
                   <p
                     key={`target-${index}`}
                     data-para-index={index}
-                    className="tm-translation-contrast-para"
+                    className={[
+                      'tm-translation-contrast-para',
+                      showTargetPlaceholder && index === 0
+                        ? 'tm-translation-contrast-para--placeholder'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
-                    {row.target || '\u00a0'}
+                    {showTargetPlaceholder
+                      ? index === 0
+                        ? placeholderText
+                        : '\u00a0'
+                      : row.target || '\u00a0'}
                   </p>
-                ))
-              )}
+                ))}
             </div>
           </section>
         </div>

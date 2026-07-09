@@ -20,6 +20,19 @@ export function normalizeMarkdownHtmlLineBreaksOutsideTables(text: string): stri
     .join('\n')
 }
 
+/** Streaming: normalize <br> in table rows to inline separators; elsewhere use hard breaks. */
+export function normalizeStreamingHtmlLineBreaks(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        return line.replace(MARKDOWN_HTML_BR_RE, ' · ')
+      }
+      return line.replace(MARKDOWN_HTML_BR_RE, '  \n')
+    })
+    .join('\n')
+}
+
 function renderTextWithHtmlBreaks(text: string, keyPrefix: string): ReactNode {
   MARKDOWN_HTML_BR_RE.lastIndex = 0
   if (!MARKDOWN_HTML_BR_RE.test(text)) return text

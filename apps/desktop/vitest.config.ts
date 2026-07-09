@@ -6,14 +6,16 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     exclude: ['src/**/*.integration.test.ts'],
     testTimeout: process.env.CI ? 15_000 : 5_000,
-    poolOptions: process.env.CI
-      ? {
-          threads: {
-            maxThreads: 2,
-            minThreads: 1,
-          },
-        }
-      : undefined,
+    pool: 'threads',
+    maxWorkers: 1,
+    fileParallelism: false,
+    deps: {
+      optimizer: {
+        ssr: {
+          include: [/@toolman\//],
+        },
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

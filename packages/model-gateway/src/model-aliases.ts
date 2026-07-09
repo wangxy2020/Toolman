@@ -127,6 +127,12 @@ export function isQwenThinkingOllamaModelId(model: string): boolean {
   return QWEN_THINKING_OLLAMA_MODEL.test(model.trim().toLowerCase())
 }
 
+/** Ollama native /api/chat models that expose separate thinking + content fields. */
+export function isOllamaNativeThinkingModelId(model: string): boolean {
+  const key = model.trim()
+  return isGemmaThinkingOllamaModelId(key) || isQwenThinkingOllamaModelId(key)
+}
+
 function ollamaRoutesReasoningAsAnswer(model: string): boolean {
   return (
     isOcrVisionModelId(model) ||

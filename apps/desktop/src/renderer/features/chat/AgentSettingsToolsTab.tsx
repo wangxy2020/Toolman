@@ -92,6 +92,15 @@ export function AgentSettingsToolsTab({
     }
   }, [servers, workingDirectory, environmentVariables])
 
+  const handleMcpToggle = async (server: McpServerConfig, wantEnabled: boolean) => {
+    if (wantEnabled && !server.enabled) {
+      const result = await window.api.invoke(IpcChannel.McpServerUpsert, { ...server, enabled: true })
+      if (!result.ok) return
+      setServers((prev) => prev.map((item) => (item.id === server.id ? { ...item, enabled: true } : item)))
+    }
+    onMcpToggle(server.id, wantEnabled)
+  }
+
   return (
     <div className="tm-agent-tab-panel">
       <div className="tm-agent-tab-head">
@@ -132,9 +141,9 @@ export function AgentSettingsToolsTab({
                 </span>
               </div>
               <Toggle
-                checked={enabled && !globallyDisabled}
+                checked={enabled && server.enabled}
                 onChange={(v) => {
-                  if (!globallyDisabled) onMcpToggle(server.id, v)
+                  void handleMcpToggle(server, v)
                 }}
               />
             </div>

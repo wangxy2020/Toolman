@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react'
+import type { ReactNode } from 'react'
 import {
   IconCodeBlock,
   IconFormula,
@@ -48,7 +48,6 @@ type ToolbarItem = {
 }
 
 interface Props {
-  bodyRef: RefObject<HTMLTextAreaElement | null>
   disabled?: boolean
   onRunAction: (key: NoteToolbarActionKey) => void
   onRunImage: () => void | Promise<void>

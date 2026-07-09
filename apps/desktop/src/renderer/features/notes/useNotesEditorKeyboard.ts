@@ -30,7 +30,7 @@ export function useNotesEditorKeyboard({
   runLink,
 }: UseNotesEditorKeyboardParams) {
   return useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (slashMenuOpen && slashCandidates.length > 0) {
         if (event.key === 'ArrowDown') {
           event.preventDefault()

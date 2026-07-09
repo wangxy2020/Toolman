@@ -1,3 +1,5 @@
+import type { NotesEditorPreviewMode } from './notes-editor-types'
+
 const STORAGE_KEY = 'toolman:notes-editor-settings'
 
 export type NotesDefaultView = 'edit' | 'preview'
@@ -47,9 +49,10 @@ export function settingsPatchFromNotesOpenMode(
   }
 }
 
-export function resolveInitialPreviewMode(settings: NotesEditorSettings): NotesDefaultEditView {
+export function resolveInitialPreviewMode(settings: NotesEditorSettings): NotesEditorPreviewMode {
   if (settings.defaultView === 'preview') return 'preview'
-  return settings.defaultEditView
+  if (settings.defaultEditView === 'preview') return 'split'
+  return 'edit'
 }
 
 export function loadNotesEditorSettings(): NotesEditorSettings {

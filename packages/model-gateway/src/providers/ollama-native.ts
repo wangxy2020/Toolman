@@ -1,6 +1,7 @@
 import {
   isGemmaThinkingOllamaModelId,
   isOcrVisionModelId,
+  isOllamaNativeThinkingModelId,
   isQwenThinkingOllamaModelId,
   resolveOpenAiMaxTokens,
 } from '../model-aliases.js'
@@ -117,7 +118,7 @@ export async function* streamOllamaNativeChat(
       model: params.model.trim(),
       messages: formatMessagesForOllamaNative(params.messages),
       stream: true,
-      think: false,
+      think: isOllamaNativeThinkingModelId(params.model.trim()),
       options: {
         temperature: params.temperature ?? (isOcr ? 0 : 0.7),
         num_predict: numPredict,
@@ -163,10 +164,17 @@ export async function* streamOllamaNativeChat(
           eval_count?: number
         }
 
-        // glm-ocr may put text in thinking/reasoning-like fields on some builds.
-        const text = parsed.message?.content || (isOcr ? parsed.message?.thinking : undefined)
-        if (text) {
-          yield { type: 'text-delta', text }
+        const thinking = parsed.message?.thinking
+        const content = parsed.message?.content
+
+        if (thinking && isOllamaNativeThinkingModelId(params.model.trim())) {
+          yield { type: 'reasoning-delta', text: thinking }
+        } else if (isOcr && thinking) {
+          yield { type: 'text-delta', text: thinking }
+        }
+
+        if (content) {
+          yield { type: 'text-delta', text: content }
         }
 
         if (parsed.done) {

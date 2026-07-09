@@ -1,6 +1,6 @@
 import type { ChatMessage } from '@toolman/model-gateway'
 import { ProviderError } from '@toolman/model-gateway'
-import { isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
+import { isGemmaThinkingOllamaModelId, isQwenThinkingOllamaModelId } from '@toolman/model-gateway'
 import { isOcrVisionModelId, toErrorMessage, type Message } from '@toolman/shared'
 import { getMessageRepository } from '../../db/repos'
 import { logStructured } from '../structured-log.service'
@@ -25,7 +25,9 @@ export function finalizeSuccessfulGeneration(options: {
   let usage = options.usage
 
   if (
-    (isOcrVisionModelId(options.model) || isGemmaThinkingOllamaModelId(options.model)) &&
+    (isOcrVisionModelId(options.model) ||
+      isGemmaThinkingOllamaModelId(options.model) ||
+      isQwenThinkingOllamaModelId(options.model)) &&
     options.stream.buffers.promoteThinkingToText()
   ) {
     options.stream.persistBlocks(true)

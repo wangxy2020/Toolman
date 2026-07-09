@@ -1,4 +1,7 @@
-export type NotesEditorPreviewMode = 'edit' | 'preview'
+export type NotesEditorPreviewMode = 'edit' | 'split' | 'preview'
+
+/** Modes shown in the editor status bar menu (excludes split / live preview). */
+export const NOTES_STATUSBAR_PREVIEW_MODES: NotesEditorPreviewMode[] = ['edit', 'preview']
 
 export type NotesEditorSnapshot = {
   title: string

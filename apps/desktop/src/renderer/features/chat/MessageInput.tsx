@@ -21,6 +21,7 @@ export function MessageInput(props: MessageInputProps) {
     textareaRef,
     handleInputDragOver,
     handleInputDrop,
+    handleInputPaste,
     handleSubmit,
     placeholder,
   } = input
@@ -61,6 +62,7 @@ export function MessageInput(props: MessageInputProps) {
           spellCheck={spellCheckEnabled}
           style={{ height: fieldHeight }}
           onChange={(e) => setText(e.target.value)}
+          onPaste={handleInputPaste}
           onKeyDown={(e) => {
             if (shouldSubmitOnEnter(e, sendShortcut)) {
               e.preventDefault()

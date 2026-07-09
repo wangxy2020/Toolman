@@ -158,7 +158,7 @@ export async function runToolLoop(options: {
         continue
       }
 
-      stream.buffers.clearThinking()
+      stream.buffers.stripPreparingStatusFromThinking()
       stream.persistBlocks(true)
       await streamPlainCompletion({
         sessionId: options.sessionId,
@@ -184,7 +184,7 @@ export async function runToolLoop(options: {
     }
   } catch (toolError) {
     if (toolError instanceof ProviderError) {
-      stream.buffers.clearThinking()
+      stream.buffers.stripPreparingStatusFromThinking()
       stream.persistBlocks(true)
       await streamPlainCompletion({
         sessionId: options.sessionId,

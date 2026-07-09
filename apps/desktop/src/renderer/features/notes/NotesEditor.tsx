@@ -9,9 +9,10 @@ import { NotesInteractivePreview } from './NotesInteractivePreview'
 import { NotesEditorToolbar } from './NotesEditorToolbar'
 import { NotesOutlinePanel } from './NotesOutlinePanel'
 import type { NotesEditorSettings } from './notes-editor-settings'
-import type { NotesEditorPreviewMode } from './notes-editor-types'
+import { NOTES_STATUSBAR_PREVIEW_MODES } from './notes-editor-types'
 import type { NoteItem } from './notes-storage'
 import { syncTextareaHeight } from './note-editor-utils'
+import { NotesRichBodyEditor } from './NotesRichBodyEditor'
 import { NotesTagsEditor } from './NotesTagsEditor'
 import { useNotesEditor } from './useNotesEditor'
 
@@ -58,7 +59,6 @@ export function NotesEditor({
       style={{ ['--tm-notes-font-size' as string]: `${editorSettings.fontSize}px` }}
     >
       <NotesEditorToolbar
-        bodyRef={editor.bodyRef}
         disabled={locked}
         onRunAction={editor.handleToolbarAction}
         onRunImage={editor.runImage}
@@ -72,7 +72,14 @@ export function NotesEditor({
       />
 
       <div className="tm-notes-editor-layout">
-        <div className="tm-notes-editor-main">
+        <div
+          className={[
+            'tm-notes-editor-main',
+            editor.previewMode === 'split' ? 'tm-notes-editor-main--split' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
         {editor.showEditor ? (
           <div
             ref={editor.editPaneRef}
@@ -123,18 +130,17 @@ export function NotesEditor({
                 onChange={(blocks) => onUpdate({ blocks, editorMode: 'blocks' })}
               />
             ) : (
-              <textarea
+              <NotesRichBodyEditor
                 ref={editor.bodyRef}
-                className="tm-notes-editor-body"
                 value={note.content}
                 readOnly={locked}
                 placeholder={editor.t('notesPage.editor.slashPlaceholder')}
-                onChange={(event) => editor.handleBodyChange(event.target.value)}
+                onChange={editor.handleBodyChange}
                 onKeyDown={editor.handleBodyKeyDown}
-                onClick={() => {
-                  const textarea = editor.bodyRef.current
-                  if (!textarea) return
-                  editor.updateSlashMenu(note.content, textarea.selectionStart)
+                onSelectionChange={() => {
+                  const body = editor.bodyRef.current
+                  if (!body) return
+                  editor.updateSlashMenu(note.content, body.getSelectionOffset())
                 }}
               />
             )}
@@ -204,7 +210,7 @@ export function NotesEditor({
           </button>
           {editor.modeMenuOpen ? (
             <div className="tm-notes-statusbar-mode-menu" role="menu">
-              {(Object.keys(editor.previewModeLabels) as NotesEditorPreviewMode[]).map((mode) => (
+              {NOTES_STATUSBAR_PREVIEW_MODES.map((mode) => (
                 <button
                   key={mode}
                   type="button"

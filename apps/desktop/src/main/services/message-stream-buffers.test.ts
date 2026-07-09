@@ -18,6 +18,16 @@ describe('MessageStreamBuffers local_file_links', () => {
 })
 
 describe('MessageStreamBuffers thinking + tools', () => {
+  it('strips preparing status when model thinking arrives', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    buffers.appendThinking('分析用户问题')
+    expect(buffers.toContentBlocks()[0]).toEqual({
+      type: 'thinking',
+      text: '分析用户问题',
+    })
+  })
+
   it('promotes thinking to text when model returns reasoning only', () => {
     const buffers = new MessageStreamBuffers()
     buffers.appendThinking('answer text')

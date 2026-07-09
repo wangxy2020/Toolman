@@ -35,7 +35,7 @@ export async function executeGenerationStrategy(options: {
   const { stream, runtime } = options
 
   if (!options.enableTools || options.tools.length === 0 || options.preferGemmaOllamaStreamOnly) {
-    stream.buffers.clearThinking()
+    stream.buffers.stripPreparingStatusFromThinking()
     stream.persistBlocks(true)
     await streamPlainCompletion({
       sessionId: options.sessionId,

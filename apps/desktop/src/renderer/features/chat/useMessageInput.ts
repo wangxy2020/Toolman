@@ -87,7 +87,7 @@ export function useMessageInput(props: MessageInputProps) {
     extraSlashCommands,
   })
 
-  const { stagePathsAsAttachments, handleUploadFiles } = useMessageInputAttachments({
+  const { stagePathsAsAttachments, handleUploadFiles, handleInputPaste } = useMessageInputAttachments({
     disabled,
     defaultFilePath,
     onError,
@@ -275,6 +275,7 @@ export function useMessageInput(props: MessageInputProps) {
     handleUploadFiles,
     handleInputDragOver,
     handleInputDrop,
+    handleInputPaste,
     runSlashCommand,
     handleAddQuickPhrase,
     handleSelectQuickPhrase,

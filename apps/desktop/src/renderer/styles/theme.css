@@ -1969,16 +1969,27 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   font-size: 14px;
   line-height: 1.6;
   color: var(--tm-text);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .tm-translation-contrast-col--source {
   outline: none;
+  padding-left: 2.25rem;
 }
 
-.tm-translation-contrast-col--source:empty::before,
-.tm-translation-contrast-col--source[data-placeholder]:not(:focus):has(p:only-child):has(p:empty)::before {
+.tm-translation-contrast-col--source:not(:focus)
+  > .tm-translation-contrast-para--empty:first-of-type::before {
   content: attr(data-placeholder);
   color: var(--tm-text-muted);
+  pointer-events: none;
+}
+
+.tm-translation-contrast-col--source:not(:focus)
+  > .tm-translation-contrast-para--empty:first-of-type {
+  color: transparent;
+  caret-color: var(--tm-text);
 }
 
 .tm-translation-contrast-col--target {
@@ -1988,10 +1999,24 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 
 .tm-translation-contrast-para,
 .tm-translation-contrast-col--source > div {
+  position: relative;
   margin: 0;
   min-height: 1.6em;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.tm-translation-contrast-col--source > .tm-translation-contrast-para[data-line-label]::before,
+.tm-translation-contrast-col--source > div[data-line-label]::before {
+  content: attr(data-line-label);
+  position: absolute;
+  left: -1.5rem;
+  width: 1.25rem;
+  text-align: right;
+  color: var(--tm-text-muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none;
 }
 
 .tm-translation-contrast-para--placeholder {
@@ -14441,7 +14466,7 @@ html.theme-dark .tm-agent-workdir-browse {
 .tm-about-logo {
   width: 56px;
   height: 56px;
-  border-radius: 50%;
+  border-radius: 12px;
   object-fit: cover;
   display: block;
   flex-shrink: 0;
@@ -17929,6 +17954,101 @@ html.theme-dark .tm-notes-toolbar {
 
 .tm-notes-editor-body:read-only {
   cursor: default;
+}
+
+.tm-notes-rich-body {
+  white-space: normal;
+}
+
+.tm-notes-rich-body--empty:not(:focus)::before {
+  content: attr(data-placeholder);
+  color: var(--tm-text-tertiary);
+  pointer-events: none;
+}
+
+.tm-notes-rich-body strong,
+.tm-notes-rich-body b {
+  font-weight: 700;
+}
+
+.tm-notes-rich-body em,
+.tm-notes-rich-body i {
+  font-style: italic;
+}
+
+.tm-notes-rich-body u {
+  text-decoration: underline;
+}
+
+.tm-notes-rich-body s,
+.tm-notes-rich-body strike,
+.tm-notes-rich-body del {
+  text-decoration: line-through;
+}
+
+.tm-notes-rich-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--tm-surface-raised);
+}
+
+.tm-notes-rich-body pre {
+  margin: 0.6em 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--tm-surface-raised);
+  overflow-x: auto;
+}
+
+.tm-notes-rich-body pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.tm-notes-rich-body h1 {
+  font-size: 1.6em;
+  font-weight: 700;
+  margin: 0.6em 0 0.35em;
+}
+
+.tm-notes-rich-body h2 {
+  font-size: 1.35em;
+  font-weight: 700;
+  margin: 0.55em 0 0.3em;
+}
+
+.tm-notes-rich-body h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 0.5em 0 0.25em;
+}
+
+.tm-notes-rich-body blockquote {
+  margin: 0.4em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--tm-border);
+  color: var(--tm-text-secondary);
+}
+
+.tm-notes-rich-body ul,
+.tm-notes-rich-body ol {
+  margin: 0.35em 0;
+  padding-left: 1.4em;
+}
+
+.tm-notes-rich-body a {
+  color: var(--tm-accent);
+  text-decoration: underline;
+}
+
+.tm-notes-rich-body img,
+.tm-notes-rich-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.35em 0;
 }
 
 .tm-notes-editor-body::placeholder,

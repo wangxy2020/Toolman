@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { RefObject } from 'react'
 import { detectSlashQuery } from './note-editor-utils'
+import type { NotesBodyEditorHandle } from './NotesRichBodyEditor'
 import {
   filterNotesSlashCommands,
   type NotesSlashCommandItem,
@@ -8,7 +9,7 @@ import {
 import { useNoteEditorActions } from './useNoteEditorActions'
 
 type UseNotesEditorSlashParams = {
-  bodyRef: RefObject<HTMLTextAreaElement | null>
+  bodyRef: RefObject<NotesBodyEditorHandle | null>
   noteContent: string
   slashCommands: NotesSlashCommandItem[]
   locked: boolean
@@ -41,9 +42,9 @@ export function useNotesEditorSlash({
 
   const slashCandidates = useMemo(() => {
     if (!slashMenuOpen) return []
-    const textarea = bodyRef.current
-    if (!textarea) return slashCommands
-    const detected = detectSlashQuery(noteContent, textarea.selectionStart)
+    const editor = bodyRef.current
+    if (!editor) return slashCommands
+    const detected = detectSlashQuery(noteContent, editor.getSelectionOffset())
     if (!detected) return slashCommands
     return filterNotesSlashCommands(detected.query, slashCommands)
   }, [bodyRef, noteContent, slashCommands, slashMenuOpen])
@@ -64,15 +65,15 @@ export function useNotesEditorSlash({
   }, [])
 
   const removeSlashToken = useCallback(() => {
-    const textarea = bodyRef.current
-    if (!textarea) return
-    const cursor = textarea.selectionStart
+    const editor = bodyRef.current
+    if (!editor) return
+    const cursor = editor.getSelectionOffset()
     const next = `${noteContent.slice(0, slashReplaceStart)}${noteContent.slice(cursor)}`
     markSkipHistory()
     onUpdate({ content: next })
     requestAnimationFrame(() => {
-      textarea.focus()
-      textarea.setSelectionRange(slashReplaceStart, slashReplaceStart)
+      editor.focus()
+      editor.setSelectionOffset(slashReplaceStart)
     })
   }, [bodyRef, markSkipHistory, noteContent, onUpdate, slashReplaceStart])
 

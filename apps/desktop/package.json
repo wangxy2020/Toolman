@@ -18,7 +18,7 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "pnpm typecheck",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS=--max-old-space-size=6144 vitest run src/main && NODE_OPTIONS=--max-old-space-size=6144 vitest run src/renderer",
     "test:p2p-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "test:knowledge-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/knowledge-ingest.integration.test.ts",
     "test:docx-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/main/services/docx-review.integration.test.ts",
@@ -58,6 +58,7 @@
     "react-virtuoso": "^4.12.6",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "yjs": "^13.6.27"

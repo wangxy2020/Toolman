@@ -20,6 +20,7 @@ vi.mock('@toolman/model-gateway', () => ({
   },
   providerSupportsOpenAiVision: () => true,
   isGemmaThinkingOllamaModelId: () => false,
+  isQwenThinkingOllamaModelId: () => false,
 }))
 
 vi.mock('./provider.service', () => ({

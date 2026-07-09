@@ -42,10 +42,16 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm test
 
       - name: Desktop coverage
-        run: pnpm --filter @toolman/desktop exec vitest run --coverage
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          pnpm --filter @toolman/desktop exec vitest run --coverage src/main
+          pnpm --filter @toolman/desktop exec vitest run --coverage src/renderer
 
       - name: Docx integration
         run: pnpm --filter @toolman/desktop test:docx-integration

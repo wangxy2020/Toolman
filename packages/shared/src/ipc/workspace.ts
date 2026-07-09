@@ -184,9 +184,20 @@ export const TranslationDocumentRenderPageOutputSchema = z.object({
   height: z.number().positive(),
 })
 
-export const ChatStageAttachmentsInputSchema = z.object({
-  paths: z.array(z.string()).min(1),
+export const ChatStageAttachmentBlobInputSchema = z.object({
+  base64: z.string().min(1),
+  mimeType: z.string().min(1),
+  name: z.string().optional(),
 })
+
+export const ChatStageAttachmentsInputSchema = z
+  .object({
+    paths: z.array(z.string()).default([]),
+    blobs: z.array(ChatStageAttachmentBlobInputSchema).default([]),
+  })
+  .refine((data) => data.paths.length > 0 || data.blobs.length > 0, {
+    message: 'paths or blobs required',
+  })
 
 export const ChatStageAttachmentsItemSchema = z.object({
   path: z.string(),
