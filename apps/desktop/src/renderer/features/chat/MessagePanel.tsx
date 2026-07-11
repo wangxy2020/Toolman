@@ -44,6 +44,14 @@ export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps)
   }
 
   if (messages.length === 0) {
+    if (props.hideEmptyState) {
+      return (
+        <>
+          <div className="tm-messages" aria-hidden />
+          {deleteConfirmPopover}
+        </>
+      )
+    }
     return (
       <>
         <div className="tm-messages-center">
@@ -67,6 +75,15 @@ export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps)
             alignToBottom
             initialTopMostItemIndex={Math.max(0, turns.length - 1)}
             increaseViewportBy={{ top: 600, bottom: 600 }}
+            components={
+              props.listFooter
+                ? {
+                    Footer: () => (
+                      <div className="tm-messages-list-footer">{props.listFooter}</div>
+                    ),
+                  }
+                : undefined
+            }
             computeItemKey={(_index, turn) =>
               turn.type === 'user'
                 ? turn.message.id
@@ -102,6 +119,9 @@ export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps)
             {...turnViewProps}
           />
         ))}
+        {props.listFooter ? (
+          <div className="tm-messages-list-footer">{props.listFooter}</div>
+        ) : null}
         <div ref={bottomRef} className="tm-messages-scroll-anchor" aria-hidden="true" />
       </div>
       {deleteConfirmPopover}

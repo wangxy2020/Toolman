@@ -100,6 +100,16 @@ export const AppShellRevealPathOutputSchema = z.object({
   revealed: z.boolean(),
 })
 
+export const AppPrintWindowInputSchema = z.object({
+  landscape: z.boolean().default(true),
+  printBackground: z.boolean().default(true),
+})
+
+export const AppPrintWindowOutputSchema = z.object({
+  printed: z.boolean(),
+  error: z.string().optional(),
+})
+
 export const AppGetStorageStatsOutputSchema = z.object({
   cacheBytes: z.number().int().nonnegative(),
   userData: z.string(),

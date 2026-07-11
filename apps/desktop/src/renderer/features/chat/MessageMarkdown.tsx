@@ -17,6 +17,7 @@ import { LOCAL_FILE_LINK_SCHEME, sanitizeAssistantMarkdown } from './sanitize-as
 import { normalizeMarkdownHtmlLineBreaksOutsideTables } from './markdown-html-breaks'
 import { prepareStreamingMarkdown } from './streaming-markdown'
 import type { CodeStyle, MessageSettings } from './message-settings'
+import { presentPmPlanMarkdownForDisplay } from '@toolman/shared'
 import 'katex/dist/katex.min.css'
 
 const CODE_THEME_PATHS: Record<Exclude<CodeStyle, 'auto'>, () => Promise<unknown>> = {
@@ -170,10 +171,10 @@ export function MessageMarkdown({
   const codeStyle = resolveCodeStyle(settings.codeStyle)
   const renderedText = useMemo(() => {
     if (streaming) {
-      return prepareStreamingMarkdown(text, sanitizeAssistant)
+      return presentPmPlanMarkdownForDisplay(prepareStreamingMarkdown(text, sanitizeAssistant))
     }
     const base = sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text
-    return normalizeMarkdownHtmlLineBreaksOutsideTables(base)
+    return normalizeMarkdownHtmlLineBreaksOutsideTables(presentPmPlanMarkdownForDisplay(base))
   }, [sanitizeAssistant, streaming, text])
 
   useEffect(() => {

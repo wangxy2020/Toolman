@@ -1,4 +1,5 @@
 import type { ContentBlock, TranslationLanguage } from '@toolman/shared'
+import type { ReactNode } from 'react'
 import type { PendingAttachment } from './chat-attachments'
 import { MessageInput } from './MessageInput'
 import { MessagePanel } from './MessagePanel'
@@ -36,6 +37,13 @@ interface ChatComposerProps {
   onSend?: (contentBlocks: ContentBlock[]) => void | Promise<void>
   loadQuickPhrasesFn?: () => QuickPhrase[]
   extraSlashCommands?: SlashCommandItem[]
+  /** Hide MessagePanel empty-state copy when another surface occupies the chat area. */
+  hideEmptyState?: boolean
+  /** Rendered after the last chat message (legacy list footer). */
+  messageListFooter?: ReactNode
+  /** Attach footer inside a specific assistant message (preferred for plan apply). */
+  assistantFooterMessageId?: string | null
+  assistantFooter?: ReactNode
 }
 
 export function ChatComposer({
@@ -59,6 +67,10 @@ export function ChatComposer({
   onSend,
   loadQuickPhrasesFn,
   extraSlashCommands,
+  hideEmptyState = false,
+  messageListFooter,
+  assistantFooterMessageId = null,
+  assistantFooter = null,
 }: ChatComposerProps) {
   return (
     <>
@@ -79,6 +91,10 @@ export function ChatComposer({
         onForkFromMessage={(id) => void chat.forkFromMessage(id)}
         onSaveToNote={onSaveToNote}
         onError={chat.setError}
+        hideEmptyState={hideEmptyState}
+        listFooter={messageListFooter}
+        assistantFooterMessageId={assistantFooterMessageId}
+        assistantFooter={assistantFooter}
       />
       <MessageInput
         disabled={!chat.activeSessionId || chat.effectiveModelIds.length === 0 || groupProxyReadOnly}

@@ -1,4 +1,5 @@
 import type { Message } from '@toolman/shared'
+import type { ReactNode } from 'react'
 import {
   IconCopy,
   IconGitFork,
@@ -41,6 +42,7 @@ export function MessagePanelAssistantMessage({
   deleting,
   forking,
   regenerating,
+  actionTrailing = null,
 }: {
   message: Message
   assistantName: string
@@ -60,6 +62,8 @@ export function MessagePanelAssistantMessage({
   deleting?: boolean
   forking?: boolean
   regenerating?: boolean
+  /** Extra control after the delete action (e.g. plan confirm). */
+  actionTrailing?: ReactNode
 }) {
   const text = getMessageText(message)
   const tokenLabel = formatAssistantTokens(message)
@@ -169,6 +173,7 @@ export function MessagePanelAssistantMessage({
               >
                 <IconTrash size={15} className={deleting ? 'tm-icon-spin' : undefined} />
               </MessagePanelActionButton>
+              {actionTrailing}
             </div>
             <div className="tm-stream-tokens">{tokenLabel}</div>
           </div>

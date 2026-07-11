@@ -1,4 +1,5 @@
 import type { Message, TranslationLanguage } from '@toolman/shared'
+import type { ReactNode } from 'react'
 import type { MessageSettings, SendShortcut } from './message-settings'
 
 export type PendingMessageAction = {
@@ -28,7 +29,14 @@ export interface MessagePanelProps {
   sendShortcut?: SendShortcut
   emptyTitle?: string
   emptyHint?: string
+  /** When true, skip the empty-state title/hint (e.g. another panel already fills the area). */
+  hideEmptyState?: boolean
   loadingLabel?: string
+  /** Rendered after the last message turn (e.g. plan apply confirm). */
+  listFooter?: ReactNode
+  /** Attach a footer inside a specific assistant message body. */
+  assistantFooterMessageId?: string | null
+  assistantFooter?: ReactNode
 }
 
 export type MessageTurn =

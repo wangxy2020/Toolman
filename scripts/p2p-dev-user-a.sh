@@ -3,7 +3,19 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-USER_DATA_DIR="${TOOLMAN_P2P_USER_A_DATA:-/tmp/toolman-node-b}"
+DEFAULT_USER_DATA="$HOME/Library/Application Support/Toolman-p2p-dev-a"
+LEGACY_USER_DATA="/tmp/toolman-node-b"
+USER_DATA_DIR="${TOOLMAN_P2P_USER_A_DATA:-$DEFAULT_USER_DATA}"
+
+if [[ -z "${TOOLMAN_P2P_USER_A_DATA:-}" && ! -e "$USER_DATA_DIR/toolman.db" && -e "$LEGACY_USER_DATA/toolman.db" ]]; then
+  echo "==> Migrating legacy P2P dev data: $LEGACY_USER_DATA -> $USER_DATA_DIR"
+  mkdir -p "$USER_DATA_DIR"
+  cp -a "$LEGACY_USER_DATA/." "$USER_DATA_DIR/"
+fi
+
+if [[ -z "${TOOLMAN_P2P_USER_A_DATA:-}" ]]; then
+  echo "P2P 用户 A 数据目录: $USER_DATA_DIR"
+fi
 
 # shellcheck source=scripts/p2p-community-env.sh
 source "$ROOT_DIR/scripts/p2p-community-env.sh"

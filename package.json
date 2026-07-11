@@ -24,7 +24,7 @@
     "dev:p2p:a": "bash scripts/p2p-dev-user-a.sh",
     "dev:p2p:b": "bash scripts/p2p-dev-user-b.sh",
     "verify:folders": "bash scripts/verify-toolman-folders.sh",
-    "verify:folders:a": "bash scripts/verify-toolman-folders.sh /tmp/toolman-node-b 用户1",
+    "verify:folders:a": "bash scripts/verify-toolman-folders.sh \"$HOME/Library/Application Support/Toolman-p2p-dev-a\" 用户1",
     "verify:folders:b": "bash scripts/verify-toolman-folders.sh /tmp/toolman-p2p-b 用户2",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",

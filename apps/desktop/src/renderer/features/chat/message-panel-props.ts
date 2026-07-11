@@ -18,7 +18,11 @@ export function areMessagePanelPropsEqual(
     prev.translationLanguages === next.translationLanguages &&
     prev.emptyTitle === next.emptyTitle &&
     prev.emptyHint === next.emptyHint &&
+    prev.hideEmptyState === next.hideEmptyState &&
     prev.loadingLabel === next.loadingLabel &&
+    prev.listFooter === next.listFooter &&
+    prev.assistantFooterMessageId === next.assistantFooterMessageId &&
+    prev.assistantFooter === next.assistantFooter &&
     prev.getUserDisplayName === next.getUserDisplayName &&
     prev.getUserAvatarInitial === next.getUserAvatarInitial &&
     prev.isOwnUserMessage === next.isOwnUserMessage

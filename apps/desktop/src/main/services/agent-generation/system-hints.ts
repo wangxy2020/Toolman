@@ -32,6 +32,7 @@ import { parseModelId } from '../provider.service'
 import { getProviderRow } from '../provider/crud'
 import { resolveAttachmentReadPath } from '../resolve-user-content-blocks.service'
 import { getSession } from '../session.service'
+import { buildPmRuntimeSnapshot } from '../project-management/pm-runtime-snapshot.service'
 import type { BuildRuntimeSystemHintsOptions } from './types'
 
 function looksLikeDirectoryExportGoal(text: string): boolean {
@@ -86,7 +87,15 @@ export async function buildRuntimeSystemHints(
     if (session) {
       const projectManagement = parseProjectManagementSessionMetadata(session.metadata)
       if (projectManagement) {
-        hints.push(buildProjectManagementRuntimeHint(projectManagement.tab))
+        let snapshot = null
+        try {
+          if (session.workspaceId) {
+            snapshot = buildPmRuntimeSnapshot(session.workspaceId, projectManagement.tab)
+          }
+        } catch {
+          snapshot = null
+        }
+        hints.push(buildProjectManagementRuntimeHint(projectManagement.tab, snapshot))
       }
     }
   }

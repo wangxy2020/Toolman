@@ -1,10 +1,11 @@
 import type { Assistant, Session } from '@toolman/shared'
 import {
   buildProjectManagementAssistantSystemPrompt,
-  buildProjectManagementSessionMetadata,
+  isProjectManagementAgentTab as isSharedProjectManagementAgentTab,
+  needsProjectManagementSessionReconcile,
   parseProjectManagementSessionMetadata,
-  PROJECT_MANAGEMENT_AGENT_SESSION_TITLES,
   PROJECT_MANAGEMENT_ASSISTANT_NAME,
+  resolveProjectManagementSessionForTab,
   type ProjectManagementAgentTab,
 } from '@toolman/shared'
 
@@ -18,7 +19,7 @@ export {
 export function isProjectManagementAgentTab(
   tab: ConfigurableSidebarMenuKey,
 ): tab is ProjectManagementAgentTab {
-  return tab === 'cost_management' || tab === 'progress_management'
+  return isSharedProjectManagementAgentTab(tab)
 }
 
 export function resolveProjectManagementAgentSession(
@@ -26,37 +27,22 @@ export function resolveProjectManagementAgentSession(
   sessions: Session[],
   tab: ProjectManagementAgentTab,
 ): { assistant: Assistant; session: Session } | null {
-  const sessionTitle = PROJECT_MANAGEMENT_AGENT_SESSION_TITLES[tab]
-
   const assistant = assistants.find(
     (item) => item.name.trim() === PROJECT_MANAGEMENT_ASSISTANT_NAME,
   )
   if (!assistant) return null
 
-  const session = sessions.find(
-    (item) => item.assistantId === assistant.id && item.title.trim() === sessionTitle,
-  )
+  const session = resolveProjectManagementSessionForTab(sessions, assistant.id, tab)
   if (!session) return null
 
-  return { assistant, session }
+  return { assistant, session: session as Session }
 }
 
 export function needsProjectManagementSessionMetadata(
   session: Session,
   tab: ProjectManagementAgentTab,
 ): boolean {
-  const metadata = parseProjectManagementSessionMetadata(session.metadata)
-  return metadata?.tab !== tab
+  return needsProjectManagementSessionReconcile(session, tab)
 }
 
-export function projectManagementSessionMetadataPatch(
-  session: Session,
-  tab: ProjectManagementAgentTab,
-): Record<string, unknown> {
-  return {
-    ...session.metadata,
-    ...buildProjectManagementSessionMetadata(tab),
-  }
-}
-
-export { buildProjectManagementAssistantSystemPrompt }
+export { buildProjectManagementAssistantSystemPrompt, parseProjectManagementSessionMetadata }

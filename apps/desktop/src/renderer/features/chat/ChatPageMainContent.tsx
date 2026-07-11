@@ -106,6 +106,7 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
         activeTab={props.projectSidebarTab}
         agentContext={{
           workspaceId: props.workspaceId,
+          workspace: props.workspace,
           chat: props.chat,
           messageSettings: props.messageSettings,
           messagePanelStyle: props.messagePanelStyle,

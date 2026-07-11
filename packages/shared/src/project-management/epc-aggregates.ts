@@ -1,3 +1,4 @@
+import type { EpcProjectRecord } from './epc-mock.js'
 import { MOCK_EPC_PROJECTS } from './epc-mock.js'
 
 export type EpcPortfolioAggregates = {
@@ -11,23 +12,27 @@ export type EpcPortfolioAggregates = {
   settlementRate: string
 }
 
-export function buildEpcPortfolioAggregates(): EpcPortfolioAggregates {
-  const contractTotal = MOCK_EPC_PROJECTS.reduce((sum, project) => sum + project.contractValue, 0)
-  const settledTotal = MOCK_EPC_PROJECTS.reduce((sum, project) => sum + project.settledAmount, 0)
-  const pendingTotal = MOCK_EPC_PROJECTS.reduce((sum, project) => sum + project.pendingAmount, 0)
+export function buildPortfolioAggregates(
+  records: EpcProjectRecord[],
+  options?: { overdueCount?: number },
+): EpcPortfolioAggregates {
+  const contractTotal = records.reduce((sum, project) => sum + project.contractValue, 0)
+  const settledTotal = records.reduce((sum, project) => sum + project.settledAmount, 0)
+  const pendingTotal = records.reduce((sum, project) => sum + project.pendingAmount, 0)
   const avgProgress =
-    MOCK_EPC_PROJECTS.length > 0
-      ? MOCK_EPC_PROJECTS.reduce((sum, project) => sum + project.progressPercent, 0) /
-        MOCK_EPC_PROJECTS.length
+    records.length > 0
+      ? records.reduce((sum, project) => sum + project.progressPercent, 0) / records.length
       : 0
   const varianceRate =
     contractTotal > 0 ? ((contractTotal - settledTotal) / contractTotal) * 100 : 0
-  const overdueCount = MOCK_EPC_PROJECTS.filter((project) => project.status !== 'normal').length
+  const overdueCount =
+    options?.overdueCount ??
+    records.filter((project) => project.status !== 'normal').length
   const settlementRate =
     contractTotal > 0 ? ((settledTotal / contractTotal) * 100).toFixed(1) : '0'
 
   return {
-    projectCount: MOCK_EPC_PROJECTS.length,
+    projectCount: records.length,
     contractTotal,
     settledTotal,
     pendingTotal,
@@ -36,4 +41,8 @@ export function buildEpcPortfolioAggregates(): EpcPortfolioAggregates {
     overdueCount,
     settlementRate,
   }
+}
+
+export function buildEpcPortfolioAggregates(): EpcPortfolioAggregates {
+  return buildPortfolioAggregates(MOCK_EPC_PROJECTS)
 }

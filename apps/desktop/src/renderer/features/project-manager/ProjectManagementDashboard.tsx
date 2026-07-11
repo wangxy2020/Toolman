@@ -1,33 +1,55 @@
 import type { FC } from 'react'
-import { useMemo } from 'react'
 
-import { buildEpcPortfolioAggregates, MOCK_EPC_PROJECTS } from '@toolman/shared'
+import type { PmDomain } from '@toolman/shared'
 
 import { useI18n } from '../../i18n/useI18n'
 import { DashboardInsights } from './dashboard/DashboardInsights'
 import { DashboardKpiCards } from './dashboard/DashboardKpiCards'
 import type { ProjectDashboardVariant } from './dashboard/dashboard-types'
 import { ProjectCard } from './dashboard/ProjectCard'
+import { usePmDashboardData } from './dashboard/usePmDashboardData'
 
 export type { ProjectDashboardVariant } from './dashboard/dashboard-types'
 
 interface Props {
+  workspaceId?: string
   variant: ProjectDashboardVariant
+  domain?: PmDomain
+  dedupeByCode?: boolean
+  mockFallback?: boolean
 }
 
-const ProjectManagementDashboard: FC<Props> = ({ variant }) => {
+const ProjectManagementDashboard: FC<Props> = ({
+  workspaceId,
+  variant,
+  domain,
+  dedupeByCode = false,
+  mockFallback = true,
+}) => {
   const { t } = useI18n()
   const isCost = variant === 'cost'
   const prefix = isCost ? 'projectManagerPage.dashboard.cost' : 'projectManagerPage.dashboard.progress'
-  const aggregates = useMemo(() => buildEpcPortfolioAggregates(), [])
+  const { data, loading, error } = usePmDashboardData(workspaceId, {
+    domain,
+    dedupeByCode,
+    mockFallback,
+  })
 
-  if (MOCK_EPC_PROJECTS.length === 0) {
+  if (loading && !data) {
+    return <div className="tm-pm-empty">{t('projectManagerPage.dashboard.loading')}</div>
+  }
+
+  if (error) {
+    return <div className="tm-pm-empty">{error}</div>
+  }
+
+  if (!data || data.records.length === 0) {
     return <div className="tm-pm-empty">{t('projectManagerPage.dashboard.empty')}</div>
   }
 
   return (
     <div className="tm-pm-dashboard">
-      <DashboardKpiCards variant={variant} aggregates={aggregates} />
+      <DashboardKpiCards variant={variant} aggregates={data.aggregates} />
 
       <section className="tm-pm-section">
         <div className="tm-pm-section-head">
@@ -35,13 +57,13 @@ const ProjectManagementDashboard: FC<Props> = ({ variant }) => {
           <span className="tm-pm-section-desc">{t(`${prefix}.sectionDesc`)}</span>
         </div>
         <div className="tm-pm-project-grid">
-          {MOCK_EPC_PROJECTS.slice(0, 6).map((project) => (
+          {data.records.slice(0, 6).map((project) => (
             <ProjectCard key={project.id} project={project} variant={variant} prefix={prefix} />
           ))}
         </div>
       </section>
 
-      <DashboardInsights variant={variant} aggregates={aggregates} />
+      <DashboardInsights variant={variant} aggregates={data.aggregates} />
     </div>
   )
 }

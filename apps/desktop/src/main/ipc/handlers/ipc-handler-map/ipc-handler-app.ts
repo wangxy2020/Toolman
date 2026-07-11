@@ -4,6 +4,8 @@ import {
   AppBackupDataInputSchema,
   AppGetInfoOutputSchema,
   AppGetPathsOutputSchema,
+  AppPrintWindowInputSchema,
+  AppPrintWindowOutputSchema,
   AppProvenanceBeaconInputSchema,
   AppProvenanceBeaconOutputSchema,
   AppRestoreDataInputSchema,
@@ -19,6 +21,7 @@ import {
   ipcOk,
   ipcErr,
 } from '@toolman/shared'
+import { BrowserWindow } from 'electron'
 import { getAppInfo, getAppPaths } from '../../app'
 import { syncRuntimeAppSettings } from '../../../services/runtime-app-settings.service'
 import {
@@ -172,6 +175,26 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.AppShellRevealPath]: async (input) => {
     const { path } = AppShellRevealPathInputSchema.parse(input)
     return ipcOk(revealPathInShell(path))
+  },
+
+  [IpcChannel.AppPrintWindow]: async (input) => {
+    const data = AppPrintWindowInputSchema.parse(input ?? {})
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    if (!win || win.isDestroyed()) {
+      return ipcOk(AppPrintWindowOutputSchema.parse({ printed: false, error: 'No window' }))
+    }
+    const printed = await new Promise<boolean>((resolve) => {
+      win.webContents.print(
+        {
+          silent: false,
+          printBackground: data.printBackground,
+          landscape: data.landscape,
+          pageSize: 'A4',
+        },
+        (success) => resolve(Boolean(success)),
+      )
+    })
+    return ipcOk(AppPrintWindowOutputSchema.parse({ printed }))
   },
 
   [IpcChannel.AppGetStorageStats]: async () => ipcOk(getStorageStats()),

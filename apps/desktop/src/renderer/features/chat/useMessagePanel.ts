@@ -40,6 +40,8 @@ export function useMessagePanel({
   emptyTitle,
   emptyHint,
   loadingLabel,
+  assistantFooterMessageId = null,
+  assistantFooter = null,
 }: MessagePanelProps) {
   const { t } = useI18n()
   const resolvedEmptyTitle = emptyTitle ?? t('chat.messages.emptyTitle')
@@ -234,6 +236,8 @@ export function useMessagePanel({
     translatingIds,
     pendingMessageAction,
     editingUserMessageId,
+    assistantFooterMessageId,
+    assistantFooter,
   }
 
   return {

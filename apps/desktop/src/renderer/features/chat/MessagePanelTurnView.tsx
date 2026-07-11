@@ -1,4 +1,5 @@
 import type { Message } from '@toolman/shared'
+import type { ReactNode } from 'react'
 import { getUserMessageCopyText } from './chat-attachments'
 import { getMessageText as getAssistantMessageText } from './message-utils'
 import type { MessageSettings } from './message-settings'
@@ -30,6 +31,8 @@ export type MessageTurnViewProps = {
   getUserDisplayName?: (message: Message) => string
   getUserAvatarInitial?: (message: Message) => string
   isOwnUserMessage?: (message: Message) => boolean
+  assistantFooterMessageId?: string | null
+  assistantFooter?: ReactNode
 }
 
 export function MessagePanelTurnView({
@@ -55,6 +58,8 @@ export function MessagePanelTurnView({
   translatingIds,
   pendingMessageAction,
   editingUserMessageId,
+  assistantFooterMessageId = null,
+  assistantFooter = null,
 }: MessageTurnViewProps) {
   if (turn.type === 'user') {
     const message = turn.message
@@ -109,6 +114,9 @@ export function MessagePanelTurnView({
         deleting={isMessageActionPending(pendingMessageAction, 'delete', msg.id)}
         forking={isMessageActionPending(pendingMessageAction, 'fork', msg.id)}
         regenerating={isMessageActionPending(pendingMessageAction, 'regenerate', msg.id)}
+        actionTrailing={
+          assistantFooter && msg.id === assistantFooterMessageId ? assistantFooter : null
+        }
       />
     )
   }

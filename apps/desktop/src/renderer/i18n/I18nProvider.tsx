@@ -1,5 +1,6 @@
-import { createContext, useMemo, type ReactNode } from 'react'
+import { createContext, useEffect, useMemo, type ReactNode } from 'react'
 import type { AppLanguage } from '../features/settings/app-settings'
+import { getDateLocale } from './date-locale'
 import { translate, type TranslateParams } from './translate'
 
 export type TranslateFn = (key: string, params?: TranslateParams) => string
@@ -25,6 +26,11 @@ export function I18nProvider({
     }),
     [language],
   )
+
+  // Keep <html lang> in sync so native controls (e.g. input[type=date]) use the UI locale.
+  useEffect(() => {
+    document.documentElement.lang = getDateLocale(language)
+  }, [language])
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }

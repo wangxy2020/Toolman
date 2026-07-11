@@ -34,12 +34,23 @@ export function useProjectManagementAgentSession(
       ? activeTab
       : null
 
-  const [linkState, setLinkState] = useState<ProjectManagementAgentLinkState>({ status: 'idle' })
-
   const linked = useMemo(() => {
     if (!agentTab) return null
     return resolveProjectManagementAgentSession(chat.assistants, chat.sessions, agentTab)
   }, [agentTab, chat.assistants, chat.sessions])
+
+  const [linkState, setLinkState] = useState<ProjectManagementAgentLinkState>(() => {
+    if (!enabled || !agentTab) return { status: 'idle' }
+    const existing = resolveProjectManagementAgentSession(chat.assistants, chat.sessions, agentTab)
+    if (existing && !needsProjectManagementSessionMetadata(existing.session, agentTab)) {
+      return {
+        status: 'linked',
+        assistantId: existing.assistant.id,
+        sessionId: existing.session.id,
+      }
+    }
+    return { status: 'idle' }
+  })
 
   useEffect(() => {
     if (!enabled || !agentTab || !workspaceId) {

@@ -85,6 +85,27 @@
       "when": 1781343000000,
       "tag": "0011_agent_task_artifacts",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1781344000000,
+      "tag": "0012_pm_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1781345000000,
+      "tag": "0013_pm_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1781346000000,
+      "tag": "0014_pm_execution",
+      "breakpoints": true
     }
   ]
 }

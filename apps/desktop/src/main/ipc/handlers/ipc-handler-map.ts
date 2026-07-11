@@ -3,6 +3,7 @@ import { knowledgeIpcHandlers } from '../knowledge-ipc-handlers'
 import { p2pIpcHandlers } from '../p2p-ipc-handlers'
 import { communityHandlers } from '../community-handlers'
 import { epcIpcHandlers } from './ipc-handler-map/ipc-handler-epc'
+import { pmIpcHandlers } from './ipc-handler-map/ipc-handler-pm'
 import { appIpcHandlers } from './ipc-handler-map/ipc-handler-app'
 import { workspaceIpcHandlers } from './ipc-handler-map/ipc-handler-workspace'
 import { dialogNotesIpcHandlers } from './ipc-handler-map/ipc-handler-dialog-notes'
@@ -22,4 +23,5 @@ export const ipcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   ...p2pIpcHandlers,
   ...communityHandlers,
   ...epcIpcHandlers,
+  ...pmIpcHandlers,
 }

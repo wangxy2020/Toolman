@@ -9,6 +9,9 @@ export const CONFIGURABLE_SIDEBAR_MENU_KEYS = [
   'security_management',
   'quality_management',
   'archive_management',
+  'technical_management',
+  'contract_risk_management',
+  'operations_management',
 ] as const
 
 export type ConfigurableSidebarMenuKey = (typeof CONFIGURABLE_SIDEBAR_MENU_KEYS)[number]
@@ -17,16 +20,8 @@ export type ProjectSidebarMenuTab = ConfigurableSidebarMenuKey | 'customize_menu
 
 export const PROJECT_SIDEBAR_CUSTOM_TAB: ProjectSidebarMenuTab = 'customize_menu'
 
-/** Phase 1: only cost/schedule dashboards are implemented; hide other tabs by default. */
-export const PLACEHOLDER_SIDEBAR_MENU_KEYS: ConfigurableSidebarMenuKey[] = [
-  'all_projects',
-  'urgent_tasks',
-  'key_projects',
-  'resource_management',
-  'security_management',
-  'quality_management',
-  'archive_management',
-]
+/** Vertical domain menus are available; users can still hide them via customize. */
+export const PLACEHOLDER_SIDEBAR_MENU_KEYS: ConfigurableSidebarMenuKey[] = []
 
 export const SIDEBAR_MENU_I18N_KEY: Record<ConfigurableSidebarMenuKey, string> = {
   all_projects: 'projectManagerPage.sidebar.allProjects',
@@ -38,6 +33,9 @@ export const SIDEBAR_MENU_I18N_KEY: Record<ConfigurableSidebarMenuKey, string> =
   security_management: 'projectManagerPage.sidebar.securityManagement',
   quality_management: 'projectManagerPage.sidebar.qualityManagement',
   archive_management: 'projectManagerPage.sidebar.archiveManagement',
+  technical_management: 'projectManagerPage.sidebar.technicalManagement',
+  contract_risk_management: 'projectManagerPage.sidebar.contractRiskManagement',
+  operations_management: 'projectManagerPage.sidebar.operationsManagement',
 }
 
 export const PANEL_SUBTITLE_I18N_KEY: Record<ConfigurableSidebarMenuKey, string> = {
@@ -50,6 +48,9 @@ export const PANEL_SUBTITLE_I18N_KEY: Record<ConfigurableSidebarMenuKey, string>
   security_management: 'projectManagerPage.panel.subtitles.securityManagement',
   quality_management: 'projectManagerPage.panel.subtitles.qualityManagement',
   archive_management: 'projectManagerPage.panel.subtitles.archiveManagement',
+  technical_management: 'projectManagerPage.panel.subtitles.technicalManagement',
+  contract_risk_management: 'projectManagerPage.panel.subtitles.contractRiskManagement',
+  operations_management: 'projectManagerPage.panel.subtitles.operationsManagement',
 }
 
 export const isConfigurableSidebarMenuKey = (

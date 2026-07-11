@@ -4,6 +4,10 @@ import {
 } from './agent-link.js'
 import { buildEpcPortfolioAggregates } from './epc-aggregates.js'
 import { MOCK_EPC_PROJECTS, formatProjectMoney, type EpcProjectRecord } from './epc-mock.js'
+import {
+  buildPmAgentPortfolioSummary,
+  type PmAgentSnapshot,
+} from './pm-agent-snapshot.js'
 
 function formatEpcStatus(status: EpcProjectRecord['status']): string {
   switch (status) {
@@ -61,18 +65,54 @@ export function buildProjectManagementAssistantSystemPrompt(): string {
   ].join('\n')
 }
 
-export function buildProjectManagementRuntimeHint(tab: ProjectManagementAgentTab): string {
+export function buildProjectManagementRuntimeHint(
+  tab: ProjectManagementAgentTab,
+  snapshot?: PmAgentSnapshot | null,
+): string {
   const sessionTitle = PROJECT_MANAGEMENT_AGENT_SESSION_TITLES[tab]
-  const focus =
-    tab === 'cost_management'
-      ? '合同、结算、待支付、成本偏差与付款节奏'
-      : '进度、里程碑、计划阶段、周期与滞后风险'
+  const portfolioSummary = snapshot
+    ? buildPmAgentPortfolioSummary(snapshot)
+    : buildEpcPortfolioSummary(tab)
+  const dataSourceNote = snapshot
+    ? '下方为 Toolman 工作区 SQLite 中的项目与工作项快照。'
+    : '下方为 Toolman 成本/计划看板演示快照（MOCK 数据）。'
+
+  if (tab === 'cost_management' || tab === 'progress_management') {
+    const focus =
+      tab === 'cost_management'
+        ? '合同、结算、待支付、成本偏差与付款节奏'
+        : '进度、里程碑、计划阶段、周期、依赖关系与滞后风险'
+
+    return [
+      '## 项目管理（EPC）工作上下文',
+      `当前话题：${sessionTitle}。优先围绕 ${focus} 作答。`,
+      dataSourceNote,
+      portfolioSummary,
+      '若用户上传 Excel/Word 或要求生成报表，可使用已启用的 MCP 工具处理工作目录中的项目文件。',
+    ].join('\n\n')
+  }
+
+  const focusByTab: Partial<Record<ProjectManagementAgentTab, string>> = {
+    all_projects: '跨项目工作台总览、重点项目状态与快捷跟进',
+    urgent_tasks: '待办、预警、逾期与高优先级事项的梳理与推进',
+    key_projects: '重点项目组合管理与综合协调',
+    resource_management: '人力、设备与物料资源的计划与调配',
+    security_management: '安全质量检查、隐患整改与验收闭环',
+    quality_management: '测量试验记录、检测数据与质量验收',
+    archive_management: '项目档案归档、检索与交付文档管理',
+    technical_management: '技术方案、设计变更与技术评审闭环',
+    contract_risk_management: '合同履约、索赔与合约风险管控',
+    operations_management: '运营运维、SLA 与日常运营事项推进',
+  }
+
+  const focus = focusByTab[tab] ?? '当前项目管理分栏的业务目标与执行事项'
 
   return [
-    '## 项目管理（EPC）工作上下文',
+    '## 项目管理工作上下文',
     `当前话题：${sessionTitle}。优先围绕 ${focus} 作答。`,
-    '下方为 Toolman 成本/计划看板当前快照（MOCK 演示数据；正式 EPC 引擎接入后会替换为实时数据）。',
-    buildEpcPortfolioSummary(tab),
-    '若用户上传 Excel/Word 或要求生成报表，可使用已启用的 MCP 工具处理工作目录中的项目文件。',
+    dataSourceNote,
+    portfolioSummary,
+    '可结合工作区中的项目数据库、工作项与文件协助用户整理计划、任务与文档。',
+    '涉及表格或报告时，可使用已启用的 Excel / DOCX MCP 工具处理工作目录文件。',
   ].join('\n\n')
 }
