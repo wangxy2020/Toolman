@@ -258,6 +258,49 @@ describe('formatPmPlanAsMarkdownTable', () => {
     expect(presented).not.toContain('"wbs"')
     expect(presented).not.toMatch(/\| 1 \| 理解/)
   })
+
+  it('does not use schedule-adjustment prose as the project root title', () => {
+    const prose = '已检查各任务间逻辑关系，移除多项不必要的滞后量，调整如下'
+    const source = [
+      prose,
+      '',
+      '```json',
+      JSON.stringify({
+        projectPlan: { planStart: '2026-08-01', planFinish: '2027-09-01', durationDays: 397 },
+        wbs: [
+          {
+            title: '一、施工准备与拆除',
+            durationDays: 50,
+            startDate: '2026-08-01',
+            dueDate: '2026-09-19',
+          },
+        ],
+      }),
+      '```',
+    ].join('\n')
+    const presented = presentPmPlanMarkdownForDisplay(source, {
+      fallbackProjectName: 'PRJ-2601 · Toolman项目1',
+    })
+    expect(presented).toContain('| 1 | PRJ-2601 · Toolman项目1 |')
+    expect(presented).not.toMatch(new RegExp(`\\| 1 \\| ${prose}`))
+    expect(presented).toMatch(/\| :---: \| --- \| :---: \|/)
+  })
+
+  it('rejects implausible projectName values from JSON', () => {
+    const presented = presentPmPlanMarkdownForDisplay(
+      [
+        '```json',
+        JSON.stringify({
+          projectName: '已检查各任务间逻辑关系，调整如下',
+          projectPlan: { planStart: '2026-08-01', planFinish: '2026-08-10', durationDays: 10 },
+          wbs: [{ title: '进场', durationDays: 10, startDate: '2026-08-01', dueDate: '2026-08-10' }],
+        }),
+        '```',
+      ].join('\n'),
+    )
+    expect(presented).toContain('| 1 | 项目 |')
+    expect(presented).not.toContain('已检查各任务间逻辑关系')
+  })
 })
 
 describe('buildPmNewProjectBriefMessage', () => {

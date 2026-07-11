@@ -564,6 +564,9 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
             agentKickoffProject={agentKickoffProject}
             onAgentKickoffConsumed={() => setAgentKickoffProject(null)}
             onPlanApplied={handlePlanApplied}
+            onProjectsChange={async () => {
+              await reloadProjects()
+            }}
             {...agentContext!}
           />
         </AgentKeepAliveRoot>
@@ -584,8 +587,8 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
             projects={projects}
             selectedProjectId={selectedProjectId}
             dataRevision={ganttDataRevision}
-            onProjectsChange={() => {
-              void reloadProjects()
+            onProjectsChange={async () => {
+              await reloadProjects()
             }}
             onRequestNewProject={() => openCreateProjectDialog(false)}
           />

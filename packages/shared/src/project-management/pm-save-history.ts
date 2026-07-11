@@ -4,14 +4,56 @@ export const PM_LAST_SAVED_AT_KEY = 'lastSavedAt'
 export const PM_SAVE_HISTORY_KEY = 'saveHistory'
 /** Set by agent plan/schedule apply; cleared on next Gantt save that bumps version. */
 export const PM_PENDING_AGENT_REVISION_KEY = 'pendingAgentScheduleRevision'
+/** Durable fingerprints of agent plans already applied to this project (survives restart). */
+export const PM_APPLIED_PLAN_RECEIPTS_KEY = 'appliedPlanReceipts'
 
 export const PM_SAVE_HISTORY_MAX = 10
+export const PM_APPLIED_PLAN_RECEIPTS_MAX = 20
 
 export type PmScheduleSaveRecord = {
   version: number
   savedAt: number
   workItemCount: number
+  /** Inclusive calendar-day span of the live schedule envelope at save time. */
+  totalDurationDays?: number
   note?: string
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function startOfLocalDayMs(ms: number): number {
+  const date = new Date(ms)
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+/**
+ * Inclusive calendar-day span across work-item start/due dates.
+ * Returns null when the schedule has no dated envelope.
+ */
+export function computeScheduleTotalDurationDays(
+  items: ReadonlyArray<{ startDate?: number | null; dueDate?: number | null }>,
+): number | null {
+  let earliest: number | null = null
+  let latest: number | null = null
+  for (const item of items) {
+    if (typeof item.startDate === 'number' && Number.isFinite(item.startDate)) {
+      earliest = earliest == null ? item.startDate : Math.min(earliest, item.startDate)
+    }
+    if (typeof item.dueDate === 'number' && Number.isFinite(item.dueDate)) {
+      latest = latest == null ? item.dueDate : Math.max(latest, item.dueDate)
+    }
+  }
+  if (earliest == null && latest == null) return null
+  if (earliest == null) earliest = latest
+  if (latest == null) latest = earliest
+  const start = startOfLocalDayMs(earliest!)
+  const finish = startOfLocalDayMs(latest!)
+  return Math.max(1, Math.round((finish - start) / DAY_MS) + 1)
+}
+
+export type PmAppliedPlanReceipt = {
+  fingerprint: string
+  appliedAt: number
 }
 
 function isSaveRecord(value: unknown): value is PmScheduleSaveRecord {
@@ -36,6 +78,17 @@ export function readScheduleVersion(metadata: Record<string, unknown> | null | u
   return 0
 }
 
+/** Highest version number among current pointer and save-history rows. */
+export function readMaxScheduleVersion(
+  metadata: Record<string, unknown> | null | undefined,
+): number {
+  let max = readScheduleVersion(metadata)
+  for (const row of readSaveHistory(metadata)) {
+    if (row.version > max) max = row.version
+  }
+  return max
+}
+
 export function readLastSavedAt(metadata: Record<string, unknown> | null | undefined): number | null {
   const raw = metadata?.[PM_LAST_SAVED_AT_KEY]
   if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return raw
@@ -55,6 +108,11 @@ export function readSaveHistory(
     version: Math.floor(row.version),
     savedAt: row.savedAt,
     workItemCount: Math.max(0, Math.floor(row.workItemCount)),
+    ...(typeof row.totalDurationDays === 'number' &&
+    Number.isFinite(row.totalDurationDays) &&
+    row.totalDurationDays >= 0
+      ? { totalDurationDays: Math.floor(row.totalDurationDays) }
+      : {}),
     ...(typeof row.note === 'string' && row.note.trim() ? { note: row.note.trim() } : {}),
   }))
 }
@@ -62,7 +120,13 @@ export function readSaveHistory(
 export function readPendingAgentScheduleRevision(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {
-  return metadata?.[PM_PENDING_AGENT_REVISION_KEY] === true
+  const raw = metadata?.[PM_PENDING_AGENT_REVISION_KEY]
+  if (raw === true || raw === 1) return true
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase()
+    return normalized === 'true' || normalized === '1' || normalized === 'yes'
+  }
+  return false
 }
 
 /** Mark that an agent apply landed; the next intentional Save may create a new version. */
@@ -73,6 +137,75 @@ export function markPendingAgentScheduleRevision(
     ...(metadata ?? {}),
     [PM_PENDING_AGENT_REVISION_KEY]: true,
   }
+}
+
+function isAppliedPlanReceipt(value: unknown): value is PmAppliedPlanReceipt {
+  if (value == null || typeof value !== 'object') return false
+  const row = value as Record<string, unknown>
+  return (
+    typeof row.fingerprint === 'string' &&
+    row.fingerprint.length > 0 &&
+    typeof row.appliedAt === 'number' &&
+    Number.isFinite(row.appliedAt)
+  )
+}
+
+export function readAppliedPlanReceipts(
+  metadata: Record<string, unknown> | null | undefined,
+): PmAppliedPlanReceipt[] {
+  const raw = metadata?.[PM_APPLIED_PLAN_RECEIPTS_KEY]
+  if (!Array.isArray(raw)) return []
+  return raw.filter(isAppliedPlanReceipt).map((row) => ({
+    fingerprint: row.fingerprint,
+    appliedAt: row.appliedAt,
+  }))
+}
+
+/** True when this fingerprint was already applied to the project (survives restart). */
+export function hasAppliedPlanFingerprint(
+  metadata: Record<string, unknown> | null | undefined,
+  fingerprint: string,
+): boolean {
+  if (!fingerprint) return false
+  return readAppliedPlanReceipts(metadata).some((row) => row.fingerprint === fingerprint)
+}
+
+/** Prepend a receipt; dedupe by fingerprint; cap list length. */
+export function upsertAppliedPlanReceipt(
+  metadata: Record<string, unknown> | null | undefined,
+  fingerprint: string,
+  appliedAt: number = Date.now(),
+): Record<string, unknown> {
+  const base = { ...(metadata ?? {}) }
+  const trimmed = fingerprint.trim()
+  if (!trimmed) return base
+  const next: PmAppliedPlanReceipt[] = [
+    { fingerprint: trimmed, appliedAt },
+    ...readAppliedPlanReceipts(base).filter((row) => row.fingerprint !== trimmed),
+  ].slice(0, PM_APPLIED_PLAN_RECEIPTS_MAX)
+  return {
+    ...base,
+    [PM_APPLIED_PLAN_RECEIPTS_KEY]: next,
+  }
+}
+
+/**
+ * Decide apply-bar action for the current assistant plan fingerprint.
+ * - goToGantt: already applied (do not clearExisting)
+ * - reapply: new plan on a project that already has live data / prior applies
+ * - confirm: first apply onto empty / fresh target
+ */
+export type PmPlanApplyAction = 'goToGantt' | 'confirm' | 'reapply'
+
+export function resolvePmPlanApplyAction(options: {
+  fingerprint: string
+  fingerprintAlreadyApplied: boolean
+  hasLiveWorkItems: boolean
+  hasAnyPriorReceipt: boolean
+}): PmPlanApplyAction {
+  if (options.fingerprintAlreadyApplied) return 'goToGantt'
+  if (options.hasLiveWorkItems || options.hasAnyPriorReceipt) return 'reapply'
+  return 'confirm'
 }
 
 /**
@@ -87,6 +220,8 @@ export function buildScheduleSaveMetadata(
   metadata: Record<string, unknown> | null | undefined,
   options: {
     workItemCount: number
+    /** Inclusive calendar days for the project schedule envelope. */
+    totalDurationDays?: number
     savedAt?: number
     note?: string
     /** Override auto detection from pending agent flag. */
@@ -96,6 +231,10 @@ export function buildScheduleSaveMetadata(
   const base = { ...(metadata ?? {}) }
   const savedAt = options.savedAt ?? Date.now()
   const workItemCount = Math.max(0, Math.floor(options.workItemCount))
+  const totalDurationDays =
+    options.totalDurationDays != null && Number.isFinite(options.totalDurationDays)
+      ? Math.max(0, Math.floor(options.totalDurationDays))
+      : undefined
   const shouldBump =
     options.bumpVersion ?? readPendingAgentScheduleRevision(base)
 
@@ -103,11 +242,14 @@ export function buildScheduleSaveMetadata(
   base[PM_PENDING_AGENT_REVISION_KEY] = false
 
   if (shouldBump) {
-    const nextVersion = readScheduleVersion(base) + 1
+    // After restoring an older version, current+1 may collide with a newer
+    // history entry (e.g. on v2 while v3 still exists). Always allocate past max.
+    const nextVersion = readMaxScheduleVersion(base) + 1
     const entry: PmScheduleSaveRecord = {
       version: nextVersion,
       savedAt,
       workItemCount,
+      ...(totalDurationDays != null ? { totalDurationDays } : {}),
     }
     if (options.note?.trim()) entry.note = options.note.trim()
 
@@ -129,6 +271,11 @@ export function buildScheduleSaveMetadata(
       version: currentVersion,
       savedAt,
       workItemCount,
+      ...(totalDurationDays != null
+        ? { totalDurationDays }
+        : index >= 0 && history[index]?.totalDurationDays != null
+          ? { totalDurationDays: history[index]!.totalDurationDays }
+          : {}),
       ...(options.note?.trim()
         ? { note: options.note.trim() }
         : index >= 0 && history[index]?.note
@@ -148,4 +295,147 @@ export function buildScheduleSaveMetadata(
     [PM_LAST_SAVED_AT_KEY]: savedAt,
     ...(currentVersion > 0 ? { [PM_SAVE_HISTORY_KEY]: history } : {}),
   }
+}
+
+/**
+ * Parse schedule version from auto-named version baselines (`版本 2` / `Version 2`).
+ * Returns null when the name is a manual capture baseline.
+ */
+export function parseVersionFromBaselineName(name: string): number | null {
+  const trimmed = name.trim()
+  const match = /^(?:版本|version)\s*(\d+)\s*$/i.exec(trimmed)
+  if (!match) return null
+  const version = Number.parseInt(match[1]!, 10)
+  return Number.isFinite(version) && version > 0 ? version : null
+}
+
+export function isVersionBaselineName(name: string): boolean {
+  return parseVersionFromBaselineName(name) != null
+}
+
+/**
+ * Keep one baseline per schedule version (newest first). Manual capture baselines are kept as-is.
+ * Input should already be sorted newest → oldest.
+ */
+export function dedupeVersionBaselines<T extends { id: string; name: string }>(
+  baselines: readonly T[],
+): T[] {
+  const seenVersions = new Set<number>()
+  const result: T[] = []
+  for (const baseline of baselines) {
+    const version = parseVersionFromBaselineName(baseline.name)
+    if (version != null) {
+      if (seenVersions.has(version)) continue
+      seenVersions.add(version)
+    }
+    result.push(baseline)
+  }
+  return result
+}
+
+/** Ids of older duplicate version baselines to remove (keeps newest per version). */
+export function findDuplicateVersionBaselineIds(
+  baselines: ReadonlyArray<{ id: string; name: string }>,
+): string[] {
+  const seenVersions = new Set<number>()
+  const duplicateIds: string[] = []
+  for (const baseline of baselines) {
+    const version = parseVersionFromBaselineName(baseline.name)
+    if (version == null) continue
+    if (seenVersions.has(version)) duplicateIds.push(baseline.id)
+    else seenVersions.add(version)
+  }
+  return duplicateIds
+}
+
+type BaselineCompareItem = {
+  workItemId: string
+  title: string
+  startDate?: number | null
+  dueDate?: number | null
+  progressPercent?: number | null
+}
+
+type WorkItemCompareItem = {
+  id: string
+  title: string
+  startDate?: number | null
+  dueDate?: number | null
+  progressPercent?: number | null
+}
+
+/**
+ * After agent clearExisting, most snapshot UUIDs are gone — rebuild the tree
+ * instead of no-op patching by id.
+ */
+export function shouldStructurallyRestoreBaseline(
+  missingCount: number,
+  snapshotCount: number,
+): boolean {
+  return snapshotCount > 0 && missingCount >= Math.ceil(snapshotCount * 0.5)
+}
+
+/** Diff a baseline snapshot against current work items (title / dates / progress). */
+export function countBaselineSnapshotChanges(
+  snapshotItems: readonly BaselineCompareItem[],
+  currentItems: readonly WorkItemCompareItem[],
+): { changed: number; unchanged: number; missing: number } {
+  const byId = new Map(currentItems.map((item) => [item.id, item]))
+  let changed = 0
+  let unchanged = 0
+  let missing = 0
+  for (const entry of snapshotItems) {
+    const current = byId.get(entry.workItemId)
+    if (!current) {
+      missing += 1
+      continue
+    }
+    const sameTitle = current.title === entry.title
+    const sameStart = (current.startDate ?? null) === (entry.startDate ?? null)
+    const sameDue = (current.dueDate ?? null) === (entry.dueDate ?? null)
+    const sameProgress =
+      (current.progressPercent ?? 0) === (entry.progressPercent ?? 0)
+    if (sameTitle && sameStart && sameDue && sameProgress) unchanged += 1
+    else changed += 1
+  }
+  return { changed, unchanged, missing }
+}
+
+/** True when snapshot exists and matches every current work item field it covers. */
+export function isBaselineSnapshotIdenticalToItems(
+  snapshotItems: readonly BaselineCompareItem[],
+  currentItems: readonly WorkItemCompareItem[],
+): boolean {
+  if (snapshotItems.length === 0) return false
+  const { changed, missing } = countBaselineSnapshotChanges(snapshotItems, currentItems)
+  return changed === 0 && missing === 0
+}
+
+/**
+ * Remove one save-history entry. If it was the current version, fall back to the
+ * newest remaining history entry (or 0 when history is empty).
+ */
+export function removeSaveHistoryEntry(
+  metadata: Record<string, unknown> | null | undefined,
+  version: number,
+): Record<string, unknown> {
+  const base = { ...(metadata ?? {}) }
+  const target = Math.floor(version)
+  const history = readSaveHistory(base).filter((row) => row.version !== target)
+  const currentVersion = readScheduleVersion(base)
+  const nextVersion =
+    currentVersion === target ? (history[0]?.version ?? 0) : currentVersion
+  const nextLastSavedAt =
+    currentVersion === target
+      ? (history[0]?.savedAt ?? null)
+      : readLastSavedAt(base)
+
+  const next: Record<string, unknown> = {
+    ...base,
+    [PM_SCHEDULE_VERSION_KEY]: nextVersion,
+    [PM_SAVE_HISTORY_KEY]: history,
+  }
+  if (nextLastSavedAt != null) next[PM_LAST_SAVED_AT_KEY] = nextLastSavedAt
+  else delete next[PM_LAST_SAVED_AT_KEY]
+  return next
 }

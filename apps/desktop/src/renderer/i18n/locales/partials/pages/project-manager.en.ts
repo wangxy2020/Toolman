@@ -38,7 +38,12 @@ export const projectManagerPageEn = {
     applyPlan: 'Confirm and create plan ({{count}} items)',
     applyPlanSuccess: 'Created {{count}} work items ({{relations}} links)',
     applyConfirm: 'Confirm',
+    applyReapply: 'Re-apply',
     applyGoToGantt: 'Open Gantt',
+    applyOverwriteConfirm:
+      'Apply the agent plan to “{{name}}”? This clears and overwrites the current Gantt tasks and dependencies.',
+    applyReapplyConfirm:
+      'A newer agent plan is available. Re-applying to “{{name}}” will clear and overwrite the current Gantt (a protective version snapshot is saved first when possible). Continue?',
     applyNameConflictConfirm:
       'Project "{{name}}" already exists. Clear its work items and rebuild the plan?',
     applyCancelled: 'Apply cancelled',
@@ -333,6 +338,20 @@ export const projectManagerPageEn = {
     loading: 'Loading schedule view…',
     captureBaseline: 'Capture baseline',
     baselineSelect: 'Compare baseline',
+    baselineCompareNone: 'No comparison',
+    baselineEmpty: 'No baselines yet — capture one or save a new version',
+    versionSwitch: 'Switch version',
+    versionSwitchEmpty: 'No switchable versions yet (appear after saving a new version)',
+    versionSwitchNoSnapshot:
+      'This version has no historical snapshot and cannot be restored',
+    versionSwitchNoSnapshotShort: 'No snapshot',
+    switchToVersion: 'Switch to {{name}}',
+    restoreBaselineTitle: 'Switch schedule version',
+    restoreBaselineConfirm:
+      'Restore task dates, progress, and titles from “{{name}}”. Task structure will not be rebuilt. Continue?',
+    restoreBaselineConfirmLabel: 'Switch',
+    restoreBaselineSuccess:
+      'Switched to “{{name}}” ({{updated}} changed, {{missing}} missing skipped)',
     deleteBaseline: 'Delete baseline',
     askAi: 'Ask AI',
     aiWbsPrompt: 'Suggest WBS child tasks with start/end dates for the selected project schedule.',
@@ -396,6 +415,8 @@ export const projectManagerPageEn = {
     saveSuccess: 'Schedule saved',
     saveSuccessNewVersion: 'Schedule saved (new version {{version}})',
     saveSuccessUpdated: 'Schedule saved (version {{version}} updated)',
+    versionBaselineName: 'Version {{version}}',
+    versionBaselineCreateFailed: 'Version saved, but baseline snapshot failed: {{detail}}',
     statusBar: {
       ready: 'Ready · {{count}} work items',
       selected: 'Selected: {{title}}',
@@ -561,6 +582,15 @@ export const projectManagerPageEn = {
     saveHistoryEmpty: 'No save records yet',
     saveHistoryVersion: 'Version {{version}}',
     saveHistoryTasks: '{{count}} work items',
+    saveHistoryDuration: '{{days}} days',
+    saveHistoryColVersion: 'Version',
+    saveHistoryColSavedAt: 'Saved at',
+    saveHistoryColDuration: 'Duration',
+    saveHistoryColTasks: 'Work items',
+    saveHistoryColActions: 'Actions',
+    saveHistoryCurrent: 'Current',
+    saveHistoryDeleteConfirm:
+      'Delete save record “Version {{version}}”? Matching version baselines will also be removed.',
     statusPlanning: 'Planning',
     statusActive: 'Active',
     statusOnHold: 'On hold',

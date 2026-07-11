@@ -23,8 +23,34 @@ function extractTextContent(node: ReactNode): string {
 const SERIAL_COLUMN_PATTERN = /^(序号|编号|序|no\.?|#|index|id)$/
 const QUANTITY_COLUMN_PATTERN = /^(数量|数目|个数|件数|qty|quantity|count)$/
 
+/** Progress-plan WBS table emitted by the plan agent. */
+export function isPmPlanTableHeaders(headers: string[]): boolean {
+  const normalized = headers.map((header) => normalizeHeaderLabel(header))
+  return (
+    normalized.some((header) => header.includes('层级')) &&
+    normalized.some((header) => header.includes('任务名称') || header.includes('任务名'))
+  )
+}
+
 export function getCenterAlignedColumnIndexes(headers: string[]): Set<number> {
   const normalized = headers.map((header) => normalizeHeaderLabel(header))
+
+  if (isPmPlanTableHeaders(headers)) {
+    const indexes = new Set<number>()
+    normalized.forEach((header, index) => {
+      if (
+        header.includes('层级') ||
+        header.includes('工期') ||
+        header.includes('开始') ||
+        header.includes('完成') ||
+        header.includes('结束')
+      ) {
+        indexes.add(index)
+      }
+    })
+    return indexes
+  }
+
   const hasSerial = normalized.some((header) => SERIAL_COLUMN_PATTERN.test(header))
   const hasQuantity = normalized.some((header) => QUANTITY_COLUMN_PATTERN.test(header))
   if (!hasSerial || !hasQuantity) return new Set()
@@ -67,9 +93,9 @@ export function MarkdownTable({
   children,
   ...props
 }: React.TableHTMLAttributes<HTMLTableElement> & { children?: ReactNode }) {
-  const centerColumns = useMemo(() => getCenterAlignedColumnIndexes(extractTableHeaders(children)), [
-    children,
-  ])
+  const headers = useMemo(() => extractTableHeaders(children), [children])
+  const centerColumns = useMemo(() => getCenterAlignedColumnIndexes(headers), [headers])
+  const isPmPlan = useMemo(() => isPmPlanTableHeaders(headers), [headers])
   const columnRef = useRef(0)
   const contextValue = useMemo(
     () => ({
@@ -83,11 +109,12 @@ export function MarkdownTable({
   )
 
   return (
-    <div className="tm-md-table-wrap">
+    <div className={isPmPlan ? 'tm-md-table-wrap tm-md-table-wrap--pm-plan' : 'tm-md-table-wrap'}>
       <MarkdownTableContext.Provider value={contextValue}>
         <table
           className={[
             'tm-md-table',
+            isPmPlan ? 'tm-md-table--pm-plan' : '',
             centerColumns.size > 0 ? 'tm-md-table--has-center-cols' : '',
           ]
             .filter(Boolean)

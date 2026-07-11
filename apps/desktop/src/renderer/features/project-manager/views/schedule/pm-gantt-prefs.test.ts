@@ -37,9 +37,10 @@ describe('pm-gantt-prefs', () => {
     ])
   })
 
-  it('lets the name column absorb leftover width without an add-column track', () => {
+  it('keeps a fixed name width in split gantt view (no content-driven resize)', () => {
     const template = buildGridTemplateColumns(['index', 'name'])
-    expect(template).toBe(['48px', 'minmax(160px, 1fr)'].join(' '))
+    expect(template).toBe(['48px', '220px'].join(' '))
+    expect(template).not.toContain('1fr')
     expect(template).not.toContain('36px')
   })
 

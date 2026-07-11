@@ -32,6 +32,14 @@ export function rowToPmScheduleBaseline(row: PmScheduleBaselineRow): PmScheduleB
   })
 }
 
+function tryRowToPmScheduleBaseline(row: PmScheduleBaselineRow): PmScheduleBaseline | null {
+  try {
+    return rowToPmScheduleBaseline(row)
+  } catch {
+    return null
+  }
+}
+
 export interface CreatePmScheduleBaselineInput {
   workspaceId: string
   projectId: string
@@ -61,7 +69,8 @@ export class PmScheduleBaselineRepository {
       )
       .orderBy(desc(pmScheduleBaselines.createdAt))
       .all()
-      .map(rowToPmScheduleBaseline)
+      .map(tryRowToPmScheduleBaseline)
+      .filter((entry): entry is PmScheduleBaseline => entry != null)
   }
 
   create(input: CreatePmScheduleBaselineInput): PmScheduleBaseline {
@@ -90,6 +99,22 @@ export class PmScheduleBaselineRepository {
       .where(eq(pmScheduleBaselines.id, id))
       .run()
     return true
+  }
+
+  /** Replace snapshot contents in place (keeps id / createdAt). */
+  updateSnapshot(id: string, snapshot: PmScheduleBaselineSnapshot): PmScheduleBaseline | null {
+    const row = this.db.select().from(pmScheduleBaselines).where(eq(pmScheduleBaselines.id, id)).get()
+    if (!row || row.deletedAt) return null
+    const now = new Date()
+    this.db
+      .update(pmScheduleBaselines)
+      .set({
+        snapshotJson: JSON.stringify(snapshot),
+        updatedAt: now,
+      })
+      .where(eq(pmScheduleBaselines.id, id))
+      .run()
+    return this.getById(id)
   }
 
   upsertFromSync(baseline: PmScheduleBaseline): PmScheduleBaseline {

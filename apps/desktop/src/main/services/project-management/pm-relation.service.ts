@@ -18,29 +18,9 @@ function getWorkItemRepo(): PmWorkItemRepository {
 
 export function listPmRelations(input: unknown) {
   const data = PmRelationListInputSchema.parse(input)
-  // Repair missing demo FS links (e.g. review → critical) even when other relations exist.
+  // Repair missing demo FS links for seeded mock projects only (seedKey metadata).
   ensurePmDemoRelationsForProject(data.workspaceId, data.projectId)
-  const relationRepo = getRelationRepo()
-  let relations = relationRepo.listByProject(data.projectId, data.workspaceId)
-
-  if (relations.length === 0) {
-    const items = getWorkItemRepo()
-      .list({ workspaceId: data.workspaceId, projectId: data.projectId, limit: 1000 })
-      .filter((item) => item.domain === 'progress_management' && item.type !== 'wbs_node')
-      .sort((left, right) => left.sortOrder - right.sortOrder)
-
-    for (let index = 0; index < items.length - 1; index += 1) {
-      const created = relationRepo.create({
-        workspaceId: data.workspaceId,
-        projectId: data.projectId,
-        fromWorkItemId: items[index]!.id,
-        toWorkItemId: items[index + 1]!.id,
-        type: 'FS',
-      })
-      relations.push(created)
-    }
-  }
-
+  const relations = getRelationRepo().listByProject(data.projectId, data.workspaceId)
   return { relations }
 }
 

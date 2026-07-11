@@ -9719,6 +9719,37 @@ html.theme-dark .tm-dedup-error {
   text-align: center;
 }
 
+/* Plan-agent WBS table: shrink to content, keep outline/dates on one line. */
+.tm-md-table-wrap--pm-plan {
+  max-width: 100%;
+}
+
+.tm-md-table--pm-plan {
+  width: max-content;
+  max-width: 100%;
+  table-layout: auto;
+}
+
+.tm-md-table--pm-plan th,
+.tm-md-table--pm-plan td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.tm-md-table--pm-plan th:nth-child(2),
+.tm-md-table--pm-plan td:nth-child(2) {
+  white-space: normal;
+  min-width: 10em;
+  max-width: 28em;
+  text-align: left;
+}
+
+.tm-md-table--pm-plan th:nth-child(6),
+.tm-md-table--pm-plan td:nth-child(6) {
+  white-space: nowrap;
+  text-align: left;
+}
+
 .tm-md-code-block {
   margin: 0.75em 0;
   border: 1px solid var(--tm-border);

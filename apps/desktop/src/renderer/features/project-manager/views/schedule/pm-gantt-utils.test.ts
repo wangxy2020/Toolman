@@ -257,4 +257,32 @@ describe('withGanttProjectRootItems', () => {
     expect(view[0]?.progressPercent).toBe(25)
     expect(view.slice(1).every((entry) => entry.parentId === GANTT_PROJECT_ROOT_ID)).toBe(true)
   })
+
+  it('uses live task envelope for root duration, not pinned planFinish', () => {
+    const project = {
+      id: '550e8400-e29b-41d4-a716-446655440001',
+      workspaceId: '00000000-0000-0000-0000-000000000002',
+      code: 'EPC-1',
+      name: 'Demo',
+      status: 'active' as const,
+      domain: 'progress_management' as const,
+      metadata: {
+        planStartDate: '2026-01-01',
+        planFinishDate: '2026-12-31',
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const tasks = [
+      item({
+        id: '550e8400-e29b-41d4-a716-446655440011',
+        title: 'A',
+        startDate: Date.parse('2026-03-01T00:00:00'),
+        dueDate: Date.parse('2026-03-10T00:00:00'),
+      }),
+    ]
+    const view = withGanttProjectRootItems(project, tasks)
+    expect(view[0]?.startDate).toBe(Date.parse('2026-03-01T00:00:00'))
+    expect(view[0]?.dueDate).toBe(Date.parse('2026-03-10T00:00:00'))
+  })
 })

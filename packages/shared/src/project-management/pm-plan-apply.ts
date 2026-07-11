@@ -176,6 +176,92 @@ function escapeMarkdownTableCell(value: string): string {
   return value.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim()
 }
 
+/** Reject assistant prose / instructions that are not project titles. */
+export function isPlausiblePmProjectName(name: string): boolean {
+  const cleaned = name.trim()
+  if (cleaned.length < 2 || cleaned.length > 80) return false
+  if (/[。；！？]/.test(cleaned)) return false
+  if (/如下\s*[:：]?$/.test(cleaned)) return false
+  if (/[，、：:]/.test(cleaned)) return false
+  if (
+    /(检查|移除|调整|滞后|逻辑关系|缩短|增加|重构|补充|生成|输出|表格|如下)/.test(cleaned)
+  ) {
+    return false
+  }
+  if (
+    /^(请|将|我|既然|理解|已检查|基于|现在|下面|根据|可以|需要|不要|任务|先|再|接着)/.test(
+      cleaned,
+    )
+  ) {
+    return false
+  }
+  return true
+}
+
+function readProjectNameFromParsed(parsed: unknown): string | undefined {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+  const record = parsed as Record<string, unknown>
+  for (const key of ['projectName', 'name', 'projectTitle'] as const) {
+    const value = record[key]
+    if (typeof value === 'string' && isPlausiblePmProjectName(value)) return value.trim()
+  }
+  const projectPlan = record.projectPlan
+  if (projectPlan && typeof projectPlan === 'object' && !Array.isArray(projectPlan)) {
+    const name = (projectPlan as Record<string, unknown>).name
+    if (typeof name === 'string' && isPlausiblePmProjectName(name)) return name.trim()
+  }
+  return undefined
+}
+
+/** Infer a project title from prose around a plan JSON block. */
+export function inferPmPlanProjectNameFromText(textBefore: string): string | undefined {
+  const lines = textBefore
+    .split('\n')
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^#+\s*/, '')
+        .replace(/\*\*/g, '')
+        .replace(/^["「]|["」]$/g, ''),
+    )
+    .filter(Boolean)
+
+  const candidates: string[] = []
+  for (const line of lines) {
+    if (/^```/.test(line)) continue
+    if (/^(json|output|wbs)\b/i.test(line)) continue
+    if (/^[{\[]/.test(line)) continue
+    const cleaned = line
+      .replace(/\s*[\(（]?JSON\s*Output[\)）]?\s*$/i, '')
+      .replace(/\s*[:：]\s*$/, '')
+      .trim()
+    if (!isPlausiblePmProjectName(cleaned)) continue
+    candidates.push(cleaned)
+  }
+
+  if (candidates.length === 0) return undefined
+
+  const preferred =
+    [...candidates]
+      .reverse()
+      .find(
+        (line) =>
+          /^PRJ[-_]?\w+/i.test(line) ||
+          /项目\d*$/.test(line) ||
+          /项目/.test(line) ||
+          /施工进度计划/.test(line),
+      ) ?? [...candidates].reverse().find((line) => line.length <= 40)
+
+  if (!preferred) return undefined
+  // "PRJ-2602 施工进度计划" → keep; strip trailing generic suffix noise only when code present
+  const codeMatch = preferred.match(/^(PRJ[-_]?\w+)\s*[·\-—_]?\s*(.+)$/i)
+  if (codeMatch?.[1] && codeMatch[2] && /进度计划|施工计划/.test(codeMatch[2])) {
+    // Prefer bare project label if the rest is just "施工进度计划"
+    return preferred.replace(/\s*施工进度计划.*$/, '').trim() || preferred
+  }
+  return preferred
+}
+
 /** Outline depth from parentTitle chain (roots = 0). Parent must appear earlier in the list. */
 export function resolvePmWbsOutlineDepths(wbs: PmWbsSuggestion[]): number[] {
   const depthByTitle = new Map<string, number>()
@@ -250,55 +336,6 @@ function resolvePlanDateRange(plan: PmParsedPlanFromText): {
   }
 }
 
-/** Infer a project title from prose around a plan JSON block. */
-export function inferPmPlanProjectNameFromText(textBefore: string): string | undefined {
-  const lines = textBefore
-    .split('\n')
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^#+\s*/, '')
-        .replace(/\*\*/g, '')
-        .replace(/^["「]|["」]$/g, ''),
-    )
-    .filter(Boolean)
-
-  const candidates: string[] = []
-  for (const line of lines) {
-    if (/^```/.test(line)) continue
-    if (/^(json|output|wbs)\b/i.test(line)) continue
-    if (/^[{\[]/.test(line)) continue
-    const cleaned = line
-      .replace(/\s*[\(（]?JSON\s*Output[\)）]?\s*$/i, '')
-      .replace(/\s*[:：]\s*$/, '')
-      .trim()
-    if (cleaned.length < 2 || cleaned.length > 80) continue
-    // Skip assistant prose / sentences — not project titles.
-    if (/[。；！？]/.test(cleaned)) continue
-    if (/^(请|将|我|既然|理解|任务|基于|现在|下面|根据|可以|需要|不要)/.test(cleaned)) {
-      continue
-    }
-    candidates.push(cleaned)
-  }
-
-  if (candidates.length === 0) return undefined
-
-  const preferred =
-    [...candidates]
-      .reverse()
-      .find((line) => /^PRJ[-_]?\w+/i.test(line) || /项目\d*$/.test(line) || /施工进度计划/.test(line)) ??
-    [...candidates].reverse().find((line) => line.length <= 40)
-
-  if (!preferred) return undefined
-  // "PRJ-2602 施工进度计划" → keep; strip trailing generic suffix noise only when code present
-  const codeMatch = preferred.match(/^(PRJ[-_]?\w+)\s*[·\-—_]?\s*(.+)$/i)
-  if (codeMatch?.[1] && codeMatch[2] && /进度计划|施工计划/.test(codeMatch[2])) {
-    // Prefer bare project label if the rest is just "施工进度计划"
-    return preferred.replace(/\s*施工进度计划.*$/, '').trim() || preferred
-  }
-  return preferred
-}
-
 export type FormatPmPlanTableOptions = {
   /** Display root row title (project name). */
   projectName?: string
@@ -312,7 +349,8 @@ export function formatPmPlanAsMarkdownTable(
   const { wbs } = plan
   if (wbs.length === 0) return ''
 
-  const projectName = options?.projectName?.trim() || '项目'
+  const rawName = options?.projectName?.trim() || ''
+  const projectName = rawName && isPlausiblePmProjectName(rawName) ? rawName : '项目'
   const range = resolvePlanDateRange(plan)
   const depths = resolvePmWbsOutlineDepths(wbs)
   const counters: number[] = [1]
@@ -340,7 +378,7 @@ export function formatPmPlanAsMarkdownTable(
     `### ${escapeMarkdownTableCell(projectName)}`,
     '',
     '| 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |',
-    '| --- | --- | ---: | --- | --- | --- |',
+    '| :---: | --- | :---: | :---: | :---: | --- |',
     `| 1 | ${escapeMarkdownTableCell(projectName)} | ${range.durationDays} | ${range.startDate} | ${range.dueDate} | — |`,
   ]
 
@@ -361,26 +399,25 @@ export function formatPmPlanAsMarkdownTable(
   return lines.join('\n')
 }
 
-function readProjectNameFromParsed(parsed: unknown): string | undefined {
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
-  const record = parsed as Record<string, unknown>
-  for (const key of ['projectName', 'name', 'projectTitle'] as const) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  const projectPlan = record.projectPlan
-  if (projectPlan && typeof projectPlan === 'object' && !Array.isArray(projectPlan)) {
-    const name = (projectPlan as Record<string, unknown>).name
-    if (typeof name === 'string' && name.trim()) return name.trim()
-  }
-  return undefined
-}
-
 /**
  * Replace WBS JSON (fenced or raw) with a readable markdown table for chat UI.
  * Original message text is unchanged — apply/parse still uses the stored JSON.
  */
-export function presentPmPlanMarkdownForDisplay(text: string): string {
+export function presentPmPlanMarkdownForDisplay(
+  text: string,
+  options?: { fallbackProjectName?: string },
+): string {
+  const fallback =
+    options?.fallbackProjectName?.trim() &&
+    isPlausiblePmProjectName(options.fallbackProjectName)
+      ? options.fallbackProjectName.trim()
+      : undefined
+
+  const resolveName = (parsed: unknown, textBefore: string): string | undefined =>
+    readProjectNameFromParsed(parsed) ||
+    inferPmPlanProjectNameFromText(textBefore) ||
+    fallback
+
   let replacedFence = false
   const withFences = text.replace(
     /```(?:json)?\s*([\s\S]*?)```/gi,
@@ -392,10 +429,9 @@ export function presentPmPlanMarkdownForDisplay(text: string): string {
           : parsePlanObject(parsed)
         if (!plan || plan.wbs.length === 0) return full
         replacedFence = true
-        const projectName =
-          readProjectNameFromParsed(parsed) ||
-          inferPmPlanProjectNameFromText(text.slice(0, offset))
-        return formatPmPlanAsMarkdownTable(plan, { projectName })
+        return formatPmPlanAsMarkdownTable(plan, {
+          projectName: resolveName(parsed, text.slice(0, offset)),
+        })
       } catch {
         return full
       }
@@ -414,7 +450,7 @@ export function presentPmPlanMarkdownForDisplay(text: string): string {
     parsed = null
   }
   return formatPmPlanAsMarkdownTable(plan, {
-    projectName: readProjectNameFromParsed(parsed),
+    projectName: resolveName(parsed, text),
   })
 }
 
@@ -633,7 +669,7 @@ export function buildPmNewProjectBriefMessage(input: {
 ## 输出要求
 1. **先**输出 Markdown 任务表（给人阅读），列固定为：
    | 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |
-   - 第 1 行必须是项目名称任务（层级 1），工期/起止为项目总工期；其余任务全部挂在其下（1.1、1.1.1…）。
+   - 第 1 行必须是**当前项目名称**（层级 1，如 PRJ 编号 · 项目名），工期/起止为项目总工期；不要把说明文字写入任务名称。其余任务全部挂在其下（1.1、1.1.1…）。
    - 前置任务列用**层级编号**写逻辑关系，如 \`1.1FS\`、\`1.2SS+5\`（不要写任务名称）；无前置写 —。
    - 层级用 1 / 1.1 / 1.1.1 表示父子；不要在表格里贴 JSON。
 2. **再**输出一个 JSON 对象（\`\`\`json 代码块），供系统应用计划，格式：

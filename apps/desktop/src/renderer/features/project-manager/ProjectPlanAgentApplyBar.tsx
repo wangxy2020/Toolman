@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
+  hasAppliedPlanFingerprint,
   parsePmFullPlanFromText,
   parsePmScheduleSuggestionsFromText,
+  readAppliedPlanReceipts,
+  readScheduleVersion,
+  resolvePmPlanApplyAction,
+  upsertAppliedPlanReceipt,
   type Message,
   type PmProject,
   type PmProjectPlan,
@@ -12,7 +17,12 @@ import {
 import { useI18n } from '../../i18n/useI18n'
 import { getMessageText } from '../chat/message-utils'
 import { pmApi } from './pm-api'
+import {
+  markSessionPendingAgentRevision,
+  pendingAgentRevisionMetadataPatch,
+} from './pm-pending-revision'
 import type { PmNewProjectBriefValues } from './PmNewProjectBriefForm'
+import { pmScheduleApi } from './views/schedule/pm-schedule-api'
 
 export type PmPendingNewProjectBrief = PmNewProjectBriefValues
 
@@ -20,6 +30,7 @@ function storageKey(workspaceId: string): string {
   return `tm-pm-plan-applied:${workspaceId}`
 }
 
+/** Optimistic session cache; durable source of truth is project metadata receipts. */
 function readAppliedMap(workspaceId: string): Record<string, string> {
   try {
     const raw = sessionStorage.getItem(storageKey(workspaceId))
@@ -73,6 +84,24 @@ export function buildPmPlanFingerprint(
   })
 }
 
+function findAppliedProjectId(
+  projects: PmProject[],
+  fingerprint: string,
+  workspaceId: string,
+): string | null {
+  if (!fingerprint) return null
+  for (const project of projects) {
+    if (hasAppliedPlanFingerprint(project.metadata, fingerprint)) {
+      return project.id
+    }
+  }
+  const sessionId = readAppliedMap(workspaceId)[fingerprint]
+  if (sessionId && projects.some((project) => project.id === sessionId)) {
+    return sessionId
+  }
+  return null
+}
+
 interface Props {
   workspaceId: string
   messages: Message[]
@@ -81,6 +110,8 @@ interface Props {
   pendingBrief: PmPendingNewProjectBrief | null
   onPlanApplied: (projectId: string) => void
   onBriefConsumed?: () => void
+  /** Refresh project list after metadata / apply changes. */
+  onProjectsChange?: () => void | Promise<void>
 }
 
 /** Compact green text confirm / jump for the assistant message action row. */
@@ -92,6 +123,7 @@ export function ProjectPlanAgentApplyBar({
   pendingBrief,
   onPlanApplied,
   onBriefConsumed,
+  onProjectsChange,
 }: Props) {
   const { t } = useI18n()
   const [applying, setApplying] = useState(false)
@@ -132,56 +164,124 @@ export function ProjectPlanAgentApplyBar({
     return buildPmPlanFingerprint(wbsSuggestions, parsedPlan.projectPlan, null)
   }, [canApplyPlan, parsedPlan.projectPlan, scheduleSuggestions, wbsSuggestions])
 
-  // Keep local apply state in sync with the current plan fingerprint so a newer
-  // assistant plan can be applied again (instead of only jumping to the old id).
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  )
+
+  // Keep local apply state in sync with durable receipts (+ session optimistic cache).
   useEffect(() => {
     if (!workspaceId || !fingerprint) {
       setLocalAppliedProjectId(null)
       return
     }
-    const stored = readAppliedMap(workspaceId)[fingerprint] ?? null
-    const stillExists =
-      stored != null && projects.some((project) => project.id === stored)
-    if (stored && !stillExists) {
-      clearPmPlanAppliedProject(workspaceId, stored)
-      setLocalAppliedProjectId(null)
-      return
-    }
+    const stored = findAppliedProjectId(projects, fingerprint, workspaceId)
     setLocalAppliedProjectId(stored)
   }, [fingerprint, projects, workspaceId])
 
-  const storedAppliedProjectId = useMemo(() => {
-    if (!workspaceId || !fingerprint) return null
-    return readAppliedMap(workspaceId)[fingerprint] ?? null
-  }, [fingerprint, workspaceId, localAppliedProjectId])
-
   const appliedProjectId = (() => {
-    const id = localAppliedProjectId ?? storedAppliedProjectId
+    const id =
+      localAppliedProjectId ?? findAppliedProjectId(projects, fingerprint, workspaceId)
     if (!id) return null
     if (!projects.some((project) => project.id === id)) return null
     return id
   })()
 
+  const applyAction = useMemo(() => {
+    if (appliedProjectId) return 'goToGantt' as const
+    const hasAnyPriorReceipt = selectedProject
+      ? readAppliedPlanReceipts(selectedProject.metadata).length > 0
+      : false
+    return resolvePmPlanApplyAction({
+      fingerprint,
+      fingerprintAlreadyApplied: false,
+      // Button label: first apply = 确定; later plans on same project = 重新应用.
+      // Destructive confirm still runs for both when clearing an existing project.
+      hasLiveWorkItems: false,
+      hasAnyPriorReceipt,
+    })
+  }, [appliedProjectId, fingerprint, selectedProject])
+
   const markApplied = useCallback(
-    (projectId: string) => {
+    async (projectId: string) => {
       setLocalAppliedProjectId(projectId)
       const map = readAppliedMap(workspaceId)
       map[fingerprint] = projectId
       writeAppliedMap(workspaceId, map)
+      try {
+        const fresh = await pmApi.getProject(projectId)
+        await pmApi.updateProject({
+          id: projectId,
+          metadata: {
+            ...upsertAppliedPlanReceipt(fresh.metadata, fingerprint),
+            ...pendingAgentRevisionMetadataPatch(),
+          },
+        })
+        await onProjectsChange?.()
+      } catch {
+        // Session map still prevents immediate double-apply in this session.
+      }
     },
-    [fingerprint, workspaceId],
+    [fingerprint, onProjectsChange, workspaceId],
+  )
+
+  /** Ensure Save can bump version even if project-list metadata is stale. */
+  const markPendingRevision = useCallback(
+    async (projectId: string) => {
+      markSessionPendingAgentRevision(workspaceId, projectId)
+      try {
+        await pmApi.updateProject({
+          id: projectId,
+          metadata: pendingAgentRevisionMetadataPatch(),
+        })
+      } catch {
+        // Session flag still lets Save bump; DB flag is best-effort.
+      }
+    },
+    [workspaceId],
+  )
+
+  /** Protect current version snapshot before destructive clearExisting. */
+  const protectCurrentVersionBaseline = useCallback(
+    async (project: PmProject) => {
+      const version = readScheduleVersion(project.metadata)
+      if (version <= 0) return
+      try {
+        await pmScheduleApi.createBaseline(
+          workspaceId,
+          project.id,
+          t('projectManagerPage.schedule.versionBaselineName', {
+            version: String(version),
+          }),
+        )
+      } catch {
+        // Best-effort; apply should still proceed.
+      }
+    },
+    [t, workspaceId],
+  )
+
+  const confirmDestructiveApply = useCallback(
+    (action: 'confirm' | 'reapply', projectName: string): boolean => {
+      if (action === 'reapply') {
+        return window.confirm(
+          t('projectManagerPage.agent.applyReapplyConfirm', { name: projectName }),
+        )
+      }
+      return window.confirm(
+        t('projectManagerPage.agent.applyOverwriteConfirm', { name: projectName }),
+      )
+    },
+    [t],
   )
 
   const handleApplyPlan = useCallback(async () => {
     if (!canApplyPlan || !lastAssistant || applyingRef.current) return
 
-    const existingApplied = readAppliedMap(workspaceId)[fingerprint]
-    if (existingApplied && projects.some((project) => project.id === existingApplied)) {
+    const existingApplied = findAppliedProjectId(projects, fingerprint, workspaceId)
+    if (existingApplied) {
       onPlanApplied(existingApplied)
       return
-    }
-    if (existingApplied) {
-      clearPmPlanAppliedProject(workspaceId, existingApplied)
     }
 
     applyingRef.current = true
@@ -200,6 +300,7 @@ export function ProjectPlanAgentApplyBar({
           )
           if (!confirmed) return
           clearExisting = true
+          await protectCurrentVersionBaseline(existing)
         }
 
         const result = await pmApi.applyWbsSuggestions({
@@ -214,22 +315,49 @@ export function ProjectPlanAgentApplyBar({
             clearExisting,
           },
         })
-        markApplied(result.projectId)
+        await markApplied(result.projectId)
+        await markPendingRevision(result.projectId)
         onBriefConsumed?.()
         onPlanApplied(result.projectId)
         return
       }
 
-      if (!selectedProjectId) {
+      if (!selectedProjectId || !selectedProject) {
         window.alert(t('projectManagerPage.agent.applyNeedProject'))
         return
       }
 
-      const selectedProject = projects.find((project) => project.id === selectedProjectId)
-      if (!selectedProject) {
-        window.alert(t('projectManagerPage.agent.applyNeedProject'))
-        return
+      let hasLiveWorkItems = true
+      try {
+        const listed = await pmApi.listWorkItems({
+          workspaceId,
+          projectId: selectedProjectId,
+          limit: 1,
+        })
+        hasLiveWorkItems = listed.items.length > 0
+      } catch {
+        hasLiveWorkItems = true
       }
+
+      const action = resolvePmPlanApplyAction({
+        fingerprint,
+        fingerprintAlreadyApplied: false,
+        hasLiveWorkItems,
+        hasAnyPriorReceipt: readAppliedPlanReceipts(selectedProject.metadata).length > 0,
+      })
+      if (hasLiveWorkItems || action === 'reapply') {
+        if (
+          !confirmDestructiveApply(
+            action === 'reapply' ? 'reapply' : 'confirm',
+            selectedProject.name,
+          )
+        ) {
+          return
+        }
+      }
+
+      await protectCurrentVersionBaseline(selectedProject)
+
       const result = await pmApi.applyWbsSuggestions({
         workspaceId,
         suggestions: wbsSuggestions,
@@ -241,7 +369,8 @@ export function ProjectPlanAgentApplyBar({
           clearExisting: true,
         },
       })
-      markApplied(result.projectId)
+      await markApplied(result.projectId)
+      await markPendingRevision(result.projectId)
       onPlanApplied(result.projectId)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
@@ -251,15 +380,19 @@ export function ProjectPlanAgentApplyBar({
     }
   }, [
     canApplyPlan,
+    confirmDestructiveApply,
     fingerprint,
     lastAssistant,
     markApplied,
+    markPendingRevision,
     onBriefConsumed,
     onPlanApplied,
     parsedPlan.projectPlan,
     pendingBrief,
     projects,
+    protectCurrentVersionBaseline,
     scheduleSuggestions,
+    selectedProject,
     selectedProjectId,
     t,
     wbsSuggestions,
@@ -267,27 +400,56 @@ export function ProjectPlanAgentApplyBar({
   ])
 
   const handleApplySchedule = useCallback(async () => {
-    if (!selectedProjectId || !lastAssistant || scheduleSuggestions.length === 0) return
+    if (!selectedProjectId || !selectedProject || !lastAssistant) return
+    if (scheduleSuggestions.length === 0) return
     if (applyingRef.current) return
 
-    const existingApplied = readAppliedMap(workspaceId)[fingerprint]
-    if (existingApplied && projects.some((project) => project.id === existingApplied)) {
+    const existingApplied = findAppliedProjectId(projects, fingerprint, workspaceId)
+    if (existingApplied) {
       onPlanApplied(existingApplied)
       return
     }
-    if (existingApplied) {
-      clearPmPlanAppliedProject(workspaceId, existingApplied)
+
+    let hasLiveWorkItems = true
+    try {
+      const listed = await pmApi.listWorkItems({
+        workspaceId,
+        projectId: selectedProjectId,
+        limit: 1,
+      })
+      hasLiveWorkItems = listed.items.length > 0
+    } catch {
+      hasLiveWorkItems = true
+    }
+
+    const action = resolvePmPlanApplyAction({
+      fingerprint,
+      fingerprintAlreadyApplied: false,
+      hasLiveWorkItems,
+      hasAnyPriorReceipt: readAppliedPlanReceipts(selectedProject.metadata).length > 0,
+    })
+    if (hasLiveWorkItems || action === 'reapply') {
+      if (
+        !confirmDestructiveApply(
+          action === 'reapply' ? 'reapply' : 'confirm',
+          selectedProject.name,
+        )
+      ) {
+        return
+      }
     }
 
     applyingRef.current = true
     setApplying(true)
     try {
+      await protectCurrentVersionBaseline(selectedProject)
       await pmApi.applyScheduleSuggestions({
         workspaceId,
         projectId: selectedProjectId,
         suggestions: scheduleSuggestions,
       })
-      markApplied(selectedProjectId)
+      await markApplied(selectedProjectId)
+      await markPendingRevision(selectedProjectId)
       onPlanApplied(selectedProjectId)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
@@ -296,13 +458,18 @@ export function ProjectPlanAgentApplyBar({
       setApplying(false)
     }
   }, [
+    confirmDestructiveApply,
     fingerprint,
     lastAssistant,
     markApplied,
+    markPendingRevision,
     onPlanApplied,
     projects,
+    protectCurrentVersionBaseline,
     scheduleSuggestions,
+    selectedProject,
     selectedProjectId,
+    t,
     workspaceId,
   ])
 
@@ -322,6 +489,11 @@ export function ProjectPlanAgentApplyBar({
     )
   }
 
+  const buttonLabel =
+    applyAction === 'reapply'
+      ? t('projectManagerPage.agent.applyReapply')
+      : t('projectManagerPage.agent.applyConfirm')
+
   return (
     <button
       type="button"
@@ -333,7 +505,7 @@ export function ProjectPlanAgentApplyBar({
       }
       disabled={applying || (canApplyScheduleOnly && !selectedProjectId)}
       onClick={() => void (canApplyPlan ? handleApplyPlan() : handleApplySchedule())}>
-      {applying ? '…' : t('projectManagerPage.agent.applyConfirm')}
+      {applying ? '…' : buttonLabel}
     </button>
   )
 }

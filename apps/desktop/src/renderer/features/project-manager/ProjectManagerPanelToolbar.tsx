@@ -6,7 +6,6 @@ import {
   IconChartBar,
   IconDatabase,
   IconGantt,
-  IconCalendar,
   IconPlus,
   IconSliders,
 } from '../../components/icons'
@@ -46,7 +45,6 @@ const BASE_VIEW_ITEMS: PanelToolbarItem[] = [
 
 const PROGRESS_SCHEDULE_ITEMS: PanelToolbarItem[] = [
   { key: 'gantt', titleKey: 'projectManagerPage.toolbar.gantt', icon: <IconGantt size={16} /> },
-  { key: 'calendar', titleKey: 'projectManagerPage.toolbar.calendar', icon: <IconCalendar size={16} /> },
 ]
 
 function insertAfterAgent(items: PanelToolbarItem[], extra: PanelToolbarItem[]): PanelToolbarItem[] {

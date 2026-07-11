@@ -36,16 +36,17 @@ export function buildGanttProjectRootItem(
     }
   }
 
+  // Plan start/finish in project metadata are contract targets (项目信息), not the
+  // live schedule envelope. Mixing them in pinned 总工期 so predecessor-driven
+  // reschedules looked like a no-op when tasks stayed inside the plan window.
   const readMetaDate = (key: string): number | undefined => {
     const raw = project.metadata?.[key]
     if (typeof raw !== 'string' || !raw.trim()) return undefined
     const parsed = Date.parse(`${raw.trim()}T00:00:00`)
     return Number.isFinite(parsed) ? parsed : undefined
   }
-  const planStart = readMetaDate('planStartDate')
-  const planFinish = readMetaDate('planFinishDate')
-  if (planStart != null) startMs = startMs == null ? planStart : Math.min(startMs, planStart)
-  if (planFinish != null) dueMs = dueMs == null ? planFinish : Math.max(dueMs, planFinish)
+  if (startMs == null) startMs = readMetaDate('planStartDate')
+  if (dueMs == null) dueMs = readMetaDate('planFinishDate')
 
   if (startMs == null && dueMs != null) startMs = dueMs
   if (dueMs == null && startMs != null) dueMs = startMs

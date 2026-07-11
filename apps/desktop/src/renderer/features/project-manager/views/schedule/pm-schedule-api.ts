@@ -1,4 +1,9 @@
-import { IpcChannel, type PmScheduleBaseline, type PmWorkItemRelation } from '@toolman/shared'
+import {
+  IpcChannel,
+  type PmBaselineRestoreOutput,
+  type PmScheduleBaseline,
+  type PmWorkItemRelation,
+} from '@toolman/shared'
 
 async function invoke<T>(channel: IpcChannel, input?: unknown): Promise<T> {
   const result = await window.api.invoke(channel, input)
@@ -52,5 +57,9 @@ export const pmScheduleApi = {
 
   getBaseline(id: string) {
     return invoke<PmScheduleBaseline>(IpcChannel.Pm_BaselineGet, { id })
+  },
+
+  restoreBaseline(id: string) {
+    return invoke<PmBaselineRestoreOutput>(IpcChannel.Pm_BaselineRestore, { id })
   },
 }

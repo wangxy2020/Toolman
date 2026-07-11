@@ -2,12 +2,17 @@ import type { FC } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  computeScheduleTotalDurationDays,
+  parseVersionFromBaselineName,
+  PM_SAVE_HISTORY_KEY,
   readLastSavedAt,
   readSaveHistory,
   readScheduleVersion,
+  removeSaveHistoryEntry,
   type PmDomain,
   type PmProject,
   type PmProjectStatus,
+  type PmScheduleSaveRecord,
   type PmWorkItem,
 } from '@toolman/shared'
 
@@ -15,6 +20,7 @@ import { getDateLocale } from '../../../../i18n/date-locale'
 import { useI18n } from '../../../../i18n/useI18n'
 import { pmApi } from '../../pm-api'
 import { formatWorkItemDate } from './pm-gantt-utils'
+import { pmScheduleApi } from './pm-schedule-api'
 
 type InfoTab = 'overview' | 'schedule' | 'statistics' | 'advanced'
 
@@ -196,13 +202,27 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     project ? toDraft(project) : emptyDraft(createDefaults ?? undefined),
   )
   const [saving, setSaving] = useState(false)
+  const [deletingHistoryVersion, setDeletingHistoryVersion] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [historyRows, setHistoryRows] = useState<PmScheduleSaveRecord[]>(() =>
+    readSaveHistory(project?.metadata),
+  )
+  const [scheduleVersion, setScheduleVersion] = useState(() =>
+    readScheduleVersion(project?.metadata),
+  )
+  const [lastSavedAt, setLastSavedAt] = useState(() => readLastSavedAt(project?.metadata))
 
   useEffect(() => {
     if (project) {
       setDraft(toDraft(project))
+      setHistoryRows(readSaveHistory(project.metadata))
+      setScheduleVersion(readScheduleVersion(project.metadata))
+      setLastSavedAt(readLastSavedAt(project.metadata))
     } else if (createDefaults) {
       setDraft(emptyDraft(createDefaults))
+      setHistoryRows([])
+      setScheduleVersion(0)
+      setLastSavedAt(null)
     }
     setError(null)
   }, [
@@ -212,6 +232,67 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     createDefaults?.code,
     createDefaults?.name,
   ])
+
+  // Backfill missing totalDurationDays from live items / version baselines.
+  useEffect(() => {
+    if (!project) return
+    let cancelled = false
+
+    const run = async () => {
+      const baseHistory = readSaveHistory(project.metadata)
+      if (baseHistory.length === 0) return
+
+      const currentVersion = readScheduleVersion(project.metadata)
+      const liveDuration = computeScheduleTotalDurationDays(workItems)
+      const durationByVersion = new Map<number, number>()
+      if (currentVersion > 0 && liveDuration != null) {
+        durationByVersion.set(currentVersion, liveDuration)
+      }
+
+      try {
+        const { baselines } = await pmScheduleApi.listBaselines(
+          project.workspaceId,
+          project.id,
+        )
+        for (const baseline of baselines) {
+          const version = parseVersionFromBaselineName(baseline.name)
+          if (version == null || durationByVersion.has(version)) continue
+          const days = computeScheduleTotalDurationDays(baseline.snapshot.workItems)
+          if (days != null) durationByVersion.set(version, days)
+        }
+      } catch {
+        // Display whatever we can from live items.
+      }
+
+      if (cancelled || durationByVersion.size === 0) return
+
+      let changed = false
+      const enriched = baseHistory.map((entry) => {
+        if (entry.totalDurationDays != null) return entry
+        const days = durationByVersion.get(entry.version)
+        if (days == null) return entry
+        changed = true
+        return { ...entry, totalDurationDays: days }
+      })
+      if (!changed) return
+
+      setHistoryRows(enriched)
+      try {
+        // Persist so reopening project info keeps the column filled.
+        await pmApi.updateProject({
+          id: project.id,
+          metadata: { [PM_SAVE_HISTORY_KEY]: enriched },
+        })
+      } catch {
+        // UI already shows enriched rows for this session.
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [project, workItems])
 
   const stats = useMemo(() => {
     const total = workItems.length
@@ -229,14 +310,53 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     return { total, milestones, done, inProgress, blocked, avgProgress, earliestStart, latestFinish }
   }, [workItems])
 
-  const saveInfo = useMemo(() => {
-    const metadata = project?.metadata ?? {}
-    return {
-      version: readScheduleVersion(metadata),
-      lastSavedAt: readLastSavedAt(metadata),
-      history: readSaveHistory(metadata),
+  const handleDeleteHistoryEntry = async (entry: PmScheduleSaveRecord) => {
+    if (!project) return
+    const confirmed = window.confirm(
+      t('projectManagerPage.projectInfo.saveHistoryDeleteConfirm', {
+        version: String(entry.version),
+      }),
+    )
+    if (!confirmed) return
+
+    setDeletingHistoryVersion(entry.version)
+    setError(null)
+    try {
+      const nextMeta = removeSaveHistoryEntry(project.metadata ?? {}, entry.version)
+      const updated = await pmApi.updateProject({
+        id: project.id,
+        metadata: nextMeta,
+      })
+
+      // Best-effort: remove matching version baseline snapshot.
+      try {
+        const { baselines } = await pmScheduleApi.listBaselines(
+          project.workspaceId,
+          project.id,
+        )
+        const versionNames = new Set([
+          `版本 ${entry.version}`,
+          `Version ${entry.version}`,
+        ])
+        for (const baseline of baselines) {
+          if (versionNames.has(baseline.name.trim())) {
+            await pmScheduleApi.deleteBaseline(baseline.id)
+          }
+        }
+      } catch {
+        // history delete already succeeded
+      }
+
+      setHistoryRows(readSaveHistory(updated.metadata))
+      setScheduleVersion(readScheduleVersion(updated.metadata))
+      setLastSavedAt(readLastSavedAt(updated.metadata))
+      onSaved(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeletingHistoryVersion(null)
     }
-  }, [project?.metadata])
+  }
 
   const statusLabel = (status: PmProjectStatus): string => {
     switch (status) {
@@ -658,9 +778,9 @@ const ProjectInfoDialog: FC<Props> = (props) => {
                         {t('projectManagerPage.projectInfo.fieldScheduleVersion')}
                       </label>
                       <span className="tm-kb-settings-readonly">
-                        {saveInfo.version > 0
+                        {scheduleVersion > 0
                           ? t('projectManagerPage.projectInfo.saveHistoryVersion', {
-                              version: String(saveInfo.version),
+                              version: String(scheduleVersion),
                             })
                           : t('projectManagerPage.projectInfo.scheduleVersionNever')}
                       </span>
@@ -670,37 +790,86 @@ const ProjectInfoDialog: FC<Props> = (props) => {
                         {t('projectManagerPage.projectInfo.fieldLastSavedAt')}
                       </label>
                       <span className="tm-kb-settings-readonly">
-                        {saveInfo.lastSavedAt != null
-                          ? formatDateTime(saveInfo.lastSavedAt, dateInputLang)
+                        {lastSavedAt != null
+                          ? formatDateTime(lastSavedAt, dateInputLang)
                           : '—'}
                       </span>
                     </div>
-                    <div className="tm-kb-settings-row tm-kb-settings-row--block">
+                    <div className="tm-kb-settings-row tm-kb-settings-row--top">
                       <label className="tm-kb-settings-label">
                         {t('projectManagerPage.projectInfo.fieldSaveHistory')}
                       </label>
-                      {saveInfo.history.length === 0 ? (
+                      {historyRows.length === 0 ? (
                         <span className="tm-kb-settings-readonly">
                           {t('projectManagerPage.projectInfo.saveHistoryEmpty')}
                         </span>
                       ) : (
-                        <ul className="tm-pm-project-info-save-history">
-                          {saveInfo.history.map((entry) => (
-                            <li key={`${entry.version}-${entry.savedAt}`}>
-                              <span>
+                        <div className="tm-pm-project-info-save-history" role="table">
+                          <div
+                            className="tm-pm-project-info-save-history-head"
+                            role="row">
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColVersion')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColSavedAt')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColDuration')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColTasks')}
+                            </span>
+                            <span role="columnheader" className="tm-pm-project-info-save-history-actions">
+                              {t('projectManagerPage.projectInfo.saveHistoryColActions')}
+                            </span>
+                          </div>
+                          {historyRows.map((entry) => (
+                            <div
+                              key={`${entry.version}-${entry.savedAt}`}
+                              className="tm-pm-project-info-save-history-row"
+                              role="row">
+                              <span role="cell">
                                 {t('projectManagerPage.projectInfo.saveHistoryVersion', {
                                   version: String(entry.version),
                                 })}
+                                {entry.version === scheduleVersion ? (
+                                  <span className="tm-pm-project-info-save-history-current">
+                                    {t('projectManagerPage.projectInfo.saveHistoryCurrent')}
+                                  </span>
+                                ) : null}
                               </span>
-                              <span>{formatDateTime(entry.savedAt, dateInputLang)}</span>
-                              <span>
+                              <span role="cell">
+                                {formatDateTime(entry.savedAt, dateInputLang)}
+                              </span>
+                              <span role="cell">
+                                {entry.totalDurationDays != null
+                                  ? t('projectManagerPage.projectInfo.saveHistoryDuration', {
+                                      days: String(entry.totalDurationDays),
+                                    })
+                                  : '—'}
+                              </span>
+                              <span role="cell">
                                 {t('projectManagerPage.projectInfo.saveHistoryTasks', {
                                   count: String(entry.workItemCount),
                                 })}
                               </span>
-                            </li>
+                              <span
+                                role="cell"
+                                className="tm-pm-project-info-save-history-actions">
+                                <button
+                                  type="button"
+                                  className="tm-pm-project-info-save-history-delete"
+                                  disabled={deletingHistoryVersion === entry.version}
+                                  onClick={() => void handleDeleteHistoryEntry(entry)}>
+                                  {deletingHistoryVersion === entry.version
+                                    ? '…'
+                                    : t('common.delete')}
+                                </button>
+                              </span>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       )}
                     </div>
                   </>

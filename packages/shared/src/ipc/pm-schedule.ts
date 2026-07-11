@@ -51,7 +51,28 @@ export const PmBaselineDeleteInputSchema = z.object({
   id: UuidSchema,
 })
 
+export const PmBaselineRestoreInputSchema = z.object({
+  id: UuidSchema,
+})
+
+export const PmBaselineRestoreOutputSchema = z.object({
+  ok: z.literal(true),
+  updatedCount: z.number().int().nonnegative(),
+  /** Rows written that actually differed from the live plan before restore. */
+  changedCount: z.number().int().nonnegative(),
+  /** Rows written that already matched the snapshot (no visible change). */
+  unchangedCount: z.number().int().nonnegative(),
+  missingCount: z.number().int().nonnegative(),
+  /** Dependency links recreated from the snapshot (0 when snapshot has no relations). */
+  relationsRestored: z.number().int().nonnegative().default(0),
+  baselineId: UuidSchema,
+  baselineName: z.string(),
+  scheduleVersion: z.number().int().nonnegative().nullable(),
+})
+
 export type PmRelationListInput = z.infer<typeof PmRelationListInputSchema>
 export type PmRelationCreateInput = z.infer<typeof PmRelationCreateInputSchema>
 export type PmBaselineListInput = z.infer<typeof PmBaselineListInputSchema>
 export type PmBaselineCreateInput = z.infer<typeof PmBaselineCreateInputSchema>
+export type PmBaselineRestoreInput = z.infer<typeof PmBaselineRestoreInputSchema>
+export type PmBaselineRestoreOutput = z.infer<typeof PmBaselineRestoreOutputSchema>

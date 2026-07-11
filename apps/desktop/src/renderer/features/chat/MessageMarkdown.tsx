@@ -18,6 +18,7 @@ import { normalizeMarkdownHtmlLineBreaksOutsideTables } from './markdown-html-br
 import { prepareStreamingMarkdown } from './streaming-markdown'
 import type { CodeStyle, MessageSettings } from './message-settings'
 import { presentPmPlanMarkdownForDisplay } from '@toolman/shared'
+import { usePlanProjectDisplayName } from './PlanProjectDisplayNameContext'
 import 'katex/dist/katex.min.css'
 
 const CODE_THEME_PATHS: Record<Exclude<CodeStyle, 'auto'>, () => Promise<unknown>> = {
@@ -169,13 +170,18 @@ export function MessageMarkdown({
 }: Props) {
   const [themeReady, setThemeReady] = useState(false)
   const codeStyle = resolveCodeStyle(settings.codeStyle)
+  const planProjectName = usePlanProjectDisplayName()
   const renderedText = useMemo(() => {
+    const present = (value: string) =>
+      presentPmPlanMarkdownForDisplay(value, {
+        ...(planProjectName ? { fallbackProjectName: planProjectName } : {}),
+      })
     if (streaming) {
-      return presentPmPlanMarkdownForDisplay(prepareStreamingMarkdown(text, sanitizeAssistant))
+      return present(prepareStreamingMarkdown(text, sanitizeAssistant))
     }
     const base = sanitizeAssistant ? sanitizeAssistantMarkdown(text) : text
-    return normalizeMarkdownHtmlLineBreaksOutsideTables(presentPmPlanMarkdownForDisplay(base))
-  }, [sanitizeAssistant, streaming, text])
+    return normalizeMarkdownHtmlLineBreaksOutsideTables(present(base))
+  }, [planProjectName, sanitizeAssistant, streaming, text])
 
   useEffect(() => {
     let cancelled = false

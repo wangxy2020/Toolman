@@ -3,11 +3,11 @@ export const PLAN_WBS_QUICK_PHRASE_TITLE = 'AI 生成 WBS'
 export const PLAN_WBS_QUICK_PHRASE_CONTENT = `请根据当前项目的进度 WBS，补充或生成完整层级计划。
 
 先输出 Markdown 任务表，列：层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务。
-第 1 行必须是项目名称（总工期）；其余任务挂在其下。前置任务列用层级编号写逻辑关系（如 1.1FS、1.2SS+5），不要写任务名称。
+第 1 行必须是**当前项目名称**（如 PRJ-2601 · Toolman项目1），工期/起止为项目总工期；不要把说明文字写进任务名称。其余任务挂在其下。前置任务列用层级编号写逻辑关系（如 1.1FS、1.2SS+5），不要写任务名称。
 
 再输出 JSON 对象（\`\`\`json 代码块）供系统应用：
 {
-  "projectName": "项目名称",
+  "projectName": "与第 1 行相同的项目名称（不要写说明句）",
   "projectPlan": { "planStart": "YYYY-MM-DD", "planFinish": "YYYY-MM-DD", "durationDays": number },
   "wbs": [
     {
@@ -23,7 +23,7 @@ export const PLAN_WBS_QUICK_PHRASE_CONTENT = `请根据当前项目的进度 WBS
   ]
 }
 层级覆盖单位/分部/分项/区域/部位等。除最早开始任务外每项须有 predecessors，网络须从开工连通到竣工。表格给人看，JSON 给系统用。`
-export const PLAN_WBS_QUICK_PHRASE_REVISION = 6
+export const PLAN_WBS_QUICK_PHRASE_REVISION = 7
 
 export const PLAN_SCHEDULE_QUICK_PHRASE_ID = 'toolman:pm-plan-schedule'
 export const PLAN_SCHEDULE_QUICK_PHRASE_TITLE = 'AI 自动排期'

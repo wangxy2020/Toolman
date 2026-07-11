@@ -96,6 +96,16 @@ export class PmWorkItemRelationRepository {
     return true
   }
 
+  /** Soft-delete every active relation for a project (used by version restore). */
+  softDeleteAllByProject(projectId: string, workspaceId: string): number {
+    const rows = this.listByProject(projectId, workspaceId)
+    let count = 0
+    for (const row of rows) {
+      if (this.softDelete(row.id)) count += 1
+    }
+    return count
+  }
+
   upsertFromSync(relation: PmWorkItemRelation): PmWorkItemRelation {
     const createdAt = new Date(relation.createdAt)
     const updatedAt = new Date(relation.updatedAt)

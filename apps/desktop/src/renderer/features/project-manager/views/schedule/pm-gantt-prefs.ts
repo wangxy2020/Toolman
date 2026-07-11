@@ -57,7 +57,8 @@ export type GanttCustomColumn = {
 
 export const GANTT_COLUMN_WIDTHS: Record<string, string> = {
   index: '48px',
-  name: 'minmax(160px, 1fr)',
+  /** Fixed in split gantt view so collapse/expand does not resize the list pane. */
+  name: '220px',
   duration: '64px',
   start: '100px',
   finish: '100px',

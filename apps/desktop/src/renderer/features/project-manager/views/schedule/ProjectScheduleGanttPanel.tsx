@@ -5,8 +5,14 @@ import { flushSync } from 'react-dom'
 import {
   buildPmWorkItemForest,
   buildScheduleSaveMetadata,
+  computeScheduleTotalDurationDays,
+  dedupeVersionBaselines,
+  findDuplicateVersionBaselineIds,
   IpcChannel,
+  parseVersionFromBaselineName,
+  PM_PENDING_AGENT_REVISION_KEY,
   readPendingAgentScheduleRevision,
+  readSaveHistory,
   readScheduleVersion,
   type PmProject,
   type PmScheduleBaseline,
@@ -17,7 +23,12 @@ import {
 import { useI18n } from '../../../../i18n/useI18n'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { pmApi } from '../../pm-api'
-import { ProjectGanttMenuBar, type GanttMenuAction } from './ProjectGanttMenuBar'
+import {
+  clearSessionPendingAgentRevision,
+  hasSessionPendingAgentRevision,
+  isPendingAgentScheduleRevision,
+} from '../../pm-pending-revision'
+import { ProjectGanttMenuBar, type GanttMenuAction, type GanttVersionSwitchEntry } from './ProjectGanttMenuBar'
 import {
   ProjectGanttTaskGrid,
   type GanttColumnLabels,
@@ -75,7 +86,7 @@ interface Props {
   selectedProjectId: string | null
   /** Bump to force reload after external plan apply. */
   dataRevision?: number
-  onProjectsChange?: () => void
+  onProjectsChange?: () => void | Promise<void>
   /** Open shared create-project dialog (manual create from Gantt toolbar). */
   onRequestNewProject?: () => void
 }
@@ -102,9 +113,18 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const [chartPaneWidth, setChartPaneWidth] = useState(600)
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
   const [pendingDeleteSelected, setPendingDeleteSelected] = useState(false)
+  const [pendingRestoreBaselineId, setPendingRestoreBaselineId] = useState<string | null>(null)
   const hasDataRef = useRef(false)
   const scheduleSyncingRef = useRef(false)
+  const pendingRescheduleRef = useRef(false)
+  /** After version restore, skip one auto-schedule persist so snapshot dates stick. */
+  const suppressAutoScheduleRef = useRef(false)
   const lastScheduleFingerprintRef = useRef('')
+  /**
+   * After restoring a version, show stored dates instead of live auto-schedule overlay
+   * until the user edits schedule inputs or saves (which re-snapshots relations).
+   */
+  const [freezeStoredSchedule, setFreezeStoredSchedule] = useState(false)
   const gridScrollRef = useRef<HTMLDivElement>(null)
   const chartScrollRef = useRef<HTMLDivElement>(null)
   const chartHeaderScrollRef = useRef<HTMLDivElement>(null)
@@ -166,15 +186,17 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   }, [projects.length, selectedProjectId, uiPrefs.scheduleView])
 
   const loadProjectData = useCallback(
-    async (projectId: string | null) => {
+    async (
+      projectId: string | null,
+    ): Promise<{ items: PmWorkItem[]; relations: PmWorkItemRelation[] } | null> => {
       if (!projectId) {
         setItems([])
         setRelations([])
         setBaselines([])
         setSelectedBaselineId(null)
-        return
+        return null
       }
-      const [relationResult, itemResult, baselineResult] = await Promise.all([
+      const [relationResult, itemResult] = await Promise.all([
         pmScheduleApi.listRelations(workspaceId, projectId),
         pmApi.listWorkItems({
           workspaceId,
@@ -182,17 +204,46 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           domain: 'progress_management',
           limit: 1000,
         }),
-        pmScheduleApi.listBaselines(workspaceId, projectId),
       ])
       setRelations(relationResult.relations)
       setItems(itemResult.items)
-      setBaselines(baselineResult.baselines)
-      setSelectedBaselineId((current) => {
-        if (current && baselineResult.baselines.some((entry) => entry.id === current)) {
-          return current
+
+      let listedBaselines: PmScheduleBaseline[] = []
+      try {
+        const baselineResult = await pmScheduleApi.listBaselines(workspaceId, projectId)
+        listedBaselines = baselineResult.baselines
+      } catch {
+        listedBaselines = []
+      }
+
+      // Soft-delete older duplicate version baselines (e.g. double backfill).
+      const duplicateIds = findDuplicateVersionBaselineIds(listedBaselines)
+      if (duplicateIds.length > 0) {
+        await Promise.all(
+          duplicateIds.map(async (id) => {
+            try {
+              await pmScheduleApi.deleteBaseline(id)
+            } catch {
+              // ignore; UI still dedupes below
+            }
+          }),
+        )
+        listedBaselines = listedBaselines.filter((entry) => !duplicateIds.includes(entry.id))
+      }
+
+      // Do NOT backfill missing version snapshots from the current plan — that makes
+      // "switch to version N" a no-op and pollutes history with identical snapshots.
+
+      listedBaselines = dedupeVersionBaselines(listedBaselines)
+      setBaselines(listedBaselines)
+      // Compare is opt-in: keep selection only if it still exists; never auto-pick.
+      setSelectedBaselineId((currentId) => {
+        if (currentId && listedBaselines.some((entry) => entry.id === currentId)) {
+          return currentId
         }
-        return baselineResult.baselines[0]?.id ?? null
+        return null
       })
+      return { items: itemResult.items, relations: relationResult.relations }
     },
     [workspaceId],
   )
@@ -218,6 +269,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   useEffect(() => {
     setCheckedIds(new Set())
     setSelectedId(null)
+    setFreezeStoredSchedule(false)
+    suppressAutoScheduleRef.current = false
+    lastScheduleFingerprintRef.current = ''
   }, [selectedProjectId])
 
   const selectedProject = useMemo(
@@ -246,9 +300,11 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     [items, relations, scheduled],
   )
   const displayItems = useMemo(() => {
-    const scheduledItems = applyScheduledRangesToItems(items, scheduled)
+    const scheduledItems = freezeStoredSchedule
+      ? items
+      : applyScheduledRangesToItems(items, scheduled)
     return withGanttProjectRootItems(selectedProject, scheduledItems)
-  }, [items, scheduled, selectedProject])
+  }, [freezeStoredSchedule, items, scheduled, selectedProject])
   const displayById = useMemo(
     () => new Map(displayItems.map((item) => [item.id, item])),
     [displayItems],
@@ -306,36 +362,91 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     return map
   }, [baseline])
 
-  const persistAutoSchedule = useCallback(async () => {
-    if (!selectedProjectId || scheduleSyncingRef.current) return
-    const next = scheduleWorkItems(items, relations)
-    const updates = collectScheduleUpdates(items, next)
-    if (updates.length === 0) return
-    const fingerprint = updates
-      .map((update) => `${update.id}:${update.startDate}:${update.dueDate}`)
-      .sort()
-      .join('|')
-    if (fingerprint === lastScheduleFingerprintRef.current) return
-    lastScheduleFingerprintRef.current = fingerprint
-    scheduleSyncingRef.current = true
-    try {
-      await Promise.all(
-        updates.map((update) =>
-          pmApi.updateWorkItem({
-            id: update.id,
-            startDate: update.startDate,
-            dueDate: update.dueDate,
-          }),
-        ),
-      )
-      await loadProjectData(selectedProjectId)
-    } finally {
-      scheduleSyncingRef.current = false
-    }
-  }, [items, loadProjectData, relations, selectedProjectId])
+  const versionSwitchEntries = useMemo((): GanttVersionSwitchEntry[] => {
+    const history = readSaveHistory(selectedProject?.metadata)
+    const currentVersion = readScheduleVersion(selectedProject?.metadata)
+    if (history.length === 0) return []
+    return history.map((entry) => {
+      const matched =
+        baselines.find(
+          (item) => parseVersionFromBaselineName(item.name) === entry.version,
+        ) ?? null
+      return {
+        version: entry.version,
+        name: t('projectManagerPage.schedule.versionBaselineName', {
+          version: String(entry.version),
+        }),
+        baselineId: matched?.id ?? null,
+        isCurrent: entry.version === currentVersion,
+      }
+    })
+  }, [baselines, selectedProject?.metadata, t])
+
+  const persistAutoSchedule = useCallback(
+    async (snapshot?: { items: PmWorkItem[]; relations: PmWorkItemRelation[] }) => {
+      if (!selectedProjectId) return
+      if (scheduleSyncingRef.current) {
+        pendingRescheduleRef.current = true
+        return
+      }
+      scheduleSyncingRef.current = true
+      let sourceItems = snapshot?.items ?? items
+      let sourceRelations = snapshot?.relations ?? relations
+      try {
+        for (;;) {
+          pendingRescheduleRef.current = false
+          const next = scheduleWorkItems(sourceItems, sourceRelations)
+          const updates = collectScheduleUpdates(sourceItems, next)
+          if (updates.length === 0) break
+          const fingerprint = updates
+            .map((update) => `${update.id}:${update.startDate}:${update.dueDate}`)
+            .sort()
+            .join('|')
+          if (fingerprint === lastScheduleFingerprintRef.current) break
+          lastScheduleFingerprintRef.current = fingerprint
+          await Promise.all(
+            updates.map((update) =>
+              pmApi.updateWorkItem({
+                id: update.id,
+                startDate: update.startDate,
+                dueDate: update.dueDate,
+              }),
+            ),
+          )
+          const loaded = await loadProjectData(selectedProjectId)
+          if (!loaded) break
+          sourceItems = loaded.items
+          sourceRelations = loaded.relations
+          if (!pendingRescheduleRef.current) break
+        }
+      } finally {
+        scheduleSyncingRef.current = false
+      }
+    },
+    [items, loadProjectData, relations, selectedProjectId],
+  )
 
   useEffect(() => {
-    if (!selectedProjectId || items.length === 0 || scheduleSyncingRef.current) return
+    if (!selectedProjectId || items.length === 0) return
+    if (suppressAutoScheduleRef.current) {
+      // Accept restored (or just-loaded) dates: remember what auto-schedule would
+      // change, but do not write — otherwise version switch is immediately undone.
+      const updates = collectScheduleUpdates(items, scheduleWorkItems(items, relations))
+      if (updates.length > 0) {
+        lastScheduleFingerprintRef.current = updates
+          .map((update) => `${update.id}:${update.startDate}:${update.dueDate}`)
+          .sort()
+          .join('|')
+      } else {
+        lastScheduleFingerprintRef.current = ''
+      }
+      suppressAutoScheduleRef.current = false
+      return
+    }
+    if (scheduleSyncingRef.current) {
+      pendingRescheduleRef.current = true
+      return
+    }
     const updates = collectScheduleUpdates(items, scheduleWorkItems(items, relations))
     if (updates.length === 0) return
     const fingerprint = updates
@@ -397,6 +508,15 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     if (!selectedProjectId || isGanttProjectRootId(itemId)) return
     const item = items.find((entry) => entry.id === itemId)
     if (!item) return
+
+    if (
+      field === 'duration' ||
+      field === 'start' ||
+      field === 'finish' ||
+      field === 'predecessors'
+    ) {
+      setFreezeStoredSchedule(false)
+    }
 
     if (isGanttCustomColumnId(field) || !isGanttBuiltinColumn(field)) {
       const key = customColumnMetaKey(field)
@@ -534,8 +654,8 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       default:
         return
     }
-    await loadProjectData(selectedProjectId)
-    await persistAutoSchedule()
+    const loaded = await loadProjectData(selectedProjectId)
+    if (loaded) await persistAutoSchedule(loaded)
   }
 
   const handleCreateTask = async (afterId: string | null) => {
@@ -774,18 +894,65 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
 
   const handleScheduleSave = useCallback(async () => {
     if (!selectedProjectId || !selectedProject) return
-    await persistAutoSchedule()
-    const prevMeta = selectedProject.metadata ?? {}
-    const bumped = readPendingAgentScheduleRevision(prevMeta)
+    // While frozen on a restored version, do not re-drive dates from live relations
+    // before snapshotting — that would overwrite the version being saved.
+    if (!freezeStoredSchedule) {
+      await persistAutoSchedule()
+    }
+
+    // Prefer fresh project metadata — list prop can lag behind agent apply.
+    let prevMeta: Record<string, unknown> = { ...(selectedProject.metadata ?? {}) }
+    try {
+      const fresh = await pmApi.getProject(selectedProjectId)
+      prevMeta = { ...(fresh.metadata ?? {}) }
+    } catch {
+      // fall back to list prop metadata
+    }
+
+    const sessionPending = hasSessionPendingAgentRevision(workspaceId, selectedProjectId)
+    // Session only fills the gap until fresh metadata reflects the DB pending flag.
+    const bumped = isPendingAgentScheduleRevision(prevMeta, workspaceId, selectedProjectId)
+    if (sessionPending && !readPendingAgentScheduleRevision(prevMeta)) {
+      prevMeta = { ...prevMeta, [PM_PENDING_AGENT_REVISION_KEY]: true }
+    }
+
+    const totalDurationDays = computeScheduleTotalDurationDays(items) ?? undefined
     const nextMeta = buildScheduleSaveMetadata(prevMeta, {
       workItemCount: items.length,
+      ...(totalDurationDays != null ? { totalDurationDays } : {}),
+      bumpVersion: bumped ? true : undefined,
     })
     await pmApi.updateProject({
       id: selectedProjectId,
       metadata: nextMeta,
     })
-    onProjectsChange?.()
+    clearSessionPendingAgentRevision(workspaceId, selectedProjectId)
+
     const version = readScheduleVersion(nextMeta)
+    if (version > 0) {
+      // Persist snapshot for the version being saved only (upsert by version name).
+      try {
+        await pmScheduleApi.createBaseline(
+          workspaceId,
+          selectedProjectId,
+          t('projectManagerPage.schedule.versionBaselineName', {
+            version: String(version),
+          }),
+        )
+      } catch (err) {
+        window.alert(
+          t('projectManagerPage.schedule.versionBaselineCreateFailed', {
+            detail: err instanceof Error ? err.message : String(err),
+          }),
+        )
+      }
+    }
+
+    setFreezeStoredSchedule(false)
+    suppressAutoScheduleRef.current = false
+    lastScheduleFingerprintRef.current = ''
+    await onProjectsChange?.()
+    await loadProjectData(selectedProjectId)
     if (bumped) {
       window.alert(
         t('projectManagerPage.schedule.saveSuccessNewVersion', {
@@ -801,7 +968,59 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     } else {
       window.alert(t('projectManagerPage.schedule.saveSuccess'))
     }
-  }, [items.length, onProjectsChange, persistAutoSchedule, selectedProject, selectedProjectId, t])
+  }, [
+    freezeStoredSchedule,
+    items,
+    loadProjectData,
+    onProjectsChange,
+    persistAutoSchedule,
+    selectedProject,
+    selectedProjectId,
+    t,
+    workspaceId,
+  ])
+
+  const pendingRestoreBaseline = useMemo(
+    () =>
+      pendingRestoreBaselineId
+        ? (baselines.find((entry) => entry.id === pendingRestoreBaselineId) ?? null)
+        : null,
+    [baselines, pendingRestoreBaselineId],
+  )
+
+  const handleConfirmRestoreBaseline = useCallback(async () => {
+    if (!pendingRestoreBaselineId || !selectedProjectId) return
+    try {
+      const result = await pmScheduleApi.restoreBaseline(pendingRestoreBaselineId)
+      setPendingRestoreBaselineId(null)
+      // Clear compare overlay so restored bars aren't confused with ghost baselines.
+      setSelectedBaselineId(null)
+      clearSessionPendingAgentRevision(workspaceId, selectedProjectId)
+      // Prevent auto-schedule from rewriting restored dates/relations on next load.
+      suppressAutoScheduleRef.current = true
+      lastScheduleFingerprintRef.current = ''
+      setFreezeStoredSchedule(true)
+      await onProjectsChange?.()
+      await loadProjectData(selectedProjectId)
+      window.alert(
+        t('projectManagerPage.schedule.restoreBaselineSuccess', {
+          name: result.baselineName,
+          updated: String(result.changedCount),
+          missing: String(result.missingCount),
+        }),
+      )
+    } catch (err) {
+      setPendingRestoreBaselineId(null)
+      window.alert(err instanceof Error ? err.message : String(err))
+    }
+  }, [
+    loadProjectData,
+    onProjectsChange,
+    pendingRestoreBaselineId,
+    selectedProjectId,
+    t,
+    workspaceId,
+  ])
 
   const handleMenuAction = (action: GanttMenuAction) => {
     void (async () => {
@@ -847,14 +1066,22 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           break
         case 'captureBaseline':
           if (!selectedProjectId) break
-          await pmScheduleApi.createBaseline(workspaceId, selectedProjectId)
-          await loadProjectData(selectedProjectId)
+          try {
+            await pmScheduleApi.createBaseline(workspaceId, selectedProjectId)
+            await loadProjectData(selectedProjectId)
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : String(err))
+          }
           break
         case 'deleteBaseline':
           if (!selectedBaselineId || !selectedProjectId) break
-          await pmScheduleApi.deleteBaseline(selectedBaselineId)
-          setSelectedBaselineId(null)
-          await loadProjectData(selectedProjectId)
+          try {
+            await pmScheduleApi.deleteBaseline(selectedBaselineId)
+            setSelectedBaselineId(null)
+            await loadProjectData(selectedProjectId)
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : String(err))
+          }
           break
         case 'openResource':
           handlePrefsChange({ ...uiPrefs, scheduleView: 'resource' })
@@ -915,7 +1142,13 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const checkedCount = checkedIds.size
   const criticalCount = criticalIds.size
   const scheduleVersion = readScheduleVersion(selectedProject?.metadata)
-  const pendingAgentRevision = readPendingAgentScheduleRevision(selectedProject?.metadata)
+  const pendingAgentRevision =
+    selectedProjectId != null &&
+    isPendingAgentScheduleRevision(
+      selectedProject?.metadata,
+      workspaceId,
+      selectedProjectId,
+    )
   const statusMessage = (() => {
     if (pendingAgentRevision) {
       return {
@@ -1002,6 +1235,8 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         baselines={baselines}
         selectedBaselineId={selectedBaselineId}
         onSelectBaseline={setSelectedBaselineId}
+        versionSwitchEntries={versionSwitchEntries}
+        onRestoreBaseline={(id) => setPendingRestoreBaselineId(id)}
         onAction={handleMenuAction}
       />
 
@@ -1284,6 +1519,20 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           danger
           onCancel={() => setPendingDeleteSelected(false)}
           onConfirm={() => void handleDeleteSelectedRows()}
+        />
+      ) : null}
+
+      {pendingRestoreBaseline ? (
+        <ConfirmDialog
+          title={t('projectManagerPage.schedule.restoreBaselineTitle')}
+          message={t('projectManagerPage.schedule.restoreBaselineConfirm', {
+            name: pendingRestoreBaseline.name,
+          })}
+          confirmLabel={t('projectManagerPage.schedule.restoreBaselineConfirmLabel')}
+          cancelLabel={t('common.cancel')}
+          danger
+          onCancel={() => setPendingRestoreBaselineId(null)}
+          onConfirm={() => void handleConfirmRestoreBaseline()}
         />
       ) : null}
     </div>

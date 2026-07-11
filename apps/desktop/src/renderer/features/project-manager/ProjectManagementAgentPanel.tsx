@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 
 import { ChatComposer } from '../chat/ChatComposer'
+import { PlanProjectDisplayNameProvider } from '../chat/PlanProjectDisplayNameContext'
 import { getBlocksText, getMessageText } from '../chat/message-utils'
 import {
   buildPmNewProjectBriefMessageFromProject,
@@ -53,6 +54,7 @@ export type ProjectManagementAgentPanelProps = Pick<
   agentKickoffProject?: PmProject | null
   onAgentKickoffConsumed?: () => void
   onPlanApplied?: (projectId: string) => void
+  onProjectsChange?: () => void | Promise<void>
   workspace?: import('@toolman/shared').Workspace | null
 }
 
@@ -64,6 +66,7 @@ export function ProjectManagementAgentPanel({
   agentKickoffProject = null,
   onAgentKickoffConsumed,
   onPlanApplied,
+  onProjectsChange,
   chat,
   messageSettings,
   defaultModelId,
@@ -117,6 +120,7 @@ export function ProjectManagementAgentPanel({
         selectedProjectId={selectedProjectId}
         pendingBrief={null}
         onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
+        onProjectsChange={onProjectsChange}
       />
     ) : null
 
@@ -163,6 +167,15 @@ export function ProjectManagementAgentPanel({
     })
   }, [agentKickoffProject, chat, linked, onAgentKickoffConsumed, planEnabled])
 
+  const selectedProjectLabel = useMemo(() => {
+    const project = projects.find((entry) => entry.id === selectedProjectId)
+    if (!project) return null
+    const code = project.code?.trim() ?? ''
+    const name = project.name?.trim() ?? ''
+    if (code && name) return `${code} · ${name}`
+    return name || code || null
+  }, [projects, selectedProjectId])
+
   // Prefer showing an already-resolved session over a loading flash (keep-alive / re-entry).
   if (
     !linked &&
@@ -205,7 +218,7 @@ export function ProjectManagementAgentPanel({
   }
 
   return (
-    <>
+    <PlanProjectDisplayNameProvider projectName={selectedProjectLabel}>
       {chat.error ? (
         <div className="tm-error-bar">
           {chat.error}
@@ -247,6 +260,6 @@ export function ProjectManagementAgentPanel({
         assistantFooterMessageId={lastAssistantMessageId}
         assistantFooter={planApplyFooter}
       />
-    </>
+    </PlanProjectDisplayNameProvider>
   )
 }

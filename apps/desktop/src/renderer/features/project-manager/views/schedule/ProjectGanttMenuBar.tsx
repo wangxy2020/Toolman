@@ -37,6 +37,13 @@ export type GanttMenuAction =
 
 export type GanttLeafTaskType = 'task' | 'milestone'
 
+export type GanttVersionSwitchEntry = {
+  version: number
+  name: string
+  baselineId: string | null
+  isCurrent: boolean
+}
+
 type MenuItem = {
   key: GanttMenuAction
   title: string
@@ -59,6 +66,8 @@ interface Props {
   baselines: Array<{ id: string; name: string }>
   selectedBaselineId: string | null
   onSelectBaseline: (id: string | null) => void
+  versionSwitchEntries: GanttVersionSwitchEntry[]
+  onRestoreBaseline: (id: string) => void
   onAction: (action: GanttMenuAction) => void
 }
 
@@ -97,6 +106,8 @@ export function ProjectGanttMenuBar({
   baselines,
   selectedBaselineId,
   onSelectBaseline,
+  versionSwitchEntries,
+  onRestoreBaseline,
   onAction,
 }: Props) {
   const { t } = useI18n()
@@ -412,36 +423,100 @@ export function ProjectGanttMenuBar({
                 type="button"
                 role="menuitem"
                 className="tm-pm-gantt-view-option"
+                disabled={!hasProject}
                 onClick={() => {
                   onAction('captureBaseline')
                   setOpenMenu(null)
                 }}>
                 {t('projectManagerPage.schedule.captureBaseline')}
               </button>
-              {baselines.length > 0 ? (
-                <div className="tm-pm-gantt-submenu-title">
-                  {t('projectManagerPage.schedule.baselineSelect')}
+
+              <div className="tm-pm-gantt-submenu-title">
+                {t('projectManagerPage.schedule.baselineSelect')}
+              </div>
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={selectedBaselineId == null}
+                className={[
+                  'tm-pm-gantt-view-option',
+                  selectedBaselineId == null ? 'tm-pm-gantt-view-option--active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  onSelectBaseline(null)
+                  setOpenMenu(null)
+                }}>
+                {t('projectManagerPage.schedule.baselineCompareNone')}
+              </button>
+              {baselines.length === 0 ? (
+                <div className="tm-pm-gantt-submenu-empty">
+                  {t('projectManagerPage.schedule.baselineEmpty')}
                 </div>
-              ) : null}
-              {baselines.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={selectedBaselineId === entry.id}
-                  className={[
-                    'tm-pm-gantt-view-option',
-                    selectedBaselineId === entry.id ? 'tm-pm-gantt-view-option--active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => {
-                    onSelectBaseline(entry.id)
-                    setOpenMenu(null)
-                  }}>
-                  {entry.name}
-                </button>
-              ))}
+              ) : (
+                baselines.map((entry) => (
+                  <button
+                    key={`compare-${entry.id}`}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selectedBaselineId === entry.id}
+                    className={[
+                      'tm-pm-gantt-view-option',
+                      selectedBaselineId === entry.id ? 'tm-pm-gantt-view-option--active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      onSelectBaseline(
+                        selectedBaselineId === entry.id ? null : entry.id,
+                      )
+                      setOpenMenu(null)
+                    }}>
+                    {entry.name}
+                  </button>
+                ))
+              )}
+
+              <div className="tm-pm-gantt-submenu-title">
+                {t('projectManagerPage.schedule.versionSwitch')}
+              </div>
+              {versionSwitchEntries.length === 0 ? (
+                <div className="tm-pm-gantt-submenu-empty">
+                  {t('projectManagerPage.schedule.versionSwitchEmpty')}
+                </div>
+              ) : (
+                versionSwitchEntries.map((entry) => {
+                  const canSwitch = entry.baselineId != null
+                  return (
+                    <button
+                      key={`restore-v-${entry.version}`}
+                      type="button"
+                      role="menuitem"
+                      className="tm-pm-gantt-view-option"
+                      disabled={!canSwitch}
+                      title={
+                        canSwitch
+                          ? undefined
+                          : t('projectManagerPage.schedule.versionSwitchNoSnapshot')
+                      }
+                      onClick={() => {
+                        if (!entry.baselineId) return
+                        onRestoreBaseline(entry.baselineId)
+                        setOpenMenu(null)
+                      }}>
+                      {t('projectManagerPage.schedule.switchToVersion', { name: entry.name })}
+                      {entry.isCurrent
+                        ? ` · ${t('projectManagerPage.projectInfo.saveHistoryCurrent')}`
+                        : ''}
+                      {!canSwitch
+                        ? ` · ${t('projectManagerPage.schedule.versionSwitchNoSnapshotShort')}`
+                        : ''}
+                    </button>
+                  )
+                })
+              )}
+
               <button
                 type="button"
                 role="menuitem"

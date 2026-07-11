@@ -928,6 +928,8 @@
   position: fixed;
   z-index: 2000;
   min-width: 148px;
+  max-height: min(70vh, 420px);
+  overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--tm-border);
   border-radius: 8px;
@@ -1281,6 +1283,9 @@
 
 .tm-pm-gantt-col--name {
   gap: 2px;
+  /* Prevent long titles / deep indent from expanding the fixed track. */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .tm-pm-gantt-grid-row .tm-pm-gantt-col--name {
@@ -1817,6 +1822,12 @@ button.tm-pm-gantt-col-menu-action:hover {
   font-size: 11px;
   color: var(--tm-text-muted);
   border-top: 1px solid var(--tm-border);
+}
+
+.tm-pm-gantt-submenu-empty {
+  padding: 4px 10px 8px;
+  font-size: 12px;
+  color: var(--tm-text-tertiary);
 }
 
 .tm-pm-gantt-color-grid {
@@ -2448,24 +2459,76 @@ button.tm-pm-gantt-col-menu-action:hover {
 .tm-pm-project-info-save-history {
   margin: 0;
   padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   width: 100%;
+  border: none;
+  background: transparent;
 }
 
-.tm-pm-project-info-save-history li {
+.tm-pm-project-info-save-history-head,
+.tm-pm-project-info-save-history-row {
   display: grid;
-  grid-template-columns: minmax(72px, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(80px, 1fr) minmax(110px, 1.3fr) minmax(64px, 0.8fr) minmax(64px, 0.9fr) auto;
   gap: 8px 12px;
-  align-items: baseline;
-  padding: 6px 8px;
-  border: 0.5px solid var(--tm-border);
-  border-radius: 6px;
-  background: var(--tm-sidebar-bg, transparent);
+  align-items: center;
+  padding: 0 0 8px;
   font-size: 12px;
+}
+
+.tm-pm-project-info-save-history-head {
+  font-weight: 500;
   color: var(--tm-text-secondary);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-bottom: 0.5px solid var(--tm-border);
+  /* Match label line height so header aligns with「保存记录」 */
+  min-height: 18px;
+  padding-bottom: 6px;
+}
+
+.tm-pm-project-info-save-history-row {
+  color: var(--tm-text-secondary);
+  border: none;
+  border-bottom: 0.5px solid var(--tm-border);
+  padding: 6px 0;
+}
+
+.tm-pm-project-info-save-history-row:last-child {
+  border-bottom: none;
+}
+
+.tm-pm-project-info-save-history-current {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--tm-accent);
+  background: color-mix(in srgb, var(--tm-accent) 12%, transparent);
+}
+
+.tm-pm-project-info-save-history-actions {
+  justify-self: end;
+}
+
+.tm-pm-project-info-save-history-delete {
+  height: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tm-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.tm-pm-project-info-save-history-delete:hover:not(:disabled) {
+  color: #b91c1c;
+}
+
+.tm-pm-project-info-save-history-delete:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .tm-kb-settings-row--block {
