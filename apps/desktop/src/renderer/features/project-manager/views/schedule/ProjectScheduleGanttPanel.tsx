@@ -6,6 +6,7 @@ import {
   buildPmWorkItemForest,
   buildScheduleSaveMetadata,
   IpcChannel,
+  readPendingAgentScheduleRevision,
   readScheduleVersion,
   type PmProject,
   type PmScheduleBaseline,
@@ -774,7 +775,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const handleScheduleSave = useCallback(async () => {
     if (!selectedProjectId || !selectedProject) return
     await persistAutoSchedule()
-    const nextMeta = buildScheduleSaveMetadata(selectedProject.metadata ?? {}, {
+    const prevMeta = selectedProject.metadata ?? {}
+    const bumped = readPendingAgentScheduleRevision(prevMeta)
+    const nextMeta = buildScheduleSaveMetadata(prevMeta, {
       workItemCount: items.length,
     })
     await pmApi.updateProject({
@@ -783,11 +786,21 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     })
     onProjectsChange?.()
     const version = readScheduleVersion(nextMeta)
-    window.alert(
-      t('projectManagerPage.schedule.saveSuccess', {
-        version: String(version),
-      }),
-    )
+    if (bumped) {
+      window.alert(
+        t('projectManagerPage.schedule.saveSuccessNewVersion', {
+          version: String(version),
+        }),
+      )
+    } else if (version > 0) {
+      window.alert(
+        t('projectManagerPage.schedule.saveSuccessUpdated', {
+          version: String(version),
+        }),
+      )
+    } else {
+      window.alert(t('projectManagerPage.schedule.saveSuccess'))
+    }
   }, [items.length, onProjectsChange, persistAutoSchedule, selectedProject, selectedProjectId, t])
 
   const handleMenuAction = (action: GanttMenuAction) => {
@@ -898,6 +911,51 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     ? `${selectedProject.code} · ${selectedProject.name}`
     : t('projectManagerPage.headerProject.allProjects')
   const rootSelected = isGanttProjectRootId(selectedId)
+  const workItemCount = items.length
+  const checkedCount = checkedIds.size
+  const criticalCount = criticalIds.size
+  const scheduleVersion = readScheduleVersion(selectedProject?.metadata)
+  const pendingAgentRevision = readPendingAgentScheduleRevision(selectedProject?.metadata)
+  const statusMessage = (() => {
+    if (pendingAgentRevision) {
+      return {
+        text: t('projectManagerPage.schedule.statusBar.pendingAgentRevision'),
+        tone: 'info' as const,
+      }
+    }
+    if (selectedItem && !isGanttProjectRootId(selectedItem.id)) {
+      return {
+        text: t('projectManagerPage.schedule.statusBar.selected', {
+          title: selectedItem.title,
+        }),
+        tone: 'muted' as const,
+      }
+    }
+    if (checkedCount > 0) {
+      return {
+        text: t('projectManagerPage.schedule.statusBar.checked', {
+          count: String(checkedCount),
+        }),
+        tone: 'muted' as const,
+      }
+    }
+    return {
+      text: t('projectManagerPage.schedule.statusBar.ready', {
+        count: String(workItemCount),
+      }),
+      tone: 'muted' as const,
+    }
+  })()
+  const statusMetaParts = [
+    t(`projectManagerPage.schedule.views.${uiPrefs.scheduleView}`),
+    t('projectManagerPage.schedule.statusBar.tasks', { count: String(workItemCount) }),
+    t('projectManagerPage.schedule.statusBar.critical', { count: String(criticalCount) }),
+    scheduleVersion > 0
+      ? t('projectManagerPage.schedule.statusBar.version', {
+          version: String(scheduleVersion),
+        })
+      : t('projectManagerPage.schedule.statusBar.versionNone'),
+  ]
 
   return (
     <div
@@ -1141,6 +1199,28 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         </div>
         ) : null}
       </div>
+
+      <footer className="tm-pm-gantt-statusbar" aria-live="polite">
+        <span
+          className={[
+            'tm-pm-gantt-statusbar-message',
+            `tm-pm-gantt-statusbar-message--${statusMessage.tone}`,
+          ].join(' ')}>
+          {statusMessage.text}
+        </span>
+        <div className="tm-pm-gantt-statusbar-meta" title={statusMetaParts.join(' · ')}>
+          {statusMetaParts.map((part, index) => (
+            <span key={`${part}-${index}`} className="tm-pm-gantt-statusbar-meta-item">
+              {index > 0 ? (
+                <span className="tm-pm-gantt-statusbar-sep" aria-hidden>
+                  ·
+                </span>
+              ) : null}
+              {part}
+            </span>
+          ))}
+        </div>
+      </footer>
 
       <div className="tm-pm-gantt-print-legend" aria-hidden>
         <span className="tm-pm-gantt-print-legend-title">

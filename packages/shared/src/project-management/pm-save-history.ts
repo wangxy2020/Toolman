@@ -2,6 +2,8 @@
 export const PM_SCHEDULE_VERSION_KEY = 'scheduleVersion'
 export const PM_LAST_SAVED_AT_KEY = 'lastSavedAt'
 export const PM_SAVE_HISTORY_KEY = 'saveHistory'
+/** Set by agent plan/schedule apply; cleared on next Gantt save that bumps version. */
+export const PM_PENDING_AGENT_REVISION_KEY = 'pendingAgentScheduleRevision'
 
 export const PM_SAVE_HISTORY_MAX = 10
 
@@ -57,9 +59,29 @@ export function readSaveHistory(
   }))
 }
 
+export function readPendingAgentScheduleRevision(
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  return metadata?.[PM_PENDING_AGENT_REVISION_KEY] === true
+}
+
+/** Mark that an agent apply landed; the next intentional Save may create a new version. */
+export function markPendingAgentScheduleRevision(
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  return {
+    ...(metadata ?? {}),
+    [PM_PENDING_AGENT_REVISION_KEY]: true,
+  }
+}
+
 /**
  * Build the next metadata patch after a successful schedule save.
- * Preserves unrelated metadata keys; caps history at {@link PM_SAVE_HISTORY_MAX}.
+ *
+ * - `bumpVersion: true` (default when pending agent revision): new version + history entry
+ * - otherwise: keep current version, refresh `lastSavedAt` / current history row
+ *
+ * Clears {@link PM_PENDING_AGENT_REVISION_KEY}. Caps history at {@link PM_SAVE_HISTORY_MAX}.
  */
 export function buildScheduleSaveMetadata(
   metadata: Record<string, unknown> | null | undefined,
@@ -67,24 +89,63 @@ export function buildScheduleSaveMetadata(
     workItemCount: number
     savedAt?: number
     note?: string
+    /** Override auto detection from pending agent flag. */
+    bumpVersion?: boolean
   },
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) }
-  const nextVersion = readScheduleVersion(base) + 1
   const savedAt = options.savedAt ?? Date.now()
-  const entry: PmScheduleSaveRecord = {
-    version: nextVersion,
-    savedAt,
-    workItemCount: Math.max(0, Math.floor(options.workItemCount)),
-  }
-  if (options.note?.trim()) entry.note = options.note.trim()
+  const workItemCount = Math.max(0, Math.floor(options.workItemCount))
+  const shouldBump =
+    options.bumpVersion ?? readPendingAgentScheduleRevision(base)
 
-  const history = [entry, ...readSaveHistory(base)].slice(0, PM_SAVE_HISTORY_MAX)
+  // Explicit false so shallow-merge updateProject clears a previous true flag.
+  base[PM_PENDING_AGENT_REVISION_KEY] = false
+
+  if (shouldBump) {
+    const nextVersion = readScheduleVersion(base) + 1
+    const entry: PmScheduleSaveRecord = {
+      version: nextVersion,
+      savedAt,
+      workItemCount,
+    }
+    if (options.note?.trim()) entry.note = options.note.trim()
+
+    const history = [entry, ...readSaveHistory(base)].slice(0, PM_SAVE_HISTORY_MAX)
+
+    return {
+      ...base,
+      [PM_SCHEDULE_VERSION_KEY]: nextVersion,
+      [PM_LAST_SAVED_AT_KEY]: savedAt,
+      [PM_SAVE_HISTORY_KEY]: history,
+    }
+  }
+
+  const currentVersion = readScheduleVersion(base)
+  let history = readSaveHistory(base)
+  if (currentVersion > 0) {
+    const index = history.findIndex((row) => row.version === currentVersion)
+    const updated: PmScheduleSaveRecord = {
+      version: currentVersion,
+      savedAt,
+      workItemCount,
+      ...(options.note?.trim()
+        ? { note: options.note.trim() }
+        : index >= 0 && history[index]?.note
+          ? { note: history[index]!.note }
+          : {}),
+    }
+    if (index >= 0) {
+      history = [...history]
+      history[index] = updated
+    } else {
+      history = [updated, ...history].slice(0, PM_SAVE_HISTORY_MAX)
+    }
+  }
 
   return {
     ...base,
-    [PM_SCHEDULE_VERSION_KEY]: nextVersion,
     [PM_LAST_SAVED_AT_KEY]: savedAt,
-    [PM_SAVE_HISTORY_KEY]: history,
+    ...(currentVersion > 0 ? { [PM_SAVE_HISTORY_KEY]: history } : {}),
   }
 }

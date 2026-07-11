@@ -1,4 +1,5 @@
 import {
+  markPendingAgentScheduleRevision,
   mergePmScheduleIntoWbsSuggestions,
   nextDefaultPmProjectCode,
   PmApplyWbsInputSchema,
@@ -192,12 +193,12 @@ function writebackProjectPlan(
     }
   }
 
-  const metadata = {
+  const metadata = markPendingAgentScheduleRevision({
     ...project.metadata,
     ...(planStart ? { planStartDate: planStart } : {}),
     ...(planFinish ? { planFinishDate: planFinish } : {}),
     ...(plan?.durationDays != null ? { planDurationDays: plan.durationDays } : {}),
-  }
+  })
 
   return updatePmProject({
     id: project.id,
@@ -402,6 +403,16 @@ export function applyPmScheduleSuggestions(input: unknown) {
       },
     })
     updated.push(next)
+  }
+
+  if (updated.length > 0) {
+    const project = getProjectRepo().getById(data.projectId)
+    if (project) {
+      updatePmProject({
+        id: project.id,
+        metadata: markPendingAgentScheduleRevision(project.metadata),
+      })
+    }
   }
 
   return { updatedCount: updated.length, items: updated, projectId: data.projectId }
