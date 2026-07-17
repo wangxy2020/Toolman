@@ -8,6 +8,7 @@ import {
   readScheduleVersion,
   resolvePmPlanApplyAction,
   upsertAppliedPlanReceipt,
+  versionPlanSnapshotName,
   type Message,
   type PmProject,
   type PmProjectPlan,
@@ -241,7 +242,7 @@ export function ProjectPlanAgentApplyBar({
     [workspaceId],
   )
 
-  /** Protect current version snapshot before destructive clearExisting. */
+  /** Protect current version plan snapshot before destructive clearExisting. */
   const protectCurrentVersionBaseline = useCallback(
     async (project: PmProject) => {
       const version = readScheduleVersion(project.metadata)
@@ -250,15 +251,13 @@ export function ProjectPlanAgentApplyBar({
         await pmScheduleApi.createBaseline(
           workspaceId,
           project.id,
-          t('projectManagerPage.schedule.versionBaselineName', {
-            version: String(version),
-          }),
+          versionPlanSnapshotName(version),
         )
       } catch {
         // Best-effort; apply should still proceed.
       }
     },
-    [t, workspaceId],
+    [workspaceId],
   )
 
   const confirmDestructiveApply = useCallback(

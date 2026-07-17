@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { type CommunityBoardMessage } from '@toolman/shared'
 
+import { translateCommunityDisplayName } from '../../i18n/community-user-labels'
 import { useI18n } from '../../i18n/useI18n'
 import { formatBoardMessageTitle, formatNewsDate } from './community-news-utils'
 
@@ -37,7 +38,7 @@ export function MessageBoardDetailModal({ message, onClose }: Props) {
               {formatBoardMessageTitle(message.body, 200)}
             </h2>
             <p className="tm-community-news-article-modal-meta">
-              <span>{message.author.displayName}</span>
+              <span>{translateCommunityDisplayName(message.author.displayName, t)}</span>
               <span>·</span>
               <span>{formatNewsDate(message.createdAt)}</span>
             </p>

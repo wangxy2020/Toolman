@@ -28,7 +28,8 @@ export interface NotesBodyEditorHandle {
   getSelectionOffset: () => number
   setSelectionOffset: (offset: number) => void
   scrollToLine: (lineIndex: number) => void
-  runAction: (key: NoteToolbarActionKey) => boolean
+  runAction: (key: NoteToolbarActionKey, options?: { fontSizePx?: number }) => boolean
+  getRootElement: () => HTMLElement | null
   insertImage: (filePath: string, alt?: string) => void
   insertLink: (url: string) => void
 }
@@ -93,10 +94,10 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
         const root = rootRef.current
         if (root) scrollRichEditorToLine(root, lineIndex)
       },
-      runAction: (key: NoteToolbarActionKey) => {
+      runAction: (key: NoteToolbarActionKey, options?: { fontSizePx?: number }) => {
         const root = rootRef.current
         if (!root) return false
-        const changed = runRichToolbarAction(root, key)
+        const changed = runRichToolbarAction(root, key, options)
         if (!changed) return false
         const markdown = editorHtmlToMarkdown(root)
         lastEmittedRef.current = markdown
@@ -108,8 +109,10 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
           setMarkdownSelectionOffset(root, offset)
         }
         onChange(markdown)
+        onSelectionChange?.()
         return true
       },
+      getRootElement: () => rootRef.current,
       insertImage: (filePath: string, alt?: string) => {
         const root = rootRef.current
         if (!root) return

@@ -10,11 +10,20 @@ function escapeHtml(text: string): string {
 
 function applyInlineMarkdown(line: string): string {
   const underlineSlots: string[] = []
+  const fontSlots: string[] = []
   let work = line.replace(/<u>([\s\S]*?)<\/u>/gi, (_, inner: string) => {
     const token = `\u0000U${underlineSlots.length}\u0000`
     underlineSlots.push(`<u>${escapeHtml(inner)}</u>`)
     return token
   })
+  work = work.replace(
+    /<span\s+style=["']font-size:\s*([^"']+)["']>([\s\S]*?)<\/span>/gi,
+    (_, size: string, inner: string) => {
+      const token = `\u0000F${fontSlots.length}\u0000`
+      fontSlots.push(`<span style="font-size: ${escapeHtml(size.trim())}">${escapeHtml(inner)}</span>`)
+      return token
+    },
+  )
 
   work = escapeHtml(work)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -24,6 +33,9 @@ function applyInlineMarkdown(line: string): string {
 
   underlineSlots.forEach((html, index) => {
     work = work.replace(`\u0000U${index}\u0000`, html)
+  })
+  fontSlots.forEach((html, index) => {
+    work = work.replace(`\u0000F${index}\u0000`, html)
   })
 
   return work
@@ -145,6 +157,11 @@ function serializeInline(node: Node): string {
       const src = el.getAttribute('src') ?? ''
       const alt = el.getAttribute('alt') ?? '图片'
       return `![${alt}](${src})`
+    }
+    case 'SPAN': {
+      const fontSize = el.style.fontSize?.trim()
+      if (fontSize) return `<span style="font-size: ${fontSize}">${inner}</span>`
+      return inner
     }
     default:
       return inner
@@ -353,17 +370,166 @@ function getActiveBlock(root: HTMLElement): HTMLElement | null {
   return null
 }
 
+function restoreCaretIn(element: HTMLElement) {
+  const selection = window.getSelection()
+  if (!selection) return
+  const range = document.createRange()
+  range.selectNodeContents(element)
+  range.collapse(false)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+/** Replace block tag in place — avoids nested headings / growing font from formatBlock. */
+function replaceBlockElement(block: HTMLElement, tag: string): HTMLElement {
+  const next = document.createElement(tag)
+  while (block.firstChild) next.appendChild(block.firstChild)
+  block.replaceWith(next)
+  restoreCaretIn(next)
+  return next
+}
+
 function toggleBlockTag(root: HTMLElement, tag: 'h1' | 'h2' | 'h3' | 'blockquote' | 'div') {
   const block = getActiveBlock(root)
   if (!block || block === root) {
-    runExec('formatBlock', tag)
+    runExec('formatBlock', tag === 'div' ? 'div' : tag)
     return
   }
   if (block.tagName.toLowerCase() === tag) {
-    runExec('formatBlock', 'div')
+    replaceBlockElement(block, 'div')
     return
   }
-  runExec('formatBlock', tag)
+  replaceBlockElement(block, tag)
+}
+
+function applyFontSizePx(root: HTMLElement, px: number) {
+  root.focus()
+  const selection = window.getSelection()
+  if (!selection?.rangeCount) return
+  const range = selection.getRangeAt(0)
+  if (range.collapsed) {
+    const span = document.createElement('span')
+    span.style.fontSize = `${px}px`
+    span.appendChild(document.createTextNode('\u200b'))
+    range.insertNode(span)
+    const next = document.createRange()
+    next.setStart(span.firstChild ?? span, 1)
+    next.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(next)
+    root.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    return
+  }
+  const span = document.createElement('span')
+  span.style.fontSize = `${px}px`
+  try {
+    range.surroundContents(span)
+  } catch {
+    span.appendChild(range.extractContents())
+    range.insertNode(span)
+  }
+  const next = document.createRange()
+  next.selectNodeContents(span)
+  next.collapse(false)
+  selection.removeAllRanges()
+  selection.addRange(next)
+  root.dispatchEvent(new InputEvent('input', { bubbles: true }))
+}
+
+export type NotesToolbarFormatState = {
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+  h1: boolean
+  h2: boolean
+  h3: boolean
+  body: boolean
+}
+
+function selectionInsideRoot(root: HTMLElement): boolean {
+  const selection = window.getSelection()
+  if (!selection?.rangeCount) return false
+  const node = selection.anchorNode
+  if (!node) return false
+  return root.contains(node.nodeType === Node.TEXT_NODE ? node.parentNode : node)
+}
+
+function walkSelectionAncestors(
+  root: HTMLElement,
+  visit: (el: HTMLElement) => boolean,
+): boolean {
+  const selection = window.getSelection()
+  if (!selection?.rangeCount) return false
+  let node: Node | null = selection.anchorNode
+  if (node?.nodeType === Node.TEXT_NODE) node = node.parentNode
+  while (node && node !== root) {
+    if (node instanceof HTMLElement && visit(node)) return true
+    node = node.parentNode
+  }
+  return false
+}
+
+function queryCommandStateSafe(command: string): boolean {
+  try {
+    return Boolean(document.queryCommandState(command))
+  } catch {
+    return false
+  }
+}
+
+function selectionHasInlineFormat(
+  root: HTMLElement,
+  command: string,
+  tags: Set<string>,
+  styleMatch: (style: CSSStyleDeclaration) => boolean,
+): boolean {
+  if (queryCommandStateSafe(command)) return true
+  return walkSelectionAncestors(root, (el) => {
+    if (tags.has(el.tagName)) return true
+    // Prefer inline styles only — computed weight on headings would false-positive Bold.
+    return styleMatch(el.style)
+  })
+}
+
+export function queryNotesToolbarFormatState(root: HTMLElement | null): NotesToolbarFormatState {
+  if (!root || !selectionInsideRoot(root)) {
+    return {
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      h1: false,
+      h2: false,
+      h3: false,
+      body: false,
+    }
+  }
+  const block = getActiveBlock(root)
+  const tag = block?.tagName.toLowerCase() ?? ''
+  return {
+    bold: selectionHasInlineFormat(root, 'bold', new Set(['STRONG', 'B']), (style) => {
+      const weight = String(style.fontWeight)
+      return weight === 'bold' || weight === 'bolder' || Number(weight) >= 600
+    }),
+    italic: selectionHasInlineFormat(root, 'italic', new Set(['EM', 'I']), (style) =>
+      style.fontStyle === 'italic' || style.fontStyle === 'oblique',
+    ),
+    underline: selectionHasInlineFormat(root, 'underline', new Set(['U']), (style) =>
+      String(style.textDecorationLine || style.textDecoration).includes('underline'),
+    ),
+    strike: selectionHasInlineFormat(
+      root,
+      'strikeThrough',
+      new Set(['S', 'STRIKE', 'DEL']),
+      (style) =>
+        String(style.textDecorationLine || style.textDecoration).includes('line-through'),
+    ),
+    h1: tag === 'h1',
+    h2: tag === 'h2',
+    h3: tag === 'h3',
+    body: tag === 'div' || tag === 'p' || tag === '',
+  }
 }
 
 function insertPlainText(root: HTMLElement, text: string) {
@@ -380,7 +546,11 @@ function insertPlainText(root: HTMLElement, text: string) {
   root.dispatchEvent(new InputEvent('input', { bubbles: true }))
 }
 
-export function runRichToolbarAction(root: HTMLElement, key: NoteToolbarActionKey): boolean {
+export function runRichToolbarAction(
+  root: HTMLElement,
+  key: NoteToolbarActionKey,
+  options?: { fontSizePx?: number },
+): boolean {
   root.focus()
 
   switch (key) {
@@ -399,9 +569,22 @@ export function runRichToolbarAction(root: HTMLElement, key: NoteToolbarActionKe
     case 'code':
       surroundSelection('code', '代码')
       return true
-    case 'body':
-      runExec('formatBlock', 'div')
+    case 'clearFormat':
+      runExec('removeFormat')
+      toggleBlockTag(root, 'div')
       return true
+    case 'fontSize': {
+      const px = options?.fontSizePx
+      if (px == null || !Number.isFinite(px)) return false
+      applyFontSizePx(root, px)
+      return true
+    }
+    case 'body': {
+      const block = getActiveBlock(root)
+      if (block && block !== root) replaceBlockElement(block, 'div')
+      else runExec('formatBlock', 'div')
+      return true
+    }
     case 'h1':
       toggleBlockTag(root, 'h1')
       return true

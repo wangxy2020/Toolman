@@ -49,6 +49,8 @@ export const PmBaselineGetInputSchema = z.object({
 
 export const PmBaselineDeleteInputSchema = z.object({
   id: UuidSchema,
+  /** Soft-delete version plan snapshots (save-history cleanup / dedupe only). */
+  allowVersionPlan: z.boolean().optional(),
 })
 
 export const PmBaselineRestoreInputSchema = z.object({

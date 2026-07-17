@@ -41,11 +41,15 @@ function persistFirebaseLogin(input: {
   region: 'intl'
 }): AuthSession {
   const expiresInSeconds = Number.parseInt(input.result.expiresIn, 10)
+  const email = input.result.email?.trim().toLowerCase()
   return persistAuthLogin({
     region: input.region,
     provider: input.provider,
     subjectId: input.result.localId,
     bindingLabel: buildBindingLabel(input.result),
+    bindingMetadata: email
+      ? { email, label: buildBindingLabel(input.result) }
+      : { label: buildBindingLabel(input.result) },
     accessToken: input.result.idToken,
     refreshToken: input.result.refreshToken,
     expiresInSeconds: Number.isFinite(expiresInSeconds) ? expiresInSeconds : undefined,

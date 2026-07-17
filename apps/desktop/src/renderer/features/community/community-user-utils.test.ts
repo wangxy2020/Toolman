@@ -1,16 +1,31 @@
 import { describe, expect, it } from 'vitest'
 
-import { INSTALL_STATUS_LABELS, USER_ROLE_LABELS } from './community-user-utils'
+import {
+  canDeleteCommunityComment,
+  canDeleteCommunityResource,
+  isCommunityFounder,
+  isCommunityModerator,
+} from './community-user-utils'
 
 describe('community-user-utils', () => {
-  it('labels user roles', () => {
-    expect(USER_ROLE_LABELS.founder).toBe('超级管理员')
-    expect(USER_ROLE_LABELS.admin).toBe('管理员')
-    expect(USER_ROLE_LABELS.user).toBe('普通用户')
+  it('identifies moderator and founder roles', () => {
+    expect(isCommunityModerator('admin')).toBe(true)
+    expect(isCommunityModerator('founder')).toBe(true)
+    expect(isCommunityModerator('user')).toBe(false)
+    expect(isCommunityFounder('founder')).toBe(true)
+    expect(isCommunityFounder('admin')).toBe(false)
   })
 
-  it('labels install statuses', () => {
-    expect(INSTALL_STATUS_LABELS.success).toBe('成功')
-    expect(INSTALL_STATUS_LABELS.pending).toBe('进行中')
+  it('allows authors and moderators to delete comments', () => {
+    expect(canDeleteCommunityComment('a1', null)).toBe(false)
+    expect(canDeleteCommunityComment('a1', { id: 'a1', role: 'user' })).toBe(true)
+    expect(canDeleteCommunityComment('a1', { id: 'other', role: 'user' })).toBe(false)
+    expect(canDeleteCommunityComment('a1', { id: 'other', role: 'admin' })).toBe(true)
+  })
+
+  it('allows owners and moderators to delete resources', () => {
+    expect(canDeleteCommunityResource('o1', { id: 'o1', role: 'user' })).toBe(true)
+    expect(canDeleteCommunityResource('o1', { id: 'other', role: 'user' })).toBe(false)
+    expect(canDeleteCommunityResource('o1', { id: 'other', role: 'founder' })).toBe(true)
   })
 })

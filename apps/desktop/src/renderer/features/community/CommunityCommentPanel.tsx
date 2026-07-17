@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { IconTrash, IconX } from '../../components/icons'
 import { formatCommunityDate } from './community-market-utils'
 import { CommunityCommentInput } from './CommunityCommentInput'
+import { translateCommunityDisplayName } from '../../i18n/community-user-labels'
 import { useI18n } from '../../i18n/useI18n'
 import { type CommunityCommentTarget } from './community-comment-utils'
 import { useCommunityInlineComments } from './useCommunityInlineComments'
@@ -64,7 +65,7 @@ export function CommunityCommentPanel({ target, open, onCountChange, onClose, em
               <li key={item.id} className="tm-community-inline-comment">
                 <div className="tm-community-inline-comment-head">
                   <span className="tm-community-inline-comment-author">
-                    {item.author.displayName}
+                    {translateCommunityDisplayName(item.author.displayName, t)}
                   </span>
                   <div className="tm-community-inline-comment-head-actions">
                     <span className="tm-community-inline-comment-time">

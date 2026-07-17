@@ -42,6 +42,13 @@ export function AdminModerationPanel() {
         <CommunityPanelHeader
           title={t('communityPage.panels.management.title')}
           subtitle={t('communityPage.panels.management.subtitle')}
+          actions={
+            <CommunityPanelRefreshButton
+              loading={moderation.loading}
+              disabled={moderation.loading}
+              onClick={handleRefresh}
+            />
+          }
         />
         <div className="tm-kb-file-panel tm-community-user-center-body">
           <div className="tm-user-center-feed">
@@ -56,14 +63,7 @@ export function AdminModerationPanel() {
     <div className="tm-community-market tm-community-user-center">
       <CommunityPanelHeader
         title={t('communityPage.panels.management.title')}
-        subtitle={isFounder ? t('communityPage.admin.founderConsole') : t('communityPage.admin.adminConsole')}
-        titleExtra={
-          profileRole ? (
-            <span className="tm-user-center-role-badge">
-              {getCommunityUserRoleLabel(profileRole, t)}
-            </span>
-          ) : null
-        }
+        subtitle={t('communityPage.panels.management.subtitle')}
         actions={
           <CommunityPanelRefreshButton
             title={t('communityPage.admin.scanNow')}
@@ -75,6 +75,20 @@ export function AdminModerationPanel() {
       />
 
       <div className="tm-kb-file-panel tm-community-user-center-body">
+        {isFounder || profileRole ? (
+          <div className="tm-user-center-identity-row">
+            <span className="tm-user-center-role-badge">
+              {isFounder
+                ? t('communityPage.admin.founderConsole')
+                : t('communityPage.admin.adminConsole')}
+            </span>
+            {profileRole ? (
+              <span className="tm-user-center-role-badge">
+                {getCommunityUserRoleLabel(profileRole, t)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <div
           className="tm-user-center-stat-grid"
           style={{ ['--tm-stat-cols' as string]: categoryStatCards.length }}

@@ -10,9 +10,10 @@ describe('buildDemoWorkItemSeeds', () => {
   it('creates progress management demo items', () => {
     const items = buildDemoWorkItemSeeds(mock, 'progress_management')
     expect(items.length).toBeGreaterThanOrEqual(3)
-    expect(items[0]?.type).toBe('wbs_node')
-    expect(items.some((item) => item.title.includes('施工'))).toBe(true)
-    expect(items.some((item) => item.parentKey === 'wbs')).toBe(true)
+    expect(items.some((item) => item.key === 'wbs')).toBe(false)
+    expect(items.some((item) => item.title.includes('进度 WBS'))).toBe(false)
+    expect(items.every((item) => item.parentKey == null)).toBe(true)
+    expect(items.some((item) => item.title.includes('阶段主线'))).toBe(true)
   })
 
   it('creates cost management demo items', () => {

@@ -759,13 +759,52 @@
 }
 
 
-.tm-pm-header-project {
+/*
+ * PM breadcrumb: keep「项目管理 / XX管理」fully visible on one line;
+ * only the 3rd segment (project picker) may shrink with ellipsis.
+ */
+.tm-project-manager-page .tm-chat-header .tm-chat-breadcrumb {
+  flex-wrap: nowrap;
+  align-items: center;
+  min-height: 0;
+}
+
+.tm-project-manager-page .tm-chat-header .tm-chat-breadcrumb > .tm-module-pill:first-child {
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.tm-project-manager-page
+  .tm-chat-header
+  .tm-chat-breadcrumb
+  > .tm-module-breadcrumb-group:not(.tm-pm-header-project) {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+}
+
+.tm-project-manager-page
+  .tm-chat-header
+  .tm-chat-breadcrumb
+  > .tm-module-breadcrumb-group:not(.tm-pm-header-project)
+  .tm-module-pill {
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.tm-project-manager-page .tm-pm-header-project {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  flex: 0 1 auto;
-  max-width: min(200px, 28vw);
+  flex: 1 1 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .tm-pm-header-project-select.tm-model-pill {
@@ -809,6 +848,8 @@
   min-width: 0;
   min-height: 0;
   width: 100%;
+  /* Needed for Gantt/Notes toolbar horizontal scroll in narrow panes — do not remove casually. */
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -826,9 +867,23 @@
   overflow: hidden;
 }
 
-/* Use the shared notes toolbar look (height, padding, border, scroll). */
+/* Shared notes toolbar look: single row + horizontal scrollbar when overflowing. */
 .tm-pm-gantt-toolbar.tm-notes-toolbar {
   width: 100%;
+  height: var(--tm-titlebar-height);
+  min-height: var(--tm-titlebar-height);
+  max-height: var(--tm-titlebar-height);
+  padding: 0 12px;
+  box-sizing: border-box;
+  align-items: center;
+  overflow: hidden;
+}
+
+.tm-pm-gantt-toolbar-group {
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
 }
 
 .tm-pm-gantt-statusbar {
@@ -881,10 +936,6 @@
   opacity: 0.55;
 }
 
-.tm-pm-gantt-toolbar-group {
-  flex-wrap: nowrap;
-}
-
 .tm-pm-gantt-toolbar-group .tm-notes-toolbar-item {
   flex-shrink: 0;
 }
@@ -917,6 +968,14 @@
 
 .tm-pm-gantt-view-menu .tm-notes-toolbar-btn {
   gap: 4px;
+}
+
+.tm-pm-resource-view-btn.tm-notes-toolbar-btn {
+  justify-content: flex-start;
+}
+
+.tm-pm-resource-view-btn-label {
+  flex-shrink: 0;
 }
 
 .tm-pm-gantt-view-current {
@@ -958,6 +1017,34 @@
 .tm-pm-gantt-view-option--active {
   color: var(--tm-accent);
   font-weight: 600;
+}
+
+.tm-pm-resource-view-current {
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 12em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+.tm-pm-resource-view-panel {
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.tm-pm-resource-view-option {
+  min-width: 0;
+}
+
+.tm-pm-resource-view-option-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-settings-modal {
@@ -2424,6 +2511,27 @@ button.tm-pm-gantt-col-menu-action:hover {
   margin-bottom: 12px;
 }
 
+/* Project info tab intros: match modal body / nav (13px), not the global 12px muted hint. */
+.tm-kb-settings-modal-content .tm-kb-settings-form > .tm-kb-settings-hint:not(.tm-pm-project-info-error) {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tm-text-secondary);
+}
+
+.tm-pm-project-info-domain-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 24px;
+  border: 1px dashed var(--tm-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tm-hover) 55%, transparent);
+  color: var(--tm-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 .tm-pm-project-info-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2472,6 +2580,11 @@ button.tm-pm-gantt-col-menu-action:hover {
   align-items: center;
   padding: 0 0 8px;
   font-size: 12px;
+}
+
+.tm-pm-project-info-save-history--resource .tm-pm-project-info-save-history-head,
+.tm-pm-project-info-save-history--resource .tm-pm-project-info-save-history-row {
+  grid-template-columns: minmax(80px, 1fr) minmax(110px, 1.3fr) minmax(72px, 1fr) auto;
 }
 
 .tm-pm-project-info-save-history-head {
@@ -2589,4 +2702,290 @@ button.tm-pm-gantt-col-menu-action:hover {
 .tm-kb-settings-row--stack .tm-kb-settings-textarea,
 .tm-kb-settings-row--stack .tm-kb-settings-input {
   width: 100%;
+}
+
+/* Resource table only. Do not reuse/alter .tm-pm-gantt-toolbar / notes toolbar scroll rules here. */
+.tm-pm-resource-table-page {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.tm-pm-resource-table-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  padding: 0;
+  /* Keep horizontal scrollbar visible when content overflows (macOS overlay can hide it). */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.tm-pm-resource-table-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.tm-pm-resource-table-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border-radius: 999px;
+}
+
+/* Forces overflow when the pane is narrower than the column set. */
+.tm-pm-resource-table-scroll-inner {
+  min-width: 820px;
+  width: max(100%, 820px);
+  box-sizing: border-box;
+}
+
+.tm-pm-resource-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.tm-pm-resource-table th,
+.tm-pm-resource-table td {
+  height: 36px;
+  border-bottom: 0.5px solid var(--tm-border);
+  border-right: 0.5px solid var(--tm-border);
+  padding: 0 8px;
+  text-align: left;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.tm-pm-resource-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 54px;
+  background: var(--tm-sidebar-bg);
+  color: var(--tm-text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-align: center;
+  border-bottom: 1px solid var(--tm-border);
+}
+
+.tm-pm-resource-table-col-index {
+  width: 48px;
+  text-align: center;
+}
+
+.tm-pm-resource-table-col-index .tm-kb-file-card-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.tm-pm-resource-table-applicable-control {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 0.5px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.tm-pm-resource-table-applicable-control:hover,
+.tm-pm-resource-table-applicable-control:focus-within {
+  border-color: var(--tm-border);
+  background: var(--tm-surface-raised, transparent);
+}
+
+.tm-pm-resource-table-applicable-display {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 18px 4px 6px;
+  color: var(--tm-text);
+  font: inherit;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.tm-pm-resource-table-applicable-control::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--tm-text-secondary, #6b7280);
+  transform: translateY(-35%);
+  pointer-events: none;
+}
+
+.tm-pm-resource-table-applicable-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tm-pm-resource-table-col-type {
+  width: 96px;
+}
+
+.tm-pm-resource-table-col-name {
+  width: 160px;
+}
+
+.tm-pm-resource-table-col-unit {
+  width: 72px;
+  text-align: center;
+}
+
+.tm-pm-resource-table-col-price {
+  width: 100px;
+  text-align: center;
+}
+
+.tm-pm-resource-table-col-baseline {
+  width: 72px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.tm-pm-resource-table td.tm-pm-resource-table-col-baseline {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.tm-pm-resource-table-baseline-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+  font: inherit;
+  color: var(--tm-text);
+}
+
+.tm-pm-resource-table-baseline-text--off {
+  color: var(--tm-danger, #dc2626);
+  font-weight: 600;
+}
+
+.tm-pm-resource-table-col-applicable {
+  width: 220px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.tm-pm-resource-table-applicable-text {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 0.5px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tm-text);
+  font: inherit;
+  line-height: 1.2;
+  padding: 4px 6px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Trailing blank area: horizontal rules continue to the panel edge. */
+.tm-pm-resource-table-col-spacer {
+  width: auto;
+  padding: 0;
+  border-right: none;
+}
+
+.tm-pm-resource-table-index {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.tm-pm-resource-table-index-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+  color: var(--tm-text-secondary);
+}
+
+.tm-pm-resource-table-cell--center {
+  text-align: center;
+}
+
+.tm-pm-resource-table-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0.5px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tm-text);
+  font: inherit;
+  padding: 4px 6px;
+}
+
+.tm-pm-resource-table-input:hover,
+.tm-pm-resource-table-input:focus {
+  border-color: var(--tm-border);
+  outline: none;
+  background: var(--tm-bg-elevated, var(--tm-bg));
+}
+
+.tm-pm-resource-table-input--center {
+  text-align: center;
+}
+
+.tm-pm-resource-table-input--number {
+  text-align: center;
+}
+
+.tm-pm-resource-table-row--selected {
+  background: color-mix(in srgb, var(--tm-accent, #3b82f6) 12%, transparent);
+}
+
+.tm-pm-resource-table-row--checked {
+  background: color-mix(in srgb, var(--tm-accent, #3b82f6) 8%, transparent);
+}
+
+@media print {
+  .tm-pm-resource-table-page .tm-pm-gantt-toolbar,
+  .tm-pm-resource-table-page .tm-pm-gantt-statusbar {
+    display: none !important;
+  }
+
+  .tm-pm-resource-table-scroll {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .tm-pm-resource-table-scroll-inner {
+    min-width: 0;
+    width: 100%;
+  }
 }

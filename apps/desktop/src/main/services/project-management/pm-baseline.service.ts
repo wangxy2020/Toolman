@@ -3,7 +3,8 @@ import {
   PM_LAST_SAVED_AT_KEY,
   PM_PENDING_AGENT_REVISION_KEY,
   PM_SCHEDULE_VERSION_KEY,
-  parseVersionFromBaselineName,
+  parseVersionPlanSnapshotName,
+  versionPlanSnapshotName,
   PmBaselineCreateInputSchema,
   PmBaselineDeleteInputSchema,
   PmBaselineGetInputSchema,
@@ -40,8 +41,40 @@ function getRelationRepo(): PmWorkItemRelationRepository {
 
 export function listPmBaselines(input: unknown) {
   const data = PmBaselineListInputSchema.parse(input)
+  reviveMissingVersionPlanSnapshots(data.projectId, data.workspaceId)
   const baselines = getBaselineRepo().listByProject(data.projectId, data.workspaceId)
   return { baselines }
+}
+
+/**
+ * If save-history still lists a version but its plan snapshot was soft-deleted
+ * (e.g. mistaken “delete baseline”), revive the newest matching row so version
+ * switch keeps working. User baselines are never revived here.
+ */
+function reviveMissingVersionPlanSnapshots(projectId: string, workspaceId: string): void {
+  let historyVersions: number[] = []
+  try {
+    const project = getPmProject({ id: projectId })
+    historyVersions = readSaveHistory(project.metadata).map((row) => row.version)
+  } catch {
+    return
+  }
+  if (historyVersions.length === 0) return
+
+  const repo = getBaselineRepo()
+  const live = repo.listByProject(projectId, workspaceId)
+  const liveVersions = new Set<number>()
+  for (const entry of live) {
+    const version = parseVersionPlanSnapshotName(entry.name)
+    if (version != null) liveVersions.add(version)
+  }
+
+  for (const version of new Set(historyVersions)) {
+    if (liveVersions.has(version)) continue
+    const soft = repo.findSoftDeletedVersionPlan(projectId, workspaceId, version)
+    if (!soft) continue
+    repo.undelete(soft.id, versionPlanSnapshotName(version))
+  }
 }
 
 export function getPmBaseline(input: unknown) {
@@ -93,23 +126,37 @@ export function createPmBaseline(input: unknown) {
     `基线 ${new Date(capturedAt).toLocaleString('zh-CN', { hour12: false })}`
   const snapshot = captureScheduleSnapshot(data.workspaceId, data.projectId)
 
-  // Version baselines are unique per schedule version: saving v2 must update only
-  // the v2 snapshot and must not create a second row that later dedupe/replace
-  // could confuse with a newer version.
-  const version = parseVersionFromBaselineName(name)
+  // Version plan snapshots are unique per schedule version (upsert).
+  // User baselines are independent — many baselines may exist for one version.
+  const version = parseVersionPlanSnapshotName(name)
   if (version != null) {
     const repo = getBaselineRepo()
     const sameVersion = repo
       .listByProject(data.projectId, data.workspaceId)
-      .filter((entry) => parseVersionFromBaselineName(entry.name) === version)
-    const [keep, ...duplicates] = sameVersion
+      .filter((entry) => parseVersionPlanSnapshotName(entry.name) === version)
+    const preferredName = versionPlanSnapshotName(version)
+    const keep =
+      sameVersion.find((entry) => entry.name === preferredName) ?? sameVersion[0]
+    const duplicates = sameVersion.filter((entry) => entry.id !== keep?.id)
     for (const duplicate of duplicates) {
       repo.softDelete(duplicate.id)
     }
     if (keep) {
-      const updated = repo.updateSnapshot(keep.id, snapshot)
+      // Migrate legacy `版本 N` rows to the reserved version-plan name.
+      const updated = repo.updateSnapshot(keep.id, snapshot, preferredName)
       if (updated) return updated
     }
+    const soft = repo.findSoftDeletedVersionPlan(data.projectId, data.workspaceId, version)
+    if (soft) {
+      const revived = repo.undeleteAndUpdateSnapshot(soft.id, snapshot, preferredName)
+      if (revived) return revived
+    }
+    return getBaselineRepo().create({
+      workspaceId: data.workspaceId,
+      projectId: data.projectId,
+      name: preferredName,
+      snapshot,
+    })
   }
 
   return getBaselineRepo().create({
@@ -125,6 +172,11 @@ export function deletePmBaseline(input: unknown) {
   const existing = getBaselineRepo().getById(data.id)
   if (!existing) {
     throw new Error('基线不存在')
+  }
+  // Version plan snapshots back save-history switches — never remove via baseline UI.
+  // Project info → delete save record is the intentional path.
+  if (parseVersionPlanSnapshotName(existing.name) != null && !data.allowVersionPlan) {
+    throw new Error('版本计划快照不能作为基线删除；请在项目信息中删除对应保存记录')
   }
   const deleted = getBaselineRepo().softDelete(data.id)
   if (!deleted) {
@@ -319,7 +371,7 @@ export function restorePmBaseline(input: unknown) {
     }
   }
 
-  const scheduleVersion = parseVersionFromBaselineName(baseline.name)
+  const scheduleVersion = parseVersionPlanSnapshotName(baseline.name)
   if (scheduleVersion != null) {
     // Keep history timestamps; only move the current-version pointer.
     const current = getPmProject({ id: baseline.projectId })

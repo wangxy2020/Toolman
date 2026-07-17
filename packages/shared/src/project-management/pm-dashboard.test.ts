@@ -79,6 +79,22 @@ describe('resolvePmProjectDashboardRecord', () => {
     const record = resolvePmProjectDashboardRecord(project, workItems)
     expect(record.progressPercent).toBe(60)
   })
+
+  it('does not use project description as the period chip', () => {
+    const record = resolvePmProjectDashboardRecord(
+      baseProject({
+        description: '本项目拟建教学楼1栋，地上6层，建筑面积5310.38㎡。',
+        metadata: {
+          contractValue: 10,
+          planPhase: '施工',
+          region: '华东',
+        },
+        code: 'PRJ-ONLY',
+      }),
+    )
+    expect(record.period).toBe('—')
+    expect(record.period).not.toContain('教学楼')
+  })
 })
 
 describe('dedupePmProjectsByCode', () => {

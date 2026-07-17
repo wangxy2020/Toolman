@@ -12,7 +12,7 @@ type UseNotesEditorKeyboardParams = {
   runSlashCommand: (item: NotesSlashCommandItem) => Promise<void>
   handleUndo: () => void
   handleRedo: () => void
-  handleToolbarAction: (key: NoteToolbarActionKey) => void
+  handleToolbarAction: (key: NoteToolbarActionKey, options?: { fontSizePx?: number }) => void
   runLink: () => void
 }
 

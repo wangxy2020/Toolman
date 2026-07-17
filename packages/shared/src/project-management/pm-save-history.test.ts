@@ -5,11 +5,15 @@ import {
   computeScheduleTotalDurationDays,
   dedupeVersionBaselines,
   findDuplicateVersionBaselineIds,
+  findVersionPlanSnapshot,
   hasAppliedPlanFingerprint,
   isBaselineSnapshotIdenticalToItems,
   isVersionBaselineName,
+  isVersionPlanSnapshotName,
+  listUserBaselines,
   markPendingAgentScheduleRevision,
   parseVersionFromBaselineName,
+  parseVersionPlanSnapshotName,
   countBaselineSnapshotChanges,
   PM_APPLIED_PLAN_RECEIPTS_KEY,
   PM_LAST_SAVED_AT_KEY,
@@ -17,6 +21,7 @@ import {
   PM_SAVE_HISTORY_KEY,
   PM_SAVE_HISTORY_MAX,
   PM_SCHEDULE_VERSION_KEY,
+  PM_VERSION_PLAN_SNAPSHOT_PREFIX,
   readAppliedPlanReceipts,
   readLastSavedAt,
   readPendingAgentScheduleRevision,
@@ -26,6 +31,7 @@ import {
   resolvePmPlanApplyAction,
   shouldStructurallyRestoreBaseline,
   upsertAppliedPlanReceipt,
+  versionPlanSnapshotName,
 } from './pm-save-history.js'
 
 describe('pm-save-history', () => {
@@ -72,11 +78,13 @@ describe('pm-save-history', () => {
     expect(readPendingAgentScheduleRevision(manual)).toBe(false)
   })
 
-  it('manual save with no version only stamps lastSavedAt', () => {
+  it('first manual save creates version 1 and a history row', () => {
     const next = buildScheduleSaveMetadata({}, { workItemCount: 3, savedAt: 500 })
-    expect(readScheduleVersion(next)).toBe(0)
+    expect(readScheduleVersion(next)).toBe(1)
     expect(readLastSavedAt(next)).toBe(500)
-    expect(readSaveHistory(next)).toEqual([])
+    expect(readSaveHistory(next)).toEqual([
+      { version: 1, savedAt: 500, workItemCount: 3 },
+    ])
   })
 
   it('agent apply then save creates next version after manual updates', () => {
@@ -139,6 +147,51 @@ describe('pm-save-history', () => {
     expect(isVersionBaselineName('基线 A')).toBe(false)
   })
 
+  it('keeps version plan snapshots separate from user baselines', () => {
+    expect(versionPlanSnapshotName(3)).toBe(`${PM_VERSION_PLAN_SNAPSHOT_PREFIX}3`)
+    expect(parseVersionPlanSnapshotName('__pm_version_plan__:3')).toBe(3)
+    expect(parseVersionPlanSnapshotName('版本 3')).toBe(3)
+    expect(parseVersionPlanSnapshotName('基线 手动')).toBeNull()
+    expect(isVersionPlanSnapshotName('__pm_version_plan__:1')).toBe(true)
+    expect(isVersionPlanSnapshotName('基线 A')).toBe(false)
+
+    const rows = [
+      { id: 'plan', name: '__pm_version_plan__:2' },
+      { id: 'legacy', name: '版本 2' },
+      { id: 'b1', name: '基线 A' },
+      { id: 'b2', name: '基线 B' },
+    ]
+    expect(listUserBaselines(rows).map((row) => row.id)).toEqual(['b1', 'b2'])
+    expect(findVersionPlanSnapshot(rows, 2)?.id).toBe('plan')
+    expect(findVersionPlanSnapshot([{ id: 'legacy', name: '版本 2' }], 2)?.id).toBe('legacy')
+    expect(findVersionPlanSnapshot(rows, 9)).toBeNull()
+  })
+
+  it('dedupes version plan snapshots but keeps multiple user baselines', () => {
+    const rows = [
+      { id: 'a', name: '__pm_version_plan__:3' },
+      { id: 'b', name: '版本 3' },
+      { id: 'c', name: '__pm_version_plan__:2' },
+      { id: 'd', name: '版本 2' },
+      { id: 'e', name: '基线手动' },
+      { id: 'f', name: '基线手动2' },
+    ]
+    expect(dedupeVersionBaselines(rows).map((row) => row.id)).toEqual(['a', 'c', 'e', 'f'])
+    expect(findDuplicateVersionBaselineIds(rows)).toEqual(['b', 'd'])
+  })
+
+  it('dedupes legacy version baselines keeping the newest per version', () => {
+    const rows = [
+      { id: 'a', name: '版本 3' },
+      { id: 'b', name: '版本 3' },
+      { id: 'c', name: '版本 2' },
+      { id: 'd', name: '版本 2' },
+      { id: 'e', name: '基线手动' },
+    ]
+    expect(dedupeVersionBaselines(rows).map((row) => row.id)).toEqual(['a', 'c', 'e'])
+    expect(findDuplicateVersionBaselineIds(rows)).toEqual(['b', 'd'])
+  })
+
   it('removes a history entry and falls back current version', () => {
     const meta = {
       [PM_SCHEDULE_VERSION_KEY]: 2,
@@ -152,18 +205,6 @@ describe('pm-save-history', () => {
     expect(readScheduleVersion(next)).toBe(1)
     expect(readLastSavedAt(next)).toBe(1000)
     expect(readSaveHistory(next).map((row) => row.version)).toEqual([1])
-  })
-
-  it('dedupes version baselines keeping the newest per version', () => {
-    const rows = [
-      { id: 'a', name: '版本 3' },
-      { id: 'b', name: '版本 3' },
-      { id: 'c', name: '版本 2' },
-      { id: 'd', name: '版本 2' },
-      { id: 'e', name: '基线手动' },
-    ]
-    expect(dedupeVersionBaselines(rows).map((row) => row.id)).toEqual(['a', 'c', 'e'])
-    expect(findDuplicateVersionBaselineIds(rows)).toEqual(['b', 'd'])
   })
 
   it('bumps past max history version after restoring an older version', () => {

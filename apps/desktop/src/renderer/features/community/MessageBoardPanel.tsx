@@ -26,6 +26,7 @@ import { useCommunityUser } from './useCommunityUser'
 import { useCommunityHubConnection } from './useCommunityHubConnection'
 import { useRegistrationGate } from '../user/useRegistrationGate'
 import { useCommunityPanelStatus } from './community-panel-status'
+import { translateCommunityDisplayName } from '../../i18n/community-user-labels'
 import { useI18n } from '../../i18n/useI18n'
 
 export function MessageBoardPanel() {
@@ -158,7 +159,9 @@ export function MessageBoardPanel() {
                   description={formatNewsPreview(message.body)}
                   meta={
                     <>
-                      <span>{message.author.displayName}</span>
+                      <span>
+                        {translateCommunityDisplayName(message.author.displayName, t)}
+                      </span>
                       <span>·</span>
                       <span>{formatNewsDate(message.createdAt)}</span>
                     </>

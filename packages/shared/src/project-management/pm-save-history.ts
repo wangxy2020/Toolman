@@ -211,7 +211,8 @@ export function resolvePmPlanApplyAction(options: {
 /**
  * Build the next metadata patch after a successful schedule save.
  *
- * - `bumpVersion: true` (default when pending agent revision): new version + history entry
+ * - `bumpVersion: true` (default when pending agent revision, or first save with no
+ *   schedule version yet): new version + history entry
  * - otherwise: keep current version, refresh `lastSavedAt` / current history row
  *
  * Clears {@link PM_PENDING_AGENT_REVISION_KEY}. Caps history at {@link PM_SAVE_HISTORY_MAX}.
@@ -224,7 +225,7 @@ export function buildScheduleSaveMetadata(
     totalDurationDays?: number
     savedAt?: number
     note?: string
-    /** Override auto detection from pending agent flag. */
+    /** Override auto detection from pending agent flag / first-save rule. */
     bumpVersion?: boolean
   },
 ): Record<string, unknown> {
@@ -235,8 +236,11 @@ export function buildScheduleSaveMetadata(
     options.totalDurationDays != null && Number.isFinite(options.totalDurationDays)
       ? Math.max(0, Math.floor(options.totalDurationDays))
       : undefined
+  // First Gantt save (manual or agent) must create version 1 + a history row.
+  // Otherwise manually built plans only stamp lastSavedAt with an empty save record list.
   const shouldBump =
-    options.bumpVersion ?? readPendingAgentScheduleRevision(base)
+    options.bumpVersion ??
+    (readPendingAgentScheduleRevision(base) || readMaxScheduleVersion(base) === 0)
 
   // Explicit false so shallow-merge updateProject clears a previous true flag.
   base[PM_PENDING_AGENT_REVISION_KEY] = false
@@ -300,6 +304,7 @@ export function buildScheduleSaveMetadata(
 /**
  * Parse schedule version from auto-named version baselines (`版本 2` / `Version 2`).
  * Returns null when the name is a manual capture baseline.
+ * @deprecated Prefer {@link parseVersionPlanSnapshotName} — legacy display names only.
  */
 export function parseVersionFromBaselineName(name: string): number | null {
   const trimmed = name.trim()
@@ -314,8 +319,51 @@ export function isVersionBaselineName(name: string): boolean {
 }
 
 /**
- * Keep one baseline per schedule version (newest first). Manual capture baselines are kept as-is.
- * Input should already be sorted newest → oldest.
+ * Reserved storage name for a version's plan snapshot (version switch data).
+ * Not shown in the baseline-compare list — baselines are separate and many-per-version.
+ */
+export const PM_VERSION_PLAN_SNAPSHOT_PREFIX = '__pm_version_plan__:'
+
+export function versionPlanSnapshotName(version: number): string {
+  return `${PM_VERSION_PLAN_SNAPSHOT_PREFIX}${Math.floor(version)}`
+}
+
+/** Parse version from a version-plan snapshot name (new prefix or legacy `版本 N`). */
+export function parseVersionPlanSnapshotName(name: string): number | null {
+  const trimmed = name.trim()
+  if (trimmed.startsWith(PM_VERSION_PLAN_SNAPSHOT_PREFIX)) {
+    const raw = trimmed.slice(PM_VERSION_PLAN_SNAPSHOT_PREFIX.length)
+    const version = Number.parseInt(raw, 10)
+    return Number.isFinite(version) && version > 0 ? version : null
+  }
+  return parseVersionFromBaselineName(trimmed)
+}
+
+export function isVersionPlanSnapshotName(name: string): boolean {
+  return parseVersionPlanSnapshotName(name) != null
+}
+
+/** User-captured baselines only (excludes version plan snapshots used for version switch). */
+export function listUserBaselines<T extends { name: string }>(baselines: readonly T[]): T[] {
+  return baselines.filter((entry) => !isVersionPlanSnapshotName(entry.name))
+}
+
+export function findVersionPlanSnapshot<T extends { id: string; name: string }>(
+  baselines: readonly T[],
+  version: number,
+): T | null {
+  const target = Math.floor(version)
+  const preferred = versionPlanSnapshotName(target)
+  const exact = baselines.find((entry) => entry.name === preferred)
+  if (exact) return exact
+  return (
+    baselines.find((entry) => parseVersionPlanSnapshotName(entry.name) === target) ?? null
+  )
+}
+
+/**
+ * Keep one version-plan snapshot per schedule version (newest first).
+ * User baselines are never deduped — a version may have many baselines.
  */
 export function dedupeVersionBaselines<T extends { id: string; name: string }>(
   baselines: readonly T[],
@@ -323,7 +371,7 @@ export function dedupeVersionBaselines<T extends { id: string; name: string }>(
   const seenVersions = new Set<number>()
   const result: T[] = []
   for (const baseline of baselines) {
-    const version = parseVersionFromBaselineName(baseline.name)
+    const version = parseVersionPlanSnapshotName(baseline.name)
     if (version != null) {
       if (seenVersions.has(version)) continue
       seenVersions.add(version)
@@ -333,14 +381,14 @@ export function dedupeVersionBaselines<T extends { id: string; name: string }>(
   return result
 }
 
-/** Ids of older duplicate version baselines to remove (keeps newest per version). */
+/** Ids of older duplicate version-plan snapshots to remove (keeps newest per version). */
 export function findDuplicateVersionBaselineIds(
   baselines: ReadonlyArray<{ id: string; name: string }>,
 ): string[] {
   const seenVersions = new Set<number>()
   const duplicateIds: string[] = []
   for (const baseline of baselines) {
-    const version = parseVersionFromBaselineName(baseline.name)
+    const version = parseVersionPlanSnapshotName(baseline.name)
     if (version == null) continue
     if (seenVersions.has(version)) duplicateIds.push(baseline.id)
     else seenVersions.add(version)

@@ -7,8 +7,10 @@ import {
   IconPlus,
   IconPrint,
   IconProjectInfo,
+  IconRedo,
   IconSave,
   IconTrash,
+  IconUndo,
 } from '../../../../components/icons'
 import { useI18n } from '../../../../i18n/useI18n'
 import type { GanttScheduleView } from './pm-gantt-prefs'
@@ -16,10 +18,11 @@ import type { GanttScheduleView } from './pm-gantt-prefs'
 const ICON_SIZE = 16
 
 export type GanttMenuAction =
-  | 'newProject'
   | 'save'
   | 'print'
   | 'projectInfo'
+  | 'undo'
+  | 'redo'
   | 'newTask'
   | 'insertTask'
   | 'deleteTask'
@@ -59,6 +62,8 @@ interface Props {
   disabled?: boolean
   hasSelection: boolean
   hasProject?: boolean
+  canUndo?: boolean
+  canRedo?: boolean
   canSetTaskType: boolean
   selectedTaskType: GanttLeafTaskType
   scheduleView: GanttScheduleView
@@ -99,6 +104,8 @@ export function ProjectGanttMenuBar({
   disabled = false,
   hasSelection,
   hasProject = true,
+  canUndo = false,
+  canRedo = false,
   canSetTaskType,
   selectedTaskType,
   scheduleView,
@@ -149,12 +156,6 @@ export function ProjectGanttMenuBar({
 
   const items: MenuItem[] = [
     {
-      key: 'newProject',
-      title: t('projectManagerPage.schedule.menu.newProject'),
-      label: <IconPlus size={ICON_SIZE} />,
-      icon: true,
-    },
-    {
       key: 'save',
       title: t('projectManagerPage.schedule.menu.save'),
       label: <IconSave size={ICON_SIZE} />,
@@ -172,6 +173,20 @@ export function ProjectGanttMenuBar({
       label: <IconProjectInfo size={ICON_SIZE} />,
       icon: true,
       disabled: !hasProject,
+    },
+    {
+      key: 'undo',
+      title: t('projectManagerPage.schedule.menu.undo'),
+      label: <IconUndo size={ICON_SIZE} />,
+      icon: true,
+      disabled: !canUndo,
+    },
+    {
+      key: 'redo',
+      title: t('projectManagerPage.schedule.menu.redo'),
+      label: <IconRedo size={ICON_SIZE} />,
+      icon: true,
+      disabled: !canRedo,
       dividerAfter: true,
     },
     {
@@ -241,9 +256,9 @@ export function ProjectGanttMenuBar({
       ? t('projectManagerPage.schedule.menu.setMilestone')
       : t('projectManagerPage.schedule.menu.setTask')
 
-  const leadingItems = items.slice(0, 7)
-  const hierarchyItems = items.slice(7, 9)
-  const moveItems = items.slice(9)
+  const leadingItems = items.slice(0, 8)
+  const hierarchyItems = items.slice(8, 10)
+  const moveItems = items.slice(10)
 
   const renderToolbarItem = (item: MenuItem) => (
     <span key={item.key} className="tm-notes-toolbar-item">

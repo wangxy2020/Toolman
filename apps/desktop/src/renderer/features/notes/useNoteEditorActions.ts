@@ -9,6 +9,8 @@ type ActionKey =
   | 'underline'
   | 'strike'
   | 'code'
+  | 'clearFormat'
+  | 'fontSize'
   | 'body'
   | 'h1'
   | 'h2'
@@ -46,10 +48,10 @@ export function useNoteEditorActions({
   )
 
   const runAction = useCallback(
-    (key: ActionKey) =>
+    (key: ActionKey, options?: { fontSizePx?: number }) =>
       withEditor((editor) => {
         if (key === 'image' || key === 'link') return false
-        return editor.runAction(key)
+        return editor.runAction(key, options)
       }),
     [withEditor],
   )

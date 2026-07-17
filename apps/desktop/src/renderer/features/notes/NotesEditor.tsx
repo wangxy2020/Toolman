@@ -60,6 +60,7 @@ export function NotesEditor({
     >
       <NotesEditorToolbar
         disabled={locked}
+        formatState={editor.formatState}
         onRunAction={editor.handleToolbarAction}
         onRunImage={editor.runImage}
         onRunLink={editor.runLink}
@@ -141,6 +142,7 @@ export function NotesEditor({
                   const body = editor.bodyRef.current
                   if (!body) return
                   editor.updateSlashMenu(note.content, body.getSelectionOffset())
+                  editor.refreshFormatState()
                 }}
               />
             )}

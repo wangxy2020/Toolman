@@ -70,12 +70,26 @@ export function removeLegacyKnowledgeBaseRows(
   workspaceId: string,
   kind: keyof typeof DEFAULT_FOLDER_KB_NAMES,
 ): void {
+  const kbRepo = getKnowledgeBaseRepository()
+  const rows = kbRepo.listByWorkspace(workspaceId).filter((row) => row.kind === kind)
+
+  // Deduplicate same-name default-folder KBs (esp. local — historically not cleaned).
+  const createdAtMs = (value: Date | number) =>
+    value instanceof Date ? value.getTime() : Number(value)
+  const canonicalNameRows = rows
+    .filter((row) => row.name === DEFAULT_FOLDER_KB_NAME)
+    .sort((left, right) => createdAtMs(left.createdAt) - createdAtMs(right.createdAt))
+  const keepCanonical = canonicalNameRows[0]
+  for (const duplicate of canonicalNameRows.slice(1)) {
+    stopKnowledgeWatchersForKb(workspaceId, duplicate.id)
+    kbRepo.softDelete(duplicate.id, workspaceId)
+  }
+
   if (kind === 'local') return
 
   const legacyName = LEGACY_DEFAULT_FOLDER_KB_NAMES[kind]
-  const kbRepo = getKnowledgeBaseRepository()
-  const rows = kbRepo.listByWorkspace(workspaceId).filter((row) => row.kind === kind)
-  const canonical = rows.find((row) => row.name === DEFAULT_FOLDER_KB_NAME)
+  const canonical =
+    keepCanonical ?? rows.find((row) => row.name === DEFAULT_FOLDER_KB_NAME)
   const legacyRows = rows.filter((row) => row.name === legacyName)
 
   for (const legacy of legacyRows) {

@@ -97,8 +97,10 @@ export function NotesPage({
           {note ? (
             <span className="tm-module-breadcrumb-group">
               <span className="tm-chat-breadcrumb-sep">/</span>
-              <span className="tm-model-pill tm-module-pill tm-module-pill--secondary" title={note.title}>
-                {note.title}
+              <span
+                className="tm-model-pill tm-module-pill tm-module-pill--secondary"
+                title={note.title}>
+                <span className="tm-agent-pill-label">{note.title}</span>
               </span>
             </span>
           ) : null}

@@ -17,6 +17,8 @@ interface Props {
   domain?: PmDomain
   dedupeByCode?: boolean
   mockFallback?: boolean
+  /** Bump after project metadata changes so cards refresh without remount. */
+  refreshKey?: number
 }
 
 const ProjectManagementDashboard: FC<Props> = ({
@@ -25,6 +27,7 @@ const ProjectManagementDashboard: FC<Props> = ({
   domain,
   dedupeByCode = false,
   mockFallback = true,
+  refreshKey = 0,
 }) => {
   const { t } = useI18n()
   const isCost = variant === 'cost'
@@ -33,6 +36,7 @@ const ProjectManagementDashboard: FC<Props> = ({
     domain,
     dedupeByCode,
     mockFallback,
+    refreshKey,
   })
 
   if (loading && !data) {

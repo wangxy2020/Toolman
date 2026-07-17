@@ -19,6 +19,8 @@ interface Options {
   domain?: PmDomain
   dedupeByCode?: boolean
   mockFallback?: boolean
+  /** Bump to force a reload (e.g. after project info save). */
+  refreshKey?: number
 }
 
 export interface PmDashboardData {
@@ -40,7 +42,7 @@ export function buildMockPmDashboardData(): PmDashboardData {
 }
 
 export function usePmDashboardData(workspaceId: string | undefined, options: Options = {}) {
-  const { domain, dedupeByCode = false, mockFallback = true } = options
+  const { domain, dedupeByCode = false, mockFallback = true, refreshKey = 0 } = options
   const [data, setData] = useState<PmDashboardData | null>(null)
   const [loading, setLoading] = useState(Boolean(workspaceId))
   const [error, setError] = useState<string | null>(null)
@@ -101,6 +103,12 @@ export function usePmDashboardData(workspaceId: string | undefined, options: Opt
     hasDataRef.current = false
     void reload()
   }, [reload])
+
+  // Soft refresh keeps existing cards visible while new project metadata loads.
+  useEffect(() => {
+    if (refreshKey === 0) return
+    void reload()
+  }, [refreshKey, reload])
 
   return { data, loading, error, reload }
 }

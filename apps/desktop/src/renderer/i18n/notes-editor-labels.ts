@@ -12,6 +12,8 @@ export function getNotesToolbarTitles(t: TranslateFn): Record<NoteToolbarActionK
     underline: t('notesPage.editor.toolbar.underline'),
     strike: t('notesPage.editor.toolbar.strike'),
     code: t('notesPage.editor.toolbar.code'),
+    clearFormat: t('notesPage.editor.toolbar.clearFormat'),
+    fontSize: t('notesPage.editor.toolbar.fontSize'),
     body: t('notesPage.editor.toolbar.body'),
     h1: t('notesPage.editor.toolbar.h1'),
     h2: t('notesPage.editor.toolbar.h2'),

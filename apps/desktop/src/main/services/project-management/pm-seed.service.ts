@@ -156,64 +156,48 @@ export function buildDemoWorkItemSeeds(
       mock.status === 'critical' ? 'urgent' : mock.status === 'warning' ? 'high' : 'normal'
     return [
       {
-        key: 'wbs',
-        type: 'wbs_node',
-        title: `${mock.code} 进度 WBS`,
-        status: 'in_progress',
-        priority: 'normal',
-        progressPercent: mock.progressPercent,
-        sortOrder: 0,
-        description: `${mock.name} · ${mock.period}`,
-        startDate: daysFromNow(-60),
-        dueDate: daysFromNow(90),
-      },
-      {
         key: 'phase',
-        parentKey: 'wbs',
         type: 'milestone',
         title: `${mock.planPhase}阶段主线`,
         status: mock.progressPercent >= 95 ? 'done' : 'in_progress',
         priority: riskPriority,
         progressPercent: mock.progressPercent,
-        sortOrder: 1,
+        sortOrder: 0,
         description: `当前阶段 ${mock.planPhase}`,
         startDate: daysFromNow(-30),
         dueDate: mock.status === 'critical' ? daysFromNow(-2) : daysFromNow(14),
       },
       {
         key: 'review',
-        parentKey: 'wbs',
         type: 'task',
         title: `${mock.period} 进度计划复核`,
         status: mock.progressPercent >= 50 ? 'done' : 'in_progress',
         priority: 'normal',
         progressPercent: Math.min(mock.progressPercent + 10, 100),
-        sortOrder: 2,
+        sortOrder: 1,
         assignee: '计划工程师',
         startDate: daysFromNow(-14),
         dueDate: daysFromNow(7),
       },
       {
         key: 'critical',
-        parentKey: 'wbs',
         type: 'task',
         title: '关键路径偏差分析',
         status: mock.status === 'normal' ? 'todo' : 'in_progress',
         priority: riskPriority,
         progressPercent: mock.status === 'critical' ? 35 : 0,
-        sortOrder: 3,
+        sortOrder: 2,
         startDate: daysFromNow(-3),
         dueDate: mock.status !== 'normal' ? daysFromNow(3) : undefined,
       },
       {
         key: 'acceptance',
-        parentKey: 'wbs',
         type: 'milestone',
         title: `${mock.region}区域联调验收`,
         status: mock.progressPercent >= 90 ? 'in_progress' : 'todo',
         priority: 'normal',
         progressPercent: Math.max(mock.progressPercent - 15, 0),
-        sortOrder: 4,
+        sortOrder: 3,
         startDate: daysFromNow(30),
         dueDate: daysFromNow(60),
       },
@@ -553,11 +537,6 @@ export function ensurePmDemoWorkItems(
   }
 
   const workItemRepo = new PmWorkItemRepository(getDatabase())
-  const existing = workItemRepo.list({ workspaceId, projectId, domain, limit: 1 })
-  if (existing.length > 0) {
-    return
-  }
-
   const project = new PmProjectRepository(getDatabase()).getById(projectId)
   if (!project || project.workspaceId !== workspaceId) {
     return
@@ -565,6 +544,16 @@ export function ensurePmDemoWorkItems(
 
   const mock = MOCK_EPC_PROJECTS.find((entry) => entry.code === project.code)
   if (!mock) {
+    return
+  }
+
+  // Existing demo DBs: drop the legacy progress WBS wrapper under the project root.
+  if (domain === 'progress_management' && isMockSeedProject(project.metadata)) {
+    stripDemoProgressWbsNode(workItemRepo, workspaceId, projectId)
+  }
+
+  const existing = workItemRepo.list({ workspaceId, projectId, domain, limit: 1 })
+  if (existing.length > 0) {
     return
   }
 
@@ -599,6 +588,35 @@ export function ensurePmDemoWorkItems(
   if (domain === 'progress_management') {
     ensurePmDemoRelations(workspaceId, projectId, idByKey)
   }
+}
+
+/**
+ * Remove the obsolete `${code} 进度 WBS` seed row and promote its children to roots.
+ * Safe no-op when the wrapper was never created or already removed.
+ */
+function stripDemoProgressWbsNode(
+  workItemRepo: PmWorkItemRepository,
+  workspaceId: string,
+  projectId: string,
+): void {
+  const items = workItemRepo.list({
+    workspaceId,
+    projectId,
+    domain: 'progress_management',
+    limit: 500,
+  })
+  const wbs = items.find((item) => {
+    if (item.metadata?.seedKey !== 'wbs') return false
+    if (item.metadata?.source !== 'mock_seed') return false
+    return item.type === 'wbs_node' || item.title.includes('进度 WBS')
+  })
+  if (!wbs) return
+
+  for (const item of items) {
+    if (item.parentId !== wbs.id) continue
+    workItemRepo.update(item.id, { parentId: null })
+  }
+  workItemRepo.softDelete(wbs.id)
 }
 
 export function ensurePmDemoRelations(

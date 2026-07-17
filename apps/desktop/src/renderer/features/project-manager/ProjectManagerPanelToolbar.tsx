@@ -8,6 +8,7 @@ import {
   IconGantt,
   IconPlus,
   IconSliders,
+  IconTable,
 } from '../../components/icons'
 import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
@@ -47,6 +48,14 @@ const PROGRESS_SCHEDULE_ITEMS: PanelToolbarItem[] = [
   { key: 'gantt', titleKey: 'projectManagerPage.toolbar.gantt', icon: <IconGantt size={16} /> },
 ]
 
+const RESOURCE_TABLE_ITEMS: PanelToolbarItem[] = [
+  {
+    key: 'resource_table',
+    titleKey: 'projectManagerPage.toolbar.resourceTable',
+    icon: <IconTable size={16} />,
+  },
+]
+
 function insertAfterAgent(items: PanelToolbarItem[], extra: PanelToolbarItem[]): PanelToolbarItem[] {
   const agentIndex = items.findIndex((item) => item.key === 'agent')
   return [
@@ -80,13 +89,15 @@ export function ProjectManagerPanelToolbar({
   onCreateProject,
 }: Props) {
   const { t } = useI18n()
-  const baseItems =
+  const withDomainExtras =
     activeTab === 'progress_management'
       ? insertAfterAgent(BASE_VIEW_ITEMS, PROGRESS_SCHEDULE_ITEMS)
-      : BASE_VIEW_ITEMS
+      : activeTab === 'resource_management'
+        ? insertAfterAgent(BASE_VIEW_ITEMS, RESOURCE_TABLE_ITEMS)
+        : BASE_VIEW_ITEMS
   const viewItems = onCreateProject
-    ? insertCreateBetweenDatabaseAndSettings(baseItems)
-    : baseItems
+    ? insertCreateBetweenDatabaseAndSettings(withDomainExtras)
+    : withDomainExtras
 
   return (
     <>

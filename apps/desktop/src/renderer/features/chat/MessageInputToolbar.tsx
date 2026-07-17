@@ -8,7 +8,6 @@ import {
   IconShortcut,
   IconTerminalPrompt,
 } from '../../components/icons'
-import { IconTaskList } from '../../components/icons/rich-text'
 import { EmojiPickerPopup } from './EmojiPickerPopup'
 import { InputToolButton } from './InputToolButton'
 import { MessageInputResizeHandle } from './MessageInputResizeHandle'
@@ -25,12 +24,6 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
     onCreateSession,
     onToggleWebSearch,
     onToggleKb,
-    autonomousTaskMode,
-    autonomousTaskToggleTitle,
-    longTaskEnabled = false,
-    longTaskToggleDisabled = false,
-    onToggleAutonomousTask,
-    sessionTaskBindingLocked = false,
     toolbarMode,
     text,
     emojiMenuOpen,
@@ -102,21 +95,6 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
             onClick={() => onToggleKb?.()}
           >
             <IconKnowledge size={18} />
-          </InputToolButton>
-          <InputToolButton
-            label={autonomousTaskToggleTitle ?? t('chat.input.autonomousTaskOn')}
-            active={autonomousTaskMode}
-            disabled={
-              disabled ||
-              !longTaskEnabled ||
-              longTaskToggleDisabled ||
-              !onToggleAutonomousTask ||
-              sessionTaskBindingLocked
-            }
-            data-testid="autonomous-task-toggle"
-            onClick={() => void onToggleAutonomousTask?.()}
-          >
-            <IconTaskList size={18} />
           </InputToolButton>
         </>
       ) : null}

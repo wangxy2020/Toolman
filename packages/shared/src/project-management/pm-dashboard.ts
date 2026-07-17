@@ -80,7 +80,8 @@ export function resolvePmProjectDashboardRecord(
     pendingAmount,
     progressPercent: Math.round(progressPercent),
     planPhase: readMetaString(metadata, 'planPhase') ?? mock?.planPhase ?? '—',
-    period: readMetaString(metadata, 'period') ?? project.description ?? mock?.period ?? '—',
+    // Do not fall back to project.description — that is overview prose, not a period label.
+    period: readMetaString(metadata, 'period') ?? mock?.period ?? '—',
     status,
     region: readMetaString(metadata, 'region') ?? mock?.region ?? '—',
   }

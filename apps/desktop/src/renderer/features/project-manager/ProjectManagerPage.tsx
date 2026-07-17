@@ -47,6 +47,7 @@ import {
   resolvePmDatabaseListDomain,
 } from './pm-domain-config'
 import ProjectTimeEntryPanel from './views/time/ProjectTimeEntryPanel'
+import ProjectResourceTablePanel from './views/resource/ProjectResourceTablePanel'
 
 const HEADER_PROJECT_VIEWS = new Set<ProjectManagerPanelView>([
   'agent',
@@ -54,6 +55,7 @@ const HEADER_PROJECT_VIEWS = new Set<ProjectManagerPanelView>([
   'database',
   'gantt',
   'calendar',
+  'resource_table',
 ])
 
 interface Props {
@@ -170,6 +172,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   )
   const [projects, setProjects] = useState<PmProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [resourceWorkspaceInfoRequestId, setResourceWorkspaceInfoRequestId] = useState(0)
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
   /** After create dialog: open agent and auto-send plan kickoff. */
   const [createContinueWithAgent, setCreateContinueWithAgent] = useState(false)
@@ -181,7 +184,12 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   } | null>(null)
   const [agentKickoffProject, setAgentKickoffProject] = useState<PmProject | null>(null)
   const [ganttDataRevision, setGanttDataRevision] = useState(0)
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const preferAllProjectsRef = useRef(false)
+
+  const bumpDashboardRefresh = useCallback(() => {
+    setDashboardRefreshKey((value) => value + 1)
+  }, [])
 
   const projectListDomain = useMemo((): PmDomain | undefined => {
     if (!isConfigurableSidebarMenuKey(activeTab)) return undefined
@@ -214,9 +222,23 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     }
   }, [projectListDomain, workspaceId])
 
+  const reloadProjectsAndDashboard = useCallback(async () => {
+    await reloadProjects()
+    bumpDashboardRefresh()
+  }, [bumpDashboardRefresh, reloadProjects])
+
   useEffect(() => {
     void reloadProjects()
   }, [reloadProjects])
+
+  const previousPanelViewRef = useRef(panelView)
+  useEffect(() => {
+    const previous = previousPanelViewRef.current
+    previousPanelViewRef.current = panelView
+    if (previous !== panelView && panelView === 'stats') {
+      bumpDashboardRefresh()
+    }
+  }, [bumpDashboardRefresh, panelView])
 
   useEffect(() => {
     setPanelView('stats')
@@ -285,21 +307,25 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   )
 
   const handleCreateProjectSaved = useCallback(
-    (project: PmProject) => {
+    (project: PmProject, options?: { manualCreate?: boolean }) => {
       preferAllProjectsRef.current = false
       setSelectedProjectId(project.id)
-      void reloadProjects().then(() => {
+      void reloadProjectsAndDashboard().then(() => {
         setSelectedProjectId(project.id)
       })
       setGanttDataRevision((value) => value + 1)
 
-      if (createContinueWithAgent && activeTab === 'progress_management') {
+      if (
+        !options?.manualCreate &&
+        createContinueWithAgent &&
+        activeTab === 'progress_management'
+      ) {
         setAgentKickoffProject(project)
         openAgentPanel()
       }
       setCreateContinueWithAgent(false)
     },
-    [activeTab, createContinueWithAgent, openAgentPanel, reloadProjects],
+    [activeTab, createContinueWithAgent, openAgentPanel, reloadProjectsAndDashboard],
   )
 
   const handleCreateProject = useCallback(() => {
@@ -317,6 +343,9 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       onChange={(projectId) => {
         preferAllProjectsRef.current = projectId === null
         setSelectedProjectId(projectId)
+        if (projectId === null && activeTab === 'resource_management') {
+          setResourceWorkspaceInfoRequestId((id) => id + 1)
+        }
       }}
       ariaLabel={t('projectManagerPage.database.project')}
     />
@@ -355,6 +384,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
           workspaceId={workspaceId ?? undefined}
           variant="progress"
           dedupeByCode
+          refreshKey={dashboardRefreshKey}
         />
       )
     }
@@ -367,6 +397,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
           workspaceId={workspaceId ?? undefined}
           variant="cost"
           domain="cost_management"
+          refreshKey={dashboardRefreshKey}
         />
       )
     }
@@ -376,6 +407,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
           workspaceId={workspaceId ?? undefined}
           variant="progress"
           domain="progress_management"
+          refreshKey={dashboardRefreshKey}
         />
       )
     }
@@ -425,7 +457,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         domain={activeTab}
         onClose={() => setSettingsOpen(false)}
         onProjectsChange={() => {
-          void reloadProjects().then(() => {
+          void reloadProjectsAndDashboard().then(() => {
             setGanttDataRevision((value) => value + 1)
           })
         }}
@@ -433,6 +465,10 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     ) : null
 
   const showGanttPanel = panelView === 'gantt' && showProgressDashboard && workspaceId != null
+  const showResourceTablePanel =
+    panelView === 'resource_table' &&
+    activeTab === 'resource_management' &&
+    workspaceId != null
 
   const toolbarActiveView: ProjectManagerPanelView = settingsOpen ? 'settings' : panelView
 
@@ -468,7 +504,8 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     panelView !== 'database' &&
     panelView !== 'gantt' &&
     panelView !== 'calendar' &&
-    panelView !== 'time_entries' ? (
+    panelView !== 'time_entries' &&
+    panelView !== 'resource_table' ? (
       <div className="tm-kb-file-panel-empty">
         <p>
           {isProgressScheduleView(panelView)
@@ -564,9 +601,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
             agentKickoffProject={agentKickoffProject}
             onAgentKickoffConsumed={() => setAgentKickoffProject(null)}
             onPlanApplied={handlePlanApplied}
-            onProjectsChange={async () => {
-              await reloadProjects()
-            }}
+            onProjectsChange={reloadProjectsAndDashboard}
             {...agentContext!}
           />
         </AgentKeepAliveRoot>
@@ -587,10 +622,29 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
             projects={projects}
             selectedProjectId={selectedProjectId}
             dataRevision={ganttDataRevision}
-            onProjectsChange={async () => {
-              await reloadProjects()
-            }}
-            onRequestNewProject={() => openCreateProjectDialog(false)}
+            onProjectsChange={reloadProjectsAndDashboard}
+          />
+        </div>
+      ) : null}
+
+      {activeTab === 'resource_management' &&
+      workspaceId &&
+      mountedViews.has('resource_table') ? (
+        <div
+          className={[
+            'tm-module-content',
+            'tm-pm-gantt-content',
+            showResourceTablePanel ? '' : 'tm-pm-view-hidden',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!showResourceTablePanel}>
+          <ProjectResourceTablePanel
+            workspaceId={workspaceId}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onProjectsChange={reloadProjectsAndDashboard}
+            openWorkspaceInfoRequestId={resourceWorkspaceInfoRequestId}
           />
         </div>
       ) : null}
@@ -612,11 +666,13 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         className={[
           'tm-module-content',
           'tm-community-module-content',
-          showAgentPanel || showGanttPanel ? 'tm-pm-view-hidden' : '',
+          showAgentPanel || showGanttPanel || showResourceTablePanel
+            ? 'tm-pm-view-hidden'
+            : '',
         ]
           .filter(Boolean)
           .join(' ')}
-        aria-hidden={showAgentPanel || showGanttPanel}>
+        aria-hidden={showAgentPanel || showGanttPanel || showResourceTablePanel}>
         <ProjectManagerPanelShell
           title={activeMenuLabel}
           subtitle={panelSubtitle}
@@ -636,7 +692,9 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         </ProjectManagerPanelShell>
       </div>
 
-      {!showAgentPanel && !showGanttPanel ? <ModulePageStatusBar /> : null}
+      {!showAgentPanel && !showGanttPanel && !showResourceTablePanel ? (
+        <ModulePageStatusBar />
+      ) : null}
     </main>
   )
 }

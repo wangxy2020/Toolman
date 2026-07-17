@@ -16,18 +16,7 @@ export function UserCenterPanel() {
     <div className="tm-community-market tm-community-user-center">
       <CommunityPanelHeader
         title={t('communityPage.panels.mine.title')}
-        subtitle={
-          profile
-            ? translateCommunityDisplayName(profile.displayName, t)
-            : t('communityPage.panels.mine.subtitle')
-        }
-        titleExtra={
-          profile ? (
-            <span className="tm-user-center-role-badge">
-              {getCommunityUserRoleLabel(profile.role, t)}
-            </span>
-          ) : null
-        }
+        subtitle={t('communityPage.panels.mine.subtitle')}
         actions={
           <CommunityPanelRefreshButton
             loading={center.loading}
@@ -38,6 +27,16 @@ export function UserCenterPanel() {
       />
 
       <div className="tm-kb-file-panel tm-community-user-center-body">
+        {profile ? (
+          <div className="tm-user-center-identity-row">
+            <span className="tm-user-center-role-badge">
+              {translateCommunityDisplayName(profile.displayName, t)}
+            </span>
+            <span className="tm-user-center-role-badge">
+              {getCommunityUserRoleLabel(profile.role, t)}
+            </span>
+          </div>
+        ) : null}
         <div
           className="tm-user-center-stat-grid"
           style={{ ['--tm-stat-cols' as string]: USER_CENTER_SECTIONS.length }}

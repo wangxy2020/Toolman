@@ -15,6 +15,11 @@ import { buildApiQuery, fromApiJson, toApiJson } from './community-case'
 import { asItems, fetchWithHubCache, requireClient } from './community-ipc.facade-core'
 
 export async function listBoardMessages(input: unknown) {
+  // Ensure current user's hub displayName is the registered account (email) before listing.
+  await import('../auth/auth-profile-sync.service')
+    .then(({ syncAuthProfileToCommunityHub }) => syncAuthProfileToCommunityHub())
+    .catch(() => undefined)
+
   const parsed = CommunityBoardMessageListInputSchema.parse(input ?? {})
   const query = buildApiQuery({
     user_id: parsed.userId,

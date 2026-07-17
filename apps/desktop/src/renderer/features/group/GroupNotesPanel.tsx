@@ -4,6 +4,7 @@ import { GroupNoteActionMenu } from './GroupNoteActionMenu'
 import { GroupFileContextMenu } from './GroupFileContextMenu'
 import { GroupMemberResourceSection } from './GroupMemberResourceSection'
 import { GroupPanelHeader } from './GroupPanelHeader'
+import { GroupPanelRefreshButton } from './GroupPanelRefreshButton'
 import { GroupSharedNotebookSection } from './GroupSharedNotebookSection'
 import type { GroupNotesPanelProps } from './group-notes-panel-types'
 import { useGroupNotesPanel } from './useGroupNotesPanel'
@@ -49,6 +50,7 @@ export function GroupNotesPanel(props: GroupNotesPanelProps) {
     handleOpenGroupNote,
     handleNoteAction,
     handleConfirmPicker,
+    handleRefresh,
   } = panel
 
   return (
@@ -59,6 +61,12 @@ export function GroupNotesPanel(props: GroupNotesPanelProps) {
           count: p2pNotes.sharedResources.length,
           type: t('groupPage.panels.types.notes'),
         })}`}
+        actions={
+          <GroupPanelRefreshButton
+            loading={p2pNotes.loading}
+            onRefresh={() => void handleRefresh()}
+          />
+        }
       />
 
       <div className="tm-kb-file-panel" onContextMenu={handleContextMenu}>

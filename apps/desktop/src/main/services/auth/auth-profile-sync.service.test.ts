@@ -7,6 +7,9 @@ const mockExchangeAuthHubToken = vi.fn()
 const mockGetUserMe = vi.fn()
 const mockUpdateUserMe = vi.fn()
 const mockSyncAuthingUserProfileAfterLogin = vi.fn()
+const mockResolveRegisteredAccountDisplayName = vi.fn()
+const mockInvalidateHubTokenCache = vi.fn()
+const mockInvalidateCommunityHubCache = vi.fn()
 
 vi.mock('../auth-session.service', () => ({
   getAuthSession: () => mockGetAuthSession(),
@@ -24,6 +27,19 @@ vi.mock('./auth-hub-token.service', () => ({
   exchangeAuthHubToken: () => mockExchangeAuthHubToken(),
 }))
 
+vi.mock('./resolve-registered-email', () => ({
+  resolveRegisteredAccountDisplayName: (...args: unknown[]) =>
+    mockResolveRegisteredAccountDisplayName(...args),
+}))
+
+vi.mock('../community/community-hub-auth.service', () => ({
+  invalidateHubTokenCache: () => mockInvalidateHubTokenCache(),
+}))
+
+vi.mock('../community/community-hub-cache.service', () => ({
+  invalidateCommunityHubCache: (...args: unknown[]) => mockInvalidateCommunityHubCache(...args),
+}))
+
 vi.mock('../community/community-bridge.service', () => ({
   getCommunityHubStatus: () => mockGetCommunityHubStatus(),
 }))
@@ -36,6 +52,7 @@ vi.mock('../community/community-ipc.facade', () => ({
 describe('auth-profile-sync.service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.resetModules()
     mockGetAuthSession.mockReturnValue({
       registrationStatus: 'registered',
       isLoggedIn: true,
@@ -46,6 +63,7 @@ describe('auth-profile-sync.service', () => {
     mockGetIdentityProfile.mockReturnValue({
       displayName: '本地昵称',
     })
+    mockResolveRegisteredAccountDisplayName.mockReturnValue(undefined)
     mockExchangeAuthHubToken.mockResolvedValue({
       accessToken: 'hub-token',
       expiresAt: Date.now() + 3600_000,
@@ -90,7 +108,20 @@ describe('auth-profile-sync.service', () => {
     expect(mockGetUserMe).not.toHaveBeenCalled()
   })
 
-  it('pushes local display name to community hub when it differs', async () => {
+  it('pushes registered email to community hub when available', async () => {
+    mockResolveRegisteredAccountDisplayName.mockReturnValue('user@example.com')
+
+    const { syncAuthProfileToCommunityHub } = await import('./auth-profile-sync.service')
+    const profile = await syncAuthProfileToCommunityHub()
+
+    expect(mockInvalidateHubTokenCache).toHaveBeenCalled()
+    expect(mockExchangeAuthHubToken).toHaveBeenCalled()
+    expect(mockUpdateUserMe).toHaveBeenCalledWith({ displayName: 'user@example.com' })
+    expect(mockInvalidateCommunityHubCache).toHaveBeenCalledWith('board-messages')
+    expect(profile?.displayName).toBe('user@example.com')
+  })
+
+  it('falls back to local display name when email is unavailable', async () => {
     const { syncAuthProfileToCommunityHub } = await import('./auth-profile-sync.service')
     const profile = await syncAuthProfileToCommunityHub()
 
@@ -100,10 +131,11 @@ describe('auth-profile-sync.service', () => {
   })
 
   it('does not patch hub profile when display name already matches', async () => {
+    mockResolveRegisteredAccountDisplayName.mockReturnValue('user@example.com')
     mockGetUserMe.mockResolvedValue({
       id: 'user-1',
       identityId: '00000000-0000-0000-0000-000000000001',
-      displayName: '本地昵称',
+      displayName: 'user@example.com',
       role: 'user',
       canPublish: true,
       canAcceptTask: true,
@@ -118,5 +150,6 @@ describe('auth-profile-sync.service', () => {
     await syncAuthProfileToCommunityHub()
 
     expect(mockUpdateUserMe).not.toHaveBeenCalled()
+    expect(mockInvalidateCommunityHubCache).toHaveBeenCalledWith('board-messages')
   })
 })

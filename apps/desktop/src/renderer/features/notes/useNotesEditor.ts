@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  queryNotesToolbarFormatState,
+  type NotesToolbarFormatState,
+} from './notes-rich-editor'
 import { getNotesSlashCommands } from '../../i18n/notes-editor-labels'
 import { useI18n } from '../../i18n/useI18n'
 import { isGroupNotebookId } from '../group/group-note-utils'
@@ -61,6 +65,19 @@ export function useNotesEditor({
     resolveInitialPreviewMode(editorSettings),
   )
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [formatState, setFormatState] = useState<NotesToolbarFormatState>(() =>
+    queryNotesToolbarFormatState(null),
+  )
+
+  const refreshFormatState = useCallback(() => {
+    setFormatState(queryNotesToolbarFormatState(bodyRef.current?.getRootElement() ?? null))
+  }, [])
+
+  useEffect(() => {
+    const onSelectionChange = () => refreshFormatState()
+    document.addEventListener('selectionchange', onSelectionChange)
+    return () => document.removeEventListener('selectionchange', onSelectionChange)
+  }, [refreshFormatState])
 
   const history = useNotesEditorHistory({
     noteTitle: note.title,
@@ -146,10 +163,11 @@ export function useNotesEditor({
   }, [history, slash])
 
   const handleToolbarAction = useCallback(
-    (key: NoteToolbarActionKey) => {
-      slash.handleToolbarAction(key)
+    (key: NoteToolbarActionKey, options?: { fontSizePx?: number }) => {
+      slash.handleToolbarAction(key, options)
+      requestAnimationFrame(() => refreshFormatState())
     },
-    [slash],
+    [refreshFormatState, slash],
   )
 
   const handleBodyKeyDown = useNotesEditorKeyboard({
@@ -242,6 +260,8 @@ export function useNotesEditor({
     handleBodyChange,
     handleBodyKeyDown,
     handleToolbarAction,
+    formatState,
+    refreshFormatState,
     handleUndo,
     handleRedo,
     handleToggleTask,

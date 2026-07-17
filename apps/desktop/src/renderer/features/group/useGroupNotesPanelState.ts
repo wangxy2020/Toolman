@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRegisterGroupPanelError } from './group-page-status'
+import { createGroupPanelRefreshHandler } from './group-p2p-sync-policy'
 import { useP2pNotes } from './useP2pNotes'
 import { useI18n } from '../../i18n/useI18n'
 import type {
@@ -38,6 +39,11 @@ export function useGroupNotesPanelState({
   const [sectionKeysMap, setSectionKeysMap] = useState<Record<string, string[]>>({})
 
   const p2pNotes = useP2pNotes({ workspaceId: p2pWorkspaceId })
+
+  const handleRefresh = useMemo(
+    () => createGroupPanelRefreshHandler(p2pWorkspaceId, () => p2pNotes.load()),
+    [p2pNotes, p2pWorkspaceId],
+  )
 
   useRegisterGroupPanelError('notes', p2pNotes.error, () => p2pNotes.setError(null))
 
@@ -165,6 +171,7 @@ export function useGroupNotesPanelState({
     handleToggleSelect,
     handleToggleSelectSection,
     handleSectionKeysChange,
+    handleRefresh,
   }
 }
 

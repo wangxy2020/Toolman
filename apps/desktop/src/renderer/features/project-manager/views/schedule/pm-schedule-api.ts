@@ -51,8 +51,11 @@ export const pmScheduleApi = {
     return invoke<{ ok: boolean }>(IpcChannel.Pm_RelationDelete, { id })
   },
 
-  deleteBaseline(id: string) {
-    return invoke<{ ok: boolean }>(IpcChannel.Pm_BaselineDelete, { id })
+  deleteBaseline(id: string, options?: { allowVersionPlan?: boolean }) {
+    return invoke<{ ok: boolean }>(IpcChannel.Pm_BaselineDelete, {
+      id,
+      ...(options?.allowVersionPlan ? { allowVersionPlan: true } : {}),
+    })
   },
 
   getBaseline(id: string) {

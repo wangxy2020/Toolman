@@ -1901,8 +1901,31 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+}
+
+/* Fixed-width breadcrumb segments: long names show … instead of being clipped. */
+.tm-chat-breadcrumb > .tm-module-pill:first-child,
+.tm-chat-breadcrumb > .tm-notes-notebook-pill {
+  max-width: 140px;
+}
+
+.tm-chat-breadcrumb .tm-module-breadcrumb-group {
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+.tm-chat-breadcrumb .tm-module-breadcrumb-group .tm-module-pill,
+.tm-chat-breadcrumb .tm-module-breadcrumb-group .tm-module-pill--secondary {
+  max-width: 180px;
+}
+
+.tm-chat-breadcrumb .tm-module-pill .tm-agent-pill-label,
+.tm-chat-breadcrumb .tm-module-pill .tm-workspace-pill-label {
+  display: block;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .tm-module-content {
@@ -17738,6 +17761,8 @@ html.theme-dark .tm-mcp-package-source-group {
 }
 
 .tm-notes-editor {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -17745,10 +17770,13 @@ html.theme-dark .tm-mcp-package-source-group {
   display: flex;
   flex-direction: column;
   background: var(--tm-bg);
-  overflow: hidden;
+  /* Visible so toolbar tooltips / font menu can paint over the editor body. */
+  overflow: visible;
 }
 
 .tm-notes-toolbar {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -17768,10 +17796,27 @@ html.theme-dark .tm-notes-toolbar {
 .tm-notes-toolbar-group {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 2px;
   min-width: 0;
   flex: 1;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tm-scrollbar-thumb) var(--tm-scrollbar-track);
+}
+
+.tm-notes-toolbar-group::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tm-notes-toolbar-group::-webkit-scrollbar-thumb {
+  background: var(--tm-scrollbar-thumb);
+  border-radius: 3px;
+}
+
+.tm-notes-toolbar-group::-webkit-scrollbar-track {
+  background: var(--tm-scrollbar-track);
 }
 
 .tm-notes-toolbar-end {
@@ -17780,20 +17825,92 @@ html.theme-dark .tm-notes-toolbar {
   flex-shrink: 0;
 }
 
-.tm-notes-toolbar-btn--active {
-  background: var(--tm-accent-light);
-  color: var(--tm-accent);
+/* Instant tooltips below buttons (above was clipped by overflow parents). */
+.tm-notes-toolbar-btn[data-tooltip] {
+  position: relative;
 }
 
-.tm-notes-toolbar-btn--active:hover:not(:disabled) {
-  background: var(--tm-accent-light);
-  color: var(--tm-accent);
+.tm-notes-toolbar-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 4000;
+  max-width: 220px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tm-text) 92%, #000);
+  color: var(--tm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(-2px);
+  transition:
+    opacity 0.08s ease 0.02s,
+    transform 0.08s ease 0.02s,
+    visibility 0.08s ease 0.02s;
+}
+
+.tm-notes-toolbar-btn[data-tooltip]:hover::after,
+.tm-notes-toolbar-btn[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tm-notes-toolbar-font-menu {
+  position: fixed;
+  z-index: 4100;
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+  padding: 4px;
+  border: 1px solid var(--tm-border);
+  border-radius: 8px;
+  background: var(--tm-bg);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+}
+
+.tm-notes-toolbar-font-option {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tm-text);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tm-notes-toolbar-font-option:hover:not(:disabled) {
+  background: var(--tm-hover);
+}
+
+.tm-notes-toolbar-clear {
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: line-through;
+}
+
+.tm-notes-toolbar-fontsize {
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .tm-notes-toolbar-item {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .tm-notes-toolbar-btn {
@@ -17841,6 +17958,27 @@ html.theme-dark .tm-notes-toolbar {
 .tm-notes-toolbar-btn:hover:not(:disabled) {
   background: var(--tm-hover);
   color: var(--tm-notes-toolbar-fg);
+}
+
+/* After base `background: transparent` so active fill is not overridden.
+   Keep label/icon color unchanged (black / theme toolbar fg). */
+.tm-notes-toolbar-btn.tm-notes-toolbar-btn--active {
+  background: color-mix(in srgb, var(--tm-accent) 28%, #fff);
+  color: var(--tm-notes-toolbar-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-accent) 55%, transparent);
+}
+
+.tm-notes-toolbar-btn.tm-notes-toolbar-btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent) 36%, #fff);
+  color: var(--tm-notes-toolbar-fg);
+}
+
+html.theme-dark .tm-notes-toolbar-btn.tm-notes-toolbar-btn--active {
+  background: color-mix(in srgb, var(--tm-accent) 34%, var(--tm-bg));
+}
+
+html.theme-dark .tm-notes-toolbar-btn.tm-notes-toolbar-btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent) 42%, var(--tm-bg));
 }
 
 .tm-notes-toolbar-btn:disabled {
@@ -20513,21 +20651,23 @@ html.theme-dark .tm-community-publish-interval-input {
   flex-shrink: 0;
 }
 
+/* Keep 我的 / 管理 header layout identical to other community panels
+   (title + subtitle left, refresh right, vertically centered). */
 .tm-community-user-center .tm-community-panel-header {
-  align-items: flex-start;
-  min-height: 44px;
-  box-sizing: border-box;
-}
-
-.tm-community-user-center .tm-community-panel-subtitle {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  align-items: center;
 }
 
 .tm-user-center-header {
   align-items: center;
   padding-bottom: 0;
+}
+
+.tm-user-center-identity-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .tm-user-center-header-main {

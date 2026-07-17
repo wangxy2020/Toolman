@@ -2,9 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import {
   IconArrowLeftRight,
   IconClear,
-  IconDownload,
   IconExternalLink,
   IconParse,
+  IconSave,
   IconSaveNote,
   IconSliders,
   IconTranslate,
@@ -153,7 +153,7 @@ export function TranslationPageHeader({
           disabled={!canSave}
           onClick={onSave}
         >
-          {isDocuments ? <IconDownload size={16} /> : <IconSaveNote size={16} />}
+          <IconSave size={16} />
         </HeaderIconButton>
         {isDocuments ? (
           <HeaderIconButton

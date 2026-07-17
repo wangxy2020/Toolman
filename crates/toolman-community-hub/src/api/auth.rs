@@ -5,7 +5,7 @@ use axum::http::{HeaderMap, Method, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
 
-use crate::domain::{CommunityUser, UserPermission};
+use crate::domain::{CommunityUser, UpdateUserProfileInput, UserPermission};
 use crate::repositories::UserRepository;
 use crate::state::AppState;
 
@@ -71,11 +71,41 @@ pub fn resolve_identity_from_headers(
     ))
 }
 
+fn should_use_jwt_email_as_display_name(current: &str, email: &str) -> bool {
+    let current = current.trim();
+    if current.eq_ignore_ascii_case(email) {
+        return false;
+    }
+    // Prefer registered email over placeholders / local nicknames.
+    current.is_empty()
+        || current.eq_ignore_ascii_case("Community User")
+        || current == "本地用户"
+        || current == "P2P 用户 B"
+        || !current.contains('@')
+}
+
 pub async fn load_auth_user(state: &AppState, identity: &ResolvedIdentity) -> Result<AuthUser, ApiError> {
     let repo = UserRepository::new(state.db.clone());
+    let preferred_name = identity.email.as_deref();
     let user = repo
-        .find_or_create_by_identity_id(&identity.identity_id, None)
+        .find_or_create_by_identity_id(&identity.identity_id, preferred_name)
         .await?;
+    let user = if let Some(email) = preferred_name {
+        if should_use_jwt_email_as_display_name(&user.display_name, email) {
+            repo.update_profile(
+                &user.id,
+                UpdateUserProfileInput {
+                    display_name: Some(email.to_string()),
+                    ..Default::default()
+                },
+            )
+            .await?
+        } else {
+            user
+        }
+    } else {
+        user
+    };
     let user = crate::services::authing_community_role::apply_jwt_community_role(
         &repo,
         user,

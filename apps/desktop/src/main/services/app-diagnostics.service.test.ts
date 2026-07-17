@@ -70,6 +70,7 @@ vi.mock('./p2p/p2p-bridge', () => ({
   P2pBridge: {
     ping: () => 'pong',
     version: () => '0.1.0-test',
+    connectionList: async () => [],
   },
 }))
 

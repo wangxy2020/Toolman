@@ -100,8 +100,8 @@ export function useNotesEditorSlash({
   )
 
   const handleToolbarAction = useCallback(
-    (key: Parameters<typeof runAction>[0]) => {
-      if (!runAction(key)) return false
+    (key: Parameters<typeof runAction>[0], options?: { fontSizePx?: number }) => {
+      if (!runAction(key, options)) return false
       setSlashMenuOpen(false)
       return true
     },

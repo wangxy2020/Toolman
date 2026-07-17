@@ -157,8 +157,6 @@ export function useChatSend(
     boundTask,
   )
 
-  const taskModeActive = autonomousTaskMode
-
   const activeAssistant = useMemo(() => {
     const assistantId = session.activeSession?.assistantId
     if (assistantId) {
@@ -471,41 +469,6 @@ export function useChatSend(
     })
   }, [session.activeSessionId, streamingIds])
 
-  const toggleAutonomousTask = useCallback(async () => {
-    const sessionId = session.activeSessionId
-    if (!sessionId) return
-
-    if (!longTaskEnabled) {
-      setError('请先在智能体设置 → 权限模式中启用「长任务模式」')
-      return
-    }
-
-    const runningBound =
-      boundTask &&
-      sessionActiveTaskId &&
-      sessionActiveTaskId === boundTask.id &&
-      !isTerminalTaskStatus(boundTask.status)
-        ? boundTask
-        : null
-
-    if (!runningBound) {
-      return
-    }
-
-    const result = await window.api.invoke(IpcChannel.TaskControl, {
-      taskId: runningBound.id,
-      action: 'cancel',
-    })
-    if (!result.ok) {
-      setError(result.error.message)
-      return
-    }
-    setBoundTask((result.data as { task: AgentTask }).task)
-    await window.api.invoke(IpcChannel.TaskReleaseSessionBinding, { sessionId })
-    await session.loadSessions()
-    setBoundTask(null)
-  }, [boundTask, longTaskEnabled, session, sessionActiveTaskId, setError])
-
   return {
     sending,
     setSending,
@@ -516,9 +479,6 @@ export function useChatSend(
     groupProxyMode,
     effectiveModelIds,
     autonomousTaskMode,
-    setAutonomousTaskMode,
-    toggleAutonomousTask,
-    taskModeActive,
     longTaskEnabled,
     sessionActiveTaskId,
     sessionTaskBindingLocked,

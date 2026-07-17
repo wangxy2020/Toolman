@@ -45,6 +45,17 @@ function isLocalSharer(p2pWorkspaceId: string, sharedBy: string | null): boolean
   }
 }
 
+function isPollutedP2pProjectionUri(uri: string | null | undefined): boolean {
+  if (!uri) return false
+  return (
+    uri.includes(`${sep}p2p-sync${sep}`) ||
+    uri.includes('/共享知识库/') ||
+    uri.includes('\\共享知识库\\') ||
+    uri.includes('/共享知识库') ||
+    uri.includes('\\共享知识库')
+  )
+}
+
 function purgePollutedDocumentsFromKb(kbId: string, workspaceId: string): number {
   const docRepo = getDocumentRepository()
   const kbRepo = getKnowledgeBaseRepository()
@@ -53,6 +64,13 @@ function purgePollutedDocumentsFromKb(kbId: string, workspaceId: string): number
   for (const doc of docRepo.listByKb(kbId)) {
     if (!isPollutedP2pProjectionDocument(doc.absolutePath)) continue
     if (docRepo.softDelete(doc.id, kbId)) {
+      removed += 1
+    }
+  }
+
+  for (const source of docRepo.listSourcesByKb(kbId)) {
+    if (!isPollutedP2pProjectionUri(source.uri)) continue
+    if (docRepo.softDeleteSource(source.id, kbId)) {
       removed += 1
     }
   }
@@ -98,6 +116,9 @@ function isPollutedP2pProjectedKnowledgeBase(row: {
 /**
  * Remove P2P mirror rows that were incorrectly stored on the source knowledge base id,
  * and scrub projection garbage documents from the sharer's source KB.
+ *
+ * Also scrub shared-folder ghost documents from normal local KBs (system default
+ * 「默认文件夹」 often accumulates 共享知识库 paths from past P2P sources).
  */
 export async function cleanupMisplacedP2pMirrorKnowledgeBases(): Promise<{
   purgedKbCount: number
@@ -136,6 +157,12 @@ export async function cleanupMisplacedP2pMirrorKnowledgeBases(): Promise<{
         purgedKbCount += 1
       }
       continue
+    }
+
+    // Local / system KBs are not "polluted KB rows", but may still hold ghost docs
+    // indexed from a past 共享知识库 folder source.
+    if (row.kind === 'local') {
+      removedDocCount += purgePollutedDocumentsFromKb(row.id, row.workspaceId)
     }
   }
 

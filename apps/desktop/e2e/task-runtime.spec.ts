@@ -57,12 +57,15 @@ test.describe('Task runtime production E2E', () => {
       .not.toBe('paused')
   })
 
-  test('creates task from composer autonomous mode', async ({ window }) => {
+  test('creates task from composer when long-task mode is enabled in agent settings', async ({
+    window,
+  }) => {
     const title = `E2E composer ${Date.now()}`
 
     await enableLongTaskModeViaIpc(window)
 
-    await expect(window.getByTestId('autonomous-task-toggle')).toHaveClass(/tm-input-tool--active/)
+    // Composer no longer exposes a long-task toggle; mode follows agent settings → permission.
+    await expect(window.getByTestId('autonomous-task-toggle')).toHaveCount(0)
 
     await window.getByTestId('chat-message-input').fill(title)
     await window.getByTestId('chat-send-button').click()
