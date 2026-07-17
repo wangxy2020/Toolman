@@ -15,7 +15,7 @@ import {
 import { resolveAssistantWorkingDirectory } from '../agent-runtime'
 import { getAssistantRow } from '../assistant.service'
 import { resolveWorkingDirectory } from '../permission.service'
-import { getDefaultTaskRuntimeDir, getTaskRuntimeRootDir } from './paths'
+import { getDefaultTaskRuntimeDir } from './paths'
 import { parseAssistantParametersJson } from './resolve-models'
 
 export interface TaskWorkspacePaths {
@@ -166,9 +166,4 @@ export function buildTaskWorkspacePatch(
       [TASK_WORKSPACE_METADATA_LAYOUT_KEY]: TASK_WORKSPACE_LAYOUT_VERSION,
     },
   }
-}
-
-/** @deprecated Prefer getDefaultTaskRuntimeDir(taskId) */
-export function getLegacyTaskRuntimeDir(taskId: string): string {
-  return join(getTaskRuntimeRootDir(), taskId)
 }

@@ -51,9 +51,6 @@ export interface PageDisplayBox {
   width: number
 }
 
-export const DOCUMENT_PAGE_ZOOM_MIN = 0.7
-export const DOCUMENT_PAGE_ZOOM_MAX = 1.6
-export const DOCUMENT_PAGE_ZOOM_STEP = 0.1
 export const DOCUMENT_PAGE_ZOOM_DEFAULT = 1
 
 function isPdfPath(filePath: string): boolean {

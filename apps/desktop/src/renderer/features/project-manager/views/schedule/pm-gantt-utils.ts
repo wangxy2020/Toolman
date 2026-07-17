@@ -612,28 +612,6 @@ export function buildScheduleTimeline(
   }
 }
 
-export function groupItemsByDueMonth(
-  items: PmWorkItem[],
-  anchor: Date,
-): Map<string, PmWorkItem[]> {
-  const map = new Map<string, PmWorkItem[]>()
-  const monthKey = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, '0')}`
-
-  for (const item of items) {
-    const due = item.dueDate ?? item.startDate
-    if (!due) continue
-    const date = new Date(due)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    if (key !== monthKey) continue
-    const dayKey = String(date.getDate())
-    const bucket = map.get(dayKey) ?? []
-    bucket.push(item)
-    map.set(dayKey, bucket)
-  }
-
-  return map
-}
-
 export function workItemDurationDays(item: PmWorkItem): number {
   if (item.type === 'milestone') return 0
   const { startMs, endMs } = resolveWorkItemScheduleRange(item)
@@ -694,10 +672,6 @@ export function parseDateInput(value: string): number | null {
 
 export function finishFromStartDuration(startMs: number, durationDays: number): number {
   return finishFromStartAndDuration(startMs, durationDays)
-}
-
-export function durationFromStartFinish(startMs: number, finishMs: number): number {
-  return durationDaysBetween(startMs, finishMs)
 }
 
 export function parseDurationDaysInput(value: string): number | null {

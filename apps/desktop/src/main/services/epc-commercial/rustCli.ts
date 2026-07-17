@@ -19,13 +19,6 @@ export const rustGetMachineId = async (): Promise<{ machineId: string }> => {
   return invokeCli({ command: 'get-machine-id' })
 }
 
-export interface RustIpcAlignmentRequest {
-  masterPricePath: string
-  ipcRootPath: string
-  period: string
-  dataDir: string
-}
-
 export interface RustWorkspaceIpcWorkflowRequest {
   workspaceRoot: string
   period?: string
@@ -56,17 +49,6 @@ export interface RustCommitShippingCiLedgerRequest {
   workspaceRoot: string
   dataDir: string
   successes: Array<{ fileName: string; md5: string }>
-}
-
-export const rustExecuteIpcAlignment = async (
-  request: RustIpcAlignmentRequest,
-): Promise<IpcAlignmentExecuteResponse> => {
-  return rustExecuteWorkspaceIpcWorkflow({
-    workspaceRoot: request.ipcRootPath,
-    period: request.period,
-    masterPricePath: request.masterPricePath,
-    dataDir: request.dataDir,
-  })
 }
 
 const mapErrorCode = (code?: string): IpcAlignmentExecuteResponse['errorCode'] => {
@@ -292,26 +274,4 @@ export const rustApplyPaymentDataOverrides = async (workspaceRoot: string): Prom
     request: { workspaceRoot },
   })
   return mapSimpleOk(raw)
-}
-
-export const rustPropagatePmDataAfterEdit = async (
-  params: import('@toolman/shared').PropagatePmDataParams,
-): Promise<import('@toolman/shared').PropagatePmDataResponse> => {
-  const raw = await invokeCli<{
-    ok: boolean
-    actions?: string[]
-    error_message?: string
-    errorMessage?: string
-  }>({
-    command: 'propagate-pm-data-after-edit',
-    request: {
-      workspaceRoot: params.workspaceRoot,
-      editedFilePath: params.editedFilePath,
-    },
-  })
-  return {
-    ok: raw.ok,
-    actions: raw.actions,
-    errorMessage: raw.errorMessage ?? raw.error_message,
-  }
 }

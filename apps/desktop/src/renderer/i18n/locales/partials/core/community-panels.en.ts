@@ -9,7 +9,6 @@ export const communityPanelsEn = {
       tasks: { title: 'Task market', hint: 'Browse and take on community tasks.' },
       news: { title: 'News', hint: 'Community updates, announcements, and events.' },
       messages: { title: 'Messages', hint: 'Browse community posts and discussions.' },
-      recommend: { title: 'Recommended', hint: 'Personalized agent and resource recommendations.' },
       management: {
         title: 'Community admin',
         hint: 'Scan online resources, handle reports, appoint admins, and ban abusive users.',

@@ -18,12 +18,23 @@ import {
 } from './p2p-connection-state'
 
 const PEER_RECONNECT_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000] as const
+/** Stop scheduling after this many failed attempts (delays already capped at 30s). */
+const PEER_RECONNECT_MAX_ATTEMPTS = 20
+/** After giving up, allow a fresh retry window once discovery/schedulers call again. */
+const PEER_RECONNECT_GIVE_UP_COOLDOWN_MS = 5 * 60_000
+
+const reconnectGiveUpCooldowns = new Map<string, ReturnType<typeof setTimeout>>()
 
 export function cancelPendingPeerRecovery(peerDeviceId: string): void {
   const timer = reconnectTimers.get(peerDeviceId)
   if (timer) {
     clearTimeout(timer)
     reconnectTimers.delete(peerDeviceId)
+  }
+  const cooldown = reconnectGiveUpCooldowns.get(peerDeviceId)
+  if (cooldown) {
+    clearTimeout(cooldown)
+    reconnectGiveUpCooldowns.delete(peerDeviceId)
   }
   iceRestartInFlight.delete(peerDeviceId)
 }
@@ -57,6 +68,22 @@ export function schedulePeerReconnect(
   if (reconnectTimers.has(peerDeviceId)) return
 
   const attempt = reconnectAttempts.get(peerDeviceId) ?? 0
+  if (attempt >= PEER_RECONNECT_MAX_ATTEMPTS) {
+    logStructured(
+      'p2p.reconnect',
+      'warn',
+      `giving up reconnect after ${PEER_RECONNECT_MAX_ATTEMPTS} attempts`,
+      { peerDeviceId, workspaceId },
+    )
+    if (!reconnectGiveUpCooldowns.has(peerDeviceId)) {
+      const cooldown = setTimeout(() => {
+        reconnectGiveUpCooldowns.delete(peerDeviceId)
+        reconnectAttempts.delete(peerDeviceId)
+      }, PEER_RECONNECT_GIVE_UP_COOLDOWN_MS)
+      reconnectGiveUpCooldowns.set(peerDeviceId, cooldown)
+    }
+    return
+  }
   const delay =
     PEER_RECONNECT_DELAYS_MS[Math.min(attempt, PEER_RECONNECT_DELAYS_MS.length - 1)] ?? 30_000
 

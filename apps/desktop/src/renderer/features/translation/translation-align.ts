@@ -1,5 +1,3 @@
-export const TRANSLATION_PARAGRAPH_GAP_PX = 16
-
 /** Pad only the target side so source spacing stays stable (gap comes from CSS). */
 export function alignTargetParagraphsToSource(
   sourceCol: HTMLElement,

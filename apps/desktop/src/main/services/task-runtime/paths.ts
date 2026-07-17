@@ -12,15 +12,6 @@ export function getDefaultTaskRuntimeDir(taskId: string): string {
   return join(getTaskRuntimeRootDir(), taskId)
 }
 
-/** @deprecated Use getDefaultTaskRuntimeDir or task.workspaceRoot */
-export function getTaskWorkspaceDir(taskId: string): string {
-  return getDefaultTaskRuntimeDir(taskId)
-}
-
-export function getTaskSnapshotPath(taskId: string): string {
-  return join(getDefaultTaskRuntimeDir(taskId), 'task.json')
-}
-
 /** Legacy flat JSON per assistant (pre-T01). */
 export function getLegacyAgentTasksDir(): string {
   return join(app.getPath('userData'), 'agent-tasks')

@@ -16,10 +16,6 @@ export async function getCommunityHubHealth(): Promise<CommunityHubHealthOutput>
   return invokeIpc(IpcChannel.CommunityHubHealth)
 }
 
-export async function getCommunityHubConfig(): Promise<CommunityHubConfig> {
-  return invokeIpc(IpcChannel.CommunityHubConfigGet)
-}
-
 export async function updateCommunityHubConfig(
   input: CommunityHubConfigUpdateInput,
 ): Promise<CommunityHubConfig> {

@@ -140,12 +140,9 @@ export function updatePmWorkItem(input: unknown) {
 
 export function deletePmWorkItem(input: unknown) {
   const data = PmWorkItemDeleteInputSchema.parse(input)
-  const existing = getWorkItemRepo().getById(data.id)
   const deleted = getWorkItemRepo().softDelete(data.id)
   if (!deleted) {
     throw new Error('工作项不存在')
-  }
-  if (existing) {
   }
   return { ok: true as const }
 }

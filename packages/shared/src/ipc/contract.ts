@@ -1,6 +1,14 @@
 import type { z } from 'zod'
 import { IpcChannel } from './channels.js'
-import { SessionListInputSchema, SessionListOutputSchema } from './agent.js'
+import {
+  MessageListInputSchema,
+  MessageListOutputSchema,
+  SessionCreateInputSchema,
+  SessionGetInputSchema,
+  SessionListInputSchema,
+  SessionListOutputSchema,
+  SessionSchema,
+} from './agent.js'
 import {
   P2pEventListInputSchema,
   P2pEventListOutputSchema,
@@ -8,11 +16,26 @@ import {
   P2pWorkspaceGetOutputSchema,
 } from './p2p.js'
 
-/** IPC channels with typed input/output Zod schemas for renderer invoke helpers. */
+/**
+ * IPC channels with typed input/output Zod schemas for renderer invoke helpers.
+ * Expand deliberately — prefer schemas that already exist in shared/ipc.
+ */
 export const IPC_CHANNEL_CONTRACT = {
   [IpcChannel.SessionList]: {
     input: SessionListInputSchema,
     output: SessionListOutputSchema,
+  },
+  [IpcChannel.SessionGet]: {
+    input: SessionGetInputSchema,
+    output: SessionSchema,
+  },
+  [IpcChannel.SessionCreate]: {
+    input: SessionCreateInputSchema,
+    output: SessionSchema,
+  },
+  [IpcChannel.MessageList]: {
+    input: MessageListInputSchema,
+    output: MessageListOutputSchema,
   },
   [IpcChannel.P2pEventList]: {
     input: P2pEventListInputSchema,

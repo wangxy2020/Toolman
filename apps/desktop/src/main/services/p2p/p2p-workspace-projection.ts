@@ -1,5 +1,6 @@
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
@@ -68,6 +69,9 @@ export function projectWorkspaceDeletedEvent(event: WorkspaceEvent): void {
   broadcastP2pMemberChanged({ workspaceId: event.workspaceId })
 
   if (!deferCleanup) {
-    void finalizeLocalWorkspaceDissolve(event.workspaceId)
+    fireAndForget(
+      'p2p.workspace_dissolve',
+      finalizeLocalWorkspaceDissolve(event.workspaceId),
+    )
   }
 }

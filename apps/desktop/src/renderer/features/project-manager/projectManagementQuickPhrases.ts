@@ -1,5 +1,5 @@
 import { EPC_BUILTIN_QUICK_PHRASES } from '@toolman/shared'
-import { loadQuickPhrases, type QuickPhrase } from '../chat/quick-phrases'
+import type { QuickPhrase } from '../chat/quick-phrases'
 
 const BUILTIN_REVISION_KEY = 'toolman:epc-builtin-quick-phrases-revision'
 
@@ -44,8 +44,4 @@ export function mergeEpcBuiltinQuickPhrases(userPhrases: QuickPhrase[]): QuickPh
   }
 
   return [...builtins, ...remainingUser]
-}
-
-export function loadProjectManagementQuickPhrases(): QuickPhrase[] {
-  return mergeEpcBuiltinQuickPhrases(loadQuickPhrases())
 }

@@ -14,6 +14,9 @@ import { getAuthSession } from '../auth-session.service'
 import { refreshP2pDeviceIdentityBinding } from '../p2p/p2p-device-identity.service'
 import { AuthLoginError } from './auth-login.error.js'
 import { formatAuthProviderNotConfiguredMessage } from './auth-config-message.js'
+import { isAuthingConfigured } from './authing-auth.config.js'
+import { getAuthingManagementClient } from './authing-management-client.service.js'
+import { resolveAuthingUserIdFromAccessToken } from './authing-token-utils.js'
 import { resetIdentityToGuest } from './auth-persist.service.js'
 import { getFirebaseAuthConfig } from './firebase-auth.config.js'
 import {
@@ -25,6 +28,10 @@ import {
   createReauthToken,
 } from './auth-reauth.service.js'
 import { verifyPhoneSmsLogin } from './tencent-phone-auth.service.js'
+
+function looksLikeAuthingUserId(value: string): boolean {
+  return /^[a-f0-9]{24}$/i.test(value.trim())
+}
 
 export async function verifyDeleteAccountReauth(
   input: AuthVerifyDeleteReauthInput,
@@ -88,6 +95,7 @@ export async function deleteAuthAccountRemote(input: AuthDeleteAccountInput): Pr
   const identityId = currentSession?.identityId ?? session.identityId
   const bindings = bindingRepo.listByIdentityId(identityId)
   const hasFirebaseBinding = bindings.some((binding) => binding.provider.startsWith('firebase_'))
+  const cnBindings = bindings.filter((binding) => binding.provider.startsWith('tencent_'))
 
   const idToken = decryptSecret(currentSession?.idTokenRef)
   if (config && idToken && hasFirebaseBinding) {
@@ -95,6 +103,26 @@ export async function deleteAuthAccountRemote(input: AuthDeleteAccountInput): Pr
       await firebaseDeleteUser(config, idToken)
     } catch (error) {
       const message = toErrorMessage(error, 'Firebase 删号失败')
+      throw new AuthLoginError(message)
+    }
+  }
+
+  if (cnBindings.length > 0 && isAuthingConfigured()) {
+    const management = getAuthingManagementClient()
+    if (!management) {
+      throw new AuthLoginError('无法删除远程账号：Authing 管理端未配置')
+    }
+    const fallbackSubject =
+      cnBindings.map((binding) => binding.subjectId).find(looksLikeAuthingUserId) ??
+      cnBindings[0]!.subjectId
+    const authingUserId = resolveAuthingUserIdFromAccessToken(idToken, fallbackSubject)
+    if (!looksLikeAuthingUserId(authingUserId)) {
+      throw new AuthLoginError('无法删除远程账号：缺少有效的 Authing 用户标识')
+    }
+    try {
+      await management.users.delete(authingUserId)
+    } catch (error) {
+      const message = toErrorMessage(error, 'Authing 删号失败')
       throw new AuthLoginError(message)
     }
   }

@@ -1,12 +1,14 @@
 /**
- * Session / Message 持久化 IPC 接口签名（供 Main 进程实现、Renderer 调用）
+ * @deprecated Prefer Zod schemas in `./agent.ts` (`Session` / `Message` / SessionList*).
+ * Live IPC handlers map DB rows through `apps/desktop` mappers into those schemas.
+ * These DTOs mirror slim `@toolman/db` `PersistedChatSession` shapes and can drift.
  *
  * 所有 invoke 返回 IpcResult<T>（见 @toolman/shared ipc/base.ts）
  */
 
 import type { IpcResult } from './base.js'
 
-// ── 领域类型（与 @toolman/db types/chat 对齐）────────────────
+// ── 领域类型（与 @toolman/db PersistedChat* 对齐；非 IPC 权威类型）────────────
 
 export type ChatMessageRole = 'system' | 'user' | 'assistant' | 'tool'
 

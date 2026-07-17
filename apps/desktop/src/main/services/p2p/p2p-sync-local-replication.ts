@@ -2,6 +2,7 @@ import type { WorkspaceEvent } from '@toolman/shared'
 import { P2pMemberRepository } from '@toolman/db'
 import { toErrorMessage } from '@toolman/shared'
 import { logStructured } from '../structured-log.service'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { getDatabase } from '../../bootstrap/database'
 import { ensurePeerReadyForWorkspace, listP2pConnections } from './p2p-connection.service'
 import { markP2pEventSynced } from './p2p-event.service'
@@ -16,7 +17,7 @@ import {
 import { getCursorRepo } from './p2p-sync-state'
 
 export function onLocalP2pEventAppended(event: WorkspaceEvent): void {
-  void replicateLocalP2pEvent(event)
+  fireAndForget('p2p.local_replication', replicateLocalP2pEvent(event))
 }
 
 export async function replicateLocalP2pEvent(event: WorkspaceEvent): Promise<void> {

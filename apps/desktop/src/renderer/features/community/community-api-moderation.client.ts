@@ -6,7 +6,6 @@ import {
   type CommunityModerationLogsListInput,
   type CommunityModerationReport,
   type CommunityModerationReportCreateInput,
-  type CommunityModerationReportListInput,
   type CommunityModerationReportResolveInput,
   type CommunityModerationResourceActionInput,
   type CommunityModerationScanOutput,
@@ -19,12 +18,6 @@ export async function createCommunityModerationReport(
   input: CommunityModerationReportCreateInput,
 ): Promise<CommunityModerationReport> {
   return invokeIpc(IpcChannel.CommunityModerationReport, input)
-}
-
-export async function listCommunityModerationReports(
-  input: CommunityModerationReportListInput = {},
-): Promise<{ items: CommunityModerationReport[] }> {
-  return invokeIpc(IpcChannel.CommunityModerationReportList, input)
 }
 
 export async function resolveCommunityModerationReport(

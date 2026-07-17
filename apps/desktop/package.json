@@ -16,7 +16,7 @@
     "dist": "pnpm build && pnpm exec electron-builder --config electron-builder.yml --publish never",
     "dist:release": "bash ../../scripts/build-desktop-release.sh",
     "preview": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "pnpm --filter @toolman/desktop^... build && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "pnpm typecheck",
     "test": "NODE_OPTIONS=--max-old-space-size=6144 vitest run src/main && NODE_OPTIONS=--max-old-space-size=6144 vitest run src/renderer",
     "test:p2p-integration": "bash scripts/run-with-electron-node.sh node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",

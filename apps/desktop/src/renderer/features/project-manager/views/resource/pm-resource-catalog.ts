@@ -26,11 +26,6 @@ export type PmResourceType = (typeof PM_RESOURCE_TYPES)[number]
 
 export const PM_RESOURCE_APPLICABLE_ALL = 'all'
 
-/** View menu: shared list (适用 = 全部项目). Project views use a project id. */
-export const PM_RESOURCE_VIEW_ALL = 'all'
-
-export type PmResourceViewKey = typeof PM_RESOURCE_VIEW_ALL | string
-
 export type PmResourceRow = {
   id: string
   type: PmResourceType
@@ -97,8 +92,10 @@ function isResourceRow(value: unknown): value is PmResourceRow {
   )
 }
 
+/** Parse a stored catalog. `null` = key missing/invalid; `[]` = explicit empty (do not reseed). */
 function parseResourceRows(raw: unknown): PmResourceRow[] | null {
-  if (!Array.isArray(raw) || raw.length === 0) return null
+  if (!Array.isArray(raw)) return null
+  if (raw.length === 0) return []
   const parsed = raw
     .filter(isResourceRow)
     .map((row) => ({
@@ -116,7 +113,8 @@ function parseResourceRows(raw: unknown): PmResourceRow[] | null {
       parentId: typeof row.parentId === 'string' ? row.parentId : null,
     }))
     .sort((left, right) => left.sortOrder - right.sortOrder)
-  if (parsed.length === 0) return null
+  // Array was present but no valid rows — treat as explicit empty, not "unset".
+  if (parsed.length === 0) return []
   return applyDefaultUnitPrices(parsed).rows
 }
 
@@ -149,35 +147,6 @@ export function applyDefaultUnitPrices(rows: PmResourceRow[]): {
     return { ...row, unitPrice: price }
   })
   return { rows: next, changed }
-}
-
-/** True when metadata has never stored a resource catalog array (or it is empty). */
-export function isResourceCatalogUnset(
-  metadata: Record<string, unknown> | null | undefined,
-): boolean {
-  const raw = metadata?.[PM_RESOURCE_CATALOG_KEY]
-  return !Array.isArray(raw) || raw.length === 0
-}
-
-/** True when stored rows are missing reference market prices for built-in names. */
-export function resourceCatalogNeedsPriceBackfill(
-  metadata: Record<string, unknown> | null | undefined,
-): boolean {
-  const raw = metadata?.[PM_RESOURCE_CATALOG_KEY]
-  if (!Array.isArray(raw) || raw.length === 0) return false
-  return raw.some((value) => {
-    if (!isResourceRow(value)) return false
-    if (value.unitPrice != null) return false
-    return DEFAULT_UNIT_PRICE_BY_NAME.has(value.name.trim())
-  })
-}
-
-export function readResourceCatalog(
-  metadata: Record<string, unknown> | null | undefined,
-): PmResourceRow[] {
-  const parsed = parseResourceRows(metadata?.[PM_RESOURCE_CATALOG_KEY])
-  if (parsed) return parsed
-  return createDefaultResourceCatalog(PM_RESOURCE_APPLICABLE_ALL)
 }
 
 /** Clone a catalog with new ids and a fixed applicable scope (project or all). */

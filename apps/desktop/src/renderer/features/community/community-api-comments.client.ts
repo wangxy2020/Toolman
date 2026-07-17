@@ -1,8 +1,6 @@
 import {
   IpcChannel,
   type CommunityComment,
-  type CommunityCommentCountInput,
-  type CommunityCommentCountOutput,
   type CommunityCommentCreateInput,
   type CommunityCommentListInput,
 } from '@toolman/shared'
@@ -24,10 +22,4 @@ export async function deleteCommunityComment(
   commentId: string,
 ): Promise<{ deleted: boolean }> {
   return invokeIpc(IpcChannel.CommunityCommentDelete, { commentId })
-}
-
-export async function countCommunityComments(
-  input: CommunityCommentCountInput,
-): Promise<CommunityCommentCountOutput> {
-  return invokeIpc(IpcChannel.CommunityCommentCount, input)
 }

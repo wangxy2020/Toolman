@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   mergeSharedIntoProjectCatalog,
   PM_RESOURCE_APPLICABLE_ALL,
+  readSharedResourceCatalog,
   upsertSharedResourceCatalog,
+  writeSharedResourceCatalog,
   type PmResourceRow,
 } from './pm-resource-catalog'
 
@@ -44,6 +46,34 @@ describe('mergeSharedIntoProjectCatalog', () => {
     const merged = mergeSharedIntoProjectCatalog(project, shared)
     expect(merged.changed).toBe(false)
     expect(merged.rows).toHaveLength(1)
+  })
+})
+
+describe('readSharedResourceCatalog', () => {
+  const workspaceId = 'ws-resource-empty-test'
+  const store = new Map<string, string>()
+
+  beforeEach(() => {
+    store.clear()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value)
+        },
+        removeItem: (key: string) => {
+          store.delete(key)
+        },
+      },
+    })
+  })
+
+  it('keeps an explicit empty catalog instead of reseeding defaults', () => {
+    writeSharedResourceCatalog(workspaceId, [])
+    const shared = readSharedResourceCatalog(workspaceId)
+    expect(shared.isDefault).toBe(false)
+    expect(shared.rows).toEqual([])
   })
 })
 

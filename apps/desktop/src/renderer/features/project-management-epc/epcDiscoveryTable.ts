@@ -6,9 +6,6 @@ export const EPC_DISCOVERY_TABLE_CLASS = 'epc-discovery-table'
 export const EPC_DISCOVERY_FILE_NAME_COLUMN_PERCENT = 34
 export const EPC_DISCOVERY_QUEUE_COLUMN_PERCENT = 12
 
-/** 分类列最小宽度（约 4 个汉字），窄屏时可横向滚动 */
-export const EPC_DISCOVERY_QUEUE_COLUMN_MIN_WIDTH_PX = 104
-
 export interface EpcDiscoveryTableRow {
   fileName: string
   queueLabel: string

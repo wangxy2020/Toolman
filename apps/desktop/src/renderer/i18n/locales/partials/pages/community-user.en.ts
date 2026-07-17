@@ -253,11 +253,4 @@ export const communityPageUserEn = {
     admin: 'Admin',
     founder: 'Founder',
   },
-  recommendSections: {
-    hotMcp: 'Hot MCP',
-    hotSkills: 'Hot Skills',
-    hotWorkflow: 'Hot workflows',
-    hotNews: 'Recommended news',
-    installCount: '{{count}} installs',
-  },
 } as const

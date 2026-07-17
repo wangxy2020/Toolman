@@ -27,8 +27,6 @@ export {
   normalizeModelTypes,
 }
 
-export type ModelTypeSupport = ModelTypeState
-
 export type ModelCategory =
   | 'all'
   | 'reasoning'
@@ -47,17 +45,6 @@ export const MODEL_TYPE_OPTIONS: Array<{ key: ModelTypeKey; label: string }> = [
   { key: 'rerank', label: '重排' },
   { key: 'embedding', label: '嵌入' },
 ]
-
-export const MODEL_CATEGORY_LABELS: Record<ModelCategory, string> = {
-  all: '全部',
-  reasoning: '推理',
-  vision: '视觉',
-  web: '联网',
-  free: '免费',
-  embedding: '嵌入',
-  rerank: '重排',
-  tools: '工具',
-}
 
 export function createProviderModel(
   id: string,
@@ -120,30 +107,6 @@ export function groupProviderModels(models: ProviderModel[]) {
     key,
     items: items.sort((a, b) => a.name.localeCompare(b.name)),
   }))
-}
-
-export function isEmbeddingModel(modelId: string): boolean {
-  return isEmbeddingModelId(modelId)
-}
-
-export function isChatModel(modelId: string): boolean {
-  const support = getModelTypeSupport(modelId)
-  return !support.embedding && !support.rerank
-}
-
-export function modelCapabilities(modelId: string): {
-  embedding: boolean
-  vision: boolean
-  reasoning: boolean
-  tools: boolean
-} {
-  const types = getDefaultModelTypes(modelId)
-  return {
-    embedding: types.embedding,
-    vision: types.vision,
-    reasoning: types.reasoning,
-    tools: types.tools,
-  }
 }
 
 export function groupModels(models: Array<{ id: string; name: string; group?: string }>) {

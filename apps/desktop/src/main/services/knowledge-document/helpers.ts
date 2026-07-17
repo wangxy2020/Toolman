@@ -5,7 +5,6 @@ import {
 } from '@toolman/shared'
 import { isIgnoredKnowledgeIngestFile } from '@toolman/knowledge'
 import type { KnowledgeBaseRow } from '@toolman/db'
-import { getDocumentRepository } from '../../db/repos'
 import { deleteKnowledgeFolderFile, isPathInsideFolder } from '../knowledge-folder-files.service'
 import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 
@@ -83,6 +82,3 @@ export function isIgnoredKnowledgeDocument(row: {
   return isIgnoredKnowledgeIngestFile(row.title)
 }
 
-export function getDocumentRepo() {
-  return getDocumentRepository()
-}

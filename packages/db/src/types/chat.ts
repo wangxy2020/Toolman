@@ -1,15 +1,16 @@
 /**
- * 对外暴露的会话/消息领域类型（持久化 API 使用）
+ * Persistence-layer chat types used by `@toolman/db` repositories.
  *
- * DB 映射：
- * - Session.modelId  → sessions.model_id
- * - Message.content  → messages.content（同时镜像到 content_blocks_json 供旧代码读取）
- * - Message.timestamp → messages.created_at
+ * Do **not** confuse with IPC DTOs:
+ * - IPC / renderer: `Session` / `Message` from `@toolman/shared` (Zod schemas)
+ * - Drizzle rows: `SessionRow` / `MessageRow` from `./rows`
+ * - This file: slim persisted views returned by repositories
  */
 
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool'
 
-export interface Session {
+/** Slim persisted session (repository API). Prefer `@toolman/shared` Session for IPC. */
+export interface PersistedChatSession {
   id: string
   title: string
   modelId: string | null
@@ -17,13 +18,26 @@ export interface Session {
   updatedAt: number
 }
 
-export interface Message {
+/**
+ * @deprecated Use {@link PersistedChatSession}. Kept as alias so existing db call sites compile;
+ * do not import this name from desktop — use `@toolman/shared` Session for IPC.
+ */
+export type Session = PersistedChatSession
+
+/** Slim persisted message (repository API). Prefer `@toolman/shared` Message for IPC. */
+export interface PersistedChatMessage {
   id: string
   sessionId: string
   role: MessageRole
   content: string
   timestamp: number
 }
+
+/**
+ * @deprecated Use {@link PersistedChatMessage}. Kept as alias so existing db call sites compile;
+ * do not import this name from desktop — use `@toolman/shared` Message for IPC.
+ */
+export type Message = PersistedChatMessage
 
 export interface CreateSessionInput {
   title?: string

@@ -113,16 +113,6 @@ export function resolveExcelMcpShortToolName(toolName: string): string {
   return resolveMcpShortToolName(toolName, EXCEL_MCP_SERVER_ID, EXCEL_MCP_BATCH_TOOL_NAME)
 }
 
-export function isExcelMcpToolName(toolName: string): boolean {
-  if (toolName === EXCEL_MCP_BATCH_TOOL_NAME) return true
-  return (
-    toolName.includes(EXCEL_MCP_SERVER_ID) ||
-    ['read_excel', 'review_excel', 'modify_excel_cells', 'highlight_excel_cells'].includes(
-      resolveExcelMcpShortToolName(toolName),
-    )
-  )
-}
-
 export function filterExcelMcpToolDefinitions(tools: ToolDefinition[]): ToolDefinition[] {
   return filterMcpToolDefinitions(tools, EXCEL_MCP_SERVER_ID, [
     'read_excel',

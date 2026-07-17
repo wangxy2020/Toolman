@@ -4,6 +4,7 @@ import {
   createP2pDeviceIdentityRepository,
 } from '@toolman/db'
 import type { P2pMemberRole, WorkspaceEvent } from '@toolman/shared'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { cleanupLocalMemberDeparture } from './p2p-workspace-member-cleanup.service'
@@ -170,7 +171,10 @@ export function projectMemberLeftEvent(event: WorkspaceEvent): void {
     revokePeerTrustForWorkspace(event.workspaceId, existing.deviceId)
   }
   if (existing.deviceId === localDeviceId) {
-    void cleanupLocalMemberDeparture(event.workspaceId)
+    fireAndForget(
+      'p2p.member_departure',
+      cleanupLocalMemberDeparture(event.workspaceId),
+    )
   }
 }
 

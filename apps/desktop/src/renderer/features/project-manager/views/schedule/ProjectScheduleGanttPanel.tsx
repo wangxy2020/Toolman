@@ -511,8 +511,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       scheduleSyncingRef.current = true
       let sourceItems = snapshot?.items ?? items
       let sourceRelations = snapshot?.relations ?? relations
+      const maxIterations = 8
       try {
-        for (;;) {
+        for (let iteration = 0; iteration < maxIterations; iteration += 1) {
           pendingRescheduleRef.current = false
           const next = scheduleWorkItems(sourceItems, sourceRelations)
           const updates = collectScheduleUpdates(sourceItems, next)
@@ -540,6 +541,11 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         }
       } finally {
         scheduleSyncingRef.current = false
+      }
+      if (pendingRescheduleRef.current) {
+        queueMicrotask(() => {
+          void persistAutoSchedule()
+        })
       }
     },
     [items, loadProjectData, relations, selectedProjectId],

@@ -54,7 +54,6 @@ export const communityPageHubEn = {
     workflow: { title: 'Workflow market', subtitle: 'Browse and import shared workflows', publish: 'Publish workflow' },
     knowledge: { title: 'Knowledge market', subtitle: 'Browse and install public knowledge collections', publish: 'Publish knowledge' },
     tasks: { title: 'Task market', subtitle: 'Publish tasks, apply, and deliver work', publish: 'Publish task', empty: 'No tasks yet. Publish from the top right.' },
-    recommend: { title: 'Recommended', subtitle: 'Popular MCP, Skills, workflows, and news', loading: 'Loading recommendations…', empty: 'No recommendations yet' },
     mine: { title: 'Mine', subtitle: 'Your posts, installs, favorites, and tasks' },
     management: { title: 'Community admin', subtitle: 'Founders and admins only.' },
   },

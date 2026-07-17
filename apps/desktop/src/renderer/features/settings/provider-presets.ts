@@ -104,7 +104,3 @@ export const DEEPSEEK_PRESET_MODELS = [
   { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash' },
   { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro' },
 ] as const
-
-export function getPresetById(id: ProviderPresetId): ProviderPreset | undefined {
-  return ALL_PROVIDER_PRESETS.find((preset) => preset.id === id)
-}

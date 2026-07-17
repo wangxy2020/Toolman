@@ -9,7 +9,6 @@ export const communityPanelsZhCN = {
       tasks: { title: '任务市场', hint: '浏览与承接社区任务。' },
       news: { title: '资讯', hint: '查看社区动态、更新公告与活动资讯。' },
       messages: { title: '留言板', hint: '浏览社区留言与互动讨论。' },
-      recommend: { title: '推荐', hint: '根据你的使用习惯，为你推荐智能体与资源。' },
       management: { title: '社区管理', hint: '扫描在线资源、处理举报、任命管理员并封禁恶意用户。' },
     },
   },

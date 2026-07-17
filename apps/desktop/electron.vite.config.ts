@@ -40,7 +40,8 @@ export default defineConfig({
     resolve: {
       alias: {
         '@main': resolve('src/main'),
-        // Bundle workspace packages from source in main; predev builds dist for tsc (see package.json predev).
+        // Bundle workspace packages from source in main.
+        // Typecheck resolves package.json → dist; `pnpm typecheck` builds deps first (see package.json).
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
         '@toolman/knowledge': resolve('../../packages/knowledge/src/index.ts'),
         '@toolman/db': resolve('../../packages/db/src/index.ts'),

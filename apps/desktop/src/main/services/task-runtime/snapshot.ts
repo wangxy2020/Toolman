@@ -42,8 +42,3 @@ export function syncTaskSnapshotFromDb(task: AgentTask): void {
     // Snapshot is best-effort; DB remains authoritative.
   }
 }
-
-/** @deprecated Use ensureTaskWorkspaceLayout from task-workspace.service */
-export function ensureTaskWorkspaceDir(taskId: string): string {
-  return ensureTaskWorkspaceLayout(getDefaultTaskRuntimeDir(taskId))
-}

@@ -5,7 +5,6 @@ import {
   IconMessageBoard,
   IconMcp,
   IconNews,
-  IconRecommend,
   IconSkill,
   IconSliders,
   IconFlag,
@@ -34,7 +33,6 @@ import { KnowledgeMarketPanel } from './KnowledgeMarketPanel'
 import { McpMarketPanel } from './McpMarketPanel'
 import { MessageBoardPanel } from './MessageBoardPanel'
 import { NewsCenterPanel } from './NewsCenterPanel'
-import { RecommendPanel } from './RecommendPanel'
 import { SkillsMarketPanel } from './SkillsMarketPanel'
 import { WorkflowMarketPanel } from './WorkflowMarketPanel'
 import { TaskMarketPanel } from './TaskMarketPanel'
@@ -64,7 +62,6 @@ const PANEL_ICONS: Record<string, ReactNode> = {
   tasks: <IconTaskList size={28} />,
   news: <IconNews size={28} />,
   messages: <IconMessageBoard size={28} />,
-  recommend: <IconRecommend size={28} />,
   management: <IconFlag size={28} />,
 }
 
@@ -170,9 +167,6 @@ export function CommunityPage({
 
         <CommunityPageStatusArea>
           <div className="tm-module-content tm-community-module-content">
-            <div hidden={effectiveAction !== 'recommend'} aria-hidden={effectiveAction !== 'recommend'}>
-              <RecommendPanel />
-            </div>
             <div hidden={effectiveAction !== 'mcp'} aria-hidden={effectiveAction !== 'mcp'}>
               <McpMarketPanel />
             </div>
@@ -198,8 +192,7 @@ export function CommunityPage({
               <UserCenterPanel />
             </div>
             {effectiveAction === 'management' ? <AdminModerationPanel /> : null}
-            {effectiveAction !== 'recommend' &&
-            effectiveAction !== 'mcp' &&
+            {effectiveAction !== 'mcp' &&
             effectiveAction !== 'news' &&
             effectiveAction !== 'messages' &&
             effectiveAction !== 'skills' &&

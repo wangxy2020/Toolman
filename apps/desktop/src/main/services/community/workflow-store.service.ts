@@ -33,8 +33,6 @@ export const WorkflowUpsertInputSchema = z.object({
   requiredSkillIds: z.array(z.string()).optional(),
 })
 
-export type WorkflowUpsertInput = z.infer<typeof WorkflowUpsertInputSchema>
-
 const WORKFLOWS_FILE = 'workflows.json'
 
 let cache: StoredWorkflow[] | null = null
@@ -101,16 +99,4 @@ export function upsertStoredWorkflow(input: unknown): StoredWorkflow {
 
   saveWorkflows(workflows)
   return next
-}
-
-export function deleteStoredWorkflow(id: string): boolean {
-  const workflows = getWorkflows()
-  const next = workflows.filter((workflow) => workflow.id !== id)
-  if (next.length === workflows.length) return false
-  saveWorkflows(next)
-  return true
-}
-
-export function invalidateWorkflowStoreCache(): void {
-  cache = null
 }

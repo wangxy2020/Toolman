@@ -46,10 +46,6 @@ export function normalizeContrastBlocks(column: HTMLElement, placeholder?: strin
   })
 }
 
-export function contrastSourceHasContent(column: HTMLElement): boolean {
-  return readContrastParagraphs(column).some((paragraph) => paragraph.trim())
-}
-
 export function readContrastParagraphs(column: HTMLElement, placeholder?: string): string[] {
   normalizeContrastBlocks(column, placeholder)
   const blocks = Array.from(column.querySelectorAll<HTMLElement>(':scope > [data-para-index]'))

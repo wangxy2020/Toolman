@@ -20,6 +20,10 @@ export function useP2pTrustPrompt() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!window.api?.subscribe || !window.api?.invoke) {
+      return
+    }
+
     const applyPending = () => {
       void loadFirstPendingTrustPrompt().then((next) => {
         if (next) {

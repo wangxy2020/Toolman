@@ -1,11 +1,3 @@
-export {
-  CHANNEL_PLATFORMS,
-  type ChannelPlatformId,
-  DEFAULT_CHANNEL_WEBHOOK_PORT,
-} from '@toolman/shared'
-
-export type { ImChannelConfigPublic as ChannelConfigPublic } from '@toolman/shared'
-
 const STORAGE_KEY = 'toolman:channel-configs'
 
 /** @deprecated 仅用于一次性迁移到主进程存储 */

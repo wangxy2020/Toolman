@@ -44,6 +44,10 @@ export const TOOLMAN_PROVENANCE_REGISTRY = {
       'apps/desktop/src/main/index.ts',
       'apps/desktop/src/renderer/main.tsx',
       'apps/desktop/src/renderer/index.html (meta copyright)',
+      'crates/toolman-p2p/src/lib.rs',
+      'crates/toolman-libp2p/src/lib.rs',
+      'crates/toolman-community-hub/src/lib.rs',
+      'crates/toolman-docx-core/src/lib.rs',
     ],
   },
 } as const

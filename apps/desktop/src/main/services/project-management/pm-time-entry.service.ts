@@ -93,9 +93,6 @@ export function updatePmTimeEntry(input: unknown) {
   if (!updated) {
     throw new Error('工时记录不存在')
   }
-  const project = getProjectRepo().getById(updated.projectId)
-  if (project) {
-  }
   return updated
 }
 
@@ -105,9 +102,6 @@ export function deletePmTimeEntry(input: unknown) {
   const deleted = getTimeEntryRepo().softDelete(data.id)
   if (!deleted || !existing) {
     throw new Error('工时记录不存在')
-  }
-  const project = getProjectRepo().getById(existing.projectId)
-  if (project) {
   }
   return { ok: true as const }
 }

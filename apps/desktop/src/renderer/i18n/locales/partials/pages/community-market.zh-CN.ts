@@ -56,10 +56,6 @@ export const communityPageMarketZhCN = {
     workflowEmpty: '暂无工作流资源，请确认 Community Hub 已启动并已发布资源',
     knowledgeEmpty: '暂无知识库资源，请确认 Community Hub 已启动并已发布资源',
     defaultEmpty: '暂无可用资源',
-    recommendMcp: '暂无 MCP 推荐',
-    recommendSkills: '暂无 Skills 推荐',
-    recommendWorkflow: '暂无工作流推荐',
-    recommendNews: '暂无资讯推荐',
     pendingResourceReview:
       '「{{title}}」已在审核中，请等待管理员处理。可在「我的 → 发布」查看进度。',
     pendingTaskReview: '「{{title}}」已在审核中，请等待管理员处理。可在「我的 → 任务」查看进度。',

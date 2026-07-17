@@ -21400,14 +21400,6 @@ html.theme-light .tm-community-card-action--active.tm-community-card-action--dis
   gap: 16px;
 }
 
-.tm-community-recommend-content {
-  gap: 16px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
-
 .tm-community-user-list {
   list-style: none;
   margin: 0;
@@ -21432,110 +21424,6 @@ html.theme-light .tm-community-card-action--active.tm-community-card-action--dis
 
 .tm-community-user-task-groups .tm-community-news-section-label {
   padding: 0 0 8px;
-}
-
-/* Community recommend */
-.tm-community-recommend {
-  gap: 16px;
-}
-
-.tm-community-recommend-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  align-content: start;
-}
-
-.tm-community-recommend-section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border: 1px solid var(--tm-border);
-  border-radius: 12px;
-  background: var(--tm-bg);
-  overflow: hidden;
-}
-
-.tm-community-recommend-section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--tm-border);
-  background: var(--tm-nav-bg);
-}
-
-.tm-community-recommend-section-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--tm-accent);
-}
-
-.tm-community-recommend-section-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.tm-community-recommend-section-body {
-  padding: 12px;
-  min-height: 0;
-  overflow: auto;
-}
-
-.tm-community-recommend-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.tm-community-recommend-card {
-  padding: 12px 14px;
-  border: 1px solid var(--tm-border);
-  border-radius: 10px;
-  background: var(--tm-nav-bg);
-}
-
-.tm-community-recommend-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.tm-community-recommend-card-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  flex: 1;
-  min-width: 0;
-}
-
-.tm-community-recommend-card-meta {
-  margin: 0 0 6px;
-  font-size: 11px;
-  color: var(--tm-text-muted);
-}
-
-.tm-community-recommend-card-desc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--tm-text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.tm-community-recommend-empty {
-  margin: 0;
-  padding: 12px 4px;
-  font-size: 13px;
-  color: var(--tm-text-secondary);
-  text-align: center;
 }
 
 .tm-community-moderation-header-nav {

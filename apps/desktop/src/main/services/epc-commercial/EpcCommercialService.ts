@@ -321,6 +321,4 @@ export class EpcCommercialService {
   }
 }
 
-export const getEpcCommercialDataDir = getDataDir
-
 export const epcCommercialService = new EpcCommercialService()

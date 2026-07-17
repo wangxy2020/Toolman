@@ -54,7 +54,6 @@ export const communityPageHubZhCN = {
     workflow: { title: '工作流市场', subtitle: '浏览与导入社区共享的自动化工作流', publish: '发布工作流' },
     knowledge: { title: '知识库市场', subtitle: '浏览与安装社区公开的知识库合集', publish: '发布知识库' },
     tasks: { title: '任务市场', subtitle: '发布协作任务、申请接单并完成交付验收', publish: '发布任务', empty: '暂无任务，点击右上角发布任务' },
-    recommend: { title: '为你推荐', subtitle: '聚合热门 MCP、Skills、工作流与资讯', loading: '加载推荐内容…', empty: '暂无推荐内容…' },
     mine: { title: '我的', subtitle: '查看我的发布、安装、收藏与任务' },
     management: { title: '社区管理', subtitle: '仅创始人或管理员可访问社区管理功能。' },
   },

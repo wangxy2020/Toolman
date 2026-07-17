@@ -42,7 +42,7 @@ alwaysApply: false
 
 ## 新入口文件版权头
 
-主进程 / renderer 根入口保留块注释头，内容与 `TOOLMAN_COPYRIGHT_HEADER` 一致（Electron 入口无法 runtime 注入）。Rust crate 根 `lib.rs` 同理。
+主进程 / renderer 根入口保留块注释头，内容与 `TOOLMAN_COPYRIGHT_HEADER` 一致（Electron 入口无法 runtime 注入）。Rust crate 根 `lib.rs` 同理（含 `toolman-docx-core`）。
 
 ## 自检
 

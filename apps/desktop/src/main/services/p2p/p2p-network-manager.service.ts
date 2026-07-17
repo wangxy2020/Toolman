@@ -1,4 +1,5 @@
 import { toErrorMessage } from '@toolman/shared'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { Libp2pBridge } from './libp2p-bridge'
 import {
@@ -40,23 +41,26 @@ export function startP2pNetworkManager(): void {
 
   if (!Libp2pBridge.isAvailable()) {
     recordDiagnosticEvent('libp2p', 'warn', 'toolman-libp2p native module unavailable')
-    void pollAndBroadcast()
+    fireAndForget('p2p.network_manager', pollAndBroadcast())
     pollTimer = setInterval(() => {
-      void pollAndBroadcast()
+      fireAndForget('p2p.network_manager', pollAndBroadcast())
     }, POLL_INTERVAL_MS)
     return
   }
 
-  void bootstrapLibp2pNetwork().then((running) => {
-    setBootstrapCompleted(true)
-    setLastObservedRunning(running)
-    if (!running && !getShutdownRequested()) {
-      scheduleLibp2pRestartForReason('initial bootstrap failed')
-    }
-  })
+  fireAndForget(
+    'p2p.network_manager.bootstrap',
+    bootstrapLibp2pNetwork().then((running) => {
+      setBootstrapCompleted(true)
+      setLastObservedRunning(running)
+      if (!running && !getShutdownRequested()) {
+        scheduleLibp2pRestartForReason('initial bootstrap failed')
+      }
+    }),
+  )
 
   pollTimer = setInterval(() => {
-    void pollAndBroadcast()
+    fireAndForget('p2p.network_manager', pollAndBroadcast())
   }, POLL_INTERVAL_MS)
 }
 

@@ -1,39 +1,53 @@
 # Toolman 待办任务清单
 
-> 由代码库扫描生成（2026-06-28）。`apps/desktop/src` 及 `packages/*/src` 中**未发现** `// TODO` / `FIXME` 行内注释；下列条目来自 `available: false`、占位 UI、`即将推出` 文案及 stub 适配器等**已实现占位、功能未完成**的代码路径。
+> 扫描日期：2026-07-17（复扫）  
+> 范围：`apps/desktop/src`、`packages/*/src`  
+> 结论：
+>
+> - **无** `// TODO` / `FIXME` / `HACK` 行内注释  
+> - **无**大段注释掉的实现代码（`//` 连续禁用块、`/* */` 禁用实现、`{/* */}` 禁用 JSX、CSS 整块禁用规则）  
+> - **无**临时/scratch/wip 测试文件，**无** `describe.only` / `it.skip` 等挂起用例  
+> - **无** `src` 内计划/说明类 `.md`  
+> - 下列条目仅来自产品占位（`available: false`、`即将推出`、unsupported 适配器等），**不是**代码内 TODO
 
 ## 导航与模块
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
-| 自动化模块（工作流编辑器） | `renderer/features/settings/nav-modules.ts` (`workflow`, `available: false`)、`renderer/features/modules/module-config.ts` | 顶栏「自动化」入口占位；可在 设置 → 显示 → 隐藏图标 中预先启用，但尚无实际页面 |
-| 翻译模块 | `nav-modules.ts` (`translate`) | 导航项已定义，不可点击 |
-| 助手库模块 | `nav-modules.ts` (`assistant-lib`) | 导航项已定义，不可点击 |
-| 代码工具模块 | `nav-modules.ts` (`code-tools`) | 导航项已定义，不可点击 |
-| 项目管理模块 | `nav-modules.ts` (`projects`, `available: true`) | 已实现；默认在「隐藏图标」池，需在 设置 → 显示 中启用 |
-| 顶栏导航布局 | `renderer/features/settings/display-settings-components.tsx` | 「顶部导航」选项 `disabled: true`，仅支持侧边栏布局 |
+| 自动化模块（工作流编辑器） | `nav-modules.ts`（`workflow`, `available: false`） | 顶栏占位，尚无实际页面 |
+| 助手库模块 | `nav-modules.ts`（`assistant-lib`） | `available: false` |
+| 代码工具模块 | `nav-modules.ts`（`code-tools`） | `available: false` |
+| 顶栏导航布局 | `display-settings-components.tsx` | 「顶部导航」`disabled: true`，仅侧边栏 |
 
-## IM 渠道集成
+## IM 渠道
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
-| QQ 渠道运行时适配器 | `main/services/channels/unsupported.adapter.ts` | 可保存配置，状态为 `unsupported` |
-| Slack 渠道运行时适配器 | 同上 | 可保存配置，状态为 `unsupported` |
+| QQ 运行时适配器 | `channels/unsupported.adapter.ts` | 可保存配置，运行时 unsupported |
+| Slack 运行时适配器 | 同上 | 同上 |
 
-## 社区 UI 占位
-
-| 任务 | 位置 | 说明 |
-|------|------|------|
-| 社区侧栏「添加」按钮 | `CommunitySidebar.tsx`、`ModuleSidebar.tsx` | 按钮 `disabled`，`title` 为「即将推出」 |
-| 未知社区 action 面板 | `CommunityPage.tsx` → `CommunityPlaceholderPanel` | 未映射的 `effectiveAction` 显示占位面板 |
-
-## 性能与基础设施（低优先级）
+## 社区
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
-| Auth build profile 缓存 | `main/services/auth/auth-build-profile.service.ts` | 注释预留 memoization，当前每次直读环境变量 |
+| 侧栏「添加」按钮 | `CommunitySidebar.tsx`、`ModuleSidebar.tsx` | `disabled` +「即将推出」 |
 
-## 扫描结论（无需代码内 TODO 注释）
+## 项目管理
 
-- **大段注释死代码**：`apps/desktop/src`、`packages/*/src` 中未发现 2 行以上的注释掉的实现代码；CSS 中亦无整块注释掉的规则。
-- **行内 TODO**：全库 `src` 无 `// TODO` / `FIXME` / `HACK` 注释；无需从源码迁移或删除。
+| 任务 | 位置 | 说明 |
+|------|------|------|
+| 进度分析（关键路径 / 挣值等） | `ProjectScheduleGanttPanel.tsx` | 菜单目前 `alert` 即将推出 |
+| 部分领域设置页 | `ProjectManagementSettingsPanel.tsx` | 占位文案 |
+| 数据库面板 | `ProjectManagerPage` / toolbar | 入口保留，内容为 reserved 占位 |
+
+## 基础设施（低优先级）
+
+| 任务 | 位置 | 说明 |
+|------|------|------|
+| Auth build region 缓存 | `auth-build-profile.service.ts` | 当前直读环境变量；测试 reset 为空操作 |
+
+## 说明
+
+- `@deprecated` 迁移桩（KB legacy 名、Gantt prefs、channel 迁移、ICE `stunServers` 等）仍有运行时用途，**不删除**。  
+- 资讯中的「推荐文章」接口属于资讯能力，与已删除的社区「推荐」整页无关。  
+- 源码内无行内 TODO 可迁移；本文件为唯一任务汇总入口。

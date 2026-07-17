@@ -2,7 +2,6 @@ import {
   IpcChannel,
   type CommunityNewsArticle,
   type CommunityNewsComment,
-  type CommunityNewsCommentCreateInput,
   type CommunityNewsCommentListInput,
   type CommunityNewsInteractionOutput,
   type CommunityNewsListInput,
@@ -69,10 +68,4 @@ export async function listCommunityNewsComments(
   input: CommunityNewsCommentListInput,
 ): Promise<{ items: CommunityNewsComment[] }> {
   return invokeIpc(IpcChannel.CommunityNewsCommentList, input)
-}
-
-export async function createCommunityNewsComment(
-  input: CommunityNewsCommentCreateInput,
-): Promise<CommunityNewsComment> {
-  return invokeIpc(IpcChannel.CommunityNewsCommentCreate, input)
 }

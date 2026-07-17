@@ -5,7 +5,7 @@ import { sessions } from '../schema/session.js'
 import type {
   CreateSessionInput,
   ListSessionsQuery,
-  Session,
+  PersistedChatSession,
   UpdateSessionInput,
 } from '../types/chat.js'
 import type { SessionRow } from '../types/rows.js'
@@ -23,7 +23,7 @@ function sessionSortTimeExpr() {
   return sql`COALESCE(${sessions.lastMessageAt}, ${sessions.createdAt})`
 }
 
-function toSession(row: SessionRow): Session {
+function toSession(row: SessionRow): PersistedChatSession {
   return {
     id: row.id,
     title: row.title,
@@ -42,7 +42,7 @@ export class SessionRepository {
     return row
   }
 
-  create(input: CreateSessionInput): Session {
+  create(input: CreateSessionInput): PersistedChatSession {
     const now = new Date()
     const id = randomUUID()
 
@@ -66,12 +66,12 @@ export class SessionRepository {
     return this.getById(id)!
   }
 
-  getById(id: string): Session | null {
+  getById(id: string): PersistedChatSession | null {
     const row = this.findRowById(id)
     return row ? toSession(row) : null
   }
 
-  list(query: ListSessionsQuery): Session[] {
+  list(query: ListSessionsQuery): PersistedChatSession[] {
     return this.listRows(query).map(toSession)
   }
 
@@ -121,7 +121,7 @@ export class SessionRepository {
     return { items, nextCursor }
   }
 
-  update(id: string, input: UpdateSessionInput): Session | null {
+  update(id: string, input: UpdateSessionInput): PersistedChatSession | null {
     const existing = this.findRowById(id)
     if (!existing) return null
 

@@ -3,6 +3,7 @@ import { net } from 'electron'
 import { toErrorMessage } from '@toolman/shared'
 
 import { logStructured } from '../structured-log.service'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { applyP2pNetworkConfig } from './p2p-network.config'
 import { stopP2pDiscovery, startP2pDiscovery } from './p2p-discovery.service'
 import { listP2pConnections, disconnectP2pPeer } from './p2p-connection.service'
@@ -12,7 +13,8 @@ import { getDatabase } from '../../bootstrap/database'
 
 const NETWORK_POLL_MS = 5_000
 let pollTimer: ReturnType<typeof setInterval> | null = null
-let lastOnline = net.isOnline()
+/** Deferred — never call `net.isOnline()` at module load (breaks under some Electron boot paths). */
+let lastOnline: boolean | null = null
 let recoveryInFlight = false
 
 async function recoverAfterNetworkChange(online: boolean): Promise<void> {
@@ -38,7 +40,10 @@ async function recoverAfterNetworkChange(online: boolean): Promise<void> {
 
     const workspaces = new P2pWorkspaceRepository(getDatabase()).listActive()
     for (const workspace of workspaces) {
-      void reconcileOwnerWorkspaceMembers(workspace.id, { immediate: true })
+      fireAndForget(
+        'p2p.network_change.reconcile',
+        reconcileOwnerWorkspaceMembers(workspace.id, { immediate: true }),
+      )
     }
   } catch (error) {
     logStructured('p2p.network_change', 'warn', 'network change recovery failed', {
@@ -51,9 +56,9 @@ async function recoverAfterNetworkChange(online: boolean): Promise<void> {
 
 function pollNetworkState(): void {
   const online = net.isOnline()
-  if (online === lastOnline) return
+  if (lastOnline !== null && online === lastOnline) return
   lastOnline = online
-  void recoverAfterNetworkChange(online)
+  fireAndForget('p2p.network_change', recoverAfterNetworkChange(online))
 }
 
 export function startP2pNetworkChangeMonitor(): void {

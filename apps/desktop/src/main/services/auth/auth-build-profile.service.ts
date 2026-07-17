@@ -73,6 +73,4 @@ export function assertAuthBindAllowed(provider: AuthProvider): void {
   assertAuthLoginAllowed('intl', provider)
 }
 
-export function resetAuthBuildRegionCacheForTests(): void {
-  // Reserved for future memoization; env reads are direct today.
-}
+export function resetAuthBuildRegionCacheForTests(): void {}

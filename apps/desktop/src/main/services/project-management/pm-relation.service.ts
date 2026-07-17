@@ -55,8 +55,5 @@ export function deletePmRelation(input: unknown) {
   if (!deleted || !existing) {
     throw new Error('依赖关系不存在')
   }
-  const fromItem = getWorkItemRepo().getById(existing.fromWorkItemId)
-  if (fromItem) {
-  }
   return { ok: true as const }
 }

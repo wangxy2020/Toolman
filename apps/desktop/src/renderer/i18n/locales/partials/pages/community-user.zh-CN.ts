@@ -253,11 +253,4 @@ export const communityPageUserZhCN = {
     admin: '管理员',
     founder: '超级管理员',
   },
-  recommendSections: {
-    hotMcp: '热门 MCP',
-    hotSkills: '热门 Skills',
-    hotWorkflow: '热门工作流',
-    hotNews: '推荐资讯',
-    installCount: '{{count}} 次安装',
-  },
 } as const

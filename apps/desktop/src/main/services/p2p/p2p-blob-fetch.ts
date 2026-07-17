@@ -1,4 +1,5 @@
 import { logStructured } from '../structured-log.service'
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { toErrorMessage } from '@toolman/shared'
 import { randomUUID } from 'node:crypto'
 import { blobExists } from '../blob.service'
@@ -223,5 +224,8 @@ export function scheduleBlobFetch(
   mimeType?: string,
 ): void {
   if (!contentHash || blobExists(contentHash)) return
-  void fetchBlobFromPeers(workspaceId, contentHash, mimeType)
+  fireAndForget(
+    'p2p.blob_fetch',
+    fetchBlobFromPeers(workspaceId, contentHash, mimeType),
+  )
 }

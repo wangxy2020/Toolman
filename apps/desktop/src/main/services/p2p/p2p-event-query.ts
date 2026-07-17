@@ -4,7 +4,7 @@ import {
 } from './p2p-permission.guard'
 import { getEventRepo, mapEventRow } from './p2p-event-store-internal'
 
-const ACTIVITY_LOG_EXCLUDED_RESOURCE_TYPES = new Set(['GroupChat'])
+const ACTIVITY_LOG_EXCLUDED_RESOURCE_TYPES = ['GroupChat'] as const satisfies readonly P2pResourceType[]
 
 export function listP2pEvents(rawInput: {
   workspaceId: string
@@ -19,28 +19,27 @@ export function listP2pEvents(rawInput: {
   const limit = Math.min(rawInput.limit ?? 50, 200)
   const offset = rawInput.offset ?? 0
   const repo = getEventRepo()
-  const total = repo.count({
+  const excludeResourceTypes = rawInput.resourceType
+    ? undefined
+    : [...ACTIVITY_LOG_EXCLUDED_RESOURCE_TYPES]
+  const filter = {
     workspaceId: rawInput.workspaceId,
     resourceType: rawInput.resourceType,
+    excludeResourceTypes,
     resourceId: rawInput.resourceId,
     sinceSeq: rawInput.sinceSeq,
+  }
+  const total = repo.count(filter)
+  const rows = repo.list({
+    ...filter,
+    limit,
+    offset,
+    order: 'desc',
   })
-  const rows = repo
-    .list({
-      workspaceId: rawInput.workspaceId,
-      resourceType: rawInput.resourceType,
-      resourceId: rawInput.resourceId,
-      sinceSeq: rawInput.sinceSeq,
-      limit: Math.min(limit * 3, 200),
-      offset,
-      order: 'desc',
-    })
-    .filter((row) => !ACTIVITY_LOG_EXCLUDED_RESOURCE_TYPES.has(row.resourceType))
-    .slice(0, limit)
 
   return {
     events: rows.map(mapEventRow),
-    total: rows.length < limit ? offset + rows.length : total,
+    total,
     hasMore: offset + rows.length < total,
   }
 }

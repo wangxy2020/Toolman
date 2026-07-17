@@ -98,18 +98,23 @@ export function bootstrapMainProcessServices(): void {
 }
 
 export function bootstrapCommunityHubAsync(): void {
-  void bootstrapCommunityHub().then((status) => {
-    if (status.running) {
-      logStructured('community.hub', 'info', `ready at ${status.baseUrl}`)
-      // Login often finishes before the hub is up; push registered email once hub is ready.
-      void import('./services/auth/auth-profile-sync.service')
-        .then(({ syncAuthProfileToCommunityHub }) => syncAuthProfileToCommunityHub())
+  void bootstrapCommunityHub()
+    .then((status) => {
+      if (status.running) {
+        logStructured('community.hub', 'info', `ready at ${status.baseUrl}`)
+        // Login often finishes before the hub is up; push registered email once hub is ready.
+        void import('./services/auth/auth-profile-sync.service')
+          .then(({ syncAuthProfileToCommunityHub }) => syncAuthProfileToCommunityHub())
+          .catch(() => undefined)
+      } else if (status.error) {
+        logStructured('community.hub', 'warn', `unavailable: ${status.error}`)
+      }
+      void import('./services/crash-report.service')
+        .then(({ flushPendingCrashReports }) => flushPendingCrashReports())
         .catch(() => undefined)
-    } else if (status.error) {
-      logStructured('community.hub', 'warn', `unavailable: ${status.error}`)
-    }
-    void import('./services/crash-report.service')
-      .then(({ flushPendingCrashReports }) => flushPendingCrashReports())
-      .catch(() => undefined)
-  })
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      logStructured('community.hub', 'error', `bootstrap failed: ${message}`)
+    })
 }

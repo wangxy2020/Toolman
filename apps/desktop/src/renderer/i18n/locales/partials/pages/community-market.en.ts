@@ -56,10 +56,6 @@ export const communityPageMarketEn = {
     workflowEmpty: 'No workflow resources. Ensure Community Hub is running and resources are published.',
     knowledgeEmpty: 'No knowledge resources. Ensure Community Hub is running and resources are published.',
     defaultEmpty: 'No resources available',
-    recommendMcp: 'No MCP recommendations yet',
-    recommendSkills: 'No Skills recommendations yet',
-    recommendWorkflow: 'No workflow recommendations yet',
-    recommendNews: 'No news recommendations yet',
     pendingResourceReview:
       '"{{title}}" is under review. Check Mine → Published for progress.',
     pendingTaskReview: '"{{title}}" is under review. Check Mine → Tasks for progress.',

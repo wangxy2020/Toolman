@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 
 import { AuthLoginError } from './auth-login.error.js'
 import type { WechatAuthIdentity } from './wechat-oauth.service.js'
@@ -51,8 +51,4 @@ function cleanupExpired(): void {
 
 export function resetWechatMergeTokensForTests(): void {
   pendingMerges.clear()
-}
-
-export function hashWechatMergeToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex').slice(0, 12)
 }

@@ -138,15 +138,6 @@ export function ensurePmDemoProjects(workspaceId: string, _domain?: PmDomain): v
   }
 }
 
-/** Shared portfolio projects used by every PM menu (workbench, plan, cost, …). */
-export function listPmDemoPortfolioProjects(workspaceId: string) {
-  ensurePmDemoProjects(workspaceId)
-  return new PmProjectRepository(getDatabase())
-    .listByWorkspace(workspaceId, { limit: 500 })
-    .filter((project) => isMockSeedProject(project.metadata))
-    .sort((left, right) => left.code.localeCompare(right.code))
-}
-
 export function buildDemoWorkItemSeeds(
   mock: EpcProjectRecord,
   domain: PmDomain,

@@ -427,19 +427,3 @@ export function dateHeaderHeight(_mode?: GanttDateHeaderMode | GanttDateHeaderRo
   // Always reserve the 3-row budget; visible scale rows share it via flex.
   return GANTT_DATE_HEADER_HEIGHT
 }
-
-export function dateHeaderRowCount(mode: GanttDateHeaderMode): 1 | 2 | 3 {
-  switch (mode) {
-    case 'day':
-    case 'week':
-    case 'month':
-    case 'year':
-      return 1
-    case 'month_day':
-    case 'year_month':
-      return 2
-    case 'year_month_day':
-    default:
-      return 3
-  }
-}

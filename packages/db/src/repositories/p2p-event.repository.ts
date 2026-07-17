@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { and, count, desc, eq, gt, lt } from 'drizzle-orm'
+import { and, count, desc, eq, gt, lt, notInArray } from 'drizzle-orm'
 import type { ToolmanDatabase } from '../index.js'
 import { p2pEvents, p2pWorkspaces } from '../schema/p2p.js'
 import type { P2pEventRow, P2pEventType, P2pResourceType } from '../types/p2p.js'
@@ -36,6 +36,8 @@ export interface ListP2pEventsOptions {
   workspaceId: string
   sinceSeq?: number
   resourceType?: P2pResourceType
+  /** When set, rows whose resourceType is in this list are omitted (ignored if resourceType is set). */
+  excludeResourceTypes?: P2pResourceType[]
   resourceId?: string
   limit?: number
   offset?: number
@@ -90,6 +92,8 @@ export class P2pEventRepository {
     }
     if (options.resourceType) {
       conditions.push(eq(p2pEvents.resourceType, options.resourceType))
+    } else if (options.excludeResourceTypes && options.excludeResourceTypes.length > 0) {
+      conditions.push(notInArray(p2pEvents.resourceType, options.excludeResourceTypes))
     }
     if (options.resourceId) {
       conditions.push(eq(p2pEvents.resourceId, options.resourceId))
@@ -121,6 +125,8 @@ export class P2pEventRepository {
     }
     if (options.resourceType) {
       conditions.push(eq(p2pEvents.resourceType, options.resourceType))
+    } else if (options.excludeResourceTypes && options.excludeResourceTypes.length > 0) {
+      conditions.push(notInArray(p2pEvents.resourceType, options.excludeResourceTypes))
     }
     if (options.resourceId) {
       conditions.push(eq(p2pEvents.resourceId, options.resourceId))

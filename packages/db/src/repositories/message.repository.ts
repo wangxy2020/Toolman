@@ -5,7 +5,7 @@ import { messages } from '../schema/session.js'
 import type {
   CreateMessageInput,
   ListMessagesQuery,
-  Message,
+  PersistedChatMessage,
   UpdateMessageInput,
 } from '../types/chat.js'
 import type { MessageRow } from '../types/rows.js'
@@ -35,7 +35,7 @@ function fromContentBlocks(json: string, plain: string | null): string {
   }
 }
 
-function toMessage(row: MessageRow): Message {
+function toMessage(row: MessageRow): PersistedChatMessage {
   return {
     id: row.id,
     sessionId: row.sessionId,
@@ -54,7 +54,7 @@ export class MessageRepository {
     return row
   }
 
-  create(input: CreateMessageInput): Message {
+  create(input: CreateMessageInput): PersistedChatMessage {
     const now = new Date()
     const id = randomUUID()
     const contentBlocks = input.contentBlocks ?? [{ type: 'text', text: input.content }]
@@ -110,12 +110,12 @@ export class MessageRepository {
     return this.findRowById(input.id)!
   }
 
-  getById(id: string): Message | null {
+  getById(id: string): PersistedChatMessage | null {
     const row = this.findRowById(id)
     return row ? toMessage(row) : null
   }
 
-  list(query: ListMessagesQuery): Message[] {
+  list(query: ListMessagesQuery): PersistedChatMessage[] {
     return this.listRows(query).map(toMessage)
   }
 
@@ -148,7 +148,7 @@ export class MessageRepository {
       .all()
   }
 
-  update(id: string, input: UpdateMessageInput): Message | null {
+  update(id: string, input: UpdateMessageInput): PersistedChatMessage | null {
     const existing = this.findRowById(id)
     if (!existing) return null
 

@@ -40,18 +40,6 @@ export function collectAllowedPathRoots(): string[] {
   return [...roots]
 }
 
-export function isPathWithinAllowedRoots(inputPath: string): boolean {
-  const trimmed = inputPath.trim()
-  if (!trimmed) return false
-
-  try {
-    assertPathWithinAllowedRoots(trimmed)
-    return true
-  } catch {
-    return false
-  }
-}
-
 function canonicalizePath(path: string): string {
   const normalized = resolve(path)
   let cursor = normalized
