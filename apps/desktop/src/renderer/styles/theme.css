@@ -9719,12 +9719,15 @@ html.theme-dark .tm-dedup-error {
 .tm-md-table-wrap {
   overflow-x: auto;
   margin: 0.75em 0;
+  max-width: 100%;
 }
 
 .tm-md-table {
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   border-collapse: collapse;
   font-size: 0.95em;
+  table-layout: auto;
 }
 
 .tm-md-table th,
@@ -9732,6 +9735,10 @@ html.theme-dark .tm-dedup-error {
   border: 1px solid var(--tm-border);
   padding: 8px 10px;
   text-align: left;
+  vertical-align: top;
+  /* Keep CJK phrases intact when the column is squeezed; still wrap long paths/URLs. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .tm-md-table th {
@@ -9740,6 +9747,32 @@ html.theme-dark .tm-dedup-error {
 
 .tm-md-table-cell--center {
   text-align: center;
+}
+
+/* Two-column label | content tables: first column shrink-wraps, labels stay on one line. */
+.tm-md-table-wrap--label-value {
+  max-width: 100%;
+}
+
+.tm-md-table--label-value {
+  width: 100%;
+  max-width: 100%;
+}
+
+.tm-md-table--label-value th:first-child,
+.tm-md-table--label-value td:first-child {
+  white-space: nowrap;
+  width: 1%;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.tm-md-table--label-value th:last-child,
+.tm-md-table--label-value td:last-child {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 12em;
 }
 
 /* Plan-agent WBS table: shrink to content, keep outline/dates on one line. */
@@ -17781,7 +17814,7 @@ html.theme-dark .tm-mcp-package-source-group {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 6px 12px 2px;
   border-bottom: 1px solid var(--tm-border);
   background: var(--tm-bg);
   flex-shrink: 0;
@@ -17799,24 +17832,38 @@ html.theme-dark .tm-notes-toolbar {
   flex-wrap: nowrap;
   gap: 2px;
   min-width: 0;
-  flex: 1;
-  overflow-x: auto;
+  flex: 1 1 0;
+  /* scroll (not auto): always reserve/show bar so macOS overlay scrollbars aren't "invisible" */
+  overflow-x: scroll;
   overflow-y: hidden;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: var(--tm-scrollbar-thumb) var(--tm-scrollbar-track);
+  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 55%, transparent)
+    color-mix(in srgb, var(--tm-border) 65%, transparent);
 }
 
 .tm-notes-toolbar-group::-webkit-scrollbar {
-  height: 6px;
+  height: 10px;
+  width: 10px;
+  -webkit-appearance: none;
 }
 
 .tm-notes-toolbar-group::-webkit-scrollbar-thumb {
-  background: var(--tm-scrollbar-thumb);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border: none;
+  border-radius: 999px;
+  background-clip: border-box;
+}
+
+.tm-notes-toolbar-group::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--tm-text-secondary) 70%, transparent);
+  border: none;
+  background-clip: border-box;
 }
 
 .tm-notes-toolbar-group::-webkit-scrollbar-track {
-  background: var(--tm-scrollbar-track);
+  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tm-notes-toolbar-end {

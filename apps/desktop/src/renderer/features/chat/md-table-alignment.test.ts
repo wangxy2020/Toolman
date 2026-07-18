@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getCenterAlignedColumnIndexes,
+  isLabelValueTableHeaders,
   isPmPlanTableHeaders,
 } from './md-table-alignment'
 
@@ -23,5 +24,19 @@ describe('md-table-alignment pm plan', () => {
       '前置任务',
     ])
     expect([...indexes].sort()).toEqual([0, 2, 3, 4])
+  })
+})
+
+describe('md-table-alignment label-value', () => {
+  it('treats 项目/内容 and other two-column tables as label-value', () => {
+    expect(isLabelValueTableHeaders(['项目', '内容'])).toBe(true)
+    expect(isLabelValueTableHeaders(['字段', '值'])).toBe(true)
+    expect(isLabelValueTableHeaders(['Key', 'Value'])).toBe(true)
+    expect(isLabelValueTableHeaders(['A', 'B'])).toBe(true)
+  })
+
+  it('does not treat multi-column tables as label-value', () => {
+    expect(isLabelValueTableHeaders(['序号', '名称', '数量'])).toBe(false)
+    expect(isLabelValueTableHeaders(['项目'])).toBe(false)
   })
 })

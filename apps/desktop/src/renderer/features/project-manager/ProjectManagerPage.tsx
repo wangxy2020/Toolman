@@ -427,6 +427,17 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     )
   })()
 
+  const openScheduleFromFeatures = useCallback((_view: 'list' | 'gantt' | 'resource' | 'cost') => {
+    setSettingsOpen(false)
+    setPanelView('gantt')
+    setMountedViews((prev) => {
+      if (prev.has('gantt')) return prev
+      const next = new Set(prev)
+      next.add('gantt')
+      return next
+    })
+  }, [])
+
   const filesPanel =
     workspaceId &&
     isConfigurableSidebarMenuKey(activeTab) &&
@@ -437,6 +448,8 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         systemPaths={agentContext?.systemPaths ?? null}
         projects={projects}
         selectedProjectId={selectedProjectId}
+        onOpenScheduleView={openScheduleFromFeatures}
+        onProjectsChange={reloadProjectsAndDashboard}
       />
     ) : (
       <div className="tm-kb-file-panel-empty">
@@ -469,6 +482,11 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     panelView === 'resource_table' &&
     activeTab === 'resource_management' &&
     workspaceId != null
+  const showFeaturesPanel =
+    panelView === 'files' &&
+    workspaceId != null &&
+    isConfigurableSidebarMenuKey(activeTab) &&
+    isPmFilesDomain(activeTab)
 
   const toolbarActiveView: ProjectManagerPanelView = settingsOpen ? 'settings' : panelView
 
@@ -627,6 +645,23 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         </div>
       ) : null}
 
+      {workspaceId &&
+      isConfigurableSidebarMenuKey(activeTab) &&
+      isPmFilesDomain(activeTab) &&
+      mountedViews.has('files') ? (
+        <div
+          className={[
+            'tm-module-content',
+            'tm-pm-gantt-content',
+            showFeaturesPanel ? '' : 'tm-pm-view-hidden',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!showFeaturesPanel}>
+          {filesPanel}
+        </div>
+      ) : null}
+
       {activeTab === 'resource_management' &&
       workspaceId &&
       mountedViews.has('resource_table') ? (
@@ -666,22 +701,21 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         className={[
           'tm-module-content',
           'tm-community-module-content',
-          showAgentPanel || showGanttPanel || showResourceTablePanel
+          showAgentPanel || showGanttPanel || showResourceTablePanel || showFeaturesPanel
             ? 'tm-pm-view-hidden'
             : '',
         ]
           .filter(Boolean)
           .join(' ')}
-        aria-hidden={showAgentPanel || showGanttPanel || showResourceTablePanel}>
+        aria-hidden={
+          showAgentPanel || showGanttPanel || showResourceTablePanel || showFeaturesPanel
+        }>
         <ProjectManagerPanelShell
           title={activeMenuLabel}
           subtitle={panelSubtitle}
           showHeader={panelView === 'stats'}>
           <KeepAliveSlot active={panelView === 'stats'} mounted={mountedViews.has('stats')}>
             {statsPanel}
-          </KeepAliveSlot>
-          <KeepAliveSlot active={panelView === 'files'} mounted={mountedViews.has('files')}>
-            {filesPanel}
           </KeepAliveSlot>
           <KeepAliveSlot active={panelView === 'database'} mounted={mountedViews.has('database')}>
             {databasePanel}
@@ -692,7 +726,10 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         </ProjectManagerPanelShell>
       </div>
 
-      {!showAgentPanel && !showGanttPanel && !showResourceTablePanel ? (
+      {!showAgentPanel &&
+      !showGanttPanel &&
+      !showResourceTablePanel &&
+      !showFeaturesPanel ? (
         <ModulePageStatusBar />
       ) : null}
     </main>

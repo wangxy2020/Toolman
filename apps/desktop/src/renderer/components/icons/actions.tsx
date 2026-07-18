@@ -296,3 +296,70 @@ export function IconApps({ size = 16, className }: IconProps) {
     </svg>
   )
 }
+
+/** Insert a row / task below selection (outline-style). */
+export function IconInsertRow({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M4 5h16" />
+      <path d="M4 19h16" />
+      <path d="M4 12h9" />
+      <path d="M17 9v6" />
+      <path d="M14 12h6" />
+    </svg>
+  )
+}
+
+/** Indent / demote in outline (降级). */
+export function IconIndent({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M3 18h18" />
+      <path d="M11 12h10" />
+      <path d="M3 9l4 3-4 3" />
+    </svg>
+  )
+}
+
+/** Outdent / promote in outline (升级). */
+export function IconOutdent({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M3 18h18" />
+      <path d="M11 12h10" />
+      <path d="M7 9l-4 3 4 3" />
+    </svg>
+  )
+}

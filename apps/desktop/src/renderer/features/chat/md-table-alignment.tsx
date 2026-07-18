@@ -32,6 +32,14 @@ export function isPmPlanTableHeaders(headers: string[]): boolean {
   )
 }
 
+/**
+ * Two-column tables from chat models are usually label | content (e.g. 项目 | 内容).
+ * Keep the first column on one line so CJK labels are not crushed by a stretched table.
+ */
+export function isLabelValueTableHeaders(headers: string[]): boolean {
+  return headers.length === 2
+}
+
 export function getCenterAlignedColumnIndexes(headers: string[]): Set<number> {
   const normalized = headers.map((header) => normalizeHeaderLabel(header))
 
@@ -96,6 +104,10 @@ export function MarkdownTable({
   const headers = useMemo(() => extractTableHeaders(children), [children])
   const centerColumns = useMemo(() => getCenterAlignedColumnIndexes(headers), [headers])
   const isPmPlan = useMemo(() => isPmPlanTableHeaders(headers), [headers])
+  const isLabelValue = useMemo(
+    () => !isPmPlan && isLabelValueTableHeaders(headers),
+    [headers, isPmPlan],
+  )
   const columnRef = useRef(0)
   const contextValue = useMemo(
     () => ({
@@ -109,12 +121,21 @@ export function MarkdownTable({
   )
 
   return (
-    <div className={isPmPlan ? 'tm-md-table-wrap tm-md-table-wrap--pm-plan' : 'tm-md-table-wrap'}>
+    <div
+      className={[
+        'tm-md-table-wrap',
+        isPmPlan ? 'tm-md-table-wrap--pm-plan' : '',
+        isLabelValue ? 'tm-md-table-wrap--label-value' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <MarkdownTableContext.Provider value={contextValue}>
         <table
           className={[
             'tm-md-table',
             isPmPlan ? 'tm-md-table--pm-plan' : '',
+            isLabelValue ? 'tm-md-table--label-value' : '',
             centerColumns.size > 0 ? 'tm-md-table--has-center-cols' : '',
           ]
             .filter(Boolean)

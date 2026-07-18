@@ -1,3 +1,4 @@
 @import './styles/theme.css';
+@import './features/notes/notes-editor.css';
 @import './features/project-manager/project-manager.css';
 @import './components/user-center/user-center.css';

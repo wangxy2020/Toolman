@@ -734,6 +734,29 @@
   white-space: nowrap;
 }
 
+/* Features body inside the shared Gantt page chrome (toolbar + statusbar). */
+.tm-pm-features-workspace {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.tm-pm-features-placeholder {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+ * Features toolbar: disabled look when using aria-disabled (keeps tooltips).
+ */
+.tm-pm-features-page .tm-pm-features-menubar-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .tm-pm-files-list {
   list-style: none;
   margin: 0;
@@ -867,23 +890,383 @@
   overflow: hidden;
 }
 
-/* Shared notes toolbar look: single row + horizontal scrollbar when overflowing. */
+/*
+ * Gantt function menu — independent of Notes `.tm-notes-editor-toolbar`
+ * and of Resource/Features `.tm-notes-toolbar.tm-pm-gantt-toolbar`.
+ * Fit: titlebar height. Overflow: custom track under icons drops the bottom rule.
+ */
+.tm-pm-gantt-menubar {
+  --tm-pm-gantt-menubar-fg: #000;
+  position: relative;
+  z-index: 20;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tm-titlebar-height);
+  height: auto;
+  padding: 0 0 0 12px;
+  border-bottom: 1px solid var(--tm-border);
+  background: var(--tm-bg);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+html.theme-dark .tm-pm-gantt-menubar {
+  --tm-pm-gantt-menubar-fg: var(--tm-text);
+}
+
+.tm-pm-gantt-menubar-main {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tm-pm-gantt-menubar-scroll {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tm-pm-gantt-menubar-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.tm-pm-gantt-menubar--overflow .tm-pm-gantt-menubar-scroll {
+  padding-bottom: 2px;
+}
+
+.tm-pm-gantt-menubar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px;
+  width: max-content;
+  min-width: max-content;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-menubar-hscroll {
+  position: relative;
+  flex-shrink: 0;
+  height: 8px;
+  margin: 0 8px 2px 0;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-track);
+  cursor: pointer;
+}
+
+.tm-pm-gantt-menubar-hscroll-thumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 24px;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-thumb);
+  background-clip: padding-box;
+  pointer-events: none;
+}
+
+.tm-pm-gantt-menubar-hscroll:hover .tm-pm-gantt-menubar-hscroll-thumb {
+  background: var(--tm-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.tm-pm-gantt-menubar-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tm-pm-gantt-menubar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tm-pm-gantt-menubar-fg);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tm-pm-gantt-menubar-btn--icon {
+  width: 28px;
+  padding: 0;
+}
+
+.tm-pm-gantt-menubar-btn--icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.tm-pm-gantt-menubar-btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--tm-hover);
+  color: var(--tm-pm-gantt-menubar-fg);
+}
+
+.tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active {
+  background: color-mix(in srgb, var(--tm-accent) 28%, #fff);
+  color: var(--tm-pm-gantt-menubar-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-accent) 55%, transparent);
+}
+
+.tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent) 36%, #fff);
+  color: var(--tm-pm-gantt-menubar-fg);
+}
+
+html.theme-dark .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active {
+  background: color-mix(in srgb, var(--tm-accent) 34%, var(--tm-bg));
+}
+
+html.theme-dark .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent) 42%, var(--tm-bg));
+}
+
+.tm-pm-gantt-menubar-btn:disabled,
+.tm-pm-gantt-menubar-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tm-pm-gantt-menubar-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--tm-border);
+  flex-shrink: 0;
+}
+
+.tm-pm-gantt-menubar-tooltip {
+  position: fixed;
+  z-index: 5000;
+  max-width: 240px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tm-text) 92%, #000);
+  color: var(--tm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * Features function menu — independent of Gantt/Notes toolbars.
+ * Same chrome & overflow scrollbar behavior as `.tm-pm-gantt-menubar`.
+ */
+.tm-pm-features-menubar {
+  --tm-pm-features-menubar-fg: #000;
+  position: relative;
+  z-index: 20;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tm-titlebar-height);
+  height: auto;
+  padding: 0 0 0 12px;
+  border-bottom: 1px solid var(--tm-border);
+  background: var(--tm-bg);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+html.theme-dark .tm-pm-features-menubar {
+  --tm-pm-features-menubar-fg: var(--tm-text);
+}
+
+.tm-pm-features-menubar-main {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tm-pm-features-menubar-scroll {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tm-pm-features-menubar-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.tm-pm-features-menubar--overflow .tm-pm-features-menubar-scroll {
+  padding-bottom: 2px;
+}
+
+.tm-pm-features-menubar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px;
+  width: max-content;
+  min-width: max-content;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.tm-pm-features-menubar-hscroll {
+  position: relative;
+  flex-shrink: 0;
+  height: 8px;
+  margin: 0 8px 2px 0;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-track);
+  cursor: pointer;
+}
+
+.tm-pm-features-menubar-hscroll-thumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 24px;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-thumb);
+  background-clip: padding-box;
+  pointer-events: none;
+}
+
+.tm-pm-features-menubar-hscroll:hover .tm-pm-features-menubar-hscroll-thumb {
+  background: var(--tm-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.tm-pm-features-menubar-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tm-pm-features-menubar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tm-pm-features-menubar-fg);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tm-pm-features-menubar-btn--icon {
+  width: 28px;
+  padding: 0;
+}
+
+.tm-pm-features-menubar-btn--icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.tm-pm-features-menubar-btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--tm-hover);
+  color: var(--tm-pm-features-menubar-fg);
+}
+
+.tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active {
+  background: color-mix(in srgb, var(--tm-accent) 28%, #fff);
+  color: var(--tm-pm-features-menubar-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-accent) 55%, transparent);
+}
+
+.tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent) 36%, #fff);
+  color: var(--tm-pm-features-menubar-fg);
+}
+
+html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active {
+  background: color-mix(in srgb, var(--tm-accent) 34%, var(--tm-bg));
+}
+
+html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent) 42%, var(--tm-bg));
+}
+
+.tm-pm-features-menubar-btn:disabled,
+.tm-pm-features-menubar-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tm-pm-features-menubar-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--tm-border);
+  flex-shrink: 0;
+}
+
+.tm-pm-features-menubar-tooltip {
+  position: fixed;
+  z-index: 5000;
+  max-width: 240px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tm-text) 92%, #000);
+  color: var(--tm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * Resource still uses shared notes toolbar + this class.
+ * Do not couple to `.tm-pm-gantt-menubar` / `.tm-pm-features-menubar`.
+ */
 .tm-pm-gantt-toolbar.tm-notes-toolbar {
   width: 100%;
-  height: var(--tm-titlebar-height);
-  min-height: var(--tm-titlebar-height);
-  max-height: var(--tm-titlebar-height);
-  padding: 0 12px;
-  box-sizing: border-box;
-  align-items: center;
-  overflow: hidden;
 }
 
 .tm-pm-gantt-toolbar-group {
   flex-wrap: nowrap;
-  align-items: center;
-  min-width: 0;
-  height: 100%;
 }
 
 .tm-pm-gantt-statusbar {
@@ -966,7 +1349,9 @@
   position: relative;
 }
 
-.tm-pm-gantt-view-menu .tm-notes-toolbar-btn {
+.tm-pm-gantt-view-menu .tm-notes-toolbar-btn,
+.tm-pm-gantt-view-menu .tm-pm-gantt-menubar-btn,
+.tm-pm-gantt-view-menu .tm-pm-features-menubar-btn {
   gap: 4px;
 }
 
@@ -1081,10 +1466,15 @@
 
 .tm-pm-gantt-workspace {
   display: grid;
-  /* Left pane hugs task columns; chart takes the remaining width (no mid-gap). */
-  grid-template-columns: max-content minmax(0, 1fr);
+  /*
+   * fit-content(cap): hug task columns, but never exceed the cap — so the list stays in a
+   * bounded scrollport (.tm-pm-gantt-grid-hscroll). Naked max-content could grow past the
+   * viewport and clip the toolbar + list with no usable scrollbar.
+   */
+  grid-template-columns: fit-content(min(62vw, 880px)) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   /* No side padding — task index flush left; scrollbar on the far right. */
   padding: 0 0 16px;
@@ -1166,8 +1556,9 @@
 }
 
 .tm-pm-gantt-grid-pane {
-  width: max-content;
-  max-width: min(62vw, 880px);
+  width: 100%;
+  max-width: none;
+  min-width: 0;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-pane {
@@ -1183,10 +1574,31 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
   display: flex;
   flex-direction: column;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 55%, transparent)
+    color-mix(in srgb, var(--tm-border) 65%, transparent);
+}
+
+.tm-pm-gantt-grid-hscroll::-webkit-scrollbar {
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.tm-pm-gantt-grid-hscroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border: none;
+  border-radius: 999px;
+  background-clip: border-box;
+}
+
+.tm-pm-gantt-grid-hscroll::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tm-pm-gantt-grid-inner {
@@ -1281,19 +1693,28 @@
   min-height: 0;
   width: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: scroll;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 50%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 55%, transparent)
+    color-mix(in srgb, var(--tm-border) 65%, transparent);
 }
 
 .tm-pm-gantt-chart-body::-webkit-scrollbar {
   width: 10px;
+  -webkit-appearance: none;
 }
 
 .tm-pm-gantt-chart-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--tm-text-muted) 45%, transparent);
-  border-radius: 6px;
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border: none;
+  border-radius: 999px;
+  background-clip: border-box;
+}
+
+.tm-pm-gantt-chart-body::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tm-pm-gantt-grid-row {
@@ -2268,6 +2689,8 @@ button.tm-pm-gantt-col-menu-action:hover {
   .tm-pm-agent-root,
   .tm-pm-view-hidden,
   .tm-pm-gantt-toolbar,
+  .tm-pm-gantt-menubar,
+  .tm-pm-features-menubar,
   .tm-pm-gantt-view-panel,
   .tm-pm-gantt-col-menu,
   .tm-pm-gantt-add-col-btn,

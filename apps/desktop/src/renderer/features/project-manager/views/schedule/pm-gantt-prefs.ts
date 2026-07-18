@@ -187,6 +187,9 @@ export function saveGanttUiPrefs(prefs: GanttUiPrefs): void {
   } catch {
     // ignore quota
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('tm-pm-gantt-prefs'))
+  }
 }
 
 const LEGACY_PERCENT_LABELS = new Set(['完成百分比', '% Complete', 'Percent Complete'])
