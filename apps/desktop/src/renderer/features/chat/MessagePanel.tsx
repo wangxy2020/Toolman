@@ -1,10 +1,13 @@
 import { memo } from 'react'
-import { Virtuoso } from 'react-virtuoso'
+import { Virtuoso, type Components } from 'react-virtuoso'
 import { MessageDeleteConfirmPopover } from './MessageDeleteConfirmPopover'
 import { MessagePanelTurnView } from './MessagePanelTurnView'
 import { areMessagePanelPropsEqual } from './message-panel-props'
-import type { MessagePanelProps } from './message-panel-types'
+import type { MessagePanelProps, MessageTurn } from './message-panel-types'
 import { useMessagePanel } from './useMessagePanel'
+
+/** Stable empty map — avoid `components={undefined}` (Virtuoso crash on EmptyPlaceholder). */
+const EMPTY_VIRTUOSO_COMPONENTS: Components<MessageTurn> = {}
 
 export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps) {
   const panel = useMessagePanel(props)
@@ -75,6 +78,8 @@ export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps)
             alignToBottom
             initialTopMostItemIndex={Math.max(0, turns.length - 1)}
             increaseViewportBy={{ top: 600, bottom: 600 }}
+            // Always pass an object — `components={undefined}` makes react-virtuoso set its
+            // internal components stream to undefined, then crash on EmptyPlaceholder.
             components={
               props.listFooter
                 ? {
@@ -82,7 +87,7 @@ export const MessagePanel = memo(function MessagePanel(props: MessagePanelProps)
                       <div className="tm-messages-list-footer">{props.listFooter}</div>
                     ),
                   }
-                : undefined
+                : EMPTY_VIRTUOSO_COMPONENTS
             }
             computeItemKey={(_index, turn) =>
               turn.type === 'user'
