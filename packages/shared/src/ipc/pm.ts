@@ -131,3 +131,20 @@ export {
   P2pPmShareDomainInputSchema,
   P2pPmShareDomainOutputSchema,
 } from '../project-management/pm-p2p-types.js'
+
+export {
+  PmApplyResourcePlanInputSchema,
+  type PmApplyResourcePlanInput,
+} from '../project-management/pm-resource-apply.js'
+
+export {
+  PmApplyResourceCatalogPatchInputSchema,
+  type PmApplyResourceCatalogPatchInput,
+} from '../project-management/pm-resource-catalog-agent.js'
+
+export {
+  PmSharedResourceCatalogGetInputSchema,
+  PmSharedResourceCatalogSetInputSchema,
+  PmSharedResourceCatalogUpsertInputSchema,
+  type PmSharedResourceCatalogRow,
+} from '../project-management/pm-shared-resource-catalog.js'

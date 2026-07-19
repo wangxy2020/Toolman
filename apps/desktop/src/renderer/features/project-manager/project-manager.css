@@ -741,6 +741,192 @@
   padding: 0;
 }
 
+.tm-pm-features-table-page {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.tm-pm-features-table-scroll-wrap {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  /* Prefer the custom bottom scrollbar (same as resource-allocation / Gantt). */
+  scrollbar-width: none;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-scroll-inner {
+  /* Fill the pane so the trailing spacer can absorb leftover width (资源分配同款). */
+  min-width: 100%;
+  width: max(100%, max-content);
+  padding-right: 0;
+  box-sizing: border-box;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table {
+  width: 100%;
+  min-width: max-content;
+  table-layout: fixed;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-col-type {
+  width: 80px;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-col-name {
+  width: 100px;
+}
+
+.tm-pm-features-table-col-remark {
+  width: 160px;
+  min-width: 160px;
+}
+
+.tm-pm-features-table-col-date {
+  width: 100px;
+  min-width: 100px;
+}
+
+.tm-pm-features-table-col-month {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+}
+
+.tm-pm-features-table-page th.tm-pm-features-table-col-year {
+  height: 26px;
+  padding: 0 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 0.5px solid var(--tm-border);
+}
+
+.tm-pm-features-table-page th.tm-pm-features-table-col-month,
+.tm-pm-features-table-page td.tm-pm-features-table-month {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  padding: 0 2px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-pm-features-table-page th.tm-pm-features-table-col-month {
+  height: 26px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Horizontal two-row headers use split heights; vertical keeps the standard 54px sticky bar. */
+.tm-pm-features-table-page
+  .tm-pm-resource-table:not(.tm-pm-features-table--vertical)
+  thead
+  th {
+  height: auto;
+}
+
+.tm-pm-features-table-page .tm-pm-features-table--vertical thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 54px;
+  min-height: 54px;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+/* Rowspan year cells must not keep the 36px row height, or text sticks to the first row. */
+.tm-pm-features-table-page .tm-pm-features-table--vertical td.tm-pm-features-table-year {
+  height: auto;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.tm-pm-features-table-page
+  .tm-pm-resource-table
+  thead
+  tr.tm-pm-features-table-head-row--year
+  > th[rowspan] {
+  top: 0;
+  z-index: 3;
+  height: 52px;
+  vertical-align: middle;
+}
+
+.tm-pm-features-table-page
+  .tm-pm-resource-table
+  thead
+  tr.tm-pm-features-table-head-row--year
+  > th.tm-pm-features-table-col-year {
+  top: 0;
+  z-index: 2;
+  height: 26px;
+}
+
+.tm-pm-features-table-page
+  .tm-pm-resource-table
+  thead
+  tr.tm-pm-features-table-head-row--month
+  > th {
+  top: 26px;
+  z-index: 2;
+  height: 26px;
+}
+
+.tm-pm-features-table-page .tm-pm-gantt-grid-custom-hscroll {
+  margin: 0 12px 4px 12px;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-col-spacer,
+.tm-pm-features-table-page th.tm-pm-resource-table-col-spacer,
+.tm-pm-features-table-page td.tm-pm-resource-table-col-spacer {
+  /* Data columns | vertical rule | right margin stretching to the panel edge. */
+  width: auto;
+  min-width: 16px;
+  padding: 0;
+  border-left: 0.5px solid var(--tm-border);
+  border-right: none;
+}
+
+.tm-pm-features-table-col-resource {
+  width: 88px;
+  min-width: 88px;
+}
+
+.tm-pm-features-table-page th.tm-pm-features-table-col-resource {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-pm-features-table-month {
+  white-space: nowrap;
+}
+
+.tm-pm-features-table-rollup {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  color: var(--tm-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .tm-pm-features-placeholder {
   flex: 1;
   min-height: 0;
@@ -892,7 +1078,6 @@
 
 /*
  * Gantt function menu — independent of Notes `.tm-notes-editor-toolbar`
- * and of Resource/Features `.tm-notes-toolbar.tm-pm-gantt-toolbar`.
  * Fit: titlebar height. Overflow: custom track under icons drops the bottom rule.
  */
 .tm-pm-gantt-menubar {
@@ -1258,9 +1443,170 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
 }
 
 /*
- * Resource still uses shared notes toolbar + this class.
- * Do not couple to `.tm-pm-gantt-menubar` / `.tm-pm-features-menubar`.
+ * Resource list function menu — same chrome & overflow scrollbar as Gantt menubar.
+ * Keep class names independent of `.tm-pm-gantt-menubar` / `.tm-pm-features-menubar`.
  */
+.tm-pm-resource-menubar {
+  --tm-pm-resource-menubar-fg: #000;
+  position: relative;
+  z-index: 20;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tm-titlebar-height);
+  height: auto;
+  padding: 0 0 0 12px;
+  border-bottom: 1px solid var(--tm-border);
+  background: var(--tm-bg);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+html.theme-dark .tm-pm-resource-menubar {
+  --tm-pm-resource-menubar-fg: var(--tm-text);
+}
+
+.tm-pm-resource-menubar-main {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tm-pm-resource-menubar-scroll {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tm-pm-resource-menubar-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.tm-pm-resource-menubar--overflow .tm-pm-resource-menubar-scroll {
+  padding-bottom: 2px;
+}
+
+.tm-pm-resource-menubar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px;
+  width: max-content;
+  min-width: max-content;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.tm-pm-resource-menubar-hscroll {
+  position: relative;
+  flex-shrink: 0;
+  height: 8px;
+  margin: 0 8px 2px 0;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-track);
+  cursor: pointer;
+}
+
+.tm-pm-resource-menubar-hscroll-thumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 24px;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-thumb);
+  background-clip: padding-box;
+  pointer-events: none;
+}
+
+.tm-pm-resource-menubar-hscroll:hover .tm-pm-resource-menubar-hscroll-thumb {
+  background: var(--tm-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.tm-pm-resource-menubar-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tm-pm-resource-menubar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tm-pm-resource-menubar-fg);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tm-pm-resource-menubar-btn--icon {
+  width: 28px;
+  padding: 0;
+}
+
+.tm-pm-resource-menubar-btn--icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.tm-pm-resource-menubar-btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--tm-hover);
+  color: var(--tm-pm-resource-menubar-fg);
+}
+
+.tm-pm-resource-menubar-btn:disabled,
+.tm-pm-resource-menubar-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tm-pm-resource-menubar-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--tm-border);
+  flex-shrink: 0;
+}
+
+.tm-pm-resource-menubar-tooltip {
+  position: fixed;
+  z-index: 5000;
+  max-width: 240px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tm-text) 92%, #000);
+  color: var(--tm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+/* Legacy notes-toolbar chrome (unused by current menubars; keep for any residual markup). */
 .tm-pm-gantt-toolbar.tm-notes-toolbar {
   width: 100%;
 }
@@ -1351,7 +1697,8 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
 
 .tm-pm-gantt-view-menu .tm-notes-toolbar-btn,
 .tm-pm-gantt-view-menu .tm-pm-gantt-menubar-btn,
-.tm-pm-gantt-view-menu .tm-pm-features-menubar-btn {
+.tm-pm-gantt-view-menu .tm-pm-features-menubar-btn,
+.tm-pm-gantt-view-menu .tm-pm-resource-menubar-btn {
   gap: 4px;
 }
 
@@ -1476,70 +1823,141 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  /* No side padding — task index flush left; scrollbar on the far right. */
-  padding: 0 0 16px;
+  /* Flush to statusbar — bottom padding hid the horizontal scrollbar. */
+  padding: 0;
   box-sizing: border-box;
 }
 
 .tm-pm-gantt-workspace--full-list {
   grid-template-columns: 1fr;
-  padding: 0 0 16px;
+  padding: 0;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-chart-pane {
   display: none;
 }
 
-/* Full-list layout: vertical scrollbar on the pane edge (not clipped by max-content width). */
+/* Full-list: V on .tm-pm-gantt-grid-vscroll, H on .tm-pm-gantt-grid-hscroll
+ * (native H fully hidden — only the custom track below is shown).
+ * Column headers are pinned above the V scrollport and H-synced via transform. */
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-pane {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+}
+
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-header-pin {
+  flex-shrink: 0;
+  overflow: hidden;
+  width: 100%;
+  background: var(--tm-sidebar-bg);
+  border-bottom: 1px solid var(--tm-border);
+  z-index: 3;
+  /* Match V scrollbar gutter so pinned columns align with body tracks. */
+  scrollbar-gutter: stable;
+}
+
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-header-pin-inner {
+  width: max-content;
+  min-width: 100%;
+  will-change: transform;
+}
+
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-header-pin .tm-pm-gantt-grid-header {
+  border-bottom: none;
+}
+
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-vscroll {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 50%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 55%, transparent)
+    color-mix(in srgb, var(--tm-border) 65%, transparent);
 }
 
-.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-pane::-webkit-scrollbar {
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-vscroll::-webkit-scrollbar {
   width: 10px;
+  height: 0;
+  -webkit-appearance: none;
 }
 
-.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-pane::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--tm-text-muted) 45%, transparent);
-  border-radius: 6px;
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-vscroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border: none;
+  border-radius: 999px;
+  background-clip: border-box;
+}
+
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-vscroll::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-hscroll {
-  overflow-x: auto;
-  overflow-y: visible;
   flex: 0 0 auto;
-  height: auto;
   min-height: 100%;
+  min-width: 0;
+  height: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+}
+
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-hscroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-inner {
-  height: auto;
-  min-height: 100%;
-  width: 100%;
+  /* Grow with column tracks so overflow can scroll; still fill when narrower. */
+  width: max-content;
   min-width: 100%;
   max-width: none;
+  height: auto;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-header,
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-row {
-  width: 100%;
+  width: max-content;
   min-width: 100%;
   justify-content: start;
+  box-sizing: border-box;
 }
 
-/* Full-list: name column stretches; no trailing add/spacer tracks. */
+/* Full-list: name column stretches when there is no trailing spacer. */
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-col--name {
   min-width: 0;
+}
+
+/* Resource allocation: fixed columns + trailing blank track. */
+.tm-pm-gantt-workspace--resource .tm-pm-gantt-col--name {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tm-pm-gantt-workspace--resource .tm-pm-gantt-col--spacer {
+  min-width: 0;
+  border-right: none;
+  background: transparent;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-body {
   overflow: visible;
   flex: 0 0 auto;
   height: auto;
-  scrollbar-width: auto;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-body::-webkit-scrollbar {
@@ -1561,44 +1979,98 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
   min-width: 0;
 }
 
-.tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-pane {
-  width: auto;
-  max-width: none;
-}
-
 .tm-pm-gantt-chart-pane {
   width: 100%;
+}
+
+.tm-pm-gantt-grid-vscroll {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .tm-pm-gantt-grid-hscroll {
   flex: 1;
   min-height: 0;
   min-width: 0;
-  overflow-x: scroll;
+  overflow-x: auto;
   overflow-y: hidden;
   display: flex;
   flex-direction: column;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 55%, transparent)
-    color-mix(in srgb, var(--tm-border) 65%, transparent);
+  scrollbar-gutter: auto;
+  /* Native H fully suppressed — custom track below (avoids double bars while dragging). */
+  scrollbar-width: none;
 }
 
 .tm-pm-gantt-grid-hscroll::-webkit-scrollbar {
-  height: 10px;
+  display: none;
+  width: 0;
+  height: 0;
   -webkit-appearance: none;
 }
 
-.tm-pm-gantt-grid-hscroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
-  border: none;
-  border-radius: 999px;
-  background-clip: border-box;
+/*
+ * Custom horizontal scrollbar — tall bottom hit zone; expands on hover / drag
+ * so the bar is easy to find and grab (macOS overlay scrollbars are easy to miss).
+ */
+.tm-pm-gantt-grid-custom-hscroll {
+  position: relative;
+  flex-shrink: 0;
+  height: 14px;
+  margin: 0 12px 2px 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  z-index: 6;
 }
 
-.tm-pm-gantt-grid-hscroll::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+.tm-pm-gantt-grid-custom-hscroll::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 4px;
   border-radius: 999px;
+  background: var(--tm-scrollbar-track, color-mix(in srgb, var(--tm-border) 65%, transparent));
+  opacity: 0.45;
+  transition:
+    height 0.12s ease,
+    opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.tm-pm-gantt-grid-custom-hscroll-thumb {
+  position: absolute;
+  bottom: 2px;
+  height: 4px;
+  min-width: 28px;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--tm-scrollbar-thumb, color-mix(in srgb, var(--tm-text-muted) 55%, transparent));
+  background-clip: padding-box;
+  pointer-events: none;
+  opacity: 0.7;
+  transition:
+    height 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.tm-pm-gantt-grid-pane--h-dragging .tm-pm-gantt-grid-custom-hscroll::before,
+.tm-pm-gantt-grid-custom-hscroll:hover::before {
+  height: 10px;
+  opacity: 1;
+}
+
+.tm-pm-gantt-grid-pane--h-dragging .tm-pm-gantt-grid-custom-hscroll-thumb,
+.tm-pm-gantt-grid-custom-hscroll:hover .tm-pm-gantt-grid-custom-hscroll-thumb {
+  height: 10px;
+  opacity: 1;
+  background: var(--tm-scrollbar-thumb-hover, color-mix(in srgb, var(--tm-text-muted) 75%, transparent));
+  background-clip: padding-box;
 }
 
 .tm-pm-gantt-grid-inner {
@@ -1610,8 +2082,9 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
   min-width: max-content;
 }
 
+/* Keep full-list max-content width (do not collapse to 100% — that kills H-scroll). */
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-inner {
-  width: 100%;
+  width: max-content;
   min-width: 100%;
   max-width: none;
 }
@@ -1633,6 +2106,533 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
   font-weight: 600;
   color: var(--tm-text-secondary);
   position: relative;
+}
+
+.tm-pm-gantt-grid-header--resource {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.tm-pm-gantt-grid-header--resource .tm-pm-gantt-col--rowspan2 {
+  grid-row: 1 / 3;
+  align-self: stretch;
+}
+
+.tm-pm-gantt-resource-header-group {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 0.5px solid var(--tm-border);
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-resource-header-group:not(.tm-pm-gantt-resource-header-group--named):not(
+    .tm-pm-gantt-cost-header-group
+  ) {
+  grid-column: span 3;
+}
+
+.tm-pm-gantt-resource-header-group.tm-pm-gantt-cost-header-group {
+  grid-column: span 2;
+}
+
+.tm-pm-gantt-resource-header-group-title {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-bottom: 0.5px solid var(--tm-border);
+  padding: 0 4px;
+}
+
+.tm-pm-gantt-resource-header-group-subs {
+  flex: 1 1 0;
+  display: grid;
+  min-height: 0;
+}
+
+.tm-pm-gantt-resource-header-group:not(.tm-pm-gantt-resource-header-group--named):not(
+    .tm-pm-gantt-cost-header-group
+  )
+  .tm-pm-gantt-resource-header-group-subs {
+  grid-template-columns: 88px 140px 72px;
+}
+
+.tm-pm-gantt-resource-header-group--named .tm-pm-gantt-resource-header-group-subs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tm-pm-gantt-resource-header-group--indexed {
+  grid-row: 1 / 3;
+}
+
+.tm-pm-gantt-resource-header-group-subs--index {
+  display: grid;
+  min-height: 0;
+}
+
+.tm-pm-gantt-col--resource-group-label {
+  justify-content: center;
+  text-align: center;
+}
+
+.tm-pm-gantt-col--resource-index {
+  justify-content: center;
+  text-align: center;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--tm-text-muted, var(--tm-text-secondary));
+}
+
+.tm-pm-gantt-resource-header-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.tm-pm-gantt-col--resource-cell {
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.tm-pm-gantt-col--resource-cell .tm-pm-gantt-resource-header-select,
+.tm-pm-gantt-col--resource-cell .tm-pm-gantt-resource-cell-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+}
+
+button.tm-pm-gantt-resource-cell-trigger.tm-pm-gantt-cell-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  line-height: 1.2;
+  padding: 0 2px 0 4px;
+}
+
+.tm-pm-gantt-resource-cell-trigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.tm-pm-gantt-resource-cell-trigger-label {
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tm-pm-gantt-resource-cell-trigger-chevron {
+  flex: 0 0 auto;
+  opacity: 0.65;
+  color: var(--tm-text);
+}
+
+.tm-pm-gantt-resource-cell-trigger--open .tm-pm-gantt-resource-cell-trigger-chevron {
+  opacity: 1;
+}
+
+.tm-pm-gantt-cell-input.tm-pm-gantt-resource-cell-qty {
+  flex: 0 0 6ch;
+  width: 6ch;
+  min-width: 6ch;
+  max-width: 8ch;
+  height: 22px;
+  padding: 0 2px;
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.tm-pm-gantt-cell-input.tm-pm-gantt-resource-cell-qty::-webkit-outer-spin-button,
+.tm-pm-gantt-cell-input.tm-pm-gantt-resource-cell-qty::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Native-like dual-check resource picker */
+.tm-pm-gantt-resource-select-menu {
+  position: fixed;
+  z-index: 1300;
+  max-height: min(320px, calc(100vh - 16px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 0;
+  border: 0.5px solid color-mix(in srgb, var(--tm-border) 85%, transparent);
+  border-radius: 8px;
+  background: var(--tm-bg, #fff);
+  box-shadow:
+    0 0 0 0.5px color-mix(in srgb, var(--tm-text) 8%, transparent),
+    0 8px 24px color-mix(in srgb, var(--tm-text) 16%, transparent);
+  font-size: 13px;
+  color: var(--tm-text);
+}
+
+.tm-pm-gantt-resource-select-menu-label {
+  padding: 4px 12px 2px 28px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #6b7280));
+}
+
+.tm-pm-gantt-resource-select-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: color-mix(in srgb, var(--tm-border) 90%, transparent);
+}
+
+.tm-pm-gantt-resource-select-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 24px;
+  padding: 2px 12px 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--tm-text);
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: default;
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-resource-select-menu-item:hover {
+  background: color-mix(in srgb, var(--tm-accent, #0a84ff) 16%, transparent);
+}
+
+.tm-pm-gantt-resource-select-menu-item--checked {
+  background: color-mix(in srgb, var(--tm-accent, #0a84ff) 22%, transparent);
+}
+
+.tm-pm-gantt-resource-select-menu-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--tm-accent, #0a84ff);
+}
+
+.tm-pm-gantt-resource-select-menu-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-pm-gantt-resource-select-menu-empty {
+  padding: 4px 12px 4px 28px;
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #9ca3af));
+  font-size: 13px;
+}
+
+.tm-pm-gantt-resource-header-group-subs .tm-pm-gantt-col--sub {
+  justify-content: center;
+  text-align: center;
+  border-right: 0.5px solid var(--tm-border);
+}
+
+.tm-pm-gantt-resource-header-group-subs .tm-pm-gantt-col--sub:last-child {
+  border-right: none;
+}
+
+/* Resource groups: even slots shaded, odd slots plain (repeats). */
+.tm-pm-gantt-resource-header-group.tm-pm-gantt-resource-group--band {
+  background: color-mix(in srgb, var(--tm-text-muted) 12%, var(--tm-sidebar-bg));
+}
+
+.tm-pm-gantt-grid-row .tm-pm-gantt-col.tm-pm-gantt-resource-group--band {
+  background: color-mix(in srgb, var(--tm-text-muted) 10%, transparent);
+}
+
+.tm-pm-gantt-resource-assign-popup {
+  --tm-pm-resource-assign-row-h: 34px;
+  position: fixed;
+  z-index: 1220;
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100vw - 24px));
+  min-width: 420px;
+  max-height: calc(100vh - 16px);
+  padding: 0;
+  border: 0.5px solid color-mix(in srgb, var(--tm-border) 88%, transparent);
+  border-radius: 10px;
+  background: var(--tm-bg, #fff);
+  color: var(--tm-text);
+  box-shadow:
+    0 0 0 0.5px color-mix(in srgb, var(--tm-text) 6%, transparent),
+    0 12px 32px color-mix(in srgb, var(--tm-text) 14%, transparent);
+  overflow: hidden;
+}
+
+.tm-pm-gantt-resource-assign-popup-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px 10px;
+  border-bottom: 0.5px solid var(--tm-border);
+  background: var(--tm-bg, #fff);
+}
+
+.tm-pm-gantt-resource-assign-popup-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--tm-text);
+}
+
+.tm-pm-gantt-resource-assign-popup-subtitle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #6b7280));
+}
+
+.tm-pm-gantt-resource-assign-popup-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(var(--tm-pm-resource-assign-row-h) * 10 + var(--tm-pm-resource-assign-row-h));
+  overflow: auto;
+  background: var(--tm-bg, #fff);
+}
+
+.tm-pm-gantt-resource-assign-popup-empty {
+  margin: 0;
+  padding: 16px 14px;
+  color: var(--tm-text-muted);
+  font-size: 12px;
+}
+
+.tm-pm-gantt-resource-assign-popup-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th,
+.tm-pm-gantt-resource-assign-popup-table td {
+  height: var(--tm-pm-resource-assign-row-h);
+  padding: 3px 8px;
+  border-bottom: 0.5px solid color-mix(in srgb, var(--tm-border) 90%, transparent);
+  border-right: 0.5px solid color-mix(in srgb, var(--tm-border) 90%, transparent);
+  text-align: left;
+  vertical-align: middle;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th:last-child,
+.tm-pm-gantt-resource-assign-popup-table td:last-child {
+  border-right: none;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #6b7280));
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-align: center;
+  background: var(--tm-bg, #fff);
+  box-shadow: none;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th:nth-child(1),
+.tm-pm-gantt-resource-assign-popup-table td:nth-child(1),
+.tm-pm-gantt-resource-assign-popup-table th.tm-pm-gantt-resource-assign-popup-col--index,
+.tm-pm-gantt-resource-assign-popup-table td.tm-pm-gantt-resource-assign-popup-col--index {
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #6b7280));
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th:nth-child(2),
+.tm-pm-gantt-resource-assign-popup-table td:nth-child(2) {
+  width: 17%;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th:nth-child(3),
+.tm-pm-gantt-resource-assign-popup-table td:nth-child(3) {
+  width: 26%;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th:nth-child(4),
+.tm-pm-gantt-resource-assign-popup-table td:nth-child(4) {
+  width: 14%;
+}
+
+.tm-pm-gantt-resource-assign-popup-table th:nth-child(5),
+.tm-pm-gantt-resource-assign-popup-table td:nth-child(5) {
+  width: 32%;
+}
+
+.tm-pm-gantt-resource-assign-popup-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--tm-text-muted) 5%, transparent);
+}
+
+.tm-pm-gantt-resource-assign-popup-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tm-pm-gantt-resource-assign-popup-select,
+.tm-pm-gantt-resource-assign-popup-qty,
+.tm-pm-gantt-resource-assign-popup-note {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 0.5px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.tm-pm-gantt-resource-assign-popup-select:hover:not(:disabled),
+.tm-pm-gantt-resource-assign-popup-qty:hover:not(:disabled),
+.tm-pm-gantt-resource-assign-popup-note:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tm-border) 85%, transparent);
+  background: color-mix(in srgb, var(--tm-text-muted) 4%, var(--tm-bg, #fff));
+}
+
+.tm-pm-gantt-resource-assign-popup-qty {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.tm-pm-gantt-resource-assign-popup-qty::-webkit-outer-spin-button,
+.tm-pm-gantt-resource-assign-popup-qty::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.tm-pm-gantt-resource-assign-popup-note::placeholder {
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #9ca3af));
+}
+
+.tm-pm-gantt-resource-assign-popup-select:disabled,
+.tm-pm-gantt-resource-assign-popup-qty:disabled,
+.tm-pm-gantt-resource-assign-popup-note:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tm-pm-gantt-resource-assign-popup-select:focus,
+.tm-pm-gantt-resource-assign-popup-qty:focus,
+.tm-pm-gantt-resource-assign-popup-note:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--tm-accent, #00a870) 55%, var(--tm-border));
+  background: var(--tm-bg, #fff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tm-accent, #00a870) 14%, transparent);
+}
+
+.tm-pm-gantt-resource-assign-popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  border-top: 0.5px solid var(--tm-border);
+  background: color-mix(in srgb, var(--tm-text-muted) 3%, var(--tm-bg, #fff));
+}
+
+.tm-pm-gantt-resource-assign-popup-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tm-pm-gantt-resource-assign-popup-move-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0.5px solid var(--tm-border);
+  border-radius: 6px;
+  background: var(--tm-bg, #fff);
+  color: var(--tm-text);
+  cursor: pointer;
+}
+
+.tm-pm-gantt-resource-assign-popup-move-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tm-accent, #00a870) 45%, var(--tm-border));
+  color: var(--tm-accent, #00a870);
+}
+
+.tm-pm-gantt-resource-assign-popup-move-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tm-pm-gantt-resource-assign-popup-table tbody tr.tm-pm-gantt-resource-assign-popup-row--selected td {
+  background: color-mix(in srgb, var(--tm-accent, #00a870) 12%, var(--tm-bg, #fff));
+}
+
+.tm-pm-gantt-resource-assign-popup-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--tm-accent, #00a870);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tm-pm-gantt-resource-assign-popup-add > span {
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.tm-pm-gantt-resource-assign-popup-add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tm-accent, #00a870) 10%, transparent);
+}
+
+.tm-pm-gantt-resource-assign-popup-add:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .tm-pm-gantt-grid-header .tm-pm-gantt-col,
@@ -1942,6 +2942,11 @@ button.tm-pm-gantt-col-menu-action:hover {
   background: var(--tm-hover);
 }
 
+button.tm-pm-gantt-col-menu-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .tm-pm-settings-hint {
   margin: 0 0 12px;
   font-size: 12px;
@@ -2006,15 +3011,127 @@ button.tm-pm-gantt-col-menu-action:hover {
   min-width: 0;
   height: 24px;
   padding: 0 4px;
-  border: 1px solid var(--tm-accent);
+  border: 0.5px solid transparent;
   border-radius: 4px;
-  background: var(--tm-bg);
+  background: transparent;
   color: var(--tm-text);
   font-size: 12px;
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-cell-input:hover:not(:disabled),
+.tm-pm-gantt-cell-input:focus:not(:disabled) {
+  border-color: var(--tm-border);
+  background: var(--tm-bg);
+  outline: none;
+}
+
+.tm-pm-gantt-cell-input:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tm-pm-gantt-cell-input--empty {
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #9ca3af));
+}
+
+.tm-pm-gantt-cell-input--empty::placeholder {
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #9ca3af));
 }
 
 .tm-pm-gantt-cell-input--name {
   flex: 1;
+}
+
+.tm-pm-gantt-cell-input--number {
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.tm-pm-gantt-cell-input--number::-webkit-outer-spin-button,
+.tm-pm-gantt-cell-input--number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.tm-pm-gantt-cell-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 2px;
+  border: 0.5px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tm-text);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-cell-select:hover,
+.tm-pm-gantt-cell-select:focus {
+  border-color: var(--tm-border);
+  background: var(--tm-bg);
+  outline: none;
+}
+
+.tm-pm-gantt-cell-select--empty {
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #9ca3af));
+}
+
+.tm-pm-gantt-col--resourceType,
+.tm-pm-gantt-col--resourceName,
+.tm-pm-gantt-col--resourceQty,
+.tm-pm-gantt-col--resourceInput {
+  padding: 0 4px;
+}
+
+.tm-pm-gantt-grid-header .tm-pm-gantt-col--resourceInput {
+  justify-content: center;
+  text-align: center;
+}
+
+.tm-pm-gantt-col--costName,
+.tm-pm-gantt-col--costAmount,
+.tm-pm-gantt-col--costInput {
+  padding: 0 4px;
+}
+
+.tm-pm-gantt-grid-header .tm-pm-gantt-col--costInput {
+  justify-content: center;
+  text-align: center;
+}
+
+.tm-pm-gantt-cost-header-group {
+  grid-column: span 2;
+}
+
+.tm-pm-gantt-resource-header-group.tm-pm-gantt-cost-header-group {
+  grid-column: span 2;
+}
+
+.tm-pm-gantt-cost-header-group-subs {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-columns: 160px 96px;
+  min-height: 0;
+}
+
+.tm-pm-gantt-cost-header-group-subs .tm-pm-gantt-col--sub {
+  justify-content: center;
+  text-align: center;
+  border-right: 0.5px solid var(--tm-border);
+}
+
+.tm-pm-gantt-cost-header-group-subs .tm-pm-gantt-col--sub:last-child {
+  border-right: none;
+}
+
+.tm-pm-gantt-cell-input--resource-combo {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
 }
 
 .tm-pm-gantt-chart-header-scroll {
@@ -2691,6 +3808,7 @@ button.tm-pm-gantt-col-menu-action:hover {
   .tm-pm-gantt-toolbar,
   .tm-pm-gantt-menubar,
   .tm-pm-features-menubar,
+  .tm-pm-resource-menubar,
   .tm-pm-gantt-view-panel,
   .tm-pm-gantt-col-menu,
   .tm-pm-gantt-add-col-btn,
@@ -3127,11 +4245,19 @@ button.tm-pm-gantt-col-menu-action:hover {
   width: 100%;
 }
 
-/* Resource table only. Do not reuse/alter .tm-pm-gantt-toolbar / notes toolbar scroll rules here. */
+/* Resource table scroll pane only — menubar chrome lives under `.tm-pm-resource-menubar`. */
 .tm-pm-resource-table-page {
   min-width: 0;
   width: 100%;
   max-width: 100%;
+}
+
+.tm-pm-resource-table-scroll-wrap {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .tm-pm-resource-table-scroll {
@@ -3143,19 +4269,25 @@ button.tm-pm-gantt-col-menu-action:hover {
   overflow-x: auto;
   overflow-y: auto;
   padding: 0;
-  /* Keep horizontal scrollbar visible when content overflows (macOS overlay can hide it). */
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
+  /* Prefer the custom bottom scrollbar (same as resource-allocation / Gantt). */
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
 }
 
 .tm-pm-resource-table-scroll::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
-.tm-pm-resource-table-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
-  border-radius: 999px;
+.tm-pm-resource-table-page .tm-pm-gantt-grid-custom-hscroll {
+  margin: 0 12px 4px 12px;
+}
+
+.tm-pm-resource-table-scroll-wrap--h-dragging .tm-pm-gantt-grid-custom-hscroll::before,
+.tm-pm-resource-table-scroll-wrap--h-dragging .tm-pm-gantt-grid-custom-hscroll-thumb {
+  height: 10px;
+  opacity: 1;
 }
 
 /* Forces overflow when the pane is narrower than the column set. */
@@ -3277,8 +4409,17 @@ button.tm-pm-gantt-col-menu-action:hover {
   width: 160px;
 }
 
+.tm-pm-resource-table-col-spec {
+  width: 120px;
+}
+
 .tm-pm-resource-table-col-unit {
-  width: 72px;
+  width: 88px;
+  text-align: center;
+}
+
+.tm-pm-resource-table-col-pricing-unit {
+  width: 88px;
   text-align: center;
 }
 
@@ -3314,7 +4455,7 @@ button.tm-pm-gantt-col-menu-action:hover {
 }
 
 .tm-pm-resource-table-col-applicable {
-  width: 220px;
+  width: 180px;
   text-align: center;
   overflow: hidden;
 }
@@ -3335,6 +4476,10 @@ button.tm-pm-gantt-col-menu-action:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.tm-pm-resource-table-col-note {
+  width: 180px;
 }
 
 /* Trailing blank area: horizontal rules continue to the panel edge. */
@@ -3398,7 +4543,13 @@ button.tm-pm-gantt-col-menu-action:hover {
 
 @media print {
   .tm-pm-resource-table-page .tm-pm-gantt-toolbar,
+  .tm-pm-resource-table-page .tm-pm-resource-menubar,
   .tm-pm-resource-table-page .tm-pm-gantt-statusbar {
+    display: none !important;
+  }
+
+  .tm-pm-features-table-page .tm-pm-features-menubar,
+  .tm-pm-features-table-page .tm-pm-gantt-statusbar {
     display: none !important;
   }
 

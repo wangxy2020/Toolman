@@ -35,6 +35,26 @@ export const PLAN_SCHEDULE_QUICK_PHRASE_CONTENT = `请根据当前计划工作�
 以 Markdown 表格输出。也可在同条消息附带可解析 WBS JSON（含 parentTitle、durationDays、predecessors、projectPlan）。`
 export const PLAN_SCHEDULE_QUICK_PHRASE_REVISION = 2
 
+export const PLAN_RESOURCE_QUICK_PHRASE_ID = 'toolman:pm-plan-resource'
+export const PLAN_RESOURCE_QUICK_PHRASE_TITLE = 'AI 资源用量'
+export const PLAN_RESOURCE_QUICK_PHRASE_CONTENT = `请根据当前计划任务与资源列表，为叶子任务给出资源用量建议。
+
+先用 Markdown 表（任务 | 资源类型 | 资源名称 | 数量 | 单位）说明；再输出 JSON 供系统确认写入甘特：
+\`\`\`json
+{
+  "resourcePlan": [
+    {
+      "workItemTitle": "与甘特任务名称一致",
+      "assignments": [
+        { "type": "labor", "name": "普通工", "quantity": 20, "unit": "工日" }
+      ]
+    }
+  ]
+}
+\`\`\`
+type 可用 labor/material/equipment/device/instrument/management/fees/funds/other（或中文人力/材料/机械/设备/仪器/资金等）。名称优先用资源列表已有项；确需新增仍输出该名称。`
+export const PLAN_RESOURCE_QUICK_PHRASE_REVISION = 3
+
 export const COST_FORECAST_QUICK_PHRASE_ID = 'toolman:pm-cost-forecast'
 export const COST_FORECAST_QUICK_PHRASE_TITLE = 'AI 成本预测'
 export const COST_FORECAST_QUICK_PHRASE_CONTENT = `请基于当前 EPC 成本台账（合同额、已结算、待支付）与风险项目，给出未来一季度成本预测：
@@ -90,6 +110,12 @@ export const PLAN_BUILTIN_QUICK_PHRASES = [
     revision: PLAN_SCHEDULE_QUICK_PHRASE_REVISION,
   },
   {
+    id: PLAN_RESOURCE_QUICK_PHRASE_ID,
+    label: PLAN_RESOURCE_QUICK_PHRASE_TITLE,
+    text: PLAN_RESOURCE_QUICK_PHRASE_CONTENT,
+    revision: PLAN_RESOURCE_QUICK_PHRASE_REVISION,
+  },
+  {
     id: COST_FORECAST_QUICK_PHRASE_ID,
     label: COST_FORECAST_QUICK_PHRASE_TITLE,
     text: COST_FORECAST_QUICK_PHRASE_CONTENT,
@@ -118,5 +144,6 @@ export const PLAN_BUILTIN_QUICK_PHRASES = [
 export const PLAN_SLASH_COMMANDS = [
   { command: '/wbs', description: '生成 WBS 建议（JSON）' },
   { command: '/schedule', description: '自动排期建议' },
+  { command: '/resource', description: '任务资源用量建议' },
   { command: '/forecast', description: '成本预测分析' },
 ] as const

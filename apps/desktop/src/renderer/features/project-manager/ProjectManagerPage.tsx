@@ -29,6 +29,10 @@ import {
 import ProjectSidebarMenuSettings from './ProjectSidebarMenuSettings'
 import { useProjectSidebarMenuPreferences } from './useProjectSidebarMenuPreferences'
 import { clearPmPlanAppliedProject } from './ProjectPlanAgentApplyBar'
+import {
+  resolveDefaultProjectId,
+  writeLastSelectedProjectId,
+} from './pm-last-selected-project'
 import ProjectArchiveStatsPanel from './views/archive/ProjectArchiveStatsPanel'
 import ProjectManagementFilesPanel from './views/files/ProjectManagementFilesPanel'
 import ProjectKeyProjectsPanel from './views/key-projects/ProjectKeyProjectsPanel'
@@ -172,7 +176,6 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   )
   const [projects, setProjects] = useState<PmProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [resourceWorkspaceInfoRequestId, setResourceWorkspaceInfoRequestId] = useState(0)
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
   /** After create dialog: open agent and auto-send plan kickoff. */
   const [createContinueWithAgent, setCreateContinueWithAgent] = useState(false)
@@ -185,7 +188,14 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   const [agentKickoffProject, setAgentKickoffProject] = useState<PmProject | null>(null)
   const [ganttDataRevision, setGanttDataRevision] = useState(0)
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
-  const preferAllProjectsRef = useRef(false)
+  const preferAllProjectsRef = useRef(activeTab === 'resource_management')
+  const previousActiveTabRef = useRef(activeTab)
+
+  // Resource management defaults to「全部项目」; set the ref before reload effects run.
+  if (previousActiveTabRef.current !== activeTab) {
+    previousActiveTabRef.current = activeTab
+    preferAllProjectsRef.current = activeTab === 'resource_management'
+  }
 
   const bumpDashboardRefresh = useCallback(() => {
     setDashboardRefreshKey((value) => value + 1)
@@ -212,7 +222,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         if (current && result.projects.some((project) => project.id === current)) {
           return current
         }
-        return result.projects[0]?.id ?? null
+        return resolveDefaultProjectId(workspaceId, result.projects)
       })
       return result.projects
     } catch {
@@ -247,7 +257,10 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     setCreateContinueWithAgent(false)
     setCreateProjectDefaults(null)
     setAgentKickoffProject(null)
-    preferAllProjectsRef.current = false
+    preferAllProjectsRef.current = activeTab === 'resource_management'
+    if (activeTab === 'resource_management') {
+      setSelectedProjectId(null)
+    }
     setMountedViews(new Set<ProjectManagerPanelView>(['stats']))
   }, [activeTab])
 
@@ -277,10 +290,11 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       setGanttDataRevision((value) => value + 1)
       void reloadProjects().then((nextProjects) => {
         if (nextProjects.some((project) => project.id === projectId)) {
+          if (workspaceId) writeLastSelectedProjectId(workspaceId, projectId)
           setSelectedProjectId(projectId)
         } else if (workspaceId) {
           clearPmPlanAppliedProject(workspaceId, projectId)
-          setSelectedProjectId(nextProjects[0]?.id ?? null)
+          setSelectedProjectId(resolveDefaultProjectId(workspaceId, nextProjects))
         }
       })
     },
@@ -309,6 +323,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
   const handleCreateProjectSaved = useCallback(
     (project: PmProject, options?: { manualCreate?: boolean }) => {
       preferAllProjectsRef.current = false
+      if (workspaceId) writeLastSelectedProjectId(workspaceId, project.id)
       setSelectedProjectId(project.id)
       void reloadProjectsAndDashboard().then(() => {
         setSelectedProjectId(project.id)
@@ -325,7 +340,13 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       }
       setCreateContinueWithAgent(false)
     },
-    [activeTab, createContinueWithAgent, openAgentPanel, reloadProjectsAndDashboard],
+    [
+      activeTab,
+      createContinueWithAgent,
+      openAgentPanel,
+      reloadProjectsAndDashboard,
+      workspaceId,
+    ],
   )
 
   const handleCreateProject = useCallback(() => {
@@ -342,10 +363,10 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       value={selectedProjectId}
       onChange={(projectId) => {
         preferAllProjectsRef.current = projectId === null
-        setSelectedProjectId(projectId)
-        if (projectId === null && activeTab === 'resource_management') {
-          setResourceWorkspaceInfoRequestId((id) => id + 1)
+        if (projectId && workspaceId) {
+          writeLastSelectedProjectId(workspaceId, projectId)
         }
+        setSelectedProjectId(projectId)
       }}
       ariaLabel={t('projectManagerPage.database.project')}
     />
@@ -357,6 +378,18 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       return
     }
     setSettingsOpen(false)
+    // Gantt needs a concrete project: restore last used when none is selected.
+    if (
+      view === 'gantt' &&
+      workspaceId &&
+      (!selectedProjectId || !projects.some((project) => project.id === selectedProjectId))
+    ) {
+      const restored = resolveDefaultProjectId(workspaceId, projects)
+      if (restored) {
+        preferAllProjectsRef.current = false
+        setSelectedProjectId(restored)
+      }
+    }
     setPanelView(view)
     setMountedViews((prev) => {
       if (prev.has(view)) return prev
@@ -429,6 +462,16 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
 
   const openScheduleFromFeatures = useCallback((_view: 'list' | 'gantt' | 'resource' | 'cost') => {
     setSettingsOpen(false)
+    if (
+      workspaceId &&
+      (!selectedProjectId || !projects.some((project) => project.id === selectedProjectId))
+    ) {
+      const restored = resolveDefaultProjectId(workspaceId, projects)
+      if (restored) {
+        preferAllProjectsRef.current = false
+        setSelectedProjectId(restored)
+      }
+    }
     setPanelView('gantt')
     setMountedViews((prev) => {
       if (prev.has('gantt')) return prev
@@ -436,7 +479,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       next.add('gantt')
       return next
     })
-  }, [])
+  }, [projects, selectedProjectId, workspaceId])
 
   const filesPanel =
     workspaceId &&
@@ -679,7 +722,6 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
             projects={projects}
             selectedProjectId={selectedProjectId}
             onProjectsChange={reloadProjectsAndDashboard}
-            openWorkspaceInfoRequestId={resourceWorkspaceInfoRequestId}
           />
         </div>
       ) : null}

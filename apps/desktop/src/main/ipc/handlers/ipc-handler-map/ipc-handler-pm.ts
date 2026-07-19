@@ -45,6 +45,13 @@ import {
   applyPmScheduleSuggestions,
   applyPmWbsSuggestions,
 } from '../../../services/project-management/pm-plan-apply.service'
+import { applyPmResourcePlanSuggestions } from '../../../services/project-management/pm-resource-apply.service'
+import { applyPmResourceCatalogPatches } from '../../../services/project-management/pm-resource-catalog-apply.service'
+import {
+  getSharedResourceCatalogIpc,
+  setSharedResourceCatalogIpc,
+  upsertSharedResourceCatalogIpc,
+} from '../../../services/project-management/pm-shared-resource-catalog.service'
 import type { HandlerFn } from './types'
 
 export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
@@ -77,4 +84,14 @@ export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.Pm_DomainSettingsSet]: async (input) => ipcOk(setPmDomainSettings(input)),
   [IpcChannel.Pm_WorkItemApplyWbs]: async (input) => ipcOk(applyPmWbsSuggestions(input)),
   [IpcChannel.Pm_WorkItemApplySchedule]: async (input) => ipcOk(applyPmScheduleSuggestions(input)),
+  [IpcChannel.Pm_WorkItemApplyResourcePlan]: async (input) =>
+    ipcOk(applyPmResourcePlanSuggestions(input)),
+  [IpcChannel.Pm_ApplyResourceCatalogPatch]: async (input) =>
+    ipcOk(applyPmResourceCatalogPatches(input)),
+  [IpcChannel.Pm_SharedResourceCatalogGet]: async (input) =>
+    ipcOk(getSharedResourceCatalogIpc(input)),
+  [IpcChannel.Pm_SharedResourceCatalogSet]: async (input) =>
+    ipcOk(setSharedResourceCatalogIpc(input)),
+  [IpcChannel.Pm_SharedResourceCatalogUpsert]: async (input) =>
+    ipcOk(upsertSharedResourceCatalogIpc(input)),
 }

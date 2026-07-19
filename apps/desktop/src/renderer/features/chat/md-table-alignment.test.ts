@@ -40,3 +40,17 @@ describe('md-table-alignment label-value', () => {
     expect(isLabelValueTableHeaders(['项目'])).toBe(false)
   })
 })
+
+describe('md-table-alignment resource analysis', () => {
+  it('centers short metric columns in multi-column agent tables', () => {
+    const indexes = getCenterAlignedColumnIndexes([
+      '资源',
+      '当前单价',
+      '计价单位',
+      '市场参考',
+      '合理?',
+      '分析',
+    ])
+    expect([...indexes].sort()).toEqual([1, 2, 3, 4])
+  })
+})

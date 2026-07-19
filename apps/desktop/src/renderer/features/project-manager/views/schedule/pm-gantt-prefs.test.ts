@@ -52,6 +52,28 @@ describe('pm-gantt-prefs', () => {
     expect(template).not.toContain('36px')
   })
 
+  it('keeps a fixed name width and absorbs leftover space in the trailing spacer for resource view', () => {
+    const template = buildGridTemplateColumns(
+      [
+        'index',
+        'name',
+        'duration',
+        'start',
+        'finish',
+        'resource:0:qty',
+        'resource:1:qty',
+        'resource:2:qty',
+        'spacer',
+      ],
+      { fullWidthList: true },
+    )
+    expect(template).toBe(
+      ['48px', '280px', '64px', '100px', '100px', '120px', '120px', '120px', 'minmax(0, 1fr)'].join(
+        ' ',
+      ),
+    )
+  })
+
   it('uses a fixed name width and omits flexible tracks for print', () => {
     const template = buildGridTemplateColumns(
       ['index', 'name', 'duration', 'start', 'finish', 'predecessors'],
@@ -77,6 +99,27 @@ describe('pm-gantt-prefs', () => {
     expect(normalizeGanttUiPrefs({}).barStyle).toBe('fill')
     expect(normalizeGanttUiPrefs({ barStyle: 'outline' }).barStyle).toBe('outline')
     expect(normalizeGanttUiPrefs({ barStyle: 'hatch' }).barStyle).toBe('hatch')
+  })
+
+  it('migrates resource view to three type columns with header bindings', () => {
+    const prefs = normalizeGanttUiPrefs({
+      resourceView: {
+        slotCount: 1,
+        showDuration: true,
+        showStart: true,
+        showFinish: true,
+        inputMode: true,
+        columnLayoutVersion: 2,
+      },
+    })
+    expect(prefs.resourceView.slotCount).toBe(3)
+    expect(prefs.resourceView.inputMode).toBe(false)
+    expect(prefs.resourceView.columnLayoutVersion).toBe(3)
+    expect(prefs.resourceView.columnBindings?.map((binding) => binding.type)).toEqual([
+      'labor',
+      'material',
+      'equipment',
+    ])
   })
 
   it('drops legacy 完成百分比 custom column and stale percentComplete label', () => {

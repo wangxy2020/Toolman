@@ -61,6 +61,28 @@ export function parseProjectManagementSessionMetadata(
   }
 }
 
+/** Infer PM tab from session title when metadata is missing (legacy sessions). */
+export function resolveProjectManagementTabFromSessionTitle(
+  title: string,
+): ProjectManagementAgentTab | null {
+  const normalized = title.trim()
+  if (!normalized) return null
+  for (const tab of PROJECT_MANAGEMENT_AGENT_TABS) {
+    if (PROJECT_MANAGEMENT_AGENT_SESSION_TITLES[tab] === normalized) return tab
+  }
+  return null
+}
+
+export function resolveProjectManagementTabFromSession(session: {
+  title: string
+  metadata: Record<string, unknown>
+}): ProjectManagementAgentTab | null {
+  return (
+    parseProjectManagementSessionMetadata(session.metadata)?.tab ??
+    resolveProjectManagementTabFromSessionTitle(session.title)
+  )
+}
+
 export function buildProjectManagementSessionMetadata(
   tab: ProjectManagementAgentTab,
 ): Record<string, unknown> {

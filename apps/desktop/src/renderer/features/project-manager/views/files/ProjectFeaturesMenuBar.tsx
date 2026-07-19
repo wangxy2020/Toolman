@@ -55,7 +55,17 @@ type MenuItem = {
   disabled?: boolean
   dividerAfter?: boolean
   icon?: boolean
+  active?: boolean
 }
+
+export type FeaturesRowType =
+  | 'labor'
+  | 'material'
+  | 'machinery'
+  | 'procurement'
+  | 'metering'
+  | 'node'
+  | 'funds'
 
 interface Props {
   disabled?: boolean
@@ -64,6 +74,8 @@ interface Props {
   canUndo?: boolean
   canRedo?: boolean
   canEdit?: boolean
+  /** Highlights the matching type button when a row is selected. */
+  selectedType?: FeaturesRowType
   scheduleView: FeaturesScheduleView
   onScheduleViewChange: (view: FeaturesScheduleView) => void
   onAction: (action: FeaturesMenuAction) => void
@@ -110,6 +122,7 @@ export function ProjectFeaturesMenuBar({
   canUndo = false,
   canRedo = false,
   canEdit = true,
+  selectedType,
   scheduleView,
   onScheduleViewChange,
   onAction,
@@ -263,36 +276,43 @@ export function ProjectFeaturesMenuBar({
       key: 'labor',
       title: t('projectManagerPage.files.menu.labor'),
       label: t('projectManagerPage.files.menu.labor'),
+      active: selectedType === 'labor',
     },
     {
       key: 'material',
       title: t('projectManagerPage.files.menu.material'),
       label: t('projectManagerPage.files.menu.material'),
+      active: selectedType === 'material',
     },
     {
       key: 'machinery',
       title: t('projectManagerPage.files.menu.machinery'),
       label: t('projectManagerPage.files.menu.machinery'),
+      active: selectedType === 'machinery',
     },
     {
       key: 'procurement',
       title: t('projectManagerPage.files.menu.procurement'),
       label: t('projectManagerPage.files.menu.procurement'),
+      active: selectedType === 'procurement',
     },
     {
       key: 'metering',
       title: t('projectManagerPage.files.menu.metering'),
       label: t('projectManagerPage.files.menu.metering'),
+      active: selectedType === 'metering',
     },
     {
       key: 'node',
       title: t('projectManagerPage.files.menu.node'),
       label: t('projectManagerPage.files.menu.node'),
+      active: selectedType === 'node',
     },
     {
       key: 'funds',
       title: t('projectManagerPage.files.menu.funds'),
       label: t('projectManagerPage.files.menu.funds'),
+      active: selectedType === 'funds',
     },
   ]
 
@@ -319,11 +339,13 @@ export function ProjectFeaturesMenuBar({
           className={[
             'tm-pm-features-menubar-btn',
             item.icon ? 'tm-pm-features-menubar-btn--icon' : '',
+            item.active ? 'tm-pm-features-menubar-btn--active' : '',
           ]
             .filter(Boolean)
             .join(' ')}
           aria-label={item.title}
           aria-disabled={isDisabled}
+          aria-pressed={item.active ? true : undefined}
           onClick={() => {
             if (isDisabled) return
             hideTip()

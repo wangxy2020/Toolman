@@ -418,6 +418,11 @@ export enum IpcChannel {
   Pm_DomainSettingsSet = 'pm:domain-settings:set',
   Pm_WorkItemApplyWbs = 'pm:work-item:apply-wbs',
   Pm_WorkItemApplySchedule = 'pm:work-item:apply-schedule',
+  Pm_WorkItemApplyResourcePlan = 'pm:work-item:apply-resource-plan',
+  Pm_ApplyResourceCatalogPatch = 'pm:resource-catalog:apply-patch',
+  Pm_SharedResourceCatalogGet = 'pm:shared-resource-catalog:get',
+  Pm_SharedResourceCatalogSet = 'pm:shared-resource-catalog:set',
+  Pm_SharedResourceCatalogUpsert = 'pm:shared-resource-catalog:upsert',
 }
 
 /** P2P 推送事件（通过 window.api.subscribe 订阅，非 ipcMain.handle） */

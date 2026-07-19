@@ -1,10 +1,17 @@
-import type { FC, MouseEvent as ReactMouseEvent } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { FC, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { flushSync } from 'react-dom'
 
 import type { PmProject } from '@toolman/shared'
-import { buildResourceSaveMetadata, IpcChannel } from '@toolman/shared'
+import {
+  buildMetadataForResourceVersionSwitch,
+  buildResourceSaveMetadata,
+  IpcChannel,
+  readResourceSaveHistory,
+  readResourceVersion,
+  readResourceVersionCatalog,
+} from '@toolman/shared'
 
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { useI18n } from '../../../../i18n/useI18n'
@@ -13,40 +20,56 @@ import ProjectInfoDialog from '../schedule/ProjectInfoDialog'
 import {
   ProjectResourceMenuBar,
   type ResourceMenuAction,
+  type ResourceVersionSwitchEntry,
 } from './ProjectResourceMenuBar'
 import {
   buildBaselinePriceIndex,
   computeResourceBaselineRatio,
   createEmptyResourceRow,
+  deriveResourceApplicable,
+  ensureDefaultResourcesInCatalog,
   fingerprintResourceCatalog,
   formatResourceBaselineRatio,
+  isPmResourceType,
   isResourceBaselineRatioOff,
   lookupBaselineUnitPrice,
   PM_RESOURCE_APPLICABLE_ALL,
   PM_RESOURCE_CATALOG_KEY,
+  PM_RESOURCE_TYPES,
   readSharedResourceCatalog,
+  readSharedResourceSaveHistory,
+  readSharedResourceSaveMeta,
+  readSharedResourceVersion,
   recordSharedResourceSaveMeta,
   reindexResourceRows,
   resolveProjectResourceCatalog,
+  sortResourceRowsByTypeMenu,
+  sortResourceRowsLikeSharedCatalog,
   resourceRowDepth,
+  toResourceCatalogSnapshot,
   upsertSharedResourceCatalog,
+  withDerivedResourceApplicable,
   writeSharedResourceCatalog,
+  writeSharedResourceSaveMeta,
+  hydrateSharedResourceCatalogFromMain,
+  normalizeResourceCatalogRows,
   type PmResourceRow,
   type PmResourceType,
 } from './pm-resource-catalog'
+import { cloneResourceRows, ResourceHistoryStack } from './pm-resource-history'
 
 interface Props {
   workspaceId: string
   projects: PmProject[]
   selectedProjectId: string | null
   onProjectsChange?: () => void | Promise<void>
-  /** When true, open「全部项目」resource info once (header selected All projects). */
-  openWorkspaceInfoRequestId?: number
 }
 
 type ContextMenuState = {
   left: number
   top: number
+  /** Row under the cursor — menu target when nothing is multi-selected. */
+  rowId: string
 }
 
 function formatPathProjectLabel(project: PmProject): string {
@@ -61,7 +84,6 @@ const ProjectResourceTablePanel: FC<Props> = ({
   projects,
   selectedProjectId,
   onProjectsChange,
-  openWorkspaceInfoRequestId = 0,
 }) => {
   const { t } = useI18n()
 
@@ -84,11 +106,118 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set())
   const [selectionMode, setSelectionMode] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
-  const [pendingDelete, setPendingDelete] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<Set<string> | null>(null)
   const [saving, setSaving] = useState(false)
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
+  const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
+  const [historyEpoch, setHistoryEpoch] = useState(0)
+  const historyStackRef = useRef(new ResourceHistoryStack())
+  const historyApplyingRef = useRef(false)
+  const rowsRef = useRef<PmResourceRow[]>([])
+  const cleanFingerprintRef = useRef('')
+  const tableScrollRef = useRef<HTMLDivElement | null>(null)
+  const hTrackRef = useRef<HTMLDivElement | null>(null)
+  const [hScrollMetrics, setHScrollMetrics] = useState({
+    overflowing: false,
+    thumbSize: 0,
+    thumbOffset: 0,
+  })
+  const [hScrollDragging, setHScrollDragging] = useState(false)
+
+  const syncHScrollMetrics = useCallback(() => {
+    const el = tableScrollRef.current
+    if (!el) return
+    const { scrollLeft, scrollWidth, clientWidth } = el
+    if (scrollWidth <= clientWidth + 1) {
+      setHScrollMetrics({ overflowing: false, thumbSize: 0, thumbOffset: 0 })
+      return
+    }
+    const thumbSize = Math.max(28, (clientWidth / scrollWidth) * clientWidth)
+    const maxOffset = Math.max(0, clientWidth - thumbSize)
+    const maxScroll = scrollWidth - clientWidth
+    const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * maxOffset
+    setHScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
+  }, [])
+
+  useLayoutEffect(() => {
+    syncHScrollMetrics()
+    const el = tableScrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => syncHScrollMetrics())
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    window.addEventListener('resize', syncHScrollMetrics)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', syncHScrollMetrics)
+    }
+  }, [rows.length, syncHScrollMetrics, selectionMode])
+
+  const scrollToThumbOffset = useCallback((nextOffsetRatio: number) => {
+    const el = tableScrollRef.current
+    if (!el) return
+    const maxScroll = el.scrollWidth - el.clientWidth
+    if (maxScroll <= 0) return
+    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
+    const travel = 1 - thumbSize
+    const clamped = Math.max(0, Math.min(travel, nextOffsetRatio))
+    el.scrollLeft = travel <= 0 ? 0 : (clamped / travel) * maxScroll
+  }, [])
+
+  const onHTrackPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const track = hTrackRef.current
+      const el = tableScrollRef.current
+      if (!track || !el) return
+      event.preventDefault()
+      setHScrollDragging(true)
+      const trackRect = track.getBoundingClientRect()
+      const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
+      const pointerRatio = (event.clientX - trackRect.left) / trackRect.width
+      scrollToThumbOffset(pointerRatio - thumbSize / 2)
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const ratio = (moveEvent.clientX - trackRect.left) / trackRect.width
+        scrollToThumbOffset(ratio - thumbSize / 2)
+        syncHScrollMetrics()
+      }
+      const onUp = () => {
+        setHScrollDragging(false)
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [scrollToThumbOffset, syncHScrollMetrics],
+  )
 
   const scopeKey = isAllScope ? PM_RESOURCE_APPLICABLE_ALL : (editingProject?.id ?? '')
+
+  const markCleanCatalog = useCallback((catalog: PmResourceRow[]) => {
+    cleanFingerprintRef.current = fingerprintResourceCatalog(catalog)
+    rowsRef.current = catalog
+  }, [])
+
+  const applyCatalogRows = useCallback(
+    (catalog: PmResourceRow[], options?: { dirty?: boolean; clearHistory?: boolean }) => {
+      setRows(catalog)
+      rowsRef.current = catalog
+      if (options?.clearHistory) {
+        historyStackRef.current.clear()
+        setHistoryEpoch((value) => value + 1)
+      }
+      if (options?.dirty === false) {
+        markCleanCatalog(catalog)
+        setDirty(false)
+      } else if (options?.dirty === true) {
+        setDirty(true)
+      } else {
+        setDirty(fingerprintResourceCatalog(catalog) !== cleanFingerprintRef.current)
+      }
+    },
+    [markCleanCatalog],
+  )
 
   useEffect(() => {
     setDirty(false)
@@ -97,48 +226,94 @@ const ProjectResourceTablePanel: FC<Props> = ({
     setSelectionMode(false)
     setContextMenu(null)
     setProjectInfoOpen(false)
+    setPendingRestoreVersion(null)
+    historyStackRef.current.clear()
+    setHistoryEpoch((value) => value + 1)
+    cleanFingerprintRef.current = ''
+    rowsRef.current = []
   }, [scopeKey])
 
-  useEffect(() => {
-    if (openWorkspaceInfoRequestId <= 0 || !isAllScope) return
-    setProjectInfoOpen(true)
-  }, [openWorkspaceInfoRequestId, isAllScope])
+  const canUndo = historyEpoch >= 0 && historyStackRef.current.canUndo
+  const canRedo = historyEpoch >= 0 && historyStackRef.current.canRedo
+
+  const versionSwitchEntries = useMemo((): ResourceVersionSwitchEntry[] => {
+    const history = isAllScope
+      ? readSharedResourceSaveHistory(workspaceId)
+      : readResourceSaveHistory(editingProject?.metadata)
+    const currentVersion = isAllScope
+      ? readSharedResourceVersion(workspaceId)
+      : readResourceVersion(editingProject?.metadata)
+    return history.map((entry) => ({
+      version: entry.version,
+      name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+        version: String(entry.version),
+      }),
+      hasSnapshot: Array.isArray(entry.catalog),
+      isCurrent: entry.version === currentVersion,
+    }))
+  }, [editingProject?.metadata, isAllScope, t, workspaceId, dirty, rows])
 
   useEffect(() => {
     if (dirty) return
 
     if (isAllScope) {
-      const shared = readSharedResourceCatalog(workspaceId)
-      setRows(shared.rows)
-      if (shared.isDefault) {
-        writeSharedResourceCatalog(workspaceId, shared.rows)
+      let cancelled = false
+      void hydrateSharedResourceCatalogFromMain(workspaceId).then((hydrated) => {
+        if (cancelled) return
+        const ensured = ensureDefaultResourcesInCatalog(hydrated)
+        const normalized = normalizeResourceCatalogRows(ensured.rows)
+        const ordered = sortResourceRowsByTypeMenu(normalized.rows)
+        applyCatalogRows(ordered, { dirty: false, clearHistory: true })
+        const orderChanged = ordered.some(
+          (row, index) => row.id !== normalized.rows[index]?.id,
+        )
+        if (ensured.changed || normalized.changed || orderChanged) {
+          writeSharedResourceCatalog(workspaceId, ordered)
+        }
+      })
+      return () => {
+        cancelled = true
       }
-      return
     }
 
     if (!editingProject) {
-      setRows([])
+      applyCatalogRows([], { dirty: false, clearHistory: true })
       return
     }
 
+    const sharedRows = readSharedResourceCatalog(workspaceId).rows
     const resolved = resolveProjectResourceCatalog(
       workspaceId,
       editingProject.id,
       editingProject.metadata,
+      { projectCode: editingProject.code },
     )
-    setRows(resolved.rows)
-    if (resolved.needsPersist) {
+    const baseline = buildBaselinePriceIndex(sharedRows)
+    const normalized = withDerivedResourceApplicable(
+      resolved.rows,
+      baseline,
+      editingProject.id,
+    )
+    const ordered = sortResourceRowsLikeSharedCatalog(normalized, sharedRows)
+    applyCatalogRows(ordered, { dirty: false, clearHistory: true })
+    // Never auto-write a project catalog for shared-fallback projects.
+    if (resolved.usesSharedFallback) return
+    const applicableChanged = ordered.some(
+      (row, index) => row.applicable !== resolved.rows[index]?.applicable,
+    )
+    const orderChanged = ordered.some((row, index) => row.id !== resolved.rows[index]?.id)
+    if (resolved.needsPersist || applicableChanged || orderChanged) {
       void pmApi
         .updateProject({
           id: editingProject.id,
-          metadata: { [PM_RESOURCE_CATALOG_KEY]: resolved.rows },
+          metadata: { [PM_RESOURCE_CATALOG_KEY]: ordered },
         })
         .then(() => onProjectsChange?.())
         .catch(() => {
           // Keep catalog in memory even if seed write fails.
         })
     }
-  }, [dirty, editingProject, isAllScope, onProjectsChange, scopeKey, workspaceId])
+  }, [applyCatalogRows, dirty, editingProject, isAllScope, onProjectsChange, scopeKey, workspaceId])
 
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
@@ -149,10 +324,80 @@ const ProjectResourceTablePanel: FC<Props> = ({
     return buildBaselinePriceIndex(readSharedResourceCatalog(workspaceId).rows)
   }, [isAllScope, workspaceId, dirty])
 
-  const updateRows = useCallback((updater: (prev: PmResourceRow[]) => PmResourceRow[]) => {
-    setRows((prev) => reindexResourceRows(updater(prev)))
-    setDirty(true)
-  }, [])
+  const updateRows = useCallback(
+    (
+      updater: (prev: PmResourceRow[]) => PmResourceRow[],
+      options?: { coalesceMs?: number },
+    ) => {
+      const prev = rowsRef.current
+      const next = reindexResourceRows(updater(prev))
+      if (fingerprintResourceCatalog(next) === fingerprintResourceCatalog(prev)) {
+        return
+      }
+      if (!historyApplyingRef.current) {
+        historyStackRef.current.pushBeforeChange(cloneResourceRows(prev), {
+          coalesceMs: options?.coalesceMs,
+        })
+        setHistoryEpoch((value) => value + 1)
+      }
+      rowsRef.current = next
+      setRows(next)
+      setDirty(true)
+    },
+    [],
+  )
+
+  const handleUndo = useCallback(() => {
+    if (!canEdit || !historyStackRef.current.canUndo) return
+    const current = cloneResourceRows(rowsRef.current)
+    const previous = historyStackRef.current.popUndo(current)
+    if (!previous) return
+    historyApplyingRef.current = true
+    applyCatalogRows(cloneResourceRows(previous))
+    setHistoryEpoch((value) => value + 1)
+    historyApplyingRef.current = false
+  }, [applyCatalogRows, canEdit])
+
+  const handleRedo = useCallback(() => {
+    if (!canEdit || !historyStackRef.current.canRedo) return
+    const current = cloneResourceRows(rowsRef.current)
+    const next = historyStackRef.current.popRedo(current)
+    if (!next) return
+    historyApplyingRef.current = true
+    applyCatalogRows(cloneResourceRows(next))
+    setHistoryEpoch((value) => value + 1)
+    historyApplyingRef.current = false
+  }, [applyCatalogRows, canEdit])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (projectInfoOpen || pendingDelete || pendingRestoreVersion != null) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+      const mod = event.metaKey || event.ctrlKey
+      if (!mod) return
+      const key = event.key.toLowerCase()
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        handleUndo()
+        return
+      }
+      if ((key === 'z' && event.shiftKey) || key === 'y') {
+        event.preventDefault()
+        handleRedo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleRedo, handleUndo, pendingDelete, pendingRestoreVersion, projectInfoOpen])
 
   const persistProjectCatalog = useCallback(
     async (
@@ -165,6 +410,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
             ...buildResourceSaveMetadata(project.metadata ?? {}, {
               resourceCount: catalog.length,
               contentFingerprint: fingerprintResourceCatalog(catalog),
+              catalog: toResourceCatalogSnapshot(catalog),
             }),
             [PM_RESOURCE_CATALOG_KEY]: catalog,
           }
@@ -177,50 +423,38 @@ const ProjectResourceTablePanel: FC<Props> = ({
     [],
   )
 
-  const propagateSharedToProjects = useCallback(
-    async (exceptProjectId?: string | null) => {
-      for (const project of projects) {
-        if (exceptProjectId && project.id === exceptProjectId) continue
-        // Shared catalog is already written; resolve merges any new「全部项目」rows in.
-        const resolved = resolveProjectResourceCatalog(
-          workspaceId,
-          project.id,
-          project.metadata,
-        )
-        if (!resolved.needsPersist) continue
-        await persistProjectCatalog(project, resolved.rows)
-      }
-    },
-    [persistProjectCatalog, projects, workspaceId],
-  )
+  // Projects without a saved catalog use「全部项目」live — do not auto-seed copies.
 
   const handleSave = useCallback(async () => {
     if (!canEdit) return
     setSaving(true)
     try {
       if (isAllScope) {
-        const payload = rows.map((row) => ({
-          ...row,
-          applicable: PM_RESOURCE_APPLICABLE_ALL,
-        }))
+        const payload = sortResourceRowsByTypeMenu(
+          rows.map((row) => ({
+            ...row,
+            applicable: PM_RESOURCE_APPLICABLE_ALL,
+          })),
+        )
         writeSharedResourceCatalog(workspaceId, payload)
         recordSharedResourceSaveMeta(workspaceId, payload)
-        await propagateSharedToProjects()
-        setRows(payload)
-        setDirty(false)
+        applyCatalogRows(payload, { dirty: false })
         await onProjectsChange?.()
         window.alert(t('projectManagerPage.resourceTable.saveSuccess'))
         return
       }
       if (!editingProject) return
 
-      const payload = rows.map((row) => ({
-        ...row,
-        applicable:
-          row.applicable === PM_RESOURCE_APPLICABLE_ALL
-            ? PM_RESOURCE_APPLICABLE_ALL
-            : editingProject.id,
-      }))
+      const sharedRows = readSharedResourceCatalog(workspaceId).rows
+      const baseline = buildBaselinePriceIndex(sharedRows)
+      const payload = sortResourceRowsLikeSharedCatalog(
+        withDerivedResourceApplicable(
+          rows.map((row) => ({ ...row })),
+          baseline,
+          editingProject.id,
+        ),
+        sharedRows,
+      )
 
       const sharedCandidates = payload.filter(
         (row) => row.applicable === PM_RESOURCE_APPLICABLE_ALL && row.name.trim(),
@@ -231,13 +465,11 @@ const ProjectResourceTablePanel: FC<Props> = ({
         if (upserted.changed || shared.isDefault) {
           writeSharedResourceCatalog(workspaceId, upserted.rows)
           recordSharedResourceSaveMeta(workspaceId, upserted.rows)
-          await propagateSharedToProjects(editingProject.id)
         }
       }
 
       await persistProjectCatalog(editingProject, payload, { recordSaveVersion: true })
-      setRows(payload)
-      setDirty(false)
+      applyCatalogRows(payload, { dirty: false })
       await onProjectsChange?.()
       window.alert(t('projectManagerPage.resourceTable.saveSuccess'))
     } catch (err) {
@@ -246,12 +478,12 @@ const ProjectResourceTablePanel: FC<Props> = ({
       setSaving(false)
     }
   }, [
+    applyCatalogRows,
     canEdit,
     editingProject,
     isAllScope,
     onProjectsChange,
     persistProjectCatalog,
-    propagateSharedToProjects,
     rows,
     t,
     workspaceId,
@@ -320,9 +552,10 @@ const ProjectResourceTablePanel: FC<Props> = ({
   )
 
   const handleDelete = useCallback(() => {
-    const ids = checkedIds.size > 0 ? checkedIds : selectedId ? new Set([selectedId]) : new Set()
+    const ids: Set<string> =
+      checkedIds.size > 0 ? checkedIds : selectedId ? new Set([selectedId]) : new Set()
     if (ids.size === 0) return
-    setPendingDelete(true)
+    setPendingDelete(ids)
   }, [checkedIds, selectedId])
 
   const handleIndent = useCallback(() => {
@@ -377,6 +610,108 @@ const ProjectResourceTablePanel: FC<Props> = ({
     [selectedId, updateRows],
   )
 
+  const snapshotToRows = useCallback((snapshot: NonNullable<ReturnType<typeof readResourceVersionCatalog>>): PmResourceRow[] => {
+    return snapshot
+      .filter((row) => isPmResourceType(row.type))
+      .map((row) => ({
+        id: row.id,
+        type: row.type as PmResourceType,
+        name: row.name,
+        spec: row.spec ?? '',
+        unit: row.unit,
+        pricingUnit: row.pricingUnit?.trim() ? row.pricingUnit : row.unit,
+        unitPrice: row.unitPrice,
+        applicable: row.applicable,
+        note: row.note ?? '',
+        sortOrder: row.sortOrder,
+        parentId: row.parentId,
+      }))
+  }, [])
+
+  const handleConfirmRestoreVersion = useCallback(async () => {
+    if (pendingRestoreVersion == null) return
+    const version = pendingRestoreVersion
+    setPendingRestoreVersion(null)
+    setSaving(true)
+    try {
+      if (isAllScope) {
+        const meta = readSharedResourceSaveMeta(workspaceId)
+        const catalog = readResourceVersionCatalog(meta, version)
+        const nextMeta = buildMetadataForResourceVersionSwitch(meta, version)
+        if (!catalog || !nextMeta) {
+          window.alert(t('projectManagerPage.resourceTable.versionSwitchNoSnapshot'))
+          return
+        }
+        const rowsNext = sortResourceRowsByTypeMenu(snapshotToRows(catalog))
+        writeSharedResourceCatalog(workspaceId, rowsNext)
+        writeSharedResourceSaveMeta(workspaceId, nextMeta)
+        applyCatalogRows(rowsNext, { dirty: false, clearHistory: true })
+        setSelectedId(null)
+        await onProjectsChange?.()
+        window.alert(
+          t('projectManagerPage.resourceTable.restoreVersionSuccess', {
+            name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+              version: String(version),
+            }),
+          }),
+        )
+        return
+      }
+      if (!editingProject) return
+      const catalog = readResourceVersionCatalog(editingProject.metadata, version)
+      const nextMeta = buildMetadataForResourceVersionSwitch(
+        editingProject.metadata,
+        version,
+      )
+      if (!catalog || !nextMeta) {
+        window.alert(t('projectManagerPage.resourceTable.versionSwitchNoSnapshot'))
+        return
+      }
+      const rowsNext = sortResourceRowsByTypeMenu(snapshotToRows(catalog))
+      await pmApi.updateProject({
+        id: editingProject.id,
+        metadata: {
+          ...nextMeta,
+          [PM_RESOURCE_CATALOG_KEY]: rowsNext,
+        },
+      })
+      applyCatalogRows(rowsNext, { dirty: false, clearHistory: true })
+      setSelectedId(null)
+      await onProjectsChange?.()
+      window.alert(
+        t('projectManagerPage.resourceTable.restoreVersionSuccess', {
+          name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+            version: String(version),
+          }),
+        }),
+      )
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }, [
+    applyCatalogRows,
+    editingProject,
+    isAllScope,
+    onProjectsChange,
+    pendingRestoreVersion,
+    snapshotToRows,
+    t,
+    workspaceId,
+  ])
+
+  const handleRestoreVersion = useCallback(
+    (version: number) => {
+      const currentVersion = isAllScope
+        ? readSharedResourceVersion(workspaceId)
+        : readResourceVersion(editingProject?.metadata)
+      if (version === currentVersion) return
+      setPendingRestoreVersion(version)
+    },
+    [editingProject?.metadata, isAllScope, workspaceId],
+  )
+
   const handleMenuAction = useCallback(
     (action: ResourceMenuAction) => {
       switch (action) {
@@ -388,6 +723,12 @@ const ProjectResourceTablePanel: FC<Props> = ({
           break
         case 'projectInfo':
           setProjectInfoOpen(true)
+          break
+        case 'undo':
+          handleUndo()
+          break
+        case 'redo':
+          handleRedo()
           break
         case 'add':
           handleAdd()
@@ -420,13 +761,18 @@ const ProjectResourceTablePanel: FC<Props> = ({
       handleMove,
       handleOutdent,
       handlePrint,
+      handleRedo,
       handleSave,
+      handleUndo,
     ],
   )
 
   const patchRow = useCallback(
     (id: string, patch: Partial<PmResourceRow>) => {
-      updateRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
+      updateRows(
+        (prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+        { coalesceMs: 500 },
+      )
     },
     [updateRows],
   )
@@ -434,14 +780,8 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const handleRowContextMenu = useCallback(
     (event: ReactMouseEvent, rowId: string) => {
       event.preventDefault()
-      setSelectedId(rowId)
       setSelectionMode(true)
-      setCheckedIds((prev) => {
-        const next = new Set(prev)
-        next.add(rowId)
-        return next
-      })
-      setContextMenu({ left: event.clientX, top: event.clientY })
+      setContextMenu({ left: event.clientX, top: event.clientY, rowId })
     },
     [],
   )
@@ -456,8 +796,8 @@ const ProjectResourceTablePanel: FC<Props> = ({
     setSelectionMode(false)
   }, [])
 
-  const pendingDeleteIds =
-    checkedIds.size > 0 ? checkedIds : selectedId ? new Set([selectedId]) : new Set<string>()
+  const contextMenuDeleteIds =
+    checkedIds.size > 0 ? checkedIds : contextMenu ? new Set([contextMenu.rowId]) : new Set<string>()
 
   return (
     <div className="tm-pm-gantt-page tm-pm-resource-table-page">
@@ -466,25 +806,45 @@ const ProjectResourceTablePanel: FC<Props> = ({
         hasSelection={selectedId != null}
         hasProject
         canEdit={canEdit}
+        canUndo={canUndo}
+        canRedo={canRedo}
         selectedType={selectedType}
         onTypeChange={handleTypeChange}
+        versionSwitchEntries={versionSwitchEntries}
+        onRestoreVersion={handleRestoreVersion}
         onAction={handleMenuAction}
       />
 
       {!canEdit ? (
         <div className="tm-pm-empty">{t('projectManagerPage.resourceTable.needProject')}</div>
       ) : (
-        <div className="tm-pm-resource-table-scroll">
-          <div className="tm-pm-resource-table-scroll-inner">
+        <div
+          className={[
+            'tm-pm-resource-table-scroll-wrap',
+            hScrollMetrics.overflowing ? 'tm-pm-resource-table-scroll-wrap--h-overflow' : '',
+            hScrollDragging ? 'tm-pm-resource-table-scroll-wrap--h-dragging' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <div
+            ref={tableScrollRef}
+            className="tm-pm-resource-table-scroll"
+            onScroll={() => syncHScrollMetrics()}
+          >
+            <div className="tm-pm-resource-table-scroll-inner">
           <table className="tm-pm-resource-table">
             <colgroup>
               <col className="tm-pm-resource-table-col-index" />
               <col className="tm-pm-resource-table-col-type" />
               <col className="tm-pm-resource-table-col-name" />
+              <col className="tm-pm-resource-table-col-spec" />
               <col className="tm-pm-resource-table-col-unit" />
+              <col className="tm-pm-resource-table-col-pricing-unit" />
               <col className="tm-pm-resource-table-col-price" />
               <col className="tm-pm-resource-table-col-baseline" />
               <col className="tm-pm-resource-table-col-applicable" />
+              <col className="tm-pm-resource-table-col-note" />
               <col className="tm-pm-resource-table-col-spacer" />
             </colgroup>
             <thead>
@@ -526,8 +886,14 @@ const ProjectResourceTablePanel: FC<Props> = ({
                 <th className="tm-pm-resource-table-col-name">
                   {t('projectManagerPage.resourceTable.columns.name')}
                 </th>
+                <th className="tm-pm-resource-table-col-spec">
+                  {t('projectManagerPage.resourceTable.columns.spec')}
+                </th>
                 <th className="tm-pm-resource-table-col-unit">
                   {t('projectManagerPage.resourceTable.columns.unit')}
+                </th>
+                <th className="tm-pm-resource-table-col-pricing-unit">
+                  {t('projectManagerPage.resourceTable.columns.pricingUnit')}
                 </th>
                 <th className="tm-pm-resource-table-col-price">
                   {t('projectManagerPage.resourceTable.columns.unitPrice')}
@@ -537,6 +903,9 @@ const ProjectResourceTablePanel: FC<Props> = ({
                 </th>
                 <th className="tm-pm-resource-table-col-applicable">
                   {t('projectManagerPage.resourceTable.columns.applicable')}
+                </th>
+                <th className="tm-pm-resource-table-col-note">
+                  {t('projectManagerPage.resourceTable.columns.note')}
                 </th>
                 <th className="tm-pm-resource-table-col-spacer" aria-hidden />
               </tr>
@@ -595,22 +964,20 @@ const ProjectResourceTablePanel: FC<Props> = ({
                       <select
                         className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
                         value={row.type}
-                        onChange={(event) =>
-                          patchRow(row.id, {
-                            type: event.target.value as PmResourceType,
-                          })
-                        }
+                        onChange={(event) => {
+                          const type = event.target.value as PmResourceType
+                          const applicable =
+                            editingProject != null
+                              ? deriveResourceApplicable(
+                                  { ...row, type },
+                                  baselinePriceIndex,
+                                  editingProject.id,
+                                )
+                              : row.applicable
+                          patchRow(row.id, { type, applicable })
+                        }}
                         onClick={(event) => event.stopPropagation()}>
-                        {(
-                          [
-                            'labor',
-                            'material',
-                            'equipment',
-                            'management',
-                            'fees',
-                            'other',
-                          ] as const
-                        ).map((type) => (
+                        {PM_RESOURCE_TYPES.map((type) => (
                           <option key={type} value={type}>
                             {t(`projectManagerPage.resourceTable.types.${type}`)}
                           </option>
@@ -623,7 +990,27 @@ const ProjectResourceTablePanel: FC<Props> = ({
                         style={{ paddingLeft: `${8 + depth * 16}px` }}
                         value={row.name}
                         placeholder={t('projectManagerPage.resourceTable.namePlaceholder')}
-                        onChange={(event) => patchRow(row.id, { name: event.target.value })}
+                        onChange={(event) => {
+                          const name = event.target.value
+                          const applicable =
+                            editingProject != null
+                              ? deriveResourceApplicable(
+                                  { ...row, name },
+                                  baselinePriceIndex,
+                                  editingProject.id,
+                                )
+                              : row.applicable
+                          patchRow(row.id, { name, applicable })
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="tm-pm-resource-table-input"
+                        value={row.spec}
+                        placeholder={t('projectManagerPage.resourceTable.specPlaceholder')}
+                        onChange={(event) => patchRow(row.id, { spec: event.target.value })}
                         onClick={(event) => event.stopPropagation()}
                       />
                     </td>
@@ -631,7 +1018,25 @@ const ProjectResourceTablePanel: FC<Props> = ({
                       <input
                         className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
                         value={row.unit}
-                        onChange={(event) => patchRow(row.id, { unit: event.target.value })}
+                        onChange={(event) => {
+                          const unit = event.target.value
+                          const pricingInSync =
+                            row.pricingUnit.trim() === '' || row.pricingUnit === row.unit
+                          patchRow(row.id, {
+                            unit,
+                            ...(pricingInSync ? { pricingUnit: unit } : {}),
+                          })
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                    </td>
+                    <td className="tm-pm-resource-table-cell--center">
+                      <input
+                        className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
+                        value={row.pricingUnit}
+                        onChange={(event) =>
+                          patchRow(row.id, { pricingUnit: event.target.value })
+                        }
                         onClick={(event) => event.stopPropagation()}
                       />
                     </td>
@@ -644,9 +1049,16 @@ const ProjectResourceTablePanel: FC<Props> = ({
                         value={row.unitPrice ?? ''}
                         onChange={(event) => {
                           const raw = event.target.value.trim()
-                          patchRow(row.id, {
-                            unitPrice: raw === '' ? null : Number(raw),
-                          })
+                          const unitPrice = raw === '' ? null : Number(raw)
+                          const applicable =
+                            editingProject != null
+                              ? deriveResourceApplicable(
+                                  { ...row, unitPrice },
+                                  baselinePriceIndex,
+                                  editingProject.id,
+                                )
+                              : row.applicable
+                          patchRow(row.id, { unitPrice, applicable })
                         }}
                         onClick={(event) => event.stopPropagation()}
                       />
@@ -692,10 +1104,13 @@ const ProjectResourceTablePanel: FC<Props> = ({
                         </span>
                       ) : (
                         (() => {
-                          const applicableValue =
-                            row.applicable === PM_RESOURCE_APPLICABLE_ALL
-                              ? PM_RESOURCE_APPLICABLE_ALL
-                              : (editingProject?.id ?? viewApplicable)
+                          const applicableValue = editingProject
+                            ? deriveResourceApplicable(
+                                row,
+                                baselinePriceIndex,
+                                editingProject.id,
+                              )
+                            : row.applicable
                           const applicableLabel =
                             applicableValue === PM_RESOURCE_APPLICABLE_ALL
                               ? t('projectManagerPage.resourceTable.applicableAll')
@@ -703,39 +1118,26 @@ const ProjectResourceTablePanel: FC<Props> = ({
                                 ? formatPathProjectLabel(editingProject)
                                 : applicableValue
                           return (
-                            <div className="tm-pm-resource-table-applicable-control">
-                              <span
-                                className="tm-pm-resource-table-applicable-display"
-                                title={applicableLabel}>
-                                {applicableLabel}
-                              </span>
-                              <select
-                                className="tm-pm-resource-table-applicable-select"
-                                value={applicableValue}
-                                aria-label={t(
-                                  'projectManagerPage.resourceTable.columns.applicable',
-                                )}
-                                title={
-                                  applicableLabel ||
-                                  t('projectManagerPage.resourceTable.applicableHint')
-                                }
-                                onChange={(event) =>
-                                  patchRow(row.id, { applicable: event.target.value })
-                                }
-                                onClick={(event) => event.stopPropagation()}>
-                                <option value={PM_RESOURCE_APPLICABLE_ALL}>
-                                  {t('projectManagerPage.resourceTable.applicableAll')}
-                                </option>
-                                {editingProject ? (
-                                  <option value={editingProject.id}>
-                                    {formatPathProjectLabel(editingProject)}
-                                  </option>
-                                ) : null}
-                              </select>
-                            </div>
+                            <span
+                              className="tm-pm-resource-table-applicable-text"
+                              title={
+                                applicableLabel ||
+                                t('projectManagerPage.resourceTable.applicableHint')
+                              }>
+                              {applicableLabel}
+                            </span>
                           )
                         })()
                       )}
+                    </td>
+                    <td>
+                      <input
+                        className="tm-pm-resource-table-input"
+                        value={row.note}
+                        placeholder={t('projectManagerPage.resourceTable.notePlaceholder')}
+                        onChange={(event) => patchRow(row.id, { note: event.target.value })}
+                        onClick={(event) => event.stopPropagation()}
+                      />
                     </td>
                     <td className="tm-pm-resource-table-col-spacer" aria-hidden />
                   </tr>
@@ -744,6 +1146,34 @@ const ProjectResourceTablePanel: FC<Props> = ({
             </tbody>
           </table>
           </div>
+          </div>
+          {hScrollMetrics.overflowing ? (
+            <div
+              ref={hTrackRef}
+              className="tm-pm-gantt-grid-custom-hscroll"
+              onPointerDown={onHTrackPointerDown}
+              role="scrollbar"
+              aria-orientation="horizontal"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(
+                (hScrollMetrics.thumbOffset /
+                  Math.max(
+                    1,
+                    (tableScrollRef.current?.clientWidth ?? 1) - hScrollMetrics.thumbSize,
+                  )) *
+                  100,
+              )}
+            >
+              <div
+                className="tm-pm-gantt-grid-custom-hscroll-thumb"
+                style={{
+                  width: `${hScrollMetrics.thumbSize}px`,
+                  left: `${hScrollMetrics.thumbOffset}px`,
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -799,19 +1229,21 @@ const ProjectResourceTablePanel: FC<Props> = ({
                   className={[
                     'tm-group-context-menu-item',
                     'tm-group-context-menu-item--danger',
-                    checkedIds.size === 0 ? 'tm-group-context-menu-item--disabled' : '',
+                    contextMenuDeleteIds.size === 0
+                      ? 'tm-group-context-menu-item--disabled'
+                      : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   role="menuitem"
-                  disabled={checkedIds.size === 0}
+                  disabled={contextMenuDeleteIds.size === 0}
                   onClick={() => {
-                    if (checkedIds.size === 0) return
+                    if (contextMenuDeleteIds.size === 0) return
+                    setPendingDelete(new Set(contextMenuDeleteIds))
                     setContextMenu(null)
-                    setPendingDelete(true)
                   }}>
                   {t('projectManagerPage.resourceTable.selection.deleteSelected')}
-                  {checkedIds.size > 0 ? ` (${checkedIds.size})` : ''}
+                  {contextMenuDeleteIds.size > 0 ? ` (${contextMenuDeleteIds.size})` : ''}
                 </button>
                 <button
                   type="button"
@@ -829,20 +1261,35 @@ const ProjectResourceTablePanel: FC<Props> = ({
           )
         : null}
 
-      {pendingDelete ? (
+      {pendingDelete && pendingDelete.size > 0 ? (
         <ConfirmDialog
           title={t('projectManagerPage.resourceTable.selection.deleteSelectedTitle')}
           message={t('projectManagerPage.resourceTable.selection.deleteSelectedConfirm', {
-            count: String(pendingDeleteIds.size),
+            count: String(pendingDelete.size),
           })}
           confirmLabel={t('common.delete')}
           cancelLabel={t('common.cancel')}
           danger
-          onCancel={() => setPendingDelete(false)}
+          onCancel={() => setPendingDelete(null)}
           onConfirm={() => {
-            deleteIds(pendingDeleteIds)
-            setPendingDelete(false)
+            deleteIds(pendingDelete)
+            setPendingDelete(null)
           }}
+        />
+      ) : null}
+
+      {pendingRestoreVersion != null ? (
+        <ConfirmDialog
+          title={t('projectManagerPage.resourceTable.restoreVersionTitle')}
+          message={t('projectManagerPage.resourceTable.restoreVersionConfirm', {
+            name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+              version: String(pendingRestoreVersion),
+            }),
+          })}
+          confirmLabel={t('projectManagerPage.resourceTable.restoreVersionConfirmLabel')}
+          cancelLabel={t('common.cancel')}
+          onCancel={() => setPendingRestoreVersion(null)}
+          onConfirm={() => void handleConfirmRestoreVersion()}
         />
       ) : null}
 

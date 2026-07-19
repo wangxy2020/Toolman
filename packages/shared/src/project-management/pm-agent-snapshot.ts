@@ -3,6 +3,10 @@ import type { EpcPortfolioAggregates } from './epc-aggregates.js'
 import type { EpcProjectRecord } from './epc-mock.js'
 import { formatProjectMoney } from './epc-mock.js'
 import type { PmDomain } from './pm-types.js'
+import {
+  formatProjectResourceCatalogAgentBlock,
+  type PmAgentProjectResourceCatalogSummary,
+} from './pm-resource-catalog-agent.js'
 
 export type PmAgentDataSource = 'mock' | 'sqlite'
 
@@ -15,6 +19,12 @@ export type PmAgentSnapshot = {
   overdueWorkItems: number
   urgentWorkItems: number
   relationCount?: number
+  /** Markdown bullet list of「全部项目」resource catalog rows. */
+  resourceCatalogSummary?: string
+  /** Per-project catalogs (system defaults + user-owned / shared-fallback). */
+  projectResourceCatalogSummaries?: PmAgentProjectResourceCatalogSummary[]
+  /** Sample schedule leaf/task titles for resource-plan matching. */
+  scheduleTaskTitles?: string[]
 }
 
 export function resolvePmDomainForAgentTab(
@@ -60,6 +70,29 @@ export function buildPmAgentPortfolioSummary(snapshot: PmAgentSnapshot): string 
     summaryLines.push(`- 计划依赖关系：${snapshot.relationCount} 条`)
   }
 
+  const catalogBlock =
+    snapshot.resourceCatalogSummary != null && snapshot.resourceCatalogSummary.trim()
+      ? [
+          '',
+          '### 全部项目适用的资源列表（系统默认 · 权威数据源）',
+          '说明：下列条目即为工作区「全部项目」资源字典（类型/名称/单位/单价/规格/说明）。智能体应直接据此分析，不要到工作目录找文件。',
+          snapshot.resourceCatalogSummary.trim(),
+        ]
+      : []
+
+  const projectCatalogBlock = formatProjectResourceCatalogAgentBlock(
+    snapshot.projectResourceCatalogSummaries ?? [],
+  )
+
+  const taskBlock =
+    snapshot.scheduleTaskTitles != null && snapshot.scheduleTaskTitles.length > 0
+      ? [
+          '',
+          '### 计划任务名称（用于资源用量匹配）',
+          ...snapshot.scheduleTaskTitles.slice(0, 60).map((title) => `- ${title}`),
+        ]
+      : []
+
   const projectLines = records.slice(0, 12).map((project) => {
     if (tab === 'cost_management') {
       return [
@@ -74,5 +107,14 @@ export function buildPmAgentPortfolioSummary(snapshot: PmAgentSnapshot): string 
     ].join('\n')
   })
 
-  return ['### 组合汇总', ...summaryLines, '', '### 项目明细', ...projectLines].join('\n')
+  return [
+    '### 组合汇总',
+    ...summaryLines,
+    '',
+    '### 项目明细',
+    ...projectLines,
+    ...catalogBlock,
+    ...(projectCatalogBlock ? ['', projectCatalogBlock] : []),
+    ...taskBlock,
+  ].join('\n')
 }

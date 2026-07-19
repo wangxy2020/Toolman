@@ -40,6 +40,26 @@ import {
 import ProjectGanttPrintTable from './ProjectGanttPrintTable'
 import ProjectInfoDialog from './ProjectInfoDialog'
 import {
+  ensureDefaultResourcesInCatalog,
+  readSharedResourceCatalog,
+  resolveAssignableResourceCatalog,
+  sortResourceRowsByTypeMenu,
+  writeSharedResourceCatalog,
+  type PmResourceRow,
+} from '../resource/pm-resource-catalog'
+import {
+  isEmptyAssignment,
+  patchTaskResourceAssignmentMetadata,
+  readTaskResourceAssignments,
+  replaceTaskResourceAssignmentsMetadata,
+  type TaskResourceAssignment,
+} from './pm-gantt-resource-assignment'
+import {
+  patchTaskCostAssignmentMetadata,
+  replaceTaskCostAssignmentsMetadata,
+  type TaskCostAssignment,
+} from './pm-gantt-cost-assignment'
+import {
   buildStableRowNumberById,
   findDemoteParentId,
   flattenPmWorkItemForestCollapsed,
@@ -49,6 +69,9 @@ import {
   ACTUAL_FINISH_META_KEY,
   ACTUAL_START_META_KEY,
   GANTT_MAX_DEPTH,
+  buildDefaultResourceColumnBindings,
+  buildResourceViewColumnOrder,
+  buildCostViewColumnOrder,
   SHOULD_PERCENT_META_KEY,
   computeGanttDayWidth,
   customColumnMetaKey,
@@ -399,6 +422,39 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     [projects, selectedProjectId],
   )
 
+  const resourceCatalog = useMemo((): PmResourceRow[] => {
+    if (!selectedProject) return []
+    return resolveAssignableResourceCatalog(
+      workspaceId,
+      selectedProject.id,
+      selectedProject.metadata,
+      { projectCode: selectedProject.code },
+    )
+  }, [selectedProject, workspaceId])
+
+  const resourceColumnCatalog = useMemo((): PmResourceRow[] => {
+    const shared = readSharedResourceCatalog(workspaceId)
+    const ensured = ensureDefaultResourcesInCatalog(shared.rows)
+    const ordered = sortResourceRowsByTypeMenu(ensured.rows)
+    if (shared.isDefault || ensured.changed) {
+      writeSharedResourceCatalog(workspaceId, ordered)
+    }
+    return ordered
+  }, [workspaceId])
+
+  /** Widest per-task assignment count — resource view must show at least this many columns. */
+  const maxResourceAssignmentSlots = useMemo(() => {
+    let max = 0
+    for (const item of items) {
+      if (item.type === 'milestone') continue
+      const count = readTaskResourceAssignments(item.metadata).filter(
+        (entry) => !isEmptyAssignment(entry),
+      ).length
+      if (count > max) max = count
+    }
+    return max
+  }, [items])
+
   const itemsForView = useMemo(
     () => withGanttProjectRootItems(selectedProject, items),
     [items, selectedProject],
@@ -629,6 +685,115 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     })
   }
 
+  const ensureResourceViewSlotCount = useCallback(
+    (needed: number) => {
+      const nextCount = Math.max(1, Math.floor(needed))
+      setUiPrefs((current) => {
+        if (nextCount <= current.resourceView.slotCount) return current
+        const prevBindings = current.resourceView.columnBindings ?? []
+        const next: GanttUiPrefs = {
+          ...current,
+          resourceView: {
+            ...current.resourceView,
+            slotCount: nextCount,
+            columnBindings: buildDefaultResourceColumnBindings(nextCount).map(
+              (binding, index) => prevBindings[index] ?? binding,
+            ),
+          },
+        }
+        saveGanttUiPrefs(next)
+        return next
+      })
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (uiPrefs.scheduleView !== 'resource') return
+    if (maxResourceAssignmentSlots <= uiPrefs.resourceView.slotCount) return
+    ensureResourceViewSlotCount(maxResourceAssignmentSlots)
+  }, [
+    ensureResourceViewSlotCount,
+    maxResourceAssignmentSlots,
+    uiPrefs.resourceView.slotCount,
+    uiPrefs.scheduleView,
+  ])
+
+  const handleAssignResource = useCallback(
+    async (itemId: string, patch: Partial<TaskResourceAssignment>, slot = 0) => {
+      if (!selectedProjectId || isGanttProjectRootId(itemId)) return
+      // Summary / milestone tasks cannot be assigned resources.
+      if (items.some((entry) => entry.parentId === itemId)) return
+      const item = items.find((entry) => entry.id === itemId)
+      if (!item || item.type === 'milestone') return
+      // Patch the target slot only — do not auto-reorder other cells.
+      const nextMeta = patchTaskResourceAssignmentMetadata(item.metadata, patch, slot)
+      const nextList = readTaskResourceAssignments(nextMeta)
+      captureHistoryBeforeChange()
+      await pmApi.updateWorkItem({ id: itemId, metadata: nextMeta })
+      ensureResourceViewSlotCount(nextList.filter((entry) => !isEmptyAssignment(entry)).length)
+      await loadProjectData(selectedProjectId)
+    },
+    [
+      captureHistoryBeforeChange,
+      ensureResourceViewSlotCount,
+      items,
+      loadProjectData,
+      selectedProjectId,
+    ],
+  )
+
+  const handleReplaceResourceAssignments = useCallback(
+    async (itemId: string, assignments: TaskResourceAssignment[]) => {
+      if (!selectedProjectId || isGanttProjectRootId(itemId)) return
+      if (items.some((entry) => entry.parentId === itemId)) return
+      const item = items.find((entry) => entry.id === itemId)
+      if (!item || item.type === 'milestone') return
+      // Keep caller order (manual move / per-slot edits). No type/name auto-sort.
+      const nextMeta = replaceTaskResourceAssignmentsMetadata(item.metadata, assignments)
+      const nextList = readTaskResourceAssignments(nextMeta)
+      captureHistoryBeforeChange()
+      await pmApi.updateWorkItem({ id: itemId, metadata: nextMeta })
+      ensureResourceViewSlotCount(nextList.length)
+      await loadProjectData(selectedProjectId)
+    },
+    [
+      captureHistoryBeforeChange,
+      ensureResourceViewSlotCount,
+      items,
+      loadProjectData,
+      selectedProjectId,
+    ],
+  )
+
+  const handleReplaceCostAssignments = useCallback(
+    async (itemId: string, assignments: TaskCostAssignment[]) => {
+      if (!selectedProjectId || isGanttProjectRootId(itemId)) return
+      if (items.some((entry) => entry.parentId === itemId)) return
+      const item = items.find((entry) => entry.id === itemId)
+      if (!item || item.type === 'milestone') return
+      const nextMeta = replaceTaskCostAssignmentsMetadata(item.metadata, assignments)
+      captureHistoryBeforeChange()
+      await pmApi.updateWorkItem({ id: itemId, metadata: nextMeta })
+      await loadProjectData(selectedProjectId)
+    },
+    [captureHistoryBeforeChange, items, loadProjectData, selectedProjectId],
+  )
+
+  const handleAssignCost = useCallback(
+    async (itemId: string, patch: Partial<TaskCostAssignment>, slot = 0) => {
+      if (!selectedProjectId || isGanttProjectRootId(itemId)) return
+      if (items.some((entry) => entry.parentId === itemId)) return
+      const item = items.find((entry) => entry.id === itemId)
+      if (!item || item.type === 'milestone') return
+      const nextMeta = patchTaskCostAssignmentMetadata(item.metadata, patch, slot)
+      captureHistoryBeforeChange()
+      await pmApi.updateWorkItem({ id: itemId, metadata: nextMeta })
+      await loadProjectData(selectedProjectId)
+    },
+    [captureHistoryBeforeChange, items, loadProjectData, selectedProjectId],
+  )
+
   const handleCommitCell = async (itemId: string, field: string, rawValue: string) => {
     if (!selectedProjectId || isGanttProjectRootId(itemId)) return
     const item = items.find((entry) => entry.id === itemId)
@@ -642,6 +807,8 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     ) {
       setFreezeStoredSchedule(false)
     }
+
+    if (field === 'spacer') return
 
     if (isGanttCustomColumnId(field) || !isGanttBuiltinColumn(field)) {
       const key = customColumnMetaKey(field)
@@ -1190,6 +1357,22 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
 
   const handleMenuAction = (action: GanttMenuAction) => {
     void (async () => {
+      const structureLocked = uiPrefs.scheduleView === 'resource'
+      const structureActions = new Set<GanttMenuAction>([
+        'newTask',
+        'insertTask',
+        'deleteTask',
+        'indent',
+        'outdent',
+        'setTask',
+        'setMilestone',
+        'moveUp',
+        'moveDown',
+        'captureBaseline',
+        'deleteBaseline',
+      ])
+      if (structureLocked && structureActions.has(action)) return
+
       switch (action) {
         case 'save':
           await handleScheduleSave()
@@ -1297,6 +1480,46 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const isCostView = uiPrefs.scheduleView === 'cost'
   const isChartView = uiPrefs.scheduleView === 'gantt'
   const isFullWidthListLayout = isListView || isResourceView || isCostView
+  // Plain derive (not useMemo): this block sits after early returns for loading/error.
+  const gridPrefs: GanttUiPrefs = isResourceView
+    ? {
+        ...uiPrefs,
+        resourceView: {
+          ...uiPrefs.resourceView,
+          slotCount: Math.max(
+            uiPrefs.resourceView.slotCount,
+            maxResourceAssignmentSlots,
+            1,
+          ),
+        },
+        columnOrder: buildResourceViewColumnOrder({
+          ...uiPrefs.resourceView,
+          slotCount: Math.max(
+            uiPrefs.resourceView.slotCount,
+            maxResourceAssignmentSlots,
+            1,
+          ),
+        }),
+        columnLabels: {
+          ...uiPrefs.columnLabels,
+          resourceType: t('projectManagerPage.schedule.columns.resourceType'),
+          resourceName: t('projectManagerPage.schedule.columns.resourceName'),
+          resourceQty: t('projectManagerPage.schedule.columns.resourceQty'),
+          spacer: '',
+        },
+      }
+    : isCostView
+      ? {
+          ...uiPrefs,
+          columnOrder: buildCostViewColumnOrder(uiPrefs.costView),
+          columnLabels: {
+            ...uiPrefs.columnLabels,
+            costName: t('projectManagerPage.schedule.columns.costName'),
+            costAmount: t('projectManagerPage.schedule.columns.costAmount'),
+            spacer: '',
+          },
+        }
+      : uiPrefs
   const barStyleClass =
     barStyle === 'outline'
       ? 'tm-pm-gantt-page--outline'
@@ -1379,7 +1602,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         relations={relations}
         indexById={indexById}
         criticalIds={criticalIds}
-        prefs={uiPrefs}
+        prefs={gridPrefs}
         builtinLabels={builtinLabels}
         timeline={timeline}
         baselineByItemId={baselineByItemId}
@@ -1415,6 +1638,8 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         className={[
           'tm-pm-gantt-workspace',
           isFullWidthListLayout ? 'tm-pm-gantt-workspace--full-list' : '',
+          isResourceView ? 'tm-pm-gantt-workspace--resource' : '',
+          isCostView ? 'tm-pm-gantt-workspace--cost' : '',
         ]
           .filter(Boolean)
           .join(' ')}>
@@ -1423,12 +1648,14 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           relations={relations}
           indexById={indexById}
           criticalIds={criticalIds}
-          prefs={uiPrefs}
+          prefs={gridPrefs}
           builtinLabels={builtinLabels}
           headerHeight={headerHeight}
           selectedId={selectedId}
           checkedIds={checkedIds}
           listView={isFullWidthListLayout}
+          resourceViewMode={isResourceView}
+          costViewMode={isCostView}
           printLayout={false}
           gridScrollRef={gridScrollRef}
           onScroll={syncScroll('grid')}
@@ -1441,6 +1668,14 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           onToggleCollapse={handleToggleCollapse}
           onPrefsChange={handlePrefsChange}
           onCommitCell={handleCommitCell}
+          resourceCatalog={resourceCatalog}
+          resourceColumnCatalog={resourceColumnCatalog}
+          onAssignResource={isResourceView ? handleAssignResource : undefined}
+          onReplaceResourceAssignments={
+            isResourceView ? handleReplaceResourceAssignments : undefined
+          }
+          onAssignCost={isCostView ? handleAssignCost : undefined}
+          onReplaceCostAssignments={isCostView ? handleReplaceCostAssignments : undefined}
           selectionResetKey={selectedProjectId}
         />
 

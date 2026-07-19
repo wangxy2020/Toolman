@@ -25,13 +25,11 @@ import { getDateLocale } from '../../../../i18n/date-locale'
 import { useI18n } from '../../../../i18n/useI18n'
 import { pmApi } from '../../pm-api'
 import {
-  PM_RESOURCE_CATALOG_KEY,
   PM_RESOURCE_TYPES,
   readSharedResourceLastSavedAt,
   readSharedResourceSaveHistory,
   readSharedResourceVersion,
   removeSharedResourceSaveHistoryEntry,
-  seedProjectResourceCatalogFromShared,
   type PmResourceRow,
   type PmResourceType,
 } from '../resource/pm-resource-catalog'
@@ -661,15 +659,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
           domain: createDefaults.domain,
           description: draft.description.trim() || undefined,
           workspaceRoot: draft.workspaceRoot.trim() || undefined,
-          metadata:
-            createDefaults.domain === 'resource_management'
-              ? {
-                  ...baseMetadata,
-                  [PM_RESOURCE_CATALOG_KEY]: seedProjectResourceCatalogFromShared(
-                    createDefaults.workspaceId,
-                  ),
-                }
-              : baseMetadata,
+          metadata: baseMetadata,
         })
         props.onSaved(created, { manualCreate: options?.manualCreate === true })
         onClose()

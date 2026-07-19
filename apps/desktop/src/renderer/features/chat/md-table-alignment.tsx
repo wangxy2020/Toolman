@@ -23,6 +23,10 @@ function extractTextContent(node: ReactNode): string {
 const SERIAL_COLUMN_PATTERN = /^(序号|编号|序|no\.?|#|index|id)$/
 const QUANTITY_COLUMN_PATTERN = /^(数量|数目|个数|件数|qty|quantity|count)$/
 
+/** Short / metric columns that look better centered and non-wrapping. */
+const SHORT_CENTER_COLUMN_PATTERN =
+  /^(序号|编号|序|no\.?|#|index|id|数量|数目|个数|件数|qty|quantity|count|单价|当前单价|市场参考|参考价|计价单位|计量单位|单位|合理\??|是否合理|状态|工期|天数|层级|开始|完成|结束|日期)$/
+
 /** Progress-plan WBS table emitted by the plan agent. */
 export function isPmPlanTableHeaders(headers: string[]): boolean {
   const normalized = headers.map((header) => normalizeHeaderLabel(header))
@@ -38,6 +42,16 @@ export function isPmPlanTableHeaders(headers: string[]): boolean {
  */
 export function isLabelValueTableHeaders(headers: string[]): boolean {
   return headers.length === 2
+}
+
+function shouldCenterColumnHeader(header: string): boolean {
+  const normalized = normalizeHeaderLabel(header)
+  if (!normalized) return false
+  if (SHORT_CENTER_COLUMN_PATTERN.test(normalized)) return true
+  if (normalized.includes('单价') || normalized.includes('单位')) return true
+  if (normalized.includes('合理')) return true
+  if (normalized.includes('市场参考') || normalized.includes('参考价')) return true
+  return false
 }
 
 export function getCenterAlignedColumnIndexes(headers: string[]): Set<number> {
@@ -57,6 +71,15 @@ export function getCenterAlignedColumnIndexes(headers: string[]): Set<number> {
       }
     })
     return indexes
+  }
+
+  // Generic agent tables (resource analysis, etc.): center short metric columns.
+  if (headers.length >= 3) {
+    const indexes = new Set<number>()
+    headers.forEach((header, index) => {
+      if (shouldCenterColumnHeader(header)) indexes.add(index)
+    })
+    if (indexes.size > 0) return indexes
   }
 
   const hasSerial = normalized.some((header) => SERIAL_COLUMN_PATTERN.test(header))

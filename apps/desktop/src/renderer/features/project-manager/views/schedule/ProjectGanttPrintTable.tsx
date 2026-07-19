@@ -52,6 +52,26 @@ function cellValue(
   indexById: Map<string, number>,
   dayUnit: string,
 ): string {
+  if (field === 'spacer') return ''
+  const resourceMatch = /^resource:(\d+):(type|name|qty)$/.exec(field)
+  if (resourceMatch) {
+    const slot = Number(resourceMatch[1])
+    const kind = resourceMatch[2]
+    const list = item.metadata?.resourceAssignments
+    const legacy = item.metadata?.resourceAssignment
+    const raw = Array.isArray(list)
+      ? list[slot]
+      : slot === 0
+        ? legacy
+        : null
+    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return ''
+    const row = raw as Record<string, unknown>
+    if (kind === 'type') return typeof row.type === 'string' ? row.type : ''
+    if (kind === 'name') return typeof row.name === 'string' ? row.name : ''
+    return typeof row.quantity === 'number' && Number.isFinite(row.quantity)
+      ? String(row.quantity)
+      : ''
+  }
   if (isGanttCustomColumnId(field) || (!isGanttBuiltinColumn(field) && field !== 'index')) {
     const raw = item.metadata?.[customColumnMetaKey(field)]
     return raw == null ? '' : String(raw)
@@ -114,7 +134,7 @@ const ProjectGanttPrintTable: FC<Props> = ({
 }) => {
   const { t } = useI18n()
   const dayUnit = t('projectManagerPage.schedule.dayUnit')
-  const columns = prefs.columnOrder
+  const columns = prefs.columnOrder.filter((columnId) => columnId !== 'spacer')
 
   return (
     <table className="tm-pm-gantt-print-table">

@@ -14,10 +14,22 @@ export const PM_PLAN_SLASH_COMMANDS: SlashCommandItem[] = [
     insert: '/schedule',
   },
   {
+    id: 'pm-resource',
+    command: '/resource',
+    description: '任务资源用量建议',
+    insert: '/resource',
+  },
+  {
     id: 'pm-forecast',
     command: '/forecast',
     description: '成本预测分析',
     insert: '/forecast',
+  },
+  {
+    id: 'pm-catalog',
+    command: '/catalog',
+    description: '检查资源列表',
+    insert: '/catalog',
   },
   {
     id: 'pm-daily',

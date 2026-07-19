@@ -4,6 +4,7 @@ import {
   buildProjectManagementSessionMetadata,
   parseProjectManagementSessionMetadata,
   resolveProjectManagementSessionForTab,
+  resolveProjectManagementTabFromSession,
   type ProjectManagementSessionCandidate,
 } from './agent-link.js'
 import { buildProjectManagementRuntimeHint } from './epc-context.js'
@@ -27,6 +28,26 @@ describe('project management agent link metadata', () => {
     const metadata = buildProjectManagementSessionMetadata('cost_management')
     const parsed = parseProjectManagementSessionMetadata(metadata)
     expect(parsed).toEqual({ tab: 'cost_management', dataSource: 'sqlite' })
+  })
+})
+
+describe('resolveProjectManagementTabFromSession', () => {
+  it('prefers metadata tab', () => {
+    expect(
+      resolveProjectManagementTabFromSession({
+        title: '工作台',
+        metadata: buildProjectManagementSessionMetadata('resource_management'),
+      }),
+    ).toBe('resource_management')
+  })
+
+  it('falls back to session title when metadata is missing', () => {
+    expect(
+      resolveProjectManagementTabFromSession({
+        title: '资源管理',
+        metadata: {},
+      }),
+    ).toBe('resource_management')
   })
 })
 
@@ -85,5 +106,16 @@ describe('buildProjectManagementRuntimeHint', () => {
     const hint = buildProjectManagementRuntimeHint('progress_management')
     expect(hint).toContain('计划管理')
     expect(hint).toContain('进度')
+    expect(hint).toContain('resourcePlan')
+  })
+
+  it('focuses resource catalog for resource tab', () => {
+    const hint = buildProjectManagementRuntimeHint('resource_management')
+    expect(hint).toContain('资源管理')
+    expect(hint).toContain('资源列表')
+    expect(hint).toContain('默认可读清单')
+    expect(hint).toContain('resourceCatalogPatches')
+    expect(hint).toContain('EMP-2401')
+    expect(hint).toContain('禁止')
   })
 })

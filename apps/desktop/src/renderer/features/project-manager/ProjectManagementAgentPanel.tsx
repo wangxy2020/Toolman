@@ -5,6 +5,7 @@ import { PlanProjectDisplayNameProvider } from '../chat/PlanProjectDisplayNameCo
 import { getBlocksText, getMessageText } from '../chat/message-utils'
 import {
   buildPmNewProjectBriefMessageFromProject,
+  getPmAgentCapability,
   type ContentBlock,
   type PmProject,
 } from '@toolman/shared'
@@ -19,10 +20,13 @@ import {
   loadCostManagementQuickPhrases,
   loadExecutionReportQuickPhrases,
   loadPlanManagementQuickPhrases,
+  loadResourceManagementQuickPhrases,
   resolvePlanSlashCommand,
 } from './planManagementQuickPhrases'
 import { PM_PLAN_SLASH_COMMANDS } from './pm-plan-slash-commands'
 import { ProjectPlanAgentApplyBar } from './ProjectPlanAgentApplyBar'
+import { ProjectResourceCatalogApplyBar } from './ProjectResourceCatalogApplyBar'
+import { ProjectResourcePlanApplyBar } from './ProjectResourcePlanApplyBar'
 import type { ConfigurableSidebarMenuKey } from './projectSidebarMenuConfig'
 import { useProjectManagementAgentSession } from './useProjectManagementAgentSession'
 import { useProjectManagementEpcSend } from './useProjectManagementEpcSend'
@@ -58,6 +62,11 @@ export type ProjectManagementAgentPanelProps = Pick<
   workspace?: import('@toolman/shared').Workspace | null
 }
 
+/**
+ * PM agent shell. Tab capabilities come from {@link getPmAgentCapability}
+ * (phrases / apply footers / kickoff) so new domains can plug in without more
+ * `activeTab ===` hard-coding here.
+ */
 export function ProjectManagementAgentPanel({
   workspaceId,
   activeTab,
@@ -93,14 +102,14 @@ export function ProjectManagementAgentPanel({
   )
   const kickoffSentRef = useRef<string | null>(null)
 
-  const epcEnabled =
-    isProjectManagementAgentTab(activeTab) && activeTab === 'cost_management' && linked != null
-  const planEnabled =
-    isProjectManagementAgentTab(activeTab) && activeTab === 'progress_management' && linked != null
-  const executionEnabled =
-    isProjectManagementAgentTab(activeTab) &&
-    (activeTab === 'urgent_tasks' || activeTab === 'all_projects') &&
-    linked != null
+  const capability = isProjectManagementAgentTab(activeTab)
+    ? getPmAgentCapability(activeTab)
+    : null
+
+  const epcEnabled = capability?.phrases === 'cost' && linked != null
+  const planEnabled = capability?.phrases === 'plan' && linked != null
+  const executionEnabled = capability?.phrases === 'execution' && linked != null
+  const resourceEnabled = capability?.phrases === 'resource' && linked != null
   const sendEpcMessage = useProjectManagementEpcSend(chat, linked?.assistant ?? null, epcEnabled)
 
   const lastAssistantMessageId = useMemo(() => {
@@ -111,17 +120,39 @@ export function ProjectManagementAgentPanel({
     return null
   }, [chat.messages])
 
-  const planApplyFooter =
-    planEnabled && workspaceId ? (
-      <ProjectPlanAgentApplyBar
-        workspaceId={workspaceId}
-        messages={chat.messages}
-        projects={projects}
-        selectedProjectId={selectedProjectId}
-        pendingBrief={null}
-        onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
-        onProjectsChange={onProjectsChange}
-      />
+  const applyKinds = capability?.apply ?? []
+  const assistantFooter =
+    linked && workspaceId && applyKinds.length > 0 ? (
+      <>
+        {applyKinds.includes('plan') || applyKinds.includes('schedule') ? (
+          <ProjectPlanAgentApplyBar
+            workspaceId={workspaceId}
+            messages={chat.messages}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            pendingBrief={null}
+            onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
+            onProjectsChange={onProjectsChange}
+          />
+        ) : null}
+        {applyKinds.includes('resourcePlan') ? (
+          <ProjectResourcePlanApplyBar
+            workspaceId={workspaceId}
+            messages={chat.messages}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
+            onProjectsChange={onProjectsChange}
+          />
+        ) : null}
+        {applyKinds.includes('resourceCatalog') ? (
+          <ProjectResourceCatalogApplyBar
+            workspaceId={workspaceId}
+            messages={chat.messages}
+            onProjectsChange={onProjectsChange}
+          />
+        ) : null}
+      </>
     ) : null
 
   const loadQuickPhrasesFn = epcEnabled
@@ -130,42 +161,49 @@ export function ProjectManagementAgentPanel({
       ? loadPlanManagementQuickPhrases
       : executionEnabled
         ? loadExecutionReportQuickPhrases
-        : undefined
+        : resourceEnabled
+          ? loadResourceManagementQuickPhrases
+          : undefined
 
   const extraSlashCommands = epcEnabled
     ? [...EPC_SLASH_COMMANDS, ...PM_PLAN_SLASH_COMMANDS]
     : planEnabled
-      ? PM_PLAN_SLASH_COMMANDS
+      ? PM_PLAN_SLASH_COMMANDS.filter((item) =>
+          ['/wbs', '/schedule', '/resource'].includes(item.command),
+        )
       : executionEnabled
         ? PM_PLAN_SLASH_COMMANDS.filter((item) =>
             ['/daily', '/weekly', '/monthly'].includes(item.command),
           )
+        : resourceEnabled
+          ? PM_PLAN_SLASH_COMMANDS.filter((item) => item.command === '/catalog')
+          : undefined
+
+  const handleSend =
+    epcEnabled
+      ? sendEpcMessage
+      : planEnabled || executionEnabled || resourceEnabled
+        ? async (contentBlocks: ContentBlock[]) => {
+            const text = getBlocksText(contentBlocks.filter((block) => block.type === 'text'))
+            const expanded = resolvePlanSlashCommand(text.trim())
+            if (!expanded) {
+              await chat.sendMessage(contentBlocks)
+              return
+            }
+            const attachmentBlocks = contentBlocks.filter((block) => block.type !== 'text')
+            await chat.sendMessage([{ type: 'text', text: expanded }, ...attachmentBlocks])
+          }
         : undefined
 
-  const handleSend = epcEnabled
-    ? sendEpcMessage
-    : planEnabled || executionEnabled
-      ? async (contentBlocks: ContentBlock[]) => {
-          const text = getBlocksText(contentBlocks.filter((block) => block.type === 'text'))
-          const expanded = resolvePlanSlashCommand(text.trim())
-          if (!expanded) {
-            await chat.sendMessage(contentBlocks)
-            return
-          }
-          const attachmentBlocks = contentBlocks.filter((block) => block.type !== 'text')
-          await chat.sendMessage([{ type: 'text', text: expanded }, ...attachmentBlocks])
-        }
-      : undefined
-
   useEffect(() => {
-    if (!planEnabled || !linked || !agentKickoffProject) return
+    if (!capability?.kickoff || !linked || !agentKickoffProject) return
     if (kickoffSentRef.current === agentKickoffProject.id) return
     kickoffSentRef.current = agentKickoffProject.id
     const message = buildPmNewProjectBriefMessageFromProject(agentKickoffProject)
     void chat.sendMessage([{ type: 'text', text: message }]).finally(() => {
       onAgentKickoffConsumed?.()
     })
-  }, [agentKickoffProject, chat, linked, onAgentKickoffConsumed, planEnabled])
+  }, [agentKickoffProject, capability?.kickoff, chat, linked, onAgentKickoffConsumed])
 
   const selectedProjectLabel = useMemo(() => {
     const project = projects.find((entry) => entry.id === selectedProjectId)
@@ -258,7 +296,7 @@ export function ProjectManagementAgentPanel({
         loadQuickPhrasesFn={loadQuickPhrasesFn}
         extraSlashCommands={extraSlashCommands}
         assistantFooterMessageId={lastAssistantMessageId}
-        assistantFooter={planApplyFooter}
+        assistantFooter={assistantFooter}
       />
     </PlanProjectDisplayNameProvider>
   )

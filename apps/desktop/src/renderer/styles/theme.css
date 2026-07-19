@@ -9720,10 +9720,11 @@ html.theme-dark .tm-dedup-error {
   overflow-x: auto;
   margin: 0.75em 0;
   max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tm-md-table {
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   border-collapse: collapse;
   font-size: 0.95em;
@@ -9733,20 +9734,43 @@ html.theme-dark .tm-dedup-error {
 .tm-md-table th,
 .tm-md-table td {
   border: 1px solid var(--tm-border);
-  padding: 8px 10px;
+  padding: 8px 12px;
   text-align: left;
-  vertical-align: top;
-  /* Keep CJK phrases intact when the column is squeezed; still wrap long paths/URLs. */
-  word-break: keep-all;
-  overflow-wrap: anywhere;
+  vertical-align: middle;
 }
 
 .tm-md-table th {
   background: var(--tm-hover);
+  text-align: center;
+  white-space: nowrap;
+  font-weight: 600;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.tm-md-table td {
+  min-width: 3.5em;
+  /* Allow long CJK analysis cells to wrap (keep-all would force one line). */
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-break: anywhere;
 }
 
 .tm-md-table-cell--center {
   text-align: center;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  line-break: auto;
+  width: 1%;
+}
+
+/* Last text column (e.g. 分析): take remaining width and wrap. */
+.tm-md-table th:last-child:not(.tm-md-table-cell--center),
+.tm-md-table td:last-child:not(.tm-md-table-cell--center) {
+  min-width: 12em;
+  width: auto;
 }
 
 /* Two-column label | content tables: first column shrink-wraps, labels stay on one line. */
@@ -9763,6 +9787,7 @@ html.theme-dark .tm-dedup-error {
 .tm-md-table--label-value td:first-child {
   white-space: nowrap;
   width: 1%;
+  text-align: left;
   word-break: keep-all;
   overflow-wrap: normal;
 }
@@ -9770,6 +9795,7 @@ html.theme-dark .tm-dedup-error {
 .tm-md-table--label-value th:last-child,
 .tm-md-table--label-value td:last-child {
   white-space: normal;
+  text-align: left;
   word-break: break-word;
   overflow-wrap: anywhere;
   min-width: 12em;

@@ -4,7 +4,7 @@ import {
   EXCEL_MCP_SERVER_ID,
   isDocxMcpSourceFileBlock,
   isExcelMcpSourceFileBlock,
-  parseProjectManagementSessionMetadata,
+  resolveProjectManagementTabFromSession,
   buildProjectManagementRuntimeHint,
 } from '@toolman/shared'
 import { isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
@@ -32,7 +32,7 @@ import { parseModelId } from '../provider.service'
 import { getProviderRow } from '../provider/crud'
 import { resolveAttachmentReadPath } from '../resolve-user-content-blocks.service'
 import { getSession } from '../session.service'
-import { buildPmRuntimeSnapshot } from '../project-management/pm-runtime-snapshot.service'
+import { buildPmRuntimeSnapshot, buildPmResourceCatalogFallbackSnapshot } from '../project-management/pm-runtime-snapshot.service'
 import type { BuildRuntimeSystemHintsOptions } from './types'
 
 function looksLikeDirectoryExportGoal(text: string): boolean {
@@ -85,17 +85,30 @@ export async function buildRuntimeSystemHints(
   if (options.sessionId) {
     const session = getSession({ id: options.sessionId })
     if (session) {
-      const projectManagement = parseProjectManagementSessionMetadata(session.metadata)
-      if (projectManagement) {
+      const tab = resolveProjectManagementTabFromSession(session)
+      if (tab) {
         let snapshot = null
         try {
           if (session.workspaceId) {
-            snapshot = buildPmRuntimeSnapshot(session.workspaceId, projectManagement.tab)
+            snapshot = buildPmRuntimeSnapshot(session.workspaceId, tab)
           }
-        } catch {
-          snapshot = null
+        } catch (error) {
+          console.warn('[pm] runtime snapshot failed', error)
+          if (
+            session.workspaceId &&
+            (tab === 'resource_management' || tab === 'progress_management')
+          ) {
+            try {
+              snapshot = buildPmResourceCatalogFallbackSnapshot(session.workspaceId, tab)
+            } catch (fallbackError) {
+              console.warn('[pm] resource catalog fallback failed', fallbackError)
+              snapshot = null
+            }
+          } else {
+            snapshot = null
+          }
         }
-        hints.push(buildProjectManagementRuntimeHint(projectManagement.tab, snapshot))
+        hints.push(buildProjectManagementRuntimeHint(tab, snapshot))
       }
     }
   }

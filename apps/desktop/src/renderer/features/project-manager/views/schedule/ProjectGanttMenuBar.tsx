@@ -205,6 +205,8 @@ export function ProjectGanttMenuBar({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [openMenu])
 
+  const structureLocked = scheduleView === 'resource'
+
   const items: MenuItem[] = [
     {
       key: 'save',
@@ -245,19 +247,21 @@ export function ProjectGanttMenuBar({
       title: t('projectManagerPage.schedule.menu.newTask'),
       label: <IconPlus size={ICON_SIZE} />,
       icon: true,
+      disabled: structureLocked,
     },
     {
       key: 'insertTask',
       title: t('projectManagerPage.schedule.menu.insertTask'),
       label: <IconInsertRow size={ICON_SIZE} />,
       icon: true,
+      disabled: structureLocked,
     },
     {
       key: 'deleteTask',
       title: t('projectManagerPage.schedule.menu.deleteTask'),
       label: <IconTrash size={ICON_SIZE} />,
       icon: true,
-      disabled: !hasSelection,
+      disabled: structureLocked || !hasSelection,
       dividerAfter: true,
     },
     {
@@ -265,27 +269,27 @@ export function ProjectGanttMenuBar({
       title: t('projectManagerPage.schedule.menu.indent'),
       label: <IconIndent size={ICON_SIZE} />,
       icon: true,
-      disabled: !hasSelection,
+      disabled: structureLocked || !hasSelection,
     },
     {
       key: 'outdent',
       title: t('projectManagerPage.schedule.menu.outdent'),
       label: <IconOutdent size={ICON_SIZE} />,
       icon: true,
-      disabled: !hasSelection,
+      disabled: structureLocked || !hasSelection,
     },
     {
       key: 'moveUp',
       title: t('projectManagerPage.schedule.menu.moveUp'),
       label: <IconChevronUp size={ICON_SIZE} />,
-      disabled: !hasSelection,
+      disabled: structureLocked || !hasSelection,
       icon: true,
     },
     {
       key: 'moveDown',
       title: t('projectManagerPage.schedule.menu.moveDown'),
       label: <IconChevronDown size={ICON_SIZE} />,
-      disabled: !hasSelection,
+      disabled: structureLocked || !hasSelection,
       icon: true,
     },
   ]
@@ -507,10 +511,10 @@ export function ProjectGanttMenuBar({
                 type="button"
                 className="tm-pm-gantt-menubar-btn"
                 aria-label={t('projectManagerPage.schedule.menu.taskType')}
-                aria-disabled={disabled || !canSetTaskType}
+                aria-disabled={disabled || structureLocked || !canSetTaskType}
                 aria-expanded={openMenu === 'type'}
                 onClick={() => {
-                  if (disabled || !canSetTaskType) return
+                  if (disabled || structureLocked || !canSetTaskType) return
                   hideTip()
                   toggleMenu('type')
                 }}
@@ -563,7 +567,13 @@ export function ProjectGanttMenuBar({
 
             {moveItems.map(renderToolbarItem)}
 
-            {renderMenuButton('baseline', baselineRef, t('projectManagerPage.schedule.menu.baseline'))}
+            {renderMenuButton(
+              'baseline',
+              baselineRef,
+              t('projectManagerPage.schedule.menu.baseline'),
+              undefined,
+              disabled || structureLocked,
+            )}
             {openMenu === 'baseline' &&
               renderPanel(
                 baselinePos,

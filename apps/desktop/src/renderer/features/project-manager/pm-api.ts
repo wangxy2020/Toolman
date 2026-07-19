@@ -1,10 +1,12 @@
 import {
   IpcChannel,
   type KnowledgeFolderFileItem,
+  type PmApplyResourcePlanInput,
   type PmApplyScheduleInput,
   type PmApplyWbsInput,
   type PmDomain,
   type PmProject,
+  type PmSharedResourceCatalogRow,
   type PmTimeEntry,
   type PmTimeEntryUpdateInput,
   type PmWorkItem,
@@ -142,6 +144,83 @@ export const pmApi = {
     return invoke<{ updatedCount: number; items: PmWorkItem[]; projectId?: string }>(
       IpcChannel.Pm_WorkItemApplySchedule,
       input,
+    )
+  },
+
+  applyResourcePlanSuggestions(input: PmApplyResourcePlanInput) {
+    return invoke<{
+      projectId: string
+      updatedCount: number
+      items: PmWorkItem[]
+      catalogUpserts: Array<{
+        type: string
+        name: string
+        unit?: string
+        unitPrice?: number | null
+      }>
+      catalogChanged: boolean
+    }>(IpcChannel.Pm_WorkItemApplyResourcePlan, input)
+  },
+
+  applyResourceCatalogPatches(input: {
+    workspaceId: string
+    patches: Array<{
+      target: string
+      upserts: Array<{
+        type: PmSharedResourceCatalogRow['type']
+        name: string
+        unit?: string
+        unitPrice?: number | null
+      }>
+      removes?: Array<{ type?: PmSharedResourceCatalogRow['type']; name: string }>
+    }>
+  }) {
+    return invoke<{
+      workspaceId: string
+      sharedChanged: boolean
+      changedCount: number
+      results: Array<{
+        target: string
+        scope: 'shared' | 'project'
+        projectId?: string
+        projectCode?: string
+        changed: boolean
+        upserted: number
+        removed: number
+        rowCount: number
+      }>
+    }>(IpcChannel.Pm_ApplyResourceCatalogPatch, input)
+  },
+
+  getSharedResourceCatalog(workspaceId: string) {
+    return invoke<{ rows: PmSharedResourceCatalogRow[]; isDefault: boolean }>(
+      IpcChannel.Pm_SharedResourceCatalogGet,
+      { workspaceId },
+    )
+  },
+
+  setSharedResourceCatalog(workspaceId: string, rows: PmSharedResourceCatalogRow[]) {
+    return invoke<{ rows: PmSharedResourceCatalogRow[] }>(IpcChannel.Pm_SharedResourceCatalogSet, {
+      workspaceId,
+      rows,
+    })
+  },
+
+  upsertSharedResourceCatalog(
+    workspaceId: string,
+    upserts: Array<{
+      type: PmSharedResourceCatalogRow['type']
+      name: string
+      unit?: string
+      pricingUnit?: string
+      unitPrice?: number | null
+      spec?: string
+      note?: string
+    }>,
+  ) {
+    return invoke<{ rows: PmSharedResourceCatalogRow[]; changed: boolean }>(
+      IpcChannel.Pm_SharedResourceCatalogUpsert,
+      { workspaceId, upserts },
     )
   },
 
