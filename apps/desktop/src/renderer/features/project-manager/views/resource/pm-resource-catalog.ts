@@ -16,12 +16,20 @@ export const PM_RESOURCE_CATALOG_KEY = 'resourceCatalog'
 
 export const PM_RESOURCE_TYPES = [
   'labor',
+  'auxiliary',
   'material',
   'equipment',
   'device',
   'instrument',
   'management',
   'fees',
+  'comprehensive',
+  'measures',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
   'funds',
   'other',
 ] as const
@@ -62,14 +70,14 @@ const DEFAULT_RESOURCE_DEFS: ReadonlyArray<{
   { type: 'labor', name: '普通工', unit: '人', pricingUnit: '工日', unitPrice: 250 },
   { type: 'labor', name: '技术工人', unit: '人', pricingUnit: '工日', unitPrice: 400 },
   { type: 'labor', name: '管理人员', unit: '人', pricingUnit: '工日', unitPrice: 500 },
+  { type: 'auxiliary', name: '模板', unit: 'm²', pricingUnit: 'm²', unitPrice: 50 },
+  { type: 'auxiliary', name: '方木', unit: 'm³', pricingUnit: 'm³', unitPrice: 1800 },
+  { type: 'auxiliary', name: '脚手架', unit: 't', pricingUnit: 't', unitPrice: 5000 },
   { type: 'material', name: '砂子', unit: 'm³', pricingUnit: 'm³', unitPrice: 100 },
   { type: 'material', name: '石子', unit: 'm³', pricingUnit: 'm³', unitPrice: 110 },
   { type: 'material', name: '水泥', unit: 't', pricingUnit: 't', unitPrice: 400 },
   { type: 'material', name: '商品混凝土', unit: 'm³', pricingUnit: 'm³', unitPrice: 420 },
   { type: 'material', name: '钢筋', unit: 't', pricingUnit: 't', unitPrice: 3800 },
-  { type: 'material', name: '模板', unit: 'm²', pricingUnit: 'm²', unitPrice: 50 },
-  { type: 'material', name: '方木', unit: 'm³', pricingUnit: 'm³', unitPrice: 1800 },
-  { type: 'material', name: '脚手架', unit: 't', pricingUnit: 't', unitPrice: 5000 },
   { type: 'material', name: '砌块/砖', unit: 'm³', pricingUnit: 'm³', unitPrice: 280 },
   { type: 'material', name: '防水卷材', unit: 'm²', pricingUnit: 'm²', unitPrice: 25 },
   { type: 'material', name: '预拌砂浆', unit: 'm³', pricingUnit: 'm³', unitPrice: 450 },
@@ -90,10 +98,16 @@ const DEFAULT_RESOURCE_DEFS: ReadonlyArray<{
   { type: 'instrument', name: '全站仪', unit: '台', pricingUnit: '台班', unitPrice: 400 },
   { type: 'instrument', name: '水准仪', unit: '台', pricingUnit: '台班', unitPrice: 150 },
   { type: 'instrument', name: '塔尺', unit: '台', pricingUnit: '台班', unitPrice: 30 },
-  { type: 'funds', name: '投资估算', unit: '元', pricingUnit: '元', unitPrice: null },
-  { type: 'funds', name: '设计概算', unit: '元', pricingUnit: '元', unitPrice: null },
-  { type: 'funds', name: '施工图预算', unit: '元', pricingUnit: '元', unitPrice: null },
-  { type: 'funds', name: '成本预算', unit: '元', pricingUnit: '元', unitPrice: null },
+  { type: 'investment', name: '投资估算', unit: '元', pricingUnit: '元', unitPrice: null },
+  { type: 'designEstimate', name: '设计概算', unit: '元', pricingUnit: '元', unitPrice: null },
+  {
+    type: 'constructionBudget',
+    name: '施工预算',
+    unit: '元',
+    pricingUnit: '元',
+    unitPrice: null,
+  },
+  { type: 'costBudget', name: '成本预算', unit: '元', pricingUnit: '元', unitPrice: null },
 ]
 
 const DEFAULT_UNIT_PRICE_BY_NAME = new Map(
@@ -109,6 +123,98 @@ export function isPmResourceType(value: unknown): value is PmResourceType {
 /** Legacy display names normalized onto the current project vocabulary. */
 const RESOURCE_NAME_ALIASES: Readonly<Record<string, string>> = {
   普通工人: '普通工',
+  方林: '方木',
+  施工图预算: '施工预算',
+}
+
+/** Names that belong under「辅材」even if older catalogs stored them as material. */
+const AUXILIARY_RESOURCE_NAMES: ReadonlySet<string> = new Set(['模板', '方木', '脚手架'])
+
+/** Legacy「资金」named rows that become dedicated budget types. */
+const BUDGET_TYPE_BY_NAME: Readonly<Record<string, PmResourceType>> = {
+  投资估算: 'investment',
+  设计概算: 'designEstimate',
+  施工预算: 'constructionBudget',
+  成本预算: 'costBudget',
+}
+
+/**
+ * Move formwork / timber / scaffold into「辅材」and drop duplicate material rows.
+ */
+export function applyAuxiliaryResourceMigration(
+  rows: readonly PmResourceRow[],
+): { rows: PmResourceRow[]; changed: boolean } {
+  let changed = false
+  const result: PmResourceRow[] = []
+  const seenAuxiliary = new Set<string>()
+
+  for (const row of rows) {
+    const name = canonicalizeResourceName(row.name)
+    if (!AUXILIARY_RESOURCE_NAMES.has(name)) {
+      if (name !== row.name.trim()) {
+        changed = true
+        result.push({ ...row, name })
+      } else {
+        result.push(row)
+      }
+      continue
+    }
+
+    if (seenAuxiliary.has(name)) {
+      changed = true
+      continue
+    }
+    seenAuxiliary.add(name)
+    if (row.type !== 'auxiliary' || name !== row.name.trim()) {
+      changed = true
+      result.push({ ...row, name, type: 'auxiliary' })
+    } else {
+      result.push(row)
+    }
+  }
+
+  if (!changed) return { rows: [...rows], changed: false }
+  return { rows: result, changed: true }
+}
+
+/**
+ * Promote legacy funds rows (投资估算等) into dedicated budget resource types.
+ */
+export function applyBudgetTypeMigration(
+  rows: readonly PmResourceRow[],
+): { rows: PmResourceRow[]; changed: boolean } {
+  let changed = false
+  const result: PmResourceRow[] = []
+  const seenBudget = new Set<string>()
+
+  for (const row of rows) {
+    const name = canonicalizeResourceName(row.name)
+    const budgetType = BUDGET_TYPE_BY_NAME[name]
+    if (!budgetType) {
+      if (name !== row.name.trim()) {
+        changed = true
+        result.push({ ...row, name })
+      } else {
+        result.push(row)
+      }
+      continue
+    }
+
+    if (seenBudget.has(budgetType)) {
+      changed = true
+      continue
+    }
+    seenBudget.add(budgetType)
+    if (row.type !== budgetType || name !== row.name.trim()) {
+      changed = true
+      result.push({ ...row, name, type: budgetType })
+    } else {
+      result.push(row)
+    }
+  }
+
+  if (!changed) return { rows: [...rows], changed: false }
+  return { rows: result, changed: true }
 }
 
 /** Canonicalize a resource name (e.g. 普通工人 → 普通工). */
@@ -168,12 +274,27 @@ function rawCatalogMissingPricingUnit(raw: unknown): boolean {
   })
 }
 
+function rawCatalogNeedsTypeMigration(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false
+  return raw.some((entry) => {
+    if (entry == null || typeof entry !== 'object') return false
+    const row = entry as { name?: unknown; type?: unknown }
+    const name = canonicalizeResourceName(typeof row.name === 'string' ? row.name : '')
+    if (!name) return false
+    if (AUXILIARY_RESOURCE_NAMES.has(name) && row.type !== 'auxiliary') return true
+    const budgetType = BUDGET_TYPE_BY_NAME[name]
+    if (budgetType && row.type !== budgetType) return true
+    return false
+  })
+}
+
 function rawCatalogNeedsLegacyRewrite(raw: unknown): boolean {
   return (
     rawCatalogHasLegacyResourceNames(raw) ||
     rawCatalogHasLegacyLaborUnits(raw) ||
     rawCatalogHasLegacyMachineMeasureUnits(raw) ||
-    rawCatalogMissingPricingUnit(raw)
+    rawCatalogMissingPricingUnit(raw) ||
+    rawCatalogNeedsTypeMigration(raw)
   )
 }
 
@@ -286,7 +407,9 @@ export function normalizeResourceCatalogRows(
   rows: readonly PmResourceRow[],
 ): { rows: PmResourceRow[]; changed: boolean } {
   const aliased = applyResourceNameAliases(rows)
-  const measured = applyLaborUnitAliases(aliased.rows)
+  const auxiliary = applyAuxiliaryResourceMigration(aliased.rows)
+  const budget = applyBudgetTypeMigration(auxiliary.rows)
+  const measured = applyLaborUnitAliases(budget.rows)
   const conventioned = applyResourceUnitConventions(measured.rows)
   const pricedUnits = applyDefaultPricingUnits(conventioned.rows)
   const priced = applyDefaultUnitPrices(pricedUnits.rows)
@@ -294,6 +417,8 @@ export function normalizeResourceCatalogRows(
     rows: priced.rows,
     changed:
       aliased.changed ||
+      auxiliary.changed ||
+      budget.changed ||
       measured.changed ||
       conventioned.changed ||
       pricedUnits.changed ||
@@ -403,7 +528,15 @@ export function createDefaultResourceCatalog(
  * Types whose built-in defaults should be rolled into already-saved catalogs
  * when the type is completely absent (e.g. newly added「设备」「资金」「仪器」).
  */
-const ENSURE_DEFAULT_TYPES: readonly PmResourceType[] = ['device', 'funds', 'instrument']
+const ENSURE_DEFAULT_TYPES: readonly PmResourceType[] = [
+  'auxiliary',
+  'device',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
+  'instrument',
+]
 
 /**
  * Named defaults to roll into existing catalogs even when the type already exists
@@ -413,6 +546,13 @@ const ENSURE_NAMED_DEFAULTS: ReadonlyArray<{ type: PmResourceType; name: string 
   { type: 'instrument', name: '全站仪' },
   { type: 'instrument', name: '水准仪' },
   { type: 'instrument', name: '塔尺' },
+  { type: 'auxiliary', name: '模板' },
+  { type: 'auxiliary', name: '方木' },
+  { type: 'auxiliary', name: '脚手架' },
+  { type: 'investment', name: '投资估算' },
+  { type: 'designEstimate', name: '设计概算' },
+  { type: 'constructionBudget', name: '施工预算' },
+  { type: 'costBudget', name: '成本预算' },
   { type: 'material', name: '砌块/砖' },
   { type: 'material', name: '防水卷材' },
   { type: 'material', name: '预拌砂浆' },
@@ -682,14 +822,14 @@ export function readSharedResourceCatalog(workspaceId: string): {
 export function writeSharedResourceCatalog(
   workspaceId: string,
   rows: PmResourceRow[],
-): void {
+): Promise<void> {
   const normalized = rows.map((row) => ({
     ...row,
     applicable: PM_RESOURCE_APPLICABLE_ALL,
   }))
   localStorage.setItem(sharedCatalogStorageKey(workspaceId), JSON.stringify(normalized))
   // Best-effort durable mirror for agent hints / main-process apply.
-  void import('../../pm-api')
+  return import('../../pm-api')
     .then(({ pmApi }) =>
       pmApi.setSharedResourceCatalog(
         workspaceId,
@@ -708,6 +848,7 @@ export function writeSharedResourceCatalog(
         })),
       ),
     )
+    .then(() => undefined)
     .catch(() => {
       // ignore offline / IPC failures; localStorage remains source for UI
     })
@@ -752,7 +893,15 @@ export async function hydrateSharedResourceCatalogFromMain(
           parentId: row.parentId ?? null,
         }
       })
-      const normalized = normalizeResourceCatalogRows(mapped)
+      const local = readSharedResourceCatalog(workspaceId)
+      const remoteIds = new Set(mapped.map((row) => row.id))
+      // Keep local-only rows (e.g. types main dropped while sync lagged / schema lagged).
+      const localExtras =
+        !local.isDefault
+          ? local.rows.filter((row) => !remoteIds.has(row.id))
+          : []
+      const merged = localExtras.length > 0 ? [...mapped, ...localExtras] : mapped
+      const normalized = normalizeResourceCatalogRows(merged)
       // Always write normalized rows so unit conventions sync to localStorage + main.
       writeSharedResourceCatalog(workspaceId, normalized.rows)
       return normalized.rows

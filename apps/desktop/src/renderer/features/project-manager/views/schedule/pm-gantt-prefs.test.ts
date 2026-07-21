@@ -15,6 +15,11 @@ describe('pm-gantt-prefs', () => {
     expect(prefs.columnOrder).toContain('name')
   })
 
+  it('keeps progressCheck schedule view', () => {
+    const prefs = normalizeGanttUiPrefs({ scheduleView: 'progressCheck' })
+    expect(prefs.scheduleView).toBe('progressCheck')
+  })
+
   it('restores hidden columns at fixed canonical positions', () => {
     expect(insertColumnInCanonicalOrder(['name', 'duration', 'finish'], 'index')).toEqual([
       'index',
@@ -101,7 +106,7 @@ describe('pm-gantt-prefs', () => {
     expect(normalizeGanttUiPrefs({ barStyle: 'hatch' }).barStyle).toBe('hatch')
   })
 
-  it('migrates resource view to three type columns with header bindings', () => {
+  it('migrates resource view to four type columns including 辅材', () => {
     const prefs = normalizeGanttUiPrefs({
       resourceView: {
         slotCount: 1,
@@ -112,11 +117,36 @@ describe('pm-gantt-prefs', () => {
         columnLayoutVersion: 2,
       },
     })
-    expect(prefs.resourceView.slotCount).toBe(3)
+    expect(prefs.resourceView.slotCount).toBe(4)
     expect(prefs.resourceView.inputMode).toBe(false)
-    expect(prefs.resourceView.columnLayoutVersion).toBe(3)
+    expect(prefs.resourceView.columnLayoutVersion).toBe(4)
     expect(prefs.resourceView.columnBindings?.map((binding) => binding.type)).toEqual([
       'labor',
+      'auxiliary',
+      'material',
+      'equipment',
+    ])
+  })
+
+  it('upgrades legacy default labor/material/equipment columns to include 辅材', () => {
+    const prefs = normalizeGanttUiPrefs({
+      resourceView: {
+        slotCount: 3,
+        showDuration: true,
+        showStart: true,
+        showFinish: true,
+        inputMode: false,
+        columnLayoutVersion: 3,
+        columnBindings: [
+          { type: 'labor', resourceId: null },
+          { type: 'material', resourceId: null },
+          { type: 'equipment', resourceId: null },
+        ],
+      },
+    })
+    expect(prefs.resourceView.columnBindings?.map((binding) => binding.type)).toEqual([
+      'labor',
+      'auxiliary',
       'material',
       'equipment',
     ])
@@ -178,6 +208,7 @@ describe('pm-gantt-prefs', () => {
         actualFinish: 'Actual Finish Date',
         shouldPercentComplete: 'Planned\nComplete',
         percentComplete: 'Actual\nComplete',
+        variance: 'Variance',
       },
     )
     expect(label).toBe('Start Date')

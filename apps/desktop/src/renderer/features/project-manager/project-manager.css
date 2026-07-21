@@ -906,10 +906,29 @@
 .tm-pm-features-table-col-resource {
   width: 88px;
   min-width: 88px;
+  max-width: 88px;
 }
 
 .tm-pm-features-table-page th.tm-pm-features-table-col-resource {
-  max-width: 120px;
+  max-width: 88px;
+  overflow: hidden;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.tm-pm-features-table-resource-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-col-name {
+  overflow: hidden;
+}
+
+.tm-pm-features-table-page .tm-pm-features-table-name-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1096,6 +1115,8 @@
   background: var(--tm-bg);
   flex-shrink: 0;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html.theme-dark .tm-pm-gantt-menubar {
@@ -1210,22 +1231,14 @@ html.theme-dark .tm-pm-gantt-menubar {
 }
 
 .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active {
-  background: color-mix(in srgb, var(--tm-accent) 28%, #fff);
-  color: var(--tm-pm-gantt-menubar-fg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-accent) 55%, transparent);
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
+  box-shadow: none;
 }
 
 .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tm-accent) 36%, #fff);
-  color: var(--tm-pm-gantt-menubar-fg);
-}
-
-html.theme-dark .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active {
-  background: color-mix(in srgb, var(--tm-accent) 34%, var(--tm-bg));
-}
-
-html.theme-dark .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tm-accent) 42%, var(--tm-bg));
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
 }
 
 .tm-pm-gantt-menubar-btn:disabled,
@@ -1279,6 +1292,8 @@ html.theme-dark .tm-pm-gantt-menubar-btn.tm-pm-gantt-menubar-btn--active:hover:n
   background: var(--tm-bg);
   flex-shrink: 0;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html.theme-dark .tm-pm-features-menubar {
@@ -1393,22 +1408,14 @@ html.theme-dark .tm-pm-features-menubar {
 }
 
 .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active {
-  background: color-mix(in srgb, var(--tm-accent) 28%, #fff);
-  color: var(--tm-pm-features-menubar-fg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-accent) 55%, transparent);
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
+  box-shadow: none;
 }
 
 .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tm-accent) 36%, #fff);
-  color: var(--tm-pm-features-menubar-fg);
-}
-
-html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active {
-  background: color-mix(in srgb, var(--tm-accent) 34%, var(--tm-bg));
-}
-
-html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tm-accent) 42%, var(--tm-bg));
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
 }
 
 .tm-pm-features-menubar-btn:disabled,
@@ -1462,6 +1469,8 @@ html.theme-dark .tm-pm-features-menubar-btn.tm-pm-features-menubar-btn--active:h
   background: var(--tm-bg);
   flex-shrink: 0;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html.theme-dark .tm-pm-resource-menubar {
@@ -1726,6 +1735,8 @@ html.theme-dark .tm-pm-resource-menubar {
   border-radius: 8px;
   background: var(--tm-bg);
   box-shadow: 0 8px 24px color-mix(in srgb, #000 16%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tm-pm-gantt-view-option {
@@ -2604,6 +2615,12 @@ button.tm-pm-gantt-resource-cell-trigger.tm-pm-gantt-cell-select {
   background: color-mix(in srgb, var(--tm-accent, #00a870) 12%, var(--tm-bg, #fff));
 }
 
+.tm-pm-gantt-resource-assign-popup-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .tm-pm-gantt-resource-assign-popup-add {
   display: inline-flex;
   align-items: center;
@@ -2647,13 +2664,23 @@ button.tm-pm-gantt-resource-cell-trigger.tm-pm-gantt-cell-select {
 }
 
 .tm-pm-gantt-col--shouldPercentComplete,
-.tm-pm-gantt-col--percentComplete {
+.tm-pm-gantt-col--percentComplete,
+.tm-pm-gantt-col--variance {
   justify-content: center;
   text-align: center;
 }
 
+.tm-pm-gantt-col--variance-ahead {
+  color: #2e7d32;
+}
+
+.tm-pm-gantt-col--variance-behind {
+  color: #c62828;
+}
+
 .tm-pm-gantt-grid-header .tm-pm-gantt-col--percentComplete,
-.tm-pm-gantt-grid-header .tm-pm-gantt-col--shouldPercentComplete {
+.tm-pm-gantt-grid-header .tm-pm-gantt-col--shouldPercentComplete,
+.tm-pm-gantt-grid-header .tm-pm-gantt-col--variance {
   white-space: normal;
   line-height: 1.15;
   padding: 0 4px;
@@ -3114,7 +3141,7 @@ button.tm-pm-gantt-col-menu-action:disabled {
 .tm-pm-gantt-cost-header-group-subs {
   flex: 1 1 0;
   display: grid;
-  grid-template-columns: 160px 96px;
+  grid-template-columns: 128px 128px;
   min-height: 0;
 }
 
@@ -3453,6 +3480,190 @@ button.tm-pm-gantt-col-menu-action:disabled {
   padding: 4px 10px 8px;
   font-size: 12px;
   color: var(--tm-text-tertiary);
+}
+
+.tm-pm-baseline-capture-dialog {
+  min-width: min(360px, calc(100vw - 32px));
+}
+
+.tm-pm-baseline-capture-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--tm-text);
+}
+
+.tm-pm-baseline-capture-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tm-pm-baseline-capture-text,
+.tm-pm-baseline-capture-picker {
+  height: 32px;
+  border: 1px solid var(--tm-border);
+  border-radius: 6px;
+  background: var(--tm-bg);
+  color: var(--tm-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  box-sizing: border-box;
+  outline: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.tm-pm-baseline-capture-text:hover,
+.tm-pm-baseline-capture-picker:hover {
+  border-color: color-mix(in srgb, var(--tm-border) 70%, var(--tm-text-muted, #9ca3af));
+}
+
+.tm-pm-baseline-capture-text:focus,
+.tm-pm-baseline-capture-text:focus-visible,
+.tm-pm-baseline-capture-picker:focus,
+.tm-pm-baseline-capture-picker:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--tm-border) 55%, var(--tm-text-muted, #9ca3af));
+  box-shadow: none;
+}
+
+.tm-pm-baseline-capture-text {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.tm-pm-baseline-capture-text--full {
+  width: 100%;
+  flex: none;
+}
+
+.tm-pm-baseline-capture-picker {
+  width: 132px;
+  padding: 0 8px;
+  color-scheme: light;
+}
+
+/* Keep native calendar affordance after appearance reset. */
+.tm-pm-baseline-capture-picker::-webkit-calendar-picker-indicator {
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.tm-pm-gantt-view-option--baseline {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.tm-pm-gantt-baseline-option-name {
+  font-size: 12px;
+  color: inherit;
+}
+
+.tm-pm-gantt-baseline-option-time {
+  font-size: 11px;
+  color: var(--tm-text-muted);
+}
+
+.tm-pm-gantt-bar-actual {
+  position: absolute;
+  inset: 0 auto 0 0;
+  /* Soft darken of the bar fill — avoid currentColor (inherits near-black text). */
+  background: color-mix(in srgb, #ffffff 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #000000 8%, transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tm-pm-gantt-bar-should {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 0;
+  border-left: 2px solid #ff9800;
+  transform: translateX(-1px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tm-pm-gantt-bar--behind {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #c62828 55%, transparent);
+}
+
+.tm-pm-gantt-bar--ahead {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2e7d32 55%, transparent);
+}
+
+.tm-pm-baseline-capture-error {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: var(--tm-danger, #c62828);
+}
+
+.tm-pm-gantt-progress-line-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.tm-pm-gantt-progress-line-status {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1.5px dashed #e65100;
+  transform: translateX(-0.75px);
+  z-index: 1;
+}
+
+.tm-pm-gantt-progress-line-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  z-index: 2;
+}
+
+.tm-pm-gantt-progress-line-stub {
+  stroke: #e65100;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.tm-pm-gantt-progress-line-stub--behind {
+  stroke: #c62828;
+}
+
+.tm-pm-gantt-progress-line-stub--ahead {
+  stroke: #2e7d32;
+}
+
+.tm-pm-gantt-progress-line-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #e65100;
+  border: 1.5px solid #fff;
+  box-sizing: border-box;
+}
+
+.tm-pm-gantt-progress-line-dot--behind {
+  background: #c62828;
+}
+
+.tm-pm-gantt-progress-line-dot--ahead {
+  background: #2e7d32;
 }
 
 .tm-pm-gantt-color-grid {
@@ -4292,8 +4503,8 @@ button.tm-pm-gantt-col-menu-action:disabled {
 
 /* Forces overflow when the pane is narrower than the column set. */
 .tm-pm-resource-table-scroll-inner {
-  min-width: 820px;
-  width: max(100%, 820px);
+  min-width: 900px;
+  width: max(100%, 900px);
   box-sizing: border-box;
 }
 
@@ -4402,11 +4613,13 @@ button.tm-pm-gantt-col-menu-action:disabled {
 }
 
 .tm-pm-resource-table-col-type {
-  width: 96px;
+  width: 112px;
+  min-width: 112px;
 }
 
 .tm-pm-resource-table-col-name {
-  width: 160px;
+  width: 180px;
+  min-width: 180px;
 }
 
 .tm-pm-resource-table-col-spec {
@@ -4482,10 +4695,14 @@ button.tm-pm-gantt-col-menu-action:disabled {
   width: 180px;
 }
 
-/* Trailing blank area: horizontal rules continue to the panel edge. */
-.tm-pm-resource-table-col-spacer {
+/* Trailing blank area: data columns | vertical rule | margin to panel edge (same as 实务). */
+.tm-pm-resource-table-page .tm-pm-resource-table-col-spacer,
+.tm-pm-resource-table-page th.tm-pm-resource-table-col-spacer,
+.tm-pm-resource-table-page td.tm-pm-resource-table-col-spacer {
   width: auto;
+  min-width: 16px;
   padding: 0;
+  border-left: 0.5px solid var(--tm-border);
   border-right: none;
 }
 

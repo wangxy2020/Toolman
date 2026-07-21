@@ -71,12 +71,13 @@ function makeFeature(
 describe('pm-feature-gantt-rollup', () => {
   it('maps feature types to resource types', () => {
     expect(featureTypeToResourceType('labor')).toBe('labor')
+    expect(featureTypeToResourceType('auxiliary')).toBe('auxiliary')
     expect(featureTypeToResourceType('material')).toBe('material')
     expect(featureTypeToResourceType('machinery')).toBe('equipment')
     expect(featureTypeToResourceType('procurement')).toBeNull()
   })
 
-  it('sums quantities and derives start/finish by type+name', () => {
+  it('peaks labor and sums material; derives start/finish by type+name', () => {
     const features = [
       makeFeature('f1', 'labor', '普通工'),
       makeFeature('f2', 'machinery', '挖掘机'),
@@ -152,7 +153,7 @@ describe('pm-feature-gantt-rollup', () => {
     ])
   })
 
-  it('uses peak concurrent headcount for labor (not sum, not people×days)', () => {
+  it('uses peak concurrent quantity for labor / auxiliary / machinery (not sum)', () => {
     const features = [makeFeature('f1', 'labor', '普通工')]
     // Sequential: 10 then 20 in the same month → peak 20, not 30.
     const itemsSequential = [
@@ -206,18 +207,66 @@ describe('pm-feature-gantt-rollup', () => {
     ).get('f1')!
     expect(longTask.monthly[formatMonthKey(2026, 7)]).toBe(10)
     expect(longTask.quantity).toBe(10)
+
+    // Auxiliary and machinery also use peak, not cumulative sum.
+    const auxFeatures = [makeFeature('a1', 'auxiliary', '模板')]
+    const auxSequential = computeFeatureGanttRollups(
+      [
+        makeItem(
+          't1',
+          new Date(2026, 7, 1).getTime(),
+          new Date(2026, 7, 10).getTime(),
+          [{ type: 'auxiliary', name: '模板', quantity: 100 }],
+        ),
+        makeItem(
+          't2',
+          new Date(2026, 7, 11).getTime(),
+          new Date(2026, 7, 20).getTime(),
+          [{ type: 'auxiliary', name: '模板', quantity: 200 }],
+        ),
+      ],
+      auxFeatures,
+    ).get('a1')!
+    expect(auxSequential.quantity).toBe(200)
+
+    const machFeatures = [makeFeature('m1', 'machinery', '挖掘机')]
+    const machSequential = computeFeatureGanttRollups(
+      [
+        makeItem(
+          't1',
+          new Date(2026, 7, 1).getTime(),
+          new Date(2026, 7, 10).getTime(),
+          [{ type: 'equipment', name: '挖掘机', quantity: 2 }],
+        ),
+        makeItem(
+          't2',
+          new Date(2026, 7, 11).getTime(),
+          new Date(2026, 7, 20).getTime(),
+          [{ type: 'equipment', name: '挖掘机', quantity: 3 }],
+        ),
+      ],
+      machFeatures,
+    ).get('m1')!
+    expect(machSequential.quantity).toBe(3)
   })
 
-  it('keeps day-weighted month allocation for non-labor resources', () => {
+  it('keeps day-weighted month allocation for material (cumulative)', () => {
     const features = [makeFeature('f1', 'material', '钢筋')]
     const start = new Date(2026, 0, 31).getTime()
     const end = new Date(2026, 1, 1).getTime()
     const items = [
       makeItem('t1', start, end, [{ type: 'material', name: '钢筋', quantity: 10 }]),
+      makeItem(
+        't2',
+        new Date(2026, 7, 1).getTime(),
+        new Date(2026, 7, 10).getTime(),
+        [{ type: 'material', name: '钢筋', quantity: 5 }],
+      ),
     ]
-    const monthly = computeFeatureGanttRollups(items, features).get('f1')!.monthly
-    expect(monthly[formatMonthKey(2026, 0)]).toBeCloseTo(5)
-    expect(monthly[formatMonthKey(2026, 1)]).toBeCloseTo(5)
+    const rollup = computeFeatureGanttRollups(items, features).get('f1')!
+    expect(rollup.monthly[formatMonthKey(2026, 0)]).toBeCloseTo(5)
+    expect(rollup.monthly[formatMonthKey(2026, 1)]).toBeCloseTo(5)
+    expect(rollup.quantity).toBe(15)
   })
 
   it('groups consecutive month keys by year for colspan headers', () => {

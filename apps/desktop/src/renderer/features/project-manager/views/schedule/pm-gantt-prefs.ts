@@ -11,6 +11,7 @@ export const GANTT_BUILTIN_COLUMNS = [
   'actualFinish',
   'shouldPercentComplete',
   'percentComplete',
+  'variance',
 ] as const
 
 export type GanttBuiltinColumn = (typeof GANTT_BUILTIN_COLUMNS)[number]
@@ -67,6 +68,7 @@ export const GANTT_COLUMN_WIDTHS: Record<string, string> = {
   actualFinish: '100px',
   shouldPercentComplete: '72px',
   percentComplete: '72px',
+  variance: '72px',
   /** Resource-assignment view: named columns (header select; cell = name select + qty). */
   resourceType: '88px',
   resourceName: '140px',
@@ -76,9 +78,9 @@ export const GANTT_COLUMN_WIDTHS: Record<string, string> = {
   'resource:0:type': '88px',
   'resource:0:name': '140px',
   'resource:0:qty': '120px',
-  /** Cost-allocation view columns. */
-  costName: '160px',
-  costAmount: '96px',
+  /** Cost-allocation view columns (name / amount equal width). */
+  costName: '128px',
+  costAmount: '128px',
   costInput: '320px',
 }
 
@@ -105,16 +107,36 @@ export const GANTT_COST_VIEW_MAX_SLOTS = 6
 
 export const GANTT_CUSTOM_COLUMN_WIDTH = '100px'
 
-export type GanttScheduleView = 'list' | 'gantt' | 'resource' | 'cost'
+export type GanttScheduleView = 'list' | 'gantt' | 'progressCheck' | 'resource' | 'cost'
+
+/** Columns shown in 进度检查 view (list + Gantt). */
+export const PROGRESS_CHECK_COLUMN_ORDER: readonly GanttBuiltinColumn[] = [
+  'index',
+  'name',
+  'duration',
+  'start',
+  'finish',
+  'shouldPercentComplete',
+  'percentComplete',
+  'variance',
+] as const
 
 export type GanttResourceColumnType =
   | 'labor'
+  | 'auxiliary'
   | 'material'
   | 'equipment'
   | 'device'
   | 'instrument'
   | 'management'
   | 'fees'
+  | 'comprehensive'
+  | 'measures'
+  | 'tax'
+  | 'investment'
+  | 'designEstimate'
+  | 'constructionBudget'
+  | 'costBudget'
   | 'funds'
   | 'other'
 
@@ -125,9 +147,10 @@ export type GanttResourceColumnBinding = {
   resourceId: string | null
 }
 
-/** Default: one column per primary type — 人力 / 材料 / 机械. */
+/** Default: one column per primary type — 人力 / 辅材 / 材料 / 机械. */
 export const DEFAULT_RESOURCE_COLUMN_TYPES: readonly GanttResourceColumnType[] = [
   'labor',
+  'auxiliary',
   'material',
   'equipment',
 ] as const
@@ -135,12 +158,20 @@ export const DEFAULT_RESOURCE_COLUMN_TYPES: readonly GanttResourceColumnType[] =
 /** Types the resource-allocation header can switch among (all resource list types). */
 export const SWITCHABLE_RESOURCE_COLUMN_TYPES: readonly GanttResourceColumnType[] = [
   'labor',
+  'auxiliary',
   'material',
   'equipment',
   'device',
   'instrument',
   'management',
   'fees',
+  'comprehensive',
+  'measures',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
   'funds',
   'other',
 ] as const
@@ -158,12 +189,20 @@ export function buildDefaultResourceColumnBindings(
 function isGanttResourceColumnType(value: unknown): value is GanttResourceColumnType {
   return (
     value === 'labor' ||
+    value === 'auxiliary' ||
     value === 'material' ||
     value === 'equipment' ||
     value === 'device' ||
     value === 'instrument' ||
     value === 'management' ||
     value === 'fees' ||
+    value === 'comprehensive' ||
+    value === 'measures' ||
+    value === 'tax' ||
+    value === 'investment' ||
+    value === 'designEstimate' ||
+    value === 'constructionBudget' ||
+    value === 'costBudget' ||
     value === 'funds' ||
     value === 'other'
   )
@@ -209,6 +248,7 @@ export type GanttResourceViewPrefs = {
   /**
    * Bumped when column model changes.
    * v3 = one column per type with header resource-name dropdown.
+   * v4 = defaults include 辅材 between 人力 and 材料.
    */
   columnLayoutVersion?: number
   /** Per-column type + selected resource (header dropdown). */
@@ -216,13 +256,13 @@ export type GanttResourceViewPrefs = {
 }
 
 export const DEFAULT_GANTT_RESOURCE_VIEW_PREFS: GanttResourceViewPrefs = {
-  slotCount: 3,
+  slotCount: DEFAULT_RESOURCE_COLUMN_TYPES.length,
   showDuration: true,
   showStart: true,
   showFinish: true,
   inputMode: false,
-  columnLayoutVersion: 3,
-  columnBindings: buildDefaultResourceColumnBindings(3),
+  columnLayoutVersion: 4,
+  columnBindings: buildDefaultResourceColumnBindings(),
 }
 
 export type GanttCostViewPrefs = {
@@ -377,8 +417,8 @@ const STOCK_BUILTIN_LABELS: Record<GanttBuiltinColumn, readonly string[]> = {
   index: ['序号', '#', 'No.', 'ID'],
   name: ['任务名称', 'Task Name'],
   duration: ['工期', 'Duration'],
-  start: ['开始日期', 'Start', 'Start Date'],
-  finish: ['完成日期', 'Finish', 'Finish Date'],
+  start: ['计划开始日期', '开始日期', 'Planned Start', 'Start', 'Start Date'],
+  finish: ['计划完成日期', '完成日期', 'Planned Finish', 'Finish', 'Finish Date'],
   predecessors: ['前置任务', 'Predecessors'],
   actualStart: ['实际开始日期', 'Actual Start', 'Actual Start Date'],
   actualFinish: ['实际完成日期', 'Actual Finish', 'Actual Finish Date'],
@@ -403,6 +443,7 @@ const STOCK_BUILTIN_LABELS: Record<GanttBuiltinColumn, readonly string[]> = {
     '% Complete',
     'Percent Complete',
   ],
+  variance: ['偏差', '偏差天数', 'Variance', 'Variance Days', 'Finish Variance'],
 }
 
 function normalizeLabelKey(label: string): string {
@@ -478,15 +519,38 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
       ? Math.floor(layoutVersionRaw)
       : 0
   // v3: one column per type (人力/材料/机械) with header resource-name dropdown.
+  // v4: insert 辅材 into the default type columns.
   if (columnLayoutVersion < 3) {
     slotCount = DEFAULT_GANTT_RESOURCE_VIEW_PREFS.slotCount
     resourceInputMode = false
   }
 
-  const columnBindings = normalizeResourceColumnBindings(
+  let columnBindings = normalizeResourceColumnBindings(
     resourceViewPartial?.columnBindings,
     slotCount,
   )
+
+  if (columnLayoutVersion < 4) {
+    const types = columnBindings.map((binding) => binding.type)
+    const isLegacyDefaultTriplet =
+      types.length === 3 &&
+      types[0] === 'labor' &&
+      types[1] === 'material' &&
+      types[2] === 'equipment'
+    if (columnLayoutVersion < 3 || isLegacyDefaultTriplet) {
+      slotCount = DEFAULT_GANTT_RESOURCE_VIEW_PREFS.slotCount
+      columnBindings = buildDefaultResourceColumnBindings(slotCount)
+    } else if (!types.includes('auxiliary')) {
+      const laborIndex = types.indexOf('labor')
+      const insertAt = laborIndex >= 0 ? laborIndex + 1 : 0
+      columnBindings = [
+        ...columnBindings.slice(0, insertAt),
+        { type: 'auxiliary', resourceId: null },
+        ...columnBindings.slice(insertAt),
+      ]
+      slotCount = columnBindings.length
+    }
+  }
 
   const costViewPartial =
     partial?.costView && typeof partial.costView === 'object' ? partial.costView : null
@@ -520,7 +584,9 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
           ? 'resource'
           : partial?.scheduleView === 'cost'
             ? 'cost'
-            : 'gantt',
+            : partial?.scheduleView === 'progressCheck'
+              ? 'progressCheck'
+              : 'gantt',
     calendarWeekStartsOn: partial?.calendarWeekStartsOn === 0 ? 0 : 1,
     columnOrder,
     columnLabels,
@@ -531,7 +597,7 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
       showStart: resourceViewPartial?.showStart !== false,
       showFinish: resourceViewPartial?.showFinish !== false,
       inputMode: resourceInputMode,
-      columnLayoutVersion: 3,
+      columnLayoutVersion: 4,
       columnBindings,
     },
     costView: {

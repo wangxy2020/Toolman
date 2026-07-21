@@ -39,6 +39,7 @@ export type FeaturesMenuAction =
   | 'moveUp'
   | 'moveDown'
   | 'labor'
+  | 'auxiliary'
   | 'material'
   | 'machinery'
   | 'procurement'
@@ -46,7 +47,7 @@ export type FeaturesMenuAction =
   | 'node'
   | 'funds'
 
-export type FeaturesScheduleView = 'list' | 'gantt' | 'resource' | 'cost'
+export type FeaturesScheduleView = 'list' | 'gantt' | 'progressCheck' | 'resource' | 'cost'
 
 type MenuItem = {
   key: FeaturesMenuAction
@@ -60,6 +61,7 @@ type MenuItem = {
 
 export type FeaturesRowType =
   | 'labor'
+  | 'auxiliary'
   | 'material'
   | 'machinery'
   | 'procurement'
@@ -180,6 +182,7 @@ export function ProjectFeaturesMenuBar({
   const viewLabelByMode: Record<FeaturesScheduleView, string> = {
     list: t('projectManagerPage.schedule.views.list'),
     gantt: t('projectManagerPage.schedule.views.gantt'),
+    progressCheck: t('projectManagerPage.schedule.views.progressCheck'),
     resource: t('projectManagerPage.schedule.views.resource'),
     cost: t('projectManagerPage.schedule.views.cost'),
   }
@@ -279,6 +282,12 @@ export function ProjectFeaturesMenuBar({
       active: selectedType === 'labor',
     },
     {
+      key: 'auxiliary',
+      title: t('projectManagerPage.files.menu.auxiliary'),
+      label: t('projectManagerPage.files.menu.auxiliary'),
+      active: selectedType === 'auxiliary',
+    },
+    {
       key: 'material',
       title: t('projectManagerPage.files.menu.material'),
       label: t('projectManagerPage.files.menu.material'),
@@ -289,6 +298,7 @@ export function ProjectFeaturesMenuBar({
       title: t('projectManagerPage.files.menu.machinery'),
       label: t('projectManagerPage.files.menu.machinery'),
       active: selectedType === 'machinery',
+      dividerAfter: true,
     },
     {
       key: 'procurement',
@@ -441,7 +451,7 @@ export function ProjectFeaturesMenuBar({
                       role="menu"
                       style={{ top: viewPos.top, left: viewPos.left }}
                     >
-                      {(['list', 'gantt', 'resource', 'cost'] as const).map((view) => (
+                      {(['list', 'gantt', 'progressCheck', 'resource', 'cost'] as const).map((view) => (
                         <button
                           key={view}
                           type="button"

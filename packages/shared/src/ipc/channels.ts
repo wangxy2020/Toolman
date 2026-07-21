@@ -405,6 +405,7 @@ export enum IpcChannel {
   Pm_BaselineList = 'pm:baseline:list',
   Pm_BaselineCreate = 'pm:baseline:create',
   Pm_BaselineGet = 'pm:baseline:get',
+  Pm_BaselineUpdate = 'pm:baseline:update',
   Pm_BaselineDelete = 'pm:baseline:delete',
   Pm_BaselineRestore = 'pm:baseline:restore',
   Pm_TimeEntryList = 'pm:time-entry:list',

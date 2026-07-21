@@ -3,6 +3,8 @@ import type { FC } from 'react'
 import type { PmWorkItem, PmWorkItemRelation } from '@toolman/shared'
 
 import { useI18n } from '../../../../i18n/useI18n'
+import type { PmResourceRow, PmResourceType } from '../resource/pm-resource-catalog'
+import { isPmResourceType } from '../resource/pm-resource-catalog'
 import type { GanttTreeRow } from './pm-gantt-tree'
 import { resolveGanttTaskKind } from './pm-gantt-tree'
 import {
@@ -16,8 +18,14 @@ import {
   type GanttUiPrefs,
 } from './pm-gantt-prefs'
 import {
+  readTaskResourceAssignments,
+  resolveAssignmentAgainstCatalog,
+} from './pm-gantt-resource-assignment'
+import {
   barPercentsInRange,
   buildScheduleTimeline,
+  computeScheduleVarianceDays,
+  formatScheduleVarianceDays,
   formatWorkItemDate,
   GANTT_ROW_HEIGHT,
   isGanttProjectRootId,
@@ -43,6 +51,7 @@ type Props = {
   showWeekRow: boolean
   showDayRow: boolean
   headerHeight: number
+  resourceCatalog?: readonly PmResourceRow[]
 }
 
 function cellValue(
@@ -51,25 +60,32 @@ function cellValue(
   relations: PmWorkItemRelation[],
   indexById: Map<string, number>,
   dayUnit: string,
+  resourceCatalog: readonly PmResourceRow[],
+  typeLabel: (type: PmResourceType) => string,
 ): string {
   if (field === 'spacer') return ''
   const resourceMatch = /^resource:(\d+):(type|name|qty)$/.exec(field)
   if (resourceMatch) {
     const slot = Number(resourceMatch[1])
     const kind = resourceMatch[2]
-    const list = item.metadata?.resourceAssignments
-    const legacy = item.metadata?.resourceAssignment
-    const raw = Array.isArray(list)
-      ? list[slot]
-      : slot === 0
-        ? legacy
-        : null
-    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return ''
-    const row = raw as Record<string, unknown>
-    if (kind === 'type') return typeof row.type === 'string' ? row.type : ''
-    if (kind === 'name') return typeof row.name === 'string' ? row.name : ''
-    return typeof row.quantity === 'number' && Number.isFinite(row.quantity)
-      ? String(row.quantity)
+    const assignment = resolveAssignmentAgainstCatalog(
+      readTaskResourceAssignments(item.metadata)[slot] ?? {
+        resourceId: null,
+        type: null,
+        name: '',
+        quantity: null,
+        note: '',
+      },
+      resourceCatalog,
+    )
+    if (kind === 'type') {
+      return assignment.type && isPmResourceType(assignment.type)
+        ? typeLabel(assignment.type)
+        : ''
+    }
+    if (kind === 'name') return assignment.name
+    return assignment.quantity != null && Number.isFinite(assignment.quantity)
+      ? String(assignment.quantity)
       : ''
   }
   if (isGanttCustomColumnId(field) || (!isGanttBuiltinColumn(field) && field !== 'index')) {
@@ -101,6 +117,11 @@ function cellValue(
       return `${shouldCompletePercent(item)}%`
     case 'percentComplete':
       return `${item.progressPercent}%`
+    case 'variance': {
+      const result = computeScheduleVarianceDays(item)
+      if (!result) return '—'
+      return formatScheduleVarianceDays(result.days, dayUnit)
+    }
     default:
       return ''
   }
@@ -131,9 +152,12 @@ const ProjectGanttPrintTable: FC<Props> = ({
   showWeekRow,
   showDayRow,
   headerHeight,
+  resourceCatalog = [],
 }) => {
   const { t } = useI18n()
   const dayUnit = t('projectManagerPage.schedule.dayUnit')
+  const typeLabel = (type: PmResourceType) =>
+    t(`projectManagerPage.resourceTable.types.${type}`)
   const columns = prefs.columnOrder.filter((columnId) => columnId !== 'spacer')
 
   return (
@@ -293,7 +317,15 @@ const ProjectGanttPrintTable: FC<Props> = ({
                     className={`tm-pm-gantt-print-td tm-pm-gantt-print-td--${
                       isGanttBuiltinColumn(columnId) ? columnId : 'custom'
                     }`}>
-                    {cellValue(item, columnId, relations, indexById, dayUnit) || '—'}
+                    {cellValue(
+                      item,
+                      columnId,
+                      relations,
+                      indexById,
+                      dayUnit,
+                      resourceCatalog,
+                      typeLabel,
+                    ) || '—'}
                   </td>
                 )
               })}

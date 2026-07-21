@@ -6,6 +6,7 @@ export const PM_FEATURE_CATALOG_KEY = 'featureCatalog'
 
 export const PM_FEATURE_TYPES = [
   'labor',
+  'auxiliary',
   'material',
   'machinery',
   'procurement',
@@ -39,7 +40,7 @@ const DEFAULT_FEATURE_DEFS: ReadonlyArray<{
   quantity: number | null
   remark: string
 }> = [
-  // labor / material / machinery are seeded from Gantt resource assignments — no placeholders.
+  // labor / auxiliary / material / machinery are seeded from Gantt — no placeholders.
   { type: 'procurement', name: '招标采购计划', unit: '包', quantity: null, remark: '' },
   { type: 'metering', name: '工程计量节点', unit: '期', quantity: null, remark: '' },
   { type: 'node', name: '关键里程碑节点', unit: '个', quantity: null, remark: '' },
@@ -55,6 +56,7 @@ const LEGACY_SCHEDULE_FEATURE_PLACEHOLDERS: ReadonlySet<string> = new Set([
 
 const SCHEDULE_FEATURE_TYPES: ReadonlySet<PmFeatureType> = new Set([
   'labor',
+  'auxiliary',
   'material',
   'machinery',
 ])
@@ -141,7 +143,7 @@ function featureMatchKey(type: PmFeatureType, name: string): string {
   return `${type}::${name.trim()}`
 }
 
-/** Drop legacy labor/material/machinery placeholders from stored catalogs. */
+/** Drop legacy labor/auxiliary/material/machinery placeholders from stored catalogs. */
 export function pruneLegacyScheduleFeaturePlaceholders(
   rows: readonly PmFeatureRow[],
 ): { rows: PmFeatureRow[]; changed: boolean } {
@@ -155,7 +157,7 @@ export function pruneLegacyScheduleFeaturePlaceholders(
 }
 
 /**
- * Remove labor/material/machinery rows from persisted catalogs.
+ * Remove labor/auxiliary/material/machinery rows from persisted catalogs.
  * Those types are live-derived from Gantt assignments and must not linger in storage.
  */
 export function stripScheduleFeatureRows(

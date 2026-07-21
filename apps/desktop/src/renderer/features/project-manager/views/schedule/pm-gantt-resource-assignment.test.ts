@@ -4,8 +4,10 @@ import type { PmResourceRow, PmResourceType } from '../resource/pm-resource-cata
 import {
   catalogRowsForType,
   catalogTypesInUse,
+  findAssignmentIndexForResource,
   formatResourceAssignmentInput,
   formatResourceAssignmentsInput,
+  hydrateTaskResourceAssignmentsAgainstCatalog,
   moveTaskResourceAssignment,
   orderAssignmentsByResourceCatalog,
   orderResourcesForGanttColumns,
@@ -125,6 +127,48 @@ describe('pm-gantt-resource-assignment', () => {
     })
   })
 
+  it('matches resource columns and hydrates when stored type lags catalog reclass', () => {
+    const auxCatalog = [
+      catalogRow({
+        id: 'a1',
+        type: 'auxiliary',
+        name: '模板',
+        unit: 'm²',
+        unitPrice: 50,
+      }),
+    ]
+    const stale = [
+      {
+        resourceId: null,
+        type: 'material' as const,
+        name: '模板',
+        quantity: 12,
+        note: '',
+      },
+    ]
+    expect(findAssignmentIndexForResource(stale, auxCatalog[0]!)).toBe(0)
+
+    const hydrated = hydrateTaskResourceAssignmentsAgainstCatalog(stale, auxCatalog)
+    expect(hydrated.changed).toBe(true)
+    expect(hydrated.assignments).toEqual([
+      {
+        resourceId: 'a1',
+        type: 'auxiliary',
+        name: '模板',
+        quantity: 12,
+        note: '',
+      },
+    ])
+
+    // Ghost free-text rows are left alone (not cleared) during hydrate.
+    const ghost = hydrateTaskResourceAssignmentsAgainstCatalog(
+      [{ resourceId: null, type: 'material', name: '自定义材料', quantity: 1, note: '' }],
+      auxCatalog,
+    )
+    expect(ghost.changed).toBe(false)
+    expect(ghost.assignments[0]?.name).toBe('自定义材料')
+  })
+
   it('drops ghost resource names that are not in the assignable catalog', () => {
     const resolved = resolveAssignmentAgainstCatalog(
       { resourceId: 'ghost', type: 'labor', name: '技术工人', quantity: 5, note: '' },
@@ -173,19 +217,27 @@ describe('pm-gantt-resource-assignment', () => {
   })
 
   it('formats and parses input-mode assignment text', () => {
-    const typeLabel = (type: PmResourceType) =>
+    const typeLabel = (type: PmResourceType): string =>
       (
         {
           labor: '人力',
+          auxiliary: '辅材',
           material: '材料',
           equipment: '机械',
           device: '设备',
           instrument: '仪器',
           management: '管理',
           fees: '规费',
+          comprehensive: '综合单价',
+          measures: '措施费',
+          tax: '税金',
+          investment: '投资估算',
+          designEstimate: '设计概算',
+          constructionBudget: '施工预算',
+          costBudget: '成本预算',
           funds: '资金',
           other: '其他',
-        } as const
+        } satisfies Record<PmResourceType, string>
       )[type]
 
     expect(

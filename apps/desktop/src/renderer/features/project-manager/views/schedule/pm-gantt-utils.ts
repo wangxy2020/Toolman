@@ -1,6 +1,6 @@
 import type { PmProject, PmWorkItem } from '@toolman/shared'
 
-import { SHOULD_PERCENT_META_KEY } from './pm-gantt-prefs'
+import { ACTUAL_FINISH_META_KEY, ACTUAL_START_META_KEY, SHOULD_PERCENT_META_KEY } from './pm-gantt-prefs'
 import {
   durationDaysBetween,
   finishFromStartAndDuration,
@@ -623,7 +623,21 @@ export function shouldCompletePercent(
   item: PmWorkItem,
   startMs?: number | null,
   finishMs?: number | null,
+  /** When set (e.g. selected baseline as-of), ignore stored metadata and recompute. */
+  statusDateMs?: number | null,
 ): number {
+  const start = startMs ?? item.startDate
+  const finish = finishMs ?? item.dueDate
+  if (statusDateMs != null && Number.isFinite(statusDateMs)) {
+    if (start == null || finish == null) return 0
+    const status = startOfLocalDay(statusDateMs)
+    const rangeStart = startOfLocalDay(start)
+    const rangeFinish = startOfLocalDay(finish)
+    if (status <= rangeStart) return 0
+    if (status >= rangeFinish) return 100
+    const span = Math.max(rangeFinish - rangeStart, DAY_MS)
+    return Math.min(100, Math.max(0, Math.round(((status - rangeStart) / span) * 100)))
+  }
   const meta = item.metadata?.[SHOULD_PERCENT_META_KEY]
   if (typeof meta === 'number' && Number.isFinite(meta)) {
     return Math.min(100, Math.max(0, Math.round(meta)))
@@ -632,8 +646,6 @@ export function shouldCompletePercent(
     const parsed = Number.parseInt(meta, 10)
     if (Number.isFinite(parsed)) return Math.min(100, Math.max(0, parsed))
   }
-  const start = startMs ?? item.startDate
-  const finish = finishMs ?? item.dueDate
   if (start == null || finish == null) return 0
   const now = startOfLocalDay(Date.now())
   const rangeStart = startOfLocalDay(start)
@@ -642,6 +654,69 @@ export function shouldCompletePercent(
   if (now >= rangeFinish) return 100
   const span = Math.max(rangeFinish - rangeStart, DAY_MS)
   return Math.min(100, Math.max(0, Math.round(((now - rangeStart) / span) * 100)))
+}
+
+function readActualDateMeta(item: PmWorkItem, key: string): number | null {
+  const raw = item.metadata?.[key]
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string' && raw.trim()) {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+export type ScheduleVarianceSource = 'finish' | 'progress'
+
+/**
+ * Schedule variance in days (positive = ahead, negative = behind).
+ * - With actual start + actual finish: planned finish − actual finish.
+ * - Else with baseline 应完成%: (actual% − should%) × planned duration.
+ */
+export function computeScheduleVarianceDays(
+  item: PmWorkItem,
+  options?: {
+    planStartMs?: number | null
+    planFinishMs?: number | null
+    shouldPercentAsOfMs?: number | null
+  },
+): { days: number; source: ScheduleVarianceSource } | null {
+  const planStart = options?.planStartMs ?? item.startDate
+  const planFinish = options?.planFinishMs ?? item.dueDate
+  const actualStart = readActualDateMeta(item, ACTUAL_START_META_KEY)
+  const actualFinish = readActualDateMeta(item, ACTUAL_FINISH_META_KEY)
+
+  if (actualStart != null && actualFinish != null && planFinish != null) {
+    const days = Math.round(
+      (startOfLocalDay(planFinish) - startOfLocalDay(actualFinish)) / DAY_MS,
+    )
+    return { days, source: 'finish' }
+  }
+
+  const hasShouldMeta =
+    item.metadata?.[SHOULD_PERCENT_META_KEY] != null &&
+    item.metadata?.[SHOULD_PERCENT_META_KEY] !== ''
+  const hasShouldContext = options?.shouldPercentAsOfMs != null || hasShouldMeta
+  if (!hasShouldContext || planStart == null || planFinish == null) return null
+
+  const should = shouldCompletePercent(
+    item,
+    planStart,
+    planFinish,
+    options?.shouldPercentAsOfMs,
+  )
+  const actual =
+    typeof item.progressPercent === 'number' && Number.isFinite(item.progressPercent)
+      ? Math.min(100, Math.max(0, item.progressPercent))
+      : 0
+  const duration = durationDaysBetween(planStart, planFinish)
+  const days = Math.round(((actual - should) / 100) * duration)
+  return { days, source: 'progress' }
+}
+
+export function formatScheduleVarianceDays(days: number, dayUnit: string): string {
+  if (days === 0) return `0${dayUnit}`
+  return `${days > 0 ? '+' : ''}${days}${dayUnit}`
 }
 
 export function formatWorkItemDate(ms: number | undefined, empty = '—'): string {

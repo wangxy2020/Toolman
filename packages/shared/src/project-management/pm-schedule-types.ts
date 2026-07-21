@@ -57,6 +57,8 @@ export type PmScheduleBaselineRelation = z.infer<typeof PmScheduleBaselineRelati
 export const PmScheduleBaselineSnapshotSchema = z.object({
   workItems: z.array(PmScheduleBaselineItemSchema),
   capturedAt: z.number().int(),
+  /** As-of / status date chosen when capturing the baseline (start of local day). */
+  asOfDate: z.number().int().optional(),
   /** Present on snapshots created after version restore fix; omitted on legacy baselines. */
   relations: z.array(PmScheduleBaselineRelationSchema).optional(),
 })

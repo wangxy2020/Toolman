@@ -10,6 +10,7 @@ import {
   PmBaselineGetInputSchema,
   PmBaselineListInputSchema,
   PmBaselineRestoreInputSchema,
+  PmBaselineUpdateInputSchema,
   readLastSavedAt,
   readSaveHistory,
   shouldStructurallyRestoreBaseline,
@@ -86,7 +87,36 @@ export function getPmBaseline(input: unknown) {
   return baseline
 }
 
-function captureScheduleSnapshot(workspaceId: string, projectId: string): PmScheduleBaselineSnapshot {
+function startOfLocalDayMs(ms: number): number {
+  const date = new Date(ms)
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+function parseAsOfDateInput(value: string | undefined): number | null {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (!match) return null
+  const ms = new Date(
+    Number.parseInt(match[1]!, 10),
+    Number.parseInt(match[2]!, 10) - 1,
+    Number.parseInt(match[3]!, 10),
+  ).getTime()
+  return Number.isFinite(ms) ? startOfLocalDayMs(ms) : null
+}
+
+function formatAsOfDateLabel(ms: number): string {
+  const date = new Date(ms)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function captureScheduleSnapshot(
+  workspaceId: string,
+  projectId: string,
+  asOfDate?: number | null,
+): PmScheduleBaselineSnapshot {
   const items = getWorkItemRepo().list({
     workspaceId,
     projectId,
@@ -96,6 +126,7 @@ function captureScheduleSnapshot(workspaceId: string, projectId: string): PmSche
   const capturedAt = Date.now()
   return {
     capturedAt,
+    ...(asOfDate != null ? { asOfDate } : {}),
     workItems: items.map((item) => ({
       workItemId: item.id,
       title: item.title,
@@ -118,13 +149,62 @@ function captureScheduleSnapshot(workspaceId: string, projectId: string): PmSche
   }
 }
 
+function plannedProgressAtDateMs(
+  startMs: number | null | undefined,
+  finishMs: number | null | undefined,
+  statusDateMs: number,
+): number {
+  if (startMs == null || finishMs == null) return 0
+  const start = startOfLocalDayMs(startMs)
+  const finish = startOfLocalDayMs(finishMs)
+  const status = startOfLocalDayMs(statusDateMs)
+  if (status <= start) return 0
+  if (status >= finish) return 100
+  const span = Math.max(1, finish - start)
+  return Math.min(100, Math.max(0, Math.round(((status - start) / span) * 100)))
+}
+
+const SHOULD_PERCENT_META_KEY = 'shouldPercentComplete'
+
+/** Write 应完成百分比 on live tasks from the baseline as-of date. */
+function applyShouldPercentFromAsOfDate(
+  workspaceId: string,
+  projectId: string,
+  asOfDate: number,
+): void {
+  const items = getWorkItemRepo().list({
+    workspaceId,
+    projectId,
+    domain: 'progress_management',
+    limit: 1000,
+  })
+  for (const item of items) {
+    const should = plannedProgressAtDateMs(item.startDate, item.dueDate, asOfDate)
+    const prevMeta =
+      item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? (item.metadata as Record<string, unknown>)
+        : {}
+    if (prevMeta[SHOULD_PERCENT_META_KEY] === should) continue
+    updatePmWorkItem({
+      id: item.id,
+      metadata: { ...prevMeta, [SHOULD_PERCENT_META_KEY]: should },
+    })
+  }
+}
+
 export function createPmBaseline(input: unknown) {
   const data = PmBaselineCreateInputSchema.parse(input)
-  const capturedAt = Date.now()
+  // Prefer schema field; fall back to raw payload if an older shared build stripped asOfDate.
+  const rawAsOf =
+    data.asOfDate ??
+    (input && typeof input === 'object' && typeof (input as { asOfDate?: unknown }).asOfDate === 'string'
+      ? (input as { asOfDate: string }).asOfDate
+      : undefined)
+  const asOfDate = parseAsOfDateInput(rawAsOf) ?? startOfLocalDayMs(Date.now())
   const name =
     data.name?.trim() ||
-    `基线 ${new Date(capturedAt).toLocaleString('zh-CN', { hour12: false })}`
-  const snapshot = captureScheduleSnapshot(data.workspaceId, data.projectId)
+    `基线 ${formatAsOfDateLabel(asOfDate)}`
+  const snapshot = captureScheduleSnapshot(data.workspaceId, data.projectId, asOfDate)
 
   // Version plan snapshots are unique per schedule version (upsert).
   // User baselines are independent — many baselines may exist for one version.
@@ -159,12 +239,50 @@ export function createPmBaseline(input: unknown) {
     })
   }
 
-  return getBaselineRepo().create({
+  const created = getBaselineRepo().create({
     workspaceId: data.workspaceId,
     projectId: data.projectId,
     name,
     snapshot,
   })
+  // User baselines: refresh 应完成百分比 so Gantt/前锋线 can compare vs 实际完成.
+  applyShouldPercentFromAsOfDate(data.workspaceId, data.projectId, asOfDate)
+  return created
+}
+
+/** Update user baseline name and/or as-of date (refreshes 应完成% when date changes). */
+export function updatePmBaseline(input: unknown) {
+  const data = PmBaselineUpdateInputSchema.parse(input)
+  const existing = getBaselineRepo().getById(data.id)
+  if (!existing) {
+    throw new Error('基线不存在')
+  }
+  if (parseVersionPlanSnapshotName(existing.name) != null) {
+    throw new Error('版本计划快照不能在此修改；请在项目信息中管理保存记录')
+  }
+  if (data.name == null && data.asOfDate == null) {
+    return existing
+  }
+
+  const name = data.name?.trim() || existing.name
+  let snapshot = existing.snapshot
+  let asOfDate: number | null = null
+  if (data.asOfDate != null) {
+    asOfDate = parseAsOfDateInput(data.asOfDate)
+    if (asOfDate == null) {
+      throw new Error('请输入有效日期，格式为 YYYY-MM-DD')
+    }
+    snapshot = { ...snapshot, asOfDate }
+  }
+
+  const updated = getBaselineRepo().updateSnapshot(existing.id, snapshot, name)
+  if (!updated) {
+    throw new Error('基线不存在')
+  }
+  if (asOfDate != null) {
+    applyShouldPercentFromAsOfDate(existing.workspaceId, existing.projectId, asOfDate)
+  }
+  return updated
 }
 
 export function deletePmBaseline(input: unknown) {
@@ -205,6 +323,7 @@ function sortSnapshotItemsForCreate(items: PmScheduleBaselineItem[]): PmSchedule
 /**
  * When most snapshot IDs are gone (typical after agent clearExisting), wipe live
  * progress items and rebuild the tree from the snapshot, remapping relation IDs.
+ * Preserves task metadata (resource/cost assignments, etc.) matched by title.
  */
 function structurallyRestoreSnapshot(options: {
   workspaceId: string
@@ -212,6 +331,32 @@ function structurallyRestoreSnapshot(options: {
   snapshot: PmScheduleBaselineSnapshot
 }): { createdCount: number; relationsRestored: number; idMap: Map<string, string> } {
   const { workspaceId, projectId, snapshot } = options
+  const liveBefore = getWorkItemRepo().list({
+    workspaceId,
+    projectId,
+    domain: 'progress_management',
+    limit: 1000,
+  })
+  const metadataByTitle = new Map<string, Record<string, unknown>>()
+  for (const item of liveBefore) {
+    const meta =
+      item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? (item.metadata as Record<string, unknown>)
+        : {}
+    const existing = metadataByTitle.get(item.title)
+    const hasAssignments =
+      (Array.isArray(meta.resourceAssignments) && meta.resourceAssignments.length > 0) ||
+      (Array.isArray(meta.costAssignments) && meta.costAssignments.length > 0)
+    const existingHasAssignments =
+      existing != null &&
+      ((Array.isArray(existing.resourceAssignments) &&
+        existing.resourceAssignments.length > 0) ||
+        (Array.isArray(existing.costAssignments) && existing.costAssignments.length > 0))
+    if (!existing || (hasAssignments && !existingHasAssignments)) {
+      metadataByTitle.set(item.title, { ...meta })
+    }
+  }
+
   clearPmProjectPlanData(workspaceId, projectId)
 
   const idMap = new Map<string, string>()
@@ -223,6 +368,7 @@ function structurallyRestoreSnapshot(options: {
     const parentId = entry.parentWorkItemId
       ? (idMap.get(entry.parentWorkItemId) ?? undefined)
       : undefined
+    const preserved = metadataByTitle.get(entry.title)
     const created = createPmWorkItem({
       workspaceId,
       projectId,
@@ -236,6 +382,7 @@ function structurallyRestoreSnapshot(options: {
       sortOrder: entry.sortOrder ?? sortFallback,
       status: 'todo',
       priority: 'normal',
+      ...(preserved && Object.keys(preserved).length > 0 ? { metadata: preserved } : {}),
     })
     idMap.set(entry.workItemId, created.id)
     createdCount += 1

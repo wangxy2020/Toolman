@@ -89,16 +89,29 @@ async function ensureProjectManagementAssistant(
   chat: ChatApi,
   modelId: string,
 ): Promise<Assistant | null> {
+  const desiredSystemPrompt = buildProjectManagementAssistantSystemPrompt()
   const existing = chat.assistants.find(
     (item) => item.name.trim() === PROJECT_MANAGEMENT_ASSISTANT_NAME,
   )
-  if (existing) return existing
+  if (existing) {
+    if (existing.systemPrompt === desiredSystemPrompt) return existing
+    const updated = await window.api.invoke(IpcChannel.AssistantUpdate, {
+      id: existing.id,
+      systemPrompt: desiredSystemPrompt,
+    })
+    if (!updated.ok) return existing
+    await chat.loadAssistants()
+    return (
+      chat.assistants.find((item) => item.name.trim() === PROJECT_MANAGEMENT_ASSISTANT_NAME) ??
+      (updated.data as Assistant)
+    )
+  }
 
   const result = await window.api.invoke(IpcChannel.AssistantCreate, {
     workspaceId,
     name: PROJECT_MANAGEMENT_ASSISTANT_NAME,
     description: 'EPC 项目管理专用助手',
-    systemPrompt: buildProjectManagementAssistantSystemPrompt(),
+    systemPrompt: desiredSystemPrompt,
     modelId,
     parameters: {
       permissionMode: 'auto-edit',

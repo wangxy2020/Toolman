@@ -26,6 +26,8 @@ import { PM_RESOURCE_TYPES, type PmResourceType } from './pm-resource-catalog'
 
 const ICON_SIZE = 16
 
+export type ResourceViewFilter = 'all' | PmResourceType
+
 export type ResourceMenuAction =
   | 'save'
   | 'print'
@@ -74,6 +76,9 @@ interface Props {
   canEdit?: boolean
   canUndo?: boolean
   canRedo?: boolean
+  /** Table type filter; `all` shows every resource type. */
+  viewFilter: ResourceViewFilter
+  onViewFilterChange: (filter: ResourceViewFilter) => void
   selectedType: PmResourceType
   onTypeChange: (type: PmResourceType) => void
   versionSwitchEntries: ResourceVersionSwitchEntry[]
@@ -112,6 +117,8 @@ export function ProjectResourceMenuBar({
   canEdit = true,
   canUndo = false,
   canRedo = false,
+  viewFilter,
+  onViewFilterChange,
   selectedType,
   onTypeChange,
   versionSwitchEntries,
@@ -119,14 +126,17 @@ export function ProjectResourceMenuBar({
   onAction,
 }: Props) {
   const { t } = useI18n()
+  const [viewOpen, setViewOpen] = useState(false)
   const [typeOpen, setTypeOpen] = useState(false)
   const [baselineOpen, setBaselineOpen] = useState(false)
   const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(EMPTY_SCROLL)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const viewRef = useRef<HTMLSpanElement>(null)
   const typeRef = useRef<HTMLSpanElement>(null)
   const baselineRef = useRef<HTMLSpanElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
+  const viewPos = useDropdownPos(viewOpen, viewRef)
   const typePos = useDropdownPos(typeOpen, typeRef)
   const baselinePos = useDropdownPos(baselineOpen, baselineRef)
 
@@ -160,19 +170,26 @@ export function ProjectResourceMenuBar({
   }, [])
 
   useEffect(() => {
-    if (!typeOpen && !baselineOpen) return
+    if (!viewOpen && !typeOpen && !baselineOpen) return
     const onDoc = (event: MouseEvent) => {
       const target = event.target as Node
+      if (viewOpen && viewRef.current?.contains(target)) return
       if (typeOpen && typeRef.current?.contains(target)) return
       if (baselineOpen && baselineRef.current?.contains(target)) return
       if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
+      setViewOpen(false)
       setTypeOpen(false)
       setBaselineOpen(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [baselineOpen, typeOpen])
+  }, [baselineOpen, typeOpen, viewOpen])
 
+  const viewMenuLabel = t('projectManagerPage.resourceTable.menu.view')
+  const viewCurrentLabel =
+    viewFilter === 'all'
+      ? t('projectManagerPage.resourceTable.views.allTypes')
+      : t(`projectManagerPage.resourceTable.types.${viewFilter}`)
   const typeMenuLabel = t('projectManagerPage.resourceTable.menu.type')
   const typeLabel = t(`projectManagerPage.resourceTable.types.${selectedType}`)
   const baselineMenuLabel = t('projectManagerPage.resourceTable.menu.baseline')
@@ -365,6 +382,77 @@ export function ProjectResourceMenuBar({
           }}
         >
           <div className="tm-pm-resource-menubar-group">
+            <span className="tm-pm-resource-menubar-item tm-pm-gantt-view-menu" ref={viewRef}>
+              <button
+                type="button"
+                className="tm-pm-resource-menubar-btn"
+                aria-label={viewMenuLabel}
+                aria-disabled={disabled}
+                aria-expanded={viewOpen}
+                onClick={() => {
+                  if (disabled) return
+                  hideTip()
+                  setTypeOpen(false)
+                  setBaselineOpen(false)
+                  setViewOpen((open) => !open)
+                }}
+                {...tipProps(viewMenuLabel)}
+              >
+                <span>{viewMenuLabel}</span>
+                <span className="tm-pm-gantt-view-current">{viewCurrentLabel}</span>
+                <IconChevronDown size={14} />
+              </button>
+              {viewOpen && viewPos
+                ? createPortal(
+                    <div
+                      className="tm-pm-gantt-view-panel tm-pm-resource-view-panel"
+                      role="menu"
+                      style={{ top: viewPos.top, left: viewPos.left }}
+                    >
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={viewFilter === 'all'}
+                        className={[
+                          'tm-pm-gantt-view-option',
+                          viewFilter === 'all' ? 'tm-pm-gantt-view-option--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          onViewFilterChange('all')
+                          setViewOpen(false)
+                        }}
+                      >
+                        {t('projectManagerPage.resourceTable.views.allTypes')}
+                      </button>
+                      {PM_RESOURCE_TYPES.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={viewFilter === type}
+                          className={[
+                            'tm-pm-gantt-view-option',
+                            viewFilter === type ? 'tm-pm-gantt-view-option--active' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          onClick={() => {
+                            onViewFilterChange(type)
+                            setViewOpen(false)
+                          }}
+                        >
+                          {t(`projectManagerPage.resourceTable.types.${type}`)}
+                        </button>
+                      ))}
+                    </div>,
+                    document.body,
+                  )
+                : null}
+              <span className="tm-pm-resource-menubar-divider" />
+            </span>
+
             {leadingItems.map(renderToolbarItem)}
             {hierarchyItems.map(renderToolbarItem)}
 
@@ -378,6 +466,7 @@ export function ProjectResourceMenuBar({
                 onClick={() => {
                   if (disabled || !hasSelection) return
                   hideTip()
+                  setViewOpen(false)
                   setBaselineOpen(false)
                   setTypeOpen((open) => !open)
                 }}
@@ -433,6 +522,7 @@ export function ProjectResourceMenuBar({
                 onClick={() => {
                   if (disabled || !hasProject) return
                   hideTip()
+                  setViewOpen(false)
                   setTypeOpen(false)
                   setBaselineOpen((open) => !open)
                 }}

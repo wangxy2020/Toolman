@@ -61,6 +61,8 @@ import {
 } from './pm-gantt-prefs'
 import {
   formatWorkItemDate,
+  formatScheduleVarianceDays,
+  computeScheduleVarianceDays,
   GANTT_ROW_HEIGHT,
   isGanttProjectRootId,
   shouldCompletePercent,
@@ -174,6 +176,8 @@ interface Props {
    * Assignment pickers prefer `resourceCatalog` (current project list).
    */
   resourceColumnCatalog?: readonly PmResourceRow[]
+  /** Duration-weighted rolled-up actual % (summaries included). */
+  progressPercentById?: ReadonlyMap<string, number>
   /** Persist task ↔ catalog assignment (type / name / quantity) for a slot. */
   onAssignResource?: (
     itemId: string,
@@ -198,6 +202,10 @@ interface Props {
   ) => void | Promise<void>
   /** Change this (e.g. project id) to exit multi-select mode. */
   selectionResetKey?: string | null
+  /** Baseline as-of date: recompute 应完成% from schedule instead of stored metadata. */
+  shouldPercentAsOfMs?: number | null
+  /** Plan dates frozen in the selected baseline (Baseline Start/Finish). */
+  baselinePlanByItemId?: ReadonlyMap<string, { startDate?: number; dueDate?: number }>
 }
 
 export const ProjectGanttTaskGrid: FC<Props> = ({
@@ -227,11 +235,14 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
   onCommitCell,
   resourceCatalog = [],
   resourceColumnCatalog,
+  progressPercentById,
   onAssignResource,
   onReplaceResourceAssignments,
   onAssignCost,
   onReplaceCostAssignments,
   selectionResetKey = null,
+  shouldPercentAsOfMs = null,
+  baselinePlanByItemId,
 }) => {
   const { t } = useI18n()
   const [editing, setEditing] = useState<EditTarget | null>(null)
@@ -638,10 +649,34 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
         const ms = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : null
         return ms != null && Number.isFinite(ms) ? formatWorkItemDate(ms) : ''
       }
-      case 'shouldPercentComplete':
-        return `${shouldCompletePercent(item)}%`
+      case 'shouldPercentComplete': {
+        const plan = baselinePlanByItemId?.get(item.id)
+        return `${shouldCompletePercent(
+          item,
+          plan?.startDate,
+          plan?.dueDate,
+          shouldPercentAsOfMs,
+        )}%`
+      }
       case 'percentComplete':
-        return `${item.progressPercent}%`
+        return `${progressPercentById?.get(item.id) ?? item.progressPercent}%`
+      case 'variance': {
+        const plan = baselinePlanByItemId?.get(item.id)
+        const rolledProgress = progressPercentById?.get(item.id)
+        const result = computeScheduleVarianceDays(
+          rolledProgress == null ? item : { ...item, progressPercent: rolledProgress },
+          {
+            planStartMs: plan?.startDate,
+            planFinishMs: plan?.dueDate,
+            shouldPercentAsOfMs,
+          },
+        )
+        if (!result) return '—'
+        return formatScheduleVarianceDays(
+          result.days,
+          t('projectManagerPage.schedule.dayUnit'),
+        )
+      }
       default:
         return ''
     }
@@ -1405,12 +1440,37 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     }
 
     const isProjectRoot = isGanttProjectRootId(item.id)
+    const varianceTone =
+      field === 'variance'
+        ? (() => {
+            const plan = baselinePlanByItemId?.get(item.id)
+            const rolledProgress = progressPercentById?.get(item.id)
+            const result = computeScheduleVarianceDays(
+              rolledProgress == null ? item : { ...item, progressPercent: rolledProgress },
+              {
+                planStartMs: plan?.startDate,
+                planFinishMs: plan?.dueDate,
+                shouldPercentAsOfMs,
+              },
+            )
+            if (!result || result.days === 0) return ''
+            return result.days > 0 ? 'tm-pm-gantt-col--variance-ahead' : 'tm-pm-gantt-col--variance-behind'
+          })()
+        : ''
     return (
       <span
         key={field}
-        className={`tm-pm-gantt-col tm-pm-gantt-col--${columnClassSuffix(field)}`}
+        className={[
+          'tm-pm-gantt-col',
+          `tm-pm-gantt-col--${columnClassSuffix(field)}`,
+          varianceTone,
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onDoubleClick={(event) => {
           if (isProjectRoot) return
+          if (field === 'variance') return
+          if (field === 'percentComplete' && hasChildren) return
           event.stopPropagation()
           startEdit({ kind: 'cell', itemId: item.id, field }, value)
         }}>
@@ -1970,6 +2030,11 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                     selectedSlot != null &&
                     selectedSlot >= 0 &&
                     selectedSlot < slotAssignments.length
+                  const canDeleteSelected =
+                    canEdit &&
+                    selectedSlot != null &&
+                    selectedSlot >= 0 &&
+                    selectedSlot < resourceAssignPopup.rowCount
                   const moveSelected = (direction: -1 | 1) => {
                     if (!popupItem || selectedSlot == null) return
                     const target = selectedSlot + direction
@@ -1981,6 +2046,35 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                     )
                     void onReplaceResourceAssignments?.(popupItem.id, next)
                     setResourceAssignSelectedSlot(target)
+                  }
+                  const deleteSelected = () => {
+                    if (!popupItem || selectedSlot == null) return
+                    const slot = selectedSlot
+                    let nextAssignments = slotAssignments
+                    if (slot < slotAssignments.length) {
+                      nextAssignments = slotAssignments.filter((_, index) => index !== slot)
+                      if (onReplaceResourceAssignments) {
+                        void onReplaceResourceAssignments(popupItem.id, nextAssignments)
+                      }
+                    }
+                    setResourceAssignPopup((current) => {
+                      if (!current) return current
+                      return {
+                        ...current,
+                        rowCount: Math.max(
+                          RESOURCE_ASSIGN_POPUP_VISIBLE_ROWS,
+                          nextAssignments.length,
+                          current.rowCount - 1,
+                        ),
+                      }
+                    })
+                    setResourceAssignSelectedSlot((prev) => {
+                      if (prev == null) return prev
+                      if (prev < slot) return prev
+                      if (prev > slot) return prev - 1
+                      if (nextAssignments.length === 0) return null
+                      return Math.min(slot, nextAssignments.length - 1)
+                    })
                   }
                   return (
                     <>
@@ -2273,23 +2367,34 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                               <IconChevronDown size={16} />
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            className="tm-pm-gantt-resource-assign-popup-add"
-                            onClick={() => {
-                              setResourceAssignPopup((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      rowCount: current.rowCount + 1,
-                                    }
-                                  : current,
-                              )
-                            }}
-                          >
-                            <span aria-hidden>+</span>
-                            {t('projectManagerPage.schedule.resourceAssign.addRow')}
-                          </button>
+                          <div className="tm-pm-gantt-resource-assign-popup-actions">
+                            <button
+                              type="button"
+                              className="tm-pm-gantt-resource-assign-popup-add"
+                              disabled={!canDeleteSelected}
+                              onClick={() => deleteSelected()}
+                            >
+                              <span aria-hidden>−</span>
+                              {t('projectManagerPage.schedule.resourceAssign.deleteRow')}
+                            </button>
+                            <button
+                              type="button"
+                              className="tm-pm-gantt-resource-assign-popup-add"
+                              onClick={() => {
+                                setResourceAssignPopup((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        rowCount: current.rowCount + 1,
+                                      }
+                                    : current,
+                                )
+                              }}
+                            >
+                              <span aria-hidden>+</span>
+                              {t('projectManagerPage.schedule.resourceAssign.addRow')}
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </>

@@ -32,6 +32,7 @@ import {
   formatRollupQuantity,
   groupMonthKeysByYear,
   parseMonthKey,
+  usesPeakConcurrentRollup,
 } from './pm-feature-gantt-rollup'
 import {
   createEmptyFeatureRow,
@@ -260,14 +261,12 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   )
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
   const selectedType: PmFeatureType = viewType
-  const quantityFromGanttHint =
-    viewType === 'labor'
-      ? t('projectManagerPage.files.table.quantityFromGanttHintLabor')
-      : t('projectManagerPage.files.table.quantityFromGanttHint')
-  const monthFromGanttHint =
-    viewType === 'labor'
-      ? t('projectManagerPage.files.table.monthFromGanttHintLabor')
-      : t('projectManagerPage.files.table.monthFromGanttHint')
+  const quantityFromGanttHint = usesPeakConcurrentRollup(viewType)
+    ? t('projectManagerPage.files.table.quantityFromGanttHintPeak')
+    : t('projectManagerPage.files.table.quantityFromGanttHint')
+  const monthFromGanttHint = usesPeakConcurrentRollup(viewType)
+    ? t('projectManagerPage.files.table.monthFromGanttHintPeak')
+    : t('projectManagerPage.files.table.monthFromGanttHint')
 
   const rollups = useMemo(
     () => computeFeatureGanttRollups(workItems, rows),
@@ -396,7 +395,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
     if (!canEdit) return
     setSaving(true)
     try {
-      // labor / material / machinery are live from Gantt — never persist them.
+      // labor / auxiliary / material / machinery are live from Gantt — never persist them.
       const persisted = stripScheduleFeatureRows(rows).rows
       const live = buildLiveScheduleFeatureRows(ganttSeeds, [], viewApplicable)
 
@@ -739,9 +738,11 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                       <th
                         key={row.id}
                         className="tm-pm-features-table-col-resource"
-                        title={row.name}
+                        title={row.name.trim() || undefined}
                       >
-                        {row.name.trim() || '—'}
+                        <span className="tm-pm-features-table-resource-label">
+                          {row.name.trim() || '—'}
+                        </span>
                       </th>
                     ))}
                     <th className="tm-pm-resource-table-col-spacer" aria-hidden />
@@ -1003,11 +1004,12 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                           ))}
                         </select>
                       </td>
-                      <td>
+                      <td className="tm-pm-resource-table-col-name">
                         <input
-                          className="tm-pm-resource-table-input"
+                          className="tm-pm-resource-table-input tm-pm-features-table-name-input"
                           style={{ paddingLeft: `${8 + depth * 16}px` }}
                           value={row.name}
+                          title={row.name.trim() || undefined}
                           placeholder={t('projectManagerPage.files.table.namePlaceholder')}
                           onChange={(event) => patchRow(row.id, { name: event.target.value })}
                           onClick={(event) => event.stopPropagation()}

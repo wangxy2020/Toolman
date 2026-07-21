@@ -84,11 +84,66 @@ export function isAncestorOf(
 }
 
 /**
+ * Relations that participate in forward schedule / critical-path math.
+ * Ancestor→descendant links are excluded: after 降级 the previous sibling often
+ * becomes both parent and FS predecessor; keeping that edge creates resolve
+ * cycles and wrong float.
+ */
+export function isSchedulableRelation(
+  relation: Pick<PmWorkItemRelation, 'fromWorkItemId' | 'toWorkItemId'>,
+  byId: Map<string, PmWorkItem>,
+): boolean {
+  if (!byId.has(relation.fromWorkItemId) || !byId.has(relation.toWorkItemId)) return false
+  if (isAncestorOf(relation.fromWorkItemId, relation.toWorkItemId, byId)) return false
+  if (isAncestorOf(relation.toWorkItemId, relation.fromWorkItemId, byId)) return false
+  return true
+}
+
+/** Build early ranges from stored dates only (no predecessor push / no parent rollup). */
+export function rangesFromStoredItems(
+  items: readonly PmWorkItem[],
+): Map<string, ScheduledRange> {
+  const result = new Map<string, ScheduledRange>()
+  for (const item of items) {
+    if (item.type === 'milestone') {
+      const startMs = startOfLocalDay(
+        item.startDate ?? item.dueDate ?? item.updatedAt ?? Date.now(),
+      )
+      result.set(item.id, {
+        startMs,
+        finishMs: startMs,
+        durationDays: 1,
+        autoScheduled: false,
+      })
+      continue
+    }
+    const durationDays =
+      item.startDate != null && item.dueDate != null
+        ? durationDaysBetween(item.startDate, item.dueDate)
+        : 7
+    const startMs = startOfLocalDay(
+      item.startDate ?? item.dueDate ?? item.updatedAt ?? Date.now(),
+    )
+    const finishMs =
+      item.dueDate != null
+        ? startOfLocalDay(item.dueDate)
+        : finishFromStartAndDuration(startMs, durationDays)
+    result.set(item.id, {
+      startMs: Math.min(startMs, finishMs),
+      finishMs: Math.max(startMs, finishMs),
+      durationDays,
+      autoScheduled: false,
+    })
+  }
+  return result
+}
+
+/**
  * Compute effective dates for all items:
  * - leaf tasks with predecessors are auto-scheduled (OpenProject automatic mode)
  * - parents roll up to children envelope
  *
- * Ancestor→descendant predecessor links are ignored. After 降级, the previous
+ * Ancestor↔descendant predecessor links are ignored. After 降级, the previous
  * sibling often becomes both parent and FS predecessor; using that link with
  * parent rollup creates a resolve cycle that shifts dates by one day on every
  * auto-schedule persist.
@@ -108,9 +163,7 @@ export function scheduleWorkItems(
 
   const incoming = new Map<string, PmWorkItemRelation[]>()
   for (const relation of relations) {
-    if (!byId.has(relation.fromWorkItemId) || !byId.has(relation.toWorkItemId)) continue
-    // Hierarchy already constrains timing via rollup; skip ancestor preds.
-    if (isAncestorOf(relation.fromWorkItemId, relation.toWorkItemId, byId)) continue
+    if (!isSchedulableRelation(relation, byId)) continue
     const list = incoming.get(relation.toWorkItemId) ?? []
     list.push(relation)
     incoming.set(relation.toWorkItemId, list)
@@ -301,9 +354,7 @@ export function computeCriticalTaskIds(
 
   if (leafIds.length === 0) return new Set()
 
-  const validRelations = relations.filter(
-    (relation) => byId.has(relation.fromWorkItemId) && byId.has(relation.toWorkItemId),
-  )
+  const validRelations = relations.filter((relation) => isSchedulableRelation(relation, byId))
 
   const parent = new Map<string, string>()
   const find = (id: string): string => {

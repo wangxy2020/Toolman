@@ -21,6 +21,7 @@ import {
   ProjectResourceMenuBar,
   type ResourceMenuAction,
   type ResourceVersionSwitchEntry,
+  type ResourceViewFilter,
 } from './ProjectResourceMenuBar'
 import {
   buildBaselinePriceIndex,
@@ -110,6 +111,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const [saving, setSaving] = useState(false)
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
+  const [viewFilter, setViewFilter] = useState<ResourceViewFilter>('all')
   const [historyEpoch, setHistoryEpoch] = useState(0)
   const historyStackRef = useRef(new ResourceHistoryStack())
   const historyApplyingRef = useRef(false)
@@ -227,6 +229,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
     setContextMenu(null)
     setProjectInfoOpen(false)
     setPendingRestoreVersion(null)
+    setViewFilter('all')
     historyStackRef.current.clear()
     setHistoryEpoch((value) => value + 1)
     cleanFingerprintRef.current = ''
@@ -263,6 +266,14 @@ const ProjectResourceTablePanel: FC<Props> = ({
         const ensured = ensureDefaultResourcesInCatalog(hydrated)
         const normalized = normalizeResourceCatalogRows(ensured.rows)
         const ordered = sortResourceRowsByTypeMenu(normalized.rows)
+        const orderedFp = fingerprintResourceCatalog(ordered)
+        const cleanFp = cleanFingerprintRef.current
+        const currentFp = fingerprintResourceCatalog(rowsRef.current)
+        // After a local save, props/main may still be stale — do not clobber newer in-memory rows.
+        if (cleanFp && currentFp === cleanFp && orderedFp !== cleanFp) {
+          writeSharedResourceCatalog(workspaceId, rowsRef.current)
+          return
+        }
         applyCatalogRows(ordered, { dirty: false, clearHistory: true })
         const orderChanged = ordered.some(
           (row, index) => row.id !== normalized.rows[index]?.id,
@@ -295,6 +306,12 @@ const ProjectResourceTablePanel: FC<Props> = ({
       editingProject.id,
     )
     const ordered = sortResourceRowsLikeSharedCatalog(normalized, sharedRows)
+    const orderedFp = fingerprintResourceCatalog(ordered)
+    const cleanFp = cleanFingerprintRef.current
+    const currentFp = fingerprintResourceCatalog(rowsRef.current)
+    if (cleanFp && currentFp === cleanFp && orderedFp !== cleanFp) {
+      return
+    }
     applyCatalogRows(ordered, { dirty: false, clearHistory: true })
     // Never auto-write a project catalog for shared-fallback projects.
     if (resolved.usesSharedFallback) return
@@ -318,6 +335,33 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
   const selectedType: PmResourceType = selectedRow?.type ?? 'labor'
+  const visibleRows = useMemo(
+    () => (viewFilter === 'all' ? rows : rows.filter((row) => row.type === viewFilter)),
+    [rows, viewFilter],
+  )
+  const addType: PmResourceType = viewFilter === 'all' ? selectedType : viewFilter
+
+  const handleViewFilterChange = useCallback(
+    (filter: ResourceViewFilter) => {
+      setViewFilter(filter)
+      if (filter === 'all') return
+      setSelectedId((prev) => {
+        if (!prev) return prev
+        const row = rowsRef.current.find((entry) => entry.id === prev)
+        return row && row.type === filter ? prev : null
+      })
+      setCheckedIds((prev) => {
+        if (prev.size === 0) return prev
+        const next = new Set<string>()
+        for (const id of prev) {
+          const row = rowsRef.current.find((entry) => entry.id === id)
+          if (row?.type === filter) next.add(id)
+        }
+        return next
+      })
+    },
+    [],
+  )
 
   const baselinePriceIndex = useMemo(() => {
     if (isAllScope) return null
@@ -436,7 +480,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
             applicable: PM_RESOURCE_APPLICABLE_ALL,
           })),
         )
-        writeSharedResourceCatalog(workspaceId, payload)
+        await writeSharedResourceCatalog(workspaceId, payload)
         recordSharedResourceSaveMeta(workspaceId, payload)
         applyCatalogRows(payload, { dirty: false })
         await onProjectsChange?.()
@@ -463,7 +507,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
         const shared = readSharedResourceCatalog(workspaceId)
         const upserted = upsertSharedResourceCatalog(shared.rows, sharedCandidates)
         if (upserted.changed || shared.isDefault) {
-          writeSharedResourceCatalog(workspaceId, upserted.rows)
+          await writeSharedResourceCatalog(workspaceId, upserted.rows)
           recordSharedResourceSaveMeta(workspaceId, upserted.rows)
         }
       }
@@ -504,11 +548,11 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const handleAdd = useCallback(() => {
     if (!canEdit) return
     updateRows((prev) => {
-      const next = createEmptyResourceRow(prev.length, selectedType, null, viewApplicable)
+      const next = createEmptyResourceRow(prev.length, addType, null, viewApplicable)
       setSelectedId(next.id)
       return [...prev, next]
     })
-  }, [canEdit, selectedType, updateRows, viewApplicable])
+  }, [addType, canEdit, updateRows, viewApplicable])
 
   const handleInsert = useCallback(() => {
     if (!canEdit || !selectedId) return
@@ -516,13 +560,13 @@ const ProjectResourceTablePanel: FC<Props> = ({
       const index = prev.findIndex((row) => row.id === selectedId)
       if (index < 0) return prev
       const parentId = prev[index]?.parentId ?? null
-      const next = createEmptyResourceRow(index, selectedType, parentId, viewApplicable)
+      const next = createEmptyResourceRow(index, addType, parentId, viewApplicable)
       setSelectedId(next.id)
       const copy = [...prev]
       copy.splice(index, 0, next)
       return copy
     })
-  }, [canEdit, selectedId, selectedType, updateRows, viewApplicable])
+  }, [addType, canEdit, selectedId, updateRows, viewApplicable])
 
   const deleteIds = useCallback(
     (ids: Set<string>) => {
@@ -787,9 +831,9 @@ const ProjectResourceTablePanel: FC<Props> = ({
   )
 
   const handleSelectAll = useCallback(() => {
-    setCheckedIds(new Set(rows.map((row) => row.id)))
+    setCheckedIds(new Set(visibleRows.map((row) => row.id)))
     setSelectionMode(true)
-  }, [rows])
+  }, [visibleRows])
 
   const handleClearSelection = useCallback(() => {
     setCheckedIds(new Set())
@@ -808,6 +852,8 @@ const ProjectResourceTablePanel: FC<Props> = ({
         canEdit={canEdit}
         canUndo={canUndo}
         canRedo={canRedo}
+        viewFilter={viewFilter}
+        onViewFilterChange={handleViewFilterChange}
         selectedType={selectedType}
         onTypeChange={handleTypeChange}
         versionSwitchEntries={versionSwitchEntries}
@@ -857,7 +903,10 @@ const ProjectResourceTablePanel: FC<Props> = ({
                       <input
                         type="checkbox"
                         className="tm-kb-file-card-select-input"
-                        checked={rows.length > 0 && checkedIds.size === rows.length}
+                        checked={
+                          visibleRows.length > 0 &&
+                          visibleRows.every((row) => checkedIds.has(row.id))
+                        }
                         onChange={(event) => {
                           if (event.target.checked) handleSelectAll()
                           else handleClearSelection()
@@ -867,7 +916,8 @@ const ProjectResourceTablePanel: FC<Props> = ({
                       <span
                         className={[
                           'tm-kb-file-card-select-box',
-                          rows.length > 0 && checkedIds.size === rows.length
+                          visibleRows.length > 0 &&
+                          visibleRows.every((row) => checkedIds.has(row.id))
                             ? 'tm-kb-file-card-select-box--checked'
                             : '',
                         ]
@@ -910,7 +960,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
                 <th className="tm-pm-resource-table-col-spacer" aria-hidden />
               </tr>
             </thead>            <tbody>
-              {rows.map((row, index) => {
+              {visibleRows.map((row, index) => {
                 const depth = resourceRowDepth(row, byId)
                 const isSelected = selectedId === row.id
                 const isChecked = checkedIds.has(row.id)

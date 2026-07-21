@@ -27,6 +27,7 @@ import {
 import { useI18n } from '../../../../i18n/useI18n'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { pmApi } from '../../pm-api'
+import BaselineCaptureDialog from './BaselineCaptureDialog'
 import {
   clearSessionPendingAgentRevision,
   hasSessionPendingAgentRevision,
@@ -49,6 +50,7 @@ import {
 } from '../resource/pm-resource-catalog'
 import {
   isEmptyAssignment,
+  hydrateTaskResourceAssignmentsAgainstCatalog,
   patchTaskResourceAssignmentMetadata,
   readTaskResourceAssignments,
   replaceTaskResourceAssignmentsMetadata,
@@ -79,7 +81,9 @@ import {
   isGanttBuiltinColumn,
   isGanttCustomColumnId,
   loadGanttUiPrefs,
+  PROGRESS_CHECK_COLUMN_ORDER,
   saveGanttUiPrefs,
+  type GanttScheduleView,
   type GanttUiPrefs,
 } from './pm-gantt-prefs'
 import {
@@ -97,9 +101,20 @@ import {
   workItemDurationDays,
 } from './pm-gantt-utils'
 import {
+  computeProgressLineStubs,
+  nextUserBaselineName,
+  nextUserBaselineIndex,
+  plannedProgressAtDate,
+  resolveBaselineAsOfDate,
+  suggestBaselineAsOfDate,
+  type BaselineCompareMode,
+} from './pm-gantt-baseline-compare'
+import {
   applyScheduledRangesToItems,
   collectScheduleUpdates,
   computeCriticalTaskIds,
+  isSchedulableRelation,
+  rangesFromStoredItems,
   scheduleWorkItems,
   startOfLocalDay,
 } from './pm-gantt-schedule'
@@ -109,6 +124,10 @@ import {
   cloneGanttSnapshot,
   GanttHistoryStack,
 } from './pm-gantt-history'
+import {
+  collectProgressRollupUpdates,
+  buildProgressPercentById,
+} from './pm-gantt-progress-rollup'
 import { pmScheduleApi } from './pm-schedule-api'
 
 interface Props {
@@ -133,6 +152,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const [relations, setRelations] = useState<PmWorkItemRelation[]>([])
   const [baselines, setBaselines] = useState<PmScheduleBaseline[]>([])
   const [selectedBaselineId, setSelectedBaselineId] = useState<string | null>(null)
+  const [baselineCompareMode, setBaselineCompareMode] = useState<BaselineCompareMode>('none')
+  const [captureBaselineOpen, setCaptureBaselineOpen] = useState(false)
+  const [editBaselineOpen, setEditBaselineOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(() => new Set())
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -179,6 +201,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       actualFinish: t('projectManagerPage.schedule.columns.actualFinish'),
       shouldPercentComplete: t('projectManagerPage.schedule.columns.shouldPercentComplete'),
       percentComplete: t('projectManagerPage.schedule.columns.percentComplete'),
+      variance: t('projectManagerPage.schedule.columns.variance'),
     }),
     [t],
   )
@@ -314,6 +337,10 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     setCheckedIds(new Set())
     setSelectedId(null)
     setFreezeStoredSchedule(false)
+    setSelectedBaselineId(null)
+    setBaselineCompareMode('none')
+    setCaptureBaselineOpen(false)
+    setEditBaselineOpen(false)
     suppressAutoScheduleRef.current = false
     lastScheduleFingerprintRef.current = ''
     historyStackRef.current.clear()
@@ -442,6 +469,77 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     return ordered
   }, [workspaceId])
 
+  /** Rewrite stale assignment types (e.g. 模板 still stored as material) to match resource list. */
+  const assignmentHydrateKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selectedProjectId || items.length === 0 || resourceCatalog.length === 0) return
+    const updates: Array<{ id: string; metadata: Record<string, unknown> }> = []
+    for (const item of items) {
+      if (item.type === 'milestone') continue
+      const current = readTaskResourceAssignments(item.metadata)
+      if (current.length === 0) continue
+      const hydrated = hydrateTaskResourceAssignmentsAgainstCatalog(current, resourceCatalog)
+      if (!hydrated.changed) continue
+      updates.push({
+        id: item.id,
+        metadata: replaceTaskResourceAssignmentsMetadata(item.metadata, hydrated.assignments),
+      })
+    }
+    if (updates.length === 0) {
+      assignmentHydrateKeyRef.current = selectedProjectId
+      return
+    }
+    const hydrateKey = `${selectedProjectId}:${updates.map((entry) => entry.id).join(',')}`
+    if (assignmentHydrateKeyRef.current === hydrateKey) return
+    assignmentHydrateKeyRef.current = hydrateKey
+    let cancelled = false
+    void (async () => {
+      try {
+        await Promise.all(
+          updates.map((entry) =>
+            pmApi.updateWorkItem({ id: entry.id, metadata: entry.metadata }),
+          ),
+        )
+        if (!cancelled) await loadProjectData(selectedProjectId)
+      } catch {
+        assignmentHydrateKeyRef.current = null
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [items, loadProjectData, resourceCatalog, selectedProjectId])
+
+  /** Remove leftover ancestor↔descendant links (e.g. after older demotes) so CP stays consistent. */
+  const prunedAncestorRelationsRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selectedProjectId || items.length === 0 || relations.length === 0) return
+    const byId = new Map(items.map((entry) => [entry.id, entry]))
+    const stale = relations.filter((relation) => !isSchedulableRelation(relation, byId))
+    if (stale.length === 0) {
+      prunedAncestorRelationsRef.current = selectedProjectId
+      return
+    }
+    const key = `${selectedProjectId}:${stale
+      .map((entry) => entry.id)
+      .sort()
+      .join(',')}`
+    if (prunedAncestorRelationsRef.current === key) return
+    prunedAncestorRelationsRef.current = key
+    let cancelled = false
+    void (async () => {
+      try {
+        await Promise.all(stale.map((relation) => pmScheduleApi.deleteRelation(relation.id)))
+        if (!cancelled) await loadProjectData(selectedProjectId)
+      } catch {
+        prunedAncestorRelationsRef.current = null
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [items, loadProjectData, relations, selectedProjectId])
+
   /** Widest per-task assignment count — resource view must show at least this many columns. */
   const maxResourceAssignmentSlots = useMemo(() => {
     let max = 0
@@ -471,9 +569,14 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   )
 
   const scheduled = useMemo(() => scheduleWorkItems(items, relations), [items, relations])
+  /** Critical path must use the same early dates the bars show (live schedule vs frozen stored). */
+  const criticalSchedule = useMemo(
+    () => (freezeStoredSchedule ? rangesFromStoredItems(items) : scheduled),
+    [freezeStoredSchedule, items, scheduled],
+  )
   const criticalIds = useMemo(
-    () => computeCriticalTaskIds(items, relations, scheduled),
-    [items, relations, scheduled],
+    () => computeCriticalTaskIds(items, relations, criticalSchedule),
+    [criticalSchedule, items, relations],
   )
   const displayItems = useMemo(() => {
     const scheduledItems = freezeStoredSchedule
@@ -528,7 +631,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   )
   const baselineByItemId = useMemo(() => {
     const map = new Map<string, { startDate?: number; dueDate?: number }>()
-    if (!baseline) return map
+    if (!baseline || baselineCompareMode === 'none') return map
     for (const entry of baseline.snapshot.workItems) {
       map.set(entry.workItemId, {
         startDate: entry.startDate,
@@ -536,9 +639,57 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       })
     }
     return map
-  }, [baseline])
+  }, [baseline, baselineCompareMode])
 
-  const userBaselines = useMemo(() => listUserBaselines(baselines), [baselines])
+  const progressPercentById = useMemo(() => buildProgressPercentById(items), [items])
+
+  const showBaselineVariance =
+    (baselineCompareMode === 'gantt' || baselineCompareMode === 'progressLine') &&
+    baseline != null
+
+  const showGanttBaselineGhosts =
+    baselineCompareMode === 'gantt' && selectedBaselineId != null && baselineByItemId.size > 0
+
+  const progressLine = useMemo(() => {
+    if (baselineCompareMode !== 'progressLine' || !baseline) {
+      return {
+        stubs: [] as ReturnType<typeof computeProgressLineStubs>['stubs'],
+        statusLeftPercent: 0,
+      }
+    }
+    return computeProgressLineStubs({
+      rows: treeRows,
+      baselineByItemId,
+      statusDateMs: resolveBaselineAsOfDate(baseline),
+      rangeStart: timeline.rangeStart,
+      rangeEnd: timeline.rangeEnd,
+    })
+  }, [baseline, baselineByItemId, baselineCompareMode, timeline.rangeEnd, timeline.rangeStart, treeRows])
+
+  const userBaselines = useMemo(
+    () =>
+      listUserBaselines(baselines).map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        createdAt: entry.createdAt,
+        capturedAt: entry.snapshot.capturedAt ?? entry.createdAt,
+        asOfDate: resolveBaselineAsOfDate(entry),
+      })),
+    [baselines],
+  )
+
+  const nextCaptureAsOfMs = useMemo(() => suggestBaselineAsOfDate(items), [items])
+
+  const nextCaptureBaselineIndex = useMemo(
+    () => nextUserBaselineIndex(userBaselines),
+    [userBaselines],
+  )
+
+  const nextCaptureBaselineName = useMemo(
+    () =>
+      nextUserBaselineName(userBaselines, formatWorkItemDate(nextCaptureAsOfMs)),
+    [userBaselines, nextCaptureAsOfMs],
+  )
 
   const versionSwitchEntries = useMemo((): GanttVersionSwitchEntry[] => {
     const history = readSaveHistory(selectedProject?.metadata)
@@ -899,9 +1050,18 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         for (const relation of existing) {
           await pmScheduleApi.deleteRelation(relation.id)
         }
+        const byId = new Map(items.map((entry) => [entry.id, entry]))
         for (const token of tokens) {
           const fromId = idByIndex.get(token.index)
           if (!fromId || fromId === itemId) continue
+          if (
+            !isSchedulableRelation(
+              { fromWorkItemId: fromId, toWorkItemId: itemId },
+              byId,
+            )
+          ) {
+            continue
+          }
           await pmScheduleApi.createRelation({
             workspaceId,
             projectId: selectedProjectId,
@@ -934,11 +1094,29 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       case 'percentComplete': {
         const digits = rawValue.replace(/[^\d]/g, '')
         if (!digits) return
+        if (items.some((entry) => entry.parentId === itemId)) return
         const progressPercent = Math.min(100, Math.max(0, Number.parseInt(digits, 10)))
         captureHistoryBeforeChange()
         await pmApi.updateWorkItem({ id: itemId, progressPercent })
+        const nextItems = itemsRef.current.map((entry) =>
+          entry.id === itemId ? { ...entry, progressPercent } : entry,
+        )
+        const rollups = collectProgressRollupUpdates(nextItems)
+        if (rollups.length > 0) {
+          await Promise.all(
+            rollups.map((update) =>
+              pmApi.updateWorkItem({
+                id: update.id,
+                progressPercent: update.progressPercent,
+              }),
+            ),
+          )
+        }
         break
       }
+      case 'variance':
+        // Read-only computed column.
+        return
       case 'shouldPercentComplete': {
         const digits = rawValue.replace(/[^\d]/g, '')
         const nextMeta = { ...item.metadata }
@@ -1070,6 +1248,24 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     if (!parentId || isGanttProjectRootId(parentId)) return
     captureHistoryBeforeChange()
     await pmApi.updateWorkItem({ id: selectedId, parentId })
+
+    // Drop predecessor links that become ancestor↔descendant after demote (e.g. FS
+    // from the new parent). Keeping them desyncs schedule vs critical path.
+    const nextById = new Map(
+      items.map((entry) => [
+        entry.id,
+        entry.id === selectedId ? { ...entry, parentId } : entry,
+      ]),
+    )
+    const staleRelations = relations.filter(
+      (relation) => !isSchedulableRelation(relation, nextById),
+    )
+    if (staleRelations.length > 0) {
+      await Promise.all(
+        staleRelations.map((relation) => pmScheduleApi.deleteRelation(relation.id)),
+      )
+    }
+
     lastScheduleFingerprintRef.current = ''
     await loadProjectData(selectedProjectId)
   }
@@ -1246,11 +1442,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       if (version > 0) {
         // Persist the version's plan snapshot for version switch (not a user baseline).
         try {
-          await pmScheduleApi.createBaseline(
-            workspaceId,
-            selectedProjectId,
-            versionPlanSnapshotName(version),
-          )
+          await pmScheduleApi.createBaseline(workspaceId, selectedProjectId, {
+            name: versionPlanSnapshotName(version),
+          })
         } catch (err) {
           window.alert(
             t('projectManagerPage.schedule.versionBaselineCreateFailed', {
@@ -1355,6 +1549,44 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     workspaceId,
   ])
 
+  /** Defaults for 进度检查: Gantt compare + latest user baseline (no version restore). */
+  const applyProgressCheckDefaults = useCallback(() => {
+    if (!selectedProjectId) return
+    setBaselineCompareMode('gantt')
+    const users = listUserBaselines(baselines)
+    const latestBaseline = [...users].sort(
+      (a, b) =>
+        (b.snapshot.capturedAt ?? b.createdAt) - (a.snapshot.capturedAt ?? a.createdAt),
+    )[0]
+    setSelectedBaselineId(latestBaseline?.id ?? null)
+  }, [baselines, selectedProjectId])
+
+  const progressCheckSetupKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (uiPrefs.scheduleView !== 'progressCheck' || loading || !selectedProjectId) {
+      if (uiPrefs.scheduleView !== 'progressCheck') {
+        progressCheckSetupKeyRef.current = null
+      }
+      return
+    }
+    const key = `${selectedProjectId}:progressCheck`
+    if (progressCheckSetupKeyRef.current === key) return
+    progressCheckSetupKeyRef.current = key
+    applyProgressCheckDefaults()
+  }, [
+    applyProgressCheckDefaults,
+    loading,
+    selectedProjectId,
+    uiPrefs.scheduleView,
+  ])
+
+  const handleScheduleViewChange = useCallback(
+    (scheduleView: GanttScheduleView) => {
+      handlePrefsChange({ ...uiPrefs, scheduleView })
+    },
+    [handlePrefsChange, uiPrefs],
+  )
+
   const handleMenuAction = (action: GanttMenuAction) => {
     void (async () => {
       const structureLocked = uiPrefs.scheduleView === 'resource'
@@ -1369,6 +1601,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         'moveUp',
         'moveDown',
         'captureBaseline',
+        'editBaseline',
         'deleteBaseline',
       ])
       if (structureLocked && structureActions.has(action)) return
@@ -1418,18 +1651,18 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           break
         case 'captureBaseline':
           if (!selectedProjectId) break
-          try {
-            await pmScheduleApi.createBaseline(workspaceId, selectedProjectId)
-            await loadProjectData(selectedProjectId)
-          } catch (err) {
-            window.alert(err instanceof Error ? err.message : String(err))
-          }
+          setCaptureBaselineOpen(true)
+          break
+        case 'editBaseline':
+          if (!selectedBaselineId || !selectedProjectId) break
+          setEditBaselineOpen(true)
           break
         case 'deleteBaseline':
           if (!selectedBaselineId || !selectedProjectId) break
           try {
             await pmScheduleApi.deleteBaseline(selectedBaselineId)
             setSelectedBaselineId(null)
+            setBaselineCompareMode('none')
             await loadProjectData(selectedProjectId)
           } catch (err) {
             window.alert(err instanceof Error ? err.message : String(err))
@@ -1478,7 +1711,8 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const isListView = uiPrefs.scheduleView === 'list'
   const isResourceView = uiPrefs.scheduleView === 'resource'
   const isCostView = uiPrefs.scheduleView === 'cost'
-  const isChartView = uiPrefs.scheduleView === 'gantt'
+  const isProgressCheckView = uiPrefs.scheduleView === 'progressCheck'
+  const isChartView = uiPrefs.scheduleView === 'gantt' || isProgressCheckView
   const isFullWidthListLayout = isListView || isResourceView || isCostView
   // Plain derive (not useMemo): this block sits after early returns for loading/error.
   const gridPrefs: GanttUiPrefs = isResourceView
@@ -1519,7 +1753,12 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
             spacer: '',
           },
         }
-      : uiPrefs
+      : isProgressCheckView
+        ? {
+            ...uiPrefs,
+            columnOrder: [...PROGRESS_CHECK_COLUMN_ORDER],
+          }
+        : uiPrefs
   const barStyleClass =
     barStyle === 'outline'
       ? 'tm-pm-gantt-page--outline'
@@ -1605,12 +1844,13 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         prefs={gridPrefs}
         builtinLabels={builtinLabels}
         timeline={timeline}
-        baselineByItemId={baselineByItemId}
+        baselineByItemId={showGanttBaselineGhosts ? baselineByItemId : new Map()}
         showYearRow={showYearRow}
         showMonthRow={showMonthRow}
         showWeekRow={showWeekRow}
         showDayRow={showDayRow}
         headerHeight={headerHeight}
+        resourceCatalog={resourceCatalog}
       />
 
       <ProjectGanttMenuBar
@@ -1625,10 +1865,19 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         }
         selectedTaskType={selectedTaskType}
         scheduleView={uiPrefs.scheduleView}
-        onScheduleViewChange={(scheduleView) => handlePrefsChange({ ...uiPrefs, scheduleView })}
+        onScheduleViewChange={handleScheduleViewChange}
         baselines={userBaselines}
         selectedBaselineId={selectedBaselineId}
-        onSelectBaseline={setSelectedBaselineId}
+        onSelectBaseline={(id) => {
+          setSelectedBaselineId(id)
+          if (id == null) setBaselineCompareMode('none')
+          else if (baselineCompareMode === 'none') setBaselineCompareMode('gantt')
+        }}
+        baselineCompareMode={baselineCompareMode}
+        onBaselineCompareModeChange={(mode) => {
+          setBaselineCompareMode(mode)
+          if (mode === 'none') setSelectedBaselineId(null)
+        }}
         versionSwitchEntries={versionSwitchEntries}
         onRestoreBaseline={(id) => setPendingRestoreBaselineId(id)}
         onAction={handleMenuAction}
@@ -1666,10 +1915,19 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           onClearRowSelection={handleClearRowSelection}
           onDeleteSelectedRows={requestDeleteSelectedRows}
           onToggleCollapse={handleToggleCollapse}
-          onPrefsChange={handlePrefsChange}
+          onPrefsChange={
+            isProgressCheckView
+              ? (next) =>
+                  handlePrefsChange({
+                    ...next,
+                    columnOrder: uiPrefs.columnOrder,
+                  })
+              : handlePrefsChange
+          }
           onCommitCell={handleCommitCell}
           resourceCatalog={resourceCatalog}
           resourceColumnCatalog={resourceColumnCatalog}
+          progressPercentById={progressPercentById}
           onAssignResource={isResourceView ? handleAssignResource : undefined}
           onReplaceResourceAssignments={
             isResourceView ? handleReplaceResourceAssignments : undefined
@@ -1677,6 +1935,14 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           onAssignCost={isCostView ? handleAssignCost : undefined}
           onReplaceCostAssignments={isCostView ? handleReplaceCostAssignments : undefined}
           selectionResetKey={selectedProjectId}
+          shouldPercentAsOfMs={
+            showBaselineVariance && baseline
+              ? resolveBaselineAsOfDate(baseline)
+              : null
+          }
+          baselinePlanByItemId={
+            showBaselineVariance && baselineByItemId.size > 0 ? baselineByItemId : undefined
+          }
         />
 
         {isChartView ? (
@@ -1768,7 +2034,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
               style={{ width: '100%', minHeight: chartHeight }}>
               {treeRows.map(({ item, hasChildren }) => {
                 const bar = timeline.bars.find((entry) => entry.item.id === item.id)
-                const ghost = baselineByItemId.get(item.id)
+                const ghost = showGanttBaselineGhosts ? baselineByItemId.get(item.id) : undefined
                 const ghostRange =
                   ghost?.startDate != null && ghost.dueDate != null
                     ? barPercentsInRange(
@@ -1783,6 +2049,19 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
                 const kind = resolveGanttTaskKind(item, hasChildren, onCritical)
                 const isMilestoneBar = !hasChildren && item.type === 'milestone'
                 const isProjectRoot = isGanttProjectRootId(item.id)
+                const actualPct =
+                  typeof item.progressPercent === 'number' && Number.isFinite(item.progressPercent)
+                    ? Math.min(100, Math.max(0, item.progressPercent))
+                    : 0
+                const planDates = baselineByItemId.get(item.id)
+                const shouldPct = showBaselineVariance
+                  ? plannedProgressAtDate(
+                      planDates?.startDate ?? item.startDate,
+                      planDates?.dueDate ?? item.dueDate,
+                      resolveBaselineAsOfDate(baseline!),
+                    )
+                  : 0
+                const variancePct = actualPct - shouldPct
                 return (
                   <div
                     key={item.id}
@@ -1821,6 +2100,13 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
                           kind === 'summary' ? 'tm-pm-gantt-bar--summary' : '',
                           isMilestoneBar ? 'tm-pm-gantt-bar--milestone' : '',
                           onCritical ? 'tm-pm-gantt-bar--critical' : '',
+                          showBaselineVariance && !isMilestoneBar && !hasChildren
+                            ? variancePct < -0.5
+                              ? 'tm-pm-gantt-bar--behind'
+                              : variancePct > 0.5
+                                ? 'tm-pm-gantt-bar--ahead'
+                                : 'tm-pm-gantt-bar--ontrack'
+                            : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
@@ -1829,12 +2115,93 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
                             ? { left: `${bar.leftPercent}%`, width: 12, height: 12 }
                             : { left: `${bar.leftPercent}%`, width: `${bar.widthPercent}%` }
                         }
-                        title={`${item.title} · ${formatWorkItemDate(item.startDate)} → ${formatWorkItemDate(item.dueDate)}`}
-                      />
+                        title={
+                          showBaselineVariance && !hasChildren
+                            ? `${item.title} · ${t('projectManagerPage.schedule.baselineVarianceTitle', {
+                                actual: String(Math.round(actualPct)),
+                                should: String(Math.round(shouldPct)),
+                                variance:
+                                  (variancePct >= 0 ? '+' : '') + String(Math.round(variancePct)),
+                              })}`
+                            : `${item.title} · ${formatWorkItemDate(item.startDate)} → ${formatWorkItemDate(item.dueDate)}`
+                        }>
+                        {showBaselineVariance && !isMilestoneBar && !hasChildren ? (
+                          <>
+                            <div
+                              className="tm-pm-gantt-bar-actual"
+                              style={{ width: `${actualPct}%` }}
+                            />
+                            <div
+                              className="tm-pm-gantt-bar-should"
+                              style={{ left: `${shouldPct}%` }}
+                            />
+                          </>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 )
               })}
+              {baselineCompareMode === 'progressLine' && baseline ? (
+                <div
+                  className="tm-pm-gantt-progress-line-layer"
+                  style={{ height: chartHeight }}
+                  aria-hidden>
+                  <div
+                    className="tm-pm-gantt-progress-line-status"
+                    style={{ left: `${progressLine.statusLeftPercent}%` }}
+                    title={formatWorkItemDate(resolveBaselineAsOfDate(baseline))}
+                  />
+                  {progressLine.stubs.length > 0 ? (
+                    <>
+                      <svg
+                        className="tm-pm-gantt-progress-line-svg"
+                        width="100%"
+                        height={chartHeight}
+                        viewBox={`0 0 100 ${chartHeight}`}
+                        preserveAspectRatio="none">
+                        {progressLine.stubs.map((stub) => (
+                          <line
+                            key={`stub-${stub.itemId}`}
+                            className={[
+                              'tm-pm-gantt-progress-line-stub',
+                              stub.variancePct < -0.5
+                                ? 'tm-pm-gantt-progress-line-stub--behind'
+                                : stub.variancePct > 0.5
+                                  ? 'tm-pm-gantt-progress-line-stub--ahead'
+                                  : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            x1={progressLine.statusLeftPercent}
+                            y1={stub.y}
+                            x2={stub.tipLeftPercent}
+                            y2={stub.y}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        ))}
+                      </svg>
+                      {progressLine.stubs.map((stub) => (
+                        <span
+                          key={stub.itemId}
+                          className={[
+                            'tm-pm-gantt-progress-line-dot',
+                            stub.variancePct < -0.5
+                              ? 'tm-pm-gantt-progress-line-dot--behind'
+                              : stub.variancePct > 0.5
+                                ? 'tm-pm-gantt-progress-line-dot--ahead'
+                                : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          style={{ left: `${stub.tipLeftPercent}%`, top: stub.y }}
+                          title={`${stub.variancePct >= 0 ? '+' : ''}${stub.variancePct.toFixed(0)}%`}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1925,6 +2292,132 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           danger
           onCancel={() => setPendingDeleteSelected(false)}
           onConfirm={() => void handleDeleteSelectedRows()}
+        />
+      ) : null}
+
+      {captureBaselineOpen && selectedProjectId ? (
+        <BaselineCaptureDialog
+          mode="capture"
+          initialName={nextCaptureBaselineName}
+          initialDateMs={nextCaptureAsOfMs}
+          nameIndex={nextCaptureBaselineIndex}
+          onCancel={() => setCaptureBaselineOpen(false)}
+          onConfirm={({ name, asOfDate }) => {
+            setCaptureBaselineOpen(false)
+            void (async () => {
+              try {
+                const created = await pmScheduleApi.createBaseline(
+                  workspaceId,
+                  selectedProjectId,
+                  {
+                    name,
+                    asOfDate,
+                  },
+                )
+                const asOfMs = parseDateInput(asOfDate)
+                let leafCount = 0
+                let zeroCount = 0
+                let minStart: number | null = null
+                if (asOfMs != null) {
+                  const currentItems = itemsRef.current
+                  const childIds = new Set(
+                    currentItems
+                      .map((item) => item.parentId)
+                      .filter((id): id is string => Boolean(id)),
+                  )
+                  await Promise.all(
+                    currentItems.map((item) => {
+                      const should = Math.round(
+                        plannedProgressAtDate(item.startDate, item.dueDate, asOfMs),
+                      )
+                      if (item.startDate != null) {
+                        const start = startOfLocalDay(item.startDate)
+                        minStart = minStart == null ? start : Math.min(minStart, start)
+                      }
+                      if (!childIds.has(item.id) && item.type !== 'milestone') {
+                        leafCount += 1
+                        if (should === 0) zeroCount += 1
+                      }
+                      const prev = item.metadata?.[SHOULD_PERCENT_META_KEY]
+                      if (prev === should) return Promise.resolve()
+                      return pmApi.updateWorkItem({
+                        id: item.id,
+                        metadata: {
+                          ...item.metadata,
+                          [SHOULD_PERCENT_META_KEY]: should,
+                        },
+                      })
+                    }),
+                  )
+                }
+                await loadProjectData(selectedProjectId)
+                setSelectedBaselineId(created.id)
+                setBaselineCompareMode('gantt')
+                if (
+                  asOfMs != null &&
+                  leafCount > 0 &&
+                  zeroCount === leafCount &&
+                  minStart != null &&
+                  asOfMs <= minStart
+                ) {
+                  window.alert(
+                    t('projectManagerPage.schedule.baselineCapture.allZeroHint', {
+                      name,
+                      asOfDate,
+                      suggestDate: formatWorkItemDate(suggestBaselineAsOfDate(itemsRef.current)),
+                    }),
+                  )
+                }
+              } catch (err) {
+                window.alert(err instanceof Error ? err.message : String(err))
+              }
+            })()
+          }}
+        />
+      ) : null}
+
+      {editBaselineOpen && selectedBaselineId && baseline ? (
+        <BaselineCaptureDialog
+          mode="edit"
+          initialName={baseline.name}
+          initialDateMs={resolveBaselineAsOfDate(baseline)}
+          nameIndex={
+            /^基线\s*(\d+)/u.exec(baseline.name.trim())
+              ? Number.parseInt(/^基线\s*(\d+)/u.exec(baseline.name.trim())![1]!, 10)
+              : nextCaptureBaselineIndex
+          }
+          onCancel={() => setEditBaselineOpen(false)}
+          onConfirm={({ name, asOfDate }) => {
+            setEditBaselineOpen(false)
+            void (async () => {
+              try {
+                await pmScheduleApi.updateBaseline(selectedBaselineId, { name, asOfDate })
+                const asOfMs = parseDateInput(asOfDate)
+                if (asOfMs != null) {
+                  const currentItems = itemsRef.current
+                  await Promise.all(
+                    currentItems.map((item) => {
+                      const should = Math.round(
+                        plannedProgressAtDate(item.startDate, item.dueDate, asOfMs),
+                      )
+                      const prev = item.metadata?.[SHOULD_PERCENT_META_KEY]
+                      if (prev === should) return Promise.resolve()
+                      return pmApi.updateWorkItem({
+                        id: item.id,
+                        metadata: {
+                          ...item.metadata,
+                          [SHOULD_PERCENT_META_KEY]: should,
+                        },
+                      })
+                    }),
+                  )
+                }
+                await loadProjectData(selectedProjectId)
+              } catch (err) {
+                window.alert(err instanceof Error ? err.message : String(err))
+              }
+            })()
+          }}
         />
       ) : null}
 

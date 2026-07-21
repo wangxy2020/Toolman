@@ -41,6 +41,21 @@ export const PmBaselineCreateInputSchema = z.object({
   workspaceId: UuidSchema,
   projectId: UuidSchema,
   name: z.string().min(1).max(200).optional(),
+  /** As-of date for the baseline (YYYY-MM-DD). Used for naming and progress-line compare. */
+  asOfDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+})
+
+export const PmBaselineUpdateInputSchema = z.object({
+  id: UuidSchema,
+  name: z.string().min(1).max(200).optional(),
+  /** Update status / as-of date (YYYY-MM-DD). Refreshes live 应完成百分比. */
+  asOfDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 })
 
 export const PmBaselineGetInputSchema = z.object({
@@ -76,5 +91,6 @@ export type PmRelationListInput = z.infer<typeof PmRelationListInputSchema>
 export type PmRelationCreateInput = z.infer<typeof PmRelationCreateInputSchema>
 export type PmBaselineListInput = z.infer<typeof PmBaselineListInputSchema>
 export type PmBaselineCreateInput = z.infer<typeof PmBaselineCreateInputSchema>
+export type PmBaselineUpdateInput = z.infer<typeof PmBaselineUpdateInputSchema>
 export type PmBaselineRestoreInput = z.infer<typeof PmBaselineRestoreInputSchema>
 export type PmBaselineRestoreOutput = z.infer<typeof PmBaselineRestoreOutputSchema>

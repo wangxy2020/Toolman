@@ -454,4 +454,94 @@ describe('computeCriticalTaskIds', () => {
     expect(critical.has('a')).toBe(true)
     expect(critical.has('b')).toBe(true)
   })
+
+  it('leaves parallel non-driving branches off the critical path', () => {
+    const items = [
+      item({
+        id: 'long',
+        title: 'Long',
+        startDate: Date.parse('2026-01-01'),
+        dueDate: Date.parse('2026-01-20'),
+      }),
+      item({
+        id: 'short',
+        title: 'Short',
+        startDate: Date.parse('2026-01-01'),
+        dueDate: Date.parse('2026-01-05'),
+      }),
+      item({
+        id: 'end',
+        title: 'End',
+        startDate: Date.parse('2026-01-01'),
+        dueDate: Date.parse('2026-01-03'),
+      }),
+    ]
+    const rel = (id: string, from: string, to: string): PmWorkItemRelation => ({
+      id,
+      projectId: items[0]!.projectId,
+      workspaceId: items[0]!.workspaceId,
+      fromWorkItemId: from,
+      toWorkItemId: to,
+      type: 'FS',
+      lagDays: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const relations = [rel('r1', 'long', 'end'), rel('r2', 'short', 'end')]
+    const scheduled = scheduleWorkItems(items, relations)
+    const critical = computeCriticalTaskIds(items, relations, scheduled)
+    expect(critical.has('long')).toBe(true)
+    expect(critical.has('end')).toBe(true)
+    expect(critical.has('short')).toBe(false)
+  })
+
+  it('ignores ancestor↔descendant FS links when computing critical path', () => {
+    // After 降级: B is child of A while stale A→B FS remains; C follows B.
+    const items = [
+      item({
+        id: 'a',
+        title: 'A',
+        startDate: Date.parse('2026-01-01'),
+        dueDate: Date.parse('2026-01-10'),
+      }),
+      item({
+        id: 'b',
+        title: 'B',
+        parentId: 'a',
+        startDate: Date.parse('2026-01-11'),
+        dueDate: Date.parse('2026-01-15'),
+      }),
+      item({
+        id: 'c',
+        title: 'C',
+        startDate: Date.parse('2026-01-01'),
+        dueDate: Date.parse('2026-01-05'),
+      }),
+      item({
+        id: 'slack',
+        title: 'Slack',
+        startDate: Date.parse('2026-01-01'),
+        dueDate: Date.parse('2026-01-02'),
+      }),
+    ]
+    const rel = (id: string, from: string, to: string): PmWorkItemRelation => ({
+      id,
+      projectId: items[0]!.projectId,
+      workspaceId: items[0]!.workspaceId,
+      fromWorkItemId: from,
+      toWorkItemId: to,
+      type: 'FS',
+      lagDays: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    // A→B is ancestor (ignored); B→C drives the finish; slack is isolated early.
+    const relations = [rel('r0', 'a', 'b'), rel('r1', 'b', 'c')]
+    const scheduled = scheduleWorkItems(items, relations)
+    const critical = computeCriticalTaskIds(items, relations, scheduled)
+    expect(critical.has('b')).toBe(true)
+    expect(critical.has('c')).toBe(true)
+    expect(critical.has('a')).toBe(true) // summary bubble from critical child b
+    expect(critical.has('slack')).toBe(false)
+  })
 })

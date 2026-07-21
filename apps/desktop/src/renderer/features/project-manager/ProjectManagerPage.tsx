@@ -460,7 +460,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     )
   })()
 
-  const openScheduleFromFeatures = useCallback((_view: 'list' | 'gantt' | 'resource' | 'cost') => {
+  const openScheduleFromFeatures = useCallback((_view: 'list' | 'gantt' | 'progressCheck' | 'resource' | 'cost') => {
     setSettingsOpen(false)
     if (
       workspaceId &&

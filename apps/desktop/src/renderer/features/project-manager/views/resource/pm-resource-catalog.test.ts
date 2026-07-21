@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  applyAuxiliaryResourceMigration,
+  applyBudgetTypeMigration,
   applyLaborUnitAliases,
   applyResourceNameAliases,
   applyResourceUnitConventions,
@@ -227,7 +229,7 @@ describe('upsertSharedResourceCatalog', () => {
 })
 
 describe('ensureDefaultResourcesInCatalog', () => {
-  it('appends missing device and funds defaults into an existing catalog', () => {
+  it('appends missing device and budget defaults into an existing catalog', () => {
     const existing = [
       row({ id: 'p1', type: 'labor', name: '普通工', unitPrice: 250 }),
     ]
@@ -236,12 +238,12 @@ describe('ensureDefaultResourcesInCatalog', () => {
     expect(ensured.rows.some((entry) => entry.type === 'device' && entry.name === '发电机')).toBe(
       true,
     )
-    expect(ensured.rows.some((entry) => entry.type === 'funds' && entry.name === '投资估算')).toBe(
-      true,
-    )
-    expect(ensured.rows.some((entry) => entry.type === 'funds' && entry.name === '成本预算')).toBe(
-      true,
-    )
+    expect(
+      ensured.rows.some((entry) => entry.type === 'investment' && entry.name === '投资估算'),
+    ).toBe(true)
+    expect(
+      ensured.rows.some((entry) => entry.type === 'costBudget' && entry.name === '成本预算'),
+    ).toBe(true)
     expect(ensured.rows.some((entry) => entry.type === 'labor' && entry.name === '普通工')).toBe(
       true,
     )
@@ -283,13 +285,19 @@ describe('ensureDefaultResourcesInCatalog', () => {
     expect(result.rows[2]).toMatchObject({ unit: '台', pricingUnit: '台班' })
   })
 
-  it('does not re-seed funds when the type already exists', () => {
+  it('does not re-seed budget types when already present', () => {
     const existing = [
       row({ id: 'd1', type: 'device', name: '发电机', unit: '台班', unitPrice: 600 }),
-      row({ id: 'f1', type: 'funds', name: '投资估算', unit: '元', unitPrice: null }),
+      row({ id: 'b1', type: 'investment', name: '投资估算', unit: '元', unitPrice: null }),
+      row({ id: 'b2', type: 'designEstimate', name: '设计概算', unit: '元', unitPrice: null }),
+      row({ id: 'b3', type: 'constructionBudget', name: '施工预算', unit: '元', unitPrice: null }),
+      row({ id: 'b4', type: 'costBudget', name: '成本预算', unit: '元', unitPrice: null }),
       row({ id: 'i1', type: 'instrument', name: '全站仪', unit: '台班', unitPrice: 400 }),
       row({ id: 'i2', type: 'instrument', name: '水准仪', unit: '台班', unitPrice: 150 }),
       row({ id: 'i3', type: 'instrument', name: '塔尺', unit: '天', unitPrice: 30 }),
+      row({ id: 'a1', type: 'auxiliary', name: '模板', unit: 'm²', unitPrice: 50 }),
+      row({ id: 'a2', type: 'auxiliary', name: '方木', unit: 'm³', unitPrice: 1800 }),
+      row({ id: 'a3', type: 'auxiliary', name: '脚手架', unit: 't', unitPrice: 5000 }),
       row({ id: 'm1', type: 'material', name: '砌块/砖', unit: 'm³', unitPrice: 280 }),
       row({ id: 'm2', type: 'material', name: '防水卷材', unit: 'm²', unitPrice: 25 }),
       row({ id: 'm3', type: 'material', name: '预拌砂浆', unit: 'm³', unitPrice: 450 }),
@@ -316,6 +324,55 @@ describe('ensureDefaultResourcesInCatalog', () => {
     expect(ensured.rows.some((entry) => entry.type === 'material' && entry.name === '钢管')).toBe(
       true,
     )
+    expect(ensured.rows.some((entry) => entry.type === 'auxiliary' && entry.name === '模板')).toBe(
+      true,
+    )
+  })
+
+  it('migrates 模板/方木/脚手架 from material into auxiliary', () => {
+    const migrated = applyAuxiliaryResourceMigration([
+      row({ id: 'm1', type: 'material', name: '模板', unit: 'm²', unitPrice: 50 }),
+      row({ id: 'm2', type: 'material', name: '方林', unit: 'm³', unitPrice: 1800 }),
+      row({ id: 'm3', type: 'material', name: '脚手架', unit: 't', unitPrice: 5000 }),
+      row({ id: 'm4', type: 'material', name: '砂子', unit: 'm³', unitPrice: 100 }),
+    ])
+    expect(migrated.changed).toBe(true)
+    expect(migrated.rows.map((entry) => `${entry.type}:${entry.name}`)).toEqual([
+      'auxiliary:模板',
+      'auxiliary:方木',
+      'auxiliary:脚手架',
+      'material:砂子',
+    ])
+  })
+
+  it('persists project catalogs that still store 模板 as material', () => {
+    const resolved = resolveProjectResourceCatalog('ws-persist-aux', 'project-a', {
+      resourceCatalog: [
+        row({ id: 'm1', type: 'material', name: '模板', unit: 'm²', unitPrice: 50 }),
+      ],
+    })
+    expect(resolved.rows.map((entry) => `${entry.type}:${entry.name}`)).toEqual([
+      'auxiliary:模板',
+    ])
+    expect(resolved.needsPersist).toBe(true)
+  })
+
+  it('migrates legacy funds budget names into dedicated types', () => {
+    const migrated = applyBudgetTypeMigration([
+      row({ id: 'f1', type: 'funds', name: '投资估算', unit: '元', unitPrice: null }),
+      row({ id: 'f2', type: 'funds', name: '设计概算', unit: '元', unitPrice: null }),
+      row({ id: 'f3', type: 'funds', name: '施工图预算', unit: '元', unitPrice: null }),
+      row({ id: 'f4', type: 'funds', name: '成本预算', unit: '元', unitPrice: null }),
+      row({ id: 'f5', type: 'funds', name: '其他资金', unit: '元', unitPrice: null }),
+    ])
+    expect(migrated.changed).toBe(true)
+    expect(migrated.rows.map((entry) => `${entry.type}:${entry.name}`)).toEqual([
+      'investment:投资估算',
+      'designEstimate:设计概算',
+      'constructionBudget:施工预算',
+      'costBudget:成本预算',
+      'funds:其他资金',
+    ])
   })
 })
 

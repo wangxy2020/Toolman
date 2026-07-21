@@ -7,7 +7,10 @@ import {
   resolveProjectManagementTabFromSession,
   type ProjectManagementSessionCandidate,
 } from './agent-link.js'
-import { buildProjectManagementRuntimeHint } from './epc-context.js'
+import {
+  buildProjectManagementAssistantSystemPrompt,
+  buildProjectManagementRuntimeHint,
+} from './epc-context.js'
 
 function session(
   partial: Partial<ProjectManagementSessionCandidate> & Pick<ProjectManagementSessionCandidate, 'id'>,
@@ -91,6 +94,15 @@ describe('resolveProjectManagementSessionForTab', () => {
     expect(resolveProjectManagementSessionForTab(sessions, 'assistant-1', 'all_projects')?.id).toBe(
       'current',
     )
+  })
+})
+
+describe('buildProjectManagementAssistantSystemPrompt', () => {
+  it('embeds the GFM output style guide for local agent readability', () => {
+    const prompt = buildProjectManagementAssistantSystemPrompt()
+    expect(prompt).toContain('回复版式（必读）')
+    expect(prompt).toContain('摘要 → 分节 → 列表 → 必要时表格 → 结论')
+    expect(prompt).toContain('禁止：HTML')
   })
 })
 

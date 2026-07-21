@@ -248,11 +248,9 @@ export function ProjectPlanAgentApplyBar({
       const version = readScheduleVersion(project.metadata)
       if (version <= 0) return
       try {
-        await pmScheduleApi.createBaseline(
-          workspaceId,
-          project.id,
-          versionPlanSnapshotName(version),
-        )
+        await pmScheduleApi.createBaseline(workspaceId, project.id, {
+          name: versionPlanSnapshotName(version),
+        })
       } catch {
         // Best-effort; apply should still proceed.
       }

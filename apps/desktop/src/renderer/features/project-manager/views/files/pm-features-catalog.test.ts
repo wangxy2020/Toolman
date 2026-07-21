@@ -15,6 +15,7 @@ describe('pm-features-catalog', () => {
   it('exposes the practice type set used by the Features menubar', () => {
     expect(PM_FEATURE_TYPES).toEqual([
       'labor',
+      'auxiliary',
       'material',
       'machinery',
       'procurement',
@@ -23,6 +24,7 @@ describe('pm-features-catalog', () => {
       'funds',
     ])
     expect(isPmFeatureType('machinery')).toBe(true)
+    expect(isPmFeatureType('auxiliary')).toBe(true)
     expect(isPmFeatureType('equipment')).toBe(false)
   })
 

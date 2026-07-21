@@ -355,6 +355,7 @@ export const projectManagerPageEn = {
       moveUp: 'Move up',
       moveDown: 'Move down',
       labor: 'Labor',
+      auxiliary: 'Auxiliary',
       material: 'Material',
       machinery: 'Machinery',
       procurement: 'Procurement',
@@ -381,7 +382,7 @@ export const projectManagerPageEn = {
         index: 'No.',
         type: 'Type',
         name: 'Name',
-        unit: 'Unit',
+        unit: 'Measure unit',
         quantity: 'Qty',
         start: 'Start Date',
         finish: 'Finish Date',
@@ -393,10 +394,14 @@ export const projectManagerPageEn = {
         remark: 'Remark',
       },
       quantityFromGanttHint: 'Summed from Gantt task resource assignments with the same type and name',
+      quantityFromGanttHintPeak:
+        'Peak concurrent quantity from matching Gantt assignments (not a sum across tasks)',
       quantityFromGanttHintLabor:
         'Peak concurrent headcount from matching Gantt labor assignments (not a sum across tasks)',
       monthFromGanttHint:
         'Monthly quantities prorated by overlapping days between each task schedule and calendar months',
+      monthFromGanttHintPeak:
+        'Peak same-day concurrent quantity in each month (not a simple sum, and not quantity × days)',
       monthFromGanttHintLabor:
         'Peak same-day concurrent headcount in each month (not a simple sum, and not people × days)',
       selection: {
@@ -414,9 +419,34 @@ export const projectManagerPageEn = {
   schedule: {
     loading: 'Loading schedule view…',
     captureBaseline: 'Capture baseline',
-    baselineSelect: 'Compare baseline',
+    baselineSelect: 'Select baseline',
+    baselineCompareMode: 'Compare mode',
     baselineCompareNone: 'No comparison',
-    baselineEmpty: 'No baselines yet — capture one from the current plan',
+    baselineCompareGantt: 'Gantt compare',
+    baselineCompareProgressLine: 'Progress line',
+    baselineEmpty: 'No baselines yet — capture one first',
+    baselineCapture: {
+      title: 'Capture baseline',
+      message:
+        'Set the baseline name and status date. Planned % complete uses planned start/finish vs the status date (MS Project–style); enter actual progress separately. If the status date is before planned start, planned % will be 0%.',
+      nameLabel: 'Baseline name',
+      dateLabel: 'Baseline date (status date)',
+      pickDate: 'Pick a date',
+      confirm: 'Capture',
+      invalidDate: 'Enter a valid date as YYYY-MM-DD',
+      invalidName: 'Enter a baseline name',
+      allZeroHint:
+        'Captured “{{name}}”. Status date {{asOfDate}} is on or before planned start, so every task’s planned % is 0%. Recapture with a status date inside the schedule (e.g. {{suggestDate}}).',
+    },
+    baselineEdit: {
+      title: 'Edit baseline',
+      message:
+        'Update the baseline name and status date. Changing the status date recalculates each task’s planned % complete.',
+      confirm: 'Save',
+    },
+    editBaseline: 'Edit baseline info',
+    baselineAsOfShort: 'As-of',
+    baselineVarianceTitle: 'Actual {{actual}}% · Planned {{should}}% · Variance {{variance}}%',
     versionSwitch: 'Switch version',
     versionSwitchEmpty: 'No switchable versions yet (appear after saving a new version)',
     versionSwitchNoSnapshot:
@@ -454,13 +484,14 @@ export const projectManagerPageEn = {
       index: 'No.',
       name: 'Task Name',
       duration: 'Duration',
-      start: 'Start Date',
-      finish: 'Finish Date',
+      start: 'Planned Start',
+      finish: 'Planned Finish',
       predecessors: 'Predecessors',
       actualStart: 'Actual Start Date',
       actualFinish: 'Actual Finish Date',
       shouldPercentComplete: 'Planned\nComplete',
       percentComplete: 'Actual\nComplete',
+      variance: 'Variance',
       resourceType: 'Resource type',
       resourceName: 'Resource name',
       resourceQty: 'Qty',
@@ -478,6 +509,7 @@ export const projectManagerPageEn = {
       notePlaceholder: 'Add a note',
       selectName: 'Select name',
       switchType: 'Type',
+      deleteRow: 'Delete row',
       addRow: 'Add row',
       moveUp: 'Move up',
       moveDown: 'Move down',
@@ -560,6 +592,7 @@ export const projectManagerPageEn = {
     views: {
       list: 'Task list',
       gantt: 'Gantt chart',
+      progressCheck: 'Progress check',
       resource: 'Resource allocation',
       cost: 'Cost allocation',
     },
@@ -792,17 +825,26 @@ export const projectManagerPageEn = {
     },
     types: {
       labor: 'Labor',
+      auxiliary: 'Auxiliary',
       material: 'Material',
       equipment: 'Machinery',
       device: 'Equipment',
       instrument: 'Instrument',
       management: 'Management',
       fees: 'Fees',
+      comprehensive: 'All-in rate',
+      measures: 'Measures',
+      tax: 'Tax',
+      investment: 'Investment estimate',
+      designEstimate: 'Design estimate',
+      constructionBudget: 'Construction budget',
+      costBudget: 'Cost budget',
       funds: 'Funds',
       other: 'Other',
     },
     views: {
       table: 'All projects',
+      allTypes: 'All types',
     },
     menu: {
       barLabel: 'Resource list editing',

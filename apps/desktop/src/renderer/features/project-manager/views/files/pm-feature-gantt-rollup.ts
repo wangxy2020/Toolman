@@ -19,8 +19,8 @@ import {
 
 export type FeatureGanttRollup = {
   /**
-   * Labor: peak concurrent headcount across the schedule.
-   * Material / machinery: sum of matching assignment quantities.
+   * Labor / auxiliary / machinery: peak concurrent quantity across the schedule.
+   * Material: sum of matching assignment quantities.
    */
   quantity: number
   /** Earliest task start among matching assignments. */
@@ -28,8 +28,8 @@ export type FeatureGanttRollup = {
   /** Latest task finish among matching assignments. */
   finishDate: number | null
   /**
-   * Labor: peak concurrent headcount within each calendar month.
-   * Material / machinery: day-weighted quantity by month key (`YYYY-MM`).
+   * Labor / auxiliary / machinery: peak concurrent quantity within each calendar month.
+   * Material: day-weighted quantity by month key (`YYYY-MM`).
    */
   monthly: Record<string, number>
 }
@@ -48,6 +48,8 @@ export function featureTypeToResourceType(type: PmFeatureType): PmResourceType |
   switch (type) {
     case 'labor':
       return 'labor'
+    case 'auxiliary':
+      return 'auxiliary'
     case 'material':
       return 'material'
     case 'machinery':
@@ -67,6 +69,8 @@ export function resourceTypeToFeatureType(type: PmResourceType): PmFeatureType |
   switch (type) {
     case 'labor':
       return 'labor'
+    case 'auxiliary':
+      return 'auxiliary'
     case 'material':
       return 'material'
     case 'equipment':
@@ -88,11 +92,17 @@ function defaultUnitForFeatureType(type: PmFeatureType): string {
       return '人'
     case 'machinery':
       return '台'
+    case 'auxiliary':
     case 'material':
       return ''
     default:
       return ''
   }
+}
+
+/** Types that roll up by peak concurrent quantity (not cumulative sum). */
+export function usesPeakConcurrentRollup(type: PmFeatureType): boolean {
+  return type === 'labor' || type === 'auxiliary' || type === 'machinery'
 }
 
 function featureMatchKey(type: PmFeatureType, name: string): string {
@@ -115,7 +125,8 @@ export function buildResourceUnitLookup(
 }
 
 /**
- * Distinct 实务 seeds from Gantt task resource assignments (labor / material / equipment).
+ * Distinct 实务 seeds from Gantt task resource assignments
+ * (labor / auxiliary / material / equipment).
  * Only counts non-empty assignments that include a finite quantity.
  * When `catalog` is provided, assignments not present in that list are ignored.
  * `unitLookup` keys are `${resourceType}\0${name}`.
@@ -149,7 +160,7 @@ export function collectGanttFeatureSeeds(
 }
 
 /**
- * Live 实务 rows for labor/material/machinery from current Gantt seeds.
+ * Live 实务 rows for labor/auxiliary/material/machinery from current Gantt seeds.
  * Optional `overlays` supply id / unit / remark when the same type+name exists in catalog.
  */
 export function buildLiveScheduleFeatureRows(
@@ -487,8 +498,8 @@ function assignmentMatchesFeature(
  * For each feature row, aggregate quantities from tasks whose resource assignments
  * match the row's mapped resource type + name and derive start/finish.
  *
- * Labor uses peak concurrent headcount (daily max within each month).
- * Material / machinery use quantity sums with day-weighted month allocation.
+ * Labor / auxiliary / machinery use peak concurrent quantity (daily max within each month).
+ * Material uses quantity sums with day-weighted month allocation.
  */
 export function computeFeatureGanttRollups(
   items: readonly PmWorkItem[],
@@ -503,12 +514,12 @@ export function computeFeatureGanttRollups(
       continue
     }
 
-    const usePeakHeadcount = feature.type === 'labor'
+    const usePeak = usesPeakConcurrentRollup(feature.type)
     let quantity = 0
     let startDate: number | null = null
     let finishDate: number | null = null
     const monthly: Record<string, number> = {}
-    const headcountSpans: HeadcountSpan[] = []
+    const peakSpans: HeadcountSpan[] = []
 
     for (const item of items) {
       const assignments = readTaskResourceAssignments(item.metadata)
@@ -519,7 +530,7 @@ export function computeFeatureGanttRollups(
         matchedOnTask = true
         if (assignment.quantity != null && Number.isFinite(assignment.quantity)) {
           matchedQty += assignment.quantity
-          if (!usePeakHeadcount) quantity += assignment.quantity
+          if (!usePeak) quantity += assignment.quantity
         }
       }
       if (!matchedOnTask) continue
@@ -535,8 +546,8 @@ export function computeFeatureGanttRollups(
 
       if (matchedQty === 0) continue
 
-      if (usePeakHeadcount) {
-        headcountSpans.push({
+      if (usePeak) {
+        peakSpans.push({
           quantity: matchedQty,
           startDate: item.startDate,
           finishDate: item.dueDate,
@@ -549,8 +560,8 @@ export function computeFeatureGanttRollups(
       }
     }
 
-    if (usePeakHeadcount) {
-      const peak = allocatePeakHeadcountByMonth(headcountSpans)
+    if (usePeak) {
+      const peak = allocatePeakHeadcountByMonth(peakSpans)
       result.set(feature.id, {
         quantity: peak.peak,
         startDate,

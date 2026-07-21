@@ -62,15 +62,23 @@ export function isEmptyAssignment(assignment: TaskResourceAssignment): boolean {
   )
 }
 
-/** Column display order: 人力 → 材料 → 机械, then remaining types. */
+/** Column display order: 人力 → 辅材 → 材料 → 机械, then remaining types. */
 export const RESOURCE_COLUMN_TYPE_ORDER: readonly PmResourceType[] = [
   'labor',
+  'auxiliary',
   'material',
   'equipment',
   'device',
   'instrument',
   'management',
   'fees',
+  'comprehensive',
+  'measures',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
   'funds',
   'other',
 ] as const
@@ -89,7 +97,7 @@ export function resourceMatchKey(
 
 /**
  * Order「全部项目」resources for Gantt resource columns:
- * labor → material → equipment (then other types), then by name.
+ * labor → auxiliary → material → equipment (then other types), then by name.
  */
 export function orderResourcesForGanttColumns(
   catalog: readonly PmResourceRow[],
@@ -113,8 +121,15 @@ export function findAssignmentIndexForResource(
   )
   if (byId >= 0) return byId
   const key = resourceMatchKey(resource.type, resource.name)
-  return assignments.findIndex(
+  const byTypeName = assignments.findIndex(
     (entry) => resourceMatchKey(entry.type, entry.name) === key,
+  )
+  if (byTypeName >= 0) return byTypeName
+  // Catalog reclassification (e.g. material→auxiliary) leaves stale stored types.
+  const name = canonicalizeResourceName(resource.name)
+  if (!name) return -1
+  return assignments.findIndex(
+    (entry) => canonicalizeResourceName(entry.name) === name,
   )
 }
 
@@ -273,49 +288,43 @@ export function replaceTaskResourceAssignmentsMetadata(
   return base
 }
 
+/**
+ * Match an assignment to a catalog row (id → type+name → name-only).
+ * Returns null when nothing in the catalog matches.
+ */
+export function findCatalogRowForAssignment(
+  assignment: TaskResourceAssignment,
+  catalog: readonly PmResourceRow[],
+): PmResourceRow | null {
+  if (assignment.resourceId) {
+    const found = catalog.find((row) => row.id === assignment.resourceId)
+    if (found) return found
+  }
+  const name = canonicalizeResourceName(assignment.name)
+  if (!name) return null
+  const typedMatch = catalog.find(
+    (row) =>
+      canonicalizeResourceName(row.name) === name &&
+      (assignment.type == null || row.type === assignment.type),
+  )
+  if (typedMatch) return typedMatch
+  // Fall back to name-only so stale/wrong stored types still resolve after catalog reclass.
+  return catalog.find((row) => canonicalizeResourceName(row.name) === name) ?? null
+}
+
 /** Resolve display fields against the live catalog (prefer catalog name/type by id). */
 export function resolveAssignmentAgainstCatalog(
   assignment: TaskResourceAssignment,
   catalog: readonly PmResourceRow[],
 ): TaskResourceAssignment {
-  if (assignment.resourceId) {
-    const found = catalog.find((row) => row.id === assignment.resourceId)
-    if (found) {
-      return {
-        resourceId: found.id,
-        type: found.type,
-        name: found.name,
-        quantity: assignment.quantity,
-        note: assignment.note,
-      }
-    }
-  }
-  const name = canonicalizeResourceName(assignment.name)
-  if (name) {
-    const typedMatch = catalog.find(
-      (row) =>
-        canonicalizeResourceName(row.name) === name &&
-        (assignment.type == null || row.type === assignment.type),
-    )
-    if (typedMatch) {
-      return {
-        resourceId: typedMatch.id,
-        type: typedMatch.type,
-        name: typedMatch.name,
-        quantity: assignment.quantity,
-        note: assignment.note,
-      }
-    }
-    // Fall back to name-only so stale/wrong stored types still sort & display correctly.
-    const nameOnly = catalog.find((row) => canonicalizeResourceName(row.name) === name)
-    if (nameOnly) {
-      return {
-        resourceId: nameOnly.id,
-        type: nameOnly.type,
-        name: nameOnly.name,
-        quantity: assignment.quantity,
-        note: assignment.note,
-      }
+  const found = findCatalogRowForAssignment(assignment, catalog)
+  if (found) {
+    return {
+      resourceId: found.id,
+      type: found.type,
+      name: found.name,
+      quantity: assignment.quantity,
+      note: assignment.note,
     }
   }
 
@@ -329,6 +338,39 @@ export function resolveAssignmentAgainstCatalog(
   }
 
   return assignment
+}
+
+/**
+ * Rewrite stored assignment type/name/id to match the live resource list.
+ * Unlike display resolve, unmatched (ghost) rows are left unchanged so hydrate
+ * does not wipe free-text entries.
+ */
+export function hydrateTaskResourceAssignmentsAgainstCatalog(
+  assignments: readonly TaskResourceAssignment[],
+  catalog: readonly PmResourceRow[],
+): { assignments: TaskResourceAssignment[]; changed: boolean } {
+  let changed = false
+  const next = assignments.map((assignment) => {
+    if (isEmptyAssignment(assignment)) return assignment
+    const found = findCatalogRowForAssignment(assignment, catalog)
+    if (!found) return assignment
+    if (
+      assignment.resourceId === found.id &&
+      assignment.type === found.type &&
+      canonicalizeResourceName(assignment.name) === canonicalizeResourceName(found.name)
+    ) {
+      return assignment
+    }
+    changed = true
+    return {
+      resourceId: found.id,
+      type: found.type,
+      name: found.name,
+      quantity: assignment.quantity,
+      note: assignment.note,
+    }
+  })
+  return { assignments: changed ? next : [...assignments], changed }
 }
 
 /** True when assignment identity (id or name) exists in the catalog. */
@@ -392,7 +434,7 @@ export function moveTaskResourceAssignment(
 }
 
 /**
- * Optional helper: order by labor → material → equipment, then name.
+ * Optional helper: order by labor → auxiliary → material → equipment, then name.
  * Not applied automatically — call only from explicit user actions if needed.
  */
 export function orderAssignmentsByResourceCatalog(

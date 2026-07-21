@@ -21,6 +21,9 @@ import {
   IconUndo,
 } from '../../../../components/icons'
 import { useI18n } from '../../../../i18n/useI18n'
+import type { BaselineCompareMode } from './pm-gantt-baseline-compare'
+import { formatBaselineCaptureTime } from './pm-gantt-baseline-compare'
+import { formatWorkItemDate } from './pm-gantt-utils'
 import type { GanttScheduleView } from './pm-gantt-prefs'
 
 const ICON_SIZE = 16
@@ -41,6 +44,7 @@ export type GanttMenuAction =
   | 'moveUp'
   | 'moveDown'
   | 'captureBaseline'
+  | 'editBaseline'
   | 'deleteBaseline'
   | 'openResource'
   | 'openCost'
@@ -76,9 +80,17 @@ interface Props {
   selectedTaskType: GanttLeafTaskType
   scheduleView: GanttScheduleView
   onScheduleViewChange: (view: GanttScheduleView) => void
-  baselines: Array<{ id: string; name: string }>
+  baselines: Array<{
+    id: string
+    name: string
+    createdAt: number
+    capturedAt: number
+    asOfDate?: number
+  }>
   selectedBaselineId: string | null
   onSelectBaseline: (id: string | null) => void
+  baselineCompareMode: BaselineCompareMode
+  onBaselineCompareModeChange: (mode: BaselineCompareMode) => void
   versionSwitchEntries: GanttVersionSwitchEntry[]
   onRestoreBaseline: (id: string) => void
   onAction: (action: GanttMenuAction) => void
@@ -131,6 +143,8 @@ export function ProjectGanttMenuBar({
   baselines,
   selectedBaselineId,
   onSelectBaseline,
+  baselineCompareMode,
+  onBaselineCompareModeChange,
   versionSwitchEntries,
   onRestoreBaseline,
   onAction,
@@ -297,6 +311,7 @@ export function ProjectGanttMenuBar({
   const viewLabelByMode: Record<GanttScheduleView, string> = {
     list: t('projectManagerPage.schedule.views.list'),
     gantt: t('projectManagerPage.schedule.views.gantt'),
+    progressCheck: t('projectManagerPage.schedule.views.progressCheck'),
     resource: t('projectManagerPage.schedule.views.resource'),
     cost: t('projectManagerPage.schedule.views.cost'),
   }
@@ -482,7 +497,7 @@ export function ProjectGanttMenuBar({
             {openMenu === 'view' &&
               renderPanel(
                 viewPos,
-                (['list', 'gantt', 'resource', 'cost'] as const).map((view) => (
+                (['list', 'gantt', 'progressCheck', 'resource', 'cost'] as const).map((view) => (
                   <button
                     key={view}
                     type="button"
@@ -591,50 +606,83 @@ export function ProjectGanttMenuBar({
                   </button>
 
                   <div className="tm-pm-gantt-submenu-title">
+                    {t('projectManagerPage.schedule.baselineCompareMode')}
+                  </div>
+                  {(
+                    [
+                      ['none', 'baselineCompareNone'],
+                      ['gantt', 'baselineCompareGantt'],
+                      ['progressLine', 'baselineCompareProgressLine'],
+                    ] as const
+                  ).map(([mode, labelKey]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={baselineCompareMode === mode}
+                      className={[
+                        'tm-pm-gantt-view-option',
+                        baselineCompareMode === mode ? 'tm-pm-gantt-view-option--active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        onBaselineCompareModeChange(mode)
+                        if (mode === 'none') onSelectBaseline(null)
+                        setOpenMenu(null)
+                      }}>
+                      {t(`projectManagerPage.schedule.${labelKey}`)}
+                    </button>
+                  ))}
+
+                  <div className="tm-pm-gantt-submenu-title">
                     {t('projectManagerPage.schedule.baselineSelect')}
                   </div>
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selectedBaselineId == null}
-                    className={[
-                      'tm-pm-gantt-view-option',
-                      selectedBaselineId == null ? 'tm-pm-gantt-view-option--active' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    onClick={() => {
-                      onSelectBaseline(null)
-                      setOpenMenu(null)
-                    }}>
-                    {t('projectManagerPage.schedule.baselineCompareNone')}
-                  </button>
                   {baselines.length === 0 ? (
                     <div className="tm-pm-gantt-submenu-empty">
                       {t('projectManagerPage.schedule.baselineEmpty')}
                     </div>
                   ) : (
-                    baselines.map((entry) => (
-                      <button
-                        key={`compare-${entry.id}`}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={selectedBaselineId === entry.id}
-                        className={[
-                          'tm-pm-gantt-view-option',
-                          selectedBaselineId === entry.id ? 'tm-pm-gantt-view-option--active' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        onClick={() => {
-                          onSelectBaseline(
-                            selectedBaselineId === entry.id ? null : entry.id,
-                          )
-                          setOpenMenu(null)
-                        }}>
-                        {entry.name}
-                      </button>
-                    ))
+                    baselines.map((entry) => {
+                      const asOfLabel =
+                        entry.asOfDate != null ? formatWorkItemDate(entry.asOfDate) : ''
+                      const nameWithoutDate = entry.name
+                        .replace(/\s*[（(]\d{4}-\d{2}-\d{2}[）)]\s*$/u, '')
+                        .trim()
+                      const label =
+                        asOfLabel !== ''
+                          ? `${nameWithoutDate} (${asOfLabel})`
+                          : entry.name
+                      return (
+                        <button
+                          key={`compare-${entry.id}`}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selectedBaselineId === entry.id}
+                          className={[
+                            'tm-pm-gantt-view-option',
+                            'tm-pm-gantt-view-option--baseline',
+                            selectedBaselineId === entry.id
+                              ? 'tm-pm-gantt-view-option--active'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          onClick={() => {
+                            if (baselineCompareMode === 'none') {
+                              onBaselineCompareModeChange('gantt')
+                            }
+                            onSelectBaseline(
+                              selectedBaselineId === entry.id ? null : entry.id,
+                            )
+                          }}>
+                          <span className="tm-pm-gantt-baseline-option-name">{label}</span>
+                          <span className="tm-pm-gantt-baseline-option-time">
+                            {formatBaselineCaptureTime(entry.capturedAt || entry.createdAt)}
+                          </span>
+                        </button>
+                      )
+                    })
                   )}
 
                   <div className="tm-pm-gantt-submenu-title">
@@ -682,8 +730,19 @@ export function ProjectGanttMenuBar({
                     className="tm-pm-gantt-view-option"
                     disabled={!selectedBaselineId}
                     onClick={() => {
-                      onAction('deleteBaseline')
+                      onAction('editBaseline')
                       setOpenMenu(null)
+                    }}>
+                    {t('projectManagerPage.schedule.editBaseline')}
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tm-pm-gantt-view-option"
+                    disabled={!selectedBaselineId}
+                    onClick={() => {
+                      onAction('deleteBaseline')
                     }}>
                     {t('projectManagerPage.schedule.deleteBaseline')}
                   </button>

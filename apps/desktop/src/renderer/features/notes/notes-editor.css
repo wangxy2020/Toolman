@@ -19,6 +19,8 @@
   background: var(--tm-bg);
   flex-shrink: 0;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html.theme-dark .tm-notes-editor-toolbar {
@@ -234,6 +236,8 @@ html.theme-dark .tm-notes-editor-toolbar-btn.tm-notes-editor-toolbar-btn--active
   border-radius: 8px;
   background: var(--tm-bg);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tm-notes-editor-toolbar-font-option {

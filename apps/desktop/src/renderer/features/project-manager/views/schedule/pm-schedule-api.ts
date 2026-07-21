@@ -28,11 +28,24 @@ export const pmScheduleApi = {
     })
   },
 
-  createBaseline(workspaceId: string, projectId: string, name?: string) {
+  createBaseline(
+    workspaceId: string,
+    projectId: string,
+    options?: { name?: string; asOfDate?: string },
+  ) {
     return invoke<PmScheduleBaseline>(IpcChannel.Pm_BaselineCreate, {
       workspaceId,
       projectId,
-      name,
+      ...(options?.name ? { name: options.name } : {}),
+      ...(options?.asOfDate ? { asOfDate: options.asOfDate } : {}),
+    })
+  },
+
+  updateBaseline(id: string, options: { name?: string; asOfDate?: string }) {
+    return invoke<PmScheduleBaseline>(IpcChannel.Pm_BaselineUpdate, {
+      id,
+      ...(options.name ? { name: options.name } : {}),
+      ...(options.asOfDate ? { asOfDate: options.asOfDate } : {}),
     })
   },
 

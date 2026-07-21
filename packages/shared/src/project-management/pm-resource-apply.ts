@@ -3,12 +3,20 @@ import { z } from 'zod'
 /** Mirrors desktop catalog types used by Gantt resource allocation. */
 export const PmAgentResourceTypeSchema = z.enum([
   'labor',
+  'auxiliary',
   'material',
   'equipment',
   'device',
   'instrument',
   'management',
   'fees',
+  'comprehensive',
+  'measures',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
   'funds',
   'other',
 ])
@@ -17,12 +25,20 @@ export type PmAgentResourceType = z.infer<typeof PmAgentResourceTypeSchema>
 
 export const PM_AGENT_RESOURCE_TYPE_LABELS: Record<PmAgentResourceType, string> = {
   labor: '人力',
+  auxiliary: '辅材',
   material: '材料',
   equipment: '机械',
   device: '设备',
   instrument: '仪器',
   management: '管理',
   fees: '规费',
+  comprehensive: '综合单价',
+  measures: '措施费',
+  tax: '税金',
+  investment: '投资估算',
+  designEstimate: '设计概算',
+  constructionBudget: '施工预算',
+  costBudget: '成本预算',
   funds: '资金',
   other: '其他',
 }
@@ -324,7 +340,7 @@ export const PM_RESOURCE_PLAN_OUTPUT_HINT = [
   '    }',
   '  ]',
   '}',
-  'type 可用：labor/material/equipment/device/instrument/management/fees/funds/other（或中文：人力/材料/机械/设备/仪器/管理/规费/资金/其他）。',
+  'type 可用：labor/auxiliary/material/equipment/device/instrument/management/fees/comprehensive/measures/tax/investment/designEstimate/constructionBudget/costBudget/funds/other（或中文：人力/辅材/材料/机械/设备/仪器/管理/规费/综合单价/措施费/税金/投资估算/设计概算/施工预算/成本预算/资金/其他）。',
   '名称尽量使用资源列表中的现有名称；若需新增，仍输出该名称，系统确认后会写入「全部项目」资源列表。',
   '同一任务再次应用时按资源名称合并数量，不会无故清空其他资源。',
 ].join('\n')

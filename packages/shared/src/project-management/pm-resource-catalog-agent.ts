@@ -337,6 +337,6 @@ export const PM_RESOURCE_CATALOG_PATCH_OUTPUT_HINT = [
   '}',
   'target：`全部项目`/`shared`/`all` 写入工作区默认列表；或项目编码（如 EMP-2401、PRJ-2601、用户项目编码）。',
   '系统默认列表：全部项目、EMP-2401、PRJ-2601；其余为用户自建项目列表。均可查询、分析与修改。',
-  'type 可用：labor/material/equipment/device/instrument/management/fees/funds/other（或中文人力/材料/机械/设备/仪器等）。',
+  'type 可用：labor/auxiliary/material/equipment/device/instrument/management/fees/comprehensive/measures/tax/investment/designEstimate/constructionBudget/costBudget/funds/other（或中文人力/辅材/材料/机械/设备/仪器/综合单价/措施费/税金/投资估算/设计概算/施工预算/成本预算等）。',
   '未写入资源字典前不要声称已生效；有 UI 确认条时，以用户确认的结果为准。',
 ].join('\n')

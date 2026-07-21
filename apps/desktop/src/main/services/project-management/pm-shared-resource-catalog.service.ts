@@ -52,14 +52,106 @@ export function getSharedResourceCatalog(workspaceId: string): {
   const store = readStore()
   const stored = store[workspaceId]
   if (stored) {
-    const ensured = ensureMissingDefaultTypes(stored)
-    if (ensured.changed) {
-      setSharedResourceCatalog(workspaceId, ensured.rows)
-      return { rows: ensured.rows, isDefault: false }
+    const migratedAux = migrateAuxiliaryResources(stored)
+    const migratedBudget = migrateBudgetResources(migratedAux.rows)
+    const ensured = ensureMissingDefaultTypes(migratedBudget.rows)
+    if (migratedAux.changed || migratedBudget.changed || ensured.changed) {
+      const rows = ensured.rows
+      setSharedResourceCatalog(workspaceId, rows)
+      return { rows, isDefault: false }
     }
     return { rows: stored, isDefault: false }
   }
   return { rows: createDefaultSharedResourceCatalogRows(), isDefault: true }
+}
+
+const AUXILIARY_RESOURCE_NAMES = new Set(['模板', '方木', '脚手架'])
+
+function canonicalizeSharedResourceName(name: string): string {
+  const trimmed = name.trim()
+  if (trimmed === '方林') return '方木'
+  if (trimmed === '施工图预算') return '施工预算'
+  return trimmed
+}
+
+/** Reclassify formwork / timber / scaffold as「辅材」. */
+function migrateAuxiliaryResources(rows: PmSharedResourceCatalogRow[]): {
+  rows: PmSharedResourceCatalogRow[]
+  changed: boolean
+} {
+  let changed = false
+  const result: PmSharedResourceCatalogRow[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const name = canonicalizeSharedResourceName(row.name)
+    if (!AUXILIARY_RESOURCE_NAMES.has(name)) {
+      if (name !== row.name.trim()) {
+        changed = true
+        result.push({ ...row, name })
+      } else {
+        result.push(row)
+      }
+      continue
+    }
+    if (seen.has(name)) {
+      changed = true
+      continue
+    }
+    seen.add(name)
+    if (row.type !== 'auxiliary' || name !== row.name.trim()) {
+      changed = true
+      result.push({ ...row, name, type: 'auxiliary' })
+    } else {
+      result.push(row)
+    }
+  }
+  if (!changed) return { rows, changed: false }
+  return { rows: result.map((row, index) => ({ ...row, sortOrder: index })), changed: true }
+}
+
+const BUDGET_TYPE_BY_NAME: Readonly<
+  Record<string, PmSharedResourceCatalogRow['type']>
+> = {
+  投资估算: 'investment',
+  设计概算: 'designEstimate',
+  施工预算: 'constructionBudget',
+  成本预算: 'costBudget',
+}
+
+/** Promote legacy funds named rows into dedicated budget types. */
+function migrateBudgetResources(rows: PmSharedResourceCatalogRow[]): {
+  rows: PmSharedResourceCatalogRow[]
+  changed: boolean
+} {
+  let changed = false
+  const result: PmSharedResourceCatalogRow[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const name = canonicalizeSharedResourceName(row.name)
+    const budgetType = BUDGET_TYPE_BY_NAME[name]
+    if (!budgetType) {
+      if (name !== row.name.trim()) {
+        changed = true
+        result.push({ ...row, name })
+      } else {
+        result.push(row)
+      }
+      continue
+    }
+    if (seen.has(budgetType)) {
+      changed = true
+      continue
+    }
+    seen.add(budgetType)
+    if (row.type !== budgetType || name !== row.name.trim()) {
+      changed = true
+      result.push({ ...row, name, type: budgetType })
+    } else {
+      result.push(row)
+    }
+  }
+  if (!changed) return { rows, changed: false }
+  return { rows: result.map((row, index) => ({ ...row, sortOrder: index })), changed: true }
 }
 
 /** Roll newly introduced built-in types / named rows into an already-persisted catalog. */
@@ -68,14 +160,25 @@ function ensureMissingDefaultTypes(rows: PmSharedResourceCatalogRow[]): {
   changed: boolean
 } {
   const ensureTypes: ReadonlyArray<PmSharedResourceCatalogRow['type']> = [
+    'auxiliary',
     'device',
-    'funds',
+    'investment',
+    'designEstimate',
+    'constructionBudget',
+    'costBudget',
     'instrument',
   ]
   const ensureNames: ReadonlyArray<{ type: PmSharedResourceCatalogRow['type']; name: string }> = [
     { type: 'instrument', name: '全站仪' },
     { type: 'instrument', name: '水准仪' },
     { type: 'instrument', name: '塔尺' },
+    { type: 'auxiliary', name: '模板' },
+    { type: 'auxiliary', name: '方木' },
+    { type: 'auxiliary', name: '脚手架' },
+    { type: 'investment', name: '投资估算' },
+    { type: 'designEstimate', name: '设计概算' },
+    { type: 'constructionBudget', name: '施工预算' },
+    { type: 'costBudget', name: '成本预算' },
     { type: 'material', name: '砌块/砖' },
     { type: 'material', name: '防水卷材' },
     { type: 'material', name: '预拌砂浆' },

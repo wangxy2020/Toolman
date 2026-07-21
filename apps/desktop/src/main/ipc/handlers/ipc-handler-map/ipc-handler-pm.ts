@@ -20,6 +20,7 @@ import {
   getPmBaseline,
   listPmBaselines,
   restorePmBaseline,
+  updatePmBaseline,
 } from '../../../services/project-management/pm-baseline.service'
 import {
   createPmRelation,
@@ -71,6 +72,7 @@ export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.Pm_BaselineList]: async (input) => ipcOk(listPmBaselines(input)),
   [IpcChannel.Pm_BaselineCreate]: async (input) => ipcOk(createPmBaseline(input)),
   [IpcChannel.Pm_BaselineGet]: async (input) => ipcOk(getPmBaseline(input)),
+  [IpcChannel.Pm_BaselineUpdate]: async (input) => ipcOk(updatePmBaseline(input)),
   [IpcChannel.Pm_BaselineDelete]: async (input) => ipcOk(deletePmBaseline(input)),
   [IpcChannel.Pm_BaselineRestore]: async (input) => ipcOk(restorePmBaseline(input)),
   [IpcChannel.Pm_TimeEntryList]: async (input) => ipcOk(listPmTimeEntries(input)),

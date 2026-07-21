@@ -8,6 +8,7 @@ import {
   buildPmAgentPortfolioSummary,
   type PmAgentSnapshot,
 } from './pm-agent-snapshot.js'
+import { PM_AGENT_OUTPUT_STYLE_GUIDE } from './pm-agent-output-style.js'
 import { PM_RESOURCE_PLAN_OUTPUT_HINT } from './pm-resource-apply.js'
 import { PM_RESOURCE_CATALOG_PATCH_OUTPUT_HINT } from './pm-resource-catalog-agent.js'
 
@@ -64,6 +65,8 @@ export function buildProjectManagementAssistantSystemPrompt(): string {
     '- 使用清晰中文；金额注明口径（当前看板为 USD 演示数据）',
     '- 优先依据系统注入的最新项目快照作答；缺少实时 EPC 引擎数据时明确说明',
     '- 涉及文件操作时在工作目录内创建或修改，并给出绝对路径',
+    '',
+    PM_AGENT_OUTPUT_STYLE_GUIDE,
   ].join('\n')
 }
 
