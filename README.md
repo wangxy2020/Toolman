@@ -1,6 +1,6 @@
 # Toolman
 
-AI 桌面客户端，基于 Electron + React + SQLite。当前为 **Beta / 开源 RC**（<!-- toolman:version -->`0.5.0-rc.1`<!-- /toolman:version -->），秉承本地优先、去中心化、安全至上的理念，支持多模态智能体、知识库、笔记、P2P 群组、社区 Hub 与会员体系。后期将聚焦于垂直领域的AI办公场景，打造项目管理、标书编制、对照翻译等模块。
+AI 桌面客户端，基于 Electron + React + SQLite。当前为 **Beta / 开源 RC**（<!-- toolman:version -->`0.5.0-rc.3`<!-- /toolman:version -->），秉承本地优先、去中心化、安全至上的理念，支持多模态智能体、知识库、笔记、P2P 群组、社区 Hub 与会员体系。后期将聚焦于垂直领域的AI办公场景，打造项目管理、标书编制、对照翻译等模块。
 
 <!-- toolman:user-content:start -->
 ### 功能介绍
