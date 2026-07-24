@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-import { PmAgentResourceTypeSchema, resolvePmAgentResourceTypeLabel } from './pm-resource-apply.js'
+import {
+  PmAgentResourceTypeSchema,
+  PM_AGENT_RESOURCE_TYPE_LABELS,
+  resolvePmAgentResourceTypeLabel,
+} from './pm-resource-apply.js'
 
 export const PmCostAssignmentSuggestionSchema = z.object({
   type: PmAgentResourceTypeSchema.optional(),
@@ -209,19 +213,50 @@ function parseCostPlanArray(parsed: unknown): PmCostTaskPlanSuggestion[] {
   return suggestions
 }
 
+function extractJsonObjectSnippet(text: string): string | null {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  return text.slice(start, end + 1)
+}
+
+function extractJsonArraySnippet(text: string): string | null {
+  const start = text.indexOf('[')
+  const end = text.lastIndexOf(']')
+  if (start < 0 || end <= start) return null
+  return text.slice(start, end + 1)
+}
+
 function extractJsonPayloads(text: string): string[] {
   const payloads: string[] = []
+  const seen = new Set<string>()
+  const push = (body: string | null | undefined) => {
+    const trimmed = body?.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    payloads.push(trimmed)
+  }
+
   const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi
   let match: RegExpExecArray | null
   while ((match = fenceRe.exec(text)) != null) {
-    const body = match[1]?.trim()
-    if (body) payloads.push(body)
+    push(match[1])
   }
   const trimmed = text.trim()
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    payloads.push(trimmed)
+    push(trimmed)
   }
+  // Embedded prose + JSON (e.g.「JSON 数据结构（供系统确认）：{ ... }」)
+  push(extractJsonObjectSnippet(text))
+  push(extractJsonArraySnippet(text))
   return payloads
+}
+
+function rootLooksLikeResourcePlanOnly(root: Record<string, unknown>): boolean {
+  return (
+    ('resourcePlan' in root || 'resourceAssignments' in root) &&
+    !('costPlan' in root || 'costAssignments' in root)
+  )
 }
 
 /**
@@ -231,8 +266,16 @@ function extractJsonPayloads(text: string): string[] {
  * - bare `[ ... ]` of task suggestions
  */
 export function parsePmCostPlanFromText(text: string): PmParsedCostPlanFromText {
-  const fenced = extractJsonPayloads(text)
-  for (const payload of fenced) {
+  // Do not steal pure resourcePlan payloads.
+  if (
+    /"resourcePlan"\s*:/.test(text) &&
+    !/"costPlan"\s*:/.test(text) &&
+    !/"costAssignments"\s*:/.test(text)
+  ) {
+    return { costPlan: [] }
+  }
+
+  for (const payload of extractJsonPayloads(text)) {
     try {
       const parsed = JSON.parse(payload) as unknown
       if (Array.isArray(parsed)) {
@@ -242,11 +285,12 @@ export function parsePmCostPlanFromText(text: string): PmParsedCostPlanFromText 
       }
       if (parsed && typeof parsed === 'object') {
         const root = parsed as Record<string, unknown>
+        if (rootLooksLikeResourcePlanOnly(root)) continue
         const costPlan = parseCostPlanArray(root.costPlan ?? root.costAssignments)
         if (costPlan.length > 0) return { costPlan }
       }
     } catch {
-      // try next fence
+      // try next payload
     }
   }
   return { costPlan: [] }
@@ -273,10 +317,125 @@ export function buildPmCostPlanFingerprint(
   )
 }
 
+function escapeMarkdownTableCell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim()
+}
+
+function formatCostTypeCell(entry: PmCostAssignmentSuggestion): string {
+  if (entry.type) {
+    const resolved = resolvePmAgentResourceTypeLabel(entry.type) ?? entry.type
+    return (
+      (PM_AGENT_RESOURCE_TYPE_LABELS as Record<string, string>)[resolved] ??
+      resolved
+    )
+  }
+  const fromLabel = entry.typeLabel
+    ? resolvePmAgentResourceTypeLabel(entry.typeLabel)
+    : null
+  if (fromLabel) return PM_AGENT_RESOURCE_TYPE_LABELS[fromLabel]
+  return entry.typeLabel?.trim() || '—'
+}
+
+function formatAmountCell(entry: PmCostAssignmentSuggestion): string {
+  if (entry.amount != null && Number.isFinite(entry.amount)) return String(entry.amount)
+  if (entry.quantity != null && entry.unitPrice != null) {
+    return String(entry.quantity * entry.unitPrice)
+  }
+  return '—'
+}
+
+/** Human-readable cost plan table for chat display. */
+export function formatPmCostPlanAsMarkdownTable(plan: PmParsedCostPlanFromText): string {
+  const { costPlan } = plan
+  if (costPlan.length === 0) return ''
+
+  const lines: string[] = [
+    '### 成本计划',
+    '',
+    '| 任务名称 | 类型 | 费用名称 | 数量 | 单价 | 金额 | 单位 |',
+    '| --- | :---: | --- | :---: | :---: | :---: | :---: |',
+  ]
+
+  for (const task of costPlan) {
+    const title = escapeMarkdownTableCell(
+      task.workItemTitle?.trim() || task.workItemCode?.trim() || task.workItemId || '任务',
+    )
+    for (const entry of task.assignments) {
+      lines.push(
+        `| ${title} | ${escapeMarkdownTableCell(formatCostTypeCell(entry))} | ${escapeMarkdownTableCell(
+          entry.name,
+        )} | ${entry.quantity ?? '—'} | ${entry.unitPrice ?? '—'} | ${formatAmountCell(entry)} | ${escapeMarkdownTableCell(
+          entry.unit?.trim() || '—',
+        )} |`,
+      )
+    }
+  }
+
+  return lines.join('\n')
+}
+
+const COST_JSON_CONFIRM_LABEL_RE = /JSON\s*数据结构\s*[（(]供系统确认[）)]\s*[:：]?\s*/gi
+
+/**
+ * Replace costPlan JSON (fenced, raw, or embedded after a confirm label) with a readable table.
+ * Original message text is unchanged — apply/parse still uses the stored JSON.
+ */
+export function presentPmCostPlanMarkdownForDisplay(text: string): string {
+  let replacedFence = false
+  const withFences = text.replace(
+    /```(?:json)?\s*([\s\S]*?)```/gi,
+    (full, body: string) => {
+      try {
+        const parsed = JSON.parse(body.trim()) as unknown
+        let costPlan: PmCostTaskPlanSuggestion[] = []
+        if (Array.isArray(parsed)) {
+          costPlan = parseCostPlanArray(parsed)
+        } else if (parsed && typeof parsed === 'object') {
+          const root = parsed as Record<string, unknown>
+          if (rootLooksLikeResourcePlanOnly(root)) return full
+          if (!('costPlan' in root || 'costAssignments' in root)) return full
+          if ('wbs' in root || 'projectPlan' in root) return full
+          costPlan = parseCostPlanArray(root.costPlan ?? root.costAssignments)
+        }
+        if (costPlan.length === 0) return full
+        replacedFence = true
+        return formatPmCostPlanAsMarkdownTable({ costPlan })
+      } catch {
+        return full
+      }
+    },
+  )
+  if (replacedFence) {
+    return withFences.replace(COST_JSON_CONFIRM_LABEL_RE, '')
+  }
+
+  const plan = parsePmCostPlanFromText(text)
+  if (plan.costPlan.length === 0) return text
+
+  const snippet = extractJsonObjectSnippet(text) ?? extractJsonArraySnippet(text)
+  if (!snippet) return text
+
+  const table = formatPmCostPlanAsMarkdownTable(plan)
+  const withoutLabel = text.replace(COST_JSON_CONFIRM_LABEL_RE, '')
+  const idx = withoutLabel.indexOf(snippet)
+  if (idx < 0) {
+    // Fallback: whole-text JSON
+    const trimmed = text.trim()
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return table
+    return text
+  }
+  return `${withoutLabel.slice(0, idx).trimEnd()}\n\n${table}\n\n${withoutLabel
+    .slice(idx + snippet.length)
+    .trimStart()}`.trim()
+}
+
 /** Prompt fragment: how the plan agent should emit cost assignments. */
 export const PM_COST_PLAN_OUTPUT_HINT = [
   '## 成本计划输出（写入甘特「成本分配」）',
-  '在给出任务成本/费用时，除可读说明外，请附加如下 JSON（可用 ```json 代码块）：',
+  '仅在进度计划已完善、甘特中已有任务时再输出成本分配；不要与进度 WBS / 资源计划写在同一条消息里。',
+  '1. **先**输出 Markdown 成本表（给人阅读），列固定为：',
+  '   | 任务名称 | 类型 | 费用名称 | 数量 | 单价 | 金额 | 单位 |',
+  '2. **再**附加如下 JSON（可用 ```json 代码块），供系统确认写入；聊天界面会隐藏该 JSON 并展示为表格：',
   '{',
   '  "costPlan": [',
   '    {',

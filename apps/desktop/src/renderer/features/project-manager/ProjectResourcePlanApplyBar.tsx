@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   buildPmResourcePlanFingerprint,
+  hasAppliedResourcePlanFingerprint,
   parsePmResourcePlanFromText,
+  upsertAppliedResourcePlanReceipt,
   type Message,
   type PmProject,
   type PmResourceTaskPlanSuggestion,
@@ -52,6 +54,25 @@ function writeAppliedMap(workspaceId: string, map: Record<string, string>): void
 
 function assignmentCount(suggestions: readonly PmResourceTaskPlanSuggestion[]): number {
   return suggestions.reduce((sum, task) => sum + task.assignments.length, 0)
+}
+
+/** Durable receipts in project metadata first; session map as optimistic fallback. */
+function findAppliedProjectId(
+  projects: PmProject[],
+  fingerprint: string,
+  workspaceId: string,
+): string | null {
+  if (!fingerprint) return null
+  for (const project of projects) {
+    if (hasAppliedResourcePlanFingerprint(project.metadata, fingerprint)) {
+      return project.id
+    }
+  }
+  const sessionId = readAppliedMap(workspaceId)[fingerprint]
+  if (sessionId && projects.some((project) => project.id === sessionId)) {
+    return sessionId
+  }
+  return null
 }
 
 interface Props {
@@ -108,8 +129,7 @@ export function ProjectResourcePlanApplyBar({
       setDiscarded(false)
       return
     }
-    const stored = readAppliedMap(workspaceId)[fingerprint]
-    setLocalAppliedProjectId(stored && projects.some((p) => p.id === stored) ? stored : null)
+    setLocalAppliedProjectId(findAppliedProjectId(projects, fingerprint, workspaceId))
     setDiscarded(isPmAgentApplyDiscarded(workspaceId, 'resourcePlan', fingerprint))
   }, [fingerprint, projects, workspaceId])
 
@@ -120,7 +140,8 @@ export function ProjectResourcePlanApplyBar({
   }, [fingerprint, workspaceId])
 
   const appliedProjectId = (() => {
-    const id = localAppliedProjectId ?? readAppliedMap(workspaceId)[fingerprint]
+    const id =
+      localAppliedProjectId ?? findAppliedProjectId(projects, fingerprint, workspaceId)
     if (!id) return null
     if (!projects.some((project) => project.id === id)) return null
     return id
@@ -187,7 +208,8 @@ export function ProjectResourcePlanApplyBar({
         await pmApi.updateProject({
           id: projectId,
           metadata: {
-            ...fresh.metadata,
+            // Durable receipt so the 跳转 state survives app restart.
+            ...upsertAppliedResourcePlanReceipt(fresh.metadata, fingerprint),
             ...pendingAgentRevisionMetadataPatch(),
           },
         })
@@ -213,6 +235,16 @@ export function ProjectResourcePlanApplyBar({
     applyingRef.current = true
     setApplying(true)
     try {
+      const listed = await pmApi.listWorkItems({
+        workspaceId,
+        projectId: selectedProjectId,
+        limit: 1,
+      })
+      if (listed.items.length === 0) {
+        window.alert(t('projectManagerPage.agent.applyNeedProgress'))
+        return
+      }
+
       const result = await pmApi.applyResourcePlanSuggestions({
         workspaceId,
         projectId: selectedProjectId,
@@ -272,7 +304,7 @@ export function ProjectResourcePlanApplyBar({
         type="button"
         className="tm-pm-agent-apply-text-btn"
         title={t('projectManagerPage.agent.applyResourcePlan', { count })}
-        disabled={applying || !selectedProjectId}
+        disabled={applying}
         onClick={() => void handleApply()}
       >
         {applying ? '…' : buttonLabel}

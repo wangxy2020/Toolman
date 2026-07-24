@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildPmCostPlanFingerprint,
+  formatPmCostPlanAsMarkdownTable,
   mergeTaskCostAssignmentsByName,
   normalizeCostAssignmentSuggestion,
   parsePmCostPlanFromText,
+  presentPmCostPlanMarkdownForDisplay,
 } from './pm-cost-apply.js'
 import { upsertSharedCostCatalogRows } from './pm-shared-cost-catalog.js'
 
@@ -146,5 +148,62 @@ describe('upsertSharedCostCatalogRows', () => {
     expect(result.changed).toBe(true)
     expect(result.rows).toHaveLength(2)
     expect(result.rows[1]?.id).toBe('new-id')
+  })
+})
+
+describe('presentPmCostPlanMarkdownForDisplay', () => {
+  it('hides embedded costPlan JSON after confirm label', () => {
+    const json = JSON.stringify({
+      costPlan: [
+        {
+          workItemTitle: '满堂基础（地下室筏板）',
+          assignments: [
+            {
+              type: 'comprehensive',
+              name: '满堂基础（地下室筏板）',
+              quantity: 180,
+              unitPrice: 897.54,
+              unit: 'm³',
+            },
+          ],
+        },
+      ],
+    })
+    const source = `按项目信息生成成本建议。\n\nJSON 数据结构（供系统确认）：${json}`
+    const presented = presentPmCostPlanMarkdownForDisplay(source)
+    expect(presented).toContain('### 成本计划')
+    expect(presented).toContain('满堂基础（地下室筏板）')
+    expect(presented).toContain('| 180 |')
+    expect(presented).not.toContain('"costPlan"')
+    expect(presented).not.toContain('JSON 数据结构')
+  })
+
+  it('formats cost plan as markdown table', () => {
+    const table = formatPmCostPlanAsMarkdownTable({
+      costPlan: [
+        {
+          workItemTitle: '现浇构件钢筋',
+          assignments: [
+            { type: 'comprehensive', name: '现浇构件钢筋', quantity: 45, unitPrice: 100, unit: 't' },
+          ],
+        },
+      ],
+    })
+    expect(table).toContain('| 现浇构件钢筋 |')
+    expect(table).toContain('4500')
+  })
+})
+
+describe('parsePmCostPlanFromText embedded', () => {
+  it('parses costPlan embedded after Chinese label', () => {
+    const text = `说明文字\nJSON 数据结构（供系统确认）：${JSON.stringify({
+      costPlan: [
+        {
+          workItemTitle: '矩形柱',
+          assignments: [{ type: 'material', name: '墙面砖', quantity: 10, unitPrice: 30 }],
+        },
+      ],
+    })}`
+    expect(parsePmCostPlanFromText(text).costPlan).toHaveLength(1)
   })
 })

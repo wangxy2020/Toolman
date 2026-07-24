@@ -2,38 +2,33 @@ export const PLAN_WBS_QUICK_PHRASE_ID = 'toolman:pm-plan-wbs'
 export const PLAN_WBS_QUICK_PHRASE_TITLE = 'AI 生成 WBS'
 export const PLAN_WBS_QUICK_PHRASE_CONTENT = `请根据当前项目的进度 WBS，补充或生成完整层级计划。
 
-先输出 Markdown 任务表，列：层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务。
-第 1 行必须是**当前项目名称**（如 PRJ-2601 · Toolman项目1），工期/起止为项目总工期；不要把说明文字写进任务名称。其余任务挂在其下。前置任务列用层级编号写逻辑关系（如 1.1FS、1.2SS+5），不要写任务名称。
+请严格按以下四段 Markdown 输出（**不要输出 JSON / 代码块**；系统会直接从任务表解析并写入甘特）：
 
-再输出 JSON 对象（\`\`\`json 代码块）供系统应用：
-{
-  "projectName": "与第 1 行相同的项目名称（不要写说明句）",
-  "projectPlan": { "planStart": "YYYY-MM-DD", "planFinish": "YYYY-MM-DD", "durationDays": number },
-  "wbs": [
-    {
-      "title": "中文标题",
-      "type": "task | milestone | wbs_node | phase",
-      "parentTitle": "父任务标题（根可省略）",
-      "durationDays": number,
-      "startDate": "YYYY-MM-DD",
-      "dueDate": "YYYY-MM-DD",
-      "predecessors": [{ "title": "前置任务标题", "type": "FS | SS | FF | SF", "lagDays": 0 }],
-      "priority": "low | normal | high | urgent"
-    }
-  ]
-}
-层级覆盖单位/分部/分项/区域/部位等。除最早开始任务外每项须有 predecessors，网络须从开工连通到竣工。表格给人看，JSON 给系统用。`
-export const PLAN_WBS_QUICK_PHRASE_REVISION = 7
+### 一、任务表（WBS层级）
+列固定为：| 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |
+第 1 行必须是**当前项目名称**（如 PRJ-2601 · Toolman项目1），工期/起止为项目总工期；不要把说明文字写进任务名称。
+其余任务按深度优先挂在其下（父项后紧跟全部子项）。前置任务列用层级编号写逻辑关系（如 1.1FS、1.2SS+5），不要写任务名称；汇总行前置写 —，逻辑关系仅写在叶子任务上。
+汇总行起止须包络子项；除最早开始的叶子外，每个叶子须有前置，网络从开工连通到竣工。
+
+### 二、计划合规性说明
+用短列表说明总工期、层级完整性与前置连通性。
+
+### 三、关键路径说明
+标出关键路径主要段落及合计日历天。
+
+### 四、调度说明（或后续建议）
+补充平行路径、汇聚节点与下一步建议（3–6 条以内）。`
+export const PLAN_WBS_QUICK_PHRASE_REVISION = 9
 
 export const PLAN_SCHEDULE_QUICK_PHRASE_ID = 'toolman:pm-plan-schedule'
 export const PLAN_SCHEDULE_QUICK_PHRASE_TITLE = 'AI 自动排期'
-export const PLAN_SCHEDULE_QUICK_PHRASE_CONTENT = `请根据当前计划工作项与 FS/SS/FF/SF 依赖关系，提出排期调整建议。对每项输出：
-- workItemTitle
-- suggestedStartDate（YYYY-MM-DD）
-- suggestedDueDate（YYYY-MM-DD）
-- reason（一句话）
-以 Markdown 表格输出。也可在同条消息附带可解析 WBS JSON（含 parentTitle、durationDays、predecessors、projectPlan）。`
-export const PLAN_SCHEDULE_QUICK_PHRASE_REVISION = 2
+export const PLAN_SCHEDULE_QUICK_PHRASE_CONTENT = `请根据当前计划工作项与 FS/SS/FF/SF 依赖关系，提出排期调整建议。
+
+请用 Markdown 输出（不要 JSON）：
+1. 调整说明（短列表）
+2. 建议排期表，列：| workItemTitle | suggestedStartDate | suggestedDueDate | reason |
+也可直接输出完整 WBS 任务表（列：层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务），系统会从表解析。`
+export const PLAN_SCHEDULE_QUICK_PHRASE_REVISION = 3
 
 export const PLAN_RESOURCE_QUICK_PHRASE_ID = 'toolman:pm-plan-resource'
 export const PLAN_RESOURCE_QUICK_PHRASE_TITLE = 'AI 资源用量'

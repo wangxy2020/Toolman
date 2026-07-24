@@ -30,7 +30,11 @@ import {
   removeSaveHistoryEntry,
   resolvePmPlanApplyAction,
   shouldStructurallyRestoreBaseline,
+  hasAppliedCostPlanFingerprint,
+  hasAppliedResourcePlanFingerprint,
+  upsertAppliedCostPlanReceipt,
   upsertAppliedPlanReceipt,
+  upsertAppliedResourcePlanReceipt,
   versionPlanSnapshotName,
 } from './pm-save-history.js'
 
@@ -302,6 +306,20 @@ describe('pm-save-history', () => {
         hasAnyPriorReceipt: true,
       }),
     ).toBe('reapply')
+  })
+
+  it('persists resource/cost plan receipts independently of plan receipts', () => {
+    const withResource = upsertAppliedResourcePlanReceipt({}, 'fp-res', 1000)
+    expect(hasAppliedResourcePlanFingerprint(withResource, 'fp-res')).toBe(true)
+    expect(hasAppliedPlanFingerprint(withResource, 'fp-res')).toBe(false)
+    expect(hasAppliedCostPlanFingerprint(withResource, 'fp-res')).toBe(false)
+
+    const withBoth = upsertAppliedCostPlanReceipt(withResource, 'fp-cost', 2000)
+    expect(hasAppliedCostPlanFingerprint(withBoth, 'fp-cost')).toBe(true)
+    expect(hasAppliedResourcePlanFingerprint(withBoth, 'fp-res')).toBe(true)
+    // Existing metadata keys are preserved.
+    const merged = upsertAppliedResourcePlanReceipt({ keep: 1 }, 'fp-x', 3000)
+    expect(merged.keep).toBe(1)
   })
 
   it('chooses structural restore when most snapshot ids are missing', () => {

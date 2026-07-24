@@ -57,6 +57,8 @@ export const projectManagerPageZhCN = {
       '检测到新的智能体计划。重新应用到「{{name}}」会清空并覆盖当前甘特数据（应用前会尽量保存当前版本快照）。确定继续？',
     applyCancelled: '已取消应用',
     applyNeedProject: '请先选择项目，或点击工具栏「新建」创建。',
+    applyNeedProgress:
+      '当前项目还没有进度任务。请先在「全部项目」选中该项目，用计划智能体生成并确认进度计划后，再确认资源/成本分配。',
     applyResourcePlan: '确认资源计划写入甘特（{{count}} 项用量）',
     applyResourcePlanSuccess: '已更新 {{count}} 个任务的资源分配',
     applyResourceCatalog: '确认写入资源列表（{{count}} 项变更）',

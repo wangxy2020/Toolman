@@ -276,8 +276,16 @@ function normalizeAssignmentSuggestion(entry: unknown): unknown {
  * - bare `[ ... ]` of task suggestions
  */
 export function parsePmResourcePlanFromText(text: string): PmParsedResourcePlanFromText {
-  const fenced = extractJsonPayloads(text)
-  for (const payload of fenced) {
+  // Do not steal pure costPlan payloads (same assignment shape).
+  if (
+    /"costPlan"\s*:/.test(text) &&
+    !/"resourcePlan"\s*:/.test(text) &&
+    !/"resourceAssignments"\s*:/.test(text)
+  ) {
+    return { resourcePlan: [] }
+  }
+
+  for (const payload of extractJsonPayloads(text)) {
     try {
       const parsed = JSON.parse(payload) as unknown
       if (Array.isArray(parsed)) {
@@ -287,30 +295,59 @@ export function parsePmResourcePlanFromText(text: string): PmParsedResourcePlanF
       }
       if (parsed && typeof parsed === 'object') {
         const root = parsed as Record<string, unknown>
+        if (
+          ('costPlan' in root || 'costAssignments' in root) &&
+          !('resourcePlan' in root || 'resourceAssignments' in root || 'assignments' in root)
+        ) {
+          continue
+        }
         const resourcePlan = parseResourcePlanArray(
           root.resourcePlan ?? root.resourceAssignments ?? root.assignments,
         )
         if (resourcePlan.length > 0) return { resourcePlan }
       }
     } catch {
-      // try next fence
+      // try next payload
     }
   }
   return { resourcePlan: [] }
 }
 
+function extractJsonObjectSnippet(text: string): string | null {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  return text.slice(start, end + 1)
+}
+
+function extractJsonArraySnippet(text: string): string | null {
+  const start = text.indexOf('[')
+  const end = text.lastIndexOf(']')
+  if (start < 0 || end <= start) return null
+  return text.slice(start, end + 1)
+}
+
 function extractJsonPayloads(text: string): string[] {
   const payloads: string[] = []
+  const seen = new Set<string>()
+  const push = (body: string | null | undefined) => {
+    const trimmed = body?.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    payloads.push(trimmed)
+  }
+
   const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi
   let match: RegExpExecArray | null
   while ((match = fenceRe.exec(text)) != null) {
-    const body = match[1]?.trim()
-    if (body) payloads.push(body)
+    push(match[1])
   }
   const trimmed = text.trim()
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    payloads.push(trimmed)
+    push(trimmed)
   }
+  push(extractJsonObjectSnippet(text))
+  push(extractJsonArraySnippet(text))
   return payloads
 }
 
@@ -393,7 +430,10 @@ export function presentPmResourcePlanMarkdownForDisplay(text: string): string {
           resourcePlan = parseResourcePlanArray(parsed)
         } else if (parsed && typeof parsed === 'object') {
           const root = parsed as Record<string, unknown>
-          // Prefer explicit resourcePlan keys; do not treat bare WBS as resources.
+          // Prefer explicit resourcePlan keys; do not treat bare WBS / cost as resources.
+          if ('costPlan' in root || 'costAssignments' in root) {
+            return full
+          }
           if (!('resourcePlan' in root || 'resourceAssignments' in root || 'assignments' in root)) {
             return full
           }
@@ -412,17 +452,41 @@ export function presentPmResourcePlanMarkdownForDisplay(text: string): string {
       }
     },
   )
-  if (replacedFence) return withFences
+  if (replacedFence) {
+    return withFences.replace(/JSON\s*数据结构\s*[（(]供系统确认[）)]\s*[:：]?\s*/gi, '')
+  }
+
+  // Pure costPlan messages must not be rewritten as resource tables.
+  if (/"costPlan"\s*:/.test(text) && !/"resourcePlan"\s*:/.test(text)) {
+    return text
+  }
+
+  const plan = parsePmResourcePlanFromText(text)
+  if (plan.resourcePlan.length === 0) return text
+
+  const snippet = extractJsonObjectSnippet(text) ?? extractJsonArraySnippet(text)
+  if (snippet) {
+    const table = formatPmResourcePlanAsMarkdownTable(plan)
+    const withoutLabel = text.replace(
+      /JSON\s*数据结构\s*[（(]供系统确认[）)]\s*[:：]?\s*/gi,
+      '',
+    )
+    const idx = withoutLabel.indexOf(snippet)
+    if (idx >= 0) {
+      return `${withoutLabel.slice(0, idx).trimEnd()}\n\n${table}\n\n${withoutLabel
+        .slice(idx + snippet.length)
+        .trimStart()}`.trim()
+    }
+  }
 
   const trimmed = text.trim()
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return text
-  const plan = parsePmResourcePlanFromText(trimmed)
-  if (plan.resourcePlan.length === 0) return text
   try {
     const parsed = JSON.parse(trimmed) as unknown
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const root = parsed as Record<string, unknown>
       if ('wbs' in root || 'projectPlan' in root) return text
+      if ('costPlan' in root || 'costAssignments' in root) return text
     }
   } catch {
     return text
@@ -449,6 +513,7 @@ export function normalizeResourceAssignmentSuggestion(
 /** Prompt fragment: how the plan agent should emit resource quantities. */
 export const PM_RESOURCE_PLAN_OUTPUT_HINT = [
   '## 资源计划输出（写入甘特「资源分配」）',
+  '仅在进度计划已完善、甘特中已有任务时再输出资源分配；不要与进度 WBS / 成本计划写在同一条消息里。',
   '1. **先**输出 Markdown 资源表（给人阅读），列固定为：',
   '   | 任务名称 | 类型 | 资源名称 | 数量 | 单位 |',
   '2. **再**附加如下 JSON（可用 ```json 代码块），供系统确认写入；聊天界面会隐藏该 JSON 并展示为表格：',

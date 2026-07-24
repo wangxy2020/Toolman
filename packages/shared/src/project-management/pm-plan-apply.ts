@@ -6,6 +6,7 @@ import {
   PmWorkItemTypeSchema,
 } from './pm-types.js'
 import { presentPmResourcePlanMarkdownForDisplay } from './pm-resource-apply.js'
+import { presentPmCostPlanMarkdownForDisplay } from './pm-cost-apply.js'
 
 export const DEFAULT_PM_PROJECT_NAME_PREFIX = 'Toolman项目'
 export const DEFAULT_PM_PROJECT_CODE_PREFIX = 'PRJ-'
@@ -126,11 +127,82 @@ function parseWbsArray(parsed: unknown): PmWbsSuggestion[] {
   return suggestions
 }
 
+function normalizeTitle(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? ''
+}
+
+/**
+ * Normalize model WBS output before display/apply:
+ * - remove a duplicated project root (the project already owns the WBS)
+ * - place each parent immediately before its descendants
+ * - keep dependencies on executable leaves, not summary/group rows
+ */
+export function normalizePmWbsHierarchy(
+  wbs: PmWbsSuggestion[],
+  projectName?: string,
+): PmWbsSuggestion[] {
+  if (wbs.length === 0) return []
+
+  const normalizedProjectName = normalizeTitle(projectName)
+  const duplicateRoot = wbs.find((item) => {
+    if (item.parentTitle?.trim()) return false
+    if (item.type !== 'wbs_node' && item.type !== 'phase') return false
+    const title = normalizeTitle(item.title)
+    return (
+      Boolean(normalizedProjectName) &&
+      (title === normalizedProjectName ||
+        title.endsWith(` · ${normalizedProjectName}`) ||
+        title.endsWith(` - ${normalizedProjectName}`))
+    )
+  })
+  const duplicateRootTitle = normalizeTitle(duplicateRoot?.title)
+
+  const stripped = wbs
+    .filter((item) => item !== duplicateRoot)
+    .map((item) => ({
+      ...item,
+      parentTitle:
+        duplicateRootTitle && normalizeTitle(item.parentTitle) === duplicateRootTitle
+          ? undefined
+          : item.parentTitle,
+    }))
+
+  const titleSet = new Set(stripped.map((item) => normalizeTitle(item.title)))
+  const childrenByParent = new Map<string, PmWbsSuggestion[]>()
+  const roots: PmWbsSuggestion[] = []
+  for (const item of stripped) {
+    const parentKey = normalizeTitle(item.parentTitle)
+    if (!parentKey || parentKey === normalizeTitle(item.title) || !titleSet.has(parentKey)) {
+      roots.push(item)
+      continue
+    }
+    const siblings = childrenByParent.get(parentKey) ?? []
+    siblings.push(item)
+    childrenByParent.set(parentKey, siblings)
+  }
+
+  const result: PmWbsSuggestion[] = []
+  const visited = new Set<PmWbsSuggestion>()
+  const visit = (item: PmWbsSuggestion) => {
+    if (visited.has(item)) return
+    visited.add(item)
+    const children = childrenByParent.get(normalizeTitle(item.title)) ?? []
+    result.push(children.length > 0 ? { ...item, predecessors: [] } : item)
+    for (const child of children) visit(child)
+  }
+  for (const root of roots) visit(root)
+  // Preserve malformed/cyclic rows rather than silently dropping them.
+  for (const item of stripped) visit(item)
+  return result
+}
+
 function parsePlanObject(parsed: unknown): PmParsedPlanFromText | null {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
   const record = parsed as Record<string, unknown>
   const wbsRaw = record.wbs ?? record.items ?? record.suggestions
-  const wbs = parseWbsArray(wbsRaw)
+  const projectName =
+    typeof record.projectName === 'string' ? record.projectName.trim() : undefined
+  const wbs = normalizePmWbsHierarchy(parseWbsArray(wbsRaw), projectName)
   if (wbs.length === 0) return null
   const projectPlanResult = PmProjectPlanSchema.safeParse(record.projectPlan)
   return {
@@ -139,7 +211,216 @@ function parsePlanObject(parsed: unknown): PmParsedPlanFromText | null {
   }
 }
 
+function splitMarkdownRow(line: string): string[] {
+  return line
+    .split('|')
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0)
+}
+
+function isMarkdownSeparatorRow(cells: string[]): boolean {
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
+}
+
+function normalizeOutlineId(raw: string): string | null {
+  const cleaned = raw.replace(/[　\s]+/g, '').replace(/、$/, '')
+  if (!/^\d+(?:\.\d+)*$/.test(cleaned)) return null
+  return cleaned
+}
+
+function parentOutlineId(outline: string): string | null {
+  const parts = outline.split('.')
+  if (parts.length <= 1) return null
+  return parts.slice(0, -1).join('.')
+}
+
+function parseOptionalDurationDays(raw: string): number | undefined {
+  const cleaned = raw.replace(/[天日dD]/g, '').trim()
+  if (!cleaned || cleaned === '—' || cleaned === '-' || cleaned === '–') return undefined
+  const value = Number.parseInt(cleaned, 10)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function parseOptionalIsoDate(raw: string): string | undefined {
+  const cleaned = raw.trim()
+  if (!cleaned || cleaned === '—' || cleaned === '-' || cleaned === '–') return undefined
+  const match = cleaned.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  if (!match) return undefined
+  const year = match[1]!
+  const month = match[2]!.padStart(2, '0')
+  const day = match[3]!.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseOutlinePredecessorRefs(
+  raw: string,
+  titleByOutline: Map<string, string>,
+): PmWbsPredecessor[] {
+  const cleaned = raw.trim()
+  if (!cleaned || cleaned === '—' || cleaned === '-' || cleaned === '–' || cleaned === '—*' ) {
+    return []
+  }
+  // Ignore free-form notes that are not outline refs.
+  if (!/\d/.test(cleaned) || !/(FS|SS|FF|SF)/i.test(cleaned)) return []
+
+  const predecessors: PmWbsPredecessor[] = []
+  const re =
+    /(\d+(?:\.\d+)*)\s*(FS|SS|FF|SF)\s*([+-]\d+)?/gi
+  let match: RegExpExecArray | null
+  while ((match = re.exec(cleaned)) != null) {
+    const outline = match[1]!
+    const title = titleByOutline.get(outline)
+    if (!title) continue
+    const lagRaw = match[3]
+    const lagDays = lagRaw ? Number.parseInt(lagRaw, 10) : 0
+    predecessors.push({
+      title,
+      type: match[2]!.toUpperCase() as NonNullable<PmWbsPredecessor['type']>,
+      ...(Number.isFinite(lagDays) && lagDays !== 0 ? { lagDays } : {}),
+    })
+  }
+  return predecessors
+}
+
+function inferWbsTypeFromOutline(
+  outline: string,
+  childOutlines: Set<string>,
+  title: string,
+  durationDays: number | undefined,
+): NonNullable<PmWbsSuggestion['type']> {
+  if (/里程碑|milestone/i.test(title) || durationDays === 0) return 'milestone'
+  const hasChild = [...childOutlines].some(
+    (child) => child.startsWith(`${outline}.`) && child !== outline,
+  )
+  if (hasChild) {
+    const depth = outline.split('.').length
+    return depth <= 2 ? 'phase' : 'wbs_node'
+  }
+  return 'task'
+}
+
+/**
+ * Parse the human-readable WBS markdown table:
+ * | 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |
+ *
+ * Row outline `1` is treated as the project root (feeds projectPlan) and is not
+ * included in the returned WBS list.
+ */
+export function parsePmWbsMarkdownTableFromText(text: string): PmParsedPlanFromText {
+  const lines = text.split('\n')
+  let headerIndex = -1
+  let headerCells: string[] = []
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]?.trim() ?? ''
+    if (!line.includes('|')) continue
+    const cells = splitMarkdownRow(line)
+    if (cells.length < 4) continue
+    const joined = cells.join(' ')
+    if (
+      /层级/.test(joined) &&
+      /任务名称|名称|标题/.test(joined) &&
+      (/工期/.test(joined) || /开始/.test(joined))
+    ) {
+      headerIndex = index
+      headerCells = cells
+      break
+    }
+  }
+  if (headerIndex < 0) return { wbs: [] }
+
+  const findCol = (...names: string[]): number =>
+    headerCells.findIndex((cell) => names.some((name) => cell.includes(name)))
+
+  const outlineCol = findCol('层级')
+  const titleCol = findCol('任务名称', '名称', '标题')
+  const durationCol = findCol('工期')
+  const startCol = findCol('开始')
+  const dueCol = findCol('完成', '结束', '截止')
+  const predCol = findCol('前置')
+  if (outlineCol < 0 || titleCol < 0) return { wbs: [] }
+
+  type Row = {
+    outline: string
+    title: string
+    durationDays?: number
+    startDate?: string
+    dueDate?: string
+    predecessorRaw: string
+  }
+  const rows: Row[] = []
+
+  for (let index = headerIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index]?.trim() ?? ''
+    if (!line.includes('|')) {
+      if (rows.length > 0 && line.startsWith('#')) break
+      if (rows.length > 0 && line === '') continue
+      if (rows.length > 0 && !line.startsWith('|')) break
+      continue
+    }
+    const cells = splitMarkdownRow(line)
+    if (isMarkdownSeparatorRow(cells)) continue
+    const outline = normalizeOutlineId(cells[outlineCol] ?? '')
+    const title = (cells[titleCol] ?? '').replace(/^[　\s]+/, '').trim()
+    if (!outline || !title) continue
+    rows.push({
+      outline,
+      title,
+      durationDays:
+        durationCol >= 0 ? parseOptionalDurationDays(cells[durationCol] ?? '') : undefined,
+      startDate: startCol >= 0 ? parseOptionalIsoDate(cells[startCol] ?? '') : undefined,
+      dueDate: dueCol >= 0 ? parseOptionalIsoDate(cells[dueCol] ?? '') : undefined,
+      predecessorRaw: predCol >= 0 ? (cells[predCol] ?? '') : '',
+    })
+  }
+
+  if (rows.length === 0) return { wbs: [] }
+
+  const titleByOutline = new Map(rows.map((row) => [row.outline, row.title]))
+  const outlines = new Set(rows.map((row) => row.outline))
+  const root = rows.find((row) => row.outline === '1') ?? rows[0]!
+  const projectPlan: PmProjectPlan | undefined =
+    root.startDate || root.dueDate || root.durationDays
+      ? {
+          ...(root.startDate ? { planStart: root.startDate } : {}),
+          ...(root.dueDate ? { planFinish: root.dueDate } : {}),
+          ...(root.durationDays ? { durationDays: root.durationDays } : {}),
+        }
+      : undefined
+
+  const wbsRows = rows.filter((row) => row.outline !== root.outline)
+  const wbs: PmWbsSuggestion[] = wbsRows.map((row) => {
+    const parentOutline = parentOutlineId(row.outline)
+    const parentTitle =
+      parentOutline && parentOutline !== root.outline
+        ? titleByOutline.get(parentOutline)
+        : undefined
+    const predecessors = parseOutlinePredecessorRefs(row.predecessorRaw, titleByOutline).filter(
+      (item) => item.title !== row.title && item.title !== root.title,
+    )
+    return {
+      title: row.title,
+      type: inferWbsTypeFromOutline(row.outline, outlines, row.title, row.durationDays),
+      ...(parentTitle ? { parentTitle } : {}),
+      ...(row.durationDays != null ? { durationDays: row.durationDays } : {}),
+      ...(row.startDate ? { startDate: row.startDate } : {}),
+      ...(row.dueDate ? { dueDate: row.dueDate } : {}),
+      ...(predecessors.length > 0 ? { predecessors } : {}),
+    }
+  })
+
+  return {
+    wbs: normalizePmWbsHierarchy(wbs, root.title),
+    projectPlan,
+  }
+}
+
 export function parsePmFullPlanFromText(text: string): PmParsedPlanFromText {
+  // Prefer the human-readable WBS table — this is the primary contract.
+  const fromTable = parsePmWbsMarkdownTableFromText(text)
+  if (fromTable.wbs.length > 0) return fromTable
+
+  // Backward compatibility for older messages that still embed JSON payloads.
   const candidates = [
     text.trim(),
     extractJsonCodeFence(text),
@@ -151,7 +432,7 @@ export function parsePmFullPlanFromText(text: string): PmParsedPlanFromText {
     try {
       const parsed = JSON.parse(candidate) as unknown
       if (Array.isArray(parsed)) {
-        const wbs = parseWbsArray(parsed)
+        const wbs = normalizePmWbsHierarchy(parseWbsArray(parsed))
         if (wbs.length > 0) return { wbs }
         continue
       }
@@ -409,6 +690,11 @@ export function presentPmPlanMarkdownForDisplay(
   text: string,
   options?: { fallbackProjectName?: string },
 ): string {
+  const brief = presentPmNewProjectBriefForDisplay(text)
+  if (brief !== text) return brief
+  const hasReadableWbsTable =
+    /\|\s*层级\s*\|\s*任务名称\s*\|\s*工期(?:\(天\)|（天）)?\s*\|/.test(text)
+
   const fallback =
     options?.fallbackProjectName?.trim() &&
     isPlausiblePmProjectName(options.fallbackProjectName)
@@ -427,10 +713,13 @@ export function presentPmPlanMarkdownForDisplay(
       try {
         const parsed = JSON.parse(body.trim()) as unknown
         const plan = Array.isArray(parsed)
-          ? ({ wbs: parseWbsArray(parsed) } satisfies PmParsedPlanFromText)
+          ? ({ wbs: normalizePmWbsHierarchy(parseWbsArray(parsed)) } satisfies PmParsedPlanFromText)
           : parsePlanObject(parsed)
         if (!plan || plan.wbs.length === 0) return full
         replacedFence = true
+        // The machine payload is required by the apply button, but a preceding
+        // human-readable WBS table already contains everything the user needs.
+        if (hasReadableWbsTable) return ''
         return formatPmPlanAsMarkdownTable(plan, {
           projectName: resolveName(parsed, text.slice(0, offset)),
         })
@@ -441,7 +730,18 @@ export function presentPmPlanMarkdownForDisplay(
   )
 
   let presented = withFences
-  if (replacedFence) {
+  if (replacedFence && hasReadableWbsTable) {
+    // Hide only the machine JSON section. Keep later human sections such as
+    // 关键路径 / 调度说明 when the model includes them.
+    presented = withFences
+      .replace(
+        /^#{1,6}\s*(?:[一二三四五六七八九十]+[、.．]\s*)?(?:系统\s*)?JSON(?:\s*[（(][^）)]*[）)])?.*(?:\n+---)?\s*$/gim,
+        '',
+      )
+      .replace(/(?:^|\n)---\s*(?=\n+#{1,6}\s)/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  } else if (replacedFence) {
     presented = withFences
   } else {
     const trimmed = text.trim()
@@ -461,15 +761,8 @@ export function presentPmPlanMarkdownForDisplay(
     }
   }
 
-  // Resource plan fences / raw JSON → readable table (after WBS presentation).
-  return presentPmResourcePlanMarkdownForDisplay(presented)
-}
-
-function splitMarkdownRow(line: string): string[] {
-  return line
-    .split('|')
-    .map((cell) => cell.trim())
-    .filter((cell) => cell.length > 0)
+  // Resource / cost plan fences / raw JSON → readable tables (after WBS presentation).
+  return presentPmCostPlanMarkdownForDisplay(presentPmResourcePlanMarkdownForDisplay(presented))
 }
 
 export function parsePmScheduleSuggestionsFromText(text: string): PmScheduleSuggestion[] {
@@ -662,6 +955,7 @@ export function buildPmNewProjectBriefMessage(input: {
   period?: string
   region?: string
 }): string {
+  const today = new Date().toISOString().slice(0, 10)
   const durationLine =
     input.durationDays != null && input.durationDays > 0
       ? String(input.durationDays)
@@ -683,39 +977,66 @@ export function buildPmNewProjectBriefMessage(input: {
 - 工期总日历天：${durationLine}${extraLines.length > 0 ? `\n${extraLines.join('\n')}` : ''}
 
 ## 输出要求
-1. **先**输出 Markdown 任务表（给人阅读），列固定为：
-   | 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |
-   - 第 1 行必须是**当前项目名称**（层级 1，如 PRJ 编号 · 项目名），工期/起止为项目总工期；不要把说明文字写入任务名称。其余任务全部挂在其下（1.1、1.1.1…）。
-   - 前置任务列用**层级编号**写逻辑关系，如 \`1.1FS\`、\`1.2SS+5\`（不要写任务名称）；无前置写 —。
-   - 层级用 1 / 1.1 / 1.1.1 表示父子；不要在表格里贴 JSON。
-2. **再**输出一个 JSON 对象（\`\`\`json 代码块），供系统应用计划，格式：
-{
-  "projectName": "${input.name}",
-  "projectPlan": {
-    "planStart": "YYYY-MM-DD",
-    "planFinish": "YYYY-MM-DD",
-    "durationDays": number
-  },
-  "wbs": [
-    {
-      "title": "任务名称",
-      "type": "wbs_node | phase | task | milestone",
-      "parentTitle": "父任务标题（根节点可省略；根级任务的父为项目名称时可省略）",
-      "durationDays": number,
-      "startDate": "YYYY-MM-DD",
-      "dueDate": "YYYY-MM-DD",
-      "predecessors": [
-        { "title": "前置任务标题", "type": "FS | SS | FF | SF", "lagDays": 0 }
-      ],
-      "priority": "low | normal | high | urgent"
-    }
-  ]
+请严格按以下四段 Markdown 输出（**不要输出 JSON / 代码块**；系统会直接从任务表解析并写入甘特）：
+
+### 一、任务表（WBS层级）
+用 Markdown 表，列固定为：
+| 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |
+规则：
+- 第 1 行必须是**当前项目名称**（层级 1，如 PRJ 编号 · 项目名），工期/起止为项目总工期；不要把说明文字写入任务名称。
+- 其余任务全部挂在其下，按深度优先排列（父项后紧跟全部子项）：1.1、1.1.1、1.1.2、1.2…
+- 前置任务列只用**层级编号**写逻辑关系，如 \`1.1FS\`、\`1.2SS+5\`；多个前置用逗号或分号分隔；无前置写 —。
+- 汇总行（有子项）前置列写 —；逻辑关系只写在叶子任务上。
+- 汇总行起止日期必须包络全部子项；若简报未指定开始日期，建议开始不得早于 ${today}。
+- 叶子任务前置须连通：除最早开始的叶子外，每个叶子都要有 predecessors，从开工能到达竣工。
+
+### 二、计划合规性说明
+用短列表说明：总工期是否满足、层级是否齐全、前置网络是否连通、有无并行/汇聚约定。不要重复粘贴任务表。
+
+### 三、关键路径说明
+用短表或条目标出关键路径主要段落及合计日历天。
+
+### 四、调度说明（或后续建议）
+补充平行路径、汇聚节点、风险与下一步建议（3–6 条以内）。
+
+项目已在系统中创建，勿要求用户再次填写项目名称；除上述四段外不要写冗长散文。`
 }
-3. 层级覆盖单位/分部/分项/区域/部位等；父子用 parentTitle 指向已出现的父项 title。
-4. 可另附 Markdown 排期表补日期（列：workItemTitle | suggestedStartDate | suggestedDueDate | reason）。
-5. 标明项目级建议起止（projectPlan）；关键路径由系统在有关系与日期后计算，无需单独输出。
-6. 除表格与 JSON 外不要写冗长散文；项目已在系统中创建，勿要求用户再次填写项目名称。
-7. 前置关系必须连通：除整个计划中最早开始的那一项外，每个任务都要有 predecessors；从开工任务沿前置关系必须能到达竣工任务。禁止中段任务无前置（否则关键路径会从中段断开）。`
+
+const PM_NEW_PROJECT_BRIEF_MARKER = '请根据以下新建项目简报'
+const PM_BRIEF_SECTION_HEADING = '## 项目简报'
+const PM_BRIEF_REQUIREMENTS_HEADING = '## 输出要求'
+
+/**
+ * Render the kickoff brief as a readable summary for chat display.
+ * The stored message keeps the full output contract that the model needs.
+ */
+export function presentPmNewProjectBriefForDisplay(text: string): string {
+  if (!text.includes(PM_NEW_PROJECT_BRIEF_MARKER)) return text
+  const briefStart = text.indexOf(PM_BRIEF_SECTION_HEADING)
+  if (briefStart < 0) return text
+  const requirementsStart = text.indexOf(PM_BRIEF_REQUIREMENTS_HEADING, briefStart)
+  const briefBody = (
+    requirementsStart > briefStart
+      ? text.slice(briefStart + PM_BRIEF_SECTION_HEADING.length, requirementsStart)
+      : text.slice(briefStart + PM_BRIEF_SECTION_HEADING.length)
+  ).trim()
+  if (!briefBody) return text
+
+  const fields = briefBody
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('-'))
+    .map((line) =>
+      line.replace(
+        /^-\s*工期总日历天：（未指定[^）]*）\s*$/,
+        '- 工期总日历天：未指定（由智能体依据概况推断）',
+      ),
+    )
+
+  const lines = fields.length > 0 ? fields : [briefBody]
+  return ['### 新建项目', '', ...lines, '', '请计划智能体生成层级 WBS、排期与前置关系。'].join(
+    '\n',
+  )
 }
 
 /** True when suggestions need hierarchical / relation-aware apply. */

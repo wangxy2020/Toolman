@@ -57,6 +57,8 @@ export const projectManagerPageEn = {
       'A newer agent plan is available. Re-applying to “{{name}}” will clear and overwrite the current Gantt (a protective version snapshot is saved first when possible). Continue?',
     applyCancelled: 'Apply cancelled',
     applyNeedProject: 'Select a project before applying, or create one from the toolbar New button.',
+    applyNeedProgress:
+      'This project has no schedule tasks yet. Select it under All projects, confirm a progress plan first, then apply resource/cost assignments.',
     applyResourcePlan: 'Apply resource plan to Gantt ({{count}} assignments)',
     applyResourcePlanSuccess: 'Updated resource assignments on {{count}} tasks',
     applyResourceCatalog: 'Apply resource catalog changes ({{count}} ops)',

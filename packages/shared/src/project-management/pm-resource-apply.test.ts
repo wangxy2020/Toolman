@@ -44,6 +44,20 @@ describe('parsePmResourcePlanFromText', () => {
     expect(parsed.resourcePlan[0]?.assignments[0]?.type).toBe('material')
   })
 
+  it('does not treat costPlan JSON as a resource plan', () => {
+    const text = `JSON 数据结构（供系统确认）：${JSON.stringify({
+      costPlan: [
+        {
+          workItemTitle: '满堂基础',
+          assignments: [
+            { type: 'comprehensive', name: '满堂基础', quantity: 180, unitPrice: 897.54, unit: 'm³' },
+          ],
+        },
+      ],
+    })}`
+    expect(parsePmResourcePlanFromText(text).resourcePlan).toEqual([])
+  })
+
   it('maps mechanical alias to equipment', () => {
     expect(resolvePmAgentResourceTypeLabel('mechanical')).toBe('equipment')
   })

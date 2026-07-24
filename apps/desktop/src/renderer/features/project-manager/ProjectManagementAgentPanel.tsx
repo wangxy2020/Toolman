@@ -6,6 +6,7 @@ import { getBlocksText, getMessageText } from '../chat/message-utils'
 import {
   buildPmNewProjectBriefMessageFromProject,
   getPmAgentCapability,
+  resolvePmAgentApplyKindsForMessage,
   type ContentBlock,
   type PmProject,
 } from '@toolman/shared'
@@ -122,7 +123,18 @@ export function ProjectManagementAgentPanel({
     return null
   }, [chat.messages])
 
-  const applyKinds = capability?.apply ?? []
+  const lastAssistantText = useMemo(() => {
+    for (let index = chat.messages.length - 1; index >= 0; index -= 1) {
+      const message = chat.messages[index]
+      if (message?.role === 'assistant') return getMessageText(message)
+    }
+    return ''
+  }, [chat.messages])
+
+  const applyKinds = useMemo(
+    () => resolvePmAgentApplyKindsForMessage(lastAssistantText, capability?.apply ?? []),
+    [capability?.apply, lastAssistantText],
+  )
   const assistantFooter =
     linked && workspaceId && applyKinds.length > 0 ? (
       <>

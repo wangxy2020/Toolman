@@ -6,6 +6,10 @@ export const PM_SAVE_HISTORY_KEY = 'saveHistory'
 export const PM_PENDING_AGENT_REVISION_KEY = 'pendingAgentScheduleRevision'
 /** Durable fingerprints of agent plans already applied to this project (survives restart). */
 export const PM_APPLIED_PLAN_RECEIPTS_KEY = 'appliedPlanReceipts'
+/** Durable fingerprints of agent resource plans already applied (survives restart). */
+export const PM_APPLIED_RESOURCE_PLAN_RECEIPTS_KEY = 'appliedResourcePlanReceipts'
+/** Durable fingerprints of agent cost plans already applied (survives restart). */
+export const PM_APPLIED_COST_PLAN_RECEIPTS_KEY = 'appliedCostPlanReceipts'
 
 export const PM_SAVE_HISTORY_MAX = 10
 export const PM_APPLIED_PLAN_RECEIPTS_MAX = 20
@@ -150,15 +154,42 @@ function isAppliedPlanReceipt(value: unknown): value is PmAppliedPlanReceipt {
   )
 }
 
-export function readAppliedPlanReceipts(
+function readAppliedReceiptsAt(
   metadata: Record<string, unknown> | null | undefined,
+  key: string,
 ): PmAppliedPlanReceipt[] {
-  const raw = metadata?.[PM_APPLIED_PLAN_RECEIPTS_KEY]
+  const raw = metadata?.[key]
   if (!Array.isArray(raw)) return []
   return raw.filter(isAppliedPlanReceipt).map((row) => ({
     fingerprint: row.fingerprint,
     appliedAt: row.appliedAt,
   }))
+}
+
+/** Prepend a receipt; dedupe by fingerprint; cap list length. */
+function upsertAppliedReceiptAt(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+  fingerprint: string,
+  appliedAt: number,
+): Record<string, unknown> {
+  const base = { ...(metadata ?? {}) }
+  const trimmed = fingerprint.trim()
+  if (!trimmed) return base
+  const next: PmAppliedPlanReceipt[] = [
+    { fingerprint: trimmed, appliedAt },
+    ...readAppliedReceiptsAt(base, key).filter((row) => row.fingerprint !== trimmed),
+  ].slice(0, PM_APPLIED_PLAN_RECEIPTS_MAX)
+  return {
+    ...base,
+    [key]: next,
+  }
+}
+
+export function readAppliedPlanReceipts(
+  metadata: Record<string, unknown> | null | undefined,
+): PmAppliedPlanReceipt[] {
+  return readAppliedReceiptsAt(metadata, PM_APPLIED_PLAN_RECEIPTS_KEY)
 }
 
 /** True when this fingerprint was already applied to the project (survives restart). */
@@ -176,17 +207,55 @@ export function upsertAppliedPlanReceipt(
   fingerprint: string,
   appliedAt: number = Date.now(),
 ): Record<string, unknown> {
-  const base = { ...(metadata ?? {}) }
-  const trimmed = fingerprint.trim()
-  if (!trimmed) return base
-  const next: PmAppliedPlanReceipt[] = [
-    { fingerprint: trimmed, appliedAt },
-    ...readAppliedPlanReceipts(base).filter((row) => row.fingerprint !== trimmed),
-  ].slice(0, PM_APPLIED_PLAN_RECEIPTS_MAX)
-  return {
-    ...base,
-    [PM_APPLIED_PLAN_RECEIPTS_KEY]: next,
-  }
+  return upsertAppliedReceiptAt(metadata, PM_APPLIED_PLAN_RECEIPTS_KEY, fingerprint, appliedAt)
+}
+
+/** True when this resource-plan fingerprint was already applied (survives restart). */
+export function hasAppliedResourcePlanFingerprint(
+  metadata: Record<string, unknown> | null | undefined,
+  fingerprint: string,
+): boolean {
+  if (!fingerprint) return false
+  return readAppliedReceiptsAt(metadata, PM_APPLIED_RESOURCE_PLAN_RECEIPTS_KEY).some(
+    (row) => row.fingerprint === fingerprint,
+  )
+}
+
+export function upsertAppliedResourcePlanReceipt(
+  metadata: Record<string, unknown> | null | undefined,
+  fingerprint: string,
+  appliedAt: number = Date.now(),
+): Record<string, unknown> {
+  return upsertAppliedReceiptAt(
+    metadata,
+    PM_APPLIED_RESOURCE_PLAN_RECEIPTS_KEY,
+    fingerprint,
+    appliedAt,
+  )
+}
+
+/** True when this cost-plan fingerprint was already applied (survives restart). */
+export function hasAppliedCostPlanFingerprint(
+  metadata: Record<string, unknown> | null | undefined,
+  fingerprint: string,
+): boolean {
+  if (!fingerprint) return false
+  return readAppliedReceiptsAt(metadata, PM_APPLIED_COST_PLAN_RECEIPTS_KEY).some(
+    (row) => row.fingerprint === fingerprint,
+  )
+}
+
+export function upsertAppliedCostPlanReceipt(
+  metadata: Record<string, unknown> | null | undefined,
+  fingerprint: string,
+  appliedAt: number = Date.now(),
+): Record<string, unknown> {
+  return upsertAppliedReceiptAt(
+    metadata,
+    PM_APPLIED_COST_PLAN_RECEIPTS_KEY,
+    fingerprint,
+    appliedAt,
+  )
 }
 
 /**

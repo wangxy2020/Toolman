@@ -13,6 +13,7 @@ import {
   parsePmWbsSuggestionsFromText,
   PmApplyWbsInputSchema,
   PmWbsSuggestionSchema,
+  presentPmNewProjectBriefForDisplay,
   resolvePmWbsSuggestionDates,
 } from './pm-plan-apply.js'
 
@@ -55,6 +56,95 @@ describe('parsePmWbsSuggestionsFromText', () => {
     expect(plan.wbs).toHaveLength(2)
     expect(plan.wbs[1]?.parentTitle).toBe('单位工程A')
     expect(plan.wbs[1]?.predecessors?.[0]?.type).toBe('FS')
+  })
+
+  it('parses WBS from markdown table without JSON', () => {
+    const text = [
+      '### 一、任务表（WBS层级）',
+      '',
+      '| 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |',
+      '| --- | --- | --- | --- | --- | --- |',
+      '| 1 | PRJ-2602 · Toolman项目2 | 30 | 2026-08-01 | 2026-08-30 | — |',
+      '| 1.1 | 施工准备 | 10 | 2026-08-01 | 2026-08-10 | — |',
+      '| 1.1.1 | 现场勘察 | 5 | 2026-08-01 | 2026-08-05 | — |',
+      '| 1.1.2 | 临时设施 | 5 | 2026-08-06 | 2026-08-10 | 1.1.1FS |',
+      '| 1.2 | 主体结构 | 20 | 2026-08-11 | 2026-08-30 | — |',
+      '| 1.2.1 | 一层结构 | 20 | 2026-08-11 | 2026-08-30 | 1.1.2FS |',
+      '',
+      '### 二、计划合规性说明',
+      '- 总工期 30 天',
+      '',
+      '### 三、关键路径说明',
+      '- 勘察 → 临时设施 → 一层结构',
+      '',
+      '### 四、调度说明',
+      '- 无额外并行',
+    ].join('\n')
+
+    const plan = parsePmFullPlanFromText(text)
+    expect(plan.projectPlan).toEqual({
+      planStart: '2026-08-01',
+      planFinish: '2026-08-30',
+      durationDays: 30,
+    })
+    expect(plan.wbs.map((item) => item.title)).toEqual([
+      '施工准备',
+      '现场勘察',
+      '临时设施',
+      '主体结构',
+      '一层结构',
+    ])
+    expect(plan.wbs.find((item) => item.title === '临时设施')?.predecessors).toEqual([
+      { title: '现场勘察', type: 'FS' },
+    ])
+    expect(plan.wbs.find((item) => item.title === '一层结构')?.parentTitle).toBe('主体结构')
+    expect(plan.wbs.find((item) => item.title === '施工准备')?.type).toBe('phase')
+    expect(plan.wbs.find((item) => item.title === '现场勘察')?.type).toBe('task')
+    // Summary phase predecessors are cleared by hierarchy normalization.
+    expect(plan.wbs.find((item) => item.title === '主体结构')?.predecessors ?? []).toEqual([])
+  })
+
+  it('prefers markdown table over conflicting JSON payload', () => {
+    const text = [
+      '| 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |',
+      '| --- | --- | --- | --- | --- | --- |',
+      '| 1 | Demo | 5 | 2026-01-01 | 2026-01-05 | — |',
+      '| 1.1 | 从表解析 | 5 | 2026-01-01 | 2026-01-05 | — |',
+      '',
+      '```json',
+      JSON.stringify({
+        projectName: 'Demo',
+        wbs: [{ title: '从 JSON 解析', type: 'task', durationDays: 5 }],
+      }),
+      '```',
+    ].join('\n')
+    const plan = parsePmFullPlanFromText(text)
+    expect(plan.wbs.map((item) => item.title)).toEqual(['从表解析'])
+  })
+
+  it('removes duplicate project root and orders each parent before its children', () => {
+    const text = JSON.stringify({
+      projectName: 'Toolman项目2',
+      projectPlan: { planStart: '2026-01-01', planFinish: '2026-12-31', durationDays: 365 },
+      wbs: [
+        { title: 'PRJ-2602 · Toolman项目2', type: 'wbs_node' },
+        {
+          title: '阶段一',
+          type: 'phase',
+          parentTitle: 'PRJ-2602 · Toolman项目2',
+          predecessors: [{ title: '准备任务', type: 'FS' }],
+        },
+        { title: '阶段二', type: 'phase', parentTitle: 'PRJ-2602 · Toolman项目2' },
+        { title: '任务一', type: 'task', parentTitle: '阶段一' },
+        { title: '任务二', type: 'task', parentTitle: '阶段二' },
+      ],
+    })
+
+    const plan = parsePmFullPlanFromText(text)
+    expect(plan.wbs.map((item) => item.title)).toEqual(['阶段一', '任务一', '阶段二', '任务二'])
+    expect(plan.wbs[0]?.parentTitle).toBeUndefined()
+    expect(plan.wbs[0]?.predecessors).toEqual([])
+    expect(plan.wbs.some((item) => item.title.includes('Toolman项目2'))).toBe(false)
   })
 })
 
@@ -310,10 +400,57 @@ describe('formatPmPlanAsMarkdownTable', () => {
     expect(presented).toContain('| 1 | 项目 |')
     expect(presented).not.toContain('已检查各任务间逻辑关系')
   })
+
+  it('hides machine JSON when a readable WBS table is already present', () => {
+    const source = [
+      '### 一、Markdown 排期表（层级 WBS）',
+      '',
+      '| 层级 | 任务名称 | 工期(天) | 开始日期 | 完成日期 | 前置任务 |',
+      '| --- | --- | --- | --- | --- | --- |',
+      '| 1 | PRJ-2602 · Toolman项目2 | 10 | 2026-01-01 | 2026-01-10 | — |',
+      '| 1.1 | 施工准备 | 10 | 2026-01-01 | 2026-01-10 | — |',
+      '',
+      '### 二、系统 JSON（可解析计划）',
+      '',
+      '```json',
+      JSON.stringify({
+        projectName: 'Toolman项目2',
+        projectPlan: { planStart: '2026-01-01', planFinish: '2026-01-10', durationDays: 10 },
+        wbs: [
+          {
+            title: '施工准备',
+            type: 'task',
+            durationDays: 10,
+            startDate: '2026-01-01',
+            dueDate: '2026-01-10',
+          },
+        ],
+      }),
+      '```',
+      '',
+      '### 三、关键路径说明',
+      '| 关键路径段 | 持续时间 | 说明 |',
+      '| --- | --- | --- |',
+      '| 准备 → 交付 | 10d | 主路径 |',
+      '',
+      '### 四、调度说明',
+      '- 计划说明仍可显示。',
+    ].join('\n')
+
+    const presented = presentPmPlanMarkdownForDisplay(source)
+    expect(presented).toContain('Markdown 排期表')
+    expect(presented).toContain('| 1.1 | 施工准备 |')
+    expect(presented).toContain('三、关键路径说明')
+    expect(presented).toContain('主路径')
+    expect(presented).toContain('四、调度说明')
+    expect(presented).not.toContain('系统 JSON')
+    expect(presented).not.toContain('"projectPlan"')
+    expect(presented).not.toContain('```json')
+  })
 })
 
 describe('buildPmNewProjectBriefMessage', () => {
-  it('includes overview and output contract', () => {
+  it('includes overview and markdown-only output contract', () => {
     const message = buildPmNewProjectBriefMessage({
       name: 'Toolman项目1',
       overview: '新建办公楼装修',
@@ -321,9 +458,13 @@ describe('buildPmNewProjectBriefMessage', () => {
     })
     expect(message).toContain('Toolman项目1')
     expect(message).toContain('新建办公楼装修')
-    expect(message).toContain('parentTitle')
-    expect(message).toContain('projectPlan')
-    expect(message).toContain('Markdown 任务表')
+    expect(message).toContain('一、任务表（WBS层级）')
+    expect(message).toContain('二、计划合规性说明')
+    expect(message).toContain('三、关键路径说明')
+    expect(message).toContain('四、调度说明')
+    expect(message).toContain('不要输出 JSON')
+    expect(message).not.toContain('parentTitle')
+    expect(message).not.toContain('"projectPlan"')
   })
 
   it('includes optional schedule fields from create dialog', () => {
@@ -337,6 +478,45 @@ describe('buildPmNewProjectBriefMessage', () => {
     expect(message).toContain('PRJ-ABC')
     expect(message).toContain('2026-01-01')
     expect(message).toContain('2026-06-30')
+  })
+})
+
+describe('presentPmNewProjectBriefForDisplay', () => {
+  it('shows only the brief fields and hides the JSON contract', () => {
+    const source = buildPmNewProjectBriefMessageFromProject({
+      code: 'PRJ-2602',
+      name: 'Toolman项目2',
+      description: '本项目拟建教学楼1栋，工期要求360天。',
+      metadata: {},
+    })
+    const presented = presentPmNewProjectBriefForDisplay(source)
+    expect(presented).toContain('### 新建项目')
+    expect(presented).toContain('Toolman项目2')
+    expect(presented).toContain('PRJ-2602')
+    expect(presented).toContain('本项目拟建教学楼1栋')
+    expect(presented).toContain('未指定（由智能体依据概况推断）')
+    expect(presented).toContain('请计划智能体生成层级 WBS、排期与前置关系。')
+    expect(presented).not.toContain('已请计划智能体')
+    expect(presented).not.toContain('## 输出要求')
+    expect(presented).not.toContain('"projectPlan"')
+    expect(presented).not.toContain('```json')
+    expect(presented).not.toContain('parentTitle')
+  })
+
+  it('is applied by the shared display presenter', () => {
+    const source = buildPmNewProjectBriefMessageFromProject({
+      code: 'PRJ-1',
+      name: 'Demo',
+      description: '概况说明',
+      metadata: { planStartDate: '2026-01-01', planFinishDate: '2026-01-10' },
+    })
+    const presented = presentPmPlanMarkdownForDisplay(source)
+    expect(presented).toContain('### 新建项目')
+    expect(presented).not.toContain('"wbs"')
+  })
+
+  it('leaves unrelated messages untouched', () => {
+    expect(presentPmNewProjectBriefForDisplay('普通消息')).toBe('普通消息')
   })
 })
 
