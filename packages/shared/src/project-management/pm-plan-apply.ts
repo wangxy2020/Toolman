@@ -5,6 +5,7 @@ import {
   PmWorkItemPrioritySchema,
   PmWorkItemTypeSchema,
 } from './pm-types.js'
+import { presentPmResourcePlanMarkdownForDisplay } from './pm-resource-apply.js'
 
 export const DEFAULT_PM_PROJECT_NAME_PREFIX = 'Toolman项目'
 export const DEFAULT_PM_PROJECT_CODE_PREFIX = 'PRJ-'
@@ -401,7 +402,8 @@ export function formatPmPlanAsMarkdownTable(
 
 /**
  * Replace WBS JSON (fenced or raw) with a readable markdown table for chat UI.
- * Original message text is unchanged — apply/parse still uses the stored JSON.
+ * Also replaces resourcePlan JSON fences. Original message text is unchanged —
+ * apply/parse still uses the stored JSON.
  */
 export function presentPmPlanMarkdownForDisplay(
   text: string,
@@ -437,21 +439,30 @@ export function presentPmPlanMarkdownForDisplay(
       }
     },
   )
-  if (replacedFence) return withFences
 
-  const trimmed = text.trim()
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return text
-  const plan = parsePmFullPlanFromText(trimmed)
-  if (plan.wbs.length === 0) return text
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(trimmed)
-  } catch {
-    parsed = null
+  let presented = withFences
+  if (replacedFence) {
+    presented = withFences
+  } else {
+    const trimmed = text.trim()
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      const plan = parsePmFullPlanFromText(trimmed)
+      if (plan.wbs.length > 0) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(trimmed)
+        } catch {
+          parsed = null
+        }
+        presented = formatPmPlanAsMarkdownTable(plan, {
+          projectName: resolveName(parsed, text),
+        })
+      }
+    }
   }
-  return formatPmPlanAsMarkdownTable(plan, {
-    projectName: resolveName(parsed, text),
-  })
+
+  // Resource plan fences / raw JSON → readable table (after WBS presentation).
+  return presentPmResourcePlanMarkdownForDisplay(presented)
 }
 
 function splitMarkdownRow(line: string): string[] {
@@ -467,12 +478,17 @@ export function parsePmScheduleSuggestionsFromText(text: string): PmScheduleSugg
     .map((line) => line.trim())
     .filter((line) => line.includes('|'))
 
+  const looksLikeDate = (value: string): boolean =>
+    /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(value.trim())
+
   const suggestions: PmScheduleSuggestion[] = []
   for (const row of rows) {
     if (/^[-:| ]+$/.test(row)) continue
     const cells = splitMarkdownRow(row)
     if (cells.length < 3) continue
     if (/workItemTitle|任务|标题/i.test(cells[0] ?? '')) continue
+    // Resource/cost tables share a pipe layout; require date-like cells for schedule rows.
+    if (!looksLikeDate(cells[1] ?? '') || !looksLikeDate(cells[2] ?? '')) continue
 
     const result = PmScheduleSuggestionSchema.safeParse({
       workItemTitle: cells[0],

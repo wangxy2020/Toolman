@@ -188,14 +188,6 @@ export function ProjectResourceCatalogApplyBar({
         <span className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--done">
           {t('projectManagerPage.agent.applyResourceCatalogDone')}
         </span>
-        <button
-          type="button"
-          className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
-          title={t('projectManagerPage.agent.applyDiscard')}
-          onClick={handleDiscard}
-        >
-          {t('projectManagerPage.agent.applyDiscard')}
-        </button>
       </span>
     )
   }

@@ -258,14 +258,6 @@ export function ProjectCostPlanApplyBar({
         >
           {t('projectManagerPage.agent.applyGoToGantt')}
         </button>
-        <button
-          type="button"
-          className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
-          title={t('projectManagerPage.agent.applyDiscard')}
-          onClick={handleDiscard}
-        >
-          {t('projectManagerPage.agent.applyDiscard')}
-        </button>
       </span>
     )
   }

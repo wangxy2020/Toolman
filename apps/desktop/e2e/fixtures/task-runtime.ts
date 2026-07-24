@@ -13,15 +13,17 @@ export interface E2eAgentTask {
   metadata?: Record<string, unknown>
 }
 
-/** Scope list rows to the popup list — detail cards reuse the same test id. */
+/** Scope list rows to the fold section — cards inside the body must not share this test id. */
 export function sidebarTaskListItem(sidebar: Locator, taskId: string): Locator {
-  return sidebar.locator('.tm-agent-tasks-popup-list').getByTestId(`task-list-item-${taskId}`)
+  return sidebar
+    .locator('.tm-agent-tasks-popup-list')
+    .locator(`section.tm-agent-task-fold[data-testid="task-list-item-${taskId}"]`)
 }
 
 export function sidebarTaskListItemByTitle(sidebar: Locator, title: string): Locator {
   return sidebar
     .locator('.tm-agent-tasks-popup-list')
-    .locator('[data-testid^="task-list-item-"]')
+    .locator('section.tm-agent-task-fold[data-testid^="task-list-item-"]')
     .filter({ hasText: title })
 }
 

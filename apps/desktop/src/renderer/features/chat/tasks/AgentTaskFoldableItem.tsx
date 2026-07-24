@@ -59,7 +59,7 @@ export function AgentTaskFoldableItem({
             .join(' ')}
           data-testid="task-detail-panel"
         >
-          {!collapsible ? <AgentTaskCard task={task} bound={bound} asListItem /> : null}
+          {!collapsible ? <AgentTaskCard task={task} bound={bound} /> : null}
           <AgentTaskTimeline
             key={`${task.id}-${timelineReloadToken}`}
             taskId={task.id}

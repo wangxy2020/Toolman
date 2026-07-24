@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildPmResourcePlanFingerprint,
+  formatPmResourcePlanAsMarkdownTable,
   mergeTaskResourceAssignmentsByName,
   parsePmResourcePlanFromText,
+  presentPmResourcePlanMarkdownForDisplay,
+  resolvePmAgentResourceTypeLabel,
 } from './pm-resource-apply.js'
 import { upsertSharedResourceCatalogRows } from './pm-shared-resource-catalog.js'
 
@@ -39,6 +42,56 @@ describe('parsePmResourcePlanFromText', () => {
     })
     const parsed = parsePmResourcePlanFromText(text)
     expect(parsed.resourcePlan[0]?.assignments[0]?.type).toBe('material')
+  })
+
+  it('maps mechanical alias to equipment', () => {
+    expect(resolvePmAgentResourceTypeLabel('mechanical')).toBe('equipment')
+  })
+})
+
+describe('presentPmResourcePlanMarkdownForDisplay', () => {
+  it('replaces fenced resourcePlan JSON with a readable table', () => {
+    const source = [
+      '资源建议如下。',
+      '',
+      '```json',
+      JSON.stringify({
+        resourcePlan: [
+          {
+            workItemTitle: '1层主体结构施工（含水电预埋）',
+            assignments: [
+              { type: 'labor', name: '钢筋工', quantity: 15, unit: '工日' },
+              { type: 'material', name: '钢筋', quantity: 50, unit: 't' },
+              { type: 'mechanical', name: '塔吊', quantity: 1, unit: '台班' },
+            ],
+          },
+        ],
+      }),
+      '```',
+    ].join('\n')
+    const presented = presentPmResourcePlanMarkdownForDisplay(source)
+    expect(presented).toContain('### 资源计划')
+    expect(presented).toContain('| 任务名称 | 类型 | 资源名称 | 数量 | 单位 |')
+    expect(presented).toContain('钢筋工')
+    expect(presented).toContain('机械')
+    expect(presented).toContain('塔吊')
+    expect(presented).not.toContain('"resourcePlan"')
+    expect(presented).not.toContain('```')
+  })
+
+  it('formatPmResourcePlanAsMarkdownTable expands one row per assignment', () => {
+    const table = formatPmResourcePlanAsMarkdownTable({
+      resourcePlan: [
+        {
+          workItemTitle: '浇筑',
+          assignments: [
+            { type: 'labor', name: '普通工', quantity: 10, unit: '工日' },
+            { type: 'material', name: '砂', quantity: 2, unit: 'm³' },
+          ],
+        },
+      ],
+    })
+    expect(table.split('\n').filter((line) => line.startsWith('| 浇筑'))).toHaveLength(2)
   })
 })
 

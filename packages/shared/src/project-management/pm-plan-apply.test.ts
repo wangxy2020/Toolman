@@ -103,6 +103,15 @@ describe('parsePmScheduleSuggestionsFromText', () => {
     expect(suggestions[0]?.workItemTitle).toBe('进度计划复核')
     expect(suggestions[0]?.suggestedStartDate).toBe('2026-01-05')
   })
+
+  it('ignores resource-plan style tables without dates', () => {
+    const text = `
+| 任务名称 | 类型 | 资源名称 | 数量 | 单位 |
+| --- | --- | --- | --- | --- |
+| 1层主体结构施工 | 人力 | 钢筋工 | 15 | 工日 |
+`
+    expect(parsePmScheduleSuggestionsFromText(text)).toEqual([])
+  })
 })
 
 describe('mergePmScheduleIntoWbsSuggestions', () => {

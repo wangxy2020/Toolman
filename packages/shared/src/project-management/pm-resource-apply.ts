@@ -51,6 +51,16 @@ export function resolvePmAgentResourceTypeLabel(label: string): PmAgentResourceT
   if ((PmAgentResourceTypeSchema.options as readonly string[]).includes(trimmed)) {
     return trimmed as PmAgentResourceType
   }
+  // Common LLM aliases / informal labels
+  const aliases: Record<string, PmAgentResourceType> = {
+    mechanical: 'equipment',
+    machinery: 'equipment',
+    machine: 'equipment',
+    机具: 'equipment',
+    施工机械: 'equipment',
+  }
+  const alias = aliases[trimmed.toLowerCase()] ?? aliases[trimmed]
+  if (alias) return alias
   if (trimmed === '其他') return 'other'
   if (trimmed === '管理') return 'management'
   for (const [type, zh] of Object.entries(PM_AGENT_RESOURCE_TYPE_LABELS) as Array<
@@ -324,6 +334,102 @@ export function buildPmResourcePlanFingerprint(
   )
 }
 
+function escapeMarkdownTableCell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim()
+}
+
+function formatResourceTypeCell(entry: PmResourceAssignmentSuggestion): string {
+  if (entry.type) return PM_AGENT_RESOURCE_TYPE_LABELS[entry.type]
+  const resolved = entry.typeLabel
+    ? resolvePmAgentResourceTypeLabel(entry.typeLabel)
+    : null
+  if (resolved) return PM_AGENT_RESOURCE_TYPE_LABELS[resolved]
+  return entry.typeLabel?.trim() || '—'
+}
+
+/** Human-readable resource plan table for chat display. */
+export function formatPmResourcePlanAsMarkdownTable(
+  plan: PmParsedResourcePlanFromText,
+): string {
+  const { resourcePlan } = plan
+  if (resourcePlan.length === 0) return ''
+
+  const lines: string[] = [
+    '### 资源计划',
+    '',
+    '| 任务名称 | 类型 | 资源名称 | 数量 | 单位 |',
+    '| --- | :---: | --- | :---: | :---: |',
+  ]
+
+  for (const task of resourcePlan) {
+    const title = escapeMarkdownTableCell(
+      task.workItemTitle?.trim() || task.workItemCode?.trim() || task.workItemId || '任务',
+    )
+    for (const entry of task.assignments) {
+      lines.push(
+        `| ${title} | ${escapeMarkdownTableCell(formatResourceTypeCell(entry))} | ${escapeMarkdownTableCell(
+          entry.name,
+        )} | ${entry.quantity ?? '—'} | ${escapeMarkdownTableCell(entry.unit?.trim() || '—')} |`,
+      )
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Replace resourcePlan JSON (fenced or raw) with a readable markdown table for chat UI.
+ * Original message text is unchanged — apply/parse still uses the stored JSON.
+ */
+export function presentPmResourcePlanMarkdownForDisplay(text: string): string {
+  let replacedFence = false
+  const withFences = text.replace(
+    /```(?:json)?\s*([\s\S]*?)```/gi,
+    (full, body: string) => {
+      try {
+        const parsed = JSON.parse(body.trim()) as unknown
+        let resourcePlan: PmResourceTaskPlanSuggestion[] = []
+        if (Array.isArray(parsed)) {
+          resourcePlan = parseResourcePlanArray(parsed)
+        } else if (parsed && typeof parsed === 'object') {
+          const root = parsed as Record<string, unknown>
+          // Prefer explicit resourcePlan keys; do not treat bare WBS as resources.
+          if (!('resourcePlan' in root || 'resourceAssignments' in root || 'assignments' in root)) {
+            return full
+          }
+          if ('wbs' in root || 'projectPlan' in root) {
+            return full
+          }
+          resourcePlan = parseResourcePlanArray(
+            root.resourcePlan ?? root.resourceAssignments ?? root.assignments,
+          )
+        }
+        if (resourcePlan.length === 0) return full
+        replacedFence = true
+        return formatPmResourcePlanAsMarkdownTable({ resourcePlan })
+      } catch {
+        return full
+      }
+    },
+  )
+  if (replacedFence) return withFences
+
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return text
+  const plan = parsePmResourcePlanFromText(trimmed)
+  if (plan.resourcePlan.length === 0) return text
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const root = parsed as Record<string, unknown>
+      if ('wbs' in root || 'projectPlan' in root) return text
+    }
+  } catch {
+    return text
+  }
+  return formatPmResourcePlanAsMarkdownTable(plan)
+}
+
 export function normalizeResourceAssignmentSuggestion(
   entry: PmResourceAssignmentSuggestion,
 ): PmTaskResourceAssignment {
@@ -343,7 +449,9 @@ export function normalizeResourceAssignmentSuggestion(
 /** Prompt fragment: how the plan agent should emit resource quantities. */
 export const PM_RESOURCE_PLAN_OUTPUT_HINT = [
   '## 资源计划输出（写入甘特「资源分配」）',
-  '在给出任务资源用量时，除可读说明外，请附加如下 JSON（可用 ```json 代码块）：',
+  '1. **先**输出 Markdown 资源表（给人阅读），列固定为：',
+  '   | 任务名称 | 类型 | 资源名称 | 数量 | 单位 |',
+  '2. **再**附加如下 JSON（可用 ```json 代码块），供系统确认写入；聊天界面会隐藏该 JSON 并展示为表格：',
   '{',
   '  "resourcePlan": [',
   '    {',

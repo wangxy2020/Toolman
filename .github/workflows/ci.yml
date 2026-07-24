@@ -50,8 +50,11 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
         run: |
+          # Coverage thresholds apply to src/main/services only (see vitest.config.ts).
           pnpm --filter @toolman/desktop exec vitest run --coverage src/main
-          pnpm --filter @toolman/desktop exec vitest run --coverage src/renderer
+          # Renderer suite is covered by unit tests; do not re-run with --coverage
+          # or global main-service thresholds fail at ~0%.
+          pnpm --filter @toolman/desktop exec vitest run src/renderer
 
       - name: Docx integration
         run: pnpm --filter @toolman/desktop test:docx-integration

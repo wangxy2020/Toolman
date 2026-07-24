@@ -15,8 +15,6 @@ import {
 interface Props {
   task: AgentTask
   bound?: boolean
-  /** When true, exposes list-item test id for E2E (single-task menu). */
-  asListItem?: boolean
   onSelect?: (taskId: string) => void
   /** Collapsed fold header — title row only, no progress bar. */
   variant?: 'full' | 'summary'
@@ -33,7 +31,6 @@ function taskStatusBadgeVariant(status: AgentTask['status']): 'failure' | 'retry
 export function AgentTaskCard({
   task,
   bound = false,
-  asListItem = false,
   onSelect,
   variant = 'full',
   headerAction,
@@ -53,7 +50,6 @@ export function AgentTaskCard({
       ]
         .filter(Boolean)
         .join(' ')}
-      data-testid={asListItem ? `task-list-item-${task.id}` : undefined}
       onClick={onSelect ? () => onSelect(task.id) : undefined}
       onKeyDown={
         onSelect
