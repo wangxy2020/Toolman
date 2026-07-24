@@ -1,6 +1,5 @@
 import {
   EPC_WORK2_SHIPPING_CI_AGENT_NARRATION_MARKER,
-  EPC_WORK2_SHIPPING_CI_COMMAND_TEMPLATE,
   EPC_WORK2_SHIPPING_CI_DEFAULT_QUICK_PHRASE_ID,
   EPC_WORK2_SHIPPING_CI_QUICK_PHRASE_CONTENT,
   EPC_WORK2_SHIPPING_CI_QUICK_PHRASE_TITLE,
@@ -30,16 +29,6 @@ export const normalizeEpcWork2CommandInput = (command: string): string =>
 
 export const isEpcWork2ShippingCiCommand = (text: string): boolean =>
   COMMAND_PATTERN.test(normalizeEpcWork2CommandInput(text))
-
-export const isEpcWork2ShippingCiSlashCommand = (command: string): boolean => {
-  const normalized = normalizeEpcWork2CommandInput(command)
-  if (!normalized) return false
-  if (normalized === normalizeEpcWork2CommandInput(EPC_WORK2_SHIPPING_CI_COMMAND_TEMPLATE)) return true
-  return COMMAND_PATTERN.test(normalized)
-}
-
-export const buildEpcWork2ShippingCiSlashCommandFillText = (): string =>
-  EPC_WORK2_SHIPPING_CI_COMMAND_TEMPLATE
 
 export const isBuiltinEpcWork2ShippingCiQuickPhraseId = (phraseId: string | undefined): boolean =>
   phraseId === EPC_WORK2_SHIPPING_CI_DEFAULT_QUICK_PHRASE_ID

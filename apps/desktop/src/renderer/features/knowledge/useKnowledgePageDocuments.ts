@@ -253,15 +253,10 @@ export function useKnowledgePageDocuments(
     }
   }
 
-  const handleContextMenu = (event: React.MouseEvent, documentId?: string) => {
+  const handleContextMenu = (event: React.MouseEvent, _documentId?: string) => {
     if (!showFileToolbar) return
     event.preventDefault()
-    if (documentId) {
-      setSelectedIds((current) => {
-        if (current.has(documentId)) return current
-        return new Set([documentId])
-      })
-    }
+    // Right-click opens the menu only — do not change row selection.
     setContextMenu({ x: event.clientX, y: event.clientY })
   }
 

@@ -40,9 +40,68 @@ export const PmScheduleBaselineItemSchema = z.object({
   parentWorkItemId: UuidSchema.optional().nullable().transform((value) => value ?? undefined),
   type: PmWorkItemTypeSchema.optional(),
   sortOrder: z.number().int().optional(),
+  /**
+   * Task resource assignments at capture time (plan version / baseline).
+   * Omitted on legacy snapshots — restore must not clear live assignments.
+   */
+  resourceAssignments: z.array(z.unknown()).optional(),
+  /**
+   * Task cost (price-list) assignments at capture time.
+   * Omitted on legacy snapshots — restore must not clear live assignments.
+   */
+  costAssignments: z.array(z.unknown()).optional(),
 })
 
 export type PmScheduleBaselineItem = z.infer<typeof PmScheduleBaselineItemSchema>
+
+/** True when this snapshot item recorded assignment fields (even if empty arrays). */
+export function baselineItemHasAssignmentSnapshot(
+  item: Pick<PmScheduleBaselineItem, 'resourceAssignments' | 'costAssignments'>,
+): boolean {
+  return item.resourceAssignments !== undefined || item.costAssignments !== undefined
+}
+
+/**
+ * Pick resource/cost assignment arrays from live work-item metadata for capture.
+ * Always returns both keys so restores can clear assignments when empty.
+ */
+export function pickAssignmentSnapshotFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): {
+  resourceAssignments: unknown[]
+  costAssignments: unknown[]
+} {
+  const resourceAssignments = Array.isArray(metadata?.resourceAssignments)
+    ? [...(metadata!.resourceAssignments as unknown[])]
+    : []
+  const costAssignments = Array.isArray(metadata?.costAssignments)
+    ? [...(metadata!.costAssignments as unknown[])]
+    : []
+  return { resourceAssignments, costAssignments }
+}
+
+/**
+ * Merge snapshot assignment fields into live metadata (shallow-merge friendly).
+ * Uses `null` for empty lists so shallow merge clears previous arrays.
+ * Returns null when the snapshot item is legacy (no assignment fields).
+ */
+export function mergeAssignmentSnapshotIntoMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  item: Pick<PmScheduleBaselineItem, 'resourceAssignments' | 'costAssignments'>,
+): Record<string, unknown> | null {
+  if (!baselineItemHasAssignmentSnapshot(item)) return null
+  const base =
+    metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? { ...metadata }
+      : {}
+  const resourceAssignments = item.resourceAssignments ?? []
+  const costAssignments = item.costAssignments ?? []
+  base.resourceAssignments = resourceAssignments.length > 0 ? resourceAssignments : null
+  base.costAssignments = costAssignments.length > 0 ? costAssignments : null
+  // Force-clear legacy single-assignment key under shallow merge.
+  base.resourceAssignment = null
+  return base
+}
 
 /** Lightweight relation row stored inside a schedule/version baseline snapshot. */
 export const PmScheduleBaselineRelationSchema = z.object({

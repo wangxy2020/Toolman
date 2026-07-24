@@ -76,6 +76,7 @@ describe('upsertSharedResourceCatalogRows', () => {
         {
           id: '1',
           type: 'labor',
+          customTypeName: '',
           name: '普通工',
           spec: '',
           unit: '工日',

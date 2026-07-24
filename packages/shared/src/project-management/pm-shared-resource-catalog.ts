@@ -11,6 +11,8 @@ export const PmSharedResourceCatalogRowSchema = z
   .object({
     id: z.string().min(1),
     type: PmAgentResourceTypeSchema,
+    /** User-defined type name when type is custom. */
+    customTypeName: z.string().default(''),
     name: z.string(),
     spec: z.string().default(''),
     unit: z.string(),
@@ -24,6 +26,7 @@ export const PmSharedResourceCatalogRowSchema = z
   })
   .transform((row) => ({
     ...row,
+    customTypeName: row.type === 'custom' ? row.customTypeName : '',
     pricingUnit:
       row.pricingUnit != null && row.pricingUnit.trim().length > 0
         ? row.pricingUnit
@@ -144,20 +147,11 @@ export function createDefaultSharedResourceCatalogRows(): PmSharedResourceCatalo
     { type: 'instrument', name: '全站仪', unit: '台', pricingUnit: '台班', unitPrice: 400 },
     { type: 'instrument', name: '水准仪', unit: '台', pricingUnit: '台班', unitPrice: 150 },
     { type: 'instrument', name: '塔尺', unit: '台', pricingUnit: '台班', unitPrice: 30 },
-    { type: 'investment', name: '投资估算', unit: '元', pricingUnit: '元', unitPrice: null },
-    { type: 'designEstimate', name: '设计概算', unit: '元', pricingUnit: '元', unitPrice: null },
-    {
-      type: 'constructionBudget',
-      name: '施工预算',
-      unit: '元',
-      pricingUnit: '元',
-      unitPrice: null,
-    },
-    { type: 'costBudget', name: '成本预算', unit: '元', pricingUnit: '元', unitPrice: null },
   ]
   return defs.map((entry, index) => ({
     id: `default-resource-${index + 1}`,
     type: entry.type,
+    customTypeName: '',
     name: entry.name,
     spec: '',
     unit: entry.unit,
@@ -218,6 +212,7 @@ export function upsertSharedResourceCatalogRows(
       next.push({
         id: createId(),
         type: entry.type,
+        customTypeName: '',
         name,
         spec: entry.spec?.trim() ?? '',
         unit,

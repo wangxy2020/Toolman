@@ -1,6 +1,6 @@
 import type { IconProps } from './types'
 
-export function IconVSCode({ size = 16 }: IconProps) {
+function IconVSCode({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <path
@@ -19,7 +19,7 @@ export function IconVSCode({ size = 16 }: IconProps) {
   )
 }
 
-export function IconCursorEditor({ size = 16 }: IconProps) {
+function IconCursorEditor({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <rect x="4" y="4" width="16" height="16" rx="4" fill="#1a1a1a" />

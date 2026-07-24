@@ -2,14 +2,12 @@ import {
   CommunityBoardMessageSchema,
   CommunityYjsStatusSchema,
   type CommunityBoardMessage,
-  type CommunityUserProfile,
 } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { listBoardMessages, getUserMe } from './community-ipc.facade'
 import { isCommunityYjsEnabled, ensureDefaultCommunitySyncConfig, readCommunitySyncConfig, writeCommunitySyncConfig } from './community-yjs.config'
 import {
-  listLwwEntities,
   upsertLwwEntity,
   YJS_ORIGIN_BOOTSTRAP,
 } from './community-yjs-store'
@@ -17,10 +15,7 @@ import {
   getCommunityYjsProviderStatus,
   startCommunityYjsProvider,
   stopCommunityYjsProvider,
-  syncCommunityBoardMessageToYjs,
-  syncCommunityProfileToYjs,
 } from './community-yjs-provider'
-import { broadcastCommunityYjsUpdate } from './community-yjs-broadcast'
 
 let hydrated = false
 
@@ -96,32 +91,4 @@ export async function setCommunityYjsEnabled(enabled: boolean) {
   }
 
   return getCommunityYjsStatus()
-}
-
-export function listCommunityBoardMessagesFromYjs(): CommunityBoardMessage[] {
-  return listLwwEntities('board')
-    .map(({ record }) => CommunityBoardMessageSchema.safeParse(record.payload))
-    .filter((result) => result.success)
-    .map((result) => result.data)
-    .sort((left, right) => right.createdAt - left.createdAt)
-}
-
-export function exportCommunityYjsBoardMessage(message: CommunityBoardMessage): void {
-  syncCommunityBoardMessageToYjs(message)
-}
-
-export function exportCommunityYjsProfile(profile: CommunityUserProfile): void {
-  syncCommunityProfileToYjs(profile)
-}
-
-export function emitCommunityYjsBoardUpdatesFromStore(): void {
-  for (const { id, record } of listLwwEntities('board')) {
-    broadcastCommunityYjsUpdate({
-      domain: 'board',
-      entityId: id,
-      action: 'upsert',
-      entity: record.payload,
-      updatedAt: record.updatedAt,
-    })
-  }
 }

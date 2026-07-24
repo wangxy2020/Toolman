@@ -12,14 +12,14 @@ import {
 import type { PmResourceRow } from '../resource/pm-resource-catalog'
 import {
   isScheduleFeatureType,
-  reindexFeatureRows,
   type PmFeatureRow,
   type PmFeatureType,
 } from './pm-features-catalog'
 
 export type FeatureGanttRollup = {
   /**
-   * Labor / auxiliary / machinery: peak concurrent quantity across the schedule.
+   * Labor / auxiliary: peak of daily summed concurrent quantities.
+   * Machinery: peak of daily max task quantities (overlap does not stack).
    * Material: sum of matching assignment quantities.
    */
   quantity: number
@@ -28,7 +28,8 @@ export type FeatureGanttRollup = {
   /** Latest task finish among matching assignments. */
   finishDate: number | null
   /**
-   * Labor / auxiliary / machinery: peak concurrent quantity within each calendar month.
+   * Labor / auxiliary: peak of daily summed concurrent quantities per month.
+   * Machinery: peak of daily max task quantities per month.
    * Material: day-weighted quantity by month key (`YYYY-MM`).
    */
   monthly: Record<string, number>
@@ -54,6 +55,10 @@ export function featureTypeToResourceType(type: PmFeatureType): PmResourceType |
       return 'material'
     case 'machinery':
       return 'equipment'
+    case 'device':
+      return 'device'
+    case 'instrument':
+      return 'instrument'
     case 'procurement':
     case 'metering':
     case 'node':
@@ -75,6 +80,10 @@ export function resourceTypeToFeatureType(type: PmResourceType): PmFeatureType |
       return 'material'
     case 'equipment':
       return 'machinery'
+    case 'device':
+      return 'device'
+    case 'instrument':
+      return 'instrument'
     default:
       return null
   }
@@ -91,6 +100,8 @@ function defaultUnitForFeatureType(type: PmFeatureType): string {
     case 'labor':
       return '人'
     case 'machinery':
+    case 'device':
+    case 'instrument':
       return '台'
     case 'auxiliary':
     case 'material':
@@ -100,9 +111,23 @@ function defaultUnitForFeatureType(type: PmFeatureType): string {
   }
 }
 
-/** Types that roll up by peak concurrent quantity (not cumulative sum). */
+/** Types that roll up by peak quantity (not cumulative sum). */
 export function usesPeakConcurrentRollup(type: PmFeatureType): boolean {
-  return type === 'labor' || type === 'auxiliary' || type === 'machinery'
+  return (
+    type === 'labor' ||
+    type === 'auxiliary' ||
+    type === 'machinery' ||
+    type === 'device' ||
+    type === 'instrument'
+  )
+}
+
+/**
+ * Machinery / device / instrument: overlapping tasks do not stack (shared plant).
+ * Labor / auxiliary: overlapping tasks sum into daily concurrent demand.
+ */
+export function usesNonStackingPeakRollup(type: PmFeatureType): boolean {
+  return type === 'machinery' || type === 'device' || type === 'instrument'
 }
 
 function featureMatchKey(type: PmFeatureType, name: string): string {
@@ -126,7 +151,7 @@ export function buildResourceUnitLookup(
 
 /**
  * Distinct 实务 seeds from Gantt task resource assignments
- * (labor / auxiliary / material / equipment).
+ * (labor / auxiliary / material / equipment / device / instrument).
  * Only counts non-empty assignments that include a finite quantity.
  * When `catalog` is provided, assignments not present in that list are ignored.
  * `unitLookup` keys are `${resourceType}\0${name}`.
@@ -160,7 +185,7 @@ export function collectGanttFeatureSeeds(
 }
 
 /**
- * Live 实务 rows for labor/auxiliary/material/machinery from current Gantt seeds.
+ * Live 实务 rows for labor/auxiliary/material/machinery/device/instrument from current Gantt seeds.
  * Optional `overlays` supply id / unit / remark when the same type+name exists in catalog.
  */
 export function buildLiveScheduleFeatureRows(
@@ -190,51 +215,6 @@ export function buildLiveScheduleFeatureRows(
       parentId: null,
     }
   })
-}
-
-/**
- * Append missing 实务 rows for Gantt-assigned resources (type + name).
- * @deprecated Prefer `buildLiveScheduleFeatureRows` — schedule types are not persisted.
- */
-export function mergeGanttSeedsIntoFeatureRows(
-  rows: readonly PmFeatureRow[],
-  seeds: readonly GanttFeatureSeed[],
-  applicable: string,
-): { rows: PmFeatureRow[]; changed: boolean } {
-  const existingKeys = new Set<string>()
-  for (const row of rows) {
-    const name = row.name.trim()
-    if (!name) continue
-    existingKeys.add(featureMatchKey(row.type, name))
-  }
-
-  const additions: PmFeatureRow[] = []
-  for (const seed of seeds) {
-    const name = seed.name.trim()
-    if (!name) continue
-    const key = featureMatchKey(seed.type, name)
-    if (existingKeys.has(key)) continue
-    existingKeys.add(key)
-    additions.push({
-      id: crypto.randomUUID(),
-      type: seed.type,
-      name,
-      unit: seed.unit,
-      quantity: null,
-      remark: '',
-      applicable,
-      sortOrder: rows.length + additions.length,
-      parentId: null,
-    })
-  }
-
-  if (additions.length === 0) {
-    return { rows: [...rows], changed: false }
-  }
-  return {
-    rows: reindexFeatureRows([...rows, ...additions]),
-    changed: true,
-  }
 }
 
 export function formatMonthKey(year: number, monthIndex: number): string {
@@ -376,11 +356,14 @@ function resolveInclusiveDaySpan(
 }
 
 /**
- * Labor headcount: for each calendar day, sum concurrent task requirements;
- * month value = peak daily total in that month (not a sum, not people×days).
+ * Peak quantity by calendar day, then peak within each month.
+ * - `sum`: labor / auxiliary — add overlapping task requirements on the same day.
+ * - `max`: machinery — take the largest single-task requirement on the same day
+ *   (critical + normal work overlapping must not double-count shared plant).
  */
 export function allocatePeakHeadcountByMonth(
   spans: readonly HeadcountSpan[],
+  mode: 'sum' | 'max' = 'sum',
 ): { monthly: Record<string, number>; peak: number } {
   const daily = new Map<number, number>()
 
@@ -392,7 +375,8 @@ export function allocatePeakHeadcountByMonth(
     const cursor = new Date(range.startDay)
     while (cursor.getTime() <= range.endDay) {
       const day = startOfLocalDay(cursor.getTime())
-      daily.set(day, (daily.get(day) ?? 0) + span.quantity)
+      const prev = daily.get(day) ?? 0
+      daily.set(day, mode === 'max' ? Math.max(prev, span.quantity) : prev + span.quantity)
       cursor.setDate(cursor.getDate() + 1)
     }
   }
@@ -498,8 +482,9 @@ function assignmentMatchesFeature(
  * For each feature row, aggregate quantities from tasks whose resource assignments
  * match the row's mapped resource type + name and derive start/finish.
  *
- * Labor / auxiliary / machinery use peak concurrent quantity (daily max within each month).
- * Material uses quantity sums with day-weighted month allocation.
+ * Labor / auxiliary: peak of daily summed concurrent quantities.
+ * Machinery: peak of daily max task quantities (overlap does not stack).
+ * Material: quantity sums with day-weighted month allocation.
  */
 export function computeFeatureGanttRollups(
   items: readonly PmWorkItem[],
@@ -515,6 +500,7 @@ export function computeFeatureGanttRollups(
     }
 
     const usePeak = usesPeakConcurrentRollup(feature.type)
+    const peakMode = usesNonStackingPeakRollup(feature.type) ? 'max' : 'sum'
     let quantity = 0
     let startDate: number | null = null
     let finishDate: number | null = null
@@ -561,7 +547,7 @@ export function computeFeatureGanttRollups(
     }
 
     if (usePeak) {
-      const peak = allocatePeakHeadcountByMonth(peakSpans)
+      const peak = allocatePeakHeadcountByMonth(peakSpans, peakMode)
       result.set(feature.id, {
         quantity: peak.peak,
         startDate,

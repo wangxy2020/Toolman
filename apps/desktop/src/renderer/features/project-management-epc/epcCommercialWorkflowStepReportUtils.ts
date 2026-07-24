@@ -1,4 +1,4 @@
-import type { AuditErrorRow, IpcAlignmentReport, IpcFileResult } from '@toolman/shared'
+import type { IpcAlignmentReport, IpcFileResult } from '@toolman/shared'
 import { EPC_COMMERCIAL_WORKFLOW_STEPS } from '@toolman/shared'
 
 import {
@@ -91,17 +91,6 @@ export const formatWork4NarrationHints = (
 
 const formatAmount = (amount: number): string =>
   amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-export const formatPeriodApplicationAmount = (
-  amount: number | undefined,
-  currency: string | undefined,
-): string | null => {
-  if (amount == null) {
-    return null
-  }
-  const code = currency?.trim() || 'USD'
-  return `本期完成（申请）金额：${code} ${formatAmount(amount)}`
-}
 
 const formatCompactMoney = (amount: number, currency: string | undefined): string => {
   const code = currency?.trim() || 'USD'
@@ -284,22 +273,6 @@ export const getStep5FooterParts = (report: IpcAlignmentReport, workflowError?: 
 }
 
 /** 由合同母表路径推导 canonical aligned 路径（与 Rust canonical_aligned_master_path 一致） */
-export const deriveCanonicalAlignedPath = (contractMasterPath: string): string => {
-  const trimmed = contractMasterPath.trim()
-  if (!trimmed) {
-    return trimmed
-  }
-  const slashIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
-  if (slashIndex < 0) {
-    const stem = trimmed.replace(/\.xlsx$/i, '').replace(/_aligned(?:_\d+)?$/i, '')
-    return `${stem}_aligned.xlsx`
-  }
-  const dir = trimmed.slice(0, slashIndex + 1)
-  const file = trimmed.slice(slashIndex + 1)
-  const stem = file.replace(/\.xlsx$/i, '').replace(/_aligned(?:_\d+)?$/i, '')
-  return `${dir}${stem}_aligned.xlsx`
-}
-
 const isAlignedMasterPath = (path: string): boolean => /_aligned(?:_\d+)?\.xlsx$/i.test(path)
 
 /** 步骤 5 仅列出本次写出的 *_aligned.xlsx（可点击打开），不含合同母表原文件路径 */
@@ -355,12 +328,6 @@ export const getWorkflowStepFooterParts = (
   }
 }
 
-export const formatWorkflowStepFooterLine = (
-  stepIndex: 2 | 3 | 4 | 5,
-  report: IpcAlignmentReport,
-  workflowError?: string,
-): string => formatWorkflowStepFooterMarkdown(stepIndex, report, workflowError).join('\n')
-
 /** 步骤 5 成功时：先「**成功。**」，再输出文件，最后统计详情 */
 export const formatWorkflowStepFooterMarkdown = (
   stepIndex: 2 | 3 | 4 | 5,
@@ -395,12 +362,3 @@ export const formatWorkflowStepsMarkdown = (report: IpcAlignmentReport, workflow
   }
   return lines
 }
-
-export const buildAuditErrorsFromReport = (report: IpcAlignmentReport): AuditErrorRow[] =>
-  report.files
-    .filter((file) => file.status === 'failed')
-    .map((file) => ({
-      fileName: file.fileName,
-      filePath: file.filePath,
-      errorMessage: file.errorMessage ?? '未知错误',
-    }))

@@ -18,18 +18,27 @@ import {
   IconProjectInfo,
   IconRedo,
   IconSave,
+  IconSaveAsNewVersion,
   IconTrash,
   IconUndo,
 } from '../../../../components/icons'
 import { useI18n } from '../../../../i18n/useI18n'
-import { PM_RESOURCE_TYPES, type PmResourceType } from './pm-resource-catalog'
+import {
+  encodeCustomResourceViewFilter,
+  isPmResourceCostType,
+  parseCustomResourceViewFilter,
+  PM_RESOURCE_BUILTIN_PRIMARY_TYPES,
+  type PmResourceType,
+} from './pm-resource-catalog'
 
 const ICON_SIZE = 16
 
-export type ResourceViewFilter = 'all' | PmResourceType
+/** `all` | built-in / custom enum | `customName:<name>` for a user-named type. */
+export type ResourceViewFilter = 'all' | PmResourceType | string
 
 export type ResourceMenuAction =
   | 'save'
+  | 'saveAsNewVersion'
   | 'print'
   | 'projectInfo'
   | 'undo'
@@ -79,8 +88,16 @@ interface Props {
   /** Table type filter; `all` shows every resource type. */
   viewFilter: ResourceViewFilter
   onViewFilterChange: (filter: ResourceViewFilter) => void
+  /** Named custom types registered in View (and any still present on rows). */
+  customTypeNames: readonly string[]
+  /** Register a secondary custom type name from the View flyout. */
+  onRegisterCustomTypeName: (name: string) => void
+  /** Request deleting a named custom type (View nested list, context menu). */
+  onRequestDeleteCustomTypeName: (name: string) => void
   selectedType: PmResourceType
-  onTypeChange: (type: PmResourceType) => void
+  /** When selected row is custom, its user-defined type name. */
+  selectedCustomTypeName?: string
+  onTypeChange: (type: PmResourceType, customTypeName?: string) => void
   versionSwitchEntries: ResourceVersionSwitchEntry[]
   onRestoreVersion: (version: number) => void
   onAction: (action: ResourceMenuAction) => void
@@ -119,7 +136,11 @@ export function ProjectResourceMenuBar({
   canRedo = false,
   viewFilter,
   onViewFilterChange,
+  customTypeNames,
+  onRegisterCustomTypeName,
+  onRequestDeleteCustomTypeName,
   selectedType,
+  selectedCustomTypeName = '',
   onTypeChange,
   versionSwitchEntries,
   onRestoreVersion,
@@ -129,11 +150,22 @@ export function ProjectResourceMenuBar({
   const [viewOpen, setViewOpen] = useState(false)
   const [typeOpen, setTypeOpen] = useState(false)
   const [baselineOpen, setBaselineOpen] = useState(false)
+  const [customViewExpanded, setCustomViewExpanded] = useState(false)
+  const [customViewSubPos, setCustomViewSubPos] = useState<{ top: number; left: number } | null>(
+    null,
+  )
+  const [customTypeSubPos, setCustomTypeSubPos] = useState<{ top: number; left: number } | null>(
+    null,
+  )
+  const [customViewDraft, setCustomViewDraft] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(EMPTY_SCROLL)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const viewRef = useRef<HTMLSpanElement>(null)
   const typeRef = useRef<HTMLSpanElement>(null)
   const baselineRef = useRef<HTMLSpanElement>(null)
+  const customViewGroupRef = useRef<HTMLDivElement>(null)
+  const customTypeGroupRef = useRef<HTMLButtonElement>(null)
+  const customViewHoverTimerRef = useRef<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const viewPos = useDropdownPos(viewOpen, viewRef)
@@ -177,28 +209,133 @@ export function ProjectResourceMenuBar({
       if (typeOpen && typeRef.current?.contains(target)) return
       if (baselineOpen && baselineRef.current?.contains(target)) return
       if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
+      if ((target as Element).closest?.('.tm-pm-resource-custom-submenu')) return
       setViewOpen(false)
       setTypeOpen(false)
       setBaselineOpen(false)
+      setCustomViewExpanded(false)
+      setCustomViewSubPos(null)
+      setCustomTypeSubPos(null)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [baselineOpen, typeOpen, viewOpen])
 
+  useEffect(() => {
+    if (!viewOpen) {
+      clearCustomViewHoverTimer()
+      setCustomViewExpanded(false)
+      setCustomViewSubPos(null)
+      setCustomViewDraft('')
+    }
+  }, [viewOpen])
+
+  useEffect(() => {
+    if (!typeOpen) setCustomTypeSubPos(null)
+  }, [typeOpen])
+
+  useEffect(() => {
+    return () => {
+      if (customViewHoverTimerRef.current != null) {
+        window.clearTimeout(customViewHoverTimerRef.current)
+        customViewHoverTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const clearCustomViewHoverTimer = () => {
+    if (customViewHoverTimerRef.current != null) {
+      window.clearTimeout(customViewHoverTimerRef.current)
+      customViewHoverTimerRef.current = null
+    }
+  }
+
+  const keepCustomViewSubmenu = () => {
+    clearCustomViewHoverTimer()
+  }
+
+  const scheduleHideCustomViewSubmenu = () => {
+    clearCustomViewHoverTimer()
+    customViewHoverTimerRef.current = window.setTimeout(() => {
+      setCustomViewSubPos(null)
+      customViewHoverTimerRef.current = null
+    }, 120)
+  }
+
+  const hideCustomViewSubmenu = () => {
+    clearCustomViewHoverTimer()
+    setCustomViewSubPos(null)
+  }
+
+  const placeCustomSubmenu = (anchor: HTMLElement, options?: { width?: number; height?: number }) => {
+    const rect = anchor.getBoundingClientRect()
+    const width = options?.width ?? 140
+    const height = options?.height ?? 220
+    const sideGap = 12
+    const gap = 4
+    const margin = 8
+    let left = rect.right + sideGap
+    if (left + width > window.innerWidth - margin) {
+      left = Math.max(margin, rect.left - width - sideGap)
+    }
+    const spaceBelow = window.innerHeight - rect.bottom - margin
+    const spaceAbove = rect.top - margin
+    const openAbove = height > spaceBelow && spaceAbove > spaceBelow
+    let top = openAbove ? rect.top - height - gap : rect.top
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
+    return { top, left }
+  }
+
   const viewMenuLabel = t('projectManagerPage.resourceTable.menu.view')
+  const viewCustomName = parseCustomResourceViewFilter(viewFilter)
   const viewCurrentLabel =
     viewFilter === 'all'
       ? t('projectManagerPage.resourceTable.views.allTypes')
-      : t(`projectManagerPage.resourceTable.types.${viewFilter}`)
+      : viewCustomName != null
+        ? viewCustomName || t('projectManagerPage.resourceTable.types.customUnnamed')
+        : t(`projectManagerPage.resourceTable.types.${viewFilter}`)
   const typeMenuLabel = t('projectManagerPage.resourceTable.menu.type')
-  const typeLabel = t(`projectManagerPage.resourceTable.types.${selectedType}`)
+  const typeLabel = isPmResourceCostType(selectedType)
+    ? `${t('projectManagerPage.resourceTable.views.costResources')} · ${t(`projectManagerPage.resourceTable.types.${selectedType}`)}`
+    : selectedType === 'custom'
+      ? selectedCustomTypeName.trim() || t('projectManagerPage.resourceTable.types.custom')
+      : t(`projectManagerPage.resourceTable.types.${selectedType}`)
   const baselineMenuLabel = t('projectManagerPage.resourceTable.menu.baseline')
+
+  const closeTypeMenus = () => {
+    setTypeOpen(false)
+    setCustomTypeSubPos(null)
+  }
+
+  const commitCustomViewTypeName = (raw: string) => {
+    const name = raw.trim()
+    if (!name) return
+    onRegisterCustomTypeName(name)
+    onViewFilterChange(encodeCustomResourceViewFilter(name))
+    setViewOpen(false)
+    setCustomViewExpanded(false)
+    setCustomViewSubPos(null)
+    setCustomViewDraft('')
+  }
+
+  const applyCustomTypeToSelection = (name: string) => {
+    onTypeChange('custom', name.trim())
+    closeTypeMenus()
+  }
 
   const items: MenuItem[] = [
     {
       key: 'save',
       title: t('projectManagerPage.resourceTable.menu.save'),
       label: <IconSave size={ICON_SIZE} />,
+      icon: true,
+      disabled: !canEdit,
+    },
+    {
+      key: 'saveAsNewVersion',
+      title: t('projectManagerPage.resourceTable.menu.saveAsNewVersion'),
+      label: <IconSaveAsNewVersion size={ICON_SIZE} />,
       icon: true,
       disabled: !canEdit,
     },
@@ -394,7 +531,17 @@ export function ProjectResourceMenuBar({
                   hideTip()
                   setTypeOpen(false)
                   setBaselineOpen(false)
-                  setViewOpen((open) => !open)
+                  setViewOpen((open) => {
+                    const next = !open
+                    if (next) {
+                      setCustomViewExpanded(
+                        customTypeNames.length > 0 ||
+                          viewFilter === 'custom' ||
+                          parseCustomResourceViewFilter(viewFilter) != null,
+                      )
+                    }
+                    return next
+                  })
                 }}
                 {...tipProps(viewMenuLabel)}
               >
@@ -419,6 +566,7 @@ export function ProjectResourceMenuBar({
                         ]
                           .filter(Boolean)
                           .join(' ')}
+                        onMouseEnter={hideCustomViewSubmenu}
                         onClick={() => {
                           onViewFilterChange('all')
                           setViewOpen(false)
@@ -426,7 +574,7 @@ export function ProjectResourceMenuBar({
                       >
                         {t('projectManagerPage.resourceTable.views.allTypes')}
                       </button>
-                      {PM_RESOURCE_TYPES.map((type) => (
+                      {PM_RESOURCE_BUILTIN_PRIMARY_TYPES.map((type) => (
                         <button
                           key={type}
                           type="button"
@@ -438,6 +586,7 @@ export function ProjectResourceMenuBar({
                           ]
                             .filter(Boolean)
                             .join(' ')}
+                          onMouseEnter={hideCustomViewSubmenu}
                           onClick={() => {
                             onViewFilterChange(type)
                             setViewOpen(false)
@@ -446,6 +595,167 @@ export function ProjectResourceMenuBar({
                           {t(`projectManagerPage.resourceTable.types.${type}`)}
                         </button>
                       ))}
+                      <div
+                        ref={customViewGroupRef}
+                        className={[
+                          'tm-pm-gantt-view-option',
+                          'tm-pm-gantt-view-option--group',
+                          'tm-pm-resource-type-cell-custom-row',
+                          viewFilter === 'custom' ? 'tm-pm-gantt-view-option--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        role="none"
+                        onMouseEnter={(event) => {
+                          keepCustomViewSubmenu()
+                          setCustomViewSubPos(
+                            placeCustomSubmenu(event.currentTarget, { height: 56 }),
+                          )
+                        }}
+                        onMouseLeave={scheduleHideCustomViewSubmenu}
+                      >
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={viewFilter === 'custom'}
+                          className="tm-pm-resource-type-cell-custom-main"
+                          onClick={() => {
+                            onViewFilterChange('custom')
+                            const anchor = customViewGroupRef.current
+                            if (anchor) {
+                              keepCustomViewSubmenu()
+                              setCustomViewSubPos(placeCustomSubmenu(anchor, { height: 56 }))
+                            }
+                            if (customTypeNames.length > 0) setCustomViewExpanded(true)
+                          }}
+                        >
+                          {t('projectManagerPage.resourceTable.types.custom')}
+                        </button>
+                        {customTypeNames.length > 0 ? (
+                          <button
+                            type="button"
+                            className="tm-pm-resource-type-cell-fold"
+                            aria-expanded={customViewExpanded}
+                            aria-label={t('projectManagerPage.resourceTable.types.custom')}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              setCustomViewExpanded((open) => !open)
+                            }}
+                          >
+                            <IconChevronDown
+                              size={14}
+                              className={[
+                                'tm-pm-gantt-view-option-chevron',
+                                customViewExpanded
+                                  ? 'tm-pm-gantt-view-option-chevron--open'
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+                      {customViewExpanded
+                        ? customTypeNames.map((name) => {
+                            const filter = encodeCustomResourceViewFilter(name)
+                            return (
+                              <button
+                                key={filter}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={viewFilter === filter}
+                                className={[
+                                  'tm-pm-gantt-view-option',
+                                  'tm-pm-gantt-view-option--nested',
+                                  viewFilter === filter ? 'tm-pm-gantt-view-option--active' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                                title={name}
+                                onMouseEnter={hideCustomViewSubmenu}
+                                onClick={() => {
+                                  onViewFilterChange(filter)
+                                  setViewOpen(false)
+                                  setCustomViewSubPos(null)
+                                }}
+                                onContextMenu={(event) => {
+                                  if (!canEdit) return
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  setViewOpen(false)
+                                  setCustomViewSubPos(null)
+                                  onRequestDeleteCustomTypeName(name)
+                                }}
+                              >
+                                {name}
+                              </button>
+                            )
+                          })
+                        : null}
+                      {customViewSubPos
+                        ? createPortal(
+                            <div
+                              className="tm-pm-gantt-resource-select-submenu tm-pm-resource-custom-submenu"
+                              role="menu"
+                              style={{ top: customViewSubPos.top, left: customViewSubPos.left }}
+                              onMouseEnter={keepCustomViewSubmenu}
+                              onMouseLeave={scheduleHideCustomViewSubmenu}
+                            >
+                              <div className="tm-pm-resource-custom-submenu-compose">
+                                <input
+                                  className="tm-pm-resource-custom-submenu-input"
+                                  value={customViewDraft}
+                                  placeholder={t(
+                                    'projectManagerPage.resourceTable.customTypeNamePlaceholder',
+                                  )}
+                                  autoFocus
+                                  onChange={(event) => setCustomViewDraft(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault()
+                                      commitCustomViewTypeName(customViewDraft)
+                                    }
+                                    if (event.key === 'Escape') {
+                                      event.preventDefault()
+                                      hideCustomViewSubmenu()
+                                    }
+                                  }}
+                                  onClick={(event) => event.stopPropagation()}
+                                />
+                                <button
+                                  type="button"
+                                  className="tm-pm-resource-custom-submenu-apply"
+                                  disabled={!customViewDraft.trim()}
+                                  onClick={() => commitCustomViewTypeName(customViewDraft)}
+                                >
+                                  {t('projectManagerPage.resourceTable.customTypeNameApply')}
+                                </button>
+                              </div>
+                            </div>,
+                            document.body,
+                          )
+                        : null}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-disabled="true"
+                        title={t('projectManagerPage.resourceTable.views.costResourcesReserved')}
+                        className={[
+                          'tm-pm-gantt-view-option',
+                          'tm-pm-gantt-view-option--group',
+                          'tm-pm-gantt-view-option--disabled',
+                        ].join(' ')}
+                        onMouseEnter={hideCustomViewSubmenu}
+                        onClick={(event) => event.preventDefault()}
+                      >
+                        <span>{t('projectManagerPage.resourceTable.views.costResources')}</span>
+                        <IconChevronDown
+                          size={14}
+                          className="tm-pm-gantt-view-option-chevron"
+                        />
+                      </button>
                     </div>,
                     document.body,
                   )
@@ -483,7 +793,7 @@ export function ProjectResourceMenuBar({
                       role="menu"
                       style={{ top: typePos.top, left: typePos.left }}
                     >
-                      {PM_RESOURCE_TYPES.map((type) => (
+                      {PM_RESOURCE_BUILTIN_PRIMARY_TYPES.map((type) => (
                         <button
                           key={type}
                           type="button"
@@ -498,11 +808,121 @@ export function ProjectResourceMenuBar({
                           onClick={() => {
                             onTypeChange(type)
                             setTypeOpen(false)
+                            setCustomTypeSubPos(null)
                           }}
                         >
                           {t(`projectManagerPage.resourceTable.types.${type}`)}
                         </button>
                       ))}
+                      <button
+                        ref={customTypeGroupRef}
+                        type="button"
+                        role="menuitem"
+                        aria-haspopup="menu"
+                        aria-expanded={customTypeSubPos != null}
+                        aria-checked={selectedType === 'custom'}
+                        className={[
+                          'tm-pm-gantt-view-option',
+                          'tm-pm-gantt-view-option--group',
+                          selectedType === 'custom' ? 'tm-pm-gantt-view-option--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onMouseEnter={(event) => {
+                          setCustomTypeSubPos(placeCustomSubmenu(event.currentTarget))
+                        }}
+                        onClick={(event) => {
+                          setCustomTypeSubPos(placeCustomSubmenu(event.currentTarget))
+                          onTypeChange('custom', selectedCustomTypeName)
+                        }}
+                      >
+                        <span>{t('projectManagerPage.resourceTable.types.custom')}</span>
+                        <IconChevronDown
+                          size={14}
+                          className={[
+                            'tm-pm-gantt-view-option-chevron',
+                            customTypeSubPos ? 'tm-pm-gantt-view-option-chevron--open' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        />
+                      </button>
+                      {customTypeSubPos
+                        ? createPortal(
+                            <div
+                              className="tm-pm-gantt-resource-select-submenu tm-pm-resource-custom-submenu"
+                              role="menu"
+                              style={{ top: customTypeSubPos.top, left: customTypeSubPos.left }}
+                            >
+                              <div className="tm-pm-resource-custom-submenu-list">
+                                <button
+                                  type="button"
+                                  role="menuitemradio"
+                                  aria-checked={
+                                    selectedType === 'custom' && !selectedCustomTypeName.trim()
+                                  }
+                                  className={[
+                                    'tm-pm-resource-custom-submenu-item',
+                                    selectedType === 'custom' && !selectedCustomTypeName.trim()
+                                      ? 'tm-pm-resource-custom-submenu-item--active'
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' ')}
+                                  onClick={() => {
+                                    onTypeChange('custom', '')
+                                    closeTypeMenus()
+                                  }}
+                                >
+                                  {t('projectManagerPage.resourceTable.types.custom')}
+                                </button>
+                                {customTypeNames.map((name) => (
+                                  <button
+                                    key={`type-custom:${name}`}
+                                    type="button"
+                                    role="menuitemradio"
+                                    aria-checked={
+                                      selectedType === 'custom' &&
+                                      selectedCustomTypeName.trim() === name
+                                    }
+                                    className={[
+                                      'tm-pm-resource-custom-submenu-item',
+                                      selectedType === 'custom' &&
+                                      selectedCustomTypeName.trim() === name
+                                        ? 'tm-pm-resource-custom-submenu-item--active'
+                                        : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                    title={name}
+                                    onClick={() => applyCustomTypeToSelection(name)}
+                                  >
+                                    {name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>,
+                            document.body,
+                          )
+                        : null}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-disabled="true"
+                        title={t('projectManagerPage.resourceTable.views.costResourcesReserved')}
+                        className={[
+                          'tm-pm-gantt-view-option',
+                          'tm-pm-gantt-view-option--group',
+                          'tm-pm-gantt-view-option--disabled',
+                        ].join(' ')}
+                        onClick={(event) => event.preventDefault()}
+                      >
+                        <span>{t('projectManagerPage.resourceTable.views.costResources')}</span>
+                        <IconChevronDown
+                          size={14}
+                          className="tm-pm-gantt-view-option-chevron"
+                        />
+                      </button>
                     </div>,
                     document.body,
                   )

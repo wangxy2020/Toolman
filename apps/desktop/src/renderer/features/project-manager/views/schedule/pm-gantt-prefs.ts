@@ -78,9 +78,10 @@ export const GANTT_COLUMN_WIDTHS: Record<string, string> = {
   'resource:0:type': '88px',
   'resource:0:name': '140px',
   'resource:0:qty': '120px',
-  /** Cost-allocation view columns (name / amount equal width). */
+  /** Cost-allocation: one slot column = name picker + quantity. */
   costName: '128px',
-  costAmount: '128px',
+  costAmount: '88px',
+  costQty: '184px',
   costInput: '320px',
 }
 
@@ -103,7 +104,11 @@ export const GANTT_RESOURCE_VIEW_MAX_SLOTS = Number.POSITIVE_INFINITY
 
 export const GANTT_COST_VIEW_BASE_COLUMNS = ['index', 'name'] as const
 export const GANTT_COST_VIEW_OPTIONAL_COLUMNS = ['duration', 'start', 'finish'] as const
-export const GANTT_COST_VIEW_MAX_SLOTS = 6
+/**
+ * Cost-view column groups are unbounded; slotCount grows with assigned costs.
+ * Kept as Infinity so older `Math.min(..., MAX)` call sites stay safe.
+ */
+export const GANTT_COST_VIEW_MAX_SLOTS = Number.POSITIVE_INFINITY
 
 export const GANTT_CUSTOM_COLUMN_WIDTH = '100px'
 
@@ -139,6 +144,7 @@ export type GanttResourceColumnType =
   | 'costBudget'
   | 'funds'
   | 'other'
+  | 'custom'
 
 export type GanttResourceColumnBinding = {
   /** Resource type this column represents (header defaults to this type's label). */
@@ -174,6 +180,7 @@ export const SWITCHABLE_RESOURCE_COLUMN_TYPES: readonly GanttResourceColumnType[
   'costBudget',
   'funds',
   'other',
+  'custom',
 ] as const
 
 export function buildDefaultResourceColumnBindings(
@@ -204,8 +211,64 @@ function isGanttResourceColumnType(value: unknown): value is GanttResourceColumn
     value === 'constructionBudget' ||
     value === 'costBudget' ||
     value === 'funds' ||
-    value === 'other'
+    value === 'other' ||
+    value === 'custom'
   )
+}
+
+export type GanttAssignTypeFilter = 'all' | GanttResourceColumnType | 'custom'
+
+export function normalizeGanttAssignTypeFilter(value: unknown): GanttAssignTypeFilter {
+  if (value === 'all' || value === 'custom' || isGanttResourceColumnType(value)) return value
+  return 'all'
+}
+
+/** Types listed under the 资源分配 menubar dropdown. */
+export const GANTT_RESOURCE_ASSIGN_MENU_TYPES = [
+  'labor',
+  'auxiliary',
+  'material',
+  'equipment',
+  'device',
+  'instrument',
+  'custom',
+] as const satisfies readonly GanttAssignTypeFilter[]
+
+/** Types listed under the 成本分配 menubar dropdown (price-list primary types through 资金). */
+export const GANTT_COST_ASSIGN_MENU_TYPES = [
+  'comprehensive',
+  'management',
+  'fees',
+  'measures',
+  'other',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
+  'funds',
+] as const satisfies readonly GanttAssignTypeFilter[]
+
+export function normalizeResourceAssignTypeFilter(value: unknown): GanttAssignTypeFilter {
+  if (value === 'all') return 'all'
+  if (
+    typeof value === 'string' &&
+    (GANTT_RESOURCE_ASSIGN_MENU_TYPES as readonly string[]).includes(value)
+  ) {
+    return value as GanttAssignTypeFilter
+  }
+  return 'all'
+}
+
+export function normalizeCostAssignTypeFilter(value: unknown): GanttAssignTypeFilter {
+  if (value === 'all') return 'all'
+  if (
+    typeof value === 'string' &&
+    (GANTT_COST_ASSIGN_MENU_TYPES as readonly string[]).includes(value)
+  ) {
+    return value as GanttAssignTypeFilter
+  }
+  return 'all'
 }
 
 export function normalizeResourceColumnBindings(
@@ -253,6 +316,11 @@ export type GanttResourceViewPrefs = {
   columnLayoutVersion?: number
   /** Per-column type + selected resource (header dropdown). */
   columnBindings?: GanttResourceColumnBinding[]
+  /**
+   * Menubar filter for 资源分配: `'all'` or a resource-list type.
+   * Filters visible assignment columns to that type.
+   */
+  typeFilter?: GanttAssignTypeFilter
 }
 
 export const DEFAULT_GANTT_RESOURCE_VIEW_PREFS: GanttResourceViewPrefs = {
@@ -263,6 +331,7 @@ export const DEFAULT_GANTT_RESOURCE_VIEW_PREFS: GanttResourceViewPrefs = {
   inputMode: false,
   columnLayoutVersion: 4,
   columnBindings: buildDefaultResourceColumnBindings(),
+  typeFilter: 'all',
 }
 
 export type GanttCostViewPrefs = {
@@ -271,10 +340,15 @@ export type GanttCostViewPrefs = {
   showStart: boolean
   showFinish: boolean
   /**
-   * When true, one combined column (`名称，金额；…`) labeled「成本」
-   * instead of name / amount pairs.
+   * When true, one combined column (`类型，名称，数量；…`) labeled「成本」
+   * instead of per-slot name / quantity columns.
    */
   inputMode: boolean
+  /**
+   * Menubar filter for 成本分配: `'all'` or a price-list type.
+   * Filters visible assignment columns to that type.
+   */
+  typeFilter?: GanttAssignTypeFilter
 }
 
 export const DEFAULT_GANTT_COST_VIEW_PREFS: GanttCostViewPrefs = {
@@ -282,7 +356,8 @@ export const DEFAULT_GANTT_COST_VIEW_PREFS: GanttCostViewPrefs = {
   showDuration: true,
   showStart: true,
   showFinish: true,
-  inputMode: true,
+  inputMode: false,
+  typeFilter: 'all',
 }
 
 export type GanttUiPrefs = {
@@ -311,6 +386,11 @@ export type GanttUiPrefs = {
   resourceView: GanttResourceViewPrefs
   /** Cost-allocation view layout. */
   costView: GanttCostViewPrefs
+  /**
+   * Bumped when default visible columns change.
+   * Drives one-time inserts (e.g. ensure 前置任务 is visible).
+   */
+  columnDefaultsVersion?: number
 }
 
 /** Max outline depth index (0-based). 5 levels → 0..4 */
@@ -334,6 +414,8 @@ export const DEFAULT_GANTT_UI_PREFS: GanttUiPrefs = {
   customColumns: [],
   resourceView: { ...DEFAULT_GANTT_RESOURCE_VIEW_PREFS },
   costView: { ...DEFAULT_GANTT_COST_VIEW_PREFS },
+  /** Bump when shipping a new one-time default-column migration. */
+  columnDefaultsVersion: 2,
 }
 
 const GANTT_UI_PREFS_KEY = 'tm-pm-gantt-ui-prefs'
@@ -471,7 +553,7 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
   const rawOrder = Array.isArray(partial?.columnOrder)
     ? partial!.columnOrder
     : [...DEFAULT_GANTT_VISIBLE_COLUMNS]
-  const columnOrder = rawOrder.filter(
+  let columnOrder = rawOrder.filter(
     (id) =>
       typeof id === 'string' &&
       (GANTT_BUILTIN_COLUMNS.includes(id as GanttBuiltinColumn) || customIds.has(id)),
@@ -484,6 +566,19 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
   // Ensure known customs appear if missing from order but exist
   for (const col of customColumns) {
     if (!columnOrder.includes(col.id)) columnOrder.push(col.id)
+  }
+
+  let columnDefaultsVersion =
+    typeof partial?.columnDefaultsVersion === 'number' &&
+    Number.isFinite(partial.columnDefaultsVersion)
+      ? Math.floor(partial.columnDefaultsVersion)
+      : 0
+  // v1–v2: Gantt/list default set includes 前置任务 (existing installs may omit it).
+  if (columnDefaultsVersion < 2) {
+    if (!columnOrder.includes('predecessors')) {
+      columnOrder = insertColumnInCanonicalOrder(columnOrder, 'predecessors', customColumns)
+    }
+    columnDefaultsVersion = 2
   }
 
   const columnLabels: Record<string, string> =
@@ -557,10 +652,7 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
   const costSlotCountRaw = costViewPartial?.slotCount
   const costSlotCount =
     typeof costSlotCountRaw === 'number' && Number.isFinite(costSlotCountRaw)
-      ? Math.min(
-          GANTT_COST_VIEW_MAX_SLOTS,
-          Math.max(1, Math.floor(costSlotCountRaw)),
-        )
+      ? Math.max(1, Math.floor(costSlotCountRaw))
       : DEFAULT_GANTT_COST_VIEW_PREFS.slotCount
 
   return {
@@ -599,14 +691,17 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
       inputMode: resourceInputMode,
       columnLayoutVersion: 4,
       columnBindings,
+      typeFilter: normalizeResourceAssignTypeFilter(resourceViewPartial?.typeFilter),
     },
     costView: {
       slotCount: costSlotCount,
       showDuration: costViewPartial?.showDuration !== false,
       showStart: costViewPartial?.showStart !== false,
       showFinish: costViewPartial?.showFinish !== false,
-      inputMode: costViewPartial?.inputMode !== false,
+      inputMode: costViewPartial?.inputMode === true,
+      typeFilter: normalizeCostAssignTypeFilter(costViewPartial?.typeFilter),
     },
+    columnDefaultsVersion,
   }
 }
 
@@ -643,6 +738,19 @@ export function insertColumnInCanonicalOrder(
   return next
 }
 
+/** Ensure 前置任务 is visible (Gantt view default when switching views / migrating prefs). */
+export function withGanttDefaultPredecessorsColumn(prefs: GanttUiPrefs): GanttUiPrefs {
+  if (prefs.columnOrder.includes('predecessors')) return prefs
+  return {
+    ...prefs,
+    columnOrder: insertColumnInCanonicalOrder(
+      prefs.columnOrder,
+      'predecessors',
+      prefs.customColumns,
+    ),
+  }
+}
+
 export function isGanttBuiltinColumn(id: string): id is GanttBuiltinColumn {
   return (GANTT_BUILTIN_COLUMNS as readonly string[]).includes(id)
 }
@@ -676,16 +784,27 @@ export function buildCostViewColumnOrder(costView: GanttCostViewPrefs): string[]
   if (costView.showDuration) columns.push('duration')
   if (costView.showStart) columns.push('start')
   if (costView.showFinish) columns.push('finish')
-  const slots = Math.min(
-    GANTT_COST_VIEW_MAX_SLOTS,
-    Math.max(1, Math.floor(costView.slotCount)),
-  )
+  const slots = Math.max(1, Math.floor(costView.slotCount))
   for (let slot = 0; slot < slots; slot += 1) {
     if (costView.inputMode) {
       columns.push('cost:0:input')
       break
     }
-    columns.push(`cost:${slot}:name`, `cost:${slot}:amount`)
+    // One column per slot: price-list name picker + quantity (mirrors resource qty columns).
+    columns.push(`cost:${slot}:qty`)
+  }
+  columns.push('spacer')
+  return columns
+}
+
+/**
+ * Task list view: keep user column order, append trailing spacer so leftover
+ * width sits in the blank column instead of stretching the task name.
+ */
+export function buildListViewColumnOrder(columnOrder: readonly string[]): string[] {
+  const columns = columnOrder.filter((id) => id !== 'spacer')
+  if (!columns.includes('name')) {
+    columns.splice(Math.min(1, columns.length), 0, 'name')
   }
   columns.push('spacer')
   return columns
@@ -741,6 +860,7 @@ export function buildGridTemplateColumns(
     if (id === 'costAmount' || /^cost:\d+:amount$/.test(id)) {
       return GANTT_COLUMN_WIDTHS.costAmount!
     }
+    if (/^cost:\d+:qty$/.test(id)) return GANTT_COLUMN_WIDTHS.costQty!
     if (id === 'costInput' || /^cost:\d+:input$/.test(id)) {
       return GANTT_COLUMN_WIDTHS.costInput!
     }

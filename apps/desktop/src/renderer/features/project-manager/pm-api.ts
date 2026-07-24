@@ -1,11 +1,13 @@
 import {
   IpcChannel,
   type KnowledgeFolderFileItem,
+  type PmApplyCostPlanInput,
   type PmApplyResourcePlanInput,
   type PmApplyScheduleInput,
   type PmApplyWbsInput,
   type PmDomain,
   type PmProject,
+  type PmSharedCostCatalogRow,
   type PmSharedResourceCatalogRow,
   type PmTimeEntry,
   type PmTimeEntryUpdateInput,
@@ -221,6 +223,98 @@ export const pmApi = {
     return invoke<{ rows: PmSharedResourceCatalogRow[]; changed: boolean }>(
       IpcChannel.Pm_SharedResourceCatalogUpsert,
       { workspaceId, upserts },
+    )
+  },
+
+  applyCostPlanSuggestions(input: PmApplyCostPlanInput) {
+    return invoke<{
+      projectId: string
+      updatedCount: number
+      items: PmWorkItem[]
+      catalogUpserts: Array<{
+        type: string
+        name: string
+        unit?: string
+        quantity?: number | null
+        unitPrice?: number | null
+      }>
+      catalogChanged: boolean
+    }>(IpcChannel.Pm_WorkItemApplyCostPlan, input)
+  },
+
+  applyCostCatalogPatches(input: {
+    workspaceId: string
+    patches: Array<{
+      target: string
+      upserts: Array<{
+        type: PmSharedCostCatalogRow['type']
+        name: string
+        code?: string
+        unit?: string
+        quantity?: number | null
+        unitPrice?: number | null
+        featureDescription?: string
+        note?: string
+        sectionalWork?: string
+      }>
+      removes?: Array<{ type?: PmSharedCostCatalogRow['type']; name: string }>
+    }>
+  }) {
+    return invoke<{
+      workspaceId: string
+      sharedChanged: boolean
+      changedCount: number
+      results: Array<{
+        target: string
+        scope: 'shared' | 'project'
+        projectId?: string
+        projectCode?: string
+        changed: boolean
+        upserted: number
+        removed: number
+        rowCount: number
+      }>
+    }>(IpcChannel.Pm_ApplyCostCatalogPatch, input)
+  },
+
+  getSharedCostCatalog(workspaceId: string) {
+    return invoke<{ rows: PmSharedCostCatalogRow[]; isDefault: boolean }>(
+      IpcChannel.Pm_SharedCostCatalogGet,
+      { workspaceId },
+    )
+  },
+
+  setSharedCostCatalog(workspaceId: string, rows: PmSharedCostCatalogRow[]) {
+    return invoke<{ rows: PmSharedCostCatalogRow[] }>(IpcChannel.Pm_SharedCostCatalogSet, {
+      workspaceId,
+      rows,
+    })
+  },
+
+  upsertSharedCostCatalog(
+    workspaceId: string,
+    upserts: Array<{
+      type: PmSharedCostCatalogRow['type']
+      name: string
+      code?: string
+      unit?: string
+      quantity?: number | null
+      unitPrice?: number | null
+      featureDescription?: string
+      note?: string
+      sectionalWork?: string
+    }>,
+  ) {
+    return invoke<{ rows: PmSharedCostCatalogRow[]; changed: boolean }>(
+      IpcChannel.Pm_SharedCostCatalogUpsert,
+      { workspaceId, upserts },
+    )
+  },
+
+  smartAssignWorkItems(input: { workspaceId: string; projectId: string; kind: 'resource' | 'cost' }) {
+    return invoke<{ updatedCount: number; items: PmWorkItem[] }>(
+      IpcChannel.Pm_WorkItemSmartAssign,
+      input,
     )
   },
 

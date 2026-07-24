@@ -4,6 +4,7 @@ import type { PmResourceRow, PmResourceType } from '../resource/pm-resource-cata
 import {
   catalogRowsForType,
   catalogTypesInUse,
+  countResourceAssignmentsForTypeFilter,
   findAssignmentIndexForResource,
   formatResourceAssignmentInput,
   formatResourceAssignmentsInput,
@@ -14,9 +15,11 @@ import {
   parseResourceAssignmentInput,
   parseResourceAssignmentsInput,
   patchTaskResourceAssignmentMetadata,
+  readResourceAssignmentAtFilteredSlot,
   readTaskResourceAssignmentAt,
   readTaskResourceAssignments,
   resolveAssignmentAgainstCatalog,
+  resolveResourceAssignSourceIndex,
   TASK_RESOURCE_ASSIGNMENT_KEY,
   TASK_RESOURCE_ASSIGNMENTS_KEY,
   upsertResourceColumnQuantity,
@@ -38,6 +41,7 @@ function catalogRow(
   return {
     id: partial.id,
     type: partial.type,
+    customTypeName: partial.customTypeName ?? '',
     name: partial.name,
     spec: partial.spec ?? '',
     unit,
@@ -237,6 +241,7 @@ describe('pm-gantt-resource-assignment', () => {
           costBudget: '成本预算',
           funds: '资金',
           other: '其他',
+          custom: '自定义',
         } satisfies Record<PmResourceType, string>
       )[type]
 
@@ -558,5 +563,20 @@ describe('pm-gantt-resource-assignment', () => {
       'B',
     ])
     expect(moveTaskResourceAssignment(list, 1, 1)).toEqual(list)
+  })
+})
+
+describe('resource assign type filter slots', () => {
+  it('maps filtered display slots to source indices', () => {
+    const assignments = [
+      { resourceId: 'a', type: 'labor' as const, name: '普通工', quantity: 2, note: '' },
+      { resourceId: 'b', type: 'material' as const, name: '砂子', quantity: 10, note: '' },
+      { resourceId: 'c', type: 'labor' as const, name: '钢筋工', quantity: 3, note: '' },
+    ]
+    expect(countResourceAssignmentsForTypeFilter(assignments, 'labor')).toBe(2)
+    expect(resolveResourceAssignSourceIndex(assignments, 0, 'labor')).toBe(0)
+    expect(resolveResourceAssignSourceIndex(assignments, 1, 'labor')).toBe(2)
+    expect(resolveResourceAssignSourceIndex(assignments, 2, 'labor')).toBe(3)
+    expect(readResourceAssignmentAtFilteredSlot(assignments, 1, 'labor').name).toBe('钢筋工')
   })
 })

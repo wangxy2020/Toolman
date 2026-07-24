@@ -18,14 +18,19 @@ describe('pm-features-catalog', () => {
       'auxiliary',
       'material',
       'machinery',
+      'device',
+      'instrument',
       'procurement',
       'metering',
       'node',
       'funds',
     ])
     expect(isPmFeatureType('machinery')).toBe(true)
+    expect(isPmFeatureType('device')).toBe(true)
+    expect(isPmFeatureType('instrument')).toBe(true)
     expect(isPmFeatureType('auxiliary')).toBe(true)
     expect(isPmFeatureType('equipment')).toBe(false)
+    expect(isPmFeatureType('scheduleAll')).toBe(false)
   })
 
   it('seeds defaults for non-schedule types only', () => {

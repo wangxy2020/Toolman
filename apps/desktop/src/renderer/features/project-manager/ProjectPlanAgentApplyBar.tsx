@@ -19,13 +19,14 @@ import { useI18n } from '../../i18n/useI18n'
 import { getMessageText } from '../chat/message-utils'
 import { pmApi } from './pm-api'
 import {
+  isPmAgentApplyDiscarded,
+  markPmAgentApplyDiscarded,
+} from './pm-agent-apply-discard'
+import {
   markSessionPendingAgentRevision,
   pendingAgentRevisionMetadataPatch,
 } from './pm-pending-revision'
-import type { PmNewProjectBriefValues } from './PmNewProjectBriefForm'
 import { pmScheduleApi } from './views/schedule/pm-schedule-api'
-
-export type PmPendingNewProjectBrief = PmNewProjectBriefValues
 
 function storageKey(workspaceId: string): string {
   return `tm-pm-plan-applied:${workspaceId}`
@@ -65,13 +66,9 @@ export function clearPmPlanAppliedProject(workspaceId: string, projectId: string
 }
 
 /** Stable fingerprint so remount / message-id churn cannot re-apply the same plan. */
-export function buildPmPlanFingerprint(
-  wbs: PmWbsSuggestion[],
-  projectPlan?: PmProjectPlan,
-  projectName?: string | null,
-): string {
+function buildPmPlanFingerprint(wbs: PmWbsSuggestion[], projectPlan?: PmProjectPlan): string {
   return JSON.stringify({
-    name: projectName?.trim() || '',
+    name: '',
     plan: projectPlan ?? null,
     wbs: wbs.map((item) => ({
       title: item.title,
@@ -108,9 +105,7 @@ interface Props {
   messages: Message[]
   projects: PmProject[]
   selectedProjectId: string | null
-  pendingBrief: PmPendingNewProjectBrief | null
   onPlanApplied: (projectId: string) => void
-  onBriefConsumed?: () => void
   /** Refresh project list after metadata / apply changes. */
   onProjectsChange?: () => void | Promise<void>
 }
@@ -121,15 +116,14 @@ export function ProjectPlanAgentApplyBar({
   messages,
   projects,
   selectedProjectId,
-  pendingBrief,
   onPlanApplied,
-  onBriefConsumed,
   onProjectsChange,
 }: Props) {
   const { t } = useI18n()
   const [applying, setApplying] = useState(false)
   /** Local override so UI flips to 跳转 immediately even if parent remounts mid-navigate. */
   const [localAppliedProjectId, setLocalAppliedProjectId] = useState<string | null>(null)
+  const [discarded, setDiscarded] = useState(false)
   const applyingRef = useRef(false)
 
   const lastAssistant = useMemo(() => {
@@ -160,9 +154,7 @@ export function ProjectPlanAgentApplyBar({
     if (!canApplyPlan) {
       return `schedule:${JSON.stringify(scheduleSuggestions)}`
     }
-    // Do not include project name — pendingBrief is cleared after apply and would
-    // change the fingerprint, causing a duplicate write on the next click.
-    return buildPmPlanFingerprint(wbsSuggestions, parsedPlan.projectPlan, null)
+    return buildPmPlanFingerprint(wbsSuggestions, parsedPlan.projectPlan)
   }, [canApplyPlan, parsedPlan.projectPlan, scheduleSuggestions, wbsSuggestions])
 
   const selectedProject = useMemo(
@@ -174,11 +166,19 @@ export function ProjectPlanAgentApplyBar({
   useEffect(() => {
     if (!workspaceId || !fingerprint) {
       setLocalAppliedProjectId(null)
+      setDiscarded(false)
       return
     }
     const stored = findAppliedProjectId(projects, fingerprint, workspaceId)
     setLocalAppliedProjectId(stored)
+    setDiscarded(isPmAgentApplyDiscarded(workspaceId, 'plan', fingerprint))
   }, [fingerprint, projects, workspaceId])
+
+  const handleDiscard = useCallback(() => {
+    if (!fingerprint) return
+    markPmAgentApplyDiscarded(workspaceId, 'plan', fingerprint)
+    setDiscarded(true)
+  }, [fingerprint, workspaceId])
 
   const appliedProjectId = (() => {
     const id =
@@ -284,41 +284,6 @@ export function ProjectPlanAgentApplyBar({
     applyingRef.current = true
     setApplying(true)
     try {
-      const createName = pendingBrief?.name.trim() || null
-
-      if (createName) {
-        const existing = projects.find(
-          (project) => project.name.trim().toLowerCase() === createName.trim().toLowerCase(),
-        )
-        let clearExisting = false
-        if (existing) {
-          const confirmed = window.confirm(
-            t('projectManagerPage.agent.applyNameConflictConfirm', { name: createName }),
-          )
-          if (!confirmed) return
-          clearExisting = true
-          await protectCurrentVersionBaseline(existing)
-        }
-
-        const result = await pmApi.applyWbsSuggestions({
-          workspaceId,
-          suggestions: wbsSuggestions,
-          scheduleSuggestions:
-            scheduleSuggestions.length > 0 ? scheduleSuggestions : undefined,
-          projectPlan: parsedPlan.projectPlan,
-          createProject: {
-            name: createName,
-            description: pendingBrief?.overview,
-            clearExisting,
-          },
-        })
-        await markApplied(result.projectId)
-        await markPendingRevision(result.projectId)
-        onBriefConsumed?.()
-        onPlanApplied(result.projectId)
-        return
-      }
-
       if (!selectedProjectId || !selectedProject) {
         window.alert(t('projectManagerPage.agent.applyNeedProject'))
         return
@@ -382,10 +347,8 @@ export function ProjectPlanAgentApplyBar({
     lastAssistant,
     markApplied,
     markPendingRevision,
-    onBriefConsumed,
     onPlanApplied,
     parsedPlan.projectPlan,
-    pendingBrief,
     projects,
     protectCurrentVersionBaseline,
     scheduleSuggestions,
@@ -474,15 +437,30 @@ export function ProjectPlanAgentApplyBar({
     return null
   }
 
+  if (discarded) {
+    return null
+  }
+
   if (appliedProjectId) {
     return (
-      <button
-        type="button"
-        className="tm-pm-agent-apply-text-btn"
-        title={t('projectManagerPage.agent.applyGoToGantt')}
-        onClick={() => onPlanApplied(appliedProjectId)}>
-        {t('projectManagerPage.agent.applyGoToGantt')}
-      </button>
+      <span className="tm-pm-agent-apply-actions">
+        <button
+          type="button"
+          className="tm-pm-agent-apply-text-btn"
+          title={t('projectManagerPage.agent.applyGoToGantt')}
+          onClick={() => onPlanApplied(appliedProjectId)}
+        >
+          {t('projectManagerPage.agent.applyGoToGantt')}
+        </button>
+        <button
+          type="button"
+          className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
+          title={t('projectManagerPage.agent.applyDiscard')}
+          onClick={handleDiscard}
+        >
+          {t('projectManagerPage.agent.applyDiscard')}
+        </button>
+      </span>
     )
   }
 
@@ -492,17 +470,29 @@ export function ProjectPlanAgentApplyBar({
       : t('projectManagerPage.agent.applyConfirm')
 
   return (
-    <button
-      type="button"
-      className="tm-pm-agent-apply-text-btn"
-      title={
-        canApplyPlan
-          ? t('projectManagerPage.agent.applyPlan', { count: wbsSuggestions.length })
-          : t('projectManagerPage.agent.applySchedule', { count: scheduleSuggestions.length })
-      }
-      disabled={applying || (canApplyScheduleOnly && !selectedProjectId)}
-      onClick={() => void (canApplyPlan ? handleApplyPlan() : handleApplySchedule())}>
-      {applying ? '…' : buttonLabel}
-    </button>
+    <span className="tm-pm-agent-apply-actions">
+      <button
+        type="button"
+        className="tm-pm-agent-apply-text-btn"
+        title={
+          canApplyPlan
+            ? t('projectManagerPage.agent.applyPlan', { count: wbsSuggestions.length })
+            : t('projectManagerPage.agent.applySchedule', { count: scheduleSuggestions.length })
+        }
+        disabled={applying || (canApplyScheduleOnly && !selectedProjectId)}
+        onClick={() => void (canApplyPlan ? handleApplyPlan() : handleApplySchedule())}
+      >
+        {applying ? '…' : buttonLabel}
+      </button>
+      <button
+        type="button"
+        className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
+        title={t('projectManagerPage.agent.applyDiscard')}
+        disabled={applying}
+        onClick={handleDiscard}
+      >
+        {t('projectManagerPage.agent.applyDiscard')}
+      </button>
+    </span>
   )
 }

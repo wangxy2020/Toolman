@@ -12,6 +12,10 @@ import { useI18n } from '../../i18n/useI18n'
 import { getMessageText } from '../chat/message-utils'
 import { pmApi } from './pm-api'
 import {
+  isPmAgentApplyDiscarded,
+  markPmAgentApplyDiscarded,
+} from './pm-agent-apply-discard'
+import {
   markSessionPendingAgentRevision,
   pendingAgentRevisionMetadataPatch,
 } from './pm-pending-revision'
@@ -71,6 +75,7 @@ export function ProjectResourcePlanApplyBar({
   const { t } = useI18n()
   const [applying, setApplying] = useState(false)
   const [localAppliedProjectId, setLocalAppliedProjectId] = useState<string | null>(null)
+  const [discarded, setDiscarded] = useState(false)
   const applyingRef = useRef(false)
 
   const lastAssistant = useMemo(() => {
@@ -100,11 +105,19 @@ export function ProjectResourcePlanApplyBar({
   useEffect(() => {
     if (!workspaceId || !fingerprint) {
       setLocalAppliedProjectId(null)
+      setDiscarded(false)
       return
     }
     const stored = readAppliedMap(workspaceId)[fingerprint]
     setLocalAppliedProjectId(stored && projects.some((p) => p.id === stored) ? stored : null)
+    setDiscarded(isPmAgentApplyDiscarded(workspaceId, 'resourcePlan', fingerprint))
   }, [fingerprint, projects, workspaceId])
+
+  const handleDiscard = useCallback(() => {
+    if (!fingerprint) return
+    markPmAgentApplyDiscarded(workspaceId, 'resourcePlan', fingerprint)
+    setDiscarded(true)
+  }, [fingerprint, workspaceId])
 
   const appliedProjectId = (() => {
     const id = localAppliedProjectId ?? readAppliedMap(workspaceId)[fingerprint]
@@ -129,6 +142,7 @@ export function ProjectResourcePlanApplyBar({
         return {
           id: crypto.randomUUID(),
           type: (entry.type as PmResourceType) || 'other',
+          customTypeName: '',
           name: entry.name,
           spec: '',
           unit,
@@ -229,15 +243,28 @@ export function ProjectResourcePlanApplyBar({
 
   if (!lastAssistant || !hasSuggestion) return null
 
+  if (discarded) return null
+
   if (appliedProjectId) {
     return (
-      <button
-        type="button"
-        className="tm-pm-agent-apply-text-btn"
-        title={t('projectManagerPage.agent.applyGoToGantt')}
-        onClick={() => onPlanApplied(appliedProjectId)}>
-        {t('projectManagerPage.agent.applyGoToGantt')}
-      </button>
+      <span className="tm-pm-agent-apply-actions">
+        <button
+          type="button"
+          className="tm-pm-agent-apply-text-btn"
+          title={t('projectManagerPage.agent.applyGoToGantt')}
+          onClick={() => onPlanApplied(appliedProjectId)}
+        >
+          {t('projectManagerPage.agent.applyGoToGantt')}
+        </button>
+        <button
+          type="button"
+          className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
+          title={t('projectManagerPage.agent.applyDiscard')}
+          onClick={handleDiscard}
+        >
+          {t('projectManagerPage.agent.applyDiscard')}
+        </button>
+      </span>
     )
   }
 
@@ -248,13 +275,25 @@ export function ProjectResourcePlanApplyBar({
     : t('projectManagerPage.agent.applyConfirm')
 
   return (
-    <button
-      type="button"
-      className="tm-pm-agent-apply-text-btn"
-      title={t('projectManagerPage.agent.applyResourcePlan', { count })}
-      disabled={applying || !selectedProjectId}
-      onClick={() => void handleApply()}>
-      {applying ? '…' : buttonLabel}
-    </button>
+    <span className="tm-pm-agent-apply-actions">
+      <button
+        type="button"
+        className="tm-pm-agent-apply-text-btn"
+        title={t('projectManagerPage.agent.applyResourcePlan', { count })}
+        disabled={applying || !selectedProjectId}
+        onClick={() => void handleApply()}
+      >
+        {applying ? '…' : buttonLabel}
+      </button>
+      <button
+        type="button"
+        className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
+        title={t('projectManagerPage.agent.applyDiscard')}
+        disabled={applying}
+        onClick={handleDiscard}
+      >
+        {t('projectManagerPage.agent.applyDiscard')}
+      </button>
+    </span>
   )
 }

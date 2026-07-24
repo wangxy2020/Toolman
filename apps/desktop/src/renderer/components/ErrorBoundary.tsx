@@ -28,6 +28,13 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
       stack: error.stack,
       componentStack: info.componentStack ?? undefined,
     })
+    // Vite Fast Refresh can orphan AuthSession context; a full reload restores the tree.
+    if (
+      import.meta.hot &&
+      error.message.includes('useAuthSession must be used within AuthSessionProvider')
+    ) {
+      window.setTimeout(() => window.location.reload(), 0)
+    }
   }
 
   private handleReset = (): void => {

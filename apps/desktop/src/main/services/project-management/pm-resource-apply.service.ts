@@ -1,4 +1,5 @@
 import {
+  findPmWorkItemForAgentSuggestion,
   markPendingAgentScheduleRevision,
   mergeTaskResourceAssignmentsByName,
   normalizeResourceAssignmentSuggestion,
@@ -24,11 +25,6 @@ function getProjectRepo(): PmProjectRepository {
   return new PmProjectRepository(getDatabase())
 }
 
-function findWorkItemByTitle(items: PmWorkItem[], title: string): PmWorkItem | undefined {
-  const normalized = title.trim().toLowerCase()
-  return items.find((entry) => entry.title.trim().toLowerCase() === normalized)
-}
-
 export function applyPmResourcePlanSuggestions(input: unknown) {
   const data = PmApplyResourcePlanInputSchema.parse(input)
   const items = getWorkItemRepo().list({
@@ -43,7 +39,7 @@ export function applyPmResourcePlanSuggestions(input: unknown) {
   const updated: PmWorkItem[] = []
 
   for (const suggestion of data.suggestions) {
-    const item = findWorkItemByTitle(items, suggestion.workItemTitle)
+    const item = findPmWorkItemForAgentSuggestion(items, suggestion)
     if (!item) continue
 
     const incoming = suggestion.assignments.map((entry) =>

@@ -8,7 +8,9 @@ export type PmAgentCapability = {
   /** Quick phrases / slash expansions for this tab. */
   phrases: 'none' | 'plan' | 'cost' | 'execution' | 'resource'
   /** Confirm-and-apply footers shown on the last assistant message. */
-  apply: ReadonlyArray<'plan' | 'schedule' | 'resourcePlan' | 'resourceCatalog'>
+  apply: ReadonlyArray<
+    'plan' | 'schedule' | 'resourcePlan' | 'resourceCatalog' | 'costPlan' | 'costCatalog'
+  >
   /** Auto-send project brief after create (plan kickoff). */
   kickoff: boolean
 }
@@ -19,11 +21,11 @@ export const PM_AGENT_CAPABILITIES: Record<ProjectManagementAgentTab, PmAgentCap
   key_projects: { phrases: 'none', apply: [], kickoff: false },
   progress_management: {
     phrases: 'plan',
-    /** Plan session confirms WBS/schedule and resource quantities into the Gantt. */
-    apply: ['plan', 'schedule', 'resourcePlan', 'resourceCatalog'],
+    /** Plan session confirms WBS/schedule and resource/cost quantities into the Gantt. */
+    apply: ['plan', 'schedule', 'resourcePlan', 'resourceCatalog', 'costPlan'],
     kickoff: true,
   },
-  cost_management: { phrases: 'cost', apply: [], kickoff: false },
+  cost_management: { phrases: 'cost', apply: ['costPlan', 'costCatalog'], kickoff: false },
   resource_management: {
     phrases: 'resource',
     apply: ['resourceCatalog'],

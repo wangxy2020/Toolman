@@ -1,5 +1,7 @@
 import {
   countBaselineSnapshotChanges,
+  mergeAssignmentSnapshotIntoMetadata,
+  pickAssignmentSnapshotFromMetadata,
   PM_LAST_SAVED_AT_KEY,
   PM_PENDING_AGENT_REVISION_KEY,
   PM_SCHEDULE_VERSION_KEY,
@@ -127,19 +129,28 @@ function captureScheduleSnapshot(
   return {
     capturedAt,
     ...(asOfDate != null ? { asOfDate } : {}),
-    workItems: items.map((item) => ({
-      workItemId: item.id,
-      title: item.title,
-      ...(item.startDate != null ? { startDate: item.startDate } : {}),
-      ...(item.dueDate != null ? { dueDate: item.dueDate } : {}),
-      progressPercent:
-        typeof item.progressPercent === 'number' && Number.isFinite(item.progressPercent)
-          ? Math.min(100, Math.max(0, Math.floor(item.progressPercent)))
-          : 0,
-      ...(item.parentId ? { parentWorkItemId: item.parentId } : {}),
-      type: item.type,
-      sortOrder: item.sortOrder,
-    })),
+    workItems: items.map((item) => {
+      const meta =
+        item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+          ? (item.metadata as Record<string, unknown>)
+          : {}
+      const assignments = pickAssignmentSnapshotFromMetadata(meta)
+      return {
+        workItemId: item.id,
+        title: item.title,
+        ...(item.startDate != null ? { startDate: item.startDate } : {}),
+        ...(item.dueDate != null ? { dueDate: item.dueDate } : {}),
+        progressPercent:
+          typeof item.progressPercent === 'number' && Number.isFinite(item.progressPercent)
+            ? Math.min(100, Math.max(0, Math.floor(item.progressPercent)))
+            : 0,
+        ...(item.parentId ? { parentWorkItemId: item.parentId } : {}),
+        type: item.type,
+        sortOrder: item.sortOrder,
+        resourceAssignments: assignments.resourceAssignments,
+        costAssignments: assignments.costAssignments,
+      }
+    }),
     relations: relations.map((relation) => ({
       fromWorkItemId: relation.fromWorkItemId,
       toWorkItemId: relation.toWorkItemId,
@@ -323,7 +334,10 @@ function sortSnapshotItemsForCreate(items: PmScheduleBaselineItem[]): PmSchedule
 /**
  * When most snapshot IDs are gone (typical after agent clearExisting), wipe live
  * progress items and rebuild the tree from the snapshot, remapping relation IDs.
- * Preserves task metadata (resource/cost assignments, etc.) matched by title.
+ *
+ * Assignment metadata preference:
+ * 1. Snapshot resource/cost assignments when the baseline recorded them
+ * 2. Else fall back to live-by-title (legacy baselines without assignment fields)
  */
 function structurallyRestoreSnapshot(options: {
   workspaceId: string
@@ -368,7 +382,8 @@ function structurallyRestoreSnapshot(options: {
     const parentId = entry.parentWorkItemId
       ? (idMap.get(entry.parentWorkItemId) ?? undefined)
       : undefined
-    const preserved = metadataByTitle.get(entry.title)
+    const fromSnapshot = mergeAssignmentSnapshotIntoMetadata({}, entry)
+    const preserved = fromSnapshot ?? metadataByTitle.get(entry.title)
     const created = createPmWorkItem({
       workspaceId,
       projectId,
@@ -476,12 +491,14 @@ export function restorePmBaseline(input: unknown) {
       ) {
         continue
       }
+      const assignmentMeta = mergeAssignmentSnapshotIntoMetadata(existing.metadata, entry)
       updatePmWorkItem({
         id: entry.workItemId,
         title: entry.title,
         startDate: entry.startDate ?? null,
         dueDate: entry.dueDate ?? null,
         progressPercent: entry.progressPercent,
+        ...(assignmentMeta ? { metadata: assignmentMeta } : {}),
       })
       updatedCount += 1
     }

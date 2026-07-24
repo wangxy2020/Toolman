@@ -1,6 +1,5 @@
 import {
   EPC_WORK1_BOQ_FORMAT_AGENT_NARRATION_MARKER,
-  EPC_WORK1_BOQ_FORMAT_COMMAND_TEMPLATE,
   EPC_WORK1_BOQ_FORMAT_DEFAULT_QUICK_PHRASE_ID,
   EPC_WORK1_BOQ_FORMAT_QUICK_PHRASE_CONTENT,
   EPC_WORK1_BOQ_FORMAT_QUICK_PHRASE_TITLE,
@@ -30,15 +29,6 @@ export const normalizeEpcWork1CommandInput = (command: string): string =>
 
 export const isEpcWork1BoqFormatCommand = (text: string): boolean =>
   EPC_WORK1_COMMAND_LINE_PATTERN.test(normalizeEpcWork1CommandInput(text))
-
-export const isEpcWork1BoqFormatSlashCommand = (command: string): boolean => {
-  const normalized = normalizeEpcWork1CommandInput(command)
-  if (!normalized) return false
-  if (normalized === normalizeEpcWork1CommandInput(EPC_WORK1_BOQ_FORMAT_COMMAND_TEMPLATE)) return true
-  return EPC_WORK1_COMMAND_LINE_PATTERN.test(normalized)
-}
-
-export const buildEpcWork1BoqFormatSlashCommandFillText = (): string => EPC_WORK1_BOQ_FORMAT_COMMAND_TEMPLATE
 
 export const isBuiltinEpcWork1BoqFormatQuickPhraseId = (phraseId: string | undefined): boolean =>
   phraseId === EPC_WORK1_BOQ_FORMAT_DEFAULT_QUICK_PHRASE_ID

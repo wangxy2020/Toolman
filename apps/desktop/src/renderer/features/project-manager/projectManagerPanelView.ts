@@ -8,10 +8,9 @@ export type ProjectManagerPanelView =
   | 'gantt'
   | 'calendar'
   | 'resource_table'
+  | 'cost_table'
 
 export const PROGRESS_SCHEDULE_VIEWS = ['gantt', 'calendar'] as const satisfies readonly ProjectManagerPanelView[]
-
-export const RESOURCE_TABLE_VIEW = 'resource_table' as const satisfies ProjectManagerPanelView
 
 export function isProgressScheduleView(
   view: ProjectManagerPanelView,

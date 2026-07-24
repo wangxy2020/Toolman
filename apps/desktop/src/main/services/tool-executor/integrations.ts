@@ -18,8 +18,8 @@ import {
   formatAgentTasks,
   listAgentTasks,
   updateAgentTask,
-  type AgentTaskStatus,
-} from '../task-store.service'
+  type LegacyAgentTaskStatus as AgentTaskStatus,
+} from '../task-runtime/store'
 import type { ToolExecutionContext } from './types'
 
 interface HubToolEntry {

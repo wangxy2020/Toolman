@@ -1,10 +1,8 @@
 import {
   EPC_WORK5_PAYMENT_AGENT_NARRATION_MARKER,
-  EPC_WORK5_PAYMENT_COMMAND_TEMPLATE,
   EPC_WORK5_PAYMENT_DEFAULT_QUICK_PHRASE_ID,
   EPC_WORK5_PAYMENT_QUICK_PHRASE_CONTENT,
   EPC_WORK5_PAYMENT_QUICK_PHRASE_TITLE,
-  EPC_WORK5_PAYMENT_REPORT_MARKER,
   EPC_WORK5_PAYMENT_REPORT_TITLE,
   EPC_WORK5_PAYMENT_WORKFLOW_STEPS,
   EPC_WORK5_DATA_OVERRIDES_RELATIVE,
@@ -35,16 +33,6 @@ export const normalizeEpcWork5CommandInput = (command: string): string =>
 
 export const isEpcWork5PaymentCommand = (text: string): boolean =>
   EPC_WORK5_COMMAND_LINE_PATTERN.test(normalizeEpcWork5CommandInput(text))
-
-export const isEpcWork5PaymentSlashCommand = (command: string): boolean => {
-  const normalized = normalizeEpcWork5CommandInput(command)
-  if (!normalized) return false
-  if (normalized === normalizeEpcWork5CommandInput(EPC_WORK5_PAYMENT_COMMAND_TEMPLATE)) return true
-  return EPC_WORK5_COMMAND_LINE_PATTERN.test(normalized)
-}
-
-/** 斜杠命令选中后填入输入框（仅命令，简洁展示） */
-export const buildEpcWork5PaymentSlashCommandFillText = (): string => EPC_WORK5_PAYMENT_COMMAND_TEMPLATE
 
 /** 是否为内置工作 5 快捷短语（按 ID） */
 export const isBuiltinEpcWork5PaymentQuickPhraseId = (phraseId: string | undefined): boolean =>
@@ -226,57 +214,4 @@ ${params.workspaceRoot}${periodInfo}
 
 ## 本地 Rust 引擎执行结果
 ${engineSection}`
-}
-
-export const buildPaymentWorkflowReportMessageContent = (report: PaymentWorkflowReport): string => {
-  return `${EPC_WORK5_PAYMENT_REPORT_MARKER}\n${JSON.stringify(report)}`
-}
-
-export type EpcWork5PaymentReportPayload =
-  | { kind: 'report'; report: PaymentWorkflowReport }
-  | { kind: 'error'; errorMessage: string; report?: PaymentWorkflowReport }
-
-export const buildEpcWork5PaymentErrorContent = (
-  errorMessage: string,
-  report?: PaymentWorkflowReport
-): string => {
-  return `${EPC_WORK5_PAYMENT_REPORT_MARKER}\n${JSON.stringify({ errorMessage, ...report })}`
-}
-
-/** 仅引擎写入的 marker+JSON 块才渲染 PaymentWorkflowReportCard */
-export const isEpcWork5PaymentStructuredReportContent = (content: string): boolean => {
-  if (!content.startsWith(EPC_WORK5_PAYMENT_REPORT_MARKER)) {
-    return false
-  }
-  const body = content.slice(EPC_WORK5_PAYMENT_REPORT_MARKER.length).trim()
-  if (!body.startsWith('{')) {
-    return false
-  }
-  try {
-    JSON.parse(body)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export const parseEpcWork5PaymentPayloadFromContent = (content: string): EpcWork5PaymentReportPayload | null => {
-  if (!isEpcWork5PaymentStructuredReportContent(content)) {
-    return null
-  }
-  const json = content.slice(EPC_WORK5_PAYMENT_REPORT_MARKER.length).trim()
-  try {
-    const parsed = JSON.parse(json) as PaymentWorkflowReport & { errorMessage?: string }
-    if (parsed.errorMessage) {
-      const hasReport = (parsed.files?.length ?? 0) > 0 || Boolean(parsed.ipcPaymentDataPath)
-      return {
-        kind: 'error',
-        errorMessage: parsed.errorMessage,
-        report: hasReport ? (parsed as PaymentWorkflowReport) : undefined
-      }
-    }
-    return { kind: 'report', report: parsed as PaymentWorkflowReport }
-  } catch {
-    return null
-  }
 }

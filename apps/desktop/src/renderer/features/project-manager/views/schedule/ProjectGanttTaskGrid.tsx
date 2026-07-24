@@ -14,17 +14,41 @@ import type { PmWorkItem, PmWorkItemRelation } from '@toolman/shared'
 
 import { IconCheck, IconChevronDown, IconChevronRight, IconChevronUp } from '../../../../components/icons'
 import { useI18n } from '../../../../i18n/useI18n'
+import { isPmEditableEventTarget } from '../../pm-editable-dom'
+import { handlePmTableCellNavKeyDown } from '../../pm-table-cell-nav'
+import {
+  isPmCostType,
+  PM_COST_PRIMARY_TYPES,
+  type PmCostRow,
+  type PmCostType,
+} from '../cost/pm-cost-catalog'
 import type { PmResourceRow, PmResourceType } from '../resource/pm-resource-catalog'
-import { isPmResourceType, PM_RESOURCE_TYPES } from '../resource/pm-resource-catalog'
+import {
+  isPmResourceType,
+  PM_RESOURCE_PRIMARY_TYPES,
+  PM_RESOURCE_TYPES,
+  resourceCustomTypeName,
+} from '../resource/pm-resource-catalog'
 import type { GanttTreeRow } from './pm-gantt-tree'
 import { resolveGanttTaskKind } from './pm-gantt-tree'
 import {
+  buildCostAllocatedAmountById,
+  costCatalogRowsForType,
+  EMPTY_TASK_COST_ASSIGNMENT,
   formatCostAssignmentsInput,
+  groupCostCatalogBySectionalWork,
+  isCostQuantityFullyAllocated,
+  isEmptyCostAssignment,
   makeCostColumnId,
+  moveTaskCostAssignment,
   parseCostAssignmentsInput,
   parseCostColumnId,
+  readCostAssignmentAtFilteredSlot,
   readTaskCostAssignmentAt,
   readTaskCostAssignments,
+  resolveCostAssignSourceIndex,
+  resolveCostAssignmentAgainstCatalog,
+  countCostAssignmentsForTypeFilter,
   type TaskCostAssignment,
 } from './pm-gantt-cost-assignment'
 import {
@@ -36,8 +60,11 @@ import {
   moveTaskResourceAssignment,
   parseResourceAssignmentInput,
   parseResourceColumnId,
+  readResourceAssignmentAtFilteredSlot,
   readTaskResourceAssignments,
+  resolveResourceAssignSourceIndex,
   resolveAssignmentAgainstCatalog,
+  countResourceAssignmentsForTypeFilter,
   type TaskResourceAssignment,
 } from './pm-gantt-resource-assignment'
 import {
@@ -51,7 +78,6 @@ import {
   insertColumnInCanonicalOrder,
   isGanttBuiltinColumn,
   isGanttCustomColumnId,
-  GANTT_COST_VIEW_MAX_SLOTS,
   resolveColumnLabel,
   SWITCHABLE_RESOURCE_COLUMN_TYPES,
   type GanttBuiltinColumn,
@@ -102,6 +128,15 @@ type ResourceAssignPopupState = {
   rowCount: number
 }
 
+/** Cost-allocation view: popup table for one task's assignments. */
+type CostAssignPopupState = {
+  top: number
+  left: number
+  anchorY: number
+  itemId: string
+  rowCount: number
+}
+
 const RESOURCE_ASSIGN_POPUP_VISIBLE_ROWS = 10
 const RESOURCE_ASSIGN_POPUP_ROW_PX = 32
 
@@ -118,6 +153,22 @@ type ResourceCellPickerState = {
   anchorBottom: number
   left: number
   minWidth: number
+}
+
+/**
+ * Cost name cascade picker: L1 分部工程 → L2 工作名称.
+ * Used by cost-view cells and the cost-assign popup name column.
+ */
+type CostNamePickerState = {
+  itemId: string
+  slot: number
+  source: 'cell-name' | 'cell-qty' | 'popup'
+  typeFilter: PmCostType | null
+  anchorTop: number
+  anchorBottom: number
+  left: number
+  minWidth: number
+  openSectionKey: string | null
 }
 
 type HScrollMetrics = {
@@ -176,6 +227,8 @@ interface Props {
    * Assignment pickers prefer `resourceCatalog` (current project list).
    */
   resourceColumnCatalog?: readonly PmResourceRow[]
+  /** Project / shared price list for cost-assignment pickers. */
+  costCatalog?: readonly PmCostRow[]
   /** Duration-weighted rolled-up actual % (summaries included). */
   progressPercentById?: ReadonlyMap<string, number>
   /** Persist task ↔ catalog assignment (type / name / quantity) for a slot. */
@@ -235,6 +288,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
   onCommitCell,
   resourceCatalog = [],
   resourceColumnCatalog,
+  costCatalog = [],
   progressPercentById,
   onAssignResource,
   onReplaceResourceAssignments,
@@ -254,10 +308,18 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
   )
   const [resourceAssignSelectedSlot, setResourceAssignSelectedSlot] = useState<number | null>(null)
   const resourceAssignPopupRef = useRef<HTMLDivElement | null>(null)
+  const [costAssignPopup, setCostAssignPopup] = useState<CostAssignPopupState | null>(null)
+  const [costAssignSelectedSlot, setCostAssignSelectedSlot] = useState<number | null>(null)
+  const costAssignPopupRef = useRef<HTMLDivElement | null>(null)
+  const [costAssignDraftTypes, setCostAssignDraftTypes] = useState<Record<number, PmCostType>>(
+    {},
+  )
   const [resourceCellPicker, setResourceCellPicker] = useState<ResourceCellPickerState | null>(
     null,
   )
   const resourceCellPickerMenuRef = useRef<HTMLDivElement | null>(null)
+  const [costNamePicker, setCostNamePicker] = useState<CostNamePickerState | null>(null)
+  const costNamePickerMenuRef = useRef<HTMLDivElement | null>(null)
   /** Popup-only type drafts for empty rows (not persisted until a name is chosen). */
   const [resourceAssignDraftTypes, setResourceAssignDraftTypes] = useState<
     Record<number, PmResourceType>
@@ -324,6 +386,10 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     setResourceAssignPopup(null)
     setResourceCellPicker(null)
     setResourceAssignDraftTypes({})
+    setCostAssignPopup(null)
+    setCostAssignSelectedSlot(null)
+    setCostAssignDraftTypes({})
+    setCostNamePicker(null)
   }, [selectionResetKey])
 
   useEffect(() => {
@@ -333,15 +399,41 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
   }, [editing])
 
   useEffect(() => {
-    if (!contextMenu && !rowContextMenu && !resourceAssignPopup && !resourceCellPicker) return
+    if (
+      !contextMenu &&
+      !rowContextMenu &&
+      !resourceAssignPopup &&
+      !costAssignPopup &&
+      !resourceCellPicker &&
+      !costNamePicker
+    ) {
+      return
+    }
     const onDoc = (event: globalThis.MouseEvent) => {
       const target = event.target
+      if (!(target instanceof Element)) {
+        setContextMenu(null)
+        setRowContextMenu(null)
+        setResourceAssignPopup(null)
+        setResourceCellPicker(null)
+        setResourceAssignDraftTypes({})
+        setCostAssignPopup(null)
+        setCostAssignSelectedSlot(null)
+        setCostAssignDraftTypes({})
+        setCostNamePicker(null)
+        return
+      }
+      // Cascade / list menus are portaled; keep them interactive.
+      if (target.closest('.tm-pm-gantt-resource-select-menu')) return
+      // Cost name cascade: close when clicking outside its trigger (incl. elsewhere in popup).
+      if (!target.closest('.tm-pm-gantt-cost-name-trigger')) {
+        setCostNamePicker(null)
+      }
       if (
-        target instanceof Element &&
         target.closest(
           [
-            '.tm-pm-gantt-resource-select-menu',
             '.tm-pm-gantt-resource-cell-trigger',
+            '.tm-pm-gantt-cost-name-trigger',
             '.tm-pm-gantt-resource-assign-popup',
             '.tm-pm-gantt-col-menu',
           ].join(', '),
@@ -354,6 +446,10 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
       setResourceAssignPopup(null)
       setResourceCellPicker(null)
       setResourceAssignDraftTypes({})
+      setCostAssignPopup(null)
+      setCostAssignSelectedSlot(null)
+      setCostAssignDraftTypes({})
+      setCostNamePicker(null)
     }
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return
@@ -362,6 +458,10 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
       setResourceAssignPopup(null)
       setResourceCellPicker(null)
       setResourceAssignDraftTypes({})
+      setCostAssignPopup(null)
+      setCostAssignSelectedSlot(null)
+      setCostAssignDraftTypes({})
+      setCostNamePicker(null)
     }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onKey)
@@ -369,7 +469,14 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [contextMenu, rowContextMenu, resourceAssignPopup, resourceCellPicker])
+  }, [
+    contextMenu,
+    rowContextMenu,
+    resourceAssignPopup,
+    costAssignPopup,
+    resourceCellPicker,
+    costNamePicker,
+  ])
 
   useLayoutEffect(() => {
     const menu = resourceCellPickerMenuRef.current
@@ -400,6 +507,75 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
   }, [resourceCellPicker])
 
   useLayoutEffect(() => {
+    const menu = costNamePickerMenuRef.current
+    if (!costNamePicker || !menu) return
+
+    const margin = 8
+    const gap = 2
+    const spaceBelow = window.innerHeight - costNamePicker.anchorBottom - margin
+    const spaceAbove = costNamePicker.anchorTop - margin
+
+    // L1 scrolls within the available viewport side (same idea as resource picker).
+    menu.style.overflowX = 'hidden'
+    menu.style.overflowY = 'auto'
+    menu.style.maxHeight = `${Math.min(320, Math.max(120, spaceBelow, spaceAbove))}px`
+    let height = menu.offsetHeight
+    const openAbove = height > spaceBelow && spaceAbove > spaceBelow
+    const sideBudget = openAbove ? spaceAbove : spaceBelow
+    menu.style.maxHeight = `${Math.min(320, Math.max(120, sideBudget))}px`
+    height = menu.offsetHeight
+
+    const width = Math.max(menu.offsetWidth, costNamePicker.minWidth)
+    let top = openAbove
+      ? costNamePicker.anchorTop - height - gap
+      : costNamePicker.anchorBottom + gap
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+    let left = costNamePicker.left
+    const flyoutPad = 188
+    left = Math.max(
+      margin,
+      Math.min(left, window.innerWidth - width - flyoutPad - margin),
+    )
+
+    menu.style.top = `${top}px`
+    menu.style.left = `${left}px`
+
+    // L2: fixed to the viewport so bottom-of-screen cells keep the flyout fully visible.
+    const submenu = menu.querySelector(
+      '.tm-pm-gantt-resource-select-submenu',
+    ) as HTMLElement | null
+    const sectionBtn = menu.querySelector(
+      '.tm-pm-gantt-resource-select-menu-item--group[aria-expanded="true"]',
+    ) as HTMLElement | null
+    if (!submenu || !sectionBtn) return
+
+    const anchor = sectionBtn.getBoundingClientRect()
+    submenu.style.position = 'fixed'
+    submenu.style.right = 'auto'
+    submenu.style.bottom = 'auto'
+    submenu.style.maxHeight = `${Math.min(280, window.innerHeight - margin * 2)}px`
+
+    const subWidth = Math.max(submenu.offsetWidth, 168)
+    let subLeft = anchor.right - 4
+    if (subLeft + subWidth > window.innerWidth - margin) {
+      subLeft = Math.max(margin, anchor.left - subWidth + 4)
+    }
+
+    let subTop = anchor.top - 4
+    const subHeight = Math.min(
+      submenu.scrollHeight,
+      Math.min(280, window.innerHeight - margin * 2),
+    )
+    if (subTop + subHeight > window.innerHeight - margin) {
+      subTop = Math.max(margin, window.innerHeight - margin - subHeight)
+    }
+    subTop = Math.max(margin, subTop)
+
+    submenu.style.top = `${subTop}px`
+    submenu.style.left = `${subLeft}px`
+  }, [costNamePicker])
+
+  useLayoutEffect(() => {
     const popup = resourceAssignPopupRef.current
     if (!resourceAssignPopup || !popup) return
 
@@ -424,20 +600,65 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     popup.style.left = `${left}px`
   }, [resourceAssignPopup])
 
+  useLayoutEffect(() => {
+    const popup = costAssignPopupRef.current
+    if (!costAssignPopup || !popup) return
+
+    const margin = 8
+    const maxViewportHeight = Math.max(160, window.innerHeight - margin * 2)
+    popup.style.maxHeight = `${maxViewportHeight}px`
+
+    const width = popup.offsetWidth
+    const height = popup.offsetHeight
+    const spaceBelow = window.innerHeight - costAssignPopup.anchorY - margin
+    const spaceAbove = costAssignPopup.anchorY - margin
+    const openAbove = height > spaceBelow && spaceAbove > spaceBelow
+
+    let top = openAbove ? costAssignPopup.anchorY - height : costAssignPopup.anchorY
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+    let left = costAssignPopup.left
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
+
+    popup.style.top = `${top}px`
+    popup.style.left = `${left}px`
+  }, [costAssignPopup])
+
   const writeOrderedResourceSlot = (
     itemId: string,
     currentOrdered: TaskResourceAssignment[],
-    slotIndex: number,
+    displaySlot: number,
     patch: Partial<TaskResourceAssignment>,
   ) => {
+    const typeFilter = prefs.resourceView.typeFilter ?? 'all'
+    const filter = typeFilter === 'all' ? 'all' : typeFilter
+    const slotIndex = resolveResourceAssignSourceIndex(currentOrdered, displaySlot, filter)
     const list = currentOrdered.map((entry) => ({ ...entry }))
-    const base = list[slotIndex] ?? { ...EMPTY_TASK_RESOURCE_ASSIGNMENT }
+    const base = list[slotIndex] ?? {
+      ...EMPTY_TASK_RESOURCE_ASSIGNMENT,
+      type: filter === 'all' ? null : filter,
+    }
     const merged: TaskResourceAssignment = {
       resourceId: patch.resourceId !== undefined ? patch.resourceId : base.resourceId,
       type: patch.type !== undefined ? patch.type : base.type,
       name: patch.name !== undefined ? patch.name : base.name,
       quantity: patch.quantity !== undefined ? patch.quantity : base.quantity,
       note: patch.note !== undefined ? patch.note : base.note,
+    }
+    // Clearing must use slot patch so later columns/rows keep their indices.
+    if (isEmptyAssignment(merged)) {
+      if (onAssignResource) {
+        void onAssignResource(itemId, { ...EMPTY_TASK_RESOURCE_ASSIGNMENT }, slotIndex)
+        return
+      }
+      if (onReplaceResourceAssignments) {
+        const next = list
+          .map((entry, index) =>
+            index === slotIndex ? { ...EMPTY_TASK_RESOURCE_ASSIGNMENT } : entry,
+          )
+          .filter((entry) => !isEmptyAssignment(entry))
+        void onReplaceResourceAssignments(itemId, next)
+      }
+      return
     }
     if (slotIndex < list.length) list[slotIndex] = merged
     else {
@@ -451,6 +672,54 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     if (onAssignResource) void onAssignResource(itemId, patch, slotIndex)
   }
 
+  const writeOrderedCostSlot = (
+    itemId: string,
+    currentOrdered: TaskCostAssignment[],
+    displaySlot: number,
+    patch: Partial<TaskCostAssignment>,
+  ) => {
+    const typeFilter = prefs.costView.typeFilter ?? 'all'
+    const filter = typeFilter === 'all' ? 'all' : typeFilter
+    const slotIndex = resolveCostAssignSourceIndex(currentOrdered, displaySlot, filter)
+    const list = currentOrdered.map((entry) => ({ ...entry }))
+    const base = list[slotIndex] ?? {
+      ...EMPTY_TASK_COST_ASSIGNMENT,
+      type: filter === 'all' ? null : filter,
+    }
+    const merged: TaskCostAssignment = {
+      costId: patch.costId !== undefined ? patch.costId : base.costId,
+      type: patch.type !== undefined ? patch.type : base.type,
+      name: patch.name !== undefined ? patch.name : base.name,
+      amount: patch.amount !== undefined ? patch.amount : base.amount,
+      note: patch.note !== undefined ? patch.note : base.note,
+    }
+    if (isEmptyCostAssignment(merged)) {
+      if (onAssignCost) {
+        void onAssignCost(itemId, { ...EMPTY_TASK_COST_ASSIGNMENT }, slotIndex)
+        return
+      }
+      if (onReplaceCostAssignments) {
+        const next = list
+          .map((entry, index) =>
+            index === slotIndex ? { ...EMPTY_TASK_COST_ASSIGNMENT } : entry,
+          )
+          .filter((entry) => !isEmptyCostAssignment(entry))
+        void onReplaceCostAssignments(itemId, next)
+      }
+      return
+    }
+    if (slotIndex < list.length) list[slotIndex] = merged
+    else {
+      while (list.length < slotIndex) list.push({ ...EMPTY_TASK_COST_ASSIGNMENT })
+      list.push(merged)
+    }
+    if (onReplaceCostAssignments) {
+      void onReplaceCostAssignments(itemId, list)
+      return
+    }
+    if (onAssignCost) void onAssignCost(itemId, patch, slotIndex)
+  }
+
   const labelOf = (id: string) => {
     const resourceCol = parseResourceColumnId(id)
     if (resourceCol?.field === 'input') {
@@ -459,6 +728,9 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     const costCol = parseCostColumnId(id)
     if (costCol?.field === 'input') {
       return t('projectManagerPage.schedule.columns.costGroup')
+    }
+    if (costCol?.field === 'qty') {
+      return t('projectManagerPage.schedule.columns.costQty')
     }
     if (costCol?.field === 'name') {
       return t('projectManagerPage.schedule.columns.costName')
@@ -493,11 +765,47 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     for (const type of PM_RESOURCE_TYPES) {
       if (t(`projectManagerPage.resourceTable.types.${type}`) === trimmed) return type
     }
+    const catalog = columnCatalog.length > 0 ? columnCatalog : resourceCatalog
+    for (const row of catalog) {
+      if (row.type === 'custom' && resourceCustomTypeName(row) === trimmed) return 'custom'
+    }
+    return null
+  }
+
+  const resolveCostTypeLabel = (label: string): PmCostType | null => {
+    const trimmed = label.trim()
+    if (!trimmed) return null
+    const fromResource = resolveResourceTypeLabel(trimmed)
+    if (fromResource) return fromResource
+    for (const type of PM_RESOURCE_TYPES) {
+      if (t(`projectManagerPage.costTable.types.${type}`) === trimmed) return type
+    }
     return null
   }
 
   const typeLabelOf = (type: PmResourceType) =>
     t(`projectManagerPage.resourceTable.types.${type}`)
+
+  const resolveAssignmentCustomTypeName = (assignment: {
+    resourceId: string | null
+    name: string
+    type: PmResourceType | null
+  }) => {
+    if (assignment.type !== 'custom') return ''
+    const catalog = columnCatalog.length > 0 ? columnCatalog : resourceCatalog
+    const row =
+      (assignment.resourceId
+        ? catalog.find((entry) => entry.id === assignment.resourceId)
+        : undefined) ??
+      catalog.find(
+        (entry) =>
+          entry.type === 'custom' && entry.name.trim() === assignment.name.trim(),
+      )
+    return row ? resourceCustomTypeName(row) : ''
+  }
+
+  const costTypeLabelOf = (type: PmCostType) =>
+    t(`projectManagerPage.costTable.types.${type}`)
 
   const patchPrefs = (patch: Partial<GanttUiPrefs> | ((current: GanttUiPrefs) => GanttUiPrefs)) => {
     const next = typeof patch === 'function' ? patch(prefs) : { ...prefs, ...patch }
@@ -519,6 +827,55 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     setContextMenu({ top, right: clampedRight })
     setRowContextMenu(null)
     setResourceAssignPopup(null)
+    setResourceCellPicker(null)
+    setCostAssignPopup(null)
+    setCostAssignSelectedSlot(null)
+    setCostAssignDraftTypes({})
+    setCostNamePicker(null)
+  }
+
+  const openCostNamePicker = (
+    event: ReactMouseEvent<HTMLElement>,
+    options: {
+      itemId: string
+      slot: number
+      source: CostNamePickerState['source']
+      typeFilter: PmCostType | null
+    },
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    const menuItem = rows.find((entry) => entry.item.id === options.itemId)?.item
+    const current = menuItem
+      ? resolveCostAssignmentAgainstCatalog(
+          readTaskCostAssignmentAt(menuItem.metadata, options.slot),
+          costCatalog,
+        )
+      : EMPTY_TASK_COST_ASSIGNMENT
+    const sections = groupCostCatalogBySectionalWork(costCatalog, options.typeFilter)
+    const selectedCostId = current.costId ?? ''
+    const selectedName = current.name.trim()
+    const openSectionKey =
+      sections.find((section) =>
+        section.rows.some((row) =>
+          selectedCostId
+            ? row.id === selectedCostId
+            : selectedName !== '' && row.name.trim() === selectedName,
+        ),
+      )?.key ?? null
+    setResourceCellPicker(null)
+    setCostNamePicker({
+      itemId: options.itemId,
+      slot: options.slot,
+      source: options.source,
+      typeFilter: options.typeFilter,
+      anchorTop: rect.top,
+      anchorBottom: rect.bottom,
+      left: rect.left,
+      minWidth: Math.max(rect.width, 180),
+      openSectionKey,
+    })
   }
 
   const startEdit = (target: EditTarget, value: string) => {
@@ -604,11 +961,15 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
         const list = readTaskResourceAssignments(item.metadata).map((entry) =>
           resolveAssignmentAgainstCatalog(entry, catalogForCell),
         )
-        return formatResourceAssignmentsInput(list, typeLabelOf)
+        return formatResourceAssignmentsInput(list, typeLabelOf, {
+          resolveCustomTypeName: resolveAssignmentCustomTypeName,
+        })
       }
       const slotList = readTaskResourceAssignments(item.metadata)
+      const typeFilter = prefs.resourceView.typeFilter ?? 'all'
+      const filter = typeFilter === 'all' ? 'all' : typeFilter
       const assignment = resolveAssignmentAgainstCatalog(
-        slotList[resourceCol.slot] ?? EMPTY_TASK_RESOURCE_ASSIGNMENT,
+        readResourceAssignmentAtFilteredSlot(slotList, resourceCol.slot, filter),
         catalogForCell,
       )
       if (assignment.quantity == null) return ''
@@ -616,10 +977,24 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     }
     const costCol = parseCostColumnId(field)
     if (costCol) {
-      const assignment = readTaskCostAssignmentAt(item.metadata, costCol.slot)
+      const typeFilter = prefs.costView.typeFilter ?? 'all'
+      const filter = typeFilter === 'all' ? 'all' : typeFilter
+      const assignment = resolveCostAssignmentAgainstCatalog(
+        readCostAssignmentAtFilteredSlot(
+          readTaskCostAssignments(item.metadata),
+          costCol.slot,
+          filter,
+        ),
+        costCatalog,
+      )
       if (costCol.field === 'name') return assignment.name
       if (costCol.field === 'input') {
-        return formatCostAssignmentsInput(readTaskCostAssignments(item.metadata))
+        return formatCostAssignmentsInput(
+          readTaskCostAssignments(item.metadata).map((entry) =>
+            resolveCostAssignmentAgainstCatalog(entry, costCatalog),
+          ),
+          costTypeLabelOf,
+        )
       }
       if (assignment.amount == null) return ''
       return String(assignment.amount)
@@ -694,6 +1069,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
     if (costCol) {
       if (costCol.field === 'name') return 'costName'
       if (costCol.field === 'amount') return 'costAmount'
+      if (costCol.field === 'qty') return 'costQty'
       return 'costInput'
     }
     if (columnId === 'spacer' || isGanttBuiltinColumn(columnId)) {
@@ -703,6 +1079,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
   }
 
   const openHeaderMenu = (event: ReactMouseEvent) => {
+    if (isPmEditableEventTarget(event.target)) return
     event.preventDefault()
     openColumnMenu(event.clientX, event.clientY)
   }
@@ -888,40 +1265,97 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
         index += 1
         continue
       }
-      if (
-        !costInputMode &&
-        parsed?.field === 'name' &&
-        order[index + 1] === makeCostColumnId(parsed.slot, 'amount')
-      ) {
-        const slot = parsed.slot
-        const bandClass = resourceSlotBandClass(slot)
+      if (!costInputMode && parsed?.field === 'qty') {
+        const qtyIds: string[] = []
+        let cursor = index
+        while (cursor < order.length) {
+          const nextId = order[cursor]!
+          const nextParsed = parseCostColumnId(nextId)
+          if (nextParsed?.field !== 'qty') break
+          qtyIds.push(nextId)
+          cursor += 1
+        }
+        const colCount = Math.max(1, qtyIds.length)
         nodes.push(
           <div
-            key={`cost-group-${slot}`}
-            className={[
-              'tm-pm-gantt-resource-header-group',
-              'tm-pm-gantt-cost-header-group',
-              bandClass,
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            key="cost-named-group"
+            className="tm-pm-gantt-resource-header-group tm-pm-gantt-resource-header-group--indexed"
+            style={{ gridColumn: `span ${colCount}` }}
             onContextMenu={openHeaderMenu}
           >
             <div className="tm-pm-gantt-resource-header-group-title">
               {t('projectManagerPage.schedule.columns.costGroup')}
             </div>
-            <div className="tm-pm-gantt-cost-header-group-subs">
-              <span className="tm-pm-gantt-col tm-pm-gantt-col--costName tm-pm-gantt-col--sub">
-                {t('projectManagerPage.schedule.columns.costName')}
-              </span>
-              <span className="tm-pm-gantt-col tm-pm-gantt-col--costAmount tm-pm-gantt-col--sub">
-                {t('projectManagerPage.schedule.columns.costAmount')}
-              </span>
+            <div
+              className="tm-pm-gantt-resource-header-group-subs tm-pm-gantt-resource-header-group-subs--index"
+              style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+            >
+              {qtyIds.map((qtyId, slotIndex) => (
+                <span
+                  key={qtyId}
+                  className="tm-pm-gantt-col tm-pm-gantt-col--sub tm-pm-gantt-col--resource-index"
+                >
+                  {slotIndex + 1}
+                </span>
+              ))}
             </div>
           </div>,
         )
-        index += 2
+        index = cursor
         continue
+      }
+      if (
+        !costInputMode &&
+        parsed?.field === 'name' &&
+        order[index + 1] === makeCostColumnId(parsed.slot, 'amount')
+      ) {
+        let colCount = 0
+        let slotCount = 0
+        let cursor = index
+        while (cursor < order.length) {
+          const nextId = order[cursor]!
+          const nextParsed = parseCostColumnId(nextId)
+          if (
+            nextParsed?.field === 'name' &&
+            order[cursor + 1] === makeCostColumnId(nextParsed.slot, 'amount')
+          ) {
+            colCount += 2
+            slotCount += 1
+            cursor += 2
+            continue
+          }
+          break
+        }
+        if (slotCount > 0) {
+          nodes.push(
+            <div
+              key={`cost-legacy-group-${index}`}
+              className="tm-pm-gantt-resource-header-group tm-pm-gantt-resource-header-group--indexed"
+              style={{ gridColumn: `span ${colCount}` }}
+              onContextMenu={openHeaderMenu}
+            >
+              <div className="tm-pm-gantt-resource-header-group-title">
+                {t('projectManagerPage.schedule.columns.costGroup')}
+              </div>
+              <div
+                className="tm-pm-gantt-resource-header-group-subs tm-pm-gantt-resource-header-group-subs--index"
+                style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+              >
+                {Array.from({ length: slotCount }, (_, slotIndex) => (
+                  <span
+                    key={`cost-legacy-index-${index}-${slotIndex}`}
+                    className="tm-pm-gantt-col tm-pm-gantt-col--sub tm-pm-gantt-col--resource-index"
+                    style={{ gridColumn: 'span 2' }}
+                  >
+                    {slotIndex + 1}
+                  </span>
+                ))}
+              </div>
+            </div>,
+          )
+          index = cursor
+          continue
+        }
       }
       nodes.push(renderPlainHeaderCell(columnId, { rowSpan2: !costInputMode }))
       index += 1
@@ -1074,14 +1508,18 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
       const binding = columnBindings[slot]
       const catalogForCell = columnCatalog.length > 0 ? columnCatalog : resourceCatalog
       const slotAssignments = readTaskResourceAssignments(item.metadata)
+      const resourceTypeFilter = prefs.resourceView.typeFilter ?? 'all'
+      const resourceFilter = resourceTypeFilter === 'all' ? 'all' : resourceTypeFilter
       const assignment = resolveAssignmentAgainstCatalog(
-        slotAssignments[slot] ?? EMPTY_TASK_RESOURCE_ASSIGNMENT,
+        readResourceAssignmentAtFilteredSlot(slotAssignments, slot, resourceFilter),
         catalogForCell,
       )
 
       // Input mode: one text field per column — `类型，名称，数量`.
       if (resourceInputMode) {
-        const display = formatResourceAssignmentInput(assignment, typeLabelOf)
+        const display = formatResourceAssignmentInput(assignment, typeLabelOf, {
+          resolveCustomTypeName: resolveAssignmentCustomTypeName,
+        })
         const canEditInput = Boolean(onReplaceResourceAssignments || onAssignResource)
         if (!canEditInput) {
           return (
@@ -1231,6 +1669,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                 return
               }
               const rect = event.currentTarget.getBoundingClientRect()
+              setCostNamePicker(null)
               setResourceCellPicker({
                 itemId: item.id,
                 slot,
@@ -1298,11 +1737,16 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
           </span>
         )
       }
-      const assignment = readTaskCostAssignmentAt(item.metadata, slot)
+      const assignment = resolveCostAssignmentAgainstCatalog(
+        readTaskCostAssignmentAt(item.metadata, slot),
+        costCatalog,
+      )
 
       if (costField === 'input') {
-        const list = readTaskCostAssignments(item.metadata)
-        const display = formatCostAssignmentsInput(list)
+        const list = readTaskCostAssignments(item.metadata).map((entry) =>
+          resolveCostAssignmentAgainstCatalog(entry, costCatalog),
+        )
+        const display = formatCostAssignmentsInput(list, costTypeLabelOf)
         if (!onReplaceCostAssignments) {
           return (
             <span
@@ -1336,15 +1780,21 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
               placeholder={t('projectManagerPage.schedule.costAssign.inputPlaceholder')}
               aria-label={t('projectManagerPage.schedule.columns.costGroup')}
               onBlur={(event) => {
-                const next = parseCostAssignmentsInput(event.target.value).slice(
-                  0,
-                  GANTT_COST_VIEW_MAX_SLOTS,
+                const next = parseCostAssignmentsInput(
+                  event.target.value,
+                  costCatalog,
+                  resolveCostTypeLabel,
                 )
                 const same =
                   next.length === list.length &&
                   next.every((entry, index) => {
                     const prev = list[index]!
-                    return entry.name === prev.name && entry.amount === prev.amount
+                    return (
+                      entry.costId === prev.costId &&
+                      entry.type === prev.type &&
+                      entry.name === prev.name &&
+                      entry.amount === prev.amount
+                    )
                   })
                 if (same) return
                 void onReplaceCostAssignments(item.id, next)
@@ -1355,7 +1805,135 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
         )
       }
 
-      if (!onAssignCost) {
+      const canEditCost = Boolean(onAssignCost || onReplaceCostAssignments)
+
+      if (costField === 'qty') {
+        const slotAssignments = readTaskCostAssignments(item.metadata).map((entry) =>
+          resolveCostAssignmentAgainstCatalog(entry, costCatalog),
+        )
+        const costTypeFilter = prefs.costView.typeFilter ?? 'all'
+        const costFilter = costTypeFilter === 'all' ? 'all' : costTypeFilter
+        const qtyAssignment = resolveCostAssignmentAgainstCatalog(
+          readCostAssignmentAtFilteredSlot(slotAssignments, slot, costFilter),
+          costCatalog,
+        )
+        if (!canEditCost) {
+          const label = qtyAssignment.name.trim() || qtyAssignment.costId || ''
+          const display =
+            label && qtyAssignment.amount != null
+              ? `${label} · ${qtyAssignment.amount}`
+              : label || (qtyAssignment.amount != null ? String(qtyAssignment.amount) : '')
+          return (
+            <span
+              key={field}
+              className={[
+                'tm-pm-gantt-col',
+                'tm-pm-gantt-col--costQty',
+                'tm-pm-gantt-col--resource-cell',
+                bandClass,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {display || '—'}
+            </span>
+          )
+        }
+        const selectedId = qtyAssignment.costId ?? ''
+        const namedRows = costCatalog.filter((row) => row.name.trim().length > 0)
+        const selectedInCatalog = Boolean(
+          selectedId && namedRows.some((row) => row.id === selectedId),
+        )
+        const orphanName =
+          !selectedInCatalog && qtyAssignment.name.trim() ? qtyAssignment.name.trim() : ''
+        const triggerLabel =
+          qtyAssignment.name.trim() ||
+          orphanName ||
+          t('projectManagerPage.schedule.costAssign.selectName')
+        const pickerOpen =
+          costNamePicker?.itemId === item.id &&
+          costNamePicker.slot === slot &&
+          costNamePicker.source === 'cell-qty'
+        const commitAmount = (rawValue: string) => {
+          if (!selectedId && !qtyAssignment.name.trim()) return
+          const raw = rawValue.trim()
+          const next = raw === '' ? null : Number(raw)
+          if (next != null && !Number.isFinite(next)) return
+          if (next === qtyAssignment.amount) return
+          writeOrderedCostSlot(item.id, slotAssignments, slot, { amount: next })
+        }
+        return (
+          <span
+            key={field}
+            className={[
+              'tm-pm-gantt-col',
+              'tm-pm-gantt-col--costQty',
+              'tm-pm-gantt-col--resource-cell',
+              bandClass,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className={[
+                'tm-pm-gantt-cell-select',
+                'tm-pm-gantt-resource-header-select',
+                'tm-pm-gantt-resource-cell-trigger',
+                'tm-pm-gantt-cost-name-trigger',
+                !selectedId && !orphanName ? 'tm-pm-gantt-cell-select--empty' : '',
+                pickerOpen ? 'tm-pm-gantt-resource-cell-trigger--open' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-label={t('projectManagerPage.schedule.columns.costName')}
+              title={triggerLabel}
+              onClick={(event) =>
+                openCostNamePicker(event, {
+                  itemId: item.id,
+                  slot,
+                  source: 'cell-qty',
+                  typeFilter: null,
+                })
+              }
+            >
+              <span className="tm-pm-gantt-resource-cell-trigger-label">{triggerLabel}</span>
+              <IconChevronDown size={12} className="tm-pm-gantt-resource-cell-trigger-chevron" />
+            </button>
+            <input
+              key={`${item.id}:${slot}:qty:${selectedId}:${qtyAssignment.amount ?? ''}`}
+              className={[
+                'tm-pm-gantt-cell-input',
+                'tm-pm-gantt-cell-input--number',
+                'tm-pm-gantt-resource-cell-qty',
+                qtyAssignment.amount == null ? 'tm-pm-gantt-cell-input--empty' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              type="text"
+              inputMode="decimal"
+              defaultValue={qtyAssignment.amount ?? ''}
+              aria-label={t('projectManagerPage.schedule.columns.costAmount')}
+              placeholder=""
+              disabled={!selectedId && !qtyAssignment.name.trim()}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                commitAmount(event.currentTarget.value)
+                event.currentTarget.blur()
+              }}
+              onBlur={(event) => {
+                commitAmount(event.target.value)
+              }}
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+            />
+          </span>
+        )
+      }
+
+      if (!canEditCost) {
         const display =
           costField === 'name'
             ? assignment.name
@@ -1379,6 +1957,21 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
       }
 
       if (costField === 'name') {
+        const selectedId = assignment.costId ?? ''
+        const namedRows = costCatalog.filter((row) => row.name.trim().length > 0)
+        const selectedInCatalog = Boolean(
+          selectedId && namedRows.some((row) => row.id === selectedId),
+        )
+        const orphanName =
+          !selectedInCatalog && assignment.name.trim() ? assignment.name.trim() : ''
+        const triggerLabel =
+          assignment.name.trim() ||
+          orphanName ||
+          t('projectManagerPage.schedule.costAssign.selectName')
+        const pickerOpen =
+          costNamePicker?.itemId === item.id &&
+          costNamePicker.slot === slot &&
+          costNamePicker.source === 'cell-name'
         return (
           <span
             key={field}
@@ -1387,28 +1980,38 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
               .join(' ')}
             onClick={(event) => event.stopPropagation()}
           >
-            <input
-              key={`${item.id}:${slot}:name:${assignment.name}`}
+            <button
+              type="button"
               className={[
-                'tm-pm-gantt-cell-input',
-                !assignment.name.trim() ? 'tm-pm-gantt-cell-input--empty' : '',
+                'tm-pm-gantt-cell-select',
+                'tm-pm-gantt-resource-cell-trigger',
+                'tm-pm-gantt-cost-name-trigger',
+                !selectedId && !orphanName ? 'tm-pm-gantt-cell-select--empty' : '',
+                pickerOpen ? 'tm-pm-gantt-resource-cell-trigger--open' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              defaultValue={assignment.name}
-              placeholder={t('projectManagerPage.schedule.costAssign.namePlaceholder')}
               aria-label={t('projectManagerPage.schedule.columns.costName')}
-              onBlur={(event) => {
-                const next = event.target.value.trim()
-                if (next === assignment.name.trim()) return
-                void onAssignCost(item.id, { name: next }, slot)
-              }}
-              onClick={(event) => event.stopPropagation()}
-            />
+              title={triggerLabel}
+              onClick={(event) =>
+                openCostNamePicker(event, {
+                  itemId: item.id,
+                  slot,
+                  source: 'cell-name',
+                  typeFilter: null,
+                })
+              }
+            >
+              <span className="tm-pm-gantt-resource-cell-trigger-label">{triggerLabel}</span>
+              <IconChevronDown size={12} className="tm-pm-gantt-resource-cell-trigger-chevron" />
+            </button>
           </span>
         )
       }
 
+      const amountSlotAssignments = readTaskCostAssignments(item.metadata).map((entry) =>
+        resolveCostAssignmentAgainstCatalog(entry, costCatalog),
+      )
       return (
         <span
           key={field}
@@ -1425,13 +2028,13 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
             step="any"
             defaultValue={assignment.amount ?? ''}
             aria-label={t('projectManagerPage.schedule.columns.costAmount')}
-            placeholder={assignment.name.trim() ? '0' : ''}
+            placeholder={assignment.name.trim() || assignment.costId ? '0' : ''}
             onBlur={(event) => {
               const raw = event.target.value.trim()
               const next = raw === '' ? null : Number(raw)
               if (next != null && !Number.isFinite(next)) return
               if (next === assignment.amount) return
-              void onAssignCost(item.id, { amount: next }, slot)
+              writeOrderedCostSlot(item.id, amountSlotAssignments, slot, { amount: next })
             }}
             onClick={(event) => event.stopPropagation()}
           />
@@ -1596,7 +2199,11 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
               ref={gridScrollRef}
               className="tm-pm-gantt-grid-body"
               onScroll={onScroll}
-              onWheel={handleWheel}>
+              onWheel={handleWheel}
+              onKeyDown={(event) => {
+                handlePmTableCellNavKeyDown(event)
+              }}
+            >
               {rows.map((row) => {
                 const active = row.item.id === selectedId
                 const checked = checkedIds.has(row.item.id)
@@ -1617,17 +2224,17 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                     style={{ height: GANTT_ROW_HEIGHT, gridTemplateColumns: gridTemplate }}
                     onClick={() => onSelect(row.item.id)}
                     onContextMenu={(event) => {
+                      if (isPmEditableEventTarget(event.target)) return
                       if (isProjectRoot) {
                         event.preventDefault()
-                        onSelect(row.item.id)
                         return
                       }
                       event.preventDefault()
                       event.stopPropagation()
-                      onSelect(row.item.id)
                       setContextMenu(null)
 
                       if (resourceViewMode) {
+                        onSelect(row.item.id)
                         const menuWidth = 480
                         const chromeHeight = 120
                         const estimatedHeight =
@@ -1648,10 +2255,15 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                               event.clientY,
                               Math.max(margin, window.innerHeight - estimatedHeight - margin),
                             )
-                        const existingCount = readTaskResourceAssignments(row.item.metadata).filter(
-                          (entry) => !isEmptyAssignment(entry),
-                        ).length
+                        const resourceTypeFilter = prefs.resourceView.typeFilter ?? 'all'
+                        const existingCount = countResourceAssignmentsForTypeFilter(
+                          readTaskResourceAssignments(row.item.metadata),
+                          resourceTypeFilter === 'all' ? 'all' : resourceTypeFilter,
+                        )
                         setRowContextMenu(null)
+                        setCostAssignPopup(null)
+                        setCostAssignSelectedSlot(null)
+                        setCostAssignDraftTypes({})
                         setResourceAssignDraftTypes({})
                         setResourceAssignSelectedSlot(null)
                         setResourceAssignPopup({
@@ -1664,10 +2276,50 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                         return
                       }
 
-                      setSelectionMode(true)
-                      if (!checkedIds.has(row.item.id)) {
-                        onToggleChecked(row.item.id)
+                      if (costViewMode) {
+                        onSelect(row.item.id)
+                        const menuWidth = 480
+                        const chromeHeight = 120
+                        const estimatedHeight =
+                          chromeHeight +
+                          RESOURCE_ASSIGN_POPUP_VISIBLE_ROWS * RESOURCE_ASSIGN_POPUP_ROW_PX
+                        const margin = 8
+                        const left = Math.min(
+                          event.clientX,
+                          Math.max(margin, window.innerWidth - menuWidth - margin),
+                        )
+                        const spaceBelow = window.innerHeight - event.clientY - margin
+                        const spaceAbove = event.clientY - margin
+                        const openAbove =
+                          estimatedHeight > spaceBelow && spaceAbove > spaceBelow
+                        const top = openAbove
+                          ? Math.max(margin, event.clientY - estimatedHeight)
+                          : Math.min(
+                              event.clientY,
+                              Math.max(margin, window.innerHeight - estimatedHeight - margin),
+                            )
+                        const costTypeFilter = prefs.costView.typeFilter ?? 'all'
+                        const existingCount = countCostAssignmentsForTypeFilter(
+                          readTaskCostAssignments(row.item.metadata),
+                          costTypeFilter === 'all' ? 'all' : costTypeFilter,
+                        )
+                        setRowContextMenu(null)
+                        setResourceAssignPopup(null)
+                        setResourceAssignSelectedSlot(null)
+                        setResourceAssignDraftTypes({})
+                        setCostAssignDraftTypes({})
+                        setCostAssignSelectedSlot(null)
+                        setCostAssignPopup({
+                          top,
+                          left,
+                          anchorY: event.clientY,
+                          itemId: row.item.id,
+                          rowCount: Math.max(RESOURCE_ASSIGN_POPUP_VISIBLE_ROWS, existingCount),
+                        })
+                        return
                       }
+
+                      // Task list / Gantt / progress check: menu only, no row selection.
                       const menuWidth = 160
                       const left = Math.min(
                         event.clientX,
@@ -1675,9 +2327,14 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                       )
                       const top = Math.min(
                         event.clientY,
-                        Math.max(8, window.innerHeight - 140),
+                        Math.max(8, window.innerHeight - 160),
                       )
                       setResourceAssignPopup(null)
+                      setResourceAssignSelectedSlot(null)
+                      setResourceAssignDraftTypes({})
+                      setCostAssignPopup(null)
+                      setCostAssignSelectedSlot(null)
+                      setCostAssignDraftTypes({})
                       setRowContextMenu({ top, left, itemId: row.item.id })
                     }}>
                   {prefs.columnOrder.map((columnId) => renderBodyCell(row, columnId))}
@@ -1846,9 +2503,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                       <button
                         type="button"
                         className="tm-pm-gantt-col-menu-item tm-pm-gantt-col-menu-action"
-                        disabled={prefs.costView.slotCount >= GANTT_COST_VIEW_MAX_SLOTS}
                         onClick={() => {
-                          if (prefs.costView.slotCount >= GANTT_COST_VIEW_MAX_SLOTS) return
                           patchPrefs({
                             costView: {
                               ...prefs.costView,
@@ -1940,6 +2595,16 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                 style={{ left: rowContextMenu.left, top: rowContextMenu.top }}
                 role="menu"
                 onMouseDown={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  className="tm-group-context-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setSelectionMode(true)
+                    setRowContextMenu(null)
+                  }}>
+                  {t('projectManagerPage.schedule.selection.enterSelection')}
+                </button>
                 <button
                   type="button"
                   className="tm-group-context-menu-item"
@@ -2092,7 +2757,12 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                         ) : null}
                       </header>
                       <div className="tm-pm-gantt-resource-assign-popup-scroll">
-                        <table className="tm-pm-gantt-resource-assign-popup-table">
+                        <table
+                          className="tm-pm-gantt-resource-assign-popup-table"
+                          onKeyDown={(event) => {
+                            handlePmTableCellNavKeyDown(event)
+                          }}
+                        >
                           <thead>
                             <tr>
                               <th className="tm-pm-gantt-resource-assign-popup-col--index">
@@ -2106,8 +2776,15 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                           </thead>
                           <tbody>
                             {slots.map((slot) => {
+                              const resourceTypeFilter = prefs.resourceView.typeFilter ?? 'all'
+                              const resourceFilter =
+                                resourceTypeFilter === 'all' ? 'all' : resourceTypeFilter
                               const assignment = resolveAssignmentAgainstCatalog(
-                                slotAssignments[slot] ?? EMPTY_TASK_RESOURCE_ASSIGNMENT,
+                                readResourceAssignmentAtFilteredSlot(
+                                  slotAssignments,
+                                  slot,
+                                  resourceFilter,
+                                ),
                                 catalog,
                               )
                               const selectedId = assignment.resourceId ?? ''
@@ -2161,12 +2838,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                                             popupItem.id,
                                             slotAssignments,
                                             slot,
-                                            {
-                                              type: nextType,
-                                              resourceId: null,
-                                              name: '',
-                                              quantity: null,
-                                            },
+                                            { ...EMPTY_TASK_RESOURCE_ASSIGNMENT },
                                           )
                                           setResourceAssignDraftTypes((current) => ({
                                             ...current,
@@ -2180,11 +2852,27 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                                         }))
                                       }}
                                     >
-                                      {PM_RESOURCE_TYPES.map((entry) => (
+                                      {PM_RESOURCE_PRIMARY_TYPES.map((entry) => (
                                         <option key={entry} value={entry}>
-                                          {t(`projectManagerPage.resourceTable.types.${entry}`)}
+                                          {entry === 'custom' && type === 'custom'
+                                            ? resolveAssignmentCustomTypeName({
+                                                resourceId: selectedId,
+                                                name: assignment.name,
+                                                type: 'custom',
+                                              }) ||
+                                              t('projectManagerPage.resourceTable.types.custom')
+                                            : t(`projectManagerPage.resourceTable.types.${entry}`)}
                                         </option>
                                       ))}
+                                      <option
+                                        value="__pm_resource_cost_group__"
+                                        disabled
+                                        title={t(
+                                          'projectManagerPage.resourceTable.views.costResourcesReserved',
+                                        )}
+                                      >
+                                        {t('projectManagerPage.resourceTable.views.costResources')}
+                                      </option>
                                     </select>
                                   </td>
                                   <td>
@@ -2204,12 +2892,7 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                                             popupItem.id,
                                             slotAssignments,
                                             slot,
-                                            {
-                                              type,
-                                              resourceId: null,
-                                              name: '',
-                                              quantity: null,
-                                            },
+                                            { ...EMPTY_TASK_RESOURCE_ASSIGNMENT },
                                           )
                                           return
                                         }
@@ -2244,7 +2927,6 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                                       {nameOptions.map((row) => (
                                         <option key={row.id} value={row.id}>
                                           {row.name}
-                                          {row.unit ? ` (${row.unit})` : ''}
                                         </option>
                                       ))}
                                     </select>
@@ -2406,6 +3088,408 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
           )
         : null}
 
+      {costAssignPopup
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                className="tm-group-context-menu-backdrop"
+                aria-label={t('projectManagerPage.schedule.selection.cancel')}
+                onClick={() => {
+                  setCostAssignPopup(null)
+                  setCostAssignSelectedSlot(null)
+                  setCostAssignDraftTypes({})
+                }}
+              />
+              <div
+                ref={costAssignPopupRef}
+                className="tm-pm-gantt-resource-assign-popup tm-pm-gantt-resource-assign-popup--cost"
+                style={{ left: costAssignPopup.left, top: costAssignPopup.top }}
+                role="dialog"
+                aria-label={t('projectManagerPage.schedule.costAssign.popupTitle')}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                {(() => {
+                  const popupRow = rows.find((entry) => entry.item.id === costAssignPopup.itemId)
+                  const popupItem = popupRow?.item
+                  const canEdit = Boolean(
+                    popupItem && (onAssignCost || onReplaceCostAssignments),
+                  )
+                  const slotAssignments = popupItem
+                    ? readTaskCostAssignments(popupItem.metadata).map((entry) =>
+                        resolveCostAssignmentAgainstCatalog(entry, costCatalog),
+                      )
+                    : []
+                  const slots = Array.from({ length: costAssignPopup.rowCount }, (_, slot) => slot)
+                  const selectedSlot = costAssignSelectedSlot
+                  const canMoveSelected =
+                    canEdit &&
+                    selectedSlot != null &&
+                    selectedSlot >= 0 &&
+                    selectedSlot < slotAssignments.length
+                  const canDeleteSelected =
+                    canEdit &&
+                    selectedSlot != null &&
+                    selectedSlot >= 0 &&
+                    selectedSlot < costAssignPopup.rowCount
+                  const moveSelected = (direction: -1 | 1) => {
+                    if (!popupItem || selectedSlot == null) return
+                    const target = selectedSlot + direction
+                    if (target < 0 || target >= slotAssignments.length) return
+                    const next = moveTaskCostAssignment(slotAssignments, selectedSlot, target)
+                    void onReplaceCostAssignments?.(popupItem.id, next)
+                    setCostAssignSelectedSlot(target)
+                  }
+                  const deleteSelected = () => {
+                    if (!popupItem || selectedSlot == null) return
+                    const slot = selectedSlot
+                    let nextAssignments = slotAssignments
+                    if (slot < slotAssignments.length) {
+                      nextAssignments = slotAssignments.filter((_, index) => index !== slot)
+                      if (onReplaceCostAssignments) {
+                        void onReplaceCostAssignments(popupItem.id, nextAssignments)
+                      } else if (onAssignCost) {
+                        void onAssignCost(
+                          popupItem.id,
+                          { ...EMPTY_TASK_COST_ASSIGNMENT },
+                          slot,
+                        )
+                      }
+                    }
+                    setCostAssignPopup((current) => {
+                      if (!current) return current
+                      return {
+                        ...current,
+                        rowCount: Math.max(
+                          RESOURCE_ASSIGN_POPUP_VISIBLE_ROWS,
+                          nextAssignments.length,
+                          current.rowCount - 1,
+                        ),
+                      }
+                    })
+                    setCostAssignSelectedSlot((prev) => {
+                      if (prev == null) return prev
+                      if (prev < slot) return prev
+                      if (prev > slot) return prev - 1
+                      if (nextAssignments.length === 0) return null
+                      return Math.min(slot, nextAssignments.length - 1)
+                    })
+                  }
+                  return (
+                    <>
+                      <header className="tm-pm-gantt-resource-assign-popup-header">
+                        <div className="tm-pm-gantt-resource-assign-popup-title">
+                          {t('projectManagerPage.schedule.costAssign.popupTitle')}
+                        </div>
+                        {popupItem?.title ? (
+                          <div
+                            className="tm-pm-gantt-resource-assign-popup-subtitle"
+                            title={popupItem.title}
+                          >
+                            {popupItem.title}
+                          </div>
+                        ) : null}
+                      </header>
+                      <div className="tm-pm-gantt-resource-assign-popup-scroll">
+                        <table
+                          className="tm-pm-gantt-resource-assign-popup-table"
+                          onKeyDown={(event) => {
+                            handlePmTableCellNavKeyDown(event)
+                          }}
+                        >
+                          <thead>
+                            <tr>
+                              <th className="tm-pm-gantt-resource-assign-popup-col--index">
+                                {t('projectManagerPage.schedule.columns.index')}
+                              </th>
+                              <th>{t('projectManagerPage.costTable.columns.type')}</th>
+                              <th>{t('projectManagerPage.costTable.columns.name')}</th>
+                              <th>{t('projectManagerPage.schedule.columns.costAmount')}</th>
+                              <th>{t('projectManagerPage.schedule.columns.costNote')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {slots.map((slot) => {
+                              const costTypeFilter = prefs.costView.typeFilter ?? 'all'
+                              const costFilter = costTypeFilter === 'all' ? 'all' : costTypeFilter
+                              const assignment = resolveCostAssignmentAgainstCatalog(
+                                readCostAssignmentAtFilteredSlot(
+                                  slotAssignments,
+                                  slot,
+                                  costFilter,
+                                ),
+                                costCatalog,
+                              )
+                              const selectedId = assignment.costId ?? ''
+                              const type: PmCostType =
+                                (assignment.type && isPmCostType(assignment.type)
+                                  ? assignment.type
+                                  : null) ??
+                                costAssignDraftTypes[slot] ??
+                                'comprehensive'
+                              const selectedInOptions = costCatalogRowsForType(
+                                costCatalog,
+                                type,
+                              ).some((entry) => entry.id === selectedId)
+                              const qtyDisabled =
+                                !canEdit || (!selectedId && !assignment.name.trim())
+                              const rowSelected = selectedSlot === slot
+                              const rowHasAssignment = !isEmptyCostAssignment(assignment)
+                              const nameTriggerLabel =
+                                assignment.name.trim() ||
+                                (selectedId && !selectedInOptions
+                                  ? selectedId
+                                  : t('projectManagerPage.schedule.costAssign.selectName'))
+                              const namePickerOpen =
+                                costNamePicker?.itemId === costAssignPopup.itemId &&
+                                costNamePicker.slot === slot &&
+                                costNamePicker.source === 'popup'
+                              return (
+                                <tr
+                                  key={`${costAssignPopup.itemId}:${slot}`}
+                                  className={
+                                    rowSelected
+                                      ? 'tm-pm-gantt-resource-assign-popup-row--selected'
+                                      : undefined
+                                  }
+                                  onClick={() => {
+                                    if (!rowHasAssignment) {
+                                      setCostAssignSelectedSlot(null)
+                                      return
+                                    }
+                                    setCostAssignSelectedSlot(slot)
+                                  }}
+                                >
+                                  <td className="tm-pm-gantt-resource-assign-popup-col--index">
+                                    {slot + 1}
+                                  </td>
+                                  <td>
+                                    <select
+                                      className="tm-pm-gantt-resource-assign-popup-select"
+                                      value={type}
+                                      disabled={!canEdit}
+                                      aria-label={t('projectManagerPage.costTable.columns.type')}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) => {
+                                        if (!popupItem || !canEdit) return
+                                        const nextType = event.target.value as PmCostType
+                                        if (!isPmCostType(nextType)) return
+                                        if (selectedId) {
+                                          writeOrderedCostSlot(
+                                            popupItem.id,
+                                            slotAssignments,
+                                            slot,
+                                            { ...EMPTY_TASK_COST_ASSIGNMENT },
+                                          )
+                                          setCostAssignDraftTypes((current) => ({
+                                            ...current,
+                                            [slot]: nextType,
+                                          }))
+                                          return
+                                        }
+                                        setCostAssignDraftTypes((current) => ({
+                                          ...current,
+                                          [slot]: nextType,
+                                        }))
+                                      }}
+                                    >
+                                      {PM_COST_PRIMARY_TYPES.map((entry) => (
+                                        <option key={entry} value={entry}>
+                                          {t(`projectManagerPage.costTable.types.${entry}`)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className={[
+                                        'tm-pm-gantt-resource-assign-popup-select',
+                                        'tm-pm-gantt-resource-cell-trigger',
+                                        'tm-pm-gantt-cost-name-trigger',
+                                        !selectedId && !assignment.name.trim()
+                                          ? 'tm-pm-gantt-cell-select--empty'
+                                          : '',
+                                        namePickerOpen
+                                          ? 'tm-pm-gantt-resource-cell-trigger--open'
+                                          : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                      disabled={!canEdit || !popupItem}
+                                      aria-label={t('projectManagerPage.costTable.columns.name')}
+                                      title={nameTriggerLabel}
+                                      onClick={(event) => {
+                                        if (!popupItem || !canEdit) return
+                                        openCostNamePicker(event, {
+                                          itemId: popupItem.id,
+                                          slot,
+                                          source: 'popup',
+                                          typeFilter: type,
+                                        })
+                                      }}
+                                    >
+                                      <span className="tm-pm-gantt-resource-cell-trigger-label">
+                                        {nameTriggerLabel}
+                                      </span>
+                                      <IconChevronDown
+                                        size={12}
+                                        className="tm-pm-gantt-resource-cell-trigger-chevron"
+                                      />
+                                    </button>
+                                  </td>
+                                  <td>
+                                    <input
+                                      key={`${costAssignPopup.itemId}:${slot}:qty:${selectedId}:${assignment.amount ?? ''}`}
+                                      className="tm-pm-gantt-resource-assign-popup-qty"
+                                      type="text"
+                                      inputMode="decimal"
+                                      defaultValue={assignment.amount ?? ''}
+                                      placeholder=""
+                                      disabled={qtyDisabled}
+                                      aria-label={t(
+                                        'projectManagerPage.schedule.columns.costAmount',
+                                      )}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onKeyDown={(event) => {
+                                        if (event.key !== 'Enter' || !popupItem || !canEdit) {
+                                          return
+                                        }
+                                        event.preventDefault()
+                                        const raw = event.currentTarget.value.trim()
+                                        const next = raw === '' ? null : Number(raw)
+                                        if (next != null && !Number.isFinite(next)) return
+                                        if (next === assignment.amount) {
+                                          event.currentTarget.blur()
+                                          return
+                                        }
+                                        writeOrderedCostSlot(
+                                          popupItem.id,
+                                          slotAssignments,
+                                          slot,
+                                          { amount: next },
+                                        )
+                                        event.currentTarget.blur()
+                                      }}
+                                      onBlur={(event) => {
+                                        if (!popupItem || !canEdit) return
+                                        if (!selectedId && !assignment.name.trim()) return
+                                        const raw = event.currentTarget.value.trim()
+                                        const next = raw === '' ? null : Number(raw)
+                                        if (next != null && !Number.isFinite(next)) return
+                                        if (next === assignment.amount) return
+                                        writeOrderedCostSlot(
+                                          popupItem.id,
+                                          slotAssignments,
+                                          slot,
+                                          { amount: next },
+                                        )
+                                      }}
+                                    />
+                                  </td>
+                                  <td>
+                                    {canEdit && popupItem ? (
+                                      <input
+                                        className="tm-pm-gantt-resource-assign-popup-note"
+                                        defaultValue={assignment.note}
+                                        placeholder={t(
+                                          'projectManagerPage.schedule.costAssign.notePlaceholder',
+                                        )}
+                                        aria-label={t(
+                                          'projectManagerPage.schedule.columns.costNote',
+                                        )}
+                                        disabled={!selectedId && !assignment.name.trim()}
+                                        onBlur={(event) => {
+                                          const nextNote = event.target.value
+                                          if (nextNote === assignment.note) return
+                                          writeOrderedCostSlot(
+                                            popupItem.id,
+                                            slotAssignments,
+                                            slot,
+                                            { note: nextNote },
+                                          )
+                                        }}
+                                        onClick={(event) => event.stopPropagation()}
+                                      />
+                                    ) : (
+                                      assignment.note.trim() || '—'
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {canEdit ? (
+                        <div className="tm-pm-gantt-resource-assign-popup-footer">
+                          <div className="tm-pm-gantt-resource-assign-popup-move">
+                            <button
+                              type="button"
+                              className="tm-pm-gantt-resource-assign-popup-move-btn"
+                              aria-label={t('projectManagerPage.schedule.costAssign.moveUp')}
+                              title={t('projectManagerPage.schedule.costAssign.moveUp')}
+                              disabled={
+                                !canMoveSelected || selectedSlot == null || selectedSlot <= 0
+                              }
+                              onClick={() => moveSelected(-1)}
+                            >
+                              <IconChevronUp size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="tm-pm-gantt-resource-assign-popup-move-btn"
+                              aria-label={t('projectManagerPage.schedule.costAssign.moveDown')}
+                              title={t('projectManagerPage.schedule.costAssign.moveDown')}
+                              disabled={
+                                !canMoveSelected ||
+                                selectedSlot == null ||
+                                selectedSlot >= slotAssignments.length - 1
+                              }
+                              onClick={() => moveSelected(1)}
+                            >
+                              <IconChevronDown size={16} />
+                            </button>
+                          </div>
+                          <div className="tm-pm-gantt-resource-assign-popup-actions">
+                            <button
+                              type="button"
+                              className="tm-pm-gantt-resource-assign-popup-add"
+                              disabled={!canDeleteSelected}
+                              onClick={() => deleteSelected()}
+                            >
+                              <span aria-hidden>−</span>
+                              {t('projectManagerPage.schedule.costAssign.deleteRow')}
+                            </button>
+                            <button
+                              type="button"
+                              className="tm-pm-gantt-resource-assign-popup-add"
+                              onClick={() => {
+                                setCostAssignPopup((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        rowCount: current.rowCount + 1,
+                                      }
+                                    : current,
+                                )
+                              }}
+                            >
+                              <span aria-hidden>+</span>
+                              {t('projectManagerPage.schedule.costAssign.addRow')}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  )
+                })()}
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
+
       {resourceCellPicker
         ? createPortal(
             <div
@@ -2438,16 +3522,25 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                 )
                 const selectedResourceId = menuAssignment.resourceId ?? ''
                 const selectedName = menuAssignment.name.trim()
+                // Prefer id so duplicate resource names only check the assigned row.
                 const isNameChecked = (row: PmResourceRow) =>
-                  row.id === selectedResourceId ||
-                  (selectedName !== '' && row.name.trim() === selectedName)
+                  selectedResourceId
+                    ? row.id === selectedResourceId
+                    : selectedName !== '' && row.name.trim() === selectedName
                 return (
                   <>
                     <div className="tm-pm-gantt-resource-select-menu-label">
                       {t('projectManagerPage.schedule.columns.resourceType')}
                     </div>
-                    {SWITCHABLE_RESOURCE_COLUMN_TYPES.map((entry) => {
-                      const label = t(`projectManagerPage.resourceTable.types.${entry}`)
+                    {PM_RESOURCE_PRIMARY_TYPES.map((entry) => {
+                      const label =
+                        entry === 'custom' && menuType === 'custom'
+                          ? resolveAssignmentCustomTypeName({
+                              resourceId: menuAssignment.resourceId,
+                              name: menuAssignment.name,
+                              type: 'custom',
+                            }) || t('projectManagerPage.resourceTable.types.custom')
+                          : t(`projectManagerPage.resourceTable.types.${entry}`)
                       const checked = entry === menuType
                       return (
                         <button
@@ -2476,10 +3569,52 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                         </button>
                       )
                     })}
+                    <button
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      title={t('projectManagerPage.resourceTable.views.costResourcesReserved')}
+                      className={[
+                        'tm-pm-gantt-resource-select-menu-item',
+                        'tm-pm-gantt-resource-select-menu-item--group',
+                        'tm-pm-gantt-resource-select-menu-item--disabled',
+                      ].join(' ')}
+                    >
+                      <span className="tm-pm-gantt-resource-select-menu-check" aria-hidden />
+                      <span className="tm-pm-gantt-resource-select-menu-text">
+                        {t('projectManagerPage.resourceTable.views.costResources')}
+                      </span>
+                      <IconChevronDown
+                        size={14}
+                        className="tm-pm-gantt-resource-select-menu-chevron"
+                      />
+                    </button>
                     <div className="tm-pm-gantt-resource-select-menu-sep" role="separator" />
                     <div className="tm-pm-gantt-resource-select-menu-label">
                       {t('projectManagerPage.schedule.columns.resourceName')}
                     </div>
+                    {!isEmptyAssignment(menuAssignment) ? (
+                      <button
+                        type="button"
+                        role="option"
+                        className="tm-pm-gantt-resource-select-menu-item"
+                        onClick={() => {
+                          if (!onAssignResource && !onReplaceResourceAssignments) return
+                          writeOrderedResourceSlot(
+                            resourceCellPicker.itemId,
+                            menuSlots,
+                            resourceCellPicker.slot,
+                            { ...EMPTY_TASK_RESOURCE_ASSIGNMENT },
+                          )
+                          setResourceCellPicker(null)
+                        }}
+                      >
+                        <span className="tm-pm-gantt-resource-select-menu-check" aria-hidden />
+                        <span className="tm-pm-gantt-resource-select-menu-text">
+                          {t('projectManagerPage.schedule.resourceAssign.none')}
+                        </span>
+                      </button>
+                    ) : null}
                     {menuOptions.length === 0 ? (
                       <div className="tm-pm-gantt-resource-select-menu-empty">—</div>
                     ) : (
@@ -2501,6 +3636,16 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                               .join(' ')}
                             onClick={() => {
                               if (!onAssignResource && !onReplaceResourceAssignments) return
+                              if (checked) {
+                                writeOrderedResourceSlot(
+                                  resourceCellPicker.itemId,
+                                  menuSlots,
+                                  resourceCellPicker.slot,
+                                  { ...EMPTY_TASK_RESOURCE_ASSIGNMENT },
+                                )
+                                setResourceCellPicker(null)
+                                return
+                              }
                               writeOrderedResourceSlot(
                                 resourceCellPicker.itemId,
                                 menuSlots,
@@ -2523,9 +3668,268 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
                             </span>
                             <span className="tm-pm-gantt-resource-select-menu-text">
                               {row.name}
-                              {row.unit ? ` (${row.unit})` : ''}
                             </span>
                           </button>
+                        )
+                      })
+                    )}
+                  </>
+                )
+              })()}
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {costNamePicker
+        ? createPortal(
+            <div
+              ref={costNamePickerMenuRef}
+              className="tm-pm-gantt-resource-select-menu tm-pm-gantt-resource-select-menu--cost-cascade"
+              style={{
+                top: costNamePicker.anchorBottom + 2,
+                left: costNamePicker.left,
+                minWidth: costNamePicker.minWidth,
+              }}
+              role="menu"
+              aria-label={t('projectManagerPage.schedule.costAssign.selectSectionalWork')}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              {(() => {
+                const menuItem = rows.find(
+                  (entry) => entry.item.id === costNamePicker.itemId,
+                )?.item
+                const menuSlots = menuItem
+                  ? readTaskCostAssignments(menuItem.metadata).map((entry) =>
+                      resolveCostAssignmentAgainstCatalog(entry, costCatalog),
+                    )
+                  : []
+                const menuAssignment = resolveCostAssignmentAgainstCatalog(
+                  menuSlots[costNamePicker.slot] ?? EMPTY_TASK_COST_ASSIGNMENT,
+                  costCatalog,
+                )
+                const selectedCostId = menuAssignment.costId ?? ''
+                const selectedName = menuAssignment.name.trim()
+                const sections = groupCostCatalogBySectionalWork(
+                  costCatalog,
+                  costNamePicker.typeFilter,
+                )
+                const allocatedById = buildCostAllocatedAmountById(
+                  rows.map((entry) => entry.item),
+                  costCatalog,
+                )
+                // Prefer id so duplicate price-item names only check the assigned row.
+                const isNameChecked = (row: PmCostRow) =>
+                  selectedCostId
+                    ? row.id === selectedCostId
+                    : selectedName !== '' && row.name.trim() === selectedName
+                const sectionLabel = (key: string) =>
+                  key
+                    ? key
+                    : t('projectManagerPage.schedule.costAssign.sectionalWorkEmpty')
+                const commitName = (row: PmCostRow) => {
+                  if (!onAssignCost && !onReplaceCostAssignments) return
+                  const checked = isNameChecked(row)
+                  if (checked) {
+                    writeOrderedCostSlot(
+                      costNamePicker.itemId,
+                      menuSlots,
+                      costNamePicker.slot,
+                      { ...EMPTY_TASK_COST_ASSIGNMENT },
+                    )
+                    if (costNamePicker.source === 'popup') {
+                      setCostAssignDraftTypes((current) => {
+                        const next = { ...current }
+                        delete next[costNamePicker.slot]
+                        return next
+                      })
+                    }
+                    setCostNamePicker(null)
+                    return
+                  }
+                  if (isCostQuantityFullyAllocated(row, allocatedById)) {
+                    return
+                  }
+                  writeOrderedCostSlot(
+                    costNamePicker.itemId,
+                    menuSlots,
+                    costNamePicker.slot,
+                    {
+                      costId: row.id,
+                      type: row.type,
+                      name: row.name,
+                      amount: row.quantity,
+                    },
+                  )
+                  if (costNamePicker.source === 'popup') {
+                    setCostAssignDraftTypes((current) => {
+                      const next = { ...current }
+                      delete next[costNamePicker.slot]
+                      return next
+                    })
+                  }
+                  setCostNamePicker(null)
+                }
+                return (
+                  <>
+                    <div className="tm-pm-gantt-resource-select-menu-label">
+                      {t('projectManagerPage.costTable.columns.sectionalWork')}
+                    </div>
+                    {!isEmptyCostAssignment(menuAssignment) ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="tm-pm-gantt-resource-select-menu-item"
+                        onClick={() => {
+                          if (!onAssignCost && !onReplaceCostAssignments) return
+                          writeOrderedCostSlot(
+                            costNamePicker.itemId,
+                            menuSlots,
+                            costNamePicker.slot,
+                            { ...EMPTY_TASK_COST_ASSIGNMENT },
+                          )
+                          if (costNamePicker.source === 'popup') {
+                            setCostAssignDraftTypes((current) => {
+                              const next = { ...current }
+                              delete next[costNamePicker.slot]
+                              return next
+                            })
+                          }
+                          setCostNamePicker(null)
+                        }}
+                      >
+                        <span className="tm-pm-gantt-resource-select-menu-check" aria-hidden />
+                        <span className="tm-pm-gantt-resource-select-menu-text">
+                          {t('projectManagerPage.schedule.resourceAssign.none')}
+                        </span>
+                      </button>
+                    ) : null}
+                    {sections.length === 0 ? (
+                      <div className="tm-pm-gantt-resource-select-menu-empty">—</div>
+                    ) : (
+                      sections.map((section) => {
+                        const open = costNamePicker.openSectionKey === section.key
+                        const sectionChecked = section.rows.some(isNameChecked)
+                        return (
+                          <div
+                            key={section.key || '__empty__'}
+                            className="tm-pm-gantt-resource-select-menu-item--section"
+                            onMouseEnter={() => {
+                              setCostNamePicker((current) =>
+                                current
+                                  ? { ...current, openSectionKey: section.key }
+                                  : current,
+                              )
+                            }}
+                          >
+                            <button
+                              type="button"
+                              role="menuitem"
+                              aria-haspopup="menu"
+                              aria-expanded={open}
+                              className={[
+                                'tm-pm-gantt-resource-select-menu-item',
+                                'tm-pm-gantt-resource-select-menu-item--group',
+                                sectionChecked
+                                  ? 'tm-pm-gantt-resource-select-menu-item--checked'
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              title={sectionLabel(section.key)}
+                              onClick={() => {
+                                setCostNamePicker((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        openSectionKey:
+                                          current.openSectionKey === section.key
+                                            ? null
+                                            : section.key,
+                                      }
+                                    : current,
+                                )
+                              }}
+                            >
+                              <span
+                                className="tm-pm-gantt-resource-select-menu-check"
+                                aria-hidden
+                              >
+                                {sectionChecked ? <IconCheck size={14} /> : null}
+                              </span>
+                              <span className="tm-pm-gantt-resource-select-menu-text">
+                                {sectionLabel(section.key)}
+                              </span>
+                              <IconChevronRight
+                                size={14}
+                                className="tm-pm-gantt-resource-select-menu-chevron"
+                              />
+                            </button>
+                            {open ? (
+                              <div
+                                className="tm-pm-gantt-resource-select-submenu"
+                                role="menu"
+                                aria-label={t(
+                                  'projectManagerPage.schedule.costAssign.selectName',
+                                )}
+                              >
+                                <div className="tm-pm-gantt-resource-select-menu-label">
+                                  {t('projectManagerPage.costTable.columns.name')}
+                                </div>
+                                {section.rows.map((row) => {
+                                  const checked = isNameChecked(row)
+                                  const exhausted = isCostQuantityFullyAllocated(
+                                    row,
+                                    allocatedById,
+                                  )
+                                  const disabled = exhausted && !checked
+                                  return (
+                                    <button
+                                      key={row.id}
+                                      type="button"
+                                      role="menuitem"
+                                      aria-selected={checked}
+                                      aria-disabled={disabled}
+                                      disabled={disabled}
+                                      className={[
+                                        'tm-pm-gantt-resource-select-menu-item',
+                                        checked
+                                          ? 'tm-pm-gantt-resource-select-menu-item--checked'
+                                          : '',
+                                        disabled
+                                          ? 'tm-pm-gantt-resource-select-menu-item--disabled'
+                                          : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                      title={
+                                        disabled
+                                          ? t(
+                                              'projectManagerPage.schedule.costAssign.quantityFullyAllocated',
+                                              { name: row.name },
+                                            )
+                                          : row.name
+                                      }
+                                      onClick={() => {
+                                        if (disabled) return
+                                        commitName(row)
+                                      }}
+                                    >
+                                      <span
+                                        className="tm-pm-gantt-resource-select-menu-check"
+                                        aria-hidden
+                                      >
+                                        {checked ? <IconCheck size={14} /> : null}
+                                      </span>
+                                      <span className="tm-pm-gantt-resource-select-menu-text">
+                                        {row.name}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
                         )
                       })
                     )}

@@ -37,6 +37,16 @@ export const DialogSelectFolderOutputSchema = z.object({
 export const DialogSelectFilesInputSchema = z.object({
   defaultPath: z.string().optional(),
   multiple: z.boolean().optional(),
+  title: z.string().optional(),
+  buttonLabel: z.string().optional(),
+  filters: z
+    .array(
+      z.object({
+        name: z.string(),
+        extensions: z.array(z.string()),
+      }),
+    )
+    .optional(),
 })
 
 export const DialogSelectFilesOutputSchema = z.object({

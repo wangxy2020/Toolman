@@ -1,20 +1,35 @@
-/** Task cost assignment(s) stored on `PmWorkItem.metadata`. */
+/** Task ↔ price-list (cost catalog) assignment(s) stored on `PmWorkItem.metadata`. */
+
+import {
+  isPmCostType,
+  type PmCostRow,
+  type PmCostType,
+} from '../cost/pm-cost-catalog'
+import { canonicalizeResourceName } from '../resource/pm-resource-catalog'
 
 export const TASK_COST_ASSIGNMENTS_KEY = 'costAssignments'
 
 export type TaskCostAssignment = {
+  /** Linked price-list row id when assigned from the project cost catalog. */
+  costId: string | null
+  type: PmCostType | null
   name: string
   amount: number | null
+  /** Free-form note (说明). */
+  note: string
 }
 
-export type CostColumnField = 'name' | 'amount' | 'input'
+export type CostColumnField = 'name' | 'amount' | 'qty' | 'input'
 
 export const EMPTY_TASK_COST_ASSIGNMENT: TaskCostAssignment = {
+  costId: null,
+  type: null,
   name: '',
   amount: null,
+  note: '',
 }
 
-const COST_COLUMN_RE = /^cost:(\d+):(name|amount|input)$/
+const COST_COLUMN_RE = /^cost:(\d+):(name|amount|qty|input)$/
 
 export function makeCostColumnId(slot: number, field: CostColumnField): string {
   return `cost:${Math.max(0, Math.floor(slot))}:${field}`
@@ -31,12 +46,17 @@ export function parseCostColumnId(
   return { slot, field }
 }
 
-export function isCostColumnId(id: string): boolean {
-  return parseCostColumnId(id) != null
+export function isEmptyCostAssignment(assignment: TaskCostAssignment): boolean {
+  return (
+    assignment.costId == null &&
+    assignment.type == null &&
+    !assignment.name.trim() &&
+    assignment.amount == null
+  )
 }
 
-export function isEmptyCostAssignment(assignment: TaskCostAssignment): boolean {
-  return !assignment.name.trim() && assignment.amount == null
+function canonicalizeCostName(name: string): string {
+  return canonicalizeResourceName(name)
 }
 
 function parseAssignment(raw: unknown): TaskCostAssignment {
@@ -47,8 +67,11 @@ function parseAssignment(raw: unknown): TaskCostAssignment {
   const amount =
     typeof row.amount === 'number' && Number.isFinite(row.amount) ? row.amount : null
   return {
-    name: typeof row.name === 'string' ? row.name : '',
+    costId: typeof row.costId === 'string' && row.costId ? row.costId : null,
+    type: isPmCostType(row.type) ? row.type : null,
+    name: canonicalizeCostName(typeof row.name === 'string' ? row.name : ''),
     amount,
+    note: typeof row.note === 'string' ? row.note : '',
   }
 }
 
@@ -77,8 +100,11 @@ export function patchTaskCostAssignmentMetadata(
   const currentList = readTaskCostAssignments(metadata)
   const current = currentList[index] ?? { ...EMPTY_TASK_COST_ASSIGNMENT }
   const next: TaskCostAssignment = {
+    costId: patch.costId !== undefined ? patch.costId : current.costId,
+    type: patch.type !== undefined ? patch.type : current.type,
     name: patch.name !== undefined ? patch.name : current.name,
     amount: patch.amount !== undefined ? patch.amount : current.amount,
+    note: patch.note !== undefined ? patch.note : current.note,
   }
 
   const list: Array<TaskCostAssignment | null> = []
@@ -121,63 +147,355 @@ export function replaceTaskCostAssignmentsMetadata(
   return base
 }
 
-/** Display one assignment as `名称，金额` (empty → blank). */
-export function formatCostAssignmentInput(assignment: TaskCostAssignment): string {
+/**
+ * Match an assignment to a price-list row (id → type+name → name-only).
+ * Returns null when nothing in the catalog matches.
+ */
+export function findCatalogRowForCostAssignment(
+  assignment: TaskCostAssignment,
+  catalog: readonly PmCostRow[],
+): PmCostRow | null {
+  if (assignment.costId) {
+    const found = catalog.find((row) => row.id === assignment.costId)
+    if (found) return found
+  }
+  const name = canonicalizeCostName(assignment.name)
+  if (!name) return null
+  const typedMatch = catalog.find(
+    (row) =>
+      canonicalizeCostName(row.name) === name &&
+      (assignment.type == null || row.type === assignment.type),
+  )
+  if (typedMatch) return typedMatch
+  return catalog.find((row) => canonicalizeCostName(row.name) === name) ?? null
+}
+
+/** Resolve display fields against the live price list (prefer catalog name/type by id). */
+export function resolveCostAssignmentAgainstCatalog(
+  assignment: TaskCostAssignment,
+  catalog: readonly PmCostRow[],
+): TaskCostAssignment {
+  const found = findCatalogRowForCostAssignment(assignment, catalog)
+  if (found) {
+    return {
+      costId: found.id,
+      type: found.type,
+      name: found.name,
+      amount: assignment.amount,
+      note: assignment.note,
+    }
+  }
+  return assignment
+}
+
+/**
+ * Rewrite stored assignment type/name/id to match the live price list.
+ * Unmatched (ghost / free-text) rows are left unchanged.
+ */
+export function hydrateTaskCostAssignmentsAgainstCatalog(
+  assignments: readonly TaskCostAssignment[],
+  catalog: readonly PmCostRow[],
+): { assignments: TaskCostAssignment[]; changed: boolean } {
+  let changed = false
+  const next = assignments.map((assignment) => {
+    if (isEmptyCostAssignment(assignment)) return assignment
+    const found = findCatalogRowForCostAssignment(assignment, catalog)
+    if (!found) return assignment
+    if (
+      assignment.costId === found.id &&
+      assignment.type === found.type &&
+      canonicalizeCostName(assignment.name) === canonicalizeCostName(found.name)
+    ) {
+      return assignment
+    }
+    changed = true
+    return {
+      costId: found.id,
+      type: found.type,
+      name: found.name,
+      amount: assignment.amount,
+      note: assignment.note,
+    }
+  })
+  return { assignments: changed ? next : [...assignments], changed }
+}
+
+/** Options for a name picker — named rows only, optionally filtered by type. */
+export function costCatalogRowsForType(
+  catalog: readonly PmCostRow[],
+  type: PmCostType | null,
+): PmCostRow[] {
+  const named = catalog.filter((row) => row.name.trim().length > 0)
+  if (!type) return named
+  return named.filter((row) => row.type === type)
+}
+
+export type CostSectionalGroup = {
+  /** Trimmed `sectionalWork`, or `''` when blank. */
+  key: string
+  rows: PmCostRow[]
+}
+
+/**
+ * Group named catalog rows by 分部工程 for cascading name pickers.
+ * Groups follow first appearance order in the price list (top → bottom).
+ * Rows within a group keep catalog order.
+ */
+export function groupCostCatalogBySectionalWork(
+  catalog: readonly PmCostRow[],
+  type: PmCostType | null = null,
+): CostSectionalGroup[] {
+  const named = costCatalogRowsForType(catalog, type)
+  const byKey = new Map<string, PmCostRow[]>()
+  const keyOrder: string[] = []
+  for (const row of named) {
+    const key = row.sectionalWork?.trim() ?? ''
+    const list = byKey.get(key)
+    if (list) {
+      list.push(row)
+    } else {
+      byKey.set(key, [row])
+      keyOrder.push(key)
+    }
+  }
+  return keyOrder.map((key) => ({
+    key,
+    rows: byKey.get(key) ?? [],
+  }))
+}
+
+function resolveAssignmentCostId(
+  assignment: TaskCostAssignment,
+  catalog: readonly PmCostRow[],
+): string | null {
+  const resolved = resolveCostAssignmentAgainstCatalog(assignment, catalog)
+  if (resolved.costId) return resolved.costId
+  const name = resolved.name.trim()
+  if (!name) return null
+  const matched = catalog.find(
+    (row) =>
+      row.name.trim() === name &&
+      (resolved.type == null || row.type === resolved.type),
+  )
+  return matched?.id ?? null
+}
+
+/**
+ * Sum assigned amounts for each price-list row id across all tasks.
+ * Used to gray out fully allocated items in the cost name cascade.
+ */
+export function buildCostAllocatedAmountById(
+  items: ReadonlyArray<{ metadata?: Record<string, unknown> | null }>,
+  catalog: readonly PmCostRow[] = [],
+): Map<string, number> {
+  const totals = new Map<string, number>()
+  for (const item of items) {
+    for (const raw of readTaskCostAssignments(item.metadata)) {
+      const costId = resolveAssignmentCostId(raw, catalog)
+      if (!costId) continue
+      const amount = raw.amount
+      if (amount == null || !Number.isFinite(amount)) continue
+      totals.set(costId, (totals.get(costId) ?? 0) + amount)
+    }
+  }
+  return totals
+}
+
+/** True when assigned amounts cover the catalog quantity (null quantity = unlimited). */
+export function isCostQuantityFullyAllocated(
+  row: PmCostRow,
+  allocatedById: ReadonlyMap<string, number>,
+): boolean {
+  const qty = row.quantity
+  if (qty == null || !Number.isFinite(qty)) return false
+  if (qty <= 0) return true
+  const allocated = allocatedById.get(row.id) ?? 0
+  return allocated + 1e-9 >= qty
+}
+
+/** Display one assignment as `类型，名称，金额` (empty → blank). */
+export function formatCostAssignmentInput(
+  assignment: TaskCostAssignment,
+  typeLabel: (type: PmCostType) => string = (type) => type,
+): string {
   if (isEmptyCostAssignment(assignment)) return ''
+  const typePart = assignment.type ? typeLabel(assignment.type) : ''
   const namePart = assignment.name.trim()
   const amountPart = assignment.amount != null ? String(assignment.amount) : ''
-  return [namePart, amountPart].join('，')
+  return [typePart, namePart, amountPart].join('，')
 }
 
 /**
  * Join multiple assignments with `；` — no trailing semicolon.
- * Example: `材料费，1200；机械费，800`
+ * Example: `材料，水泥，1200；机械，塔吊，800`
  */
 export function formatCostAssignmentsInput(
   assignments: readonly TaskCostAssignment[],
+  typeLabel: (type: PmCostType) => string = (type) => type,
 ): string {
   return assignments
-    .map((entry) => formatCostAssignmentInput(entry))
+    .map((entry) => formatCostAssignmentInput(entry, typeLabel))
     .filter((part) => part.length > 0)
     .join('；')
 }
 
-/** Parse one `名称，金额` group (also accepts ASCII commas). */
-export function parseCostAssignmentInput(raw: string): TaskCostAssignment {
+/**
+ * Parse one `类型，名称，金额` (or legacy `名称，金额`) group.
+ * Resolves catalog rows by name (+ optional type) when possible.
+ */
+export function parseCostAssignmentInput(
+  raw: string,
+  catalog: readonly PmCostRow[] = [],
+  resolveTypeLabel: (label: string) => PmCostType | null = () => null,
+): TaskCostAssignment {
   const trimmed = raw.trim()
   if (!trimmed) return { ...EMPTY_TASK_COST_ASSIGNMENT }
 
   const parts = trimmed.split(/[,，]/u).map((part) => part.trim())
+  let type: PmCostType | null = null
+  let name = ''
+  let amount: number | null = null
+
   if (parts.length === 1) {
     const only = parts[0] ?? ''
     const asNumber = Number(only)
     if (only !== '' && Number.isFinite(asNumber) && /^-?\d/.test(only)) {
-      return { name: '', amount: asNumber }
+      return { ...EMPTY_TASK_COST_ASSIGNMENT, amount: asNumber }
     }
-    return { name: only, amount: null }
+    type = resolveTypeLabel(only) ?? (isPmCostType(only) ? only : null)
+    if (!type) name = only
+  } else if (parts.length === 2) {
+    const first = parts[0] ?? ''
+    const second = parts[1] ?? ''
+    const secondAsNumber = Number(second)
+    if (second !== '' && Number.isFinite(secondAsNumber) && /^-?\d/.test(second)) {
+      // Legacy: 名称，金额
+      name = first
+      amount = secondAsNumber
+    } else {
+      type = resolveTypeLabel(first) ?? (isPmCostType(first) ? first : null)
+      name = second
+    }
+  } else {
+    const typeRaw = parts[0] ?? ''
+    name = parts[1] ?? ''
+    const amountRaw = parts[2] ?? ''
+    type = resolveTypeLabel(typeRaw) ?? (isPmCostType(typeRaw) ? typeRaw : null)
+    if (amountRaw !== '') {
+      const parsed = Number(amountRaw)
+      amount = Number.isFinite(parsed) ? parsed : null
+    }
   }
 
-  const name = parts[0] ?? ''
-  const amountRaw = parts[1] ?? ''
-  let amount: number | null = null
-  if (amountRaw !== '') {
-    const parsed = Number(amountRaw)
-    amount = Number.isFinite(parsed) ? parsed : null
+  if (name) {
+    const canon = canonicalizeCostName(name)
+    const matched =
+      catalog.find(
+        (row) =>
+          canonicalizeCostName(row.name) === canon && (type == null || row.type === type),
+      ) ?? catalog.find((row) => canonicalizeCostName(row.name) === canon)
+    if (matched) {
+      return {
+        costId: matched.id,
+        type: matched.type,
+        name: matched.name,
+        amount,
+        note: '',
+      }
+    }
+    name = canon
   }
-  return { name, amount }
+
+  return {
+    costId: null,
+    type,
+    name,
+    amount,
+    note: '',
+  }
 }
 
 /**
- * Parse `名称，金额；名称，金额` (groups split on `;` / `；`).
+ * Parse `类型，名称，金额；…` (groups split on `;` / `；`).
  * Trailing semicolon is ignored.
  */
-export function parseCostAssignmentsInput(raw: string): TaskCostAssignment[] {
+export function parseCostAssignmentsInput(
+  raw: string,
+  catalog: readonly PmCostRow[] = [],
+  resolveTypeLabel: (label: string) => PmCostType | null = () => null,
+): TaskCostAssignment[] {
   const trimmed = raw.trim()
   if (!trimmed) return []
   return trimmed
     .split(/[;；]/u)
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
-    .map((part) => parseCostAssignmentInput(part))
+    .map((part) => parseCostAssignmentInput(part, catalog, resolveTypeLabel))
     .filter((entry) => !isEmptyCostAssignment(entry))
+}
+
+export function moveTaskCostAssignment(
+  assignments: readonly TaskCostAssignment[],
+  fromIndex: number,
+  toIndex: number,
+): TaskCostAssignment[] {
+  const list = assignments.map((entry) => ({ ...entry }))
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= list.length ||
+    toIndex >= list.length ||
+    fromIndex === toIndex
+  ) {
+    return list
+  }
+  const [entry] = list.splice(fromIndex, 1)
+  if (!entry) return list
+  list.splice(toIndex, 0, entry)
+  return list
+}
+
+/** Count non-empty cost assignments, optionally limited to one cost type. */
+export function countCostAssignmentsForTypeFilter(
+  assignments: readonly TaskCostAssignment[],
+  typeFilter: 'all' | PmCostType,
+): number {
+  let count = 0
+  for (const entry of assignments) {
+    if (isEmptyCostAssignment(entry)) continue
+    if (typeFilter !== 'all' && entry.type !== typeFilter) continue
+    count += 1
+  }
+  return count
+}
+
+/**
+ * Map a visible (filtered) slot index to the source cost-assignment index.
+ * When the display slot is beyond matching rows, returns `assignments.length` (append).
+ */
+export function resolveCostAssignSourceIndex(
+  assignments: readonly TaskCostAssignment[],
+  displaySlot: number,
+  typeFilter: 'all' | PmCostType,
+): number {
+  const slot = Math.max(0, Math.floor(displaySlot))
+  if (typeFilter === 'all') return slot
+  let matched = -1
+  for (let index = 0; index < assignments.length; index += 1) {
+    const entry = assignments[index]!
+    if (isEmptyCostAssignment(entry)) continue
+    if (entry.type !== typeFilter) continue
+    matched += 1
+    if (matched === slot) return index
+  }
+  return assignments.length
+}
+
+export function readCostAssignmentAtFilteredSlot(
+  assignments: readonly TaskCostAssignment[],
+  displaySlot: number,
+  typeFilter: 'all' | PmCostType,
+): TaskCostAssignment {
+  const sourceIndex = resolveCostAssignSourceIndex(assignments, displaySlot, typeFilter)
+  return assignments[sourceIndex] ?? { ...EMPTY_TASK_COST_ASSIGNMENT }
 }

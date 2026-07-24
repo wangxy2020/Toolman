@@ -11,12 +11,14 @@ import {
   IconChevronUp,
   IconIndent,
   IconInsertRow,
+  IconLink,
   IconOutdent,
   IconPlus,
   IconPrint,
   IconProjectInfo,
   IconRedo,
   IconSave,
+  IconSaveAsNewVersion,
   IconTrash,
   IconUndo,
 } from '../../../../components/icons'
@@ -25,13 +27,20 @@ import type { BaselineCompareMode } from './pm-gantt-baseline-compare'
 import { formatBaselineCaptureTime } from './pm-gantt-baseline-compare'
 import { formatWorkItemDate } from './pm-gantt-utils'
 import type { GanttScheduleView } from './pm-gantt-prefs'
+import {
+  GANTT_COST_ASSIGN_MENU_TYPES,
+  GANTT_RESOURCE_ASSIGN_MENU_TYPES,
+  type GanttAssignTypeFilter,
+} from './pm-gantt-prefs'
 
 const ICON_SIZE = 16
 
 export type GanttMenuAction =
   | 'save'
+  | 'saveAsNewVersion'
   | 'print'
   | 'projectInfo'
+  | 'link'
   | 'undo'
   | 'redo'
   | 'newTask'
@@ -48,6 +57,8 @@ export type GanttMenuAction =
   | 'deleteBaseline'
   | 'openResource'
   | 'openCost'
+  | 'autoAssignResource'
+  | 'autoAssignCost'
   | 'openAnalysis'
 
 export type GanttLeafTaskType = 'task' | 'milestone'
@@ -68,7 +79,15 @@ type MenuItem = {
   icon?: boolean
 }
 
-type DropdownKey = 'view' | 'type' | 'baseline' | 'analysis'
+type DropdownKey =
+  | 'view'
+  | 'type'
+  | 'baseline'
+  | 'node'
+  | 'resourceAssign'
+  | 'costAssign'
+  | 'smartAssign'
+  | 'analysis'
 
 interface Props {
   disabled?: boolean
@@ -80,6 +99,10 @@ interface Props {
   selectedTaskType: GanttLeafTaskType
   scheduleView: GanttScheduleView
   onScheduleViewChange: (view: GanttScheduleView) => void
+  resourceTypeFilter?: GanttAssignTypeFilter
+  costTypeFilter?: GanttAssignTypeFilter
+  onResourceTypeFilterChange?: (filter: GanttAssignTypeFilter) => void
+  onCostTypeFilterChange?: (filter: GanttAssignTypeFilter) => void
   baselines: Array<{
     id: string
     name: string
@@ -140,6 +163,10 @@ export function ProjectGanttMenuBar({
   selectedTaskType,
   scheduleView,
   onScheduleViewChange,
+  resourceTypeFilter = 'all',
+  costTypeFilter = 'all',
+  onResourceTypeFilterChange,
+  onCostTypeFilterChange,
   baselines,
   selectedBaselineId,
   onSelectBaseline,
@@ -156,6 +183,10 @@ export function ProjectGanttMenuBar({
   const viewRef = useRef<HTMLSpanElement>(null)
   const typeRef = useRef<HTMLSpanElement>(null)
   const baselineRef = useRef<HTMLSpanElement>(null)
+  const nodeRef = useRef<HTMLSpanElement>(null)
+  const resourceAssignRef = useRef<HTMLSpanElement>(null)
+  const costAssignRef = useRef<HTMLSpanElement>(null)
+  const smartAssignRef = useRef<HTMLSpanElement>(null)
   const analysisRef = useRef<HTMLSpanElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
@@ -163,6 +194,10 @@ export function ProjectGanttMenuBar({
   const viewPos = useDropdownPos(openMenu === 'view', viewRef)
   const typePos = useDropdownPos(openMenu === 'type', typeRef)
   const baselinePos = useDropdownPos(openMenu === 'baseline', baselineRef)
+  const nodePos = useDropdownPos(openMenu === 'node', nodeRef)
+  const resourceAssignPos = useDropdownPos(openMenu === 'resourceAssign', resourceAssignRef)
+  const costAssignPos = useDropdownPos(openMenu === 'costAssign', costAssignRef)
+  const smartAssignPos = useDropdownPos(openMenu === 'smartAssign', smartAssignRef)
   const analysisPos = useDropdownPos(openMenu === 'analysis', analysisRef)
 
   const syncScrollMetrics = () => {
@@ -206,6 +241,10 @@ export function ProjectGanttMenuBar({
         ['view', viewRef],
         ['type', typeRef],
         ['baseline', baselineRef],
+        ['node', nodeRef],
+        ['resourceAssign', resourceAssignRef],
+        ['costAssign', costAssignRef],
+        ['smartAssign', smartAssignRef],
         ['analysis', analysisRef],
       ]
       for (const [key, ref] of refs) {
@@ -229,6 +268,12 @@ export function ProjectGanttMenuBar({
       icon: true,
     },
     {
+      key: 'saveAsNewVersion',
+      title: t('projectManagerPage.schedule.menu.saveAsNewVersion'),
+      label: <IconSaveAsNewVersion size={ICON_SIZE} />,
+      icon: true,
+    },
+    {
       key: 'print',
       title: t('projectManagerPage.schedule.menu.print'),
       label: <IconPrint size={ICON_SIZE} />,
@@ -240,6 +285,14 @@ export function ProjectGanttMenuBar({
       label: <IconProjectInfo size={ICON_SIZE} />,
       icon: true,
       disabled: !hasProject,
+    },
+    {
+      key: 'link',
+      title: t('projectManagerPage.schedule.menu.link'),
+      label: <IconLink size={ICON_SIZE} />,
+      icon: true,
+      // Placeholder — feature not implemented yet.
+      disabled: true,
     },
     {
       key: 'undo',
@@ -321,9 +374,9 @@ export function ProjectGanttMenuBar({
       ? t('projectManagerPage.schedule.menu.setMilestone')
       : t('projectManagerPage.schedule.menu.setTask')
 
-  const leadingItems = items.slice(0, 8)
-  const hierarchyItems = items.slice(8, 10)
-  const moveItems = items.slice(10)
+  const leadingItems = items.slice(0, 9)
+  const hierarchyItems = items.slice(9, 11)
+  const moveItems = items.slice(11)
 
   const hideTip = () => setTooltip(null)
 
@@ -385,55 +438,45 @@ export function ProjectGanttMenuBar({
     key: DropdownKey,
     ref: React.RefObject<HTMLSpanElement | null>,
     label: string,
-    current?: string,
-    buttonDisabled = disabled,
-  ) => (
-    <span className="tm-pm-gantt-menubar-item tm-pm-gantt-view-menu" ref={ref}>
-      <button
-        type="button"
-        className="tm-pm-gantt-menubar-btn"
-        aria-label={label}
-        aria-disabled={buttonDisabled}
-        aria-expanded={openMenu === key}
-        onClick={() => {
-          if (buttonDisabled) return
-          hideTip()
-          toggleMenu(key)
-        }}
-        {...tipProps(label)}
-      >
-        <span>{label}</span>
-        {current ? <span className="tm-pm-gantt-view-current">{current}</span> : null}
-        <IconChevronDown size={14} />
-      </button>
-      <span className="tm-pm-gantt-menubar-divider" />
-    </span>
-  )
-
-  const renderNavButton = (action: GanttMenuAction, label: string, active = false) => (
-    <span className="tm-pm-gantt-menubar-item">
-      <button
-        type="button"
-        className={[
-          'tm-pm-gantt-menubar-btn',
-          active ? 'tm-pm-gantt-menubar-btn--active' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        aria-label={label}
-        aria-disabled={disabled}
-        onClick={() => {
-          if (disabled) return
-          hideTip()
-          onAction(action)
-        }}
-        {...tipProps(label)}
-      >
-        <span>{label}</span>
-      </button>
-      <span className="tm-pm-gantt-menubar-divider" />
-    </span>
-  )
+    options?: {
+      current?: string
+      active?: boolean
+      dividerAfter?: boolean
+      buttonDisabled?: boolean
+    },
+  ) => {
+    const buttonDisabled = options?.buttonDisabled ?? disabled
+    const dividerAfter = options?.dividerAfter !== false
+    return (
+      <span className="tm-pm-gantt-menubar-item tm-pm-gantt-view-menu" ref={ref}>
+        <button
+          type="button"
+          className={[
+            'tm-pm-gantt-menubar-btn',
+            options?.active ? 'tm-pm-gantt-menubar-btn--active' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-label={label}
+          aria-disabled={buttonDisabled}
+          aria-expanded={openMenu === key}
+          onClick={() => {
+            if (buttonDisabled) return
+            hideTip()
+            toggleMenu(key)
+          }}
+          {...tipProps(label)}
+        >
+          <span>{label}</span>
+          {options?.current ? (
+            <span className="tm-pm-gantt-view-current">{options.current}</span>
+          ) : null}
+          <IconChevronDown size={14} />
+        </button>
+        {dividerAfter ? <span className="tm-pm-gantt-menubar-divider" /> : null}
+      </span>
+    )
+  }
 
   const scrollToThumbOffset = (nextOffset: number) => {
     const el = scrollRef.current
@@ -492,7 +535,7 @@ export function ProjectGanttMenuBar({
               'view',
               viewRef,
               t('projectManagerPage.schedule.menu.view'),
-              viewLabelByMode[scheduleView],
+              { current: viewLabelByMode[scheduleView] },
             )}
             {openMenu === 'view' &&
               renderPanel(
@@ -586,8 +629,7 @@ export function ProjectGanttMenuBar({
               'baseline',
               baselineRef,
               t('projectManagerPage.schedule.menu.baseline'),
-              undefined,
-              disabled || structureLocked,
+              { buttonDisabled: disabled || structureLocked, dividerAfter: false },
             )}
             {openMenu === 'baseline' &&
               renderPanel(
@@ -749,16 +791,165 @@ export function ProjectGanttMenuBar({
                 </>,
               )}
 
-            {renderNavButton(
-              'openResource',
+            {renderMenuButton(
+              'node',
+              nodeRef,
+              t('projectManagerPage.schedule.menu.node'),
+              { buttonDisabled: disabled || structureLocked },
+            )}
+            {openMenu === 'node' &&
+              renderPanel(
+                nodePos,
+                <div className="tm-pm-gantt-submenu-empty">
+                  {t('projectManagerPage.schedule.menu.nodePlaceholder')}
+                </div>,
+              )}
+
+            {renderMenuButton(
+              'resourceAssign',
+              resourceAssignRef,
               t('projectManagerPage.schedule.menu.resource'),
-              scheduleView === 'resource',
+              {
+                active: scheduleView === 'resource',
+                dividerAfter: false,
+              },
             )}
-            {renderNavButton(
-              'openCost',
+            {openMenu === 'resourceAssign' &&
+              renderPanel(
+                resourceAssignPos,
+                <>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={scheduleView === 'resource' && resourceTypeFilter === 'all'}
+                    className={[
+                      'tm-pm-gantt-view-option',
+                      scheduleView === 'resource' && resourceTypeFilter === 'all'
+                        ? 'tm-pm-gantt-view-option--active'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      onResourceTypeFilterChange?.('all')
+                      setOpenMenu(null)
+                    }}
+                  >
+                    {t('projectManagerPage.schedule.menu.assignAll')}
+                  </button>
+                  {GANTT_RESOURCE_ASSIGN_MENU_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={scheduleView === 'resource' && resourceTypeFilter === type}
+                      className={[
+                        'tm-pm-gantt-view-option',
+                        scheduleView === 'resource' && resourceTypeFilter === type
+                          ? 'tm-pm-gantt-view-option--active'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        onResourceTypeFilterChange?.(type)
+                        setOpenMenu(null)
+                      }}
+                    >
+                      {t(`projectManagerPage.resourceTable.types.${type}`)}
+                    </button>
+                  ))}
+                </>,
+              )}
+            {renderMenuButton(
+              'costAssign',
+              costAssignRef,
               t('projectManagerPage.schedule.menu.cost'),
-              scheduleView === 'cost',
+              {
+                active: scheduleView === 'cost',
+                dividerAfter: false,
+              },
             )}
+            {openMenu === 'costAssign' &&
+              renderPanel(
+                costAssignPos,
+                <>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={scheduleView === 'cost' && costTypeFilter === 'all'}
+                    className={[
+                      'tm-pm-gantt-view-option',
+                      scheduleView === 'cost' && costTypeFilter === 'all'
+                        ? 'tm-pm-gantt-view-option--active'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      onCostTypeFilterChange?.('all')
+                      setOpenMenu(null)
+                    }}
+                  >
+                    {t('projectManagerPage.schedule.menu.assignAll')}
+                  </button>
+                  {GANTT_COST_ASSIGN_MENU_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={scheduleView === 'cost' && costTypeFilter === type}
+                      className={[
+                        'tm-pm-gantt-view-option',
+                        scheduleView === 'cost' && costTypeFilter === type
+                          ? 'tm-pm-gantt-view-option--active'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        onCostTypeFilterChange?.(type)
+                        setOpenMenu(null)
+                      }}
+                    >
+                      {t(`projectManagerPage.costTable.types.${type}`)}
+                    </button>
+                  ))}
+                </>,
+              )}
+            {renderMenuButton(
+              'smartAssign',
+              smartAssignRef,
+              t('projectManagerPage.schedule.menu.smartAssign'),
+            )}
+            {openMenu === 'smartAssign' &&
+              renderPanel(
+                smartAssignPos,
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tm-pm-gantt-view-option"
+                    onClick={() => {
+                      onAction('autoAssignResource')
+                      setOpenMenu(null)
+                    }}
+                  >
+                    {t('projectManagerPage.schedule.menu.autoAssignResource')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tm-pm-gantt-view-option"
+                    onClick={() => {
+                      onAction('autoAssignCost')
+                      setOpenMenu(null)
+                    }}
+                  >
+                    {t('projectManagerPage.schedule.menu.autoAssignCost')}
+                  </button>
+                </>,
+              )}
 
             {renderMenuButton(
               'analysis',

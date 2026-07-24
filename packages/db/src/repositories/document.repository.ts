@@ -393,10 +393,36 @@ export class DocumentRepository {
   }
 
   pruneOrphanedFileRegistry(workspaceId: string): number {
+    // Soft-deleted KBs may still own live documents (e.g. incomplete duplicate-KB cleanup).
+    // Soft-delete those documents first so the orphan query below can clear their registry rows.
+    const ghostKbIds = this.db
+      .selectDistinct({ id: knowledgeBases.id })
+      .from(knowledgeBases)
+      .innerJoin(documents, eq(documents.kbId, knowledgeBases.id))
+      .where(
+        and(
+          eq(knowledgeBases.workspaceId, workspaceId),
+          sql`${knowledgeBases.deletedAt} IS NOT NULL`,
+          isNull(documents.deletedAt),
+        ),
+      )
+      .all()
+      .map((row) => row.id)
+
+    for (const kbId of ghostKbIds) {
+      const documentIds = this.listActiveDocumentIdsByKb(kbId)
+      this.clearRegistryForDocumentIds(documentIds)
+      this.deleteIngestJobsByKb(kbId)
+      this.softDeleteAllChunksByKb(kbId)
+      this.softDeleteAllSourcesByKb(kbId)
+      this.softDeleteAllByKb(kbId)
+    }
+
     const orphans = this.db
       .select({ id: fileRegistry.id })
       .from(fileRegistry)
       .leftJoin(documents, eq(fileRegistry.documentId, documents.id))
+      .leftJoin(knowledgeBases, eq(documents.kbId, knowledgeBases.id))
       .where(
         and(
           eq(fileRegistry.workspaceId, workspaceId),
@@ -404,12 +430,13 @@ export class DocumentRepository {
             isNull(fileRegistry.documentId),
             isNull(documents.id),
             sql`${documents.deletedAt} IS NOT NULL`,
+            sql`${knowledgeBases.deletedAt} IS NOT NULL`,
           ),
         ),
       )
       .all()
 
-    if (orphans.length === 0) return 0
+    if (orphans.length === 0) return ghostKbIds.length > 0 ? 1 : 0
 
     const orphanIds = orphans.map((row) => row.id)
     this.db.delete(fileRegistry).where(inArray(fileRegistry.id, orphanIds)).run()

@@ -28,6 +28,7 @@ function row(
     id,
     type,
     name,
+    customTypeName = '',
     spec = '',
     unit = '人',
     pricingUnit,
@@ -46,6 +47,7 @@ function row(
   return {
     id,
     type,
+    customTypeName,
     name,
     spec,
     unit,
@@ -229,7 +231,7 @@ describe('upsertSharedResourceCatalog', () => {
 })
 
 describe('ensureDefaultResourcesInCatalog', () => {
-  it('appends missing device and budget defaults into an existing catalog', () => {
+  it('appends missing device defaults into an existing catalog without re-seeding budgets', () => {
     const existing = [
       row({ id: 'p1', type: 'labor', name: '普通工', unitPrice: 250 }),
     ]
@@ -238,15 +240,47 @@ describe('ensureDefaultResourcesInCatalog', () => {
     expect(ensured.rows.some((entry) => entry.type === 'device' && entry.name === '发电机')).toBe(
       true,
     )
-    expect(
-      ensured.rows.some((entry) => entry.type === 'investment' && entry.name === '投资估算'),
-    ).toBe(true)
-    expect(
-      ensured.rows.some((entry) => entry.type === 'costBudget' && entry.name === '成本预算'),
-    ).toBe(true)
+    expect(ensured.rows.some((entry) => entry.type === 'investment')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'designEstimate')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'constructionBudget')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'costBudget')).toBe(false)
     expect(ensured.rows.some((entry) => entry.type === 'labor' && entry.name === '普通工')).toBe(
       true,
     )
+  })
+
+  it('does not resurrect deleted budget defaults', () => {
+    const existing = [
+      row({ id: 'p1', type: 'labor', name: '普通工', unitPrice: 250 }),
+      row({ id: 'd1', type: 'device', name: '发电机', unit: '台', unitPrice: 600 }),
+      row({ id: 'i1', type: 'instrument', name: '全站仪', unit: '台', unitPrice: 400 }),
+      row({ id: 'i2', type: 'instrument', name: '水准仪', unit: '台', unitPrice: 150 }),
+      row({ id: 'i3', type: 'instrument', name: '塔尺', unit: '台', unitPrice: 30 }),
+      row({ id: 'a1', type: 'auxiliary', name: '模板', unit: 'm²', unitPrice: 50 }),
+      row({ id: 'a2', type: 'auxiliary', name: '方木', unit: 'm³', unitPrice: 1800 }),
+      row({ id: 'a3', type: 'auxiliary', name: '脚手架', unit: 't', unitPrice: 5000 }),
+      row({ id: 'm1', type: 'material', name: '砌块/砖', unit: 'm³', unitPrice: 280 }),
+      row({ id: 'm2', type: 'material', name: '防水卷材', unit: 'm²', unitPrice: 25 }),
+      row({ id: 'm3', type: 'material', name: '预拌砂浆', unit: 'm³', unitPrice: 450 }),
+      row({ id: 'm4', type: 'material', name: '电缆', unit: 'm', unitPrice: 20 }),
+      row({ id: 'm5', type: 'material', name: '钢管', unit: 't', unitPrice: 4800 }),
+    ]
+    const ensured = ensureDefaultResourcesInCatalog(existing)
+    expect(ensured.rows.some((entry) => entry.type === 'investment')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'costBudget')).toBe(false)
+  })
+
+  it('strips retired budget defaults from existing catalogs', () => {
+    const existing = [
+      row({ id: 'p1', type: 'labor', name: '普通工', unitPrice: 250 }),
+      row({ id: 'b1', type: 'investment', name: '投资估算', unit: '元', unitPrice: null }),
+      row({ id: 'b2', type: 'costBudget', name: '成本预算', unit: '元', unitPrice: null }),
+    ]
+    const ensured = ensureDefaultResourcesInCatalog(existing)
+    expect(ensured.changed).toBe(true)
+    expect(ensured.rows.some((entry) => entry.type === 'investment')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'costBudget')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.name === '普通工')).toBe(true)
   })
 
   it('maps legacy 普通工人 onto 普通工 and dedupes', () => {
@@ -285,7 +319,7 @@ describe('ensureDefaultResourcesInCatalog', () => {
     expect(result.rows[2]).toMatchObject({ unit: '台', pricingUnit: '台班' })
   })
 
-  it('does not re-seed budget types when already present', () => {
+  it('strips retired budget defaults instead of keeping them', () => {
     const existing = [
       row({ id: 'd1', type: 'device', name: '发电机', unit: '台班', unitPrice: 600 }),
       row({ id: 'b1', type: 'investment', name: '投资估算', unit: '元', unitPrice: null }),
@@ -305,7 +339,11 @@ describe('ensureDefaultResourcesInCatalog', () => {
       row({ id: 'm5', type: 'material', name: '钢管', unit: 't', unitPrice: 4800 }),
     ]
     const ensured = ensureDefaultResourcesInCatalog(existing)
-    expect(ensured.changed).toBe(false)
+    expect(ensured.changed).toBe(true)
+    expect(ensured.rows.some((entry) => entry.type === 'investment')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'designEstimate')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'constructionBudget')).toBe(false)
+    expect(ensured.rows.some((entry) => entry.type === 'costBudget')).toBe(false)
   })
 
   it('appends new instruments and materials into an existing catalog', () => {

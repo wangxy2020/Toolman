@@ -55,8 +55,14 @@ export function getSharedResourceCatalog(workspaceId: string): {
     const migratedAux = migrateAuxiliaryResources(stored)
     const migratedBudget = migrateBudgetResources(migratedAux.rows)
     const ensured = ensureMissingDefaultTypes(migratedBudget.rows)
-    if (migratedAux.changed || migratedBudget.changed || ensured.changed) {
-      const rows = ensured.rows
+    const stripped = stripRetiredBudgetDefaults(ensured.rows)
+    if (
+      migratedAux.changed ||
+      migratedBudget.changed ||
+      ensured.changed ||
+      stripped.changed
+    ) {
+      const rows = stripped.rows
       setSharedResourceCatalog(workspaceId, rows)
       return { rows, isDefault: false }
     }
@@ -162,10 +168,6 @@ function ensureMissingDefaultTypes(rows: PmSharedResourceCatalogRow[]): {
   const ensureTypes: ReadonlyArray<PmSharedResourceCatalogRow['type']> = [
     'auxiliary',
     'device',
-    'investment',
-    'designEstimate',
-    'constructionBudget',
-    'costBudget',
     'instrument',
   ]
   const ensureNames: ReadonlyArray<{ type: PmSharedResourceCatalogRow['type']; name: string }> = [
@@ -175,10 +177,6 @@ function ensureMissingDefaultTypes(rows: PmSharedResourceCatalogRow[]): {
     { type: 'auxiliary', name: '模板' },
     { type: 'auxiliary', name: '方木' },
     { type: 'auxiliary', name: '脚手架' },
-    { type: 'investment', name: '投资估算' },
-    { type: 'designEstimate', name: '设计概算' },
-    { type: 'constructionBudget', name: '施工预算' },
-    { type: 'costBudget', name: '成本预算' },
     { type: 'material', name: '砌块/砖' },
     { type: 'material', name: '防水卷材' },
     { type: 'material', name: '预拌砂浆' },
@@ -215,6 +213,28 @@ function ensureMissingDefaultTypes(rows: PmSharedResourceCatalogRow[]): {
   if (additions.length === 0) return { rows, changed: false }
   return {
     rows: [...rows, ...additions].map((row, index) => ({ ...row, sortOrder: index })),
+    changed: true,
+  }
+}
+
+const RETIRED_SHARED_BUDGET_DEFAULTS = new Set([
+  'investment::投资估算',
+  'designEstimate::设计概算',
+  'constructionBudget::施工预算',
+  'costBudget::成本预算',
+])
+
+function stripRetiredBudgetDefaults(rows: PmSharedResourceCatalogRow[]): {
+  rows: PmSharedResourceCatalogRow[]
+  changed: boolean
+} {
+  const next = rows.filter((row) => {
+    const name = canonicalizeSharedResourceName(row.name)
+    return !RETIRED_SHARED_BUDGET_DEFAULTS.has(`${row.type}::${name}`)
+  })
+  if (next.length === rows.length) return { rows, changed: false }
+  return {
+    rows: next.map((row, index) => ({ ...row, sortOrder: index })),
     changed: true,
   }
 }

@@ -11,6 +11,8 @@ export const PM_RESOURCE_SAVE_HISTORY_MAX = 5
 export type PmResourceCatalogSnapshotRow = {
   id: string
   type: string
+  /** User-defined type name when type is custom; optional for legacy snapshots. */
+  customTypeName?: string
   name: string
   spec: string
   unit: string
@@ -63,6 +65,7 @@ export function normalizeResourceCatalogSnapshot(
   return rows.map((row) => ({
     id: row.id,
     type: row.type,
+    customTypeName: typeof row.customTypeName === 'string' ? row.customTypeName : '',
     name: row.name,
     spec: typeof row.spec === 'string' ? row.spec : '',
     unit: row.unit,
@@ -83,6 +86,7 @@ function parseResourceCatalogSnapshot(raw: unknown): PmResourceCatalogSnapshotRo
     return {
       id: row.id,
       type: row.type,
+      customTypeName: typeof record.customTypeName === 'string' ? record.customTypeName : '',
       name: row.name,
       spec: typeof record.spec === 'string' ? record.spec : '',
       unit: row.unit,
@@ -227,12 +231,11 @@ export function buildMetadataForResourceVersionSwitch(
 /**
  * Build the next metadata patch after a successful resource-catalog save.
  *
- * New versions are created only when:
- * - there is no version yet (first save), or
- * - `contentFingerprint` differs from the last saved fingerprint, or
- * - `bumpVersion` is explicitly true
+ * - `bumpVersion: true`: always create a new version
+ * - `bumpVersion: false`: update current version only (first save still creates v1)
+ * - omitted: bump when content fingerprint changed (legacy)
  *
- * Unchanged content refreshes `lastSavedAt` on the current version only.
+ * Unchanged / non-bump saves refresh `lastSavedAt` on the current version.
  */
 export function buildResourceSaveMetadata(
   metadata: Record<string, unknown> | null | undefined,
@@ -262,7 +265,8 @@ export function buildResourceSaveMetadata(
       : !hasVersion
   const shouldBump =
     options.bumpVersion === true ||
-    (options.bumpVersion !== false && contentChanged)
+    !hasVersion ||
+    (options.bumpVersion == null && contentChanged)
   const catalog =
     options.catalog != null ? normalizeResourceCatalogSnapshot(options.catalog) : undefined
 

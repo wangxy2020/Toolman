@@ -17,7 +17,7 @@ const VISION_MODEL =
   /vision|vl-|vl_|4o|gemini.*vision|llava|minicpm-v|qwen.*vl|gpt-4o|gpt-4-turbo|claude-3|glm-4v|glm[-_]ocr/i
 const REASONING_MODEL =
   /o1|o3|reason|r1|think|deepseek-reasoner|qwen3|gemma|deepseek-r|o\d-/i
-const TOOL_MODEL = /gpt-|claude|gemma|qwen|deepseek|moonshot|glm|chat|instruct|sonnet|haiku|opus/i
+const TOOL_MODEL = /gpt-|claude|gemma|qwen|deepseek|moonshot|kimi|glm|chat|instruct|sonnet|haiku|opus/i
 const RERANK_MODEL = /rerank|bge-reranker/i
 const WEB_MODEL = /search|online|browse/i
 

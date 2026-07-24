@@ -7,6 +7,10 @@ import {
   formatProjectResourceCatalogAgentBlock,
   type PmAgentProjectResourceCatalogSummary,
 } from './pm-resource-catalog-agent.js'
+import {
+  formatProjectCostCatalogAgentBlock,
+  type PmAgentProjectCostCatalogSummary,
+} from './pm-cost-catalog-agent.js'
 
 export type PmAgentDataSource = 'mock' | 'sqlite'
 
@@ -23,8 +27,16 @@ export type PmAgentSnapshot = {
   resourceCatalogSummary?: string
   /** Per-project catalogs (system defaults + user-owned / shared-fallback). */
   projectResourceCatalogSummaries?: PmAgentProjectResourceCatalogSummary[]
+  /** Markdown bullet list of「全部项目」cost/price-list catalog rows. */
+  costCatalogSummary?: string
+  /** Per-project price lists (system defaults + user-owned / shared-fallback). */
+  projectCostCatalogSummaries?: PmAgentProjectCostCatalogSummary[]
+  /** Markdown bullet list of「全部项目」feature (实务目录) catalog rows. */
+  featureCatalogSummary?: string
   /** Sample schedule leaf/task titles for resource-plan matching. */
   scheduleTaskTitles?: string[]
+  /** Sample schedule leaf/task id+title (+code) refs; preferred over titles for agent matching. */
+  scheduleTaskRefs?: Array<{ id: string; title: string; code?: string }>
 }
 
 export function resolvePmDomainForAgentTab(
@@ -84,14 +96,45 @@ export function buildPmAgentPortfolioSummary(snapshot: PmAgentSnapshot): string 
     snapshot.projectResourceCatalogSummaries ?? [],
   )
 
-  const taskBlock =
-    snapshot.scheduleTaskTitles != null && snapshot.scheduleTaskTitles.length > 0
+  const costCatalogBlock =
+    snapshot.costCatalogSummary != null && snapshot.costCatalogSummary.trim()
       ? [
           '',
-          '### 计划任务名称（用于资源用量匹配）',
-          ...snapshot.scheduleTaskTitles.slice(0, 60).map((title) => `- ${title}`),
+          '### 全部项目适用的价格表（系统默认 · 权威数据源）',
+          '说明：下列条目即为工作区「全部项目」价格表（类型/编码/名称/单位/数量/单价/分部工程/说明）。智能体应直接据此分析，不要到工作目录找文件。',
+          snapshot.costCatalogSummary.trim(),
         ]
       : []
+
+  const projectCostCatalogBlock = formatProjectCostCatalogAgentBlock(
+    snapshot.projectCostCatalogSummaries ?? [],
+  )
+
+  const featureCatalogBlock =
+    snapshot.featureCatalogSummary != null && snapshot.featureCatalogSummary.trim()
+      ? [
+          '',
+          '### 全部项目适用的实务目录（系统默认 · 权威数据源）',
+          snapshot.featureCatalogSummary.trim(),
+        ]
+      : []
+
+  const taskBlock =
+    snapshot.scheduleTaskRefs != null && snapshot.scheduleTaskRefs.length > 0
+      ? [
+          '',
+          '### 计划任务列表（用于资源/成本用量匹配，请优先使用 id）',
+          ...snapshot.scheduleTaskRefs
+            .slice(0, 60)
+            .map((task) => `- ${task.id} · ${task.title}${task.code ? ` · ${task.code}` : ''}`),
+        ]
+      : snapshot.scheduleTaskTitles != null && snapshot.scheduleTaskTitles.length > 0
+        ? [
+            '',
+            '### 计划任务名称（用于资源用量匹配）',
+            ...snapshot.scheduleTaskTitles.slice(0, 60).map((title) => `- ${title}`),
+          ]
+        : []
 
   const projectLines = records.slice(0, 12).map((project) => {
     if (tab === 'cost_management') {
@@ -115,6 +158,9 @@ export function buildPmAgentPortfolioSummary(snapshot: PmAgentSnapshot): string 
     ...projectLines,
     ...catalogBlock,
     ...(projectCatalogBlock ? ['', projectCatalogBlock] : []),
+    ...costCatalogBlock,
+    ...(projectCostCatalogBlock ? ['', projectCostCatalogBlock] : []),
+    ...featureCatalogBlock,
     ...taskBlock,
   ].join('\n')
 }

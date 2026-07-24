@@ -40,8 +40,12 @@ export async function selectFiles(input: unknown) {
   const result = await dialog.showOpenDialog(win ?? undefined, {
     properties: data.multiple === false ? ['openFile'] : ['openFile', 'multiSelections'],
     defaultPath: resolveDefaultPath(data.defaultPath),
-    title: '选择文件',
-    buttonLabel: '选择',
+    title: data.title ?? '选择文件',
+    buttonLabel: data.buttonLabel ?? '选择',
+    filters: data.filters?.map((filter) => ({
+      name: filter.name,
+      extensions: filter.extensions,
+    })),
   })
 
   const paths = result.canceled ? [] : result.filePaths

@@ -9,8 +9,6 @@ import type { ProjectDashboardVariant } from './dashboard/dashboard-types'
 import { ProjectCard } from './dashboard/ProjectCard'
 import { usePmDashboardData } from './dashboard/usePmDashboardData'
 
-export type { ProjectDashboardVariant } from './dashboard/dashboard-types'
-
 interface Props {
   workspaceId?: string
   variant: ProjectDashboardVariant

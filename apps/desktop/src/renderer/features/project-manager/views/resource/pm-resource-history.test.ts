@@ -8,6 +8,7 @@ function row(partial: Partial<PmResourceRow> & Pick<PmResourceRow, 'id' | 'name'
   return {
     id: partial.id,
     type: partial.type ?? 'labor',
+    customTypeName: partial.customTypeName ?? '',
     name: partial.name,
     spec: partial.spec ?? '',
     unit,

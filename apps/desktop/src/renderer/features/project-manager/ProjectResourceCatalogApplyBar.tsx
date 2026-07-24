@@ -11,6 +11,10 @@ import { useI18n } from '../../i18n/useI18n'
 import { getMessageText } from '../chat/message-utils'
 import { pmApi } from './pm-api'
 import {
+  isPmAgentApplyDiscarded,
+  markPmAgentApplyDiscarded,
+} from './pm-agent-apply-discard'
+import {
   readSharedResourceCatalog,
   writeSharedResourceCatalog,
   type PmResourceRow,
@@ -61,6 +65,7 @@ export function ProjectResourceCatalogApplyBar({
   const { t } = useI18n()
   const [applying, setApplying] = useState(false)
   const [localApplied, setLocalApplied] = useState(false)
+  const [discarded, setDiscarded] = useState(false)
   const applyingRef = useRef(false)
 
   const lastAssistant = useMemo(() => {
@@ -85,9 +90,17 @@ export function ProjectResourceCatalogApplyBar({
   useEffect(() => {
     if (!workspaceId || !fingerprint) {
       setLocalApplied(false)
+      setDiscarded(false)
       return
     }
     setLocalApplied(readAppliedSet(workspaceId).has(fingerprint))
+    setDiscarded(isPmAgentApplyDiscarded(workspaceId, 'resourceCatalog', fingerprint))
+  }, [fingerprint, workspaceId])
+
+  const handleDiscard = useCallback(() => {
+    if (!fingerprint) return
+    markPmAgentApplyDiscarded(workspaceId, 'resourceCatalog', fingerprint)
+    setDiscarded(true)
   }, [fingerprint, workspaceId])
 
   const syncSharedLocal = useCallback(async () => {
@@ -99,6 +112,7 @@ export function ProjectResourceCatalogApplyBar({
           (row): PmResourceRow => ({
             id: row.id,
             type: row.type,
+            customTypeName: row.customTypeName ?? '',
             name: row.name,
             spec: row.spec ?? '',
             unit: row.unit,
@@ -166,23 +180,47 @@ export function ProjectResourceCatalogApplyBar({
 
   if (!lastAssistant || !hasSuggestion) return null
 
+  if (discarded) return null
+
   if (localApplied) {
     return (
-      <span className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--done">
-        {t('projectManagerPage.agent.applyResourceCatalogDone')}
+      <span className="tm-pm-agent-apply-actions">
+        <span className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--done">
+          {t('projectManagerPage.agent.applyResourceCatalogDone')}
+        </span>
+        <button
+          type="button"
+          className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
+          title={t('projectManagerPage.agent.applyDiscard')}
+          onClick={handleDiscard}
+        >
+          {t('projectManagerPage.agent.applyDiscard')}
+        </button>
       </span>
     )
   }
 
   const count = patchOpCount(patches)
   return (
-    <button
-      type="button"
-      className="tm-pm-agent-apply-text-btn"
-      title={t('projectManagerPage.agent.applyResourceCatalog', { count: String(count) })}
-      disabled={applying}
-      onClick={() => void handleApply()}>
-      {applying ? '…' : t('projectManagerPage.agent.applyConfirm')}
-    </button>
+    <span className="tm-pm-agent-apply-actions">
+      <button
+        type="button"
+        className="tm-pm-agent-apply-text-btn"
+        title={t('projectManagerPage.agent.applyResourceCatalog', { count: String(count) })}
+        disabled={applying}
+        onClick={() => void handleApply()}
+      >
+        {applying ? '…' : t('projectManagerPage.agent.applyConfirm')}
+      </button>
+      <button
+        type="button"
+        className="tm-pm-agent-apply-text-btn tm-pm-agent-apply-text-btn--muted"
+        title={t('projectManagerPage.agent.applyDiscard')}
+        disabled={applying}
+        onClick={handleDiscard}
+      >
+        {t('projectManagerPage.agent.applyDiscard')}
+      </button>
+    </span>
   )
 }

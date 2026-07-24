@@ -171,38 +171,3 @@ export function computeProgressLineStubs(input: {
 
   return { stubs, statusLeftPercent }
 }
-
-/** @deprecated Prefer computeProgressLineStubs */
-export function computeProgressLinePoints(input: {
-  rows: ReadonlyArray<{ item: PmWorkItem; hasChildren: boolean }>
-  baselineByItemId: ReadonlyMap<string, { startDate?: number; dueDate?: number }>
-  statusDateMs: number
-  rangeStart: number
-  rangeEnd: number
-}): {
-  points: Array<{
-    itemId: string
-    y: number
-    leftPercent: number
-    variancePct: number
-  }>
-  statusLeftPercent: number
-} {
-  const { stubs, statusLeftPercent } = computeProgressLineStubs(input)
-  return {
-    statusLeftPercent,
-    points: stubs.map((stub) => ({
-      itemId: stub.itemId,
-      y: stub.y,
-      leftPercent: stub.tipLeftPercent,
-      variancePct: stub.variancePct,
-    })),
-  }
-}
-
-export function progressLinePolylinePoints(
-  points: ReadonlyArray<{ leftPercent: number; y: number }>,
-): string {
-  if (points.length === 0) return ''
-  return points.map((point) => `${point.leftPercent},${point.y}`).join(' ')
-}

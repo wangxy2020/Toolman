@@ -52,6 +52,7 @@ import {
 } from './pm-domain-config'
 import ProjectTimeEntryPanel from './views/time/ProjectTimeEntryPanel'
 import ProjectResourceTablePanel from './views/resource/ProjectResourceTablePanel'
+import ProjectCostTablePanel from './views/cost/ProjectCostTablePanel'
 
 const HEADER_PROJECT_VIEWS = new Set<ProjectManagerPanelView>([
   'agent',
@@ -60,6 +61,7 @@ const HEADER_PROJECT_VIEWS = new Set<ProjectManagerPanelView>([
   'gantt',
   'calendar',
   'resource_table',
+  'cost_table',
 ])
 
 interface Props {
@@ -261,6 +263,8 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     if (activeTab === 'resource_management') {
       setSelectedProjectId(null)
     }
+    // Unmount heavy editors on sidebar switch. Catalog leave-save flushes on unmount
+    // via usePmCatalogAutoSave — do not keep all tables alive (causes input lag).
     setMountedViews(new Set<ProjectManagerPanelView>(['stats']))
   }, [activeTab])
 
@@ -525,6 +529,10 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     panelView === 'resource_table' &&
     activeTab === 'resource_management' &&
     workspaceId != null
+  const showCostTablePanel =
+    panelView === 'cost_table' &&
+    activeTab === 'cost_management' &&
+    workspaceId != null
   const showFeaturesPanel =
     panelView === 'files' &&
     workspaceId != null &&
@@ -566,7 +574,8 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
     panelView !== 'gantt' &&
     panelView !== 'calendar' &&
     panelView !== 'time_entries' &&
-    panelView !== 'resource_table' ? (
+    panelView !== 'resource_table' &&
+    panelView !== 'cost_table' ? (
       <div className="tm-kb-file-panel-empty">
         <p>
           {isProgressScheduleView(panelView)
@@ -726,6 +735,27 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         </div>
       ) : null}
 
+      {activeTab === 'cost_management' &&
+      workspaceId &&
+      mountedViews.has('cost_table') ? (
+        <div
+          className={[
+            'tm-module-content',
+            'tm-pm-gantt-content',
+            showCostTablePanel ? '' : 'tm-pm-view-hidden',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!showCostTablePanel}>
+          <ProjectCostTablePanel
+            workspaceId={workspaceId}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onProjectsChange={reloadProjectsAndDashboard}
+          />
+        </div>
+      ) : null}
+
       {createProjectOpen && createProjectDefaults ? (
         <ProjectInfoDialog
           mode="create"
@@ -743,14 +773,14 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         className={[
           'tm-module-content',
           'tm-community-module-content',
-          showAgentPanel || showGanttPanel || showResourceTablePanel || showFeaturesPanel
+          showAgentPanel || showGanttPanel || showResourceTablePanel || showCostTablePanel || showFeaturesPanel
             ? 'tm-pm-view-hidden'
             : '',
         ]
           .filter(Boolean)
           .join(' ')}
         aria-hidden={
-          showAgentPanel || showGanttPanel || showResourceTablePanel || showFeaturesPanel
+          showAgentPanel || showGanttPanel || showResourceTablePanel || showCostTablePanel || showFeaturesPanel
         }>
         <ProjectManagerPanelShell
           title={activeMenuLabel}
@@ -771,6 +801,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       {!showAgentPanel &&
       !showGanttPanel &&
       !showResourceTablePanel &&
+      !showCostTablePanel &&
       !showFeaturesPanel ? (
         <ModulePageStatusBar />
       ) : null}

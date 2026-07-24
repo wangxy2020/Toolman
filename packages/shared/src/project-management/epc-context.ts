@@ -11,6 +11,8 @@ import {
 import { PM_AGENT_OUTPUT_STYLE_GUIDE } from './pm-agent-output-style.js'
 import { PM_RESOURCE_PLAN_OUTPUT_HINT } from './pm-resource-apply.js'
 import { PM_RESOURCE_CATALOG_PATCH_OUTPUT_HINT } from './pm-resource-catalog-agent.js'
+import { PM_COST_PLAN_OUTPUT_HINT } from './pm-cost-apply.js'
+import { PM_COST_CATALOG_PATCH_OUTPUT_HINT } from './pm-cost-catalog-agent.js'
 
 function formatEpcStatus(status: EpcProjectRecord['status']): string {
   switch (status) {
@@ -88,6 +90,8 @@ export function buildProjectManagementRuntimeHint(
       `当前话题：${sessionTitle}。优先围绕 合同、结算、待支付、成本偏差与付款节奏 作答。`,
       dataSourceNote,
       portfolioSummary,
+      PM_COST_PLAN_OUTPUT_HINT,
+      PM_COST_CATALOG_PATCH_OUTPUT_HINT,
       '若用户上传 Excel/Word 或要求生成报表，可使用已启用的 MCP 工具处理工作目录中的项目文件。',
     ].join('\n\n')
   }
@@ -95,11 +99,12 @@ export function buildProjectManagementRuntimeHint(
   if (tab === 'progress_management') {
     return [
       '## 项目管理（EPC）工作上下文',
-      `当前话题：${sessionTitle}。优先围绕 进度、里程碑、计划阶段、周期、依赖关系、滞后风险与任务资源用量 作答。`,
+      `当前话题：${sessionTitle}。优先围绕 进度、里程碑、计划阶段、周期、依赖关系、滞后风险与任务资源/成本用量 作答。`,
       dataSourceNote,
       portfolioSummary,
       PM_RESOURCE_PLAN_OUTPUT_HINT,
       PM_RESOURCE_CATALOG_PATCH_OUTPUT_HINT,
+      PM_COST_PLAN_OUTPUT_HINT,
       '若用户上传 Excel/Word 或要求生成报表，可使用已启用的 MCP 工具处理工作目录中的项目文件。',
     ].join('\n\n')
   }

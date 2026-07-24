@@ -53,6 +53,14 @@ import {
   setSharedResourceCatalogIpc,
   upsertSharedResourceCatalogIpc,
 } from '../../../services/project-management/pm-shared-resource-catalog.service'
+import { applyPmCostPlanSuggestions } from '../../../services/project-management/pm-cost-apply.service'
+import { applyPmCostCatalogPatches } from '../../../services/project-management/pm-cost-catalog-apply.service'
+import {
+  getSharedCostCatalogIpc,
+  setSharedCostCatalogIpc,
+  upsertSharedCostCatalogIpc,
+} from '../../../services/project-management/pm-shared-cost-catalog.service'
+import { smartAssignPmWorkItems } from '../../../services/project-management/pm-smart-assign.service'
 import type { HandlerFn } from './types'
 
 export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
@@ -96,4 +104,11 @@ export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     ipcOk(setSharedResourceCatalogIpc(input)),
   [IpcChannel.Pm_SharedResourceCatalogUpsert]: async (input) =>
     ipcOk(upsertSharedResourceCatalogIpc(input)),
+  [IpcChannel.Pm_WorkItemApplyCostPlan]: async (input) => ipcOk(applyPmCostPlanSuggestions(input)),
+  [IpcChannel.Pm_ApplyCostCatalogPatch]: async (input) => ipcOk(applyPmCostCatalogPatches(input)),
+  [IpcChannel.Pm_SharedCostCatalogGet]: async (input) => ipcOk(getSharedCostCatalogIpc(input)),
+  [IpcChannel.Pm_SharedCostCatalogSet]: async (input) => ipcOk(setSharedCostCatalogIpc(input)),
+  [IpcChannel.Pm_SharedCostCatalogUpsert]: async (input) =>
+    ipcOk(upsertSharedCostCatalogIpc(input)),
+  [IpcChannel.Pm_WorkItemSmartAssign]: async (input) => ipcOk(smartAssignPmWorkItems(input)),
 }

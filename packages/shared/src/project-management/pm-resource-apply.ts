@@ -18,6 +18,7 @@ export const PmAgentResourceTypeSchema = z.enum([
   'constructionBudget',
   'costBudget',
   'funds',
+  'custom',
   'other',
 ])
 
@@ -30,7 +31,7 @@ export const PM_AGENT_RESOURCE_TYPE_LABELS: Record<PmAgentResourceType, string> 
   equipment: '机械',
   device: '设备',
   instrument: '仪器',
-  management: '管理',
+  management: '管理费',
   fees: '规费',
   comprehensive: '综合单价',
   measures: '措施费',
@@ -40,7 +41,8 @@ export const PM_AGENT_RESOURCE_TYPE_LABELS: Record<PmAgentResourceType, string> 
   constructionBudget: '施工预算',
   costBudget: '成本预算',
   funds: '资金',
-  other: '其他',
+  custom: '自定义',
+  other: '其他费',
 }
 
 export function resolvePmAgentResourceTypeLabel(label: string): PmAgentResourceType | null {
@@ -49,6 +51,8 @@ export function resolvePmAgentResourceTypeLabel(label: string): PmAgentResourceT
   if ((PmAgentResourceTypeSchema.options as readonly string[]).includes(trimmed)) {
     return trimmed as PmAgentResourceType
   }
+  if (trimmed === '其他') return 'other'
+  if (trimmed === '管理') return 'management'
   for (const [type, zh] of Object.entries(PM_AGENT_RESOURCE_TYPE_LABELS) as Array<
     [PmAgentResourceType, string]
   >) {
@@ -70,10 +74,16 @@ export const PmResourceAssignmentSuggestionSchema = z.object({
 
 export type PmResourceAssignmentSuggestion = z.infer<typeof PmResourceAssignmentSuggestionSchema>
 
-export const PmResourceTaskPlanSuggestionSchema = z.object({
-  workItemTitle: z.string().min(1),
-  assignments: z.array(PmResourceAssignmentSuggestionSchema).min(1),
-})
+export const PmResourceTaskPlanSuggestionSchema = z
+  .object({
+    workItemId: z.string().uuid().optional(),
+    workItemCode: z.string().optional(),
+    workItemTitle: z.string().min(1).optional(),
+    assignments: z.array(PmResourceAssignmentSuggestionSchema).min(1),
+  })
+  .refine((value) => value.workItemId != null || value.workItemTitle != null, {
+    message: 'workItemId or workItemTitle is required',
+  })
 
 export type PmResourceTaskPlanSuggestion = z.infer<typeof PmResourceTaskPlanSuggestionSchema>
 
@@ -223,6 +233,8 @@ function normalizeTaskSuggestion(entry: unknown): unknown {
     ? assignmentsRaw.map((item) => normalizeAssignmentSuggestion(item))
     : []
   return {
+    workItemId: row.workItemId ?? row.taskId ?? row.id,
+    workItemCode: row.workItemCode ?? row.taskCode ?? row.code ?? row.wbsCode,
     workItemTitle: row.workItemTitle ?? row.title ?? row.taskTitle ?? row.task,
     assignments,
   }
@@ -297,7 +309,9 @@ export function buildPmResourcePlanFingerprint(
 ): string {
   return JSON.stringify(
     suggestions.map((task) => ({
-      workItemTitle: task.workItemTitle.trim(),
+      workItemId: task.workItemId ?? null,
+      workItemCode: task.workItemCode?.trim() ?? null,
+      workItemTitle: task.workItemTitle?.trim() ?? null,
       assignments: task.assignments.map((entry) => ({
         type: entry.type ?? resolvePmAgentResourceTypeLabel(entry.typeLabel ?? '') ?? null,
         name: entry.name.trim(),
@@ -333,14 +347,15 @@ export const PM_RESOURCE_PLAN_OUTPUT_HINT = [
   '{',
   '  "resourcePlan": [',
   '    {',
-  '      "workItemTitle": "与甘特任务名称一致的叶子任务",',
+  '      "workItemId": "优先填写下方任务列表中的任务 id（uuid）",',
+  '      "workItemTitle": "无法确定 id 时，填写与甘特任务名称一致的叶子任务作为兜底",',
   '      "assignments": [',
   '        { "type": "labor", "name": "普通工", "quantity": 20, "unit": "工日" }',
   '      ]',
   '    }',
   '  ]',
   '}',
-  'type 可用：labor/auxiliary/material/equipment/device/instrument/management/fees/comprehensive/measures/tax/investment/designEstimate/constructionBudget/costBudget/funds/other（或中文：人力/辅材/材料/机械/设备/仪器/管理/规费/综合单价/措施费/税金/投资估算/设计概算/施工预算/成本预算/资金/其他）。',
+  'type 可用：labor/auxiliary/material/equipment/device/instrument/funds/custom/management/fees/comprehensive/measures/other/tax/investment/designEstimate/constructionBudget/costBudget（或中文：人力/辅材/材料/机械/设备/仪器/资金/自定义/管理费/规费/综合单价/措施费/其他费/税金/投资估算/设计概算/施工预算/成本预算）。',
   '名称尽量使用资源列表中的现有名称；若需新增，仍输出该名称，系统确认后会写入「全部项目」资源列表。',
   '同一任务再次应用时按资源名称合并数量，不会无故清空其他资源。',
 ].join('\n')

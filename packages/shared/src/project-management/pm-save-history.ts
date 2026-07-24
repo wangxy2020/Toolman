@@ -211,9 +211,10 @@ export function resolvePmPlanApplyAction(options: {
 /**
  * Build the next metadata patch after a successful schedule save.
  *
- * - `bumpVersion: true` (default when pending agent revision, or first save with no
- *   schedule version yet): new version + history entry
- * - otherwise: keep current version, refresh `lastSavedAt` / current history row
+ * - `bumpVersion: true`: always create a new version + history entry
+ * - `bumpVersion: false`: update current version only (first save with no version
+ *   still creates v1 so there is a version pointer to update)
+ * - omitted: legacy — bump on first save or pending agent revision
  *
  * Clears {@link PM_PENDING_AGENT_REVISION_KEY}. Caps history at {@link PM_SAVE_HISTORY_MAX}.
  */
@@ -236,11 +237,13 @@ export function buildScheduleSaveMetadata(
     options.totalDurationDays != null && Number.isFinite(options.totalDurationDays)
       ? Math.max(0, Math.floor(options.totalDurationDays))
       : undefined
-  // First Gantt save (manual or agent) must create version 1 + a history row.
-  // Otherwise manually built plans only stamp lastSavedAt with an empty save record list.
+  const maxVersion = readMaxScheduleVersion(base)
+  // First save always creates v1. Explicit true always bumps. Explicit false never
+  // bumps after v1. Omitted keeps legacy agent-pending auto-bump for callers/tests.
   const shouldBump =
-    options.bumpVersion ??
-    (readPendingAgentScheduleRevision(base) || readMaxScheduleVersion(base) === 0)
+    options.bumpVersion === true ||
+    maxVersion === 0 ||
+    (options.bumpVersion == null && readPendingAgentScheduleRevision(base))
 
   // Explicit false so shallow-merge updateProject clears a previous true flag.
   base[PM_PENDING_AGENT_REVISION_KEY] = false

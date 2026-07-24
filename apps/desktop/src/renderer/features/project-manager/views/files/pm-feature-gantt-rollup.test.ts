@@ -15,6 +15,7 @@ import {
   formatMonthKey,
   formatRollupMonthQuantity,
   groupMonthKeysByYear,
+  resourceTypeToFeatureType,
 } from './pm-feature-gantt-rollup'
 
 function makeItem(
@@ -74,7 +75,12 @@ describe('pm-feature-gantt-rollup', () => {
     expect(featureTypeToResourceType('auxiliary')).toBe('auxiliary')
     expect(featureTypeToResourceType('material')).toBe('material')
     expect(featureTypeToResourceType('machinery')).toBe('equipment')
+    expect(featureTypeToResourceType('device')).toBe('device')
+    expect(featureTypeToResourceType('instrument')).toBe('instrument')
     expect(featureTypeToResourceType('procurement')).toBeNull()
+    expect(resourceTypeToFeatureType('equipment')).toBe('machinery')
+    expect(resourceTypeToFeatureType('device')).toBe('device')
+    expect(resourceTypeToFeatureType('instrument')).toBe('instrument')
   })
 
   it('peaks labor and sums material; derives start/finish by type+name', () => {
@@ -208,7 +214,7 @@ describe('pm-feature-gantt-rollup', () => {
     expect(longTask.monthly[formatMonthKey(2026, 7)]).toBe(10)
     expect(longTask.quantity).toBe(10)
 
-    // Auxiliary and machinery also use peak, not cumulative sum.
+    // Auxiliary keeps stacking peak (sum concurrent). Machinery does not stack.
     const auxFeatures = [makeFeature('a1', 'auxiliary', '模板')]
     const auxSequential = computeFeatureGanttRollups(
       [
@@ -248,6 +254,27 @@ describe('pm-feature-gantt-rollup', () => {
       machFeatures,
     ).get('m1')!
     expect(machSequential.quantity).toBe(3)
+
+    // Overlapping critical + normal work: take max (2), not sum (2+3=5).
+    const machOverlap = computeFeatureGanttRollups(
+      [
+        makeItem(
+          't1',
+          new Date(2026, 7, 1).getTime(),
+          new Date(2026, 7, 15).getTime(),
+          [{ type: 'equipment', name: '挖掘机', quantity: 2 }],
+        ),
+        makeItem(
+          't2',
+          new Date(2026, 7, 10).getTime(),
+          new Date(2026, 7, 20).getTime(),
+          [{ type: 'equipment', name: '挖掘机', quantity: 3 }],
+        ),
+      ],
+      machFeatures,
+    ).get('m1')!
+    expect(machOverlap.quantity).toBe(3)
+    expect(machOverlap.monthly[formatMonthKey(2026, 7)]).toBe(3)
   })
 
   it('keeps day-weighted month allocation for material (cumulative)', () => {
@@ -324,6 +351,7 @@ describe('pm-feature-gantt-rollup', () => {
       {
         id: 'c1',
         type: 'labor' as const,
+        customTypeName: '',
         name: '普通工',
         unit: '人',
         pricingUnit: '工日',
@@ -337,6 +365,7 @@ describe('pm-feature-gantt-rollup', () => {
       {
         id: 'c2',
         type: 'equipment' as const,
+        customTypeName: '',
         name: '挖掘机',
         unit: '台',
         pricingUnit: '台班',

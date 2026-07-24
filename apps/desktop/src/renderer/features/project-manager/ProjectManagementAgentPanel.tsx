@@ -24,6 +24,8 @@ import {
   resolvePlanSlashCommand,
 } from './planManagementQuickPhrases'
 import { PM_PLAN_SLASH_COMMANDS } from './pm-plan-slash-commands'
+import { ProjectCostCatalogApplyBar } from './ProjectCostCatalogApplyBar'
+import { ProjectCostPlanApplyBar } from './ProjectCostPlanApplyBar'
 import { ProjectPlanAgentApplyBar } from './ProjectPlanAgentApplyBar'
 import { ProjectResourceCatalogApplyBar } from './ProjectResourceCatalogApplyBar'
 import { ProjectResourcePlanApplyBar } from './ProjectResourcePlanApplyBar'
@@ -130,7 +132,6 @@ export function ProjectManagementAgentPanel({
             messages={chat.messages}
             projects={projects}
             selectedProjectId={selectedProjectId}
-            pendingBrief={null}
             onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
             onProjectsChange={onProjectsChange}
           />
@@ -147,6 +148,23 @@ export function ProjectManagementAgentPanel({
         ) : null}
         {applyKinds.includes('resourceCatalog') ? (
           <ProjectResourceCatalogApplyBar
+            workspaceId={workspaceId}
+            messages={chat.messages}
+            onProjectsChange={onProjectsChange}
+          />
+        ) : null}
+        {applyKinds.includes('costPlan') ? (
+          <ProjectCostPlanApplyBar
+            workspaceId={workspaceId}
+            messages={chat.messages}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
+            onProjectsChange={onProjectsChange}
+          />
+        ) : null}
+        {applyKinds.includes('costCatalog') ? (
+          <ProjectCostCatalogApplyBar
             workspaceId={workspaceId}
             messages={chat.messages}
             onProjectsChange={onProjectsChange}

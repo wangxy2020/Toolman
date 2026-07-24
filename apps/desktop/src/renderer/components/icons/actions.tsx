@@ -34,6 +34,29 @@ export function IconSave({ size = 16, className }: IconProps) {
   )
 }
 
+/** Save as a new version (disk + plus badge). */
+export function IconSaveAsNewVersion({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M15 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v4" />
+      <polyline points="17 21 17 13 7 13 7 21" />
+      <polyline points="7 3 7 8 15 8" />
+      <line x1="19" y1="16" x2="19" y2="22" />
+      <line x1="16" y1="19" x2="22" y2="19" />
+    </svg>
+  )
+}
+
 /** Project information / properties (MS Project–style). */
 export function IconProjectInfo({ size = 16, className }: IconProps) {
   return (
@@ -360,6 +383,50 @@ export function IconOutdent({ size = 16, className }: IconProps) {
       <path d="M3 18h18" />
       <path d="M11 12h10" />
       <path d="M7 9l-4 3 4 3" />
+    </svg>
+  )
+}
+
+/** Price list / 价格表 — price tag, distinct from IconTable (resource list). */
+export function IconPriceList({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <circle cx="7" cy="7" r="1.25" fill="currentColor" stroke="none" />
+      <path d="M11 10h4" />
+      <path d="M11 13.5h5" />
+      <path d="M11 17h3" />
+    </svg>
+  )
+}
+
+/** Import / 导入 — arrow into a document (distinct from download). */
+export function IconImport({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H14" />
+      <path d="M3 12h12" />
+      <path d="M11 8l4 4-4 4" />
     </svg>
   )
 }

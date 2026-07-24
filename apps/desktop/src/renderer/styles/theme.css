@@ -4267,6 +4267,7 @@ select.tm-kb-settings-input {
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 0.2s ease,

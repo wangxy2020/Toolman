@@ -148,3 +148,20 @@ export {
   PmSharedResourceCatalogUpsertInputSchema,
   type PmSharedResourceCatalogRow,
 } from '../project-management/pm-shared-resource-catalog.js'
+
+export {
+  PmApplyCostPlanInputSchema,
+  type PmApplyCostPlanInput,
+} from '../project-management/pm-cost-apply.js'
+
+export {
+  PmApplyCostCatalogPatchInputSchema,
+  type PmApplyCostCatalogPatchInput,
+} from '../project-management/pm-cost-catalog-agent.js'
+
+export {
+  PmSharedCostCatalogGetInputSchema,
+  PmSharedCostCatalogSetInputSchema,
+  PmSharedCostCatalogUpsertInputSchema,
+  type PmSharedCostCatalogRow,
+} from '../project-management/pm-shared-cost-catalog.js'

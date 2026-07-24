@@ -73,10 +73,42 @@ export function resolveDeepSeekChatOptions(model: string): DeepSeekChatOptions {
   return { model: key }
 }
 
+/** Normalize display-ish model ids (`Kimi K3` → `kimi-k3`). */
+export function normalizeOpenAiCompatibleModelKey(model: string): string {
+  return model.trim().toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-')
+}
+
+/**
+ * Kimi K3 fixes temperature/top_p/n/penalties server-side; sending them returns HTTP 400.
+ * @see https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+ */
+export function isKimiFixedSamplingModelId(model: string): boolean {
+  const key = normalizeOpenAiCompatibleModelKey(model)
+  return /(^|\/)kimi-k3(?:$|[-:])/.test(key)
+}
+
+export function isMoonshotCompatibleBaseUrl(
+  baseUrl: string | null | undefined,
+): boolean {
+  const base = (baseUrl ?? '').toLowerCase()
+  return base.includes('moonshot') || base.includes('kimi.ai')
+}
+
+/** True when OpenAI-compatible requests must omit sampling knobs (temperature, etc.). */
+export function shouldOmitOpenAiSamplingParams(
+  _config: ProviderConfig,
+  model: string,
+): boolean {
+  return isKimiFixedSamplingModelId(model)
+}
+
 export function resolveOpenAiModelName(config: ProviderConfig, model: string): string {
   const base = (config.baseUrl ?? '').toLowerCase()
   if (base.includes('deepseek')) {
     return resolveDeepSeekChatOptions(model).model
+  }
+  if (isMoonshotCompatibleBaseUrl(config.baseUrl) || isKimiFixedSamplingModelId(model)) {
+    return normalizeOpenAiCompatibleModelKey(model)
   }
   return model.trim()
 }

@@ -71,7 +71,20 @@ export function removeLegacyKnowledgeBaseRows(
   kind: keyof typeof DEFAULT_FOLDER_KB_NAMES,
 ): void {
   const kbRepo = getKnowledgeBaseRepository()
+  const docRepo = getDocumentRepository()
   const rows = kbRepo.listByWorkspace(workspaceId).filter((row) => row.kind === kind)
+
+  const softDeleteDuplicateKb = (kbId: string) => {
+    stopKnowledgeWatchersForKb(workspaceId, kbId)
+    // Do not delete disk files — duplicate default-folder KBs share the same folder.
+    const documentIds = docRepo.listActiveDocumentIdsByKb(kbId)
+    docRepo.clearRegistryForDocumentIds(documentIds)
+    docRepo.deleteIngestJobsByKb(kbId)
+    docRepo.softDeleteAllChunksByKb(kbId)
+    docRepo.softDeleteAllSourcesByKb(kbId)
+    docRepo.softDeleteAllByKb(kbId)
+    kbRepo.softDelete(kbId, workspaceId)
+  }
 
   // Deduplicate same-name default-folder KBs (esp. local — historically not cleaned).
   const createdAtMs = (value: Date | number) =>
@@ -81,8 +94,7 @@ export function removeLegacyKnowledgeBaseRows(
     .sort((left, right) => createdAtMs(left.createdAt) - createdAtMs(right.createdAt))
   const keepCanonical = canonicalNameRows[0]
   for (const duplicate of canonicalNameRows.slice(1)) {
-    stopKnowledgeWatchersForKb(workspaceId, duplicate.id)
-    kbRepo.softDelete(duplicate.id, workspaceId)
+    softDeleteDuplicateKb(duplicate.id)
   }
 
   if (kind === 'local') return
@@ -94,8 +106,7 @@ export function removeLegacyKnowledgeBaseRows(
 
   for (const legacy of legacyRows) {
     if (canonical && legacy.id !== canonical.id) {
-      stopKnowledgeWatchersForKb(workspaceId, legacy.id)
-      kbRepo.softDelete(legacy.id, workspaceId)
+      softDeleteDuplicateKb(legacy.id)
       continue
     }
     if (!canonical) {

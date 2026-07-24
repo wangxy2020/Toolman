@@ -424,6 +424,12 @@ export enum IpcChannel {
   Pm_SharedResourceCatalogGet = 'pm:shared-resource-catalog:get',
   Pm_SharedResourceCatalogSet = 'pm:shared-resource-catalog:set',
   Pm_SharedResourceCatalogUpsert = 'pm:shared-resource-catalog:upsert',
+  Pm_WorkItemApplyCostPlan = 'pm:work-item:apply-cost-plan',
+  Pm_ApplyCostCatalogPatch = 'pm:cost-catalog:apply-patch',
+  Pm_SharedCostCatalogGet = 'pm:shared-cost-catalog:get',
+  Pm_SharedCostCatalogSet = 'pm:shared-cost-catalog:set',
+  Pm_SharedCostCatalogUpsert = 'pm:shared-cost-catalog:upsert',
+  Pm_WorkItemSmartAssign = 'pm:work-item:smart-assign',
 }
 
 /** P2P 推送事件（通过 window.api.subscribe 订阅，非 ipcMain.handle） */

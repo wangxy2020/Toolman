@@ -9,7 +9,15 @@ import type {
   ToolCall,
 } from '../types.js'
 import { ProviderError } from '../types.js'
-import { resolveDeepSeekExtraBody, resolveOpenAiModelName, providerSupportsOpenAiVision, resolveOllamaExtraBody, resolveOpenAiMaxTokens, shouldRouteThinkingAsAnswer } from '../model-aliases.js'
+import {
+  resolveDeepSeekExtraBody,
+  resolveOpenAiModelName,
+  providerSupportsOpenAiVision,
+  resolveOllamaExtraBody,
+  resolveOpenAiMaxTokens,
+  shouldOmitOpenAiSamplingParams,
+  shouldRouteThinkingAsAnswer,
+} from '../model-aliases.js'
 import { assertApiKey, providerFetch, readErrorBody, resolveOpenAiBaseUrl } from '../utils.js'
 
 function formatProviderHttpError(status: number, body: string): string {
@@ -94,7 +102,7 @@ export async function testOpenAiConnection(config: ProviderConfig): Promise<Test
 function resolvePingModel(config: ProviderConfig): string {
   const base = (config.baseUrl ?? '').toLowerCase()
   if (base.includes('deepseek')) return 'deepseek-v4-flash'
-  if (base.includes('moonshot')) return 'moonshot-v1-8k'
+  if (base.includes('moonshot') || base.includes('kimi.ai')) return 'kimi-k3'
   if (base.includes('dashscope') || base.includes('aliyuncs')) return 'qwen-plus'
   if (base.includes('bigmodel')) return 'glm-4-flash'
   return 'gpt-3.5-turbo'
@@ -154,13 +162,22 @@ export async function* streamOpenAiCompatible(
   const baseUrl = resolveOpenAiBaseUrl(config)
   const apiModel = resolveOpenAiModelName(config, params.model)
   const routeThinkingAsAnswer = shouldRouteThinkingAsAnswer(config, params.model)
+  const omitSampling = shouldOmitOpenAiSamplingParams(config, params.model)
   const body: Record<string, unknown> = {
     model: apiModel,
     messages: formatMessagesForOpenAi(params.messages, config, params.model),
-    temperature: params.temperature ?? 0.7,
     max_tokens: resolveOpenAiMaxTokens(config, params.model, params.maxTokens),
     stream: true,
     ...mergeExtraBody(config, params.model, params.extraBody),
+  }
+  if (!omitSampling) {
+    body.temperature = params.temperature ?? 0.7
+  } else {
+    delete body.temperature
+    delete body.top_p
+    delete body.n
+    delete body.presence_penalty
+    delete body.frequency_penalty
   }
 
   if (supportsUsageInStream(config)) {
@@ -352,13 +369,22 @@ export async function chatCompleteOpenAiCompatible(
   const baseUrl = resolveOpenAiBaseUrl(config)
   const apiModel = resolveOpenAiModelName(config, params.model)
   const routeThinkingAsAnswer = shouldRouteThinkingAsAnswer(config, params.model)
+  const omitSampling = shouldOmitOpenAiSamplingParams(config, params.model)
   const body: Record<string, unknown> = {
     model: apiModel,
     messages: formatMessagesForOpenAi(params.messages, config, params.model),
-    temperature: params.temperature ?? 0.7,
     max_tokens: resolveOpenAiMaxTokens(config, params.model, params.maxTokens),
     stream: false,
     ...mergeExtraBody(config, params.model, params.extraBody),
+  }
+  if (!omitSampling) {
+    body.temperature = params.temperature ?? 0.7
+  } else {
+    delete body.temperature
+    delete body.top_p
+    delete body.n
+    delete body.presence_penalty
+    delete body.frequency_penalty
   }
 
   if (params.tools?.length) {

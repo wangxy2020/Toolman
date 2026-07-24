@@ -117,6 +117,7 @@ describe('pm-resource-save-history', () => {
       {
         id: 'r1',
         type: 'labor',
+        customTypeName: '',
         name: '普通工',
         spec: '',
         unit: '工日',

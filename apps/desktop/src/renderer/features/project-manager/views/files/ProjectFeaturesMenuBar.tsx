@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import {
+  IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconIndent,
@@ -18,6 +19,7 @@ import {
   IconProjectInfo,
   IconRedo,
   IconSave,
+  IconSaveAsNewVersion,
   IconTrash,
   IconUndo,
 } from '../../../../components/icons'
@@ -27,6 +29,7 @@ const ICON_SIZE = 16
 
 export type FeaturesMenuAction =
   | 'save'
+  | 'saveAsNewVersion'
   | 'print'
   | 'projectInfo'
   | 'undo'
@@ -42,12 +45,22 @@ export type FeaturesMenuAction =
   | 'auxiliary'
   | 'material'
   | 'machinery'
+  | 'device'
+  | 'instrument'
+  | 'scheduleAll'
   | 'procurement'
   | 'metering'
   | 'node'
   | 'funds'
 
 export type FeaturesScheduleView = 'list' | 'gantt' | 'progressCheck' | 'resource' | 'cost'
+
+export type FeaturesVersionSwitchEntry = {
+  version: number
+  name: string
+  hasSnapshot: boolean
+  isCurrent: boolean
+}
 
 type MenuItem = {
   key: FeaturesMenuAction
@@ -64,10 +77,36 @@ export type FeaturesRowType =
   | 'auxiliary'
   | 'material'
   | 'machinery'
+  | 'device'
+  | 'instrument'
   | 'procurement'
   | 'metering'
   | 'node'
   | 'funds'
+
+export type FeaturesViewFilter = FeaturesRowType | 'scheduleAll'
+
+/** Resource-stat filters shown in the「资源统计」dropdown (default: scheduleAll). */
+export const FEATURES_RESOURCE_STAT_FILTERS = [
+  'scheduleAll',
+  'labor',
+  'auxiliary',
+  'material',
+  'machinery',
+  'device',
+  'instrument',
+] as const satisfies readonly FeaturesViewFilter[]
+
+export type FeaturesResourceStatFilter = (typeof FEATURES_RESOURCE_STAT_FILTERS)[number]
+
+export function isFeaturesResourceStatFilter(
+  value: string | null | undefined,
+): value is FeaturesResourceStatFilter {
+  return (
+    value != null &&
+    (FEATURES_RESOURCE_STAT_FILTERS as readonly string[]).includes(value)
+  )
+}
 
 interface Props {
   disabled?: boolean
@@ -76,10 +115,12 @@ interface Props {
   canUndo?: boolean
   canRedo?: boolean
   canEdit?: boolean
-  /** Highlights the matching type button when a row is selected. */
-  selectedType?: FeaturesRowType
+  /** Highlights the matching type /「全部」button. */
+  selectedType?: FeaturesViewFilter
   scheduleView: FeaturesScheduleView
   onScheduleViewChange: (view: FeaturesScheduleView) => void
+  versionSwitchEntries?: FeaturesVersionSwitchEntry[]
+  onRestoreVersion?: (version: number) => void
   onAction: (action: FeaturesMenuAction) => void
 }
 
@@ -127,16 +168,24 @@ export function ProjectFeaturesMenuBar({
   selectedType,
   scheduleView,
   onScheduleViewChange,
+  versionSwitchEntries = [],
+  onRestoreVersion,
   onAction,
 }: Props) {
   const { t } = useI18n()
   const [viewOpen, setViewOpen] = useState(false)
+  const [resourceStatsOpen, setResourceStatsOpen] = useState(false)
+  const [baselineOpen, setBaselineOpen] = useState(false)
   const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(EMPTY_SCROLL)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const viewRef = useRef<HTMLSpanElement>(null)
+  const resourceStatsRef = useRef<HTMLSpanElement>(null)
+  const baselineRef = useRef<HTMLSpanElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const viewPos = useDropdownPos(viewOpen, viewRef)
+  const resourceStatsPos = useDropdownPos(resourceStatsOpen, resourceStatsRef)
+  const baselinePos = useDropdownPos(baselineOpen, baselineRef)
 
   const syncScrollMetrics = () => {
     const el = scrollRef.current
@@ -168,16 +217,20 @@ export function ProjectFeaturesMenuBar({
   }, [])
 
   useEffect(() => {
-    if (!viewOpen) return
+    if (!viewOpen && !resourceStatsOpen && !baselineOpen) return
     const onDoc = (event: MouseEvent) => {
       const target = event.target as Node
-      if (viewRef.current?.contains(target)) return
+      if (viewOpen && viewRef.current?.contains(target)) return
+      if (resourceStatsOpen && resourceStatsRef.current?.contains(target)) return
+      if (baselineOpen && baselineRef.current?.contains(target)) return
       if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
       setViewOpen(false)
+      setResourceStatsOpen(false)
+      setBaselineOpen(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [viewOpen])
+  }, [baselineOpen, resourceStatsOpen, viewOpen])
 
   const viewLabelByMode: Record<FeaturesScheduleView, string> = {
     list: t('projectManagerPage.schedule.views.list'),
@@ -186,12 +239,35 @@ export function ProjectFeaturesMenuBar({
     resource: t('projectManagerPage.schedule.views.resource'),
     cost: t('projectManagerPage.schedule.views.cost'),
   }
+  const baselineMenuLabel = t('projectManagerPage.files.menu.baseline')
+  const resourceStatsMenuLabel = t('projectManagerPage.files.menu.resourceStatistics')
+  const resourceStatMode = isFeaturesResourceStatFilter(selectedType)
+  const resourceStatCurrent: FeaturesResourceStatFilter | null = resourceStatMode
+    ? selectedType
+    : null
+  const resourceStatCurrentLabel =
+    resourceStatCurrent == null
+      ? null
+      : resourceStatCurrent === 'scheduleAll'
+        ? t('projectManagerPage.files.menu.scheduleAll')
+        : t(`projectManagerPage.files.menu.${resourceStatCurrent}`)
+  const resourceStatsTip =
+    resourceStatCurrentLabel != null
+      ? `${resourceStatsMenuLabel} · ${resourceStatCurrentLabel}`
+      : resourceStatsMenuLabel
 
   const items: MenuItem[] = [
     {
       key: 'save',
       title: t('projectManagerPage.files.menu.save'),
       label: <IconSave size={ICON_SIZE} />,
+      icon: true,
+      disabled: !canEdit,
+    },
+    {
+      key: 'saveAsNewVersion',
+      title: t('projectManagerPage.files.menu.saveAsNewVersion'),
+      label: <IconSaveAsNewVersion size={ICON_SIZE} />,
       icon: true,
       disabled: !canEdit,
     },
@@ -273,31 +349,6 @@ export function ProjectFeaturesMenuBar({
       label: <IconChevronDown size={ICON_SIZE} />,
       icon: true,
       disabled: !hasSelection,
-      dividerAfter: true,
-    },
-    {
-      key: 'labor',
-      title: t('projectManagerPage.files.menu.labor'),
-      label: t('projectManagerPage.files.menu.labor'),
-      active: selectedType === 'labor',
-    },
-    {
-      key: 'auxiliary',
-      title: t('projectManagerPage.files.menu.auxiliary'),
-      label: t('projectManagerPage.files.menu.auxiliary'),
-      active: selectedType === 'auxiliary',
-    },
-    {
-      key: 'material',
-      title: t('projectManagerPage.files.menu.material'),
-      label: t('projectManagerPage.files.menu.material'),
-      active: selectedType === 'material',
-    },
-    {
-      key: 'machinery',
-      title: t('projectManagerPage.files.menu.machinery'),
-      label: t('projectManagerPage.files.menu.machinery'),
-      active: selectedType === 'machinery',
       dividerAfter: true,
     },
     {
@@ -405,6 +456,10 @@ export function ProjectFeaturesMenuBar({
 
   const viewLabel = t('projectManagerPage.files.menu.view')
 
+  // Edit actions through moveDown; trailing type filters after resource-stats dropdown.
+  const leadingItems = items.slice(0, 13)
+  const trailingTypeItems = items.slice(13)
+
   return (
     <div
       className={[
@@ -436,6 +491,8 @@ export function ProjectFeaturesMenuBar({
                 onClick={() => {
                   if (disabled) return
                   hideTip()
+                  setResourceStatsOpen(false)
+                  setBaselineOpen(false)
                   setViewOpen((open) => !open)
                 }}
                 {...tipProps(viewLabel)}
@@ -478,7 +535,174 @@ export function ProjectFeaturesMenuBar({
               <span className="tm-pm-features-menubar-divider" />
             </span>
 
-            {items.map(renderToolbarItem)}
+            {leadingItems.map(renderToolbarItem)}
+
+            <span className="tm-pm-features-menubar-item tm-pm-gantt-view-menu" ref={baselineRef}>
+              <button
+                type="button"
+                className="tm-pm-features-menubar-btn"
+                aria-label={baselineMenuLabel}
+                aria-disabled={disabled || !hasProject}
+                aria-expanded={baselineOpen}
+                onClick={() => {
+                  if (disabled || !hasProject) return
+                  hideTip()
+                  setViewOpen(false)
+                  setResourceStatsOpen(false)
+                  setBaselineOpen((open) => !open)
+                }}
+                {...tipProps(baselineMenuLabel)}
+              >
+                <span>{baselineMenuLabel}</span>
+                <IconChevronDown size={14} />
+              </button>
+              {baselineOpen && baselinePos
+                ? createPortal(
+                    <div
+                      className="tm-pm-gantt-view-panel"
+                      role="menu"
+                      style={{ top: baselinePos.top, left: baselinePos.left }}
+                    >
+                      <div className="tm-pm-gantt-submenu-title">
+                        {t('projectManagerPage.files.versionSwitch')}
+                      </div>
+                      {versionSwitchEntries.length === 0 ? (
+                        <div className="tm-pm-gantt-submenu-empty">
+                          {t('projectManagerPage.files.versionSwitchEmpty')}
+                        </div>
+                      ) : (
+                        versionSwitchEntries.map((entry) => {
+                          const canSwitch = entry.hasSnapshot && !entry.isCurrent
+                          return (
+                            <button
+                              key={`restore-feature-v-${entry.version}`}
+                              type="button"
+                              role="menuitem"
+                              className={[
+                                'tm-pm-gantt-view-option',
+                                entry.isCurrent ? 'tm-pm-gantt-view-option--active' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              disabled={!entry.hasSnapshot || entry.isCurrent}
+                              title={
+                                entry.hasSnapshot
+                                  ? undefined
+                                  : t('projectManagerPage.files.versionSwitchNoSnapshot')
+                              }
+                              onClick={() => {
+                                if (!canSwitch) return
+                                onRestoreVersion?.(entry.version)
+                                setBaselineOpen(false)
+                              }}
+                            >
+                              {t('projectManagerPage.files.switchToVersion', {
+                                name: entry.name,
+                              })}
+                              {entry.isCurrent
+                                ? ` · ${t('projectManagerPage.projectInfo.saveHistoryCurrent')}`
+                                : ''}
+                              {!entry.hasSnapshot
+                                ? ` · ${t('projectManagerPage.files.versionSwitchNoSnapshotShort')}`
+                                : ''}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>,
+                    document.body,
+                  )
+                : null}
+              <span className="tm-pm-features-menubar-divider" />
+            </span>
+
+            <span
+              className="tm-pm-features-menubar-item tm-pm-gantt-view-menu tm-pm-features-resource-stats-menu"
+              ref={resourceStatsRef}
+            >
+              <button
+                type="button"
+                className={[
+                  'tm-pm-features-menubar-btn',
+                  resourceStatMode ? 'tm-pm-features-menubar-btn--active' : '',
+                  resourceStatsOpen ? 'tm-pm-features-menubar-btn--open' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label={resourceStatsMenuLabel}
+                aria-disabled={disabled}
+                aria-expanded={resourceStatsOpen}
+                aria-haspopup="menu"
+                onClick={() => {
+                  if (disabled) return
+                  hideTip()
+                  setViewOpen(false)
+                  setBaselineOpen(false)
+                  setResourceStatsOpen((open) => !open)
+                }}
+                {...tipProps(resourceStatsTip)}
+              >
+                <span>{resourceStatsMenuLabel}</span>
+                {resourceStatCurrentLabel != null ? (
+                  <span className="tm-pm-gantt-view-current">{resourceStatCurrentLabel}</span>
+                ) : null}
+                <IconChevronDown
+                  size={14}
+                  className={[
+                    'tm-pm-features-resource-stats-chevron',
+                    resourceStatsOpen ? 'tm-pm-features-resource-stats-chevron--open' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                />
+              </button>
+              {resourceStatsOpen && resourceStatsPos
+                ? createPortal(
+                    <div
+                      className="tm-pm-gantt-view-panel tm-pm-features-resource-stats-panel"
+                      role="menu"
+                      aria-label={resourceStatsMenuLabel}
+                      style={{ top: resourceStatsPos.top, left: resourceStatsPos.left }}
+                    >
+                      {FEATURES_RESOURCE_STAT_FILTERS.map((filter) => {
+                        const checked = resourceStatCurrent === filter
+                        const label =
+                          filter === 'scheduleAll'
+                            ? t('projectManagerPage.files.menu.scheduleAll')
+                            : t(`projectManagerPage.files.menu.${filter}`)
+                        return (
+                          <button
+                            key={filter}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={checked}
+                            className={[
+                              'tm-pm-gantt-view-option',
+                              'tm-pm-gantt-view-option--checkable',
+                              checked ? 'tm-pm-gantt-view-option--active' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            onClick={() => {
+                              onAction(filter)
+                              setResourceStatsOpen(false)
+                            }}
+                          >
+                            <span className="tm-pm-gantt-view-option-label">{label}</span>
+                            <span className="tm-pm-gantt-view-option-check" aria-hidden="true">
+                              {checked ? <IconCheck size={14} /> : null}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>,
+                    document.body,
+                  )
+                : null}
+              <span className="tm-pm-features-menubar-divider" />
+            </span>
+
+            {trailingTypeItems.map(renderToolbarItem)}
           </div>
         </div>
         {scrollMetrics.overflowing ? (

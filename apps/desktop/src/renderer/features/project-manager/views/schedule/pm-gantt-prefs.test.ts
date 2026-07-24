@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildGridTemplateColumns,
+  buildListViewColumnOrder,
   computeGanttDayWidth,
   dateHeaderHeight,
   insertColumnInCanonicalOrder,
   normalizeGanttUiPrefs,
   resolveColumnLabel,
+  withGanttDefaultPredecessorsColumn,
 } from './pm-gantt-prefs'
 
 describe('pm-gantt-prefs', () => {
@@ -57,6 +59,22 @@ describe('pm-gantt-prefs', () => {
     expect(template).not.toContain('36px')
   })
 
+  it('keeps a fixed name width and absorbs leftover space in the trailing spacer for list view', () => {
+    const order = buildListViewColumnOrder([
+      'index',
+      'name',
+      'duration',
+      'start',
+      'finish',
+      'predecessors',
+    ])
+    expect(order.at(-1)).toBe('spacer')
+    const template = buildGridTemplateColumns(order, { fullWidthList: true })
+    expect(template).toBe(
+      ['48px', '280px', '64px', '100px', '100px', '72px', 'minmax(0, 1fr)'].join(' '),
+    )
+  })
+
   it('keeps a fixed name width and absorbs leftover space in the trailing spacer for resource view', () => {
     const template = buildGridTemplateColumns(
       [
@@ -95,6 +113,54 @@ describe('pm-gantt-prefs', () => {
     // Small window + long span: shrink below former 2px floor so nothing is clipped.
     expect(computeGanttDayWidth(200, 300, 0, 2)).toBe(1.5)
     expect(computeGanttDayWidth(200, 300, 0, 2) * 200).toBe(300)
+  })
+
+  it('migrates legacy prefs to include predecessors in the default column set', () => {
+    const prefs = normalizeGanttUiPrefs({
+      columnOrder: ['index', 'name', 'duration', 'start', 'finish'],
+    })
+    expect(prefs.columnOrder).toEqual([
+      'index',
+      'name',
+      'duration',
+      'start',
+      'finish',
+      'predecessors',
+    ])
+    expect(prefs.columnDefaultsVersion).toBe(2)
+  })
+
+  it('re-adds predecessors once for v1 prefs that still omit them', () => {
+    const prefs = normalizeGanttUiPrefs({
+      columnOrder: ['index', 'name', 'duration', 'start', 'finish'],
+      columnDefaultsVersion: 1,
+    })
+    expect(prefs.columnOrder).toContain('predecessors')
+    expect(prefs.columnDefaultsVersion).toBe(2)
+  })
+
+  it('does not re-add predecessors after the user hid them once migrated to v2', () => {
+    const prefs = normalizeGanttUiPrefs({
+      columnOrder: ['index', 'name', 'duration', 'start', 'finish'],
+      columnDefaultsVersion: 2,
+    })
+    expect(prefs.columnOrder).not.toContain('predecessors')
+    expect(prefs.columnDefaultsVersion).toBe(2)
+  })
+
+  it('withGanttDefaultPredecessorsColumn inserts predecessors in canonical order', () => {
+    const prefs = normalizeGanttUiPrefs({
+      columnOrder: ['index', 'name', 'duration', 'start', 'finish'],
+      columnDefaultsVersion: 2,
+    })
+    expect(withGanttDefaultPredecessorsColumn(prefs).columnOrder).toEqual([
+      'index',
+      'name',
+      'duration',
+      'start',
+      'finish',
+      'predecessors',
+    ])
   })
 
   it('migrates legacy dateHeaderRows and keeps bar style defaults', () => {
@@ -165,7 +231,7 @@ describe('pm-gantt-prefs', () => {
       },
     })
     expect(prefs.customColumns).toEqual([{ id: 'custom:keep', label: '备注' }])
-    expect(prefs.columnOrder).toEqual(['name', 'custom:keep'])
+    expect(prefs.columnOrder).toEqual(['name', 'predecessors', 'custom:keep'])
     expect(prefs.columnLabels.percentComplete).toBeUndefined()
     expect(prefs.columnLabels['custom:old']).toBeUndefined()
   })

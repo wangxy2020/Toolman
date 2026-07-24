@@ -145,17 +145,3 @@ export async function runWechatOAuthFlow(): Promise<WechatAuthIdentity> {
     throw error instanceof AuthLoginError ? error : new AuthLoginError('微信授权失败')
   }
 }
-
-export async function shutdownWechatOAuthServer(): Promise<void> {
-  if (!callbackServer) return
-  await new Promise<void>((resolve) => {
-    callbackServer?.close(() => resolve())
-  })
-  callbackServer = null
-}
-
-export function resetWechatOAuthStateForTests(): void {
-  pendingStates.clear()
-  oauthInFlight = false
-  activeOAuthHandlers = null
-}

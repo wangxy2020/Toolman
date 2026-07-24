@@ -49,10 +49,6 @@ export function parseResourceColumnId(
   return { slot, field }
 }
 
-export function isResourceColumnId(id: string): boolean {
-  return parseResourceColumnId(id) != null
-}
-
 export function isEmptyAssignment(assignment: TaskResourceAssignment): boolean {
   return (
     assignment.resourceId == null &&
@@ -74,13 +70,13 @@ export const RESOURCE_COLUMN_TYPE_ORDER: readonly PmResourceType[] = [
   'fees',
   'comprehensive',
   'measures',
+  'other',
   'tax',
   'investment',
   'designEstimate',
   'constructionBudget',
   'costBudget',
   'funds',
-  'other',
 ] as const
 
 function resourceTypeRank(type: PmResourceType): number {
@@ -131,17 +127,6 @@ export function findAssignmentIndexForResource(
   return assignments.findIndex(
     (entry) => canonicalizeResourceName(entry.name) === name,
   )
-}
-
-export function assignmentForResourceColumn(
-  assignments: readonly TaskResourceAssignment[],
-  resource: PmResourceRow | null | undefined,
-): TaskResourceAssignment {
-  if (!resource) return { ...EMPTY_TASK_RESOURCE_ASSIGNMENT }
-  const index = findAssignmentIndexForResource(assignments, resource)
-  return index >= 0
-    ? { ...assignments[index]! }
-    : { ...EMPTY_TASK_RESOURCE_ASSIGNMENT }
 }
 
 /** Set / clear quantity for a catalog resource column (match by id or type+name). */
@@ -214,13 +199,6 @@ export function readTaskResourceAssignmentAt(
 ): TaskResourceAssignment {
   const list = readTaskResourceAssignments(metadata)
   return list[slot] ? { ...list[slot]! } : { ...EMPTY_TASK_RESOURCE_ASSIGNMENT }
-}
-
-/** @deprecated Prefer slot-aware helpers. */
-export function readTaskResourceAssignment(
-  metadata: Record<string, unknown> | null | undefined,
-): TaskResourceAssignment {
-  return readTaskResourceAssignmentAt(metadata, 0)
 }
 
 /**
@@ -478,9 +456,18 @@ export function catalogTypesInUse(catalog: readonly PmResourceRow[]): PmResource
 export function formatResourceAssignmentInput(
   assignment: TaskResourceAssignment,
   typeLabel: (type: PmResourceType) => string,
+  options?: {
+    resolveCustomTypeName?: (assignment: TaskResourceAssignment) => string
+  },
 ): string {
   if (isEmptyAssignment(assignment)) return ''
-  const typePart = assignment.type ? typeLabel(assignment.type) : ''
+  let typePart = ''
+  if (assignment.type === 'custom') {
+    typePart =
+      options?.resolveCustomTypeName?.(assignment)?.trim() || typeLabel('custom')
+  } else if (assignment.type) {
+    typePart = typeLabel(assignment.type)
+  }
   const namePart = assignment.name.trim()
   const qtyPart = assignment.quantity != null ? String(assignment.quantity) : ''
   return [typePart, namePart, qtyPart].join('，')
@@ -493,9 +480,12 @@ export function formatResourceAssignmentInput(
 export function formatResourceAssignmentsInput(
   assignments: readonly TaskResourceAssignment[],
   typeLabel: (type: PmResourceType) => string,
+  options?: {
+    resolveCustomTypeName?: (assignment: TaskResourceAssignment) => string
+  },
 ): string {
   return assignments
-    .map((entry) => formatResourceAssignmentInput(entry, typeLabel))
+    .map((entry) => formatResourceAssignmentInput(entry, typeLabel, options))
     .filter((part) => part.length > 0)
     .join('；')
 }
@@ -520,12 +510,28 @@ export function parseResourceAssignmentInput(
   if (parts.length === 1) {
     const only = parts[0] ?? ''
     type = resolveTypeLabel(only) ?? (isPmResourceType(only) ? only : null)
-    if (!type) name = only
+    if (!type) {
+      const byCustomName = catalog.find(
+        (row) =>
+          row.type === 'custom' &&
+          (row.customTypeName?.trim() ?? '') === only,
+      )
+      if (byCustomName) type = 'custom'
+      else name = only
+    }
   } else {
     const typeRaw = parts[0] ?? ''
     name = parts[1] ?? ''
     const qtyRaw = parts[2] ?? ''
     type = resolveTypeLabel(typeRaw) ?? (isPmResourceType(typeRaw) ? typeRaw : null)
+    if (!type) {
+      const byCustomName = catalog.find(
+        (row) =>
+          row.type === 'custom' &&
+          (row.customTypeName?.trim() ?? '') === typeRaw,
+      )
+      if (byCustomName) type = 'custom'
+    }
     if (qtyRaw !== '') {
       const parsed = Number(qtyRaw)
       quantity = Number.isFinite(parsed) ? parsed : null
@@ -589,4 +595,49 @@ export function parseResourceAssignmentsInput(
       return { ...parsed, note: matchedPrev.note }
     })
     .filter((entry) => !isEmptyAssignment(entry))
+}
+
+/** Count non-empty assignments, optionally limited to one resource type. */
+export function countResourceAssignmentsForTypeFilter(
+  assignments: readonly TaskResourceAssignment[],
+  typeFilter: 'all' | PmResourceType,
+): number {
+  let count = 0
+  for (const entry of assignments) {
+    if (isEmptyAssignment(entry)) continue
+    if (typeFilter !== 'all' && entry.type !== typeFilter) continue
+    count += 1
+  }
+  return count
+}
+
+/**
+ * Map a visible (filtered) slot index to the source assignment index.
+ * When the display slot is beyond matching rows, returns `assignments.length` (append).
+ */
+export function resolveResourceAssignSourceIndex(
+  assignments: readonly TaskResourceAssignment[],
+  displaySlot: number,
+  typeFilter: 'all' | PmResourceType,
+): number {
+  const slot = Math.max(0, Math.floor(displaySlot))
+  if (typeFilter === 'all') return slot
+  let matched = -1
+  for (let index = 0; index < assignments.length; index += 1) {
+    const entry = assignments[index]!
+    if (isEmptyAssignment(entry)) continue
+    if (entry.type !== typeFilter) continue
+    matched += 1
+    if (matched === slot) return index
+  }
+  return assignments.length
+}
+
+export function readResourceAssignmentAtFilteredSlot(
+  assignments: readonly TaskResourceAssignment[],
+  displaySlot: number,
+  typeFilter: 'all' | PmResourceType,
+): TaskResourceAssignment {
+  const sourceIndex = resolveResourceAssignSourceIndex(assignments, displaySlot, typeFilter)
+  return assignments[sourceIndex] ?? { ...EMPTY_TASK_RESOURCE_ASSIGNMENT }
 }

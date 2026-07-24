@@ -5,15 +5,25 @@ import {
   computeScheduleTotalDurationDays,
   parseVersionPlanSnapshotName,
   PM_SAVE_HISTORY_KEY,
+  readCostLastSavedAt,
+  readCostSaveHistory,
+  readCostVersion,
+  readFeatureLastSavedAt,
+  readFeatureSaveHistory,
+  readFeatureVersion,
   readLastSavedAt,
   readResourceLastSavedAt,
   readResourceSaveHistory,
   readResourceVersion,
   readSaveHistory,
   readScheduleVersion,
+  removeCostSaveHistoryEntry,
+  removeFeatureSaveHistoryEntry,
   removeResourceSaveHistoryEntry,
   removeSaveHistoryEntry,
+  type PmCostSaveRecord,
   type PmDomain,
+  type PmFeatureSaveRecord,
   type PmProject,
   type PmProjectStatus,
   type PmResourceSaveRecord,
@@ -24,6 +34,22 @@ import {
 import { getDateLocale } from '../../../../i18n/date-locale'
 import { useI18n } from '../../../../i18n/useI18n'
 import { pmApi } from '../../pm-api'
+import {
+  PM_COST_TYPES,
+  readSharedCostLastSavedAt,
+  readSharedCostSaveHistory,
+  readSharedCostVersion,
+  removeSharedCostSaveHistoryEntry,
+  type PmCostRow,
+  type PmCostType,
+} from '../cost/pm-cost-catalog'
+import {
+  readSharedFeatureLastSavedAt,
+  readSharedFeatureSaveHistory,
+  readSharedFeatureVersion,
+  removeSharedFeatureSaveHistoryEntry,
+  type PmFeatureRow,
+} from '../files/pm-features-catalog'
 import {
   PM_RESOURCE_TYPES,
   readSharedResourceLastSavedAt,
@@ -36,9 +62,9 @@ import {
 import { formatWorkItemDate } from './pm-gantt-utils'
 import { pmScheduleApi } from './pm-schedule-api'
 
-type ProjectInfoVariant = 'schedule' | 'resource'
-type InfoTab = 'overview' | 'schedule' | 'resource' | 'domain' | 'statistics' | 'advanced'
-type DomainTabKind = 'schedule' | 'resource' | 'placeholder'
+type ProjectInfoVariant = 'schedule' | 'resource' | 'cost' | 'features'
+type InfoTab = 'overview' | 'schedule' | 'resource' | 'cost' | 'domain' | 'statistics' | 'advanced'
+type DomainTabKind = 'schedule' | 'resource' | 'cost' | 'placeholder'
 
 function resolveInfoDomain(
   isCreate: boolean,
@@ -47,21 +73,24 @@ function resolveInfoDomain(
   variant: ProjectInfoVariant | undefined,
 ): PmDomain {
   if (isCreate && createDomain) return createDomain
-  // Explicit opener context (resource / schedule panels) wins over stored domain.
+  // Explicit opener context (resource / cost / schedule panels) wins over stored domain.
   if (variant === 'resource') return 'resource_management'
-  if (variant === 'schedule') return 'progress_management'
+  if (variant === 'cost') return 'cost_management'
+  if (variant === 'schedule' || variant === 'features') return 'progress_management'
   return projectDomain ?? 'progress_management'
 }
 
 function resolveDomainTabKind(domain: PmDomain): DomainTabKind {
   if (domain === 'progress_management') return 'schedule'
   if (domain === 'resource_management') return 'resource'
+  if (domain === 'cost_management') return 'cost'
   return 'placeholder'
 }
 
 function resolveDomainTabId(kind: DomainTabKind): InfoTab {
   if (kind === 'schedule') return 'schedule'
   if (kind === 'resource') return 'resource'
+  if (kind === 'cost') return 'cost'
   return 'domain'
 }
 
@@ -99,9 +128,15 @@ interface EditProps {
   mode?: 'edit'
   project: PmProject
   workItems?: PmWorkItem[]
-  /** When `resource`, middle tab is 资源 and stats come from the catalog. */
+  /** When `resource` / `cost` / `features`, middle tab and stats come from that catalog. */
   variant?: ProjectInfoVariant
   resourceRows?: PmResourceRow[]
+  costRows?: PmCostRow[]
+  featureRows?: PmFeatureRow[]
+  /** Persist the price catalog (same as toolbar Save). Used when `variant` is `cost`. */
+  onSaveCosts?: () => void | Promise<void | boolean>
+  /** Persist the practice catalog (same as toolbar Save). Used when `variant` is `features`. */
+  onSaveFeatures?: () => void | Promise<void | boolean>
   onClose: () => void
   onSaved: (project: PmProject, options?: { manualCreate?: boolean }) => void
 }
@@ -112,6 +147,8 @@ interface CreateProps {
   workItems?: PmWorkItem[]
   variant?: ProjectInfoVariant
   resourceRows?: PmResourceRow[]
+  costRows?: PmCostRow[]
+  featureRows?: PmFeatureRow[]
   onClose: () => void
   onSaved: (project: PmProject, options?: { manualCreate?: boolean }) => void
 }
@@ -122,12 +159,34 @@ interface WorkspaceResourceProps {
   workspaceId: string
   resourceRows?: PmResourceRow[]
   /** Persist the shared resource catalog (same as toolbar Save). */
-  onSaveResources?: () => void | Promise<void>
+  onSaveResources?: () => void | Promise<void | boolean>
   onClose: () => void
   onSaved?: () => void
 }
 
-type Props = EditProps | CreateProps | WorkspaceResourceProps
+/** Workspace「全部项目」price-list info (no concrete PmProject). */
+interface WorkspaceCostProps {
+  mode: 'workspaceCost'
+  workspaceId: string
+  costRows?: PmCostRow[]
+  /** Persist the shared price catalog (same as toolbar Save). */
+  onSaveCosts?: () => void | Promise<void | boolean>
+  onClose: () => void
+  onSaved?: () => void
+}
+
+/** Workspace「全部项目」practice-catalog info (no concrete PmProject). */
+interface WorkspaceFeaturesProps {
+  mode: 'workspaceFeatures'
+  workspaceId: string
+  featureRows?: PmFeatureRow[]
+  /** Persist the shared practice catalog (same as toolbar Save). */
+  onSaveFeatures?: () => void | Promise<void | boolean>
+  onClose: () => void
+  onSaved?: () => void
+}
+
+type Props = EditProps | CreateProps | WorkspaceResourceProps | WorkspaceCostProps | WorkspaceFeaturesProps
 
 const PROJECT_TYPE_OPTIONS: PmProjectType[] = [
   'construction_gc',
@@ -299,25 +358,95 @@ function computeResourceStats(rows: PmResourceRow[]) {
   }
 }
 
+function computeCostStats(rows: PmCostRow[]) {
+  const byType = Object.fromEntries(PM_COST_TYPES.map((type) => [type, 0])) as Record<
+    PmCostType,
+    number
+  >
+  let priced = 0
+  let priceSum = 0
+  let totalPriceSum = 0
+  let hasTotal = false
+  let minPrice: number | null = null
+  let maxPrice: number | null = null
+  for (const row of rows) {
+    byType[row.type] += 1
+    if (row.unitPrice != null && Number.isFinite(row.unitPrice)) {
+      priced += 1
+      priceSum += row.unitPrice
+      minPrice = minPrice == null ? row.unitPrice : Math.min(minPrice, row.unitPrice)
+      maxPrice = maxPrice == null ? row.unitPrice : Math.max(maxPrice, row.unitPrice)
+    }
+    if (
+      row.quantity != null &&
+      row.unitPrice != null &&
+      Number.isFinite(row.quantity) &&
+      Number.isFinite(row.unitPrice)
+    ) {
+      totalPriceSum += row.quantity * row.unitPrice
+      hasTotal = true
+    }
+  }
+  return {
+    total: rows.length,
+    priced,
+    unpriced: rows.length - priced,
+    avgUnitPrice: priced === 0 ? null : Math.round((priceSum / priced) * 100) / 100,
+    priceSum,
+    totalPriceSum: hasTotal ? Math.round(totalPriceSum * 100) / 100 : null,
+    minPrice,
+    maxPrice,
+    byType,
+  }
+}
+
 const ProjectInfoDialog: FC<Props> = (props) => {
   const { onClose } = props
   const isWorkspaceResource = props.mode === 'workspaceResource'
+  const isWorkspaceCost = props.mode === 'workspaceCost'
+  const isWorkspaceFeatures = props.mode === 'workspaceFeatures'
+  const isWorkspaceCatalog = isWorkspaceResource || isWorkspaceCost || isWorkspaceFeatures
   const isCreate = props.mode === 'create'
-  const project = isCreate || isWorkspaceResource ? null : props.project
-  const workItems = isWorkspaceResource ? [] : (props.workItems ?? [])
-  const resourceRows = props.resourceRows ?? []
-  const variantProp = isWorkspaceResource ? 'resource' : props.variant
+  const project = isCreate || isWorkspaceCatalog ? null : props.project
+  const workItems = isWorkspaceCatalog ? [] : (props.workItems ?? [])
+  const resourceRows =
+    isWorkspaceCost || isWorkspaceFeatures || !('resourceRows' in props)
+      ? []
+      : (props.resourceRows ?? [])
+  const costRows =
+    isWorkspaceResource || isWorkspaceFeatures || !('costRows' in props)
+      ? []
+      : (props.costRows ?? [])
+  const featureRows =
+    isWorkspaceResource || isWorkspaceCost || !('featureRows' in props)
+      ? []
+      : (props.featureRows ?? [])
+  const variantProp = isWorkspaceResource
+    ? 'resource'
+    : isWorkspaceCost
+      ? 'cost'
+      : isWorkspaceFeatures
+        ? 'features'
+        : props.variant
   const createDefaults = isCreate ? props.createDefaults : null
   const workspaceResourceId = isWorkspaceResource ? props.workspaceId : null
+  const workspaceCostId = isWorkspaceCost ? props.workspaceId : null
+  const workspaceFeaturesId = isWorkspaceFeatures ? props.workspaceId : null
   const isResourceInfo = variantProp === 'resource' || isWorkspaceResource
+  const isCostInfo = variantProp === 'cost' || isWorkspaceCost
+  const isFeaturesInfo = variantProp === 'features' || isWorkspaceFeatures
   const infoDomain = isWorkspaceResource
     ? 'resource_management'
-    : resolveInfoDomain(
-        isCreate,
-        createDefaults?.domain,
-        project?.domain,
-        variantProp,
-      )
+    : isWorkspaceCost
+      ? 'cost_management'
+      : isWorkspaceFeatures
+        ? 'progress_management'
+        : resolveInfoDomain(
+            isCreate,
+            createDefaults?.domain,
+            project?.domain,
+            variantProp,
+          )
   const domainTabKind = resolveDomainTabKind(infoDomain)
   const domainTabId = resolveDomainTabId(domainTabKind)
 
@@ -325,12 +454,18 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   const dateInputLang = getDateLocale(language)
   const datePlaceholder = t('projectManagerPage.projectInfo.datePlaceholder')
   const [activeTab, setActiveTab] = useState<InfoTab>(() =>
-    isWorkspaceResource ? 'resource' : 'overview',
+    isWorkspaceResource
+      ? 'resource'
+      : isWorkspaceCost
+        ? 'cost'
+        : isWorkspaceFeatures
+          ? 'overview'
+          : 'overview',
   )
   const [draft, setDraft] = useState<ProjectInfoDraft>(() =>
     project
       ? toDraft(project)
-      : isWorkspaceResource
+      : isWorkspaceCatalog
         ? emptyDraft({
             code: 'ALL',
             name: '', // filled after i18n below via effect
@@ -341,7 +476,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   const [deletingHistoryVersion, setDeletingHistoryVersion] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [scheduleHistoryRows, setScheduleHistoryRows] = useState<PmScheduleSaveRecord[]>(() =>
-    isResourceInfo ? [] : readSaveHistory(project?.metadata),
+    isResourceInfo || isCostInfo || isFeaturesInfo ? [] : readSaveHistory(project?.metadata),
   )
   const [resourceHistoryRows, setResourceHistoryRows] = useState<PmResourceSaveRecord[]>(() => {
     if (isWorkspaceResource && workspaceResourceId) {
@@ -350,8 +485,22 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     if (isResourceInfo) return readResourceSaveHistory(project?.metadata)
     return []
   })
+  const [costHistoryRows, setCostHistoryRows] = useState<PmCostSaveRecord[]>(() => {
+    if (isWorkspaceCost && workspaceCostId) {
+      return readSharedCostSaveHistory(workspaceCostId)
+    }
+    if (isCostInfo) return readCostSaveHistory(project?.metadata)
+    return []
+  })
+  const [featureHistoryRows, setFeatureHistoryRows] = useState<PmFeatureSaveRecord[]>(() => {
+    if (isWorkspaceFeatures && workspaceFeaturesId) {
+      return readSharedFeatureSaveHistory(workspaceFeaturesId)
+    }
+    if (isFeaturesInfo) return readFeatureSaveHistory(project?.metadata)
+    return []
+  })
   const [scheduleVersion, setScheduleVersion] = useState(() =>
-    isResourceInfo ? 0 : readScheduleVersion(project?.metadata),
+    isResourceInfo || isCostInfo || isFeaturesInfo ? 0 : readScheduleVersion(project?.metadata),
   )
   const [resourceVersion, setResourceVersion] = useState(() => {
     if (isWorkspaceResource && workspaceResourceId) {
@@ -360,11 +509,33 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     if (isResourceInfo) return readResourceVersion(project?.metadata)
     return 0
   })
+  const [costVersion, setCostVersion] = useState(() => {
+    if (isWorkspaceCost && workspaceCostId) {
+      return readSharedCostVersion(workspaceCostId)
+    }
+    if (isCostInfo) return readCostVersion(project?.metadata)
+    return 0
+  })
+  const [featureVersion, setFeatureVersion] = useState(() => {
+    if (isWorkspaceFeatures && workspaceFeaturesId) {
+      return readSharedFeatureVersion(workspaceFeaturesId)
+    }
+    if (isFeaturesInfo) return readFeatureVersion(project?.metadata)
+    return 0
+  })
   const [lastSavedAt, setLastSavedAt] = useState(() => {
     if (isWorkspaceResource && workspaceResourceId) {
       return readSharedResourceLastSavedAt(workspaceResourceId)
     }
+    if (isWorkspaceCost && workspaceCostId) {
+      return readSharedCostLastSavedAt(workspaceCostId)
+    }
+    if (isWorkspaceFeatures && workspaceFeaturesId) {
+      return readSharedFeatureLastSavedAt(workspaceFeaturesId)
+    }
     if (isResourceInfo) return readResourceLastSavedAt(project?.metadata)
+    if (isCostInfo) return readCostLastSavedAt(project?.metadata)
+    if (isFeaturesInfo) return readFeatureLastSavedAt(project?.metadata)
     return readLastSavedAt(project?.metadata)
   })
 
@@ -379,6 +550,48 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       setResourceHistoryRows(readSharedResourceSaveHistory(workspaceResourceId))
       setResourceVersion(readSharedResourceVersion(workspaceResourceId))
       setLastSavedAt(readSharedResourceLastSavedAt(workspaceResourceId))
+      setCostHistoryRows([])
+      setCostVersion(0)
+      setFeatureHistoryRows([])
+      setFeatureVersion(0)
+      setScheduleHistoryRows([])
+      setScheduleVersion(0)
+      setError(null)
+      return
+    }
+    if (isWorkspaceCost && workspaceCostId) {
+      setDraft(
+        emptyDraft({
+          code: 'ALL',
+          name: t('projectManagerPage.headerProject.allProjects'),
+        }),
+      )
+      setCostHistoryRows(readSharedCostSaveHistory(workspaceCostId))
+      setCostVersion(readSharedCostVersion(workspaceCostId))
+      setLastSavedAt(readSharedCostLastSavedAt(workspaceCostId))
+      setResourceHistoryRows([])
+      setResourceVersion(0)
+      setFeatureHistoryRows([])
+      setFeatureVersion(0)
+      setScheduleHistoryRows([])
+      setScheduleVersion(0)
+      setError(null)
+      return
+    }
+    if (isWorkspaceFeatures && workspaceFeaturesId) {
+      setDraft(
+        emptyDraft({
+          code: 'ALL',
+          name: t('projectManagerPage.headerProject.allProjects'),
+        }),
+      )
+      setFeatureHistoryRows(readSharedFeatureSaveHistory(workspaceFeaturesId))
+      setFeatureVersion(readSharedFeatureVersion(workspaceFeaturesId))
+      setLastSavedAt(readSharedFeatureLastSavedAt(workspaceFeaturesId))
+      setResourceHistoryRows([])
+      setResourceVersion(0)
+      setCostHistoryRows([])
+      setCostVersion(0)
       setScheduleHistoryRows([])
       setScheduleVersion(0)
       setError(null)
@@ -390,6 +603,30 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         setResourceHistoryRows(readResourceSaveHistory(project.metadata))
         setResourceVersion(readResourceVersion(project.metadata))
         setLastSavedAt(readResourceLastSavedAt(project.metadata))
+        setCostHistoryRows([])
+        setCostVersion(0)
+        setFeatureHistoryRows([])
+        setFeatureVersion(0)
+        setScheduleHistoryRows([])
+        setScheduleVersion(0)
+      } else if (isCostInfo) {
+        setCostHistoryRows(readCostSaveHistory(project.metadata))
+        setCostVersion(readCostVersion(project.metadata))
+        setLastSavedAt(readCostLastSavedAt(project.metadata))
+        setResourceHistoryRows([])
+        setResourceVersion(0)
+        setFeatureHistoryRows([])
+        setFeatureVersion(0)
+        setScheduleHistoryRows([])
+        setScheduleVersion(0)
+      } else if (isFeaturesInfo) {
+        setFeatureHistoryRows(readFeatureSaveHistory(project.metadata))
+        setFeatureVersion(readFeatureVersion(project.metadata))
+        setLastSavedAt(readFeatureLastSavedAt(project.metadata))
+        setResourceHistoryRows([])
+        setResourceVersion(0)
+        setCostHistoryRows([])
+        setCostVersion(0)
         setScheduleHistoryRows([])
         setScheduleVersion(0)
       } else {
@@ -398,26 +635,37 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         setLastSavedAt(readLastSavedAt(project.metadata))
         setResourceHistoryRows([])
         setResourceVersion(0)
+        setCostHistoryRows([])
+        setCostVersion(0)
+        setFeatureHistoryRows([])
+        setFeatureVersion(0)
       }
     } else if (createDefaults) {
       setDraft(emptyDraft(createDefaults))
       setScheduleHistoryRows([])
       setResourceHistoryRows([])
+      setCostHistoryRows([])
+      setFeatureHistoryRows([])
       setScheduleVersion(0)
       setResourceVersion(0)
+      setCostVersion(0)
+      setFeatureVersion(0)
       setLastSavedAt(null)
     }
     setError(null)
   }, [
     project,
-    createDefaults?.workspaceId,
-    createDefaults?.domain,
-    createDefaults?.code,
-    createDefaults?.name,
-    isWorkspaceResource,
-    workspaceResourceId,
-    isResourceInfo,
+    createDefaults,
     t,
+    isWorkspaceResource,
+    isWorkspaceCost,
+    isWorkspaceFeatures,
+    workspaceResourceId,
+    workspaceCostId,
+    workspaceFeaturesId,
+    isResourceInfo,
+    isCostInfo,
+    isFeaturesInfo,
   ])
 
   useEffect(() => {
@@ -431,7 +679,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
 
   // Backfill missing totalDurationDays from live items / version baselines.
   useEffect(() => {
-    if (!project || isResourceInfo) return
+    if (!project || isResourceInfo || isCostInfo || isFeaturesInfo) return
     let cancelled = false
 
     const run = async () => {
@@ -488,7 +736,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     return () => {
       cancelled = true
     }
-  }, [project, workItems, isResourceInfo])
+  }, [project, workItems, isResourceInfo, isCostInfo, isFeaturesInfo])
 
   const stats = useMemo(() => {
     const total = workItems.length
@@ -507,9 +755,14 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   }, [workItems])
 
   const resourceStats = useMemo(() => computeResourceStats(resourceRows), [resourceRows])
+  const costStats = useMemo(() => computeCostStats(costRows), [costRows])
+  const featureStats = useMemo(() => ({ total: featureRows.length }), [featureRows])
 
   const resourceTypeLabel = (type: PmResourceType): string =>
     t(`projectManagerPage.resourceTable.types.${type}`)
+
+  const costTypeLabel = (type: PmCostType): string =>
+    t(`projectManagerPage.costTable.types.${type}`)
 
   const handleDeleteScheduleHistoryEntry = async (entry: PmScheduleSaveRecord) => {
     if (!project) return
@@ -547,7 +800,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       setScheduleHistoryRows(readSaveHistory(updated.metadata))
       setScheduleVersion(readScheduleVersion(updated.metadata))
       setLastSavedAt(readLastSavedAt(updated.metadata))
-      if (!isWorkspaceResource) props.onSaved(updated)
+      if (!isWorkspaceResource) props.onSaved?.(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -587,7 +840,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       setResourceVersion(readResourceVersion(updated.metadata))
       setLastSavedAt(readResourceLastSavedAt(updated.metadata))
       if (props.mode !== 'workspaceResource') {
-        props.onSaved(updated)
+        props.onSaved?.(updated)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -620,6 +873,96 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     setLastSavedAt(readSharedResourceLastSavedAt(workspaceResourceId))
   }
 
+  const reloadWorkspaceCostHistory = () => {
+    if (!workspaceCostId) return
+    setCostHistoryRows(readSharedCostSaveHistory(workspaceCostId))
+    setCostVersion(readSharedCostVersion(workspaceCostId))
+    setLastSavedAt(readSharedCostLastSavedAt(workspaceCostId))
+  }
+
+  const reloadWorkspaceFeaturesHistory = () => {
+    if (!workspaceFeaturesId) return
+    setFeatureHistoryRows(readSharedFeatureSaveHistory(workspaceFeaturesId))
+    setFeatureVersion(readSharedFeatureVersion(workspaceFeaturesId))
+    setLastSavedAt(readSharedFeatureLastSavedAt(workspaceFeaturesId))
+  }
+
+  const handleDeleteCostHistoryEntry = async (entry: PmCostSaveRecord) => {
+    const confirmed = window.confirm(
+      t('projectManagerPage.projectInfo.saveHistoryDeleteConfirmCost', {
+        version: String(entry.version),
+      }),
+    )
+    if (!confirmed) return
+
+    setDeletingHistoryVersion(entry.version)
+    setError(null)
+    try {
+      if (isWorkspaceCost && workspaceCostId) {
+        const nextMeta = removeSharedCostSaveHistoryEntry(workspaceCostId, entry.version)
+        setCostHistoryRows(readCostSaveHistory(nextMeta))
+        setCostVersion(readCostVersion(nextMeta))
+        setLastSavedAt(readCostLastSavedAt(nextMeta))
+        props.onSaved?.()
+        return
+      }
+      if (!project) return
+      const nextMeta = removeCostSaveHistoryEntry(project.metadata ?? {}, entry.version)
+      const updated = await pmApi.updateProject({
+        id: project.id,
+        metadata: nextMeta,
+      })
+      setCostHistoryRows(readCostSaveHistory(updated.metadata))
+      setCostVersion(readCostVersion(updated.metadata))
+      setLastSavedAt(readCostLastSavedAt(updated.metadata))
+      if (props.mode !== 'workspaceCost') {
+        props.onSaved?.(updated)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeletingHistoryVersion(null)
+    }
+  }
+
+  const handleDeleteFeatureHistoryEntry = async (entry: PmFeatureSaveRecord) => {
+    const confirmed = window.confirm(
+      t('projectManagerPage.projectInfo.saveHistoryDeleteConfirmFeature', {
+        version: String(entry.version),
+      }),
+    )
+    if (!confirmed) return
+
+    setDeletingHistoryVersion(entry.version)
+    setError(null)
+    try {
+      if (isWorkspaceFeatures && workspaceFeaturesId) {
+        const nextMeta = removeSharedFeatureSaveHistoryEntry(workspaceFeaturesId, entry.version)
+        setFeatureHistoryRows(readFeatureSaveHistory(nextMeta))
+        setFeatureVersion(readFeatureVersion(nextMeta))
+        setLastSavedAt(readFeatureLastSavedAt(nextMeta))
+        props.onSaved?.()
+        return
+      }
+      if (!project) return
+      const nextMeta = removeFeatureSaveHistoryEntry(project.metadata ?? {}, entry.version)
+      const updated = await pmApi.updateProject({
+        id: project.id,
+        metadata: nextMeta,
+      })
+      setFeatureHistoryRows(readFeatureSaveHistory(updated.metadata))
+      setFeatureVersion(readFeatureVersion(updated.metadata))
+      setLastSavedAt(readFeatureLastSavedAt(updated.metadata))
+      if (props.mode !== 'workspaceFeatures') {
+        props.onSaved?.(updated)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeletingHistoryVersion(null)
+    }
+  }
+
   const handleSave = async (options?: { manualCreate?: boolean }) => {
     if (isWorkspaceResource) {
       if (!props.onSaveResources) {
@@ -639,6 +982,63 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       }
       return
     }
+
+    const onSaveCosts =
+      props.mode === 'workspaceCost'
+        ? props.onSaveCosts
+        : !isCreate && 'onSaveCosts' in props
+          ? props.onSaveCosts
+          : undefined
+
+    // Price-list info: Save persists the cost catalog (peer of resource list).
+    if (isCostInfo && onSaveCosts && !isCreate) {
+      setSaving(true)
+      setError(null)
+      try {
+        const result = await onSaveCosts()
+        if (result === false) return
+        if (isWorkspaceCost && workspaceCostId) {
+          reloadWorkspaceCostHistory()
+          props.onSaved?.()
+        } else if (project && 'project' in props) {
+          // Parent refresh reloads project metadata / version on next open.
+          props.onSaved(project)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    const onSaveFeatures =
+      props.mode === 'workspaceFeatures'
+        ? props.onSaveFeatures
+        : !isCreate && 'onSaveFeatures' in props
+          ? props.onSaveFeatures
+          : undefined
+
+    if (isFeaturesInfo && onSaveFeatures && !isCreate) {
+      setSaving(true)
+      setError(null)
+      try {
+        const result = await onSaveFeatures()
+        if (result === false) return
+        if (isWorkspaceFeatures && workspaceFeaturesId) {
+          reloadWorkspaceFeaturesHistory()
+          props.onSaved?.()
+        } else if (project && 'project' in props) {
+          props.onSaved(project)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
     const code = draft.code.trim()
     const name = draft.name.trim()
     if (!code || !name) {
@@ -677,7 +1077,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         workspaceRoot: draft.workspaceRoot.trim() || null,
         metadata: buildMetadata(draft, project.metadata ?? {}),
       })
-      props.onSaved(updated)
+      props.onSaved?.(updated)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -693,7 +1093,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       case 'resource_management':
         return t('projectManagerPage.projectInfo.tabResource')
       case 'cost_management':
-        return t('projectManagerPage.projectInfo.tabCost')
+        return t('projectManagerPage.projectInfo.tabPrice')
       case 'security_management':
         return t('projectManagerPage.projectInfo.tabSecurity')
       case 'quality_management':
@@ -723,18 +1123,28 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         { id: 'statistics', label: t('projectManagerPage.projectInfo.tabStatistics') },
         { id: 'advanced', label: t('projectManagerPage.projectInfo.tabAdvanced') },
       ]
-    : [
-        { id: 'overview', label: t('projectManagerPage.projectInfo.tabOverview') },
-        { id: domainTabId, label: domainTabLabel },
-        { id: 'statistics', label: t('projectManagerPage.projectInfo.tabStatistics') },
-        { id: 'advanced', label: t('projectManagerPage.projectInfo.tabAdvanced') },
-      ]
+    : isWorkspaceCost
+      ? [
+          { id: 'cost', label: t('projectManagerPage.projectInfo.tabPrice') },
+          { id: 'statistics', label: t('projectManagerPage.projectInfo.tabStatistics') },
+          { id: 'advanced', label: t('projectManagerPage.projectInfo.tabAdvanced') },
+        ]
+      : [
+          { id: 'overview', label: t('projectManagerPage.projectInfo.tabOverview') },
+          { id: domainTabId, label: domainTabLabel },
+          { id: 'statistics', label: t('projectManagerPage.projectInfo.tabStatistics') },
+          { id: 'advanced', label: t('projectManagerPage.projectInfo.tabAdvanced') },
+        ]
 
   const modalTitle = isWorkspaceResource
     ? t('projectManagerPage.projectInfo.modalTitleAllProjectsResource')
-    : isCreate
-      ? t('projectManagerPage.projectInfo.modalTitleCreate')
-      : t('projectManagerPage.projectInfo.modalTitle')
+    : isWorkspaceCost
+      ? t('projectManagerPage.projectInfo.modalTitleAllProjectsCost')
+      : isWorkspaceFeatures
+        ? t('projectManagerPage.projectInfo.modalTitleAllProjectsFeatures')
+        : isCreate
+          ? t('projectManagerPage.projectInfo.modalTitleCreate')
+          : t('projectManagerPage.projectInfo.modalTitle')
 
   return (
     <div className="tm-modal-overlay tm-modal-overlay--kb-settings" onClick={onClose}>
@@ -909,6 +1319,57 @@ const ProjectInfoDialog: FC<Props> = (props) => {
               </div>
             ) : null}
 
+            {activeTab === 'cost' ? (
+              <div className="tm-kb-settings-form">
+                <p className="tm-kb-settings-hint">
+                  {isWorkspaceCost
+                    ? t('projectManagerPage.projectInfo.costHintAllProjects')
+                    : t('projectManagerPage.projectInfo.costHint')}
+                </p>
+                <div className="tm-kb-settings-row">
+                  <label className="tm-kb-settings-label">
+                    {t('projectManagerPage.projectInfo.fieldResourceScope')}
+                  </label>
+                  <span className="tm-kb-settings-readonly">
+                    {isWorkspaceCost
+                      ? t('projectManagerPage.headerProject.allProjects')
+                      : project
+                        ? [project.code.trim(), project.name.trim()].filter(Boolean).join(' · ') ||
+                          project.id
+                        : '—'}
+                  </span>
+                </div>
+                <div className="tm-kb-settings-row">
+                  <label className="tm-kb-settings-label">
+                    {t('projectManagerPage.projectInfo.statCosts')}
+                  </label>
+                  <span className="tm-kb-settings-readonly">{costStats.total}</span>
+                </div>
+                <div className="tm-kb-settings-row">
+                  <label className="tm-kb-settings-label">
+                    {t('projectManagerPage.projectInfo.statPriced')}
+                  </label>
+                  <span className="tm-kb-settings-readonly">{costStats.priced}</span>
+                </div>
+                <div className="tm-kb-settings-row">
+                  <label className="tm-kb-settings-label">
+                    {t('projectManagerPage.projectInfo.statUnpriced')}
+                  </label>
+                  <span className="tm-kb-settings-readonly">{costStats.unpriced}</span>
+                </div>
+                <div className="tm-pm-project-info-stats">
+                  {PM_COST_TYPES.map((type) => (
+                    <div key={type} className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {costTypeLabel(type)}
+                      </span>
+                      <strong>{costStats.byType[type]}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {activeTab === 'schedule' ? (
               <div className="tm-kb-settings-form">
                 <p className="tm-kb-settings-hint">{t('projectManagerPage.projectInfo.scheduleHint')}</p>
@@ -1027,15 +1488,28 @@ const ProjectInfoDialog: FC<Props> = (props) => {
             {activeTab === 'statistics' ? (
               <div className="tm-kb-settings-form">
                 <p className="tm-kb-settings-hint">
-                  {domainTabKind === 'resource'
-                    ? t('projectManagerPage.projectInfo.resourceStatisticsHint')
-                    : domainTabKind === 'placeholder'
-                      ? t('projectManagerPage.projectInfo.domainStatisticsPlaceholderHint', {
-                          domain: domainTabLabel,
-                        })
-                      : t('projectManagerPage.projectInfo.statisticsHint')}
+                  {isFeaturesInfo
+                    ? t('projectManagerPage.projectInfo.featuresStatisticsHint')
+                    : domainTabKind === 'resource'
+                      ? t('projectManagerPage.projectInfo.resourceStatisticsHint')
+                      : domainTabKind === 'cost'
+                        ? t('projectManagerPage.projectInfo.costStatisticsHint')
+                        : domainTabKind === 'placeholder'
+                          ? t('projectManagerPage.projectInfo.domainStatisticsPlaceholderHint', {
+                              domain: domainTabLabel,
+                            })
+                          : t('projectManagerPage.projectInfo.statisticsHint')}
                 </p>
-                {domainTabKind === 'placeholder' ? (
+                {isFeaturesInfo ? (
+                  <div className="tm-pm-project-info-stats">
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statFeatures')}
+                      </span>
+                      <strong>{featureStats.total}</strong>
+                    </div>
+                  </div>
+                ) : domainTabKind === 'placeholder' ? (
                   <div className="tm-pm-project-info-domain-placeholder" role="status">
                     {t('projectManagerPage.projectInfo.domainPlaceholderEmpty')}
                   </div>
@@ -1096,6 +1570,63 @@ const ProjectInfoDialog: FC<Props> = (props) => {
                       <strong>
                         {resourceStats.priced > 0
                           ? formatMoney(resourceStats.priceSum)
+                          : '—'}
+                      </strong>
+                    </div>
+                  </div>
+                ) : domainTabKind === 'cost' ? (
+                  <div className="tm-pm-project-info-stats">
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statCosts')}
+                      </span>
+                      <strong>{costStats.total}</strong>
+                    </div>
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statPriced')}
+                      </span>
+                      <strong>{costStats.priced}</strong>
+                    </div>
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statUnpriced')}
+                      </span>
+                      <strong>{costStats.unpriced}</strong>
+                    </div>
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statAvgUnitPrice')}
+                      </span>
+                      <strong>
+                        {costStats.avgUnitPrice != null
+                          ? formatMoney(costStats.avgUnitPrice)
+                          : '—'}
+                      </strong>
+                    </div>
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statMinUnitPrice')}
+                      </span>
+                      <strong>
+                        {costStats.minPrice != null ? formatMoney(costStats.minPrice) : '—'}
+                      </strong>
+                    </div>
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statMaxUnitPrice')}
+                      </span>
+                      <strong>
+                        {costStats.maxPrice != null ? formatMoney(costStats.maxPrice) : '—'}
+                      </strong>
+                    </div>
+                    <div className="tm-pm-project-info-stat">
+                      <span className="tm-pm-project-info-stat-label">
+                        {t('projectManagerPage.projectInfo.statCatalogTotalPrice')}
+                      </span>
+                      <strong>
+                        {costStats.totalPriceSum != null
+                          ? formatMoney(costStats.totalPriceSum)
                           : '—'}
                       </strong>
                     </div>
@@ -1165,12 +1696,16 @@ const ProjectInfoDialog: FC<Props> = (props) => {
 
             {activeTab === 'advanced' ? (
               <div className="tm-kb-settings-form">
-                <p className="tm-kb-settings-hint">
-                  {isResourceInfo
-                    ? t('projectManagerPage.projectInfo.advancedHintResource')
-                    : t('projectManagerPage.projectInfo.advancedHint')}
-                </p>
-                {!isWorkspaceResource ? (
+                {isResourceInfo || isCostInfo || isFeaturesInfo ? (
+                  <p className="tm-kb-settings-hint">
+                    {isResourceInfo
+                      ? t('projectManagerPage.projectInfo.advancedHintResource')
+                      : isCostInfo
+                        ? t('projectManagerPage.projectInfo.advancedHintCost')
+                        : t('projectManagerPage.projectInfo.advancedHintFeatures')}
+                  </p>
+                ) : null}
+                {!isWorkspaceCatalog ? (
                   <>
                     <div className="tm-kb-settings-row">
                       <label className="tm-kb-settings-label" htmlFor="pm-info-region">
@@ -1336,7 +1871,211 @@ const ProjectInfoDialog: FC<Props> = (props) => {
                     </div>
                   </>
                 ) : null}
-                {!isResourceInfo && !isCreate && project ? (
+                {isCostInfo && (!isCreate || isWorkspaceCost) ? (
+                  <>
+                    <div className="tm-kb-settings-row">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldUpdatedAt')}
+                      </label>
+                      <span className="tm-kb-settings-readonly">
+                        {lastSavedAt != null
+                          ? formatDateTime(lastSavedAt, dateInputLang)
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="tm-kb-settings-row">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldCostVersion')}
+                      </label>
+                      <span className="tm-kb-settings-readonly">
+                        {costVersion > 0
+                          ? t('projectManagerPage.projectInfo.saveHistoryVersion', {
+                              version: String(costVersion),
+                            })
+                          : t('projectManagerPage.projectInfo.costVersionNever')}
+                      </span>
+                    </div>
+                    <div className="tm-kb-settings-row">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldLastSavedAt')}
+                      </label>
+                      <span className="tm-kb-settings-readonly">
+                        {lastSavedAt != null
+                          ? formatDateTime(lastSavedAt, dateInputLang)
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="tm-kb-settings-row tm-kb-settings-row--top">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldSaveHistory')}
+                      </label>
+                      {costHistoryRows.length === 0 ? (
+                        <span className="tm-kb-settings-readonly">
+                          {t('projectManagerPage.projectInfo.saveHistoryEmpty')}
+                        </span>
+                      ) : (
+                        <div
+                          className="tm-pm-project-info-save-history tm-pm-project-info-save-history--resource"
+                          role="table">
+                          <div
+                            className="tm-pm-project-info-save-history-head"
+                            role="row">
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColVersion')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColSavedAt')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColCosts')}
+                            </span>
+                            <span
+                              role="columnheader"
+                              className="tm-pm-project-info-save-history-actions">
+                              {t('projectManagerPage.projectInfo.saveHistoryColActions')}
+                            </span>
+                          </div>
+                          {costHistoryRows.map((entry) => (
+                            <div
+                              key={`${entry.version}-${entry.savedAt}`}
+                              className="tm-pm-project-info-save-history-row"
+                              role="row">
+                              <span role="cell">
+                                {t('projectManagerPage.projectInfo.saveHistoryVersion', {
+                                  version: String(entry.version),
+                                })}
+                                {entry.version === costVersion ? (
+                                  <span className="tm-pm-project-info-save-history-current">
+                                    {t('projectManagerPage.projectInfo.saveHistoryCurrent')}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span role="cell">
+                                {formatDateTime(entry.savedAt, dateInputLang)}
+                              </span>
+                              <span role="cell">
+                                {t('projectManagerPage.projectInfo.saveHistoryCosts', {
+                                  count: String(entry.costCount),
+                                })}
+                              </span>
+                              <span
+                                role="cell"
+                                className="tm-pm-project-info-save-history-actions">
+                                <button
+                                  type="button"
+                                  className="tm-pm-project-info-save-history-delete"
+                                  disabled={deletingHistoryVersion === entry.version}
+                                  onClick={() => void handleDeleteCostHistoryEntry(entry)}>
+                                  {deletingHistoryVersion === entry.version
+                                    ? '…'
+                                    : t('common.delete')}
+                                </button>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+                {isFeaturesInfo && (!isCreate || isWorkspaceFeatures) ? (
+                  <>
+                    <div className="tm-kb-settings-row">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldFeatureVersion')}
+                      </label>
+                      <span className="tm-kb-settings-readonly">
+                        {featureVersion > 0
+                          ? t('projectManagerPage.projectInfo.saveHistoryVersion', {
+                              version: String(featureVersion),
+                            })
+                          : t('projectManagerPage.projectInfo.featureVersionNever')}
+                      </span>
+                    </div>
+                    <div className="tm-kb-settings-row">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldLastSavedAt')}
+                      </label>
+                      <span className="tm-kb-settings-readonly">
+                        {lastSavedAt != null
+                          ? formatDateTime(lastSavedAt, dateInputLang)
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="tm-kb-settings-row tm-kb-settings-row--top">
+                      <label className="tm-kb-settings-label">
+                        {t('projectManagerPage.projectInfo.fieldSaveHistory')}
+                      </label>
+                      {featureHistoryRows.length === 0 ? (
+                        <span className="tm-kb-settings-readonly">
+                          {t('projectManagerPage.projectInfo.saveHistoryEmpty')}
+                        </span>
+                      ) : (
+                        <div
+                          className="tm-pm-project-info-save-history tm-pm-project-info-save-history--resource"
+                          role="table">
+                          <div
+                            className="tm-pm-project-info-save-history-head"
+                            role="row">
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColVersion')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColSavedAt')}
+                            </span>
+                            <span role="columnheader">
+                              {t('projectManagerPage.projectInfo.saveHistoryColFeatures')}
+                            </span>
+                            <span
+                              role="columnheader"
+                              className="tm-pm-project-info-save-history-actions">
+                              {t('projectManagerPage.projectInfo.saveHistoryColActions')}
+                            </span>
+                          </div>
+                          {featureHistoryRows.map((entry) => (
+                            <div
+                              key={`${entry.version}-${entry.savedAt}`}
+                              className="tm-pm-project-info-save-history-row"
+                              role="row">
+                              <span role="cell">
+                                {t('projectManagerPage.projectInfo.saveHistoryVersion', {
+                                  version: String(entry.version),
+                                })}
+                                {entry.version === featureVersion ? (
+                                  <span className="tm-pm-project-info-save-history-current">
+                                    {t('projectManagerPage.projectInfo.saveHistoryCurrent')}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span role="cell">
+                                {formatDateTime(entry.savedAt, dateInputLang)}
+                              </span>
+                              <span role="cell">
+                                {t('projectManagerPage.projectInfo.saveHistoryFeatures', {
+                                  count: String(entry.featureCount),
+                                })}
+                              </span>
+                              <span
+                                role="cell"
+                                className="tm-pm-project-info-save-history-actions">
+                                <button
+                                  type="button"
+                                  className="tm-pm-project-info-save-history-delete"
+                                  disabled={deletingHistoryVersion === entry.version}
+                                  onClick={() => void handleDeleteFeatureHistoryEntry(entry)}>
+                                  {deletingHistoryVersion === entry.version
+                                    ? '…'
+                                    : t('common.delete')}
+                                </button>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+                {!isResourceInfo && !isCostInfo && !isFeaturesInfo && !isCreate && project ? (
                   <>
                     <div className="tm-kb-settings-row">
                       <label className="tm-kb-settings-label">
@@ -1471,7 +2210,37 @@ const ProjectInfoDialog: FC<Props> = (props) => {
                 disabled={saving || !props.onSaveResources}>
                 {saving
                   ? t('projectManagerPage.projectInfo.saving')
-                  : t('projectManagerPage.projectInfo.saveResources')}
+                  : t('projectManagerPage.projectInfo.saveCatalog')}
+              </button>
+            ) : isCostInfo &&
+              ((props.mode === 'workspaceCost' && props.onSaveCosts) ||
+                (props.mode !== 'workspaceCost' &&
+                  props.mode !== 'create' &&
+                  'onSaveCosts' in props &&
+                  props.onSaveCosts)) ? (
+              <button
+                type="button"
+                className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--primary"
+                onClick={() => void handleSave()}
+                disabled={saving}>
+                {saving
+                  ? t('projectManagerPage.projectInfo.saving')
+                  : t('projectManagerPage.projectInfo.saveCatalog')}
+              </button>
+            ) : isFeaturesInfo &&
+              ((props.mode === 'workspaceFeatures' && props.onSaveFeatures) ||
+                (props.mode !== 'workspaceFeatures' &&
+                  props.mode !== 'create' &&
+                  'onSaveFeatures' in props &&
+                  props.onSaveFeatures)) ? (
+              <button
+                type="button"
+                className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--primary"
+                onClick={() => void handleSave()}
+                disabled={saving}>
+                {saving
+                  ? t('projectManagerPage.projectInfo.saving')
+                  : t('projectManagerPage.projectInfo.saveCatalog')}
               </button>
             ) : (
               <>

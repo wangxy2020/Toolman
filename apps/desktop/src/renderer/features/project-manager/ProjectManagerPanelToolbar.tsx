@@ -7,6 +7,7 @@ import {
   IconDatabase,
   IconGantt,
   IconPlus,
+  IconPriceList,
   IconSliders,
   IconTable,
 } from '../../components/icons'
@@ -14,6 +15,7 @@ import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import type { ConfigurableSidebarMenuKey } from './projectSidebarMenuConfig'
 import type { ProjectManagerPanelView } from './projectManagerPanelView'
+import { isPmFilesDomain } from './pm-domain-config'
 
 interface Props {
   activeTab: ConfigurableSidebarMenuKey | 'customize_menu'
@@ -31,7 +33,6 @@ type PanelToolbarItem = {
 const BASE_VIEW_ITEMS: PanelToolbarItem[] = [
   { key: 'stats', titleKey: 'projectManagerPage.toolbar.stats', icon: <IconChartBar size={16} /> },
   { key: 'agent', titleKey: 'projectManagerPage.toolbar.agent', icon: <IconAgent size={16} /> },
-  { key: 'files', titleKey: 'projectManagerPage.toolbar.files', icon: <IconApps size={16} /> },
   {
     key: 'database',
     titleKey: 'projectManagerPage.toolbar.database',
@@ -44,6 +45,12 @@ const BASE_VIEW_ITEMS: PanelToolbarItem[] = [
   },
 ]
 
+const FILES_VIEW_ITEM: PanelToolbarItem = {
+  key: 'files',
+  titleKey: 'projectManagerPage.toolbar.files',
+  icon: <IconApps size={16} />,
+}
+
 const PROGRESS_SCHEDULE_ITEMS: PanelToolbarItem[] = [
   { key: 'gantt', titleKey: 'projectManagerPage.toolbar.gantt', icon: <IconGantt size={16} /> },
 ]
@@ -53,6 +60,14 @@ const RESOURCE_TABLE_ITEMS: PanelToolbarItem[] = [
     key: 'resource_table',
     titleKey: 'projectManagerPage.toolbar.resourceTable',
     icon: <IconTable size={16} />,
+  },
+]
+
+const COST_TABLE_ITEMS: PanelToolbarItem[] = [
+  {
+    key: 'cost_table',
+    titleKey: 'projectManagerPage.toolbar.costTable',
+    icon: <IconPriceList size={16} />,
   },
 ]
 
@@ -89,12 +104,18 @@ export function ProjectManagerPanelToolbar({
   onCreateProject,
 }: Props) {
   const { t } = useI18n()
+  const baseItems =
+    activeTab !== 'customize_menu' && isPmFilesDomain(activeTab)
+      ? insertAfterAgent(BASE_VIEW_ITEMS, [FILES_VIEW_ITEM])
+      : BASE_VIEW_ITEMS
   const withDomainExtras =
     activeTab === 'progress_management'
-      ? insertAfterAgent(BASE_VIEW_ITEMS, PROGRESS_SCHEDULE_ITEMS)
+      ? insertAfterAgent(baseItems, PROGRESS_SCHEDULE_ITEMS)
       : activeTab === 'resource_management'
-        ? insertAfterAgent(BASE_VIEW_ITEMS, RESOURCE_TABLE_ITEMS)
-        : BASE_VIEW_ITEMS
+        ? insertAfterAgent(baseItems, RESOURCE_TABLE_ITEMS)
+        : activeTab === 'cost_management'
+          ? insertAfterAgent(baseItems, COST_TABLE_ITEMS)
+          : baseItems
   const viewItems = onCreateProject
     ? insertCreateBetweenDatabaseAndSettings(withDomainExtras)
     : withDomainExtras

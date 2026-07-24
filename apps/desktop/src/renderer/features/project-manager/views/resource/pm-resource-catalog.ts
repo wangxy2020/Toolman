@@ -21,26 +21,67 @@ export const PM_RESOURCE_TYPES = [
   'equipment',
   'device',
   'instrument',
+  'funds',
+  'custom',
   'management',
   'fees',
   'comprehensive',
   'measures',
+  'other',
   'tax',
   'investment',
   'designEstimate',
   'constructionBudget',
   'costBudget',
-  'funds',
-  'other',
 ] as const
 
 export type PmResourceType = (typeof PM_RESOURCE_TYPES)[number]
+
+/** Top-level types shown directly in the view / type menus. */
+export const PM_RESOURCE_PRIMARY_TYPES = [
+  'labor',
+  'auxiliary',
+  'material',
+  'equipment',
+  'device',
+  'instrument',
+  'funds',
+  'custom',
+] as const satisfies readonly PmResourceType[]
+
+/**
+ * Cost-oriented types nested under「成本资源」in resource-list menus
+ * (管理 … 成本预算, with 其他费 between 措施费 and 税金).
+ */
+export const PM_RESOURCE_COST_TYPES = [
+  'management',
+  'fees',
+  'comprehensive',
+  'measures',
+  'other',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
+] as const satisfies readonly PmResourceType[]
+
+export type PmResourceCostType = (typeof PM_RESOURCE_COST_TYPES)[number]
+
+export function isPmResourceCostType(value: unknown): value is PmResourceCostType {
+  return typeof value === 'string' && (PM_RESOURCE_COST_TYPES as readonly string[]).includes(value)
+}
 
 export const PM_RESOURCE_APPLICABLE_ALL = 'all'
 
 export type PmResourceRow = {
   id: string
   type: PmResourceType
+  /**
+   * User-defined type label when `type === 'custom'`.
+   * Display / filter / Gantt use this name — not the literal「自定义」.
+   */
+  customTypeName: string
   name: string
   /** Specification / model (规格). */
   spec: string
@@ -55,6 +96,99 @@ export type PmResourceRow = {
   note: string
   sortOrder: number
   parentId?: string | null
+}
+
+/** Built-in primary types (excludes `custom`, which is named by the user). */
+export const PM_RESOURCE_BUILTIN_PRIMARY_TYPES = PM_RESOURCE_PRIMARY_TYPES.filter(
+  (type): type is Exclude<(typeof PM_RESOURCE_PRIMARY_TYPES)[number], 'custom'> =>
+    type !== 'custom',
+)
+
+export function isCustomResourceType(type: unknown): type is 'custom' {
+  return type === 'custom'
+}
+
+/** Trimmed user-defined type name (`''` when blank / not custom). */
+export function resourceCustomTypeName(
+  row: Pick<PmResourceRow, 'type' | 'customTypeName'>,
+): string {
+  if (row.type !== 'custom') return ''
+  return row.customTypeName?.trim() ?? ''
+}
+
+/**
+ * Display label for a resource type.
+ * Custom rows use the user-entered name; unnamed custom falls back to `fallbackCustomLabel`.
+ */
+export function formatResourceTypeDisplayLabel(
+  row: Pick<PmResourceRow, 'type' | 'customTypeName'>,
+  builtinLabel: (type: PmResourceType) => string,
+  fallbackCustomLabel: string,
+): string {
+  if (row.type === 'custom') {
+    return resourceCustomTypeName(row) || fallbackCustomLabel
+  }
+  return builtinLabel(row.type)
+}
+
+/** Unique custom type names: catalog order first, then names found on rows. */
+export function listCustomResourceTypeNames(
+  rows: readonly PmResourceRow[],
+  catalog: readonly string[] = [],
+): string[] {
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const entry of catalog) {
+    const name = entry.trim()
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    names.push(name)
+  }
+  for (const row of rows) {
+    const name = resourceCustomTypeName(row)
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    names.push(name)
+  }
+  return names
+}
+
+/** Select-value encoding for a named custom type (`customName:<name>`). */
+export function encodeCustomTypeSelectValue(name: string): string {
+  return encodeCustomResourceViewFilter(name.trim())
+}
+
+export function parseCustomTypeSelectValue(
+  value: string,
+): { kind: 'blank' } | { kind: 'named'; name: string } | null {
+  if (value === 'custom') return { kind: 'blank' }
+  const name = parseCustomResourceViewFilter(value)
+  if (name != null) return { kind: 'named', name }
+  return null
+}
+
+export const CUSTOM_RESOURCE_VIEW_PREFIX = 'customName:' as const
+
+export function encodeCustomResourceViewFilter(name: string): string {
+  return `${CUSTOM_RESOURCE_VIEW_PREFIX}${name}`
+}
+
+export function parseCustomResourceViewFilter(filter: string): string | null {
+  if (!filter.startsWith(CUSTOM_RESOURCE_VIEW_PREFIX)) return null
+  return filter.slice(CUSTOM_RESOURCE_VIEW_PREFIX.length)
+}
+
+export function resourceRowMatchesViewFilter(
+  row: Pick<PmResourceRow, 'type' | 'customTypeName'>,
+  filter: string,
+): boolean {
+  if (filter === 'all') return true
+  if (filter === 'custom') return row.type === 'custom'
+  const customName = parseCustomResourceViewFilter(filter)
+  if (customName != null) {
+    return row.type === 'custom' && resourceCustomTypeName(row) === customName
+  }
+  return row.type === filter
 }
 
 /** Built-in starter rows when a catalog has never been saved.
@@ -98,16 +232,6 @@ const DEFAULT_RESOURCE_DEFS: ReadonlyArray<{
   { type: 'instrument', name: '全站仪', unit: '台', pricingUnit: '台班', unitPrice: 400 },
   { type: 'instrument', name: '水准仪', unit: '台', pricingUnit: '台班', unitPrice: 150 },
   { type: 'instrument', name: '塔尺', unit: '台', pricingUnit: '台班', unitPrice: 30 },
-  { type: 'investment', name: '投资估算', unit: '元', pricingUnit: '元', unitPrice: null },
-  { type: 'designEstimate', name: '设计概算', unit: '元', pricingUnit: '元', unitPrice: null },
-  {
-    type: 'constructionBudget',
-    name: '施工预算',
-    unit: '元',
-    pricingUnit: '元',
-    unitPrice: null,
-  },
-  { type: 'costBudget', name: '成本预算', unit: '元', pricingUnit: '元', unitPrice: null },
 ]
 
 const DEFAULT_UNIT_PRICE_BY_NAME = new Map(
@@ -483,6 +607,7 @@ function parseResourceRows(raw: unknown): PmResourceRow[] | null {
       return {
         id: row.id,
         type: row.type,
+        customTypeName: readOptionalString(record.customTypeName),
         name: canonicalizeResourceName(row.name),
         spec: readOptionalString(record.spec),
         unit,
@@ -512,6 +637,7 @@ export function createDefaultResourceCatalog(
   return DEFAULT_RESOURCE_DEFS.map((entry, index) => ({
     id: crypto.randomUUID(),
     type: entry.type,
+    customTypeName: '',
     name: entry.name,
     spec: '',
     unit: entry.unit,
@@ -526,21 +652,19 @@ export function createDefaultResourceCatalog(
 
 /**
  * Types whose built-in defaults should be rolled into already-saved catalogs
- * when the type is completely absent (e.g. newly added「设备」「资金」「仪器」).
+ * when the type is completely absent (e.g. newly added「设备」「仪器」).
+ * Budget types (投资估算…成本预算) are intentionally omitted so users can delete them.
  */
 const ENSURE_DEFAULT_TYPES: readonly PmResourceType[] = [
   'auxiliary',
   'device',
-  'investment',
-  'designEstimate',
-  'constructionBudget',
-  'costBudget',
   'instrument',
 ]
 
 /**
  * Named defaults to roll into existing catalogs even when the type already exists
  * (e.g. new materials / instruments added later).
+ * Budget named rows are omitted so deletions persist after save.
  */
 const ENSURE_NAMED_DEFAULTS: ReadonlyArray<{ type: PmResourceType; name: string }> = [
   { type: 'instrument', name: '全站仪' },
@@ -549,16 +673,39 @@ const ENSURE_NAMED_DEFAULTS: ReadonlyArray<{ type: PmResourceType; name: string 
   { type: 'auxiliary', name: '模板' },
   { type: 'auxiliary', name: '方木' },
   { type: 'auxiliary', name: '脚手架' },
-  { type: 'investment', name: '投资估算' },
-  { type: 'designEstimate', name: '设计概算' },
-  { type: 'constructionBudget', name: '施工预算' },
-  { type: 'costBudget', name: '成本预算' },
   { type: 'material', name: '砌块/砖' },
   { type: 'material', name: '防水卷材' },
   { type: 'material', name: '预拌砂浆' },
   { type: 'material', name: '电缆' },
   { type: 'material', name: '钢管' },
 ]
+
+/**
+ * Built-in budget rows removed from「全部项目」defaults; strip if still present
+ * so hydrate/localStorage cannot resurrect them after delete.
+ */
+const RETIRED_SHARED_BUDGET_DEFAULTS: ReadonlySet<string> = new Set([
+  'investment\0投资估算',
+  'designEstimate\0设计概算',
+  'constructionBudget\0施工预算',
+  'costBudget\0成本预算',
+])
+
+export function isRetiredSharedBudgetDefault(
+  type: PmResourceType,
+  name: string,
+): boolean {
+  return RETIRED_SHARED_BUDGET_DEFAULTS.has(`${type}\0${canonicalizeResourceName(name)}`)
+}
+
+export function stripRetiredSharedBudgetDefaults(rows: readonly PmResourceRow[]): {
+  rows: PmResourceRow[]
+  changed: boolean
+} {
+  const next = rows.filter((row) => !isRetiredSharedBudgetDefault(row.type, row.name))
+  if (next.length === rows.length) return { rows: [...rows], changed: false }
+  return { rows: reindexResourceRows(next), changed: true }
+}
 
 /**
  * Append built-in defaults for newly introduced types / named resources that are
@@ -568,13 +715,15 @@ export function ensureDefaultResourcesInCatalog(rows: PmResourceRow[]): {
   rows: PmResourceRow[]
   changed: boolean
 } {
+  const stripped = stripRetiredSharedBudgetDefaults(rows)
+  rows = stripped.rows
   const typesPresent = new Set<PmResourceType>()
   const keysPresent = new Set<string>()
   for (const row of rows) {
     const name = row.name.trim()
     if (!name) continue
     typesPresent.add(row.type)
-    keysPresent.add(resourceMatchKey(row.type, name))
+    keysPresent.add(resourceMatchKey(row.type, name, row.customTypeName))
   }
 
   const defByKey = new Map(
@@ -592,6 +741,7 @@ export function ensureDefaultResourcesInCatalog(rows: PmResourceRow[]): {
     additions.push({
       id: crypto.randomUUID(),
       type: entry.type,
+      customTypeName: '',
       name: entry.name,
       spec: '',
       unit: entry.unit,
@@ -613,6 +763,7 @@ export function ensureDefaultResourcesInCatalog(rows: PmResourceRow[]): {
     additions.push({
       id: crypto.randomUUID(),
       type: def.type,
+      customTypeName: '',
       name: def.name,
       spec: '',
       unit: def.unit,
@@ -626,7 +777,7 @@ export function ensureDefaultResourcesInCatalog(rows: PmResourceRow[]): {
   }
 
   if (additions.length === 0) {
-    return { rows, changed: false }
+    return { rows, changed: stripped.changed }
   }
   return {
     rows: reindexResourceRows([...rows, ...additions]),
@@ -703,6 +854,7 @@ export function fingerprintResourceCatalog(rows: readonly PmResourceRow[]): stri
   const idToIndex = new Map(rows.map((row, index) => [row.id, index]))
   const normalized = rows.map((row) => ({
     type: row.type,
+    customTypeName: row.type === 'custom' ? row.customTypeName.trim() : '',
     name: row.name.trim(),
     spec: row.spec.trim(),
     unit: row.unit.trim(),
@@ -726,6 +878,7 @@ export function toResourceCatalogSnapshot(
   return rows.map((row) => ({
     id: row.id,
     type: row.type,
+    customTypeName: row.customTypeName,
     name: row.name,
     spec: row.spec,
     unit: row.unit,
@@ -740,18 +893,21 @@ export function toResourceCatalogSnapshot(
 
 /**
  * Record shared「全部项目」save meta after a catalog save.
- * New versions are created only when catalog content actually changes.
+ * Pass `bumpVersion: true` for「另存为新版本」; `false` (default) updates current only
+ * (first save still creates v1).
  */
 export function recordSharedResourceSaveMeta(
   workspaceId: string,
   rows: readonly PmResourceRow[],
-  savedAt: number = Date.now(),
+  options?: { savedAt?: number; bumpVersion?: boolean; note?: string },
 ): Record<string, unknown> {
   const next = buildResourceSaveMetadata(readSharedResourceSaveMeta(workspaceId), {
     resourceCount: rows.length,
     contentFingerprint: fingerprintResourceCatalog(rows),
-    savedAt,
+    savedAt: options?.savedAt ?? Date.now(),
     catalog: toResourceCatalogSnapshot(rows),
+    bumpVersion: options?.bumpVersion ?? false,
+    ...(options?.note?.trim() ? { note: options.note.trim() } : {}),
   })
   writeSharedResourceSaveMeta(workspaceId, next)
   return next
@@ -836,6 +992,7 @@ export function writeSharedResourceCatalog(
         normalized.map((row) => ({
           id: row.id,
           type: row.type,
+          customTypeName: row.customTypeName ?? '',
           name: row.name,
           spec: row.spec,
           unit: row.unit,
@@ -876,6 +1033,10 @@ export async function hydrateSharedResourceCatalogFromMain(
         return {
           id: row.id,
           type: row.type as PmResourceType,
+          customTypeName:
+            typeof (row as { customTypeName?: unknown }).customTypeName === 'string'
+              ? (row as { customTypeName: string }).customTypeName
+              : '',
           name: row.name,
           spec:
             typeof (row as { spec?: unknown }).spec === 'string'
@@ -896,12 +1057,17 @@ export async function hydrateSharedResourceCatalogFromMain(
       const local = readSharedResourceCatalog(workspaceId)
       const remoteIds = new Set(mapped.map((row) => row.id))
       // Keep local-only rows (e.g. types main dropped while sync lagged / schema lagged).
+      // Do not resurrect retired budget defaults that were removed from「全部项目」.
       const localExtras =
         !local.isDefault
-          ? local.rows.filter((row) => !remoteIds.has(row.id))
+          ? local.rows.filter(
+              (row) =>
+                !remoteIds.has(row.id) && !isRetiredSharedBudgetDefault(row.type, row.name),
+            )
           : []
       const merged = localExtras.length > 0 ? [...mapped, ...localExtras] : mapped
-      const normalized = normalizeResourceCatalogRows(merged)
+      const stripped = stripRetiredSharedBudgetDefaults(merged)
+      const normalized = normalizeResourceCatalogRows(stripped.rows)
       // Always write normalized rows so unit conventions sync to localStorage + main.
       writeSharedResourceCatalog(workspaceId, normalized.rows)
       return normalized.rows
@@ -939,14 +1105,14 @@ export function mergeSharedIntoProjectCatalog(
   for (const row of projectRows) {
     const name = row.name.trim()
     if (!name) continue
-    existingKeys.add(resourceMatchKey(row.type, name))
+    existingKeys.add(resourceMatchKey(row.type, name, row.customTypeName))
   }
 
   const additions: PmResourceRow[] = []
   for (const shared of sharedRows) {
     const name = shared.name.trim()
     if (!name) continue
-    const key = resourceMatchKey(shared.type, name)
+    const key = resourceMatchKey(shared.type, name, shared.customTypeName)
     if (existingKeys.has(key)) continue
     existingKeys.add(key)
     additions.push({
@@ -977,13 +1143,13 @@ export function upsertSharedResourceCatalog(
   for (let i = 0; i < next.length; i += 1) {
     const name = next[i]!.name.trim()
     if (!name) continue
-    indexByKey.set(resourceMatchKey(next[i]!.type, name), i)
+    indexByKey.set(resourceMatchKey(next[i]!.type, name, next[i]!.customTypeName), i)
   }
 
   for (const row of incoming) {
     const name = row.name.trim()
     if (!name) continue
-    const key = resourceMatchKey(row.type, name)
+    const key = resourceMatchKey(row.type, name, row.customTypeName)
     const existingIndex = indexByKey.get(key)
     if (existingIndex == null) {
       next.push({
@@ -1084,10 +1250,12 @@ export function createEmptyResourceRow(
   type: PmResourceType = 'labor',
   parentId: string | null = null,
   applicable: string = PM_RESOURCE_APPLICABLE_ALL,
+  customTypeName = '',
 ): PmResourceRow {
   return {
     id: crypto.randomUUID(),
     type,
+    customTypeName: type === 'custom' ? customTypeName : '',
     name: '',
     spec: '',
     unit: '',
@@ -1118,6 +1286,13 @@ export function sortResourceRowsByTypeMenu(rows: readonly PmResourceRow[]): PmRe
   indexed.sort((left, right) => {
     const typeDelta = resourceTypeMenuRank(left.row.type) - resourceTypeMenuRank(right.row.type)
     if (typeDelta !== 0) return typeDelta
+    if (left.row.type === 'custom' && right.row.type === 'custom') {
+      const nameDelta = resourceCustomTypeName(left.row).localeCompare(
+        resourceCustomTypeName(right.row),
+        'zh-CN',
+      )
+      if (nameDelta !== 0) return nameDelta
+    }
     if (left.row.sortOrder !== right.row.sortOrder) {
       return left.row.sortOrder - right.row.sortOrder
     }
@@ -1138,7 +1313,7 @@ export function sortResourceRowsLikeSharedCatalog(
   sharedRows.forEach((row, index) => {
     const name = row.name.trim()
     if (!name) return
-    const key = resourceMatchKey(row.type, name)
+    const key = resourceMatchKey(row.type, name, row.customTypeName)
     if (!sharedRank.has(key)) sharedRank.set(key, index)
   })
 
@@ -1147,8 +1322,16 @@ export function sortResourceRowsLikeSharedCatalog(
     const typeDelta = resourceTypeMenuRank(left.row.type) - resourceTypeMenuRank(right.row.type)
     if (typeDelta !== 0) return typeDelta
 
-    const leftKey = resourceMatchKey(left.row.type, left.row.name)
-    const rightKey = resourceMatchKey(right.row.type, right.row.name)
+    if (left.row.type === 'custom' && right.row.type === 'custom') {
+      const nameDelta = resourceCustomTypeName(left.row).localeCompare(
+        resourceCustomTypeName(right.row),
+        'zh-CN',
+      )
+      if (nameDelta !== 0) return nameDelta
+    }
+
+    const leftKey = resourceMatchKey(left.row.type, left.row.name, left.row.customTypeName)
+    const rightKey = resourceMatchKey(right.row.type, right.row.name, right.row.customTypeName)
     const leftShared = sharedRank.get(leftKey)
     const rightShared = sharedRank.get(rightKey)
     if (leftShared != null && rightShared != null && leftShared !== rightShared) {
@@ -1183,7 +1366,14 @@ export function resourceRowDepth(
   return depth
 }
 
-function resourceMatchKey(type: PmResourceType, name: string): string {
+function resourceMatchKey(
+  type: PmResourceType,
+  name: string,
+  customTypeName = '',
+): string {
+  if (type === 'custom') {
+    return `${type}::${customTypeName.trim()}::${name.trim()}`
+  }
   return `${type}::${name.trim()}`
 }
 
@@ -1197,7 +1387,10 @@ export function buildBaselinePriceIndex(baselineRows: PmResourceRow[]): {
   for (const row of baselineRows) {
     const name = row.name.trim()
     if (!name || row.unitPrice == null || !(row.unitPrice > 0)) continue
-    byTypeAndName.set(resourceMatchKey(row.type, name), row.unitPrice)
+    byTypeAndName.set(
+      resourceMatchKey(row.type, name, row.customTypeName),
+      row.unitPrice,
+    )
     if (!byName.has(name)) byName.set(name, row.unitPrice)
   }
   return { byTypeAndName, byName }
@@ -1210,7 +1403,7 @@ export function lookupBaselineUnitPrice(
   const name = row.name.trim()
   if (!name) return null
   return (
-    index.byTypeAndName.get(resourceMatchKey(row.type, name)) ??
+    index.byTypeAndName.get(resourceMatchKey(row.type, name, row.customTypeName)) ??
     index.byName.get(name) ??
     null
   )

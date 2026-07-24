@@ -2,6 +2,16 @@
  * Workspace-wide「全部项目」catalog is stored in localStorage per workspace.
  */
 
+import {
+  buildFeatureSaveMetadata,
+  readFeatureLastSavedAt,
+  readFeatureSaveHistory,
+  readFeatureVersion,
+  removeFeatureSaveHistoryEntry,
+  type PmFeatureCatalogSnapshotRow,
+  type PmFeatureSaveRecord,
+} from '@toolman/shared'
+
 export const PM_FEATURE_CATALOG_KEY = 'featureCatalog'
 
 export const PM_FEATURE_TYPES = [
@@ -9,6 +19,8 @@ export const PM_FEATURE_TYPES = [
   'auxiliary',
   'material',
   'machinery',
+  'device',
+  'instrument',
   'procurement',
   'metering',
   'node',
@@ -18,6 +30,31 @@ export const PM_FEATURE_TYPES = [
 export type PmFeatureType = (typeof PM_FEATURE_TYPES)[number]
 
 export const PM_FEATURE_APPLICABLE_ALL = 'all'
+
+/** Schedule-synced types shown under 人力…仪器 / 「全部」. */
+export const PM_FEATURE_SCHEDULE_TYPES = [
+  'labor',
+  'auxiliary',
+  'material',
+  'machinery',
+  'device',
+  'instrument',
+] as const satisfies readonly PmFeatureType[]
+
+export type PmFeatureScheduleType = (typeof PM_FEATURE_SCHEDULE_TYPES)[number]
+
+export type PmFeatureViewFilter = PmFeatureType | 'scheduleAll'
+
+export function isPmFeatureScheduleType(value: unknown): value is PmFeatureScheduleType {
+  return (
+    typeof value === 'string' &&
+    (PM_FEATURE_SCHEDULE_TYPES as readonly string[]).includes(value)
+  )
+}
+
+export function isPmFeatureViewFilter(value: unknown): value is PmFeatureViewFilter {
+  return value === 'scheduleAll' || isPmFeatureType(value)
+}
 
 export type PmFeatureRow = {
   id: string
@@ -54,15 +91,15 @@ const LEGACY_SCHEDULE_FEATURE_PLACEHOLDERS: ReadonlySet<string> = new Set([
   'machinery::关键机械进场',
 ])
 
-const SCHEDULE_FEATURE_TYPES: ReadonlySet<PmFeatureType> = new Set([
-  'labor',
-  'auxiliary',
-  'material',
-  'machinery',
-])
+const SCHEDULE_FEATURE_TYPES: ReadonlySet<PmFeatureType> = new Set(PM_FEATURE_SCHEDULE_TYPES)
 
 export function isScheduleFeatureType(type: PmFeatureType): boolean {
   return SCHEDULE_FEATURE_TYPES.has(type)
+}
+
+export function featureTypeMenuRank(type: PmFeatureType): number {
+  const index = PM_FEATURE_TYPES.indexOf(type)
+  return index >= 0 ? index : PM_FEATURE_TYPES.length
 }
 
 export function isPmFeatureType(value: unknown): value is PmFeatureType {
@@ -364,4 +401,101 @@ export function featureRowDepth(row: PmFeatureRow, byId: Map<string, PmFeatureRo
     parentId = parent.parentId ?? null
   }
   return depth
+}
+
+/** Stable fingerprint of persisted 手工目录 rows (schedule-synced types excluded upstream). */
+export function fingerprintFeatureCatalog(rows: readonly PmFeatureRow[]): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      type: row.type,
+      name: row.name.trim(),
+      unit: row.unit.trim(),
+      quantity: row.quantity,
+      remark: row.remark,
+      applicable: row.applicable,
+      sortOrder: row.sortOrder,
+      parentId: row.parentId ?? null,
+    })),
+  )
+}
+
+function sharedCatalogMetaStorageKey(workspaceId: string): string {
+  return `toolman.pm.featureCatalog.sharedMeta.${workspaceId}`
+}
+
+export function readSharedFeatureSaveMeta(workspaceId: string): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(sharedCatalogMetaStorageKey(workspaceId))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    return parsed != null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+export function writeSharedFeatureSaveMeta(
+  workspaceId: string,
+  metadata: Record<string, unknown>,
+): void {
+  localStorage.setItem(sharedCatalogMetaStorageKey(workspaceId), JSON.stringify(metadata))
+}
+
+export function toFeatureCatalogSnapshot(rows: readonly PmFeatureRow[]): PmFeatureCatalogSnapshotRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    unit: row.unit,
+    quantity: row.quantity,
+    remark: row.remark,
+    applicable: row.applicable,
+    sortOrder: row.sortOrder,
+    parentId: row.parentId ?? null,
+  }))
+}
+
+/**
+ * Record shared「全部项目」save meta after a catalog save.
+ * Pass `bumpVersion: true` for「另存为新版本」; `false` (default) updates current only
+ * (first save still creates v1).
+ */
+export function recordSharedFeatureSaveMeta(
+  workspaceId: string,
+  rows: readonly PmFeatureRow[],
+  options?: { savedAt?: number; bumpVersion?: boolean; note?: string },
+): Record<string, unknown> {
+  const next = buildFeatureSaveMetadata(readSharedFeatureSaveMeta(workspaceId), {
+    featureCount: rows.length,
+    contentFingerprint: fingerprintFeatureCatalog(rows),
+    savedAt: options?.savedAt ?? Date.now(),
+    catalog: toFeatureCatalogSnapshot(rows),
+    bumpVersion: options?.bumpVersion ?? false,
+    ...(options?.note?.trim() ? { note: options.note.trim() } : {}),
+  })
+  writeSharedFeatureSaveMeta(workspaceId, next)
+  return next
+}
+
+export function readSharedFeatureVersion(workspaceId: string): number {
+  return readFeatureVersion(readSharedFeatureSaveMeta(workspaceId))
+}
+
+export function readSharedFeatureLastSavedAt(workspaceId: string): number | null {
+  return readFeatureLastSavedAt(readSharedFeatureSaveMeta(workspaceId))
+}
+
+export function readSharedFeatureSaveHistory(workspaceId: string): PmFeatureSaveRecord[] {
+  return readFeatureSaveHistory(readSharedFeatureSaveMeta(workspaceId))
+}
+
+export function removeSharedFeatureSaveHistoryEntry(
+  workspaceId: string,
+  version: number,
+): Record<string, unknown> {
+  const next = removeFeatureSaveHistoryEntry(readSharedFeatureSaveMeta(workspaceId), version)
+  writeSharedFeatureSaveMeta(workspaceId, next)
+  return next
 }

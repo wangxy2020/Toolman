@@ -33,3 +33,5 @@ packages/db/.demo-toolman.db
 # 系统与测试
 .DS_Store
 coverage/
+# EPC commercial test scratch
+apps/desktop/src/main/services/epc-commercial/__tests__/.tmp-*/

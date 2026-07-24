@@ -89,7 +89,7 @@ export function readUiMockInteraction(
   }
 }
 
-export function writeUiMockInteraction(id: string, snapshot: UiMockInteractionSnapshot) {
+function writeUiMockInteraction(id: string, snapshot: UiMockInteractionSnapshot) {
   if (!COMMUNITY_UI_MOCK_ENABLED || !isUiMockCommunityId(id)) return
   interactionStore.set(id, snapshot)
 }

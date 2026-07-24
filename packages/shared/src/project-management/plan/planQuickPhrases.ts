@@ -52,7 +52,7 @@ export const PLAN_RESOURCE_QUICK_PHRASE_CONTENT = `请根据当前计划任务�
   ]
 }
 \`\`\`
-type 可用 labor/auxiliary/material/equipment/device/instrument/management/fees/comprehensive/measures/tax/investment/designEstimate/constructionBudget/costBudget/funds/other（或中文人力/辅材/材料/机械/设备/仪器/综合单价/措施费/税金/投资估算/设计概算/施工预算/成本预算/资金等）。名称优先用资源列表已有项；确需新增仍输出该名称。`
+type 可用 labor/auxiliary/material/equipment/device/instrument/funds/custom/management/fees/comprehensive/measures/tax/investment/designEstimate/constructionBudget/costBudget/other（或中文人力/辅材/材料/机械/设备/仪器/资金/自定义/综合单价/措施费/税金/投资估算/设计概算/施工预算/成本预算等）。名称优先用资源列表已有项；确需新增仍输出该名称。`
 export const PLAN_RESOURCE_QUICK_PHRASE_REVISION = 3
 
 export const COST_FORECAST_QUICK_PHRASE_ID = 'toolman:pm-cost-forecast'

@@ -16,8 +16,17 @@ describe('PM_AGENT_CAPABILITIES registry', () => {
     expect(getPmAgentCapability('progress_management').phrases).toBe('plan')
   })
 
-  it('wires resource session to resource phrases only', () => {
+  it('wires resource session to resource phrases and catalog apply', () => {
     expect(getPmAgentCapability('resource_management').phrases).toBe('resource')
-    expect(getPmAgentCapability('resource_management').apply).toEqual([])
+    expect(getPmAgentCapability('resource_management').apply).toEqual(['resourceCatalog'])
+  })
+
+  it('wires cost session to cost phrases and cost apply', () => {
+    expect(getPmAgentCapability('cost_management').phrases).toBe('cost')
+    expect(getPmAgentCapability('cost_management').apply).toEqual(['costPlan', 'costCatalog'])
+  })
+
+  it('wires plan session to costPlan apply too', () => {
+    expect(getPmAgentCapability('progress_management').apply).toContain('costPlan')
   })
 })

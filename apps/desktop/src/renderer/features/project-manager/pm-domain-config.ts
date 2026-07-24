@@ -16,17 +16,8 @@ export const PM_DATABASE_DOMAINS: ConfigurableSidebarMenuKey[] = [
 ]
 
 export const PM_FILES_DOMAINS: ConfigurableSidebarMenuKey[] = [
-  'all_projects',
-  'cost_management',
+  // 实务 currently only implemented under 计划管理.
   'progress_management',
-  'key_projects',
-  'resource_management',
-  'security_management',
-  'quality_management',
-  'archive_management',
-  'technical_management',
-  'contract_risk_management',
-  'operations_management',
 ]
 
 /** Time entries remain available via API; toolbar entry removed. */

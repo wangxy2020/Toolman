@@ -4,12 +4,24 @@ import { createPortal } from 'react-dom'
 import { flushSync } from 'react-dom'
 
 import type { PmProject, PmWorkItem, Workspace } from '@toolman/shared'
-import { IpcChannel } from '@toolman/shared'
+import {
+  buildFeatureSaveMetadata,
+  buildMetadataForFeatureVersionSwitch,
+  IpcChannel,
+  readFeatureSaveHistory,
+  readFeatureVersion,
+  readFeatureVersionCatalog,
+  readMaxFeatureVersion,
+} from '@toolman/shared'
 
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
+import { SaveAsNewVersionDialog } from '../../../../components/SaveAsNewVersionDialog'
 import type { SystemPaths } from '../../../chat/useSystemPaths'
 import { useI18n } from '../../../../i18n/useI18n'
+import { isPmEditableEventTarget } from '../../pm-editable-dom'
 import { pmApi } from '../../pm-api'
+import { usePmCatalogAutoSave } from '../../usePmCatalogAutoSave'
+import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import ProjectInfoDialog from '../schedule/ProjectInfoDialog'
 import { formatWorkItemDate } from '../schedule/pm-gantt-utils'
 import {
@@ -21,6 +33,7 @@ import {
   ProjectFeaturesMenuBar,
   type FeaturesMenuAction,
   type FeaturesScheduleView,
+  type FeaturesVersionSwitchEntry,
 } from './ProjectFeaturesMenuBar'
 import {
   buildLiveScheduleFeatureRows,
@@ -33,23 +46,40 @@ import {
   groupMonthKeysByYear,
   parseMonthKey,
   usesPeakConcurrentRollup,
+  usesNonStackingPeakRollup,
 } from './pm-feature-gantt-rollup'
 import {
   createEmptyFeatureRow,
   featureRowDepth,
+  featureTypeMenuRank,
+  fingerprintFeatureCatalog,
   isPmFeatureType,
   PM_FEATURE_APPLICABLE_ALL,
   PM_FEATURE_CATALOG_KEY,
+  PM_FEATURE_SCHEDULE_TYPES,
   PM_FEATURE_TYPES,
   readSharedFeatureCatalog,
+  readSharedFeatureSaveHistory,
+  readSharedFeatureSaveMeta,
+  readSharedFeatureVersion,
+  recordSharedFeatureSaveMeta,
   reindexFeatureRows,
   resolveProjectFeatureCatalog,
   stripScheduleFeatureRows,
-  upsertSharedFeatureCatalog,
+  toFeatureCatalogSnapshot,
   writeSharedFeatureCatalog,
+  writeSharedFeatureSaveMeta,
   type PmFeatureRow,
   type PmFeatureType,
+  type PmFeatureViewFilter,
 } from './pm-features-catalog'
+import {
+  FEATURES_TOGGLE_COLUMNS,
+  loadFeaturesColumnVisibility,
+  saveFeaturesColumnVisibility,
+  type FeaturesColumnVisibility,
+  type FeaturesToggleColumn,
+} from './pm-features-column-prefs'
 import { resolveAssignableResourceCatalog } from '../resource/pm-resource-catalog'
 
 interface Props {
@@ -64,6 +94,11 @@ interface Props {
 }
 
 type ContextMenuState = {
+  left: number
+  top: number
+}
+
+type ColumnMenuState = {
   left: number
   top: number
 }
@@ -112,27 +147,27 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set())
   const [selectionMode, setSelectionMode] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [columnMenu, setColumnMenu] = useState<ColumnMenuState | null>(null)
+  const [columnVisibility, setColumnVisibility] = useState<FeaturesColumnVisibility>(() =>
+    loadFeaturesColumnVisibility(),
+  )
   const [pendingDelete, setPendingDelete] = useState(false)
+  const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
+  const [pendingSaveAsNewVersion, setPendingSaveAsNewVersion] = useState(false)
+  const [statusFeedback, setStatusFeedback] = usePmStatusFeedback()
   const [saving, setSaving] = useState(false)
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
   const [, setDraftType] = useState<PmFeatureType>('labor')
-  /** Menu filter: 人力 / 材料 / … only show rows of this type. */
-  const [viewType, setViewType] = useState<PmFeatureType>('labor')
+  /** Menu filter: 人力…仪器 / 「全部」. */
+  const [viewFilter, setViewFilter] = useState<PmFeatureViewFilter>('scheduleAll')
   /** horizontal = resources as rows; vertical = months as rows. */
   const [matrixLayout, setMatrixLayout] = useState<'horizontal' | 'vertical'>('horizontal')
   const [workItems, setWorkItems] = useState<PmWorkItem[]>([])
+  const rowsRef = useRef<PmFeatureRow[]>([])
 
   const scopeKey = isAllScope ? PM_FEATURE_APPLICABLE_ALL : (editingProject?.id ?? '')
 
-  useEffect(() => {
-    setDirty(false)
-    setSelectedId(null)
-    setCheckedIds(new Set())
-    setSelectionMode(false)
-    setContextMenu(null)
-    setProjectInfoOpen(false)
-    setMatrixLayout('horizontal')
-  }, [scopeKey])
+  rowsRef.current = rows
 
   useEffect(() => {
     let cancelled = false
@@ -255,18 +290,40 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   ])
 
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
-  const visibleRows = useMemo(
-    () => rows.filter((row) => row.type === viewType),
-    [rows, viewType],
-  )
+  const visibleRows = useMemo(() => {
+    if (viewFilter === 'scheduleAll') {
+      const allowed = new Set<string>(PM_FEATURE_SCHEDULE_TYPES)
+      return rows
+        .filter((row) => allowed.has(row.type))
+        .slice()
+        .sort((left, right) => {
+          const typeDelta = featureTypeMenuRank(left.type) - featureTypeMenuRank(right.type)
+          if (typeDelta !== 0) return typeDelta
+          return left.sortOrder - right.sortOrder
+        })
+    }
+    return rows.filter((row) => row.type === viewFilter)
+  }, [rows, viewFilter])
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
-  const selectedType: PmFeatureType = viewType
-  const quantityFromGanttHint = usesPeakConcurrentRollup(viewType)
-    ? t('projectManagerPage.files.table.quantityFromGanttHintPeak')
-    : t('projectManagerPage.files.table.quantityFromGanttHint')
-  const monthFromGanttHint = usesPeakConcurrentRollup(viewType)
-    ? t('projectManagerPage.files.table.monthFromGanttHintPeak')
-    : t('projectManagerPage.files.table.monthFromGanttHint')
+  const selectedType: PmFeatureViewFilter = viewFilter
+  const addType: PmFeatureType =
+    viewFilter === 'scheduleAll' ? (selectedRow?.type ?? 'labor') : viewFilter
+  const quantityFromGanttHint =
+    viewFilter === 'scheduleAll'
+      ? t('projectManagerPage.files.table.quantityFromGanttHint')
+      : usesNonStackingPeakRollup(viewFilter)
+        ? t('projectManagerPage.files.table.quantityFromGanttHintMachinery')
+        : usesPeakConcurrentRollup(viewFilter)
+          ? t('projectManagerPage.files.table.quantityFromGanttHintPeak')
+          : t('projectManagerPage.files.table.quantityFromGanttHint')
+  const monthFromGanttHint =
+    viewFilter === 'scheduleAll'
+      ? t('projectManagerPage.files.table.monthFromGanttHint')
+      : usesNonStackingPeakRollup(viewFilter)
+        ? t('projectManagerPage.files.table.monthFromGanttHintMachinery')
+        : usesPeakConcurrentRollup(viewFilter)
+          ? t('projectManagerPage.files.table.monthFromGanttHintPeak')
+          : t('projectManagerPage.files.table.monthFromGanttHint')
 
   const rollups = useMemo(
     () => computeFeatureGanttRollups(workItems, rows),
@@ -285,6 +342,16 @@ const ProjectManagementFilesPanel: FC<Props> = ({
     return collectRollupMonthKeys(scoped)
   }, [rollups, visibleRows])
   const yearBands = useMemo(() => groupMonthKeysByYear(monthKeys), [monthKeys])
+  const showMonths = columnVisibility.months && monthKeys.length > 0
+  const visibleYearBands = useMemo(
+    () => (showMonths ? yearBands : []),
+    [showMonths, yearBands],
+  )
+  const visibleMonthKeys = useMemo(
+    () => (showMonths ? monthKeys : []),
+    [monthKeys, showMonths],
+  )
+  const headerRowSpan = visibleMonthKeys.length > 0 ? 2 : 1
 
   const tableScrollRef = useRef<HTMLDivElement | null>(null)
   const hTrackRef = useRef<HTMLDivElement | null>(null)
@@ -368,12 +435,160 @@ const ProjectManagementFilesPanel: FC<Props> = ({
     setDirty(true)
   }, [])
 
-  const persistProjectCatalog = useCallback(async (project: PmProject, catalog: PmFeatureRow[]) => {
-    await pmApi.updateProject({
-      id: project.id,
-      metadata: { [PM_FEATURE_CATALOG_KEY]: catalog },
-    })
-  }, [])
+  const applyCatalogRows = useCallback(
+    (persisted: PmFeatureRow[], options?: { dirty?: boolean }) => {
+      const live = buildLiveScheduleFeatureRows(ganttSeeds, [], viewApplicable)
+      setRows(reindexFeatureRows([...live, ...persisted]))
+      setDirty(options?.dirty ?? false)
+    },
+    [ganttSeeds, viewApplicable],
+  )
+
+  const versionSwitchEntries = useMemo((): FeaturesVersionSwitchEntry[] => {
+    const history = isAllScope
+      ? readSharedFeatureSaveHistory(workspaceId)
+      : readFeatureSaveHistory(editingProject?.metadata)
+    const currentVersion = isAllScope
+      ? readSharedFeatureVersion(workspaceId)
+      : readFeatureVersion(editingProject?.metadata)
+    return history.map((entry) => ({
+      version: entry.version,
+      name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+        version: String(entry.version),
+      }),
+      hasSnapshot: Array.isArray(entry.catalog),
+      isCurrent: entry.version === currentVersion,
+    }))
+  }, [dirty, editingProject?.metadata, isAllScope, rows, t, workspaceId])
+
+  const snapshotToRows = useCallback(
+    (snapshot: NonNullable<ReturnType<typeof readFeatureVersionCatalog>>): PmFeatureRow[] => {
+      return snapshot
+        .filter((row) => isPmFeatureType(row.type))
+        .map((row) => ({
+          id: row.id,
+          type: row.type as PmFeatureType,
+          name: row.name,
+          unit: row.unit,
+          quantity: row.quantity,
+          remark: row.remark ?? '',
+          applicable: row.applicable,
+          sortOrder: row.sortOrder,
+          parentId: row.parentId,
+        }))
+    },
+    [],
+  )
+
+  const handleConfirmRestoreVersion = useCallback(async () => {
+    if (pendingRestoreVersion == null) return
+    const version = pendingRestoreVersion
+    setPendingRestoreVersion(null)
+    setSaving(true)
+    try {
+      if (isAllScope) {
+        const meta = readSharedFeatureSaveMeta(workspaceId)
+        const catalog = readFeatureVersionCatalog(meta, version)
+        const nextMeta = buildMetadataForFeatureVersionSwitch(meta, version)
+        if (!catalog || !nextMeta) {
+          window.alert(t('projectManagerPage.files.versionSwitchNoSnapshot'))
+          return
+        }
+        const rowsNext = snapshotToRows(catalog)
+        writeSharedFeatureCatalog(workspaceId, rowsNext)
+        writeSharedFeatureSaveMeta(workspaceId, nextMeta)
+        applyCatalogRows(rowsNext, { dirty: false })
+        setSelectedId(null)
+        await onProjectsChange?.()
+        window.alert(
+          t('projectManagerPage.files.restoreVersionSuccess', {
+            name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+              version: String(version),
+            }),
+          }),
+        )
+        return
+      }
+      if (!editingProject) return
+      const catalog = readFeatureVersionCatalog(editingProject.metadata, version)
+      const nextMeta = buildMetadataForFeatureVersionSwitch(editingProject.metadata, version)
+      if (!catalog || !nextMeta) {
+        window.alert(t('projectManagerPage.files.versionSwitchNoSnapshot'))
+        return
+      }
+      const rowsNext = snapshotToRows(catalog)
+      await pmApi.updateProject({
+        id: editingProject.id,
+        metadata: {
+          ...nextMeta,
+          [PM_FEATURE_CATALOG_KEY]: rowsNext,
+        },
+      })
+      applyCatalogRows(rowsNext, { dirty: false })
+      setSelectedId(null)
+      await onProjectsChange?.()
+      window.alert(
+        t('projectManagerPage.files.restoreVersionSuccess', {
+          name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+            version: String(version),
+          }),
+        }),
+      )
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }, [
+    applyCatalogRows,
+    editingProject,
+    isAllScope,
+    onProjectsChange,
+    pendingRestoreVersion,
+    snapshotToRows,
+    t,
+    workspaceId,
+  ])
+
+  const handleRestoreVersion = useCallback(
+    (version: number) => {
+      const currentVersion = isAllScope
+        ? readSharedFeatureVersion(workspaceId)
+        : readFeatureVersion(editingProject?.metadata)
+      if (version === currentVersion) return
+      setPendingRestoreVersion(version)
+    },
+    [editingProject?.metadata, isAllScope, workspaceId],
+  )
+
+  const persistProjectCatalog = useCallback(
+    async (
+      project: PmProject,
+      catalog: PmFeatureRow[],
+      options?: { bumpVersion?: boolean; note?: string },
+    ) => {
+      const prevVersion = readFeatureVersion(project.metadata)
+      const metadata = {
+        ...buildFeatureSaveMetadata(project.metadata ?? {}, {
+          featureCount: catalog.length,
+          contentFingerprint: fingerprintFeatureCatalog(catalog),
+          catalog: toFeatureCatalogSnapshot(catalog),
+          bumpVersion: options?.bumpVersion ?? false,
+          ...(options?.note?.trim() ? { note: options.note.trim() } : {}),
+        }),
+        [PM_FEATURE_CATALOG_KEY]: catalog,
+      }
+      await pmApi.updateProject({
+        id: project.id,
+        metadata,
+      })
+      return {
+        prevVersion,
+        nextVersion: readFeatureVersion(metadata),
+      }
+    },
+    [],
+  )
 
   const propagateSharedToProjects = useCallback(
     async (exceptProjectId?: string | null) => {
@@ -385,35 +600,146 @@ const ProjectManagementFilesPanel: FC<Props> = ({
           project.metadata,
         )
         if (!resolved.needsPersist) continue
-        await persistProjectCatalog(project, resolved.rows)
+        // Propagate catalog rows only — do not bump per-project feature versions.
+        await pmApi.updateProject({
+          id: project.id,
+          metadata: { [PM_FEATURE_CATALOG_KEY]: resolved.rows },
+        })
       }
     },
-    [persistProjectCatalog, projects, workspaceId],
+    [projects, workspaceId],
   )
 
-  const handleSave = useCallback(async () => {
-    if (!canEdit) return
-    setSaving(true)
-    try {
-      // labor / auxiliary / material / machinery are live from Gantt — never persist them.
-      const persisted = stripScheduleFeatureRows(rows).rows
-      const live = buildLiveScheduleFeatureRows(ganttSeeds, [], viewApplicable)
+  const handleSave = useCallback(
+    async (options?: { asNewVersion?: boolean; note?: string }): Promise<boolean> => {
+      if (!canEdit) {
+        window.alert(t('projectManagerPage.files.table.needProject'))
+        return false
+      }
+      const asNewVersion = options?.asNewVersion === true
+      const note = options?.note?.trim() || undefined
+      setSaving(true)
+      try {
+        // labor / auxiliary / material / machinery are live from Gantt — never persist them.
+        const persisted = stripScheduleFeatureRows(rows).rows
 
+        if (isAllScope) {
+          const payload = persisted.map((row) => ({
+            ...row,
+            applicable: PM_FEATURE_APPLICABLE_ALL,
+          }))
+          const prevVersion = readSharedFeatureVersion(workspaceId)
+          writeSharedFeatureCatalog(workspaceId, payload)
+          recordSharedFeatureSaveMeta(workspaceId, payload, {
+            bumpVersion: asNewVersion,
+            note,
+          })
+          await propagateSharedToProjects()
+          applyCatalogRows(payload, { dirty: false })
+          await onProjectsChange?.()
+          const nextVersion = readSharedFeatureVersion(workspaceId)
+          if (nextVersion > prevVersion) {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.files.saveSuccessNewVersion', {
+                version: String(nextVersion),
+              }),
+            })
+          } else if (nextVersion > 0) {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.files.saveSuccessUpdated', {
+                version: String(nextVersion),
+              }),
+            })
+          } else {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.files.table.saveSuccess'),
+            })
+          }
+          return true
+        }
+        if (!editingProject) {
+          window.alert(t('projectManagerPage.files.table.needProject'))
+          return false
+        }
+
+        const payload = persisted.map((row) => ({
+          ...row,
+          applicable:
+            row.applicable === PM_FEATURE_APPLICABLE_ALL
+              ? PM_FEATURE_APPLICABLE_ALL
+              : editingProject.id,
+        }))
+
+        // Project save does not sync into「全部项目」shared catalog.
+        const { prevVersion, nextVersion } = await persistProjectCatalog(
+          editingProject,
+          payload,
+          { bumpVersion: asNewVersion, note },
+        )
+        applyCatalogRows(payload, { dirty: false })
+        await onProjectsChange?.()
+        if (nextVersion > prevVersion) {
+          setStatusFeedback({
+            tone: 'success',
+            text: t('projectManagerPage.files.saveSuccessNewVersion', {
+              version: String(nextVersion),
+            }),
+          })
+        } else if (nextVersion > 0) {
+          setStatusFeedback({
+            tone: 'success',
+            text: t('projectManagerPage.files.saveSuccessUpdated', {
+              version: String(nextVersion),
+            }),
+          })
+        } else {
+          setStatusFeedback({
+            tone: 'success',
+            text: t('projectManagerPage.files.table.saveSuccess'),
+          })
+        }
+        return true
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : String(err))
+        return false
+      } finally {
+        setSaving(false)
+      }
+    },
+    [
+      applyCatalogRows,
+      canEdit,
+      editingProject,
+      isAllScope,
+      onProjectsChange,
+      persistProjectCatalog,
+      propagateSharedToProjects,
+      rows,
+      setStatusFeedback,
+      t,
+      workspaceId,
+    ],
+  )
+
+  const flushAutoSave = useCallback(async () => {
+    if (!canEdit) return
+    const catalog = rowsRef.current
+    try {
+      const persisted = stripScheduleFeatureRows(catalog).rows
       if (isAllScope) {
         const payload = persisted.map((row) => ({
           ...row,
           applicable: PM_FEATURE_APPLICABLE_ALL,
         }))
         writeSharedFeatureCatalog(workspaceId, payload)
+        recordSharedFeatureSaveMeta(workspaceId, payload, { bumpVersion: false })
         await propagateSharedToProjects()
-        setRows(reindexFeatureRows([...live, ...payload]))
-        setDirty(false)
-        await onProjectsChange?.()
-        window.alert(t('projectManagerPage.files.table.saveSuccess'))
         return
       }
       if (!editingProject) return
-
       const payload = persisted.map((row) => ({
         ...row,
         applicable:
@@ -421,42 +747,32 @@ const ProjectManagementFilesPanel: FC<Props> = ({
             ? PM_FEATURE_APPLICABLE_ALL
             : editingProject.id,
       }))
-
-      const sharedCandidates = payload.filter(
-        (row) => row.applicable === PM_FEATURE_APPLICABLE_ALL && row.name.trim(),
-      )
-      if (sharedCandidates.length > 0) {
-        const shared = readSharedFeatureCatalog(workspaceId)
-        const upserted = upsertSharedFeatureCatalog(shared.rows, sharedCandidates)
-        if (upserted.changed || shared.isDefault) {
-          writeSharedFeatureCatalog(workspaceId, upserted.rows)
-          await propagateSharedToProjects(editingProject.id)
-        }
-      }
-
-      await persistProjectCatalog(editingProject, payload)
-      setRows(reindexFeatureRows([...live, ...payload]))
-      setDirty(false)
-      await onProjectsChange?.()
-      window.alert(t('projectManagerPage.files.table.saveSuccess'))
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSaving(false)
+      await persistProjectCatalog(editingProject, payload, { bumpVersion: false })
+    } catch {
+      // Best-effort leave save.
     }
   }, [
     canEdit,
     editingProject,
-    ganttSeeds,
     isAllScope,
-    onProjectsChange,
     persistProjectCatalog,
     propagateSharedToProjects,
-    rows,
-    t,
-    viewApplicable,
     workspaceId,
   ])
+
+  usePmCatalogAutoSave({ scopeKey, dirty, flush: flushAutoSave })
+
+  useEffect(() => {
+    setDirty(false)
+    setSelectedId(null)
+    setCheckedIds(new Set())
+    setSelectionMode(false)
+    setContextMenu(null)
+    setColumnMenu(null)
+    setProjectInfoOpen(false)
+    setPendingRestoreVersion(null)
+    setMatrixLayout('horizontal')
+  }, [scopeKey])
 
   const handlePrint = useCallback(() => {
     flushSync(() => {
@@ -473,11 +789,11 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   const handleAdd = useCallback(() => {
     if (!canEdit) return
     updateRows((prev) => {
-      const next = createEmptyFeatureRow(prev.length, selectedType, null, viewApplicable)
+      const next = createEmptyFeatureRow(prev.length, addType, null, viewApplicable)
       setSelectedId(next.id)
       return [...prev, next]
     })
-  }, [canEdit, selectedType, updateRows, viewApplicable])
+  }, [addType, canEdit, updateRows, viewApplicable])
 
   const handleInsert = useCallback(() => {
     if (!canEdit || !selectedId) return
@@ -485,13 +801,13 @@ const ProjectManagementFilesPanel: FC<Props> = ({
       const index = prev.findIndex((row) => row.id === selectedId)
       if (index < 0) return prev
       const parentId = prev[index]?.parentId ?? null
-      const next = createEmptyFeatureRow(index, selectedType, parentId, viewApplicable)
+      const next = createEmptyFeatureRow(index, addType, parentId, viewApplicable)
       setSelectedId(next.id)
       const copy = [...prev]
       copy.splice(index, 0, next)
       return copy
     })
-  }, [canEdit, selectedId, selectedType, updateRows, viewApplicable])
+  }, [addType, canEdit, selectedId, updateRows, viewApplicable])
 
   const deleteIds = useCallback(
     (ids: Set<string>) => {
@@ -567,9 +883,11 @@ const ProjectManagementFilesPanel: FC<Props> = ({
     [selectedId, updateRows],
   )
 
-  const handleTypeChange = useCallback((type: PmFeatureType) => {
-    setDraftType(type)
-    setViewType(type)
+  const handleTypeChange = useCallback((type: PmFeatureViewFilter) => {
+    if (type !== 'scheduleAll') {
+      setDraftType(type)
+    }
+    setViewFilter(type)
   }, [])
 
   const handleScheduleViewChange = useCallback(
@@ -584,6 +902,10 @@ const ProjectManagementFilesPanel: FC<Props> = ({
 
   const handleMenuAction = useCallback(
     (action: FeaturesMenuAction) => {
+      if (action === 'scheduleAll') {
+        handleTypeChange('scheduleAll')
+        return
+      }
       if (isPmFeatureType(action)) {
         handleTypeChange(action)
         return
@@ -591,6 +913,9 @@ const ProjectManagementFilesPanel: FC<Props> = ({
       switch (action) {
         case 'save':
           void handleSave()
+          break
+        case 'saveAsNewVersion':
+          setPendingSaveAsNewVersion(true)
           break
         case 'print':
           handlePrint()
@@ -648,8 +973,10 @@ const ProjectManagementFilesPanel: FC<Props> = ({
 
   const handleRowContextMenu = useCallback(
     (event: ReactMouseEvent, _rowId: string) => {
+      if (isPmEditableEventTarget(event.target)) return
       event.preventDefault()
       event.stopPropagation()
+      setColumnMenu(null)
       setSelectionMode(true)
       setContextMenu({ left: event.clientX, top: event.clientY })
     },
@@ -657,10 +984,58 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   )
 
   const handleTableContextMenu = useCallback((event: ReactMouseEvent) => {
+    if (isPmEditableEventTarget(event.target)) return
     event.preventDefault()
+    setColumnMenu(null)
     setSelectionMode(true)
     setContextMenu({ left: event.clientX, top: event.clientY })
   }, [])
+
+  const openColumnVisibilityMenu = useCallback((event: ReactMouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu(null)
+    const menuWidth = 200
+    const menuHeight = 280
+    const gap = 4
+    let left = event.clientX + gap
+    let top = event.clientY + gap
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, event.clientX - menuWidth - gap)
+    }
+    if (top + menuHeight > window.innerHeight - 8) {
+      top = Math.max(8, event.clientY - menuHeight)
+    }
+    setColumnMenu({ left, top })
+  }, [])
+
+  const toggleColumnVisibility = useCallback((column: FeaturesToggleColumn) => {
+    setColumnVisibility((prev) => {
+      if (column === 'name' && prev.name) return prev
+      const next = { ...prev, [column]: !prev[column] }
+      if (!next.name) next.name = true
+      saveFeaturesColumnVisibility(next)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!columnMenu) return
+    const onDoc = (event: MouseEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('.tm-pm-gantt-col-menu')) return
+      setColumnMenu(null)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setColumnMenu(null)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [columnMenu])
 
   const handleSelectAll = useCallback(() => {
     setCheckedIds(new Set(visibleRows.map((row) => row.id)))
@@ -680,11 +1055,13 @@ const ProjectManagementFilesPanel: FC<Props> = ({
       <ProjectFeaturesMenuBar
         disabled={saving}
         hasSelection={selectedId != null}
-        hasProject={editingProject != null}
+        hasProject
         canEdit={canEdit}
         selectedType={selectedType}
         scheduleView={scheduleView}
         onScheduleViewChange={handleScheduleViewChange}
+        versionSwitchEntries={versionSwitchEntries}
+        onRestoreVersion={handleRestoreVersion}
         onAction={handleMenuAction}
       />
 
@@ -723,7 +1100,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                   ))}
                   <col className="tm-pm-resource-table-col-spacer" />
                 </colgroup>
-                <thead>
+                <thead onContextMenu={openColumnVisibilityMenu}>
                   <tr>
                     <th className="tm-pm-resource-table-col-index">
                       {t('projectManagerPage.files.table.columns.index')}
@@ -818,21 +1195,25 @@ const ProjectManagementFilesPanel: FC<Props> = ({
             <table className="tm-pm-resource-table">
               <colgroup>
                 <col className="tm-pm-resource-table-col-index" />
-                <col className="tm-pm-resource-table-col-type" />
-                <col className="tm-pm-resource-table-col-name" />
-                <col className="tm-pm-resource-table-col-unit" />
-                <col className="tm-pm-resource-table-col-price" />
-                <col className="tm-pm-features-table-col-date" />
-                <col className="tm-pm-features-table-col-date" />
-                {monthKeys.map((monthKey) => (
+                {columnVisibility.type ? <col className="tm-pm-resource-table-col-type" /> : null}
+                {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
+                {columnVisibility.unit ? <col className="tm-pm-resource-table-col-unit" /> : null}
+                {columnVisibility.quantity ? (
+                  <col className="tm-pm-resource-table-col-price" />
+                ) : null}
+                {columnVisibility.start ? <col className="tm-pm-features-table-col-date" /> : null}
+                {columnVisibility.finish ? <col className="tm-pm-features-table-col-date" /> : null}
+                {visibleMonthKeys.map((monthKey) => (
                   <col key={monthKey} className="tm-pm-features-table-col-month" />
                 ))}
-                <col className="tm-pm-features-table-col-remark" />
+                {columnVisibility.remark ? (
+                  <col className="tm-pm-features-table-col-remark" />
+                ) : null}
                 <col className="tm-pm-resource-table-col-spacer" />
               </colgroup>
-              <thead>
+              <thead onContextMenu={openColumnVisibilityMenu}>
                   <tr className="tm-pm-features-table-head-row tm-pm-features-table-head-row--year">
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-resource-table-col-index">
+                    <th rowSpan={headerRowSpan} className="tm-pm-resource-table-col-index">
                       {selectionMode ? (
                         <label
                           className="tm-kb-file-card-select"
@@ -868,25 +1249,37 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                         t('projectManagerPage.files.table.columns.index')
                       )}
                     </th>
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-resource-table-col-type">
-                      {t('projectManagerPage.files.table.columns.type')}
-                    </th>
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-resource-table-col-name">
-                      {t('projectManagerPage.files.table.columns.name')}
-                    </th>
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-resource-table-col-unit">
-                      {t('projectManagerPage.files.table.columns.unit')}
-                    </th>
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-resource-table-col-price">
-                      {t('projectManagerPage.files.table.columns.quantity')}
-                    </th>
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-features-table-col-date">
-                      {t('projectManagerPage.files.table.columns.start')}
-                    </th>
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-features-table-col-date">
-                      {t('projectManagerPage.files.table.columns.finish')}
-                    </th>
-                    {yearBands.map((band) => (
+                    {columnVisibility.type ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-resource-table-col-type">
+                        {t('projectManagerPage.files.table.columns.type')}
+                      </th>
+                    ) : null}
+                    {columnVisibility.name ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-resource-table-col-name">
+                        {t('projectManagerPage.files.table.columns.name')}
+                      </th>
+                    ) : null}
+                    {columnVisibility.unit ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-resource-table-col-unit">
+                        {t('projectManagerPage.files.table.columns.unit')}
+                      </th>
+                    ) : null}
+                    {columnVisibility.quantity ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-resource-table-col-price">
+                        {t('projectManagerPage.files.table.columns.quantity')}
+                      </th>
+                    ) : null}
+                    {columnVisibility.start ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-features-table-col-date">
+                        {t('projectManagerPage.files.table.columns.start')}
+                      </th>
+                    ) : null}
+                    {columnVisibility.finish ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-features-table-col-date">
+                        {t('projectManagerPage.files.table.columns.finish')}
+                      </th>
+                    ) : null}
+                    {visibleYearBands.map((band) => (
                       <th
                         key={`year-${band.year}`}
                         className="tm-pm-features-table-col-year"
@@ -898,18 +1291,20 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                         })}
                       </th>
                     ))}
-                    <th rowSpan={monthKeys.length > 0 ? 2 : 1} className="tm-pm-features-table-col-remark">
-                      {t('projectManagerPage.files.table.columns.remark')}
-                    </th>
+                    {columnVisibility.remark ? (
+                      <th rowSpan={headerRowSpan} className="tm-pm-features-table-col-remark">
+                        {t('projectManagerPage.files.table.columns.remark')}
+                      </th>
+                    ) : null}
                     <th
-                      rowSpan={monthKeys.length > 0 ? 2 : 1}
+                      rowSpan={headerRowSpan}
                       className="tm-pm-resource-table-col-spacer"
                       aria-hidden
                     />
                   </tr>
-                  {monthKeys.length > 0 ? (
+                  {visibleMonthKeys.length > 0 ? (
                     <tr className="tm-pm-features-table-head-row tm-pm-features-table-head-row--month">
-                      {monthKeys.map((monthKey) => {
+                      {visibleMonthKeys.map((monthKey) => {
                         const parsed = parseMonthKey(monthKey)
                         return (
                           <th
@@ -986,62 +1381,74 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                           <span className="tm-pm-resource-table-index-text">{index + 1}</span>
                         )}
                       </td>
-                      <td>
-                        <select
-                          className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
-                          value={row.type}
-                          onChange={(event) =>
-                            patchRow(row.id, {
-                              type: event.target.value as PmFeatureType,
-                            })
-                          }
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {PM_FEATURE_TYPES.map((type) => (
-                            <option key={type} value={type}>
-                              {t(`projectManagerPage.files.menu.${type}`)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="tm-pm-resource-table-col-name">
-                        <input
-                          className="tm-pm-resource-table-input tm-pm-features-table-name-input"
-                          style={{ paddingLeft: `${8 + depth * 16}px` }}
-                          value={row.name}
-                          title={row.name.trim() || undefined}
-                          placeholder={t('projectManagerPage.files.table.namePlaceholder')}
-                          onChange={(event) => patchRow(row.id, { name: event.target.value })}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
-                      <td className="tm-pm-resource-table-cell--center">
-                        <input
-                          className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
-                          value={row.unit}
-                          onChange={(event) => patchRow(row.id, { unit: event.target.value })}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
-                      <td className="tm-pm-resource-table-cell--center">
-                        <span
-                          className="tm-pm-features-table-rollup"
-                          title={quantityFromGanttHint}
-                        >
-                          {formatRollupQuantity(rollup?.quantity)}
-                        </span>
-                      </td>
-                      <td className="tm-pm-resource-table-cell--center">
-                        <span className="tm-pm-features-table-rollup">
-                          {formatWorkItemDate(rollup?.startDate ?? undefined)}
-                        </span>
-                      </td>
-                      <td className="tm-pm-resource-table-cell--center">
-                        <span className="tm-pm-features-table-rollup">
-                          {formatWorkItemDate(rollup?.finishDate ?? undefined)}
-                        </span>
-                      </td>
-                      {monthKeys.map((monthKey) => (
+                      {columnVisibility.type ? (
+                        <td>
+                          <select
+                            className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
+                            value={row.type}
+                            onChange={(event) =>
+                              patchRow(row.id, {
+                                type: event.target.value as PmFeatureType,
+                              })
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {PM_FEATURE_TYPES.map((type) => (
+                              <option key={type} value={type}>
+                                {t(`projectManagerPage.files.menu.${type}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      ) : null}
+                      {columnVisibility.name ? (
+                        <td className="tm-pm-resource-table-col-name">
+                          <input
+                            className="tm-pm-resource-table-input tm-pm-features-table-name-input"
+                            style={{ paddingLeft: `${8 + depth * 16}px` }}
+                            value={row.name}
+                            title={row.name.trim() || undefined}
+                            placeholder={t('projectManagerPage.files.table.namePlaceholder')}
+                            onChange={(event) => patchRow(row.id, { name: event.target.value })}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </td>
+                      ) : null}
+                      {columnVisibility.unit ? (
+                        <td className="tm-pm-resource-table-cell--center">
+                          <input
+                            className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
+                            value={row.unit}
+                            onChange={(event) => patchRow(row.id, { unit: event.target.value })}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </td>
+                      ) : null}
+                      {columnVisibility.quantity ? (
+                        <td className="tm-pm-resource-table-cell--center">
+                          <span
+                            className="tm-pm-features-table-rollup"
+                            title={quantityFromGanttHint}
+                          >
+                            {formatRollupQuantity(rollup?.quantity)}
+                          </span>
+                        </td>
+                      ) : null}
+                      {columnVisibility.start ? (
+                        <td className="tm-pm-resource-table-cell--center">
+                          <span className="tm-pm-features-table-rollup">
+                            {formatWorkItemDate(rollup?.startDate ?? undefined)}
+                          </span>
+                        </td>
+                      ) : null}
+                      {columnVisibility.finish ? (
+                        <td className="tm-pm-resource-table-cell--center">
+                          <span className="tm-pm-features-table-rollup">
+                            {formatWorkItemDate(rollup?.finishDate ?? undefined)}
+                          </span>
+                        </td>
+                      ) : null}
+                      {visibleMonthKeys.map((monthKey) => (
                         <td
                           key={monthKey}
                           className="tm-pm-resource-table-cell--center tm-pm-features-table-month"
@@ -1054,15 +1461,17 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                           </span>
                         </td>
                       ))}
-                      <td>
-                        <input
-                          className="tm-pm-resource-table-input"
-                          value={row.remark}
-                          placeholder={t('projectManagerPage.files.table.remarkPlaceholder')}
-                          onChange={(event) => patchRow(row.id, { remark: event.target.value })}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
+                      {columnVisibility.remark ? (
+                        <td className="tm-pm-features-table-col-remark">
+                          <input
+                            className="tm-pm-resource-table-input"
+                            value={row.remark}
+                            placeholder={t('projectManagerPage.files.table.remarkPlaceholder')}
+                            onChange={(event) => patchRow(row.id, { remark: event.target.value })}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </td>
+                      ) : null}
                       <td className="tm-pm-resource-table-col-spacer" aria-hidden />
                     </tr>
                   )
@@ -1103,19 +1512,23 @@ const ProjectManagementFilesPanel: FC<Props> = ({
         <div
           className={[
             'tm-pm-gantt-statusbar-message',
-            dirty
-              ? 'tm-pm-gantt-statusbar-message--info'
-              : 'tm-pm-gantt-statusbar-message--muted',
+            statusFeedback
+              ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
+              : dirty
+                ? 'tm-pm-gantt-statusbar-message--info'
+                : 'tm-pm-gantt-statusbar-message--muted',
           ].join(' ')}
         >
-          {dirty
-            ? t('projectManagerPage.files.table.statusDirty', {
-                count: String(visibleRows.length),
-              })
-            : t('projectManagerPage.files.table.statusReady', {
-                count: String(visibleRows.length),
-              })}
-          {selectedRow?.name
+          {statusFeedback
+            ? statusFeedback.text
+            : dirty
+              ? t('projectManagerPage.files.table.statusDirty', {
+                  count: String(visibleRows.length),
+                })
+              : t('projectManagerPage.files.table.statusReady', {
+                  count: String(visibleRows.length),
+                })}
+          {!statusFeedback && selectedRow?.name
             ? ` · ${t('projectManagerPage.files.table.statusSelected', {
                 name: selectedRow.name,
               })}`
@@ -1201,6 +1614,33 @@ const ProjectManagementFilesPanel: FC<Props> = ({
           )
         : null}
 
+      {columnMenu
+        ? createPortal(
+            <div
+              className="tm-pm-gantt-col-menu"
+              style={{ left: columnMenu.left, top: columnMenu.top, right: 'auto' }}
+              onMouseDown={(event) => event.stopPropagation()}
+              role="menu"
+            >
+              <div className="tm-pm-gantt-col-menu-title">
+                {t('projectManagerPage.files.table.columnVisibility')}
+              </div>
+              {FEATURES_TOGGLE_COLUMNS.map((column) => (
+                <label key={column} className="tm-pm-gantt-col-menu-item">
+                  <input
+                    type="checkbox"
+                    checked={columnVisibility[column]}
+                    disabled={column === 'name'}
+                    onChange={() => toggleColumnVisibility(column)}
+                  />
+                  <span>{t(`projectManagerPage.files.table.columns.${column}`)}</span>
+                </label>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+
       {pendingDelete ? (
         <ConfirmDialog
           title={t('projectManagerPage.files.table.selection.deleteSelectedTitle')}
@@ -1218,9 +1658,60 @@ const ProjectManagementFilesPanel: FC<Props> = ({
         />
       ) : null}
 
+      {pendingRestoreVersion != null ? (
+        <ConfirmDialog
+          title={t('projectManagerPage.files.restoreVersionTitle')}
+          message={t('projectManagerPage.files.restoreVersionConfirm', {
+            name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+              version: String(pendingRestoreVersion),
+            }),
+          })}
+          confirmLabel={t('projectManagerPage.files.restoreVersionConfirmLabel')}
+          cancelLabel={t('common.cancel')}
+          onCancel={() => setPendingRestoreVersion(null)}
+          onConfirm={() => void handleConfirmRestoreVersion()}
+        />
+      ) : null}
+
+      {pendingSaveAsNewVersion ? (
+        <SaveAsNewVersionDialog
+          currentVersion={
+            isAllScope
+              ? readSharedFeatureVersion(workspaceId)
+              : readFeatureVersion(editingProject?.metadata)
+          }
+          nextVersion={
+            (isAllScope
+              ? readMaxFeatureVersion(readSharedFeatureSaveMeta(workspaceId))
+              : readMaxFeatureVersion(editingProject?.metadata)) + 1
+          }
+          onCancel={() => setPendingSaveAsNewVersion(false)}
+          onConfirm={(note) => {
+            setPendingSaveAsNewVersion(false)
+            void handleSave({ asNewVersion: true, note })
+          }}
+        />
+      ) : null}
+
       {projectInfoOpen && editingProject ? (
         <ProjectInfoDialog
           project={editingProject}
+          variant="features"
+          featureRows={rows}
+          onSaveFeatures={handleSave}
+          onClose={() => setProjectInfoOpen(false)}
+          onSaved={() => {
+            onProjectsChange?.()
+          }}
+        />
+      ) : null}
+
+      {projectInfoOpen && isAllScope ? (
+        <ProjectInfoDialog
+          mode="workspaceFeatures"
+          workspaceId={workspaceId}
+          featureRows={rows}
+          onSaveFeatures={handleSave}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {
             onProjectsChange?.()

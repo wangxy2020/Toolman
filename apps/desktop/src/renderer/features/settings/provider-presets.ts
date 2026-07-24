@@ -96,11 +96,3 @@ export const NETWORK_PROVIDER_PRESETS: ProviderPreset[] = [
     isLocal: false,
   },
 ]
-
-export const ALL_PROVIDER_PRESETS: ProviderPreset[] = [OLLAMA_PRESET, ...NETWORK_PROVIDER_PRESETS]
-
-/** DeepSeek 当前可用模型（与主进程 preset 列表保持一致） */
-export const DEEPSEEK_PRESET_MODELS = [
-  { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash' },
-  { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro' },
-] as const

@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   deepSeekModelSupportsVision,
   isDeepSeekSupportedModelId,
+  isKimiFixedSamplingModelId,
   normalizeDeepSeekModelKey,
   providerSupportsOpenAiVision,
   resolveDeepSeekChatOptions,
   resolveOllamaExtraBody,
   resolveOpenAiModelName,
+  shouldOmitOpenAiSamplingParams,
   shouldRouteThinkingAsAnswer,
 } from './model-aliases.js'
 
@@ -60,6 +62,45 @@ describe('resolveOpenAiModelName', () => {
         'deepseek chat',
       ),
     ).toBe('deepseek-v4-flash')
+  })
+
+  it('normalizes Kimi K3 display names on Moonshot hosts', () => {
+    expect(
+      resolveOpenAiModelName(
+        { type: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1' },
+        'Kimi K3',
+      ),
+    ).toBe('kimi-k3')
+    expect(
+      resolveOpenAiModelName(
+        { type: 'openai_compatible', baseUrl: 'https://api.moonshot.ai/v1' },
+        'kimi_k3',
+      ),
+    ).toBe('kimi-k3')
+  })
+})
+
+describe('shouldOmitOpenAiSamplingParams', () => {
+  it('omits sampling for kimi-k3 (fixed temperature)', () => {
+    expect(isKimiFixedSamplingModelId('kimi-k3')).toBe(true)
+    expect(isKimiFixedSamplingModelId('Kimi K3')).toBe(true)
+    expect(isKimiFixedSamplingModelId('moonshotai/kimi-k3')).toBe(true)
+    expect(
+      shouldOmitOpenAiSamplingParams(
+        { type: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1' },
+        'kimi-k3',
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps sampling for other moonshot models', () => {
+    expect(isKimiFixedSamplingModelId('moonshot-v1-8k')).toBe(false)
+    expect(
+      shouldOmitOpenAiSamplingParams(
+        { type: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1' },
+        'moonshot-v1-128k',
+      ),
+    ).toBe(false)
   })
 })
 

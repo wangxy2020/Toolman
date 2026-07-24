@@ -13,8 +13,8 @@ import {
   IpcChannel,
   PM_PENDING_AGENT_REVISION_KEY,
   parseVersionPlanSnapshotName,
-  readMaxScheduleVersion,
   readPendingAgentScheduleRevision,
+  readMaxScheduleVersion,
   readSaveHistory,
   readScheduleVersion,
   versionPlanSnapshotName,
@@ -26,7 +26,10 @@ import {
 
 import { useI18n } from '../../../../i18n/useI18n'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
+import { SaveAsNewVersionDialog } from '../../../../components/SaveAsNewVersionDialog'
+import { isPmEditableEventTarget, isPmPanelDomActive } from '../../pm-editable-dom'
 import { pmApi } from '../../pm-api'
+import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import BaselineCaptureDialog from './BaselineCaptureDialog'
 import {
   clearSessionPendingAgentRevision,
@@ -41,6 +44,10 @@ import {
 import ProjectGanttPrintTable from './ProjectGanttPrintTable'
 import ProjectInfoDialog from './ProjectInfoDialog'
 import {
+  resolveProjectCostCatalog,
+  type PmCostRow,
+} from '../cost/pm-cost-catalog'
+import {
   ensureDefaultResourcesInCatalog,
   readSharedResourceCatalog,
   resolveAssignableResourceCatalog,
@@ -50,6 +57,7 @@ import {
 } from '../resource/pm-resource-catalog'
 import {
   isEmptyAssignment,
+  countResourceAssignmentsForTypeFilter,
   hydrateTaskResourceAssignmentsAgainstCatalog,
   patchTaskResourceAssignmentMetadata,
   readTaskResourceAssignments,
@@ -57,7 +65,11 @@ import {
   type TaskResourceAssignment,
 } from './pm-gantt-resource-assignment'
 import {
+  hydrateTaskCostAssignmentsAgainstCatalog,
+  isEmptyCostAssignment,
+  countCostAssignmentsForTypeFilter,
   patchTaskCostAssignmentMetadata,
+  readTaskCostAssignments,
   replaceTaskCostAssignmentsMetadata,
   type TaskCostAssignment,
 } from './pm-gantt-cost-assignment'
@@ -74,6 +86,7 @@ import {
   buildDefaultResourceColumnBindings,
   buildResourceViewColumnOrder,
   buildCostViewColumnOrder,
+  buildListViewColumnOrder,
   SHOULD_PERCENT_META_KEY,
   computeGanttDayWidth,
   customColumnMetaKey,
@@ -83,6 +96,8 @@ import {
   loadGanttUiPrefs,
   PROGRESS_CHECK_COLUMN_ORDER,
   saveGanttUiPrefs,
+  withGanttDefaultPredecessorsColumn,
+  type GanttAssignTypeFilter,
   type GanttScheduleView,
   type GanttUiPrefs,
 } from './pm-gantt-prefs'
@@ -164,7 +179,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const [chartPaneWidth, setChartPaneWidth] = useState(600)
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
   const [pendingDeleteSelected, setPendingDeleteSelected] = useState(false)
+  const [pendingSaveAsNewVersion, setPendingSaveAsNewVersion] = useState(false)
   const [pendingRestoreBaselineId, setPendingRestoreBaselineId] = useState<string | null>(null)
+  const [statusFeedback, setStatusFeedback] = usePmStatusFeedback()
   const hasDataRef = useRef(false)
   const scheduleSyncingRef = useRef(false)
   const pendingRescheduleRef = useRef(false)
@@ -179,6 +196,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   const [historyEpoch, setHistoryEpoch] = useState(0)
   const historyStackRef = useRef(new GanttHistoryStack())
   const historyApplyingRef = useRef(false)
+  const panelRootRef = useRef<HTMLDivElement>(null)
   const itemsRef = useRef(items)
   const relationsRef = useRef(relations)
   itemsRef.current = items
@@ -410,17 +428,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!isPmPanelDomActive(panelRootRef.current)) return
       if (projectInfoOpen || pendingDeleteSelected || pendingRestoreBaselineId) return
-      const target = event.target as HTMLElement | null
-      const tag = target?.tagName
-      if (
-        tag === 'INPUT' ||
-        tag === 'TEXTAREA' ||
-        tag === 'SELECT' ||
-        target?.isContentEditable
-      ) {
-        return
-      }
+      if (isPmEditableEventTarget(event.target)) return
       const mod = event.metaKey || event.ctrlKey
       if (!mod) return
       const key = event.key.toLowerCase()
@@ -457,6 +467,11 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       selectedProject.metadata,
       { projectCode: selectedProject.code },
     )
+  }, [selectedProject, workspaceId])
+
+  const costCatalog = useMemo((): PmCostRow[] => {
+    if (!selectedProject) return []
+    return resolveProjectCostCatalog(workspaceId, selectedProject.metadata).rows
   }, [selectedProject, workspaceId])
 
   const resourceColumnCatalog = useMemo((): PmResourceRow[] => {
@@ -510,6 +525,47 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     }
   }, [items, loadProjectData, resourceCatalog, selectedProjectId])
 
+  /** Bind legacy cost assignments (name-only) to price-list ids when possible. */
+  const costAssignmentHydrateKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selectedProjectId || items.length === 0 || costCatalog.length === 0) return
+    const updates: Array<{ id: string; metadata: Record<string, unknown> }> = []
+    for (const item of items) {
+      if (item.type === 'milestone') continue
+      const current = readTaskCostAssignments(item.metadata)
+      if (current.length === 0) continue
+      const hydrated = hydrateTaskCostAssignmentsAgainstCatalog(current, costCatalog)
+      if (!hydrated.changed) continue
+      updates.push({
+        id: item.id,
+        metadata: replaceTaskCostAssignmentsMetadata(item.metadata, hydrated.assignments),
+      })
+    }
+    if (updates.length === 0) {
+      costAssignmentHydrateKeyRef.current = selectedProjectId
+      return
+    }
+    const hydrateKey = `${selectedProjectId}:cost:${updates.map((entry) => entry.id).join(',')}`
+    if (costAssignmentHydrateKeyRef.current === hydrateKey) return
+    costAssignmentHydrateKeyRef.current = hydrateKey
+    let cancelled = false
+    void (async () => {
+      try {
+        await Promise.all(
+          updates.map((entry) =>
+            pmApi.updateWorkItem({ id: entry.id, metadata: entry.metadata }),
+          ),
+        )
+        if (!cancelled) await loadProjectData(selectedProjectId)
+      } catch {
+        costAssignmentHydrateKeyRef.current = null
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [costCatalog, items, loadProjectData, selectedProjectId])
+
   /** Remove leftover ancestor↔descendant links (e.g. after older demotes) so CP stays consistent. */
   const prunedAncestorRelationsRef = useRef<string | null>(null)
   useEffect(() => {
@@ -542,16 +598,33 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
 
   /** Widest per-task assignment count — resource view must show at least this many columns. */
   const maxResourceAssignmentSlots = useMemo(() => {
+    const typeFilter = uiPrefs.resourceView.typeFilter ?? 'all'
     let max = 0
     for (const item of items) {
       if (item.type === 'milestone') continue
-      const count = readTaskResourceAssignments(item.metadata).filter(
-        (entry) => !isEmptyAssignment(entry),
-      ).length
+      const count = countResourceAssignmentsForTypeFilter(
+        readTaskResourceAssignments(item.metadata),
+        typeFilter === 'all' ? 'all' : typeFilter,
+      )
       if (count > max) max = count
     }
     return max
-  }, [items])
+  }, [items, uiPrefs.resourceView.typeFilter])
+
+  /** Widest per-task cost assignment count — cost view must show at least this many columns. */
+  const maxCostAssignmentSlots = useMemo(() => {
+    const typeFilter = uiPrefs.costView.typeFilter ?? 'all'
+    let max = 0
+    for (const item of items) {
+      if (item.type === 'milestone') continue
+      const count = countCostAssignmentsForTypeFilter(
+        readTaskCostAssignments(item.metadata),
+        typeFilter === 'all' ? 'all' : typeFilter,
+      )
+      if (count > max) max = count
+    }
+    return max
+  }, [items, uiPrefs.costView.typeFilter])
 
   const itemsForView = useMemo(
     () => withGanttProjectRootItems(selectedProject, items),
@@ -859,6 +932,22 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     [],
   )
 
+  const ensureCostViewSlotCount = useCallback((needed: number) => {
+    const nextCount = Math.max(1, Math.floor(needed))
+    setUiPrefs((current) => {
+      if (nextCount <= current.costView.slotCount) return current
+      const next: GanttUiPrefs = {
+        ...current,
+        costView: {
+          ...current.costView,
+          slotCount: nextCount,
+        },
+      }
+      saveGanttUiPrefs(next)
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     if (uiPrefs.scheduleView !== 'resource') return
     if (maxResourceAssignmentSlots <= uiPrefs.resourceView.slotCount) return
@@ -867,6 +956,17 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     ensureResourceViewSlotCount,
     maxResourceAssignmentSlots,
     uiPrefs.resourceView.slotCount,
+    uiPrefs.scheduleView,
+  ])
+
+  useEffect(() => {
+    if (uiPrefs.scheduleView !== 'cost') return
+    if (maxCostAssignmentSlots <= uiPrefs.costView.slotCount) return
+    ensureCostViewSlotCount(maxCostAssignmentSlots)
+  }, [
+    ensureCostViewSlotCount,
+    maxCostAssignmentSlots,
+    uiPrefs.costView.slotCount,
     uiPrefs.scheduleView,
   ])
 
@@ -924,11 +1024,19 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       const item = items.find((entry) => entry.id === itemId)
       if (!item || item.type === 'milestone') return
       const nextMeta = replaceTaskCostAssignmentsMetadata(item.metadata, assignments)
+      const nextList = readTaskCostAssignments(nextMeta)
       captureHistoryBeforeChange()
       await pmApi.updateWorkItem({ id: itemId, metadata: nextMeta })
+      ensureCostViewSlotCount(nextList.length)
       await loadProjectData(selectedProjectId)
     },
-    [captureHistoryBeforeChange, items, loadProjectData, selectedProjectId],
+    [
+      captureHistoryBeforeChange,
+      ensureCostViewSlotCount,
+      items,
+      loadProjectData,
+      selectedProjectId,
+    ],
   )
 
   const handleAssignCost = useCallback(
@@ -938,11 +1046,19 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       const item = items.find((entry) => entry.id === itemId)
       if (!item || item.type === 'milestone') return
       const nextMeta = patchTaskCostAssignmentMetadata(item.metadata, patch, slot)
+      const nextList = readTaskCostAssignments(nextMeta)
       captureHistoryBeforeChange()
       await pmApi.updateWorkItem({ id: itemId, metadata: nextMeta })
+      ensureCostViewSlotCount(nextList.filter((entry) => !isEmptyCostAssignment(entry)).length)
       await loadProjectData(selectedProjectId)
     },
-    [captureHistoryBeforeChange, items, loadProjectData, selectedProjectId],
+    [
+      captureHistoryBeforeChange,
+      ensureCostViewSlotCount,
+      items,
+      loadProjectData,
+      selectedProjectId,
+    ],
   )
 
   const handleCommitCell = async (itemId: string, field: string, rawValue: string) => {
@@ -1397,97 +1513,108 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     window.setTimeout(runPrint, 0)
   }, [applyPrintDocumentTitle, applyPrintPageNumberVars])
 
-  const handleScheduleSave = useCallback(async () => {
-    if (!selectedProjectId || !selectedProject) return
-    try {
-      // While frozen on a restored version, do not re-drive dates from live relations
-      // before snapshotting — that would overwrite the version being saved.
-      if (!freezeStoredSchedule) {
-        await persistAutoSchedule()
-      }
-
-      // Prefer fresh project metadata — list prop can lag behind agent apply.
-      let prevMeta: Record<string, unknown> = { ...(selectedProject.metadata ?? {}) }
+  const handleScheduleSave = useCallback(
+    async (options?: { asNewVersion?: boolean; note?: string }) => {
+      if (!selectedProjectId || !selectedProject) return
+      const asNewVersion = options?.asNewVersion === true
       try {
-        const fresh = await pmApi.getProject(selectedProjectId)
-        prevMeta = { ...(fresh.metadata ?? {}) }
-      } catch {
-        // fall back to list prop metadata
-      }
-
-      const sessionPending = hasSessionPendingAgentRevision(workspaceId, selectedProjectId)
-      // Session only fills the gap until fresh metadata reflects the DB pending flag.
-      const agentPending = isPendingAgentScheduleRevision(prevMeta, workspaceId, selectedProjectId)
-      if (sessionPending && !readPendingAgentScheduleRevision(prevMeta)) {
-        prevMeta = { ...prevMeta, [PM_PENDING_AGENT_REVISION_KEY]: true }
-      }
-
-      const prevVersion = readScheduleVersion(prevMeta)
-      // First save (manual plan) or agent revision always creates a new version row.
-      const shouldBump = agentPending || readMaxScheduleVersion(prevMeta) === 0
-      const totalDurationDays = computeScheduleTotalDurationDays(items) ?? undefined
-      const nextMeta = buildScheduleSaveMetadata(prevMeta, {
-        workItemCount: items.length,
-        ...(totalDurationDays != null ? { totalDurationDays } : {}),
-        bumpVersion: shouldBump,
-      })
-      const updated = await pmApi.updateProject({
-        id: selectedProjectId,
-        metadata: nextMeta,
-      })
-      clearSessionPendingAgentRevision(workspaceId, selectedProjectId)
-
-      const version = readScheduleVersion(updated.metadata ?? nextMeta)
-      const createdNewVersion = version > prevVersion
-      if (version > 0) {
-        // Persist the version's plan snapshot for version switch (not a user baseline).
-        try {
-          await pmScheduleApi.createBaseline(workspaceId, selectedProjectId, {
-            name: versionPlanSnapshotName(version),
-          })
-        } catch (err) {
-          window.alert(
-            t('projectManagerPage.schedule.versionBaselineCreateFailed', {
-              detail: err instanceof Error ? err.message : String(err),
-            }),
-          )
+        // While frozen on a restored version, do not re-drive dates from live relations
+        // before snapshotting — that would overwrite the version being saved.
+        if (!freezeStoredSchedule) {
+          await persistAutoSchedule()
         }
-      }
 
-      setFreezeStoredSchedule(false)
-      suppressAutoScheduleRef.current = false
-      lastScheduleFingerprintRef.current = ''
-      await onProjectsChange?.()
-      await loadProjectData(selectedProjectId)
-      if (createdNewVersion) {
-        window.alert(
-          t('projectManagerPage.schedule.saveSuccessNewVersion', {
-            version: String(version),
-          }),
-        )
-      } else if (version > 0) {
-        window.alert(
-          t('projectManagerPage.schedule.saveSuccessUpdated', {
-            version: String(version),
-          }),
-        )
-      } else {
-        window.alert(t('projectManagerPage.schedule.saveSuccess'))
+        // Prefer fresh project metadata — list prop can lag behind agent apply.
+        let prevMeta: Record<string, unknown> = { ...(selectedProject.metadata ?? {}) }
+        try {
+          const fresh = await pmApi.getProject(selectedProjectId)
+          prevMeta = { ...(fresh.metadata ?? {}) }
+        } catch {
+          // fall back to list prop metadata
+        }
+
+        const sessionPending = hasSessionPendingAgentRevision(workspaceId, selectedProjectId)
+        // Session only fills the gap until fresh metadata reflects the DB pending flag.
+        if (sessionPending && !readPendingAgentScheduleRevision(prevMeta)) {
+          prevMeta = { ...prevMeta, [PM_PENDING_AGENT_REVISION_KEY]: true }
+        }
+
+        const prevVersion = readScheduleVersion(prevMeta)
+        // 「保存」= update current (first save still creates v1). 「另存新版本」= bump.
+        const bumpVersion = asNewVersion ? true : false
+        const totalDurationDays = computeScheduleTotalDurationDays(items) ?? undefined
+        const note = options?.note?.trim() || undefined
+        const nextMeta = buildScheduleSaveMetadata(prevMeta, {
+          workItemCount: items.length,
+          ...(totalDurationDays != null ? { totalDurationDays } : {}),
+          bumpVersion,
+          ...(note ? { note } : {}),
+        })
+        const updated = await pmApi.updateProject({
+          id: selectedProjectId,
+          metadata: nextMeta,
+        })
+        clearSessionPendingAgentRevision(workspaceId, selectedProjectId)
+
+        const version = readScheduleVersion(updated.metadata ?? nextMeta)
+        const createdNewVersion = version > prevVersion
+        if (version > 0) {
+          // Persist the version's plan snapshot for version switch (not a user baseline).
+          try {
+            await pmScheduleApi.createBaseline(workspaceId, selectedProjectId, {
+              name: versionPlanSnapshotName(version),
+            })
+          } catch (err) {
+            window.alert(
+              t('projectManagerPage.schedule.versionBaselineCreateFailed', {
+                detail: err instanceof Error ? err.message : String(err),
+              }),
+            )
+          }
+        }
+
+        setFreezeStoredSchedule(false)
+        suppressAutoScheduleRef.current = false
+        lastScheduleFingerprintRef.current = ''
+        await onProjectsChange?.()
+        await loadProjectData(selectedProjectId)
+        if (createdNewVersion) {
+          setStatusFeedback({
+            tone: 'success',
+            text: t('projectManagerPage.schedule.saveSuccessNewVersion', {
+              version: String(version),
+            }),
+          })
+        } else if (version > 0) {
+          setStatusFeedback({
+            tone: 'success',
+            text: t('projectManagerPage.schedule.saveSuccessUpdated', {
+              version: String(version),
+            }),
+          })
+        } else {
+          setStatusFeedback({
+            tone: 'success',
+            text: t('projectManagerPage.schedule.saveSuccess'),
+          })
+        }
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : String(err))
       }
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err))
-    }
-  }, [
-    freezeStoredSchedule,
-    items,
-    loadProjectData,
-    onProjectsChange,
-    persistAutoSchedule,
-    selectedProject,
-    selectedProjectId,
-    t,
-    workspaceId,
-  ])
+    },
+    [
+      freezeStoredSchedule,
+      items,
+      loadProjectData,
+      onProjectsChange,
+      persistAutoSchedule,
+      selectedProject,
+      selectedProjectId,
+      setStatusFeedback,
+      t,
+      workspaceId,
+    ],
+  )
 
   const pendingRestoreBaseline = useMemo(
     () =>
@@ -1565,6 +1692,11 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   useEffect(() => {
     if (uiPrefs.scheduleView !== 'progressCheck' || loading || !selectedProjectId) {
       if (uiPrefs.scheduleView !== 'progressCheck') {
+        // Leaving 进度检查: restore baseline menu to 不对比 (defaults are only for that view).
+        if (progressCheckSetupKeyRef.current != null) {
+          setBaselineCompareMode('none')
+          setSelectedBaselineId(null)
+        }
         progressCheckSetupKeyRef.current = null
       }
       return
@@ -1582,7 +1714,12 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
 
   const handleScheduleViewChange = useCallback(
     (scheduleView: GanttScheduleView) => {
-      handlePrefsChange({ ...uiPrefs, scheduleView })
+      let next: GanttUiPrefs = { ...uiPrefs, scheduleView }
+      // Gantt chart view defaults to showing 前置任务 when entering that view.
+      if (scheduleView === 'gantt') {
+        next = withGanttDefaultPredecessorsColumn(next)
+      }
+      handlePrefsChange(next)
     },
     [handlePrefsChange, uiPrefs],
   )
@@ -1610,11 +1747,17 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         case 'save':
           await handleScheduleSave()
           break
+        case 'saveAsNewVersion':
+          setPendingSaveAsNewVersion(true)
+          break
         case 'print':
           handlePrint()
           break
         case 'projectInfo':
           if (selectedProjectId) setProjectInfoOpen(true)
+          break
+        case 'link':
+          // Placeholder for a future link feature.
           break
         case 'undo':
           await handleUndo()
@@ -1674,6 +1817,44 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         case 'openCost':
           handlePrefsChange({ ...uiPrefs, scheduleView: 'cost' })
           break
+        case 'autoAssignResource': {
+          if (!selectedProjectId) break
+          try {
+            const result = await pmApi.smartAssignWorkItems({
+              workspaceId,
+              projectId: selectedProjectId,
+              kind: 'resource',
+            })
+            await loadProjectData(selectedProjectId)
+            window.alert(
+              t('projectManagerPage.agent.smartAssignResourceDone', {
+                count: result.updatedCount,
+              }),
+            )
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : String(err))
+          }
+          break
+        }
+        case 'autoAssignCost': {
+          if (!selectedProjectId) break
+          try {
+            const result = await pmApi.smartAssignWorkItems({
+              workspaceId,
+              projectId: selectedProjectId,
+              kind: 'cost',
+            })
+            await loadProjectData(selectedProjectId)
+            window.alert(
+              t('projectManagerPage.agent.smartAssignCostDone', {
+                count: result.updatedCount,
+              }),
+            )
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : String(err))
+          }
+          break
+        }
         case 'openAnalysis':
           window.alert(t('projectManagerPage.schedule.analysisComingSoon'))
           break
@@ -1745,7 +1926,14 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
     : isCostView
       ? {
           ...uiPrefs,
-          columnOrder: buildCostViewColumnOrder(uiPrefs.costView),
+          costView: {
+            ...uiPrefs.costView,
+            slotCount: Math.max(uiPrefs.costView.slotCount, maxCostAssignmentSlots, 1),
+          },
+          columnOrder: buildCostViewColumnOrder({
+            ...uiPrefs.costView,
+            slotCount: Math.max(uiPrefs.costView.slotCount, maxCostAssignmentSlots, 1),
+          }),
           columnLabels: {
             ...uiPrefs.columnLabels,
             costName: t('projectManagerPage.schedule.columns.costName'),
@@ -1758,7 +1946,16 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
             ...uiPrefs,
             columnOrder: [...PROGRESS_CHECK_COLUMN_ORDER],
           }
-        : uiPrefs
+        : isListView
+          ? {
+              ...uiPrefs,
+              columnOrder: buildListViewColumnOrder(uiPrefs.columnOrder),
+              columnLabels: {
+                ...uiPrefs.columnLabels,
+                spacer: '',
+              },
+            }
+          : uiPrefs
   const barStyleClass =
     barStyle === 'outline'
       ? 'tm-pm-gantt-page--outline'
@@ -1781,6 +1978,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
       selectedProjectId,
     )
   const statusMessage = (() => {
+    if (statusFeedback) {
+      return statusFeedback
+    }
     if (pendingAgentRevision) {
       return {
         text: t('projectManagerPage.schedule.statusBar.pendingAgentRevision'),
@@ -1823,6 +2023,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
 
   return (
     <div
+      ref={panelRootRef}
       className={['tm-pm-gantt-page', barStyleClass].filter(Boolean).join(' ')}
       style={
         {
@@ -1880,6 +2081,22 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         }}
         versionSwitchEntries={versionSwitchEntries}
         onRestoreBaseline={(id) => setPendingRestoreBaselineId(id)}
+        resourceTypeFilter={uiPrefs.resourceView.typeFilter ?? 'all'}
+        costTypeFilter={uiPrefs.costView.typeFilter ?? 'all'}
+        onResourceTypeFilterChange={(filter: GanttAssignTypeFilter) => {
+          handlePrefsChange({
+            ...uiPrefs,
+            scheduleView: 'resource',
+            resourceView: { ...uiPrefs.resourceView, typeFilter: filter },
+          })
+        }}
+        onCostTypeFilterChange={(filter: GanttAssignTypeFilter) => {
+          handlePrefsChange({
+            ...uiPrefs,
+            scheduleView: 'cost',
+            costView: { ...uiPrefs.costView, typeFilter: filter },
+          })
+        }}
         onAction={handleMenuAction}
       />
 
@@ -1927,6 +2144,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           onCommitCell={handleCommitCell}
           resourceCatalog={resourceCatalog}
           resourceColumnCatalog={resourceColumnCatalog}
+          costCatalog={costCatalog}
           progressPercentById={progressPercentById}
           onAssignResource={isResourceView ? handleAssignResource : undefined}
           onReplaceResourceAssignments={
@@ -2277,6 +2495,18 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {
             onProjectsChange?.()
+          }}
+        />
+      ) : null}
+
+      {pendingSaveAsNewVersion ? (
+        <SaveAsNewVersionDialog
+          currentVersion={readScheduleVersion(selectedProject?.metadata)}
+          nextVersion={readMaxScheduleVersion(selectedProject?.metadata) + 1}
+          onCancel={() => setPendingSaveAsNewVersion(false)}
+          onConfirm={(note) => {
+            setPendingSaveAsNewVersion(false)
+            void handleScheduleSave({ asNewVersion: true, note })
           }}
         />
       ) : null}

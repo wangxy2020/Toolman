@@ -1,6 +1,6 @@
 export const TOOLMAN_GITHUB_URL = 'https://github.com/wangxy2020/Toolman'
 
-export const TOOLMAN_LICENSE_URL = `${TOOLMAN_GITHUB_URL}/blob/main/LICENSE`
+const TOOLMAN_LICENSE_URL = `${TOOLMAN_GITHUB_URL}/blob/main/LICENSE`
 export const TOOLMAN_THIRD_PARTY_NOTICES_URL = `${TOOLMAN_GITHUB_URL}/blob/main/THIRD_PARTY_NOTICES.md`
 
 export const TOOLMAN_JOIN_US_QQ_GROUP = '1054710968'

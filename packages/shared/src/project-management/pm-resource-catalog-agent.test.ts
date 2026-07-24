@@ -52,6 +52,7 @@ describe('pm-resource-catalog-agent', () => {
       {
         id: '1',
         type: 'labor' as const,
+        customTypeName: '',
         name: '临时工',
         spec: '',
         unit: '工日',
@@ -65,6 +66,7 @@ describe('pm-resource-catalog-agent', () => {
       {
         id: '2',
         type: 'material' as const,
+        customTypeName: '',
         name: '砂子',
         spec: '',
         unit: 'm³',
