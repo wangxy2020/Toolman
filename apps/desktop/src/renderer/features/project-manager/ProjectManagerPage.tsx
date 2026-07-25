@@ -40,6 +40,10 @@ import ProjectManagementSettingsPanel from './views/settings/ProjectManagementSe
 import ProjectScheduleCalendarPanel from './views/schedule/ProjectScheduleCalendarPanel'
 import ProjectScheduleGanttPanel from './views/schedule/ProjectScheduleGanttPanel'
 import ProjectInfoDialog from './views/schedule/ProjectInfoDialog'
+import {
+  loadGanttUiPrefs,
+  saveGanttUiPrefs,
+} from './views/schedule/pm-gantt-prefs'
 import ProjectKanbanPanel from './views/kanban/ProjectKanbanPanel'
 import ProjectVerticalDomainStatsPanel from './views/vertical/ProjectVerticalDomainStatsPanel'
 import { isProgressScheduleView } from './projectManagerPanelView'
@@ -284,6 +288,12 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       preferAllProjectsRef.current = false
       setAgentKickoffProject(null)
       setSettingsOpen(false)
+      // Agent confirm is an explicit jump to the Gantt chart. Do not restore a
+      // previously selected allocation/check subview (for example 成本分配).
+      const ganttPrefs = loadGanttUiPrefs()
+      if (ganttPrefs.scheduleView !== 'gantt') {
+        saveGanttUiPrefs({ ...ganttPrefs, scheduleView: 'gantt' })
+      }
       setPanelView('gantt')
       setMountedViews((prev) => {
         if (prev.has('gantt')) return prev
@@ -476,28 +486,55 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         setSelectedProjectId(restored)
       }
     }
-    setPanelView('gantt')
+    // 资源/成本管理下无甘特图入口：跳到各自列表；计划管理仍打开甘特图。
+    const targetView: ProjectManagerPanelView =
+      activeTab === 'resource_management'
+        ? 'resource_table'
+        : activeTab === 'cost_management'
+          ? 'cost_table'
+          : 'gantt'
+    setPanelView(targetView)
     setMountedViews((prev) => {
-      if (prev.has('gantt')) return prev
+      if (prev.has(targetView)) return prev
       const next = new Set(prev)
-      next.add('gantt')
+      next.add(targetView)
       return next
     })
-  }, [projects, selectedProjectId, workspaceId])
+  }, [activeTab, projects, selectedProjectId, workspaceId])
 
   const filesPanel =
     workspaceId &&
     isConfigurableSidebarMenuKey(activeTab) &&
     isPmFilesDomain(activeTab) ? (
-      <ProjectManagementFilesPanel
-        workspaceId={workspaceId}
-        workspace={agentContext?.workspace ?? null}
-        systemPaths={agentContext?.systemPaths ?? null}
-        projects={projects}
-        selectedProjectId={selectedProjectId}
-        onOpenScheduleView={openScheduleFromFeatures}
-        onProjectsChange={reloadProjectsAndDashboard}
-      />
+      activeTab === 'resource_management' ? (
+        <ProjectResourceTablePanel
+          workspaceId={workspaceId}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onProjectsChange={reloadProjectsAndDashboard}
+          variant="practice"
+          onOpenScheduleView={openScheduleFromFeatures}
+        />
+      ) : activeTab === 'cost_management' ? (
+        <ProjectCostTablePanel
+          workspaceId={workspaceId}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onProjectsChange={reloadProjectsAndDashboard}
+          variant="practice"
+          onOpenScheduleView={openScheduleFromFeatures}
+        />
+      ) : (
+        <ProjectManagementFilesPanel
+          workspaceId={workspaceId}
+          workspace={agentContext?.workspace ?? null}
+          systemPaths={agentContext?.systemPaths ?? null}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onOpenScheduleView={openScheduleFromFeatures}
+          onProjectsChange={reloadProjectsAndDashboard}
+        />
+      )
     ) : (
       <div className="tm-kb-file-panel-empty">
         <p>{t('projectManagerPage.panel.reserved.files')}</p>

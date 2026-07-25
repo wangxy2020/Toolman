@@ -56,6 +56,18 @@ export const PmBaselineUpdateInputSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  /**
+   * Patch actual progress on work items inside this baseline snapshot
+   * (进度检查 edits while comparing a baseline).
+   */
+  workItemProgress: z
+    .array(
+      z.object({
+        workItemId: UuidSchema,
+        progressPercent: z.number().int().min(0).max(100),
+      }),
+    )
+    .optional(),
 })
 
 export const PmBaselineGetInputSchema = z.object({

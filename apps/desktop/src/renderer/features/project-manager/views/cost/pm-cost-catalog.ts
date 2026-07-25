@@ -14,14 +14,40 @@ import {
 
 import {
   PM_RESOURCE_TYPES,
-  type PmResourceType,
 } from '../resource/pm-resource-catalog'
 
 export const PM_COST_CATALOG_KEY = 'costCatalog'
 
-/** Reuse resource type taxonomy for 类型 column / filters. */
-export const PM_COST_TYPES = PM_RESOURCE_TYPES
-export type PmCostType = PmResourceType
+/**
+ * 成本管理-实务「视图 / 类型」共用标识（施工定额 … 估算指标）。
+ * Kept out of the price-list primary menu.
+ */
+export const PM_COST_PRACTICE_QUOTA_TYPES = [
+  'constructionQuota',
+  'budgetQuota',
+  'estimateQuota',
+  'estimateIndicator',
+  'investmentIndicator',
+] as const
+
+export type PmCostPracticeQuotaType = (typeof PM_COST_PRACTICE_QUOTA_TYPES)[number]
+
+export function isPmCostPracticeQuotaType(
+  value: unknown,
+): value is PmCostPracticeQuotaType {
+  return (
+    typeof value === 'string' &&
+    (PM_COST_PRACTICE_QUOTA_TYPES as readonly string[]).includes(value)
+  )
+}
+
+/** Price-list + practice type taxonomy. */
+export const PM_COST_TYPES = [
+  ...PM_RESOURCE_TYPES,
+  ...PM_COST_PRACTICE_QUOTA_TYPES,
+] as const
+
+export type PmCostType = (typeof PM_COST_TYPES)[number]
 
 /**
  * Price-list view/type menus: cost-oriented types stay top-level;
@@ -100,6 +126,17 @@ function sharedCatalogStorageKey(workspaceId: string): string {
 
 export function isPmCostType(value: unknown): value is PmCostType {
   return typeof value === 'string' && (PM_COST_TYPES as readonly string[]).includes(value)
+}
+
+/**
+ * Map a UI cost type onto the durable shared price-list type enum.
+ * Practice quota types are practice-only and fall back to `other`.
+ */
+export function toSharedCostCatalogType(
+  type: PmCostType,
+): Exclude<PmCostType, PmCostPracticeQuotaType> {
+  if (isPmCostPracticeQuotaType(type)) return 'other'
+  return type
 }
 
 export function computeCostTotalPrice(
@@ -239,7 +276,7 @@ export function patchCostSectionMeta(
   )
 }
 
-function parseCostRows(raw: unknown): PmCostRow[] | null {
+export function parseCostRows(raw: unknown): PmCostRow[] | null {
   if (!Array.isArray(raw)) return null
   const rows: PmCostRow[] = []
   for (const entry of raw) {
@@ -534,7 +571,7 @@ export function writeSharedCostCatalog(workspaceId: string, rows: PmCostRow[]): 
         workspaceId,
         normalized.map((row) => ({
           id: row.id,
-          type: row.type,
+          type: toSharedCostCatalogType(row.type),
           code: row.code,
           name: row.name,
           featureDescription: row.featureDescription,

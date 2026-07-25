@@ -593,7 +593,7 @@ function isResourceRow(value: unknown): value is PmResourceRow {
 }
 
 /** Parse a stored catalog. `null` = key missing/invalid; `[]` = explicit empty (do not reseed). */
-function parseResourceRows(raw: unknown): PmResourceRow[] | null {
+export function parseResourceRows(raw: unknown): PmResourceRow[] | null {
   if (!Array.isArray(raw)) return null
   if (raw.length === 0) return []
   const parsed = raw

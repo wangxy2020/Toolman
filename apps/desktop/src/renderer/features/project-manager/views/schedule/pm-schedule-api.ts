@@ -41,11 +41,21 @@ export const pmScheduleApi = {
     })
   },
 
-  updateBaseline(id: string, options: { name?: string; asOfDate?: string }) {
+  updateBaseline(
+    id: string,
+    options: {
+      name?: string
+      asOfDate?: string
+      workItemProgress?: Array<{ workItemId: string; progressPercent: number }>
+    },
+  ) {
     return invoke<PmScheduleBaseline>(IpcChannel.Pm_BaselineUpdate, {
       id,
       ...(options.name ? { name: options.name } : {}),
       ...(options.asOfDate ? { asOfDate: options.asOfDate } : {}),
+      ...(options.workItemProgress && options.workItemProgress.length > 0
+        ? { workItemProgress: options.workItemProgress }
+        : {}),
     })
   },
 

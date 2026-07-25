@@ -4,6 +4,7 @@ import {
   computeProgressLineStubs,
   nextUserBaselineName,
   plannedProgressAtDate,
+  patchBaselineWorkItemProgress,
   suggestBaselineAsOfDate,
 } from './pm-gantt-baseline-compare'
 import { GANTT_ROW_HEIGHT } from './pm-gantt-utils'
@@ -113,5 +114,61 @@ describe('computeProgressLineStubs', () => {
     // Task b not started (tip at start Jan 11); status Jan 10 → tip right of status, variance 0
     expect(stubs[1]!.variancePct).toBe(0)
     expect(stubs[1]!.tipLeftPercent).toBeGreaterThan(statusLeftPercent)
+  })
+
+  it('prefers baseline snapshot progress over live item progress', () => {
+    const rows = [
+      { item: item({ id: 'a', progressPercent: 90 }), hasChildren: false },
+    ]
+    const rangeStart = Date.parse('2026-01-01')
+    const rangeEnd = Date.parse('2026-01-31')
+    const statusDateMs = Date.parse('2026-01-10')
+    const { stubs } = computeProgressLineStubs({
+      rows,
+      baselineByItemId: new Map([
+        [
+          'a',
+          {
+            startDate: Date.parse('2026-01-01'),
+            dueDate: Date.parse('2026-01-20'),
+            progressPercent: 20,
+          },
+        ],
+      ]),
+      statusDateMs,
+      rangeStart,
+      rangeEnd,
+      progressPercentById: new Map([['a', 20]]),
+    })
+    expect(stubs).toHaveLength(1)
+    // Planned ~47% by Jan 10; snapshot actual 20 → behind (not live 90).
+    expect(stubs[0]!.variancePct).toBeLessThan(0)
+  })
+})
+
+describe('patchBaselineWorkItemProgress', () => {
+  it('updates matching snapshot work item progress', () => {
+    const baselines = [
+      {
+        id: 'b1',
+        projectId: 'p',
+        workspaceId: 'ws',
+        name: '基线1',
+        createdAt: 1,
+        updatedAt: 1,
+        snapshot: {
+          capturedAt: 1,
+          workItems: [
+            { workItemId: 'a', title: 'a', progressPercent: 0 },
+            { workItemId: 'b', title: 'b', progressPercent: 10 },
+          ],
+        },
+      },
+    ]
+    const next = patchBaselineWorkItemProgress(baselines, 'b1', [
+      { workItemId: 'a', progressPercent: 55 },
+    ])
+    expect(next[0]!.snapshot.workItems[0]!.progressPercent).toBe(55)
+    expect(next[0]!.snapshot.workItems[1]!.progressPercent).toBe(10)
   })
 })

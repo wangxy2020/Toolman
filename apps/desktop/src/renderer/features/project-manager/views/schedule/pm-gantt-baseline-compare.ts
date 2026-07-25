@@ -125,10 +125,15 @@ export function suggestBaselineAsOfDate(
  */
 export function computeProgressLineStubs(input: {
   rows: ReadonlyArray<{ item: PmWorkItem; hasChildren: boolean }>
-  baselineByItemId: ReadonlyMap<string, { startDate?: number; dueDate?: number }>
+  baselineByItemId: ReadonlyMap<
+    string,
+    { startDate?: number; dueDate?: number; progressPercent?: number }
+  >
   statusDateMs: number
   rangeStart: number
   rangeEnd: number
+  /** Prefer snapshot/display progress when comparing a baseline. */
+  progressPercentById?: ReadonlyMap<string, number>
 }): { stubs: ProgressLineStub[]; statusLeftPercent: number } {
   const span = Math.max(1, input.rangeEnd - input.rangeStart)
   const statusLeftPercent = Math.min(
@@ -149,9 +154,17 @@ export function computeProgressLineStubs(input: {
     const finish = startOfLocalDay(planFinish)
     if (finish < input.rangeStart || start > input.rangeEnd) return
 
+    const fromMap = input.progressPercentById?.get(item.id)
+    const fromBaseline = baseline?.progressPercent
+    const rawActual =
+      typeof fromMap === 'number' && Number.isFinite(fromMap)
+        ? fromMap
+        : typeof fromBaseline === 'number' && Number.isFinite(fromBaseline)
+          ? fromBaseline
+          : item.progressPercent
     const actualPct =
-      typeof item.progressPercent === 'number' && Number.isFinite(item.progressPercent)
-        ? Math.min(100, Math.max(0, item.progressPercent))
+      typeof rawActual === 'number' && Number.isFinite(rawActual)
+        ? Math.min(100, Math.max(0, rawActual))
         : 0
     const plannedPct = plannedProgressAtDate(planStart, planFinish, input.statusDateMs)
 
@@ -170,4 +183,30 @@ export function computeProgressLineStubs(input: {
   })
 
   return { stubs, statusLeftPercent }
+}
+
+/** Patch actual progressPercent values inside a baseline snapshot (local / optimistic). */
+export function patchBaselineWorkItemProgress(
+  baselines: readonly PmScheduleBaseline[],
+  baselineId: string,
+  workItemProgress: ReadonlyArray<{ workItemId: string; progressPercent: number }>,
+): PmScheduleBaseline[] {
+  if (workItemProgress.length === 0) return [...baselines]
+  const progressById = new Map(
+    workItemProgress.map((entry) => [entry.workItemId, entry.progressPercent] as const),
+  )
+  return baselines.map((entry) => {
+    if (entry.id !== baselineId) return entry
+    return {
+      ...entry,
+      snapshot: {
+        ...entry.snapshot,
+        workItems: entry.snapshot.workItems.map((item) => {
+          const next = progressById.get(item.workItemId)
+          if (next == null) return item
+          return { ...item, progressPercent: next }
+        }),
+      },
+    }
+  })
 }

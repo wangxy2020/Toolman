@@ -257,8 +257,11 @@ interface Props {
   selectionResetKey?: string | null
   /** Baseline as-of date: recompute 应完成% from schedule instead of stored metadata. */
   shouldPercentAsOfMs?: number | null
-  /** Plan dates frozen in the selected baseline (Baseline Start/Finish). */
-  baselinePlanByItemId?: ReadonlyMap<string, { startDate?: number; dueDate?: number }>
+  /** Plan dates / actual % frozen in the selected baseline (Baseline Start/Finish/Progress). */
+  baselinePlanByItemId?: ReadonlyMap<
+    string,
+    { startDate?: number; dueDate?: number; progressPercent?: number }
+  >
 }
 
 export const ProjectGanttTaskGrid: FC<Props> = ({
@@ -2074,6 +2077,8 @@ export const ProjectGanttTaskGrid: FC<Props> = ({
           if (isProjectRoot) return
           if (field === 'variance') return
           if (field === 'percentComplete' && hasChildren) return
+          // 应完成% is derived from the selected baseline as-of date while comparing.
+          if (field === 'shouldPercentComplete' && shouldPercentAsOfMs != null) return
           event.stopPropagation()
           startEdit({ kind: 'cell', itemId: item.id, field }, value)
         }}>

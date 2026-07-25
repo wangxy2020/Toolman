@@ -23,6 +23,7 @@ import {
 } from './pm-pending-revision'
 import {
   readSharedCostCatalog,
+  toSharedCostCatalogType,
   upsertSharedCostCatalog,
   writeSharedCostCatalog,
   type PmCostRow,
@@ -184,7 +185,7 @@ export function ProjectCostPlanApplyBar({
         await pmApi.upsertSharedCostCatalog(
           workspaceId,
           upserts.map((entry) => ({
-            type: (entry.type as PmCostType) || 'other',
+            type: toSharedCostCatalogType((entry.type as PmCostType) || 'other'),
             name: entry.name,
             unit: entry.unit,
             quantity: entry.quantity,

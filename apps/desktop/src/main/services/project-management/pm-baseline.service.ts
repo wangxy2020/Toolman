@@ -261,9 +261,21 @@ export function createPmBaseline(input: unknown) {
   return created
 }
 
-/** Update user baseline name and/or as-of date (refreshes 应完成% when date changes). */
+/** Update user baseline name, as-of date, and/or snapshot progress patches. */
 export function updatePmBaseline(input: unknown) {
   const data = PmBaselineUpdateInputSchema.parse(input)
+  // Prefer schema field; fall back to raw payload if an older shared build stripped it.
+  const rawProgress =
+    data.workItemProgress ??
+    (input &&
+    typeof input === 'object' &&
+    Array.isArray((input as { workItemProgress?: unknown }).workItemProgress)
+      ? (
+          input as {
+            workItemProgress: Array<{ workItemId: string; progressPercent: number }>
+          }
+        ).workItemProgress
+      : undefined)
   const existing = getBaselineRepo().getById(data.id)
   if (!existing) {
     throw new Error('基线不存在')
@@ -271,7 +283,7 @@ export function updatePmBaseline(input: unknown) {
   if (parseVersionPlanSnapshotName(existing.name) != null) {
     throw new Error('版本计划快照不能在此修改；请在项目信息中管理保存记录')
   }
-  if (data.name == null && data.asOfDate == null) {
+  if (data.name == null && data.asOfDate == null && (rawProgress == null || rawProgress.length === 0)) {
     return existing
   }
 
@@ -284,6 +296,38 @@ export function updatePmBaseline(input: unknown) {
       throw new Error('请输入有效日期，格式为 YYYY-MM-DD')
     }
     snapshot = { ...snapshot, asOfDate }
+  }
+  if (rawProgress != null && rawProgress.length > 0) {
+    const progressById = new Map(
+      rawProgress
+        .filter(
+          (entry) =>
+            entry &&
+            typeof entry.workItemId === 'string' &&
+            typeof entry.progressPercent === 'number' &&
+            Number.isFinite(entry.progressPercent),
+        )
+        .map(
+          (entry) =>
+            [
+              entry.workItemId,
+              Math.min(100, Math.max(0, Math.floor(entry.progressPercent))),
+            ] as const,
+        ),
+    )
+    let patched = 0
+    snapshot = {
+      ...snapshot,
+      workItems: snapshot.workItems.map((item) => {
+        const next = progressById.get(item.workItemId)
+        if (next == null) return item
+        patched += 1
+        return { ...item, progressPercent: next }
+      }),
+    }
+    if (patched === 0) {
+      throw new Error('基线快照中未找到对应任务，无法保存实际完成百分比')
+    }
   }
 
   const updated = getBaselineRepo().updateSnapshot(existing.id, snapshot, name)

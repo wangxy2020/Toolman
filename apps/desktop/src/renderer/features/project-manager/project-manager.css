@@ -704,12 +704,25 @@
 .tm-pm-features-table-page .tm-pm-resource-table-scroll {
   flex: 1 1 0;
   min-height: 0;
-  /* Prefer the custom bottom scrollbar (same as resource-allocation / Gantt). */
-  scrollbar-width: none;
+  /* Native V bar only; H handled by the custom bottom track (see base rule). */
+  scrollbar-gutter: stable;
 }
 
 .tm-pm-features-table-page .tm-pm-resource-table-scroll::-webkit-scrollbar {
-  display: none;
+  width: 10px;
+  -webkit-appearance: none;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border: none;
+  border-radius: 999px;
+  background-clip: border-box;
+}
+
+.tm-pm-features-table-page .tm-pm-resource-table-scroll::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tm-pm-features-table-page .tm-pm-resource-table-scroll-inner {
@@ -770,7 +783,10 @@
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+  /* Same as cost-allocation group title: one 0.5px divider between year/month.
+     Drop inherited inset box-shadow or it stacks into a double line. */
   border-bottom: 0.5px solid var(--tm-border);
+  box-shadow: none;
 }
 
 .tm-pm-features-table-page th.tm-pm-features-table-col-month,
@@ -789,9 +805,11 @@
   height: 26px;
   font-size: 11px;
   font-weight: 600;
+  /* Bottom edge of the two-row header; keep single inset line only here. */
+  box-shadow: inset 0 -1px 0 var(--tm-border);
 }
 
-/* Horizontal two-row headers use split heights; vertical keeps the standard 54px sticky bar. */
+/* Horizontal two-row headers use split heights; vertical keeps the standard 54px bar. */
 .tm-pm-features-table-page
   .tm-pm-resource-table:not(.tm-pm-features-table--vertical)
   thead
@@ -800,9 +818,6 @@
 }
 
 .tm-pm-features-table-page .tm-pm-features-table--vertical thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   height: 54px;
   min-height: 54px;
   vertical-align: middle;
@@ -821,8 +836,6 @@
   thead
   tr.tm-pm-features-table-head-row--year
   > th[rowspan] {
-  top: 0;
-  z-index: 3;
   height: 52px;
   vertical-align: middle;
 }
@@ -832,8 +845,6 @@
   thead
   tr.tm-pm-features-table-head-row--year
   > th.tm-pm-features-table-col-year {
-  top: 0;
-  z-index: 2;
   height: 26px;
 }
 
@@ -842,8 +853,6 @@
   thead
   tr.tm-pm-features-table-head-row--month
   > th {
-  top: 26px;
-  z-index: 2;
   height: 26px;
 }
 
@@ -2032,27 +2041,11 @@ html.theme-dark .tm-pm-resource-menubar {
 }
 
 /* Full-list: name stays at grid-track width; spacer absorbs leftover space. */
-.tm-pm-gantt-workspace--full-list .tm-pm-gantt-col--name {
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-col--name,
+.tm-pm-gantt-workspace--resource .tm-pm-gantt-col--name,
+.tm-pm-gantt-workspace--cost .tm-pm-gantt-col--name {
   min-width: 0;
   max-width: 100%;
-}
-
-.tm-pm-gantt-workspace--full-list .tm-pm-gantt-col--spacer {
-  min-width: 0;
-  border-right: none;
-  background: transparent;
-}
-
-/* Resource allocation: fixed columns + trailing blank track. */
-.tm-pm-gantt-workspace--resource .tm-pm-gantt-col--name {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.tm-pm-gantt-workspace--resource .tm-pm-gantt-col--spacer {
-  min-width: 0;
-  border-right: none;
-  background: transparent;
 }
 
 .tm-pm-gantt-workspace--full-list .tm-pm-gantt-grid-body {
@@ -2832,6 +2825,18 @@ button.tm-pm-gantt-resource-cell-trigger.tm-pm-gantt-resource-assign-popup-selec
   box-sizing: border-box;
   min-width: 0;
   overflow: hidden;
+}
+
+/* Trailing blank track: no right edge; keep row/header lines running to the pane edge. */
+.tm-pm-gantt-grid-header .tm-pm-gantt-col--spacer,
+.tm-pm-gantt-grid-row .tm-pm-gantt-col--spacer,
+.tm-pm-gantt-workspace--full-list .tm-pm-gantt-col--spacer,
+.tm-pm-gantt-workspace--resource .tm-pm-gantt-col--spacer,
+.tm-pm-gantt-workspace--cost .tm-pm-gantt-col--spacer {
+  min-width: 0;
+  padding: 0;
+  border-right: none;
+  background: transparent;
 }
 
 .tm-pm-gantt-col--shouldPercentComplete,
@@ -4466,30 +4471,89 @@ button.tm-pm-gantt-col-menu-action:disabled {
   gap: 10px 16px;
 }
 
+.tm-pm-project-info-stats-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tm-pm-project-info-stats-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tm-text-secondary);
+}
+
 .tm-pm-project-info-stat {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 4px;
+  min-height: 62px;
   padding: 10px 12px;
   border: 0.5px solid var(--tm-border);
   border-radius: 8px;
   background: var(--tm-sidebar-bg, transparent);
+  box-sizing: border-box;
 }
 
-.tm-pm-project-info-stat-label {
+.tm-pm-project-info-stat-label-row,
+.tm-pm-project-info-stat-value-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tm-pm-project-info-stat-value-row {
+  min-height: 20px;
+}
+
+.tm-pm-project-info-stat-currency-tag {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--tm-text-secondary);
 }
 
-.tm-pm-project-info-stat-value {
+.tm-pm-project-info-stat-value-row > strong {
+  min-width: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--tm-text);
 }
 
-.tm-pm-project-info-readonly {
+.tm-pm-project-info-stat-currency-input {
+  width: 3.5em;
+  min-width: 2.5em;
+  max-width: 5em;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 4px;
+  line-height: 18px;
+  text-align: right;
   font-size: 13px;
+  font-weight: 500;
+  /* Reserve the focus border so editing does not change card height. */
+  border: none;
+  border-bottom: 0.5px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tm-pm-project-info-stat-currency-input:focus {
+  outline: none;
+  border-bottom-color: var(--tm-border);
+}
+
+.tm-pm-project-info-stat-label {
+  font-size: 12px;
   color: var(--tm-text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-project-info-save-history {
@@ -4647,24 +4711,54 @@ button.tm-pm-gantt-col-menu-action:disabled {
   flex-direction: column;
 }
 
+/* Header pinned above the V scrollport (scrollbar starts below thead).
+   H position synced via transform on .tm-pm-resource-table-header-pin-inner. */
+.tm-pm-resource-table-header-pin {
+  flex-shrink: 0;
+  overflow: hidden;
+  width: 100%;
+  background: var(--tm-sidebar-bg);
+  z-index: 3;
+  /* Match V scrollbar gutter so pinned columns align with body tracks. */
+  scrollbar-gutter: stable;
+}
+
+.tm-pm-resource-table-header-pin-inner {
+  width: max-content;
+  min-width: 100%;
+  will-change: transform;
+}
+
 .tm-pm-resource-table-scroll {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  /* Native scrollbar for V only. H is overflow-x: hidden so no native H bar can
+     appear in any scrollbar mode (overlay/classic); horizontal scrolling is
+     driven by the custom bottom track + onWheel deltaX in the panels. */
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0;
-  /* Prefer the custom bottom scrollbar (same as resource-allocation / Gantt). */
-  scrollbar-gutter: auto;
-  scrollbar-width: none;
+  scrollbar-gutter: stable;
 }
 
 .tm-pm-resource-table-scroll::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+  width: 10px;
+  -webkit-appearance: none;
+}
+
+.tm-pm-resource-table-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
+  border: none;
+  border-radius: 999px;
+  background-clip: border-box;
+}
+
+.tm-pm-resource-table-scroll::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
+  border-radius: 999px;
 }
 
 .tm-pm-resource-table-page .tm-pm-gantt-grid-custom-hscroll {
@@ -4703,16 +4797,13 @@ button.tm-pm-gantt-col-menu-action:disabled {
 }
 
 .tm-pm-resource-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   height: 54px;
   background: var(--tm-sidebar-bg);
   color: var(--tm-text-secondary);
   font-weight: 600;
   font-size: 11px;
   text-align: center;
-  /* border-collapse shares th/td edges; box-shadow stays with sticky header while scrolling. */
+  /* Header lives outside the V scrollport; inset line marks the pin bottom edge. */
   border-bottom: none;
   box-shadow: inset 0 -1px 0 var(--tm-border);
 }
@@ -4791,9 +4882,9 @@ button.tm-pm-gantt-col-menu-action:disabled {
 }
 
 .tm-pm-resource-table-col-type {
-  width: 96px;
-  min-width: 96px;
-  max-width: 104px;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
 }
 
 .tm-pm-resource-table-type-trigger {
