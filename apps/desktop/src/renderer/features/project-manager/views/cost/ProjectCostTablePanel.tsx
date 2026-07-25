@@ -28,6 +28,13 @@ import { usePmCatalogAutoSave } from '../../usePmCatalogAutoSave'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import ProjectInfoDialog from '../schedule/ProjectInfoDialog'
 import {
+  ProjectFeaturesMenuBar,
+  type CostPracticeQuotaView,
+  type FeaturesMenuAction,
+  type FeaturesScheduleView,
+  type FeaturesVersionSwitchEntry,
+} from '../files/ProjectFeaturesMenuBar'
+import {
   ProjectCostMenuBar,
   type CostMenuAction,
   type CostVersionSwitchEntry,
@@ -72,6 +79,15 @@ import {
   type PmCostType,
 } from './pm-cost-catalog'
 import {
+  readCostPracticeCatalog,
+  readCostPracticeSaveHistory,
+  readCostPracticeSaveMeta,
+  readCostPracticeVersion,
+  recordCostPracticeSaveMeta,
+  writeCostPracticeCatalog,
+  writeCostPracticeSaveMeta,
+} from './pm-cost-practice-catalog'
+import {
   COST_TOGGLE_COLUMNS,
   loadCostColumnVisibility,
   saveCostColumnVisibility,
@@ -95,6 +111,11 @@ interface Props {
   projects: PmProject[]
   selectedProjectId: string | null
   onProjectsChange?: () => void | Promise<void>
+  /**
+   * `catalog` = 价格表；`practice` = 成本管理-实务（空表起步，独立存储，实务精简菜单）。
+   */
+  variant?: 'catalog' | 'practice'
+  onOpenScheduleView?: (view: FeaturesScheduleView) => void
 }
 
 type ContextMenuState = {
@@ -120,8 +141,11 @@ const ProjectCostTablePanel: FC<Props> = ({
   projects,
   selectedProjectId,
   onProjectsChange,
+  variant = 'catalog',
+  onOpenScheduleView: _onOpenScheduleView,
 }) => {
   const { t } = useI18n()
+  const isPractice = variant === 'practice'
 
   const isAllScope = !selectedProjectId || !projects.some((project) => project.id === selectedProjectId)
 
@@ -134,7 +158,12 @@ const ProjectCostTablePanel: FC<Props> = ({
     ? PM_COST_APPLICABLE_ALL
     : (editingProject?.id ?? PM_COST_APPLICABLE_ALL)
 
+  const practiceScopeId = isAllScope ? PM_COST_APPLICABLE_ALL : (editingProject?.id ?? '')
+
   const canEdit = isAllScope || editingProject != null
+
+  const [costQuotaView, setCostQuotaView] =
+    useState<CostPracticeQuotaView>('constructionQuota')
 
   const [rows, setRows] = useState<PmCostRow[]>([])
   const [dirty, setDirty] = useState(false)
@@ -168,6 +197,7 @@ const ProjectCostTablePanel: FC<Props> = ({
   // Keep ref aligned with React state so leave-save / undo never read a stale snapshot.
   rowsRef.current = rows
   const tableScrollRef = useRef<HTMLDivElement | null>(null)
+  const headerPinInnerRef = useRef<HTMLDivElement | null>(null)
   const hTrackRef = useRef<HTMLDivElement | null>(null)
   const [hScrollMetrics, setHScrollMetrics] = useState({
     overflowing: false,
@@ -176,9 +206,17 @@ const ProjectCostTablePanel: FC<Props> = ({
   })
   const [hScrollDragging, setHScrollDragging] = useState(false)
 
+  const syncHeaderPinScroll = useCallback(() => {
+    const el = tableScrollRef.current
+    const pin = headerPinInnerRef.current
+    if (!el || !pin) return
+    pin.style.transform = `translateX(${-el.scrollLeft}px)`
+  }, [])
+
   const syncHScrollMetrics = useCallback(() => {
     const el = tableScrollRef.current
     if (!el) return
+    syncHeaderPinScroll()
     const { scrollLeft, scrollWidth, clientWidth } = el
     if (scrollWidth <= clientWidth + 1) {
       setHScrollMetrics({ overflowing: false, thumbSize: 0, thumbOffset: 0 })
@@ -189,7 +227,7 @@ const ProjectCostTablePanel: FC<Props> = ({
     const maxScroll = scrollWidth - clientWidth
     const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * maxOffset
     setHScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
-  }, [])
+  }, [syncHeaderPinScroll])
 
   useLayoutEffect(() => {
     syncHScrollMetrics()
@@ -275,6 +313,19 @@ const ProjectCostTablePanel: FC<Props> = ({
   const canRedo = historyEpoch >= 0 && historyStackRef.current.canRedo
 
   const versionSwitchEntries = useMemo((): CostVersionSwitchEntry[] => {
+    if (isPractice) {
+      if (!practiceScopeId) return []
+      const history = readCostPracticeSaveHistory(workspaceId, practiceScopeId)
+      const currentVersion = readCostPracticeVersion(workspaceId, practiceScopeId)
+      return history.map((entry) => ({
+        version: entry.version,
+        name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+          version: String(entry.version),
+        }),
+        hasSnapshot: Array.isArray(entry.catalog),
+        isCurrent: entry.version === currentVersion,
+      }))
+    }
     const history = isAllScope
       ? readSharedCostSaveHistory(workspaceId)
       : readCostSaveHistory(editingProject?.metadata)
@@ -289,7 +340,16 @@ const ProjectCostTablePanel: FC<Props> = ({
       hasSnapshot: Array.isArray(entry.catalog),
       isCurrent: entry.version === currentVersion,
     }))
-  }, [dirty, editingProject?.metadata, isAllScope, rows, t, workspaceId])
+  }, [
+    dirty,
+    editingProject?.metadata,
+    isAllScope,
+    isPractice,
+    practiceScopeId,
+    rows,
+    t,
+    workspaceId,
+  ])
 
   const snapshotToRows = useCallback(
     (snapshot: NonNullable<ReturnType<typeof readCostVersionCatalog>>): PmCostRow[] => {
@@ -322,6 +382,29 @@ const ProjectCostTablePanel: FC<Props> = ({
     setPendingRestoreVersion(null)
     setSaving(true)
     try {
+      if (isPractice) {
+        if (!practiceScopeId) return
+        const meta = readCostPracticeSaveMeta(workspaceId, practiceScopeId)
+        const catalog = readCostVersionCatalog(meta, version)
+        const nextMeta = buildMetadataForCostVersionSwitch(meta, version)
+        if (!catalog || !nextMeta) {
+          window.alert(t('projectManagerPage.costTable.versionSwitchNoSnapshot'))
+          return
+        }
+        const rowsNext = sortCostRowsByTypeMenu(snapshotToRows(catalog))
+        writeCostPracticeCatalog(workspaceId, practiceScopeId, rowsNext)
+        writeCostPracticeSaveMeta(workspaceId, practiceScopeId, nextMeta)
+        applyCatalogRows(rowsNext, { dirty: false, clearHistory: true })
+        setSelectedId(null)
+        window.alert(
+          t('projectManagerPage.costTable.restoreVersionSuccess', {
+            name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+              version: String(version),
+            }),
+          }),
+        )
+        return
+      }
       if (isAllScope) {
         const meta = readSharedCostSaveMeta(workspaceId)
         const catalog = readCostVersionCatalog(meta, version)
@@ -379,8 +462,10 @@ const ProjectCostTablePanel: FC<Props> = ({
     applyCatalogRows,
     editingProject,
     isAllScope,
+    isPractice,
     onProjectsChange,
     pendingRestoreVersion,
+    practiceScopeId,
     snapshotToRows,
     t,
     workspaceId,
@@ -388,13 +473,17 @@ const ProjectCostTablePanel: FC<Props> = ({
 
   const handleRestoreVersion = useCallback(
     (version: number) => {
-      const currentVersion = isAllScope
-        ? readSharedCostVersion(workspaceId)
-        : readCostVersion(editingProject?.metadata)
+      const currentVersion = isPractice
+        ? practiceScopeId
+          ? readCostPracticeVersion(workspaceId, practiceScopeId)
+          : 0
+        : isAllScope
+          ? readSharedCostVersion(workspaceId)
+          : readCostVersion(editingProject?.metadata)
       if (version === currentVersion) return
       setPendingRestoreVersion(version)
     },
-    [editingProject?.metadata, isAllScope, workspaceId],
+    [editingProject?.metadata, isAllScope, isPractice, practiceScopeId, workspaceId],
   )
 
   // Must run before hydrate so a scope switch does not wipe freshly loaded rows.
@@ -416,6 +505,16 @@ const ProjectCostTablePanel: FC<Props> = ({
 
   useEffect(() => {
     if (dirty) return
+
+    if (isPractice) {
+      if (!practiceScopeId) {
+        applyCatalogRows([], { dirty: false, clearHistory: true })
+        return
+      }
+      const ordered = readCostPracticeCatalog(workspaceId, practiceScopeId)
+      applyCatalogRows(ordered, { dirty: false, clearHistory: true })
+      return
+    }
 
     if (isAllScope) {
       let cancelled = false
@@ -478,7 +577,17 @@ const ProjectCostTablePanel: FC<Props> = ({
           // Keep catalog in memory even if seed write fails.
         })
     }
-  }, [applyCatalogRows, dirty, editingProject, isAllScope, onProjectsChange, scopeKey, workspaceId])
+  }, [
+    applyCatalogRows,
+    dirty,
+    editingProject,
+    isAllScope,
+    isPractice,
+    onProjectsChange,
+    practiceScopeId,
+    scopeKey,
+    workspaceId,
+  ])
 
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
@@ -699,6 +808,47 @@ const ProjectCostTablePanel: FC<Props> = ({
       const note = options?.note?.trim() || undefined
       setSaving(true)
       try {
+        if (isPractice) {
+          if (!practiceScopeId) {
+            window.alert(t('projectManagerPage.costTable.needProject'))
+            return false
+          }
+          const payload = sortCostRowsByTypeMenu(
+            rows.map((row) => ({
+              ...row,
+              applicable: viewApplicable,
+            })),
+          )
+          const prevVersion = readCostPracticeVersion(workspaceId, practiceScopeId)
+          writeCostPracticeCatalog(workspaceId, practiceScopeId, payload)
+          recordCostPracticeSaveMeta(workspaceId, practiceScopeId, payload, {
+            bumpVersion: asNewVersion,
+            note,
+          })
+          applyCatalogRows(payload, { dirty: false })
+          const nextVersion = readCostPracticeVersion(workspaceId, practiceScopeId)
+          if (nextVersion > prevVersion) {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.costTable.saveSuccessNewVersion', {
+                version: String(nextVersion),
+              }),
+            })
+          } else if (nextVersion > 0) {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.costTable.saveSuccessUpdated', {
+                version: String(nextVersion),
+              }),
+            })
+          } else {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.costTable.saveSuccess'),
+            })
+          }
+          return true
+        }
         if (isAllScope) {
           const payload = sortCostRowsByTypeMenu(
             rows.map((row) => ({
@@ -790,11 +940,14 @@ const ProjectCostTablePanel: FC<Props> = ({
       canEdit,
       editingProject,
       isAllScope,
+      isPractice,
       onProjectsChange,
       persistProjectCatalog,
+      practiceScopeId,
       rows,
       setStatusFeedback,
       t,
+      viewApplicable,
       workspaceId,
     ],
   )
@@ -803,6 +956,19 @@ const ProjectCostTablePanel: FC<Props> = ({
     if (!canEdit) return
     const catalog = rowsRef.current
     try {
+      if (isPractice) {
+        if (!practiceScopeId) return
+        const payload = sortCostRowsByTypeMenu(
+          catalog.map((row) => ({
+            ...row,
+            applicable: viewApplicable,
+          })),
+        )
+        writeCostPracticeCatalog(workspaceId, practiceScopeId, payload)
+        recordCostPracticeSaveMeta(workspaceId, practiceScopeId, payload, { bumpVersion: false })
+        cleanFingerprintRef.current = fingerprintCostCatalog(payload)
+        return
+      }
       if (isAllScope) {
         const payload = sortCostRowsByTypeMenu(
           catalog.map((row) => ({
@@ -831,7 +997,16 @@ const ProjectCostTablePanel: FC<Props> = ({
     } catch {
       // Best-effort leave save.
     }
-  }, [canEdit, editingProject, isAllScope, persistProjectCatalog, workspaceId])
+  }, [
+    canEdit,
+    editingProject,
+    isAllScope,
+    isPractice,
+    persistProjectCatalog,
+    practiceScopeId,
+    viewApplicable,
+    workspaceId,
+  ])
 
   usePmCatalogAutoSave({ scopeKey, dirty, flush: flushAutoSave })
 
@@ -1136,6 +1311,40 @@ const ProjectCostTablePanel: FC<Props> = ({
     ],
   )
 
+  const handleFeaturesMenuAction = useCallback(
+    (action: FeaturesMenuAction) => {
+      switch (action) {
+        case 'save':
+        case 'saveAsNewVersion':
+        case 'print':
+        case 'projectInfo':
+        case 'undo':
+        case 'redo':
+        case 'add':
+        case 'insert':
+        case 'delete':
+        case 'indent':
+        case 'outdent':
+        case 'moveUp':
+        case 'moveDown':
+          handleMenuAction(action)
+          break
+        default:
+          break
+      }
+    },
+    [handleMenuAction],
+  )
+
+  const practiceVersionEntries = useMemo((): FeaturesVersionSwitchEntry[] => {
+    return versionSwitchEntries.map((entry) => ({
+      version: entry.version,
+      name: entry.name,
+      hasSnapshot: entry.hasSnapshot,
+      isCurrent: entry.isCurrent,
+    }))
+  }, [versionSwitchEntries])
+
   const patchRow = useCallback(
     (id: string, patch: Partial<PmCostRow>) => {
       updateRows(
@@ -1258,22 +1467,41 @@ const ProjectCostTablePanel: FC<Props> = ({
       ref={panelRootRef}
       className="tm-pm-gantt-page tm-pm-resource-table-page tm-pm-cost-table-page"
     >
-      <ProjectCostMenuBar
-        disabled={saving}
-        hasSelection={selectedId != null}
-        hasProject
-        canEdit={canEdit}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        viewFilter={viewFilter}
-        onViewFilterChange={handleViewFilterChange}
-        sectionFilter={sectionFilter}
-        onSectionFilterChange={handleSectionFilterChange}
-        sectionalOptions={sectionalOptions}
-        versionSwitchEntries={versionSwitchEntries}
-        onRestoreVersion={handleRestoreVersion}
-        onAction={handleMenuAction}
-      />
+      {isPractice ? (
+        <ProjectFeaturesMenuBar
+          disabled={saving}
+          hasSelection={selectedId != null}
+          hasProject
+          canEdit={canEdit}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          selectedType="scheduleAll"
+          viewMenuMode="costQuota"
+          costQuotaView={costQuotaView}
+          onCostQuotaViewChange={setCostQuotaView}
+          versionSwitchEntries={practiceVersionEntries}
+          onRestoreVersion={handleRestoreVersion}
+          onAction={handleFeaturesMenuAction}
+          showTrailingMenus={false}
+        />
+      ) : (
+        <ProjectCostMenuBar
+          disabled={saving}
+          hasSelection={selectedId != null}
+          hasProject
+          canEdit={canEdit}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          viewFilter={viewFilter}
+          onViewFilterChange={handleViewFilterChange}
+          sectionFilter={sectionFilter}
+          onSectionFilterChange={handleSectionFilterChange}
+          sectionalOptions={sectionalOptions}
+          versionSwitchEntries={versionSwitchEntries}
+          onRestoreVersion={handleRestoreVersion}
+          onAction={handleMenuAction}
+        />
+      )}
 
       {!canEdit ? (
         <div className="tm-pm-empty">{t('projectManagerPage.costTable.needProject')}</div>
@@ -1287,19 +1515,11 @@ const ProjectCostTablePanel: FC<Props> = ({
             .filter(Boolean)
             .join(' ')}
         >
-          <div
-            ref={tableScrollRef}
-            className="tm-pm-resource-table-scroll"
-            onScroll={() => syncHScrollMetrics()}
-          >
-            <div className="tm-pm-resource-table-scroll-inner">
-              <table
-                className="tm-pm-resource-table"
-                onKeyDown={(event) => {
-                  handlePmTableCellNavKeyDown(event)
-                }}
-              >
-                <colgroup>
+          <div className="tm-pm-resource-table-header-pin">
+            <div ref={headerPinInnerRef} className="tm-pm-resource-table-header-pin-inner">
+              <div className="tm-pm-resource-table-scroll-inner">
+                <table className="tm-pm-resource-table">
+                  <colgroup>
                   <col className="tm-pm-resource-table-col-index" />
                   {columnVisibility.type ? (
                     <col className="tm-pm-resource-table-col-type" />
@@ -1432,6 +1652,66 @@ const ProjectCostTablePanel: FC<Props> = ({
                     <th className="tm-pm-resource-table-col-spacer" aria-hidden />
                   </tr>
                 </thead>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div
+            ref={tableScrollRef}
+            className="tm-pm-resource-table-scroll"
+            onScroll={() => syncHScrollMetrics()}
+            onWheel={(event) => {
+              // overflow-x is hidden (no native H bar), so route trackpad deltaX manually.
+              if (event.deltaX !== 0 && tableScrollRef.current) {
+                tableScrollRef.current.scrollLeft += event.deltaX
+              }
+            }}
+          >
+            <div className="tm-pm-resource-table-scroll-inner">
+              <table
+                className="tm-pm-resource-table"
+                onKeyDown={(event) => {
+                  handlePmTableCellNavKeyDown(event)
+                }}
+              >
+                <colgroup>
+                  <col className="tm-pm-resource-table-col-index" />
+                  {columnVisibility.type ? (
+                    <col className="tm-pm-resource-table-col-type" />
+                  ) : null}
+                  {columnVisibility.sectionalWork ? (
+                    <col className="tm-pm-resource-table-col-sectional" />
+                  ) : null}
+                  {columnVisibility.code ? (
+                    <col className="tm-pm-resource-table-col-code" />
+                  ) : null}
+                  {columnVisibility.name ? (
+                    <col className="tm-pm-resource-table-col-name" />
+                  ) : null}
+                  {columnVisibility.featureDescription ? (
+                    <col className="tm-pm-resource-table-col-feature" />
+                  ) : null}
+                  {columnVisibility.unit ? (
+                    <col className="tm-pm-resource-table-col-unit" />
+                  ) : null}
+                  {columnVisibility.quantity ? (
+                    <col className="tm-pm-resource-table-col-spec" />
+                  ) : null}
+                  {columnVisibility.unitPrice ? (
+                    <col className="tm-pm-resource-table-col-price" />
+                  ) : null}
+                  {columnVisibility.totalPrice ? (
+                    <col className="tm-pm-resource-table-col-price" />
+                  ) : null}
+                  {columnVisibility.baseline ? (
+                    <col className="tm-pm-resource-table-col-baseline" />
+                  ) : null}
+                  {columnVisibility.note ? (
+                    <col className="tm-pm-resource-table-col-note" />
+                  ) : null}
+                  <col className="tm-pm-resource-table-col-spacer" />
+                </colgroup>
+
                 <tbody>
                   {displayEntries.map((entry) => {
                     if (entry.kind === 'grand' || entry.kind === 'section') {
@@ -2008,14 +2288,22 @@ const ProjectCostTablePanel: FC<Props> = ({
       {pendingSaveAsNewVersion ? (
         <SaveAsNewVersionDialog
           currentVersion={
-            isAllScope
-              ? readSharedCostVersion(workspaceId)
-              : readCostVersion(editingProject?.metadata)
+            isPractice
+              ? practiceScopeId
+                ? readCostPracticeVersion(workspaceId, practiceScopeId)
+                : 0
+              : isAllScope
+                ? readSharedCostVersion(workspaceId)
+                : readCostVersion(editingProject?.metadata)
           }
           nextVersion={
-            (isAllScope
-              ? readMaxCostVersion(readSharedCostSaveMeta(workspaceId))
-              : readMaxCostVersion(editingProject?.metadata)) + 1
+            (isPractice
+              ? practiceScopeId
+                ? readMaxCostVersion(readCostPracticeSaveMeta(workspaceId, practiceScopeId))
+                : 0
+              : isAllScope
+                ? readMaxCostVersion(readSharedCostSaveMeta(workspaceId))
+                : readMaxCostVersion(editingProject?.metadata)) + 1
           }
           onCancel={() => setPendingSaveAsNewVersion(false)}
           onConfirm={(note) => {
@@ -2030,6 +2318,7 @@ const ProjectCostTablePanel: FC<Props> = ({
           project={editingProject}
           variant="cost"
           costRows={rows}
+          practiceScopeId={isPractice ? practiceScopeId : undefined}
           onSaveCosts={handleSave}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {
@@ -2043,6 +2332,7 @@ const ProjectCostTablePanel: FC<Props> = ({
           mode="workspaceCost"
           workspaceId={workspaceId}
           costRows={rows}
+          practiceScopeId={isPractice ? practiceScopeId : undefined}
           onSaveCosts={handleSave}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {

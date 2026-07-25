@@ -754,10 +754,6 @@ export const projectManagerPageZhCN = {
     featuresStatisticsHint: '根据当前实务目录汇总的只读统计。',
     advancedHint:
       '区域、合同与工作目录等扩展属性。工具栏「保存」不升版；「另存新版本」才升版。目录历史最多 5 条；计划历史最多 10 条。用户「基线」≠ 目录/计划版本；删除目录历史不会删用户基线；删除计划保存记录会删对应版本计划快照。',
-    advancedHintResource:
-      '资源版本与保存记录。工具栏「保存」不升版；「另存新版本」才升版。目录历史最多 5 条；计划历史最多 10 条。用户「基线」≠ 目录/计划版本；删除目录历史不会删用户基线；删除计划保存记录会删对应版本计划快照。',
-    advancedHintCost:
-      '价格版本与保存记录。工具栏「保存」不升版；「另存新版本」才升版。目录历史最多 5 条；计划历史最多 10 条。用户「基线」≠ 目录/计划版本；删除目录历史不会删用户基线；删除计划保存记录会删对应版本计划快照。',
     advancedHintFeatures:
       '实务目录版本与保存记录。工具栏「保存」不升版；「另存新版本」才升版。目录历史最多 5 条；计划历史最多 10 条。用户「基线」≠ 目录/计划版本；删除目录历史不会删用户基线；删除计划保存记录会删对应版本计划快照。',
     advancedHintScheduleSave: '本弹窗「保存」只写项目概况，不升计划版本。',
@@ -799,6 +795,11 @@ export const projectManagerPageZhCN = {
     statMaxUnitPrice: '最高单价',
     statCatalogValue: '单价合计（参考）',
     statCatalogTotalPrice: '合价合计（参考）',
+    fieldCurrency: '货币',
+    statGroupResource: '资源',
+    statGroupCost: '成本',
+    statGroupEstimate: '概预算',
+    statSectionalWorkNamed: '分部工程 {{name}}',
     fieldCode: '项目编号',
     fieldName: '项目名称',
     fieldStatus: '状态',
@@ -819,11 +820,11 @@ export const projectManagerPageZhCN = {
     planCalendarCalendarDays: '日历天',
     planCalendarWorkingDays: '工作日',
     fieldPlanPhase: '计划阶段',
-    fieldPeriod: '计划周期',
+    fieldPeriod: '计划工期',
     fieldRegion: '区域',
     fieldContractValue: '合同额',
     fieldSettledAmount: '已结算',
-    fieldProgressPercent: '总体进度 (%)',
+    fieldProgressPercent: '参考项目',
     fieldWorkspaceRoot: '工作目录',
     fieldUpdatedAt: '最近更新',
     fieldScheduleVersion: '计划版本',
@@ -977,6 +978,31 @@ export const projectManagerPageZhCN = {
       deleteSelectedTitle: '删除所选资源',
       deleteSelectedConfirm: '确定删除选中的 {{count}} 条资源吗？',
       checkboxColumn: '选择',
+    },
+  },
+  resourcePractice: {
+    namePlaceholder: '定额项目',
+    specPlaceholder: '编码',
+    columns: {
+      name: '定额项目',
+      spec: '编码',
+      unit: '单位',
+      pricingUnit: '时间定额',
+      unitPrice: '产量定额',
+    },
+    views: {
+      labor: '人工定额',
+      material: '材料定额',
+      equipment: '机械定额',
+    },
+  },
+  costPractice: {
+    views: {
+      constructionQuota: '施工定额',
+      budgetQuota: '预算定额',
+      estimateQuota: '概算定额',
+      estimateIndicator: '概算指标',
+      investmentIndicator: '估算指标',
     },
   },
   costTable: {

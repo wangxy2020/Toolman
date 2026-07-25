@@ -16,7 +16,6 @@ import {
 } from '@toolman/shared'
 
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
-import { IconChevronDown } from '../../../../components/icons'
 import { SaveAsNewVersionDialog } from '../../../../components/SaveAsNewVersionDialog'
 import { useI18n } from '../../../../i18n/useI18n'
 import { PmDecimalTableInput } from '../../PmDecimalTableInput'
@@ -26,6 +25,12 @@ import { pmApi } from '../../pm-api'
 import { usePmCatalogAutoSave } from '../../usePmCatalogAutoSave'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import ProjectInfoDialog from '../schedule/ProjectInfoDialog'
+import {
+  ProjectFeaturesMenuBar,
+  type FeaturesMenuAction,
+  type FeaturesVersionSwitchEntry,
+  type ResourcePracticeQuotaView,
+} from '../files/ProjectFeaturesMenuBar'
 import {
   ProjectResourceMenuBar,
   type ResourceMenuAction,
@@ -41,13 +46,14 @@ import {
   ensureDefaultResourcesInCatalog,
   fingerprintResourceCatalog,
   formatResourceBaselineRatio,
-  formatResourceTypeDisplayLabel,
+  encodeCustomTypeSelectValue,
   isPmResourceCostType,
   isPmResourceType,
   isResourceBaselineRatioOff,
   listCustomResourceTypeNames,
   lookupBaselineUnitPrice,
   parseCustomResourceViewFilter,
+  parseCustomTypeSelectValue,
   PM_RESOURCE_APPLICABLE_ALL,
   PM_RESOURCE_BUILTIN_PRIMARY_TYPES,
   PM_RESOURCE_CATALOG_KEY,
@@ -72,6 +78,15 @@ import {
   type PmResourceType,
 } from './pm-resource-catalog'
 import {
+  readPracticeCatalog,
+  readPracticeSaveHistory,
+  readPracticeSaveMeta,
+  readPracticeVersion,
+  recordPracticeSaveMeta,
+  writePracticeCatalog,
+  writePracticeSaveMeta,
+} from './pm-resource-practice-catalog'
+import {
   addCustomTypeNameToCatalog,
   readCustomTypeNameCatalog,
   removeCustomTypeNameFromCatalog,
@@ -90,6 +105,11 @@ interface Props {
   projects: PmProject[]
   selectedProjectId: string | null
   onProjectsChange?: () => void | Promise<void>
+  /**
+   * `catalog` = 资源列表；`practice` = 资源管理-实务（空表起步，独立存储，实务精简菜单）。
+   */
+  variant?: 'catalog' | 'practice'
+  onOpenScheduleView?: (view: import('../files/ProjectFeaturesMenuBar').FeaturesScheduleView) => void
 }
 
 type ContextMenuState = {
@@ -100,15 +120,6 @@ type ContextMenuState = {
 }
 
 type ColumnMenuState = { left: number; top: number }
-
-type TypeCellMenuState = {
-  rowId: string
-  top: number
-  left: number
-  anchorTop: number
-  anchorBottom: number
-  customExpanded: boolean
-}
 
 function formatPathProjectLabel(project: PmProject): string {
   const code = project.code.trim()
@@ -122,8 +133,11 @@ const ProjectResourceTablePanel: FC<Props> = ({
   projects,
   selectedProjectId,
   onProjectsChange,
+  variant = 'catalog',
+  onOpenScheduleView: _onOpenScheduleView,
 }) => {
   const { t } = useI18n()
+  const isPractice = variant === 'practice'
 
   const isAllScope = !selectedProjectId || !projects.some((project) => project.id === selectedProjectId)
 
@@ -136,8 +150,13 @@ const ProjectResourceTablePanel: FC<Props> = ({
     ? PM_RESOURCE_APPLICABLE_ALL
     : (editingProject?.id ?? PM_RESOURCE_APPLICABLE_ALL)
 
+  const practiceScopeId = isAllScope ? PM_RESOURCE_APPLICABLE_ALL : (editingProject?.id ?? '')
+
   const canEdit = isAllScope || editingProject != null
 
+  const [viewFilter, setViewFilter] = useState<ResourceViewFilter>(
+    variant === 'practice' ? 'labor' : 'all',
+  )
   const [rows, setRows] = useState<PmResourceRow[]>([])
   const [dirty, setDirty] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -146,8 +165,6 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const [columnMenu, setColumnMenu] = useState<ColumnMenuState | null>(null)
-  const [typeCellMenu, setTypeCellMenu] = useState<TypeCellMenuState | null>(null)
-  const typeCellMenuRef = useRef<HTMLDivElement | null>(null)
   const [columnVisibility, setColumnVisibility] = useState<ResourceColumnVisibility>(() =>
     loadResourceColumnVisibility(),
   )
@@ -163,7 +180,6 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const [pendingSaveAsNewVersion, setPendingSaveAsNewVersion] = useState(false)
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
   const [statusFeedback, setStatusFeedback] = usePmStatusFeedback()
-  const [viewFilter, setViewFilter] = useState<ResourceViewFilter>('all')
   const [historyEpoch, setHistoryEpoch] = useState(0)
   const historyStackRef = useRef(new ResourceHistoryStack())
   const historyApplyingRef = useRef(false)
@@ -173,6 +189,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
   // Keep ref aligned with React state so leave-save / undo never read a stale snapshot.
   rowsRef.current = rows
   const tableScrollRef = useRef<HTMLDivElement | null>(null)
+  const headerPinInnerRef = useRef<HTMLDivElement | null>(null)
   const hTrackRef = useRef<HTMLDivElement | null>(null)
   const [hScrollMetrics, setHScrollMetrics] = useState({
     overflowing: false,
@@ -181,9 +198,17 @@ const ProjectResourceTablePanel: FC<Props> = ({
   })
   const [hScrollDragging, setHScrollDragging] = useState(false)
 
+  const syncHeaderPinScroll = useCallback(() => {
+    const el = tableScrollRef.current
+    const pin = headerPinInnerRef.current
+    if (!el || !pin) return
+    pin.style.transform = `translateX(${-el.scrollLeft}px)`
+  }, [])
+
   const syncHScrollMetrics = useCallback(() => {
     const el = tableScrollRef.current
     if (!el) return
+    syncHeaderPinScroll()
     const { scrollLeft, scrollWidth, clientWidth } = el
     if (scrollWidth <= clientWidth + 1) {
       setHScrollMetrics({ overflowing: false, thumbSize: 0, thumbOffset: 0 })
@@ -194,7 +219,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
     const maxScroll = scrollWidth - clientWidth
     const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * maxOffset
     setHScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
-  }, [])
+  }, [syncHeaderPinScroll])
 
   useLayoutEffect(() => {
     syncHScrollMetrics()
@@ -280,6 +305,19 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const canRedo = historyEpoch >= 0 && historyStackRef.current.canRedo
 
   const versionSwitchEntries = useMemo((): ResourceVersionSwitchEntry[] => {
+    if (isPractice) {
+      if (!practiceScopeId) return []
+      const history = readPracticeSaveHistory(workspaceId, practiceScopeId)
+      const currentVersion = readPracticeVersion(workspaceId, practiceScopeId)
+      return history.map((entry) => ({
+        version: entry.version,
+        name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+          version: String(entry.version),
+        }),
+        hasSnapshot: Array.isArray(entry.catalog),
+        isCurrent: entry.version === currentVersion,
+      }))
+    }
     const history = isAllScope
       ? readSharedResourceSaveHistory(workspaceId)
       : readResourceSaveHistory(editingProject?.metadata)
@@ -294,7 +332,16 @@ const ProjectResourceTablePanel: FC<Props> = ({
       hasSnapshot: Array.isArray(entry.catalog),
       isCurrent: entry.version === currentVersion,
     }))
-  }, [editingProject?.metadata, isAllScope, t, workspaceId, dirty, rows])
+  }, [
+    dirty,
+    editingProject?.metadata,
+    isAllScope,
+    isPractice,
+    practiceScopeId,
+    rows,
+    t,
+    workspaceId,
+  ])
 
   // Must run before hydrate so a scope switch does not wipe freshly loaded rows.
   useEffect(() => {
@@ -305,16 +352,31 @@ const ProjectResourceTablePanel: FC<Props> = ({
     setContextMenu(null)
     setProjectInfoOpen(false)
     setPendingRestoreVersion(null)
-    setViewFilter('all')
+    setViewFilter(isPractice ? 'labor' : 'all')
     historyStackRef.current.clear()
     setHistoryEpoch((value) => value + 1)
     cleanFingerprintRef.current = ''
     rowsRef.current = []
     setRows([])
-  }, [scopeKey])
+  }, [isPractice, scopeKey])
 
   useEffect(() => {
     if (dirty) return
+
+    if (isPractice) {
+      if (!practiceScopeId) {
+        applyCatalogRows([], { dirty: false, clearHistory: true })
+        return
+      }
+      const ordered = readPracticeCatalog(workspaceId, practiceScopeId).map((row) => {
+        const pricing = row.pricingUnit.trim()
+        // 时间定额为数字；清除「工日」等历史文本默认填充。
+        if (pricing === '' || Number.isFinite(Number(pricing))) return row
+        return { ...row, pricingUnit: '' }
+      })
+      applyCatalogRows(ordered, { dirty: false, clearHistory: true })
+      return
+    }
 
     if (isAllScope) {
       let cancelled = false
@@ -391,7 +453,17 @@ const ProjectResourceTablePanel: FC<Props> = ({
           // Keep catalog in memory even if seed write fails.
         })
     }
-  }, [applyCatalogRows, dirty, editingProject, isAllScope, onProjectsChange, scopeKey, workspaceId])
+  }, [
+    applyCatalogRows,
+    dirty,
+    editingProject,
+    isAllScope,
+    isPractice,
+    onProjectsChange,
+    practiceScopeId,
+    scopeKey,
+    workspaceId,
+  ])
 
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
@@ -607,6 +679,47 @@ const ProjectResourceTablePanel: FC<Props> = ({
       const note = options?.note?.trim() || undefined
       setSaving(true)
       try {
+        if (isPractice) {
+          if (!practiceScopeId) {
+            window.alert(t('projectManagerPage.resourceTable.needProject'))
+            return false
+          }
+          const payload = sortResourceRowsByTypeMenu(
+            rows.map((row) => ({
+              ...row,
+              applicable: viewApplicable,
+            })),
+          )
+          const prevVersion = readPracticeVersion(workspaceId, practiceScopeId)
+          writePracticeCatalog(workspaceId, practiceScopeId, payload)
+          recordPracticeSaveMeta(workspaceId, practiceScopeId, payload, {
+            bumpVersion: asNewVersion,
+            note,
+          })
+          applyCatalogRows(payload, { dirty: false })
+          const nextVersion = readPracticeVersion(workspaceId, practiceScopeId)
+          if (nextVersion > prevVersion) {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.resourceTable.saveSuccessNewVersion', {
+                version: String(nextVersion),
+              }),
+            })
+          } else if (nextVersion > 0) {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.resourceTable.saveSuccessUpdated', {
+                version: String(nextVersion),
+              }),
+            })
+          } else {
+            setStatusFeedback({
+              tone: 'success',
+              text: t('projectManagerPage.resourceTable.saveSuccess'),
+            })
+          }
+          return true
+        }
         if (isAllScope) {
           const payload = sortResourceRowsByTypeMenu(
             rows.map((row) => ({
@@ -702,11 +815,14 @@ const ProjectResourceTablePanel: FC<Props> = ({
       canEdit,
       editingProject,
       isAllScope,
+      isPractice,
       onProjectsChange,
       persistProjectCatalog,
+      practiceScopeId,
       rows,
       setStatusFeedback,
       t,
+      viewApplicable,
       workspaceId,
     ],
   )
@@ -715,6 +831,19 @@ const ProjectResourceTablePanel: FC<Props> = ({
     if (!canEdit) return
     const catalog = rowsRef.current
     try {
+      if (isPractice) {
+        if (!practiceScopeId) return
+        const payload = sortResourceRowsByTypeMenu(
+          catalog.map((row) => ({
+            ...row,
+            applicable: viewApplicable,
+          })),
+        )
+        writePracticeCatalog(workspaceId, practiceScopeId, payload)
+        recordPracticeSaveMeta(workspaceId, practiceScopeId, payload, { bumpVersion: false })
+        cleanFingerprintRef.current = fingerprintResourceCatalog(payload)
+        return
+      }
       if (isAllScope) {
         const payload = sortResourceRowsByTypeMenu(
           catalog.map((row) => ({
@@ -743,7 +872,16 @@ const ProjectResourceTablePanel: FC<Props> = ({
     } catch {
       // Best-effort leave save.
     }
-  }, [canEdit, editingProject, isAllScope, persistProjectCatalog, workspaceId])
+  }, [
+    canEdit,
+    editingProject,
+    isAllScope,
+    isPractice,
+    persistProjectCatalog,
+    practiceScopeId,
+    viewApplicable,
+    workspaceId,
+  ])
 
   usePmCatalogAutoSave({ scopeKey, dirty, flush: flushAutoSave })
 
@@ -891,21 +1029,31 @@ const ProjectResourceTablePanel: FC<Props> = ({
   const snapshotToRows = useCallback((snapshot: NonNullable<ReturnType<typeof readResourceVersionCatalog>>): PmResourceRow[] => {
     return snapshot
       .filter((row) => isPmResourceType(row.type))
-      .map((row) => ({
-        id: row.id,
-        type: row.type as PmResourceType,
-        customTypeName: row.customTypeName ?? '',
-        name: row.name,
-        spec: row.spec ?? '',
-        unit: row.unit,
-        pricingUnit: row.pricingUnit?.trim() ? row.pricingUnit : row.unit,
-        unitPrice: row.unitPrice,
-        applicable: row.applicable,
-        note: row.note ?? '',
-        sortOrder: row.sortOrder,
-        parentId: row.parentId,
-      }))
-  }, [])
+      .map((row) => {
+        const rawPricing = row.pricingUnit?.trim() ?? ''
+        const pricingUnit = isPractice
+          ? rawPricing !== '' && Number.isFinite(Number(rawPricing))
+            ? rawPricing
+            : ''
+          : rawPricing
+            ? rawPricing
+            : row.unit
+        return {
+          id: row.id,
+          type: row.type as PmResourceType,
+          customTypeName: row.customTypeName ?? '',
+          name: row.name,
+          spec: row.spec ?? '',
+          unit: row.unit,
+          pricingUnit,
+          unitPrice: row.unitPrice,
+          applicable: row.applicable,
+          note: row.note ?? '',
+          sortOrder: row.sortOrder,
+          parentId: row.parentId,
+        }
+      })
+  }, [isPractice])
 
   const handleConfirmRestoreVersion = useCallback(async () => {
     if (pendingRestoreVersion == null) return
@@ -913,6 +1061,29 @@ const ProjectResourceTablePanel: FC<Props> = ({
     setPendingRestoreVersion(null)
     setSaving(true)
     try {
+      if (isPractice) {
+        if (!practiceScopeId) return
+        const meta = readPracticeSaveMeta(workspaceId, practiceScopeId)
+        const catalog = readResourceVersionCatalog(meta, version)
+        const nextMeta = buildMetadataForResourceVersionSwitch(meta, version)
+        if (!catalog || !nextMeta) {
+          window.alert(t('projectManagerPage.resourceTable.versionSwitchNoSnapshot'))
+          return
+        }
+        const rowsNext = sortResourceRowsByTypeMenu(snapshotToRows(catalog))
+        writePracticeCatalog(workspaceId, practiceScopeId, rowsNext)
+        writePracticeSaveMeta(workspaceId, practiceScopeId, nextMeta)
+        applyCatalogRows(rowsNext, { dirty: false, clearHistory: true })
+        setSelectedId(null)
+        window.alert(
+          t('projectManagerPage.resourceTable.restoreVersionSuccess', {
+            name: t('projectManagerPage.projectInfo.saveHistoryVersion', {
+              version: String(version),
+            }),
+          }),
+        )
+        return
+      }
       if (isAllScope) {
         const meta = readSharedResourceSaveMeta(workspaceId)
         const catalog = readResourceVersionCatalog(meta, version)
@@ -973,8 +1144,10 @@ const ProjectResourceTablePanel: FC<Props> = ({
     applyCatalogRows,
     editingProject,
     isAllScope,
+    isPractice,
     onProjectsChange,
     pendingRestoreVersion,
+    practiceScopeId,
     snapshotToRows,
     t,
     workspaceId,
@@ -982,13 +1155,17 @@ const ProjectResourceTablePanel: FC<Props> = ({
 
   const handleRestoreVersion = useCallback(
     (version: number) => {
-      const currentVersion = isAllScope
-        ? readSharedResourceVersion(workspaceId)
-        : readResourceVersion(editingProject?.metadata)
+      const currentVersion = isPractice
+        ? practiceScopeId
+          ? readPracticeVersion(workspaceId, practiceScopeId)
+          : 0
+        : isAllScope
+          ? readSharedResourceVersion(workspaceId)
+          : readResourceVersion(editingProject?.metadata)
       if (version === currentVersion) return
       setPendingRestoreVersion(version)
     },
-    [editingProject?.metadata, isAllScope, workspaceId],
+    [editingProject?.metadata, isAllScope, isPractice, practiceScopeId, workspaceId],
   )
 
   const handleMenuAction = useCallback(
@@ -1049,6 +1226,69 @@ const ProjectResourceTablePanel: FC<Props> = ({
     ],
   )
 
+  const handleFeaturesMenuAction = useCallback(
+    (action: FeaturesMenuAction) => {
+      switch (action) {
+        case 'save':
+        case 'saveAsNewVersion':
+        case 'print':
+        case 'projectInfo':
+        case 'undo':
+        case 'redo':
+        case 'add':
+        case 'insert':
+        case 'delete':
+        case 'indent':
+        case 'outdent':
+        case 'moveUp':
+        case 'moveDown':
+          handleMenuAction(action)
+          break
+        default:
+          break
+      }
+    },
+    [handleMenuAction],
+  )
+
+  const practiceQuotaView: ResourcePracticeQuotaView =
+    viewFilter === 'material' || viewFilter === 'equipment' ? viewFilter : 'labor'
+
+  const handleQuotaViewChange = useCallback(
+    (view: ResourcePracticeQuotaView) => {
+      handleViewFilterChange(view)
+    },
+    [handleViewFilterChange],
+  )
+
+  const practiceColumnLabel = useCallback(
+    (column: ResourceToggleColumn | 'index') => {
+      if (!isPractice) {
+        return t(`projectManagerPage.resourceTable.columns.${column}`)
+      }
+      if (
+        column === 'name' ||
+        column === 'spec' ||
+        column === 'unit' ||
+        column === 'pricingUnit' ||
+        column === 'unitPrice'
+      ) {
+        return t(`projectManagerPage.resourcePractice.columns.${column}`)
+      }
+      return t(`projectManagerPage.resourceTable.columns.${column}`)
+    },
+    [isPractice, t],
+  )
+
+  const practiceVersionEntries = useMemo((): FeaturesVersionSwitchEntry[] => {
+    return versionSwitchEntries.map((entry) => ({
+      version: entry.version,
+      name: entry.name,
+      hasSnapshot: entry.hasSnapshot,
+      isCurrent: entry.isCurrent,
+    }))
+  }, [versionSwitchEntries])
+
   const patchRow = useCallback(
     (id: string, patch: Partial<PmResourceRow>) => {
       updateRows(
@@ -1073,9 +1313,29 @@ const ProjectResourceTablePanel: FC<Props> = ({
             )
           : row.applicable
       patchRow(rowId, { type, customTypeName: nextCustomName, applicable })
-      setTypeCellMenu(null)
     },
     [baselinePriceIndex, editingProject, patchRow],
+  )
+
+  const typeSelectValueForRow = useCallback((row: PmResourceRow): string => {
+    if (row.type === 'custom') {
+      const name = row.customTypeName.trim()
+      return name ? encodeCustomTypeSelectValue(name) : 'custom'
+    }
+    return row.type
+  }, [])
+
+  const handleTypeSelectChange = useCallback(
+    (rowId: string, value: string) => {
+      const custom = parseCustomTypeSelectValue(value)
+      if (custom) {
+        applyTypeToRow(rowId, 'custom', custom.kind === 'named' ? custom.name : '')
+        return
+      }
+      if (!isPmResourceType(value) || isPmResourceCostType(value)) return
+      applyTypeToRow(rowId, value)
+    },
+    [applyTypeToRow],
   )
 
   const handleRowContextMenu = useCallback(
@@ -1168,61 +1428,6 @@ const ProjectResourceTablePanel: FC<Props> = ({
     }
   }, [contextMenu?.rowId, contextMenu?.left, contextMenu?.top])
 
-  useEffect(() => {
-    if (!typeCellMenu) return
-    const onDoc = (event: MouseEvent) => {
-      const target = event.target
-      if (
-        target instanceof Element &&
-        (target.closest('.tm-pm-resource-type-cell-menu') ||
-          target.closest('.tm-pm-resource-table-type-trigger'))
-      ) {
-        return
-      }
-      setTypeCellMenu(null)
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setTypeCellMenu(null)
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [typeCellMenu])
-
-  useLayoutEffect(() => {
-    if (!typeCellMenu) return
-    const menu = typeCellMenuRef.current
-    if (!menu) return
-    const margin = 8
-    const gap = 4
-    const spaceBelow = window.innerHeight - typeCellMenu.anchorBottom - margin
-    const spaceAbove = typeCellMenu.anchorTop - margin
-    // Measure full content height first, then decide flip + clamp.
-    menu.style.maxHeight = `${Math.min(420, window.innerHeight - margin * 2)}px`
-    const naturalHeight = menu.scrollHeight
-    const openAbove = naturalHeight > spaceBelow && spaceAbove > spaceBelow
-    const available = Math.max(120, (openAbove ? spaceAbove : spaceBelow) - gap)
-    menu.style.maxHeight = `${Math.min(available, window.innerHeight - margin * 2)}px`
-    const height = menu.offsetHeight
-    let top = openAbove
-      ? typeCellMenu.anchorTop - height - gap
-      : typeCellMenu.anchorBottom + gap
-    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
-    if (Math.abs(top - typeCellMenu.top) > 0.5) {
-      setTypeCellMenu((current) => (current ? { ...current, top } : current))
-    }
-  }, [
-    typeCellMenu?.rowId,
-    typeCellMenu?.anchorTop,
-    typeCellMenu?.anchorBottom,
-    typeCellMenu?.customExpanded,
-    typeCellMenu?.top,
-    customTypeNames.length,
-  ])
-
   const handleSelectAll = useCallback(() => {
     setCheckedIds(new Set(visibleRows.map((row) => row.id)))
     setSelectionMode(true)
@@ -1237,25 +1442,44 @@ const ProjectResourceTablePanel: FC<Props> = ({
 
   return (
     <div ref={panelRootRef} className="tm-pm-gantt-page tm-pm-resource-table-page">
-      <ProjectResourceMenuBar
-        disabled={saving}
-        hasSelection={selectedId != null}
-        hasProject
-        canEdit={canEdit}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        viewFilter={viewFilter}
-        onViewFilterChange={handleViewFilterChange}
-        customTypeNames={customTypeNames}
-        onRegisterCustomTypeName={handleRegisterCustomTypeName}
-        onRequestDeleteCustomTypeName={handleRequestDeleteCustomTypeName}
-        selectedType={selectedType}
-        selectedCustomTypeName={selectedCustomTypeName}
-        onTypeChange={handleTypeChange}
-        versionSwitchEntries={versionSwitchEntries}
-        onRestoreVersion={handleRestoreVersion}
-        onAction={handleMenuAction}
-      />
+      {isPractice ? (
+        <ProjectFeaturesMenuBar
+          disabled={saving}
+          hasSelection={selectedId != null}
+          hasProject
+          canEdit={canEdit}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          selectedType="scheduleAll"
+          viewMenuMode="resourceQuota"
+          quotaView={practiceQuotaView}
+          onQuotaViewChange={handleQuotaViewChange}
+          versionSwitchEntries={practiceVersionEntries}
+          onRestoreVersion={handleRestoreVersion}
+          onAction={handleFeaturesMenuAction}
+          showTrailingMenus={false}
+        />
+      ) : (
+        <ProjectResourceMenuBar
+          disabled={saving}
+          hasSelection={selectedId != null}
+          hasProject
+          canEdit={canEdit}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          viewFilter={viewFilter}
+          onViewFilterChange={handleViewFilterChange}
+          customTypeNames={customTypeNames}
+          onRegisterCustomTypeName={handleRegisterCustomTypeName}
+          onRequestDeleteCustomTypeName={handleRequestDeleteCustomTypeName}
+          selectedType={selectedType}
+          selectedCustomTypeName={selectedCustomTypeName}
+          onTypeChange={handleTypeChange}
+          versionSwitchEntries={versionSwitchEntries}
+          onRestoreVersion={handleRestoreVersion}
+          onAction={handleMenuAction}
+        />
+      )}
 
       {!canEdit ? (
         <div className="tm-pm-empty">{t('projectManagerPage.resourceTable.needProject')}</div>
@@ -1269,10 +1493,146 @@ const ProjectResourceTablePanel: FC<Props> = ({
             .filter(Boolean)
             .join(' ')}
         >
+          <div className="tm-pm-resource-table-header-pin">
+            <div ref={headerPinInnerRef} className="tm-pm-resource-table-header-pin-inner">
+              <div className="tm-pm-resource-table-scroll-inner">
+                <table className="tm-pm-resource-table">
+                  <colgroup>
+                    <col className="tm-pm-resource-table-col-index" />
+                    {columnVisibility.type ? <col className="tm-pm-resource-table-col-type" /> : null}
+                    {isPractice ? (
+                      <>
+                        {columnVisibility.spec ? <col className="tm-pm-resource-table-col-spec" /> : null}
+                        {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
+                      </>
+                    ) : (
+                      <>
+                        {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
+                        {columnVisibility.spec ? <col className="tm-pm-resource-table-col-spec" /> : null}
+                      </>
+                    )}
+                    {columnVisibility.unit ? <col className="tm-pm-resource-table-col-unit" /> : null}
+                    {columnVisibility.pricingUnit ? (
+                      <col className="tm-pm-resource-table-col-pricing-unit" />
+                    ) : null}
+                    {columnVisibility.unitPrice ? <col className="tm-pm-resource-table-col-price" /> : null}
+                    {columnVisibility.baseline ? (
+                      <col className="tm-pm-resource-table-col-baseline" />
+                    ) : null}
+                    {columnVisibility.note ? <col className="tm-pm-resource-table-col-note" /> : null}
+                    <col className="tm-pm-resource-table-col-spacer" />
+                  </colgroup>
+                  <thead onContextMenu={openColumnVisibilityMenu}>
+                    <tr>
+                      <th className="tm-pm-resource-table-col-index">
+                        {selectionMode ? (
+                          <label
+                            className="tm-kb-file-card-select"
+                            title={t('projectManagerPage.resourceTable.selection.selectAll')}>
+                            <input
+                              type="checkbox"
+                              className="tm-kb-file-card-select-input"
+                              checked={
+                                visibleRows.length > 0 &&
+                                visibleRows.every((row) => checkedIds.has(row.id))
+                              }
+                              onChange={(event) => {
+                                if (event.target.checked) handleSelectAll()
+                                else handleClearSelection()
+                              }}
+                              aria-label={t('projectManagerPage.resourceTable.selection.selectAll')}
+                            />
+                            <span
+                              className={[
+                                'tm-kb-file-card-select-box',
+                                visibleRows.length > 0 &&
+                                visibleRows.every((row) => checkedIds.has(row.id))
+                                  ? 'tm-kb-file-card-select-box--checked'
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              aria-hidden="true"
+                            />
+                          </label>
+                        ) : (
+                          practiceColumnLabel('index')
+                        )}
+                      </th>
+                      {columnVisibility.type ? (
+                        <th className="tm-pm-resource-table-col-type">
+                          {practiceColumnLabel('type')}
+                        </th>
+                      ) : null}
+                      {isPractice ? (
+                        <>
+                          {columnVisibility.spec ? (
+                            <th className="tm-pm-resource-table-col-spec">
+                              {practiceColumnLabel('spec')}
+                            </th>
+                          ) : null}
+                          {columnVisibility.name ? (
+                            <th className="tm-pm-resource-table-col-name">
+                              {practiceColumnLabel('name')}
+                            </th>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          {columnVisibility.name ? (
+                            <th className="tm-pm-resource-table-col-name">
+                              {practiceColumnLabel('name')}
+                            </th>
+                          ) : null}
+                          {columnVisibility.spec ? (
+                            <th className="tm-pm-resource-table-col-spec">
+                              {practiceColumnLabel('spec')}
+                            </th>
+                          ) : null}
+                        </>
+                      )}
+                      {columnVisibility.unit ? (
+                        <th className="tm-pm-resource-table-col-unit">
+                          {practiceColumnLabel('unit')}
+                        </th>
+                      ) : null}
+                      {columnVisibility.pricingUnit ? (
+                        <th className="tm-pm-resource-table-col-pricing-unit">
+                          {practiceColumnLabel('pricingUnit')}
+                        </th>
+                      ) : null}
+                      {columnVisibility.unitPrice ? (
+                        <th className="tm-pm-resource-table-col-price">
+                          {practiceColumnLabel('unitPrice')}
+                        </th>
+                      ) : null}
+                      {columnVisibility.baseline ? (
+                        <th className="tm-pm-resource-table-col-baseline">
+                          {practiceColumnLabel('baseline')}
+                        </th>
+                      ) : null}
+                      {columnVisibility.note ? (
+                        <th className="tm-pm-resource-table-col-note">
+                          {practiceColumnLabel('note')}
+                        </th>
+                      ) : null}
+                      <th className="tm-pm-resource-table-col-spacer" aria-hidden />
+                    </tr>
+                  </thead>
+                </table>
+              </div>
+            </div>
+          </div>
           <div
             ref={tableScrollRef}
             className="tm-pm-resource-table-scroll"
             onScroll={() => syncHScrollMetrics()}
+            onWheel={(event) => {
+              // overflow-x is hidden (no native H bar), so route trackpad deltaX manually.
+              if (event.deltaX !== 0 && tableScrollRef.current) {
+                tableScrollRef.current.scrollLeft += event.deltaX
+              }
+            }}
           >
             <div className="tm-pm-resource-table-scroll-inner">
           <table
@@ -1284,8 +1644,17 @@ const ProjectResourceTablePanel: FC<Props> = ({
             <colgroup>
               <col className="tm-pm-resource-table-col-index" />
               {columnVisibility.type ? <col className="tm-pm-resource-table-col-type" /> : null}
-              {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
-              {columnVisibility.spec ? <col className="tm-pm-resource-table-col-spec" /> : null}
+              {isPractice ? (
+                <>
+                  {columnVisibility.spec ? <col className="tm-pm-resource-table-col-spec" /> : null}
+                  {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
+                </>
+              ) : (
+                <>
+                  {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
+                  {columnVisibility.spec ? <col className="tm-pm-resource-table-col-spec" /> : null}
+                </>
+              )}
               {columnVisibility.unit ? <col className="tm-pm-resource-table-col-unit" /> : null}
               {columnVisibility.pricingUnit ? (
                 <col className="tm-pm-resource-table-col-pricing-unit" />
@@ -1297,86 +1666,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
               {columnVisibility.note ? <col className="tm-pm-resource-table-col-note" /> : null}
               <col className="tm-pm-resource-table-col-spacer" />
             </colgroup>
-            <thead onContextMenu={openColumnVisibilityMenu}>
-              <tr>
-                <th className="tm-pm-resource-table-col-index">
-                  {selectionMode ? (
-                    <label
-                      className="tm-kb-file-card-select"
-                      title={t('projectManagerPage.resourceTable.selection.selectAll')}>
-                      <input
-                        type="checkbox"
-                        className="tm-kb-file-card-select-input"
-                        checked={
-                          visibleRows.length > 0 &&
-                          visibleRows.every((row) => checkedIds.has(row.id))
-                        }
-                        onChange={(event) => {
-                          if (event.target.checked) handleSelectAll()
-                          else handleClearSelection()
-                        }}
-                        aria-label={t('projectManagerPage.resourceTable.selection.selectAll')}
-                      />
-                      <span
-                        className={[
-                          'tm-kb-file-card-select-box',
-                          visibleRows.length > 0 &&
-                          visibleRows.every((row) => checkedIds.has(row.id))
-                            ? 'tm-kb-file-card-select-box--checked'
-                            : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        aria-hidden="true"
-                      />
-                    </label>
-                  ) : (
-                    t('projectManagerPage.resourceTable.columns.index')
-                  )}
-                </th>
-                {columnVisibility.type ? (
-                  <th className="tm-pm-resource-table-col-type">
-                    {t('projectManagerPage.resourceTable.columns.type')}
-                  </th>
-                ) : null}
-                {columnVisibility.name ? (
-                  <th className="tm-pm-resource-table-col-name">
-                    {t('projectManagerPage.resourceTable.columns.name')}
-                  </th>
-                ) : null}
-                {columnVisibility.spec ? (
-                  <th className="tm-pm-resource-table-col-spec">
-                    {t('projectManagerPage.resourceTable.columns.spec')}
-                  </th>
-                ) : null}
-                {columnVisibility.unit ? (
-                  <th className="tm-pm-resource-table-col-unit">
-                    {t('projectManagerPage.resourceTable.columns.unit')}
-                  </th>
-                ) : null}
-                {columnVisibility.pricingUnit ? (
-                  <th className="tm-pm-resource-table-col-pricing-unit">
-                    {t('projectManagerPage.resourceTable.columns.pricingUnit')}
-                  </th>
-                ) : null}
-                {columnVisibility.unitPrice ? (
-                  <th className="tm-pm-resource-table-col-price">
-                    {t('projectManagerPage.resourceTable.columns.unitPrice')}
-                  </th>
-                ) : null}
-                {columnVisibility.baseline ? (
-                  <th className="tm-pm-resource-table-col-baseline">
-                    {t('projectManagerPage.resourceTable.columns.baseline')}
-                  </th>
-                ) : null}
-                {columnVisibility.note ? (
-                  <th className="tm-pm-resource-table-col-note">
-                    {t('projectManagerPage.resourceTable.columns.note')}
-                  </th>
-                ) : null}
-                <th className="tm-pm-resource-table-col-spacer" aria-hidden />
-              </tr>
-            </thead>            <tbody>
+            <tbody>
               {visibleRows.map((row, index) => {
                 const depth = resourceRowDepth(row, byId)
                 const isSelected = selectedId === row.id
@@ -1429,94 +1719,124 @@ const ProjectResourceTablePanel: FC<Props> = ({
                     </td>
                     {columnVisibility.type ? (
                       <td className="tm-pm-resource-table-col-type">
-                        <button
-                          type="button"
-                          className={[
-                            'tm-pm-resource-table-type-trigger',
-                            typeCellMenu?.rowId === row.id
-                              ? 'tm-pm-resource-table-type-trigger--open'
-                              : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          aria-haspopup="menu"
-                          aria-expanded={typeCellMenu?.rowId === row.id}
-                          title={formatResourceTypeDisplayLabel(
-                            row,
-                            (type) => t(`projectManagerPage.resourceTable.types.${type}`),
-                            t('projectManagerPage.resourceTable.types.custom'),
-                          )}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            if (typeCellMenu?.rowId === row.id) {
-                              setTypeCellMenu(null)
-                              return
-                            }
-                            const rect = event.currentTarget.getBoundingClientRect()
-                            const menuWidth = 148
-                            const margin = 8
-                            let left = rect.left
-                            if (left + menuWidth > window.innerWidth - margin) {
-                              left = Math.max(margin, rect.right - menuWidth)
-                            }
-                            setTypeCellMenu({
-                              rowId: row.id,
-                              top: rect.bottom + 4,
-                              left,
-                              anchorTop: rect.top,
-                              anchorBottom: rect.bottom,
-                              customExpanded: customTypeNames.length > 0,
-                            })
-                          }}
+                        <select
+                          className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
+                          value={typeSelectValueForRow(row)}
+                          onChange={(event) =>
+                            handleTypeSelectChange(row.id, event.target.value)
+                          }
+                          onClick={(event) => event.stopPropagation()}
                         >
-                          <span className="tm-pm-resource-table-type-trigger-label">
-                            {formatResourceTypeDisplayLabel(
-                              row,
-                              (type) => t(`projectManagerPage.resourceTable.types.${type}`),
-                              t('projectManagerPage.resourceTable.types.custom'),
+                          {isPractice
+                            ? (['labor', 'material', 'equipment'] as const).map((type) => (
+                                <option key={type} value={type}>
+                                  {t(`projectManagerPage.resourcePractice.views.${type}`)}
+                                </option>
+                              ))
+                            : (
+                              <>
+                                {PM_RESOURCE_BUILTIN_PRIMARY_TYPES.map((type) => (
+                                  <option key={type} value={type}>
+                                    {t(`projectManagerPage.resourceTable.types.${type}`)}
+                                  </option>
+                                ))}
+                                <option value="custom">
+                                  {t('projectManagerPage.resourceTable.types.custom')}
+                                </option>
+                                {customTypeNames.map((name) => (
+                                  <option key={`type:${name}`} value={encodeCustomTypeSelectValue(name)}>
+                                    {name}
+                                  </option>
+                                ))}
+                                <option
+                                  value="__pm_resource_cost_group__"
+                                  disabled
+                                  title={t(
+                                    'projectManagerPage.resourceTable.views.costResourcesReserved',
+                                  )}
+                                >
+                                  {t('projectManagerPage.resourceTable.views.costResources')}
+                                </option>
+                              </>
                             )}
-                          </span>
-                          <IconChevronDown
-                            size={12}
-                            className="tm-pm-resource-table-type-trigger-chevron"
-                          />
-                        </button>
+                        </select>
                       </td>
                     ) : null}
-                    {columnVisibility.name ? (
-                      <td>
-                        <input
-                          className="tm-pm-resource-table-input"
-                          style={{ paddingLeft: `${8 + depth * 16}px` }}
-                          value={row.name}
-                          placeholder={t('projectManagerPage.resourceTable.namePlaceholder')}
-                          onChange={(event) => {
-                            const name = event.target.value
-                            const applicable =
-                              editingProject != null
-                                ? deriveResourceApplicable(
-                                    { ...row, name },
-                                    baselinePriceIndex,
-                                    editingProject.id,
-                                  )
-                                : row.applicable
-                            patchRow(row.id, { name, applicable })
-                          }}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
-                    ) : null}
-                    {columnVisibility.spec ? (
-                      <td>
-                        <input
-                          className="tm-pm-resource-table-input"
-                          value={row.spec}
-                          placeholder={t('projectManagerPage.resourceTable.specPlaceholder')}
-                          onChange={(event) => patchRow(row.id, { spec: event.target.value })}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
-                    ) : null}
+                    {isPractice ? (
+                      <>
+                        {columnVisibility.spec ? (
+                          <td>
+                            <input
+                              className="tm-pm-resource-table-input"
+                              value={row.spec}
+                              placeholder={t('projectManagerPage.resourcePractice.specPlaceholder')}
+                              onChange={(event) => patchRow(row.id, { spec: event.target.value })}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </td>
+                        ) : null}
+                        {columnVisibility.name ? (
+                          <td>
+                            <input
+                              className="tm-pm-resource-table-input"
+                              style={{ paddingLeft: `${8 + depth * 16}px` }}
+                              value={row.name}
+                              placeholder={t('projectManagerPage.resourcePractice.namePlaceholder')}
+                              onChange={(event) => {
+                                const name = event.target.value
+                                const applicable =
+                                  editingProject != null
+                                    ? deriveResourceApplicable(
+                                        { ...row, name },
+                                        baselinePriceIndex,
+                                        editingProject.id,
+                                      )
+                                    : row.applicable
+                                patchRow(row.id, { name, applicable })
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </td>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        {columnVisibility.name ? (
+                          <td>
+                            <input
+                              className="tm-pm-resource-table-input"
+                              style={{ paddingLeft: `${8 + depth * 16}px` }}
+                              value={row.name}
+                              placeholder={t('projectManagerPage.resourceTable.namePlaceholder')}
+                              onChange={(event) => {
+                                const name = event.target.value
+                                const applicable =
+                                  editingProject != null
+                                    ? deriveResourceApplicable(
+                                        { ...row, name },
+                                        baselinePriceIndex,
+                                        editingProject.id,
+                                      )
+                                    : row.applicable
+                                patchRow(row.id, { name, applicable })
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </td>
+                        ) : null}
+                        {columnVisibility.spec ? (
+                          <td>
+                            <input
+                              className="tm-pm-resource-table-input"
+                              value={row.spec}
+                              placeholder={t('projectManagerPage.resourceTable.specPlaceholder')}
+                              onChange={(event) => patchRow(row.id, { spec: event.target.value })}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </td>
+                        ) : null}
+                      </>
+                    )}
                     {columnVisibility.unit ? (
                       <td className="tm-pm-resource-table-cell--center">
                         <input
@@ -1524,6 +1844,10 @@ const ProjectResourceTablePanel: FC<Props> = ({
                           value={row.unit}
                           onChange={(event) => {
                             const unit = event.target.value
+                            if (isPractice) {
+                              patchRow(row.id, { unit })
+                              return
+                            }
                             const pricingInSync =
                               row.pricingUnit.trim() === '' || row.pricingUnit === row.unit
                             patchRow(row.id, {
@@ -1537,14 +1861,32 @@ const ProjectResourceTablePanel: FC<Props> = ({
                     ) : null}
                     {columnVisibility.pricingUnit ? (
                       <td className="tm-pm-resource-table-cell--center">
-                        <input
-                          className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
-                          value={row.pricingUnit}
-                          onChange={(event) =>
-                            patchRow(row.id, { pricingUnit: event.target.value })
-                          }
-                          onClick={(event) => event.stopPropagation()}
-                        />
+                        {isPractice ? (
+                          <PmDecimalTableInput
+                            className="tm-pm-resource-table-input tm-pm-resource-table-input--number"
+                            value={
+                              row.pricingUnit.trim() === '' ||
+                              !Number.isFinite(Number(row.pricingUnit))
+                                ? null
+                                : Number(row.pricingUnit)
+                            }
+                            onCommit={(next) =>
+                              patchRow(row.id, {
+                                pricingUnit: next == null ? '' : String(next),
+                              })
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        ) : (
+                          <input
+                            className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
+                            value={row.pricingUnit}
+                            onChange={(event) =>
+                              patchRow(row.id, { pricingUnit: event.target.value })
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        )}
                       </td>
                     ) : null}
                     {columnVisibility.unitPrice ? (
@@ -1749,131 +2091,6 @@ const ProjectResourceTablePanel: FC<Props> = ({
           )
         : null}
 
-      {typeCellMenu
-        ? (() => {
-            const menuRow = byId.get(typeCellMenu.rowId)
-            if (!menuRow) return null
-            const blankCustomActive =
-              menuRow.type === 'custom' && !menuRow.customTypeName.trim()
-            const namedActive = (name: string) =>
-              menuRow.type === 'custom' && menuRow.customTypeName.trim() === name
-            return createPortal(
-              <div
-                ref={typeCellMenuRef}
-                className="tm-pm-gantt-view-panel tm-pm-resource-type-cell-menu"
-                role="menu"
-                style={{ top: typeCellMenu.top, left: typeCellMenu.left }}
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                {PM_RESOURCE_BUILTIN_PRIMARY_TYPES.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={menuRow.type === type}
-                    className={[
-                      'tm-pm-gantt-view-option',
-                      menuRow.type === type ? 'tm-pm-gantt-view-option--active' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    onClick={() => applyTypeToRow(menuRow.id, type)}
-                  >
-                    {t(`projectManagerPage.resourceTable.types.${type}`)}
-                  </button>
-                ))}
-                <div
-                  className={[
-                    'tm-pm-gantt-view-option',
-                    'tm-pm-gantt-view-option--group',
-                    'tm-pm-resource-type-cell-custom-row',
-                    blankCustomActive ? 'tm-pm-gantt-view-option--active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  role="none"
-                >
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={blankCustomActive}
-                    className="tm-pm-resource-type-cell-custom-main"
-                    onClick={() => applyTypeToRow(menuRow.id, 'custom', '')}
-                  >
-                    {t('projectManagerPage.resourceTable.types.custom')}
-                  </button>
-                  {customTypeNames.length > 0 ? (
-                    <button
-                      type="button"
-                      className="tm-pm-resource-type-cell-fold"
-                      aria-expanded={typeCellMenu.customExpanded}
-                      aria-label={t('projectManagerPage.resourceTable.types.custom')}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        setTypeCellMenu((current) =>
-                          current
-                            ? { ...current, customExpanded: !current.customExpanded }
-                            : current,
-                        )
-                      }}
-                    >
-                      <IconChevronDown
-                        size={14}
-                        className={[
-                          'tm-pm-gantt-view-option-chevron',
-                          typeCellMenu.customExpanded
-                            ? 'tm-pm-gantt-view-option-chevron--open'
-                            : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                      />
-                    </button>
-                  ) : null}
-                </div>
-                {typeCellMenu.customExpanded
-                  ? customTypeNames.map((name) => (
-                      <button
-                        key={`cell-type:${name}`}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={namedActive(name)}
-                        className={[
-                          'tm-pm-gantt-view-option',
-                          'tm-pm-gantt-view-option--nested',
-                          namedActive(name) ? 'tm-pm-gantt-view-option--active' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        title={name}
-                        onClick={() => applyTypeToRow(menuRow.id, 'custom', name)}
-                      >
-                        {name}
-                      </button>
-                    ))
-                  : null}
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-disabled="true"
-                  title={t('projectManagerPage.resourceTable.views.costResourcesReserved')}
-                  className={[
-                    'tm-pm-gantt-view-option',
-                    'tm-pm-gantt-view-option--group',
-                    'tm-pm-gantt-view-option--disabled',
-                  ].join(' ')}
-                  onClick={(event) => event.preventDefault()}
-                >
-                  <span>{t('projectManagerPage.resourceTable.views.costResources')}</span>
-                  <IconChevronDown size={14} className="tm-pm-gantt-view-option-chevron" />
-                </button>
-              </div>,
-              document.body,
-            )
-          })()
-        : null}
-
       {columnMenu
         ? createPortal(
             <div
@@ -1893,7 +2110,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
                     disabled={column === 'name'}
                     onChange={() => toggleColumnVisibility(column)}
                   />
-                  <span>{t(`projectManagerPage.resourceTable.columns.${column}`)}</span>
+                  <span>{practiceColumnLabel(column)}</span>
                 </label>
               ))}
             </div>,
@@ -1950,14 +2167,22 @@ const ProjectResourceTablePanel: FC<Props> = ({
       {pendingSaveAsNewVersion ? (
         <SaveAsNewVersionDialog
           currentVersion={
-            isAllScope
-              ? readSharedResourceVersion(workspaceId)
-              : readResourceVersion(editingProject?.metadata)
+            isPractice
+              ? practiceScopeId
+                ? readPracticeVersion(workspaceId, practiceScopeId)
+                : 0
+              : isAllScope
+                ? readSharedResourceVersion(workspaceId)
+                : readResourceVersion(editingProject?.metadata)
           }
           nextVersion={
-            (isAllScope
-              ? readMaxResourceVersion(readSharedResourceSaveMeta(workspaceId))
-              : readMaxResourceVersion(editingProject?.metadata)) + 1
+            (isPractice
+              ? practiceScopeId
+                ? readMaxResourceVersion(readPracticeSaveMeta(workspaceId, practiceScopeId))
+                : 0
+              : isAllScope
+                ? readMaxResourceVersion(readSharedResourceSaveMeta(workspaceId))
+                : readMaxResourceVersion(editingProject?.metadata)) + 1
           }
           onCancel={() => setPendingSaveAsNewVersion(false)}
           onConfirm={(note) => {
@@ -1972,6 +2197,8 @@ const ProjectResourceTablePanel: FC<Props> = ({
           project={editingProject}
           variant="resource"
           resourceRows={rows}
+          practiceScopeId={isPractice ? practiceScopeId : undefined}
+          onSaveResources={handleSave}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {
             void onProjectsChange?.()
@@ -1984,6 +2211,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
           mode="workspaceResource"
           workspaceId={workspaceId}
           resourceRows={rows}
+          practiceScopeId={isPractice ? practiceScopeId : undefined}
           onSaveResources={handleSave}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {

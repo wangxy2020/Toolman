@@ -239,7 +239,7 @@ export function patchCostSectionMeta(
   )
 }
 
-function parseCostRows(raw: unknown): PmCostRow[] | null {
+export function parseCostRows(raw: unknown): PmCostRow[] | null {
   if (!Array.isArray(raw)) return null
   const rows: PmCostRow[] = []
   for (const entry of raw) {

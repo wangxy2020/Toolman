@@ -223,7 +223,7 @@ function isMarkdownSeparatorRow(cells: string[]): boolean {
 }
 
 function normalizeOutlineId(raw: string): string | null {
-  const cleaned = raw.replace(/[　\s]+/g, '').replace(/、$/, '')
+  const cleaned = raw.replace(/[\u3000\s]+/g, '').replace(/、$/, '')
   if (!/^\d+(?:\.\d+)*$/.test(cleaned)) return null
   return cleaned
 }
@@ -361,7 +361,7 @@ export function parsePmWbsMarkdownTableFromText(text: string): PmParsedPlanFromT
     const cells = splitMarkdownRow(line)
     if (isMarkdownSeparatorRow(cells)) continue
     const outline = normalizeOutlineId(cells[outlineCol] ?? '')
-    const title = (cells[titleCol] ?? '').replace(/^[　\s]+/, '').trim()
+    const title = (cells[titleCol] ?? '').replace(/^[\u3000\s]+/, '').trim()
     if (!outline || !title) continue
     rows.push({
       outline,
@@ -668,7 +668,7 @@ export function formatPmPlanAsMarkdownTable(
     const item = wbs[index]!
     const depth = (depths[index] ?? 0) + 1
     const outline = rowOutlines[index]!
-    const indent = '　'.repeat(depth)
+    const indent = '\u3000'.repeat(depth)
     lines.push(
       `| ${outline} | ${indent}${escapeMarkdownTableCell(item.title)} | ${
         item.durationDays ?? '—'
@@ -965,7 +965,7 @@ export function buildPmNewProjectBriefMessage(input: {
     input.planStart?.trim() ? `- 计划开始：${input.planStart.trim()}` : null,
     input.planFinish?.trim() ? `- 计划完成：${input.planFinish.trim()}` : null,
     input.planPhase?.trim() ? `- 计划阶段：${input.planPhase.trim()}` : null,
-    input.period?.trim() ? `- 计划周期：${input.period.trim()}` : null,
+    input.period?.trim() ? `- 计划工期：${input.period.trim()}` : null,
     input.region?.trim() ? `- 区域：${input.region.trim()}` : null,
   ].filter(Boolean)
 

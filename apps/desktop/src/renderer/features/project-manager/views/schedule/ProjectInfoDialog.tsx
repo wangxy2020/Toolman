@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 
 import {
   computeScheduleTotalDurationDays,
@@ -35,14 +35,26 @@ import { getDateLocale } from '../../../../i18n/date-locale'
 import { useI18n } from '../../../../i18n/useI18n'
 import { pmApi } from '../../pm-api'
 import {
+  computeCostTotalPrice,
+  costSectionalWorkKey,
+  PM_COST_PRIMARY_TYPES,
+  PM_COST_RESOURCE_TYPES,
   PM_COST_TYPES,
   readSharedCostLastSavedAt,
   readSharedCostSaveHistory,
+  readSharedCostSaveMeta,
   readSharedCostVersion,
   removeSharedCostSaveHistoryEntry,
+  writeSharedCostSaveMeta,
   type PmCostRow,
   type PmCostType,
 } from '../cost/pm-cost-catalog'
+import {
+  readCostPracticeLastSavedAt,
+  readCostPracticeSaveHistory,
+  readCostPracticeVersion,
+  removeCostPracticeSaveHistoryEntry,
+} from '../cost/pm-cost-practice-catalog'
 import {
   readSharedFeatureLastSavedAt,
   readSharedFeatureSaveHistory,
@@ -59,6 +71,12 @@ import {
   type PmResourceRow,
   type PmResourceType,
 } from '../resource/pm-resource-catalog'
+import {
+  readPracticeLastSavedAt,
+  readPracticeSaveHistory,
+  readPracticeVersion,
+  removePracticeSaveHistoryEntry,
+} from '../resource/pm-resource-practice-catalog'
 import { formatWorkItemDate } from './pm-gantt-utils'
 import { pmScheduleApi } from './pm-schedule-api'
 
@@ -97,6 +115,17 @@ function resolveDomainTabId(kind: DomainTabKind): InfoTab {
 type PmProjectType = 'construction_gc' | 'epc' | 'owner_managed' | 'ordinary'
 type PmPlanCalendar = 'calendar_days' | 'working_days'
 
+/** Default currency for price-list project info (价格 tab). */
+const DEFAULT_COST_CURRENCY = '元'
+const COST_CURRENCY_META_KEY = 'costCurrency'
+const PM_COST_ESTIMATE_TYPES = [
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
+] as const satisfies readonly PmCostType[]
+const PM_COST_ESTIMATE_TYPE_SET = new Set<PmCostType>(PM_COST_ESTIMATE_TYPES)
+
 type ProjectInfoDraft = {
   code: string
   name: string
@@ -115,6 +144,15 @@ type ProjectInfoDraft = {
   contractValue: string
   settledAmount: string
   progressPercent: string
+  /** Price-list currency label; defaults to 元. */
+  costCurrency: string
+}
+
+function readCostCurrency(metadata: Record<string, unknown> | null | undefined): string {
+  if (!metadata) return DEFAULT_COST_CURRENCY
+  const value = metadata[COST_CURRENCY_META_KEY]
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  return DEFAULT_COST_CURRENCY
 }
 
 type CreateDefaults = {
@@ -133,6 +171,13 @@ interface EditProps {
   resourceRows?: PmResourceRow[]
   costRows?: PmCostRow[]
   featureRows?: PmFeatureRow[]
+  /**
+   * When set with `variant` resource/cost, Advanced history uses practice localStorage
+   * (not project price/resource catalog metadata).
+   */
+  practiceScopeId?: string
+  /** Persist the resource catalog (same as toolbar Save). Used when `variant` is `resource`. */
+  onSaveResources?: () => void | Promise<void | boolean>
   /** Persist the price catalog (same as toolbar Save). Used when `variant` is `cost`. */
   onSaveCosts?: () => void | Promise<void | boolean>
   /** Persist the practice catalog (same as toolbar Save). Used when `variant` is `features`. */
@@ -158,6 +203,8 @@ interface WorkspaceResourceProps {
   mode: 'workspaceResource'
   workspaceId: string
   resourceRows?: PmResourceRow[]
+  /** When set, Advanced history uses resource-practice localStorage. */
+  practiceScopeId?: string
   /** Persist the shared resource catalog (same as toolbar Save). */
   onSaveResources?: () => void | Promise<void | boolean>
   onClose: () => void
@@ -169,6 +216,8 @@ interface WorkspaceCostProps {
   mode: 'workspaceCost'
   workspaceId: string
   costRows?: PmCostRow[]
+  /** When set, Advanced history uses cost-practice localStorage. */
+  practiceScopeId?: string
   /** Persist the shared price catalog (same as toolbar Save). */
   onSaveCosts?: () => void | Promise<void | boolean>
   onClose: () => void
@@ -234,6 +283,7 @@ function emptyDraft(defaults?: Pick<CreateDefaults, 'code' | 'name'>): ProjectIn
     contractValue: '',
     settledAmount: '',
     progressPercent: '',
+    costCurrency: DEFAULT_COST_CURRENCY,
   }
 }
 
@@ -263,6 +313,7 @@ function toDraft(project: PmProject): ProjectInfoDraft {
     contractValue: readMetaNumber(metadata, 'contractValue'),
     settledAmount: readMetaNumber(metadata, 'settledAmount'),
     progressPercent: readMetaNumber(metadata, 'progressPercent'),
+    costCurrency: readCostCurrency(metadata),
   }
 }
 
@@ -291,6 +342,10 @@ function buildMetadata(draft: ProjectInfoDraft, base: Record<string, unknown> = 
   setMeta('contractValue', parseOptionalNumber(draft.contractValue))
   setMeta('settledAmount', parseOptionalNumber(draft.settledAmount))
   setMeta('progressPercent', parseOptionalNumber(draft.progressPercent))
+  setMeta(
+    COST_CURRENCY_META_KEY,
+    draft.costCurrency.trim() || DEFAULT_COST_CURRENCY,
+  )
   return metadata
 }
 
@@ -359,10 +414,11 @@ function computeResourceStats(rows: PmResourceRow[]) {
 }
 
 function computeCostStats(rows: PmCostRow[]) {
-  const byType = Object.fromEntries(PM_COST_TYPES.map((type) => [type, 0])) as Record<
-    PmCostType,
-    number
-  >
+  const amountByType = Object.fromEntries(
+    PM_COST_TYPES.map((type) => [type, { total: 0, hasAmount: false }]),
+  ) as Record<PmCostType, { total: number; hasAmount: boolean }>
+  const sectionTotals = new Map<string, { total: number; hasAmount: boolean }>()
+  const sectionOrder: string[] = []
   let priced = 0
   let priceSum = 0
   let totalPriceSum = 0
@@ -370,21 +426,26 @@ function computeCostStats(rows: PmCostRow[]) {
   let minPrice: number | null = null
   let maxPrice: number | null = null
   for (const row of rows) {
-    byType[row.type] += 1
+    const sectionKey = costSectionalWorkKey(row)
+    if (!sectionTotals.has(sectionKey)) {
+      sectionTotals.set(sectionKey, { total: 0, hasAmount: false })
+      sectionOrder.push(sectionKey)
+    }
+    const section = sectionTotals.get(sectionKey)!
+    const amount = computeCostTotalPrice(row.quantity, row.unitPrice)
+    if (amount != null) {
+      section.total += amount
+      section.hasAmount = true
+      amountByType[row.type].total += amount
+      amountByType[row.type].hasAmount = true
+      totalPriceSum += amount
+      hasTotal = true
+    }
     if (row.unitPrice != null && Number.isFinite(row.unitPrice)) {
       priced += 1
       priceSum += row.unitPrice
       minPrice = minPrice == null ? row.unitPrice : Math.min(minPrice, row.unitPrice)
       maxPrice = maxPrice == null ? row.unitPrice : Math.max(maxPrice, row.unitPrice)
-    }
-    if (
-      row.quantity != null &&
-      row.unitPrice != null &&
-      Number.isFinite(row.quantity) &&
-      Number.isFinite(row.unitPrice)
-    ) {
-      totalPriceSum += row.quantity * row.unitPrice
-      hasTotal = true
     }
   }
   return {
@@ -392,11 +453,24 @@ function computeCostStats(rows: PmCostRow[]) {
     priced,
     unpriced: rows.length - priced,
     avgUnitPrice: priced === 0 ? null : Math.round((priceSum / priced) * 100) / 100,
-    priceSum,
     totalPriceSum: hasTotal ? Math.round(totalPriceSum * 100) / 100 : null,
     minPrice,
     maxPrice,
-    byType,
+    /** 分部工程 cards: name + 合价 (first-appearance order). */
+    sections: sectionOrder.map((key) => {
+      const entry = sectionTotals.get(key)!
+      return {
+        key,
+        amount: entry.hasAmount ? Math.round(entry.total * 100) / 100 : null,
+      }
+    }),
+    /** Per-type 合价合计 (quantity × unitPrice). */
+    amountByType: Object.fromEntries(
+      PM_COST_TYPES.map((type) => {
+        const entry = amountByType[type]
+        return [type, entry.hasAmount ? Math.round(entry.total * 100) / 100 : null]
+      }),
+    ) as Record<PmCostType, number | null>,
   }
 }
 
@@ -435,6 +509,12 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   const isResourceInfo = variantProp === 'resource' || isWorkspaceResource
   const isCostInfo = variantProp === 'cost' || isWorkspaceCost
   const isFeaturesInfo = variantProp === 'features' || isWorkspaceFeatures
+  const practiceScopeId =
+    isWorkspaceResource || isWorkspaceCost
+      ? props.practiceScopeId?.trim() || null
+      : !isCreate && !isWorkspaceCatalog && 'practiceScopeId' in props
+        ? props.practiceScopeId?.trim() || null
+        : null
   const infoDomain = isWorkspaceResource
     ? 'resource_management'
     : isWorkspaceCost
@@ -480,14 +560,26 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   )
   const [resourceHistoryRows, setResourceHistoryRows] = useState<PmResourceSaveRecord[]>(() => {
     if (isWorkspaceResource && workspaceResourceId) {
+      if (practiceScopeId) {
+        return readPracticeSaveHistory(workspaceResourceId, practiceScopeId)
+      }
       return readSharedResourceSaveHistory(workspaceResourceId)
+    }
+    if (isResourceInfo && practiceScopeId && project?.workspaceId) {
+      return readPracticeSaveHistory(project.workspaceId, practiceScopeId)
     }
     if (isResourceInfo) return readResourceSaveHistory(project?.metadata)
     return []
   })
   const [costHistoryRows, setCostHistoryRows] = useState<PmCostSaveRecord[]>(() => {
     if (isWorkspaceCost && workspaceCostId) {
+      if (practiceScopeId) {
+        return readCostPracticeSaveHistory(workspaceCostId, practiceScopeId)
+      }
       return readSharedCostSaveHistory(workspaceCostId)
+    }
+    if (isCostInfo && practiceScopeId && project?.workspaceId) {
+      return readCostPracticeSaveHistory(project.workspaceId, practiceScopeId)
     }
     if (isCostInfo) return readCostSaveHistory(project?.metadata)
     return []
@@ -504,14 +596,24 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   )
   const [resourceVersion, setResourceVersion] = useState(() => {
     if (isWorkspaceResource && workspaceResourceId) {
-      return readSharedResourceVersion(workspaceResourceId)
+      return practiceScopeId
+        ? readPracticeVersion(workspaceResourceId, practiceScopeId)
+        : readSharedResourceVersion(workspaceResourceId)
+    }
+    if (isResourceInfo && practiceScopeId && project?.workspaceId) {
+      return readPracticeVersion(project.workspaceId, practiceScopeId)
     }
     if (isResourceInfo) return readResourceVersion(project?.metadata)
     return 0
   })
   const [costVersion, setCostVersion] = useState(() => {
     if (isWorkspaceCost && workspaceCostId) {
-      return readSharedCostVersion(workspaceCostId)
+      return practiceScopeId
+        ? readCostPracticeVersion(workspaceCostId, practiceScopeId)
+        : readSharedCostVersion(workspaceCostId)
+    }
+    if (isCostInfo && practiceScopeId && project?.workspaceId) {
+      return readCostPracticeVersion(project.workspaceId, practiceScopeId)
     }
     if (isCostInfo) return readCostVersion(project?.metadata)
     return 0
@@ -525,15 +627,25 @@ const ProjectInfoDialog: FC<Props> = (props) => {
   })
   const [lastSavedAt, setLastSavedAt] = useState(() => {
     if (isWorkspaceResource && workspaceResourceId) {
-      return readSharedResourceLastSavedAt(workspaceResourceId)
+      return practiceScopeId
+        ? readPracticeLastSavedAt(workspaceResourceId, practiceScopeId)
+        : readSharedResourceLastSavedAt(workspaceResourceId)
     }
     if (isWorkspaceCost && workspaceCostId) {
-      return readSharedCostLastSavedAt(workspaceCostId)
+      return practiceScopeId
+        ? readCostPracticeLastSavedAt(workspaceCostId, practiceScopeId)
+        : readSharedCostLastSavedAt(workspaceCostId)
     }
     if (isWorkspaceFeatures && workspaceFeaturesId) {
       return readSharedFeatureLastSavedAt(workspaceFeaturesId)
     }
+    if (isResourceInfo && practiceScopeId && project?.workspaceId) {
+      return readPracticeLastSavedAt(project.workspaceId, practiceScopeId)
+    }
     if (isResourceInfo) return readResourceLastSavedAt(project?.metadata)
+    if (isCostInfo && practiceScopeId && project?.workspaceId) {
+      return readCostPracticeLastSavedAt(project.workspaceId, practiceScopeId)
+    }
     if (isCostInfo) return readCostLastSavedAt(project?.metadata)
     if (isFeaturesInfo) return readFeatureLastSavedAt(project?.metadata)
     return readLastSavedAt(project?.metadata)
@@ -547,9 +659,15 @@ const ProjectInfoDialog: FC<Props> = (props) => {
           name: t('projectManagerPage.headerProject.allProjects'),
         }),
       )
-      setResourceHistoryRows(readSharedResourceSaveHistory(workspaceResourceId))
-      setResourceVersion(readSharedResourceVersion(workspaceResourceId))
-      setLastSavedAt(readSharedResourceLastSavedAt(workspaceResourceId))
+      if (practiceScopeId) {
+        setResourceHistoryRows(readPracticeSaveHistory(workspaceResourceId, practiceScopeId))
+        setResourceVersion(readPracticeVersion(workspaceResourceId, practiceScopeId))
+        setLastSavedAt(readPracticeLastSavedAt(workspaceResourceId, practiceScopeId))
+      } else {
+        setResourceHistoryRows(readSharedResourceSaveHistory(workspaceResourceId))
+        setResourceVersion(readSharedResourceVersion(workspaceResourceId))
+        setLastSavedAt(readSharedResourceLastSavedAt(workspaceResourceId))
+      }
       setCostHistoryRows([])
       setCostVersion(0)
       setFeatureHistoryRows([])
@@ -560,15 +678,26 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       return
     }
     if (isWorkspaceCost && workspaceCostId) {
-      setDraft(
-        emptyDraft({
+      setDraft({
+        ...emptyDraft({
           code: 'ALL',
           name: t('projectManagerPage.headerProject.allProjects'),
         }),
-      )
-      setCostHistoryRows(readSharedCostSaveHistory(workspaceCostId))
-      setCostVersion(readSharedCostVersion(workspaceCostId))
-      setLastSavedAt(readSharedCostLastSavedAt(workspaceCostId))
+        costCurrency: readCostCurrency(
+          practiceScopeId
+            ? {}
+            : readSharedCostSaveMeta(workspaceCostId),
+        ),
+      })
+      if (practiceScopeId) {
+        setCostHistoryRows(readCostPracticeSaveHistory(workspaceCostId, practiceScopeId))
+        setCostVersion(readCostPracticeVersion(workspaceCostId, practiceScopeId))
+        setLastSavedAt(readCostPracticeLastSavedAt(workspaceCostId, practiceScopeId))
+      } else {
+        setCostHistoryRows(readSharedCostSaveHistory(workspaceCostId))
+        setCostVersion(readSharedCostVersion(workspaceCostId))
+        setLastSavedAt(readSharedCostLastSavedAt(workspaceCostId))
+      }
       setResourceHistoryRows([])
       setResourceVersion(0)
       setFeatureHistoryRows([])
@@ -600,9 +729,15 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     if (project) {
       setDraft(toDraft(project))
       if (isResourceInfo) {
-        setResourceHistoryRows(readResourceSaveHistory(project.metadata))
-        setResourceVersion(readResourceVersion(project.metadata))
-        setLastSavedAt(readResourceLastSavedAt(project.metadata))
+        if (practiceScopeId) {
+          setResourceHistoryRows(readPracticeSaveHistory(project.workspaceId, practiceScopeId))
+          setResourceVersion(readPracticeVersion(project.workspaceId, practiceScopeId))
+          setLastSavedAt(readPracticeLastSavedAt(project.workspaceId, practiceScopeId))
+        } else {
+          setResourceHistoryRows(readResourceSaveHistory(project.metadata))
+          setResourceVersion(readResourceVersion(project.metadata))
+          setLastSavedAt(readResourceLastSavedAt(project.metadata))
+        }
         setCostHistoryRows([])
         setCostVersion(0)
         setFeatureHistoryRows([])
@@ -610,9 +745,15 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         setScheduleHistoryRows([])
         setScheduleVersion(0)
       } else if (isCostInfo) {
-        setCostHistoryRows(readCostSaveHistory(project.metadata))
-        setCostVersion(readCostVersion(project.metadata))
-        setLastSavedAt(readCostLastSavedAt(project.metadata))
+        if (practiceScopeId) {
+          setCostHistoryRows(readCostPracticeSaveHistory(project.workspaceId, practiceScopeId))
+          setCostVersion(readCostPracticeVersion(project.workspaceId, practiceScopeId))
+          setLastSavedAt(readCostPracticeLastSavedAt(project.workspaceId, practiceScopeId))
+        } else {
+          setCostHistoryRows(readCostSaveHistory(project.metadata))
+          setCostVersion(readCostVersion(project.metadata))
+          setLastSavedAt(readCostLastSavedAt(project.metadata))
+        }
         setResourceHistoryRows([])
         setResourceVersion(0)
         setFeatureHistoryRows([])
@@ -666,6 +807,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     isResourceInfo,
     isCostInfo,
     isFeaturesInfo,
+    practiceScopeId,
   ])
 
   useEffect(() => {
@@ -820,6 +962,18 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     setError(null)
     try {
       if (isWorkspaceResource && workspaceResourceId) {
+        if (practiceScopeId) {
+          const nextMeta = removePracticeSaveHistoryEntry(
+            workspaceResourceId,
+            practiceScopeId,
+            entry.version,
+          )
+          setResourceHistoryRows(readResourceSaveHistory(nextMeta))
+          setResourceVersion(readResourceVersion(nextMeta))
+          setLastSavedAt(readResourceLastSavedAt(nextMeta))
+          props.onSaved?.()
+          return
+        }
         const nextMeta = removeSharedResourceSaveHistoryEntry(
           workspaceResourceId,
           entry.version,
@@ -831,6 +985,18 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         return
       }
       if (!project) return
+      if (practiceScopeId) {
+        const nextMeta = removePracticeSaveHistoryEntry(
+          project.workspaceId,
+          practiceScopeId,
+          entry.version,
+        )
+        setResourceHistoryRows(readResourceSaveHistory(nextMeta))
+        setResourceVersion(readResourceVersion(nextMeta))
+        setLastSavedAt(readResourceLastSavedAt(nextMeta))
+        props.onSaved?.(project)
+        return
+      }
       const nextMeta = removeResourceSaveHistoryEntry(project.metadata ?? {}, entry.version)
       const updated = await pmApi.updateProject({
         id: project.id,
@@ -868,6 +1034,12 @@ const ProjectInfoDialog: FC<Props> = (props) => {
 
   const reloadWorkspaceResourceHistory = () => {
     if (!workspaceResourceId) return
+    if (practiceScopeId) {
+      setResourceHistoryRows(readPracticeSaveHistory(workspaceResourceId, practiceScopeId))
+      setResourceVersion(readPracticeVersion(workspaceResourceId, practiceScopeId))
+      setLastSavedAt(readPracticeLastSavedAt(workspaceResourceId, practiceScopeId))
+      return
+    }
     setResourceHistoryRows(readSharedResourceSaveHistory(workspaceResourceId))
     setResourceVersion(readSharedResourceVersion(workspaceResourceId))
     setLastSavedAt(readSharedResourceLastSavedAt(workspaceResourceId))
@@ -875,6 +1047,12 @@ const ProjectInfoDialog: FC<Props> = (props) => {
 
   const reloadWorkspaceCostHistory = () => {
     if (!workspaceCostId) return
+    if (practiceScopeId) {
+      setCostHistoryRows(readCostPracticeSaveHistory(workspaceCostId, practiceScopeId))
+      setCostVersion(readCostPracticeVersion(workspaceCostId, practiceScopeId))
+      setLastSavedAt(readCostPracticeLastSavedAt(workspaceCostId, practiceScopeId))
+      return
+    }
     setCostHistoryRows(readSharedCostSaveHistory(workspaceCostId))
     setCostVersion(readSharedCostVersion(workspaceCostId))
     setLastSavedAt(readSharedCostLastSavedAt(workspaceCostId))
@@ -899,6 +1077,18 @@ const ProjectInfoDialog: FC<Props> = (props) => {
     setError(null)
     try {
       if (isWorkspaceCost && workspaceCostId) {
+        if (practiceScopeId) {
+          const nextMeta = removeCostPracticeSaveHistoryEntry(
+            workspaceCostId,
+            practiceScopeId,
+            entry.version,
+          )
+          setCostHistoryRows(readCostSaveHistory(nextMeta))
+          setCostVersion(readCostVersion(nextMeta))
+          setLastSavedAt(readCostLastSavedAt(nextMeta))
+          props.onSaved?.()
+          return
+        }
         const nextMeta = removeSharedCostSaveHistoryEntry(workspaceCostId, entry.version)
         setCostHistoryRows(readCostSaveHistory(nextMeta))
         setCostVersion(readCostVersion(nextMeta))
@@ -907,6 +1097,18 @@ const ProjectInfoDialog: FC<Props> = (props) => {
         return
       }
       if (!project) return
+      if (practiceScopeId) {
+        const nextMeta = removeCostPracticeSaveHistoryEntry(
+          project.workspaceId,
+          practiceScopeId,
+          entry.version,
+        )
+        setCostHistoryRows(readCostSaveHistory(nextMeta))
+        setCostVersion(readCostVersion(nextMeta))
+        setLastSavedAt(readCostLastSavedAt(nextMeta))
+        props.onSaved?.(project)
+        return
+      }
       const nextMeta = removeCostSaveHistoryEntry(project.metadata ?? {}, entry.version)
       const updated = await pmApi.updateProject({
         id: project.id,
@@ -983,6 +1185,33 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       return
     }
 
+    const onSaveResources =
+      !isCreate && 'onSaveResources' in props ? props.onSaveResources : undefined
+
+    if (isResourceInfo && onSaveResources && !isCreate) {
+      setSaving(true)
+      setError(null)
+      try {
+        const result = await onSaveResources()
+        if (result === false) return
+        if (practiceScopeId && project) {
+          setResourceHistoryRows(
+            readPracticeSaveHistory(project.workspaceId, practiceScopeId),
+          )
+          setResourceVersion(readPracticeVersion(project.workspaceId, practiceScopeId))
+          setLastSavedAt(readPracticeLastSavedAt(project.workspaceId, practiceScopeId))
+        }
+        if (project && 'project' in props) {
+          props.onSaved(project)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
     const onSaveCosts =
       props.mode === 'workspaceCost'
         ? props.onSaveCosts
@@ -995,14 +1224,38 @@ const ProjectInfoDialog: FC<Props> = (props) => {
       setSaving(true)
       setError(null)
       try {
+        const currency = draft.costCurrency.trim() || DEFAULT_COST_CURRENCY
         const result = await onSaveCosts()
         if (result === false) return
+        // Write currency after catalog save so persistProjectCatalog cannot wipe it
+        // (updateProject shallow-merges metadata).
         if (isWorkspaceCost && workspaceCostId) {
+          const meta = readSharedCostSaveMeta(workspaceCostId)
+          writeSharedCostSaveMeta(workspaceCostId, {
+            ...meta,
+            [COST_CURRENCY_META_KEY]: currency,
+          })
           reloadWorkspaceCostHistory()
           props.onSaved?.()
-        } else if (project && 'project' in props) {
-          // Parent refresh reloads project metadata / version on next open.
-          props.onSaved(project)
+        } else if (project) {
+          if (practiceScopeId) {
+            setCostHistoryRows(
+              readCostPracticeSaveHistory(project.workspaceId, practiceScopeId),
+            )
+            setCostVersion(readCostPracticeVersion(project.workspaceId, practiceScopeId))
+            setLastSavedAt(
+              readCostPracticeLastSavedAt(project.workspaceId, practiceScopeId),
+            )
+          }
+          const updated = await pmApi.updateProject({
+            id: project.id,
+            metadata: {
+              [COST_CURRENCY_META_KEY]: currency,
+            },
+          })
+          if ('project' in props) {
+            props.onSaved(updated)
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -1357,15 +1610,156 @@ const ProjectInfoDialog: FC<Props> = (props) => {
                   </label>
                   <span className="tm-kb-settings-readonly">{costStats.unpriced}</span>
                 </div>
-                <div className="tm-pm-project-info-stats">
-                  {PM_COST_TYPES.map((type) => (
-                    <div key={type} className="tm-pm-project-info-stat">
-                      <span className="tm-pm-project-info-stat-label">
-                        {costTypeLabel(type)}
-                      </span>
-                      <strong>{costStats.byType[type]}</strong>
-                    </div>
-                  ))}
+                <div className="tm-pm-project-info-stats-group">
+                  <div className="tm-pm-project-info-stats-group-title">
+                    {t('projectManagerPage.projectInfo.statGroupResource')}
+                  </div>
+                  <div className="tm-pm-project-info-stats">
+                    {PM_COST_RESOURCE_TYPES.map((type) => (
+                      <div key={type} className="tm-pm-project-info-stat">
+                        <div className="tm-pm-project-info-stat-label-row">
+                          <span className="tm-pm-project-info-stat-label">
+                            {costTypeLabel(type)}
+                          </span>
+                          <span className="tm-pm-project-info-stat-currency-tag">
+                            {t('projectManagerPage.projectInfo.fieldCurrency')}
+                          </span>
+                        </div>
+                        <div className="tm-pm-project-info-stat-value-row">
+                          <strong>
+                            {costStats.amountByType[type] != null
+                              ? formatMoney(costStats.amountByType[type]!)
+                              : '—'}
+                          </strong>
+                          <input
+                            className="tm-kb-settings-input tm-pm-project-info-stat-currency-input"
+                            value={draft.costCurrency}
+                            onChange={(event) =>
+                              patchDraft({ costCurrency: event.target.value })
+                            }
+                            placeholder={DEFAULT_COST_CURRENCY}
+                            aria-label={t('projectManagerPage.projectInfo.fieldCurrency')}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="tm-pm-project-info-stats-group">
+                  <div className="tm-pm-project-info-stats-group-title">
+                    {t('projectManagerPage.projectInfo.statGroupCost')}
+                  </div>
+                  <div className="tm-pm-project-info-stats">
+                    {PM_COST_PRIMARY_TYPES.filter(
+                      (type) => !PM_COST_ESTIMATE_TYPE_SET.has(type),
+                    ).map((type) => (
+                      <Fragment key={type}>
+                        <div className="tm-pm-project-info-stat">
+                          <div className="tm-pm-project-info-stat-label-row">
+                            <span className="tm-pm-project-info-stat-label">
+                              {costTypeLabel(type)}
+                            </span>
+                            <span className="tm-pm-project-info-stat-currency-tag">
+                              {t('projectManagerPage.projectInfo.fieldCurrency')}
+                            </span>
+                          </div>
+                          <div className="tm-pm-project-info-stat-value-row">
+                            <strong>
+                              {costStats.amountByType[type] != null
+                                ? formatMoney(costStats.amountByType[type]!)
+                                : '—'}
+                            </strong>
+                            <input
+                              className="tm-kb-settings-input tm-pm-project-info-stat-currency-input"
+                              value={draft.costCurrency}
+                              onChange={(event) =>
+                                patchDraft({ costCurrency: event.target.value })
+                              }
+                              placeholder={DEFAULT_COST_CURRENCY}
+                              aria-label={t('projectManagerPage.projectInfo.fieldCurrency')}
+                            />
+                          </div>
+                        </div>
+                        {type === 'comprehensive'
+                          ? costStats.sections.map((section) => {
+                              const sectionName =
+                                section.key ||
+                                t('projectManagerPage.costTable.views.sectionEmpty')
+                              return (
+                                <div
+                                  key={`section:${section.key || '__empty__'}`}
+                                  className="tm-pm-project-info-stat"
+                                >
+                                  <div className="tm-pm-project-info-stat-label-row">
+                                    <span className="tm-pm-project-info-stat-label">
+                                      {t('projectManagerPage.projectInfo.statSectionalWorkNamed', {
+                                        name: sectionName,
+                                      })}
+                                    </span>
+                                    <span className="tm-pm-project-info-stat-currency-tag">
+                                      {t('projectManagerPage.projectInfo.fieldCurrency')}
+                                    </span>
+                                  </div>
+                                  <div className="tm-pm-project-info-stat-value-row">
+                                    <strong>
+                                      {section.amount != null
+                                        ? formatMoney(section.amount)
+                                        : '—'}
+                                    </strong>
+                                    <input
+                                      className="tm-kb-settings-input tm-pm-project-info-stat-currency-input"
+                                      value={draft.costCurrency}
+                                      onChange={(event) =>
+                                        patchDraft({ costCurrency: event.target.value })
+                                      }
+                                      placeholder={DEFAULT_COST_CURRENCY}
+                                      aria-label={t(
+                                        'projectManagerPage.projectInfo.fieldCurrency',
+                                      )}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })
+                          : null}
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+                <div className="tm-pm-project-info-stats-group">
+                  <div className="tm-pm-project-info-stats-group-title">
+                    {t('projectManagerPage.projectInfo.statGroupEstimate')}
+                  </div>
+                  <div className="tm-pm-project-info-stats">
+                    {PM_COST_ESTIMATE_TYPES.map((type) => (
+                      <div key={type} className="tm-pm-project-info-stat">
+                        <div className="tm-pm-project-info-stat-label-row">
+                          <span className="tm-pm-project-info-stat-label">
+                            {costTypeLabel(type)}
+                          </span>
+                          <span className="tm-pm-project-info-stat-currency-tag">
+                            {t('projectManagerPage.projectInfo.fieldCurrency')}
+                          </span>
+                        </div>
+                        <div className="tm-pm-project-info-stat-value-row">
+                          <strong>
+                            {costStats.amountByType[type] != null
+                              ? formatMoney(costStats.amountByType[type]!)
+                              : '—'}
+                          </strong>
+                          <input
+                            className="tm-kb-settings-input tm-pm-project-info-stat-currency-input"
+                            value={draft.costCurrency}
+                            onChange={(event) =>
+                              patchDraft({ costCurrency: event.target.value })
+                            }
+                            placeholder={DEFAULT_COST_CURRENCY}
+                            aria-label={t('projectManagerPage.projectInfo.fieldCurrency')}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1696,13 +2090,9 @@ const ProjectInfoDialog: FC<Props> = (props) => {
 
             {activeTab === 'advanced' ? (
               <div className="tm-kb-settings-form">
-                {isResourceInfo || isCostInfo || isFeaturesInfo ? (
+                {isFeaturesInfo ? (
                   <p className="tm-kb-settings-hint">
-                    {isResourceInfo
-                      ? t('projectManagerPage.projectInfo.advancedHintResource')
-                      : isCostInfo
-                        ? t('projectManagerPage.projectInfo.advancedHintCost')
-                        : t('projectManagerPage.projectInfo.advancedHintFeatures')}
+                    {t('projectManagerPage.projectInfo.advancedHintFeatures')}
                   </p>
                 ) : null}
                 {!isWorkspaceCatalog ? (
@@ -2202,12 +2592,21 @@ const ProjectInfoDialog: FC<Props> = (props) => {
               disabled={saving}>
               {t('projectManagerPage.database.cancel')}
             </button>
-            {isWorkspaceResource ? (
+            {isWorkspaceResource ||
+            (isResourceInfo &&
+              !isCreate &&
+              'onSaveResources' in props &&
+              props.onSaveResources) ? (
               <button
                 type="button"
                 className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--primary"
                 onClick={() => void handleSave()}
-                disabled={saving || !props.onSaveResources}>
+                disabled={
+                  saving ||
+                  !(isWorkspaceResource
+                    ? props.onSaveResources
+                    : 'onSaveResources' in props && props.onSaveResources)
+                }>
                 {saving
                   ? t('projectManagerPage.projectInfo.saving')
                   : t('projectManagerPage.projectInfo.saveCatalog')}

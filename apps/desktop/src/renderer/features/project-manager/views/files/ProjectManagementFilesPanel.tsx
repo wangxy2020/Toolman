@@ -354,6 +354,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   const headerRowSpan = visibleMonthKeys.length > 0 ? 2 : 1
 
   const tableScrollRef = useRef<HTMLDivElement | null>(null)
+  const headerPinInnerRef = useRef<HTMLDivElement | null>(null)
   const hTrackRef = useRef<HTMLDivElement | null>(null)
   const [hScrollMetrics, setHScrollMetrics] = useState({
     overflowing: false,
@@ -362,9 +363,17 @@ const ProjectManagementFilesPanel: FC<Props> = ({
   })
   const [hScrollDragging, setHScrollDragging] = useState(false)
 
+  const syncHeaderPinScroll = useCallback(() => {
+    const el = tableScrollRef.current
+    const pin = headerPinInnerRef.current
+    if (!el || !pin) return
+    pin.style.transform = `translateX(${-el.scrollLeft}px)`
+  }, [])
+
   const syncHScrollMetrics = useCallback(() => {
     const el = tableScrollRef.current
     if (!el) return
+    syncHeaderPinScroll()
     const { scrollLeft, scrollWidth, clientWidth } = el
     if (scrollWidth <= clientWidth + 1) {
       setHScrollMetrics({ overflowing: false, thumbSize: 0, thumbOffset: 0 })
@@ -375,7 +384,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
     const maxScroll = scrollWidth - clientWidth
     const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * maxOffset
     setHScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
-  }, [])
+  }, [syncHeaderPinScroll])
 
   useLayoutEffect(() => {
     syncHScrollMetrics()
@@ -1077,21 +1086,18 @@ const ProjectManagementFilesPanel: FC<Props> = ({
             .filter(Boolean)
             .join(' ')}
         >
-          <div
-            ref={tableScrollRef}
-            className="tm-pm-resource-table-scroll"
-            onScroll={() => syncHScrollMetrics()}
-          >
-            <div
-              className="tm-pm-resource-table-scroll-inner"
-              onContextMenu={handleTableContextMenu}
-            >
-              {matrixLayout === 'vertical' ? (
-              <table
+          <div className="tm-pm-resource-table-header-pin">
+            <div ref={headerPinInnerRef} className="tm-pm-resource-table-header-pin-inner">
+              <div
+                className="tm-pm-resource-table-scroll-inner"
+                onContextMenu={handleTableContextMenu}
+              >
+                {matrixLayout === 'vertical' ? (
+                <table
                 className="tm-pm-resource-table tm-pm-features-table--vertical"
                 onContextMenu={handleTableContextMenu}
               >
-                <colgroup>
+                  <colgroup>
                   <col className="tm-pm-resource-table-col-index" />
                   <col className="tm-pm-features-table-col-date" />
                   <col className="tm-pm-features-table-col-month" />
@@ -1100,7 +1106,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                   ))}
                   <col className="tm-pm-resource-table-col-spacer" />
                 </colgroup>
-                <thead onContextMenu={openColumnVisibilityMenu}>
+                  <thead onContextMenu={openColumnVisibilityMenu}>
                   <tr>
                     <th className="tm-pm-resource-table-col-index">
                       {t('projectManagerPage.files.table.columns.index')}
@@ -1125,75 +1131,10 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                     <th className="tm-pm-resource-table-col-spacer" aria-hidden />
                   </tr>
                 </thead>
-                <tbody>
-                  {(() => {
-                    if (yearBands.length === 0) {
-                      return (
-                        <tr>
-                          <td
-                            colSpan={3 + visibleRows.length + 1}
-                            className="tm-pm-resource-table-cell--center"
-                          >
-                            —
-                          </td>
-                        </tr>
-                      )
-                    }
-                    let rowNumber = 0
-                    return yearBands.flatMap((band) =>
-                      band.monthKeys.map((monthKey, monthIndex) => {
-                        rowNumber += 1
-                        const parsed = parseMonthKey(monthKey)
-                        const currentNo = rowNumber
-                        return (
-                          <tr key={monthKey}>
-                            <td className="tm-pm-resource-table-index">
-                              <span className="tm-pm-resource-table-index-text">{currentNo}</span>
-                            </td>
-                            {monthIndex === 0 ? (
-                              <td
-                                className="tm-pm-resource-table-cell--center tm-pm-features-table-year"
-                                rowSpan={band.monthKeys.length}
-                              >
-                                {t('projectManagerPage.files.table.columns.monthYear', {
-                                  year: String(band.year),
-                                })}
-                              </td>
-                            ) : null}
-                            <td className="tm-pm-resource-table-cell--center tm-pm-features-table-month">
-                              {parsed
-                                ? t('projectManagerPage.files.table.columns.monthPart', {
-                                    month: String(parsed.monthIndex + 1),
-                                  })
-                                : monthKey}
-                            </td>
-                            {visibleRows.map((row) => {
-                              const rollup = rollups.get(row.id)
-                              return (
-                                <td
-                                  key={row.id}
-                                  className="tm-pm-resource-table-cell--center tm-pm-features-table-month"
-                                >
-                                  <span
-                                    className="tm-pm-features-table-rollup"
-                                    title={monthFromGanttHint}
-                                  >
-                                    {formatRollupMonthQuantity(rollup?.monthly[monthKey])}
-                                  </span>
-                                </td>
-                              )
-                            })}
-                            <td className="tm-pm-resource-table-col-spacer" aria-hidden />
-                          </tr>
-                        )
-                      }),
-                    )
-                  })()}
-                </tbody>
-              </table>
-              ) : (
-            <table className="tm-pm-resource-table">
-              <colgroup>
+                </table>
+                ) : (
+                <table className="tm-pm-resource-table">
+                  <colgroup>
                 <col className="tm-pm-resource-table-col-index" />
                 {columnVisibility.type ? <col className="tm-pm-resource-table-col-type" /> : null}
                 {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
@@ -1211,7 +1152,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                 ) : null}
                 <col className="tm-pm-resource-table-col-spacer" />
               </colgroup>
-              <thead onContextMenu={openColumnVisibilityMenu}>
+                  <thead onContextMenu={openColumnVisibilityMenu}>
                   <tr className="tm-pm-features-table-head-row tm-pm-features-table-head-row--year">
                     <th rowSpan={headerRowSpan} className="tm-pm-resource-table-col-index">
                       {selectionMode ? (
@@ -1327,7 +1268,127 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                     </tr>
                   ) : null}
                 </thead>
-              <tbody>
+                </table>
+                )}
+              </div>
+            </div>
+          </div>
+          <div
+            ref={tableScrollRef}
+            className="tm-pm-resource-table-scroll"
+            onScroll={() => syncHScrollMetrics()}
+            onWheel={(event) => {
+              // overflow-x is hidden (no native H bar), so route trackpad deltaX manually.
+              if (event.deltaX !== 0 && tableScrollRef.current) {
+                tableScrollRef.current.scrollLeft += event.deltaX
+              }
+            }}
+          >
+            <div
+              className="tm-pm-resource-table-scroll-inner"
+              onContextMenu={handleTableContextMenu}
+            >
+              {matrixLayout === 'vertical' ? (
+              <table
+                className="tm-pm-resource-table tm-pm-features-table--vertical"
+                onContextMenu={handleTableContextMenu}
+              >
+                <colgroup>
+                  <col className="tm-pm-resource-table-col-index" />
+                  <col className="tm-pm-features-table-col-date" />
+                  <col className="tm-pm-features-table-col-month" />
+                  {visibleRows.map((row) => (
+                    <col key={row.id} className="tm-pm-features-table-col-resource" />
+                  ))}
+                  <col className="tm-pm-resource-table-col-spacer" />
+                </colgroup>
+                <tbody>
+                  {(() => {
+                    if (yearBands.length === 0) {
+                      return (
+                        <tr>
+                          <td
+                            colSpan={3 + visibleRows.length + 1}
+                            className="tm-pm-resource-table-cell--center"
+                          >
+                            —
+                          </td>
+                        </tr>
+                      )
+                    }
+                    let rowNumber = 0
+                    return yearBands.flatMap((band) =>
+                      band.monthKeys.map((monthKey, monthIndex) => {
+                        rowNumber += 1
+                        const parsed = parseMonthKey(monthKey)
+                        const currentNo = rowNumber
+                        return (
+                          <tr key={monthKey}>
+                            <td className="tm-pm-resource-table-index">
+                              <span className="tm-pm-resource-table-index-text">{currentNo}</span>
+                            </td>
+                            {monthIndex === 0 ? (
+                              <td
+                                className="tm-pm-resource-table-cell--center tm-pm-features-table-year"
+                                rowSpan={band.monthKeys.length}
+                              >
+                                {t('projectManagerPage.files.table.columns.monthYear', {
+                                  year: String(band.year),
+                                })}
+                              </td>
+                            ) : null}
+                            <td className="tm-pm-resource-table-cell--center tm-pm-features-table-month">
+                              {parsed
+                                ? t('projectManagerPage.files.table.columns.monthPart', {
+                                    month: String(parsed.monthIndex + 1),
+                                  })
+                                : monthKey}
+                            </td>
+                            {visibleRows.map((row) => {
+                              const rollup = rollups.get(row.id)
+                              return (
+                                <td
+                                  key={row.id}
+                                  className="tm-pm-resource-table-cell--center tm-pm-features-table-month"
+                                >
+                                  <span
+                                    className="tm-pm-features-table-rollup"
+                                    title={monthFromGanttHint}
+                                  >
+                                    {formatRollupMonthQuantity(rollup?.monthly[monthKey])}
+                                  </span>
+                                </td>
+                              )
+                            })}
+                            <td className="tm-pm-resource-table-col-spacer" aria-hidden />
+                          </tr>
+                        )
+                      }),
+                    )
+                  })()}
+                </tbody>
+              </table>
+              ) : (
+              <table className="tm-pm-resource-table">
+                <colgroup>
+                <col className="tm-pm-resource-table-col-index" />
+                {columnVisibility.type ? <col className="tm-pm-resource-table-col-type" /> : null}
+                {columnVisibility.name ? <col className="tm-pm-resource-table-col-name" /> : null}
+                {columnVisibility.unit ? <col className="tm-pm-resource-table-col-unit" /> : null}
+                {columnVisibility.quantity ? (
+                  <col className="tm-pm-resource-table-col-price" />
+                ) : null}
+                {columnVisibility.start ? <col className="tm-pm-features-table-col-date" /> : null}
+                {columnVisibility.finish ? <col className="tm-pm-features-table-col-date" /> : null}
+                {visibleMonthKeys.map((monthKey) => (
+                  <col key={monthKey} className="tm-pm-features-table-col-month" />
+                ))}
+                {columnVisibility.remark ? (
+                  <col className="tm-pm-features-table-col-remark" />
+                ) : null}
+                <col className="tm-pm-resource-table-col-spacer" />
+              </colgroup>
+                <tbody>
                 {visibleRows.map((row, index) => {
                   const depth = featureRowDepth(row, byId)
                   const isSelected = selectedId === row.id
@@ -1477,7 +1538,7 @@ const ProjectManagementFilesPanel: FC<Props> = ({
                   )
                 })}
               </tbody>
-            </table>
+              </table>
               )}
             </div>
           </div>

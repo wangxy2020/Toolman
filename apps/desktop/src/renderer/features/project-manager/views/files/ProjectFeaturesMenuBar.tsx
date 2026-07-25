@@ -55,6 +55,31 @@ export type FeaturesMenuAction =
 
 export type FeaturesScheduleView = 'list' | 'gantt' | 'progressCheck' | 'resource' | 'cost'
 
+/** 资源管理-实务「视图」下拉：人工 / 材料 / 机械定额。 */
+export type ResourcePracticeQuotaView = 'labor' | 'material' | 'equipment'
+
+export const RESOURCE_PRACTICE_QUOTA_VIEWS = [
+  'labor',
+  'material',
+  'equipment',
+] as const satisfies readonly ResourcePracticeQuotaView[]
+
+/** 成本管理-实务「视图」下拉。 */
+export type CostPracticeQuotaView =
+  | 'constructionQuota'
+  | 'budgetQuota'
+  | 'estimateQuota'
+  | 'estimateIndicator'
+  | 'investmentIndicator'
+
+export const COST_PRACTICE_QUOTA_VIEWS = [
+  'constructionQuota',
+  'budgetQuota',
+  'estimateQuota',
+  'estimateIndicator',
+  'investmentIndicator',
+] as const satisfies readonly CostPracticeQuotaView[]
+
 export type FeaturesVersionSwitchEntry = {
   version: number
   name: string
@@ -117,11 +142,24 @@ interface Props {
   canEdit?: boolean
   /** Highlights the matching type /「全部」button. */
   selectedType?: FeaturesViewFilter
-  scheduleView: FeaturesScheduleView
-  onScheduleViewChange: (view: FeaturesScheduleView) => void
+  scheduleView?: FeaturesScheduleView
+  onScheduleViewChange?: (view: FeaturesScheduleView) => void
+  /**
+   * `schedule` = 计划实务；`resourceQuota` = 资源实务；`costQuota` = 成本实务。
+   */
+  viewMenuMode?: 'schedule' | 'resourceQuota' | 'costQuota'
+  quotaView?: ResourcePracticeQuotaView
+  onQuotaViewChange?: (view: ResourcePracticeQuotaView) => void
+  costQuotaView?: CostPracticeQuotaView
+  onCostQuotaViewChange?: (view: CostPracticeQuotaView) => void
   versionSwitchEntries?: FeaturesVersionSwitchEntry[]
   onRestoreVersion?: (version: number) => void
   onAction: (action: FeaturesMenuAction) => void
+  /**
+   * When false, hide menus after「基线」(资源统计 / 采购 / 计量 / 节点 / 资金).
+   * Used by 资源管理-实务 / 成本管理-实务.
+   */
+  showTrailingMenus?: boolean
 }
 
 type ScrollMetrics = {
@@ -166,11 +204,17 @@ export function ProjectFeaturesMenuBar({
   canRedo = false,
   canEdit = true,
   selectedType,
-  scheduleView,
+  scheduleView = 'gantt',
   onScheduleViewChange,
+  viewMenuMode = 'schedule',
+  quotaView = 'labor',
+  onQuotaViewChange,
+  costQuotaView = 'constructionQuota',
+  onCostQuotaViewChange,
   versionSwitchEntries = [],
   onRestoreVersion,
   onAction,
+  showTrailingMenus = true,
 }: Props) {
   const { t } = useI18n()
   const [viewOpen, setViewOpen] = useState(false)
@@ -239,6 +283,24 @@ export function ProjectFeaturesMenuBar({
     resource: t('projectManagerPage.schedule.views.resource'),
     cost: t('projectManagerPage.schedule.views.cost'),
   }
+  const quotaLabelByMode: Record<ResourcePracticeQuotaView, string> = {
+    labor: t('projectManagerPage.resourcePractice.views.labor'),
+    material: t('projectManagerPage.resourcePractice.views.material'),
+    equipment: t('projectManagerPage.resourcePractice.views.equipment'),
+  }
+  const costQuotaLabelByMode: Record<CostPracticeQuotaView, string> = {
+    constructionQuota: t('projectManagerPage.costPractice.views.constructionQuota'),
+    budgetQuota: t('projectManagerPage.costPractice.views.budgetQuota'),
+    estimateQuota: t('projectManagerPage.costPractice.views.estimateQuota'),
+    estimateIndicator: t('projectManagerPage.costPractice.views.estimateIndicator'),
+    investmentIndicator: t('projectManagerPage.costPractice.views.investmentIndicator'),
+  }
+  const viewCurrentLabel =
+    viewMenuMode === 'resourceQuota'
+      ? quotaLabelByMode[quotaView]
+      : viewMenuMode === 'costQuota'
+        ? costQuotaLabelByMode[costQuotaView]
+      : viewLabelByMode[scheduleView]
   const baselineMenuLabel = t('projectManagerPage.files.menu.baseline')
   const resourceStatsMenuLabel = t('projectManagerPage.files.menu.resourceStatistics')
   const resourceStatMode = isFeaturesResourceStatFilter(selectedType)
@@ -458,7 +520,7 @@ export function ProjectFeaturesMenuBar({
 
   // Edit actions through moveDown; trailing type filters after resource-stats dropdown.
   const leadingItems = items.slice(0, 13)
-  const trailingTypeItems = items.slice(13)
+  const trailingTypeItems = showTrailingMenus ? items.slice(13) : []
 
   return (
     <div
@@ -498,7 +560,7 @@ export function ProjectFeaturesMenuBar({
                 {...tipProps(viewLabel)}
               >
                 <span>{viewLabel}</span>
-                <span className="tm-pm-gantt-view-current">{viewLabelByMode[scheduleView]}</span>
+                <span className="tm-pm-gantt-view-current">{viewCurrentLabel}</span>
                 <IconChevronDown size={14} />
               </button>
               {viewOpen && viewPos
@@ -508,26 +570,72 @@ export function ProjectFeaturesMenuBar({
                       role="menu"
                       style={{ top: viewPos.top, left: viewPos.left }}
                     >
-                      {(['list', 'gantt', 'progressCheck', 'resource', 'cost'] as const).map((view) => (
-                        <button
-                          key={view}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={scheduleView === view}
-                          className={[
-                            'tm-pm-gantt-view-option',
-                            scheduleView === view ? 'tm-pm-gantt-view-option--active' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          onClick={() => {
-                            onScheduleViewChange(view)
-                            setViewOpen(false)
-                          }}
-                        >
-                          {viewLabelByMode[view]}
-                        </button>
-                      ))}
+                      {viewMenuMode === 'resourceQuota'
+                        ? RESOURCE_PRACTICE_QUOTA_VIEWS.map((view) => (
+                            <button
+                              key={view}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={quotaView === view}
+                              className={[
+                                'tm-pm-gantt-view-option',
+                                quotaView === view ? 'tm-pm-gantt-view-option--active' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              onClick={() => {
+                                onQuotaViewChange?.(view)
+                                setViewOpen(false)
+                              }}
+                            >
+                              {quotaLabelByMode[view]}
+                            </button>
+                          ))
+                        : viewMenuMode === 'costQuota'
+                          ? COST_PRACTICE_QUOTA_VIEWS.map((view) => (
+                              <button
+                                key={view}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={costQuotaView === view}
+                                className={[
+                                  'tm-pm-gantt-view-option',
+                                  costQuotaView === view
+                                    ? 'tm-pm-gantt-view-option--active'
+                                    : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                                onClick={() => {
+                                  onCostQuotaViewChange?.(view)
+                                  setViewOpen(false)
+                                }}
+                              >
+                                {costQuotaLabelByMode[view]}
+                              </button>
+                            ))
+                        : (['list', 'gantt', 'progressCheck', 'resource', 'cost'] as const).map(
+                            (view) => (
+                              <button
+                                key={view}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={scheduleView === view}
+                                className={[
+                                  'tm-pm-gantt-view-option',
+                                  scheduleView === view ? 'tm-pm-gantt-view-option--active' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                                onClick={() => {
+                                  onScheduleViewChange?.(view)
+                                  setViewOpen(false)
+                                }}
+                              >
+                                {viewLabelByMode[view]}
+                              </button>
+                            ),
+                          )}
                     </div>,
                     document.body,
                   )
@@ -616,6 +724,7 @@ export function ProjectFeaturesMenuBar({
               <span className="tm-pm-features-menubar-divider" />
             </span>
 
+            {showTrailingMenus ? (
             <span
               className="tm-pm-features-menubar-item tm-pm-gantt-view-menu tm-pm-features-resource-stats-menu"
               ref={resourceStatsRef}
@@ -701,6 +810,7 @@ export function ProjectFeaturesMenuBar({
                 : null}
               <span className="tm-pm-features-menubar-divider" />
             </span>
+            ) : null}
 
             {trailingTypeItems.map(renderToolbarItem)}
           </div>

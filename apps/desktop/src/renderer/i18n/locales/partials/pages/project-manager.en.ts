@@ -762,10 +762,6 @@ export const projectManagerPageEn = {
     featuresStatisticsHint: 'Read-only totals from the current practice catalog.',
     advancedHint:
       'Region, contract, and workspace path extensions. Toolbar Save does not bump version; Save as new version does. Catalog history keeps up to 5 entries; schedule history up to 10. User “baseline” ≠ catalog/schedule version; deleting catalog history does not remove user baselines; deleting a schedule save record removes that version’s plan snapshot.',
-    advancedHintResource:
-      'Resource versions and save history. Toolbar Save does not bump version; Save as new version does. Catalog history keeps up to 5 entries; schedule history up to 10. User “baseline” ≠ catalog/schedule version; deleting catalog history does not remove user baselines; deleting a schedule save record removes that version’s plan snapshot.',
-    advancedHintCost:
-      'Price-list versions and save history. Toolbar Save does not bump version; Save as new version does. Catalog history keeps up to 5 entries; schedule history up to 10. User “baseline” ≠ catalog/schedule version; deleting catalog history does not remove user baselines; deleting a schedule save record removes that version’s plan snapshot.',
     advancedHintFeatures:
       'Practice-catalog versions and save history. Toolbar Save does not bump version; Save as new version does. Catalog history keeps up to 5 entries; schedule history up to 10. User “baseline” ≠ catalog/schedule version; deleting catalog history does not remove user baselines; deleting a schedule save record removes that version’s plan snapshot.',
     advancedHintScheduleSave:
@@ -809,6 +805,11 @@ export const projectManagerPageEn = {
     statMaxUnitPrice: 'Max unit price',
     statCatalogValue: 'Sum of unit prices (ref.)',
     statCatalogTotalPrice: 'Sum of totals (ref.)',
+    fieldCurrency: 'Currency',
+    statGroupResource: 'Resources',
+    statGroupCost: 'Costs',
+    statGroupEstimate: 'Estimates & budgets',
+    statSectionalWorkNamed: 'Divisional work {{name}}',
     fieldCode: 'Code',
     fieldName: 'Name',
     fieldStatus: 'Status',
@@ -829,11 +830,11 @@ export const projectManagerPageEn = {
     planCalendarCalendarDays: 'Calendar days',
     planCalendarWorkingDays: 'Working days',
     fieldPlanPhase: 'Plan phase',
-    fieldPeriod: 'Period',
+    fieldPeriod: 'Plan duration',
     fieldRegion: 'Region',
     fieldContractValue: 'Contract value',
     fieldSettledAmount: 'Settled amount',
-    fieldProgressPercent: 'Overall progress (%)',
+    fieldProgressPercent: 'Reference project',
     fieldWorkspaceRoot: 'Workspace folder',
     fieldUpdatedAt: 'Last updated',
     fieldScheduleVersion: 'Schedule version',
@@ -990,6 +991,31 @@ export const projectManagerPageEn = {
       deleteSelectedTitle: 'Delete selected resources',
       deleteSelectedConfirm: 'Delete {{count}} selected resource(s)?',
       checkboxColumn: 'Select',
+    },
+  },
+  resourcePractice: {
+    namePlaceholder: 'Quota item',
+    specPlaceholder: 'Code',
+    columns: {
+      name: 'Quota item',
+      spec: 'Code',
+      unit: 'Unit',
+      pricingUnit: 'Time quota',
+      unitPrice: 'Output quota',
+    },
+    views: {
+      labor: 'Labor quota',
+      material: 'Material quota',
+      equipment: 'Machinery quota',
+    },
+  },
+  costPractice: {
+    views: {
+      constructionQuota: 'Construction quota',
+      budgetQuota: 'Budget quota',
+      estimateQuota: 'Estimate quota',
+      estimateIndicator: 'Estimate indicator',
+      investmentIndicator: 'Investment indicator',
     },
   },
   costTable: {
