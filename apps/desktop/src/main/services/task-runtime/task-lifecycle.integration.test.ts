@@ -96,6 +96,7 @@ vi.mock('../mcp-server-config.service', () => ({
 
 vi.mock('../mcp-client-manager.service', () => ({
   getMcpClientState: vi.fn(() => null),
+  ensureMcpServersConnected: vi.fn(async () => undefined),
 }))
 
 vi.mock('../workspace.service', () => ({
