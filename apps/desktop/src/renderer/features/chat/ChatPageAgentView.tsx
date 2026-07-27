@@ -7,7 +7,7 @@ import { countActiveAgentTasks } from './tasks/task-panel-utils'
 import { getMessageText } from './message-utils'
 import type { ChatPageState } from './useChatPage'
 
-export type ChatPageAgentViewProps = Pick<
+type ChatPageAgentViewProps = Pick<
   ChatPageState,
   | 'messageSettings'
   | 'messagePanelStyle'

@@ -133,7 +133,6 @@ export function buildProjectManagementRuntimeHint(
     security_management: '安全质量检查、隐患整改与验收闭环',
     quality_management: '测量试验记录、检测数据与质量验收',
     archive_management: '项目档案归档、检索与交付文档管理',
-    technical_management: '技术方案、设计变更与技术评审闭环',
     contract_risk_management: '合同履约、索赔与合约风险管控',
     operations_management: '运营运维、SLA 与日常运营事项推进',
   }

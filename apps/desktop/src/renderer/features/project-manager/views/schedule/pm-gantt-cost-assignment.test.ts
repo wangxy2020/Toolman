@@ -5,6 +5,10 @@ import {
   formatCostAssignmentInput,
   formatCostAssignmentsInput,
   buildCostAllocatedAmountById,
+  catalogCostAmountLimit,
+  computeCostAssignmentMoney,
+  defaultCostAssignmentAmount,
+  DEFAULT_COST_ASSIGNMENT_PERCENT,
   groupCostCatalogBySectionalWork,
   hydrateTaskCostAssignmentsAgainstCatalog,
   isCostQuantityFullyAllocated,
@@ -13,6 +17,7 @@ import {
   replaceTaskCostAssignmentsMetadata,
   readTaskCostAssignments,
   resolveCostAssignmentAgainstCatalog,
+  resolveCostAssignmentPercent,
   TASK_COST_ASSIGNMENTS_KEY,
 } from './pm-gantt-cost-assignment'
 
@@ -31,6 +36,9 @@ const catalog: PmCostRow[] = [
     sectionalWork: '',
     sectionCode: '',
     sectionNote: '',
+    sectionName: '',
+    sectionFeatureDescription: '',
+    sectionTotalFormula: '',
     sortOrder: 0,
     parentId: null,
   },
@@ -48,6 +56,9 @@ const catalog: PmCostRow[] = [
     sectionalWork: '',
     sectionCode: '',
     sectionNote: '',
+    sectionName: '',
+    sectionFeatureDescription: '',
+    sectionTotalFormula: '',
     sortOrder: 1,
     parentId: null,
   },
@@ -57,7 +68,14 @@ describe('pm-gantt-cost-assignment', () => {
   it('formats and parses cost input text with catalog binding', () => {
     expect(
       formatCostAssignmentInput(
-        { costId: 'c-material', type: 'material', name: '水泥', amount: 1200, note: '' },
+        {
+          costId: 'c-material',
+          type: 'material',
+          name: '水泥',
+          percent: 1,
+          amount: 1200,
+          note: '',
+        },
         (type) => (type === 'material' ? '材料' : type),
       ),
     ).toBe('材料，水泥，1200')
@@ -65,8 +83,22 @@ describe('pm-gantt-cost-assignment', () => {
     expect(
       formatCostAssignmentsInput(
         [
-          { costId: 'c-material', type: 'material', name: '水泥', amount: 1200, note: '' },
-          { costId: 'c-equip', type: 'equipment', name: '塔吊', amount: 800, note: '' },
+          {
+            costId: 'c-material',
+            type: 'material',
+            name: '水泥',
+            percent: 1,
+            amount: 1200,
+            note: '',
+          },
+          {
+            costId: 'c-equip',
+            type: 'equipment',
+            name: '塔吊',
+            percent: 1,
+            amount: 800,
+            note: '',
+          },
         ],
         (type) =>
           type === 'material' ? '材料' : type === 'equipment' ? '机械' : type,
@@ -81,6 +113,7 @@ describe('pm-gantt-cost-assignment', () => {
       costId: 'c-material',
       type: 'material',
       name: '水泥',
+      percent: null,
       amount: 1200,
       note: '',
     })
@@ -92,8 +125,22 @@ describe('pm-gantt-cost-assignment', () => {
         return null
       }),
     ).toEqual([
-      { costId: 'c-material', type: 'material', name: '水泥', amount: 1200, note: '' },
-      { costId: 'c-equip', type: 'equipment', name: '塔吊', amount: 800, note: '' },
+      {
+        costId: 'c-material',
+        type: 'material',
+        name: '水泥',
+        percent: null,
+        amount: 1200,
+        note: '',
+      },
+      {
+        costId: 'c-equip',
+        type: 'equipment',
+        name: '塔吊',
+        percent: null,
+        amount: 800,
+        note: '',
+      },
     ])
   })
 
@@ -102,6 +149,7 @@ describe('pm-gantt-cost-assignment', () => {
       costId: null,
       type: null,
       name: '自定义费',
+      percent: null,
       amount: 99,
       note: '',
     })
@@ -109,7 +157,7 @@ describe('pm-gantt-cost-assignment', () => {
 
   it('hydrates legacy name-only assignments to catalog ids', () => {
     const hydrated = hydrateTaskCostAssignmentsAgainstCatalog(
-      [{ costId: null, type: null, name: '水泥', amount: 10, note: '' }],
+      [{ costId: null, type: null, name: '水泥', percent: null, amount: 10, note: '' }],
       catalog,
     )
     expect(hydrated.changed).toBe(true)
@@ -117,6 +165,7 @@ describe('pm-gantt-cost-assignment', () => {
       costId: 'c-material',
       type: 'material',
       name: '水泥',
+      percent: null,
       amount: 10,
       note: '',
     })
@@ -125,13 +174,21 @@ describe('pm-gantt-cost-assignment', () => {
   it('resolves display fields against catalog by id', () => {
     expect(
       resolveCostAssignmentAgainstCatalog(
-        { costId: 'c-equip', type: 'other', name: '旧名', amount: 1, note: '备注' },
+        {
+          costId: 'c-equip',
+          type: 'other',
+          name: '旧名',
+          percent: 0.5,
+          amount: 1,
+          note: '备注',
+        },
         catalog,
       ),
     ).toEqual({
       costId: 'c-equip',
       type: 'equipment',
       name: '塔吊',
+      percent: 0.5,
       amount: 1,
       note: '备注',
     })
@@ -139,10 +196,24 @@ describe('pm-gantt-cost-assignment', () => {
 
   it('replaces cost assignment metadata including costId', () => {
     const meta = replaceTaskCostAssignmentsMetadata({}, [
-      { costId: 'c-material', type: 'material', name: '水泥', amount: 100, note: '' },
+      {
+        costId: 'c-material',
+        type: 'material',
+        name: '水泥',
+        percent: 1,
+        amount: 100,
+        note: '',
+      },
     ])
     expect(meta[TASK_COST_ASSIGNMENTS_KEY]).toEqual([
-      { costId: 'c-material', type: 'material', name: '水泥', amount: 100, note: '' },
+      {
+        costId: 'c-material',
+        type: 'material',
+        name: '水泥',
+        percent: 1,
+        amount: 100,
+        note: '',
+      },
     ])
     expect(readTaskCostAssignments(meta)).toHaveLength(1)
 
@@ -150,12 +221,19 @@ describe('pm-gantt-cost-assignment', () => {
     expect(cleared[TASK_COST_ASSIGNMENTS_KEY]).toBeNull()
   })
 
-  it('reads legacy rows without costId', () => {
+  it('reads legacy rows without costId / percent', () => {
     const meta = {
       [TASK_COST_ASSIGNMENTS_KEY]: [{ name: '材料费', amount: 1200 }],
     }
     expect(readTaskCostAssignments(meta)).toEqual([
-      { costId: null, type: null, name: '材料费', amount: 1200, note: '' },
+      {
+        costId: null,
+        type: null,
+        name: '材料费',
+        percent: null,
+        amount: 1200,
+        note: '',
+      },
     ])
   })
 
@@ -175,31 +253,76 @@ describe('pm-gantt-cost-assignment', () => {
     expect(groupCostCatalogBySectionalWork(rows, 'equipment')).toEqual([])
   })
 
-  it('marks catalog rows fully allocated when task amounts cover quantity', () => {
+  it('marks catalog rows fully allocated when task amounts cover 合价', () => {
     const items = [
       {
         metadata: {
           [TASK_COST_ASSIGNMENTS_KEY]: [
-            { costId: 'c-material', type: 'material', name: '水泥', amount: 0.6 },
+            { costId: 'c-material', type: 'material', name: '水泥', amount: 300 },
           ],
         },
       },
       {
         metadata: {
           [TASK_COST_ASSIGNMENTS_KEY]: [
-            { costId: 'c-material', type: 'material', name: '水泥', amount: 0.4 },
-            { costId: 'c-equip', type: 'equipment', name: '塔吊', amount: 0.5 },
+            { costId: 'c-material', type: 'material', name: '水泥', amount: 200 },
+            { costId: 'c-equip', type: 'equipment', name: '塔吊', amount: 400 },
           ],
         },
       },
     ]
     const allocated = buildCostAllocatedAmountById(items, catalog)
-    expect(allocated.get('c-material')).toBeCloseTo(1)
-    expect(allocated.get('c-equip')).toBeCloseTo(0.5)
-    expect(isCostQuantityFullyAllocated(catalog[0]!, allocated)).toBe(true)
-    expect(isCostQuantityFullyAllocated(catalog[1]!, allocated)).toBe(false)
+    expect(allocated.get('c-material')).toBeCloseTo(500)
+    expect(allocated.get('c-equip')).toBeCloseTo(400)
+    expect(isCostQuantityFullyAllocated(catalog[0]!, allocated, catalog)).toBe(true)
+    expect(isCostQuantityFullyAllocated(catalog[1]!, allocated, catalog)).toBe(false)
     expect(
-      isCostQuantityFullyAllocated({ ...catalog[0]!, quantity: null }, allocated),
+      isCostQuantityFullyAllocated(
+        { ...catalog[0]!, id: 'unknown', quantity: null, unitPrice: null },
+        allocated,
+        catalog,
+      ),
     ).toBe(false)
+  })
+
+  it('defaultCostAssignmentAmount prefers quantity × unitPrice', () => {
+    expect(defaultCostAssignmentAmount(catalog[0]!)).toBe(500)
+    expect(
+      defaultCostAssignmentAmount({ quantity: null, unitPrice: 80 }),
+    ).toBe(80)
+    expect(
+      defaultCostAssignmentAmount({ quantity: 3, unitPrice: null }),
+    ).toBe(3)
+    expect(
+      defaultCostAssignmentAmount({ quantity: null, unitPrice: null }),
+    ).toBeNull()
+  })
+
+  it('defaultCostAssignmentAmount returns remaining 合价 after allocations', () => {
+    const allocated = new Map<string, number>([['c-material', 200]])
+    expect(
+      defaultCostAssignmentAmount(catalog[0]!, {
+        catalog,
+        allocatedById: allocated,
+      }),
+    ).toBe(300)
+    expect(
+      defaultCostAssignmentAmount(catalog[0]!, {
+        catalog,
+        allocatedById: allocated,
+        excludeAllocated: 200,
+      }),
+    ).toBe(500)
+  })
+
+  it('computes amount as catalog 合价 × percent', () => {
+    expect(DEFAULT_COST_ASSIGNMENT_PERCENT).toBe(1)
+    expect(catalogCostAmountLimit(catalog[0]!, catalog)).toBe(500)
+    expect(computeCostAssignmentMoney(500, 1)).toBe(500)
+    expect(computeCostAssignmentMoney(500, 0.5)).toBe(250)
+    expect(computeCostAssignmentMoney(null, 1)).toBeNull()
+    expect(resolveCostAssignmentPercent({ percent: null, amount: null })).toBe(1)
+    expect(resolveCostAssignmentPercent({ percent: 0.25, amount: 100 })).toBe(0.25)
+    expect(resolveCostAssignmentPercent({ percent: null, amount: 250 }, 500)).toBe(0.5)
   })
 })

@@ -14,21 +14,22 @@ import {
   isCommunityFederationEnabled,
 } from './community-federation.config'
 import {
-  getCommunityFederationSigningStats,
   signFederatedCatalogDeleteWireMessage,
   signFederatedCatalogWireMessage,
   verifyFederatedCatalogDeleteWireMessage,
   verifyFederatedCatalogWireMessage,
 } from './community-federation-signing.service'
 import {
-  getFederatedCatalogStats,
   removeFederatedCatalogEntry,
   upsertFederatedCatalogEntry,
 } from './community-federated-catalog.service'
 
 let started = false
-let lastError: string | null = null
 let catalogMessagesReceived = 0
+
+export function getCommunityFederationProviderStats() {
+  return { catalogMessagesReceived }
+}
 
 function subscribeFederationTopics(): void {
   if (!Libp2pBridge.isAvailable()) return
@@ -36,7 +37,6 @@ function subscribeFederationTopics(): void {
     Libp2pBridge.pubsubSubscribe(FEDERATION_CATALOG_TOPIC)
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    lastError = message
     recordDiagnosticEvent('community-federation', 'warn', `subscribe failed: ${message}`)
   }
 }
@@ -62,7 +62,6 @@ export function publishFederatedCatalogWireMessage(
     recordDiagnosticEvent('community-federation', 'info', `published catalog ${entry.id}`)
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    lastError = message
     recordDiagnosticEvent('community-federation', 'warn', `publish failed: ${message}`)
   }
 }
@@ -77,7 +76,6 @@ export function publishFederatedCatalogDeleteWireMessage(resourceId: string): vo
     recordDiagnosticEvent('community-federation', 'info', `published catalog delete ${resourceId}`)
   } catch (error) {
     const message = toErrorMessage(error, String(error))
-    lastError = message
     recordDiagnosticEvent('community-federation', 'warn', `publish delete failed: ${message}`)
   }
 }
@@ -131,7 +129,6 @@ export async function resubscribeCommunityFederationPubsub(): Promise<void> {
 export async function startCommunityFederationProvider(): Promise<void> {
   if (started || !isCommunityFederationEnabled()) return
   if (!Libp2pBridge.isAvailable()) {
-    lastError = 'libp2p native module unavailable'
     return
   }
 
@@ -151,17 +148,4 @@ export function stopCommunityFederationProvider(): void {
   }
 
   started = false
-}
-
-export function getCommunityFederationProviderStatus() {
-  const catalogStats = getFederatedCatalogStats()
-  const signingStats = getCommunityFederationSigningStats()
-  return {
-    started,
-    federationEnabled: isCommunityFederationEnabled(),
-    catalogEntries: catalogStats.entryCount,
-    catalogMessagesReceived,
-    verifyFailures: signingStats.verifyFailures,
-    lastError,
-  }
 }

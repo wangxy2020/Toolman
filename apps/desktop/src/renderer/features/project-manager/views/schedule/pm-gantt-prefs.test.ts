@@ -7,6 +7,7 @@ import {
   dateHeaderHeight,
   insertColumnInCanonicalOrder,
   normalizeGanttUiPrefs,
+  resolveAssignViewSlotCount,
   resolveColumnLabel,
   withGanttDefaultPredecessorsColumn,
 } from './pm-gantt-prefs'
@@ -127,7 +128,7 @@ describe('pm-gantt-prefs', () => {
       'finish',
       'predecessors',
     ])
-    expect(prefs.columnDefaultsVersion).toBe(2)
+    expect(prefs.columnDefaultsVersion).toBe(3)
   })
 
   it('re-adds predecessors once for v1 prefs that still omit them', () => {
@@ -136,7 +137,7 @@ describe('pm-gantt-prefs', () => {
       columnDefaultsVersion: 1,
     })
     expect(prefs.columnOrder).toContain('predecessors')
-    expect(prefs.columnDefaultsVersion).toBe(2)
+    expect(prefs.columnDefaultsVersion).toBe(3)
   })
 
   it('does not re-add predecessors after the user hid them once migrated to v2', () => {
@@ -145,7 +146,7 @@ describe('pm-gantt-prefs', () => {
       columnDefaultsVersion: 2,
     })
     expect(prefs.columnOrder).not.toContain('predecessors')
-    expect(prefs.columnDefaultsVersion).toBe(2)
+    expect(prefs.columnDefaultsVersion).toBe(3)
   })
 
   it('withGanttDefaultPredecessorsColumn inserts predecessors in canonical order', () => {
@@ -192,6 +193,40 @@ describe('pm-gantt-prefs', () => {
       'material',
       'equipment',
     ])
+  })
+
+  it('defaults cost-allocation columns to four slots and migrates legacy single slot', () => {
+    expect(normalizeGanttUiPrefs({}).costView.slotCount).toBe(4)
+    const migrated = normalizeGanttUiPrefs({
+      columnDefaultsVersion: 2,
+      costView: {
+        slotCount: 1,
+        showDuration: true,
+        showStart: true,
+        showFinish: true,
+        inputMode: false,
+      },
+    })
+    expect(migrated.costView.slotCount).toBe(4)
+    expect(migrated.columnDefaultsVersion).toBe(3)
+    const kept = normalizeGanttUiPrefs({
+      columnDefaultsVersion: 3,
+      costView: {
+        slotCount: 2,
+        showDuration: true,
+        showStart: true,
+        showFinish: true,
+        inputMode: false,
+      },
+    })
+    expect(kept.costView.slotCount).toBe(2)
+  })
+
+  it('resolveAssignViewSlotCount uses 4 for empty projects and grows with assignments', () => {
+    expect(resolveAssignViewSlotCount(0)).toBe(4)
+    expect(resolveAssignViewSlotCount(1)).toBe(4)
+    expect(resolveAssignViewSlotCount(4)).toBe(4)
+    expect(resolveAssignViewSlotCount(7)).toBe(7)
   })
 
   it('upgrades legacy default labor/material/equipment columns to include 辅材', () => {

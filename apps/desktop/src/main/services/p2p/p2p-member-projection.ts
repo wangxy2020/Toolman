@@ -92,9 +92,11 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
         joinedAt: new Date(event.timestamp),
       })
     }
-    void import('./p2p-member-mesh.service').then((module) => {
-      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
-    })
+    void import('./p2p-member-mesh.service')
+      .then((module) => {
+        void module.reconcileWorkspaceMemberMesh(event.workspaceId)
+      })
+      .catch(() => undefined)
     return
   }
 
@@ -119,9 +121,11 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
         })
       }
     }
-    void import('./p2p-member-mesh.service').then((module) => {
-      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
-    })
+    void import('./p2p-member-mesh.service')
+      .then((module) => {
+        void module.reconcileWorkspaceMemberMesh(event.workspaceId)
+      })
+      .catch(() => undefined)
     return
   }
 
@@ -140,9 +144,11 @@ export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
     triggerJoinerResourceSyncAfterActivation(event.workspaceId)
   }
 
-  void import('./p2p-member-mesh.service').then((module) => {
-    void module.reconcileWorkspaceMemberMesh(event.workspaceId)
-  })
+  void import('./p2p-member-mesh.service')
+    .then((module) => {
+      void module.reconcileWorkspaceMemberMesh(event.workspaceId)
+    })
+    .catch(() => undefined)
 }
 
 export function projectMemberLeftEvent(event: WorkspaceEvent): void {

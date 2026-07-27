@@ -15,4 +15,3 @@ export function useGroupNotesPanel(props: GroupNotesPanelProps) {
   }
 }
 
-export type UseGroupNotesPanelResult = ReturnType<typeof useGroupNotesPanel>

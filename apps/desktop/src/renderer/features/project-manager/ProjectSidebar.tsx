@@ -34,7 +34,9 @@ export function ProjectSidebar({ activeTab, onSelectTab }: Props) {
 
   useEffect(() => {
     if (activeTab === PROJECT_SIDEBAR_CUSTOM_TAB) return
-    if (isConfigurableSidebarMenuKey(activeTab) && !visibleMenuKeys.includes(activeTab)) {
+    const isInvalid =
+      !isConfigurableSidebarMenuKey(activeTab) || !visibleMenuKeys.includes(activeTab)
+    if (isInvalid) {
       const fallback =
         visibleMenuKeys.find((key) => key === DEFAULT_TAB) ??
         visibleMenuKeys[0] ??

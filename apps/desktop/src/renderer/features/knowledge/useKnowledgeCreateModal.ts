@@ -164,4 +164,3 @@ export function useKnowledgeCreateModal({
   }
 }
 
-export type KnowledgeCreateModalState = ReturnType<typeof useKnowledgeCreateModal>

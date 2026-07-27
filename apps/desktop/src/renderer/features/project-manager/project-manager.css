@@ -770,6 +770,11 @@
   min-width: 100px;
 }
 
+.tm-pm-features-table-col-cycle {
+  width: 88px;
+  min-width: 72px;
+}
+
 .tm-pm-features-table-col-month {
   width: 60px;
   min-width: 60px;
@@ -907,6 +912,32 @@
   width: 100%;
   text-align: center;
   color: var(--tm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-pm-features-table-funds-total td {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 16%, var(--tm-bg, #fff));
+  font-weight: 600;
+}
+
+.tm-pm-features-table-funds-section td {
+  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 10%, var(--tm-bg, #fff));
+  font-weight: 600;
+}
+
+.tm-pm-features-table-funds-section-label,
+.tm-pm-features-table-funds-total-label {
+  display: block;
+  padding: 4px 6px;
+  color: var(--tm-text);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.tm-pm-features-table-funds-section-total,
+.tm-pm-features-table-funds-total-value {
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1593,15 +1624,6 @@ html.theme-dark .tm-pm-resource-menubar {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 
-/* Legacy notes-toolbar chrome (unused by current menubars; keep for any residual markup). */
-.tm-pm-gantt-toolbar.tm-notes-toolbar {
-  width: 100%;
-}
-
-.tm-pm-gantt-toolbar-group {
-  flex-wrap: nowrap;
-}
-
 .tm-pm-gantt-statusbar {
   display: flex;
   align-items: center;
@@ -1660,49 +1682,14 @@ html.theme-dark .tm-pm-resource-menubar {
   opacity: 0.55;
 }
 
-.tm-pm-gantt-toolbar-group .tm-notes-toolbar-item {
-  flex-shrink: 0;
-}
-
-.tm-pm-gantt-toolbar-baseline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 8px;
-  padding-left: 8px;
-  font-size: 12px;
-  color: var(--tm-text-secondary);
-  white-space: nowrap;
-}
-
-.tm-pm-gantt-toolbar-select {
-  height: 28px;
-  max-width: 160px;
-  padding: 0 8px;
-  border: 0.5px solid var(--tm-border);
-  border-radius: 6px;
-  background: var(--tm-bg);
-  color: var(--tm-text);
-  font-size: 12px;
-}
-
 .tm-pm-gantt-view-menu {
   position: relative;
 }
 
-.tm-pm-gantt-view-menu .tm-notes-toolbar-btn,
 .tm-pm-gantt-view-menu .tm-pm-gantt-menubar-btn,
 .tm-pm-gantt-view-menu .tm-pm-features-menubar-btn,
 .tm-pm-gantt-view-menu .tm-pm-resource-menubar-btn {
   gap: 4px;
-}
-
-.tm-pm-resource-view-btn.tm-notes-toolbar-btn {
-  justify-content: flex-start;
-}
-
-.tm-pm-resource-view-btn-label {
-  flex-shrink: 0;
 }
 
 .tm-pm-gantt-view-current {
@@ -2361,12 +2348,12 @@ button.tm-pm-gantt-resource-cell-trigger.tm-pm-gantt-resource-assign-popup-selec
   -moz-appearance: textfield;
 }
 
-/* Cost allocation: quantity field must fit 8 digits. */
+/* Cost allocation: 金额 can be a full 合价 (wider than resource qty). */
 .tm-pm-gantt-col--costQty .tm-pm-gantt-cell-input.tm-pm-gantt-resource-cell-qty {
-  flex: 0 0 8ch;
-  width: 8ch;
-  min-width: 8ch;
-  max-width: 8ch;
+  flex: 0 0 10ch;
+  width: 10ch;
+  min-width: 9ch;
+  max-width: 12ch;
 }
 
 .tm-pm-gantt-cell-input.tm-pm-gantt-resource-cell-qty::-webkit-outer-spin-button,
@@ -2706,6 +2693,34 @@ button.tm-pm-gantt-resource-cell-trigger.tm-pm-gantt-resource-assign-popup-selec
   font-variant-numeric: tabular-nums;
   appearance: textfield;
   -moz-appearance: textfield;
+}
+
+.tm-pm-gantt-resource-assign-popup-amount-unit {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+.tm-pm-gantt-resource-assign-popup-amount-unit--disabled {
+  opacity: 0.55;
+}
+
+.tm-pm-gantt-resource-assign-popup-amount-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-pm-gantt-resource-assign-popup-amount-unit-label {
+  flex: 0 0 auto;
+  color: var(--tm-text-muted, var(--tm-text-tertiary, #9ca3af));
 }
 
 .tm-pm-gantt-resource-assign-popup-qty::-webkit-outer-spin-button,
@@ -4197,7 +4212,6 @@ button.tm-pm-gantt-col-menu-action:disabled {
   .tm-pm-gantt-statusbar,
   .tm-pm-agent-root,
   .tm-pm-view-hidden,
-  .tm-pm-gantt-toolbar,
   .tm-pm-gantt-menubar,
   .tm-pm-features-menubar,
   .tm-pm-resource-menubar,
@@ -5323,7 +5337,6 @@ button.tm-pm-gantt-col-menu-action:disabled {
 }
 
 @media print {
-  .tm-pm-resource-table-page .tm-pm-gantt-toolbar,
   .tm-pm-resource-table-page .tm-pm-resource-menubar,
   .tm-pm-resource-table-page .tm-pm-gantt-statusbar {
     display: none !important;
@@ -5427,6 +5440,23 @@ button.tm-pm-gantt-col-menu-action:disabled {
   background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 18%, var(--tm-bg, #fff));
 }
 
+.tm-pm-cost-table-section-summary {
+  cursor: pointer;
+}
+
+/* Selected highlight must target td — section-summary sets td backgrounds that cover tr. */
+.tm-pm-cost-table-section-summary.tm-pm-resource-table-row--selected td {
+  background: color-mix(in srgb, var(--tm-accent, #3b82f6) 18%, var(--tm-bg, #fff));
+}
+
+.tm-pm-cost-table-section-summary.tm-pm-resource-table-row--selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--tm-accent, #3b82f6);
+}
+
+.tm-pm-cost-table-section-summary--grand.tm-pm-resource-table-row--selected td {
+  background: color-mix(in srgb, var(--tm-accent, #3b82f6) 24%, var(--tm-bg, #fff));
+}
+
 .tm-pm-cost-table-section-summary-label,
 .tm-pm-cost-table-section-summary-total {
   display: block;
@@ -5444,4 +5474,18 @@ button.tm-pm-gantt-col-menu-action:disabled {
 .tm-pm-cost-table-section-summary-total {
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.tm-pm-cost-table-summary-formula {
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-pm-cost-table-summary-formula-pickable {
+  cursor: copy;
+  outline: 1px dashed color-mix(in srgb, var(--tm-accent, #3b82f6) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.tm-pm-cost-table-summary-formula-pickable:hover {
+  background: color-mix(in srgb, var(--tm-accent, #3b82f6) 14%, var(--tm-bg, #fff));
 }

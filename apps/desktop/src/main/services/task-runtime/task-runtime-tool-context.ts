@@ -74,10 +74,6 @@ export function getCachedPlannerToolNames(
   return cached.names
 }
 
-export function clearTaskToolRuntimeCache(taskId: string): void {
-  toolNameCache.delete(taskId)
-}
-
 export function taskHasPlannerTool(
   task: Pick<AgentTask, 'id' | 'assistantId' | 'workspaceId' | 'workspaceRoot'>,
   toolName: string,

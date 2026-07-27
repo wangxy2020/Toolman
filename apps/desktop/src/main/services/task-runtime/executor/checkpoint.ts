@@ -169,13 +169,3 @@ export function rollbackTaskToolCheckpoint(checkpoint: TaskToolCheckpoint): void
 export function cleanupTaskToolCheckpoint(checkpoint: TaskToolCheckpoint): void {
   rmSync(checkpoint.dir, { recursive: true, force: true })
 }
-
-export function loadTaskToolCheckpoint(checkpointDir: string): TaskToolCheckpoint {
-  const manifestPath = join(checkpointDir, 'manifest.json')
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as TaskCheckpointManifest
-  return {
-    id: manifest.id,
-    dir: checkpointDir,
-    manifest,
-  }
-}

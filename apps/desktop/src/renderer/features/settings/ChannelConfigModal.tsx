@@ -265,6 +265,9 @@ export function ChannelConfigModal({
                   .then((message) => {
                     if (message) setTestMessage(message)
                   })
+                  .catch((err) => {
+                    setTestMessage(err instanceof Error ? err.message : String(err))
+                  })
                   .finally(() => setTesting(false))
               }}
             >

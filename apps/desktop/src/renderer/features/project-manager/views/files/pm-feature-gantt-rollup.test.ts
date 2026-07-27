@@ -2,21 +2,108 @@ import { describe, expect, it } from 'vitest'
 
 import type { PmWorkItem } from '@toolman/shared'
 
+import type { PmCostRow } from '../cost/pm-cost-catalog'
+import type { PmResourceRow } from '../resource/pm-resource-catalog'
+import { TASK_COST_ASSIGNMENTS_KEY } from '../schedule/pm-gantt-cost-assignment'
 import { TASK_RESOURCE_ASSIGNMENTS_KEY } from '../schedule/pm-gantt-resource-assignment'
 import type { PmFeatureRow } from './pm-features-catalog'
 import {
   allocateQuantityByMonth,
+  buildLiveFundsFeatureRows,
+  buildFundsDisplayEntries,
+  buildFundsSectionMetaByRowId,
+  buildLiveProcurementFeatureRows,
   buildLiveScheduleFeatureRows,
   buildResourceUnitLookup,
+  collectGanttCostSeeds,
   collectGanttFeatureSeeds,
+  collectGanttProcurementSeeds,
   collectRollupMonthKeys,
+  computeFeatureCostRollups,
   computeFeatureGanttRollups,
   featureTypeToResourceType,
   formatMonthKey,
   formatRollupMonthQuantity,
   groupMonthKeysByYear,
   resourceTypeToFeatureType,
+  rollupHorizontalAmount,
 } from './pm-feature-gantt-rollup'
+
+function asCostRows(
+  rows: ReadonlyArray<{
+    id: string
+    type: PmCostRow['type']
+    name: string
+    code?: string
+    featureDescription?: string
+    unit?: string
+    quantity?: number | null
+    unitPrice?: number | null
+    applicable?: string
+    note?: string
+    sectionalWork?: string
+    sectionCode?: string
+    sectionNote?: string
+    sectionName?: string
+    sectionFeatureDescription?: string
+    sectionTotalFormula?: string
+    sortOrder?: number
+    parentId?: string | null
+  }>,
+): PmCostRow[] {
+  return rows.map((row, index) => ({
+    id: row.id,
+    type: row.type,
+    code: row.code ?? '',
+    name: row.name,
+    featureDescription: row.featureDescription ?? '',
+    unit: row.unit ?? '',
+    quantity: row.quantity ?? null,
+    unitPrice: row.unitPrice ?? null,
+    applicable: row.applicable ?? 'all',
+    note: row.note ?? '',
+    sectionalWork: row.sectionalWork ?? '',
+    sectionCode: row.sectionCode ?? '',
+    sectionNote: row.sectionNote ?? '',
+    sectionName: row.sectionName ?? '',
+    sectionFeatureDescription: row.sectionFeatureDescription ?? '',
+    sectionTotalFormula: row.sectionTotalFormula ?? '',
+    sortOrder: row.sortOrder ?? index,
+    parentId: row.parentId ?? null,
+  }))
+}
+
+function asResourceRows(
+  rows: ReadonlyArray<{
+    id: string
+    type: PmResourceRow['type']
+    name: string
+    unit?: string
+    pricingUnit?: string
+    unitPrice?: number | null
+    note?: string
+    applicable?: string
+    sortOrder?: number
+    parentId?: string | null
+    spec?: string
+    customTypeName?: string
+  }>,
+): PmResourceRow[] {
+  return rows.map((row, index) => ({
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    unit: row.unit ?? '',
+    pricingUnit: row.pricingUnit ?? row.unit ?? '',
+    unitPrice: row.unitPrice ?? null,
+    note: row.note ?? '',
+    applicable: row.applicable ?? 'all',
+    sortOrder: row.sortOrder ?? index,
+    parentId: row.parentId ?? null,
+    spec: row.spec ?? '',
+    customTypeName: row.customTypeName ?? '',
+  }))
+}
 
 function makeItem(
   id: string,
@@ -61,6 +148,9 @@ function makeFeature(
     type,
     name,
     unit: '',
+    pricingUnit: '',
+    purchaseCycle: null,
+    transportCycle: null,
     quantity: null,
     remark: '',
     applicable: 'all',
@@ -77,7 +167,7 @@ describe('pm-feature-gantt-rollup', () => {
     expect(featureTypeToResourceType('machinery')).toBe('equipment')
     expect(featureTypeToResourceType('device')).toBe('device')
     expect(featureTypeToResourceType('instrument')).toBe('instrument')
-    expect(featureTypeToResourceType('procurement')).toBeNull()
+    expect(featureTypeToResourceType('procurement')).toBe('material')
     expect(resourceTypeToFeatureType('equipment')).toBe('machinery')
     expect(resourceTypeToFeatureType('device')).toBe('device')
     expect(resourceTypeToFeatureType('instrument')).toBe('instrument')
@@ -387,5 +477,416 @@ describe('pm-feature-gantt-rollup', () => {
     const live = buildLiveScheduleFeatureRows(seeds, orphanCatalog, 'all')
     expect(live.map((row) => row.name)).toEqual(['普通工', '挖掘机', '钢筋工'])
     expect(live.some((row) => row.name === '技术工人')).toBe(false)
+  })
+
+  it('collects cost seeds and rolls assigned amounts by month for funds', () => {
+    const jan1 = new Date(2026, 0, 1).getTime()
+    const jan31 = new Date(2026, 0, 31).getTime()
+    const feb1 = new Date(2026, 1, 1).getTime()
+    const feb28 = new Date(2026, 1, 28).getTime()
+
+    const costItems: PmWorkItem[] = [
+      {
+        ...makeItem('c1', jan1, jan31, []),
+        metadata: {
+          [TASK_COST_ASSIGNMENTS_KEY]: [
+            {
+              costId: null,
+              type: 'comprehensive',
+              name: '土建综合',
+              percent: 1,
+              amount: 100,
+            },
+          ],
+        },
+      } as unknown as PmWorkItem,
+      {
+        ...makeItem('c2', feb1, feb28, []),
+        metadata: {
+          [TASK_COST_ASSIGNMENTS_KEY]: [
+            {
+              costId: null,
+              type: 'comprehensive',
+              name: '土建综合',
+              percent: 1,
+              amount: 50,
+            },
+            {
+              costId: null,
+              type: 'labor',
+              name: '人工费',
+              percent: 1,
+              amount: 999,
+            },
+          ],
+        },
+      } as unknown as PmWorkItem,
+    ]
+
+    const seeds = collectGanttCostSeeds(costItems)
+    expect(seeds).toEqual([
+      {
+        type: 'comprehensive',
+        name: '土建综合',
+        unit: '',
+        costId: null,
+        sectionalWork: '',
+        sectionLabel: '',
+      },
+    ])
+
+    const live = buildLiveFundsFeatureRows(seeds)
+    expect(live).toHaveLength(1)
+    expect(live[0]).toMatchObject({
+      type: 'comprehensive',
+      name: '土建综合',
+      quantity: null,
+    })
+
+    const rollups = computeFeatureCostRollups(costItems, live)
+    const rollup = rollups.get(live[0]!.id)!
+    expect(rollup.quantity).toBe(150)
+    expect(rollup.startDate).toBe(jan1)
+    expect(rollup.finishDate).toBe(feb28)
+    expect(rollup.monthly[formatMonthKey(2026, 0)]).toBe(100)
+    expect(rollup.monthly[formatMonthKey(2026, 1)]).toBe(50)
+    expect(rollupHorizontalAmount(rollup)).toBe(150)
+  })
+
+  it('orders cost seeds by type, sectional work, then price-table order', () => {
+    const costItems: PmWorkItem[] = [
+      {
+        ...makeItem('c1', new Date(2026, 0, 1).getTime(), new Date(2026, 0, 31).getTime(), []),
+        metadata: {
+          [TASK_COST_ASSIGNMENTS_KEY]: [
+            {
+              costId: 'b',
+              type: 'investment',
+              name: '征地拆迁费',
+              percent: 1,
+              amount: 10,
+            },
+            {
+              costId: 'c',
+              type: 'investment',
+              name: '市政配套',
+              percent: 1,
+              amount: 20,
+            },
+            {
+              costId: 'a',
+              type: 'investment',
+              name: '产业园',
+              percent: 1,
+              amount: 30,
+            },
+            {
+              costId: 'd',
+              type: 'comprehensive',
+              name: '土建综合',
+              percent: 1,
+              amount: 40,
+            },
+          ],
+        },
+      } as unknown as PmWorkItem,
+    ]
+    const catalog = asCostRows([
+      {
+        id: 'd',
+        type: 'comprehensive' as const,
+        code: '',
+        name: '土建综合',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '主体',
+        note: '',
+        applicable: 'all',
+        sortOrder: 0,
+        parentId: null,
+      },
+      {
+        id: 'a',
+        type: 'investment' as const,
+        code: '',
+        name: '产业园',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '工程费',
+        note: '',
+        applicable: 'all',
+        sortOrder: 1,
+        parentId: null,
+      },
+      {
+        id: 'c',
+        type: 'investment' as const,
+        code: '',
+        name: '市政配套',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '工程费',
+        note: '',
+        applicable: 'all',
+        sortOrder: 2,
+        parentId: null,
+      },
+      {
+        id: 'b',
+        type: 'investment' as const,
+        code: '',
+        name: '征地拆迁费',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '工程建设其他费',
+        note: '',
+        applicable: 'all',
+        sortOrder: 3,
+        parentId: null,
+      },
+    ])
+    const seeds = collectGanttCostSeeds(costItems, catalog)
+    // comprehensive before investment; within investment: 工程费 then 工程建设其他费; within 工程费: sortOrder.
+    expect(seeds.map((seed) => seed.name)).toEqual([
+      '土建综合',
+      '产业园',
+      '市政配套',
+      '征地拆迁费',
+    ])
+    expect(seeds.map((seed) => seed.sectionalWork)).toEqual([
+      '主体',
+      '工程费',
+      '工程费',
+      '工程建设其他费',
+    ])
+  })
+
+  it('orders cost seeds by price-table catalog top-to-bottom', () => {
+    const costItems: PmWorkItem[] = [
+      {
+        ...makeItem('c1', new Date(2026, 0, 1).getTime(), new Date(2026, 0, 31).getTime(), []),
+        metadata: {
+          [TASK_COST_ASSIGNMENTS_KEY]: [
+            {
+              costId: null,
+              type: 'funds',
+              name: '预付款',
+              percent: 1,
+              amount: 10,
+            },
+            {
+              costId: null,
+              type: 'comprehensive',
+              name: '土建综合',
+              percent: 1,
+              amount: 20,
+            },
+          ],
+        },
+      } as unknown as PmWorkItem,
+    ]
+    const catalog = asCostRows([
+      {
+        id: 'a',
+        type: 'comprehensive' as const,
+        code: '',
+        name: '土建综合',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '',
+        note: '',
+        applicable: 'all',
+        sortOrder: 0,
+        parentId: null,
+      },
+      {
+        id: 'b',
+        type: 'funds' as const,
+        code: '',
+        name: '预付款',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '',
+        note: '',
+        applicable: 'all',
+        sortOrder: 1,
+        parentId: null,
+      },
+    ])
+    const seeds = collectGanttCostSeeds(costItems, catalog)
+    expect(seeds.map((seed) => seed.name)).toEqual(['土建综合', '预付款'])
+  })
+
+  it('inserts 分部名称 header rows in funds display entries', () => {
+    const jan1 = new Date(2026, 0, 1).getTime()
+    const jan31 = new Date(2026, 0, 31).getTime()
+    const costItems: PmWorkItem[] = [
+      {
+        ...makeItem('c1', jan1, jan31, []),
+        metadata: {
+          [TASK_COST_ASSIGNMENTS_KEY]: [
+            {
+              costId: 'a',
+              type: 'investment',
+              name: '产业园',
+              percent: 1,
+              amount: 100,
+            },
+            {
+              costId: 'b',
+              type: 'investment',
+              name: '市政配套',
+              percent: 1,
+              amount: 50,
+            },
+            {
+              costId: 'c',
+              type: 'investment',
+              name: '征地拆迁费',
+              percent: 1,
+              amount: 20,
+            },
+          ],
+        },
+      } as unknown as PmWorkItem,
+    ]
+    const catalog = asCostRows([
+      {
+        id: 'a',
+        type: 'investment' as const,
+        code: '',
+        name: '产业园',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '工程费',
+        sectionName: '工程费',
+        note: '',
+        applicable: 'all',
+        sortOrder: 0,
+        parentId: null,
+      },
+      {
+        id: 'b',
+        type: 'investment' as const,
+        code: '',
+        name: '市政配套',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '工程费',
+        sectionName: '工程费',
+        note: '',
+        applicable: 'all',
+        sortOrder: 1,
+        parentId: null,
+      },
+      {
+        id: 'c',
+        type: 'investment' as const,
+        code: '',
+        name: '征地拆迁费',
+        featureDescription: '',
+        unit: '',
+        quantity: null,
+        unitPrice: null,
+        sectionalWork: '工程建设其他费',
+        sectionName: '',
+        note: '',
+        applicable: 'all',
+        sortOrder: 2,
+        parentId: null,
+      },
+    ])
+    const seeds = collectGanttCostSeeds(costItems, catalog)
+    const live = buildLiveFundsFeatureRows(seeds)
+    const rollups = computeFeatureCostRollups(costItems, live)
+    const entries = buildFundsDisplayEntries(
+      live,
+      buildFundsSectionMetaByRowId(seeds),
+      rollups,
+      '未分类',
+    )
+    expect(entries.map((entry) => (entry.kind === 'section' ? `§${entry.label}` : entry.row.name))).toEqual([
+      '§工程费',
+      '产业园',
+      '市政配套',
+      '§工程建设其他费',
+      '征地拆迁费',
+    ])
+    const firstSection = entries[0]
+    expect(firstSection?.kind).toBe('section')
+    if (firstSection?.kind === 'section') {
+      expect(rollupHorizontalAmount(firstSection.rollup)).toBe(150)
+    }
+  })
+
+  it('builds procurement rows from Gantt material assignments with quantity rollup', () => {
+    const jan1 = new Date(2026, 0, 1).getTime()
+    const jan31 = new Date(2026, 0, 31).getTime()
+    const items: PmWorkItem[] = [
+      makeItem('t1', jan1, jan31, [
+        { type: 'material', name: '钢筋', quantity: 12 },
+        { type: 'labor', name: '普通工', quantity: 3 },
+        { type: 'material', name: '水泥', quantity: 5 },
+      ]),
+      makeItem('t2', jan1, jan31, [{ type: 'material', name: '钢筋', quantity: 8 }]),
+    ]
+    const catalog = asResourceRows([
+      {
+        id: 'm1',
+        type: 'material' as const,
+        name: '水泥',
+        unit: 't',
+        pricingUnit: 't',
+        unitPrice: 400,
+        note: '',
+        applicable: 'all',
+        sortOrder: 0,
+        parentId: null,
+        spec: '',
+        customTypeName: '',
+      },
+      {
+        id: 'm2',
+        type: 'material' as const,
+        name: '钢筋',
+        unit: 't',
+        pricingUnit: 't',
+        unitPrice: 3800,
+        note: '',
+        applicable: 'all',
+        sortOrder: 1,
+        parentId: null,
+        spec: '',
+        customTypeName: '',
+      },
+    ])
+    const seeds = collectGanttProcurementSeeds(items, catalog)
+    expect(seeds.map((seed) => seed.name)).toEqual(['水泥', '钢筋'])
+
+    const live = buildLiveProcurementFeatureRows(seeds, catalog)
+    expect(live.map((row) => ({ type: row.type, name: row.name, unit: row.unit, pricingUnit: row.pricingUnit }))).toEqual([
+      { type: 'procurement', name: '水泥', unit: 't', pricingUnit: 't' },
+      { type: 'procurement', name: '钢筋', unit: 't', pricingUnit: 't' },
+    ])
+
+    const rollups = computeFeatureGanttRollups(items, live)
+    expect(rollups.get(live[0]!.id)?.quantity).toBe(5)
+    expect(rollups.get(live[1]!.id)?.quantity).toBe(20)
   })
 })

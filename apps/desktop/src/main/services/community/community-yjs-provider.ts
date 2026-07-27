@@ -21,7 +21,6 @@ import {
   applyCommunityDocUpdate,
   deleteLwwEntity,
   destroyCommunityDocs,
-  encodeCommunityDocUpdate,
   getCommunityEntityMap,
   observeCommunityDoc,
   parseCommunityDomainFromTopic,
@@ -224,13 +223,6 @@ export function getCommunityYjsProviderStatus() {
     lastError,
   }
 }
-
-export function publishCommunityDomainSnapshot(domain: CommunityYjsDomain): void {
-  if (!started) return
-  const update = encodeCommunityDocUpdate(domain)
-  publishDomainUpdate(domain, update)
-}
-
 export function syncCommunityBoardMessageToYjs(message: CommunityBoardMessage): void {
   if (!isCommunityYjsEnabled()) return
 

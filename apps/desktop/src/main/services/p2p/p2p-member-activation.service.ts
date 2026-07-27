@@ -6,9 +6,9 @@ import { getMemberRepo, getWorkspaceRepo } from './p2p-member-shared'
 import { encodeReplicationMessage } from './p2p-sync-protocol'
 
 function scheduleJoinerActivationFollowUp(workspaceId: string): void {
-  void import('./p2p-sync.service').then((module) =>
-    module.awaitJoinerEventCatchUp(workspaceId, { force: true }),
-  )
+  void import('./p2p-sync.service')
+    .then((module) => module.awaitJoinerEventCatchUp(workspaceId, { force: true }))
+    .catch(() => undefined)
 }
 
 export function triggerJoinerResourceSyncAfterActivation(workspaceId: string): void {

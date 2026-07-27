@@ -13,6 +13,9 @@ export type PmFeatureCatalogSnapshotRow = {
   type: string
   name: string
   unit: string
+  pricingUnit?: string
+  purchaseCycle?: number | null
+  transportCycle?: number | null
   quantity: number | null
   remark: string
   applicable: string
@@ -57,6 +60,15 @@ export function normalizeFeatureCatalogSnapshot(
     type: row.type,
     name: row.name,
     unit: row.unit,
+    pricingUnit: typeof row.pricingUnit === 'string' ? row.pricingUnit : '',
+    purchaseCycle:
+      typeof row.purchaseCycle === 'number' && Number.isFinite(row.purchaseCycle)
+        ? row.purchaseCycle
+        : null,
+    transportCycle:
+      typeof row.transportCycle === 'number' && Number.isFinite(row.transportCycle)
+        ? row.transportCycle
+        : null,
     quantity:
       typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
     remark: typeof row.remark === 'string' ? row.remark : '',
@@ -75,6 +87,15 @@ function parseFeatureCatalogSnapshot(raw: unknown): PmFeatureCatalogSnapshotRow[
       type: row.type,
       name: row.name,
       unit: row.unit,
+      pricingUnit: typeof record.pricingUnit === 'string' ? record.pricingUnit : '',
+      purchaseCycle:
+        typeof record.purchaseCycle === 'number' && Number.isFinite(record.purchaseCycle)
+          ? record.purchaseCycle
+          : null,
+      transportCycle:
+        typeof record.transportCycle === 'number' && Number.isFinite(record.transportCycle)
+          ? record.transportCycle
+          : null,
       quantity:
         typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
       remark: typeof record.remark === 'string' ? record.remark : '',

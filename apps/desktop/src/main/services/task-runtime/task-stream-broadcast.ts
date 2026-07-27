@@ -5,13 +5,6 @@ type TaskStreamRelayListener = (event: TaskEvent) => void
 
 const taskStreamRelayListeners = new Set<TaskStreamRelayListener>()
 
-export function addTaskStreamRelayListener(listener: TaskStreamRelayListener): () => void {
-  taskStreamRelayListeners.add(listener)
-  return () => {
-    taskStreamRelayListeners.delete(listener)
-  }
-}
-
 export function broadcastTaskEvent(event: TaskEvent): void {
   for (const listener of taskStreamRelayListeners) {
     listener(event)

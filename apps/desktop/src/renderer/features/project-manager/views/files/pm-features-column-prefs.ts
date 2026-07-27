@@ -4,6 +4,9 @@ export const FEATURES_TOGGLE_COLUMNS = [
   'type',
   'name',
   'unit',
+  'pricingUnit',
+  'purchaseCycle',
+  'transportCycle',
   'quantity',
   'start',
   'finish',
@@ -19,11 +22,27 @@ export const DEFAULT_FEATURES_COLUMN_VISIBILITY: FeaturesColumnVisibility = {
   type: true,
   name: true,
   unit: true,
+  pricingUnit: true,
+  purchaseCycle: true,
+  transportCycle: true,
   quantity: true,
   start: true,
   finish: true,
   months: true,
   remark: true,
+}
+
+/** Columns only shown on the 采购 page. */
+export const FEATURES_PROCUREMENT_COLUMNS = [
+  'pricingUnit',
+  'purchaseCycle',
+  'transportCycle',
+] as const satisfies readonly FeaturesToggleColumn[]
+
+export function isFeaturesProcurementColumn(
+  column: FeaturesToggleColumn,
+): boolean {
+  return (FEATURES_PROCUREMENT_COLUMNS as readonly string[]).includes(column)
 }
 
 const STORAGE_KEY = 'toolman.pm.features.columnVisibility'

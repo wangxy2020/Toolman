@@ -1,10 +1,4 @@
-import type {
-  FocusEvent as ReactFocusEvent,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  ReactNode,
-} from 'react'
-import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import {
@@ -22,14 +16,14 @@ import {
   IconTrash,
   IconUndo,
 } from '../../../../components/icons'
-import { useI18n } from '../../../../i18n/useI18n'
+import { useMenuBarHScroll, useMenuBarTooltip } from '../../pm-menubar-chrome'
 import {
   encodeCustomResourceViewFilter,
-  isPmResourceCostType,
   parseCustomResourceViewFilter,
   PM_RESOURCE_BUILTIN_PRIMARY_TYPES,
   type PmResourceType,
 } from './pm-resource-catalog'
+import { useProjectResourceMenuBar } from './useProjectResourceMenuBar'
 
 const ICON_SIZE = 16
 
@@ -67,17 +61,7 @@ type MenuItem = {
   icon?: boolean
 }
 
-type ScrollMetrics = {
-  overflowing: boolean
-  thumbSize: number
-  thumbOffset: number
-}
-
-type TooltipState = { text: string; top: number; left: number }
-
-const EMPTY_SCROLL: ScrollMetrics = { overflowing: false, thumbSize: 1, thumbOffset: 0 }
-
-interface Props {
+export interface ProjectResourceMenuBarProps {
   disabled?: boolean
   hasSelection: boolean
   /** Enables 项目信息 — true for a concrete project or「全部项目」. */
@@ -103,29 +87,7 @@ interface Props {
   onAction: (action: ResourceMenuAction) => void
 }
 
-function useDropdownPos(open: boolean, anchorRef: React.RefObject<HTMLElement | null>) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  useEffect(() => {
-    if (!open) {
-      setPos(null)
-      return
-    }
-    const updatePos = () => {
-      const el = anchorRef.current
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: rect.left })
-    }
-    updatePos()
-    window.addEventListener('resize', updatePos)
-    window.addEventListener('scroll', updatePos, true)
-    return () => {
-      window.removeEventListener('resize', updatePos)
-      window.removeEventListener('scroll', updatePos, true)
-    }
-  }, [open, anchorRef])
-  return pos
-}
+type Props = ProjectResourceMenuBarProps
 
 export function ProjectResourceMenuBar({
   disabled = false,
@@ -146,183 +108,53 @@ export function ProjectResourceMenuBar({
   onRestoreVersion,
   onAction,
 }: Props) {
-  const { t } = useI18n()
-  const [viewOpen, setViewOpen] = useState(false)
-  const [typeOpen, setTypeOpen] = useState(false)
-  const [baselineOpen, setBaselineOpen] = useState(false)
-  const [customViewExpanded, setCustomViewExpanded] = useState(false)
-  const [customViewSubPos, setCustomViewSubPos] = useState<{ top: number; left: number } | null>(
-    null,
-  )
-  const [customTypeSubPos, setCustomTypeSubPos] = useState<{ top: number; left: number } | null>(
-    null,
-  )
-  const [customViewDraft, setCustomViewDraft] = useState('')
-  const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(EMPTY_SCROLL)
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
-  const viewRef = useRef<HTMLSpanElement>(null)
-  const typeRef = useRef<HTMLSpanElement>(null)
-  const baselineRef = useRef<HTMLSpanElement>(null)
-  const customViewGroupRef = useRef<HTMLDivElement>(null)
-  const customTypeGroupRef = useRef<HTMLButtonElement>(null)
-  const customViewHoverTimerRef = useRef<number | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const trackRef = useRef<HTMLDivElement>(null)
-  const viewPos = useDropdownPos(viewOpen, viewRef)
-  const typePos = useDropdownPos(typeOpen, typeRef)
-  const baselinePos = useDropdownPos(baselineOpen, baselineRef)
-
-  const syncScrollMetrics = () => {
-    const el = scrollRef.current
-    if (!el) return
-    const { scrollWidth, clientWidth, scrollLeft } = el
-    const overflowing = scrollWidth > clientWidth + 1
-    if (!overflowing) {
-      setScrollMetrics(EMPTY_SCROLL)
-      return
-    }
-    const thumbSize = Math.min(1, clientWidth / scrollWidth)
-    const maxScroll = scrollWidth - clientWidth
-    const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * (1 - thumbSize)
-    setScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
-  }
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    syncScrollMetrics()
-    const ro = new ResizeObserver(() => syncScrollMetrics())
-    ro.observe(el)
-    if (el.firstElementChild) ro.observe(el.firstElementChild)
-    window.addEventListener('resize', syncScrollMetrics)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', syncScrollMetrics)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!viewOpen && !typeOpen && !baselineOpen) return
-    const onDoc = (event: MouseEvent) => {
-      const target = event.target as Node
-      if (viewOpen && viewRef.current?.contains(target)) return
-      if (typeOpen && typeRef.current?.contains(target)) return
-      if (baselineOpen && baselineRef.current?.contains(target)) return
-      if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
-      if ((target as Element).closest?.('.tm-pm-resource-custom-submenu')) return
-      setViewOpen(false)
-      setTypeOpen(false)
-      setBaselineOpen(false)
-      setCustomViewExpanded(false)
-      setCustomViewSubPos(null)
-      setCustomTypeSubPos(null)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [baselineOpen, typeOpen, viewOpen])
-
-  useEffect(() => {
-    if (!viewOpen) {
-      clearCustomViewHoverTimer()
-      setCustomViewExpanded(false)
-      setCustomViewSubPos(null)
-      setCustomViewDraft('')
-    }
-  }, [viewOpen])
-
-  useEffect(() => {
-    if (!typeOpen) setCustomTypeSubPos(null)
-  }, [typeOpen])
-
-  useEffect(() => {
-    return () => {
-      if (customViewHoverTimerRef.current != null) {
-        window.clearTimeout(customViewHoverTimerRef.current)
-        customViewHoverTimerRef.current = null
-      }
-    }
-  }, [])
-
-  const clearCustomViewHoverTimer = () => {
-    if (customViewHoverTimerRef.current != null) {
-      window.clearTimeout(customViewHoverTimerRef.current)
-      customViewHoverTimerRef.current = null
-    }
-  }
-
-  const keepCustomViewSubmenu = () => {
-    clearCustomViewHoverTimer()
-  }
-
-  const scheduleHideCustomViewSubmenu = () => {
-    clearCustomViewHoverTimer()
-    customViewHoverTimerRef.current = window.setTimeout(() => {
-      setCustomViewSubPos(null)
-      customViewHoverTimerRef.current = null
-    }, 120)
-  }
-
-  const hideCustomViewSubmenu = () => {
-    clearCustomViewHoverTimer()
-    setCustomViewSubPos(null)
-  }
-
-  const placeCustomSubmenu = (anchor: HTMLElement, options?: { width?: number; height?: number }) => {
-    const rect = anchor.getBoundingClientRect()
-    const width = options?.width ?? 140
-    const height = options?.height ?? 220
-    const sideGap = 12
-    const gap = 4
-    const margin = 8
-    let left = rect.right + sideGap
-    if (left + width > window.innerWidth - margin) {
-      left = Math.max(margin, rect.left - width - sideGap)
-    }
-    const spaceBelow = window.innerHeight - rect.bottom - margin
-    const spaceAbove = rect.top - margin
-    const openAbove = height > spaceBelow && spaceAbove > spaceBelow
-    let top = openAbove ? rect.top - height - gap : rect.top
-    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
-    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
-    return { top, left }
-  }
-
-  const viewMenuLabel = t('projectManagerPage.resourceTable.menu.view')
-  const viewCustomName = parseCustomResourceViewFilter(viewFilter)
-  const viewCurrentLabel =
-    viewFilter === 'all'
-      ? t('projectManagerPage.resourceTable.views.allTypes')
-      : viewCustomName != null
-        ? viewCustomName || t('projectManagerPage.resourceTable.types.customUnnamed')
-        : t(`projectManagerPage.resourceTable.types.${viewFilter}`)
-  const typeMenuLabel = t('projectManagerPage.resourceTable.menu.type')
-  const typeLabel = isPmResourceCostType(selectedType)
-    ? `${t('projectManagerPage.resourceTable.views.costResources')} · ${t(`projectManagerPage.resourceTable.types.${selectedType}`)}`
-    : selectedType === 'custom'
-      ? selectedCustomTypeName.trim() || t('projectManagerPage.resourceTable.types.custom')
-      : t(`projectManagerPage.resourceTable.types.${selectedType}`)
-  const baselineMenuLabel = t('projectManagerPage.resourceTable.menu.baseline')
-
-  const closeTypeMenus = () => {
-    setTypeOpen(false)
-    setCustomTypeSubPos(null)
-  }
-
-  const commitCustomViewTypeName = (raw: string) => {
-    const name = raw.trim()
-    if (!name) return
-    onRegisterCustomTypeName(name)
-    onViewFilterChange(encodeCustomResourceViewFilter(name))
-    setViewOpen(false)
-    setCustomViewExpanded(false)
-    setCustomViewSubPos(null)
-    setCustomViewDraft('')
-  }
-
-  const applyCustomTypeToSelection = (name: string) => {
-    onTypeChange('custom', name.trim())
-    closeTypeMenus()
-  }
+  const {
+    t,
+    viewOpen,
+    setViewOpen,
+    typeOpen,
+    setTypeOpen,
+    baselineOpen,
+    setBaselineOpen,
+    customViewExpanded,
+    setCustomViewExpanded,
+    customViewSubPos,
+    setCustomViewSubPos,
+    customTypeSubPos,
+    setCustomTypeSubPos,
+    customViewDraft,
+    setCustomViewDraft,
+    viewRef,
+    typeRef,
+    baselineRef,
+    customViewGroupRef,
+    customTypeGroupRef,
+    viewPos,
+    typePos,
+    baselinePos,
+    keepCustomViewSubmenu,
+    scheduleHideCustomViewSubmenu,
+    hideCustomViewSubmenu,
+    placeCustomSubmenu,
+    viewMenuLabel,
+    viewCurrentLabel,
+    typeMenuLabel,
+    typeLabel,
+    baselineMenuLabel,
+    closeTypeMenus,
+    commitCustomViewTypeName,
+    applyCustomTypeToSelection,
+  } = useProjectResourceMenuBar({
+    viewFilter,
+    onViewFilterChange,
+    onRegisterCustomTypeName,
+    selectedType,
+    selectedCustomTypeName,
+    onTypeChange,
+  })
+  const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
+  const { scrollRef, trackRef, scrollMetrics, syncScrollMetrics, onTrackPointerDown } =
+    useMenuBarHScroll()
 
   const items: MenuItem[] = [
     {
@@ -423,20 +255,6 @@ export function ProjectResourceMenuBar({
   const hierarchyItems = items.slice(8, 10)
   const moveItems = items.slice(10)
 
-  const hideTip = () => setTooltip(null)
-
-  const showTipFromEl = (el: HTMLElement, text: string) => {
-    const rect = el.getBoundingClientRect()
-    setTooltip({ text, top: rect.bottom + 6, left: rect.left + rect.width / 2 })
-  }
-
-  const tipProps = (text: string) => ({
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => showTipFromEl(event.currentTarget, text),
-    onMouseLeave: hideTip,
-    onFocus: (event: ReactFocusEvent<HTMLElement>) => showTipFromEl(event.currentTarget, text),
-    onBlur: hideTip,
-  })
-
   const renderToolbarItem = (item: MenuItem) => {
     const isDisabled = Boolean(disabled || item.disabled)
     return (
@@ -463,39 +281,6 @@ export function ProjectResourceMenuBar({
         {item.dividerAfter ? <span className="tm-pm-resource-menubar-divider" /> : null}
       </span>
     )
-  }
-
-  const scrollToThumbOffset = (nextOffset: number) => {
-    const el = scrollRef.current
-    if (!el) return
-    const maxScroll = el.scrollWidth - el.clientWidth
-    if (maxScroll <= 0) return
-    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
-    const travel = 1 - thumbSize
-    const clamped = Math.max(0, Math.min(travel, nextOffset))
-    el.scrollLeft = travel <= 0 ? 0 : (clamped / travel) * maxScroll
-  }
-
-  const onTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const track = trackRef.current
-    const el = scrollRef.current
-    if (!track || !el) return
-    event.preventDefault()
-    const trackRect = track.getBoundingClientRect()
-    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
-    const pointerRatio = (event.clientX - trackRect.left) / trackRect.width
-    scrollToThumbOffset(pointerRatio - thumbSize / 2)
-
-    const onMove = (moveEvent: PointerEvent) => {
-      const ratio = (moveEvent.clientX - trackRect.left) / trackRect.width
-      scrollToThumbOffset(ratio - thumbSize / 2)
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
   }
 
   return (

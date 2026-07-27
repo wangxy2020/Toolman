@@ -29,10 +29,18 @@ export function DiagnosticsSettingsOperationsSection({
         <span className="tm-settings-static">{snapshot.operations.appVersion}</span>
       </SettingsRow>
       <SettingsRow label={t('settings.diagnostics.operations.logFile')}>
-        <span className="tm-settings-static">{snapshot.operations.logFilePath}</span>
+        <span className="tm-settings-static" title={snapshot.operations.logFilePath}>
+          {snapshot.operations.logFilePath}
+        </span>
       </SettingsRow>
       <SettingsRow label={t('settings.diagnostics.operations.crashReports')}>
-        <span className="tm-settings-static">
+        <span
+          className="tm-settings-static"
+          title={t('settings.diagnostics.operations.crashReportCount', {
+            count: snapshot.operations.crashReportCount,
+            dir: snapshot.operations.crashReportDir,
+          })}
+        >
           {t('settings.diagnostics.operations.crashReportCount', {
             count: snapshot.operations.crashReportCount,
             dir: snapshot.operations.crashReportDir,
@@ -56,7 +64,9 @@ export function DiagnosticsSettingsOperationsSection({
       </SettingsRow>
       {snapshot.operations.crashReportIngestUrl ? (
         <SettingsRow label={t('settings.diagnostics.operations.ingestUrl')}>
-          <span className="tm-settings-static">{snapshot.operations.crashReportIngestUrl}</span>
+          <span className="tm-settings-static" title={snapshot.operations.crashReportIngestUrl}>
+            {snapshot.operations.crashReportIngestUrl}
+          </span>
         </SettingsRow>
       ) : null}
       {crashUploadStatus?.lastUploadError ? (
@@ -87,7 +97,9 @@ export function DiagnosticsSettingsOperationsSection({
         )}
       </SettingsRow>
       <SettingsRow label={t('settings.diagnostics.operations.manifestPath')}>
-        <span className="tm-settings-static">{snapshot.operations.update.manifestPath}</span>
+        <span className="tm-settings-static" title={snapshot.operations.update.manifestPath}>
+          {snapshot.operations.update.manifestPath}
+        </span>
       </SettingsRow>
       {snapshot.operations.update.notes ? (
         <p className="tm-settings-row-hint">{snapshot.operations.update.notes}</p>

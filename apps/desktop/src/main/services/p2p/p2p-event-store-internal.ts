@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { logStructured } from '../structured-log.service'
 import { app } from 'electron'
-import { P2pEventRepository, type P2pEventRow } from '@toolman/db'
+import { P2pEventRepository, type P2pEventRow, type P2pEventType, type P2pResourceType } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
@@ -67,10 +67,10 @@ function computeEventHash(input: {
 export function appendViaFallback(
   input: {
     workspaceId: string
-    resourceType: string
+    resourceType: P2pResourceType
     resourceId: string
     operatorId: string
-    eventType: string
+    eventType: P2pEventType
     payload: Record<string, unknown>
     timestamp?: number
     sourceDeviceId: string
@@ -99,10 +99,10 @@ export function appendViaFallback(
 
   return repo.append({
     workspaceId: input.workspaceId,
-    resourceType: input.resourceType as P2pEventRow['resourceType'],
+    resourceType: input.resourceType,
     resourceId: input.resourceId,
     operatorId: input.operatorId,
-    eventType: input.eventType as P2pEventRow['eventType'],
+    eventType: input.eventType,
     payload: input.payload,
     prevEventHash,
     sourceDeviceId: input.sourceDeviceId,

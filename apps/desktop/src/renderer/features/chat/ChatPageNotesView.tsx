@@ -1,7 +1,7 @@
 import { NotesPage } from '../notes/NotesPage'
 import type { ChatPageState } from './useChatPage'
 
-export type ChatPageNotesViewProps = Pick<
+type ChatPageNotesViewProps = Pick<
   ChatPageState,
   | 'notes'
   | 'messageSettings'

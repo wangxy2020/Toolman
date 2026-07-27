@@ -39,10 +39,6 @@ type ManagementInternals = {
 
 let templateTtlEnsured = false
 
-export function resetAuthingOtpTemplateStateForTests(): void {
-  templateTtlEnsured = false
-}
-
 export async function ensureAuthingOtpTemplateTtl(): Promise<void> {
   if (templateTtlEnsured) return
 

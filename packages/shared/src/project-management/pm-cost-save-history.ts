@@ -27,6 +27,12 @@ export type PmCostCatalogSnapshotRow = {
   sectionCode?: string
   /** Note on 分部工程 summary row; optional for legacy snapshots. */
   sectionNote?: string
+  /** Display name on 分部工程 / 汇总 summary row; optional for legacy snapshots. */
+  sectionName?: string
+  /** Feature description on 分部工程 / 汇总 summary row; optional for legacy snapshots. */
+  sectionFeatureDescription?: string
+  /** Optional 合价 formula on 分部工程 summary row; optional for legacy snapshots. */
+  sectionTotalFormula?: string
   sortOrder: number
   parentId: string | null
 }
@@ -82,6 +88,11 @@ export function normalizeCostCatalogSnapshot(
     sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
     sectionCode: typeof row.sectionCode === 'string' ? row.sectionCode : '',
     sectionNote: typeof row.sectionNote === 'string' ? row.sectionNote : '',
+    sectionName: typeof row.sectionName === 'string' ? row.sectionName : '',
+    sectionFeatureDescription:
+      typeof row.sectionFeatureDescription === 'string' ? row.sectionFeatureDescription : '',
+    sectionTotalFormula:
+      typeof row.sectionTotalFormula === 'string' ? row.sectionTotalFormula : '',
     sortOrder: Math.floor(row.sortOrder),
     parentId: typeof row.parentId === 'string' ? row.parentId : null,
   }))
@@ -108,6 +119,13 @@ function parseCostCatalogSnapshot(raw: unknown): PmCostCatalogSnapshotRow[] | un
       sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',
       sectionCode: typeof record.sectionCode === 'string' ? record.sectionCode : '',
       sectionNote: typeof record.sectionNote === 'string' ? record.sectionNote : '',
+      sectionName: typeof record.sectionName === 'string' ? record.sectionName : '',
+      sectionFeatureDescription:
+        typeof record.sectionFeatureDescription === 'string'
+          ? record.sectionFeatureDescription
+          : '',
+      sectionTotalFormula:
+        typeof record.sectionTotalFormula === 'string' ? record.sectionTotalFormula : '',
       sortOrder: Math.floor(row.sortOrder),
       parentId: typeof row.parentId === 'string' ? row.parentId : null,
     }

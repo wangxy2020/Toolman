@@ -2,7 +2,7 @@ import { TranslationPage } from '../translation/TranslationPage'
 import type { ChatPageState } from './useChatPage'
 import type { AppView } from '../../types/app-view'
 
-export type ChatPageTranslateViewProps = Pick<
+type ChatPageTranslateViewProps = Pick<
   ChatPageState,
   | 'workspaceId'
   | 'translationSection'

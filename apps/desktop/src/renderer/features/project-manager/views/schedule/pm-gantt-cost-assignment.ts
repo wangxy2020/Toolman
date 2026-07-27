@@ -1,6 +1,8 @@
 /** Task ↔ price-list (cost catalog) assignment(s) stored on `PmWorkItem.metadata`. */
 
 import {
+  computeCostRowTotalPrice,
+  computeCostTotalPrice,
   isPmCostType,
   type PmCostRow,
   type PmCostType,
@@ -14,19 +16,124 @@ export type TaskCostAssignment = {
   costId: string | null
   type: PmCostType | null
   name: string
+  /**
+   * Allocation ratio (百分比). Default `1` = 100% of the price-list 合价.
+   * Monetary `amount` should stay in sync: catalogAmount × percent.
+   */
+  percent: number | null
+  /** Monetary amount (金额); typically catalog 合价 × percent. */
   amount: number | null
-  /** Free-form note (说明). */
+  /** Free-form note (说明). Kept for compatibility; popup shows amount instead. */
   note: string
 }
 
 export type CostColumnField = 'name' | 'amount' | 'qty' | 'input'
 
+/** Default 百分比 when picking a price-list row. */
+export const DEFAULT_COST_ASSIGNMENT_PERCENT = 1
+
 export const EMPTY_TASK_COST_ASSIGNMENT: TaskCostAssignment = {
   costId: null,
   type: null,
   name: '',
+  percent: null,
   amount: null,
   note: '',
+}
+
+/**
+ * Monetary amount from price-list 合价 × 百分比.
+ * Missing percent is treated as {@link DEFAULT_COST_ASSIGNMENT_PERCENT}.
+ */
+export function computeCostAssignmentMoney(
+  catalogAmount: number | null | undefined,
+  percent: number | null | undefined,
+): number | null {
+  if (catalogAmount == null || !Number.isFinite(catalogAmount)) return null
+  const ratio =
+    percent != null && Number.isFinite(percent) ? percent : DEFAULT_COST_ASSIGNMENT_PERCENT
+  return Math.round(catalogAmount * ratio * 100) / 100
+}
+
+/** Effective percent for display/edit.
+ * Legacy rows without `percent` infer ratio from amount ÷ catalog 合价 when possible.
+ */
+export function resolveCostAssignmentPercent(
+  assignment: Pick<TaskCostAssignment, 'percent' | 'amount'>,
+  catalogAmount?: number | null,
+): number {
+  if (assignment.percent != null && Number.isFinite(assignment.percent)) {
+    return assignment.percent
+  }
+  if (
+    catalogAmount != null &&
+    Number.isFinite(catalogAmount) &&
+    catalogAmount !== 0 &&
+    assignment.amount != null &&
+    Number.isFinite(assignment.amount)
+  ) {
+    return Math.round((assignment.amount / catalogAmount) * 1e6) / 1e6
+  }
+  return DEFAULT_COST_ASSIGNMENT_PERCENT
+}
+
+export type DefaultCostAssignmentAmountOptions = {
+  /** Full price list — enables parent-row 合价 rollup. */
+  catalog?: readonly PmCostRow[]
+  /** Sum of amounts already assigned to this price-list row across tasks. */
+  allocatedById?: ReadonlyMap<string, number>
+  /**
+   * Amount on the slot being edited (so re-picking the same row does not
+   * subtract its own prior amount from the remaining budget).
+   */
+  excludeAllocated?: number
+}
+
+/** Catalog 合价 / unit price / quantity — whichever is available. */
+export function catalogCostAmountLimit(
+  row: Pick<PmCostRow, 'id' | 'quantity' | 'unitPrice'>,
+  catalog?: readonly PmCostRow[],
+): number | null {
+  if (catalog && catalog.length > 0) {
+    const full = catalog.find((entry) => entry.id === row.id) ?? (row as PmCostRow)
+    const rolled = computeCostRowTotalPrice(full, catalog)
+    if (rolled != null) return rolled
+  }
+  const total = computeCostTotalPrice(row.quantity, row.unitPrice)
+  if (total != null) return total
+  if (row.unitPrice != null && Number.isFinite(row.unitPrice)) {
+    return Math.round(row.unitPrice * 100) / 100
+  }
+  if (row.quantity != null && Number.isFinite(row.quantity)) {
+    return Math.round(row.quantity * 100) / 100
+  }
+  return null
+}
+
+/**
+ * Default 金额 when picking a price-list row: remaining 合价
+ * (catalog total minus amounts already allocated), falling back to unit price
+ * or quantity when only one is set.
+ */
+export function defaultCostAssignmentAmount(
+  row: Pick<PmCostRow, 'id' | 'quantity' | 'unitPrice'> | Pick<PmCostRow, 'quantity' | 'unitPrice'>,
+  options?: DefaultCostAssignmentAmountOptions,
+): number | null {
+  const rowId = 'id' in row && typeof row.id === 'string' ? row.id : null
+  const limit = catalogCostAmountLimit(
+    rowId ? { ...row, id: rowId } : { id: '', quantity: row.quantity, unitPrice: row.unitPrice },
+    options?.catalog,
+  )
+  if (limit == null) return null
+  const allocated =
+    rowId && options?.allocatedById ? (options.allocatedById.get(rowId) ?? 0) : 0
+  const exclude =
+    options?.excludeAllocated != null && Number.isFinite(options.excludeAllocated)
+      ? options.excludeAllocated
+      : 0
+  const remaining = Math.round((limit - allocated + exclude) * 100) / 100
+  if (remaining <= 0) return null
+  return remaining
 }
 
 const COST_COLUMN_RE = /^cost:(\d+):(name|amount|qty|input)$/
@@ -59,18 +166,28 @@ function canonicalizeCostName(name: string): string {
   return canonicalizeResourceName(name)
 }
 
+function parseAmountValue(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim().replace(/,/g, '')
+    if (!trimmed) return null
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
 function parseAssignment(raw: unknown): TaskCostAssignment {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ...EMPTY_TASK_COST_ASSIGNMENT }
   }
   const row = raw as Record<string, unknown>
-  const amount =
-    typeof row.amount === 'number' && Number.isFinite(row.amount) ? row.amount : null
   return {
     costId: typeof row.costId === 'string' && row.costId ? row.costId : null,
     type: isPmCostType(row.type) ? row.type : null,
     name: canonicalizeCostName(typeof row.name === 'string' ? row.name : ''),
-    amount,
+    percent: parseAmountValue(row.percent),
+    amount: parseAmountValue(row.amount),
     note: typeof row.note === 'string' ? row.note : '',
   }
 }
@@ -81,14 +198,6 @@ export function readTaskCostAssignments(
   const list = metadata?.[TASK_COST_ASSIGNMENTS_KEY]
   if (!Array.isArray(list)) return []
   return list.map(parseAssignment)
-}
-
-export function readTaskCostAssignmentAt(
-  metadata: Record<string, unknown> | null | undefined,
-  slot = 0,
-): TaskCostAssignment {
-  const index = Math.max(0, Math.floor(slot))
-  return readTaskCostAssignments(metadata)[index] ?? { ...EMPTY_TASK_COST_ASSIGNMENT }
 }
 
 export function patchTaskCostAssignmentMetadata(
@@ -103,6 +212,7 @@ export function patchTaskCostAssignmentMetadata(
     costId: patch.costId !== undefined ? patch.costId : current.costId,
     type: patch.type !== undefined ? patch.type : current.type,
     name: patch.name !== undefined ? patch.name : current.name,
+    percent: patch.percent !== undefined ? patch.percent : current.percent,
     amount: patch.amount !== undefined ? patch.amount : current.amount,
     note: patch.note !== undefined ? patch.note : current.note,
   }
@@ -181,6 +291,7 @@ export function resolveCostAssignmentAgainstCatalog(
       costId: found.id,
       type: found.type,
       name: found.name,
+      percent: assignment.percent,
       amount: assignment.amount,
       note: assignment.note,
     }
@@ -213,6 +324,7 @@ export function hydrateTaskCostAssignmentsAgainstCatalog(
       costId: found.id,
       type: found.type,
       name: found.name,
+      percent: assignment.percent,
       amount: assignment.amount,
       note: assignment.note,
     }
@@ -301,16 +413,17 @@ export function buildCostAllocatedAmountById(
   return totals
 }
 
-/** True when assigned amounts cover the catalog quantity (null quantity = unlimited). */
+/** True when assigned amounts cover the catalog 合价 / quantity (null = unlimited). */
 export function isCostQuantityFullyAllocated(
   row: PmCostRow,
   allocatedById: ReadonlyMap<string, number>,
+  catalog: readonly PmCostRow[] = [],
 ): boolean {
-  const qty = row.quantity
-  if (qty == null || !Number.isFinite(qty)) return false
-  if (qty <= 0) return true
+  const limit = catalogCostAmountLimit(row, catalog)
+  if (limit == null || !Number.isFinite(limit)) return false
+  if (limit <= 0) return true
   const allocated = allocatedById.get(row.id) ?? 0
-  return allocated + 1e-9 >= qty
+  return allocated + 1e-9 >= limit
 }
 
 /** Display one assignment as `类型，名称，金额` (empty → blank). */
@@ -399,6 +512,7 @@ export function parseCostAssignmentInput(
         costId: matched.id,
         type: matched.type,
         name: matched.name,
+        percent: null,
         amount,
         note: '',
       }
@@ -410,6 +524,7 @@ export function parseCostAssignmentInput(
     costId: null,
     type,
     name,
+    percent: null,
     amount,
     note: '',
   }

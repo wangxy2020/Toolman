@@ -48,7 +48,11 @@ export const PM_BUILTIN_EMP_2401: PmBuiltinProjectSeed =
     "projectType": "owner_managed",
     "planPhase": "建设前期",
     "planCalendar": "calendar_days",
-    "scheduleFrom": "project_start"
+    "scheduleFrom": "project_start",
+    "costCurrency": "元",
+    "costCurrencies": {
+      "investment": "万元"
+    }
   },
   "workItems": [
     {

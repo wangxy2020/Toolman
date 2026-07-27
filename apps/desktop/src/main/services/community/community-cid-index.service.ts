@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, copyFile, mkdir } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { P2pCidIndexRepository } from '@toolman/db'
@@ -218,13 +218,4 @@ export function getCommunityCidIndexStats() {
     indexedPackages: repo.countDistinctRoots(),
     indexedChunks: repo.countAll(),
   }
-}
-
-export async function copyIndexedPackageToPath(rootCid: string, targetPath: string): Promise<void> {
-  const root = getRepo().findByCid(rootCid)
-  if (!root?.localPath) {
-    throw new Error('Package not found in CID index')
-  }
-  await mkdir(join(targetPath, '..'), { recursive: true }).catch(() => undefined)
-  await copyFile(root.localPath, targetPath)
 }

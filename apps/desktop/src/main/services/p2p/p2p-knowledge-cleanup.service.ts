@@ -168,7 +168,3 @@ export async function cleanupMisplacedP2pMirrorKnowledgeBases(): Promise<{
 
   return { purgedKbCount, restoredKbCount, removedDocCount }
 }
-
-export function isInternalP2pMirrorKnowledgeBase(description: string | null | undefined): boolean {
-  return isP2pSharedKnowledgeMirrorDescription(description)
-}

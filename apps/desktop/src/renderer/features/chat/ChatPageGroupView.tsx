@@ -1,7 +1,7 @@
 import { GroupPage } from '../group/GroupPage'
 import type { ChatPageState } from './useChatPage'
 
-export type ChatPageGroupViewProps = Pick<
+type ChatPageGroupViewProps = Pick<
   ChatPageState,
   | 'p2pWorkspaces'
   | 'workspaceId'

@@ -1,4 +1,3 @@
-import type { GroupChatMeshTopology } from './p2p-group-chat-mesh-simulation'
 import { buildTopologyConnections } from './p2p-group-chat-mesh-simulation'
 
 /**
@@ -31,10 +30,4 @@ export function buildWanNatStarPhysicalConnections(input: {
     connect(member, relay)
   }
   return edges
-}
-
-export type WanMeshScenario = {
-  memberCount: number
-  topology: GroupChatMeshTopology | 'wan_turn_assumed'
-  ownerPeerConnected: boolean
 }

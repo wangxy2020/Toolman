@@ -22,18 +22,6 @@ let draining = false
 
 export { getTaskWorkerSnapshot }
 
-export function getTaskQueueSnapshot(): {
-  queueLength: number
-  draining: boolean
-  pendingTaskIds: string[]
-} {
-  return {
-    queueLength: queue.length,
-    draining,
-    pendingTaskIds: queue.map((item) => item.taskId),
-  }
-}
-
 export function scheduleTaskRun(
   taskId: string,
   options: TaskOrchestratorOptions = {},

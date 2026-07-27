@@ -19,12 +19,17 @@ export async function loadSystemPaths(): Promise<SystemPaths | null> {
   if (cachedSystemPaths) return cachedSystemPaths
   if (pendingLoad) return pendingLoad
 
-  pendingLoad = window.api.invoke(IpcChannel.AppGetPaths).then((result) => {
-    pendingLoad = null
-    if (!result.ok) return null
-    cachedSystemPaths = result.data as SystemPaths
-    return cachedSystemPaths
-  })
+  pendingLoad = window.api
+    .invoke(IpcChannel.AppGetPaths)
+    .then((result) => {
+      if (!result.ok) return null
+      cachedSystemPaths = result.data as SystemPaths
+      return cachedSystemPaths
+    })
+    .catch(() => null)
+    .finally(() => {
+      pendingLoad = null
+    })
 
   return pendingLoad
 }
@@ -38,7 +43,13 @@ export function useSystemPaths() {
       return
     }
 
-    void loadSystemPaths().then(setSystemPaths)
+    let cancelled = false
+    void loadSystemPaths().then((paths) => {
+      if (!cancelled) setSystemPaths(paths)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return systemPaths

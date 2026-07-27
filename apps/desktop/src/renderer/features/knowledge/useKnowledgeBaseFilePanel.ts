@@ -111,5 +111,3 @@ export function useKnowledgeBaseFilePanel({
     handleDragLeave,
   }
 }
-
-export type KnowledgeBaseFilePanelState = ReturnType<typeof useKnowledgeBaseFilePanel>

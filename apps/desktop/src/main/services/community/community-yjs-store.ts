@@ -16,11 +16,6 @@ export function destroyCommunityDocs(): void {
   }
   docs.clear()
 }
-
-export function getCommunityDocCount(): number {
-  return docs.size
-}
-
 export interface LwwEntityRecord {
   updatedAt: number
   authorDeviceId?: string
@@ -38,15 +33,6 @@ export function getCommunityDoc(domain: CommunityYjsDomain): Y.Doc {
 export function getCommunityEntityMap(domain: CommunityYjsDomain): Y.Map<unknown> {
   return getCommunityDoc(domain).getMap('entities')
 }
-
-export function encodeCommunityDocUpdate(
-  domain: CommunityYjsDomain,
-  stateVector?: Uint8Array,
-): Uint8Array {
-  const doc = getCommunityDoc(domain)
-  return stateVector ? Y.encodeStateAsUpdate(doc, stateVector) : Y.encodeStateAsUpdate(doc)
-}
-
 export function applyCommunityDocUpdate(
   domain: CommunityYjsDomain,
   update: Uint8Array,

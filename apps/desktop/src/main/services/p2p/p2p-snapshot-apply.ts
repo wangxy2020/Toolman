@@ -85,9 +85,11 @@ export function applyWorkspaceSnapshotState(
     localMemberAfter?.status === 'active' &&
     localMemberBefore?.status !== 'active'
   ) {
-    void import('./p2p-sync.service').then((module) => {
-      module.scheduleJoinerEventCatchUp(workspaceId)
-    })
+    void import('./p2p-sync.service')
+      .then((module) => {
+        module.scheduleJoinerEventCatchUp(workspaceId)
+      })
+      .catch(() => undefined)
   }
 }
 

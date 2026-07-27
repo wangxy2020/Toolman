@@ -80,13 +80,6 @@ function requireDbPath(): string {
   return configuredDbPath
 }
 
-export function replaceDocumentChunksInWorker(
-  documentId: string,
-  rows: ChunkFtsRow[],
-): Promise<void> | null {
-  return runDbWorkerOp('fts.replaceDocumentChunks', { documentId, rows }, requireDbPath())
-}
-
 export function rebuildFtsIndexInWorker(rows: ChunkFtsRow[]): Promise<void> | null {
   return runDbWorkerOp('fts.rebuildAll', { rows }, requireDbPath())
 }

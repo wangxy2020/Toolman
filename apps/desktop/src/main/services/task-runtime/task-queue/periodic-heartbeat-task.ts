@@ -1,4 +1,4 @@
-import { isActiveTaskStatus, type AgentTask } from '@toolman/shared'
+import { isActiveTaskStatus } from '@toolman/shared'
 
 import { logStructured } from '../../structured-log.service'
 import { bindTaskToSession } from '../session-bind'
@@ -74,8 +74,4 @@ export function enqueuePeriodicHeartbeatTask(options: {
     `periodic heartbeat task enqueued: ${task.id} assistant=${options.assistantId}`,
   )
   return true
-}
-
-export function isPeriodicHeartbeatTask(task: AgentTask): boolean {
-  return task.metadata[TASK_HEARTBEAT_PERIODIC_KEY] === true
 }

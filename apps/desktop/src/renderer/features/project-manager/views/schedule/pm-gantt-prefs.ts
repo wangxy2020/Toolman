@@ -80,8 +80,8 @@ export const GANTT_COLUMN_WIDTHS: Record<string, string> = {
   'resource:0:qty': '120px',
   /** Cost-allocation: one slot column = name picker + quantity. */
   costName: '128px',
-  costAmount: '88px',
-  costQty: '184px',
+  costAmount: '104px',
+  costQty: '200px',
   costInput: '320px',
 }
 
@@ -94,21 +94,7 @@ export const GANTT_FULL_LIST_NAME_WIDTH = '280px'
  */
 export const GANTT_RESOURCE_VIEW_BASE_COLUMNS = ['index', 'name'] as const
 
-export const GANTT_RESOURCE_VIEW_OPTIONAL_COLUMNS = ['duration', 'start', 'finish'] as const
-
-/**
- * Resource-view column groups are unbounded; slotCount grows with assigned resources.
- * Kept as Infinity so older `Math.min(..., MAX)` call sites stay safe.
- */
-export const GANTT_RESOURCE_VIEW_MAX_SLOTS = Number.POSITIVE_INFINITY
-
 export const GANTT_COST_VIEW_BASE_COLUMNS = ['index', 'name'] as const
-export const GANTT_COST_VIEW_OPTIONAL_COLUMNS = ['duration', 'start', 'finish'] as const
-/**
- * Cost-view column groups are unbounded; slotCount grows with assigned costs.
- * Kept as Infinity so older `Math.min(..., MAX)` call sites stay safe.
- */
-export const GANTT_COST_VIEW_MAX_SLOTS = Number.POSITIVE_INFINITY
 
 export const GANTT_CUSTOM_COLUMN_WIDTH = '100px'
 
@@ -217,11 +203,6 @@ function isGanttResourceColumnType(value: unknown): value is GanttResourceColumn
 }
 
 export type GanttAssignTypeFilter = 'all' | GanttResourceColumnType | 'custom'
-
-export function normalizeGanttAssignTypeFilter(value: unknown): GanttAssignTypeFilter {
-  if (value === 'all' || value === 'custom' || isGanttResourceColumnType(value)) return value
-  return 'all'
-}
 
 /** Types listed under the 资源分配 menubar dropdown. */
 export const GANTT_RESOURCE_ASSIGN_MENU_TYPES = [
@@ -352,12 +333,25 @@ export type GanttCostViewPrefs = {
 }
 
 export const DEFAULT_GANTT_COST_VIEW_PREFS: GanttCostViewPrefs = {
-  slotCount: 1,
+  slotCount: 4,
   showDuration: true,
   showStart: true,
   showFinish: true,
   inputMode: false,
   typeFilter: 'all',
+}
+
+/**
+ * Visible resource/cost assignment column count for the current project.
+ * Empty projects use the default (4); otherwise at least the widest assignment row.
+ */
+export function resolveAssignViewSlotCount(
+  maxAssignmentSlots: number,
+  defaultSlots: number = DEFAULT_GANTT_COST_VIEW_PREFS.slotCount,
+): number {
+  const maxSlots = Math.max(0, Math.floor(maxAssignmentSlots))
+  const fallback = Math.max(1, Math.floor(defaultSlots))
+  return Math.max(fallback, maxSlots)
 }
 
 export type GanttUiPrefs = {
@@ -415,7 +409,7 @@ export const DEFAULT_GANTT_UI_PREFS: GanttUiPrefs = {
   resourceView: { ...DEFAULT_GANTT_RESOURCE_VIEW_PREFS },
   costView: { ...DEFAULT_GANTT_COST_VIEW_PREFS },
   /** Bump when shipping a new one-time default-column migration. */
-  columnDefaultsVersion: 2,
+  columnDefaultsVersion: 3,
 }
 
 const GANTT_UI_PREFS_KEY = 'tm-pm-gantt-ui-prefs'
@@ -650,10 +644,17 @@ export function normalizeGanttUiPrefs(partial: Partial<GanttUiPrefs> | null | un
   const costViewPartial =
     partial?.costView && typeof partial.costView === 'object' ? partial.costView : null
   const costSlotCountRaw = costViewPartial?.slotCount
-  const costSlotCount =
+  let costSlotCount =
     typeof costSlotCountRaw === 'number' && Number.isFinite(costSlotCountRaw)
       ? Math.max(1, Math.floor(costSlotCountRaw))
       : DEFAULT_GANTT_COST_VIEW_PREFS.slotCount
+  // v3: cost-allocation default columns 1 → 4 (legacy default was a single slot).
+  if (columnDefaultsVersion < 3) {
+    if (costSlotCountRaw == null || costSlotCount === 1) {
+      costSlotCount = DEFAULT_GANTT_COST_VIEW_PREFS.slotCount
+    }
+    columnDefaultsVersion = 3
+  }
 
   return {
     dateHeaderMode: migrateDateHeaderMode(partial),
@@ -753,13 +754,6 @@ export function withGanttDefaultPredecessorsColumn(prefs: GanttUiPrefs): GanttUi
 
 export function isGanttBuiltinColumn(id: string): id is GanttBuiltinColumn {
   return (GANTT_BUILTIN_COLUMNS as readonly string[]).includes(id)
-}
-
-export function isGanttResourceViewColumn(id: string): boolean {
-  if (id === 'spacer') return true
-  if ((GANTT_RESOURCE_VIEW_BASE_COLUMNS as readonly string[]).includes(id)) return true
-  if ((GANTT_RESOURCE_VIEW_OPTIONAL_COLUMNS as readonly string[]).includes(id)) return true
-  return /^resource:\d+:(type|name|qty|input)$/.test(id)
 }
 
 /** Build the fixed column order for the resource-allocation view. */

@@ -1,15 +1,14 @@
 import { z } from 'zod'
 
-import {
-  PmAgentResourceTypeSchema,
-  resolvePmAgentResourceTypeLabel,
-  type PmAgentResourceType,
-} from './pm-resource-apply.js'
+import { resolvePmAgentResourceTypeLabel } from './pm-resource-apply.js'
 import { isPmSystemDefaultResourceProjectCode } from './pm-resource-catalog-agent.js'
 import {
   costCatalogMatchKey,
   formatCostCatalogHintLines,
+  PM_SHARED_COST_TYPE_LABELS,
+  PmSharedCostCatalogTypeSchema,
   type PmSharedCostCatalogRow,
+  type PmSharedCostCatalogType,
 } from './pm-shared-cost-catalog.js'
 
 /** Stored on `PmProject.metadata`. */
@@ -28,7 +27,7 @@ export type PmAgentProjectCostCatalogSummary = {
 }
 
 export const PmCostCatalogUpsertEntrySchema = z.object({
-  type: PmAgentResourceTypeSchema,
+  type: PmSharedCostCatalogTypeSchema,
   name: z.string().min(1),
   code: z.string().optional(),
   unit: z.string().optional(),
@@ -42,7 +41,7 @@ export const PmCostCatalogUpsertEntrySchema = z.object({
 export type PmCostCatalogUpsertEntry = z.infer<typeof PmCostCatalogUpsertEntrySchema>
 
 export const PmCostCatalogRemoveEntrySchema = z.object({
-  type: PmAgentResourceTypeSchema.optional(),
+  type: PmSharedCostCatalogTypeSchema.optional(),
   typeLabel: z.string().optional(),
   name: z.string().min(1),
 })
@@ -93,9 +92,27 @@ export function normalizeCostCatalogPatchTarget(target: string): 'shared' | stri
   return trimmed
 }
 
+export function resolvePmSharedCostCatalogTypeLabel(
+  label: string,
+): PmSharedCostCatalogType | null {
+  const fromResource = resolvePmAgentResourceTypeLabel(label)
+  if (fromResource) return fromResource
+  const trimmed = label.trim()
+  if (!trimmed) return null
+  if ((PmSharedCostCatalogTypeSchema.options as readonly string[]).includes(trimmed)) {
+    return trimmed as PmSharedCostCatalogType
+  }
+  for (const [type, zh] of Object.entries(PM_SHARED_COST_TYPE_LABELS) as Array<
+    [PmSharedCostCatalogType, string]
+  >) {
+    if (zh === trimmed) return type
+  }
+  return null
+}
+
 export function removeCostCatalogRows(
   existing: readonly PmSharedCostCatalogRow[],
-  removes: ReadonlyArray<{ type?: PmAgentResourceType | null; name: string }>,
+  removes: ReadonlyArray<{ type?: PmSharedCostCatalogType | null; name: string }>,
 ): { rows: PmSharedCostCatalogRow[]; changed: boolean; removedCount: number } {
   if (removes.length === 0) {
     return { rows: [...existing], changed: false, removedCount: 0 }
@@ -135,8 +152,8 @@ function normalizeUpsertEntry(entry: unknown): unknown {
   const typeLabel = typeof row.typeLabel === 'string' ? row.typeLabel : undefined
   const typeRaw = typeof row.type === 'string' ? row.type : undefined
   const resolved =
-    (typeRaw ? resolvePmAgentResourceTypeLabel(typeRaw) : null) ??
-    (typeLabel ? resolvePmAgentResourceTypeLabel(typeLabel) : null)
+    (typeRaw ? resolvePmSharedCostCatalogTypeLabel(typeRaw) : null) ??
+    (typeLabel ? resolvePmSharedCostCatalogTypeLabel(typeLabel) : null)
   return {
     type: resolved ?? undefined,
     name: row.name ?? row.costName,
@@ -156,8 +173,8 @@ function normalizeRemoveEntry(entry: unknown): unknown {
   const typeLabel = typeof row.typeLabel === 'string' ? row.typeLabel : undefined
   const typeRaw = typeof row.type === 'string' ? row.type : undefined
   const resolved =
-    (typeRaw ? resolvePmAgentResourceTypeLabel(typeRaw) : null) ??
-    (typeLabel ? resolvePmAgentResourceTypeLabel(typeLabel) : null)
+    (typeRaw ? resolvePmSharedCostCatalogTypeLabel(typeRaw) : null) ??
+    (typeLabel ? resolvePmSharedCostCatalogTypeLabel(typeLabel) : null)
   return {
     type: resolved ?? undefined,
     typeLabel,

@@ -34,10 +34,6 @@ export const EMPTY_TASK_RESOURCE_ASSIGNMENT: TaskResourceAssignment = {
 
 const RESOURCE_COLUMN_RE = /^resource:(\d+):(type|name|qty|input)$/
 
-export function makeResourceColumnId(slot: number, field: ResourceColumnField): string {
-  return `resource:${Math.max(0, Math.floor(slot))}:${field}`
-}
-
 export function parseResourceColumnId(
   id: string,
 ): { slot: number; field: ResourceColumnField } | null {

@@ -104,10 +104,6 @@ export const PM_RESOURCE_BUILTIN_PRIMARY_TYPES = PM_RESOURCE_PRIMARY_TYPES.filte
     type !== 'custom',
 )
 
-export function isCustomResourceType(type: unknown): type is 'custom' {
-  return type === 'custom'
-}
-
 /** Trimmed user-defined type name (`''` when blank / not custom). */
 export function resourceCustomTypeName(
   row: Pick<PmResourceRow, 'type' | 'customTypeName'>,
@@ -801,25 +797,6 @@ export function applyDefaultUnitPrices(rows: PmResourceRow[]): {
   return { rows: next, changed }
 }
 
-/** Clone a catalog with new ids and a fixed applicable scope (project or all). */
-export function cloneResourceCatalog(
-  rows: PmResourceRow[],
-  applicable: string,
-): PmResourceRow[] {
-  const idMap = new Map<string, string>()
-  for (const row of rows) {
-    idMap.set(row.id, crypto.randomUUID())
-  }
-  return reindexResourceRows(
-    rows.map((row) => ({
-      ...row,
-      id: idMap.get(row.id) ?? crypto.randomUUID(),
-      parentId: row.parentId ? (idMap.get(row.parentId) ?? null) : null,
-      applicable,
-    })),
-  )
-}
-
 function sharedCatalogStorageKey(workspaceId: string): string {
   return `toolman.pm.resourceCatalog.shared.${workspaceId}`
 }
@@ -1235,14 +1212,6 @@ export function resolveAssignableResourceCatalog(
   options?: { projectCode?: string | null },
 ): PmResourceRow[] {
   return resolveProjectResourceCatalog(workspaceId, projectId, metadata, options).rows
-}
-
-/** Clone shared catalog for callers that explicitly want a project-owned copy. */
-export function seedProjectResourceCatalogFromShared(
-  workspaceId: string,
-): PmResourceRow[] {
-  const shared = readSharedResourceCatalog(workspaceId)
-  return cloneResourceCatalog(shared.rows, PM_RESOURCE_APPLICABLE_ALL)
 }
 
 export function createEmptyResourceRow(

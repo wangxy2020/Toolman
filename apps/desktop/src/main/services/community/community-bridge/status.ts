@@ -1,6 +1,5 @@
 import { hasAnyCommunityHubCache } from '../community-hub-cache.service'
 import {
-  childProcess,
   currentStatus,
   httpClient,
   setCurrentStatus,
@@ -40,8 +39,4 @@ export function clearCommunityHubOfflineReadOnly(): void {
     offlineReadOnly: false,
     error: undefined,
   })
-}
-
-export function isOwnedChildProcess(pid: number): boolean {
-  return childProcess?.pid === pid
 }

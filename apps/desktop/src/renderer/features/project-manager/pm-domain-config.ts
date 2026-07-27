@@ -10,7 +10,6 @@ export const PM_DATABASE_DOMAINS: ConfigurableSidebarMenuKey[] = [
   'security_management',
   'quality_management',
   'archive_management',
-  'technical_management',
   'contract_risk_management',
   'operations_management',
 ]
@@ -32,7 +31,6 @@ export const PM_VERTICAL_STATS_DOMAINS: ConfigurableSidebarMenuKey[] = [
   'resource_management',
   'security_management',
   'quality_management',
-  'technical_management',
   'contract_risk_management',
   'operations_management',
 ]

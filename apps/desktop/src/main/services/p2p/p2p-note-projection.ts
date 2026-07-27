@@ -7,7 +7,6 @@ import { listWorkspaceEventsSince } from './p2p-event.service'
 import {
   applyLoroOplog,
   getTextFromLoroDoc,
-  initLoroDocFromText,
 } from './loro-note-doc'
 
 import { findSharedResourceForProjection, resolveSharedResourceId } from './p2p-shared-resource-id'
@@ -198,14 +197,6 @@ export function applyNoteUpdatedEvent(event: WorkspaceEvent): void {
     tags: [],
     updatedAt: event.timestamp,
   })
-}
-
-export function ensureNoteLoroFromContent(
-  workspaceId: string,
-  noteId: string,
-  content: string,
-): void {
-  initLoroDocFromText(workspaceId, noteId, content)
 }
 
 export function reconcileNoteSharedResources(workspaceId: string): void {

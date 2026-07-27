@@ -138,7 +138,3 @@ export interface P2pNativeModule {
   snapshotHash(json: string): string
   snapshotInterval(): number
 }
-
-export type {
-  NativeConnectionInfo as NativeConnectionInfoExport,
-}

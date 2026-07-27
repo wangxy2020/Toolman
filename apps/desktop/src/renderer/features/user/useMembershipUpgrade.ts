@@ -65,8 +65,9 @@ export function useMembershipUpgrade(active: boolean) {
   useEffect(() => {
     if (!active || !order || order.status !== 'pending' || order.mockMode) return
 
+    const orderId = order.orderId
     const timer = window.setInterval(() => {
-      void getBillingOrderStatus(order.orderId)
+      void getBillingOrderStatus(orderId)
         .then((next) => {
           setOrder(next)
           if (next.status === 'paid') {
@@ -78,7 +79,7 @@ export function useMembershipUpgrade(active: boolean) {
     }, 3000)
 
     return () => window.clearInterval(timer)
-  }, [active, order, refresh, t])
+  }, [active, order?.orderId, order?.status, order?.mockMode, refresh, t])
 
   const handleCreateOrder = async () => {
     setLoading(true)

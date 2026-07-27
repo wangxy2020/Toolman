@@ -25,4 +25,3 @@ export function useGroupKnowledgePanel(props: GroupKnowledgePanelProps) {
   }
 }
 
-export type UseGroupKnowledgePanelResult = ReturnType<typeof useGroupKnowledgePanel>

@@ -18,12 +18,6 @@ export interface PersistedChatSession {
   updatedAt: number
 }
 
-/**
- * @deprecated Use {@link PersistedChatSession}. Kept as alias so existing db call sites compile;
- * do not import this name from desktop — use `@toolman/shared` Session for IPC.
- */
-export type Session = PersistedChatSession
-
 /** Slim persisted message (repository API). Prefer `@toolman/shared` Message for IPC. */
 export interface PersistedChatMessage {
   id: string
@@ -32,13 +26,6 @@ export interface PersistedChatMessage {
   content: string
   timestamp: number
 }
-
-/**
- * @deprecated Use {@link PersistedChatMessage}. Kept as alias so existing db call sites compile;
- * do not import this name from desktop — use `@toolman/shared` Message for IPC.
- */
-export type Message = PersistedChatMessage
-
 export interface CreateSessionInput {
   title?: string
   modelId?: string | null

@@ -116,6 +116,21 @@ export type PmCostRow = {
    * Kept in sync across rows that share the same sectionalWork key.
    */
   sectionNote: string
+  /**
+   * Display name on the 分部工程 / 汇总 summary row (工作名称).
+   * Kept in sync across rows that share the same sectionalWork key.
+   */
+  sectionName: string
+  /**
+   * Feature description on the 分部工程 / 汇总 summary row (特征描述).
+   * Kept in sync across rows that share the same sectionalWork key.
+   */
+  sectionFeatureDescription: string
+  /**
+   * Optional 合价 formula on the 分部工程 summary row (e.g. `=A+B`).
+   * Empty = auto-sum detail rows in the section.
+   */
+  sectionTotalFormula: string
   sortOrder: number
   parentId?: string | null
 }
@@ -130,12 +145,9 @@ export function isPmCostType(value: unknown): value is PmCostType {
 
 /**
  * Map a UI cost type onto the durable shared price-list type enum.
- * Practice quota types are practice-only and fall back to `other`.
+ * Practice quota types are first-class on the shared catalog.
  */
-export function toSharedCostCatalogType(
-  type: PmCostType,
-): Exclude<PmCostType, PmCostPracticeQuotaType> {
-  if (isPmCostPracticeQuotaType(type)) return 'other'
+export function toSharedCostCatalogType(type: PmCostType): PmCostType {
   return type
 }
 
@@ -152,6 +164,84 @@ export function computeCostTotalPrice(
     return null
   }
   return Math.round(quantity * unitPrice * 100) / 100
+}
+
+/**
+ * 合价 for a row: if it has children, sum of child 合价 (recursive);
+ * otherwise quantity × unitPrice.
+ */
+export function computeCostRowTotalPrice(
+  row: PmCostRow,
+  rows: readonly PmCostRow[],
+  childIndex?: ReadonlyMap<string, PmCostRow[]>,
+): number | null {
+  const children =
+    childIndex?.get(row.id) ?? rows.filter((entry) => entry.parentId === row.id)
+  if (children.length > 0) {
+    let sum = 0
+    let hasAmount = false
+    for (const child of children) {
+      const amount = computeCostRowTotalPrice(child, rows, childIndex)
+      if (amount != null) {
+        sum += amount
+        hasAmount = true
+      }
+    }
+    return hasAmount ? Math.round(sum * 100) / 100 : null
+  }
+  return computeCostTotalPrice(row.quantity, row.unitPrice)
+}
+
+/** Build parentId → children list for O(n) rollups. */
+export function buildCostChildrenIndex(
+  rows: readonly PmCostRow[],
+): Map<string, PmCostRow[]> {
+  const index = new Map<string, PmCostRow[]>()
+  for (const row of rows) {
+    const parentId = row.parentId
+    if (!parentId) continue
+    const list = index.get(parentId)
+    if (list) list.push(row)
+    else index.set(parentId, [row])
+  }
+  return index
+}
+
+/**
+ * Sum 合价 without double-counting: only roots whose parent is outside `rows`
+ * (or null), each using child rollup when present.
+ */
+export function sumCostRowsTotalPrice(rows: readonly PmCostRow[]): number | null {
+  if (rows.length === 0) return null
+  const idSet = new Set(rows.map((row) => row.id))
+  const childIndex = buildCostChildrenIndex(rows)
+  let sum = 0
+  let hasAmount = false
+  for (const row of rows) {
+    const parentId = row.parentId ?? null
+    if (parentId && idSet.has(parentId)) continue
+    const amount = computeCostRowTotalPrice(row, rows, childIndex)
+    if (amount != null) {
+      sum += amount
+      hasAmount = true
+    }
+  }
+  return hasAmount ? Math.round(sum * 100) / 100 : null
+}
+
+/**
+ * Suggest the next 编码 from the previous row: increment the trailing number
+ * while preserving prefix and zero-padding (e.g. `1.01` → `1.02`, `A-9` → `A-10`).
+ */
+export function suggestNextCostCode(previousCode: string): string {
+  const trimmed = previousCode.trim()
+  if (!trimmed) return ''
+  const match = trimmed.match(/^(.*?)(\d+)$/)
+  if (!match) return ''
+  const prefix = match[1] ?? ''
+  const digits = match[2] ?? ''
+  const next = String(Number(digits) + 1)
+  return `${prefix}${next.padStart(digits.length, '0')}`
 }
 
 export function formatCostTotalPrice(value: number | null): string {
@@ -188,88 +278,68 @@ export type CostSectionalDisplayEntry =
   | { kind: 'row'; row: PmCostRow; index: number }
 
 /**
- * Insert a 分部工程合价 summary before the first data row of each sectional group
- * (groups follow visible order / first appearance).
+ * Insert a 分部工程合价 summary before the rows of each sectional group.
+ * Groups are keyed by trimmed 分部工程 (first-appearance order), so the same
+ * section never produces duplicate summary rows when rows are interleaved
+ * (e.g. after type-menu sort or mid-list inserts).
  */
 export function buildCostSectionalDisplayEntries(
   rows: readonly PmCostRow[],
 ): CostSectionalDisplayEntry[] {
-  const entries: CostSectionalDisplayEntry[] = []
-  let i = 0
-  while (i < rows.length) {
-    const key = costSectionalWorkKey(rows[i]!)
-    let sum = 0
-    let hasAmount = false
-    let j = i
-    while (j < rows.length && costSectionalWorkKey(rows[j]!) === key) {
-      const amount = computeCostTotalPrice(rows[j]!.quantity, rows[j]!.unitPrice)
-      if (amount != null) {
-        sum += amount
-        hasAmount = true
-      }
-      j += 1
+  const order: string[] = []
+  const groups = new Map<string, { rows: PmCostRow[] }>()
+  for (const row of rows) {
+    const key = costSectionalWorkKey(row)
+    let group = groups.get(key)
+    if (!group) {
+      group = { rows: [] }
+      groups.set(key, group)
+      order.push(key)
     }
-    const head = rows[i]!
+    group.rows.push(row)
+  }
+
+  const entries: CostSectionalDisplayEntry[] = []
+  let displayIndex = 0
+  for (const key of order) {
+    const group = groups.get(key)!
+    const total = sumCostRowsTotalPrice(group.rows)
+    const code =
+      group.rows.map((row) => row.sectionCode?.trim() ?? '').find((value) => value) ?? ''
+    const note =
+      group.rows.map((row) => row.sectionNote?.trim() ?? '').find((value) => value) ?? ''
     entries.push({
       kind: 'section',
       summary: {
         key,
-        total: hasAmount ? Math.round(sum * 100) / 100 : null,
-        rowCount: j - i,
-        code: head.sectionCode ?? '',
-        note: head.sectionNote ?? '',
+        total,
+        rowCount: group.rows.length,
+        code,
+        note,
       },
     })
-    for (let k = i; k < j; k += 1) {
-      entries.push({ kind: 'row', row: rows[k]!, index: k })
+    for (const row of group.rows) {
+      entries.push({ kind: 'row', row, index: displayIndex })
+      displayIndex += 1
     }
-    i = j
   }
   return entries
 }
 
-/**
- * Rollup view: one grand-total row, then each 分部 summary (no detail data rows).
- */
-export function buildCostSectionalRollupDisplayEntries(
-  rows: readonly PmCostRow[],
-): Array<
-  | { kind: 'grand'; summary: CostSectionalSummary }
-  | { kind: 'section'; summary: CostSectionalSummary }
-> {
-  const sections = buildCostSectionalDisplayEntries(rows).flatMap((entry) =>
-    entry.kind === 'section' ? [entry] : [],
-  )
-  let sum = 0
-  let hasAmount = false
-  let rowCount = 0
-  for (const entry of sections) {
-    rowCount += entry.summary.rowCount
-    if (entry.summary.total != null) {
-      sum += entry.summary.total
-      hasAmount = true
-    }
-  }
-  return [
-    {
-      kind: 'grand',
-      summary: {
-        key: '',
-        total: hasAmount ? Math.round(sum * 100) / 100 : null,
-        rowCount,
-        code: '',
-        note: '',
-      },
-    },
-    ...sections,
-  ]
-}
-
-/** Patch summary-row code/note onto every row in the given sectional group. */
+/** Patch summary-row fields onto every row in the given sectional group. */
 export function patchCostSectionMeta(
   rows: readonly PmCostRow[],
   sectionKey: string,
-  patch: Partial<Pick<PmCostRow, 'sectionCode' | 'sectionNote'>>,
+  patch: Partial<
+    Pick<
+      PmCostRow,
+      | 'sectionCode'
+      | 'sectionNote'
+      | 'sectionName'
+      | 'sectionFeatureDescription'
+      | 'sectionTotalFormula'
+    >
+  >,
 ): PmCostRow[] {
   return rows.map((row) =>
     costSectionalWorkKey(row) === sectionKey ? { ...row, ...patch } : row,
@@ -301,6 +371,11 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
     const sectionalWork = typeof row.sectionalWork === 'string' ? row.sectionalWork : ''
     const sectionCode = typeof row.sectionCode === 'string' ? row.sectionCode : ''
     const sectionNote = typeof row.sectionNote === 'string' ? row.sectionNote : ''
+    const sectionName = typeof row.sectionName === 'string' ? row.sectionName : ''
+    const sectionFeatureDescription =
+      typeof row.sectionFeatureDescription === 'string' ? row.sectionFeatureDescription : ''
+    const sectionTotalFormula =
+      typeof row.sectionTotalFormula === 'string' ? row.sectionTotalFormula : ''
     const sortOrder =
       typeof row.sortOrder === 'number' && Number.isFinite(row.sortOrder)
         ? Math.floor(row.sortOrder)
@@ -325,6 +400,9 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
       sectionalWork,
       sectionCode,
       sectionNote,
+      sectionName,
+      sectionFeatureDescription,
+      sectionTotalFormula,
       sortOrder,
       ...(parentId !== undefined ? { parentId } : {}),
     })
@@ -352,6 +430,9 @@ export function createEmptyCostRow(
     sectionalWork: '',
     sectionCode: '',
     sectionNote: '',
+    sectionName: '',
+    sectionFeatureDescription: '',
+    sectionTotalFormula: '',
     sortOrder,
     parentId,
   }
@@ -377,6 +458,9 @@ export function fingerprintCostCatalog(rows: readonly PmCostRow[]): string {
       sectionalWork: row.sectionalWork,
       sectionCode: row.sectionCode,
       sectionNote: row.sectionNote,
+      sectionName: row.sectionName,
+      sectionFeatureDescription: row.sectionFeatureDescription,
+      sectionTotalFormula: row.sectionTotalFormula,
       sortOrder: row.sortOrder,
       parentId: row.parentId ?? null,
     })),
@@ -583,6 +667,9 @@ export function writeSharedCostCatalog(workspaceId: string, rows: PmCostRow[]): 
           sectionalWork: row.sectionalWork,
           sectionCode: row.sectionCode,
           sectionNote: row.sectionNote,
+          sectionName: row.sectionName,
+          sectionFeatureDescription: row.sectionFeatureDescription,
+          sectionTotalFormula: row.sectionTotalFormula,
           sortOrder: row.sortOrder,
           parentId: row.parentId ?? null,
         })),
@@ -618,6 +705,9 @@ export async function hydrateSharedCostCatalogFromMain(workspaceId: string): Pro
         sectionalWork: row.sectionalWork ?? '',
         sectionCode: row.sectionCode ?? '',
         sectionNote: row.sectionNote ?? '',
+        sectionName: row.sectionName ?? '',
+        sectionFeatureDescription: row.sectionFeatureDescription ?? '',
+        sectionTotalFormula: row.sectionTotalFormula ?? '',
         sortOrder: row.sortOrder,
         parentId: row.parentId ?? null,
       }))
@@ -679,7 +769,10 @@ export function upsertSharedCostCatalog(
         existing.note !== candidate.note ||
         existing.sectionalWork !== candidate.sectionalWork ||
         existing.sectionCode !== candidate.sectionCode ||
-        existing.sectionNote !== candidate.sectionNote
+        existing.sectionNote !== candidate.sectionNote ||
+        existing.sectionName !== candidate.sectionName ||
+        existing.sectionFeatureDescription !== candidate.sectionFeatureDescription ||
+        existing.sectionTotalFormula !== candidate.sectionTotalFormula
       ) {
         next[existingIndex] = {
           ...existing,
@@ -690,6 +783,9 @@ export function upsertSharedCostCatalog(
           sectionalWork: candidate.sectionalWork,
           sectionCode: candidate.sectionCode,
           sectionNote: candidate.sectionNote,
+          sectionName: candidate.sectionName,
+          sectionFeatureDescription: candidate.sectionFeatureDescription,
+          sectionTotalFormula: candidate.sectionTotalFormula,
         }
         changed = true
       }
@@ -747,6 +843,9 @@ export function toCostCatalogSnapshot(rows: readonly PmCostRow[]): PmCostCatalog
     sectionalWork: row.sectionalWork,
     sectionCode: row.sectionCode,
     sectionNote: row.sectionNote,
+    sectionName: row.sectionName,
+    sectionFeatureDescription: row.sectionFeatureDescription,
+    sectionTotalFormula: row.sectionTotalFormula,
     sortOrder: row.sortOrder,
     parentId: row.parentId ?? null,
   }))

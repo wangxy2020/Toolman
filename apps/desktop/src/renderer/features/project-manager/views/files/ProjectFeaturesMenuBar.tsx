@@ -1,10 +1,4 @@
-import type {
-  FocusEvent as ReactFocusEvent,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  ReactNode,
-} from 'react'
-import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import {
@@ -23,11 +17,13 @@ import {
   IconTrash,
   IconUndo,
 } from '../../../../components/icons'
-import { useI18n } from '../../../../i18n/useI18n'
+import { useMenuBarHScroll, useMenuBarTooltip } from '../../pm-menubar-chrome'
 import {
   PM_COST_PRACTICE_QUOTA_TYPES,
   type PmCostPracticeQuotaType,
 } from '../cost/pm-cost-catalog'
+import type { PmFeatureViewFilter } from './pm-features-catalog'
+import { useProjectFeaturesMenuBar } from './useProjectFeaturesMenuBar'
 
 const ICON_SIZE = 16
 
@@ -90,19 +86,8 @@ type MenuItem = {
   active?: boolean
 }
 
-export type FeaturesRowType =
-  | 'labor'
-  | 'auxiliary'
-  | 'material'
-  | 'machinery'
-  | 'device'
-  | 'instrument'
-  | 'procurement'
-  | 'metering'
-  | 'node'
-  | 'funds'
-
-export type FeaturesViewFilter = FeaturesRowType | 'scheduleAll'
+/** Align with practice catalog filters (includes cost primary types like `other`). */
+export type FeaturesViewFilter = PmFeatureViewFilter
 
 /** Resource-stat filters shown in the「资源统计」dropdown (default: scheduleAll). */
 export const FEATURES_RESOURCE_STAT_FILTERS = [
@@ -126,7 +111,7 @@ export function isFeaturesResourceStatFilter(
   )
 }
 
-interface Props {
+export interface ProjectFeaturesMenuBarProps {
   disabled?: boolean
   hasSelection?: boolean
   hasProject?: boolean
@@ -155,39 +140,7 @@ interface Props {
   showTrailingMenus?: boolean
 }
 
-type ScrollMetrics = {
-  overflowing: boolean
-  thumbSize: number
-  thumbOffset: number
-}
-
-type TooltipState = { text: string; top: number; left: number }
-
-const EMPTY_SCROLL: ScrollMetrics = { overflowing: false, thumbSize: 1, thumbOffset: 0 }
-
-function useDropdownPos(open: boolean, anchorRef: React.RefObject<HTMLElement | null>) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  useEffect(() => {
-    if (!open) {
-      setPos(null)
-      return
-    }
-    const updatePos = () => {
-      const el = anchorRef.current
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: rect.left })
-    }
-    updatePos()
-    window.addEventListener('resize', updatePos)
-    window.addEventListener('scroll', updatePos, true)
-    return () => {
-      window.removeEventListener('resize', updatePos)
-      window.removeEventListener('scroll', updatePos, true)
-    }
-  }, [open, anchorRef])
-  return pos
-}
+type Props = ProjectFeaturesMenuBarProps
 
 export function ProjectFeaturesMenuBar({
   disabled = false,
@@ -209,107 +162,35 @@ export function ProjectFeaturesMenuBar({
   onAction,
   showTrailingMenus = true,
 }: Props) {
-  const { t } = useI18n()
-  const [viewOpen, setViewOpen] = useState(false)
-  const [resourceStatsOpen, setResourceStatsOpen] = useState(false)
-  const [baselineOpen, setBaselineOpen] = useState(false)
-  const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(EMPTY_SCROLL)
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
-  const viewRef = useRef<HTMLSpanElement>(null)
-  const resourceStatsRef = useRef<HTMLSpanElement>(null)
-  const baselineRef = useRef<HTMLSpanElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const trackRef = useRef<HTMLDivElement>(null)
-  const viewPos = useDropdownPos(viewOpen, viewRef)
-  const resourceStatsPos = useDropdownPos(resourceStatsOpen, resourceStatsRef)
-  const baselinePos = useDropdownPos(baselineOpen, baselineRef)
-
-  const syncScrollMetrics = () => {
-    const el = scrollRef.current
-    if (!el) return
-    const { scrollWidth, clientWidth, scrollLeft } = el
-    const overflowing = scrollWidth > clientWidth + 1
-    if (!overflowing) {
-      setScrollMetrics(EMPTY_SCROLL)
-      return
-    }
-    const thumbSize = Math.min(1, clientWidth / scrollWidth)
-    const maxScroll = scrollWidth - clientWidth
-    const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * (1 - thumbSize)
-    setScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
-  }
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    syncScrollMetrics()
-    const ro = new ResizeObserver(() => syncScrollMetrics())
-    ro.observe(el)
-    if (el.firstElementChild) ro.observe(el.firstElementChild)
-    window.addEventListener('resize', syncScrollMetrics)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', syncScrollMetrics)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!viewOpen && !resourceStatsOpen && !baselineOpen) return
-    const onDoc = (event: MouseEvent) => {
-      const target = event.target as Node
-      if (viewOpen && viewRef.current?.contains(target)) return
-      if (resourceStatsOpen && resourceStatsRef.current?.contains(target)) return
-      if (baselineOpen && baselineRef.current?.contains(target)) return
-      if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
-      setViewOpen(false)
-      setResourceStatsOpen(false)
-      setBaselineOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [baselineOpen, resourceStatsOpen, viewOpen])
-
-  const viewLabelByMode: Record<FeaturesScheduleView, string> = {
-    list: t('projectManagerPage.schedule.views.list'),
-    gantt: t('projectManagerPage.schedule.views.gantt'),
-    progressCheck: t('projectManagerPage.schedule.views.progressCheck'),
-    resource: t('projectManagerPage.schedule.views.resource'),
-    cost: t('projectManagerPage.schedule.views.cost'),
-  }
-  const quotaLabelByMode: Record<ResourcePracticeQuotaView, string> = {
-    labor: t('projectManagerPage.resourcePractice.views.labor'),
-    material: t('projectManagerPage.resourcePractice.views.material'),
-    equipment: t('projectManagerPage.resourcePractice.views.equipment'),
-  }
-  const costQuotaLabelByMode: Record<CostPracticeQuotaView, string> = {
-    constructionQuota: t('projectManagerPage.costPractice.views.constructionQuota'),
-    budgetQuota: t('projectManagerPage.costPractice.views.budgetQuota'),
-    estimateQuota: t('projectManagerPage.costPractice.views.estimateQuota'),
-    estimateIndicator: t('projectManagerPage.costPractice.views.estimateIndicator'),
-    investmentIndicator: t('projectManagerPage.costPractice.views.investmentIndicator'),
-  }
-  const viewCurrentLabel =
-    viewMenuMode === 'resourceQuota'
-      ? quotaLabelByMode[quotaView]
-      : viewMenuMode === 'costQuota'
-        ? costQuotaLabelByMode[costQuotaView]
-      : viewLabelByMode[scheduleView]
-  const baselineMenuLabel = t('projectManagerPage.files.menu.baseline')
-  const resourceStatsMenuLabel = t('projectManagerPage.files.menu.resourceStatistics')
-  const resourceStatMode = isFeaturesResourceStatFilter(selectedType)
-  const resourceStatCurrent: FeaturesResourceStatFilter | null = resourceStatMode
-    ? selectedType
-    : null
-  const resourceStatCurrentLabel =
-    resourceStatCurrent == null
-      ? null
-      : resourceStatCurrent === 'scheduleAll'
-        ? t('projectManagerPage.files.menu.scheduleAll')
-        : t(`projectManagerPage.files.menu.${resourceStatCurrent}`)
-  const resourceStatsTip =
-    resourceStatCurrentLabel != null
-      ? `${resourceStatsMenuLabel} · ${resourceStatCurrentLabel}`
-      : resourceStatsMenuLabel
+  const {
+    t,
+    viewOpen,
+    setViewOpen,
+    resourceStatsOpen,
+    setResourceStatsOpen,
+    baselineOpen,
+    setBaselineOpen,
+    viewRef,
+    resourceStatsRef,
+    baselineRef,
+    viewPos,
+    resourceStatsPos,
+    baselinePos,
+    viewLabelByMode,
+    quotaLabelByMode,
+    costQuotaLabelByMode,
+    viewCurrentLabel,
+    baselineMenuLabel,
+    resourceStatsMenuLabel,
+    resourceStatMode,
+    resourceStatCurrent,
+    resourceStatCurrentLabel,
+    resourceStatsTip,
+    viewLabel,
+  } = useProjectFeaturesMenuBar({ selectedType, scheduleView, viewMenuMode, quotaView, costQuotaView })
+  const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
+  const { scrollRef, trackRef, scrollMetrics, syncScrollMetrics, onTrackPointerDown } =
+    useMenuBarHScroll()
 
   const items: MenuItem[] = [
     {
@@ -432,20 +313,6 @@ export function ProjectFeaturesMenuBar({
     },
   ]
 
-  const hideTip = () => setTooltip(null)
-
-  const showTipFromEl = (el: HTMLElement, text: string) => {
-    const rect = el.getBoundingClientRect()
-    setTooltip({ text, top: rect.bottom + 6, left: rect.left + rect.width / 2 })
-  }
-
-  const tipProps = (text: string) => ({
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => showTipFromEl(event.currentTarget, text),
-    onMouseLeave: hideTip,
-    onFocus: (event: ReactFocusEvent<HTMLElement>) => showTipFromEl(event.currentTarget, text),
-    onBlur: hideTip,
-  })
-
   const renderToolbarItem = (item: MenuItem) => {
     const isDisabled = Boolean(disabled || item.disabled)
     return (
@@ -475,41 +342,6 @@ export function ProjectFeaturesMenuBar({
       </span>
     )
   }
-
-  const scrollToThumbOffset = (nextOffset: number) => {
-    const el = scrollRef.current
-    if (!el) return
-    const maxScroll = el.scrollWidth - el.clientWidth
-    if (maxScroll <= 0) return
-    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
-    const travel = 1 - thumbSize
-    const clamped = Math.max(0, Math.min(travel, nextOffset))
-    el.scrollLeft = travel <= 0 ? 0 : (clamped / travel) * maxScroll
-  }
-
-  const onTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const track = trackRef.current
-    const el = scrollRef.current
-    if (!track || !el) return
-    event.preventDefault()
-    const trackRect = track.getBoundingClientRect()
-    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
-    const pointerRatio = (event.clientX - trackRect.left) / trackRect.width
-    scrollToThumbOffset(pointerRatio - thumbSize / 2)
-
-    const onMove = (moveEvent: PointerEvent) => {
-      const ratio = (moveEvent.clientX - trackRect.left) / trackRect.width
-      scrollToThumbOffset(ratio - thumbSize / 2)
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
-
-  const viewLabel = t('projectManagerPage.files.menu.view')
 
   // Edit actions through moveDown; trailing type filters after resource-stats dropdown.
   const leadingItems = items.slice(0, 13)

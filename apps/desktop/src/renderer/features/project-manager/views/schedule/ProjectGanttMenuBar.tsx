@@ -1,10 +1,4 @@
-import type {
-  FocusEvent as ReactFocusEvent,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  ReactNode,
-} from 'react'
-import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   IconChevronDown,
@@ -22,7 +16,7 @@ import {
   IconTrash,
   IconUndo,
 } from '../../../../components/icons'
-import { useI18n } from '../../../../i18n/useI18n'
+import { useMenuBarHScroll, useMenuBarTooltip } from '../../pm-menubar-chrome'
 import type { BaselineCompareMode } from './pm-gantt-baseline-compare'
 import { formatBaselineCaptureTime } from './pm-gantt-baseline-compare'
 import { formatWorkItemDate } from './pm-gantt-utils'
@@ -32,6 +26,7 @@ import {
   GANTT_RESOURCE_ASSIGN_MENU_TYPES,
   type GanttAssignTypeFilter,
 } from './pm-gantt-prefs'
+import { useProjectGanttMenuBar, type GanttMenuDropdownKey } from './useProjectGanttMenuBar'
 
 const ICON_SIZE = 16
 
@@ -79,17 +74,7 @@ type MenuItem = {
   icon?: boolean
 }
 
-type DropdownKey =
-  | 'view'
-  | 'type'
-  | 'baseline'
-  | 'node'
-  | 'resourceAssign'
-  | 'costAssign'
-  | 'smartAssign'
-  | 'analysis'
-
-interface Props {
+export interface ProjectGanttMenuBarProps {
   disabled?: boolean
   hasSelection: boolean
   hasProject?: boolean
@@ -119,39 +104,7 @@ interface Props {
   onAction: (action: GanttMenuAction) => void
 }
 
-function useDropdownPos(open: boolean, anchorRef: React.RefObject<HTMLElement | null>) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  useEffect(() => {
-    if (!open) {
-      setPos(null)
-      return
-    }
-    const updatePos = () => {
-      const el = anchorRef.current
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: rect.left })
-    }
-    updatePos()
-    window.addEventListener('resize', updatePos)
-    window.addEventListener('scroll', updatePos, true)
-    return () => {
-      window.removeEventListener('resize', updatePos)
-      window.removeEventListener('scroll', updatePos, true)
-    }
-  }, [open, anchorRef])
-  return pos
-}
-
-type ScrollMetrics = {
-  overflowing: boolean
-  thumbSize: number
-  thumbOffset: number
-}
-
-type TooltipState = { text: string; top: number; left: number }
-
-const EMPTY_SCROLL: ScrollMetrics = { overflowing: false, thumbSize: 1, thumbOffset: 0 }
+type Props = ProjectGanttMenuBarProps
 
 export function ProjectGanttMenuBar({
   disabled = false,
@@ -176,89 +129,34 @@ export function ProjectGanttMenuBar({
   onRestoreBaseline,
   onAction,
 }: Props) {
-  const { t } = useI18n()
-  const [openMenu, setOpenMenu] = useState<DropdownKey | null>(null)
-  const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(EMPTY_SCROLL)
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
-  const viewRef = useRef<HTMLSpanElement>(null)
-  const typeRef = useRef<HTMLSpanElement>(null)
-  const baselineRef = useRef<HTMLSpanElement>(null)
-  const nodeRef = useRef<HTMLSpanElement>(null)
-  const resourceAssignRef = useRef<HTMLSpanElement>(null)
-  const costAssignRef = useRef<HTMLSpanElement>(null)
-  const smartAssignRef = useRef<HTMLSpanElement>(null)
-  const analysisRef = useRef<HTMLSpanElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const trackRef = useRef<HTMLDivElement>(null)
-
-  const viewPos = useDropdownPos(openMenu === 'view', viewRef)
-  const typePos = useDropdownPos(openMenu === 'type', typeRef)
-  const baselinePos = useDropdownPos(openMenu === 'baseline', baselineRef)
-  const nodePos = useDropdownPos(openMenu === 'node', nodeRef)
-  const resourceAssignPos = useDropdownPos(openMenu === 'resourceAssign', resourceAssignRef)
-  const costAssignPos = useDropdownPos(openMenu === 'costAssign', costAssignRef)
-  const smartAssignPos = useDropdownPos(openMenu === 'smartAssign', smartAssignRef)
-  const analysisPos = useDropdownPos(openMenu === 'analysis', analysisRef)
-
-  const syncScrollMetrics = () => {
-    const el = scrollRef.current
-    if (!el) return
-    const { scrollWidth, clientWidth, scrollLeft } = el
-    const overflowing = scrollWidth > clientWidth + 1
-    if (!overflowing) {
-      setScrollMetrics(EMPTY_SCROLL)
-      return
-    }
-    const thumbSize = Math.min(1, clientWidth / scrollWidth)
-    const maxScroll = scrollWidth - clientWidth
-    const thumbOffset = maxScroll <= 0 ? 0 : (scrollLeft / maxScroll) * (1 - thumbSize)
-    setScrollMetrics({ overflowing: true, thumbSize, thumbOffset })
-  }
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    syncScrollMetrics()
-    const ro = new ResizeObserver(() => syncScrollMetrics())
-    ro.observe(el)
-    if (el.firstElementChild) ro.observe(el.firstElementChild)
-    window.addEventListener('resize', syncScrollMetrics)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', syncScrollMetrics)
-    }
-  }, [])
-
-  const toggleMenu = (key: DropdownKey) => {
-    setOpenMenu((current) => (current === key ? null : key))
-  }
-
-  useEffect(() => {
-    if (!openMenu) return
-    const onDoc = (event: MouseEvent) => {
-      const target = event.target as Node
-      const refs: Array<[DropdownKey, React.RefObject<HTMLElement | null>]> = [
-        ['view', viewRef],
-        ['type', typeRef],
-        ['baseline', baselineRef],
-        ['node', nodeRef],
-        ['resourceAssign', resourceAssignRef],
-        ['costAssign', costAssignRef],
-        ['smartAssign', smartAssignRef],
-        ['analysis', analysisRef],
-      ]
-      for (const [key, ref] of refs) {
-        if (openMenu !== key) continue
-        if (ref.current?.contains(target)) return
-        if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
-      }
-      setOpenMenu(null)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [openMenu])
-
-  const structureLocked = scheduleView === 'resource'
+  const {
+    t,
+    openMenu,
+    setOpenMenu,
+    toggleMenu,
+    viewRef,
+    typeRef,
+    baselineRef,
+    nodeRef,
+    resourceAssignRef,
+    costAssignRef,
+    smartAssignRef,
+    analysisRef,
+    viewPos,
+    typePos,
+    baselinePos,
+    nodePos,
+    resourceAssignPos,
+    costAssignPos,
+    smartAssignPos,
+    analysisPos,
+    structureLocked,
+    viewLabelByMode,
+    typeLabel,
+  } = useProjectGanttMenuBar({ scheduleView, selectedTaskType })
+  const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
+  const { scrollRef, trackRef, scrollMetrics, syncScrollMetrics, onTrackPointerDown } =
+    useMenuBarHScroll()
 
   const items: MenuItem[] = [
     {
@@ -291,7 +189,6 @@ export function ProjectGanttMenuBar({
       title: t('projectManagerPage.schedule.menu.link'),
       label: <IconLink size={ICON_SIZE} />,
       icon: true,
-      // Placeholder — feature not implemented yet.
       disabled: true,
     },
     {
@@ -361,36 +258,9 @@ export function ProjectGanttMenuBar({
     },
   ]
 
-  const viewLabelByMode: Record<GanttScheduleView, string> = {
-    list: t('projectManagerPage.schedule.views.list'),
-    gantt: t('projectManagerPage.schedule.views.gantt'),
-    progressCheck: t('projectManagerPage.schedule.views.progressCheck'),
-    resource: t('projectManagerPage.schedule.views.resource'),
-    cost: t('projectManagerPage.schedule.views.cost'),
-  }
-
-  const typeLabel =
-    selectedTaskType === 'milestone'
-      ? t('projectManagerPage.schedule.menu.setMilestone')
-      : t('projectManagerPage.schedule.menu.setTask')
-
   const leadingItems = items.slice(0, 9)
   const hierarchyItems = items.slice(9, 11)
   const moveItems = items.slice(11)
-
-  const hideTip = () => setTooltip(null)
-
-  const showTipFromEl = (el: HTMLElement, text: string) => {
-    const rect = el.getBoundingClientRect()
-    setTooltip({ text, top: rect.bottom + 6, left: rect.left + rect.width / 2 })
-  }
-
-  const tipProps = (text: string) => ({
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => showTipFromEl(event.currentTarget, text),
-    onMouseLeave: hideTip,
-    onFocus: (event: ReactFocusEvent<HTMLElement>) => showTipFromEl(event.currentTarget, text),
-    onBlur: hideTip,
-  })
 
   const renderToolbarItem = (item: MenuItem) => {
     const isDisabled = Boolean(disabled || item.disabled)
@@ -435,7 +305,7 @@ export function ProjectGanttMenuBar({
       : null
 
   const renderMenuButton = (
-    key: DropdownKey,
+    key: GanttMenuDropdownKey,
     ref: React.RefObject<HTMLSpanElement | null>,
     label: string,
     options?: {
@@ -476,39 +346,6 @@ export function ProjectGanttMenuBar({
         {dividerAfter ? <span className="tm-pm-gantt-menubar-divider" /> : null}
       </span>
     )
-  }
-
-  const scrollToThumbOffset = (nextOffset: number) => {
-    const el = scrollRef.current
-    if (!el) return
-    const maxScroll = el.scrollWidth - el.clientWidth
-    if (maxScroll <= 0) return
-    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
-    const travel = 1 - thumbSize
-    const clamped = Math.max(0, Math.min(travel, nextOffset))
-    el.scrollLeft = travel <= 0 ? 0 : (clamped / travel) * maxScroll
-  }
-
-  const onTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const track = trackRef.current
-    const el = scrollRef.current
-    if (!track || !el) return
-    event.preventDefault()
-    const trackRect = track.getBoundingClientRect()
-    const thumbSize = Math.min(1, el.clientWidth / el.scrollWidth)
-    const pointerRatio = (event.clientX - trackRect.left) / trackRect.width
-    scrollToThumbOffset(pointerRatio - thumbSize / 2)
-
-    const onMove = (moveEvent: PointerEvent) => {
-      const ratio = (moveEvent.clientX - trackRect.left) / trackRect.width
-      scrollToThumbOffset(ratio - thumbSize / 2)
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
   }
 
   return (

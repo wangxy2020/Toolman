@@ -3,13 +3,39 @@ import { z } from 'zod'
 import {
   PmAgentResourceTypeSchema,
   PM_AGENT_RESOURCE_TYPE_LABELS,
-  type PmAgentResourceType,
 } from './pm-resource-apply.js'
+
+/** Practice quota types used by 成本管理-实务 (durable on shared price-list). */
+export const PmCostPracticeQuotaTypeSchema = z.enum([
+  'constructionQuota',
+  'budgetQuota',
+  'estimateQuota',
+  'estimateIndicator',
+  'investmentIndicator',
+])
+
+export type PmCostPracticeQuotaType = z.infer<typeof PmCostPracticeQuotaTypeSchema>
+
+export const PmSharedCostCatalogTypeSchema = z.enum([
+  ...PmAgentResourceTypeSchema.options,
+  ...PmCostPracticeQuotaTypeSchema.options,
+])
+
+export type PmSharedCostCatalogType = z.infer<typeof PmSharedCostCatalogTypeSchema>
+
+export const PM_SHARED_COST_TYPE_LABELS: Record<PmSharedCostCatalogType, string> = {
+  ...PM_AGENT_RESOURCE_TYPE_LABELS,
+  constructionQuota: '施工定额',
+  budgetQuota: '预算定额',
+  estimateQuota: '概算定额',
+  estimateIndicator: '估算指标',
+  investmentIndicator: '投资指标',
+}
 
 /** Workspace「全部项目」cost/price-list (价格表) catalog row (durable + UI). */
 export const PmSharedCostCatalogRowSchema = z.object({
   id: z.string().min(1),
-  type: PmAgentResourceTypeSchema,
+  type: PmSharedCostCatalogTypeSchema,
   /** Item code (编码). */
   code: z.string().default(''),
   name: z.string(),
@@ -26,6 +52,12 @@ export const PmSharedCostCatalogRowSchema = z.object({
   sectionCode: z.string().default(''),
   /** Note on 分部工程 summary row. */
   sectionNote: z.string().default(''),
+  /** Display name on 分部工程 / 汇总 summary row. */
+  sectionName: z.string().default(''),
+  /** Feature description on 分部工程 / 汇总 summary row. */
+  sectionFeatureDescription: z.string().default(''),
+  /** Optional 合价 formula on 分部工程 summary row. */
+  sectionTotalFormula: z.string().default(''),
   sortOrder: z.number().int(),
   parentId: z.string().nullable().optional(),
 })
@@ -45,7 +77,7 @@ export const PmSharedCostCatalogUpsertInputSchema = z.object({
   workspaceId: z.string().uuid(),
   upserts: z.array(
     z.object({
-      type: PmAgentResourceTypeSchema,
+      type: PmSharedCostCatalogTypeSchema,
       name: z.string().min(1),
       code: z.string().optional(),
       unit: z.string().optional(),
@@ -60,7 +92,7 @@ export const PmSharedCostCatalogUpsertInputSchema = z.object({
 
 export const PM_SHARED_COST_APPLICABLE_ALL = 'all'
 
-export function costCatalogMatchKey(type: PmAgentResourceType, name: string): string {
+export function costCatalogMatchKey(type: PmSharedCostCatalogType, name: string): string {
   return `${type}::${name.trim().toLowerCase()}`
 }
 
@@ -81,7 +113,7 @@ export function formatCostCatalogHintLines(
 ): string {
   if (rows.length === 0) return '（价格表为空）'
   const lines = rows.slice(0, limit).map((row) => {
-    const typeLabel = PM_AGENT_RESOURCE_TYPE_LABELS[row.type] ?? row.type
+    const typeLabel = PM_SHARED_COST_TYPE_LABELS[row.type] ?? row.type
     const price =
       row.unitPrice != null && Number.isFinite(row.unitPrice) ? String(row.unitPrice) : '-'
     const quantity =
@@ -115,7 +147,7 @@ export function createDefaultSharedCostCatalogRows(): PmSharedCostCatalogRow[] {
 export function upsertSharedCostCatalogRows(
   existing: readonly PmSharedCostCatalogRow[],
   upserts: ReadonlyArray<{
-    type: PmAgentResourceType
+    type: PmSharedCostCatalogType
     name: string
     code?: string
     unit?: string
@@ -159,6 +191,9 @@ export function upsertSharedCostCatalogRows(
         sectionalWork: entry.sectionalWork?.trim() ?? '',
         sectionCode: '',
         sectionNote: '',
+        sectionName: '',
+        sectionFeatureDescription: '',
+        sectionTotalFormula: '',
         sortOrder: next.length,
         parentId: null,
       })

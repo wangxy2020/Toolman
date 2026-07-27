@@ -147,10 +147,6 @@ export async function bootstrapP2pIceServers(): Promise<boolean> {
   return true
 }
 
-export function clearRuntimeIceServersOverrideForTests(): void {
-  runtimeIceServersOverride = null
-}
-
 export function getP2pIceServers(): P2pIceServer[] {
   return sanitizeIceServersForWebRtc(getRawP2pIceServers())
 }

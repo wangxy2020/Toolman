@@ -15,8 +15,6 @@ export const SkillMarketManifestSchema = z.object({
   files: z.array(z.string().min(1)).min(1),
 })
 
-export type SkillMarketManifest = z.infer<typeof SkillMarketManifestSchema>
-
 export interface SkillMarketInstallInput {
   manifest: Record<string, unknown>
   packagePath: string

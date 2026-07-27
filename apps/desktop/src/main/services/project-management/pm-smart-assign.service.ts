@@ -33,8 +33,6 @@ export const PmSmartAssignInputSchema = z.object({
   kind: z.enum(['resource', 'cost']),
 })
 
-export type PmSmartAssignInput = z.infer<typeof PmSmartAssignInputSchema>
-
 function getWorkItemRepo(): PmWorkItemRepository {
   return new PmWorkItemRepository(getDatabase())
 }

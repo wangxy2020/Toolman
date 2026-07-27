@@ -185,10 +185,12 @@ export function syncConnectionEvents(
         }
         if (resolvedWorkspaceId) {
           notifyP2pReconnect(resolvedWorkspaceId, peerDeviceId)
-          void import('./p2p-member.service').then((module) => {
-            module.flushPendingJoinNotification(peerDeviceId, resolvedWorkspaceId)
-            void module.reconcileOwnerWorkspaceMembers(resolvedWorkspaceId)
-          })
+          void import('./p2p-member.service')
+            .then((module) => {
+              module.flushPendingJoinNotification(peerDeviceId, resolvedWorkspaceId)
+              void module.reconcileOwnerWorkspaceMembers(resolvedWorkspaceId)
+            })
+            .catch(() => undefined)
         }
       } else if (
         previous?.state === 'connected' &&

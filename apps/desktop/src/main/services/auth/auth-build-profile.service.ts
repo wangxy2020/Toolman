@@ -73,4 +73,3 @@ export function assertAuthBindAllowed(provider: AuthProvider): void {
   assertAuthLoginAllowed('intl', provider)
 }
 
-export function resetAuthBuildRegionCacheForTests(): void {}

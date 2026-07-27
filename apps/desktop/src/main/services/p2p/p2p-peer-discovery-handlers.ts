@@ -29,9 +29,11 @@ export function handlePeerDiscoveryOffline(peerDeviceId: string): void {
     peerRepo.updateConnectionState(row.workspaceId, peerDeviceId, 'closed', false)
   }
 
-  void import('./p2p-connection.service').then((module) => {
-    void module.disconnectP2pPeer(peerDeviceId).catch(() => undefined)
-  })
+  void import('./p2p-connection.service')
+    .then((module) => {
+      void module.disconnectP2pPeer(peerDeviceId).catch(() => undefined)
+    })
+    .catch(() => undefined)
 }
 
 export function handlePeerDiscoveryOnline(peerDeviceId: string): void {

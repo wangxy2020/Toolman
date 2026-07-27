@@ -1,8 +1,14 @@
 export const PROJECT_MANAGEMENT_ASSISTANT_NAME = '项目管理'
 
+/**
+ * Topic titles keyed by PM sidebar tab.
+ * Key order matches `CONFIGURABLE_SIDEBAR_MENU_KEYS` default (项目管理分栏菜单).
+ */
 export const PROJECT_MANAGEMENT_AGENT_SESSION_TITLES = {
   all_projects: '工作台',
   urgent_tasks: '待办',
+  operations_management: '运营管理',
+  contract_risk_management: '合约风控',
   key_projects: '综合管理',
   progress_management: '计划管理',
   cost_management: '成本管理',
@@ -10,9 +16,6 @@ export const PROJECT_MANAGEMENT_AGENT_SESSION_TITLES = {
   security_management: '安全质量',
   quality_management: '测量试验',
   archive_management: '档案管理',
-  technical_management: '技术管理',
-  contract_risk_management: '合约风控',
-  operations_management: '运营管理',
 } as const
 
 export type ProjectManagementAgentTab = keyof typeof PROJECT_MANAGEMENT_AGENT_SESSION_TITLES
@@ -99,6 +102,31 @@ export function listProjectManagementAssistantSessions(
   assistantId: string,
 ): ProjectManagementSessionCandidate[] {
   return sessions.filter((session) => session.assistantId === assistantId)
+}
+
+/**
+ * Sort PM agent topics to match a sidebar menu key order.
+ * Unknown / non-tab sessions sink to the end (then by recency).
+ */
+export function sortProjectManagementSessionsByMenuOrder<
+  T extends {
+    title: string
+    metadata: Record<string, unknown>
+    lastMessageAt?: number | null
+    updatedAt?: number
+  },
+>(sessions: readonly T[], menuOrder: readonly string[]): T[] {
+  const rank = new Map(menuOrder.map((tab, index) => [tab, index]))
+  return [...sessions].sort((left, right) => {
+    const leftTab = resolveProjectManagementTabFromSession(left)
+    const rightTab = resolveProjectManagementTabFromSession(right)
+    const leftRank = leftTab != null ? (rank.get(leftTab) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
+    const rightRank = rightTab != null ? (rank.get(rightTab) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
+    if (leftRank !== rightRank) return leftRank - rightRank
+    const rightActivity = right.lastMessageAt ?? right.updatedAt ?? 0
+    const leftActivity = left.lastMessageAt ?? left.updatedAt ?? 0
+    return rightActivity - leftActivity
+  })
 }
 
 export function pickBestProjectManagementSession(

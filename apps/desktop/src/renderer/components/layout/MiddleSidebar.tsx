@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Assistant, Session } from '@toolman/shared'
+import {
+  PROJECT_MANAGEMENT_ASSISTANT_NAME,
+  sortProjectManagementSessionsByMenuOrder,
+} from '@toolman/shared'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { IconChevronRight, IconPlus, IconTopic } from '../icons'
 import { SidebarRenameInput } from '../../features/notes/SidebarRenameInput'
 import { isGroupProxyAssistant, resolveGroupProxyAssistantDisplayName } from '../../features/group/group-agent-utils'
+import {
+  DEFAULT_SIDEBAR_MENU_ORDER,
+  readProjectSidebarMenuPreferences,
+} from '../../features/project-manager/projectSidebarMenuConfig'
 import { useI18n } from '../../i18n/useI18n'
 import { translateAssistantName, translateSessionTitle } from '../../i18n/system-labels'
 
@@ -48,6 +56,13 @@ function groupSessions(sessions: Session[], assistants: Assistant[]) {
   }
 
   return { map, unassigned }
+}
+
+function sessionsForAssistant(assistant: Assistant, sessions: Session[]): Session[] {
+  if (assistant.name !== PROJECT_MANAGEMENT_ASSISTANT_NAME) return sessions
+  const menuOrder = readProjectSidebarMenuPreferences().order
+  const order = menuOrder.length > 0 ? menuOrder : DEFAULT_SIDEBAR_MENU_ORDER
+  return sortProjectManagementSessionsByMenuOrder(sessions, order)
 }
 
 export function MiddleSidebar({
@@ -164,7 +179,7 @@ export function MiddleSidebar({
           )}
 
           {assistants.map((assistant) => {
-            const assistantSessions = map.get(assistant.id) ?? []
+            const assistantSessions = sessionsForAssistant(assistant, map.get(assistant.id) ?? [])
             const isOpen = expanded.has(assistant.id)
             const isActive = assistant.id === activeAssistantId
 

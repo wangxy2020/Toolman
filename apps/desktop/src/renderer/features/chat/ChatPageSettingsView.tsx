@@ -1,7 +1,7 @@
 import { SettingsPage } from '../settings/SettingsPage'
 import type { ChatPageState } from './useChatPage'
 
-export type ChatPageSettingsViewProps = Pick<
+type ChatPageSettingsViewProps = Pick<
   ChatPageState,
   | 'workspaceId'
   | 'settingsSection'

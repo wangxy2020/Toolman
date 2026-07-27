@@ -22,10 +22,6 @@ export class TaskWorkerAbortedError extends Error {
   }
 }
 
-export function getProcessWorkerId(): string {
-  return PROCESS_WORKER_ID
-}
-
 export function getTaskWorkerSnapshot(): {
   workerId: string
   activeTaskId: string | null

@@ -16,8 +16,6 @@ export const WorkflowMarketManifestSchema = z.object({
   requiredSkillIds: z.array(z.string()).optional(),
 })
 
-export type WorkflowMarketManifest = z.infer<typeof WorkflowMarketManifestSchema>
-
 export interface WorkflowMarketInstallInput {
   manifest: Record<string, unknown>
   packagePath: string

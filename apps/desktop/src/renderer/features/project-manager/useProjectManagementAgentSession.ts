@@ -15,7 +15,7 @@ import {
 
 type ChatApi = ReturnType<typeof useChat>
 
-export type ProjectManagementAgentLinkState =
+type ProjectManagementAgentLinkState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'linked'; assistantId: string; sessionId: string }

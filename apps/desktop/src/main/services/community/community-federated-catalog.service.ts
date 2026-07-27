@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import {
   CommunityResourceItemSchema,
   FederatedResourceCatalogEntrySchema,
-  type CidPackageManifest,
   type CommunityResourceItem,
   type CommunityResourceListInput,
   type FederatedResourceCatalogEntry,
@@ -148,15 +147,6 @@ export function buildFederatedCatalogEntryFromResource(
     updatedAt: resource.updatedAt,
   })
 }
-
-export function upsertFederatedCatalogFromCidManifest(
-  _manifest: CidPackageManifest,
-  _signerDid: string,
-): boolean {
-  // CID announce is for package distribution only — never add marketplace list rows.
-  return false
-}
-
 function toCommunityResourceItem(entry: StoredFederatedCatalogEntry): CommunityResourceItem {
   return CommunityResourceItemSchema.parse({
     id: entry.id,

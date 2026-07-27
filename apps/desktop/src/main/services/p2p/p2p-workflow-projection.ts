@@ -1,10 +1,7 @@
 import { P2pSharedResourceRepository } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
-import {
-  getStoredWorkflow,
-  upsertStoredWorkflow,
-} from '../community/workflow-store.service'
+import { upsertStoredWorkflow } from '../community/workflow-store.service'
 import { listWorkspaceEventsSince } from './p2p-event.service'
 import {
   findSharedResourceForProjection,
@@ -222,8 +219,4 @@ export function reconcileWorkflowSharedResources(workspaceId: string): void {
         : event.payload,
     })
   }
-}
-
-export function getProjectedWorkflow(workflowId: string) {
-  return getStoredWorkflow(workflowId)
 }

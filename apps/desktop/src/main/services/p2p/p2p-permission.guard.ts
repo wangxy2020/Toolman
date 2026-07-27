@@ -1,5 +1,5 @@
 import { P2pMemberRepository, type P2pWorkspaceMemberRow } from '@toolman/db'
-import type { P2pMemberRole, P2pSharedResourcePermission } from '@toolman/shared'
+import type { P2pSharedResourcePermission } from '@toolman/shared'
 import {
   canManageWorkspaceMembers,
   canWriteWorkspace,
@@ -73,14 +73,6 @@ export function assertCanInvite(workspaceId: string): P2pWorkspaceMemberRow {
   return member
 }
 
-export function assertWorkspaceOwner(workspaceId: string): P2pWorkspaceMemberRow {
-  const member = assertWorkspaceMemberAccess(workspaceId)
-  if (member.role !== 'owner') {
-    throw new P2pPermissionError('仅群主可执行此操作')
-  }
-  return member
-}
-
 export function assertCanManageMembers(
   workspaceId: string,
   targetMemberId: string,
@@ -136,6 +128,3 @@ export function assertCanEditSharedResource(
   throw new P2pPermissionError('只读资源无法编辑')
 }
 
-export function isWritableRole(role: P2pMemberRole): boolean {
-  return canWriteWorkspace(role)
-}

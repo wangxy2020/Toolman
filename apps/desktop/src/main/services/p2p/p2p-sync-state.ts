@@ -80,10 +80,6 @@ export function listSyncTargetPeerIds(workspaceId: string, peerDeviceId?: string
   return targets.filter((id) => id !== device.deviceId)
 }
 
-export function knownConnectionsSnapshot(): P2pConnectionInfo[] {
-  return [...connectionSnapshot]
-}
-
 export function findConnectedPeer(
   connections: P2pConnectionInfo[],
   peerDeviceId: string,

@@ -1,7 +1,7 @@
 import { ModulePage } from '../modules/ModulePage'
 import type { ModuleView } from '../../types/app-view'
 
-export type ChatPageModuleViewProps = {
+type ChatPageModuleViewProps = {
   activeView: ModuleView
 }
 

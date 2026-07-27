@@ -1,7 +1,7 @@
 import { KnowledgePage } from '../knowledge/KnowledgePage'
 import type { ChatPageState } from './useChatPage'
 
-export type ChatPageKnowledgeViewProps = Pick<
+type ChatPageKnowledgeViewProps = Pick<
   ChatPageState,
   | 'workspaceId'
   | 'knowledgeSection'

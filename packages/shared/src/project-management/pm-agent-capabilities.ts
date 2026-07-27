@@ -45,7 +45,6 @@ export const PM_AGENT_CAPABILITIES: Record<ProjectManagementAgentTab, PmAgentCap
   security_management: { phrases: 'none', apply: [], kickoff: false },
   quality_management: { phrases: 'none', apply: [], kickoff: false },
   archive_management: { phrases: 'none', apply: [], kickoff: false },
-  technical_management: { phrases: 'none', apply: [], kickoff: false },
   contract_risk_management: { phrases: 'none', apply: [], kickoff: false },
   operations_management: { phrases: 'none', apply: [], kickoff: false },
 }

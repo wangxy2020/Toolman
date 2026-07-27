@@ -105,18 +105,22 @@ function stopMemberOwnerConnectLoop(): void {
 
 function startMemberOwnerConnectLoop(): void {
   if (memberOwnerConnectTimer) return
-  void import('./p2p-member.service').then((module) =>
-    module.runMemberOwnerConnectTick({ immediate: true }),
-  )
+  void import('./p2p-member.service')
+    .then((module) => module.runMemberOwnerConnectTick({ immediate: true }))
+    .catch(() => undefined)
   memberOwnerConnectTimer = setInterval(() => {
-    void import('./p2p-member.service').then((module) => module.runMemberOwnerConnectTick())
+    void import('./p2p-member.service')
+      .then((module) => module.runMemberOwnerConnectTick())
+      .catch(() => undefined)
   }, MEMBER_OWNER_CONNECT_INTERVAL_MS)
 }
 
 function startOwnerReconcileLoop(): void {
   if (ownerReconcileTimer) return
   ownerReconcileTimer = setInterval(() => {
-    void import('./p2p-member.service').then((module) => module.runOwnerPeerReconcileTick())
+    void import('./p2p-member.service')
+      .then((module) => module.runOwnerPeerReconcileTick())
+      .catch(() => undefined)
   }, OWNER_RECONCILE_INTERVAL_MS)
 }
 

@@ -1,7 +1,7 @@
 import { CommunityPage } from '../community/CommunityPage'
 import type { ChatPageState } from './useChatPage'
 
-export type ChatPageCommunityViewProps = Pick<
+type ChatPageCommunityViewProps = Pick<
   ChatPageState,
   'communityAction' | 'communitySidebarSection'
 >

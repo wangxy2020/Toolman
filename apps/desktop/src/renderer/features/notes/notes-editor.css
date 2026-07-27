@@ -1,4 +1,4 @@
-/* Notes editor formatting toolbar — independent of Gantt/shared .tm-notes-toolbar. */
+/* Notes editor formatting toolbar. */
 
 .tm-notes-editor-toolbar {
   --tm-notes-toolbar-fg: #000;

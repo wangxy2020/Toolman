@@ -4,7 +4,7 @@ import {
   PmApplyCostCatalogPatchInputSchema,
   PM_PROJECT_COST_CATALOG_KEY,
   removeCostCatalogRows,
-  resolvePmAgentResourceTypeLabel,
+  resolvePmSharedCostCatalogTypeLabel,
   upsertSharedCostCatalogRows,
   type PmCostCatalogPatch,
   type PmSharedCostCatalogRow,
@@ -26,7 +26,9 @@ function resolveRemoves(
   return removes.map((entry) => ({
     type:
       entry.type ??
-      (entry.typeLabel ? resolvePmAgentResourceTypeLabel(entry.typeLabel) ?? undefined : undefined),
+      (entry.typeLabel
+        ? resolvePmSharedCostCatalogTypeLabel(entry.typeLabel) ?? undefined
+        : undefined),
     name: entry.name,
   }))
 }

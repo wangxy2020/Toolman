@@ -239,6 +239,31 @@ export function ensurePmBuiltinEmp2401(workspaceId: string): void {
       description: seed.description,
       metadata: { ...seed.metadata },
     })
+  } else {
+    // Fill EMP-2401 price-card currency defaults when missing on existing installs.
+    const metadata = { ...(project.metadata ?? {}) }
+    const rawCurrencies = metadata.costCurrencies
+    const costCurrencies: Record<string, unknown> =
+      rawCurrencies != null && typeof rawCurrencies === 'object' && !Array.isArray(rawCurrencies)
+        ? { ...(rawCurrencies as Record<string, unknown>) }
+        : {}
+    let changed = false
+    if (typeof metadata.costCurrency !== 'string' || !String(metadata.costCurrency).trim()) {
+      metadata.costCurrency = '元'
+      changed = true
+    }
+    if (
+      typeof costCurrencies.investment !== 'string' ||
+      !String(costCurrencies.investment).trim()
+    ) {
+      costCurrencies.investment = '万元'
+      metadata.costCurrencies = costCurrencies
+      changed = true
+    }
+    if (changed) {
+      const updated = projectRepo.update(project.id, { metadata })
+      if (updated) project = updated
+    }
   }
 
   const existingItems = workItemRepo.list({

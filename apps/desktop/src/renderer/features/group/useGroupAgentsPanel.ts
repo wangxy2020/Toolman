@@ -14,5 +14,3 @@ export function useGroupAgentsPanel(props: GroupAgentsPanelProps) {
     ...actions,
   }
 }
-
-export type UseGroupAgentsPanelResult = ReturnType<typeof useGroupAgentsPanel>

@@ -21,7 +21,3 @@ export function getAuthingClient(): AuthenticationClient {
 
   return client
 }
-
-export function resetAuthingClientForTests(): void {
-  client = null
-}

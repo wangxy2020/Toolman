@@ -5,7 +5,6 @@ import {
   decodeWanBlob,
   encodeWanBlob,
   decodeWanSdpParam,
-  encodeWanSdpParam,
   packWanInviteBundle,
   unpackWanInviteBundle,
 } from './wan-transport'
@@ -192,11 +191,6 @@ export function parseInviteInput(input: string): { token: string; offerSdp?: str
 export function decodeInviteSdpParam(encoded: string): string {
   return decodeWanSdpParam(encoded)
 }
-
-export function encodeInviteSdpParam(sdp: string): string {
-  return encodeWanSdpParam(sdp)
-}
-
 export function buildInviteUrl(token: string, offerSdp?: string): string {
   const url = new URL('toolman://join')
   if (offerSdp) {

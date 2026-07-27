@@ -2,6 +2,8 @@
 export const CONFIGURABLE_SIDEBAR_MENU_KEYS = [
   'all_projects',
   'urgent_tasks',
+  'operations_management',
+  'contract_risk_management',
   'key_projects',
   'progress_management',
   'cost_management',
@@ -9,9 +11,6 @@ export const CONFIGURABLE_SIDEBAR_MENU_KEYS = [
   'security_management',
   'quality_management',
   'archive_management',
-  'technical_management',
-  'contract_risk_management',
-  'operations_management',
 ] as const
 
 export type ConfigurableSidebarMenuKey = (typeof CONFIGURABLE_SIDEBAR_MENU_KEYS)[number]
@@ -33,7 +32,6 @@ export const SIDEBAR_MENU_I18N_KEY: Record<ConfigurableSidebarMenuKey, string> =
   security_management: 'projectManagerPage.sidebar.securityManagement',
   quality_management: 'projectManagerPage.sidebar.qualityManagement',
   archive_management: 'projectManagerPage.sidebar.archiveManagement',
-  technical_management: 'projectManagerPage.sidebar.technicalManagement',
   contract_risk_management: 'projectManagerPage.sidebar.contractRiskManagement',
   operations_management: 'projectManagerPage.sidebar.operationsManagement',
 }
@@ -48,7 +46,6 @@ export const PANEL_SUBTITLE_I18N_KEY: Record<ConfigurableSidebarMenuKey, string>
   security_management: 'projectManagerPage.panel.subtitles.securityManagement',
   quality_management: 'projectManagerPage.panel.subtitles.qualityManagement',
   archive_management: 'projectManagerPage.panel.subtitles.archiveManagement',
-  technical_management: 'projectManagerPage.panel.subtitles.technicalManagement',
   contract_risk_management: 'projectManagerPage.panel.subtitles.contractRiskManagement',
   operations_management: 'projectManagerPage.panel.subtitles.operationsManagement',
 }
@@ -64,7 +61,7 @@ export interface ProjectSidebarMenuPreferences {
   hidden: ConfigurableSidebarMenuKey[]
 }
 
-const STORAGE_KEY = 'toolman:project-sidebar-menu-preferences'
+const STORAGE_KEY = 'toolman:project-sidebar-menu-preferences:v2'
 
 const isConfigurableKey = (key: string): key is ConfigurableSidebarMenuKey =>
   (CONFIGURABLE_SIDEBAR_MENU_KEYS as readonly string[]).includes(key)

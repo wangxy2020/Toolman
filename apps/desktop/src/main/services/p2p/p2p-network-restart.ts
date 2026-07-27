@@ -26,10 +26,6 @@ export function getLibp2pRestartStatus(): Libp2pRestartStatus {
   return { ...restartStatus }
 }
 
-export function getBootstrapCompleted(): boolean {
-  return bootstrapCompleted
-}
-
 export function setBootstrapCompleted(value: boolean): void {
   bootstrapCompleted = value
 }
@@ -42,16 +38,8 @@ export function setShutdownRequested(value: boolean): void {
   shutdownRequested = value
 }
 
-export function getLastObservedRunning(): boolean {
-  return lastObservedRunning
-}
-
 export function setLastObservedRunning(value: boolean): void {
   lastObservedRunning = value
-}
-
-export function getRestartStatus(): Libp2pRestartStatus {
-  return restartStatus
 }
 
 export function setRestartStatus(value: Libp2pRestartStatus): void {

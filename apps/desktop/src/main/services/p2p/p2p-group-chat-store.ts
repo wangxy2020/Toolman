@@ -158,14 +158,6 @@ export function clearGroupChatMessages(workspaceId: string): boolean {
   return true
 }
 
-export function replaceGroupChatMessages(
-  workspaceId: string,
-  messages: P2pGroupChatMessage[],
-): void {
-  messageCache.set(workspaceId, [...messages])
-  flushGroupChatMessages(workspaceId)
-}
-
 export function resetGroupChatStoreCacheForTests(): void {
   for (const timer of flushTimers.values()) {
     clearTimeout(timer)

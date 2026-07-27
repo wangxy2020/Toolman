@@ -11,10 +11,6 @@ import { readLibp2pConfig } from './p2p-libp2p.config'
 
 let lastError: string | null = null
 
-export function getLastNetworkError(): string | null {
-  return lastError
-}
-
 export function setLastNetworkError(error: string | null): void {
   lastError = error
 }

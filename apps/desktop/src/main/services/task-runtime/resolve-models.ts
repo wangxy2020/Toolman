@@ -142,7 +142,3 @@ export function resolveTaskExecutorModelId(options: {
 
   return undefined
 }
-
-export function shouldUseLocalTaskReflectionStrategy(modelId: string | undefined | null): boolean {
-  return isLocalInferenceModelId(modelId)
-}

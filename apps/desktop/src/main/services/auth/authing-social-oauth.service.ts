@@ -272,9 +272,3 @@ export async function loginWithAuthingDouyinOAuth(): Promise<AuthSession> {
     expiresInSeconds: identity.expiresIn ?? 7 * 24 * 3600,
   })
 }
-
-export function resetAuthingOAuthStateForTests(): void {
-  pendingStates.clear()
-  oauthInFlight = false
-  activeOAuthHandlers = null
-}

@@ -30,6 +30,7 @@
     "lint": "turbo run lint",
     "lint:eslint": "eslint .",
     "test": "turbo run test",
+    "ci:check": "bash scripts/ci-check.sh",
     "smoke": "bash scripts/smoke-critical-paths.sh",
     "rc1:preflight": "bash scripts/rc1-preflight.sh",
     "rc1:build": "bash scripts/build-rc1-desktop.sh",

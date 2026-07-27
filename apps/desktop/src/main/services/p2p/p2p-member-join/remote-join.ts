@@ -39,9 +39,9 @@ function resolveRemoteMemberIdentityId(member: P2pMember): string {
 }
 
 function reconcileAfterRemoteJoin(workspaceId: string): void {
-  void import('../p2p-member-reconcile-owner').then((module) =>
-    module.reconcileOwnerWorkspaceMembers(workspaceId, { immediate: true }),
-  )
+  void import('../p2p-member-reconcile-owner')
+    .then((module) => module.reconcileOwnerWorkspaceMembers(workspaceId, { immediate: true }))
+    .catch(() => undefined)
 }
 
 export async function activateMemberAfterOwnerTrust(

@@ -7,7 +7,7 @@ import type { ProjectSidebarMenuTab } from '../project-manager/projectSidebarMen
 
 const LazyProjectManagerPage = lazy(() => import('../project-manager'))
 
-export type ChatPageProjectsViewProps = {
+type ChatPageProjectsViewProps = {
   activeTab: ProjectSidebarMenuTab
   agentContext: Omit<ProjectManagementAgentPanelProps, 'activeTab' | 'selectedProjectId'> | null
 }

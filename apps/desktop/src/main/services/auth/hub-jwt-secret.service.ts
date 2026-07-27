@@ -46,7 +46,3 @@ export async function getHubJwtSecret(): Promise<string> {
   cachedSecret = secret
   return secret
 }
-
-export function resetHubJwtSecretCacheForTests(): void {
-  cachedSecret = null
-}

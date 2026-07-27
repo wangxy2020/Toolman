@@ -14402,11 +14402,16 @@ html.theme-dark .tm-agent-workdir-browse {
 .tm-settings-static {
   font-size: 13px;
   color: var(--tm-text-secondary);
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-settings-static--mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  word-break: break-all;
+  word-break: normal;
 }
 
 .tm-settings-range-wrap {
@@ -14916,6 +14921,7 @@ html.theme-dark .tm-agent-workdir-browse {
   gap: 16px;
   padding: 14px 0;
   border-bottom: 1px solid var(--tm-border-light);
+  min-width: 0;
 }
 
 .tm-display-row:has(.tm-settings-row-hint) {
@@ -14936,8 +14942,27 @@ html.theme-dark .tm-agent-workdir-browse {
   min-width: 0;
 }
 
+/* Static value rows: keep the title column compact so the right side can ellipsize. */
+.tm-display-row:has(.tm-settings-static) .tm-display-row-label {
+  flex: 0 1 auto;
+  max-width: 42%;
+}
+
 .tm-display-row-label > span:first-child {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-display-row:has(.tm-settings-row-hint) .tm-display-row-label {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.tm-display-row:has(.tm-settings-row-hint) .tm-display-row-label > span:first-child {
+  white-space: nowrap;
 }
 
 .tm-display-row-label .tm-settings-row-hint {
@@ -14957,6 +14982,13 @@ html.theme-dark .tm-agent-workdir-browse {
   flex-shrink: 0;
   min-width: fit-content;
   padding-top: 2px;
+}
+
+/* Static text values: take remaining width and ellipsize instead of wrapping the row. */
+.tm-display-row-control:has(.tm-settings-static) {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .tm-display-settings .tm-settings-select,
@@ -17832,253 +17864,6 @@ html.theme-dark .tm-mcp-package-source-group {
   background: var(--tm-bg);
   /* Visible so toolbar tooltips / font menu can paint over the editor body. */
   overflow: visible;
-}
-
-.tm-notes-toolbar {
-  position: relative;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 12px 2px;
-  border-bottom: 1px solid var(--tm-border);
-  background: var(--tm-bg);
-  flex-shrink: 0;
-  overflow: hidden;
-  --tm-notes-toolbar-fg: #000;
-}
-
-html.theme-dark .tm-notes-toolbar {
-  --tm-notes-toolbar-fg: var(--tm-text);
-}
-
-.tm-notes-toolbar-group {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 2px;
-  min-width: 0;
-  flex: 1 1 0;
-  /* scroll (not auto): always reserve/show bar so macOS overlay scrollbars aren't "invisible" */
-  overflow-x: scroll;
-  overflow-y: hidden;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--tm-text-muted) 55%, transparent)
-    color-mix(in srgb, var(--tm-border) 65%, transparent);
-}
-
-.tm-notes-toolbar-group::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
-  -webkit-appearance: none;
-}
-
-.tm-notes-toolbar-group::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--tm-text-muted, #9ca3af) 55%, transparent);
-  border: none;
-  border-radius: 999px;
-  background-clip: border-box;
-}
-
-.tm-notes-toolbar-group::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--tm-text-secondary) 70%, transparent);
-  border: none;
-  background-clip: border-box;
-}
-
-.tm-notes-toolbar-group::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--tm-border) 65%, transparent);
-  border-radius: 999px;
-}
-
-.tm-notes-toolbar-end {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-/* Instant tooltips below buttons (above was clipped by overflow parents). */
-.tm-notes-toolbar-btn[data-tooltip] {
-  position: relative;
-}
-
-.tm-notes-toolbar-btn[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  z-index: 4000;
-  max-width: 220px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--tm-text) 92%, #000);
-  color: var(--tm-bg);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.35;
-  white-space: nowrap;
-  text-align: center;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-50%) translateY(-2px);
-  transition:
-    opacity 0.08s ease 0.02s,
-    transform 0.08s ease 0.02s,
-    visibility 0.08s ease 0.02s;
-}
-
-.tm-notes-toolbar-btn[data-tooltip]:hover::after,
-.tm-notes-toolbar-btn[data-tooltip]:focus-visible::after {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
-}
-
-.tm-notes-toolbar-font-menu {
-  position: fixed;
-  z-index: 4100;
-  display: flex;
-  flex-direction: column;
-  min-width: 96px;
-  padding: 4px;
-  border: 1px solid var(--tm-border);
-  border-radius: 8px;
-  background: var(--tm-bg);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
-}
-
-.tm-notes-toolbar-font-option {
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--tm-text);
-  font-size: 13px;
-  line-height: 1.4;
-  padding: 6px 12px;
-  text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.tm-notes-toolbar-font-option:hover:not(:disabled) {
-  background: var(--tm-hover);
-}
-
-.tm-notes-toolbar-clear {
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: line-through;
-}
-
-.tm-notes-toolbar-fontsize {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.tm-notes-toolbar-item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.tm-notes-toolbar-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--tm-notes-toolbar-fg);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.tm-notes-toolbar-btn--icon {
-  width: 28px;
-  padding: 0;
-}
-
-.tm-notes-toolbar-btn--icon svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-.tm-notes-toolbar-btn--heading {
-  min-width: 32px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.tm-notes-toolbar-btn--body {
-  min-width: 28px;
-}
-
-.tm-notes-toolbar-body {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--tm-notes-toolbar-fg);
-}
-
-.tm-notes-toolbar-btn:hover:not(:disabled) {
-  background: var(--tm-hover);
-  color: var(--tm-notes-toolbar-fg);
-}
-
-/* After base `background: transparent` so active fill is not overridden.
-   Keep label/icon color unchanged (black / theme toolbar fg). */
-.tm-notes-toolbar-btn.tm-notes-toolbar-btn--active {
-  background: color-mix(in srgb, var(--tm-accent) 28%, #fff);
-  color: var(--tm-notes-toolbar-fg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-accent) 55%, transparent);
-}
-
-.tm-notes-toolbar-btn.tm-notes-toolbar-btn--active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tm-accent) 36%, #fff);
-  color: var(--tm-notes-toolbar-fg);
-}
-
-html.theme-dark .tm-notes-toolbar-btn.tm-notes-toolbar-btn--active {
-  background: color-mix(in srgb, var(--tm-accent) 34%, var(--tm-bg));
-}
-
-html.theme-dark .tm-notes-toolbar-btn.tm-notes-toolbar-btn--active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tm-accent) 42%, var(--tm-bg));
-}
-
-.tm-notes-toolbar-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.tm-notes-toolbar-underline {
-  text-decoration: underline;
-}
-
-.tm-notes-toolbar-strike {
-  text-decoration: line-through;
-}
-
-.tm-notes-toolbar-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-}
-
-.tm-notes-toolbar-divider {
-  width: 1px;
-  height: 18px;
-  margin: 0 4px;
-  background: var(--tm-border);
-  flex-shrink: 0;
 }
 
 .tm-notes-editor-layout {

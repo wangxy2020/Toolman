@@ -190,12 +190,6 @@ export function getCommunityCidProviderStatus() {
     lastError,
   })
 }
-
-export async function rescanCommunityCidIndex(): Promise<void> {
-  const indexed = await scanCommunityPackagesForCidIndex()
-  publishAnnouncements(indexed)
-}
-
 export async function setCommunityCidDistributionEnabled(enabled: boolean) {
   ensureDefaultCommunityCidConfig()
   const current = readCommunityCidConfig()

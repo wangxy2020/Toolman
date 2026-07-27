@@ -14,6 +14,24 @@ import {
 
 export const PM_FEATURE_CATALOG_KEY = 'featureCatalog'
 
+/**
+ * Cost primary types used on the 资金 page (aligned with 价格表 type menu).
+ * Declared here as string literals to avoid a circular import with pm-cost-catalog.
+ */
+export const PM_FEATURE_COST_PRIMARY_TYPES = [
+  'comprehensive',
+  'management',
+  'fees',
+  'measures',
+  'other',
+  'tax',
+  'investment',
+  'designEstimate',
+  'constructionBudget',
+  'costBudget',
+  'funds',
+] as const
+
 export const PM_FEATURE_TYPES = [
   'labor',
   'auxiliary',
@@ -24,10 +42,12 @@ export const PM_FEATURE_TYPES = [
   'procurement',
   'metering',
   'node',
-  'funds',
+  ...PM_FEATURE_COST_PRIMARY_TYPES,
 ] as const
 
 export type PmFeatureType = (typeof PM_FEATURE_TYPES)[number]
+
+export type PmFeatureCostPrimaryType = (typeof PM_FEATURE_COST_PRIMARY_TYPES)[number]
 
 export const PM_FEATURE_APPLICABLE_ALL = 'all'
 
@@ -45,15 +65,13 @@ export type PmFeatureScheduleType = (typeof PM_FEATURE_SCHEDULE_TYPES)[number]
 
 export type PmFeatureViewFilter = PmFeatureType | 'scheduleAll'
 
-export function isPmFeatureScheduleType(value: unknown): value is PmFeatureScheduleType {
+export function isPmFeatureCostPrimaryType(
+  value: unknown,
+): value is PmFeatureCostPrimaryType {
   return (
     typeof value === 'string' &&
-    (PM_FEATURE_SCHEDULE_TYPES as readonly string[]).includes(value)
+    (PM_FEATURE_COST_PRIMARY_TYPES as readonly string[]).includes(value)
   )
-}
-
-export function isPmFeatureViewFilter(value: unknown): value is PmFeatureViewFilter {
-  return value === 'scheduleAll' || isPmFeatureType(value)
 }
 
 export type PmFeatureRow = {
@@ -61,6 +79,12 @@ export type PmFeatureRow = {
   type: PmFeatureType
   name: string
   unit: string
+  /** Pricing unit (计价单位); used on 采购 rows. */
+  pricingUnit: string
+  /** Procurement lead time in days (采购周期). */
+  purchaseCycle: number | null
+  /** Transport lead time in days (运输周期). */
+  transportCycle: number | null
   /** Optional quantity / amount depending on type. */
   quantity: number | null
   remark: string
@@ -81,7 +105,6 @@ const DEFAULT_FEATURE_DEFS: ReadonlyArray<{
   { type: 'procurement', name: '招标采购计划', unit: '包', quantity: null, remark: '' },
   { type: 'metering', name: '工程计量节点', unit: '期', quantity: null, remark: '' },
   { type: 'node', name: '关键里程碑节点', unit: '个', quantity: null, remark: '' },
-  { type: 'funds', name: '资金支付计划', unit: '笔', quantity: null, remark: '' },
 ]
 
 /** Legacy starter rows that should not appear once schedule types auto-sync from Gantt. */
@@ -104,6 +127,16 @@ export function featureTypeMenuRank(type: PmFeatureType): number {
 
 export function isPmFeatureType(value: unknown): value is PmFeatureType {
   return typeof value === 'string' && (PM_FEATURE_TYPES as readonly string[]).includes(value)
+}
+
+function parseOptionalCycleDays(value: unknown): number | null {
+  if (value == null) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 function isFeatureRow(value: unknown): value is PmFeatureRow {
@@ -130,21 +163,27 @@ function parseFeatureRows(raw: unknown): PmFeatureRow[] | null {
   if (raw.length === 0) return []
   const parsed = raw
     .filter(isFeatureRow)
-    .map((row) => ({
-      id: row.id,
-      type: row.type,
-      name: row.name,
-      unit: row.unit,
-      quantity:
-        typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
-      remark: typeof row.remark === 'string' ? row.remark : '',
-      applicable:
-        typeof row.applicable === 'string' && row.applicable.trim()
-          ? row.applicable.trim()
-          : PM_FEATURE_APPLICABLE_ALL,
-      sortOrder: Math.floor(row.sortOrder),
-      parentId: typeof row.parentId === 'string' ? row.parentId : null,
-    }))
+    .map((row) => {
+      const record = row as PmFeatureRow & Record<string, unknown>
+      return {
+        id: row.id,
+        type: row.type,
+        name: row.name,
+        unit: row.unit,
+        pricingUnit: typeof record.pricingUnit === 'string' ? record.pricingUnit : '',
+        purchaseCycle: parseOptionalCycleDays(record.purchaseCycle),
+        transportCycle: parseOptionalCycleDays(record.transportCycle),
+        quantity:
+          typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
+        remark: typeof row.remark === 'string' ? row.remark : '',
+        applicable:
+          typeof row.applicable === 'string' && row.applicable.trim()
+            ? row.applicable.trim()
+            : PM_FEATURE_APPLICABLE_ALL,
+        sortOrder: Math.floor(row.sortOrder),
+        parentId: typeof row.parentId === 'string' ? row.parentId : null,
+      }
+    })
     .sort((left, right) => left.sortOrder - right.sortOrder)
   if (parsed.length === 0) return []
   return parsed
@@ -158,6 +197,9 @@ export function createDefaultFeatureCatalog(
     type: entry.type,
     name: entry.name,
     unit: entry.unit,
+    pricingUnit: entry.unit,
+    purchaseCycle: null,
+    transportCycle: null,
     quantity: entry.quantity,
     remark: entry.remark,
     applicable,
@@ -207,6 +249,129 @@ export function stripScheduleFeatureRows(
   return { rows: reindexFeatureRows(next), changed: true }
 }
 
+/**
+ * Remove price-list / 资金 cost types from persisted catalogs.
+ * Those rows are live-derived from Gantt cost assignments.
+ */
+export function stripLiveCostFeatureRows(
+  rows: readonly PmFeatureRow[],
+): { rows: PmFeatureRow[]; changed: boolean } {
+  const next = rows.filter((row) => !isPmFeatureCostPrimaryType(row.type))
+  if (next.length === rows.length) {
+    return { rows: [...rows], changed: false }
+  }
+  return { rows: reindexFeatureRows(next), changed: true }
+}
+
+/** Live 采购 rows synced from Gantt materials (id prefix `gantt-procurement:`). */
+export function isLiveProcurementFeatureRow(
+  row: Pick<PmFeatureRow, 'id' | 'type'>,
+): boolean {
+  return row.type === 'procurement' && row.id.startsWith('gantt-procurement:')
+}
+
+/**
+ * Remove Gantt-synced 采购 material rows from persisted catalogs.
+ */
+export function stripLiveProcurementFeatureRows(
+  rows: readonly PmFeatureRow[],
+): { rows: PmFeatureRow[]; changed: boolean } {
+  const next = rows.filter((row) => !isLiveProcurementFeatureRow(row))
+  if (next.length === rows.length) {
+    return { rows: [...rows], changed: false }
+  }
+  return { rows: reindexFeatureRows(next), changed: true }
+}
+
+/** Strip schedule-synced, cost-synced, and Gantt-material procurement live rows before persist. */
+export function stripLiveFeatureRows(
+  rows: readonly PmFeatureRow[],
+): { rows: PmFeatureRow[]; changed: boolean } {
+  const schedule = stripScheduleFeatureRows(rows)
+  const cost = stripLiveCostFeatureRows(schedule.rows)
+  const procurement = stripLiveProcurementFeatureRows(cost.rows)
+  return {
+    rows: procurement.rows,
+    changed: schedule.changed || cost.changed || procurement.changed,
+  }
+}
+
+/**
+ * Persist catalog rows: drop live Gantt rows, but keep 采购周期/运输周期/备注 overlays
+ * for materials that are still live-synced into the procurement list.
+ */
+export function persistFeatureCatalogRows(rows: readonly PmFeatureRow[]): PmFeatureRow[] {
+  const stripped = stripLiveFeatureRows(rows).rows
+  const liveProcurement = rows.filter(isLiveProcurementFeatureRow)
+  if (liveProcurement.length === 0) return stripped
+
+  const next = stripped.map((row) => ({ ...row }))
+  const indexByName = new Map<string, number>()
+  next.forEach((row, index) => {
+    if (row.type !== 'procurement') return
+    const name = row.name.trim()
+    if (!name || indexByName.has(name)) return
+    indexByName.set(name, index)
+  })
+
+  let changed = false
+  for (const live of liveProcurement) {
+    const name = live.name.trim()
+    if (!name) continue
+    const worthPersisting =
+      live.purchaseCycle != null ||
+      live.transportCycle != null ||
+      live.remark.trim().length > 0
+    const existingIndex = indexByName.get(name)
+    if (!worthPersisting) {
+      if (existingIndex == null) continue
+      // Keep existing overlay row but refresh unit fields from live.
+      const existing = next[existingIndex]!
+      if (
+        existing.unit !== live.unit ||
+        existing.pricingUnit !== live.pricingUnit
+      ) {
+        next[existingIndex] = {
+          ...existing,
+          unit: live.unit,
+          pricingUnit: live.pricingUnit,
+        }
+        changed = true
+      }
+      continue
+    }
+    if (existingIndex != null) {
+      const existing = next[existingIndex]!
+      if (
+        existing.unit !== live.unit ||
+        existing.pricingUnit !== live.pricingUnit ||
+        existing.purchaseCycle !== live.purchaseCycle ||
+        existing.transportCycle !== live.transportCycle ||
+        existing.remark !== live.remark
+      ) {
+        next[existingIndex] = {
+          ...existing,
+          unit: live.unit,
+          pricingUnit: live.pricingUnit,
+          purchaseCycle: live.purchaseCycle,
+          transportCycle: live.transportCycle,
+          remark: live.remark,
+        }
+        changed = true
+      }
+      continue
+    }
+    next.push({
+      ...live,
+      id: crypto.randomUUID(),
+      parentId: null,
+    })
+    changed = true
+  }
+
+  return changed ? reindexFeatureRows(next) : stripped
+}
+
 function sharedCatalogStorageKey(workspaceId: string): string {
   return `toolman.pm.featureCatalog.shared.${workspaceId}`
 }
@@ -230,7 +395,7 @@ export function readSharedFeatureCatalog(workspaceId: string): {
         isDefault: true,
       }
     }
-    const pruned = stripScheduleFeatureRows(
+    const pruned = stripLiveFeatureRows(
       parsed.map((row) =>
         row.applicable === PM_FEATURE_APPLICABLE_ALL
           ? row
@@ -294,55 +459,6 @@ export function mergeSharedIntoProjectFeatureCatalog(
   }
 }
 
-export function upsertSharedFeatureCatalog(
-  sharedRows: PmFeatureRow[],
-  candidates: PmFeatureRow[],
-): { rows: PmFeatureRow[]; changed: boolean } {
-  const byKey = new Map<string, PmFeatureRow>()
-  for (const row of sharedRows) {
-    const name = row.name.trim()
-    if (!name) continue
-    byKey.set(featureMatchKey(row.type, name), row)
-  }
-
-  let changed = false
-  for (const candidate of candidates) {
-    const name = candidate.name.trim()
-    if (!name) continue
-    const key = featureMatchKey(candidate.type, name)
-    const existing = byKey.get(key)
-    if (!existing) {
-      byKey.set(key, {
-        ...candidate,
-        id: crypto.randomUUID(),
-        applicable: PM_FEATURE_APPLICABLE_ALL,
-        parentId: null,
-      })
-      changed = true
-      continue
-    }
-    if (
-      existing.unit !== candidate.unit ||
-      existing.quantity !== candidate.quantity ||
-      existing.remark !== candidate.remark
-    ) {
-      byKey.set(key, {
-        ...existing,
-        unit: candidate.unit,
-        quantity: candidate.quantity,
-        remark: candidate.remark,
-      })
-      changed = true
-    }
-  }
-
-  if (!changed) return { rows: sharedRows, changed: false }
-  return {
-    rows: reindexFeatureRows([...byKey.values()]),
-    changed: true,
-  }
-}
-
 export function resolveProjectFeatureCatalog(
   workspaceId: string,
   _projectId: string,
@@ -351,7 +467,7 @@ export function resolveProjectFeatureCatalog(
   const shared = readSharedFeatureCatalog(workspaceId)
   const stored = parseFeatureRows(metadata?.[PM_FEATURE_CATALOG_KEY])
   if (stored) {
-    const pruned = stripScheduleFeatureRows(stored)
+    const pruned = stripLiveFeatureRows(stored)
     const merged = mergeSharedIntoProjectFeatureCatalog(pruned.rows, shared.rows)
     return {
       rows: merged.rows,
@@ -376,6 +492,9 @@ export function createEmptyFeatureRow(
     type,
     name: '',
     unit: '',
+    pricingUnit: '',
+    purchaseCycle: null,
+    transportCycle: null,
     quantity: null,
     remark: '',
     applicable,
@@ -410,6 +529,9 @@ export function fingerprintFeatureCatalog(rows: readonly PmFeatureRow[]): string
       type: row.type,
       name: row.name.trim(),
       unit: row.unit.trim(),
+      pricingUnit: row.pricingUnit.trim(),
+      purchaseCycle: row.purchaseCycle,
+      transportCycle: row.transportCycle,
       quantity: row.quantity,
       remark: row.remark,
       applicable: row.applicable,
@@ -449,6 +571,9 @@ export function toFeatureCatalogSnapshot(rows: readonly PmFeatureRow[]): PmFeatu
     type: row.type,
     name: row.name,
     unit: row.unit,
+    pricingUnit: row.pricingUnit,
+    purchaseCycle: row.purchaseCycle,
+    transportCycle: row.transportCycle,
     quantity: row.quantity,
     remark: row.remark,
     applicable: row.applicable,
