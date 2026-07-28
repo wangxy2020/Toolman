@@ -1,6 +1,11 @@
 import { statSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
-import { hashFileStream, parseFile, type ParseFileOptions } from '@toolman/knowledge'
+import {
+  detectFileKind,
+  hashFileStream,
+  parseFile,
+  type ParseFileOptions,
+} from '@toolman/knowledge'
 import { INGEST_NO_PROGRESS_MS } from './knowledge-ingest-timeouts'
 import { resolveMainWorkerScript } from '../lib/resolve-main-worker'
 
@@ -32,12 +37,19 @@ export interface ParsedFileWorkerResult {
   kind: string
 }
 
+/** OCR only applies to PDF / images — do not route markdown/text through the OCR worker. */
+function fileNeedsOcrWorker(filePath: string): boolean {
+  const kind = detectFileKind(filePath)
+  return kind === 'pdf' || kind === 'image'
+}
+
 export function shouldParseInWorker(filePath: string, ocrEnabled = false): boolean {
   try {
-    return statSync(filePath).size >= LARGE_FILE_BYTES || ocrEnabled
+    if (statSync(filePath).size >= LARGE_FILE_BYTES) return true
   } catch {
-    return ocrEnabled
+    // Missing file: fall through to OCR-kind check only.
   }
+  return ocrEnabled && fileNeedsOcrWorker(filePath)
 }
 
 /** Worker structured-clone turns Buffer into Uint8Array — restore a real Buffer for OCR. */

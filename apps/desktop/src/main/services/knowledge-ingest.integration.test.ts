@@ -108,7 +108,9 @@ describe('knowledge ingest integration', () => {
       skipP2pSync: true,
     })
 
-    expect(ingestResult.outcome).toBe('ingested')
+    expect(ingestResult, `ingest failed: ${ingestResult.message ?? 'unknown'}`).toMatchObject({
+      outcome: 'ingested',
+    })
 
     const docRepo = getDocumentRepository()
     const docs = docRepo.listByKb(kb.id)
