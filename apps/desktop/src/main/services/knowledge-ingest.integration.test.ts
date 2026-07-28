@@ -19,6 +19,23 @@ const harness = vi.hoisted(() => ({
   cleanupDb: () => {},
 }))
 
+function embeddingForText(text: string): number[] {
+  const seed = text.includes(INTEGRATION_MARKER) ? 0.95 : 0.2
+  return [seed, 0.5, 0.25]
+}
+
+function extractEmbedInput(init?: RequestInit): string {
+  if (!init?.body || typeof init.body !== 'string') return ''
+  try {
+    const body = JSON.parse(init.body) as { input?: unknown }
+    if (typeof body.input === 'string') return body.input
+    if (Array.isArray(body.input)) return body.input.map(String).join('\n')
+  } catch {
+    // ignore malformed mock bodies
+  }
+  return ''
+}
+
 vi.mock('electron', () => ({
   app: {
     getPath: (name: string) => {
@@ -48,28 +65,45 @@ vi.mock('./p2p/knowledge-sync.service', () => ({
   maybeSyncSharedKnowledgeDocument: vi.fn(async () => undefined),
 }))
 
-vi.mock('@toolman/knowledge', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@toolman/knowledge')>()
+/** Keep markdown ingest off the OCR/worker path in CI. */
+vi.mock('./runtime-app-settings.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./runtime-app-settings.service')>()
   return {
     ...actual,
-    embedTexts: vi.fn(async (_options: unknown, texts: string[]) =>
-      texts.map((text) => {
-        const seed = text.includes(INTEGRATION_MARKER) ? 0.95 : 0.2
-        return [seed, 0.5, 0.25]
-      }),
-    ),
+    isDocumentOcrEnabled: () => false,
   }
 })
 
+/**
+ * ingestContent imports embedTexts via a package-internal path, so mocking the
+ * `@toolman/knowledge` surface export does not intercept real Ollama/HTTP calls.
+ * Stub fetch instead so CI (no local Ollama) stays deterministic.
+ */
 describe('knowledge ingest integration', () => {
   beforeEach(() => {
     const { db, cleanup } = createP2pTestDb()
     harness.db = db
     harness.cleanupDb = cleanup
     harness.tempUserData = mkdtempSync(join(tmpdir(), 'toolman-knowledge-ingest-'))
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const url = String(input)
+        const embedding = embeddingForText(extractEmbedInput(init))
+        if (url.includes('/api/embed')) {
+          return Response.json({ embeddings: [embedding] })
+        }
+        if (url.includes('/embeddings')) {
+          return Response.json({ data: [{ embedding }] })
+        }
+        return new Response(`unmocked fetch: ${url}`, { status: 404 })
+      }),
+    )
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     harness.cleanupDb()
     rmSync(harness.tempUserData, { recursive: true, force: true })
     harness.db = null
@@ -130,5 +164,7 @@ describe('knowledge ingest integration', () => {
     const kbRow = getKnowledgeBaseRepository().findRowById(kb.id, DEFAULT_WORKSPACE_ID)
     expect(kbRow?.documentCount).toBeGreaterThan(0)
     expect(kbRow?.chunkCount).toBeGreaterThan(0)
+
+    expect(fetch).toHaveBeenCalled()
   })
 })
