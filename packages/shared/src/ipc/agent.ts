@@ -16,6 +16,8 @@ export const ContentBlockSchema = z.discriminatedUnion('type', [
     type: z.literal('thinking'),
     text: z.string(),
     durationSeconds: z.number().int().nonnegative().optional(),
+    /** Main-process wall clock when the thinking phase started (for live UI timing). */
+    startedAtMs: z.number().int().nonnegative().optional(),
   }),
   z.object({
     type: z.literal('tool'),
@@ -95,6 +97,8 @@ export const StreamDeltaSchema = z.discriminatedUnion('type', [
     type: z.literal('thinking'),
     text: z.string(),
     durationSeconds: z.number().int().nonnegative().optional(),
+    /** Main-process wall clock when the thinking phase started (for live UI timing). */
+    startedAtMs: z.number().int().nonnegative().optional(),
     replace: z.boolean().optional(),
   }),
   z.object({

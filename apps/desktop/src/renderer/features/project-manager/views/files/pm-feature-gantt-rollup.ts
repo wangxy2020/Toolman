@@ -6,8 +6,13 @@ import type { PmCostRow } from '../cost/pm-cost-catalog'
 import { isPmCostType } from '../cost/pm-cost-catalog'
 import type { PmResourceType } from '../resource/pm-resource-catalog'
 import {
+  catalogCostAmountLimit,
+  catalogCostQuantity,
+  computeCostAssignmentQuantity,
+  findCatalogRowForCostAssignment,
   isEmptyCostAssignment,
   readTaskCostAssignments,
+  resolveCostAssignmentPercent,
   type TaskCostAssignment,
 } from '../schedule/pm-gantt-cost-assignment'
 import {
@@ -16,6 +21,7 @@ import {
   readTaskResourceAssignments,
   type TaskResourceAssignment,
 } from '../schedule/pm-gantt-resource-assignment'
+import { durationDaysBetween } from '../schedule/pm-gantt-schedule'
 import type { PmResourceRow } from '../resource/pm-resource-catalog'
 import {
   isPmFeatureCostPrimaryType,
@@ -33,6 +39,14 @@ export type FeatureGanttRollup = {
    * Material: sum of matching assignment quantities.
    */
   quantity: number
+  /**
+   * Pricing usage for 合价 (= pricingQuantity × unitPrice):
+   * - labor: total workdays (sum of daily concurrent headcount)
+   * - auxiliary: peak concurrent quantity
+   * - machinery / device / instrument: total machine-shifts (sum of daily max)
+   * - material: same as quantity (assignment sum)
+   */
+  pricingQuantity: number
   /** Earliest task start among matching assignments. */
   startDate: number | null
   /** Latest task finish among matching assignments. */
@@ -47,6 +61,7 @@ export type FeatureGanttRollup = {
 
 const EMPTY_ROLLUP: FeatureGanttRollup = {
   quantity: 0,
+  pricingQuantity: 0,
   startDate: null,
   finishDate: null,
   monthly: {},
@@ -142,6 +157,64 @@ export function usesNonStackingPeakRollup(type: PmFeatureType): boolean {
   return type === 'machinery' || type === 'device' || type === 'instrument'
 }
 
+/** How the displayed 数量 column is derived from Gantt assignments. */
+export type ResourceQuantityMeteringKind = 'peakStacking' | 'peakNonStacking' | 'sumTotal'
+
+export function resourceQuantityMeteringKind(
+  type: PmFeatureType,
+): ResourceQuantityMeteringKind | null {
+  if (type === 'material' || type === 'procurement') return 'sumTotal'
+  if (usesNonStackingPeakRollup(type)) return 'peakNonStacking'
+  if (usesPeakConcurrentRollup(type)) return 'peakStacking'
+  return null
+}
+
+/** How 计价数量 is derived for 合价. */
+export type ResourcePricingQuantityKind =
+  | 'totalWorkdays'
+  | 'peak'
+  | 'totalShifts'
+  | 'sumTotal'
+
+export function resourcePricingQuantityKind(
+  type: PmFeatureType,
+): ResourcePricingQuantityKind | null {
+  switch (type) {
+    case 'labor':
+      return 'totalWorkdays'
+    case 'auxiliary':
+      return 'peak'
+    case 'machinery':
+    case 'device':
+    case 'instrument':
+      return 'totalShifts'
+    case 'material':
+    case 'procurement':
+      return 'sumTotal'
+    default:
+      return null
+  }
+}
+
+function resolvePricingQuantity(
+  type: PmFeatureType,
+  peak: number,
+  usageTotal: number,
+  sumQuantity: number,
+): number {
+  switch (resourcePricingQuantityKind(type)) {
+    case 'peak':
+      return peak
+    case 'totalWorkdays':
+    case 'totalShifts':
+      return usageTotal
+    case 'sumTotal':
+      return sumQuantity
+    default:
+      return sumQuantity
+  }
+}
+
 function featureMatchKey(type: PmFeatureType, name: string): string {
   return `${type}::${name.trim()}`
 }
@@ -173,6 +246,21 @@ export function buildResourcePricingUnitLookup(
     if (!pricing) continue
     const key = `${row.type}\0${name}`
     if (!map.has(key)) map.set(key, pricing)
+  }
+  return map
+}
+
+/** Build `resourceType\0name` → unitPrice from resource catalog rows. */
+export function buildResourceUnitPriceLookup(
+  catalog: ReadonlyArray<{ type: PmResourceType; name: string; unitPrice: number | null }>,
+): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const row of catalog) {
+    const name = row.name.trim()
+    if (!name) continue
+    if (row.unitPrice == null || !Number.isFinite(row.unitPrice)) continue
+    const key = `${row.type}\0${name}`
+    if (!map.has(key)) map.set(key, row.unitPrice)
   }
   return map
 }
@@ -264,6 +352,10 @@ export function buildLiveProcurementFeatureRows(
         transportCycle: overlay?.transportCycle ?? null,
         quantity: null,
         remark: overlay?.remark ?? '',
+        code: overlay?.code ?? '',
+        featureDescription: overlay?.featureDescription ?? '',
+        sectionalWork: overlay?.sectionalWork ?? '',
+        unitPrice: overlay?.unitPrice ?? null,
         applicable: overlay?.applicable ?? applicable,
         sortOrder: index,
         parentId: null,
@@ -327,6 +419,8 @@ export type GanttCostSeed = {
   type: PmFeatureCostPrimaryType
   name: string
   unit: string
+  /** Price-list unit price when known. */
+  unitPrice: number | null
   /** Price-list row id when known (preferred identity). */
   costId: string | null
   /** 分部工程 key from the price list (for type → section → order sorting). */
@@ -462,6 +556,10 @@ export function collectGanttCostSeeds(
         type: featureType,
         name,
         unit: catalogRow?.unit?.trim() ?? '',
+        unitPrice:
+          catalogRow?.unitPrice != null && Number.isFinite(catalogRow.unitPrice)
+            ? catalogRow.unitPrice
+            : null,
         costId: catalogRow?.id ?? assignment.costId ?? null,
         sectionalWork,
         sectionLabel,
@@ -571,7 +669,7 @@ export function buildFundsSectionMetaByRowId(
 }
 
 function emptyFundsRollup(): FeatureGanttRollup {
-  return { quantity: 0, startDate: null, finishDate: null, monthly: {} }
+  return { quantity: 0, pricingQuantity: 0, startDate: null, finishDate: null, monthly: {} }
 }
 
 function mergeFundsRollup(
@@ -580,6 +678,9 @@ function mergeFundsRollup(
 ): void {
   if (!addition) return
   if (Number.isFinite(addition.quantity)) target.quantity += addition.quantity
+  if (Number.isFinite(addition.pricingQuantity)) {
+    target.pricingQuantity += addition.pricingQuantity
+  }
   if (addition.startDate != null) {
     target.startDate =
       target.startDate == null
@@ -678,6 +779,13 @@ export function buildLiveFundsFeatureRows(
       transportCycle: overlay?.transportCycle ?? null,
       quantity: null,
       remark: overlay?.remark ?? '',
+      code: overlay?.code ?? '',
+      featureDescription: overlay?.featureDescription ?? '',
+      sectionalWork: overlay?.sectionalWork ?? '',
+      unitPrice:
+        overlay?.unitPrice != null && Number.isFinite(overlay.unitPrice)
+          ? overlay.unitPrice
+          : seed.unitPrice,
       applicable: overlay?.applicable ?? applicable,
       sortOrder: index,
       parentId: null,
@@ -706,12 +814,41 @@ function costAssignmentMatchesFeature(
 }
 
 /**
- * For each 资金 feature row, sum cost-assignment amounts from matching tasks
- * and day-weight them across months (same format as material resource stats).
+ * Allocated 工程数量 for one cost assignment against a price-list row.
+ * Prefer catalog quantity × percent; else amount ÷ unitPrice; else null.
+ */
+export function resolveCostAssignmentEngineeringQuantity(
+  assignment: Pick<TaskCostAssignment, 'percent' | 'amount'>,
+  catalogRow: Pick<PmCostRow, 'id' | 'quantity' | 'unitPrice'> | null | undefined,
+  catalog: readonly PmCostRow[] = [],
+): number | null {
+  if (!catalogRow) return null
+  const catalogQty = catalogCostQuantity(catalogRow)
+  const catalogAmount = catalogCostAmountLimit(catalogRow, catalog)
+  const percent = resolveCostAssignmentPercent(assignment, catalogAmount, catalogQty)
+  if (catalogQty != null) {
+    return computeCostAssignmentQuantity(catalogQty, percent)
+  }
+  if (
+    assignment.amount != null &&
+    Number.isFinite(assignment.amount) &&
+    catalogRow.unitPrice != null &&
+    Number.isFinite(catalogRow.unitPrice) &&
+    catalogRow.unitPrice !== 0
+  ) {
+    return Math.round((assignment.amount / catalogRow.unitPrice) * 1e6) / 1e6
+  }
+  return null
+}
+
+/**
+ * For each 资金 feature row, sum allocated 工程数量 from matching tasks
+ * (and day-weight monetary amounts across months for the cash columns).
  */
 export function computeFeatureCostRollups(
   items: readonly PmWorkItem[],
   features: readonly PmFeatureRow[],
+  costCatalog: readonly PmCostRow[] = [],
 ): Map<string, FeatureGanttRollup> {
   const result = new Map<string, FeatureGanttRollup>()
 
@@ -722,6 +859,7 @@ export function computeFeatureCostRollups(
     }
 
     let quantity = 0
+    let pricingMoney = 0
     let startDate: number | null = null
     let finishDate: number | null = null
     const monthly: Record<string, number> = {}
@@ -729,16 +867,30 @@ export function computeFeatureCostRollups(
     for (const item of items) {
       const assignments = readTaskCostAssignments(item.metadata)
       let matchedAmount = 0
+      let matchedQty = 0
       let matchedOnTask = false
       for (const assignment of assignments) {
         if (!costAssignmentMatchesFeature(assignment, feature)) continue
         matchedOnTask = true
+        const catalogRow = findCatalogRowForCostAssignment(assignment, costCatalog)
+        const engQty = resolveCostAssignmentEngineeringQuantity(
+          assignment,
+          catalogRow,
+          costCatalog,
+        )
         if (assignment.amount != null && Number.isFinite(assignment.amount)) {
           matchedAmount += assignment.amount
-          quantity += assignment.amount
+          pricingMoney += assignment.amount
+        }
+        if (engQty != null) {
+          matchedQty += engQty
+        } else if (assignment.amount != null && Number.isFinite(assignment.amount)) {
+          // Legacy fallback when the price list has no quantity/unit price.
+          matchedQty += assignment.amount
         }
       }
       if (!matchedOnTask) continue
+      quantity += matchedQty
 
       if (item.startDate != null && Number.isFinite(item.startDate)) {
         startDate =
@@ -756,7 +908,13 @@ export function computeFeatureCostRollups(
       )
     }
 
-    result.set(feature.id, { quantity, startDate, finishDate, monthly })
+    result.set(feature.id, {
+      quantity,
+      pricingQuantity: pricingMoney,
+      startDate,
+      finishDate,
+      monthly,
+    })
   }
 
   return result
@@ -765,12 +923,16 @@ export function computeFeatureCostRollups(
 /**
  * Live 实务 rows for labor/auxiliary/material/machinery/device/instrument from current Gantt seeds.
  * Optional `overlays` supply id / unit / remark when the same type+name exists in catalog.
+ * `pricingUnit` / `unitPrice` prefer the resource catalog (资源表).
  */
 export function buildLiveScheduleFeatureRows(
   seeds: readonly GanttFeatureSeed[],
+  resourceCatalog: readonly PmResourceRow[] = [],
   overlays: readonly PmFeatureRow[] = [],
   applicable: string = 'all',
 ): PmFeatureRow[] {
+  const pricingLookup = buildResourcePricingUnitLookup(resourceCatalog)
+  const unitPriceLookup = buildResourceUnitPriceLookup(resourceCatalog)
   const overlayByKey = new Map<string, PmFeatureRow>()
   for (const row of overlays) {
     if (!isScheduleFeatureType(row.type)) continue
@@ -781,16 +943,36 @@ export function buildLiveScheduleFeatureRows(
 
   return seeds.map((seed, index) => {
     const overlay = overlayByKey.get(featureMatchKey(seed.type, seed.name))
+    const resourceType = featureTypeToResourceType(seed.type)
+    const catalogKey = resourceType ? `${resourceType}\0${seed.name.trim()}` : ''
+    const unit = overlay?.unit.trim() ? overlay.unit : seed.unit
+    const catalogPricing = catalogKey ? pricingLookup.get(catalogKey) : undefined
+    const catalogUnitPrice = catalogKey ? unitPriceLookup.get(catalogKey) : undefined
+    const pricingUnit =
+      catalogPricing ||
+      overlay?.pricingUnit.trim() ||
+      unit.trim() ||
+      ''
+    const unitPrice =
+      catalogUnitPrice != null
+        ? catalogUnitPrice
+        : overlay?.unitPrice != null && Number.isFinite(overlay.unitPrice)
+          ? overlay.unitPrice
+          : null
     return {
       id: overlay?.id ?? `gantt:${seed.type}:${seed.name}`,
       type: seed.type,
       name: seed.name,
-      unit: overlay?.unit.trim() ? overlay.unit : seed.unit,
-      pricingUnit: overlay?.pricingUnit ?? '',
+      unit,
+      pricingUnit,
       purchaseCycle: overlay?.purchaseCycle ?? null,
       transportCycle: overlay?.transportCycle ?? null,
       quantity: null,
       remark: overlay?.remark ?? '',
+      code: overlay?.code ?? '',
+      featureDescription: overlay?.featureDescription ?? '',
+      sectionalWork: overlay?.sectionalWork ?? '',
+      unitPrice,
       applicable: overlay?.applicable ?? applicable,
       sortOrder: index,
       parentId: null,
@@ -941,11 +1123,12 @@ function resolveInclusiveDaySpan(
  * - `sum`: labor / auxiliary — add overlapping task requirements on the same day.
  * - `max`: machinery — take the largest single-task requirement on the same day
  *   (critical + normal work overlapping must not double-count shared plant).
+ * `usageTotal` is the sum of daily values (总工日 / 总台班).
  */
 export function allocatePeakHeadcountByMonth(
   spans: readonly HeadcountSpan[],
   mode: 'sum' | 'max' = 'sum',
-): { monthly: Record<string, number>; peak: number } {
+): { monthly: Record<string, number>; peak: number; usageTotal: number } {
   const daily = new Map<number, number>()
 
   for (const span of spans) {
@@ -964,7 +1147,9 @@ export function allocatePeakHeadcountByMonth(
 
   const monthly: Record<string, number> = {}
   let peak = 0
+  let usageTotal = 0
   for (const [dayMs, qty] of daily) {
+    usageTotal += qty
     if (qty > peak) peak = qty
     const date = new Date(dayMs)
     const key = formatMonthKey(date.getFullYear(), date.getMonth())
@@ -972,7 +1157,7 @@ export function allocatePeakHeadcountByMonth(
     if (qty > prev) monthly[key] = qty
   }
 
-  return { monthly, peak }
+  return { monthly, peak, usageTotal }
 }
 
 /** Sorted unique month keys across rollups (from min start to max finish). */
@@ -1131,13 +1316,257 @@ export function computeFeatureGanttRollups(
       const peak = allocatePeakHeadcountByMonth(peakSpans, peakMode)
       result.set(feature.id, {
         quantity: peak.peak,
+        pricingQuantity: resolvePricingQuantity(
+          feature.type,
+          peak.peak,
+          peak.usageTotal,
+          peak.peak,
+        ),
         startDate,
         finishDate,
         monthly: peak.monthly,
       })
     } else {
-      result.set(feature.id, { quantity, startDate, finishDate, monthly })
+      result.set(feature.id, {
+        quantity,
+        pricingQuantity: resolvePricingQuantity(feature.type, quantity, quantity, quantity),
+        startDate,
+        finishDate,
+        monthly,
+      })
     }
+  }
+
+  return result
+}
+
+const LIVE_NODE_ID_PREFIX = 'gantt-node:'
+
+export function liveNodeFeatureId(workItemId: string): string {
+  return `${LIVE_NODE_ID_PREFIX}${workItemId}`
+}
+
+export function parseLiveNodeWorkItemId(featureId: string): string | null {
+  if (!featureId.startsWith(LIVE_NODE_ID_PREFIX)) return null
+  const id = featureId.slice(LIVE_NODE_ID_PREFIX.length)
+  return id.length > 0 ? id : null
+}
+
+export type GanttNodeSeed = {
+  workItemId: string
+  name: string
+  startDate: number | null
+  finishDate: number | null
+  durationDays: number
+  sortOrder: number
+}
+
+export type FeatureNodeRollup = {
+  durationDays: number
+  startDate: number | null
+  finishDate: number | null
+  /** Planned overall progress % at this milestone (along the project schedule). */
+  plannedPercent: number | null
+}
+
+function startOfLocalDayMs(ms: number): number {
+  const date = new Date(ms)
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+/** Distinct milestone tasks from the Gantt schedule (ordered by sortOrder / name). */
+export function collectGanttNodeSeeds(items: readonly PmWorkItem[]): GanttNodeSeed[] {
+  const seeds: GanttNodeSeed[] = []
+  for (const item of items) {
+    if (item.type !== 'milestone') continue
+    const name = (item.title ?? '').trim() || item.id
+    const startDate =
+      item.startDate != null && Number.isFinite(item.startDate) ? item.startDate : null
+    const finishDate =
+      item.dueDate != null && Number.isFinite(item.dueDate) ? item.dueDate : startDate
+    seeds.push({
+      workItemId: item.id,
+      name,
+      startDate,
+      finishDate,
+      durationDays: 0,
+      sortOrder: Number.isFinite(item.sortOrder) ? item.sortOrder : 0,
+    })
+  }
+  return seeds.sort((left, right) => {
+    if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
+    return left.name.localeCompare(right.name, 'zh')
+  })
+}
+
+/** Planned progress % when the schedule reaches `asOfMs` within [rangeStart, rangeFinish]. */
+export function plannedPercentAlongSchedule(
+  asOfMs: number | null,
+  rangeStart: number | null,
+  rangeFinish: number | null,
+): number | null {
+  if (asOfMs == null || rangeStart == null || rangeFinish == null) return null
+  const status = startOfLocalDayMs(asOfMs)
+  const start = startOfLocalDayMs(rangeStart)
+  const finish = startOfLocalDayMs(rangeFinish)
+  if (finish <= start) return status >= finish ? 100 : 0
+  if (status <= start) return 0
+  if (status >= finish) return 100
+  const span = Math.max(finish - start, MS_PER_DAY)
+  return Math.min(100, Math.max(0, Math.round(((status - start) / span) * 100)))
+}
+
+function dateEnvelopeFromBounds(
+  starts: readonly (number | null | undefined)[],
+  finishes: readonly (number | null | undefined)[],
+): { startDate: number | null; finishDate: number | null } {
+  let startDate: number | null = null
+  let finishDate: number | null = null
+  for (const value of starts) {
+    if (value != null && Number.isFinite(value)) {
+      startDate = startDate == null ? value : Math.min(startDate, value)
+    }
+  }
+  for (const value of finishes) {
+    if (value != null && Number.isFinite(value)) {
+      finishDate = finishDate == null ? value : Math.max(finishDate, value)
+    }
+  }
+  if (startDate == null && finishDate != null) startDate = finishDate
+  if (finishDate == null && startDate != null) finishDate = startDate
+  return { startDate, finishDate }
+}
+
+function scheduleDateEnvelope(items: readonly PmWorkItem[]): {
+  startDate: number | null
+  finishDate: number | null
+} {
+  return dateEnvelopeFromBounds(
+    items.map((item) => item.startDate),
+    items.map((item) => item.dueDate),
+  )
+}
+
+/** Project row: same schedule envelope / duration as the Gantt project root. */
+function projectNodeEnvelope(scheduleRange: {
+  startDate: number | null
+  finishDate: number | null
+}): FeatureNodeRollup {
+  const { startDate, finishDate } = scheduleRange
+  const durationDays =
+    startDate != null && finishDate != null ? durationDaysBetween(startDate, finishDate) : 0
+  const plannedPercent = startDate != null && finishDate != null ? 100 : null
+  return { durationDays, startDate, finishDate, plannedPercent }
+}
+
+/**
+ * Live 节点 rows: first row is the project name (displayed as 里程碑),
+ * followed by Gantt milestone tasks.
+ */
+export function buildLiveNodeFeatureRows(
+  seeds: readonly GanttNodeSeed[],
+  project: { name: string; code?: string | null } | null,
+  applicable: string = 'all',
+): PmFeatureRow[] {
+  const rows: PmFeatureRow[] = []
+  if (project) {
+    const projectName = project.name.trim()
+    const code = project.code?.trim() ?? ''
+    rows.push({
+      id: liveNodeFeatureId('__project__'),
+      type: 'node',
+      name: code && projectName ? `${code} · ${projectName}` : projectName || code || '—',
+      unit: '',
+      pricingUnit: '',
+      purchaseCycle: null,
+      transportCycle: null,
+      quantity: null,
+      remark: '',
+      code: '',
+      featureDescription: '',
+      sectionalWork: '',
+      unitPrice: null,
+      applicable,
+      sortOrder: 0,
+      parentId: null,
+    })
+  }
+
+  const projectRowId = rows[0]?.id ?? null
+  seeds.forEach((seed, index) => {
+    rows.push({
+      id: liveNodeFeatureId(seed.workItemId),
+      type: 'node',
+      name: seed.name,
+      unit: '',
+      pricingUnit: '',
+      purchaseCycle: null,
+      transportCycle: null,
+      quantity: null,
+      remark: '',
+      code: '',
+      featureDescription: '',
+      sectionalWork: '',
+      unitPrice: null,
+      applicable,
+      sortOrder: index + 1,
+      parentId: projectRowId,
+    })
+  })
+
+  return rows
+}
+
+/** Rollups for live 节点 rows (duration + finish + planned % from Gantt milestones). */
+export function computeFeatureNodeRollups(
+  seeds: readonly GanttNodeSeed[],
+  features: readonly PmFeatureRow[],
+  workItems: readonly PmWorkItem[] = [],
+): Map<string, FeatureNodeRollup> {
+  const byWorkItemId = new Map(seeds.map((seed) => [seed.workItemId, seed] as const))
+  const fromWorkItems = scheduleDateEnvelope(workItems)
+  const fromSeeds = dateEnvelopeFromBounds(
+    seeds.map((seed) => seed.startDate),
+    seeds.map((seed) => seed.finishDate),
+  )
+  const scheduleRange = {
+    startDate: fromWorkItems.startDate ?? fromSeeds.startDate,
+    finishDate: fromWorkItems.finishDate ?? fromSeeds.finishDate,
+  }
+  const projectEnvelope = projectNodeEnvelope(scheduleRange)
+  const result = new Map<string, FeatureNodeRollup>()
+  const empty: FeatureNodeRollup = {
+    durationDays: 0,
+    startDate: null,
+    finishDate: null,
+    plannedPercent: null,
+  }
+
+  for (const feature of features) {
+    if (feature.type !== 'node') continue
+    const workItemId = parseLiveNodeWorkItemId(feature.id)
+    if (workItemId === '__project__') {
+      result.set(feature.id, projectEnvelope)
+      continue
+    }
+    if (workItemId) {
+      const seed = byWorkItemId.get(workItemId)
+      if (seed) {
+        const asOf = seed.finishDate ?? seed.startDate
+        result.set(feature.id, {
+          durationDays: seed.durationDays,
+          startDate: seed.startDate,
+          finishDate: seed.finishDate,
+          plannedPercent: plannedPercentAlongSchedule(
+            asOf,
+            scheduleRange.startDate,
+            scheduleRange.finishDate,
+          ),
+        })
+        continue
+      }
+    }
+    result.set(feature.id, empty)
   }
 
   return result

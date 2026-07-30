@@ -57,9 +57,8 @@ export class MessageStreamBuffers {
     })
     if (kept.length === lines.filter((line) => line.trim()).length) return
     this.thinking = kept.join('\n')
-    if (!this.thinking.trim()) {
-      this.thinkingStartedAt = null
-    }
+    // Keep thinkingStartedAt so the clock measures real wait/think time, not just
+    // the brief window when reasoning tokens are painted in the UI.
   }
 
   clearThinking(): void {
@@ -126,11 +125,25 @@ export class MessageStreamBuffers {
   finalizeThinkingDuration(): void {
     if (this.thinkingDurationSeconds !== null) return
     if (this.thinkingStartedAt === null || !this.thinking.trim()) return
-    this.thinkingDurationSeconds = Math.round((Date.now() - this.thinkingStartedAt) / 1000)
+    this.thinkingDurationSeconds = Math.max(
+      0,
+      Math.round((Date.now() - this.thinkingStartedAt) / 1000),
+    )
   }
 
   getThinkingDurationSeconds(): number | null {
     return this.thinkingDurationSeconds
+  }
+
+  getThinkingStartedAtMs(): number | null {
+    return this.thinkingStartedAt
+  }
+
+  /** Live elapsed seconds while thinking is in progress (null if not started). */
+  getLiveThinkingElapsedSeconds(): number | null {
+    if (this.thinkingDurationSeconds !== null) return this.thinkingDurationSeconds
+    if (this.thinkingStartedAt === null) return null
+    return Math.max(0, Math.round((Date.now() - this.thinkingStartedAt) / 1000))
   }
 
   toContentBlocks(): ContentBlock[] {
@@ -140,6 +153,7 @@ export class MessageStreamBuffers {
       blocks.push({
         type: 'thinking',
         text: this.thinking,
+        ...(this.thinkingStartedAt !== null ? { startedAtMs: this.thinkingStartedAt } : {}),
         ...(this.thinkingDurationSeconds !== null
           ? { durationSeconds: this.thinkingDurationSeconds }
           : {}),

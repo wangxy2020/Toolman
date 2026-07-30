@@ -88,6 +88,14 @@ export type PmFeatureRow = {
   /** Optional quantity / amount depending on type. */
   quantity: number | null
   remark: string
+  /** Item code (编码); used on cost · 价格表 metering view. */
+  code: string
+  /** Feature / project characteristics description (特征描述). */
+  featureDescription: string
+  /** Sectional / divisional work (分部工程). */
+  sectionalWork: string
+  /** Unit price (单价); used on cost · 价格表 metering view. */
+  unitPrice: number | null
   /** `'all'` = 全部项目, otherwise a project id. */
   applicable: string
   sortOrder: number
@@ -104,7 +112,7 @@ const DEFAULT_FEATURE_DEFS: ReadonlyArray<{
   // labor / auxiliary / material / machinery are seeded from Gantt — no placeholders.
   { type: 'procurement', name: '招标采购计划', unit: '包', quantity: null, remark: '' },
   { type: 'metering', name: '工程计量节点', unit: '期', quantity: null, remark: '' },
-  { type: 'node', name: '关键里程碑节点', unit: '个', quantity: null, remark: '' },
+  // node rows are seeded from Gantt milestones — no placeholder.
 ]
 
 /** Legacy starter rows that should not appear once schedule types auto-sync from Gantt. */
@@ -130,6 +138,16 @@ export function isPmFeatureType(value: unknown): value is PmFeatureType {
 }
 
 function parseOptionalCycleDays(value: unknown): number | null {
+  if (value == null) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function parseOptionalNumber(value: unknown): number | null {
   if (value == null) return null
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) {
@@ -176,6 +194,11 @@ function parseFeatureRows(raw: unknown): PmFeatureRow[] | null {
         quantity:
           typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
         remark: typeof row.remark === 'string' ? row.remark : '',
+        code: typeof record.code === 'string' ? record.code : '',
+        featureDescription:
+          typeof record.featureDescription === 'string' ? record.featureDescription : '',
+        sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',
+        unitPrice: parseOptionalNumber(record.unitPrice),
         applicable:
           typeof row.applicable === 'string' && row.applicable.trim()
             ? row.applicable.trim()
@@ -202,6 +225,10 @@ export function createDefaultFeatureCatalog(
     transportCycle: null,
     quantity: entry.quantity,
     remark: entry.remark,
+    code: '',
+    featureDescription: '',
+    sectionalWork: '',
+    unitPrice: null,
     applicable,
     sortOrder: index,
     parentId: null,
@@ -270,6 +297,11 @@ export function isLiveProcurementFeatureRow(
   return row.type === 'procurement' && row.id.startsWith('gantt-procurement:')
 }
 
+/** Live 节点 rows synced from Gantt milestones (id prefix `gantt-node:`). */
+export function isLiveNodeFeatureRow(row: Pick<PmFeatureRow, 'id' | 'type'>): boolean {
+  return row.type === 'node' && row.id.startsWith('gantt-node:')
+}
+
 /**
  * Remove Gantt-synced 采购 material rows from persisted catalogs.
  */
@@ -283,6 +315,21 @@ export function stripLiveProcurementFeatureRows(
   return { rows: reindexFeatureRows(next), changed: true }
 }
 
+/** Remove Gantt-synced 节点 rows from persisted catalogs. */
+export function stripLiveNodeFeatureRows(
+  rows: readonly PmFeatureRow[],
+): { rows: PmFeatureRow[]; changed: boolean } {
+  const next = rows.filter(
+    (row) =>
+      !isLiveNodeFeatureRow(row) &&
+      !(row.type === 'node' && row.name.trim() === '关键里程碑节点'),
+  )
+  if (next.length === rows.length) {
+    return { rows: [...rows], changed: false }
+  }
+  return { rows: reindexFeatureRows(next), changed: true }
+}
+
 /** Strip schedule-synced, cost-synced, and Gantt-material procurement live rows before persist. */
 export function stripLiveFeatureRows(
   rows: readonly PmFeatureRow[],
@@ -290,9 +337,10 @@ export function stripLiveFeatureRows(
   const schedule = stripScheduleFeatureRows(rows)
   const cost = stripLiveCostFeatureRows(schedule.rows)
   const procurement = stripLiveProcurementFeatureRows(cost.rows)
+  const nodes = stripLiveNodeFeatureRows(procurement.rows)
   return {
-    rows: procurement.rows,
-    changed: schedule.changed || cost.changed || procurement.changed,
+    rows: nodes.rows,
+    changed: schedule.changed || cost.changed || procurement.changed || nodes.changed,
   }
 }
 
@@ -497,6 +545,10 @@ export function createEmptyFeatureRow(
     transportCycle: null,
     quantity: null,
     remark: '',
+    code: '',
+    featureDescription: '',
+    sectionalWork: '',
+    unitPrice: null,
     applicable,
     sortOrder,
     parentId,
@@ -534,6 +586,10 @@ export function fingerprintFeatureCatalog(rows: readonly PmFeatureRow[]): string
       transportCycle: row.transportCycle,
       quantity: row.quantity,
       remark: row.remark,
+      code: row.code.trim(),
+      featureDescription: row.featureDescription.trim(),
+      sectionalWork: row.sectionalWork.trim(),
+      unitPrice: row.unitPrice,
       applicable: row.applicable,
       sortOrder: row.sortOrder,
       parentId: row.parentId ?? null,
@@ -576,6 +632,10 @@ export function toFeatureCatalogSnapshot(rows: readonly PmFeatureRow[]): PmFeatu
     transportCycle: row.transportCycle,
     quantity: row.quantity,
     remark: row.remark,
+    code: row.code,
+    featureDescription: row.featureDescription,
+    sectionalWork: row.sectionalWork,
+    unitPrice: row.unitPrice,
     applicable: row.applicable,
     sortOrder: row.sortOrder,
     parentId: row.parentId ?? null,

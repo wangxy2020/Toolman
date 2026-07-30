@@ -7,13 +7,17 @@ import {
   buildCostAllocatedAmountById,
   catalogCostAmountLimit,
   computeCostAssignmentMoney,
+  computeCostAssignmentQuantity,
+  catalogCostQuantity,
   defaultCostAssignmentAmount,
   DEFAULT_COST_ASSIGNMENT_PERCENT,
+  formatCostPercentRatio,
   groupCostCatalogBySectionalWork,
   hydrateTaskCostAssignmentsAgainstCatalog,
   isCostQuantityFullyAllocated,
   parseCostAssignmentInput,
   parseCostAssignmentsInput,
+  parseCostPercentRatioInput,
   replaceTaskCostAssignmentsMetadata,
   readTaskCostAssignments,
   resolveCostAssignmentAgainstCatalog,
@@ -324,5 +328,35 @@ describe('pm-gantt-cost-assignment', () => {
     expect(resolveCostAssignmentPercent({ percent: null, amount: null })).toBe(1)
     expect(resolveCostAssignmentPercent({ percent: 0.25, amount: 100 })).toBe(0.25)
     expect(resolveCostAssignmentPercent({ percent: null, amount: 250 }, 500)).toBe(0.5)
+  })
+
+  it('treats percent as 0–1 share of price-list 工程数量', () => {
+    expect(catalogCostQuantity(catalog[0]!)).toBe(1)
+    expect(computeCostAssignmentQuantity(100, 1)).toBe(100)
+    expect(computeCostAssignmentQuantity(100, 0.5)).toBe(50)
+    expect(computeCostAssignmentQuantity(100, 0.0016)).toBe(0.16)
+    expect(formatCostPercentRatio(1)).toBe('1')
+    expect(formatCostPercentRatio(0.5)).toBe('0.5')
+    expect(formatCostPercentRatio(0.0016)).toBe('0.0016')
+    expect(parseCostPercentRatioInput('1')).toBe(1)
+    expect(parseCostPercentRatioInput('0.5')).toBe(0.5)
+    expect(parseCostPercentRatioInput('0.0016')).toBe(0.0016)
+    expect(parseCostPercentRatioInput('')).toBe(1)
+    expect(parseCostPercentRatioInput('50%')).toBe(0.5)
+  })
+
+  it('resolves percent=1 when amount was stored as catalog 工程数量', () => {
+    // amount=8.37 (qty) against 合价=8.37×500 must not become ~0.002
+    expect(
+      resolveCostAssignmentPercent({ percent: null, amount: 8.37 }, 8.37 * 500, 8.37),
+    ).toBe(1)
+    expect(
+      resolveCostAssignmentPercent({ percent: 0.002, amount: 8.37 }, 8.37 * 500, 8.37),
+    ).toBe(1)
+    expect(computeCostAssignmentQuantity(8.37, 1)).toBe(8.37)
+    // True money half-share still resolves via 合价
+    expect(
+      resolveCostAssignmentPercent({ percent: null, amount: 8.37 * 250 }, 8.37 * 500, 8.37),
+    ).toBe(0.5)
   })
 })

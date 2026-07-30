@@ -411,12 +411,21 @@ export const projectManagerPageEn = {
         name: 'Name',
         unit: 'Measure unit',
         amountUnit: 'Amount ({{currency}})',
+        engineeringQuantity: 'Quantity',
         pricingUnit: 'Pricing unit',
         purchaseCycle: 'Purchase cycle',
         transportCycle: 'Transport cycle',
         quantity: 'Qty',
+        meteringMethod: 'Metering',
+        pricingQuantity: 'Billable qty',
+        unitPrice: 'Unit price',
+        totalPrice: 'Amount',
+        duration: 'Duration',
         start: 'Start Date',
         finish: 'Finish Date',
+        plannedPercent: 'Percent',
+        plannedPercentHint: 'Planned progress percent at this milestone',
+        milestoneName: 'Milestone name',
         months: 'Months',
         month: '{{year}}/{{month}}',
         monthYear: '{{year}}',
@@ -425,6 +434,7 @@ export const projectManagerPageEn = {
         yearColumn: 'Year',
         remark: 'Remark',
       },
+      nodeMilestoneType: 'Milestone',
       cycleDaysPlaceholder: 'days',
       quantityFromGanttHint: 'Summed from Gantt task resource assignments with the same type and name',
       quantityFromGanttHintPeak:
@@ -433,7 +443,26 @@ export const projectManagerPageEn = {
         'Peak of the largest single-task machinery quantity per day; overlapping schedules do not stack',
       quantityFromGanttHintLabor:
         'Peak concurrent headcount from matching Gantt labor assignments (not a sum across tasks)',
-      quantityFromCostHint: 'Summed from Gantt task cost assignment amounts',
+      meteringMethod: {
+        peakStacking: 'Peak',
+        peakNonStacking: 'Peak',
+        sumTotal: 'Total',
+        peakStackingHint:
+          'Quantity is the peak concurrent demand: same-day assignments stack, then the max is taken',
+        peakNonStackingHint:
+          'Quantity is the peak of the largest same-day assignment; overlapping tasks do not stack',
+        sumTotalHint: 'Quantity is the sum of matching Gantt assignment quantities',
+      },
+      pricingQuantityHint: {
+        totalWorkdays:
+          'Billable qty = total workdays: sum of daily concurrent headcount across calendar days',
+        peak: 'Billable qty = peak: same as the quantity column',
+        totalShifts:
+          'Billable qty = total machine-shifts: sum of daily max usage across calendar days',
+        sumTotal: 'Billable qty = total: same as the quantity column (assignment sum)',
+      },
+      quantityFromCostHint:
+        'Summed allocated engineering quantity from Gantt cost assignments (price-list qty × percent)',
       monthFromGanttHint:
         'Monthly quantities prorated by overlapping days between each task schedule and calendar months',
       monthFromGanttHintPeak:
@@ -445,6 +474,7 @@ export const projectManagerPageEn = {
       monthFromCostHint:
         'Monthly cost amounts prorated by overlapping days between each task schedule and calendar months',
       fundsTotal: 'Total',
+      resourceStatTotal: 'Total',
       selection: {
         enterSelection: 'Select',
         selectAll: 'Select all',
@@ -543,7 +573,10 @@ export const projectManagerPageEn = {
       costName: 'Name',
       costAmount: 'Amount',
       costPercent: 'Percent',
+      costPercentHint:
+        'Allocated quantity ÷ price-list item quantity (0–1, e.g. 0.5 means half)',
       costAmountUnit: 'Amount (unit)',
+      costEngineeringQuantity: 'Quantity',
       costQty: 'Cost',
       costNote: 'Note',
     },
@@ -1057,7 +1090,7 @@ export const projectManagerPageEn = {
       name: 'Work name',
       featureDescription: 'Feature description',
       unit: 'Unit',
-      quantity: 'Qty',
+      quantity: 'Quantity',
       unitPrice: 'Unit price',
       totalPrice: 'Amount ({{currency}})',
       baseline: 'Baseline',
@@ -1123,6 +1156,44 @@ export const projectManagerPageEn = {
       section: 'Section',
       moveUp: 'Move up',
       moveDown: 'Move down',
+      metering: 'Metering',
+    },
+    meteringMenu: {
+      captureBaseline: 'Create period',
+      rollupMode: 'Metering rollup',
+      rollupNone: 'No rollup',
+      rollupSection: 'Roll up by section',
+      rollupCustom: 'Custom',
+      selectBaseline: 'Select period',
+      selectBaselineEmpty: 'No periods yet',
+      versionSwitch: 'Version switch',
+      versionSwitchEmpty: 'No switchable versions yet (appear after saving a new version)',
+      editBaseline: 'Edit period info',
+      deleteBaseline: 'Delete period',
+    },
+    meteringBaselineCapture: {
+      title: 'Create period',
+      message:
+        'Set the period name and status date. After creating, switch periods under “Select period”.',
+      nameLabel: 'Period name',
+      dateLabel: 'Period date (status date)',
+      pickDate: 'Pick a date',
+      confirm: 'Create',
+      invalidDate: 'Enter a valid date as YYYY-MM-DD',
+      invalidName: 'Enter a period name',
+      success: 'Created period “{{name}}”',
+    },
+    meteringBaselineEdit: {
+      title: 'Edit period info',
+      message: 'You can change the period name and status date.',
+      confirm: 'Save',
+      success: 'Updated period “{{name}}”',
+    },
+    meteringBaselineDelete: {
+      title: 'Delete period',
+      confirm: 'Delete period “{{name}}”? This cannot be undone.',
+      confirmLabel: 'Delete',
+      success: 'Deleted period “{{name}}”',
     },
     saveAsNewVersionPrompt: 'Optional note for the new version (Cancel aborts)',
     saveSuccessNewVersion: 'Price list saved (new version {{version}})',

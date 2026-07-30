@@ -4,12 +4,18 @@ export const FEATURES_TOGGLE_COLUMNS = [
   'type',
   'name',
   'unit',
-  'pricingUnit',
+  'meteringMethod',
   'purchaseCycle',
   'transportCycle',
   'quantity',
+  'pricingUnit',
+  'pricingQuantity',
+  'unitPrice',
+  'totalPrice',
+  'duration',
   'start',
   'finish',
+  'plannedPercent',
   'months',
   'remark',
 ] as const
@@ -22,27 +28,73 @@ export const DEFAULT_FEATURES_COLUMN_VISIBILITY: FeaturesColumnVisibility = {
   type: true,
   name: true,
   unit: true,
-  pricingUnit: true,
+  meteringMethod: true,
   purchaseCycle: true,
   transportCycle: true,
   quantity: true,
+  pricingUnit: true,
+  pricingQuantity: true,
+  unitPrice: true,
+  totalPrice: true,
+  duration: true,
   start: true,
   finish: true,
+  plannedPercent: true,
   months: true,
   remark: true,
 }
 
 /** Columns only shown on the 采购 page. */
 export const FEATURES_PROCUREMENT_COLUMNS = [
-  'pricingUnit',
   'purchaseCycle',
   'transportCycle',
+] as const satisfies readonly FeaturesToggleColumn[]
+
+/** Columns only shown on 资源统计 (计价单位 also appears on 采购). */
+export const FEATURES_RESOURCE_STAT_COLUMNS = [
+  'meteringMethod',
+  'pricingQuantity',
+  'unitPrice',
+  'totalPrice',
+] as const satisfies readonly FeaturesToggleColumn[]
+
+/** Default columns for 节点 (Gantt milestones). */
+export const FEATURES_NODE_DEFAULT_COLUMNS = [
+  'name',
+  'duration',
+  'finish',
+  'plannedPercent',
+] as const satisfies readonly FeaturesToggleColumn[]
+
+/** Columns that only apply to 节点 (or are node-oriented). */
+export const FEATURES_NODE_COLUMNS = [
+  'duration',
+  'plannedPercent',
 ] as const satisfies readonly FeaturesToggleColumn[]
 
 export function isFeaturesProcurementColumn(
   column: FeaturesToggleColumn,
 ): boolean {
   return (FEATURES_PROCUREMENT_COLUMNS as readonly string[]).includes(column)
+}
+
+export function isFeaturesResourceStatColumn(
+  column: FeaturesToggleColumn,
+): boolean {
+  return (FEATURES_RESOURCE_STAT_COLUMNS as readonly string[]).includes(column)
+}
+
+export function isFeaturesNodeColumn(column: FeaturesToggleColumn): boolean {
+  return (FEATURES_NODE_COLUMNS as readonly string[]).includes(column)
+}
+
+/** 计价单位: visible on 采购 and 资源统计. */
+export function isFeaturesPricingUnitColumn(column: FeaturesToggleColumn): boolean {
+  return column === 'pricingUnit'
+}
+
+export function isFeaturesNodeDefaultColumn(column: FeaturesToggleColumn): boolean {
+  return (FEATURES_NODE_DEFAULT_COLUMNS as readonly string[]).includes(column)
 }
 
 const STORAGE_KEY = 'toolman.pm.features.columnVisibility'

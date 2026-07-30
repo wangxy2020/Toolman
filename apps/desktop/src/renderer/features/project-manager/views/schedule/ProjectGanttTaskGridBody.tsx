@@ -5,6 +5,9 @@ import { isPmEditableEventTarget } from '../../pm-editable-dom'
 import { handlePmTableCellNavKeyDown } from '../../pm-table-cell-nav'
 import {
   catalogCostAmountLimit,
+  catalogCostQuantity,
+  computeCostAssignmentMoney,
+  computeCostAssignmentQuantity,
   countCostAssignmentsForTypeFilter,
   findCatalogRowForCostAssignment,
   formatCostAssignmentsInput,
@@ -13,6 +16,8 @@ import {
   readCostAssignmentAtFilteredSlot,
   readTaskCostAssignments,
   resolveCostAssignmentAgainstCatalog,
+  resolveCostAssignmentPercent,
+  resolveCostPercentFromQuantity,
 } from './pm-gantt-cost-assignment'
 import type { GanttResourceColumnType } from './pm-gantt-prefs'
 import { SWITCHABLE_RESOURCE_COLUMN_TYPES } from './pm-gantt-prefs'
@@ -571,12 +576,23 @@ export const ProjectGanttTaskGridBody: FC<ProjectGanttTaskGridBodyProps> = ({
           readCostAssignmentAtFilteredSlot(slotAssignments, slot, costFilter),
           costCatalog,
         )
+        const catalogRow = findCatalogRowForCostAssignment(qtyAssignment, costCatalog)
+        const catalogAmount = catalogRow
+          ? catalogCostAmountLimit(catalogRow, costCatalog)
+          : null
+        const catalogQuantity = catalogCostQuantity(catalogRow)
+        const percentValue = resolveCostAssignmentPercent(
+          qtyAssignment,
+          catalogAmount,
+          catalogQuantity,
+        )
+        const displayQuantity = computeCostAssignmentQuantity(catalogQuantity, percentValue)
         if (!canEditCost) {
           const label = qtyAssignment.name.trim() || qtyAssignment.costId || ''
           const display =
-            label && qtyAssignment.amount != null
-              ? `${label} · ${qtyAssignment.amount}`
-              : label || (qtyAssignment.amount != null ? String(qtyAssignment.amount) : '')
+            label && displayQuantity != null
+              ? `${label} · ${displayQuantity}`
+              : label || (displayQuantity != null ? String(displayQuantity) : '')
           return (
             <span
               key={field}
@@ -608,19 +624,20 @@ export const ProjectGanttTaskGridBody: FC<ProjectGanttTaskGridBodyProps> = ({
           costNamePicker?.itemId === item.id &&
           costNamePicker.slot === slot &&
           costNamePicker.source === 'cell-qty'
-        const commitAmount = (rawValue: string) => {
+        const commitQuantity = (rawValue: string) => {
           if (!selectedId && !qtyAssignment.name.trim()) return
           const raw = rawValue.trim()
-          const next = raw === '' ? null : Number(raw)
-          if (next != null && !Number.isFinite(next)) return
-          if (next === qtyAssignment.amount) return
-          const catalogRow = findCatalogRowForCostAssignment(qtyAssignment, costCatalog)
-          const catalogAmount = catalogRow
-            ? catalogCostAmountLimit(catalogRow, costCatalog)
-            : null
-          const percent = resolveCostPercentFromAmount(next, catalogAmount, qtyAssignment.percent)
+          const nextQty = raw === '' ? null : Number(raw)
+          if (nextQty != null && !Number.isFinite(nextQty)) return
+          if (nextQty === displayQuantity) return
+          const percent = resolveCostPercentFromQuantity(
+            nextQty,
+            catalogQuantity,
+            qtyAssignment.percent,
+          )
+          const nextAmount = computeCostAssignmentMoney(catalogAmount, percent)
           writeOrderedCostSlot(item.id, slotAssignments, slot, {
-            amount: next,
+            amount: nextAmount,
             percent,
           })
         }
@@ -664,29 +681,29 @@ export const ProjectGanttTaskGridBody: FC<ProjectGanttTaskGridBodyProps> = ({
               <IconChevronDown size={12} className="tm-pm-gantt-resource-cell-trigger-chevron" />
             </button>
             <input
-              key={`${item.id}:${slot}:qty:${selectedId}:${qtyAssignment.amount ?? ''}`}
+              key={`${item.id}:${slot}:qty:${selectedId}:${displayQuantity ?? ''}:${percentValue}`}
               className={[
                 'tm-pm-gantt-cell-input',
                 'tm-pm-gantt-cell-input--number',
                 'tm-pm-gantt-resource-cell-qty',
-                qtyAssignment.amount == null ? 'tm-pm-gantt-cell-input--empty' : '',
+                displayQuantity == null ? 'tm-pm-gantt-cell-input--empty' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
               type="text"
               inputMode="decimal"
-              defaultValue={qtyAssignment.amount ?? ''}
-              aria-label={t('projectManagerPage.schedule.columns.costAmount')}
+              defaultValue={displayQuantity ?? ''}
+              aria-label={t('projectManagerPage.schedule.columns.costEngineeringQuantity')}
               placeholder=""
               disabled={!selectedId && !qtyAssignment.name.trim()}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter') return
                 event.preventDefault()
-                commitAmount(event.currentTarget.value)
+                commitQuantity(event.currentTarget.value)
                 event.currentTarget.blur()
               }}
               onBlur={(event) => {
-                commitAmount(event.target.value)
+                commitQuantity(event.target.value)
               }}
               onClick={(event) => event.stopPropagation()}
               onMouseDown={(event) => event.stopPropagation()}
@@ -800,7 +817,13 @@ export const ProjectGanttTaskGridBody: FC<ProjectGanttTaskGridBodyProps> = ({
               const catalogAmount = catalogRow
                 ? catalogCostAmountLimit(catalogRow, costCatalog)
                 : null
-              const percent = resolveCostPercentFromAmount(next, catalogAmount, assignment.percent)
+              const catalogQuantity = catalogCostQuantity(catalogRow)
+              const percent = resolveCostPercentFromAmount(
+                next,
+                catalogAmount,
+                assignment.percent,
+                catalogQuantity,
+              )
               writeOrderedCostSlot(item.id, amountSlotAssignments, slot, {
                 amount: next,
                 percent,

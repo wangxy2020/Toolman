@@ -16,29 +16,29 @@ export function useProjectCostMenuBar({
   const { t } = useI18n()
   const [viewOpen, setViewOpen] = useState(false)
   const [typeOpen, setTypeOpen] = useState(false)
-  const [baselineOpen, setBaselineOpen] = useState(false)
+  const [meteringOpen, setMeteringOpen] = useState(false)
   const viewRef = useRef<HTMLSpanElement>(null)
   const typeRef = useRef<HTMLSpanElement>(null)
-  const baselineRef = useRef<HTMLSpanElement>(null)
+  const meteringRef = useRef<HTMLSpanElement>(null)
   const viewPos = useDropdownPos(viewOpen, viewRef)
   const typePos = useDropdownPos(typeOpen, typeRef)
-  const baselinePos = useDropdownPos(baselineOpen, baselineRef)
+  const meteringPos = useDropdownPos(meteringOpen, meteringRef)
 
   useEffect(() => {
-    if (!viewOpen && !typeOpen && !baselineOpen) return
+    if (!viewOpen && !typeOpen && !meteringOpen) return
     const onDoc = (event: MouseEvent) => {
       const target = event.target as Node
       if (viewOpen && viewRef.current?.contains(target)) return
       if (typeOpen && typeRef.current?.contains(target)) return
-      if (baselineOpen && baselineRef.current?.contains(target)) return
+      if (meteringOpen && meteringRef.current?.contains(target)) return
       if ((target as Element).closest?.('.tm-pm-gantt-view-panel')) return
       setViewOpen(false)
       setTypeOpen(false)
-      setBaselineOpen(false)
+      setMeteringOpen(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [baselineOpen, typeOpen, viewOpen])
+  }, [meteringOpen, typeOpen, viewOpen])
 
   const viewMenuLabel = t('projectManagerPage.costTable.menu.view')
   const viewCurrentLabel =
@@ -54,7 +54,7 @@ export function useProjectCostMenuBar({
       : isCostSectionSummaryFilter(sectionFilter)
         ? t('projectManagerPage.costTable.views.sectionSummary')
         : sectionOptionLabel(sectionFilter)
-  const baselineMenuLabel = t('projectManagerPage.costTable.menu.baseline')
+  const meteringMenuLabel = t('projectManagerPage.costTable.menu.metering')
 
   return {
     t,
@@ -62,19 +62,19 @@ export function useProjectCostMenuBar({
     setViewOpen,
     typeOpen,
     setTypeOpen,
-    baselineOpen,
-    setBaselineOpen,
+    meteringOpen,
+    setMeteringOpen,
     viewRef,
     typeRef,
-    baselineRef,
+    meteringRef,
     viewPos,
     typePos,
-    baselinePos,
+    meteringPos,
     viewMenuLabel,
     viewCurrentLabel,
     sectionMenuLabel,
     sectionOptionLabel,
     sectionCurrentLabel,
-    baselineMenuLabel,
+    meteringMenuLabel,
   }
 }

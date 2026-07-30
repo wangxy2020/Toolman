@@ -20,30 +20,41 @@ import { usePmCatalogAutoSave } from '../../usePmCatalogAutoSave'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import { formatPathProjectLabel } from '../../pm-panel-shared'
 import { findDemoteParentId } from '../schedule/pm-gantt-tree'
+import { DEFAULT_COST_CURRENCY } from '../cost/pm-cost-currency'
+import {
+  loadCostColumnVisibility,
+  saveCostColumnVisibility,
+  type CostColumnVisibility,
+  type CostToggleColumn,
+} from '../cost/pm-cost-column-prefs'
 import {
   loadGanttUiPrefs,
   saveGanttUiPrefs,
   type GanttScheduleView,
 } from '../schedule/pm-gantt-prefs'
-import type {
-  FeaturesMenuAction,
-  FeaturesScheduleView,
-  FeaturesVersionSwitchEntry,
+import {
+  isFeaturesResourceStatFilter,
+  type FeaturesMenuAction,
+  type FeaturesScheduleView,
+  type FeaturesVersionSwitchEntry,
 } from './ProjectFeaturesMenuBar'
 import {
   buildCostCatalogOrderIndex,
   buildFundsDisplayEntries,
   buildFundsSectionMetaByRowId,
   buildLiveFundsFeatureRows,
+  buildLiveNodeFeatureRows,
   buildLiveProcurementFeatureRows,
   buildLiveScheduleFeatureRows,
   buildResourceUnitLookup,
   collectGanttCostSeeds,
   collectGanttFeatureSeeds,
+  collectGanttNodeSeeds,
   collectGanttProcurementSeeds,
   collectRollupMonthKeys,
   computeFeatureCostRollups,
   computeFeatureGanttRollups,
+  computeFeatureNodeRollups,
   excludeProcurementRowsCoveredByLive,
   groupMonthKeysByYear,
   usesPeakConcurrentRollup,
@@ -80,13 +91,13 @@ import {
   type FeaturesToggleColumn,
 } from './pm-features-column-prefs'
 import { resolveProjectCostCatalog } from '../cost/pm-cost-catalog'
-import { resolveCostTableTotalPriceCurrency } from '../cost/pm-cost-currency'
 import { resolveAssignableResourceCatalog } from '../resource/pm-resource-catalog'
 import {
   collectCascadeDeleteIds,
   computeColumnMenuPosition,
   computeContextMenuPosition,
   computeFundsTotals,
+  computeResourceStatTotals,
   computeVisibleRows,
   snapshotToRows,
 } from './pm-features-panel-utils'
@@ -100,6 +111,18 @@ export interface ProjectManagementFilesPanelProps {
   /** Switch to the Gantt panel with the chosen schedule sub-view. */
   onOpenScheduleView?: (view: FeaturesScheduleView) => void
   onProjectsChange?: () => void
+  /**
+   * Lock the panel to one type filter (e.g. cost · 价格表 → 计量).
+   * Hides trailing type menus and keeps `viewFilter` fixed.
+   */
+  lockedViewFilter?: PmFeatureViewFilter
+  /**
+   * Embed inside another page (e.g. cost · 价格表 metering view): no outer page shell.
+   * Parent owns the page chrome / primary menubar.
+   */
+  embedded?: boolean
+  /** When embedded, notify parent whether a row is selected (for menubar enablement). */
+  onEmbeddedSelectionChange?: (hasSelection: boolean) => void
 }
 
 type ContextMenuState = {
@@ -125,6 +148,9 @@ export function useProjectManagementFilesPanel({
   selectedProjectId,
   onOpenScheduleView,
   onProjectsChange,
+  lockedViewFilter,
+  embedded = false,
+  onEmbeddedSelectionChange,
 }: ProjectManagementFilesPanelProps) {
   const { t } = useI18n()
   const [scheduleView, setScheduleView] = useState<FeaturesScheduleView>(() => {
@@ -156,6 +182,10 @@ export function useProjectManagementFilesPanel({
   const [columnVisibility, setColumnVisibility] = useState<FeaturesColumnVisibility>(() =>
     loadFeaturesColumnVisibility(),
   )
+  /** Shared with 价格表 · 全部类型 so metering column menu matches. */
+  const [meteringColumnVisibility, setMeteringColumnVisibility] = useState<CostColumnVisibility>(
+    () => loadCostColumnVisibility(),
+  )
   const [pendingDelete, setPendingDelete] = useState(false)
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
   const [pendingSaveAsNewVersion, setPendingSaveAsNewVersion] = useState(false)
@@ -164,15 +194,31 @@ export function useProjectManagementFilesPanel({
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
   const [, setDraftType] = useState<PmFeatureType>('labor')
   /** Menu filter: 人力…仪器 / 「全部」. */
-  const [viewFilter, setViewFilter] = useState<PmFeatureViewFilter>('scheduleAll')
+  const [viewFilter, setViewFilter] = useState<PmFeatureViewFilter>(
+    () => lockedViewFilter ?? 'scheduleAll',
+  )
   /** horizontal = resources as rows; vertical = months as rows. */
   const [matrixLayout, setMatrixLayout] = useState<'horizontal' | 'vertical'>('horizontal')
   const [workItems, setWorkItems] = useState<PmWorkItem[]>([])
   const rowsRef = useRef<PmFeatureRow[]>([])
 
   const scopeKey = isAllScope ? PM_FEATURE_APPLICABLE_ALL : (editingProject?.id ?? '')
+  const showTrailingMenus = lockedViewFilter == null
 
   rowsRef.current = rows
+
+  useEffect(() => {
+    if (lockedViewFilter == null) return
+    setViewFilter(lockedViewFilter)
+    if (lockedViewFilter !== 'scheduleAll' && isPmFeatureType(lockedViewFilter)) {
+      setDraftType(lockedViewFilter)
+    }
+  }, [lockedViewFilter])
+
+  useEffect(() => {
+    if (!embedded) return
+    onEmbeddedSelectionChange?.(selectedId != null || checkedIds.size > 0)
+  }, [checkedIds.size, embedded, onEmbeddedSelectionChange, selectedId])
 
   useEffect(() => {
     let cancelled = false
@@ -256,6 +302,8 @@ export function useProjectManagementFilesPanel({
     [assignableResourceCatalog, workItems],
   )
 
+  const nodeSeeds = useMemo(() => collectGanttNodeSeeds(workItems), [workItems])
+
   useEffect(() => {
     if (dirty) return
 
@@ -271,11 +319,18 @@ export function useProjectManagementFilesPanel({
         stripped.rows,
         PM_FEATURE_APPLICABLE_ALL,
       )
+      const liveNodes = buildLiveNodeFeatureRows(nodeSeeds, null, PM_FEATURE_APPLICABLE_ALL)
       setRows(
         reindexFeatureRows([
-          ...buildLiveScheduleFeatureRows(ganttSeeds, [], PM_FEATURE_APPLICABLE_ALL),
+          ...buildLiveScheduleFeatureRows(
+            ganttSeeds,
+            assignableResourceCatalog,
+            [],
+            PM_FEATURE_APPLICABLE_ALL,
+          ),
           ...buildLiveFundsFeatureRows(costSeeds, [], PM_FEATURE_APPLICABLE_ALL),
           ...liveProcurement,
+          ...liveNodes,
           ...excludeProcurementRowsCoveredByLive(stripped.rows, liveProcurement),
         ]),
       )
@@ -299,11 +354,22 @@ export function useProjectManagementFilesPanel({
       stripped.rows,
       PM_FEATURE_APPLICABLE_ALL,
     )
+    const liveNodes = buildLiveNodeFeatureRows(
+      nodeSeeds,
+      { name: editingProject.name, code: editingProject.code },
+      PM_FEATURE_APPLICABLE_ALL,
+    )
     setRows(
       reindexFeatureRows([
-        ...buildLiveScheduleFeatureRows(ganttSeeds, [], PM_FEATURE_APPLICABLE_ALL),
+        ...buildLiveScheduleFeatureRows(
+          ganttSeeds,
+          assignableResourceCatalog,
+          [],
+          PM_FEATURE_APPLICABLE_ALL,
+        ),
         ...buildLiveFundsFeatureRows(costSeeds, [], PM_FEATURE_APPLICABLE_ALL),
         ...liveProcurement,
+        ...liveNodes,
         ...excludeProcurementRowsCoveredByLive(stripped.rows, liveProcurement),
       ]),
     )
@@ -325,6 +391,7 @@ export function useProjectManagementFilesPanel({
     editingProject,
     ganttSeeds,
     isAllScope,
+    nodeSeeds,
     onProjectsChange,
     procurementSeeds,
     scopeKey,
@@ -334,6 +401,8 @@ export function useProjectManagementFilesPanel({
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const isFundsView = viewFilter === 'funds'
   const isProcurementView = viewFilter === 'procurement'
+  const isNodeView = viewFilter === 'node'
+  const isResourceStatView = isFeaturesResourceStatFilter(viewFilter)
   const costCatalogOrder = useMemo(
     () => buildCostCatalogOrderIndex(costCatalog),
     [costCatalog],
@@ -371,30 +440,130 @@ export function useProjectManagementFilesPanel({
           ? t('projectManagerPage.files.table.monthFromGanttHintPeak')
           : t('projectManagerPage.files.table.monthFromGanttHint')
 
-  const fundsCurrency = useMemo(
-    () =>
-      resolveCostTableTotalPriceCurrency(
-        editingProject?.metadata,
-        editingProject?.code,
-      ),
-    [editingProject?.code, editingProject?.metadata],
-  )
+  const isMeteringCostView = lockedViewFilter === 'metering' || embedded
   const unitColumnLabel = isFundsView
-    ? t('projectManagerPage.files.table.columns.amountUnit', { currency: fundsCurrency })
-    : t('projectManagerPage.files.table.columns.unit')
-  /** Funds uses the unit column as 金额; hide the redundant quantity column. */
-  const showQuantityColumn = columnVisibility.quantity && !isFundsView
-  const showPricingUnitColumn = isProcurementView && columnVisibility.pricingUnit
-  const showPurchaseCycleColumn = isProcurementView && columnVisibility.purchaseCycle
-  const showTransportCycleColumn = isProcurementView && columnVisibility.transportCycle
+    ? t('projectManagerPage.costTable.columns.unit')
+    : isMeteringCostView
+      ? t('projectManagerPage.costTable.columns.unit')
+      : t('projectManagerPage.files.table.columns.unit')
+  const fundsEngineeringQuantityLabel = t(
+    'projectManagerPage.files.table.columns.engineeringQuantity',
+  )
+  const meteringTotalPriceLabel = t('projectManagerPage.costTable.columns.totalPrice', {
+    currency: DEFAULT_COST_CURRENCY,
+  })
+  const fundsTotalPriceLabel = t('projectManagerPage.files.table.columns.totalPrice')
+  /** Column header labels: metering (cost · 价格表) uses price-list naming. */
+  const featureColumnLabel = useCallback(
+    (
+      column:
+        | 'index'
+        | 'type'
+        | 'name'
+        | 'quantity'
+        | 'start'
+        | 'finish'
+        | 'remark'
+        | 'sectionalWork'
+        | 'code'
+        | 'featureDescription'
+        | 'unitPrice'
+        | 'totalPrice',
+    ) => {
+      if (isMeteringCostView) {
+        switch (column) {
+          case 'index':
+            return t('projectManagerPage.costTable.columns.index')
+          case 'type':
+            return t('projectManagerPage.costTable.columns.type')
+          case 'name':
+            return t('projectManagerPage.costTable.columns.name')
+          case 'quantity':
+            return t('projectManagerPage.costTable.columns.quantity')
+          case 'remark':
+            return t('projectManagerPage.costTable.columns.note')
+          case 'sectionalWork':
+            return t('projectManagerPage.costTable.columns.sectionalWork')
+          case 'code':
+            return t('projectManagerPage.costTable.columns.code')
+          case 'featureDescription':
+            return t('projectManagerPage.costTable.columns.featureDescription')
+          case 'unitPrice':
+            return t('projectManagerPage.costTable.columns.unitPrice')
+          case 'totalPrice':
+            return meteringTotalPriceLabel
+          default:
+            return t(`projectManagerPage.files.table.columns.${column}`)
+        }
+      }
+      if (isNodeView && column === 'name') {
+        return t('projectManagerPage.files.table.columns.milestoneName')
+      }
+      if (isFundsView && (column === 'unitPrice' || column === 'totalPrice')) {
+        return column === 'totalPrice'
+          ? fundsTotalPriceLabel
+          : t('projectManagerPage.files.table.columns.unitPrice')
+      }
+      return t(`projectManagerPage.files.table.columns.${column}`)
+    },
+    [fundsTotalPriceLabel, isFundsView, isMeteringCostView, isNodeView, meteringTotalPriceLabel, t],
+  )
+  /** Funds shows 工程数量 in its own column; hide the generic quantity column. */
+  const showQuantityColumn = columnVisibility.quantity && !isFundsView && !isNodeView
+  const showPricingUnitColumn =
+    (isProcurementView || isResourceStatView) &&
+    columnVisibility.pricingUnit &&
+    !isMeteringCostView
+  const showUnitPriceColumn =
+    (isResourceStatView || isFundsView) &&
+    columnVisibility.unitPrice &&
+    !isMeteringCostView
+  const showTotalPriceColumn =
+    (isResourceStatView || isFundsView) &&
+    columnVisibility.totalPrice &&
+    !isMeteringCostView
+  const showMeteringMethodColumn =
+    isResourceStatView && columnVisibility.meteringMethod && !isMeteringCostView
+  const showPricingQuantityColumn =
+    isResourceStatView && columnVisibility.pricingQuantity && !isMeteringCostView
+  const showPurchaseCycleColumn =
+    isProcurementView && columnVisibility.purchaseCycle && !isMeteringCostView
+  const showTransportCycleColumn =
+    isProcurementView && columnVisibility.transportCycle && !isMeteringCostView
+  /** Metering under 价格表 matches the price-list column set (no schedule date/month cols). */
+  const showUnitColumn =
+    !isNodeView && (isMeteringCostView ? meteringColumnVisibility.unit : columnVisibility.unit)
+  /** 资金: 工程数量 after 单位 (name → unit → engineering quantity → …). */
+  const showFundsEngineeringQuantityColumn = isFundsView
+  const showTypeColumn = isMeteringCostView
+    ? meteringColumnVisibility.type
+    : isNodeView
+      ? false
+      : columnVisibility.type
+  const showNameColumn = isMeteringCostView
+    ? meteringColumnVisibility.name
+    : isNodeView
+      ? true
+      : columnVisibility.name
+  const showDurationColumn = isNodeView && columnVisibility.duration
+  const showStartColumn = !isMeteringCostView && !isNodeView && columnVisibility.start
+  const showFinishColumn = !isMeteringCostView && columnVisibility.finish
+  const showPlannedPercentColumn = isNodeView && columnVisibility.plannedPercent
+  const showRemarkColumn =
+    !isNodeView &&
+    (isMeteringCostView ? meteringColumnVisibility.note : columnVisibility.remark)
 
   const resourceRollups = useMemo(
     () => computeFeatureGanttRollups(workItems, rows),
     [rows, workItems],
   )
   const costRollups = useMemo(
-    () => computeFeatureCostRollups(workItems, rows),
-    [rows, workItems],
+    () => computeFeatureCostRollups(workItems, rows, costCatalog),
+    [costCatalog, rows, workItems],
+  )
+  const nodeRollups = useMemo(
+    () => computeFeatureNodeRollups(nodeSeeds, rows, workItems),
+    [nodeSeeds, rows, workItems],
   )
   const rollups = isFundsView ? costRollups : resourceRollups
   const fundsSectionMetaByRowId = useMemo(
@@ -414,20 +583,33 @@ export function useProjectManagementFilesPanel({
     if (!isFundsView) return null
     return computeFundsTotals(visibleRows, rollups)
   }, [isFundsView, rollups, visibleRows])
+  const resourceStatTotals = useMemo(() => {
+    if (!isResourceStatView || visibleRows.length === 0) return null
+    return computeResourceStatTotals(visibleRows, rollups, {
+      sumQuantities: viewFilter !== 'scheduleAll',
+    })
+  }, [isResourceStatView, rollups, viewFilter, visibleRows])
   const monthKeys = useMemo(() => {
     const scoped = new Map(
       visibleRows.map((row) => {
         const rollup = rollups.get(row.id)
         return [
           row.id,
-          rollup ?? { quantity: 0, startDate: null, finishDate: null, monthly: {} },
+          rollup ?? {
+            quantity: 0,
+            pricingQuantity: 0,
+            startDate: null,
+            finishDate: null,
+            monthly: {},
+          },
         ] as const
       }),
     )
     return collectRollupMonthKeys(scoped)
   }, [rollups, visibleRows])
   const yearBands = useMemo(() => groupMonthKeysByYear(monthKeys), [monthKeys])
-  const showMonths = columnVisibility.months && monthKeys.length > 0
+  const showMonths =
+    columnVisibility.months && monthKeys.length > 0 && !isMeteringCostView && !isNodeView
   const visibleYearBands = useMemo(
     () => (showMonths ? yearBands : []),
     [showMonths, yearBands],
@@ -483,7 +665,14 @@ export function useProjectManagementFilesPanel({
       ro.disconnect()
       window.removeEventListener('resize', syncHScrollMetrics)
     }
-  }, [matrixLayout, monthKeys.length, syncHScrollMetrics, visibleRows.length])
+  }, [
+    isMeteringCostView,
+    matrixLayout,
+    meteringColumnVisibility,
+    monthKeys.length,
+    syncHScrollMetrics,
+    visibleRows.length,
+  ])
 
   const scrollToThumbOffset = useCallback((nextOffsetRatio: number) => {
     const el = tableScrollRef.current
@@ -537,10 +726,23 @@ export function useProjectManagementFilesPanel({
         persisted,
         viewApplicable,
       )
+      const liveNodes = buildLiveNodeFeatureRows(
+        nodeSeeds,
+        editingProject
+          ? { name: editingProject.name, code: editingProject.code }
+          : null,
+        viewApplicable,
+      )
       const live = [
-        ...buildLiveScheduleFeatureRows(ganttSeeds, [], viewApplicable),
+        ...buildLiveScheduleFeatureRows(
+          ganttSeeds,
+          assignableResourceCatalog,
+          [],
+          viewApplicable,
+        ),
         ...buildLiveFundsFeatureRows(costSeeds, [], viewApplicable),
         ...liveProcurement,
+        ...liveNodes,
       ]
       setRows(
         reindexFeatureRows([
@@ -553,7 +755,9 @@ export function useProjectManagementFilesPanel({
     [
       assignableResourceCatalog,
       costSeeds,
+      editingProject,
       ganttSeeds,
+      nodeSeeds,
       procurementSeeds,
       viewApplicable,
     ],
@@ -832,6 +1036,7 @@ export function useProjectManagementFilesPanel({
         writeSharedFeatureCatalog(workspaceId, payload)
         recordSharedFeatureSaveMeta(workspaceId, payload, { bumpVersion: false })
         await propagateSharedToProjects()
+        await onProjectsChange?.()
         return
       }
       if (!editingProject) return
@@ -843,6 +1048,9 @@ export function useProjectManagementFilesPanel({
             : editingProject.id,
       }))
       await persistProjectCatalog(editingProject, payload, { bumpVersion: false })
+      // Refresh parent projects so remount (e.g. leave 计量 → re-enter) does not hydrate
+      // from stale metadata and drop the rows we just wrote.
+      await onProjectsChange?.()
     } catch {
       // Best-effort leave save.
     }
@@ -850,6 +1058,7 @@ export function useProjectManagementFilesPanel({
     canEdit,
     editingProject,
     isAllScope,
+    onProjectsChange,
     persistProjectCatalog,
     propagateSharedToProjects,
     workspaceId,
@@ -972,12 +1181,16 @@ export function useProjectManagementFilesPanel({
     [selectedId, updateRows],
   )
 
-  const handleTypeChange = useCallback((type: PmFeatureViewFilter) => {
-    if (type !== 'scheduleAll') {
-      setDraftType(type)
-    }
-    setViewFilter(type)
-  }, [])
+  const handleTypeChange = useCallback(
+    (type: PmFeatureViewFilter) => {
+      if (lockedViewFilter != null) return
+      if (type !== 'scheduleAll') {
+        setDraftType(type)
+      }
+      setViewFilter(type)
+    },
+    [lockedViewFilter],
+  )
 
   const handleScheduleViewChange = useCallback(
     (view: FeaturesScheduleView) => {
@@ -1096,6 +1309,16 @@ export function useProjectManagementFilesPanel({
     })
   }, [])
 
+  const toggleMeteringColumnVisibility = useCallback((column: CostToggleColumn) => {
+    setMeteringColumnVisibility((prev) => {
+      if (column === 'name' && prev.name) return prev
+      const next = { ...prev, [column]: !prev[column] }
+      if (!next.name) next.name = true
+      saveCostColumnVisibility(next)
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     if (!columnMenu) return
     const onDoc = (event: MouseEvent) => {
@@ -1146,6 +1369,8 @@ export function useProjectManagementFilesPanel({
     setContextMenu,
     columnMenu,
     columnVisibility,
+    meteringColumnVisibility,
+    meteringTotalPriceLabel,
     pendingDelete,
     setPendingDelete,
     pendingRestoreVersion,
@@ -1160,19 +1385,42 @@ export function useProjectManagementFilesPanel({
     byId,
     isFundsView,
     isProcurementView,
+    isNodeView,
+    isResourceStatView,
     visibleRows,
     selectedRow,
     selectedType,
     quantityFromGanttHint,
     monthFromGanttHint,
     unitColumnLabel,
+    fundsEngineeringQuantityLabel,
+    featureColumnLabel,
     showQuantityColumn,
     showPricingUnitColumn,
+    showUnitPriceColumn,
+    showTotalPriceColumn,
+    showMeteringMethodColumn,
+    showPricingQuantityColumn,
     showPurchaseCycleColumn,
     showTransportCycleColumn,
+    showUnitColumn,
+    showFundsEngineeringQuantityColumn,
+    showTypeColumn,
+    showNameColumn,
+    showDurationColumn,
+    showStartColumn,
+    showFinishColumn,
+    showPlannedPercentColumn,
+    showRemarkColumn,
+    showTrailingMenus,
+    lockedViewFilter,
+    embedded,
+    isMeteringCostView,
     rollups,
+    nodeRollups,
     fundsDisplayEntries,
     fundsTotals,
+    resourceStatTotals,
     yearBands,
     visibleYearBands,
     visibleMonthKeys,
@@ -1190,11 +1438,13 @@ export function useProjectManagementFilesPanel({
     handleScheduleViewChange,
     scheduleView,
     handleMenuAction,
+    flushAutoSave,
     patchRow,
     handleRowContextMenu,
     handleTableContextMenu,
     openColumnVisibilityMenu,
     toggleColumnVisibility,
+    toggleMeteringColumnVisibility,
     handleSelectAll,
     handleClearSelection,
     deleteIds,

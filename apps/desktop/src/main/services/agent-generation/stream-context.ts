@@ -31,13 +31,19 @@ export function createGenerationStreamContext(options: {
     persistTimer = setTimeout(flush, 300)
   }
 
-  const emitThinkingDelta = (text: string) => {
+  const emitThinkingDelta = (text: string, durationSeconds?: number | null) => {
+    const startedAtMs = buffers.getThinkingStartedAtMs()
     emitStreamEvent({
       type: 'message.delta',
       sessionId: options.sessionId,
       messageId: options.assistantMessageId,
       modelId: options.modelId,
-      delta: { type: 'thinking', text },
+      delta: {
+        type: 'thinking',
+        text,
+        ...(startedAtMs != null ? { startedAtMs } : {}),
+        ...(durationSeconds != null ? { durationSeconds } : {}),
+      },
       timestamp: Date.now(),
     })
   }
@@ -54,9 +60,23 @@ export function createGenerationStreamContext(options: {
     emitThinkingDelta(text)
   }
 
+  const emitThinkingDurationIfNeeded = () => {
+    buffers.finalizeThinkingDuration()
+    const thinkingDurationSeconds = buffers.getThinkingDurationSeconds()
+    if (thinkingDurationSeconds === null) return
+    emitThinkingDelta('', thinkingDurationSeconds)
+  }
+
   const appendText = (text: string) => {
+    const durationBefore = buffers.getThinkingDurationSeconds()
     buffers.appendText(text)
     persistBlocks()
+
+    // Freeze and publish thinking duration as soon as answer text starts — not only
+    // at message.done — so the UI shows wall-clock think time instead of paint time.
+    if (durationBefore === null && buffers.getThinkingDurationSeconds() !== null) {
+      emitThinkingDurationIfNeeded()
+    }
 
     emitStreamEvent({
       type: 'message.delta',
@@ -77,20 +97,6 @@ export function createGenerationStreamContext(options: {
       messageId: options.assistantMessageId,
       modelId: options.modelId,
       delta,
-      timestamp: Date.now(),
-    })
-  }
-
-  const emitThinkingDurationIfNeeded = () => {
-    buffers.finalizeThinkingDuration()
-    const thinkingDurationSeconds = buffers.getThinkingDurationSeconds()
-    if (thinkingDurationSeconds === null) return
-    emitStreamEvent({
-      type: 'message.delta',
-      sessionId: options.sessionId,
-      messageId: options.assistantMessageId,
-      modelId: options.modelId,
-      delta: { type: 'thinking', text: '', durationSeconds: thinkingDurationSeconds },
       timestamp: Date.now(),
     })
   }

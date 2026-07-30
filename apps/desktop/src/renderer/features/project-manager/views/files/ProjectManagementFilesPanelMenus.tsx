@@ -1,7 +1,15 @@
 import type { FC } from 'react'
 import { createPortal } from 'react-dom'
 
-import { FEATURES_TOGGLE_COLUMNS, isFeaturesProcurementColumn } from './pm-features-column-prefs'
+import {
+  FEATURES_TOGGLE_COLUMNS,
+  isFeaturesNodeColumn,
+  isFeaturesNodeDefaultColumn,
+  isFeaturesProcurementColumn,
+  isFeaturesPricingUnitColumn,
+  isFeaturesResourceStatColumn,
+} from './pm-features-column-prefs'
+import { COST_TOGGLE_COLUMNS } from '../cost/pm-cost-column-prefs'
 import type { ProjectManagementFilesPanelState } from './useProjectManagementFilesPanel'
 
 export interface ProjectManagementFilesPanelMenusProps {
@@ -26,10 +34,18 @@ export const ProjectManagementFilesPanelMenus: FC<ProjectManagementFilesPanelMen
     columnMenu,
     isFundsView,
     isProcurementView,
+    isResourceStatView,
+    isNodeView,
     columnVisibility,
+    meteringColumnVisibility,
     toggleColumnVisibility,
+    toggleMeteringColumnVisibility,
     unitColumnLabel,
+    featureColumnLabel,
+    meteringTotalPriceLabel,
   } = state
+
+  const isMeteringCostView = state.isMeteringCostView
 
   return (
     <>
@@ -90,21 +106,23 @@ export const ProjectManagementFilesPanelMenus: FC<ProjectManagementFilesPanelMen
                   {t('projectManagerPage.files.table.selection.deleteSelected')}
                   {checkedIds.size > 0 ? ` (${checkedIds.size})` : ''}
                 </button>
-                <button
-                  type="button"
-                  className="tm-group-context-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMatrixLayout((current) =>
-                      current === 'horizontal' ? 'vertical' : 'horizontal',
-                    )
-                    setContextMenu(null)
-                  }}
-                >
-                  {matrixLayout === 'horizontal'
-                    ? t('projectManagerPage.files.table.selection.layoutVertical')
-                    : t('projectManagerPage.files.table.selection.layoutHorizontal')}
-                </button>
+                {!isMeteringCostView ? (
+                  <button
+                    type="button"
+                    className="tm-group-context-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setMatrixLayout((current) =>
+                        current === 'horizontal' ? 'vertical' : 'horizontal',
+                      )
+                      setContextMenu(null)
+                    }}
+                  >
+                    {matrixLayout === 'horizontal'
+                      ? t('projectManagerPage.files.table.selection.layoutVertical')
+                      : t('projectManagerPage.files.table.selection.layoutHorizontal')}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="tm-group-context-menu-item"
@@ -131,27 +149,69 @@ export const ProjectManagementFilesPanelMenus: FC<ProjectManagementFilesPanelMen
               role="menu"
             >
               <div className="tm-pm-gantt-col-menu-title">
-                {t('projectManagerPage.files.table.columnVisibility')}
+                {isMeteringCostView
+                  ? t('projectManagerPage.costTable.columnVisibility')
+                  : t('projectManagerPage.files.table.columnVisibility')}
               </div>
-              {FEATURES_TOGGLE_COLUMNS.filter(
-                (column) =>
-                  !(isFundsView && column === 'quantity') &&
-                  (isProcurementView || !isFeaturesProcurementColumn(column)),
-              ).map((column) => (
-                <label key={column} className="tm-pm-gantt-col-menu-item">
-                  <input
-                    type="checkbox"
-                    checked={columnVisibility[column]}
-                    disabled={column === 'name'}
-                    onChange={() => toggleColumnVisibility(column)}
-                  />
-                  <span>
-                    {column === 'unit'
-                      ? unitColumnLabel
-                      : t(`projectManagerPage.files.table.columns.${column}`)}
-                  </span>
-                </label>
-              ))}
+              {isMeteringCostView
+                ? COST_TOGGLE_COLUMNS.map((column) => (
+                    <label key={column} className="tm-pm-gantt-col-menu-item">
+                      <input
+                        type="checkbox"
+                        checked={meteringColumnVisibility[column]}
+                        disabled={column === 'name'}
+                        onChange={() => toggleMeteringColumnVisibility(column)}
+                      />
+                      <span>
+                        {column === 'totalPrice'
+                          ? meteringTotalPriceLabel
+                          : t(`projectManagerPage.costTable.columns.${column}`)}
+                      </span>
+                    </label>
+                  ))
+                : FEATURES_TOGGLE_COLUMNS.filter((column) => {
+                    if (isNodeView) {
+                      if (isFeaturesNodeDefaultColumn(column)) return true
+                      if (column === 'start' || column === 'remark') return true
+                      return false
+                    }
+                    if (isFundsView && column === 'quantity') return false
+                    if (isFundsView && isFeaturesResourceStatColumn(column)) {
+                      return column === 'unitPrice' || column === 'totalPrice'
+                    }
+                    if (isFeaturesProcurementColumn(column) && !isProcurementView) return false
+                    if (isFeaturesResourceStatColumn(column) && !isResourceStatView) return false
+                    if (
+                      isFeaturesPricingUnitColumn(column) &&
+                      !isProcurementView &&
+                      !isResourceStatView
+                    ) {
+                      return false
+                    }
+                    if (isFeaturesNodeColumn(column)) return false
+                    return true
+                  }).map((column) => (
+                    <label key={column} className="tm-pm-gantt-col-menu-item">
+                      <input
+                        type="checkbox"
+                        checked={columnVisibility[column]}
+                        disabled={column === 'name'}
+                        onChange={() => toggleColumnVisibility(column)}
+                      />
+                      <span>
+                        {column === 'unit'
+                          ? unitColumnLabel
+                          : column === 'type' ||
+                              column === 'name' ||
+                              column === 'quantity' ||
+                              column === 'remark' ||
+                              column === 'unitPrice' ||
+                              column === 'totalPrice'
+                            ? featureColumnLabel(column)
+                            : t(`projectManagerPage.files.table.columns.${column}`)}
+                      </span>
+                    </label>
+                  ))}
             </div>,
             document.body,
           )

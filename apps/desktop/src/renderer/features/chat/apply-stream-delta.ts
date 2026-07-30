@@ -35,6 +35,7 @@ export function applyStreamDelta(blocks: ContentBlock[], delta: StreamDelta): Co
     const existingIndex = next.findIndex((block) => block.type === 'thinking')
     let thinkingText = delta.text
     let previousDuration: number | undefined
+    let previousStartedAt: number | undefined
     if (existingIndex >= 0) {
       const current = next[existingIndex]
       if (current?.type === 'thinking') {
@@ -46,6 +47,7 @@ export function applyStreamDelta(blocks: ContentBlock[], delta: StreamDelta): Co
           thinkingText = current.text
         }
         previousDuration = current.durationSeconds
+        previousStartedAt = current.startedAtMs
         next.splice(existingIndex, 1)
       }
     }
@@ -57,6 +59,11 @@ export function applyStreamDelta(blocks: ContentBlock[], delta: StreamDelta): Co
         ? { durationSeconds: delta.durationSeconds }
         : previousDuration !== undefined
           ? { durationSeconds: previousDuration }
+          : {}),
+      ...(delta.startedAtMs !== undefined
+        ? { startedAtMs: delta.startedAtMs }
+        : previousStartedAt !== undefined
+          ? { startedAtMs: previousStartedAt }
           : {}),
     }
     const firstTextIndex = next.findIndex((block) => block.type === 'text')

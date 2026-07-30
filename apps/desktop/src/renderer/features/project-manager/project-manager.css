@@ -99,34 +99,89 @@
   gap: 16px;
 }
 
-.tm-pm-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 1400px) {
-  .tm-pm-kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 900px) {
-  .tm-pm-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.tm-pm-kpi-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+/* Shared surface chrome for KPI / project / insight cards. */
+.tm-pm-kpi-card,
+.tm-pm-project-card,
+.tm-pm-insight-card {
+  box-sizing: border-box;
   padding: 14px 16px;
   border-radius: 12px;
   border: 0.5px solid var(--color-border);
   background: var(--color-background);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.tm-pm-kpi-grid {
+  display: grid;
+  gap: 12px;
+  align-items: stretch;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.tm-pm-kpi-grid[data-cols='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tm-pm-kpi-grid[data-cols='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tm-pm-kpi-grid[data-cols='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tm-pm-kpi-grid[data-cols='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tm-pm-kpi-grid[data-cols='5'] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.tm-pm-kpi-grid[data-cols='6'] {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 1400px) {
+  .tm-pm-kpi-grid,
+  .tm-pm-kpi-grid[data-cols='4'],
+  .tm-pm-kpi-grid[data-cols='5'],
+  .tm-pm-kpi-grid[data-cols='6'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tm-pm-kpi-grid[data-cols='1'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tm-pm-kpi-grid[data-cols='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .tm-pm-kpi-grid,
+  .tm-pm-kpi-grid[data-cols='3'],
+  .tm-pm-kpi-grid[data-cols='4'],
+  .tm-pm-kpi-grid[data-cols='5'],
+  .tm-pm-kpi-grid[data-cols='6'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tm-pm-kpi-grid[data-cols='1'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tm-pm-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Fixed height so sub/trend text never grows the card. */
+  height: 88px;
   min-height: 88px;
+  max-height: 88px;
+  overflow: hidden;
 }
 
 .tm-pm-kpi-icon {
@@ -143,6 +198,7 @@
 
 .tm-pm-kpi-content {
   min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -151,6 +207,9 @@
 .tm-pm-kpi-label {
   font-size: 12px;
   color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-kpi-value {
@@ -158,21 +217,35 @@
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-kpi-sub {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
   font-size: 11px;
+  line-height: 1.3;
   color: var(--color-text-tertiary, var(--color-text-secondary));
+  overflow: hidden;
+}
+
+.tm-pm-kpi-sub-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-trend {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
   font-weight: 500;
 }
 
@@ -212,16 +285,15 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
+  align-items: stretch;
 }
 
 .tm-pm-project-card {
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 0.5px solid var(--color-border);
-  background: var(--color-background);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  height: 100%;
+  min-height: 168px;
   transition: box-shadow 0.2s ease;
 }
 
@@ -234,6 +306,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  min-height: 36px;
+}
+
+.tm-pm-project-card-title {
+  min-width: 0;
+  flex: 1;
 }
 
 .tm-pm-project-code {
@@ -249,17 +327,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 220px;
 }
 
 .tm-pm-status {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 500;
   line-height: 1.4;
+  white-space: nowrap;
 }
 
 .tm-pm-status--normal {
@@ -281,6 +360,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  min-height: 34px;
 }
 
 .tm-pm-metric-item {
@@ -293,33 +373,63 @@
 .tm-pm-metric-label {
   font-size: 11px;
   color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-metric-value {
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-metric-value--warn {
   color: #dc2626;
 }
 
+/*
+ * Progress track: fill only changes WIDTH.
+ * Lock meta + bar heights so percent changes never resize the card.
+ */
 .tm-pm-progress-track {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex-shrink: 0;
+  min-height: 26px;
 }
 
 .tm-pm-progress-meta {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  height: 16px;
   font-size: 11px;
+  line-height: 16px;
   color: var(--color-text-secondary);
+  overflow: hidden;
+}
+
+.tm-pm-progress-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-pm-progress-meta > span:last-child {
+  flex-shrink: 0;
+  max-width: 45%;
 }
 
 .tm-pm-progress-bar {
   height: 6px;
+  flex: 0 0 6px;
   border-radius: 999px;
   background: var(--color-background-mute);
   overflow: hidden;
@@ -327,28 +437,42 @@
 
 .tm-pm-progress-fill {
   height: 100%;
+  max-height: 6px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--color-primary) 0%, #3b82f6 100%);
+  /* Width-only animation; never grow the track. */
+  transition: width 0.2s ease;
 }
 
 .tm-pm-project-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 8px;
+  min-height: 22px;
+  margin-top: auto;
   font-size: 11px;
   color: var(--color-text-secondary);
+  overflow: hidden;
 }
 
 .tm-pm-project-meta span {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   padding: 2px 8px;
   border-radius: 6px;
   background: var(--color-background-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tm-pm-insight-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: stretch;
 }
 
 @media (max-width: 768px) {
@@ -358,9 +482,10 @@
 }
 
 .tm-pm-insight-card {
-  padding: 16px 18px;
-  border-radius: 12px;
-  border: 0.5px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 120px;
   background: linear-gradient(135deg, var(--color-background-soft) 0%, var(--color-background) 100%);
 }
 
@@ -383,7 +508,12 @@
 .tm-pm-insight-desc {
   margin: 8px 0 0;
   font-size: 12px;
+  line-height: 1.4;
   color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .tm-pm-empty {
@@ -752,6 +882,29 @@
   overflow: hidden;
 }
 
+/* Align with Gantt split-view task name column (pm-gantt-prefs name: 220px). */
+.tm-pm-features-table-page--node .tm-pm-resource-table-col-name {
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  text-align: left;
+}
+
+.tm-pm-features-table-name-text {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  color: var(--tm-text);
+}
+
+.tm-pm-features-table-col-planned-percent {
+  width: 72px;
+  min-width: 72px;
+  max-width: 88px;
+  text-align: center;
+}
+
 .tm-pm-features-table-col-remark {
   width: 96px;
   min-width: 96px;
@@ -773,6 +926,11 @@
 .tm-pm-features-table-col-cycle {
   width: 88px;
   min-width: 72px;
+}
+
+.tm-pm-features-table-col-metering-method {
+  width: 72px;
+  min-width: 64px;
 }
 
 .tm-pm-features-table-col-month {
@@ -1591,6 +1749,17 @@ html.theme-dark .tm-pm-resource-menubar {
 .tm-pm-resource-menubar-btn:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--tm-hover);
   color: var(--tm-pm-resource-menubar-fg);
+}
+
+.tm-pm-resource-menubar-btn.tm-pm-resource-menubar-btn--active {
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
+  box-shadow: none;
+}
+
+.tm-pm-resource-menubar-btn.tm-pm-resource-menubar-btn--active:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
 }
 
 .tm-pm-resource-menubar-btn:disabled,
@@ -4822,6 +4991,30 @@ button.tm-pm-gantt-col-menu-action:disabled {
   box-shadow: inset 0 -1px 0 var(--tm-border);
 }
 
+/* Shared header rename input (Gantt + price list). */
+.tm-pm-table-header-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 4px;
+  border: 0.5px solid var(--tm-border);
+  border-radius: 4px;
+  background: var(--tm-bg);
+  color: var(--tm-text);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tm-pm-table-header-input:focus {
+  outline: none;
+  border-color: var(--tm-accent, #3b82f6);
+}
+
 .tm-pm-resource-table-col-index {
   width: 48px;
   text-align: center;
@@ -5370,6 +5563,65 @@ button.tm-pm-gantt-col-menu-action:disabled {
 .tm-pm-cost-table-page .tm-pm-resource-menubar {
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Metering: trailing spacer must absorb leftover pane width even with 0 body rows.
+   Header pin-inner is normally `width: max-content`, which makes a child `width: 100%`
+   resolve as indefinite — the table then sticks near the column-sum floor and the
+   spacer collapses. `max(100%, max-content)` gives a definite CB so 100% fills the pane. */
+.tm-pm-cost-table-page .tm-pm-cost-metering-table .tm-pm-resource-table-header-pin-inner {
+  width: max(100%, max-content);
+  min-width: 100%;
+}
+
+/* Floor = ~column sum + trailing blank so spacer is not crushed when the pane is narrow
+   (small window → H-scroll; end of scroll still shows blank after 备注). */
+.tm-pm-cost-table-page .tm-pm-cost-metering-table .tm-pm-resource-table-scroll-inner {
+  min-width: max(100%, 1464px);
+  width: max(100%, 1464px);
+  box-sizing: border-box;
+}
+
+.tm-pm-cost-table-page .tm-pm-cost-metering-table .tm-pm-resource-table {
+  width: 100%;
+  min-width: 100%;
+}
+
+.tm-pm-cost-table-page .tm-pm-cost-metering-table .tm-pm-resource-table-col-spacer,
+.tm-pm-cost-table-page .tm-pm-cost-metering-table th.tm-pm-resource-table-col-spacer,
+.tm-pm-cost-table-page .tm-pm-cost-metering-table td.tm-pm-resource-table-col-spacer {
+  /* Prefer leftover space; keep a visible blank strip even when H-scrolling. */
+  width: 100%;
+  min-width: 64px;
+  max-width: none;
+  padding: 0;
+  border-left: 0.5px solid var(--tm-border);
+  border-right: none;
+}
+
+/* Zero-height body row so colgroup + spacer still participate when there are no data rows. */
+.tm-pm-cost-table-page .tm-pm-cost-metering-table .tm-pm-resource-table-row--col-scaffold td {
+  height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
+  line-height: 0;
+  font-size: 0;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.tm-pm-cost-table-page
+  .tm-pm-cost-metering-table
+  .tm-pm-resource-table-row--col-scaffold
+  td.tm-pm-resource-table-col-spacer {
+  border-left: 0.5px solid var(--tm-border);
+  border-right: none;
+}
+
+.tm-pm-cost-table-page .tm-pm-cost-metering-table .tm-pm-gantt-grid-custom-hscroll {
+  flex-shrink: 0;
+  margin: 0 12px 4px 12px;
 }
 
 /* Editable cells must remain selectable for typing / copy-paste. */

@@ -44,7 +44,6 @@ describe('pm-features-catalog', () => {
     const rows = createDefaultFeatureCatalog()
     expect(rows.map((row) => row.type).sort()).toEqual([
       'metering',
-      'node',
       'procurement',
     ])
     expect(rows.some((row) => row.type === 'labor')).toBe(false)

@@ -57,11 +57,13 @@ export const ProjectGanttTaskGridHeader: FC<ProjectGanttTaskGridHeaderProps> = (
         {isEditing ? (
           <input
             ref={inputRef}
-            className="tm-pm-gantt-cell-input"
+            className="tm-pm-table-header-input"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={commitEdit}
             onKeyDown={handleKeyDown}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
           />
         ) : labelOf(columnId).includes('\n') ? (
           <span className="tm-pm-gantt-col-label-wrap">

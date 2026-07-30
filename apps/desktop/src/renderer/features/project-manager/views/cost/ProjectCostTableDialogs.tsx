@@ -5,6 +5,7 @@ import { AddMultipleRowsDialog } from '../../../../components/AddMultipleRowsDia
 import { SaveAsNewVersionDialog } from '../../../../components/SaveAsNewVersionDialog'
 import { useI18n } from '../../../../i18n/useI18n'
 import ProjectInfoDialog from '../schedule/ProjectInfoDialog'
+import MeteringBaselineCaptureDialog from './MeteringBaselineCaptureDialog'
 import type { ProjectCostTablePanelProps, ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
 export interface ProjectCostTableDialogsProps {
@@ -44,6 +45,21 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
     handleSave,
     projectInfoOpen,
     setProjectInfoOpen,
+    meteringCaptureBaselineOpen,
+    setMeteringCaptureBaselineOpen,
+    nextMeteringCaptureBaselineIndex,
+    nextMeteringCaptureAsOfMs,
+    nextMeteringCaptureBaselineName,
+    handleMeteringCaptureBaselineConfirm,
+    meteringEditBaselineOpen,
+    setMeteringEditBaselineOpen,
+    selectedMeteringBaseline,
+    editMeteringBaselineNameIndex,
+    editMeteringBaselineInitialDateMs,
+    handleMeteringEditBaselineConfirm,
+    pendingMeteringDeleteBaseline,
+    setPendingMeteringDeleteBaseline,
+    handleConfirmMeteringDeleteBaseline,
   } = state
 
   return (
@@ -144,6 +160,42 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
           onSaved={() => {
             void onProjectsChange?.()
           }}
+        />
+      ) : null}
+
+      {meteringCaptureBaselineOpen && !isPractice ? (
+        <MeteringBaselineCaptureDialog
+          mode="capture"
+          initialName={nextMeteringCaptureBaselineName}
+          initialDateMs={nextMeteringCaptureAsOfMs}
+          nameIndex={nextMeteringCaptureBaselineIndex}
+          onCancel={() => setMeteringCaptureBaselineOpen(false)}
+          onConfirm={handleMeteringCaptureBaselineConfirm}
+        />
+      ) : null}
+
+      {meteringEditBaselineOpen && !isPractice && selectedMeteringBaseline ? (
+        <MeteringBaselineCaptureDialog
+          mode="edit"
+          initialName={selectedMeteringBaseline.name}
+          initialDateMs={editMeteringBaselineInitialDateMs}
+          nameIndex={editMeteringBaselineNameIndex}
+          onCancel={() => setMeteringEditBaselineOpen(false)}
+          onConfirm={handleMeteringEditBaselineConfirm}
+        />
+      ) : null}
+
+      {pendingMeteringDeleteBaseline && !isPractice && selectedMeteringBaseline ? (
+        <ConfirmDialog
+          title={t('projectManagerPage.costTable.meteringBaselineDelete.title')}
+          message={t('projectManagerPage.costTable.meteringBaselineDelete.confirm', {
+            name: selectedMeteringBaseline.name,
+          })}
+          confirmLabel={t('projectManagerPage.costTable.meteringBaselineDelete.confirmLabel')}
+          cancelLabel={t('common.cancel')}
+          danger
+          onCancel={() => setPendingMeteringDeleteBaseline(false)}
+          onConfirm={handleConfirmMeteringDeleteBaseline}
         />
       ) : null}
     </>

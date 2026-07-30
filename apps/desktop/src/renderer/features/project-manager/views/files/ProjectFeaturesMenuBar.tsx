@@ -134,10 +134,12 @@ export interface ProjectFeaturesMenuBarProps {
   onRestoreVersion?: (version: number) => void
   onAction: (action: FeaturesMenuAction) => void
   /**
-   * When false, hide menus after「基线」(资源统计 / 采购 / 计量 / 节点 / 资金).
-   * Used by 资源管理-实务 / 成本管理-实务.
+   * When false, hide menus after「基线」(资源统计 / 采购 / 节点 / 资金).
+   * Used by 资源管理-实务 / 成本管理-实务 / 成本-价格表·计量.
    */
   showTrailingMenus?: boolean
+  /** When false, hide the leading「视图」dropdown (used by locked metering view). */
+  showViewMenu?: boolean
 }
 
 type Props = ProjectFeaturesMenuBarProps
@@ -161,6 +163,7 @@ export function ProjectFeaturesMenuBar({
   onRestoreVersion,
   onAction,
   showTrailingMenus = true,
+  showViewMenu = true,
 }: Props) {
   const {
     t,
@@ -184,8 +187,6 @@ export function ProjectFeaturesMenuBar({
     resourceStatsMenuLabel,
     resourceStatMode,
     resourceStatCurrent,
-    resourceStatCurrentLabel,
-    resourceStatsTip,
     viewLabel,
   } = useProjectFeaturesMenuBar({ selectedType, scheduleView, viewMenuMode, quotaView, costQuotaView })
   const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
@@ -294,12 +295,6 @@ export function ProjectFeaturesMenuBar({
       active: selectedType === 'procurement',
     },
     {
-      key: 'metering',
-      title: t('projectManagerPage.files.menu.metering'),
-      label: t('projectManagerPage.files.menu.metering'),
-      active: selectedType === 'metering',
-    },
-    {
       key: 'node',
       title: t('projectManagerPage.files.menu.node'),
       label: t('projectManagerPage.files.menu.node'),
@@ -368,6 +363,7 @@ export function ProjectFeaturesMenuBar({
           }}
         >
           <div className="tm-pm-features-menubar-group">
+            {showViewMenu ? (
             <span className="tm-pm-features-menubar-item tm-pm-gantt-view-menu" ref={viewRef}>
               <button
                 type="button"
@@ -467,6 +463,7 @@ export function ProjectFeaturesMenuBar({
                 : null}
               <span className="tm-pm-features-menubar-divider" />
             </span>
+            ) : null}
 
             {leadingItems.map(renderToolbarItem)}
 
@@ -574,12 +571,9 @@ export function ProjectFeaturesMenuBar({
                   setBaselineOpen(false)
                   setResourceStatsOpen((open) => !open)
                 }}
-                {...tipProps(resourceStatsTip)}
+                {...tipProps(resourceStatsMenuLabel)}
               >
                 <span>{resourceStatsMenuLabel}</span>
-                {resourceStatCurrentLabel != null ? (
-                  <span className="tm-pm-gantt-view-current">{resourceStatCurrentLabel}</span>
-                ) : null}
                 <IconChevronDown
                   size={14}
                   className={[
@@ -633,7 +627,6 @@ export function ProjectFeaturesMenuBar({
                     document.body,
                   )
                 : null}
-              <span className="tm-pm-features-menubar-divider" />
             </span>
             ) : null}
 

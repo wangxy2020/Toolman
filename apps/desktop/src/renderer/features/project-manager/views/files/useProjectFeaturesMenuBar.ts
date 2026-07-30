@@ -81,16 +81,6 @@ export function useProjectFeaturesMenuBar({
   const resourceStatsMenuLabel = t('projectManagerPage.files.menu.resourceStatistics')
   const resourceStatMode = isFeaturesResourceStatFilter(selectedType)
   const resourceStatCurrent = resourceStatMode ? selectedType : null
-  const resourceStatCurrentLabel =
-    resourceStatCurrent == null
-      ? null
-      : resourceStatCurrent === 'scheduleAll'
-        ? t('projectManagerPage.files.menu.scheduleAll')
-        : t(`projectManagerPage.files.menu.${resourceStatCurrent}`)
-  const resourceStatsTip =
-    resourceStatCurrentLabel != null
-      ? `${resourceStatsMenuLabel} · ${resourceStatCurrentLabel}`
-      : resourceStatsMenuLabel
   const viewLabel = t('projectManagerPage.files.menu.view')
 
   return {
@@ -115,8 +105,6 @@ export function useProjectFeaturesMenuBar({
     resourceStatsMenuLabel,
     resourceStatMode,
     resourceStatCurrent,
-    resourceStatCurrentLabel,
-    resourceStatsTip,
     viewLabel,
   }
 }

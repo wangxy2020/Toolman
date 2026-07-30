@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 
@@ -72,7 +72,16 @@ import {
   writeCostPracticeCatalog,
   writeCostPracticeSaveMeta,
 } from './pm-cost-practice-catalog'
-import { loadCostColumnVisibility, saveCostColumnVisibility, type CostColumnVisibility, type CostToggleColumn } from './pm-cost-column-prefs'
+import {
+  loadCostColumnLabels,
+  loadCostColumnVisibility,
+  saveCostColumnLabels,
+  saveCostColumnVisibility,
+  type CostColumnLabels,
+  type CostColumnVisibility,
+  type CostLabelColumn,
+  type CostToggleColumn,
+} from './pm-cost-column-prefs'
 import { DEFAULT_COST_CURRENCY, resolveCostTableTotalPriceCurrency } from './pm-cost-currency'
 import { cloneCostRows, CostHistoryStack } from './pm-cost-history'
 import { COST_IMPORT_DIALOG_FILTERS, importCostCatalogFromFile } from './pm-cost-import'
@@ -93,6 +102,20 @@ import {
   snapshotToRows,
   syncFeatureDescriptionHeight,
 } from './pm-cost-panel-utils'
+import {
+  addMeteringBaseline,
+  deleteMeteringBaseline,
+  nextMeteringPeriodIndex,
+  nextMeteringPeriodName,
+  parseMeteringPeriodNameIndex,
+  readMeteringBaselines,
+  readMeteringRollupMode,
+  updateMeteringBaseline,
+  writeMeteringRollupMode,
+  type MeteringBaseline,
+  type MeteringRollupMode,
+} from './pm-metering-baselines'
+import { formatWorkItemDate, parseDateInput } from '../schedule/pm-gantt-utils'
 
 export interface ProjectCostTablePanelProps {
   workspaceId: string
@@ -135,7 +158,7 @@ export function useProjectCostTablePanel({
     return projects.find((project) => project.id === selectedProjectId) ?? null
   }, [isAllScope, projects, selectedProjectId])
 
-  const totalPriceColumnLabel = useMemo(() => {
+  const totalPriceColumnDefaultLabel = useMemo(() => {
     const currency = resolveCostTableTotalPriceCurrency(
       editingProject?.metadata,
       editingProject?.code,
@@ -154,6 +177,17 @@ export function useProjectCostTablePanel({
   const [costQuotaView, setCostQuotaView] =
     useState<CostPracticeQuotaView>('constructionQuota')
 
+  /** Catalog-only: metering view on the same price-list page (feature catalog type=metering). */
+  const [meteringViewActive, setMeteringViewActive] = useState(false)
+  const [meteringBaselines, setMeteringBaselines] = useState<MeteringBaseline[]>([])
+  const [selectedMeteringBaselineId, setSelectedMeteringBaselineId] = useState<string | null>(
+    null,
+  )
+  const [meteringCaptureBaselineOpen, setMeteringCaptureBaselineOpen] = useState(false)
+  const [meteringEditBaselineOpen, setMeteringEditBaselineOpen] = useState(false)
+  const [pendingMeteringDeleteBaseline, setPendingMeteringDeleteBaseline] = useState(false)
+  const [meteringRollupMode, setMeteringRollupMode] = useState<MeteringRollupMode>('none')
+
   const [rows, setRows] = useState<PmCostRow[]>([])
   const [summaryRows, setSummaryRows] = useState<CostSummaryRow[]>([])
   const [dirty, setDirty] = useState(false)
@@ -170,6 +204,10 @@ export function useProjectCostTablePanel({
   const [columnVisibility, setColumnVisibility] = useState<CostColumnVisibility>(() =>
     loadCostColumnVisibility(),
   )
+  const [columnLabels, setColumnLabels] = useState<CostColumnLabels>(() => loadCostColumnLabels())
+  const [editingHeaderColumn, setEditingHeaderColumn] = useState<CostLabelColumn | null>(null)
+  const [headerDraft, setHeaderDraft] = useState('')
+  const headerInputRef = useRef<HTMLInputElement | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Set<string> | null>(null)
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
   const [pendingSaveAsNewVersion, setPendingSaveAsNewVersion] = useState(false)
@@ -460,12 +498,44 @@ export function useProjectCostTablePanel({
     setViewFilter('all')
     setSectionFilter('all')
     setSummaryRows([])
+    setMeteringViewActive(false)
+    setMeteringBaselines([])
+    setSelectedMeteringBaselineId(null)
+    setMeteringCaptureBaselineOpen(false)
+    setMeteringEditBaselineOpen(false)
+    setPendingMeteringDeleteBaseline(false)
+    setMeteringRollupMode('none')
     historyStackRef.current.clear()
     setHistoryEpoch((value) => value + 1)
     cleanFingerprintRef.current = ''
     rowsRef.current = []
     setRows([])
   }, [scopeKey])
+
+  useEffect(() => {
+    if (isPractice || !scopeKey) {
+      setMeteringBaselines([])
+      setSelectedMeteringBaselineId(null)
+      setMeteringRollupMode('none')
+      return
+    }
+    const loaded = readMeteringBaselines(workspaceId, scopeKey)
+    setMeteringBaselines(loaded)
+    setSelectedMeteringBaselineId((prev) =>
+      prev && loaded.some((entry) => entry.id === prev) ? prev : null,
+    )
+    setMeteringRollupMode(readMeteringRollupMode(workspaceId, scopeKey))
+  }, [isPractice, scopeKey, workspaceId])
+
+  const handleMeteringRollupModeChange = useCallback(
+    (mode: MeteringRollupMode) => {
+      setMeteringRollupMode(mode)
+      if (!isPractice && scopeKey) {
+        writeMeteringRollupMode(workspaceId, scopeKey, mode)
+      }
+    },
+    [isPractice, scopeKey, workspaceId],
+  )
 
   useEffect(() => {
     if (dirty) return
@@ -675,6 +745,7 @@ export function useProjectCostTablePanel({
       setViewFilter('all')
       return
     }
+    setMeteringViewActive(false)
     setViewFilter(filter)
     if (filter === 'all') return
     setSelectedId((prev) => {
@@ -694,6 +765,7 @@ export function useProjectCostTablePanel({
   }, [])
 
   const handleSectionFilterChange = useCallback((filter: string) => {
+    setMeteringViewActive(false)
     setSectionFilter(filter)
     if (filter === 'all' || isCostSectionSummaryFilter(filter)) {
       if (isCostSectionSummaryFilter(filter)) {
@@ -1496,6 +1568,29 @@ export function useProjectCostTablePanel({
         case 'moveDown':
           handleMove(1)
           break
+        case 'metering':
+          if (!isPractice) {
+            setMeteringViewActive(true)
+          }
+          break
+        case 'meteringCaptureBaseline':
+          if (!isPractice) {
+            setMeteringViewActive(true)
+            setMeteringCaptureBaselineOpen(true)
+          }
+          break
+        case 'meteringEditBaseline':
+          if (!isPractice && selectedMeteringBaselineId) {
+            setMeteringViewActive(true)
+            setMeteringEditBaselineOpen(true)
+          }
+          break
+        case 'meteringDeleteBaseline':
+          if (!isPractice && selectedMeteringBaselineId) {
+            setMeteringViewActive(true)
+            setPendingMeteringDeleteBaseline(true)
+          }
+          break
       }
     },
     [
@@ -1510,8 +1605,110 @@ export function useProjectCostTablePanel({
       handleRedo,
       handleSave,
       handleUndo,
+      isPractice,
+      selectedMeteringBaselineId,
     ],
   )
+
+  const selectedMeteringBaseline = useMemo(
+    () =>
+      selectedMeteringBaselineId
+        ? (meteringBaselines.find((entry) => entry.id === selectedMeteringBaselineId) ?? null)
+        : null,
+    [meteringBaselines, selectedMeteringBaselineId],
+  )
+
+  const nextMeteringCaptureBaselineIndex = useMemo(
+    () => nextMeteringPeriodIndex(meteringBaselines),
+    [meteringBaselines],
+  )
+
+  const nextMeteringCaptureAsOfMs = useMemo(() => Date.now(), [meteringCaptureBaselineOpen])
+
+  const nextMeteringCaptureBaselineName = useMemo(
+    () =>
+      nextMeteringPeriodName(
+        meteringBaselines,
+        formatWorkItemDate(nextMeteringCaptureAsOfMs),
+      ),
+    [meteringBaselines, nextMeteringCaptureAsOfMs],
+  )
+
+  const editMeteringBaselineNameIndex = selectedMeteringBaseline
+    ? (parseMeteringPeriodNameIndex(selectedMeteringBaseline.name) ??
+      nextMeteringCaptureBaselineIndex)
+    : nextMeteringCaptureBaselineIndex
+
+  const editMeteringBaselineInitialDateMs = selectedMeteringBaseline
+    ? (parseDateInput(selectedMeteringBaseline.asOfDate) ?? Date.now())
+    : Date.now()
+
+  const handleMeteringCaptureBaselineConfirm = useCallback(
+    ({ name, asOfDate }: { name: string; asOfDate: string }) => {
+      setMeteringCaptureBaselineOpen(false)
+      if (isPractice || !scopeKey) return
+      const created = addMeteringBaseline(workspaceId, scopeKey, { name, asOfDate })
+      setMeteringBaselines(readMeteringBaselines(workspaceId, scopeKey))
+      setSelectedMeteringBaselineId(created.id)
+      setMeteringViewActive(true)
+      setStatusFeedback({
+        tone: 'success',
+        text: t('projectManagerPage.costTable.meteringBaselineCapture.success', {
+          name: created.name,
+        }),
+      })
+    },
+    [isPractice, scopeKey, setStatusFeedback, t, workspaceId],
+  )
+
+  const handleMeteringEditBaselineConfirm = useCallback(
+    ({ name, asOfDate }: { name: string; asOfDate: string }) => {
+      setMeteringEditBaselineOpen(false)
+      if (isPractice || !scopeKey || !selectedMeteringBaselineId) return
+      const updated = updateMeteringBaseline(workspaceId, scopeKey, selectedMeteringBaselineId, {
+        name,
+        asOfDate,
+      })
+      if (!updated) return
+      setMeteringBaselines(readMeteringBaselines(workspaceId, scopeKey))
+      setStatusFeedback({
+        tone: 'success',
+        text: t('projectManagerPage.costTable.meteringBaselineEdit.success', {
+          name: updated.name,
+        }),
+      })
+    },
+    [
+      isPractice,
+      scopeKey,
+      selectedMeteringBaselineId,
+      setStatusFeedback,
+      t,
+      workspaceId,
+    ],
+  )
+
+  const handleConfirmMeteringDeleteBaseline = useCallback(() => {
+    setPendingMeteringDeleteBaseline(false)
+    if (isPractice || !scopeKey || !selectedMeteringBaselineId) return
+    const removed = deleteMeteringBaseline(workspaceId, scopeKey, selectedMeteringBaselineId)
+    if (!removed) return
+    setMeteringBaselines(readMeteringBaselines(workspaceId, scopeKey))
+    setSelectedMeteringBaselineId(null)
+    setStatusFeedback({
+      tone: 'success',
+      text: t('projectManagerPage.costTable.meteringBaselineDelete.success', {
+        name: removed.name,
+      }),
+    })
+  }, [
+    isPractice,
+    scopeKey,
+    selectedMeteringBaselineId,
+    setStatusFeedback,
+    t,
+    workspaceId,
+  ])
 
   const handleFeaturesMenuAction = useCallback(
     (action: FeaturesMenuAction) => {
@@ -1669,6 +1866,70 @@ export function useProjectCostTablePanel({
     setColumnMenu(position)
   }, [])
 
+  const costColumnLabel = useCallback(
+    (column: CostLabelColumn | 'index') => {
+      if (column === 'index') {
+        return t('projectManagerPage.costTable.columns.index')
+      }
+      const override = columnLabels[column]?.trim()
+      if (override) return override
+      if (column === 'totalPrice') return totalPriceColumnDefaultLabel
+      return t(`projectManagerPage.costTable.columns.${column}`)
+    },
+    [columnLabels, t, totalPriceColumnDefaultLabel],
+  )
+
+  const totalPriceColumnLabel = costColumnLabel('totalPrice')
+
+  const startHeaderEdit = useCallback(
+    (column: CostLabelColumn) => {
+      setColumnMenu(null)
+      setContextMenu(null)
+      setEditingHeaderColumn(column)
+      setHeaderDraft(costColumnLabel(column))
+    },
+    [costColumnLabel],
+  )
+
+  const cancelHeaderEdit = useCallback(() => {
+    setEditingHeaderColumn(null)
+    setHeaderDraft('')
+  }, [])
+
+  const commitHeaderEdit = useCallback(() => {
+    if (!editingHeaderColumn) return
+    const next = headerDraft.trim()
+    if (next) {
+      setColumnLabels((prev) => {
+        const updated = { ...prev, [editingHeaderColumn]: next }
+        saveCostColumnLabels(updated)
+        return updated
+      })
+    }
+    cancelHeaderEdit()
+  }, [cancelHeaderEdit, editingHeaderColumn, headerDraft])
+
+  const handleHeaderKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commitHeaderEdit()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        cancelHeaderEdit()
+      }
+    },
+    [cancelHeaderEdit, commitHeaderEdit],
+  )
+
+  useLayoutEffect(() => {
+    if (!editingHeaderColumn) return
+    const input = headerInputRef.current
+    if (!input) return
+    input.focus()
+    input.select()
+  }, [editingHeaderColumn])
+
   const toggleColumnVisibility = useCallback((column: CostToggleColumn) => {
     setColumnVisibility((prev) => {
       if (column === 'name' && prev.name) return prev
@@ -1802,6 +2063,7 @@ export function useProjectCostTablePanel({
     canEdit,
     practiceScopeId,
     totalPriceColumnLabel,
+    costColumnLabel,
 
     // Rows & derived views
     rows,
@@ -1827,6 +2089,13 @@ export function useProjectCostTablePanel({
     columnVisibility,
     toggleColumnVisibility,
     openColumnVisibilityMenu,
+    editingHeaderColumn,
+    headerDraft,
+    setHeaderDraft,
+    headerInputRef,
+    startHeaderEdit,
+    commitHeaderEdit,
+    handleHeaderKeyDown,
     handleRowContextMenu,
     handleSelectAll,
     handleClearSelection,
@@ -1859,6 +2128,27 @@ export function useProjectCostTablePanel({
     // Menu actions
     handleMenuAction,
     handleFeaturesMenuAction,
+    meteringViewActive,
+    meteringBaselines,
+    selectedMeteringBaselineId,
+    setSelectedMeteringBaselineId,
+    meteringRollupMode,
+    handleMeteringRollupModeChange,
+    meteringCaptureBaselineOpen,
+    setMeteringCaptureBaselineOpen,
+    meteringEditBaselineOpen,
+    setMeteringEditBaselineOpen,
+    selectedMeteringBaseline,
+    nextMeteringCaptureBaselineIndex,
+    nextMeteringCaptureAsOfMs,
+    nextMeteringCaptureBaselineName,
+    editMeteringBaselineNameIndex,
+    editMeteringBaselineInitialDateMs,
+    handleMeteringCaptureBaselineConfirm,
+    handleMeteringEditBaselineConfirm,
+    pendingMeteringDeleteBaseline,
+    setPendingMeteringDeleteBaseline,
+    handleConfirmMeteringDeleteBaseline,
 
     // Row & summary editing
     patchRow,

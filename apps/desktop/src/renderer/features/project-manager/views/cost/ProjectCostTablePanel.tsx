@@ -1,8 +1,12 @@
 import type { FC } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import { useI18n } from '../../../../i18n/useI18n'
-import { ProjectFeaturesMenuBar } from '../files/ProjectFeaturesMenuBar'
-import { ProjectCostMenuBar } from './ProjectCostMenuBar'
+import { ProjectFeaturesMenuBar, type FeaturesMenuAction } from '../files/ProjectFeaturesMenuBar'
+import ProjectManagementFilesPanel, {
+  type ProjectManagementFilesPanelHandle,
+} from '../files/ProjectManagementFilesPanel'
+import { ProjectCostMenuBar, type CostMenuAction } from './ProjectCostMenuBar'
 import { ProjectCostTableBody } from './ProjectCostTableBody'
 import { ProjectCostTableDialogs } from './ProjectCostTableDialogs'
 import { ProjectCostTableHeader } from './ProjectCostTableHeader'
@@ -15,6 +19,22 @@ import {
 export type { ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
 type Props = ProjectCostTablePanelProps
+
+const METERING_FORWARDED_ACTIONS = new Set<CostMenuAction>([
+  'save',
+  'saveAsNewVersion',
+  'print',
+  'projectInfo',
+  'undo',
+  'redo',
+  'add',
+  'insert',
+  'delete',
+  'indent',
+  'outdent',
+  'moveUp',
+  'moveDown',
+])
 
 /**
  * Thin orchestrator: owns no rendering logic of its own — all state/handlers live in
@@ -49,11 +69,58 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
     handleRestoreVersion,
     handleMenuAction,
     handleFeaturesMenuAction,
+    meteringViewActive,
+    meteringBaselines,
+    selectedMeteringBaselineId,
+    setSelectedMeteringBaselineId,
+    meteringRollupMode,
+    handleMeteringRollupModeChange,
     dirty,
     rows,
     selectedRow,
     onHTrackPointerDown,
   } = state
+
+  const showMeteringView = !isPractice && meteringViewActive
+  const meteringPanelRef = useRef<ProjectManagementFilesPanelHandle | null>(null)
+  const [meteringHasSelection, setMeteringHasSelection] = useState(false)
+
+  const flushMeteringBeforeLeave = useCallback(async () => {
+    if (!showMeteringView) return
+    await meteringPanelRef.current?.flushIfDirty()
+  }, [showMeteringView])
+
+  const onViewFilterChange = useCallback(
+    (filter: Parameters<typeof handleViewFilterChange>[0]) => {
+      void flushMeteringBeforeLeave().finally(() => {
+        handleViewFilterChange(filter)
+      })
+    },
+    [flushMeteringBeforeLeave, handleViewFilterChange],
+  )
+
+  const onSectionFilterChange = useCallback(
+    (filter: Parameters<typeof handleSectionFilterChange>[0]) => {
+      void flushMeteringBeforeLeave().finally(() => {
+        handleSectionFilterChange(filter)
+      })
+    },
+    [flushMeteringBeforeLeave, handleSectionFilterChange],
+  )
+
+  const handleCostMenuAction = useCallback(
+    (
+      action: CostMenuAction,
+      event?: { metaKey?: boolean; ctrlKey?: boolean },
+    ) => {
+      if (showMeteringView && METERING_FORWARDED_ACTIONS.has(action)) {
+        meteringPanelRef.current?.dispatchMenuAction(action as FeaturesMenuAction)
+        return
+      }
+      handleMenuAction(action, event)
+    },
+    [handleMenuAction, showMeteringView],
+  )
 
   return (
     <div
@@ -80,23 +147,43 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
       ) : (
         <ProjectCostMenuBar
           disabled={saving}
-          hasSelection={selectedId != null}
+          hasSelection={showMeteringView ? meteringHasSelection : selectedId != null}
           hasProject
           canEdit={canEdit}
           canUndo={canUndo}
           canRedo={canRedo}
           viewFilter={viewFilter}
-          onViewFilterChange={handleViewFilterChange}
+          onViewFilterChange={onViewFilterChange}
           sectionFilter={sectionFilter}
-          onSectionFilterChange={handleSectionFilterChange}
+          onSectionFilterChange={onSectionFilterChange}
           sectionalOptions={sectionalOptions}
           versionSwitchEntries={versionSwitchEntries}
           onRestoreVersion={handleRestoreVersion}
-          onAction={handleMenuAction}
+          meteringActive={meteringViewActive}
+          meteringBaselines={meteringBaselines}
+          selectedMeteringBaselineId={selectedMeteringBaselineId}
+          onSelectMeteringBaseline={setSelectedMeteringBaselineId}
+          meteringRollupMode={meteringRollupMode}
+          onMeteringRollupModeChange={handleMeteringRollupModeChange}
+          onAction={handleCostMenuAction}
         />
       )}
 
-      {!canEdit ? (
+      {showMeteringView ? (
+        <ProjectManagementFilesPanel
+          workspaceId={props.workspaceId}
+          workspace={null}
+          systemPaths={null}
+          projects={props.projects}
+          selectedProjectId={props.selectedProjectId}
+          onOpenScheduleView={props.onOpenScheduleView}
+          onProjectsChange={props.onProjectsChange}
+          lockedViewFilter="metering"
+          embedded
+          actionBridgeRef={meteringPanelRef}
+          onEmbeddedSelectionChange={setMeteringHasSelection}
+        />
+      ) : !canEdit ? (
         <div className="tm-pm-empty">{t('projectManagerPage.costTable.needProject')}</div>
       ) : (
         <div
@@ -140,35 +227,37 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
         </div>
       )}
 
-      <footer className="tm-pm-gantt-statusbar" aria-live="polite">
-        <div
-          className={[
-            'tm-pm-gantt-statusbar-message',
-            statusFeedback
-              ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
+      {showMeteringView ? null : (
+        <footer className="tm-pm-gantt-statusbar" aria-live="polite">
+          <div
+            className={[
+              'tm-pm-gantt-statusbar-message',
+              statusFeedback
+                ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
+                : dirty
+                  ? 'tm-pm-gantt-statusbar-message--info'
+                  : 'tm-pm-gantt-statusbar-message--muted',
+            ].join(' ')}
+          >
+            {statusFeedback
+              ? statusFeedback.text
               : dirty
-                ? 'tm-pm-gantt-statusbar-message--info'
-                : 'tm-pm-gantt-statusbar-message--muted',
-          ].join(' ')}
-        >
-          {statusFeedback
-            ? statusFeedback.text
-            : dirty
-              ? t('projectManagerPage.costTable.statusDirty', {
-                  count: String(rows.length),
-                })
-              : t('projectManagerPage.costTable.statusReady', {
-                  count: String(rows.length),
-                })}
-          {!statusFeedback && selectedRow?.name
-            ? ` · ${t('projectManagerPage.costTable.statusSelected', {
-                name: selectedRow.name,
-              })}`
-            : null}
-        </div>
-      </footer>
+                ? t('projectManagerPage.costTable.statusDirty', {
+                    count: String(rows.length),
+                  })
+                : t('projectManagerPage.costTable.statusReady', {
+                    count: String(rows.length),
+                  })}
+            {!statusFeedback && selectedRow?.name
+              ? ` · ${t('projectManagerPage.costTable.statusSelected', {
+                  name: selectedRow.name,
+                })}`
+              : null}
+          </div>
+        </footer>
+      )}
 
-      <ProjectCostTableMenus state={state} />
+      {showMeteringView ? null : <ProjectCostTableMenus state={state} />}
       <ProjectCostTableDialogs panelProps={props} state={state} />
     </div>
   )

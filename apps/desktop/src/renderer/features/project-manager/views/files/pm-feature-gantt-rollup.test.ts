@@ -12,19 +12,23 @@ import {
   buildLiveFundsFeatureRows,
   buildFundsDisplayEntries,
   buildFundsSectionMetaByRowId,
+  buildLiveNodeFeatureRows,
   buildLiveProcurementFeatureRows,
   buildLiveScheduleFeatureRows,
   buildResourceUnitLookup,
   collectGanttCostSeeds,
   collectGanttFeatureSeeds,
+  collectGanttNodeSeeds,
   collectGanttProcurementSeeds,
   collectRollupMonthKeys,
   computeFeatureCostRollups,
   computeFeatureGanttRollups,
+  computeFeatureNodeRollups,
   featureTypeToResourceType,
   formatMonthKey,
   formatRollupMonthQuantity,
   groupMonthKeysByYear,
+  plannedPercentAlongSchedule,
   resourceTypeToFeatureType,
   rollupHorizontalAmount,
 } from './pm-feature-gantt-rollup'
@@ -153,6 +157,10 @@ function makeFeature(
     transportCycle: null,
     quantity: null,
     remark: '',
+    code: '',
+    featureDescription: '',
+    sectionalWork: '',
+    unitPrice: null,
     applicable: 'all',
     sortOrder: 0,
     parentId: null,
@@ -204,6 +212,7 @@ describe('pm-feature-gantt-rollup', () => {
     })
     expect(rollups.get('f3')).toEqual({
       quantity: 0,
+      pricingQuantity: 0,
       startDate: null,
       finishDate: null,
       monthly: {},
@@ -269,6 +278,8 @@ describe('pm-feature-gantt-rollup', () => {
     const sequential = computeFeatureGanttRollups(itemsSequential, features).get('f1')!
     expect(sequential.monthly[formatMonthKey(2026, 7)]).toBe(20)
     expect(sequential.quantity).toBe(20)
+    // 10 people × 10 days + 20 people × 10 days = 300 workdays
+    expect(sequential.pricingQuantity).toBe(300)
 
     // Overlapping days: 10 + 20 on shared days → peak 30.
     const itemsOverlap = [
@@ -288,8 +299,10 @@ describe('pm-feature-gantt-rollup', () => {
     const overlap = computeFeatureGanttRollups(itemsOverlap, features).get('f1')!
     expect(overlap.monthly[formatMonthKey(2026, 7)]).toBe(30)
     expect(overlap.quantity).toBe(30)
+    // days 1-9: 10; 10-15: 30; 16-20: 20 → 90 + 180 + 100 = 370
+    expect(overlap.pricingQuantity).toBe(370)
 
-    // Multi-day span does not multiply headcount by days.
+    // Multi-day span does not multiply headcount by days for 数量, but does for 计价数量.
     const longTask = computeFeatureGanttRollups(
       [
         makeItem(
@@ -303,6 +316,7 @@ describe('pm-feature-gantt-rollup', () => {
     ).get('f1')!
     expect(longTask.monthly[formatMonthKey(2026, 7)]).toBe(10)
     expect(longTask.quantity).toBe(10)
+    expect(longTask.pricingQuantity).toBe(310)
 
     // Auxiliary keeps stacking peak (sum concurrent). Machinery does not stack.
     const auxFeatures = [makeFeature('a1', 'auxiliary', '模板')]
@@ -324,6 +338,7 @@ describe('pm-feature-gantt-rollup', () => {
       auxFeatures,
     ).get('a1')!
     expect(auxSequential.quantity).toBe(200)
+    expect(auxSequential.pricingQuantity).toBe(200)
 
     const machFeatures = [makeFeature('m1', 'machinery', '挖掘机')]
     const machSequential = computeFeatureGanttRollups(
@@ -344,6 +359,8 @@ describe('pm-feature-gantt-rollup', () => {
       machFeatures,
     ).get('m1')!
     expect(machSequential.quantity).toBe(3)
+    // 2×10 + 3×10 = 50 machine-shifts
+    expect(machSequential.pricingQuantity).toBe(50)
 
     // Overlapping critical + normal work: take max (2), not sum (2+3=5).
     const machOverlap = computeFeatureGanttRollups(
@@ -364,6 +381,8 @@ describe('pm-feature-gantt-rollup', () => {
       machFeatures,
     ).get('m1')!
     expect(machOverlap.quantity).toBe(3)
+    // days 1-9: 2; 10-15: 3; 16-20: 3 → 18 + 18 + 15 = 51
+    expect(machOverlap.pricingQuantity).toBe(51)
     expect(machOverlap.monthly[formatMonthKey(2026, 7)]).toBe(3)
   })
 
@@ -384,6 +403,7 @@ describe('pm-feature-gantt-rollup', () => {
     expect(rollup.monthly[formatMonthKey(2026, 0)]).toBeCloseTo(5)
     expect(rollup.monthly[formatMonthKey(2026, 1)]).toBeCloseTo(5)
     expect(rollup.quantity).toBe(15)
+    expect(rollup.pricingQuantity).toBe(15)
   })
 
   it('groups consecutive month keys by year for colspan headers', () => {
@@ -474,9 +494,57 @@ describe('pm-feature-gantt-rollup', () => {
       makeFeature('orphan', 'labor', '技术工人'),
       makeFeature('keep', 'procurement', '招标采购计划'),
     ]
-    const live = buildLiveScheduleFeatureRows(seeds, orphanCatalog, 'all')
+    const live = buildLiveScheduleFeatureRows(seeds, [], orphanCatalog, 'all')
     expect(live.map((row) => row.name)).toEqual(['普通工', '挖掘机', '钢筋工'])
     expect(live.some((row) => row.name === '技术工人')).toBe(false)
+  })
+
+  it('joins pricingUnit and unitPrice from the resource catalog into live schedule rows', () => {
+    const items: PmWorkItem[] = [
+      makeItem('t1', Date.UTC(2026, 0, 1), Date.UTC(2026, 0, 10), [
+        { type: 'labor', name: '普通工', quantity: 2 },
+        { type: 'equipment', name: '挖掘机', quantity: 1 },
+      ]),
+    ]
+    const catalog = asResourceRows([
+      {
+        id: 'r1',
+        type: 'labor',
+        name: '普通工',
+        unit: '人',
+        pricingUnit: '工日',
+        unitPrice: 280,
+      },
+      {
+        id: 'r2',
+        type: 'equipment',
+        name: '挖掘机',
+        unit: '台',
+        pricingUnit: '台班',
+        unitPrice: 1500,
+      },
+    ])
+    const unitLookup = buildResourceUnitLookup(catalog)
+    const seeds = collectGanttFeatureSeeds(items, unitLookup, catalog)
+    const live = buildLiveScheduleFeatureRows(seeds, catalog, [], 'all')
+    expect(live).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'labor',
+          name: '普通工',
+          unit: '人',
+          pricingUnit: '工日',
+          unitPrice: 280,
+        }),
+        expect.objectContaining({
+          type: 'machinery',
+          name: '挖掘机',
+          unit: '台',
+          pricingUnit: '台班',
+          unitPrice: 1500,
+        }),
+      ]),
+    )
   })
 
   it('collects cost seeds and rolls assigned amounts by month for funds', () => {
@@ -529,6 +597,7 @@ describe('pm-feature-gantt-rollup', () => {
         type: 'comprehensive',
         name: '土建综合',
         unit: '',
+        unitPrice: null,
         costId: null,
         sectionalWork: '',
         sectionLabel: '',
@@ -541,16 +610,60 @@ describe('pm-feature-gantt-rollup', () => {
       type: 'comprehensive',
       name: '土建综合',
       quantity: null,
+      unitPrice: null,
     })
 
     const rollups = computeFeatureCostRollups(costItems, live)
     const rollup = rollups.get(live[0]!.id)!
     expect(rollup.quantity).toBe(150)
+    expect(rollup.pricingQuantity).toBe(150)
     expect(rollup.startDate).toBe(jan1)
     expect(rollup.finishDate).toBe(feb28)
     expect(rollup.monthly[formatMonthKey(2026, 0)]).toBe(100)
     expect(rollup.monthly[formatMonthKey(2026, 1)]).toBe(50)
     expect(rollupHorizontalAmount(rollup)).toBe(150)
+  })
+
+  it('rolls funds engineering quantity from price-list qty × percent', () => {
+    const day = new Date(2026, 0, 1).getTime()
+    const catalog = asCostRows([
+      {
+        id: 'brick',
+        type: 'comprehensive' as const,
+        name: '砖基础',
+        unit: 'm³',
+        quantity: 1000,
+        unitPrice: 500,
+      },
+    ])
+    const items: PmWorkItem[] = [
+      {
+        ...makeItem('t1', day, day, []),
+        metadata: {
+          [TASK_COST_ASSIGNMENTS_KEY]: [
+            {
+              costId: 'brick',
+              type: 'comprehensive',
+              name: '砖基础',
+              percent: 0.1,
+              amount: 50_000,
+            },
+          ],
+        },
+      } as unknown as PmWorkItem,
+    ]
+    const seeds = collectGanttCostSeeds(items, catalog)
+    expect(seeds[0]).toMatchObject({
+      name: '砖基础',
+      unit: 'm³',
+      unitPrice: 500,
+      costId: 'brick',
+    })
+    const live = buildLiveFundsFeatureRows(seeds)
+    expect(live[0]?.unitPrice).toBe(500)
+    const rollups = computeFeatureCostRollups(items, live, catalog)
+    expect(rollups.get(live[0]!.id)?.quantity).toBe(100)
+    expect(rollups.get(live[0]!.id)?.pricingQuantity).toBe(50_000)
   })
 
   it('orders cost seeds by type, sectional work, then price-table order', () => {
@@ -888,5 +1001,63 @@ describe('pm-feature-gantt-rollup', () => {
     const rollups = computeFeatureGanttRollups(items, live)
     expect(rollups.get(live[0]!.id)?.quantity).toBe(5)
     expect(rollups.get(live[1]!.id)?.quantity).toBe(20)
+  })
+
+  it('builds node rows from Gantt milestones with a project name row first', () => {
+    const day = new Date(2026, 5, 15).getTime()
+    const later = new Date(2026, 6, 1).getTime()
+    const items: PmWorkItem[] = [
+      { ...makeItem('t1', later, later, []), type: 'milestone', title: '基础完工', sortOrder: 2 },
+      { ...makeItem('t2', day, day, []), type: 'task', title: '普通任务', sortOrder: 0 },
+      { ...makeItem('t3', day, day, []), type: 'milestone', title: '开工', sortOrder: 1 },
+    ]
+    const seeds = collectGanttNodeSeeds(items)
+    expect(seeds.map((seed) => seed.name)).toEqual(['开工', '基础完工'])
+
+    const live = buildLiveNodeFeatureRows(seeds, { name: '示范工程', code: 'P-01' })
+    expect(live.map((row) => ({ id: row.id, name: row.name, type: row.type, parentId: row.parentId }))).toEqual([
+      { id: 'gantt-node:__project__', name: 'P-01 · 示范工程', type: 'node', parentId: null },
+      { id: 'gantt-node:t3', name: '开工', type: 'node', parentId: 'gantt-node:__project__' },
+      { id: 'gantt-node:t1', name: '基础完工', type: 'node', parentId: 'gantt-node:__project__' },
+    ])
+
+    const rollups = computeFeatureNodeRollups(seeds, live, items)
+    expect(rollups.get('gantt-node:t3')).toMatchObject({
+      durationDays: 0,
+      finishDate: day,
+      plannedPercent: 0,
+    })
+    expect(rollups.get('gantt-node:t1')?.plannedPercent).toBe(100)
+    expect(rollups.get('gantt-node:__project__')?.finishDate).toBe(later)
+    expect(rollups.get('gantt-node:__project__')?.durationDays).toBeGreaterThan(0)
+    expect(rollups.get('gantt-node:__project__')?.plannedPercent).toBe(100)
+  })
+
+  it('uses full Gantt schedule envelope for project-row duration, not milestones only', () => {
+    const early = new Date(2026, 2, 1).getTime()
+    const mid = new Date(2026, 2, 15).getTime()
+    const late = new Date(2026, 2, 31).getTime()
+    const items: PmWorkItem[] = [
+      { ...makeItem('m1', mid, mid, []), type: 'milestone', title: '节点A', sortOrder: 1 },
+      { ...makeItem('t1', early, late, []), type: 'task', title: '长周期任务', sortOrder: 0 },
+    ]
+    const seeds = collectGanttNodeSeeds(items)
+    const live = buildLiveNodeFeatureRows(seeds, { name: '示范工程', code: 'P-01' })
+    const rollups = computeFeatureNodeRollups(seeds, live, items)
+    const project = rollups.get('gantt-node:__project__')
+    expect(project?.startDate).toBe(early)
+    expect(project?.finishDate).toBe(late)
+    // Inclusive calendar days: Mar 1 → Mar 31 = 31 days (same as Gantt root).
+    expect(project?.durationDays).toBe(31)
+  })
+
+  it('computes planned percent along the project schedule envelope', () => {
+    const start = new Date(2026, 0, 1).getTime()
+    const mid = new Date(2026, 0, 16).getTime()
+    const end = new Date(2026, 0, 31).getTime()
+    expect(plannedPercentAlongSchedule(start, start, end)).toBe(0)
+    expect(plannedPercentAlongSchedule(end, start, end)).toBe(100)
+    expect(plannedPercentAlongSchedule(mid, start, end)).toBe(50)
+    expect(plannedPercentAlongSchedule(null, start, end)).toBeNull()
   })
 })

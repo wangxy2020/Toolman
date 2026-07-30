@@ -24,7 +24,7 @@ export const ProjectCostTableMenus: FC<ProjectCostTableMenusProps> = ({ state })
     columnMenu,
     columnVisibility,
     toggleColumnVisibility,
-    totalPriceColumnLabel,
+    costColumnLabel,
   } = state
 
   return (
@@ -123,11 +123,7 @@ export const ProjectCostTableMenus: FC<ProjectCostTableMenusProps> = ({ state })
                     disabled={column === 'name'}
                     onChange={() => toggleColumnVisibility(column)}
                   />
-                  <span>
-                    {column === 'totalPrice'
-                      ? totalPriceColumnLabel
-                      : t(`projectManagerPage.costTable.columns.${column}`)}
-                  </span>
+                  <span>{costColumnLabel(column)}</span>
                 </label>
               ))}
             </div>,

@@ -18,6 +18,10 @@ export type PmFeatureCatalogSnapshotRow = {
   transportCycle?: number | null
   quantity: number | null
   remark: string
+  code?: string
+  featureDescription?: string
+  sectionalWork?: string
+  unitPrice?: number | null
   applicable: string
   sortOrder: number
   parentId: string | null
@@ -72,6 +76,12 @@ export function normalizeFeatureCatalogSnapshot(
     quantity:
       typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
     remark: typeof row.remark === 'string' ? row.remark : '',
+    code: typeof row.code === 'string' ? row.code : '',
+    featureDescription:
+      typeof row.featureDescription === 'string' ? row.featureDescription : '',
+    sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
+    unitPrice:
+      typeof row.unitPrice === 'number' && Number.isFinite(row.unitPrice) ? row.unitPrice : null,
     applicable: row.applicable,
     sortOrder: Math.floor(row.sortOrder),
     parentId: typeof row.parentId === 'string' ? row.parentId : null,
@@ -99,6 +109,14 @@ function parseFeatureCatalogSnapshot(raw: unknown): PmFeatureCatalogSnapshotRow[
       quantity:
         typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
       remark: typeof record.remark === 'string' ? record.remark : '',
+      code: typeof record.code === 'string' ? record.code : '',
+      featureDescription:
+        typeof record.featureDescription === 'string' ? record.featureDescription : '',
+      sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',
+      unitPrice:
+        typeof record.unitPrice === 'number' && Number.isFinite(record.unitPrice)
+          ? record.unitPrice
+          : null,
       applicable: row.applicable,
       sortOrder: Math.floor(row.sortOrder),
       parentId: typeof row.parentId === 'string' ? row.parentId : null,

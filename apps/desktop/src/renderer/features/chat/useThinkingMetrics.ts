@@ -1,10 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ContentBlock } from '@toolman/shared'
 
-export function useThinkingMetrics(streaming: boolean, blocks: ContentBlock[]) {
-  const hasThinking = blocks.some(
-    (block) => block.type === 'thinking' && block.text.trim().length > 0,
+function readThinkingMeta(blocks: ContentBlock[]): {
+  hasThinking: boolean
+  startedAtMs: number | null
+  storedDurationSeconds: number | null
+} {
+  const thinking = blocks.find(
+    (block): block is Extract<ContentBlock, { type: 'thinking' }> =>
+      block.type === 'thinking' && block.text.trim().length > 0,
   )
+  if (!thinking) {
+    return { hasThinking: false, startedAtMs: null, storedDurationSeconds: null }
+  }
+  return {
+    hasThinking: true,
+    startedAtMs:
+      typeof thinking.startedAtMs === 'number' && Number.isFinite(thinking.startedAtMs)
+        ? thinking.startedAtMs
+        : null,
+    storedDurationSeconds:
+      typeof thinking.durationSeconds === 'number' && Number.isFinite(thinking.durationSeconds)
+        ? thinking.durationSeconds
+        : null,
+  }
+}
+
+/**
+ * Live thinking timer. Prefer main-process `startedAtMs` so the displayed duration is
+ * wall-clock thinking time, not how long the thinking block has been painted.
+ */
+export function useThinkingMetrics(streaming: boolean, blocks: ContentBlock[]) {
+  const { hasThinking, startedAtMs, storedDurationSeconds } = readThinkingMeta(blocks)
   const hasAnswerText = blocks.some(
     (block) => block.type === 'text' && block.text.trim().length > 0,
   )
@@ -22,26 +49,28 @@ export function useThinkingMetrics(streaming: boolean, blocks: ContentBlock[]) {
       return
     }
 
-    if (startRef.current === null) {
+    // Anchor to main-process start when available; never restart later to a paint time.
+    if (startedAtMs != null) {
+      startRef.current = startedAtMs
+    } else if (startRef.current === null) {
       startRef.current = Date.now()
     }
 
-    if (hasAnswerText) {
-      if (frozenDurationRef.current === null && startRef.current !== null) {
-        frozenDurationRef.current = Math.max(
-          0,
-          Math.round((Date.now() - startRef.current) / 1000),
-        )
-      }
-      if (frozenDurationRef.current !== null) {
-        setDurationSeconds(frozenDurationRef.current)
-      }
-      return
+    if (storedDurationSeconds != null) {
+      frozenDurationRef.current = storedDurationSeconds
+      setDurationSeconds(storedDurationSeconds)
+      if (!active) return
     }
 
-    if (!streaming) {
+    if (!active) {
+      if (frozenDurationRef.current !== null) {
+        setDurationSeconds(frozenDurationRef.current)
+        return
+      }
       if (startRef.current !== null) {
-        setDurationSeconds(Math.max(0, Math.round((Date.now() - startRef.current) / 1000)))
+        const elapsed = Math.max(0, Math.round((Date.now() - startRef.current) / 1000))
+        frozenDurationRef.current = elapsed
+        setDurationSeconds(elapsed)
       }
       return
     }
@@ -54,7 +83,7 @@ export function useThinkingMetrics(streaming: boolean, blocks: ContentBlock[]) {
     tick()
     const id = window.setInterval(tick, 200)
     return () => window.clearInterval(id)
-  }, [streaming, hasThinking, hasAnswerText])
+  }, [streaming, hasThinking, hasAnswerText, active, startedAtMs, storedDurationSeconds])
 
   return { active, durationSeconds, hasThinking }
 }

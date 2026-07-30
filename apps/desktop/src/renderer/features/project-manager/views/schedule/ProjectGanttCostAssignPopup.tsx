@@ -6,17 +6,20 @@ import { handlePmTableCellNavKeyDown } from '../../pm-table-cell-nav'
 import { isPmCostType, PM_COST_PRIMARY_TYPES, type PmCostType } from '../cost/pm-cost-catalog'
 import {
   catalogCostAmountLimit,
+  catalogCostQuantity,
   computeCostAssignmentMoney,
+  computeCostAssignmentQuantity,
   costCatalogRowsForType,
-  DEFAULT_COST_ASSIGNMENT_PERCENT,
-  EMPTY_TASK_COST_ASSIGNMENT,
-  findCatalogRowForCostAssignment,
+  formatCostPercentRatio,
   isEmptyCostAssignment,
   moveTaskCostAssignment,
+  parseCostPercentRatioInput,
   readCostAssignmentAtFilteredSlot,
   readTaskCostAssignments,
   resolveCostAssignmentAgainstCatalog,
   resolveCostAssignmentPercent,
+  EMPTY_TASK_COST_ASSIGNMENT,
+  findCatalogRowForCostAssignment,
 } from './pm-gantt-cost-assignment'
 import { RESOURCE_ASSIGN_POPUP_VISIBLE_ROWS, type Props } from './pm-gantt-task-grid-utils'
 import type { GanttTaskGridState } from './useProjectGanttTaskGrid'
@@ -157,8 +160,10 @@ export const ProjectGanttCostAssignPopup: FC<ProjectGanttCostAssignPopupProps> =
                       </th>
                       <th>{t('projectManagerPage.costTable.columns.type')}</th>
                       <th>{t('projectManagerPage.costTable.columns.name')}</th>
-                      <th>{t('projectManagerPage.schedule.columns.costPercent')}</th>
-                      <th>{t('projectManagerPage.schedule.columns.costAmountUnit')}</th>
+                      <th title={t('projectManagerPage.schedule.columns.costPercentHint')}>
+                        {t('projectManagerPage.schedule.columns.costPercent')}
+                      </th>
+                      <th>{t('projectManagerPage.schedule.columns.costEngineeringQuantity')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -187,16 +192,16 @@ export const ProjectGanttCostAssignPopup: FC<ProjectGanttCostAssignPopupProps> =
                       const catalogAmount = catalogRow
                         ? catalogCostAmountLimit(catalogRow, costCatalog)
                         : null
+                      const catalogQuantity = catalogCostQuantity(catalogRow)
                       const percentValue = resolveCostAssignmentPercent(
                         assignment,
                         catalogAmount,
+                        catalogQuantity,
                       )
-                      const displayAmount =
-                        assignment.percent != null
-                          ? (computeCostAssignmentMoney(catalogAmount, assignment.percent) ??
-                            assignment.amount)
-                          : (assignment.amount ??
-                            computeCostAssignmentMoney(catalogAmount, percentValue))
+                      const displayQuantity = computeCostAssignmentQuantity(
+                        catalogQuantity,
+                        percentValue,
+                      )
                       const unitLabel = catalogRow?.unit?.trim() || ''
                       const nameTriggerLabel =
                         assignment.name.trim() ||
@@ -210,10 +215,7 @@ export const ProjectGanttCostAssignPopup: FC<ProjectGanttCostAssignPopupProps> =
                       const commitPercent = (rawValue: string) => {
                         if (!popupItem || !canEdit) return
                         if (!selectedId && !assignment.name.trim()) return
-                        const raw = rawValue.trim()
-                        const nextPercent =
-                          raw === '' ? DEFAULT_COST_ASSIGNMENT_PERCENT : Number(raw)
-                        if (!Number.isFinite(nextPercent)) return
+                        const nextPercent = parseCostPercentRatioInput(rawValue)
                         const nextAmount = computeCostAssignmentMoney(
                           catalogAmount,
                           nextPercent,
@@ -221,6 +223,7 @@ export const ProjectGanttCostAssignPopup: FC<ProjectGanttCostAssignPopupProps> =
                         const currentPercent = resolveCostAssignmentPercent(
                           assignment,
                           catalogAmount,
+                          catalogQuantity,
                         )
                         if (
                           nextPercent === currentPercent &&
@@ -333,11 +336,14 @@ export const ProjectGanttCostAssignPopup: FC<ProjectGanttCostAssignPopupProps> =
                               type="text"
                               inputMode="decimal"
                               defaultValue={
-                                selectedId || assignment.name.trim() ? String(percentValue) : ''
+                                selectedId || assignment.name.trim()
+                                  ? formatCostPercentRatio(percentValue)
+                                  : ''
                               }
                               placeholder=""
                               disabled={percentDisabled}
                               aria-label={t('projectManagerPage.schedule.columns.costPercent')}
+                              title={t('projectManagerPage.schedule.columns.costPercentHint')}
                               onClick={(event) => event.stopPropagation()}
                               onKeyDown={(event) => {
                                 if (event.key !== 'Enter' || !popupItem || !canEdit) {
@@ -362,17 +368,19 @@ export const ProjectGanttCostAssignPopup: FC<ProjectGanttCostAssignPopupProps> =
                               ]
                                 .filter(Boolean)
                                 .join(' ')}
-                              aria-label={t('projectManagerPage.schedule.columns.costAmountUnit')}
+                              aria-label={t(
+                                'projectManagerPage.schedule.columns.costEngineeringQuantity',
+                              )}
                               title={
-                                displayAmount != null
+                                displayQuantity != null
                                   ? unitLabel
-                                    ? `${displayAmount} ${unitLabel}`
-                                    : String(displayAmount)
+                                    ? `${displayQuantity} ${unitLabel}`
+                                    : String(displayQuantity)
                                   : undefined
                               }
                             >
                               <span className="tm-pm-gantt-resource-assign-popup-amount-value">
-                                {displayAmount != null ? displayAmount : '—'}
+                                {displayQuantity != null ? displayQuantity : '—'}
                               </span>
                               {unitLabel ? (
                                 <span className="tm-pm-gantt-resource-assign-popup-amount-unit-label">

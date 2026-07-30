@@ -25,6 +25,36 @@ describe('MessageStreamBuffers thinking + tools', () => {
     expect(buffers.toContentBlocks()[0]).toEqual({
       type: 'thinking',
       text: '分析用户问题',
+      startedAtMs: expect.any(Number),
+    })
+  })
+
+  it('preserves thinking start time across preparing-status strip for wall-clock duration', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    const startedAt = buffers.getThinkingStartedAtMs()
+    expect(startedAt).not.toBeNull()
+    buffers.appendThinking('深度分析')
+    buffers.finalizeThinkingDuration()
+    expect(buffers.getThinkingStartedAtMs()).toBe(startedAt)
+    expect(buffers.toContentBlocks()[0]).toMatchObject({
+      type: 'thinking',
+      text: '深度分析',
+      startedAtMs: startedAt,
+      durationSeconds: expect.any(Number),
+    })
+  })
+
+  it('finalizes thinking duration when answer text starts', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendThinking('reasoning')
+    expect(buffers.getThinkingDurationSeconds()).toBeNull()
+    buffers.appendText('answer')
+    expect(buffers.getThinkingDurationSeconds()).toEqual(expect.any(Number))
+    expect(buffers.toContentBlocks()[0]).toMatchObject({
+      type: 'thinking',
+      durationSeconds: expect.any(Number),
+      startedAtMs: expect.any(Number),
     })
   })
 

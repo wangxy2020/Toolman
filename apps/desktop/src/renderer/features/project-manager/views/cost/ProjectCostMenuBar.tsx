@@ -4,10 +4,11 @@ import { createPortal } from 'react-dom'
 import { IconChevronDown } from '../../../../components/icons'
 import { useMenuBarHScroll, useMenuBarTooltip } from '../../pm-menubar-chrome'
 import { ProjectCostMenuBarSectionPanel } from './ProjectCostMenuBarSectionPanel'
-import { ProjectCostMenuBarVersionPanel } from './ProjectCostMenuBarVersionPanel'
+import { ProjectCostMenuBarMeteringPanel } from './ProjectCostMenuBarMeteringPanel'
 import { ProjectCostMenuBarViewPanel } from './ProjectCostMenuBarViewPanel'
 import { buildCostMenuBarItems } from './pm-cost-menubar-items'
 import type { PmCostType } from './pm-cost-catalog'
+import type { MeteringBaseline, MeteringRollupMode } from './pm-metering-baselines'
 import { useProjectCostMenuBar } from './useProjectCostMenuBar'
 
 export type CostViewFilter = 'all' | PmCostType
@@ -27,6 +28,10 @@ export type CostMenuAction =
   | 'outdent'
   | 'moveUp'
   | 'moveDown'
+  | 'metering'
+  | 'meteringCaptureBaseline'
+  | 'meteringEditBaseline'
+  | 'meteringDeleteBaseline'
 
 export type CostVersionSwitchEntry = {
   version: number
@@ -53,6 +58,13 @@ export interface ProjectCostMenuBarProps {
   sectionalOptions: readonly string[]
   versionSwitchEntries: CostVersionSwitchEntry[]
   onRestoreVersion: (version: number) => void
+  /** Highlights 计量 when the metering view is active (price-list view). */
+  meteringActive?: boolean
+  meteringBaselines?: readonly MeteringBaseline[]
+  selectedMeteringBaselineId?: string | null
+  onSelectMeteringBaseline?: (id: string) => void
+  meteringRollupMode?: MeteringRollupMode
+  onMeteringRollupModeChange?: (mode: MeteringRollupMode) => void
   onAction: (
     action: CostMenuAction,
     event?: Pick<ReactMouseEvent, 'metaKey' | 'ctrlKey'>,
@@ -75,6 +87,12 @@ export function ProjectCostMenuBar({
   sectionalOptions,
   versionSwitchEntries,
   onRestoreVersion,
+  meteringActive = false,
+  meteringBaselines = [],
+  selectedMeteringBaselineId = null,
+  onSelectMeteringBaseline,
+  meteringRollupMode = 'none',
+  onMeteringRollupModeChange,
   onAction,
 }: Props) {
   const {
@@ -83,20 +101,20 @@ export function ProjectCostMenuBar({
     setViewOpen,
     typeOpen,
     setTypeOpen,
-    baselineOpen,
-    setBaselineOpen,
+    meteringOpen,
+    setMeteringOpen,
     viewRef,
     typeRef,
-    baselineRef,
+    meteringRef,
     viewPos,
     typePos,
-    baselinePos,
+    meteringPos,
     viewMenuLabel,
     viewCurrentLabel,
     sectionMenuLabel,
     sectionOptionLabel,
     sectionCurrentLabel,
-    baselineMenuLabel,
+    meteringMenuLabel,
   } = useProjectCostMenuBar({ viewFilter, sectionFilter })
   const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
   const { scrollRef, trackRef, scrollMetrics, syncScrollMetrics, onTrackPointerDown } =
@@ -171,7 +189,7 @@ export function ProjectCostMenuBar({
                   if (disabled) return
                   hideTip()
                   setTypeOpen(false)
-                  setBaselineOpen(false)
+                  setMeteringOpen(false)
                   setViewOpen((open) => !open)
                 }}
                 {...tipProps(viewMenuLabel)}
@@ -207,7 +225,7 @@ export function ProjectCostMenuBar({
                   if (disabled) return
                   hideTip()
                   setViewOpen(false)
-                  setBaselineOpen(false)
+                  setMeteringOpen(false)
                   setTypeOpen((open) => !open)
                 }}
                 {...tipProps(sectionMenuLabel)}
@@ -233,33 +251,45 @@ export function ProjectCostMenuBar({
 
             {moveItems.map(renderToolbarItem)}
 
-            <span className="tm-pm-resource-menubar-item tm-pm-gantt-view-menu" ref={baselineRef}>
+            <span className="tm-pm-resource-menubar-item tm-pm-gantt-view-menu" ref={meteringRef}>
               <button
                 type="button"
-                className="tm-pm-resource-menubar-btn"
-                aria-label={baselineMenuLabel}
+                className={[
+                  'tm-pm-resource-menubar-btn',
+                  meteringActive ? 'tm-pm-resource-menubar-btn--active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label={meteringMenuLabel}
                 aria-disabled={disabled || !hasProject}
-                aria-expanded={baselineOpen}
+                aria-expanded={meteringOpen}
+                aria-pressed={meteringActive}
                 onClick={() => {
                   if (disabled || !hasProject) return
                   hideTip()
                   setViewOpen(false)
                   setTypeOpen(false)
-                  setBaselineOpen((open) => !open)
+                  // Enter metering view (price-list feature); toggle the dropdown.
+                  onAction('metering')
+                  setMeteringOpen((open) => !open)
                 }}
-                {...tipProps(baselineMenuLabel)}
+                {...tipProps(meteringMenuLabel)}
               >
-                <span>{baselineMenuLabel}</span>
+                <span>{meteringMenuLabel}</span>
                 <IconChevronDown size={14} />
               </button>
-              {baselineOpen ? (
-                <ProjectCostMenuBarVersionPanel
-                  pos={baselinePos}
+              {meteringOpen ? (
+                <ProjectCostMenuBarMeteringPanel
+                  pos={meteringPos}
                   versionSwitchEntries={versionSwitchEntries}
-                  onRestoreVersion={(version) => {
-                    onRestoreVersion(version)
-                    setBaselineOpen(false)
-                  }}
+                  onRestoreVersion={onRestoreVersion}
+                  meteringBaselines={meteringBaselines}
+                  selectedMeteringBaselineId={selectedMeteringBaselineId}
+                  onSelectMeteringBaseline={(id) => onSelectMeteringBaseline?.(id)}
+                  meteringRollupMode={meteringRollupMode}
+                  onMeteringRollupModeChange={(mode) => onMeteringRollupModeChange?.(mode)}
+                  onAction={(action) => onAction(action)}
+                  onClose={() => setMeteringOpen(false)}
                 />
               ) : null}
             </span>

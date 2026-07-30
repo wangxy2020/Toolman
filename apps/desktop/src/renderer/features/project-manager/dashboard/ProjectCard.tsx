@@ -19,7 +19,7 @@ export function ProjectCard({ project, variant, prefix }: Props) {
   return (
     <article className="tm-pm-project-card">
       <div className="tm-pm-project-card-header">
-        <div>
+        <div className="tm-pm-project-card-title">
           <div className="tm-pm-project-code">{project.code}</div>
           <div className="tm-pm-project-name" title={project.name}>
             {project.name}
@@ -33,11 +33,15 @@ export function ProjectCard({ project, variant, prefix }: Props) {
           <>
             <div className="tm-pm-metric-item">
               <span className="tm-pm-metric-label">{t(`${prefix}.card.contract`)}</span>
-              <span className="tm-pm-metric-value">{formatProjectMoney(project.contractValue)}</span>
+              <span className="tm-pm-metric-value" title={formatProjectMoney(project.contractValue)}>
+                {formatProjectMoney(project.contractValue)}
+              </span>
             </div>
             <div className="tm-pm-metric-item">
               <span className="tm-pm-metric-label">{t(`${prefix}.card.settled`)}</span>
-              <span className="tm-pm-metric-value">{formatProjectMoney(project.settledAmount)}</span>
+              <span className="tm-pm-metric-value" title={formatProjectMoney(project.settledAmount)}>
+                {formatProjectMoney(project.settledAmount)}
+              </span>
             </div>
             <div className="tm-pm-metric-item">
               <span className="tm-pm-metric-label">{t(`${prefix}.card.pending`)}</span>
@@ -47,7 +51,9 @@ export function ProjectCard({ project, variant, prefix }: Props) {
                   project.pendingAmount > 10_000_000 ? 'tm-pm-metric-value--warn' : '',
                 ]
                   .filter(Boolean)
-                  .join(' ')}>
+                  .join(' ')}
+                title={formatProjectMoney(project.pendingAmount)}
+              >
                 {formatProjectMoney(project.pendingAmount)}
               </span>
             </div>
@@ -70,7 +76,9 @@ export function ProjectCard({ project, variant, prefix }: Props) {
                   project.status !== 'normal' ? 'tm-pm-metric-value--warn' : '',
                 ]
                   .filter(Boolean)
-                  .join(' ')}>
+                  .join(' ')}
+                title={project.planPhase}
+              >
                 {project.planPhase}
               </span>
             </div>

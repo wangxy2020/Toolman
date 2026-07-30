@@ -8,6 +8,7 @@ import type { PmCostRow, PmCostType } from '../cost/pm-cost-catalog'
 import type { PmResourceRow } from '../resource/pm-resource-catalog'
 import type { GanttTreeRow } from './pm-gantt-tree'
 import type { TaskCostAssignment } from './pm-gantt-cost-assignment'
+import { resolveCostAssignmentPercent } from './pm-gantt-cost-assignment'
 import type { TaskResourceAssignment } from './pm-gantt-resource-assignment'
 import type {
   GanttBuiltinColumn,
@@ -184,15 +185,24 @@ export function shortResourceCellLabel(label: string, maxChars = 3): string {
 }
 
 /**
- * Derive a cost-assignment `percent` from a manually-typed `amount`, keeping the previous
- * percent when the catalog quota is unknown/zero (amount-only edit).
+ * Derive a cost-assignment `percent` from a manually-typed monetary `amount`.
+ * Prefer {@link resolveCostPercentFromQuantity} when the edited value is 工程数量.
  */
 export function resolveCostPercentFromAmount(
   nextAmount: number | null,
   catalogAmount: number | null,
   fallbackPercent: number | null,
+  catalogQuantity?: number | null,
 ): number | null {
-  return nextAmount != null && catalogAmount != null && catalogAmount !== 0
-    ? Math.round((nextAmount / catalogAmount) * 1e6) / 1e6
-    : fallbackPercent
+  if (nextAmount == null) return fallbackPercent
+  const hasQty =
+    catalogQuantity != null && Number.isFinite(catalogQuantity) && catalogQuantity !== 0
+  const hasMoney =
+    catalogAmount != null && Number.isFinite(catalogAmount) && catalogAmount !== 0
+  if (!hasQty && !hasMoney) return fallbackPercent
+  return resolveCostAssignmentPercent(
+    { percent: null, amount: nextAmount },
+    catalogAmount,
+    catalogQuantity,
+  )
 }
