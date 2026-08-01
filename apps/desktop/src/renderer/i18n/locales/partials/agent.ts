@@ -34,6 +34,16 @@ export const agentZhCN = {
     heartbeat: '启用心跳',
     heartbeatHint: '定期触发智能体后台检查任务',
     heartbeatInterval: '间隔 (分钟)',
+    autoSpeak: '自动朗读回复',
+    autoSpeakHint: '开启后，智能体生成最终回答时将流式分句朗读（默认关闭；仍可在消息底部手动播放）',
+    ttsEngine: '语音引擎',
+    ttsEngineHint:
+      'Edge 神经语音更自然（需联网，无需 API 密钥/账号密码）；系统语音为浏览器内置，较机械但可离线',
+    ttsEngineEdge: 'Edge 神经语音（推荐，免密钥）',
+    ttsEngineWebSpeech: '系统语音（Web Speech）',
+    ttsVoice: '朗读音色',
+    ttsVoiceHint:
+      '选择 Edge 神经音色（免账号）。若听起来仍像机械音，多半是网络失败回退到了系统语音',
     translationTarget: '翻译目标语言',
     translationTargetHint: '点击翻译时，自动识别原文语言并翻译成另一种目标语言',
     systemPrompt: '系统提示词',
@@ -175,6 +185,17 @@ export const agentEn = {
     heartbeat: 'Enable heartbeat',
     heartbeatHint: 'Periodically trigger background agent checks',
     heartbeatInterval: 'Interval (minutes)',
+    autoSpeak: 'Auto-speak replies',
+    autoSpeakHint:
+      'When enabled, final answer text is spoken with streaming sentence splitting (off by default; manual play remains available)',
+    ttsEngine: 'Speech engine',
+    ttsEngineHint:
+      'Edge neural voices sound more natural (requires network; no API key). System Web Speech is offline but more robotic',
+    ttsEngineEdge: 'Edge neural (recommended, no key)',
+    ttsEngineWebSpeech: 'System voice (Web Speech)',
+    ttsVoice: 'Voice',
+    ttsVoiceHint:
+      'Edge neural voice (no account). If it still sounds robotic, Edge likely failed and fell back to system speech',
     translationTarget: 'Translation target language',
     translationTargetHint: 'Auto-detect source language and translate to the target when translating',
     systemPrompt: 'System prompt',

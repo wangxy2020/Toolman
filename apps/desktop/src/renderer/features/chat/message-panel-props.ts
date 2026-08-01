@@ -23,6 +23,8 @@ export function areMessagePanelPropsEqual(
     prev.listFooter === next.listFooter &&
     prev.assistantFooterMessageId === next.assistantFooterMessageId &&
     prev.assistantFooter === next.assistantFooter &&
+    prev.speakingMessageId === next.speakingMessageId &&
+    prev.ttsPlaybackState === next.ttsPlaybackState &&
     prev.getUserDisplayName === next.getUserDisplayName &&
     prev.getUserAvatarInitial === next.getUserAvatarInitial &&
     prev.isOwnUserMessage === next.isOwnUserMessage

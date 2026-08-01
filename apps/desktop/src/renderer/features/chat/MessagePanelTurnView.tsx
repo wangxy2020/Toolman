@@ -33,6 +33,12 @@ export type MessageTurnViewProps = {
   isOwnUserMessage?: (message: Message) => boolean
   assistantFooterMessageId?: string | null
   assistantFooter?: ReactNode
+  speakingMessageId?: string | null
+  ttsPlaybackState?: 'idle' | 'playing' | 'paused'
+  onSpeakMessage?: (messageId: string, text: string) => void
+  onPauseTts?: () => void
+  onResumeTts?: () => void
+  onStopTts?: () => void
 }
 
 export function MessagePanelTurnView({
@@ -60,6 +66,12 @@ export function MessagePanelTurnView({
   editingUserMessageId,
   assistantFooterMessageId = null,
   assistantFooter = null,
+  speakingMessageId = null,
+  ttsPlaybackState = 'idle',
+  onSpeakMessage,
+  onPauseTts,
+  onResumeTts,
+  onStopTts,
 }: MessageTurnViewProps) {
   if (turn.type === 'user') {
     const message = turn.message
@@ -104,6 +116,18 @@ export function MessagePanelTurnView({
         onDelete={onRequestDeleteMessage}
         copied={copiedKey === `assistant:${msg.id}`}
         onCopy={() => void onCopy(`assistant:${msg.id}`, getAssistantMessageText(msg))}
+        speaking={speakingMessageId === msg.id}
+        ttsPlaybackState={
+          speakingMessageId === msg.id ? ttsPlaybackState : 'idle'
+        }
+        onSpeak={
+          onSpeakMessage
+            ? () => onSpeakMessage(msg.id, getAssistantMessageText(msg))
+            : undefined
+        }
+        onPauseTts={onPauseTts}
+        onResumeTts={onResumeTts}
+        onStopTts={onStopTts}
         onRegenerate={onRegenerateMessage ? () => onRegenerate(msg) : undefined}
         onFork={onForkFromMessage ? () => onForkFromMessage(msg.id) : undefined}
         onSaveToNote={onSaveToNote ? () => onSaveToNote(msg.id) : undefined}

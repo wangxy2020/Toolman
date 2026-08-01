@@ -42,6 +42,7 @@
     "authing-js-sdk": "^4.23.55",
     "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
+    "edge-tts-universal": "^1.4.0",
     "electron-updater": "^6.6.2",
     "exceljs": "^4.4.0",
     "firebase": "^11.10.0",

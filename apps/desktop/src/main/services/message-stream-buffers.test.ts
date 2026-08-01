@@ -58,6 +58,27 @@ describe('MessageStreamBuffers thinking + tools', () => {
     })
   })
 
+  it('keeps wall-clock start across clearThinking so duration does not shrink', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    const startedAt = buffers.getThinkingStartedAtMs()
+    expect(startedAt).not.toBeNull()
+
+    buffers.appendThinking('phase-1 reasoning')
+    buffers.appendText('intermediate report')
+    const afterReport = buffers.getThinkingDurationSeconds()
+    expect(afterReport).toEqual(expect.any(Number))
+
+    buffers.clearThinking()
+    expect(buffers.getThinkingStartedAtMs()).toBe(startedAt)
+    expect(buffers.getThinkingDurationSeconds()).toBeNull()
+
+    buffers.appendThinking('final reasoning')
+    buffers.appendText('final answer')
+    expect(buffers.getThinkingStartedAtMs()).toBe(startedAt)
+    expect(buffers.getThinkingDurationSeconds()).toBeGreaterThanOrEqual(afterReport ?? 0)
+  })
+
   it('promotes thinking to text when model returns reasoning only', () => {
     const buffers = new MessageStreamBuffers()
     buffers.appendThinking('answer text')

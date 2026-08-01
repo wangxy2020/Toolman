@@ -63,6 +63,9 @@ export function useAgentSettingsModal({
     maxTokens,
     environmentVariables,
     translationLanguages,
+    autoSpeak,
+    ttsEngine,
+    ttsVoice,
   } = formState
 
   const effectiveWorkingDirectory = getEffectiveWorkingDirectory(
@@ -215,6 +218,9 @@ export function useAgentSettingsModal({
     maxTokens,
     environmentVariables,
     translationLanguages,
+    autoSpeak,
+    ttsEngine,
+    ttsVoice,
     busy,
     modelOptions,
     displayName,

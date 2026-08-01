@@ -112,6 +112,9 @@ export enum IpcChannel {
   FileReadBinary = 'file:read-binary',
   TranslationDocumentParsePages = 'translation:document:parse-pages',
   TranslationDocumentRenderPage = 'translation:document:render-page',
+  /** Edge / neural TTS: synthesize one sentence to audio bytes (main process). */
+  VoiceSynthesize = 'voice:tts:synthesize',
+  VoiceListVoices = 'voice:tts:list-voices',
   ChatStageAttachments = 'file:chat-stage-attachments',
 
   NotesAttachmentImport = 'notes:attachment:import',

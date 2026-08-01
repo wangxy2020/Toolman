@@ -397,6 +397,12 @@ export const AssistantSchema = z.object({
     environmentVariables: z.string().optional(),
     plannerModelId: z.string().min(1).optional(),
     translationLanguages: TranslationLanguagesSchema.optional(),
+    /** When true, auto-speak final answer text via the client TTS pipeline. Default off. */
+    autoSpeak: z.boolean().optional(),
+    /** TTS engine: Edge neural (default) or system Web Speech. */
+    ttsEngine: z.enum(['edge', 'web-speech']).optional(),
+    /** Edge neural voice short name, e.g. zh-CN-XiaoxiaoNeural. */
+    ttsVoice: z.string().min(1).optional(),
     p2pGroupProxy: z
       .object({
         p2pWorkspaceId: UuidSchema,

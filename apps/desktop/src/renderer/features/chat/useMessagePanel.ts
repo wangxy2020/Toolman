@@ -42,6 +42,12 @@ export function useMessagePanel({
   loadingLabel,
   assistantFooterMessageId = null,
   assistantFooter = null,
+  speakingMessageId = null,
+  ttsPlaybackState = 'idle',
+  onSpeakMessage,
+  onPauseTts,
+  onResumeTts,
+  onStopTts,
 }: MessagePanelProps) {
   const { t } = useI18n()
   const resolvedEmptyTitle = emptyTitle ?? t('chat.messages.emptyTitle')
@@ -238,6 +244,12 @@ export function useMessagePanel({
     editingUserMessageId,
     assistantFooterMessageId,
     assistantFooter,
+    speakingMessageId,
+    ttsPlaybackState,
+    onSpeakMessage,
+    onPauseTts,
+    onResumeTts,
+    onStopTts,
   }
 
   return {

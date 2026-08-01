@@ -1,5 +1,7 @@
 import type { ContentBlock, TranslationLanguage } from '@toolman/shared'
 import type { ReactNode } from 'react'
+import { useMemo } from 'react'
+import { useAssistantTts } from '../voice/useAssistantTts'
 import type { PendingAttachment } from './chat-attachments'
 import { MessageInput } from './MessageInput'
 import { MessagePanel } from './MessagePanel'
@@ -72,6 +74,23 @@ export function ChatComposer({
   assistantFooterMessageId = null,
   assistantFooter = null,
 }: ChatComposerProps) {
+  const activeAssistant = useMemo(() => {
+    const assistantId = chat.activeSession?.assistantId
+    if (!assistantId) return null
+    return chat.assistants.find((item) => item.id === assistantId) ?? null
+  }, [chat.activeSession?.assistantId, chat.assistants])
+
+  const autoSpeak = Boolean(activeAssistant?.parameters.autoSpeak)
+  const { playingMessageId, playbackState, speakMessage, pause, resume, stop } =
+    useAssistantTts({
+      autoSpeak,
+      ttsEngine: activeAssistant?.parameters.ttsEngine,
+      ttsVoice: activeAssistant?.parameters.ttsVoice,
+      sessionId: chat.activeSessionId,
+      messages: chat.messages,
+      onError: chat.setError,
+    })
+
   return (
     <>
       <MessagePanel
@@ -95,6 +114,12 @@ export function ChatComposer({
         listFooter={messageListFooter}
         assistantFooterMessageId={assistantFooterMessageId}
         assistantFooter={assistantFooter}
+        speakingMessageId={playingMessageId}
+        ttsPlaybackState={playbackState}
+        onSpeakMessage={speakMessage}
+        onPauseTts={pause}
+        onResumeTts={resume}
+        onStopTts={stop}
       />
       <MessageInput
         disabled={!chat.activeSessionId || chat.effectiveModelIds.length === 0 || groupProxyReadOnly}
@@ -124,7 +149,10 @@ export function ChatComposer({
           }
           void chat.sendMessage(contentBlocks)
         }}
-        onAbort={() => void chat.abortStreaming()}
+        onAbort={() => {
+          stop()
+          void chat.abortStreaming()
+        }}
         onError={chat.setError}
         loadQuickPhrasesFn={loadQuickPhrasesFn}
         extraSlashCommands={extraSlashCommands}

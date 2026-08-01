@@ -1,5 +1,5 @@
-import type { Assistant } from '@toolman/shared'
-import type { TranslationLanguage } from '@toolman/shared'
+import type { Assistant, TranslationLanguage, VoiceTtsEngine } from '@toolman/shared'
+import { resolveCuratedEdgeTtsVoice } from '../voice/tts-provider-factory'
 import {
   DEFAULT_PERMISSION_MODE,
   DEFAULT_SESSION_ROUND_LIMIT,
@@ -33,6 +33,9 @@ export type AgentSettingsFormState = {
   maxTokens: string
   environmentVariables: string
   translationLanguages: [TranslationLanguage, TranslationLanguage]
+  autoSpeak: boolean
+  ttsEngine: VoiceTtsEngine
+  ttsVoice: string
 }
 
 export function buildAgentSettingsFormState(
@@ -62,6 +65,9 @@ export function buildAgentSettingsFormState(
     maxTokens: assistant.parameters.maxTokens ? String(assistant.parameters.maxTokens) : '',
     environmentVariables: assistant.parameters.environmentVariables ?? '',
     translationLanguages: normalizeTranslationLanguages(assistant.parameters.translationLanguages),
+    autoSpeak: assistant.parameters.autoSpeak ?? false,
+    ttsEngine: assistant.parameters.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
+    ttsVoice: resolveCuratedEdgeTtsVoice(assistant.parameters.ttsVoice),
   }
 }
 
@@ -89,5 +95,9 @@ export function buildAgentSettingsParameters(
     sessionRoundLimit: state.sessionRoundLimit,
     environmentVariables: state.environmentVariables || undefined,
     translationLanguages: state.translationLanguages,
+    autoSpeak: state.autoSpeak || undefined,
+    ttsEngine: state.ttsEngine,
+    ttsVoice:
+      state.ttsEngine === 'edge' ? resolveCuratedEdgeTtsVoice(state.ttsVoice) : undefined,
   }
 }

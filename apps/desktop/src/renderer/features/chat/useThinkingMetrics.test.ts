@@ -51,4 +51,25 @@ describe('applyStreamDelta thinking timing meta', () => {
       startedAtMs: 42,
     })
   })
+
+  it('keeps the earliest startedAtMs and the longest durationSeconds', () => {
+    let blocks: ContentBlock[] = applyStreamDelta([], {
+      type: 'thinking',
+      text: 'a',
+      startedAtMs: 1_000,
+      durationSeconds: 63,
+    })
+    blocks = applyStreamDelta(blocks, {
+      type: 'thinking',
+      text: 'b',
+      startedAtMs: 50_000,
+      durationSeconds: 10,
+    })
+    expect(blocks[0]).toMatchObject({
+      type: 'thinking',
+      text: 'ab',
+      startedAtMs: 1_000,
+      durationSeconds: 63,
+    })
+  })
 })

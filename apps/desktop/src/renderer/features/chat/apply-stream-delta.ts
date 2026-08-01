@@ -52,19 +52,24 @@ export function applyStreamDelta(blocks: ContentBlock[], delta: StreamDelta): Co
       }
     }
 
+    const nextDuration =
+      delta.durationSeconds !== undefined && previousDuration !== undefined
+        ? Math.max(delta.durationSeconds, previousDuration)
+        : delta.durationSeconds !== undefined
+          ? delta.durationSeconds
+          : previousDuration
+    const nextStartedAt =
+      delta.startedAtMs !== undefined && previousStartedAt !== undefined
+        ? Math.min(delta.startedAtMs, previousStartedAt)
+        : delta.startedAtMs !== undefined
+          ? delta.startedAtMs
+          : previousStartedAt
+
     const thinkingBlock = {
       type: 'thinking' as const,
       text: thinkingText,
-      ...(delta.durationSeconds !== undefined
-        ? { durationSeconds: delta.durationSeconds }
-        : previousDuration !== undefined
-          ? { durationSeconds: previousDuration }
-          : {}),
-      ...(delta.startedAtMs !== undefined
-        ? { startedAtMs: delta.startedAtMs }
-        : previousStartedAt !== undefined
-          ? { startedAtMs: previousStartedAt }
-          : {}),
+      ...(nextDuration !== undefined ? { durationSeconds: nextDuration } : {}),
+      ...(nextStartedAt !== undefined ? { startedAtMs: nextStartedAt } : {}),
     }
     const firstTextIndex = next.findIndex((block) => block.type === 'text')
     if (firstTextIndex >= 0) {

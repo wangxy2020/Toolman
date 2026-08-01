@@ -51,7 +51,7 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
         {orderedBlocks.map((block, index) => {
           if (block.type === 'thinking') {
             const storedDuration = block.durationSeconds ?? 0
-            // Prefer main-process duration; live timer is anchored to startedAtMs.
+            // Monotonic: never let a shorter finalized value replace a longer live reading.
             const displayDuration = Math.max(storedDuration, liveDurationSeconds)
 
             return (

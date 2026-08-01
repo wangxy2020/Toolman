@@ -3,8 +3,12 @@ import type { ReactNode } from 'react'
 import {
   IconCopy,
   IconGitFork,
+  IconPause,
+  IconPlay,
   IconRefresh,
   IconSaveNote,
+  IconSpeaker,
+  IconStop,
   IconTrash,
   IconTranslate,
 } from '../../components/icons'
@@ -31,6 +35,12 @@ export function MessagePanelAssistantMessage({
   sending,
   onDelete,
   onCopy,
+  onSpeak,
+  speaking = false,
+  ttsPlaybackState = 'idle',
+  onPauseTts,
+  onResumeTts,
+  onStopTts,
   onRegenerate,
   onFork,
   onSaveToNote,
@@ -51,6 +61,12 @@ export function MessagePanelAssistantMessage({
   sending?: boolean
   onDelete: (id: string, anchor: HTMLElement) => void
   onCopy: () => void
+  onSpeak?: () => void
+  speaking?: boolean
+  ttsPlaybackState?: 'idle' | 'playing' | 'paused'
+  onPauseTts?: () => void
+  onResumeTts?: () => void
+  onStopTts?: () => void
   onRegenerate?: () => void
   onFork?: () => void
   onSaveToNote?: () => void
@@ -124,6 +140,51 @@ export function MessagePanelAssistantMessage({
         ) : (
           <div className="tm-stream-footer">
             <div className="tm-stream-actions">
+              {onSpeak ? (
+                speaking && ttsPlaybackState === 'playing' ? (
+                  <>
+                    <MessagePanelActionButton
+                      title="暂停"
+                      active
+                      onClick={() => onPauseTts?.()}
+                    >
+                      <IconPause size={15} />
+                    </MessagePanelActionButton>
+                    <MessagePanelActionButton
+                      title="停止"
+                      active
+                      onClick={() => onStopTts?.()}
+                    >
+                      <IconStop size={15} />
+                    </MessagePanelActionButton>
+                  </>
+                ) : speaking && ttsPlaybackState === 'paused' ? (
+                  <>
+                    <MessagePanelActionButton
+                      title="继续播放"
+                      active
+                      onClick={() => onResumeTts?.()}
+                    >
+                      <IconPlay size={15} />
+                    </MessagePanelActionButton>
+                    <MessagePanelActionButton
+                      title="停止"
+                      active
+                      onClick={() => onStopTts?.()}
+                    >
+                      <IconStop size={15} />
+                    </MessagePanelActionButton>
+                  </>
+                ) : (
+                  <MessagePanelActionButton
+                    title="语音播放"
+                    disabled={!text.trim()}
+                    onClick={onSpeak}
+                  >
+                    <IconSpeaker size={15} />
+                  </MessagePanelActionButton>
+                )
+              ) : null}
               <MessagePanelActionButton
                 title={copied ? '已复制' : '复制'}
                 disabled={!text.trim()}

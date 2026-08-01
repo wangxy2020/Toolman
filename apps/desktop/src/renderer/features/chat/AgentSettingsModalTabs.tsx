@@ -1,6 +1,7 @@
+import type { TranslationLanguage, VoiceTtsEngine } from '@toolman/shared'
+import { CURATED_EDGE_TTS_VOICES } from '../voice/tts-provider-factory'
 import { formatModelDisplayLabel } from './model-utils'
 import { TRANSLATION_LANGUAGE_OPTIONS } from './translation-utils'
-import type { TranslationLanguage } from '@toolman/shared'
 import {
   AgentSettingsHelpHint,
   AgentSettingsToggle,
@@ -27,6 +28,12 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
     setHeartbeatEnabled,
     heartbeatInterval,
     setHeartbeatInterval,
+    autoSpeak,
+    setAutoSpeak,
+    ttsEngine,
+    setTtsEngine,
+    ttsVoice,
+    setTtsVoice,
     translationLanguages,
     modelOptions,
     displayName,
@@ -139,6 +146,71 @@ export function AgentSettingsModalBasicTab({ state }: { state: AgentSettingsStat
           }}
         />
       </div>
+
+      <div className="tm-agent-setting-row">
+        <div className="tm-agent-setting-label-group">
+          <span className="tm-agent-setting-label">{t('agent.fields.autoSpeak')}</span>
+          <AgentSettingsHelpHint title={t('agent.fields.autoSpeakHint')} />
+        </div>
+        <AgentSettingsToggle
+          checked={autoSpeak}
+          onChange={(value) => {
+            setAutoSpeak(value)
+            void save({
+              parameters: { ...getParameters(), autoSpeak: value || undefined },
+            })
+          }}
+        />
+      </div>
+
+      <div className="tm-agent-setting-row">
+        <div className="tm-agent-setting-label-group">
+          <label className="tm-agent-setting-label" htmlFor="agent-settings-tts-engine">
+            {t('agent.fields.ttsEngine')}
+          </label>
+          <AgentSettingsHelpHint title={t('agent.fields.ttsEngineHint')} />
+        </div>
+        <select
+          id="agent-settings-tts-engine"
+          className="tm-agent-model-select"
+          value={ttsEngine}
+          onChange={(event) => {
+            const next = event.target.value as VoiceTtsEngine
+            setTtsEngine(next)
+            void save({ parameters: { ...getParameters(), ttsEngine: next } })
+          }}
+        >
+          <option value="edge">{t('agent.fields.ttsEngineEdge')}</option>
+          <option value="web-speech">{t('agent.fields.ttsEngineWebSpeech')}</option>
+        </select>
+      </div>
+
+      {ttsEngine === 'edge' ? (
+        <div className="tm-agent-setting-row">
+          <div className="tm-agent-setting-label-group">
+            <label className="tm-agent-setting-label" htmlFor="agent-settings-tts-voice">
+              {t('agent.fields.ttsVoice')}
+            </label>
+            <AgentSettingsHelpHint title={t('agent.fields.ttsVoiceHint')} />
+          </div>
+          <select
+            id="agent-settings-tts-voice"
+            className="tm-agent-model-select"
+            value={ttsVoice}
+            onChange={(event) => {
+              const next = event.target.value
+              setTtsVoice(next)
+              void save({ parameters: { ...getParameters(), ttsVoice: next } })
+            }}
+          >
+            {CURATED_EDGE_TTS_VOICES.map((voice) => (
+              <option key={voice.value} value={voice.value}>
+                {voice.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className="tm-agent-setting-row">
         <label className="tm-agent-setting-label" htmlFor="agent-settings-heartbeat">

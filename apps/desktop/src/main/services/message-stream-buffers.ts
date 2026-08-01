@@ -25,7 +25,7 @@ export class MessageStreamBuffers {
   appendText(chunk: string): void {
     if (chunk) {
       this.stripPreparingStatusFromThinking()
-      if (this.thinking && this.thinkingDurationSeconds === null) {
+      if (this.thinking.trim()) {
         this.finalizeThinkingDuration()
       }
     }
@@ -62,8 +62,9 @@ export class MessageStreamBuffers {
   }
 
   clearThinking(): void {
+    // Clear visible thinking text for a new phase (e.g. docx summary), but keep the
+    // original wall-clock start so duration does not shrink to only the last segment.
     this.thinking = ''
-    this.thinkingStartedAt = null
     this.thinkingDurationSeconds = null
   }
 
@@ -123,12 +124,14 @@ export class MessageStreamBuffers {
   }
 
   finalizeThinkingDuration(): void {
-    if (this.thinkingDurationSeconds !== null) return
     if (this.thinkingStartedAt === null || !this.thinking.trim()) return
-    this.thinkingDurationSeconds = Math.max(
-      0,
-      Math.round((Date.now() - this.thinkingStartedAt) / 1000),
-    )
+    const elapsed = Math.max(0, Math.round((Date.now() - this.thinkingStartedAt) / 1000))
+    // Allow duration to grow across phases (status → tools/review → final answer).
+    // Never shrink once a longer wall-clock value was observed.
+    this.thinkingDurationSeconds =
+      this.thinkingDurationSeconds === null
+        ? elapsed
+        : Math.max(this.thinkingDurationSeconds, elapsed)
   }
 
   getThinkingDurationSeconds(): number | null {

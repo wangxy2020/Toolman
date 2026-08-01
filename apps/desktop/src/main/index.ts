@@ -24,6 +24,9 @@ registerProcessCrashHandlers()
 assertProductionAuthProfile()
 
 app.commandLine.appendSwitch('lang', 'zh-CN')
+// Edge TTS plays HTMLAudioElement after async IPC; without this Chromium may
+// treat it as autoplay and block, silently falling back to Web Speech.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 app.userAgentFallback = ELECTRON_CHROME_USER_AGENT
 
 const e2eUserDataDir = process.env.TOOLMAN_E2E_USER_DATA_DIR

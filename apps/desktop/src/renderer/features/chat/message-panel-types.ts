@@ -37,6 +37,15 @@ export interface MessagePanelProps {
   /** Attach a footer inside a specific assistant message body. */
   assistantFooterMessageId?: string | null
   assistantFooter?: ReactNode
+  /** TTS: currently speaking assistant message id. */
+  speakingMessageId?: string | null
+  /** TTS: idle | playing | paused */
+  ttsPlaybackState?: 'idle' | 'playing' | 'paused'
+  /** TTS: play / replay final-answer text for an assistant message. */
+  onSpeakMessage?: (messageId: string, text: string) => void
+  onPauseTts?: () => void
+  onResumeTts?: () => void
+  onStopTts?: () => void
 }
 
 export type MessageTurn =

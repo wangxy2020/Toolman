@@ -72,9 +72,13 @@ export function createGenerationStreamContext(options: {
     buffers.appendText(text)
     persistBlocks()
 
-    // Freeze and publish thinking duration as soon as answer text starts — not only
+    // Publish thinking duration as soon as answer text starts / grows — not only
     // at message.done — so the UI shows wall-clock think time instead of paint time.
-    if (durationBefore === null && buffers.getThinkingDurationSeconds() !== null) {
+    const durationAfter = buffers.getThinkingDurationSeconds()
+    if (
+      durationAfter !== null &&
+      (durationBefore === null || durationAfter > durationBefore)
+    ) {
       emitThinkingDurationIfNeeded()
     }
 

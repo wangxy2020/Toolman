@@ -32,6 +32,9 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
   const [maxTokens, setMaxTokens] = useState(initial.maxTokens)
   const [environmentVariables, setEnvironmentVariables] = useState(initial.environmentVariables)
   const [translationLanguages, setTranslationLanguages] = useState(initial.translationLanguages)
+  const [autoSpeak, setAutoSpeak] = useState(initial.autoSpeak)
+  const [ttsEngine, setTtsEngine] = useState(initial.ttsEngine)
+  const [ttsVoice, setTtsVoice] = useState(initial.ttsVoice)
 
   useEffect(() => {
     const next = buildAgentSettingsFormState(assistant, displayModelId)
@@ -57,6 +60,9 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
     setMaxTokens(next.maxTokens)
     setEnvironmentVariables(next.environmentVariables)
     setTranslationLanguages(next.translationLanguages)
+    setAutoSpeak(next.autoSpeak)
+    setTtsEngine(next.ttsEngine)
+    setTtsVoice(next.ttsVoice)
   }, [assistant, displayModelId])
 
   const formState: AgentSettingsFormState = {
@@ -82,6 +88,9 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
     maxTokens,
     environmentVariables,
     translationLanguages,
+    autoSpeak,
+    ttsEngine,
+    ttsVoice,
   }
 
   return {
@@ -108,5 +117,8 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
     setMaxTokens,
     setEnvironmentVariables,
     setTranslationLanguages,
+    setAutoSpeak,
+    setTtsEngine,
+    setTtsVoice,
   }
 }
