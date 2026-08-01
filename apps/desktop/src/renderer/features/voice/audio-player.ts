@@ -9,7 +9,6 @@ export class ControllableAudioPlayback {
   private audio: HTMLAudioElement | null = null
   private objectUrl: string | null = null
   private resolveWait: (() => void) | null = null
-  private rejectWait: ((error: Error) => void) | null = null
   private abortHandler: (() => void) | null = null
   private signal: AbortSignal | null = null
   /** Once true, terminal callbacks are no-ops (stop/abort already settled). */
@@ -32,13 +31,11 @@ export class ControllableAudioPlayback {
       this.objectUrl = url
       this.signal = signal
       this.resolveWait = resolve
-      this.rejectWait = reject
 
       const finishOk = () => {
         if (this.closed) return
         this.closed = true
         this.resolveWait = null
-        this.rejectWait = null
         this.cleanup(true)
         resolve()
       }
@@ -50,7 +47,6 @@ export class ControllableAudioPlayback {
         }
         this.closed = true
         this.resolveWait = null
-        this.rejectWait = null
         this.cleanup(true)
         reject(error)
       }
@@ -100,7 +96,6 @@ export class ControllableAudioPlayback {
     this.closed = true
     const resolve = this.resolveWait
     this.resolveWait = null
-    this.rejectWait = null
     this.cleanup(true)
     resolve?.()
   }
