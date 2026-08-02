@@ -17,7 +17,10 @@ export function useAppSettings() {
 
   useEffect(() => {
     const loaded = loadAppSettings()
-    setSettings(loaded)
+    setSettings({
+      ...loaded,
+      kbEnabledByAssistantId: loaded.kbEnabledByAssistantId ?? {},
+    })
     applyDisplaySettings(loaded)
     void syncRuntimeAppSettingsToMain(loaded)
   }, [])
@@ -35,13 +38,13 @@ export function useAppSettings() {
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
     setSettings((prev) => {
       const merged = { ...prev, ...patch }
-      const next =
-        patch.sidebarVisibleModules != null || patch.sidebarHiddenModules != null
-          ? {
-              ...merged,
-              ...normalizeNavModules(merged.sidebarVisibleModules, merged.sidebarHiddenModules),
-            }
-          : merged
+      const next = {
+        ...merged,
+        kbEnabledByAssistantId: merged.kbEnabledByAssistantId ?? {},
+        ...(patch.sidebarVisibleModules != null || patch.sidebarHiddenModules != null
+          ? normalizeNavModules(merged.sidebarVisibleModules, merged.sidebarHiddenModules)
+          : {}),
+      }
       saveAppSettings(next)
       applyDisplaySettings(next)
       void syncRuntimeAppSettingsToMain(next)

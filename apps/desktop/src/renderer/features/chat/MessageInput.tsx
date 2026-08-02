@@ -14,7 +14,7 @@ export function MessageInput(props: MessageInputProps) {
     spellCheckEnabled,
     sendShortcut,
     text,
-    setText,
+    handleTextChange,
     fieldHeight,
     pendingAttachments,
     setPendingAttachments,
@@ -61,7 +61,7 @@ export function MessageInput(props: MessageInputProps) {
           disabled={disabled}
           spellCheck={spellCheckEnabled}
           style={{ height: fieldHeight }}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => handleTextChange(e.target.value)}
           onPaste={handleInputPaste}
           onKeyDown={(e) => {
             if (shouldSubmitOnEnter(e, sendShortcut)) {

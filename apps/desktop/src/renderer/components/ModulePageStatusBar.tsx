@@ -82,9 +82,7 @@ export function ModulePageStatusBar({
         {status.text}
       </span>
       <div className="tm-group-statusbar-actions">
-        {meta && status.tone === 'muted' ? (
-          <span className="tm-group-statusbar-meta">{meta}</span>
-        ) : null}
+        {meta ? <span className="tm-group-statusbar-meta">{meta}</span> : null}
         {status.onDismiss ? (
           <button
             type="button"

@@ -41,6 +41,7 @@ export function KnowledgePage(props: KnowledgePageProps) {
     showingSavedSharedFolder, localDefaultKb,
     networkDefaultKb, localFilesDefaultKb, panelDocuments, chatAttachableFiles,
     sectionLabel, breadcrumbItemName, settingsEnabled, settingsKb, statusFallback,
+    statusPriority, statusMeta,
     importReady, showFileToolbar, isNetworkKbView, panelLoading, importTarget,
     handleChatWithFiles, handleSortFieldChange, handleSelectAll, handleClearSelection,
     handleDeleteSelected, handleImportFiles, handleAddUrl, handleAddSitemap,
@@ -150,7 +151,11 @@ export function KnowledgePage(props: KnowledgePageProps) {
             )}
           </div>
 
-          <ModulePageStatusBar fallback={statusFallback} />
+          <ModulePageStatusBar
+            priority={statusPriority}
+            fallback={statusFallback}
+            meta={statusMeta}
+          />
         </ModulePageStatusProvider>
 
         {settingsTarget === 'kb' && workspaceId && settingsKb ? (

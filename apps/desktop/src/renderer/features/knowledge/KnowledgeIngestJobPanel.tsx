@@ -98,7 +98,9 @@ export function KnowledgeIngestJobPanel({ workspaceId, kbId }: Props) {
                 ) : null}
                 <div className="tm-knowledge-ingest-job-meta">
                   {stageLabel(item.stage)} · {item.progress}%
-                  {item.errorMessage ? ` · ${item.errorMessage}` : ''}
+                  {item.stage === 'failed' && item.errorMessage
+                    ? ` · ${item.errorMessage}`
+                    : ''}
                 </div>
                 <div className="tm-knowledge-ingest-job-progress">
                   <div

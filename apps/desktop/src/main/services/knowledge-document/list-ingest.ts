@@ -9,7 +9,13 @@ import {
 } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
-import { prepareIngestQueue, purgeIndexedDocument, reconcileStuckLocalFilesDocuments, startIngestFilePathsInBackground } from '../knowledge-ingest.service'
+import {
+  prepareIngestQueue,
+  purgeIndexedDocument,
+  reconcileProcessingDocumentsWithoutIngestJob,
+  reconcileStuckLocalFilesDocuments,
+  startIngestFilePathsInBackground,
+} from '../knowledge-ingest.service'
 import { assertKnowledgeBaseAcceptsLocalFiles } from '../knowledge-kb-kind-guard'
 import {
   deleteManagedKnowledgeFileFromDisk,
@@ -28,6 +34,9 @@ export async function listKnowledgeDocuments(input: unknown): Promise<KnowledgeD
   if (kb.kind === 'local_files') {
     await reconcileStuckLocalFilesDocuments(data.workspaceId, data.kbId)
   }
+
+  // Clear zombie "parsing/embedding…" rows left without an ingest job (e.g. after cancel / crash).
+  reconcileProcessingDocumentsWithoutIngestJob(data.kbId)
 
   const repo = getDocumentRepository()
   return repo

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { knowledgeDocumentToPanelItem } from './KnowledgeBaseFilePanel'
+import { formatKnowledgeIngestStatusBarMessage } from './knowledge-file-display'
 import {
   sortKnowledgeFilePanelItems,
   type KnowledgeFileSortField,
@@ -56,9 +57,16 @@ export function useKnowledgePageDocuments(
     const items = documents.items.map((doc) => ({
       ...knowledgeDocumentToPanelItem(doc),
       ingestProgress: documents.ingestProgressById[doc.id] ?? null,
+      ingestDetail: documents.ingestDetailById[doc.id] ?? null,
     }))
     return sortKnowledgeFilePanelItems(items, sortField, sortAscending)
-  }, [documents.ingestProgressById, documents.items, sortField, sortAscending])
+  }, [
+    documents.ingestDetailById,
+    documents.ingestProgressById,
+    documents.items,
+    sortField,
+    sortAscending,
+  ])
 
   const chatAttachableFiles = useMemo(
     () => resolveKnowledgeFilesForChat(panelDocuments, selectedIds),
@@ -68,32 +76,65 @@ export function useKnowledgePageDocuments(
   const panelLoading =
     defaultFolderInitializing || (documents.loading && Boolean(importTarget.kbId))
 
-  const statusFallback = useMemo(() => {
+  const statusBar = useMemo(() => {
     if (documents.ingesting) {
-      return { tone: 'info' as const, text: t('knowledgePage.importing') }
+      const formatted = formatKnowledgeIngestStatusBarMessage({
+        items: documents.items,
+        progressById: documents.ingestProgressById,
+        detailById: documents.ingestDetailById,
+        t,
+      })
+      return {
+        priority: {
+          tone: 'info' as const,
+          text: formatted?.text ?? t('knowledgePage.importing'),
+        },
+        fallback: {
+          tone: 'info' as const,
+          text: formatted?.text ?? t('knowledgePage.importing'),
+        },
+        meta: formatted?.meta ?? null,
+      }
     }
     if (panelLoading) {
-      return { tone: 'info' as const, text: t('common.loading') }
+      return {
+        priority: null,
+        fallback: { tone: 'info' as const, text: t('common.loading') },
+        meta: null,
+      }
     }
     if (isFileDedupView && dedupScanState.scanning) {
       const progress = dedupScanState.progress
-      if (progress && progress.total > 0) {
-        return {
-          tone: 'info' as const,
-          text: `${t('knowledgePage.scanningDuplicates')} ${progress.scanned}/${progress.total}`,
-        }
+      const text =
+        progress && progress.total > 0
+          ? `${t('knowledgePage.scanningDuplicates')} ${progress.scanned}/${progress.total}`
+          : t('knowledgePage.scanningDuplicates')
+      return {
+        priority: null,
+        fallback: { tone: 'info' as const, text },
+        meta: null,
       }
-      return { tone: 'info' as const, text: t('knowledgePage.scanningDuplicates') }
     }
-    return { tone: 'muted' as const, text: t('knowledgePage.ready') }
+    return {
+      priority: null,
+      fallback: { tone: 'muted' as const, text: t('knowledgePage.ready') },
+      meta: null,
+    }
   }, [
     dedupScanState.progress,
     dedupScanState.scanning,
+    documents.ingestDetailById,
+    documents.ingestProgressById,
     documents.ingesting,
+    documents.items,
     isFileDedupView,
     panelLoading,
     t,
   ])
+
+  const statusFallback = statusBar.fallback
+  const statusPriority = statusBar.priority
+  const statusMeta = statusBar.meta
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -269,6 +310,8 @@ export function useKnowledgePageDocuments(
     chatAttachableFiles,
     panelLoading,
     statusFallback,
+    statusPriority,
+    statusMeta,
     handleChatWithFiles,
     handleToggleSelect,
     handleSelectAll,

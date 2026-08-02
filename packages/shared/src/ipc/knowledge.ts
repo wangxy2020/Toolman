@@ -160,6 +160,27 @@ export const KnowledgeDocumentListOutputSchema = z.object({
   items: z.array(KnowledgeDocumentSchema),
 })
 
+export const KnowledgeCourseOutlineEntrySchema = z.object({
+  id: z.string().min(1),
+  documentId: UuidSchema,
+  title: z.string().min(1),
+  label: z.string().min(1),
+  level: z.number().int().min(1).max(3).default(1),
+})
+
+export const KnowledgeCourseOutlineInputSchema = z.object({
+  workspaceId: UuidSchema,
+  kbId: UuidSchema,
+})
+
+export const KnowledgeCourseOutlineOutputSchema = z.object({
+  items: z.array(KnowledgeCourseOutlineEntrySchema),
+  /** True when outline came from PDF bookmarks / text headings (not bare filenames). */
+  fromContent: z.boolean(),
+})
+
+export type KnowledgeCourseOutlineEntry = z.infer<typeof KnowledgeCourseOutlineEntrySchema>
+
 export const KnowledgeDocumentIngestInputSchema = z.object({
   workspaceId: UuidSchema,
   kbId: UuidSchema,
@@ -612,6 +633,12 @@ export const KnowledgeFileDedupDeleteOutputSchema = z.object({
   ),
 })
 
+export const KnowledgeIngestProgressDetailSchema = z.object({
+  unit: z.enum(['page', 'chunk']),
+  current: z.number().int().nonnegative(),
+  total: z.number().int().positive(),
+})
+
 export const KnowledgeIngestStreamEventSchema = z.object({
   type: z.literal('document.stage'),
   workspaceId: UuidSchema,
@@ -619,9 +646,12 @@ export const KnowledgeIngestStreamEventSchema = z.object({
   documentId: UuidSchema,
   stage: KnowledgeDocumentStatusSchema,
   progress: z.number().int().min(0).max(100).optional(),
+  /** Page/chunk counters for status-bar copy (optional). */
+  progressDetail: KnowledgeIngestProgressDetailSchema.nullable().optional(),
   errorMessage: z.string().nullable().optional(),
 })
 
+export type KnowledgeIngestProgressDetail = z.infer<typeof KnowledgeIngestProgressDetailSchema>
 export type KnowledgeIngestStreamEvent = z.infer<typeof KnowledgeIngestStreamEventSchema>
 export type KnowledgeIngestJob = z.infer<typeof KnowledgeIngestJobSchema>
 export type KnowledgeDocumentSourceKind = z.infer<typeof KnowledgeDocumentSourceKindSchema>

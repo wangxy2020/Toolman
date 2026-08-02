@@ -1,3 +1,4 @@
+import { isSpeakableUtterance } from './sanitize-speakable-text'
 import type { TtsPlaybackState, TtsProvider } from './tts-types'
 
 /**
@@ -24,7 +25,8 @@ export class TtsPlaybackQueue {
 
   enqueue(sentence: string): void {
     const trimmed = sentence.trim()
-    if (!trimmed) return
+    // Skip empty / punctuation-only chunks (avoids system voice reading “句号”).
+    if (!isSpeakableUtterance(trimmed)) return
     this.queue.push(trimmed)
     void this.pump()
   }

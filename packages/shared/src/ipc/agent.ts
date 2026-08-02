@@ -403,6 +403,14 @@ export const AssistantSchema = z.object({
     ttsEngine: z.enum(['edge', 'web-speech']).optional(),
     /** Edge neural voice short name, e.g. zh-CN-XiaoxiaoNeural. */
     ttsVoice: z.string().min(1).optional(),
+    /** Assistant library teaching mode (Socratic / open). */
+    teachingMode: z.enum(['socratic', 'open', 'off']).optional(),
+    /** Preset id from assistant library (e.g. socratic-tutor). */
+    assistantLibPresetId: z.string().min(1).optional(),
+    /** Roleplay companion id (detective / auditor / …). */
+    roleplayId: z.string().min(1).optional(),
+    /** When true (default for socratic), run post-reply answer-leak referee. */
+    refereeEnabled: z.boolean().optional(),
     p2pGroupProxy: z
       .object({
         p2pWorkspaceId: UuidSchema,

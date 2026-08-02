@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type Message, type VoiceTtsEngine } from '@toolman/shared'
-import { getMessageText } from '../chat/message-utils'
+import { stripSocraticMachineBlocks, type Message, type VoiceTtsEngine } from '@toolman/shared'
+import { getUserFacingMessageText } from '../chat/message-utils'
 import { unlockAudioPlayback } from './audio-unlock'
 import { configureSharedTts, getSharedTtsController } from './tts-controller'
 import { resolveCuratedEdgeTtsVoice } from './tts-provider-factory'
@@ -24,6 +24,9 @@ export function useAssistantTts(options: {
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null)
   const [playbackState, setPlaybackState] = useState<TtsPlaybackState>('idle')
   const streamingIdRef = useRef<string | null>(null)
+  const reportedErrorRef = useRef<string | null>(null)
+  const onErrorRef = useRef(options.onError)
+  onErrorRef.current = options.onError
   const engine = options.ttsEngine === 'web-speech' ? 'web-speech' : 'edge'
   const voice = resolveCuratedEdgeTtsVoice(options.ttsVoice)
 
@@ -31,11 +34,13 @@ export function useAssistantTts(options: {
     return controller.subscribe((state) => {
       setPlayingMessageId(state.playingMessageId)
       setPlaybackState(state.playbackState)
+      if (state.lastError === reportedErrorRef.current) return
+      reportedErrorRef.current = state.lastError
       if (state.lastError) {
-        options.onError?.(state.lastError)
+        onErrorRef.current?.(state.lastError)
       }
     })
-  }, [controller, options.onError])
+  }, [controller])
 
   useEffect(() => {
     configureSharedTts({ engine, voice })
@@ -44,6 +49,8 @@ export function useAssistantTts(options: {
   useEffect(() => {
     streamingIdRef.current = null
     controller.stop()
+    reportedErrorRef.current = null
+    onErrorRef.current?.(null)
   }, [controller, options.sessionId])
 
   useEffect(() => {
@@ -59,7 +66,7 @@ export function useAssistantTts(options: {
     if (streaming) {
       streamingIdRef.current = streaming.id
       configureSharedTts({ engine, voice })
-      controller.feedStreamText(streaming.id, getMessageText(streaming))
+      controller.feedStreamText(streaming.id, getUserFacingMessageText(streaming))
       return
     }
 
@@ -84,7 +91,7 @@ export function useAssistantTts(options: {
       // Must run in the click stack so Edge blob playback is allowed after IPC.
       unlockAudioPlayback()
       configureSharedTts({ engine, voice })
-      controller.speakMessage(messageId, text)
+      controller.speakMessage(messageId, stripSocraticMachineBlocks(text))
     },
     [controller, engine, voice],
   )

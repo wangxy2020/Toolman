@@ -105,6 +105,33 @@ describe('knowledge-ingest-shared', () => {
     vi.useRealTimers()
   })
 
+  it('createParsingProgressPulse can crawl past the old 39% soft ceiling', () => {
+    vi.useFakeTimers()
+    const repo = {
+      findById: vi.fn(() => null),
+      update: vi.fn(),
+      upsertIngestJob: vi.fn(),
+    }
+    const stop = createParsingProgressPulse(
+      repo as never,
+      {
+        workspaceId: 'ws-1',
+        kbId: 'kb-1',
+        documentId: 'doc-1',
+      },
+      1000,
+    )
+
+    vi.advanceTimersByTime(45_000)
+    const progresses = repo.upsertIngestJob.mock.calls.map(
+      (call) => (call[0] as { progress: number }).progress,
+    )
+    expect(Math.max(...progresses)).toBeGreaterThan(39)
+
+    stop()
+    vi.useRealTimers()
+  })
+
   it('buildIngestProgressHandlers maps ocr and embed progress', () => {
     const repo = {
       findById: vi.fn(() => null),
@@ -129,6 +156,18 @@ describe('knowledge-ingest-shared', () => {
       'doc-1',
       'kb-1',
       expect.objectContaining({ status: 'parsing' }),
+    )
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: 'parsing',
+        progressDetail: { unit: 'page', current: 1, total: 2 },
+      }),
+    )
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: 'embedding',
+        progressDetail: { unit: 'chunk', current: 1, total: 2 },
+      }),
     )
   })
 

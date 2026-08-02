@@ -58,5 +58,13 @@ export const modulesZhCN = {
       contentEmptyTitle: '翻译',
       contentEmptyHint: '在左侧选择对照翻译，在右侧编辑原文与译文。',
     },
+    'assistant-lib': {
+      title: '助手库',
+      addLabel: '开课',
+      headerAll: '教学预设',
+      sidebarEmptyHint: '暂无学习会话，请选择预设开课',
+      contentEmptyTitle: '助手库',
+      contentEmptyHint: '苏格拉底式学习与开放工具平台。选择预设、绑定教材知识库后开课。',
+    },
   },
 } as const

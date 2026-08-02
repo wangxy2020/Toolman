@@ -4,6 +4,7 @@ import {
   isTerminalTaskStatus,
   parseMessageTaskId,
   parseSessionActiveTaskId,
+  resolveAssistantLibTeachingRuntime,
   type AgentTask,
   type Assistant,
   type ContentBlock,
@@ -16,7 +17,7 @@ import {
   isGroupProxySession,
   resolveGroupProxyAssistantModelId,
 } from '../group/group-agent-utils'
-import type { AppSettings } from '../settings/app-settings'
+import { resolveAssistantKbEnabled, type AppSettings } from '../settings/app-settings'
 import type { useSessionManager } from './useSessionManager'
 import {
   getAssistantMcpServerIds,
@@ -63,13 +64,20 @@ export function buildSendOptions(
 
   const mcpServerIds = getAssistantMcpServerIds(activeAssistant)
   const skillIds = getAssistantSkillIds(activeAssistant)
+  const teachingRuntime = resolveAssistantLibTeachingRuntime({
+    sessionMetadata: session.activeSession?.metadata,
+    assistantParameters: activeAssistant?.parameters as Record<string, unknown> | undefined,
+  })
+  const courseKbIds = teachingRuntime.kbIds
 
   return {
     enableTools: resolveChatEnableTools(mcpServerIds, skillIds, contentBlocks ?? []),
     webSearchEnabled: appSettings?.webSearchEnabled,
     webSearchProvider: appSettings?.webSearchProvider,
-    kbEnabled: appSettings?.kbEnabled,
-    kbIds: activeAssistant?.parameters.kbIds,
+    kbEnabled: appSettings
+      ? resolveAssistantKbEnabled(appSettings, activeAssistant?.id)
+      : false,
+    kbIds: courseKbIds?.length ? courseKbIds : activeAssistant?.parameters.kbIds,
     kbTopK: activeAssistant?.parameters.kbTopK,
     kbScoreThreshold: activeAssistant?.parameters.kbScoreThreshold,
     memoryEnabled: appSettings?.memoryEnabled,

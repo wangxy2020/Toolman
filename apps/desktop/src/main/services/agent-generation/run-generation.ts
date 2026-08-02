@@ -24,6 +24,7 @@ import {
   buildChatMessages,
 } from './chat-messages'
 import { finalizeSuccessfulGeneration, handleGenerationFailure } from './generation-completion'
+import { maybeApplySocraticReferee } from './socratic-referee'
 import { executeGenerationStrategy } from './generation-strategy'
 import { buildRuntimeSystemHints } from './system-hints'
 import { createGenerationStreamContext } from './stream-context'
@@ -226,6 +227,8 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
       stream,
       onUsage,
     })
+
+    maybeApplySocraticReferee({ assistant, sessionId, stream })
 
     finalizeSuccessfulGeneration({
       sessionId,

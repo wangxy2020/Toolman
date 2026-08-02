@@ -1,7 +1,7 @@
 import type { Message } from '@toolman/shared'
 import type { ReactNode } from 'react'
 import { getUserMessageCopyText } from './chat-attachments'
-import { getMessageText as getAssistantMessageText } from './message-utils'
+import { getUserFacingMessageText as getAssistantMessageText } from './message-utils'
 import type { MessageSettings } from './message-settings'
 import { MessagePanelAssistantMessage } from './MessagePanelAssistantMessage'
 import { MessagePanelUserMessage } from './MessagePanelUserMessage'

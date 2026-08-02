@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, type CSSProperties } from 'react'
-import type { Assistant } from '@toolman/shared'
+import { isLegacyPerCourseTeachingAssistant, type Assistant } from '@toolman/shared'
 import { messageFontSizePx } from './message-settings'
 import {
   isGroupProxyReadOnlySession,
@@ -26,7 +26,12 @@ export function useChatPageAssistant(
   }, [chat.activeSession, chat.assistants])
 
   const sidebarAssistants = useMemo(
-    () => chat.assistants.filter((assistant) => !isGroupSharedMirrorAssistant(assistant)),
+    () =>
+      chat.assistants.filter(
+        (assistant) =>
+          !isGroupSharedMirrorAssistant(assistant) &&
+          !isLegacyPerCourseTeachingAssistant(assistant),
+      ),
     [chat.assistants],
   )
 

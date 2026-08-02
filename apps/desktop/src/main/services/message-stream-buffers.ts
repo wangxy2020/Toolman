@@ -197,6 +197,10 @@ export class MessageStreamBuffers {
     return blocks
   }
 
+  replacePlainText(next: string): void {
+    this.text = next
+  }
+
   plainText(): string {
     return this.text
   }

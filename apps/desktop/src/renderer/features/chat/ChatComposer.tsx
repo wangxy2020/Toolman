@@ -1,6 +1,11 @@
-import type { ContentBlock, TranslationLanguage } from '@toolman/shared'
+import {
+  resolveAssistantLibSessionTts,
+  type ContentBlock,
+  type TranslationLanguage,
+} from '@toolman/shared'
 import type { ReactNode } from 'react'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { getSharedTtsController } from '../voice/tts-controller'
 import { useAssistantTts } from '../voice/useAssistantTts'
 import type { PendingAttachment } from './chat-attachments'
 import { MessageInput } from './MessageInput'
@@ -8,6 +13,10 @@ import { MessagePanel } from './MessagePanel'
 import type { MessageSettings } from './message-settings'
 import type { QuickPhrase } from './quick-phrases'
 import type { SlashCommandItem } from './slash-commands'
+import {
+  resolveAssistantKbEnabled,
+  type AppSettings,
+} from '../settings/app-settings'
 import type { useChat } from './useChat'
 
 type ChatController = ReturnType<typeof useChat>
@@ -15,6 +24,7 @@ type ChatController = ReturnType<typeof useChat>
 interface ChatComposerAppSettings {
   webSearchEnabled: boolean
   kbEnabled: boolean
+  kbEnabledByAssistantId?: AppSettings['kbEnabledByAssistantId']
   spellCheckEnabled: boolean
 }
 
@@ -80,16 +90,34 @@ export function ChatComposer({
     return chat.assistants.find((item) => item.id === assistantId) ?? null
   }, [chat.activeSession?.assistantId, chat.assistants])
 
-  const autoSpeak = Boolean(activeAssistant?.parameters.autoSpeak)
+  const classroomTts = useMemo(
+    () => resolveAssistantLibSessionTts(chat.activeSession?.metadata),
+    [chat.activeSession?.metadata],
+  )
+  const autoSpeak = classroomTts
+    ? classroomTts.autoSpeak
+    : Boolean(activeAssistant?.parameters.autoSpeak)
+  const ttsEngine = classroomTts?.ttsEngine ?? activeAssistant?.parameters.ttsEngine
+  const ttsVoice = classroomTts?.ttsVoice ?? activeAssistant?.parameters.ttsVoice
   const { playingMessageId, playbackState, speakMessage, pause, resume, stop } =
     useAssistantTts({
       autoSpeak,
-      ttsEngine: activeAssistant?.parameters.ttsEngine,
-      ttsVoice: activeAssistant?.parameters.ttsVoice,
+      ttsEngine,
+      ttsVoice,
       sessionId: chat.activeSessionId,
       messages: chat.messages,
       onError: chat.setError,
     })
+
+  // Dismissing the chat error bar should also clear sticky TTS errors so they
+  // do not reappear after switching assistants / remounting the composer.
+  useEffect(() => {
+    if (chat.error) return
+    getSharedTtsController().clearError()
+  }, [chat.error])
+
+  const assistantId = activeAssistant?.id ?? null
+  const kbEnabled = resolveAssistantKbEnabled(appSettings, assistantId)
 
   return (
     <>
@@ -129,7 +157,7 @@ export function ChatComposer({
         defaultFilePath={systemPaths?.documents ?? systemPaths?.home ?? null}
         translationLanguages={translationLanguages}
         webSearchEnabled={appSettings.webSearchEnabled}
-        kbEnabled={appSettings.kbEnabled}
+        kbEnabled={kbEnabled}
         spellCheckEnabled={appSettings.spellCheckEnabled}
         sendShortcut={messageSettings.sendShortcut}
         onCreateSession={onCreateSession}
@@ -141,7 +169,18 @@ export function ChatComposer({
         onToggleWebSearch={() =>
           onUpdateAppSettings({ webSearchEnabled: !appSettings.webSearchEnabled })
         }
-        onToggleKb={() => onUpdateAppSettings({ kbEnabled: !appSettings.kbEnabled })}
+        onToggleKb={() => {
+          if (!assistantId) {
+            onUpdateAppSettings({ kbEnabled: !appSettings.kbEnabled })
+            return
+          }
+          onUpdateAppSettings({
+            kbEnabledByAssistantId: {
+              ...(appSettings.kbEnabledByAssistantId ?? {}),
+              [assistantId]: !kbEnabled,
+            },
+          })
+        }}
         onSend={(contentBlocks: ContentBlock[]) => {
           if (onSend) {
             void onSend(contentBlocks)

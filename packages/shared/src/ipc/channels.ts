@@ -43,6 +43,7 @@ export enum IpcChannel {
   KnowledgeDocumentDelete = 'knowledge:document:delete',
   KnowledgeDocumentReindex = 'knowledge:document:reindex',
   KnowledgeKbReindex = 'knowledge:kb:reindex',
+  KnowledgeCourseOutline = 'knowledge:course:outline',
   KnowledgeFtsRebuild = 'knowledge:fts:rebuild',
   KnowledgeSearch = 'knowledge:search',
 

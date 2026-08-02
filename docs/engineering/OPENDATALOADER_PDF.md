@@ -54,9 +54,12 @@ If `vendor/` is empty, run `pnpm vendor:odl` before install.
 
 ## Local-first document pipeline
 
-1. **PDF 解析 = OpenDataLoader** — local Java extraction (text layer, tables, reading order).
-2. **ODL Hybrid OCR** (optional) — Toolman **auto-starts** local `opendataloader-pdf-hybrid` on `localhost` when enabled in settings (first run may install a Python venv under user data).
-3. **OCR 识别** — when ODL + Hybrid still insufficient, Toolman uses the workspace **local vision model** (e.g. Ollama glm-ocr).
+Knowledge ingest / scanned PDF vectorization order:
+
+1. **ODL local** — Java extraction (text layer, tables, reading order). Fast for digital PDFs.
+2. **ODL Hybrid OCR** (when enabled) — Toolman **auto-starts** local `opendataloader-pdf-hybrid` on `localhost` for scanned PDFs (first run may install a Python venv under user data). Knowledge ingest runs Hybrid in **page batches** (with progress) rather than one opaque full-document job.
+3. **glm-ocr** — only if ODL + Hybrid still insufficient or failed (Ollama dedicated OCR model).
+4. **Other vision / LLM models** — only if glm-ocr is missing or fails.
 
 Hybrid targets a **local** server URL (default `http://localhost:5002`); do not point it at cloud APIs if you require files to stay on-device.
 

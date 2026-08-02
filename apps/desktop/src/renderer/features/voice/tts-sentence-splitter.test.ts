@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TtsSentenceSplitter } from './tts-sentence-splitter'
-import { sanitizeSpeakableText } from './sanitize-speakable-text'
+import { isSpeakableUtterance, sanitizeSpeakableText } from './sanitize-speakable-text'
 
 describe('TtsSentenceSplitter', () => {
   it('emits on Chinese sentence boundaries', () => {
@@ -8,6 +8,12 @@ describe('TtsSentenceSplitter', () => {
     expect(splitter.append('你好。')).toEqual(['你好。'])
     expect(splitter.append('世界！继续')).toEqual(['世界！'])
     expect(splitter.flush()).toEqual(['继续'])
+  })
+
+  it('keeps intensifier clusters like ？！ together', () => {
+    const splitter = new TtsSentenceSplitter()
+    expect(splitter.append('什么？！')).toEqual(['什么？！'])
+    expect(splitter.flush()).toEqual([])
   })
 
   it('emits on English punctuation with following space', () => {
@@ -35,5 +41,33 @@ describe('sanitizeSpeakableText', () => {
     expect(text).not.toContain('```')
     expect(text).toContain('文档')
     expect(text).toContain('结束。')
+  })
+
+  it('strips emoji and decorative icons', () => {
+    const text = sanitizeSpeakableText('你好 😊 世界 ✅ 继续')
+    expect(text).not.toMatch(/😊|✅/)
+    expect(text).toContain('你好')
+    expect(text).toContain('世界')
+    expect(text).toContain('继续')
+  })
+
+  it('drops punctuation-only lines', () => {
+    const text = sanitizeSpeakableText('结束。\n。\n\n！')
+    expect(text).toBe('结束。')
+  })
+})
+
+describe('isSpeakableUtterance', () => {
+  it('rejects bare punctuation', () => {
+    expect(isSpeakableUtterance('。')).toBe(false)
+    expect(isSpeakableUtterance('！')).toBe(false)
+    expect(isSpeakableUtterance('...')).toBe(false)
+    expect(isSpeakableUtterance('？！')).toBe(false)
+  })
+
+  it('accepts text with letters or digits', () => {
+    expect(isSpeakableUtterance('你好。')).toBe(true)
+    expect(isSpeakableUtterance('OK.')).toBe(true)
+    expect(isSpeakableUtterance('第1章')).toBe(true)
   })
 })

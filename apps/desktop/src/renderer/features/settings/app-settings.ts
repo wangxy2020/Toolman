@@ -65,7 +65,10 @@ export interface AppSettings {
   sendWithEnter: boolean
   webSearchEnabled: boolean
   webSearchProvider: 'duckduckgo' | 'bing' | 'google'
+  /** Legacy / fallback default when an assistant has no per-agent override. */
   kbEnabled: boolean
+  /** Per-assistant knowledge-search toggle (independent open/closed states). */
+  kbEnabledByAssistantId: Record<string, boolean>
   memoryEnabled: boolean
   memoryRetentionDays: number
   documentOcrEnabled: boolean
@@ -96,6 +99,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   webSearchEnabled: false,
   webSearchProvider: 'bing',
   kbEnabled: false,
+  kbEnabledByAssistantId: {},
   memoryEnabled: true,
   memoryRetentionDays: 30,
   documentOcrEnabled: true,
@@ -121,6 +125,30 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 
 const STORAGE_KEY = 'toolman:app-settings'
 
+function normalizeKbEnabledByAssistantId(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object') return {}
+  const next: Record<string, boolean> = {}
+  for (const [assistantId, enabled] of Object.entries(value as Record<string, unknown>)) {
+    if (!assistantId || typeof enabled !== 'boolean') continue
+    next[assistantId] = enabled
+  }
+  return next
+}
+
+/** Resolve knowledge-search toggle for a specific assistant. */
+export function resolveAssistantKbEnabled(
+  settings: {
+    kbEnabled?: boolean
+    kbEnabledByAssistantId?: Record<string, boolean> | null
+  },
+  assistantId: string | null | undefined,
+): boolean {
+  if (!assistantId) return Boolean(settings.kbEnabled)
+  const mapped = settings.kbEnabledByAssistantId?.[assistantId]
+  if (typeof mapped === 'boolean') return mapped
+  return Boolean(settings.kbEnabled)
+}
+
 export function loadAppSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -141,6 +169,7 @@ export function loadAppSettings(): AppSettings {
         parsed.pdfParserBackend === 'opendataloader' ? 'opendataloader' : 'builtin',
       odlHybrid: normalizeOdlHybridSettings(parsed.odlHybrid),
       navBarPosition: parsed.navBarPosition === 'top' ? 'left' : (parsed.navBarPosition ?? 'left'),
+      kbEnabledByAssistantId: normalizeKbEnabledByAssistantId(parsed.kbEnabledByAssistantId),
       sidebarVisibleModules: normalized.visible,
       sidebarHiddenModules: normalized.hidden,
     }

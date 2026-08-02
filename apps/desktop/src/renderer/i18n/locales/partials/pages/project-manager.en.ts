@@ -238,6 +238,22 @@ export const projectManagerPageEn = {
       blocked: 'Blocked',
       avgProgress: 'Avg progress',
     },
+    securityKpi: {
+      projects: 'Projects',
+      hazards: 'Hazards',
+      highRisk: 'High risk',
+      qcPoints: 'QC points',
+      commonDefects: 'Common defects',
+      weekInspections: 'Inspections this week',
+    },
+    securityKpiSub: {
+      projects: 'Active projects',
+      hazards: 'Open hazards to control',
+      highRisk: 'High-risk items needing attention',
+      qcPoints: 'Open quality control points',
+      commonDefects: 'Open common quality defects',
+      weekInspections: 'Scheduled / logged this week',
+    },
   },
   keyProjects: {
     loading: 'Loading key projects…',

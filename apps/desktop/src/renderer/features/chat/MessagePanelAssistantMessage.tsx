@@ -16,7 +16,7 @@ import { modelNameFromId } from './model-utils'
 import {
   formatAssistantTokens,
   formatMessageTime,
-  getMessageText,
+  getUserFacingMessageText,
 } from './message-utils'
 import { hasMessageError } from './message-error-utils'
 import { MessageErrorBanner } from './MessageErrorBanner'
@@ -81,7 +81,7 @@ export function MessagePanelAssistantMessage({
   /** Extra control after the delete action (e.g. plan confirm). */
   actionTrailing?: ReactNode
 }) {
-  const text = getMessageText(message)
+  const text = getUserFacingMessageText(message)
   const tokenLabel = formatAssistantTokens(message)
   const modelLabel = message.modelId ? modelNameFromId(message.modelId) : null
   const displayName = modelLabel ? `${assistantName} · ${modelLabel}` : assistantName

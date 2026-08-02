@@ -1,4 +1,4 @@
-import type { KnowledgeDocument } from '@toolman/shared'
+import type { KnowledgeDocument, KnowledgeIngestProgressDetail } from '@toolman/shared'
 
 export interface KnowledgeFilePanelItem {
   id: string
@@ -9,6 +9,7 @@ export interface KnowledgeFilePanelItem {
   mimeType?: string | null
   status?: KnowledgeDocument['status'] | 'pending'
   ingestProgress?: number | null
+  ingestDetail?: KnowledgeIngestProgressDetail | null
   chunkCount?: number
   errorMessage?: string | null
   absolutePath?: string | null

@@ -13541,6 +13541,7 @@ html.theme-dark .tm-msg-select {
   display: flex;
   align-items: stretch;
   overflow: hidden;
+  min-height: 38px;
   border: 1px solid var(--tm-border);
   border-radius: 6px;
   background: color-mix(in srgb, var(--tm-hover) 30%, var(--tm-bg));
@@ -13554,8 +13555,9 @@ html.theme-dark .tm-msg-select {
   background: transparent;
   color: var(--tm-text);
   font-size: 14px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  padding: 6px 12px;
+  font-family: inherit;
+  line-height: 1.4;
+  padding: 8px 12px;
   outline: none;
 }
 
@@ -13565,9 +13567,9 @@ html.theme-dark .tm-msg-select {
   border-left: 1px solid var(--tm-border);
   background: var(--tm-bg);
   color: var(--tm-text-secondary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
-  padding: 0 12px;
+  padding: 0 14px;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
 }

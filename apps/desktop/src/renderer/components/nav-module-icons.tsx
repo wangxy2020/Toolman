@@ -18,7 +18,9 @@ export function IconTranslateNav({ size = 20 }: IconProps) {
 export function IconAssistantLib({ size = 20 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="m12 3-1.9 5.8H4l4.9 3.6-1.9 5.8L12 14.6l5 5.8-1.9-5.8L20 8.8h-6.1L12 3z" />
+      <path d="M22 10 12 5 2 10l10 5 10-5Z" />
+      <path d="M6 12v5c0 1.8 2.7 3.2 6 3.2s6-1.4 6-3.2v-5" />
+      <path d="M22 10v6" />
     </svg>
   )
 }

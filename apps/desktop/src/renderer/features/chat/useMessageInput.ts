@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import type { ContentBlock } from '@toolman/shared'
 import {
   pendingAttachmentsToContentBlocks,
@@ -11,7 +11,12 @@ import { getLocalFilePaths } from '../knowledge/knowledge-file-paths'
 import { useI18n } from '../../i18n/useI18n'
 import type { MessageInputProps } from './message-input-types'
 import { INPUT_MIN_HEIGHT } from './message-input-types'
-import { buildMessageInputPlaceholder } from './message-input-utils'
+import {
+  buildMessageInputPlaceholder,
+  POST_SEND_INPUT_SUPPRESS_MS,
+  readComposerText,
+  shouldIgnoreComposerInput,
+} from './message-input-utils'
 import { useMessageInputAttachments } from './message-input-attachments'
 import { useMessageInputSlashCommands } from './message-input-commands'
 import { usePhraseMenuKeyboard, useSlashMenuKeyboard } from './message-input-menu-effects'
@@ -62,8 +67,17 @@ export function useMessageInput(props: MessageInputProps) {
   const [quickPhrases, setQuickPhrases] = useState<QuickPhrase[]>([])
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [voiceHint, setVoiceHint] = useState<string | null>(null)
+  const suppressNativeInputUntilRef = useRef(0)
+  const clearTimersRef = useRef<number[]>([])
   const { translate, translating } = useTranslate()
   const languages = normalizeTranslationLanguages(translationLanguages)
+
+  useEffect(() => {
+    return () => {
+      for (const timer of clearTimersRef.current) clearTimeout(timer)
+      clearTimersRef.current = []
+    }
+  }, [])
 
   const { slashCommands, localizedSlashCommands, phraseMenuItems } = useMessageInputMenus({
     toolbarMode,
@@ -95,10 +109,25 @@ export function useMessageInput(props: MessageInputProps) {
     [createHandleSystemVoiceInput],
   )
 
-  const clearInput = useCallback(() => {
+  const forceComposerEmpty = useCallback(() => {
     setText('')
+    const node = textareaRef.current
+    if (node && node.value) node.value = ''
+  }, [textareaRef])
+
+  const clearInput = useCallback(() => {
+    for (const timer of clearTimersRef.current) clearTimeout(timer)
+    clearTimersRef.current = []
     setPendingAttachments([])
-  }, [])
+    suppressNativeInputUntilRef.current = Date.now() + POST_SEND_INPUT_SUPPRESS_MS
+    forceComposerEmpty()
+    // System dictation (Fn / Win+H) often commits a final insert after Enter/send.
+    clearTimersRef.current = [
+      window.setTimeout(forceComposerEmpty, 0),
+      window.setTimeout(forceComposerEmpty, 80),
+      window.setTimeout(forceComposerEmpty, 200),
+    ]
+  }, [forceComposerEmpty])
 
   const sendWithOptions = useCallback(
     (contentBlocks: ContentBlock[]) => {
@@ -107,13 +136,26 @@ export function useMessageInput(props: MessageInputProps) {
     [onSend],
   )
 
-  const canSend = Boolean(text.trim() || pendingAttachments.length > 0)
+  const liveText = readComposerText(textareaRef.current, text)
+  const canSend = Boolean(liveText.trim() || pendingAttachments.length > 0)
+
+  const handleTextChange = useCallback(
+    (value: string) => {
+      if (shouldIgnoreComposerInput(suppressNativeInputUntilRef.current)) {
+        forceComposerEmpty()
+        return
+      }
+      setText(value)
+    },
+    [forceComposerEmpty],
+  )
 
   const handleSubmit = () => {
-    if (!canSend || disabled) return
-    sendWithOptions(pendingAttachmentsToContentBlocks(pendingAttachments, text))
-    setText('')
-    setPendingAttachments([])
+    if (disabled) return
+    const composerText = readComposerText(textareaRef.current, text)
+    if (!composerText.trim() && pendingAttachments.length === 0) return
+    sendWithOptions(pendingAttachmentsToContentBlocks(pendingAttachments, composerText))
+    clearInput()
   }
 
   const handleTranslate = async () => {
@@ -229,6 +271,7 @@ export function useMessageInput(props: MessageInputProps) {
     toolbarMode,
     text,
     setText,
+    handleTextChange,
     fieldHeight,
     slashMenuOpen,
     setSlashMenuOpen,

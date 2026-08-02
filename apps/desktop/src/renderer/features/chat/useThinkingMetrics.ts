@@ -37,11 +37,27 @@ function maxDuration(
   return max
 }
 
+/** Pure helper — exported for unit tests. */
+export function resolveThinkingDurationSeconds(options: {
+  active: boolean
+  startedAtMs: number | null
+  storedDurationSeconds: number | null
+  frozenDurationSeconds: number | null
+  nowMs: number
+}): number {
+  const { active, startedAtMs, storedDurationSeconds, frozenDurationSeconds, nowMs } = options
+  if (active && startedAtMs != null) {
+    const live = Math.max(0, Math.round((nowMs - startedAtMs) / 1000))
+    return maxDuration(frozenDurationSeconds, storedDurationSeconds, live) ?? 0
+  }
+  // Finished / historical: never recompute Date.now() - startedAtMs (that grows forever).
+  return maxDuration(storedDurationSeconds, frozenDurationSeconds) ?? 0
+}
+
 /**
  * Live thinking timer. Prefer main-process `startedAtMs` so the displayed duration is
- * wall-clock thinking time, not how long the thinking block has been painted.
- * Displayed seconds are monotonic — a shorter finalized value must not overwrite a
- * longer live wall-clock reading (e.g. after a mid-stream phase reset).
+ * wall-clock thinking time while streaming. Once finished, only the stored/frozen
+ * durationSeconds is shown — never "seconds since startedAtMs".
  */
 export function useThinkingMetrics(streaming: boolean, blocks: ContentBlock[]) {
   const { hasThinking, startedAtMs, storedDurationSeconds } = readThinkingMeta(blocks)
@@ -66,30 +82,47 @@ export function useThinkingMetrics(streaming: boolean, blocks: ContentBlock[]) {
     if (startedAtMs != null) {
       startRef.current =
         startRef.current === null ? startedAtMs : Math.min(startRef.current, startedAtMs)
-    } else if (startRef.current === null) {
+    } else if (startRef.current === null && active) {
       startRef.current = Date.now()
     }
 
-    const elapsedFromStart =
-      startRef.current !== null
-        ? Math.max(0, Math.round((Date.now() - startRef.current) / 1000))
-        : null
-
-    const next = maxDuration(frozenDurationRef.current, storedDurationSeconds, elapsedFromStart)
-    if (next !== null) {
-      frozenDurationRef.current = next
-      setDurationSeconds(next)
+    if (!active) {
+      // Stream just ended but duration not persisted yet: freeze once from the anchor.
+      if (
+        frozenDurationRef.current === null &&
+        storedDurationSeconds == null &&
+        streaming &&
+        startRef.current !== null
+      ) {
+        frozenDurationRef.current = Math.max(
+          0,
+          Math.round((Date.now() - startRef.current) / 1000),
+        )
+      }
+      const finished = resolveThinkingDurationSeconds({
+        active: false,
+        startedAtMs: startRef.current,
+        storedDurationSeconds,
+        frozenDurationSeconds: frozenDurationRef.current,
+        nowMs: Date.now(),
+      })
+      if (finished > 0 || storedDurationSeconds != null || frozenDurationRef.current != null) {
+        frozenDurationRef.current = finished
+        setDurationSeconds(finished)
+      }
+      return
     }
 
-    if (!active) return
-
     const tick = () => {
-      if (startRef.current === null) return
-      const elapsed = Math.max(0, Math.round((Date.now() - startRef.current) / 1000))
-      const grown = maxDuration(frozenDurationRef.current, storedDurationSeconds, elapsed)
-      if (grown === null) return
-      frozenDurationRef.current = grown
-      setDurationSeconds(grown)
+      const next = resolveThinkingDurationSeconds({
+        active: true,
+        startedAtMs: startRef.current,
+        storedDurationSeconds,
+        frozenDurationSeconds: frozenDurationRef.current,
+        nowMs: Date.now(),
+      })
+      frozenDurationRef.current = next
+      setDurationSeconds(next)
     }
     tick()
     const id = window.setInterval(tick, 200)

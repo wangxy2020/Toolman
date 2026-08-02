@@ -31,6 +31,7 @@ import { buildChatPdfOcrOptions, buildKnowledgeParseOptions } from './knowledge-
 import { isDocumentOcrEnabled, resolveOdlHybridSettings, resolvePdfParserBackend, toOdlHybridParseConfig } from './runtime-app-settings.service'
 import { clearHybridServerProbeCache, isHybridServerReachable } from './hybrid-server-probe'
 import { ensureOdlHybridServerRunning } from './odl-hybrid-server-manager.service'
+import { assertIngestNotCancelled } from './knowledge-ingest-manager.service'
 import { withTimeout } from '../utils/async-timeout'
 
 export type { DocumentParseProfile, DocumentParseRequest, DocumentParseResult }
@@ -70,6 +71,11 @@ export interface OdlPreviewParseMeta {
 const DEFAULT_ODL_TIMEOUT_MS = 5 * 60 * 1000
 /** Full-document ODL + Hybrid OCR for scanned PDFs (translation preview). */
 const ODL_HYBRID_PARSE_TIMEOUT_MS = 45 * 60 * 1000
+/** Knowledge ingest Hybrid OCR pages per JVM batch (progress + cancel granularity). */
+const KNOWLEDGE_HYBRID_BATCH_SIZE = 16
+/** Floor / ceiling for each knowledge Hybrid batch. */
+const KNOWLEDGE_HYBRID_BATCH_TIMEOUT_MIN_MS = 3 * 60 * 1000
+const KNOWLEDGE_HYBRID_BATCH_TIMEOUT_MAX_MS = 15 * 60 * 1000
 /** Parallel vision-OCR pages per backfill wave (Ollama glm-ocr). */
 const ODL_PREVIEW_OCR_CONCURRENCY = 2
 
@@ -288,7 +294,10 @@ async function runOdlHybridParseWithFallback(
         await runOdlParse(
           request,
           timeoutMs,
-          toOdlHybridParseConfig({ ...settings, backend }),
+          {
+            ...toOdlHybridParseConfig({ ...settings, backend }),
+            timeoutMs,
+          },
         ),
       )
       const rawNonEmpty = hybrid.pages.filter(
@@ -316,7 +325,7 @@ async function runOdlHybridParseWithFallback(
 async function parseOdlWithOptionalHybridRetry(
   request: OdlParseRequest,
   timeoutMs: number,
-  options?: { skipLocalWarm?: boolean },
+  options?: { skipLocalWarm?: boolean; skipHybrid?: boolean },
 ): Promise<DocumentParseResult> {
   let local: DocumentParseResult | null = null
 
@@ -328,6 +337,19 @@ async function parseOdlWithOptionalHybridRetry(
     odlPreviewScanDetected.add(request.filePath)
   } else {
     odlPreviewScanDetected.add(request.filePath)
+  }
+
+  // Optional bypass for callers that want local JVM text only (not used by knowledge ingest).
+  if (options?.skipHybrid) {
+    return (
+      local ?? {
+        backend: 'opendataloader',
+        totalPages: 1,
+        plainText: '',
+        markdown: '',
+        pages: [],
+      }
+    )
   }
 
   const hybridSettings = resolveOdlHybridSettings()
@@ -783,30 +805,153 @@ export async function parseIngestDocumentFile(options: {
   return parseFile(options.filePath, options.parseOptions)
 }
 
-/** ODL local + optional hybrid for knowledge ingest. Returns null when still insufficient (vision OCR). */
+/**
+ * Scanned knowledge PDFs: Hybrid OCR in page batches so UI progress moves and cancel works.
+ * Digital PDFs never reach this path (local ODL already returned usable text).
+ */
+async function parseKnowledgeIngestHybridBatches(options: {
+  filePath: string
+  parseTimeoutMs: number
+  documentId?: string
+  onParseProgress?: (currentPage: number, totalPages: number, inProgress?: boolean) => void
+}): Promise<DocumentParseResult | null> {
+  const { filePath, parseTimeoutMs, documentId, onParseProgress } = options
+  const settings = resolveOdlHybridSettings()
+  if (!settings.enabled) return null
+
+  const hybridUrl = settings.url.trim()
+  if (!(await isHybridServerAvailable(hybridUrl))) {
+    console.warn(
+      `[knowledge-ingest] ODL Hybrid server unavailable at ${hybridUrl || '(empty url)'}; skipping Hybrid`,
+    )
+    return null
+  }
+
+  const totalPages = await resolvePdfTotalPages(filePath)
+  const batchCount = Math.max(1, Math.ceil(totalPages / KNOWLEDGE_HYBRID_BATCH_SIZE))
+  const batchTimeoutMs = Math.min(
+    KNOWLEDGE_HYBRID_BATCH_TIMEOUT_MAX_MS,
+    Math.max(
+      KNOWLEDGE_HYBRID_BATCH_TIMEOUT_MIN_MS,
+      Math.floor(parseTimeoutMs / batchCount),
+    ),
+  )
+
+  console.info(
+    `[knowledge-ingest] ODL+Hybrid batch OCR for ${basename(filePath)} (${totalPages} pages, batch=${KNOWLEDGE_HYBRID_BATCH_SIZE})`,
+  )
+  onParseProgress?.(0, totalPages, true)
+
+  const pageByNumber = new Map<number, DocumentParseResult['pages'][number]>()
+  for (let start = 1; start <= totalPages; start += KNOWLEDGE_HYBRID_BATCH_SIZE) {
+    if (documentId) assertIngestNotCancelled(documentId)
+    const end = Math.min(totalPages, start + KNOWLEDGE_HYBRID_BATCH_SIZE - 1)
+    onParseProgress?.(start - 1, totalPages, true)
+
+    const batch = await runOdlHybridParseWithFallback(
+      {
+        filePath,
+        profile: 'knowledge',
+        pageRange: { start, end },
+      },
+      batchTimeoutMs,
+      settings,
+    )
+    if (batch) {
+      const normalized = renormalizeOdlPageRangeResult(batch, { start, end }, totalPages)
+      for (const page of normalized.pages) {
+        const text = page.text?.trim() ?? ''
+        const markdown = page.markdown?.trim() ?? text
+        if (text || markdown) {
+          pageByNumber.set(page.pageNumber, page)
+        }
+      }
+    } else {
+      console.warn(
+        `[knowledge-ingest] ODL+Hybrid batch ${start}-${end}/${totalPages} returned no usable text`,
+      )
+    }
+
+    onParseProgress?.(end, totalPages, false)
+    console.info(
+      `[knowledge-ingest] ODL+Hybrid batch ${end}/${totalPages} for ${basename(filePath)} (${pageByNumber.size} pages with text)`,
+    )
+  }
+
+  if (pageByNumber.size === 0) return null
+
+  return normalizeOdlDocumentChannels({
+    backend: 'opendataloader',
+    totalPages,
+    pages: [...pageByNumber.values()].sort((left, right) => left.pageNumber - right.pageNumber),
+    plainText: '',
+    markdown: '',
+  })
+}
+
+/**
+ * Knowledge ingest primary path: ODL local → ODL Hybrid batches (when enabled).
+ * Returns null only when ODL/Hybrid is insufficient or failed — caller then uses
+ * glm-ocr, and only after that other vision models.
+ */
 export async function tryParseIngestWithOdl(options: {
   filePath: string
   workspaceId: string
   kbId: string
   parseTimeoutMs: number
+  documentId?: string
+  onParseProgress?: (currentPage: number, totalPages: number, inProgress?: boolean) => void
 }): Promise<ParsedDocument | null> {
-  const { filePath, parseTimeoutMs } = options
+  const { filePath, parseTimeoutMs, documentId, onParseProgress } = options
   if (!shouldUseOpenDataLoaderForPdf(filePath)) return null
 
+  const hybridEnabled = resolveOdlHybridSettings().enabled
+  console.info(
+    `[knowledge-ingest] ODL${hybridEnabled ? '+Hybrid' : ''} parsing ${basename(filePath)}`,
+  )
+
   try {
-    const result = await parseOdlWithOptionalHybridRetry(
+    // Local JVM first — digital PDFs finish here without Hybrid.
+    const local = await parseOdlWithOptionalHybridRetry(
       {
         filePath,
         profile: 'knowledge',
       },
-      parseTimeoutMs,
+      Math.min(parseTimeoutMs, DEFAULT_ODL_TIMEOUT_MS),
+      { skipHybrid: true },
     )
-    if (result.plainText.trim() && !isOdlIngestResultInsufficient(result)) {
-      return toParsedDocument(filePath, result.plainText)
+    if (local.plainText.trim() && !isOdlIngestResultInsufficient(local)) {
+      console.info(
+        `[knowledge-ingest] ODL succeeded for ${basename(filePath)} (${local.totalPages} pages)`,
+      )
+      return toParsedDocument(filePath, local.plainText)
     }
+
+    if (!hybridEnabled) {
+      console.info(
+        `[knowledge-ingest] ODL text insufficient for ${basename(filePath)}; falling back to glm-ocr`,
+      )
+      return null
+    }
+
+    const hybrid = await parseKnowledgeIngestHybridBatches({
+      filePath,
+      parseTimeoutMs,
+      documentId,
+      onParseProgress,
+    })
+    if (hybrid?.plainText.trim() && !isOdlIngestResultInsufficient(hybrid)) {
+      console.info(
+        `[knowledge-ingest] ODL+Hybrid succeeded for ${basename(filePath)} (${hybrid.totalPages} pages)`,
+      )
+      return toParsedDocument(filePath, hybrid.plainText)
+    }
+    console.info(
+      `[knowledge-ingest] ODL+Hybrid text insufficient for ${basename(filePath)}; falling back to glm-ocr`,
+    )
   } catch (error) {
     console.warn(
-      `[knowledge-ingest] ODL failed for ${basename(filePath)}:`,
+      `[knowledge-ingest] ODL${hybridEnabled ? '+Hybrid' : ''} failed for ${basename(filePath)}:`,
       error instanceof Error ? error.message : error,
     )
   }

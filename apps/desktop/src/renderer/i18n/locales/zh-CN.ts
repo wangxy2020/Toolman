@@ -10,6 +10,7 @@ import {
   projectManagerPageZhCN,
   toolApprovalPageZhCN,
   translationPageZhCN,
+  assistantLibPageZhCN,
 } from './partials/pages'
 import { coreZhCN } from './partials/core'
 
@@ -26,4 +27,5 @@ export const zhCN = {
   toolApprovalPage: toolApprovalPageZhCN,
   projectManagerPage: projectManagerPageZhCN,
   translationPage: translationPageZhCN,
+  assistantLibPage: assistantLibPageZhCN,
 } as const

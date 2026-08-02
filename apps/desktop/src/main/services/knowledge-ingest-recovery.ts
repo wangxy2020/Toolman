@@ -70,13 +70,14 @@ export function recoverInterruptedIngestJobsOnStartup(): number {
   return recovered
 }
 
-export function reconcileProcessingDocumentsWithoutIngestJob(): number {
+export function reconcileProcessingDocumentsWithoutIngestJob(kbId?: string): number {
   const docRepo = getDocumentRepository()
   const kbRepo = getKnowledgeBaseRepository()
   let fixed = 0
   const message = '索引任务状态异常，请重新向量化'
 
   for (const kb of kbRepo.listAllActive()) {
+    if (kbId && kb.id !== kbId) continue
     for (const doc of docRepo.listByKb(kb.id)) {
       if (!doc.status || !ACTIVE_INGEST_STAGES.has(doc.status)) continue
       if (docRepo.findIngestJobByDocumentId(doc.id)) continue

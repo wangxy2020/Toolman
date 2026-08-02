@@ -1,4 +1,7 @@
-const SENTENCE_END = /([。！？!?；;…]|\.(?=\s|$)|!(?=\s|$)|(?:\?(?=\s|$)))/
+/** Chinese / fullwidth clusters, or a single English terminator at a boundary. */
+const SENTENCE_END =
+  /([。！？；…]+|[!?]+(?=\s|$)|(?:\.(?=\s|$)))/
+
 const FORCE_BREAK_CHARS = 80
 
 /**

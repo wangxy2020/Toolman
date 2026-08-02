@@ -1,5 +1,6 @@
+import { existsSync } from 'node:fs'
 import type { DocumentRepository } from '@toolman/db'
-import type { KnowledgeDocument } from '@toolman/shared'
+import type { KnowledgeDocument, KnowledgeIngestProgressDetail } from '@toolman/shared'
 import { isIgnoredKnowledgeIngestFile } from '@toolman/knowledge'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { broadcastKnowledgeIngestEvent } from './knowledge-ingest-broadcast'
@@ -29,6 +30,9 @@ export const ACTIVE_INGEST_STAGES = new Set([
 
 export const IN_FLIGHT_INGEST_STAGES = new Set(['parsing', 'chunking', 'embedding', 'indexing'])
 
+/** Last page/chunk counters per document — re-attached when stage pulses omit detail. */
+const lastIngestProgressDetailByDoc = new Map<string, KnowledgeIngestProgressDetail>()
+
 export interface IngestFileAtPathOptions {
   workspaceId: string
   kbId: string
@@ -54,6 +58,7 @@ export function emitIngestStage(options: {
   documentId: string
   stage: KnowledgeDocument['status']
   progress?: number
+  progressDetail?: KnowledgeIngestProgressDetail | null
   errorMessage?: string | null
 }) {
   broadcastKnowledgeIngestEvent({
@@ -63,6 +68,7 @@ export function emitIngestStage(options: {
     documentId: options.documentId,
     stage: options.stage,
     progress: options.progress,
+    ...(options.progressDetail !== undefined ? { progressDetail: options.progressDetail } : {}),
     ...(options.errorMessage !== undefined ? { errorMessage: options.errorMessage } : {}),
   })
 }
@@ -76,6 +82,7 @@ export function updateDocumentStage(
     stage: KnowledgeDocument['status']
     errorMessage?: string | null
     progress?: number
+    progressDetail?: KnowledgeIngestProgressDetail | null
     patch?: Parameters<DocumentRepository['update']>[2]
   },
 ) {
@@ -113,28 +120,71 @@ export function updateDocumentStage(
           : null
         : undefined,
   })
+
+  if (options.stage === 'ready' || options.stage === 'failed') {
+    lastIngestProgressDetailByDoc.delete(options.documentId)
+  } else if (options.progressDetail) {
+    lastIngestProgressDetailByDoc.set(options.documentId, options.progressDetail)
+  } else if (options.progressDetail === null) {
+    lastIngestProgressDetailByDoc.delete(options.documentId)
+  }
+
+  const progressDetail =
+    options.stage === 'ready' || options.stage === 'failed'
+      ? null
+      : options.progressDetail !== undefined
+        ? options.progressDetail
+        : lastIngestProgressDetailByDoc.get(options.documentId)
+
   emitIngestStage({
     workspaceId: options.workspaceId,
     kbId: options.kbId,
     documentId: options.documentId,
     stage: options.stage,
     progress: options.progress ?? STAGE_PROGRESS[options.stage] ?? 0,
+    ...(progressDetail !== undefined ? { progressDetail } : {}),
     errorMessage: options.errorMessage,
   })
 }
 
-const PARSING_PROGRESS_MAX = 39
+/** Soft ceiling while waiting on parsers that do not report page progress (below embedding=65). */
+const PARSING_PROGRESS_MAX = 60
+/**
+ * Page-progress band for ODL Hybrid batches and vision OCR.
+ * Tops out just below embedding (65) so the bar keeps moving during long scans.
+ */
+const OCR_PROGRESS_MAX = 64
 
-/** Slow heartbeat while ODL/Hybrid or other non-OCR parsers run (parsing band 20–39). */
+/** Slow heartbeat while ODL/Hybrid or other non-OCR parsers run (parsing band 20–60). */
 export function createParsingProgressPulse(
   repo: DocumentRepository,
-  ctx: { workspaceId: string; kbId: string; documentId: string },
+  ctx: { workspaceId: string; kbId: string; documentId: string; filePath?: string },
   intervalMs = 3000,
 ): () => void {
   let progress = STAGE_PROGRESS.parsing
+  let ticksAtCeiling = 0
   const timer = setInterval(() => {
-    if (progress >= PARSING_PROGRESS_MAX) return
-    progress += 1
+    if (ctx.filePath && !existsSync(ctx.filePath)) {
+      updateDocumentStage(repo, {
+        ...ctx,
+        stage: 'failed',
+        errorMessage: '源文件已丢失或被删除，无法继续解析',
+        progress: 0,
+      })
+      return
+    }
+    if (progress >= PARSING_PROGRESS_MAX) {
+      ticksAtCeiling += 1
+      // Keep refreshing so the UI does not look frozen during long OCR.
+      updateDocumentStage(repo, { ...ctx, stage: 'parsing', progress: PARSING_PROGRESS_MAX })
+      return
+    }
+    // Crawl faster early, then slower so large OCR jobs still show movement past ~39%.
+    ticksAtCeiling += 1
+    const stepEvery = progress < 40 ? 1 : progress < 50 ? 2 : 3
+    if (ticksAtCeiling % stepEvery === 0) {
+      progress += 1
+    }
     updateDocumentStage(repo, { ...ctx, stage: 'parsing', progress })
   }, intervalMs)
   return () => clearInterval(timer)
@@ -147,18 +197,27 @@ export function buildIngestProgressHandlers(
   return {
     onOcrProgress: (currentPage: number, totalPages: number, inProgress?: boolean) => {
       if (totalPages <= 0) return
-      // parsing band: 20–39. Show movement as soon as OCR starts (not only after page 1 finishes).
+      // parsing band: 20–64 (Hybrid batches / vision OCR). Move as soon as work starts.
       const completedRatio = currentPage / totalPages
       const workingBoost = inProgress && currentPage < totalPages ? 0.5 / totalPages : 0
+      const span = OCR_PROGRESS_MAX - STAGE_PROGRESS.parsing
       const progress = Math.min(
-        PARSING_PROGRESS_MAX,
+        OCR_PROGRESS_MAX,
         STAGE_PROGRESS.parsing +
-          Math.max(inProgress || currentPage > 0 ? 1 : 0, Math.floor((completedRatio + workingBoost) * 19)),
+          Math.max(
+            inProgress || currentPage > 0 ? 1 : 0,
+            Math.floor((completedRatio + workingBoost) * span),
+          ),
       )
       updateDocumentStage(repo, {
         ...ctx,
         stage: 'parsing',
         progress,
+        progressDetail: {
+          unit: 'page',
+          current: Math.min(totalPages, Math.max(0, currentPage)),
+          total: totalPages,
+        },
       })
     },
     onEmbedProgress: (completed: number, total: number) => {
@@ -167,6 +226,11 @@ export function buildIngestProgressHandlers(
         ...ctx,
         stage: 'embedding',
         progress: 65 + Math.floor((completed / total) * 19),
+        progressDetail: {
+          unit: 'chunk',
+          current: Math.min(total, Math.max(0, completed)),
+          total,
+        },
       })
     },
   }

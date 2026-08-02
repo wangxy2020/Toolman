@@ -41,17 +41,34 @@ interface ResolvedOcrVisionModel {
   modelId: string
 }
 
+type OcrModelResolveOptions = {
+  /** Only dedicated OCR models such as glm-ocr. */
+  ocrOnly?: boolean
+  /** Skip models already tried (e.g. after glm-ocr failed). */
+  excludeModelIds?: string[]
+}
+
 const ocrVisionModelCache = new Map<string, ResolvedOcrVisionModel | null>()
+
+function cacheKey(
+  workspaceId: string,
+  kbId: string | undefined,
+  options?: OcrModelResolveOptions,
+): string {
+  const exclude = (options?.excludeModelIds ?? []).slice().sort().join(',')
+  return `${workspaceId}::${kbId ?? ''}::ocrOnly=${options?.ocrOnly ? 1 : 0}::ex=${exclude}`
+}
 
 function getCachedOcrVisionModel(
   workspaceId: string,
   kbId?: string,
+  options?: OcrModelResolveOptions,
 ): ResolvedOcrVisionModel | null {
-  const key = `${workspaceId}::${kbId ?? ''}`
+  const key = cacheKey(workspaceId, kbId, options)
   if (ocrVisionModelCache.has(key)) {
     return ocrVisionModelCache.get(key) ?? null
   }
-  const resolved = resolveOcrVisionModelUncached(workspaceId, kbId)
+  const resolved = resolveOcrVisionModelUncached(workspaceId, kbId, options)
   ocrVisionModelCache.set(key, resolved)
   return resolved
 }
@@ -99,8 +116,12 @@ export function pickOcrVisionModelId(models: ProviderModel[]): string | null {
 function resolveOcrVisionModelUncached(
   workspaceId: string,
   kbId?: string,
+  options?: OcrModelResolveOptions,
 ): ResolvedOcrVisionModel | null {
   let preferredProviderId: string | null = null
+  const exclude = new Set(
+    (options?.excludeModelIds ?? []).map((id) => id.trim().toLowerCase()).filter(Boolean),
+  )
 
   if (kbId) {
     const kb = getKnowledgeBaseRepository().findRowById(kbId, workspaceId)
@@ -118,12 +139,12 @@ function resolveOcrVisionModelUncached(
     if (!row || !row.isEnabled || row.workspaceId !== workspaceId) return null
     const config = getProviderConfig(providerId)
     if (!config) return null
-    const models = (JSON.parse(row.modelsJson) as ProviderModel[]).map((model) =>
-      enrichProviderModel(model),
-    )
+    const models = (JSON.parse(row.modelsJson) as ProviderModel[])
+      .map((model) => enrichProviderModel(model))
+      .filter((model) => !exclude.has(model.id.trim().toLowerCase()))
     const modelId = preferOcrOnly
       ? models.find((model) => isVisionModel(model) && isOcrVisionModelId(model.id))?.id ?? null
-      : pickOcrVisionModelId(models)
+      : pickOcrVisionModelId(models.filter((model) => !isOcrVisionModelId(model.id)))
     if (!modelId) return null
     return { providerId, providerType: config.type, modelId }
   }
@@ -134,13 +155,19 @@ function resolveOcrVisionModelUncached(
     ...providerList.map((provider) => provider.id).filter((id) => id !== preferredProviderId),
   ]
 
-  // Pass 1: dedicated OCR models (glm-ocr) on preferred provider, then others.
+  if (options?.ocrOnly) {
+    for (const providerId of orderedProviderIds) {
+      const resolved = tryProvider(providerId, true)
+      if (resolved) return resolved
+    }
+    return null
+  }
+
+  // Dedicated OCR models (glm-ocr) first, then other vision models.
   for (const providerId of orderedProviderIds) {
     const resolved = tryProvider(providerId, true)
     if (resolved) return resolved
   }
-
-  // Pass 2: any suitable vision model.
   for (const providerId of orderedProviderIds) {
     const resolved = tryProvider(providerId, false)
     if (resolved) return resolved
@@ -258,24 +285,16 @@ async function recognizeWithOllamaNative(
   return text
 }
 
-async function recognizeImageBuffer(
+async function recognizeWithResolvedModel(
+  resolved: ResolvedOcrVisionModel,
   buffer: Buffer | Uint8Array | ArrayBuffer,
   mimeType: string,
-  workspaceId: string,
-  kbId?: string,
   options?: {
     pageNumber?: number
     totalPages?: number
     timeoutMs?: number
   },
 ): Promise<string> {
-  const resolved = getCachedOcrVisionModel(workspaceId, kbId)
-  if (!resolved) {
-    throw new Error(
-      '未找到可用的 OCR / 视觉模型。请安装 glm-ocr:latest（ollama pull glm-ocr:latest），在知识库「文档处理」中选择 Ollama，并在设置中开启「文档 OCR 识别」。',
-    )
-  }
-
   const config = getProviderConfig(resolved.providerId)
   if (!config) {
     throw new Error('OCR Provider 不可用或已禁用')
@@ -283,13 +302,8 @@ async function recognizeImageBuffer(
 
   const timeoutMs = options?.timeoutMs ?? OCR_PAGE_TIMEOUT_MS
 
-  // Ollama OCR models (glm-ocr): always use native images[] API with raw base64.
-  if (resolved.providerType === 'ollama' && isOcrVisionModelId(resolved.modelId)) {
-    return recognizeWithOllamaNative(config, resolved.modelId, buffer, timeoutMs)
-  }
-
+  // Ollama OCR / VL models: native images[] API with raw base64.
   if (resolved.providerType === 'ollama') {
-    // Other Ollama vision models also prefer native images[] over OpenAI data-URLs.
     return recognizeWithOllamaNative(config, resolved.modelId, buffer, timeoutMs)
   }
 
@@ -327,6 +341,49 @@ async function recognizeImageBuffer(
     throw new Error('视觉模型未返回可识别的文字内容')
   }
   return text
+}
+
+/**
+ * Fallback order for page OCR after ODL/Hybrid:
+ * 1) dedicated glm-ocr
+ * 2) other vision / large multimodal models
+ */
+async function recognizeImageBuffer(
+  buffer: Buffer | Uint8Array | ArrayBuffer,
+  mimeType: string,
+  workspaceId: string,
+  kbId?: string,
+  options?: {
+    pageNumber?: number
+    totalPages?: number
+    timeoutMs?: number
+  },
+): Promise<string> {
+  const glmOcr = getCachedOcrVisionModel(workspaceId, kbId, { ocrOnly: true })
+  if (glmOcr) {
+    try {
+      return await recognizeWithResolvedModel(glmOcr, buffer, mimeType, options)
+    } catch (error) {
+      console.warn(
+        `[document-ocr] glm-ocr failed (${glmOcr.modelId}); falling back to other vision models:`,
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
+
+  const fallback = getCachedOcrVisionModel(workspaceId, kbId, {
+    ocrOnly: false,
+    excludeModelIds: glmOcr ? [glmOcr.modelId] : [],
+  })
+  if (!fallback) {
+    throw new Error(
+      glmOcr
+        ? `glm-ocr（${glmOcr.modelId}）识别失败，且未找到其他可用视觉模型。`
+        : '未找到可用的 OCR / 视觉模型。请安装 glm-ocr:latest（ollama pull glm-ocr:latest），在知识库「文档处理」中选择 Ollama，并在设置中开启「文档 OCR 识别」。',
+    )
+  }
+
+  return recognizeWithResolvedModel(fallback, buffer, mimeType, options)
 }
 
 export async function ocrImageBuffer(

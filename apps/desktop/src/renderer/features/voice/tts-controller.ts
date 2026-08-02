@@ -134,16 +134,31 @@ export class TtsController {
     this.queue.resume()
   }
 
+  /** Clear sticky TTS errors (e.g. user dismissed the chat error bar). */
+  clearError(): void {
+    this.lastError = null
+    const fallback =
+      typeof (this.provider as FallbackTtsProvider).clearLastResult === 'function'
+        ? (this.provider as FallbackTtsProvider)
+        : null
+    fallback?.clearLastResult()
+    this.emit()
+  }
+
   stop(): void {
     this.splitter.reset()
     this.streamMessageId = null
     this.fedLength = 0
     this.playingMessageId = null
     this.playbackState = 'idle'
-    // Clearing intentional stop errors so the chat error bar does not show
-    // "Audio playback failed" from media element teardown.
-    this.lastError = null
     this.queue.stop()
+    // Clear after queue.stop(): onStateChange('idle') must not resurrect a stale fallback error.
+    this.lastError = null
+    const fallback =
+      typeof (this.provider as FallbackTtsProvider).clearLastResult === 'function'
+        ? (this.provider as FallbackTtsProvider)
+        : null
+    fallback?.clearLastResult()
     this.emit()
   }
 
@@ -158,12 +173,12 @@ export class TtsController {
       const result = fallback?.getLastResult()
       if (result) {
         this.activeEngine = result.engine
-        if (result.fellBack) {
-          this.lastError =
-            result.error ??
-            'Edge 语音合成失败，已回退到系统语音（音色设置不会生效，请检查网络）'
-        } else if (state === 'playing') {
-          this.lastError = null
+        // Only surface fallback warnings while actively playing — never on idle/stop.
+        if (state === 'playing') {
+          this.lastError = result.fellBack
+            ? (result.error ??
+              'Edge 语音合成失败，已回退到系统语音（音色设置不会生效，请检查网络）')
+            : null
         }
       } else {
         this.activeEngine = provider.id

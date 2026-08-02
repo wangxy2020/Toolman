@@ -7,6 +7,7 @@ import { ChatPageCommunityView } from './ChatPageCommunityView'
 import { ChatPageProjectsView } from './ChatPageProjectsView'
 import { ChatPageModuleView } from './ChatPageModuleView'
 import { ChatPageTranslateView } from './ChatPageTranslateView'
+import { ChatPageAssistantLibView } from './ChatPageAssistantLibView'
 import { ChatPageSettingsView } from './ChatPageSettingsView'
 
 type ChatPageMainContentProps = Pick<
@@ -139,6 +140,32 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
         translationLanguages={props.translationLanguages}
         notes={props.notes}
         setActiveView={props.setActiveView}
+      />
+    )
+  }
+
+  if (activeView === 'assistant-lib') {
+    return (
+      <ChatPageAssistantLibView
+        workspaceId={props.workspaceId}
+        chat={props.chat}
+        messageSettings={props.messageSettings}
+        defaultModelId={props.defaultModelId}
+        translationLanguages={props.translationLanguages}
+        groupProxyReadOnly={props.groupProxyReadOnly}
+        appSettings={props.appSettings}
+        systemPaths={props.systemPaths}
+        agentPrefillText={props.agentPrefillText}
+        agentPrefillAttachments={props.agentPrefillAttachments}
+        chatPrefillRevision={props.chatPrefillRevision}
+        handleEditUserMessage={props.handleEditUserMessage}
+        handlePrefillConsumed={props.handlePrefillConsumed}
+        updateAppSettings={props.updateAppSettings}
+        notes={props.notes}
+        setActiveView={props.setActiveView}
+        handleReloadAssistants={props.handleReloadAssistants}
+        setStatusMessage={props.setStatusMessage}
+        knowledgeFolder={props.knowledgeFolder}
       />
     )
   }

@@ -11,6 +11,7 @@ import {
   projectManagerPageEn,
   toolApprovalPageEn,
   translationPageEn,
+  assistantLibPageEn,
 } from './partials/pages'
 import { coreEn } from './partials/core'
 
@@ -31,4 +32,5 @@ export const en: DeepStringMap<typeof zhCN> = {
   toolApprovalPage: toolApprovalPageEn,
   projectManagerPage: projectManagerPageEn,
   translationPage: translationPageEn,
+  assistantLibPage: assistantLibPageEn,
 }

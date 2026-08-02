@@ -109,8 +109,9 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     id: 'assistant-lib',
     label: '助手库',
     icon: IconAssistantLib,
+    view: 'assistant-lib',
     tier: 'extension',
-    available: false,
+    available: true,
     closable: true,
   },
   'code-tools': {
@@ -136,14 +137,14 @@ export const MENU_VISIBLE_POOL: NavModuleId[] = [
   'agent',
   'knowledge',
   'notes',
+  'translate',
   'group',
   'community',
+  'assistant-lib',
 ]
 
 export const MENU_HIDDEN_POOL: NavModuleId[] = [
   'workflow',
-  'translate',
-  'assistant-lib',
   'code-tools',
   'projects',
 ]
@@ -164,6 +165,23 @@ export function getNavModuleDef(id: NavModuleId): NavModuleDef {
   return NAV_MODULE_DEFS[id]
 }
 
+/** Pre–translate-in-visible-pool default (migrate to put 翻译 4th). */
+const LEGACY_VISIBLE_WITHOUT_TRANSLATE: NavModuleId[] = [
+  'agent',
+  'knowledge',
+  'notes',
+  'group',
+  'community',
+  'assistant-lib',
+]
+
+function isLegacyVisibleWithoutTranslate(visible: NavModuleId[]): boolean {
+  if (visible.includes('translate')) return false
+  if (visible.length !== LEGACY_VISIBLE_WITHOUT_TRANSLATE.length) return false
+  const set = new Set(visible)
+  return LEGACY_VISIBLE_WITHOUT_TRANSLATE.every((id) => set.has(id))
+}
+
 export function normalizeNavModules(
   visible?: NavModuleId[],
   hidden?: NavModuleId[],
@@ -176,6 +194,11 @@ export function normalizeNavModules(
   const visibleSet = new Set<NavModuleId>(visibleInput)
   visibleSet.add(LOCKED_NAV_MODULE)
 
+  const promoteTranslate = isLegacyVisibleWithoutTranslate(visibleInput)
+  if (promoteTranslate) {
+    visibleSet.add('translate')
+  }
+
   for (const id of ALL_MENU_MODULES_ORDERED) {
     if (id !== LOCKED_NAV_MODULE && !NAV_MODULE_DEFS[id].available) {
       visibleSet.delete(id)
@@ -186,6 +209,7 @@ export function normalizeNavModules(
   if (hidden) {
     for (const id of hidden) {
       if (id !== LOCKED_NAV_MODULE && ALL_MENU_MODULES_ORDERED.includes(id)) {
+        if (promoteTranslate && id === 'translate') continue
         visibleSet.delete(id)
       }
     }

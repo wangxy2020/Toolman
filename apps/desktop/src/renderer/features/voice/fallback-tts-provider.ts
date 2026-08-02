@@ -23,9 +23,14 @@ export class FallbackTtsProvider implements TtsProvider {
     return this.lastResult
   }
 
+  clearLastResult(): void {
+    this.lastResult = null
+  }
+
   async speak(text: string, signal: AbortSignal): Promise<void> {
     if (signal.aborted) return
     this.active = this.primary
+    this.lastResult = null
     try {
       await this.primary.speak(text, signal)
       if (!signal.aborted) {
@@ -62,5 +67,6 @@ export class FallbackTtsProvider implements TtsProvider {
     this.primary.cancel()
     this.fallback.cancel()
     this.active = null
+    this.lastResult = null
   }
 }

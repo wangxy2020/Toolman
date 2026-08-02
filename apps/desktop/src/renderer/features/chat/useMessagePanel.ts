@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { VirtuosoHandle } from 'react-virtuoso'
 import type { Message } from '@toolman/shared'
-import { getMessageText } from './message-utils'
+import { getUserFacingMessageText } from './message-utils'
 import { useCopyFeedback } from './useCopyFeedback'
 import { useTranslate } from './useTranslate'
 import { normalizeTranslationLanguages } from './translation-utils'
@@ -143,7 +143,7 @@ export function useMessagePanel({
 
   const handleTranslateMessage = useCallback(
     async (message: Message) => {
-      const text = getMessageText(message)
+      const text = getUserFacingMessageText(message)
       const modelId = message.modelId ?? defaultModelId
       if (!text.trim() || !modelId) return
 

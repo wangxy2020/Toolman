@@ -4,7 +4,7 @@ import {
   formatKnowledgeDocTime,
   formatKnowledgeFileSize,
   getKnowledgeDocExtension,
-  getKnowledgeDocStatusLabel,
+  getKnowledgeDocStatusLabelWithDetail,
   isKnowledgeDocProcessing,
   isMarkdownKnowledgeDocument,
 } from './knowledge-file-display'
@@ -54,7 +54,12 @@ export function KnowledgeBaseFilePanelCard({
   const extension = getKnowledgeDocExtension(doc.title, doc.mimeType)
   const status = doc.status ?? 'ready'
   const processing = isKnowledgeDocProcessing(status)
-  const statusLabel = getKnowledgeDocStatusLabel(status, t, doc.ingestProgress)
+  const statusLabel = getKnowledgeDocStatusLabelWithDetail(
+    status,
+    t,
+    doc.ingestProgress,
+    doc.ingestDetail,
+  )
   const isUrlDoc = isUrlMode || doc.sourceKind === 'url'
   const pageUrl = isUrlDoc ? doc.absolutePath : null
   const canOpen = Boolean(isUrlDoc ? pageUrl : isOpenableLocalPath(doc.absolutePath))

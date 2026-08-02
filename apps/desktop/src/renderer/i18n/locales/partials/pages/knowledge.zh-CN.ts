@@ -7,6 +7,12 @@ export const knowledgePageZhCN = {
   selectFolder: '选择文件夹',
   deleteFile: '删除文件',
   importing: '正在导入并建立索引…',
+  ingestStatus: {
+    untitled: '未命名文件',
+    pages: '{{current}}/{{total}} 页',
+    chunks: '{{current}}/{{total}} 块',
+    withOthers: '{{message}}（另有 {{count}} 个）',
+  },
   scanningDuplicates: '正在扫描重复文件…',
   ready: '就绪',
   selectWorkspace: '请先选择工作区',

@@ -1,6 +1,7 @@
 import { toErrorMessage, IpcChannel, ipcOk, ipcErr } from '@toolman/shared'
 import * as knowledgeService from '../../services/knowledge.service'
 import * as knowledgeDocumentService from '../../services/knowledge-document.service'
+import { listKnowledgeCourseOutline } from '../../services/knowledge-course-outline.service'
 import { rebuildKnowledgeFtsIndex } from '../../services/knowledge-fts.service'
 import * as knowledgeFolderService from '../../services/knowledge-folder.service'
 import type { KnowledgeHandlerMap } from './types'
@@ -47,6 +48,15 @@ export const knowledgeBaseIpcHandlers: KnowledgeHandlerMap = {
 
   [IpcChannel.KnowledgeDocumentList]: async (input) =>
     ipcOk({ items: await knowledgeDocumentService.listKnowledgeDocuments(input) }),
+
+  [IpcChannel.KnowledgeCourseOutline]: async (input) => {
+    try {
+      return ipcOk(await listKnowledgeCourseOutline(input))
+    } catch (error) {
+      const message = toErrorMessage(error, 'Load course outline failed')
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
 
   [IpcChannel.KnowledgeDocumentIngest]: async (input) => {
     try {

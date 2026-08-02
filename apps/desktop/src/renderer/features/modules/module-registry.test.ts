@@ -11,7 +11,13 @@ import { DEFAULT_VISIBLE_NAV_MODULES } from '../settings/nav-modules'
 describe('module-registry', () => {
   it('maps app views to nav module ids', () => {
     expect(navModuleIdForAppView('projects')).toBe('projects')
+    expect(navModuleIdForAppView('assistant-lib')).toBe('assistant-lib')
     expect(navModuleIdForAppView('settings')).toBeNull()
+  })
+
+  it('allows assistant-lib when in default visible modules', () => {
+    expect(canAccessAppView('assistant-lib', DEFAULT_VISIBLE_NAV_MODULES)).toBe(true)
+    expect(guardAppView('assistant-lib', DEFAULT_VISIBLE_NAV_MODULES)).toBe('assistant-lib')
   })
 
   it('treats projects as extension module', () => {

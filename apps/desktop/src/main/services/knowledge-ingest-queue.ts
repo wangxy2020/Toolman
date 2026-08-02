@@ -3,7 +3,10 @@ import { hashFileStream, isIgnoredKnowledgeIngestFile } from '@toolman/knowledge
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { knowledgeIngestSupportsFile } from './knowledge-parse-options.service'
 import { logStructured } from './structured-log.service'
-import { isIngestCancelled } from './knowledge-ingest-manager.service'
+import {
+  clearIngestCancel,
+  isIngestCancelled,
+} from './knowledge-ingest-manager.service'
 import { findActiveDocumentByPath, shouldSkipReadyDocument } from './knowledge-document-lifecycle.util'
 import {
   buildDocumentTitle,
@@ -86,6 +89,7 @@ export async function prepareIngestQueue(options: {
 
       const title = buildDocumentTitle(filePath)
       if (existing) {
+        clearIngestCancel(existing.id)
         updateDocumentStage(repo, {
           workspaceId: options.workspaceId,
           kbId: options.kbId,
@@ -103,6 +107,7 @@ export async function prepareIngestQueue(options: {
           status: 'queued',
           absolutePath: filePath,
         })
+        clearIngestCancel(created.id)
         updateDocumentStage(repo, {
           workspaceId: options.workspaceId,
           kbId: options.kbId,
@@ -166,7 +171,16 @@ export async function ingestFilePaths(options: {
   const ingestOne = async (filePath: string) => {
     const existing = repo.findByPath(options.kbId, filePath)
     if (existing && isIngestCancelled(existing.id)) {
-      return { outcome: 'skipped' as const, path: filePath }
+      // Do not leave the row stuck in "queued" after cancel — mark failed explicitly.
+      updateDocumentStage(repo, {
+        workspaceId: options.workspaceId,
+        kbId: options.kbId,
+        documentId: existing.id,
+        stage: 'failed',
+        errorMessage: '索引任务已取消',
+        progress: 0,
+      })
+      return { outcome: 'failed' as const, path: filePath, message: '索引任务已取消' }
     }
 
     await acquireIngestJobSlot()

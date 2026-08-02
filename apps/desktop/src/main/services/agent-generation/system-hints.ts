@@ -6,6 +6,11 @@ import {
   isExcelMcpSourceFileBlock,
   resolveProjectManagementTabFromSession,
   buildProjectManagementRuntimeHint,
+  buildAssistantLibCourseRuntimeHint,
+  buildSocraticKnowledgeHint,
+  buildSocraticModeRuntimeHint,
+  isSocraticTeachingMode,
+  resolveAssistantLibTeachingRuntime,
 } from '@toolman/shared'
 import { isGemmaThinkingOllamaModelId } from '@toolman/model-gateway'
 import { buildToolSystemHint } from '../mcp-status.service'
@@ -82,34 +87,32 @@ export async function buildRuntimeSystemHints(
     if (identityHint) hints.push(identityHint)
   }
 
-  if (options.sessionId) {
-    const session = getSession({ id: options.sessionId })
-    if (session) {
-      const tab = resolveProjectManagementTabFromSession(session)
-      if (tab) {
-        let snapshot = null
-        try {
-          if (session.workspaceId) {
-            snapshot = buildPmRuntimeSnapshot(session.workspaceId, tab)
-          }
-        } catch (error) {
-          console.warn('[pm] runtime snapshot failed', error)
-          if (
-            session.workspaceId &&
-            (tab === 'resource_management' || tab === 'progress_management')
-          ) {
-            try {
-              snapshot = buildPmResourceCatalogFallbackSnapshot(session.workspaceId, tab)
-            } catch (fallbackError) {
-              console.warn('[pm] resource catalog fallback failed', fallbackError)
-              snapshot = null
-            }
-          } else {
+  const session = options.sessionId ? getSession({ id: options.sessionId }) : null
+  if (session) {
+    const tab = resolveProjectManagementTabFromSession(session)
+    if (tab) {
+      let snapshot = null
+      try {
+        if (session.workspaceId) {
+          snapshot = buildPmRuntimeSnapshot(session.workspaceId, tab)
+        }
+      } catch (error) {
+        console.warn('[pm] runtime snapshot failed', error)
+        if (
+          session.workspaceId &&
+          (tab === 'resource_management' || tab === 'progress_management')
+        ) {
+          try {
+            snapshot = buildPmResourceCatalogFallbackSnapshot(session.workspaceId, tab)
+          } catch (fallbackError) {
+            console.warn('[pm] resource catalog fallback failed', fallbackError)
             snapshot = null
           }
+        } else {
+          snapshot = null
         }
-        hints.push(buildProjectManagementRuntimeHint(tab, snapshot))
       }
+      hints.push(buildProjectManagementRuntimeHint(tab, snapshot))
     }
   }
 
@@ -299,19 +302,41 @@ export async function buildRuntimeSystemHints(
     }
   }
 
+  const assistantParams = options.assistant
+    ? (() => {
+        try {
+          return JSON.parse(options.assistant.parametersJson) as Record<string, unknown>
+        } catch {
+          return {} as Record<string, unknown>
+        }
+      })()
+    : {}
+  const teachingRuntime = resolveAssistantLibTeachingRuntime({
+    sessionMetadata: session?.metadata,
+    assistantParameters: assistantParams,
+  })
+  const socraticMode = isSocraticTeachingMode(teachingRuntime.teachingMode)
+
+  if (socraticMode) {
+    hints.push(buildSocraticModeRuntimeHint(teachingRuntime.roleplayId ?? ''))
+  }
+  const courseHint = buildAssistantLibCourseRuntimeHint(teachingRuntime)
+  if (courseHint) {
+    hints.push(courseHint)
+  }
+
   if (!hasInlineAttachment && options.sendOptions?.kbEnabled === true && options.runtime.workspaceId) {
     const kbIds = resolveEffectiveKbIds({
       workspaceId: options.runtime.workspaceId,
       assistant: options.assistant,
-      overrideKbIds: options.sendOptions?.kbIds,
+      overrideKbIds: options.sendOptions?.kbIds?.length
+        ? options.sendOptions.kbIds
+        : teachingRuntime.kbIds,
     })
 
     if (kbIds.length > 0) {
       hints.push(buildKnowledgeEnabledHint())
       try {
-        const assistantParams = options.assistant
-          ? (JSON.parse(options.assistant.parametersJson) as Record<string, unknown>)
-          : {}
         const results = await searchKnowledgeForChat({
           workspaceId: options.runtime.workspaceId,
           kbIds,
@@ -327,11 +352,19 @@ export async function buildRuntimeSystemHints(
             | undefined,
         })
         kbResults = results
-        const knowledgeHint = buildKnowledgeSystemHint(results, options.userText)
-        if (knowledgeHint) {
-          hints.push(knowledgeHint)
+        if (socraticMode) {
+          if (results.length > 0) {
+            hints.push(buildSocraticKnowledgeHint(results, options.userText))
+          } else {
+            hints.push(buildKnowledgeEmptySearchHint(options.userText))
+          }
         } else {
-          hints.push(buildKnowledgeEmptySearchHint(options.userText))
+          const knowledgeHint = buildKnowledgeSystemHint(results, options.userText)
+          if (knowledgeHint) {
+            hints.push(knowledgeHint)
+          } else {
+            hints.push(buildKnowledgeEmptySearchHint(options.userText))
+          }
         }
       } catch (error) {
         hints.push(

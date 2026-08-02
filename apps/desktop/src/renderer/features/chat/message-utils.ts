@@ -1,4 +1,4 @@
-import type { ContentBlock, Message } from '@toolman/shared'
+import { stripSocraticMachineBlocks, type ContentBlock, type Message } from '@toolman/shared'
 
 const CONTENT_BLOCK_ORDER: Record<ContentBlock['type'], number> = {
   thinking: 0,
@@ -32,6 +32,15 @@ export function getBlocksText(blocks: ContentBlock[]): string {
 
 export function getMessageText(message: Message): string {
   return getBlocksText(message.contentBlocks)
+}
+
+/** Chat bubble / TTS / copy — hide Socratic machine fences. */
+export function getUserFacingMessageText(message: Message): string {
+  return stripSocraticMachineBlocks(getMessageText(message))
+}
+
+export function sanitizeAssistantTextForDisplay(text: string): string {
+  return stripSocraticMachineBlocks(text)
 }
 
 export function formatMessageTime(timestamp: number): string {

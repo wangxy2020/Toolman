@@ -6,6 +6,9 @@ export function shouldSubmitOnEnter(
   event: KeyboardEvent<HTMLTextAreaElement>,
   sendShortcut: SendShortcut,
 ): boolean {
+  // Avoid submitting while IME/dictation is still composing (keyCode 229 = processing).
+  if (event.nativeEvent.isComposing || event.keyCode === 229) return false
+
   const enter = event.key === 'Enter'
   const shift = event.shiftKey
   const ctrl = event.metaKey || event.ctrlKey
@@ -61,4 +64,19 @@ export function insertAtCursor(
   const end = textarea.selectionEnd ?? currentText.length
   const nextText = currentText.slice(0, start) + insertion + currentText.slice(end)
   return { nextText, cursor: start + insertion.length }
+}
+
+/** How long to ignore native input after send (system dictation often flushes late). */
+export const POST_SEND_INPUT_SUPPRESS_MS = 450
+
+/** Prefer the live DOM value so system dictation text is not lost before React state catches up. */
+export function readComposerText(
+  textarea: HTMLTextAreaElement | null | undefined,
+  reactText: string,
+): string {
+  return textarea?.value ?? reactText
+}
+
+export function shouldIgnoreComposerInput(suppressUntilMs: number, nowMs = Date.now()): boolean {
+  return nowMs < suppressUntilMs
 }

@@ -7,6 +7,12 @@ export const knowledgePageEn = {
   selectFolder: 'Select folder',
   deleteFile: 'Delete file',
   importing: 'Importing and indexing…',
+  ingestStatus: {
+    untitled: 'Untitled file',
+    pages: '{{current}}/{{total}} pages',
+    chunks: '{{current}}/{{total}} chunks',
+    withOthers: '{{message}} (+{{count}} more)',
+  },
   scanningDuplicates: 'Scanning for duplicates…',
   ready: 'Ready',
   selectWorkspace: 'Select a workspace first',

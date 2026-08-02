@@ -238,6 +238,22 @@ export const projectManagerPageZhCN = {
       blocked: '阻塞',
       avgProgress: '平均进度',
     },
+    securityKpi: {
+      projects: '项目数',
+      hazards: '危险源',
+      highRisk: '高风险',
+      qcPoints: '质量控制点',
+      commonDefects: '质量通病',
+      weekInspections: '本周检查项',
+    },
+    securityKpiSub: {
+      projects: '在管项目',
+      hazards: '待管控危险源',
+      highRisk: '需重点关注的高风险项',
+      qcPoints: '待闭环质量控制点',
+      commonDefects: '待治理质量通病',
+      weekInspections: '本周计划/已排检查',
+    },
   },
   keyProjects: {
     loading: '正在加载重点项目…',

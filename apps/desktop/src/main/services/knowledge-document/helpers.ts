@@ -68,7 +68,8 @@ export function toDocument(
     sourceKind: inferSourceKind(row.absolutePath),
     chunkCount,
     sizeBytes: sizeBytes ?? null,
-    errorMessage: parseErrorJson(row.errorJson),
+    // Only surface errors for failed docs — stale cancel text must not appear under "排队中".
+    errorMessage: row.status === 'failed' ? parseErrorJson(row.errorJson) : null,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   })

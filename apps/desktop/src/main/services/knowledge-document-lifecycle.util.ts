@@ -27,7 +27,9 @@ export function findActiveDocumentByPath(
   if (deleted?.deletedAt) {
     const restored = repo.restoreDocument(deleted.id, kbId)
     if (!restored) return undefined
-    return repo.update(restored.id, kbId, { status: 'queued' }) ?? restored
+    return (
+      repo.update(restored.id, kbId, { status: 'queued', errorJson: null }) ?? restored
+    )
   }
 
   return undefined
@@ -47,7 +49,9 @@ export function findActiveDocumentById(
   if (existing.deletedAt != null) {
     const restored = repo.restoreDocument(documentId, kbId)
     if (!restored) return undefined
-    return repo.update(restored.id, kbId, { status: 'queued' }) ?? restored
+    return (
+      repo.update(restored.id, kbId, { status: 'queued', errorJson: null }) ?? restored
+    )
   }
 
   return existing

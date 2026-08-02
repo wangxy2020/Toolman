@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import {
   KnowledgeIngestJobCancelInputSchema,
   KnowledgeIngestJobRetryInputSchema,
@@ -9,6 +10,7 @@ import {
 } from './knowledge-ingest-manager.service'
 import { broadcastKnowledgeIngestEvent } from './knowledge-ingest-broadcast'
 import { refreshKbStats, startIngestFilePathsInBackground } from './knowledge-ingest.service'
+import { updateDocumentStage } from './knowledge-ingest-shared'
 
 const ACTIVE_INGEST_STAGES = new Set([
   'queued',
@@ -75,18 +77,27 @@ export function retryKnowledgeIngestJob(input: unknown): boolean {
     return false
   }
 
+  if (!existsSync(doc.absolutePath)) {
+    updateDocumentStage(repo, {
+      workspaceId: data.workspaceId,
+      kbId: data.kbId,
+      documentId: data.documentId,
+      stage: 'failed',
+      errorMessage: '源文件不存在，请重新上传后再重试',
+      progress: 0,
+    })
+    refreshKbStats(data.workspaceId, data.kbId)
+    return false
+  }
+
   clearIngestCancel(data.documentId)
-  repo.update(data.documentId, data.kbId, {
-    status: 'queued',
-    errorJson: null,
-  })
-  repo.upsertIngestJob({
+  updateDocumentStage(repo, {
     workspaceId: data.workspaceId,
     kbId: data.kbId,
     documentId: data.documentId,
     stage: 'queued',
+    errorMessage: null,
     progress: 5,
-    errorJson: null,
   })
 
   startIngestFilePathsInBackground({

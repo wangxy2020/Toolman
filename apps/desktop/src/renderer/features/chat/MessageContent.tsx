@@ -10,7 +10,11 @@ import { KnowledgeSourcesBlock } from './KnowledgeSourcesBlock'
 import { LocalFileLinksBlock } from './LocalFileLinksBlock'
 import { DocxReviewSummaryBlock } from './DocxReviewSummaryBlock'
 import { hasStructuredBlocks } from './apply-stream-delta'
-import { getBlocksText, orderContentBlocks } from './message-utils'
+import {
+  getBlocksText,
+  orderContentBlocks,
+  sanitizeAssistantTextForDisplay,
+} from './message-utils'
 import { useThinkingMetrics } from './useThinkingMetrics'
 
 interface Props {
@@ -21,7 +25,7 @@ interface Props {
 
 export function MessageContent({ contentBlocks, streaming, settings }: Props) {
   const orderedBlocks = orderContentBlocks(contentBlocks)
-  const text = getBlocksText(orderedBlocks)
+  const text = sanitizeAssistantTextForDisplay(getBlocksText(orderedBlocks))
   const structured = hasStructuredBlocks(orderedBlocks)
   const { active: thinkingActive, durationSeconds: liveDurationSeconds } = useThinkingMetrics(
     streaming,
@@ -101,10 +105,12 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
           }
 
           if (block.type === 'text' && block.text.trim()) {
+            const displayText = sanitizeAssistantTextForDisplay(block.text)
+            if (!displayText.trim()) return null
             return (
               <MessageMarkdown
                 key={`md-${index}`}
-                text={block.text}
+                text={displayText}
                 settings={settings}
                 sanitizeAssistant
                 streaming={streaming}

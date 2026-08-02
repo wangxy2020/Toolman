@@ -1,6 +1,7 @@
 import {
   DialogSelectFilesOutputSchema,
   IpcChannel,
+  isAssistantLibSession,
   isP2pSharedKnowledgeMirrorDescription,
 } from '@toolman/shared'
 import { MiddleSidebar } from '../../components/layout/MiddleSidebar'
@@ -11,6 +12,7 @@ import { CommunitySidebar } from '../community/CommunitySidebar'
 import { GroupSidebar } from '../group/GroupSidebar'
 import { ProjectSidebar } from '../project-manager/ProjectSidebar'
 import { TranslationSidebar } from '../translation/TranslationSidebar'
+import { AssistantLibSidebar } from '../assistant-lib/AssistantLibSidebar'
 import {
   buildContrastExportContent,
   buildDocumentExportContent,
@@ -336,6 +338,22 @@ export function ChatPageSidebars({
       <ProjectSidebar
         activeTab={projectSidebarTab}
         onSelectTab={setProjectSidebarTab}
+      />
+    )
+  }
+
+  if (activeView === 'assistant-lib') {
+    const learningSessions = chat.sessions
+      .filter((session) => isAssistantLibSession(session.metadata))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+    const workspaceId =
+      chat.activeSession?.workspaceId ?? learningSessions[0]?.workspaceId ?? null
+    return (
+      <AssistantLibSidebar
+        workspaceId={workspaceId}
+        sessions={learningSessions}
+        activeSessionId={chat.activeSessionId}
+        onSelectSession={(id) => void chat.selectSession(id)}
       />
     )
   }

@@ -2,10 +2,12 @@ import type { AppView } from '../types/app-view'
 
 const VIEW_TO_HASH: Partial<Record<AppView, string>> = {
   projects: '#/project-manager',
+  'assistant-lib': '#/assistant-lib',
 }
 
 const HASH_TO_VIEW: Record<string, AppView> = {
   '/project-manager': 'projects',
+  '/assistant-lib': 'assistant-lib',
 }
 
 export function appViewFromLocationHash(hash: string): AppView | null {
@@ -27,7 +29,10 @@ export function syncLocationHashForAppView(view: AppView): void {
     }
     return
   }
-  if (window.location.hash.startsWith('#/project-manager')) {
+  if (
+    window.location.hash.startsWith('#/project-manager') ||
+    window.location.hash.startsWith('#/assistant-lib')
+  ) {
     history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
   }
 }

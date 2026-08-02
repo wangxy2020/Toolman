@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import {
   ingestContent,
   type IngestFileResult,
@@ -11,7 +11,12 @@ import { assertIngestStillActive } from './knowledge-ingest-manager.service'
 import { parseFileInWorker, shouldParseInWorker } from './parse-file-worker.service'
 import { withTimeout } from '../utils/async-timeout'
 import { resolveEmbedTimeoutMs, resolveParseTimeoutMs } from './knowledge-ingest-timeouts'
-import { buildIngestProgressHandlers, createParsingProgressPulse, updateDocumentStage } from './knowledge-ingest-shared'
+import {
+  STAGE_PROGRESS,
+  buildIngestProgressHandlers,
+  createParsingProgressPulse,
+  updateDocumentStage,
+} from './knowledge-ingest-shared'
 import { appendDocumentFts, removeDocumentFts } from './knowledge-fts.service'
 
 async function runIngestContent(options: {
@@ -95,7 +100,20 @@ export async function parseAndEmbedFile(options: {
     kind: string
   }
 
-  const stopParsingPulse = createParsingProgressPulse(repo, progressCtx)
+  if (!existsSync(filePath)) {
+    throw new Error('源文件不存在，无法解析')
+  }
+
+  const stopParsingPulse = createParsingProgressPulse(repo, {
+    ...progressCtx,
+    filePath,
+  })
+  let pulseStopped = false
+  const stopPulse = () => {
+    if (pulseStopped) return
+    pulseStopped = true
+    stopParsingPulse()
+  }
   try {
     const odlParsed = isPdfFilePath(filePath)
       ? await withTimeout(
@@ -104,6 +122,12 @@ export async function parseAndEmbedFile(options: {
             workspaceId,
             kbId,
             parseTimeoutMs,
+            documentId,
+            onParseProgress: (currentPage, totalPages, inProgress) => {
+              // Real Hybrid/ODL page progress owns the bar (stop soft 20→60 crawl).
+              stopPulse()
+              onOcrProgress(currentPage, totalPages, inProgress)
+            },
           }),
           parseTimeoutMs,
           '文件解析超时，请检查文件是否损坏或过大',
@@ -114,8 +138,15 @@ export async function parseAndEmbedFile(options: {
       parsed = odlParsed
     } else if (shouldParseInWorker(filePath, ocrEnabled)) {
       console.info(
-        `[knowledge-ingest] vision OCR via worker for ${filePath.split(/[/\\]/).pop() ?? filePath}`,
+        `[knowledge-ingest] ODL fallback → glm-ocr worker for ${filePath.split(/[/\\]/).pop() ?? filePath}`,
       )
+      // Stop soft pulse and reset so per-page OCR progress is visible from the start.
+      stopPulse()
+      updateDocumentStage(repo, {
+        ...progressCtx,
+        stage: 'parsing',
+        progress: STAGE_PROGRESS.parsing,
+      })
       const workerResult = await withTimeout(
         parseFileInWorker(filePath, parseOptionsWithProgress, parseTimeoutMs),
         parseTimeoutMs,
@@ -142,7 +173,7 @@ export async function parseAndEmbedFile(options: {
       parsed = result
     }
   } finally {
-    stopParsingPulse()
+    stopPulse()
   }
 
   assertIngestStillActive(repo, documentId, kbId)
