@@ -62,6 +62,7 @@ describe('local-operations path helpers', () => {
         channel: 'local',
         latestVersion: '0.9.0',
         notes: 'test',
+        downloadUrl: 'https://example.com/app.zip',
       }),
       'utf8',
     )
@@ -70,5 +71,28 @@ describe('local-operations path helpers', () => {
     expect(diagnostics.update.updateAvailable).toBe(true)
     expect(diagnostics.update.latestVersion).toBe('0.9.0')
     expect(diagnostics.update.manifestPath).toBe(manifestPath)
+  })
+
+  it('syncs stale local placeholder latestVersion up to the running app', async () => {
+    const { mkdirSync, writeFileSync, readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { updateManifestPath, getOperationsDiagnostics } = await import('./local-operations.service')
+
+    const manifestPath = updateManifestPath()
+    mkdirSync(join(USER_DATA, 'updates'), { recursive: true })
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        channel: 'local',
+        latestVersion: '0.0.1',
+        notes: 'stale first-run placeholder',
+      }),
+      'utf8',
+    )
+
+    const diagnostics = getOperationsDiagnostics()
+    expect(diagnostics.update.latestVersion).toBe('0.1.0')
+    expect(diagnostics.update.updateAvailable).toBe(false)
+    expect(JSON.parse(readFileSync(manifestPath, 'utf8')).latestVersion).toBe('0.1.0')
   })
 })

@@ -126,7 +126,7 @@ export const knowledgeFolderIpcHandlers: KnowledgeHandlerMap = {
 
   [IpcChannel.KnowledgeFileDedupDelete]: async (input) => {
     try {
-      return ipcOk(knowledgeDedupService.deleteDuplicateFiles(input))
+      return ipcOk(await knowledgeDedupService.deleteDuplicateFiles(input))
     } catch (error) {
       const message = toErrorMessage(error, 'Delete failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })

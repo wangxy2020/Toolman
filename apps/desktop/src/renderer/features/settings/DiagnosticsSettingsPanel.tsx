@@ -6,7 +6,6 @@ import { DiagnosticsSettingsDatabaseSection } from './DiagnosticsSettingsDatabas
 import { DiagnosticsSettingsCommunitySections } from './DiagnosticsSettingsCommunitySections'
 import { DiagnosticsSettingsP2pSection } from './DiagnosticsSettingsP2pSection'
 import { DiagnosticsSettingsLibp2pSection } from './DiagnosticsSettingsLibp2pSection'
-import { DiagnosticsSettingsProvenanceSection } from './DiagnosticsSettingsProvenanceSection'
 import { DiagnosticsSettingsOperationsSection } from './DiagnosticsSettingsOperationsSection'
 import { DiagnosticsSettingsEventsSection } from './DiagnosticsSettingsEventsSection'
 
@@ -60,7 +59,6 @@ export function DiagnosticsSettingsPanel() {
             restartingLibp2p={restartingLibp2p}
             onRestartLibp2p={() => void restartLibp2pNetwork()}
           />
-          <DiagnosticsSettingsProvenanceSection snapshot={snapshot} />
           <DiagnosticsSettingsOperationsSection
             snapshot={snapshot}
             crashUploadStatus={crashUploadStatus}

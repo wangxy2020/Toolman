@@ -44,7 +44,7 @@ export async function createLocalTextbookKnowledgeBase(options: {
   const createResult = await window.api.invoke(IpcChannel.KnowledgeBaseCreate, {
     workspaceId: options.workspaceId,
     name,
-    description: `助手库课程教材（${getPathBasename(name)}）`,
+    description: `课堂课程教材（${getPathBasename(name)}）`,
     kind: 'local',
   })
   if (!createResult.ok) {

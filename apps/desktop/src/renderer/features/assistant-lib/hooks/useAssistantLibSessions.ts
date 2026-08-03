@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import {
-  ASSISTANT_LIB_ASSISTANT_NAME,
+  isAssistantLibAssistantName,
   isAssistantLibSession,
   type Assistant,
   type Session,
@@ -8,7 +8,7 @@ import {
 
 export function useAssistantLibSessions(assistants: Assistant[], sessions: Session[]) {
   const sharedAssistant = useMemo(
-    () => assistants.find((item) => item.name.trim() === ASSISTANT_LIB_ASSISTANT_NAME) ?? null,
+    () => assistants.find((item) => isAssistantLibAssistantName(item.name)) ?? null,
     [assistants],
   )
 

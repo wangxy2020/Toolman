@@ -38,17 +38,18 @@ export function buildInitialStatus(): AppUpdateStatus {
   const prefs = readUpdatePreferences()
   const localManifest = readLocalUpdateManifest()
   const currentVersion = app.getVersion()
-  const latestVersion = localManifest?.latestVersion ?? null
+  const latestVersion = localManifest?.latestVersion ?? currentVersion
+  const updateAvailable = isVersionNewer(latestVersion, currentVersion)
 
   return AppUpdateStatusSchema.parse({
     enabled: config.enabled,
     channel: config.channel,
     currentVersion,
     latestVersion,
-    updateAvailable: latestVersion != null && isVersionNewer(latestVersion, currentVersion),
+    updateAvailable,
     downloadProgress: null,
     phase: 'idle',
-    notes: localManifest?.notes ?? null,
+    notes: updateAvailable ? (localManifest?.notes ?? null) : null,
     error: null,
     autoUpdate: prefs.autoUpdate,
   })

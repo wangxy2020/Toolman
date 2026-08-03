@@ -1,5 +1,5 @@
 export const assistantLibPageZhCN = {
-  title: '助手库',
+  title: '课堂',
   toolbarChat: '课堂',
   records: {
     title: '课堂记录',

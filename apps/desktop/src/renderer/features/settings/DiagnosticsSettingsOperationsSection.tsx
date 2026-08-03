@@ -2,7 +2,6 @@ import type { AppGetDiagnosticsOutput } from '@toolman/shared'
 import type { CrashReportUploadStatus } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
 import { SettingsCollapsibleSection, SettingsRow, SettingsToggle } from './SettingsShared'
-import { statusBadge } from './diagnostics-settings-utils'
 
 interface Props {
   snapshot: AppGetDiagnosticsOutput
@@ -25,9 +24,6 @@ export function DiagnosticsSettingsOperationsSection({
 
   return (
     <SettingsCollapsibleSection title={t('settings.diagnostics.operations.title')}>
-      <SettingsRow label={t('settings.diagnostics.operations.appVersion')}>
-        <span className="tm-settings-static">{snapshot.operations.appVersion}</span>
-      </SettingsRow>
       <SettingsRow label={t('settings.diagnostics.operations.logFile')}>
         <span className="tm-settings-static" title={snapshot.operations.logFilePath}>
           {snapshot.operations.logFilePath}
@@ -84,26 +80,6 @@ export function DiagnosticsSettingsOperationsSection({
             : t('settings.diagnostics.operations.uploadPending')}
         </button>
       </SettingsRow>
-      <SettingsRow label={t('settings.diagnostics.operations.updateChannel')}>
-        <span className="tm-settings-static">{snapshot.operations.update.channel}</span>
-      </SettingsRow>
-      <SettingsRow label={t('settings.diagnostics.operations.latestVersion')}>
-        {statusBadge(
-          !snapshot.operations.update.updateAvailable,
-          snapshot.operations.update.latestVersion ?? snapshot.operations.update.currentVersion,
-          t('settings.diagnostics.operations.updateAvailable', {
-            version: snapshot.operations.update.latestVersion ?? '',
-          }),
-        )}
-      </SettingsRow>
-      <SettingsRow label={t('settings.diagnostics.operations.manifestPath')}>
-        <span className="tm-settings-static" title={snapshot.operations.update.manifestPath}>
-          {snapshot.operations.update.manifestPath}
-        </span>
-      </SettingsRow>
-      {snapshot.operations.update.notes ? (
-        <p className="tm-settings-row-hint">{snapshot.operations.update.notes}</p>
-      ) : null}
     </SettingsCollapsibleSection>
   )
 }

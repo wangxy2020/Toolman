@@ -309,6 +309,7 @@ html[data-nav-position='top'] .tm-top-bar .tm-window-chrome-btn {
 }
 
 .tm-nav-item {
+  position: relative;
   width: 40px;
   height: 40px;
   border: none;
@@ -324,6 +325,60 @@ html[data-nav-position='top'] .tm-top-bar .tm-window-chrome-btn {
 .tm-nav-item:hover {
   background: var(--tm-hover);
   color: var(--tm-text);
+}
+
+/* Match header / top-chrome aria-label tooltips for left & top nav icons. */
+.tm-nav-item[aria-label]::after,
+.tm-top-bar .tm-nav-item[aria-label]::after {
+  content: attr(aria-label);
+  position: absolute;
+  z-index: 3000;
+  max-width: 240px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tm-text) 92%, #000);
+  color: var(--tm-bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease 0.05s,
+    transform 0.12s ease 0.05s,
+    visibility 0.12s ease 0.05s;
+}
+
+/* Left sidebar nav: tip to the right of the icon. */
+.tm-nav .tm-nav-item[aria-label]::after {
+  top: 50%;
+  left: calc(100% + 8px);
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.tm-nav .tm-nav-item[aria-label]:hover::after,
+.tm-nav .tm-nav-item[aria-label]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Top nav bar: tip below the icon (same as window-chrome buttons). */
+.tm-top-bar .tm-nav-item[aria-label]::after {
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.tm-top-bar .tm-nav-item[aria-label]:hover::after,
+.tm-top-bar .tm-nav-item[aria-label]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
 .tm-nav-item--active {
@@ -8111,9 +8166,14 @@ html.theme-dark .tm-dedup-error {
 }
 
 .tm-dedup-filter-btn--active {
-  background: var(--tm-hover);
-  color: var(--tm-text);
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
   font-weight: 500;
+}
+
+.tm-dedup-filter-btn--active:hover {
+  background: var(--tm-accent-light);
+  color: var(--tm-accent);
 }
 
 .tm-dedup-delete-btn {

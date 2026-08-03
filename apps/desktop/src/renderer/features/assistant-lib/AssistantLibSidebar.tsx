@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  findAssistantLibDefaultClassroomSession,
   isAssistantLibDefaultClassroomSession,
+  looksLikeAssistantLibDefaultClassroom,
   parseAssistantLibSessionMeta,
   type Session,
 } from '@toolman/shared'
@@ -22,7 +24,7 @@ type Props = {
 }
 
 function resolveCourseLabel(session: Session, defaultLabel: string): string {
-  if (isAssistantLibDefaultClassroomSession(session.metadata)) return defaultLabel
+  if (looksLikeAssistantLibDefaultClassroom(session)) return defaultLabel
   const meta = parseAssistantLibSessionMeta(session.metadata)
   return meta?.courseName?.trim() || session.title || defaultLabel
 }
@@ -36,10 +38,15 @@ export function AssistantLibSidebar({
   const { t } = useI18n()
 
   const orderedSessions = useMemo(() => {
-    const defaultClassroom =
-      sessions.find((session) => isAssistantLibDefaultClassroomSession(session.metadata)) ?? null
-    const others = sessions.filter((session) => session.id !== defaultClassroom?.id)
-    return defaultClassroom ? [defaultClassroom, ...others] : others
+    const assistantId = sessions.find((session) => session.assistantId)?.assistantId ?? null
+    const keeper = assistantId
+      ? findAssistantLibDefaultClassroomSession(sessions, assistantId)
+      : (sessions.find((session) => looksLikeAssistantLibDefaultClassroom(session)) ?? null)
+    const others = sessions.filter(
+      (session) =>
+        session.id !== keeper?.id && !looksLikeAssistantLibDefaultClassroom(session),
+    )
+    return keeper ? [keeper, ...others] : others
   }, [sessions])
 
   const { chaptersForSession, isLoadingSession, errorForSession } = useAssistantLibCourseCatalog(

@@ -61,11 +61,11 @@ export const modulesEn = {
       contentEmptyHint: 'Select side-by-side translation on the left, then edit source and target text.',
     },
     'assistant-lib': {
-      title: 'Assistant library',
+      title: 'Classroom',
       addLabel: 'Start course',
       headerAll: 'Teaching presets',
       sidebarEmptyHint: 'No learning sessions yet. Pick a preset to start.',
-      contentEmptyTitle: 'Assistant library',
+      contentEmptyTitle: 'Classroom',
       contentEmptyHint:
         'Socratic learning and open tools. Choose a preset, bind a textbook knowledge base, then start.',
     },

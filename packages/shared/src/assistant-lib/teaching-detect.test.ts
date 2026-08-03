@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ASSISTANT_LIB_ASSISTANT_NAME,
+  ASSISTANT_LIB_ASSISTANT_NAME_LEGACY,
+  listDuplicateAssistantLibDefaultClassroomIds,
+  isAssistantLibAssistantName,
   isLegacyPerCourseTeachingAssistant,
   resolveAssistantLibTeachingRuntime,
 } from './agent-link.js'
@@ -19,6 +22,38 @@ describe('socratic referee heuristics', () => {
     expect(isTeachingAssistantParameters({ teachingMode: 'socratic' })).toBe(true)
     expect(isTeachingAssistantParameters({ assistantLibPresetId: 'detective' })).toBe(true)
     expect(isTeachingAssistantParameters({})).toBe(false)
+  })
+
+  it('recognizes current and legacy assistant classroom names', () => {
+    expect(isAssistantLibAssistantName(ASSISTANT_LIB_ASSISTANT_NAME)).toBe(true)
+    for (const legacy of ASSISTANT_LIB_ASSISTANT_NAME_LEGACY) {
+      expect(isAssistantLibAssistantName(legacy)).toBe(true)
+    }
+    expect(isAssistantLibAssistantName('其他助手')).toBe(false)
+  })
+
+  it('lists duplicate default classrooms for cleanup', () => {
+    const assistantId = 'a1'
+    const ids = listDuplicateAssistantLibDefaultClassroomIds(
+      [
+        {
+          id: 'keep',
+          assistantId,
+          title: '默认课堂',
+          createdAt: 1,
+          metadata: { toolmanAssistantLib: { enabled: true, isDefaultClassroom: true } },
+        },
+        {
+          id: 'drop',
+          assistantId,
+          title: '默认课堂',
+          createdAt: 2,
+          metadata: { toolmanAssistantLib: { enabled: true, isDefaultClassroom: true } },
+        },
+      ],
+      assistantId,
+    )
+    expect(ids).toEqual(['drop'])
   })
 
   it('hides legacy per-course teaching agents from the shared agent model', () => {

@@ -8,7 +8,10 @@ import {
 import type { TeachingMode } from './teaching-types.js'
 
 /** Single pinned agent on the agent page; courses are sessions/topics under it. */
-export const ASSISTANT_LIB_ASSISTANT_NAME = '助手库'
+export const ASSISTANT_LIB_ASSISTANT_NAME = '课堂'
+
+/** Previous display names; still recognized so existing installs keep working. */
+export const ASSISTANT_LIB_ASSISTANT_NAME_LEGACY = ['助手课堂', '助手库'] as const
 
 export const ASSISTANT_LIB_ASSISTANT_MARKER = 'assistant-lib'
 
@@ -19,10 +22,12 @@ export const ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE = '默认课堂'
 export const ASSISTANT_LIB_DEFAULT_CLASSROOM_PRESET_ID = 'socratic-tutor' as const
 
 export function isAssistantLibAssistantName(name: string | null | undefined): boolean {
-  return (name ?? '').trim() === ASSISTANT_LIB_ASSISTANT_NAME
+  const trimmed = (name ?? '').trim()
+  if (trimmed === ASSISTANT_LIB_ASSISTANT_NAME) return true
+  return (ASSISTANT_LIB_ASSISTANT_NAME_LEGACY as readonly string[]).includes(trimmed)
 }
 
-/** Legacy per-course teaching agents (pre shared「助手库」agent). */
+/** Legacy per-course teaching agents (pre shared「课堂」agent). */
 export function isLegacyPerCourseTeachingAssistant(assistant: {
   name: string
   parameters: { teachingMode?: unknown; assistantLibPresetId?: unknown }
@@ -35,10 +40,26 @@ export function isLegacyPerCourseTeachingAssistant(assistant: {
 
 export function buildAssistantLibAssistantSystemPrompt(): string {
   return [
-    '你是 Toolman「助手库」学习助手。',
+    '你是 Toolman「课堂」学习助手。',
     '具体课程角色、苏格拉底规则与教材约束见运行时「当前课程」提示。',
     '若与通用作答习惯冲突，以当前课程规则为准。',
   ].join('\n')
+}
+
+/** True for the built-in default course (flag and/or legacy title/courseName). */
+export function looksLikeAssistantLibDefaultClassroom(session: {
+  title?: string
+  metadata?: Record<string, unknown> | null
+}): boolean {
+  if (isAssistantLibDefaultClassroomSession(session.metadata)) return true
+  const meta = parseAssistantLibSessionMeta(session.metadata)
+  const courseName = meta?.courseName?.trim() ?? ''
+  const title = session.title?.trim() ?? ''
+  return (
+    title === ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE ||
+    courseName === ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE ||
+    courseName === '默认课程'
+  )
 }
 
 export type AssistantLibTeachingRuntime = {
@@ -118,20 +139,45 @@ export function buildAssistantLibCourseRuntimeHint(
 }
 
 export function findAssistantLibDefaultClassroomSession<
-  T extends { assistantId: string | null; title: string; metadata: Record<string, unknown> },
+  T extends {
+    id?: string
+    assistantId: string | null
+    title: string
+    createdAt?: number
+    metadata: Record<string, unknown>
+  },
 >(sessions: readonly T[], assistantId: string): T | null {
-  const byFlag = sessions.find(
-    (session) =>
-      session.assistantId === assistantId && isAssistantLibDefaultClassroomSession(session.metadata),
-  )
-  if (byFlag) return byFlag
+  const candidates = sessions
+    .filter(
+      (session) =>
+        session.assistantId === assistantId && looksLikeAssistantLibDefaultClassroom(session),
+    )
+    .sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0))
 
-  // Legacy / renamed-title fallback
-  return (
-    sessions.find(
+  const flagged = candidates.find((session) =>
+    isAssistantLibDefaultClassroomSession(session.metadata),
+  )
+  return flagged ?? candidates[0] ?? null
+}
+
+/** Extra default-course sessions that should be removed (keep the oldest flagged one). */
+export function listDuplicateAssistantLibDefaultClassroomIds<
+  T extends {
+    id: string
+    assistantId: string | null
+    title: string
+    createdAt?: number
+    metadata: Record<string, unknown>
+  },
+>(sessions: readonly T[], assistantId: string): string[] {
+  const keeper = findAssistantLibDefaultClassroomSession(sessions, assistantId)
+  if (!keeper) return []
+  return sessions
+    .filter(
       (session) =>
         session.assistantId === assistantId &&
-        session.title.trim() === ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE,
-    ) ?? null
-  )
+        session.id !== keeper.id &&
+        looksLikeAssistantLibDefaultClassroom(session),
+    )
+    .map((session) => session.id)
 }

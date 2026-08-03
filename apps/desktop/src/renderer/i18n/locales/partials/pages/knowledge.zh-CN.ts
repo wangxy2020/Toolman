@@ -244,8 +244,8 @@ export const knowledgePageZhCN = {
     openFile: '打开文件',
     openFolder: '打开所在文件夹',
     deleteFile: '删除',
-    deleteSelectedConfirm: '确定删除选中的 {{count}} 个重复文件吗？此操作不可恢复。',
-    deleteOneConfirm: '确定删除此文件吗？此操作不可恢复。',
-    deletePartialResult: '已删除 {{deleted}} 个，{{failed}} 个删除失败',
+    deleteSelectedConfirm: '确定将选中的 {{count}} 个重复文件移到回收站吗？可在系统回收站中恢复。',
+    deleteOneConfirm: '确定将此文件移到回收站吗？可在系统回收站中恢复。',
+    deletePartialResult: '已移到回收站 {{deleted}} 个，{{failed}} 个失败',
   },
 } as const

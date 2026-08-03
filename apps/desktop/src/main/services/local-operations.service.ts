@@ -40,6 +40,7 @@ export function bootstrapLocalOperations(): void {
   mkdirSync(crashReportDir(), { recursive: true })
   mkdirSync(join(app.getPath('userData'), 'updates'), { recursive: true })
   ensureDefaultUpdateManifest()
+  syncStaleLocalUpdateManifest()
 }
 
 function ensureDefaultUpdateManifest(): void {
@@ -61,6 +62,44 @@ function ensureDefaultUpdateManifest(): void {
     ),
     'utf8',
   )
+}
+
+/**
+ * First-run local manifests keep a frozen latestVersion. After app bumps,
+ * that stale value makes About/diagnostics look inconsistent. Bump only the
+ * default local placeholder when it lags behind the running app version.
+ */
+function syncStaleLocalUpdateManifest(): void {
+  const path = updateManifestPath()
+  if (!existsSync(path)) return
+
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as LocalUpdateManifest & {
+      downloadUrl?: string
+    }
+    if (raw.channel !== 'local') return
+    // Keep intentional test manifests that point at a downloadable newer build.
+    if (raw.downloadUrl) return
+
+    const currentVersion = app.getVersion()
+    if (!raw.latestVersion || compareSemver(raw.latestVersion, currentVersion) >= 0) return
+
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          ...raw,
+          latestVersion: currentVersion,
+          publishedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    )
+  } catch {
+    // Disk / parse failures must not break startup.
+  }
 }
 
 export function appendPersistentDiagnosticLine(line: string): void {
@@ -123,16 +162,19 @@ export function countCrashReports(): number {
 
 export function readLocalUpdateManifest(): LocalUpdateManifest | null {
   try {
+    syncStaleLocalUpdateManifest()
     const raw = readFileSync(updateManifestPath(), 'utf8')
     return JSON.parse(raw) as LocalUpdateManifest
   } catch {
     return null
   }
 }
+
 export function getOperationsDiagnostics(): AppGetDiagnosticsOutput['operations'] {
   const manifest = readLocalUpdateManifest()
   const currentVersion = app.getVersion()
-  const latestVersion = manifest?.latestVersion ?? null
+  const latestVersion = manifest?.latestVersion ?? currentVersion
+  const updateAvailable = compareSemver(latestVersion, currentVersion) > 0
 
   return {
     appVersion: currentVersion,
@@ -146,9 +188,9 @@ export function getOperationsDiagnostics(): AppGetDiagnosticsOutput['operations'
       channel: manifest?.channel ?? 'local',
       currentVersion,
       latestVersion,
-      updateAvailable: latestVersion != null && compareSemver(latestVersion, currentVersion) > 0,
+      updateAvailable,
       manifestPath: updateManifestPath(),
-      notes: manifest?.notes ?? null,
+      notes: updateAvailable ? (manifest?.notes ?? null) : null,
     },
   }
 }

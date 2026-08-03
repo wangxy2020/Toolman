@@ -15,7 +15,7 @@
 | D2 | WAN 群组 | **必须**跨网段协作；TURN + 跨 NAT 验收为 P1 必做 |
 | D3 | Yjs 点赞/收藏 | HTTP-only，禁止 Yjs CRDT 半同步 |
 | D4 | 语义搜索 | GA 阶段 Hub 搜索 **全量 Fallback SQLite FTS**，禁止对用户 501 |
-| D5 | 明确不做 | 自动化/工作流、翻译、助手库、代码工具、项目管理、真实支付、QQ/Slack 等 |
+| D5 | 明确不做 | 自动化/工作流、翻译、助手课堂、代码工具、项目管理、真实支付、QQ/Slack 等 |
 
 **开源 RC 就绪定义**（个人开发者 / 开源初期）：`pnpm rc1:preflight` 绿 · P0=0 · adhoc 签名 DMG 可安装（Gatekeeper 需右键打开）· README 标明 Beta。
 

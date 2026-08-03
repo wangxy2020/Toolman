@@ -14,7 +14,7 @@
 | 任务 | 位置 | 说明 |
 |------|------|------|
 | 自动化模块（工作流编辑器） | `nav-modules.ts`（`workflow`, `available: false`） | 顶栏占位，尚无实际页面 |
-| 助手库模块 | `nav-modules.ts`（`assistant-lib`） | `available: false` |
+| 助手课堂模块 | `nav-modules.ts`（`assistant-lib`） | `available: false` |
 | 代码工具模块 | `nav-modules.ts`（`code-tools`） | `available: false` |
 | 顶栏导航布局 | `display-settings-components.tsx` | 「顶部导航」`disabled: true`，仅侧边栏 |
 

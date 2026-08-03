@@ -55,7 +55,7 @@ export const shellZhCN = {
       group: '群组',
       community: '社区',
       translate: '翻译',
-      'assistant-lib': '助手库',
+      'assistant-lib': '课堂',
       'code-tools': '代码工具',
       projects: '项目管理',
     },

@@ -71,8 +71,7 @@ function NavModuleButtons({
             ]
               .filter(Boolean)
               .join(' ')}
-            title={canNavigate ? label : t('nav.moduleUnavailable', { label })}
-            aria-label={label}
+            aria-label={canNavigate ? label : t('nav.moduleUnavailable', { label })}
             disabled={!canNavigate}
             onClick={() => {
               if (def.view) onNavigate(def.view)

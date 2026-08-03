@@ -245,8 +245,9 @@ export const knowledgePageEn = {
     openFile: 'Open file',
     openFolder: 'Open containing folder',
     deleteFile: 'Delete',
-    deleteSelectedConfirm: 'Delete {{count}} selected duplicate files? This cannot be undone.',
-    deleteOneConfirm: 'Delete this file? This cannot be undone.',
-    deletePartialResult: 'Deleted {{deleted}}; {{failed}} failed',
+    deleteSelectedConfirm:
+      'Move {{count}} selected duplicate files to Trash? You can restore them from the system Trash.',
+    deleteOneConfirm: 'Move this file to Trash? You can restore it from the system Trash.',
+    deletePartialResult: 'Moved {{deleted}} to Trash; {{failed}} failed',
   },
 } as const

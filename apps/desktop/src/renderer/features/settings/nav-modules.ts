@@ -107,7 +107,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
   },
   'assistant-lib': {
     id: 'assistant-lib',
-    label: '助手库',
+    label: '课堂',
     icon: IconAssistantLib,
     view: 'assistant-lib',
     tier: 'extension',

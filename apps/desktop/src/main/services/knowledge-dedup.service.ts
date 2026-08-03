@@ -1,6 +1,7 @@
-import { readdirSync, statSync, unlinkSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
+import { shell } from 'electron'
 import { toErrorMessage } from '@toolman/shared'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {KnowledgeFileDedupDeleteInputSchema,
   KnowledgeFileDedupScanCancelInputSchema,
   KnowledgeFileDedupScanInputSchema,
@@ -210,19 +211,21 @@ export async function scanDuplicateFiles(input: unknown): Promise<ScanResult> {
   return result
 }
 
-export function deleteDuplicateFiles(input: unknown) {
+export async function deleteDuplicateFiles(input: unknown) {
   const data = KnowledgeFileDedupDeleteInputSchema.parse(input)
   let deleted = 0
   const failed: Array<{ path: string; message: string }> = []
 
   for (const filePath of data.filePaths) {
     try {
-      unlinkSync(filePath)
+      // Prefer Trash / Recycle Bin over permanent unlink.
+      // Electron requires a platform-native absolute path for trashItem.
+      await shell.trashItem(resolve(filePath))
       deleted += 1
     } catch (error) {
       failed.push({
         path: filePath,
-        message: toErrorMessage(error, '删除失败'),
+        message: toErrorMessage(error, '移到回收站失败'),
       })
     }
   }

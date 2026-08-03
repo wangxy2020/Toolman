@@ -18,7 +18,7 @@ export const AssistantLibSessionMetaSchema = z.object({
   kbIds: z.array(z.string().uuid()).optional(),
   customSystemPrompt: z.string().optional(),
   courseName: z.string().optional(),
-  /** Built-in default classroom topic under the shared「助手库」agent. */
+  /** Built-in default classroom topic under the shared「课堂」agent. */
   isDefaultClassroom: z.boolean().optional(),
   /** Local textbook folder when user binds a disk path instead of a KB. */
   textbookLocalPath: z.string().min(1).optional(),

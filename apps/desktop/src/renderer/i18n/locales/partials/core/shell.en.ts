@@ -55,7 +55,7 @@ export const shellEn = {
       group: 'Groups',
       community: 'Community',
       translate: 'Translate',
-      'assistant-lib': 'Assistant library',
+      'assistant-lib': 'Classroom',
       'code-tools': 'Code tools',
       projects: 'Projects',
     },

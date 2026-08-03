@@ -9,6 +9,8 @@ import {
   buildAssistantLibAssistantSystemPrompt,
   findAssistantLibDefaultClassroomSession,
   getAssistantLibPreset,
+  isAssistantLibAssistantName,
+  listDuplicateAssistantLibDefaultClassroomIds,
   IpcChannel,
   type Assistant,
   type Session,
@@ -29,18 +31,18 @@ async function ensureAssistantLibAssistant(options: {
 
   const promise = (async () => {
     const desiredSystemPrompt = buildAssistantLibAssistantSystemPrompt()
-    const existing = options.assistants.find(
-      (item) => item.name.trim() === ASSISTANT_LIB_ASSISTANT_NAME,
-    )
+    const existing = options.assistants.find((item) => isAssistantLibAssistantName(item.name))
     if (existing) {
+      const needsRename = existing.name.trim() !== ASSISTANT_LIB_ASSISTANT_NAME
       const needsPrompt = existing.systemPrompt !== desiredSystemPrompt
       const needsParams =
         existing.parameters.teachingMode !== 'socratic' ||
         existing.parameters.assistantLibPresetId !== ASSISTANT_LIB_ASSISTANT_MARKER
-      if (!needsPrompt && !needsParams) return existing
+      if (!needsRename && !needsPrompt && !needsParams) return existing
 
       const updated = await window.api.invoke(IpcChannel.AssistantUpdate, {
         id: existing.id,
+        ...(needsRename ? { name: ASSISTANT_LIB_ASSISTANT_NAME } : {}),
         ...(needsPrompt ? { systemPrompt: desiredSystemPrompt } : {}),
         ...(needsParams
           ? {
@@ -62,7 +64,7 @@ async function ensureAssistantLibAssistant(options: {
     const created = await window.api.invoke(IpcChannel.AssistantCreate, {
       workspaceId: options.workspaceId,
       name: ASSISTANT_LIB_ASSISTANT_NAME,
-      description: '助手库学习智能体：课程以话题形式挂载',
+      description: '课堂学习智能体：课程以话题形式挂载',
       systemPrompt: desiredSystemPrompt,
       modelId: options.modelId,
       parameters: {
@@ -74,7 +76,7 @@ async function ensureAssistantLibAssistant(options: {
       isPinned: true,
     })
     if (!created.ok) {
-      throw new Error(created.error.message || '创建助手库智能体失败')
+      throw new Error(created.error.message || '创建课堂智能体失败')
     }
     await options.onReady?.()
     return created.data as Assistant
@@ -104,6 +106,20 @@ async function loadAssistantSessions(workspaceId: string, assistantId: string): 
   return items
 }
 
+async function deleteDuplicateDefaultClassrooms(
+  sessions: Session[],
+  assistantId: string,
+  onReady?: () => void | Promise<void>,
+): Promise<boolean> {
+  const duplicateIds = listDuplicateAssistantLibDefaultClassroomIds(sessions, assistantId)
+  if (duplicateIds.length === 0) return false
+  for (const id of duplicateIds) {
+    await window.api.invoke(IpcChannel.SessionDelete, { id })
+  }
+  await onReady?.()
+  return true
+}
+
 async function ensureDefaultClassroomSession(options: {
   workspaceId: string
   modelId: string
@@ -125,12 +141,14 @@ async function ensureDefaultClassroomSession(options: {
 
     const cached = findAssistantLibDefaultClassroomSession(options.sessions, assistant.id)
     if (cached) {
+      await deleteDuplicateDefaultClassrooms(options.sessions, assistant.id, options.onReady)
       return { assistant, session: cached }
     }
 
     const loaded = await loadAssistantSessions(options.workspaceId, assistant.id)
     const existing = findAssistantLibDefaultClassroomSession(loaded, assistant.id)
     if (existing) {
+      await deleteDuplicateDefaultClassrooms(loaded, assistant.id)
       await options.onReady?.()
       return { assistant, session: existing }
     }

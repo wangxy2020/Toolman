@@ -1,6 +1,6 @@
 import type { AppGetDiagnosticsOutput } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
-import { SettingsRow, SettingsSection } from './SettingsShared'
+import { SettingsCollapsibleSection, SettingsRow, SettingsSection } from './SettingsShared'
 import { formatBytes, statusBadge } from './diagnostics-settings-utils'
 
 interface Props {
@@ -40,7 +40,7 @@ export function DiagnosticsSettingsDatabaseSection({ snapshot }: Props) {
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title={t('settings.diagnostics.hub.title')}>
+      <SettingsCollapsibleSection title={t('settings.diagnostics.hub.title')}>
         <SettingsRow label={t('settings.diagnostics.hub.sidecar')}>
           {statusBadge(
             snapshot.communityHub.running,
@@ -77,7 +77,7 @@ export function DiagnosticsSettingsDatabaseSection({ snapshot }: Props) {
         {snapshot.communityHub.error ? (
           <p className="tm-settings-error">{snapshot.communityHub.error}</p>
         ) : null}
-      </SettingsSection>
+      </SettingsCollapsibleSection>
     </>
   )
 }

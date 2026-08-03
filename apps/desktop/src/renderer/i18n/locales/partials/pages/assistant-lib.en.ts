@@ -1,5 +1,5 @@
 export const assistantLibPageEn = {
-  title: 'Assistant library',
+  title: 'Classroom',
   toolbarChat: 'Classroom',
   records: {
     title: 'Classroom records',
