@@ -9,6 +9,7 @@ type ChatPageKnowledgeViewProps = Pick<
   | 'knowledgeFolder'
   | 'networkKnowledgeFolder'
   | 'localFilesFolder'
+  | 'syncKnowledgeFolder'
   | 'systemPaths'
   | 'handleOpenNote'
   | 'handleChatWithKnowledgeFiles'
@@ -21,6 +22,7 @@ export function ChatPageKnowledgeView({
   knowledgeFolder,
   networkKnowledgeFolder,
   localFilesFolder,
+  syncKnowledgeFolder,
   systemPaths,
   handleOpenNote,
   handleChatWithKnowledgeFiles,
@@ -40,6 +42,10 @@ export function ChatPageKnowledgeView({
       localFilesFolderPath={localFilesFolder.path}
       localFilesFolderLoading={localFilesFolder.loading}
       localFilesFolderError={localFilesFolder.error}
+      syncKnowledgeFolderPath={syncKnowledgeFolder.path}
+      syncKnowledgeFolderLoading={syncKnowledgeFolder.loading}
+      syncKnowledgeFolderError={syncKnowledgeFolder.error}
+      knowledgeItems={knowledge.items}
       loading={knowledge.loading}
       error={knowledge.error}
       onKbChanged={() => void knowledge.load()}
@@ -49,6 +55,8 @@ export function ChatPageKnowledgeView({
       onNetworkKnowledgeFolderError={networkKnowledgeFolder.setError}
       onLocalFilesFolderPathChanged={(path) => void localFilesFolder.updatePath(path)}
       onLocalFilesFolderError={localFilesFolder.setError}
+      onSyncKnowledgeFolderPathChanged={(path) => void syncKnowledgeFolder.updatePath(path)}
+      onSyncKnowledgeFolderError={syncKnowledgeFolder.setError}
       systemPaths={systemPaths}
       onOpenNote={handleOpenNote}
       onChatWithKnowledgeFiles={(items) => void handleChatWithKnowledgeFiles(items)}

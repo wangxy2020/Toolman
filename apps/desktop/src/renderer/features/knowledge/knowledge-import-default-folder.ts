@@ -11,12 +11,14 @@ const DEFAULT_FOLDER_KB_NAMES: Record<DefaultFolderKnowledgeKind, string> = {
   local: SYSTEM_DEFAULT_FOLDER_KB_NAME,
   network: SYSTEM_DEFAULT_FOLDER_KB_NAME,
   local_files: SYSTEM_DEFAULT_FOLDER_KB_NAME,
+  sync: SYSTEM_DEFAULT_FOLDER_KB_NAME,
 }
 
 const ENSURE_FOLDER_CHANNELS: Record<DefaultFolderKnowledgeKind, IpcChannel> = {
   local: IpcChannel.KnowledgeFolderEnsure,
   network: IpcChannel.KnowledgeNetworkFolderEnsure,
   local_files: IpcChannel.KnowledgeLocalFilesFolderEnsure,
+  sync: IpcChannel.KnowledgeSyncFolderEnsure,
 }
 
 async function invokeIpc<T>(channel: IpcChannel, input: unknown): Promise<T | null> {
@@ -67,6 +69,7 @@ async function findOrCreateDefaultFolderKb(
     local: '默认文件夹知识库',
     network: '默认文件夹知识库',
     local_files: '默认文件夹存储',
+    sync: '默认同步知识库',
   }
 
   const created = await invokeIpc<KnowledgeBase>(IpcChannel.KnowledgeBaseCreate, {

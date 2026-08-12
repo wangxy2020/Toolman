@@ -228,38 +228,38 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
       )}
 
       {showMeteringView ? null : (
-        <footer className="tm-pm-gantt-statusbar" aria-live="polite">
-          <div
-            className={[
-              'tm-pm-gantt-statusbar-message',
-              statusFeedback
-                ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
-                : dirty
-                  ? 'tm-pm-gantt-statusbar-message--info'
-                  : 'tm-pm-gantt-statusbar-message--muted',
-            ].join(' ')}
-          >
-            {statusFeedback
-              ? statusFeedback.text
+      <footer className="tm-pm-gantt-statusbar" aria-live="polite">
+        <div
+          className={[
+            'tm-pm-gantt-statusbar-message',
+            statusFeedback
+              ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
               : dirty
-                ? t('projectManagerPage.costTable.statusDirty', {
-                    count: String(rows.length),
-                  })
-                : t('projectManagerPage.costTable.statusReady', {
-                    count: String(rows.length),
-                  })}
-            {!statusFeedback && selectedRow?.name
-              ? ` · ${t('projectManagerPage.costTable.statusSelected', {
-                  name: selectedRow.name,
-                })}`
-              : null}
-          </div>
-        </footer>
+                ? 'tm-pm-gantt-statusbar-message--info'
+                : 'tm-pm-gantt-statusbar-message--muted',
+          ].join(' ')}
+        >
+          {statusFeedback
+            ? statusFeedback.text
+            : dirty
+              ? t('projectManagerPage.costTable.statusDirty', {
+                  count: String(rows.length),
+                })
+              : t('projectManagerPage.costTable.statusReady', {
+                  count: String(rows.length),
+                })}
+          {!statusFeedback && selectedRow?.name
+            ? ` · ${t('projectManagerPage.costTable.statusSelected', {
+                name: selectedRow.name,
+              })}`
+            : null}
+        </div>
+      </footer>
       )}
 
       {showMeteringView ? null : <ProjectCostTableMenus state={state} />}
       <ProjectCostTableDialogs panelProps={props} state={state} />
-    </div>
+              </div>
   )
 }
 

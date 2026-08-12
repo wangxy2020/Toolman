@@ -19,6 +19,7 @@ export const knowledgePageZhCN = {
   wrongSection: '「{{name}}」不属于{{section}}分区。请在左侧对应分区中管理。',
   sections: {
     local: '本地知识库',
+    sync: '同步知识库',
     network: '网络知识库',
     shared: '共享知识库',
     localFiles: '本地文件',
@@ -28,6 +29,7 @@ export const knowledgePageZhCN = {
   sort: { createdAt: '创建时间', size: '大小', fileName: '文件名' },
   settings: {
     titleLocal: '本地知识库设置',
+    titleSync: '同步知识库设置',
     titleNetwork: '网络知识库设置',
     titleLocalFiles: '本地文件设置',
     tabs: {
@@ -121,6 +123,13 @@ export const knowledgePageZhCN = {
     clearSelection: '取消',
     deleteSelected: '删除已勾选',
     reindexAll: '全部重建索引',
+    moveToSync: '移动到同步知识库',
+    moveToSyncDefault: '默认文件夹',
+    moveToSyncEmpty: '暂无同步知识库',
+    moveToSyncNeedSelection: '请先勾选要移动的文件',
+    moveToSyncNeedPath: '所选文件缺少本地路径，无法移动',
+    moveToSyncDone: '已移动 {{count}} 个文件到同步知识库',
+    moveToSyncPartial: '已移动 {{moved}} 个，失败 {{failed}} 个',
   },
   docStatus: {
     pending: '等待同步',

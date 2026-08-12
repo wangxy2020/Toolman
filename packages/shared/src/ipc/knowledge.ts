@@ -7,7 +7,7 @@ import {
 
 export const KnowledgeBaseStatusSchema = z.enum(['idle', 'indexing', 'reindexing', 'error'])
 
-export const KnowledgeBaseKindSchema = z.enum(['local', 'network', 'local_files', 'shared'])
+export const KnowledgeBaseKindSchema = z.enum(['local', 'network', 'local_files', 'shared', 'sync'])
 export type KnowledgeBaseKind = z.infer<typeof KnowledgeBaseKindSchema>
 
 export const KnowledgeEmbedConfigSchema = z.object({
@@ -551,7 +551,7 @@ export const KnowledgeFolderDeleteFileOutputSchema = z.object({
 
 export const KnowledgeDefaultFolderEnsureKbInputSchema = z.object({
   workspaceId: UuidSchema,
-  kind: z.enum(['local', 'network', 'local_files']),
+  kind: z.enum(['local', 'network', 'local_files', 'sync']),
 })
 
 export const KnowledgeDefaultFolderEnsureKbOutputSchema = z.object({

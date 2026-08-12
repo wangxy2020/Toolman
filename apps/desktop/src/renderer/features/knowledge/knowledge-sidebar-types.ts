@@ -4,10 +4,17 @@ import {
   type KnowledgeBaseKind,
 } from '@toolman/shared'
 
-export type KnowledgeSidebarSection = 'local' | 'network' | 'shared' | 'local-files' | 'file-tools'
+export type KnowledgeSidebarSection =
+  | 'local'
+  | 'sync'
+  | 'network'
+  | 'shared'
+  | 'local-files'
+  | 'file-tools'
 
 export const DEFAULT_KNOWLEDGE_FOLDER_ID = '__default_knowledge_folder__'
 export const DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID = '__default_network_knowledge_folder__'
+export const DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID = '__default_sync_knowledge_folder__'
 export const DEFAULT_LOCAL_FILES_FOLDER_ID = '__default_local_files_folder__'
 export const FILE_REGISTRY_TOOL_ID = '__file_registry_tool__'
 export const FILE_DEDUP_TOOL_ID = '__file_dedup_tool__'
@@ -27,6 +34,7 @@ export const SYSTEM_DEFAULT_FOLDER_KB_NAMES = new Set([
 export const KNOWLEDGE_VIRTUAL_FOLDER_IDS = new Set([
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
+  DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   FILE_REGISTRY_TOOL_ID,
   FILE_DEDUP_TOOL_ID,
@@ -47,20 +55,22 @@ export function isDeletableSavedSharedKnowledgeBase(
   return item.kind === 'shared' && !isP2pSharedKnowledgeMirrorDescription(item.description)
 }
 
+/** Visible sidebar sections. `local-files` kept in the type for legacy routes but hidden for now. */
 export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{
   id: KnowledgeSidebarSection
   label: string
 }> = [
   { id: 'local', label: '本地知识库' },
+  { id: 'sync', label: '同步知识库' },
   { id: 'network', label: '网络知识库' },
   { id: 'shared', label: '共享知识库' },
-  { id: 'local-files', label: '本地文件' },
   { id: 'file-tools', label: '本地文件工具' },
 ]
 
 export function knowledgeSectionForKind(kind: KnowledgeBaseKind): KnowledgeSidebarSection {
   if (kind === 'shared') return 'shared'
   if (kind === 'network') return 'network'
+  if (kind === 'sync') return 'sync'
   if (kind === 'local_files') return 'local-files'
   return 'local'
 }

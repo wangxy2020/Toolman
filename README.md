@@ -59,6 +59,7 @@ pnpm --filter @toolman/desktop dev
 | RC1 内测 | [docs/engineering/RC1_DOGFOOD.md](docs/engineering/RC1_DOGFOOD.md) |
 | OpenDataLoader PDF | [docs/engineering/OPENDATALOADER_PDF.md](docs/engineering/OPENDATALOADER_PDF.md) |
 | 发布与 OTA | [docs/engineering/](docs/engineering/) |
+| 移动端（iOS/Android） | [docs/mobile/](docs/mobile/) |
 
 ## 故障排查
 

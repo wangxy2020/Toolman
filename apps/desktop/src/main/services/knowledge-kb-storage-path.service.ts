@@ -7,10 +7,12 @@ import {
   ensureWorkspaceLocalFilesFolder,
   ensureWorkspaceNetworkKnowledgeFolder,
   ensureWorkspaceSharedKnowledgeFolder,
+  ensureWorkspaceSyncKnowledgeFolder,
   getWorkspaceKnowledgeFolderPath,
   getWorkspaceLocalFilesFolderPath,
   getWorkspaceNetworkKnowledgeFolderPath,
   getWorkspaceSharedKnowledgeFolderPath,
+  getWorkspaceSyncKnowledgeFolderPath,
 } from './knowledge-folder.service'
 
 function sanitizeKnowledgeBaseFolderName(name: string): string {
@@ -56,6 +58,16 @@ function resolveWorkspaceRootFolder(
     )
   }
 
+  if (kind === 'sync') {
+    if (ensure) {
+      return ensureWorkspaceSyncKnowledgeFolder({ workspaceId })
+    }
+    return (
+      getWorkspaceSyncKnowledgeFolderPath({ workspaceId }) ??
+      ensureWorkspaceSyncKnowledgeFolder({ workspaceId })
+    )
+  }
+
   if (kind === 'local_files') {
     if (ensure) {
       return ensureWorkspaceLocalFilesFolder({ workspaceId })
@@ -80,6 +92,7 @@ function resolveKnowledgeStorageKind(
 ): KnowledgeFolderKind {
   if (kind === 'network') return 'network'
   if (kind === 'shared') return 'shared'
+  if (kind === 'sync') return 'sync'
   if (kind === 'local_files') return 'local_files'
   return 'local'
 }

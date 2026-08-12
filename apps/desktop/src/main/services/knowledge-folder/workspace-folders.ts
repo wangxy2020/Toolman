@@ -11,6 +11,7 @@ import {
   getDefaultLocalFilesFolderPath,
   getDefaultNetworkKnowledgeFolderPath,
   getDefaultSharedKnowledgeFolderPath,
+  getDefaultSyncKnowledgeFolderPath,
   ensureToolmanUserDocumentFolders,
 } from '../toolman-user-documents.service'
 import { getWorkspace, listWorkspaces, updateWorkspace } from '../workspace.service'
@@ -156,6 +157,28 @@ export function getWorkspaceSharedKnowledgeFolderPath(input: unknown): string | 
   const stored = readWorkspaceSettingString(workspace.settings, 'sharedKnowledgeFolderPath')
   if (typeof stored === 'string' && stored.trim().length > 0) {
     return resolveStoredFolderPath(stored, getDefaultSharedKnowledgeFolderPath)
+  }
+
+  return null
+}
+
+export function ensureWorkspaceSyncKnowledgeFolder(input: unknown): string {
+  const data = KnowledgeFolderEnsureInputSchema.parse(input)
+  return ensureWorkspaceFolderSetting(
+    data.workspaceId,
+    'syncKnowledgeFolderPath',
+    getDefaultSyncKnowledgeFolderPath,
+  )
+}
+
+export function getWorkspaceSyncKnowledgeFolderPath(input: unknown): string | null {
+  const data = KnowledgeFolderGetInputSchema.parse(input)
+  const workspace = getWorkspace({ id: data.workspaceId })
+  if (!workspace) return null
+
+  const stored = readWorkspaceSettingString(workspace.settings, 'syncKnowledgeFolderPath')
+  if (typeof stored === 'string' && stored.trim().length > 0) {
+    return resolveStoredFolderPath(stored, getDefaultSyncKnowledgeFolderPath)
   }
 
   return null

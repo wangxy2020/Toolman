@@ -85,6 +85,21 @@ export const knowledgeFolderIpcHandlers: KnowledgeHandlerMap = {
     return ipcOk({ path })
   },
 
+  [IpcChannel.KnowledgeSyncFolderEnsure]: async (input) => {
+    try {
+      const path = knowledgeFolderService.ensureWorkspaceSyncKnowledgeFolder(input)
+      return ipcOk({ path })
+    } catch (error) {
+      const message = toErrorMessage(error, 'Ensure sync folder failed')
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
+  [IpcChannel.KnowledgeSyncFolderGet]: async (input) => {
+    const path = knowledgeFolderService.getWorkspaceSyncKnowledgeFolderPath(input)
+    return ipcOk({ path })
+  },
+
   [IpcChannel.KnowledgeLocalFilesFolderEnsure]: async (input) => {
     try {
       const path = knowledgeFolderService.ensureWorkspaceLocalFilesFolder(input)

@@ -40,6 +40,7 @@ export const modalsEn = {
       typeLabel: 'Type',
       typeAria: 'Knowledge base type',
       kindLocal: 'Local knowledge',
+      kindSync: 'Synced knowledge',
       kindNetwork: 'Network knowledge',
       kindLocalFiles: 'Local files',
       descriptionPlaceholder: 'Briefly describe this knowledge base (optional)',

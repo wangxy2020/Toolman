@@ -89,17 +89,12 @@ export function KnowledgeCreateModal(props: KnowledgeCreateModalProps) {
                     <span>{t('modals.knowledgeCreate.kindLocal')}</span>
                   </label>
                   <label className="tm-kb-kind-radio">
-                    <input type="radio" name="kb-kind" checked={kind === 'network'} onChange={() => setKind('network')} />
-                    <span>{t('modals.knowledgeCreate.kindNetwork')}</span>
+                    <input type="radio" name="kb-kind" checked={kind === 'sync'} onChange={() => setKind('sync')} />
+                    <span>{t('modals.knowledgeCreate.kindSync')}</span>
                   </label>
                   <label className="tm-kb-kind-radio">
-                    <input
-                      type="radio"
-                      name="kb-kind"
-                      checked={kind === 'local_files'}
-                      onChange={() => setKind('local_files')}
-                    />
-                    <span>{t('modals.knowledgeCreate.kindLocalFiles')}</span>
+                    <input type="radio" name="kb-kind" checked={kind === 'network'} onChange={() => setKind('network')} />
+                    <span>{t('modals.knowledgeCreate.kindNetwork')}</span>
                   </label>
                 </div>
               </div>

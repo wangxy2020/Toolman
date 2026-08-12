@@ -17,6 +17,13 @@ import {
   formatSitemapImportResultError,
   importKnowledgeFiles,
 } from './knowledge-page-operations'
+import {
+  moveKnowledgeFilesToSync,
+  type SyncMoveTarget,
+} from './knowledge-move-to-sync'
+import {
+  SYSTEM_DEFAULT_FOLDER_KB_NAMES,
+} from './knowledge-sidebar-types'
 import type { KnowledgePageProps } from './knowledge-page-types'
 import type { UseKnowledgePageStateResult } from './useKnowledgePageState'
 
@@ -25,6 +32,8 @@ export function useKnowledgePageDocuments(
     workspaceId,
     section,
     localFilesFolderPath,
+    syncKnowledgeFolderPath,
+    knowledgeItems,
     onKbChanged,
     onChatWithKnowledgeFiles,
   }: KnowledgePageProps,
@@ -42,7 +51,9 @@ export function useKnowledgePageDocuments(
     setPendingDelete,
     isFileDedupView,
     showingDefaultLocalFilesFolder,
+    showingDefaultSyncFolder,
     localFilesDefaultKb,
+    syncDefaultKb,
     importTarget,
     showFileToolbar,
     defaultFolderInitializing,
@@ -52,6 +63,22 @@ export function useKnowledgePageDocuments(
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
   const documents = useKnowledgeDocuments(workspaceId, importTarget.kbId)
+
+  const syncMoveTargets = useMemo(
+    () =>
+      (knowledgeItems ?? []).filter(
+        (item) =>
+          item.kind === 'sync' &&
+          !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name) &&
+          item.id !== importTarget.kbId,
+      ),
+    [knowledgeItems, importTarget.kbId],
+  )
+
+  const showDefaultSyncTarget = !(
+    showingDefaultSyncFolder ||
+    (syncDefaultKb.kbId != null && syncDefaultKb.kbId === importTarget.kbId)
+  )
 
   const panelDocuments = useMemo(() => {
     const items = documents.items.map((doc) => ({
@@ -294,6 +321,45 @@ export function useKnowledgePageDocuments(
     }
   }
 
+  const handleMoveToSync = async (target: SyncMoveTarget) => {
+    if (!workspaceId) return
+    if (selectedIds.size === 0) {
+      documents.setError(t('knowledgePage.contextMenu.moveToSyncNeedSelection'))
+      return
+    }
+
+    const result = await moveKnowledgeFilesToSync({
+      workspaceId,
+      documentIds: Array.from(selectedIds),
+      panelDocuments,
+      target,
+      syncKnowledgeFolderPath: syncKnowledgeFolderPath ?? syncDefaultKb.folderPath,
+      remove: documents.remove,
+      setError: (message) => {
+        if (message === 'selected-files-need-path') {
+          documents.setError(t('knowledgePage.contextMenu.moveToSyncNeedPath'))
+          return
+        }
+        documents.setError(message)
+      },
+    })
+
+    onKbChanged?.()
+    if (!result) return
+
+    setSelectedIds(new Set())
+    if (result.failed > 0) {
+      documents.setError(
+        t('knowledgePage.contextMenu.moveToSyncPartial', {
+          moved: result.moved,
+          failed: result.failed,
+        }),
+      )
+      return
+    }
+    documents.setError(null)
+  }
+
   const handleContextMenu = (event: React.MouseEvent, _documentId?: string) => {
     if (!showFileToolbar) return
     event.preventDefault()
@@ -312,6 +378,8 @@ export function useKnowledgePageDocuments(
     statusFallback,
     statusPriority,
     statusMeta,
+    syncMoveTargets,
+    showDefaultSyncTarget,
     handleChatWithFiles,
     handleToggleSelect,
     handleSelectAll,
@@ -323,6 +391,7 @@ export function useKnowledgePageDocuments(
     handleAddUrl,
     handleAddSitemap,
     handleReindexAll,
+    handleMoveToSync,
     handleContextMenu,
     confirmDeleteDocuments,
     onChatWithKnowledgeFiles,

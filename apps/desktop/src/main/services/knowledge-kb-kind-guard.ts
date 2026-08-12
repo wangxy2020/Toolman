@@ -10,8 +10,12 @@ export function assertKnowledgeBaseAcceptsLocalFiles(kb: Pick<KnowledgeBaseRow, 
 }
 
 export function assertKnowledgeBaseAcceptsUrls(kb: Pick<KnowledgeBaseRow, 'kind'>): void {
-  if (kb.kind === 'local') {
-    throw new Error('本地知识库仅支持上传文件，网页请添加到网络知识库')
+  if (kb.kind === 'local' || kb.kind === 'sync') {
+    throw new Error(
+      kb.kind === 'sync'
+        ? '同步知识库仅支持上传文件，网页请添加到网络知识库'
+        : '本地知识库仅支持上传文件，网页请添加到网络知识库',
+    )
   }
   if (kb.kind === 'local_files') {
     throw new Error('本地文件库仅支持文件存储，网页请添加到网络知识库')

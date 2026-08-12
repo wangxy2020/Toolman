@@ -2,6 +2,7 @@ import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
+  DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   FILE_REGISTRY_TOOL_ID,
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
   type KnowledgeSidebarSection,
@@ -44,6 +45,11 @@ export function resolveBreadcrumbItemName({
 }: BreadcrumbParams): string | undefined {
   if (section === 'local') {
     return activeId === DEFAULT_KNOWLEDGE_FOLDER_ID ? SYSTEM_DEFAULT_FOLDER_KB_NAME : active?.name
+  }
+  if (section === 'sync') {
+    return activeId === DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID
+      ? SYSTEM_DEFAULT_FOLDER_KB_NAME
+      : active?.name
   }
   if (section === 'network') {
     return activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID

@@ -38,6 +38,32 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/mobile/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'electron',
+              message: 'Mobile must stay isolated from Electron. See docs/mobile/ISOLATION.md',
+            },
+            {
+              name: 'better-sqlite3',
+              message: 'Mobile must not use desktop native SQLite.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/apps/desktop/**', 'apps/desktop/**'],
+              message: 'Do not import desktop app code into mobile.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.{test,spec}.{ts,tsx}', '**/*.integration.test.ts'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',

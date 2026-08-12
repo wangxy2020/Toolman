@@ -131,6 +131,23 @@ export const AppDiagnosticsCommunityCidSchema = z.object({
   lastError: z.string().nullable().optional(),
 })
 
+export const AppDiagnosticsMobileSyncSchema = z.object({
+  syncEnabled: z.boolean(),
+  agentHostEnabled: z.boolean(),
+  hubRunning: z.boolean(),
+  hubBaseUrl: z.string().nullable(),
+  lastError: z.string().nullable().optional(),
+})
+export type AppDiagnosticsMobileSync = z.infer<typeof AppDiagnosticsMobileSyncSchema>
+
+const DEFAULT_MOBILE_SYNC_DIAGNOSTICS: AppDiagnosticsMobileSync = {
+  syncEnabled: false,
+  agentHostEnabled: false,
+  hubRunning: false,
+  hubBaseUrl: null,
+  lastError: null,
+}
+
 export const AppGetDiagnosticsOutputSchema = z.object({
   collectedAt: z.number().int().positive(),
   database: AppDiagnosticsDatabaseSchema,
@@ -138,9 +155,21 @@ export const AppGetDiagnosticsOutputSchema = z.object({
   communityHub: AppDiagnosticsCommunityHubSchema,
   communityYjs: AppDiagnosticsCommunityYjsSchema,
   communityCid: AppDiagnosticsCommunityCidSchema,
+  /** Optional for older main processes / HMR mismatch; UI falls back to defaults. */
+  mobileSync: AppDiagnosticsMobileSyncSchema.default(DEFAULT_MOBILE_SYNC_DIAGNOSTICS),
   p2p: AppDiagnosticsP2pSchema,
   operations: AppDiagnosticsOperationsSchema,
   provenance: AppDiagnosticsProvenanceSchema,
   recentEvents: z.array(DiagnosticLogEntrySchema),
 })
 export type AppGetDiagnosticsOutput = z.infer<typeof AppGetDiagnosticsOutputSchema>
+
+export const MobileSyncSetEnabledInputSchema = z.object({
+  enabled: z.boolean(),
+})
+export type MobileSyncSetEnabledInput = z.infer<typeof MobileSyncSetEnabledInputSchema>
+
+export const MobileAgentHostSetEnabledInputSchema = z.object({
+  enabled: z.boolean(),
+})
+export type MobileAgentHostSetEnabledInput = z.infer<typeof MobileAgentHostSetEnabledInputSchema>

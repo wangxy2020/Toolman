@@ -31,6 +31,7 @@ export interface KnowledgeCreateModalProps {
   defaultLocalFolderPath: string | null
   defaultNetworkFolderPath: string | null
   defaultLocalFilesFolderPath: string | null
+  defaultSyncFolderPath: string | null
   onClose: () => void
   onSubmit: (input: KnowledgeCreateInput) => Promise<void>
 }

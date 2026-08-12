@@ -9,6 +9,8 @@ import {
   resolveProjectedGroupNoteNotebookId,
 } from '../p2p/note-notebook-placement'
 import { getSharedResourceRepo, readMetadataNotebookId } from '../p2p/note-sync-utils'
+import { isMobileSyncPreferenceEnabled } from '../mobile-sync.config'
+import { publishNoteSyncChange } from '../mobile-sync-store'
 import { reconcileNotesDataGroupPlacement } from './reconcile-group-placement'
 import type { NoteItem, NotesData } from './types'
 
@@ -58,9 +60,22 @@ export function syncNotesData(input: unknown): { synced: boolean } {
       syncFolderPath: parsed.syncFolderPath ?? null,
     })
     writeFileSync(NOTES_DATA_PATH(), JSON.stringify(cachedData), 'utf8')
+    publishNotesForMobileSync(cachedData.notes)
     return { synced: true }
   } catch {
     return { synced: false }
+  }
+}
+
+function publishNotesForMobileSync(notes: NoteItem[]): void {
+  if (!isMobileSyncPreferenceEnabled()) return
+  for (const note of notes) {
+    publishNoteSyncChange({
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      updatedAt: note.updatedAt,
+    })
   }
 }
 
@@ -82,7 +97,10 @@ function resolveUpsertNotebookId(note: NoteItem, existing?: NoteItem): string {
   return preserved
 }
 
-export function upsertNoteItem(note: NoteItem): void {
+export function upsertNoteItem(
+  note: NoteItem,
+  options?: { skipSyncPublish?: boolean },
+): void {
   const data = getNotesData()
   const existing = data.notes.find((item) => item.id === note.id)
   const notebookId = resolveUpsertNotebookId(note, existing)
@@ -102,6 +120,9 @@ export function upsertNoteItem(note: NoteItem): void {
 
   cachedData = nextData
   writeFileSync(NOTES_DATA_PATH(), JSON.stringify(cachedData), 'utf8')
+  if (!options?.skipSyncPublish) {
+    publishNotesForMobileSync([nextNote])
+  }
 }
 
 export function getNoteById(noteId: string): NoteItem | null {

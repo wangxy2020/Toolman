@@ -1,0 +1,76 @@
+/**
+ * Persisted preferences for desktop ↔ mobile Sync Hub / agent host.
+ * Env `TOOLMAN_MOBILE_*` still overrides when set (CI / forced enable).
+ */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { app } from 'electron'
+import { z } from 'zod'
+
+const MobileSyncPreferencesSchema = z.object({
+  syncEnabled: z.boolean().default(false),
+  agentHostEnabled: z.boolean().default(false),
+  /** Optional override; empty → default port 17890. */
+  port: z.number().int().positive().optional(),
+})
+
+export type MobileSyncPreferences = z.infer<typeof MobileSyncPreferencesSchema>
+
+const DEFAULT_PREFS: MobileSyncPreferences = {
+  syncEnabled: false,
+  agentHostEnabled: false,
+}
+
+function getConfigPath(): string {
+  return join(app.getPath('userData'), 'mobile-sync', 'preferences.json')
+}
+
+export function readMobileSyncPreferences(): MobileSyncPreferences {
+  try {
+    const path = getConfigPath()
+    if (!existsSync(path)) return { ...DEFAULT_PREFS }
+    return MobileSyncPreferencesSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+  } catch {
+    return { ...DEFAULT_PREFS }
+  }
+}
+
+export function writeMobileSyncPreferences(
+  prefs: MobileSyncPreferences,
+): MobileSyncPreferences {
+  const parsed = MobileSyncPreferencesSchema.parse(prefs)
+  const path = getConfigPath()
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(parsed, null, 2), 'utf8')
+  return parsed
+}
+
+function envTriState(name: string): boolean | null {
+  const value = process.env[name]
+  if (value === '1' || value === 'true') return true
+  if (value === '0' || value === 'false') return false
+  return null
+}
+
+/** Sync Hub enabled: env override wins, else persisted preference. */
+export function isMobileSyncPreferenceEnabled(): boolean {
+  const env = envTriState('TOOLMAN_MOBILE_SYNC')
+  if (env !== null) return env
+  return readMobileSyncPreferences().syncEnabled
+}
+
+/** Agent host enabled: requires sync; env override wins when set. */
+export function isMobileAgentHostPreferenceEnabled(): boolean {
+  if (!isMobileSyncPreferenceEnabled()) return false
+  const env = envTriState('TOOLMAN_MOBILE_AGENT_HOST')
+  if (env !== null) return env
+  return readMobileSyncPreferences().agentHostEnabled
+}
+
+export function resolveMobileSyncPort(): number {
+  const fromEnv = Number.parseInt(process.env.TOOLMAN_MOBILE_SYNC_PORT ?? '', 10)
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv
+  const fromPrefs = readMobileSyncPreferences().port
+  if (typeof fromPrefs === 'number' && fromPrefs > 0) return fromPrefs
+  return 17890
+}

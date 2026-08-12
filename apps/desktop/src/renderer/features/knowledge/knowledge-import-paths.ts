@@ -4,6 +4,7 @@ import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
+  DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   LEGACY_SYSTEM_DEFAULT_LOCAL_FILES_KB_NAME,
   LEGACY_SYSTEM_DEFAULT_NETWORK_FOLDER_KB_NAME,
   SYSTEM_DEFAULT_FOLDER_KB_NAME,
@@ -52,13 +53,16 @@ export function resolveKnowledgeSectionRoots(options: {
   knowledgeFolderPath: string | null
   networkKnowledgeFolderPath: string | null
   localFilesFolderPath: string | null
+  syncKnowledgeFolderPath?: string | null
   localDefaultKbStoragePath?: string | null
   networkDefaultKbStoragePath?: string | null
   localFilesDefaultKbStoragePath?: string | null
+  syncDefaultKbStoragePath?: string | null
 }): {
   local: string | null
   network: string | null
   localFiles: string | null
+  sync: string | null
 } {
   return {
     local:
@@ -70,6 +74,9 @@ export function resolveKnowledgeSectionRoots(options: {
     localFiles:
       options.localFilesFolderPath ??
       resolveKnowledgeRootFromDefaultStorage(options.localFilesDefaultKbStoragePath ?? null),
+    sync:
+      options.syncKnowledgeFolderPath ??
+      resolveKnowledgeRootFromDefaultStorage(options.syncDefaultKbStoragePath ?? null),
   }
 }
 
@@ -101,9 +108,11 @@ export function resolveKnowledgeImportTarget(options: {
   defaultFolderKbId: string | null
   defaultNetworkFolderKbId: string | null
   defaultLocalFilesKbId: string | null
+  defaultSyncFolderKbId?: string | null
   knowledgeFolderPath: string | null
   networkKnowledgeFolderPath: string | null
   localFilesFolderPath: string | null
+  syncKnowledgeFolderPath?: string | null
 }): ImportTarget {
   const {
     section,
@@ -114,14 +123,18 @@ export function resolveKnowledgeImportTarget(options: {
     defaultFolderKbId,
     defaultNetworkFolderKbId,
     defaultLocalFilesKbId,
+    defaultSyncFolderKbId,
     knowledgeFolderPath,
     networkKnowledgeFolderPath,
     localFilesFolderPath,
+    syncKnowledgeFolderPath,
   } = options
 
   const showingDefaultFolder = section === 'local' && activeId === DEFAULT_KNOWLEDGE_FOLDER_ID
   const showingDefaultNetworkFolder =
     section === 'network' && activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID
+  const showingDefaultSyncFolder =
+    section === 'sync' && activeId === DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID
   const showingDefaultLocalFilesFolder =
     section === 'local-files' && activeId === DEFAULT_LOCAL_FILES_FOLDER_ID
 
@@ -149,6 +162,20 @@ export function resolveKnowledgeImportTarget(options: {
       storagePath,
       defaultImportPath: storagePath,
       ready: Boolean(defaultNetworkFolderKbId && storagePath),
+      vectorized: true,
+    }
+  }
+
+  if (showingDefaultSyncFolder) {
+    const storagePath = buildStoragePathForKb(
+      syncKnowledgeFolderPath ?? null,
+      SYSTEM_DEFAULT_FOLDER_KB_NAME,
+    )
+    return {
+      kbId: defaultSyncFolderKbId ?? null,
+      storagePath,
+      defaultImportPath: storagePath,
+      ready: Boolean(defaultSyncFolderKbId && storagePath),
       vectorized: true,
     }
   }
@@ -183,7 +210,9 @@ export function resolveKnowledgeImportTarget(options: {
         ? networkKnowledgeFolderPath
         : section === 'local-files'
           ? localFilesFolderPath
-          : knowledgeFolderPath
+          : section === 'sync'
+            ? syncKnowledgeFolderPath ?? null
+            : knowledgeFolderPath
     const storagePath = buildStoragePathForKb(baseFolder ?? null, activeKbName)
     return {
       kbId: activeKbId,

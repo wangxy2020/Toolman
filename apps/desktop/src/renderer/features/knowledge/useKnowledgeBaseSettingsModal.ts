@@ -25,11 +25,14 @@ export function useKnowledgeBaseSettingsModal({
   const { t } = useI18n()
   const isNetworkKb = kb.kind === 'network'
   const isLocalKb = kb.kind === 'local'
+  const isSyncKb = kb.kind === 'sync'
   const isLocalFilesKb = kb.kind === 'local_files'
   const isVectorizedKb = !isLocalFilesKb
+  const isFileBackedLocalLike = isLocalKb || isSyncKb
 
   const localRootFolder = useKnowledgeDefaultFolder(isLocalKb ? workspaceId : null, 'local')
   const networkRootFolder = useKnowledgeDefaultFolder(isNetworkKb ? workspaceId : null, 'network')
+  const syncRootFolder = useKnowledgeDefaultFolder(isSyncKb ? workspaceId : null, 'sync')
   const localFilesRootFolder = useKnowledgeDefaultFolder(
     isLocalFilesKb ? workspaceId : null,
     'local_files',
@@ -62,7 +65,10 @@ export function useKnowledgeBaseSettingsModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
   const [memoryCount, setMemoryCount] = useState(0)
   const footerErrorRef = useRef<HTMLParagraphElement>(null)
-  const watchStatus = useKnowledgeWatchStatus(isLocalKb ? workspaceId : null, isLocalKb ? kb.id : null)
+  const watchStatus = useKnowledgeWatchStatus(
+    isFileBackedLocalLike ? workspaceId : null,
+    isFileBackedLocalLike ? kb.id : null,
+  )
 
   const showSubmitError = (message: string) => {
     setError(message)
@@ -80,14 +86,18 @@ export function useKnowledgeBaseSettingsModal({
         localRootFolder.path,
         localFilesRootFolder.path,
         networkRootFolder.path,
+        isSyncKb,
+        syncRootFolder.path,
       ),
     [
       isLocalKb,
       isLocalFilesKb,
+      isSyncKb,
       kb.name,
       localRootFolder.path,
       localFilesRootFolder.path,
       networkRootFolder.path,
+      syncRootFolder.path,
     ],
   )
 
@@ -135,7 +145,7 @@ export function useKnowledgeBaseSettingsModal({
       },
       resolvedDefaultEmbeddingRef,
       defaultDocProcessorProviderId,
-      isLocalKb,
+      isFileBackedLocalLike,
       isLocalFilesKb,
       t('knowledgePage.settings.advanced.vectorReindexConfirm'),
     )
@@ -157,17 +167,17 @@ export function useKnowledgeBaseSettingsModal({
 
   const combinedError =
     error ?? watchStatus.error ?? networkRootFolder.error ?? localFilesRootFolder.error
-  const modalTitle = getModalTitle(t, isLocalFilesKb, isLocalKb)
+  const modalTitle = getModalTitle(t, isLocalFilesKb, isLocalKb, isSyncKb)
   const settingsTabs = useMemo(
     () =>
       buildSettingsTabs(t, {
         isLocalFilesKb,
-        isLocalKb,
+        isLocalKb: isFileBackedLocalLike,
         isNetworkKb,
         isVectorizedKb,
         memoryCount,
       }),
-    [isLocalFilesKb, isLocalKb, isNetworkKb, isVectorizedKb, memoryCount, t],
+    [isLocalFilesKb, isFileBackedLocalLike, isNetworkKb, isVectorizedKb, memoryCount, t],
   )
 
   useEffect(() => {
@@ -185,7 +195,7 @@ export function useKnowledgeBaseSettingsModal({
     nameReadOnly,
     defaultFolderKind,
     isNetworkKb,
-    isLocalKb,
+    isLocalKb: isFileBackedLocalLike,
     isLocalFilesKb,
     isVectorizedKb,
     ...form,

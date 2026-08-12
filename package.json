@@ -49,6 +49,8 @@
     "readme:sync-version": "node scripts/sync-readme-version.mjs",
     "db:generate": "pnpm --filter @toolman/db generate",
     "db:migrate": "pnpm --filter @toolman/db migrate",
+    "mobile:start": "pnpm --filter @toolman/mobile start",
+    "mobile:typecheck": "pnpm --filter @toolman/shared --filter @toolman/sync-client build && pnpm --filter @toolman/mobile typecheck",
     "prepare": "husky"
   },
   "devDependencies": {

@@ -9,6 +9,9 @@ export function useKnowledgeSidebarItems(items: KnowledgeBase[]) {
   const localItems = items.filter(
     (item) => item.kind === 'local' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
   )
+  const syncItems = items.filter(
+    (item) => item.kind === 'sync' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
+  )
   const networkItems = items.filter(
     (item) => item.kind === 'network' && !SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(item.name),
   )
@@ -22,7 +25,7 @@ export function useKnowledgeSidebarItems(items: KnowledgeBase[]) {
       item.documentCount > 0,
   )
 
-  return { localItems, networkItems, localFilesItems, savedSharedItems }
+  return { localItems, syncItems, networkItems, localFilesItems, savedSharedItems }
 }
 
 export function useKnowledgeSidebarExpansion(activeId: string | null, activeSection: KnowledgeSidebarSection) {

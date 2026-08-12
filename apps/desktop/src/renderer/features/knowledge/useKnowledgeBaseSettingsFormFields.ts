@@ -21,6 +21,8 @@ export function resolveKbStoragePath(
   localPath: string | null,
   localFilesPath: string | null,
   networkPath: string | null,
+  isSyncKb = false,
+  syncPath: string | null = null,
 ): string | null {
   const resolvePath = (base: string | null) => {
     if (!base) return null
@@ -30,6 +32,7 @@ export function resolveKbStoragePath(
     return buildStoragePathForKb(base, kbName) || null
   }
   if (isLocalFilesKb) return resolvePath(localFilesPath)
+  if (isSyncKb) return resolvePath(syncPath)
   if (isLocalKb) return resolvePath(localPath)
   return resolvePath(networkPath)
 }

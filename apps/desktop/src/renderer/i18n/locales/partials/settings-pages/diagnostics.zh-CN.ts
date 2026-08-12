@@ -88,6 +88,17 @@ export const settingsPagesDiagnosticsZhCN = {
       fetchVerify: 'P2P 拉取 / 验签失败',
       fetchVerifyCount: '{{fetched}} / {{failures}}',
     },
+    mobileSync: {
+      title: '移动端同步',
+      syncToggle: '本地 Sync Hub',
+      syncToggleHint:
+        '开启后在本机 127.0.0.1 提供笔记与知识库元数据同步；移动端默认同地址连接。若开关无效请完全重启桌面端。',
+      hostToggle: '桌面宿主（含知识检索）',
+      hostToggleHint:
+        '向移动端声明 agent / knowledge-search 能力；开启宿主会同时打开 Sync Hub',
+      hub: 'Hub 状态',
+      baseUrl: '服务地址',
+    },
     p2p: {
       title: 'P2P 群组',
       nativeModule: '原生模块',

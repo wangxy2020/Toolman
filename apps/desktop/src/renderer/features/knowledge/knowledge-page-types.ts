@@ -25,6 +25,11 @@ export interface KnowledgePageProps {
   localFilesFolderPath: string | null
   localFilesFolderLoading?: boolean
   localFilesFolderError?: string | null
+  syncKnowledgeFolderPath: string | null
+  syncKnowledgeFolderLoading?: boolean
+  syncKnowledgeFolderError?: string | null
+  /** Knowledge bases for context-menu targets (e.g. move to sync). */
+  knowledgeItems?: KnowledgeBase[]
   loading?: boolean
   error?: string | null
   onKbChanged?: () => void
@@ -34,6 +39,8 @@ export interface KnowledgePageProps {
   onNetworkKnowledgeFolderError?: (message: string | null) => void
   onLocalFilesFolderPathChanged?: (path: string) => void
   onLocalFilesFolderError?: (message: string | null) => void
+  onSyncKnowledgeFolderPathChanged?: (path: string) => void
+  onSyncKnowledgeFolderError?: (message: string | null) => void
   systemPaths?: SystemPaths | null
   onOpenNote?: (noteId: string) => boolean
   onChatWithKnowledgeFiles?: (items: KnowledgeFilePanelItem[]) => void
@@ -46,10 +53,13 @@ export interface KnowledgePageStatusRegistryProps {
   knowledgeFolderError?: string | null
   networkKnowledgeFolderError?: string | null
   localFilesFolderError?: string | null
+  syncKnowledgeFolderError?: string | null
   localDefaultKbError: string | null
   onClearLocalDefaultKbError: () => void
   networkDefaultKbError: string | null
   onClearNetworkDefaultKbError: () => void
+  syncDefaultKbError: string | null
+  onClearSyncDefaultKbError: () => void
   localFilesDefaultKbError: string | null
   onClearLocalFilesDefaultKbError: () => void
 }

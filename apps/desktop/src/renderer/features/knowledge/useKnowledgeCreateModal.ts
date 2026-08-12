@@ -16,6 +16,7 @@ export function useKnowledgeCreateModal({
   defaultLocalFolderPath,
   defaultNetworkFolderPath,
   defaultLocalFilesFolderPath,
+  defaultSyncFolderPath,
   onClose,
   onSubmit,
 }: KnowledgeCreateModalProps) {
@@ -32,6 +33,7 @@ export function useKnowledgeCreateModal({
     defaultLocalFolderPath,
     defaultNetworkFolderPath,
     defaultLocalFilesFolderPath,
+    defaultSyncFolderPath,
   )
 
   const effectiveName = useMemo(

@@ -37,6 +37,7 @@ export const modalsZhCN = {
       typeLabel: '类型',
       typeAria: '知识库类型',
       kindLocal: '本地知识库',
+      kindSync: '同步知识库',
       kindNetwork: '网络知识库',
       kindLocalFiles: '本地文件',
       descriptionPlaceholder: '简要说明该知识库的用途（可选）',

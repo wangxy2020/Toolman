@@ -27,9 +27,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   onProjectsChange,
 }) => {
   const panelState = useProjectScheduleGanttPanel({
-    workspaceId,
+          workspaceId,
     projects,
-    selectedProjectId,
+          selectedProjectId,
     dataRevision,
     onProjectsChange,
   })

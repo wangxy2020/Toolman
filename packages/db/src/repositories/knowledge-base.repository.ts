@@ -9,7 +9,7 @@ export interface CreateKnowledgeBaseInput {
   workspaceId: string
   name: string
   description?: string
-  kind?: 'local' | 'network' | 'local_files' | 'shared'
+  kind?: 'local' | 'network' | 'local_files' | 'shared' | 'sync'
   embedConfigJson?: string
   chunkConfigJson?: string
   watchConfigJson?: string

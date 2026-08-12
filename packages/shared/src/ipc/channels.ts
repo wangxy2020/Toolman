@@ -7,6 +7,8 @@ export enum IpcChannel {
   AppPrintWindow = 'app:window:print',
   AppGetStorageStats = 'app:storage:stats',
   AppGetDiagnostics = 'app:diagnostics:get',
+  MobileSyncSetEnabled = 'mobile:sync:set-enabled',
+  MobileAgentHostSetEnabled = 'mobile:agent-host:set-enabled',
   AppProvenanceBeacon = 'app:provenance:beacon',
 
   AppCrashReportGetStatus = 'app:crash-report:status:get',
@@ -69,6 +71,8 @@ export enum IpcChannel {
   KnowledgeFolderDeleteFile = 'knowledge:folder:delete-file',
   KnowledgeNetworkFolderEnsure = 'knowledge:network-folder:ensure',
   KnowledgeNetworkFolderGet = 'knowledge:network-folder:get',
+  KnowledgeSyncFolderEnsure = 'knowledge:sync-folder:ensure',
+  KnowledgeSyncFolderGet = 'knowledge:sync-folder:get',
   KnowledgeLocalFilesFolderEnsure = 'knowledge:local-files-folder:ensure',
   KnowledgeLocalFilesFolderGet = 'knowledge:local-files-folder:get',
   KnowledgeDefaultFolderEnsureKb = 'knowledge:default-folder:ensure-kb',

@@ -2,8 +2,12 @@ import { useI18n } from '../../i18n/useI18n'
 import { SettingsPageLayout } from './SettingsShared'
 import { useDiagnosticsSettings } from './useDiagnosticsSettings'
 import { DiagnosticsSettingsHeaderSection } from './DiagnosticsSettingsHeaderSection'
-import { DiagnosticsSettingsDatabaseSection } from './DiagnosticsSettingsDatabaseSection'
+import {
+  DiagnosticsSettingsDatabaseSection,
+  DiagnosticsSettingsHubSection,
+} from './DiagnosticsSettingsDatabaseSection'
 import { DiagnosticsSettingsCommunitySections } from './DiagnosticsSettingsCommunitySections'
+import { DiagnosticsSettingsMobileSection } from './DiagnosticsSettingsMobileSection'
 import { DiagnosticsSettingsP2pSection } from './DiagnosticsSettingsP2pSection'
 import { DiagnosticsSettingsLibp2pSection } from './DiagnosticsSettingsLibp2pSection'
 import { DiagnosticsSettingsOperationsSection } from './DiagnosticsSettingsOperationsSection'
@@ -17,6 +21,8 @@ export function DiagnosticsSettingsPanel() {
     error,
     yjsToggling,
     cidToggling,
+    mobileSyncToggling,
+    mobileHostToggling,
     restartingLibp2p,
     toggleError,
     setToggleError,
@@ -27,6 +33,8 @@ export function DiagnosticsSettingsPanel() {
     refresh,
     setCommunityYjsEnabled,
     setCommunityCidEnabled,
+    setMobileSyncEnabled,
+    setMobileAgentHostEnabled,
     restartLibp2pNetwork,
   } = useDiagnosticsSettings()
 
@@ -45,6 +53,15 @@ export function DiagnosticsSettingsPanel() {
       {snapshot ? (
         <>
           <DiagnosticsSettingsDatabaseSection snapshot={snapshot} />
+          <DiagnosticsSettingsMobileSection
+            snapshot={snapshot}
+            syncToggling={mobileSyncToggling}
+            hostToggling={mobileHostToggling}
+            loading={loading}
+            onSyncToggle={(enabled) => void setMobileSyncEnabled(enabled)}
+            onHostToggle={(enabled) => void setMobileAgentHostEnabled(enabled)}
+          />
+          <DiagnosticsSettingsHubSection snapshot={snapshot} />
           <DiagnosticsSettingsCommunitySections
             snapshot={snapshot}
             yjsToggling={yjsToggling}

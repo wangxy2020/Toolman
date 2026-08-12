@@ -10,6 +10,7 @@ type KnowledgePageSectionContentProps = Pick<
   | 'loading'
   | 'showingDefaultFolder'
   | 'showingDefaultNetworkFolder'
+  | 'showingDefaultSyncFolder'
   | 'showingDefaultLocalFilesFolder'
   | 'panelDocuments'
   | 'panelLoading'
@@ -36,6 +37,7 @@ export function KnowledgePageSectionContent({
   loading,
   showingDefaultFolder,
   showingDefaultNetworkFolder,
+  showingDefaultSyncFolder,
   showingDefaultLocalFilesFolder,
   panelDocuments,
   panelLoading,
@@ -76,10 +78,11 @@ export function KnowledgePageSectionContent({
     />
   )
 
-  if (section === 'local' || section === 'network' || section === 'local-files') {
+  if (section === 'local' || section === 'sync' || section === 'network' || section === 'local-files') {
     if (
       !showingDefaultFolder &&
       !showingDefaultNetworkFolder &&
+      !showingDefaultSyncFolder &&
       !showingDefaultLocalFilesFolder &&
       !active &&
       !loading
@@ -106,6 +109,25 @@ export function KnowledgePageSectionContent({
             {t('knowledgePage.wrongSection', {
               name: translateKnowledgeFolderName(active.name, t),
               section: t('knowledgePage.sections.local'),
+            })}
+          </p>
+        </div>
+      )
+    }
+
+    if (
+      active &&
+      section === 'sync' &&
+      active.kind !== 'sync' &&
+      !showingDefaultSyncFolder
+    ) {
+      return (
+        <div className="tm-module-empty">
+          <h2 className="tm-module-empty-title">{t('knowledgePage.sections.sync')}</h2>
+          <p className="tm-module-empty-hint">
+            {t('knowledgePage.wrongSection', {
+              name: translateKnowledgeFolderName(active.name, t),
+              section: t('knowledgePage.sections.sync'),
             })}
           </p>
         </div>
@@ -172,7 +194,17 @@ export function KnowledgePageSharedFilePanel({
   onOpenNote,
   onOpenAddUrl,
   onAddUrl,
-}: Omit<KnowledgePageSectionContentProps, 't' | 'section' | 'active' | 'loading' | 'showingDefaultFolder' | 'showingDefaultNetworkFolder' | 'showingDefaultLocalFilesFolder'>) {
+}: Omit<
+  KnowledgePageSectionContentProps,
+  | 't'
+  | 'section'
+  | 'active'
+  | 'loading'
+  | 'showingDefaultFolder'
+  | 'showingDefaultNetworkFolder'
+  | 'showingDefaultSyncFolder'
+  | 'showingDefaultLocalFilesFolder'
+>) {
   return (
     <KnowledgeBaseFilePanel
       documents={panelDocuments}

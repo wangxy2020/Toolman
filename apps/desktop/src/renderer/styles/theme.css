@@ -6965,6 +6965,30 @@ html.theme-dark .tm-invite-action-btn {
   cursor: not-allowed;
 }
 
+.tm-group-context-menu-item--submenu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tm-group-context-menu-flyout {
+  position: relative;
+}
+
+.tm-group-context-menu--submenu {
+  position: absolute;
+  left: calc(100% + 4px);
+  top: 0;
+  min-width: 160px;
+}
+
+.tm-group-context-menu-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--tm-text-muted, #6b7280);
+}
+
 .tm-kb-file-list {
   margin: 0;
   padding: 0;

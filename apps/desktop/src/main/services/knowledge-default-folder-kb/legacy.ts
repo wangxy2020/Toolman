@@ -62,7 +62,7 @@ export function purgeLegacyDefaultDiskFoldersForKind(
   baseFolder: string,
   kind: keyof typeof DEFAULT_FOLDER_KB_NAMES,
 ): void {
-  if (kind === 'local') return
+  if (kind === 'local' || kind === 'sync') return
   purgeLegacyDefaultDiskFolder(workspaceId, baseFolder, LEGACY_DEFAULT_FOLDER_KB_NAMES[kind])
 }
 
@@ -97,7 +97,7 @@ export function removeLegacyKnowledgeBaseRows(
     softDeleteDuplicateKb(duplicate.id)
   }
 
-  if (kind === 'local') return
+  if (kind === 'local' || kind === 'sync') return
 
   const legacyName = LEGACY_DEFAULT_FOLDER_KB_NAMES[kind]
   const canonical =

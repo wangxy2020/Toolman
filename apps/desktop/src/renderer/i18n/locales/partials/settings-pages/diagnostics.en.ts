@@ -92,6 +92,17 @@ export const settingsPagesDiagnosticsEn = {
       fetchVerify: 'P2P fetch / verify failures',
       fetchVerifyCount: '{{fetched}} / {{failures}}',
     },
+    mobileSync: {
+      title: 'Mobile sync',
+      syncToggle: 'Local Sync Hub',
+      syncToggleHint:
+        'Serves notes and knowledge metadata on 127.0.0.1 for the mobile client. Restart the desktop app fully if the toggle has no effect.',
+      hostToggle: 'Desktop host (incl. knowledge search)',
+      hostToggleHint:
+        'Advertise agent / knowledge-search to mobile; enabling host also starts Sync Hub',
+      hub: 'Hub status',
+      baseUrl: 'Base URL',
+    },
     p2p: {
       title: 'P2P groups',
       nativeModule: 'Native module',

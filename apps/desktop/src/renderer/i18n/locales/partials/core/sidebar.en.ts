@@ -21,6 +21,7 @@ export const sidebarEn = {
     knowledge: {
       sections: {
         local: 'Local knowledge',
+        sync: 'Synced knowledge',
         network: 'Network knowledge',
         shared: 'Shared knowledge',
         'local-files': 'Local files',
@@ -29,6 +30,7 @@ export const sidebarEn = {
       defaultFolder: 'Default folder',
       defaultFolderTitle: 'Default storage and import location for knowledge files',
       networkDefaultTitle: 'Default save location for network knowledge',
+      syncDefaultTitle: 'Default storage for knowledge synced with mobile',
       localFilesDefaultTitle: 'Default storage for local files (not vectorized)',
       noFolders: 'No folders yet',
       itemMeta: '{{name}} · {{documents}} docs · {{chunks}} chunks',

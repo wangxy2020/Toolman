@@ -46,7 +46,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
   })
   const {
     t,
-    isPractice,
+      isPractice,
     canEdit,
     saving,
     selectedId,
@@ -69,7 +69,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
     handleMenuAction,
     panelRootRef,
     dirty,
-    rows,
+      rows,
     statusFeedback,
     selectedRow,
   } = state
@@ -146,7 +146,7 @@ const ProjectResourceTablePanel: FC<Props> = ({
 
       <ProjectResourceTableMenus state={state} />
       <ProjectResourceTableDialogs state={state} onProjectsChange={onProjectsChange} />
-    </div>
+              </div>
   )
 }
 

@@ -9,6 +9,7 @@ export const DEFAULT_FOLDER_KB_NAMES = {
   local: DEFAULT_FOLDER_KB_NAME,
   network: DEFAULT_FOLDER_KB_NAME,
   local_files: DEFAULT_FOLDER_KB_NAME,
+  sync: DEFAULT_FOLDER_KB_NAME,
 } as const
 
 export const SYSTEM_KB_NAMES = new Set([
@@ -16,7 +17,7 @@ export const SYSTEM_KB_NAMES = new Set([
   ...Object.values(LEGACY_DEFAULT_FOLDER_KB_NAMES),
 ])
 
-export const DEFAULT_FOLDER_KINDS = ['local', 'network', 'local_files'] as const
+export const DEFAULT_FOLDER_KINDS = ['local', 'network', 'local_files', 'sync'] as const
 
 export function isSystemKnowledgeBase(kb: { name: string }): boolean {
   return SYSTEM_KB_NAMES.has(kb.name)

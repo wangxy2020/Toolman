@@ -1,4 +1,4 @@
-export const KNOWLEDGE_FOLDER_KINDS = ['local', 'network', 'local_files', 'shared'] as const
+export const KNOWLEDGE_FOLDER_KINDS = ['local', 'network', 'local_files', 'shared', 'sync'] as const
 export type KnowledgeFolderKind = (typeof KNOWLEDGE_FOLDER_KINDS)[number]
 
 export function isVectorizedKnowledgeBaseKind(kind: string): boolean {
@@ -15,4 +15,8 @@ export function isSharedKnowledgeBaseKind(kind: string): boolean {
 
 export function isLocalFilesKnowledgeBaseKind(kind: string): boolean {
   return kind === 'local_files'
+}
+
+export function isSyncKnowledgeBaseKind(kind: string): boolean {
+  return kind === 'sync'
 }

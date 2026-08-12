@@ -4,7 +4,7 @@ export interface KnowledgeBaseSettingsModalProps {
   workspaceId: string
   kb: KnowledgeBase
   nameReadOnly?: boolean
-  defaultFolderKind?: 'local' | 'network' | 'local_files'
+  defaultFolderKind?: 'local' | 'network' | 'local_files' | 'sync'
   onClose: () => void
   onSaved?: () => void | Promise<void>
 }

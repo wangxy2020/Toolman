@@ -52,12 +52,14 @@ export function resolveDisplayPath(
 }
 
 export function resolveBaseFolderPath(
-  kind: 'local' | 'network' | 'local_files' | 'shared',
+  kind: 'local' | 'network' | 'local_files' | 'shared' | 'sync',
   defaultLocalFolderPath: string | null,
   defaultNetworkFolderPath: string | null,
   defaultLocalFilesFolderPath: string | null,
+  defaultSyncFolderPath: string | null = null,
 ): string | null {
   if (kind === 'network') return defaultNetworkFolderPath
   if (kind === 'local_files') return defaultLocalFilesFolderPath
+  if (kind === 'sync') return defaultSyncFolderPath ?? defaultLocalFolderPath
   return defaultLocalFolderPath
 }

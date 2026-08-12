@@ -78,6 +78,10 @@ export function getDefaultSharedKnowledgeFolderPath(): string {
   return join(getToolmanUserRootPath(), '共享知识库')
 }
 
+export function getDefaultSyncKnowledgeFolderPath(): string {
+  return join(getToolmanUserRootPath(), '同步知识库')
+}
+
 export function getDefaultLocalFilesFolderPath(): string {
   return join(getToolmanUserRootPath(), '本地文件')
 }
@@ -87,6 +91,7 @@ export const TOOLMAN_USER_DOCUMENT_SUBFOLDERS = [
   '本地知识库',
   '网络知识库',
   '共享知识库',
+  '同步知识库',
   '本地文件',
 ] as const
 

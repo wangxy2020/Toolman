@@ -13,6 +13,7 @@ import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
+  DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
 } from './knowledge-sidebar-types'
@@ -35,6 +36,8 @@ export function useKnowledgePageState({
   networkKnowledgeFolderLoading,
   localFilesFolderPath,
   localFilesFolderLoading,
+  syncKnowledgeFolderPath,
+  syncKnowledgeFolderLoading,
   loading,
   error,
   onKbChanged,
@@ -59,6 +62,8 @@ export function useKnowledgePageState({
     section === 'local' && activeId === DEFAULT_KNOWLEDGE_FOLDER_ID
   const showingDefaultNetworkFolder =
     section === 'network' && activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID
+  const showingDefaultSyncFolder =
+    section === 'sync' && activeId === DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID
   const showingDefaultLocalFilesFolder =
     section === 'local-files' && activeId === DEFAULT_LOCAL_FILES_FOLDER_ID
   const showingSavedSharedFolder =
@@ -74,6 +79,11 @@ export function useKnowledgePageState({
     'network',
     section === 'network',
   )
+  const syncDefaultKb = useDefaultFolderKnowledgeBase(
+    workspaceId,
+    'sync',
+    section === 'sync',
+  )
   const localFilesDefaultKb = useDefaultFolderKnowledgeBase(
     workspaceId,
     'local_files',
@@ -84,15 +94,18 @@ export function useKnowledgePageState({
     if (active) return active
     if (showingDefaultFolder) return localDefaultKb.kb
     if (showingDefaultNetworkFolder) return networkDefaultKb.kb
+    if (showingDefaultSyncFolder) return syncDefaultKb.kb
     if (showingDefaultLocalFilesFolder) return localFilesDefaultKb.kb
     return null
   }, [
     active,
     showingDefaultFolder,
     showingDefaultNetworkFolder,
+    showingDefaultSyncFolder,
     showingDefaultLocalFilesFolder,
     localDefaultKb.kb,
     networkDefaultKb.kb,
+    syncDefaultKb.kb,
     localFilesDefaultKb.kb,
   ])
 
@@ -102,17 +115,21 @@ export function useKnowledgePageState({
         knowledgeFolderPath,
         networkKnowledgeFolderPath,
         localFilesFolderPath,
+        syncKnowledgeFolderPath,
         localDefaultKbStoragePath: localDefaultKb.folderPath,
         networkDefaultKbStoragePath: networkDefaultKb.folderPath,
         localFilesDefaultKbStoragePath: localFilesDefaultKb.folderPath,
+        syncDefaultKbStoragePath: syncDefaultKb.folderPath,
       }),
     [
       knowledgeFolderPath,
       networkKnowledgeFolderPath,
       localFilesFolderPath,
+      syncKnowledgeFolderPath,
       localDefaultKb.folderPath,
       networkDefaultKb.folderPath,
       localFilesDefaultKb.folderPath,
+      syncDefaultKb.folderPath,
     ],
   )
 
@@ -128,9 +145,11 @@ export function useKnowledgePageState({
         defaultFolderKbId: localDefaultKb.kbId,
         defaultNetworkFolderKbId: networkDefaultKb.kbId,
         defaultLocalFilesKbId: localFilesDefaultKb.kbId,
+        defaultSyncFolderKbId: syncDefaultKb.kbId,
         knowledgeFolderPath: sectionRoots.local,
         networkKnowledgeFolderPath: sectionRoots.network,
         localFilesFolderPath: sectionRoots.localFiles,
+        syncKnowledgeFolderPath: sectionRoots.sync,
       }),
     [
       workspaceId,
@@ -140,6 +159,7 @@ export function useKnowledgePageState({
       localDefaultKb.kbId,
       networkDefaultKb.kbId,
       localFilesDefaultKb.kbId,
+      syncDefaultKb.kbId,
       sectionRoots,
     ],
   )
@@ -163,6 +183,7 @@ export function useKnowledgePageState({
       (active ||
         (showingDefaultFolder && (localDefaultKb.kb || !localDefaultKb.loading)) ||
         (showingDefaultNetworkFolder && (networkDefaultKb.kb || !networkDefaultKb.loading)) ||
+        (showingDefaultSyncFolder && (syncDefaultKb.kb || !syncDefaultKb.loading)) ||
         (showingDefaultLocalFilesFolder &&
           (localFilesDefaultKb.kb || !localFilesDefaultKb.loading))),
   )
@@ -187,6 +208,7 @@ export function useKnowledgePageState({
     (showingDefaultFolder && (knowledgeFolderLoading || localDefaultKb.loading)) ||
     (showingDefaultNetworkFolder &&
       (networkKnowledgeFolderLoading || networkDefaultKb.loading)) ||
+    (showingDefaultSyncFolder && (syncKnowledgeFolderLoading || syncDefaultKb.loading)) ||
     (showingDefaultLocalFilesFolder &&
       (localFilesFolderLoading || localFilesDefaultKb.loading))
 
@@ -199,6 +221,7 @@ export function useKnowledgePageState({
   const showFileToolbar =
     Boolean(workspaceId) &&
     (section === 'local' ||
+      section === 'sync' ||
       section === 'network' ||
       section === 'local-files' ||
       showingSavedSharedFolder)
@@ -215,6 +238,7 @@ export function useKnowledgePageState({
   const handleSettingsSaved = async () => {
     localDefaultKb.reload()
     networkDefaultKb.reload()
+    syncDefaultKb.reload()
     localFilesDefaultKb.reload()
     await onKbChanged?.()
   }
@@ -242,10 +266,12 @@ export function useKnowledgePageState({
     isFileRegistryView,
     showingDefaultFolder,
     showingDefaultNetworkFolder,
+    showingDefaultSyncFolder,
     showingDefaultLocalFilesFolder,
     showingSavedSharedFolder,
     localDefaultKb,
     networkDefaultKb,
+    syncDefaultKb,
     localFilesDefaultKb,
     importTarget,
     sectionLabel,

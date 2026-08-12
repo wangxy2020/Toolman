@@ -7,15 +7,20 @@ const ENSURE_CHANNELS: Record<DefaultFolderKnowledgeKind, IpcChannel> = {
   local: IpcChannel.KnowledgeFolderEnsure,
   network: IpcChannel.KnowledgeNetworkFolderEnsure,
   local_files: IpcChannel.KnowledgeLocalFilesFolderEnsure,
+  sync: IpcChannel.KnowledgeSyncFolderEnsure,
 }
 
 const SETTINGS_KEYS: Record<
   DefaultFolderKnowledgeKind,
-  'knowledgeFolderPath' | 'networkKnowledgeFolderPath' | 'localFilesFolderPath'
+  | 'knowledgeFolderPath'
+  | 'networkKnowledgeFolderPath'
+  | 'localFilesFolderPath'
+  | 'syncKnowledgeFolderPath'
 > = {
   local: 'knowledgeFolderPath',
   network: 'networkKnowledgeFolderPath',
   local_files: 'localFilesFolderPath',
+  sync: 'syncKnowledgeFolderPath',
 }
 
 export function useKnowledgeDefaultFolder(

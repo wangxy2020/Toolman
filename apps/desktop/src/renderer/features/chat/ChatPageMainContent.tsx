@@ -49,6 +49,7 @@ type ChatPageMainContentProps = Pick<
   | 'knowledgeFolder'
   | 'networkKnowledgeFolder'
   | 'localFilesFolder'
+  | 'syncKnowledgeFolder'
   | 'handleOpenNote'
   | 'handleChatWithKnowledgeFiles'
   | 'handleChatWithNote'

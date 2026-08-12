@@ -120,6 +120,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               knowledgeFolder={page.knowledgeFolder}
               networkKnowledgeFolder={page.networkKnowledgeFolder}
               localFilesFolder={page.localFilesFolder}
+              syncKnowledgeFolder={page.syncKnowledgeFolder}
               handleOpenNote={page.handleOpenNote}
               handleChatWithKnowledgeFiles={page.handleChatWithKnowledgeFiles}
               handleChatWithNote={page.handleChatWithNote}
@@ -177,6 +178,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
           knowledgeFolder={page.knowledgeFolder}
           networkKnowledgeFolder={page.networkKnowledgeFolder}
           localFilesFolder={page.localFilesFolder}
+          syncKnowledgeFolder={page.syncKnowledgeFolder}
           showGroupCreate={page.showGroupCreate}
           setShowGroupCreate={page.setShowGroupCreate}
           p2pWorkspaces={page.p2pWorkspaces}

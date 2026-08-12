@@ -20,6 +20,7 @@ interface Props {
   loading?: boolean
   onSelect: (id: string) => void
   onSelectDefaultFolder: () => void
+  onSelectDefaultSyncFolder: () => void
   onSelectDefaultNetworkFolder: () => void
   onSelectDefaultLocalFilesFolder: () => void
   onSelectFileRegistry: () => void
@@ -36,6 +37,7 @@ export function KnowledgeSidebar({
   loading,
   onSelect,
   onSelectDefaultFolder,
+  onSelectDefaultSyncFolder,
   onSelectDefaultNetworkFolder,
   onSelectDefaultLocalFilesFolder,
   onSelectFileRegistry,
@@ -46,7 +48,7 @@ export function KnowledgeSidebar({
 }: Props) {
   const { t } = useI18n()
   const config = getModulePageConfig('knowledge', t)
-  const { localItems, networkItems, localFilesItems, savedSharedItems } =
+  const { localItems, syncItems, networkItems, localFilesItems, savedSharedItems } =
     useKnowledgeSidebarItems(items)
   const { expanded, toggleExpanded, expandSection } = useKnowledgeSidebarExpansion(activeId, activeSection)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeBase | null>(null)
@@ -128,12 +130,14 @@ export function KnowledgeSidebar({
                     activeId={activeId}
                     activeSection={activeSection}
                     localItems={localItems}
+                    syncItems={syncItems}
                     networkItems={networkItems}
                     localFilesItems={localFilesItems}
                     savedSharedItems={savedSharedItems}
                     defaultFolderLabel={defaultFolderLabel}
                     onSelect={onSelect}
                     onSelectDefaultFolder={onSelectDefaultFolder}
+                    onSelectDefaultSyncFolder={onSelectDefaultSyncFolder}
                     onSelectDefaultNetworkFolder={onSelectDefaultNetworkFolder}
                     onSelectDefaultLocalFilesFolder={onSelectDefaultLocalFilesFolder}
                     onSelectFileRegistry={onSelectFileRegistry}

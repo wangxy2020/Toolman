@@ -23,7 +23,7 @@ export const ProjectGanttTaskGrid: FC<Props> = (props) => {
   const { hScrollMetrics, hScrollDragging, hScrollRef, hTrackRef, headerPinInnerRef, syncHScrollMetrics, onHTrackPointerDown } =
     state
 
-  return (
+    return (
     <div
       className={[
         'tm-pm-gantt-grid-pane',
@@ -51,7 +51,7 @@ export const ProjectGanttTaskGrid: FC<Props> = (props) => {
           <div className="tm-pm-gantt-grid-inner">
             {listView ? null : <ProjectGanttTaskGridHeader gridProps={props} state={state} />}
             <ProjectGanttTaskGridBody gridProps={props} state={state} />
-          </div>
+            </div>
         </div>
       </div>
 
@@ -76,6 +76,6 @@ export const ProjectGanttTaskGrid: FC<Props> = (props) => {
       ) : null}
 
       <ProjectGanttTaskGridPopups gridProps={props} state={state} />
-    </div>
+                  </div>
   )
 }

@@ -76,10 +76,10 @@ const ProjectManagementFilesPanel: FC<Props> = (props) => {
         hScrollDragging ? 'tm-pm-resource-table-scroll-wrap--h-dragging' : '',
       ]
     : [
-        'tm-pm-features-table-scroll-wrap',
-        hScrollMetrics.overflowing ? 'tm-pm-features-table-scroll-wrap--h-overflow' : '',
-        hScrollDragging ? 'tm-pm-features-table-scroll-wrap--h-dragging' : '',
-      ]
+            'tm-pm-features-table-scroll-wrap',
+            hScrollMetrics.overflowing ? 'tm-pm-features-table-scroll-wrap--h-overflow' : '',
+            hScrollDragging ? 'tm-pm-features-table-scroll-wrap--h-dragging' : '',
+          ]
 
   const tableBody = !canEdit ? (
     <div className="tm-pm-empty">
@@ -87,13 +87,13 @@ const ProjectManagementFilesPanel: FC<Props> = (props) => {
         embedded
           ? 'projectManagerPage.costTable.needProject'
           : 'projectManagerPage.files.table.needProject',
-      )}
-    </div>
+                )}
+              </div>
   ) : (
     <div className={scrollWrapClass.filter(Boolean).join(' ')}>
       <ProjectManagementFilesPanelMatrix state={state} />
       <ProjectManagementFilesPanelScrollbar state={state} />
-    </div>
+            </div>
   )
 
   const statusReadyKey = embedded
@@ -107,27 +107,27 @@ const ProjectManagementFilesPanel: FC<Props> = (props) => {
     : 'projectManagerPage.files.table.statusSelected'
 
   const statusFooter = (
-    <footer className="tm-pm-gantt-statusbar" aria-live="polite">
-      <div
-        className={[
-          'tm-pm-gantt-statusbar-message',
-          statusFeedback
-            ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
+      <footer className="tm-pm-gantt-statusbar" aria-live="polite">
+        <div
+          className={[
+            'tm-pm-gantt-statusbar-message',
+            statusFeedback
+              ? `tm-pm-gantt-statusbar-message--${statusFeedback.tone}`
+              : dirty
+                ? 'tm-pm-gantt-statusbar-message--info'
+                : 'tm-pm-gantt-statusbar-message--muted',
+          ].join(' ')}
+        >
+          {statusFeedback
+            ? statusFeedback.text
             : dirty
-              ? 'tm-pm-gantt-statusbar-message--info'
-              : 'tm-pm-gantt-statusbar-message--muted',
-        ].join(' ')}
-      >
-        {statusFeedback
-          ? statusFeedback.text
-          : dirty
             ? t(statusDirtyKey, { count: String(visibleRows.length) })
             : t(statusReadyKey, { count: String(visibleRows.length) })}
-        {!statusFeedback && selectedRow?.name
+          {!statusFeedback && selectedRow?.name
           ? ` · ${t(statusSelectedKey, { name: selectedRow.name })}`
-          : null}
-      </div>
-    </footer>
+            : null}
+        </div>
+      </footer>
   )
 
   const overlays = (
@@ -167,20 +167,20 @@ const ProjectManagementFilesPanel: FC<Props> = (props) => {
 
   return (
     <div
-      className={[
+                  className={[
         'tm-pm-gantt-page',
         'tm-pm-features-page',
         'tm-pm-features-table-page',
         state.isNodeView ? 'tm-pm-features-table-page--node' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
     >
       {menubar}
       {tableBody}
       {statusFooter}
       {overlays}
-    </div>
+              </div>
   )
 }
 

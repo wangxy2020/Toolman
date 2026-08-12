@@ -11,9 +11,11 @@ import {
   ensureWorkspaceKnowledgeFolder,
   ensureWorkspaceLocalFilesFolder,
   ensureWorkspaceNetworkKnowledgeFolder,
+  ensureWorkspaceSyncKnowledgeFolder,
   getWorkspaceKnowledgeFolderPath,
   getWorkspaceLocalFilesFolderPath,
   getWorkspaceNetworkKnowledgeFolderPath,
+  getWorkspaceSyncKnowledgeFolderPath,
 } from '../knowledge-folder.service'
 import { listWorkspaces } from '../workspace.service'
 import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source.service'
@@ -38,7 +40,8 @@ function resolveDefaultFolderKnowledgeBase(
   kind: keyof typeof DEFAULT_FOLDER_KB_NAMES,
 ) {
   const name = DEFAULT_FOLDER_KB_NAMES[kind]
-  const legacyName = kind === 'local' ? null : LEGACY_DEFAULT_FOLDER_KB_NAMES[kind]
+  const legacyName =
+    kind === 'local' || kind === 'sync' ? null : LEGACY_DEFAULT_FOLDER_KB_NAMES[kind]
   const items = listKnowledgeBases({ workspaceId })
   const kbRepo = getKnowledgeBaseRepository()
 
@@ -71,6 +74,7 @@ export function cleanupErroneousKnowledgeDiskPaths(): number {
       { root: getWorkspaceKnowledgeFolderPath({ workspaceId: workspace.id }), kind: 'local' },
       { root: getWorkspaceNetworkKnowledgeFolderPath({ workspaceId: workspace.id }), kind: 'network' },
       { root: getWorkspaceLocalFilesFolderPath({ workspaceId: workspace.id }), kind: 'local_files' },
+      { root: getWorkspaceSyncKnowledgeFolderPath({ workspaceId: workspace.id }), kind: 'sync' },
     ]
     for (const { root, kind } of roots) {
       if (!root) continue
@@ -91,7 +95,9 @@ export function ensureDefaultFolderKnowledgeBase(input: unknown) {
       ? ensureWorkspaceNetworkKnowledgeFolder({ workspaceId: data.workspaceId })
       : data.kind === 'local_files'
         ? ensureWorkspaceLocalFilesFolder({ workspaceId: data.workspaceId })
-        : ensureWorkspaceKnowledgeFolder({ workspaceId: data.workspaceId })
+        : data.kind === 'sync'
+          ? ensureWorkspaceSyncKnowledgeFolder({ workspaceId: data.workspaceId })
+          : ensureWorkspaceKnowledgeFolder({ workspaceId: data.workspaceId })
 
   const existing = resolveDefaultFolderKnowledgeBase(data.workspaceId, data.kind)
   const kb =

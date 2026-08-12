@@ -20,6 +20,7 @@ export const sidebarZhCN = {
     knowledge: {
       sections: {
         local: '本地知识库',
+        sync: '同步知识库',
         network: '网络知识库',
         shared: '共享知识库',
         'local-files': '本地文件',
@@ -28,6 +29,7 @@ export const sidebarZhCN = {
       defaultFolder: '默认文件夹',
       defaultFolderTitle: '知识库文件的默认存储与导入位置',
       networkDefaultTitle: '网络知识库内容的默认保存位置',
+      syncDefaultTitle: '与移动端同步的知识库默认存储位置',
       localFilesDefaultTitle: '本地文件的默认存储位置（不进行向量化）',
       noFolders: '暂无文件夹',
       itemMeta: '{{name}} · {{documents}} 文档 · {{chunks}} 块',

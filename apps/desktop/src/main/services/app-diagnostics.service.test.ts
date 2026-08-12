@@ -66,6 +66,16 @@ vi.mock('./community/community-cid-provider.service', () => ({
   }),
 }))
 
+vi.mock('./mobile-sync-runtime.service', () => ({
+  getMobileSyncDiagnostics: () => ({
+    syncEnabled: false,
+    agentHostEnabled: false,
+    hubRunning: false,
+    hubBaseUrl: null,
+    lastError: null,
+  }),
+}))
+
 vi.mock('./p2p/p2p-bridge', () => ({
   P2pBridge: {
     ping: () => 'pong',

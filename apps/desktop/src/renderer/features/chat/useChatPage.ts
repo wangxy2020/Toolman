@@ -36,6 +36,7 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   const knowledgeFolder = useKnowledgeDefaultFolder(navigation.workspaceId, 'local')
   const networkKnowledgeFolder = useKnowledgeDefaultFolder(navigation.workspaceId, 'network')
   const localFilesFolder = useKnowledgeDefaultFolder(navigation.workspaceId, 'local_files')
+  const syncKnowledgeFolder = useKnowledgeDefaultFolder(navigation.workspaceId, 'sync')
 
   const crossModule = useChatPageCrossModule({
     chat,
@@ -99,6 +100,7 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     knowledgeFolder,
     networkKnowledgeFolder,
     localFilesFolder,
+    syncKnowledgeFolder,
     notes,
     translation,
     registrationGate,

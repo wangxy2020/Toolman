@@ -8,10 +8,13 @@ export function KnowledgePageStatusRegistry({
   knowledgeFolderError,
   networkKnowledgeFolderError,
   localFilesFolderError,
+  syncKnowledgeFolderError,
   localDefaultKbError,
   onClearLocalDefaultKbError,
   networkDefaultKbError,
   onClearNetworkDefaultKbError,
+  syncDefaultKbError,
+  onClearSyncDefaultKbError,
   localFilesDefaultKbError,
   onClearLocalFilesDefaultKbError,
 }: KnowledgePageStatusRegistryProps) {
@@ -20,6 +23,7 @@ export function KnowledgePageStatusRegistry({
   useRegisterModulePanelError('knowledge-folder-local', knowledgeFolderError ?? null)
   useRegisterModulePanelError('knowledge-folder-network', networkKnowledgeFolderError ?? null)
   useRegisterModulePanelError('knowledge-folder-local-files', localFilesFolderError ?? null)
+  useRegisterModulePanelError('knowledge-folder-sync', syncKnowledgeFolderError ?? null)
   useRegisterModulePanelError(
     'knowledge-default-local',
     localDefaultKbError,
@@ -29,6 +33,11 @@ export function KnowledgePageStatusRegistry({
     'knowledge-default-network',
     networkDefaultKbError,
     onClearNetworkDefaultKbError,
+  )
+  useRegisterModulePanelError(
+    'knowledge-default-sync',
+    syncDefaultKbError,
+    onClearSyncDefaultKbError,
   )
   useRegisterModulePanelError(
     'knowledge-default-local-files',

@@ -30,6 +30,7 @@ import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
+  DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
   knowledgeSectionForKind,
@@ -140,6 +141,10 @@ export function ChatPageSidebars({
           knowledge.setActiveId(DEFAULT_KNOWLEDGE_FOLDER_ID)
           setKnowledgeSection('local')
         }}
+        onSelectDefaultSyncFolder={() => {
+          knowledge.setActiveId(DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID)
+          setKnowledgeSection('sync')
+        }}
         onSelectDefaultNetworkFolder={() => {
           knowledge.setActiveId(DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID)
           setKnowledgeSection('network')
@@ -160,6 +165,8 @@ export function ChatPageSidebars({
           setKnowledgeSection(section)
           if (section === 'network') {
             knowledge.setActiveId(DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID)
+          } else if (section === 'sync') {
+            knowledge.setActiveId(DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID)
           } else if (section === 'shared') {
             const firstSaved = knowledge.items.find(
               (item) =>
@@ -179,6 +186,7 @@ export function ChatPageSidebars({
           } else if (
             section === 'local' &&
             (knowledge.activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID ||
+              knowledge.activeId === DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID ||
               knowledge.activeId === DEFAULT_LOCAL_FILES_FOLDER_ID ||
               knowledge.activeId === FILE_DEDUP_TOOL_ID ||
               knowledge.activeId === FILE_REGISTRY_TOOL_ID)

@@ -153,7 +153,7 @@ export async function addKnowledgeUrl({
   setError,
   load,
 }: AddKnowledgeUrlParams): Promise<void> {
-  if (section === 'local' || section === 'local-files') {
+  if (section === 'local' || section === 'local-files' || section === 'sync') {
     throw new Error('本地知识库仅支持上传文件，网页请添加到网络知识库')
   }
 

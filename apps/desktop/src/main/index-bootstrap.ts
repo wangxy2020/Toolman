@@ -29,6 +29,24 @@ import { bootstrapCopyrightProvenance } from './services/copyright-provenance.se
 import { bootstrapAppUpdateService } from './services/app-update.service'
 import { bootstrapCrashReportService } from './services/crash-report.service'
 import { logLibp2pNativeStatus, logP2pNativeStatus } from './index-native-status'
+import { ensureMobileSyncRuntime } from './services/mobile-sync-runtime.service'
+import { isMobileSyncEnabled } from './services/mobile-sync.service'
+
+function bootstrapMobileSyncHub(): void {
+  if (!isMobileSyncEnabled()) return
+  void ensureMobileSyncRuntime()
+    .then((status) => {
+      if (status.hubRunning && status.hubBaseUrl) {
+        logStructured('mobile-sync', 'info', `hub ready at ${status.hubBaseUrl}`)
+      } else if (status.lastError) {
+        logStructured('mobile-sync', 'warn', `hub unavailable: ${status.lastError}`)
+      }
+    })
+    .catch((error) => {
+      const message = toErrorMessage(error, String(error))
+      logStructured('mobile-sync', 'warn', `hub start failed: ${message}`)
+    })
+}
 
 export function bootstrapMainProcessServices(): void {
   try {
@@ -91,6 +109,7 @@ export function bootstrapMainProcessServices(): void {
     bootstrapKnowledgeWatchers()
     resumePendingIngestJobs()
     startKnowledgeUrlRefreshScheduler()
+    bootstrapMobileSyncHub()
   } catch (error) {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
     logStructured('bootstrap', 'error', `failed: ${message}`)

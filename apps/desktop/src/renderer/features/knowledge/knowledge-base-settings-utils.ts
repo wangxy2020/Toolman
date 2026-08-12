@@ -140,8 +140,10 @@ export function getModalTitle(
   t: TranslateFn,
   isLocalFilesKb: boolean,
   isLocalKb: boolean,
+  isSyncKb = false,
 ): string {
   if (isLocalFilesKb) return t('knowledgePage.settings.titleLocalFiles')
+  if (isSyncKb) return t('knowledgePage.settings.titleSync')
   if (isLocalKb) return t('knowledgePage.settings.titleLocal')
   return t('knowledgePage.settings.titleNetwork')
 }

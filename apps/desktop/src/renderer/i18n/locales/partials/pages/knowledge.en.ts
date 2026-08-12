@@ -19,6 +19,7 @@ export const knowledgePageEn = {
   wrongSection: '"{{name}}" is not in {{section}}. Manage it in the matching sidebar section.',
   sections: {
     local: 'Local knowledge',
+    sync: 'Synced knowledge',
     network: 'Network knowledge',
     shared: 'Shared knowledge',
     localFiles: 'Local files',
@@ -28,6 +29,7 @@ export const knowledgePageEn = {
   sort: { createdAt: 'Created', size: 'Size', fileName: 'File name' },
   settings: {
     titleLocal: 'Local knowledge settings',
+    titleSync: 'Synced knowledge settings',
     titleNetwork: 'Network knowledge settings',
     titleLocalFiles: 'Local files settings',
     tabs: {
@@ -122,6 +124,13 @@ export const knowledgePageEn = {
     clearSelection: 'Clear selection',
     deleteSelected: 'Delete selected',
     reindexAll: 'Reindex all',
+    moveToSync: 'Move to synced knowledge',
+    moveToSyncDefault: 'Default folder',
+    moveToSyncEmpty: 'No synced knowledge bases yet',
+    moveToSyncNeedSelection: 'Select files to move first',
+    moveToSyncNeedPath: 'Selected files have no local path and cannot be moved',
+    moveToSyncDone: 'Moved {{count}} file(s) to synced knowledge',
+    moveToSyncPartial: 'Moved {{moved}}, failed {{failed}}',
   },
   docStatus: {
     pending: 'Awaiting sync',

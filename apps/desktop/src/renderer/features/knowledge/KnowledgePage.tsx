@@ -26,6 +26,7 @@ export function KnowledgePage(props: KnowledgePageProps) {
     knowledgeFolderError,
     networkKnowledgeFolderError,
     localFilesFolderError,
+    syncKnowledgeFolderError,
     onOpenNote,
     onChatWithKnowledgeFiles,
   } = props
@@ -37,15 +38,17 @@ export function KnowledgePage(props: KnowledgePageProps) {
     contextMenu, setContextMenu, sortField, sortAscending, dedupFolderPath,
     setDedupFolderPath, dedupScanState, setDedupScanState, dedupRefreshToken,
     pendingDelete, setPendingDelete, isFileDedupView, isFileRegistryView,
-    showingDefaultFolder, showingDefaultNetworkFolder, showingDefaultLocalFilesFolder,
+    showingDefaultFolder, showingDefaultNetworkFolder, showingDefaultSyncFolder,
+    showingDefaultLocalFilesFolder,
     showingSavedSharedFolder, localDefaultKb,
-    networkDefaultKb, localFilesDefaultKb, panelDocuments, chatAttachableFiles,
+    networkDefaultKb, syncDefaultKb, localFilesDefaultKb, panelDocuments, chatAttachableFiles,
     sectionLabel, breadcrumbItemName, settingsEnabled, settingsKb, statusFallback,
     statusPriority, statusMeta,
     importReady, showFileToolbar, isNetworkKbView, panelLoading, importTarget,
+    syncMoveTargets, showDefaultSyncTarget,
     handleChatWithFiles, handleSortFieldChange, handleSelectAll, handleClearSelection,
     handleDeleteSelected, handleImportFiles, handleAddUrl, handleAddSitemap,
-    handleReindexAll, handleOpenSettings, handleSelectDedupFolder, handleDedupRefresh,
+    handleReindexAll, handleMoveToSync, handleOpenSettings, handleSelectDedupFolder, handleDedupRefresh,
     handleDedupGoParent, handleContextMenu, handleToggleSelect, handleDeleteDocument,
     confirmDeleteDocuments, handleCloseSettings, handleSettingsSaved, onKbChanged,
   } = page
@@ -59,6 +62,12 @@ export function KnowledgePage(props: KnowledgePageProps) {
       documents.setError(err instanceof Error ? err.message : '网页导入失败')
     }),
   }
+
+  const isFileSection =
+    section === 'local' ||
+    section === 'sync' ||
+    section === 'network' ||
+    section === 'local-files'
 
   return (
     <ErrorBoundary title={t('errors.knowledge')}>
@@ -93,10 +102,13 @@ export function KnowledgePage(props: KnowledgePageProps) {
             knowledgeFolderError={knowledgeFolderError}
             networkKnowledgeFolderError={networkKnowledgeFolderError}
             localFilesFolderError={localFilesFolderError}
+            syncKnowledgeFolderError={syncKnowledgeFolderError}
             localDefaultKbError={localDefaultKb.error}
             onClearLocalDefaultKbError={() => localDefaultKb.setError(null)}
             networkDefaultKbError={networkDefaultKb.error}
             onClearNetworkDefaultKbError={() => networkDefaultKb.setError(null)}
+            syncDefaultKbError={syncDefaultKb.error}
+            onClearSyncDefaultKbError={() => syncDefaultKb.setError(null)}
             localFilesDefaultKbError={localFilesDefaultKb.error}
             onClearLocalFilesDefaultKbError={() => localFilesDefaultKb.setError(null)}
           />
@@ -107,11 +119,12 @@ export function KnowledgePage(props: KnowledgePageProps) {
                 <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
                 <p className="tm-module-empty-hint">{t('knowledgePage.selectWorkspace')}</p>
               </div>
-            ) : section === 'local' || section === 'network' || section === 'local-files' ? (
+            ) : isFileSection ? (
               <KnowledgePageSectionContent
                 t={t} section={section} active={active} loading={loading}
                 showingDefaultFolder={showingDefaultFolder}
                 showingDefaultNetworkFolder={showingDefaultNetworkFolder}
+                showingDefaultSyncFolder={showingDefaultSyncFolder}
                 showingDefaultLocalFilesFolder={showingDefaultLocalFilesFolder}
                 {...filePanelProps}
               />
@@ -163,11 +176,17 @@ export function KnowledgePage(props: KnowledgePageProps) {
             key={settingsKb.id}
             workspaceId={workspaceId}
             kb={settingsKb}
-            nameReadOnly={showingDefaultFolder || showingDefaultNetworkFolder || showingDefaultLocalFilesFolder}
+            nameReadOnly={
+              showingDefaultFolder ||
+              showingDefaultNetworkFolder ||
+              showingDefaultSyncFolder ||
+              showingDefaultLocalFilesFolder
+            }
             defaultFolderKind={
               showingDefaultFolder ? 'local'
                 : showingDefaultNetworkFolder ? 'network'
-                  : showingDefaultLocalFilesFolder ? 'local_files' : undefined
+                  : showingDefaultSyncFolder ? 'sync'
+                    : showingDefaultLocalFilesFolder ? 'local_files' : undefined
             }
             onClose={handleCloseSettings}
             onSaved={handleSettingsSaved}
@@ -188,10 +207,13 @@ export function KnowledgePage(props: KnowledgePageProps) {
             selectedCount={selectedIds.size}
             documentCount={panelDocuments.length}
             reindexAllDisabled={documents.ingesting}
+            syncMoveTargets={syncMoveTargets}
+            showDefaultSyncTarget={showDefaultSyncTarget}
             onClose={() => setContextMenu(null)}
             onSelectAll={handleSelectAll}
             onClearSelection={handleClearSelection}
             onDeleteSelected={handleDeleteSelected}
+            onMoveToSync={(target) => void handleMoveToSync(target)}
             onReindexAll={() => void handleReindexAll()}
           />
         ) : null}

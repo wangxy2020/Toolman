@@ -10,6 +10,7 @@ import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
+  DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
   isDeletableKnowledgeBase,
@@ -23,12 +24,14 @@ interface SectionBodyProps {
   activeId: string | null
   activeSection: KnowledgeSidebarSection
   localItems: KnowledgeBase[]
+  syncItems: KnowledgeBase[]
   networkItems: KnowledgeBase[]
   localFilesItems: KnowledgeBase[]
   savedSharedItems: KnowledgeBase[]
   defaultFolderLabel: string
   onSelect: (id: string) => void
   onSelectDefaultFolder: () => void
+  onSelectDefaultSyncFolder: () => void
   onSelectDefaultNetworkFolder: () => void
   onSelectDefaultLocalFilesFolder: () => void
   onSelectFileRegistry: () => void
@@ -42,12 +45,14 @@ export function KnowledgeSidebarSectionBody({
   activeId,
   activeSection,
   localItems,
+  syncItems,
   networkItems,
   localFilesItems,
   savedSharedItems,
   defaultFolderLabel,
   onSelect,
   onSelectDefaultFolder,
+  onSelectDefaultSyncFolder,
   onSelectDefaultNetworkFolder,
   onSelectDefaultLocalFilesFolder,
   onSelectFileRegistry,
@@ -72,6 +77,39 @@ export function KnowledgeSidebarSectionBody({
             icon={<IconFolder size={14} />}
             label={item.name}
             active={item.id === activeId && activeSection === 'local'}
+            title={t('sidebar.knowledge.itemMeta', {
+              name: item.name,
+              documents: item.documentCount,
+              chunks: item.chunkCount,
+            })}
+            onClick={() => onSelect(item.id)}
+            onContextMenu={
+              isDeletableKnowledgeBase(item.name)
+                ? (event) => onRequestDelete(item, event)
+                : undefined
+            }
+          />
+        ))}
+      </>
+    )
+  }
+
+  if (section === 'sync') {
+    return (
+      <>
+        <KnowledgeSidebarMenuItem
+          icon={<IconFolder size={14} />}
+          label={defaultFolderLabel}
+          active={activeId === DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID && activeSection === 'sync'}
+          title={t('sidebar.knowledge.syncDefaultTitle')}
+          onClick={onSelectDefaultSyncFolder}
+        />
+        {syncItems.map((item) => (
+          <KnowledgeSidebarMenuItem
+            key={item.id}
+            icon={<IconFolder size={14} />}
+            label={item.name}
+            active={item.id === activeId && activeSection === 'sync'}
             title={t('sidebar.knowledge.itemMeta', {
               name: item.name,
               documents: item.documentCount,

@@ -1,6 +1,6 @@
 import type { AppGetDiagnosticsOutput } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
-import { SettingsCollapsibleSection, SettingsRow, SettingsSection } from './SettingsShared'
+import { SettingsCollapsibleSection, SettingsRow } from './SettingsShared'
 import { formatBytes, statusBadge } from './diagnostics-settings-utils'
 
 interface Props {
@@ -12,7 +12,7 @@ export function DiagnosticsSettingsDatabaseSection({ snapshot }: Props) {
 
   return (
     <>
-      <SettingsSection title={t('settings.diagnostics.database.title')}>
+      <SettingsCollapsibleSection title={t('settings.diagnostics.database.title')}>
         <SettingsRow label={t('settings.diagnostics.database.sqlitePath')}>
           <span className="tm-settings-static">{snapshot.database.path}</span>
         </SettingsRow>
@@ -25,9 +25,9 @@ export function DiagnosticsSettingsDatabaseSection({ snapshot }: Props) {
         >
           <span className="tm-settings-static">{snapshot.database.streamingMessageCount}</span>
         </SettingsRow>
-      </SettingsSection>
+      </SettingsCollapsibleSection>
 
-      <SettingsSection title={t('settings.diagnostics.ingest.title')}>
+      <SettingsCollapsibleSection title={t('settings.diagnostics.ingest.title')}>
         <SettingsRow label={t('settings.diagnostics.ingest.pendingJobs')}>
           <span className="tm-settings-static">{snapshot.ingest.pendingJobs}</span>
         </SettingsRow>
@@ -38,46 +38,52 @@ export function DiagnosticsSettingsDatabaseSection({ snapshot }: Props) {
             t('settings.diagnostics.ingest.failureCount', { count: snapshot.ingest.failedJobs }),
           )}
         </SettingsRow>
-      </SettingsSection>
-
-      <SettingsCollapsibleSection title={t('settings.diagnostics.hub.title')}>
-        <SettingsRow label={t('settings.diagnostics.hub.sidecar')}>
-          {statusBadge(
-            snapshot.communityHub.running,
-            t('settings.diagnostics.status.running'),
-            t('settings.diagnostics.status.stopped'),
-          )}
-        </SettingsRow>
-        <SettingsRow label={t('settings.diagnostics.hub.baseUrl')}>
-          <span className="tm-settings-static">{snapshot.communityHub.baseUrl ?? '—'}</span>
-        </SettingsRow>
-        <SettingsRow label={t('settings.diagnostics.hub.healthCheck')}>
-          {statusBadge(
-            snapshot.communityHub.healthStatus === 'healthy',
-            snapshot.communityHub.healthStatus ?? t('settings.diagnostics.hub.notChecked'),
-            snapshot.communityHub.healthStatus ?? t('settings.diagnostics.hub.abnormal'),
-          )}
-        </SettingsRow>
-        <SettingsRow label={t('settings.diagnostics.hub.version')}>
-          <span className="tm-settings-static">{snapshot.communityHub.version ?? '—'}</span>
-        </SettingsRow>
-        <SettingsRow label={t('settings.diagnostics.hub.resourcesUsers')}>
-          <span className="tm-settings-static">
-            {snapshot.communityHub.resourceCount != null
-              ? t('settings.diagnostics.hub.resourceCount', {
-                  count: snapshot.communityHub.resourceCount,
-                })
-              : '—'}{' '}
-            ·{' '}
-            {snapshot.communityHub.userCount != null
-              ? t('settings.diagnostics.hub.userCount', { count: snapshot.communityHub.userCount })
-              : '—'}
-          </span>
-        </SettingsRow>
-        {snapshot.communityHub.error ? (
-          <p className="tm-settings-error">{snapshot.communityHub.error}</p>
-        ) : null}
       </SettingsCollapsibleSection>
     </>
+  )
+}
+
+export function DiagnosticsSettingsHubSection({ snapshot }: Props) {
+  const { t } = useI18n()
+
+  return (
+    <SettingsCollapsibleSection title={t('settings.diagnostics.hub.title')}>
+      <SettingsRow label={t('settings.diagnostics.hub.sidecar')}>
+        {statusBadge(
+          snapshot.communityHub.running,
+          t('settings.diagnostics.status.running'),
+          t('settings.diagnostics.status.stopped'),
+        )}
+      </SettingsRow>
+      <SettingsRow label={t('settings.diagnostics.hub.baseUrl')}>
+        <span className="tm-settings-static">{snapshot.communityHub.baseUrl ?? '—'}</span>
+      </SettingsRow>
+      <SettingsRow label={t('settings.diagnostics.hub.healthCheck')}>
+        {statusBadge(
+          snapshot.communityHub.healthStatus === 'healthy',
+          snapshot.communityHub.healthStatus ?? t('settings.diagnostics.hub.notChecked'),
+          snapshot.communityHub.healthStatus ?? t('settings.diagnostics.hub.abnormal'),
+        )}
+      </SettingsRow>
+      <SettingsRow label={t('settings.diagnostics.hub.version')}>
+        <span className="tm-settings-static">{snapshot.communityHub.version ?? '—'}</span>
+      </SettingsRow>
+      <SettingsRow label={t('settings.diagnostics.hub.resourcesUsers')}>
+        <span className="tm-settings-static">
+          {snapshot.communityHub.resourceCount != null
+            ? t('settings.diagnostics.hub.resourceCount', {
+                count: snapshot.communityHub.resourceCount,
+              })
+            : '—'}{' '}
+          ·{' '}
+          {snapshot.communityHub.userCount != null
+            ? t('settings.diagnostics.hub.userCount', { count: snapshot.communityHub.userCount })
+            : '—'}
+        </span>
+      </SettingsRow>
+      {snapshot.communityHub.error ? (
+        <p className="tm-settings-error">{snapshot.communityHub.error}</p>
+      ) : null}
+    </SettingsCollapsibleSection>
   )
 }

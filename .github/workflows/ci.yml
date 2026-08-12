@@ -77,6 +77,32 @@ jobs:
       - name: Community hub Rust tests
         run: cargo test -p toolman-community-hub
 
+  mobile-check:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'v0.')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared + sync-client
+        run: pnpm --filter @toolman/shared --filter @toolman/sync-client build
+
+      - name: Mobile typecheck
+        run: pnpm --filter @toolman/mobile typecheck
+
+      - name: Sync-client tests
+        run: pnpm --filter @toolman/sync-client test
+
+      # Intentionally independent from desktop packaging / native builds.
   windows-check:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'v0.')
     runs-on: windows-latest

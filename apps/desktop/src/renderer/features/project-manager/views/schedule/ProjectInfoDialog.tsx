@@ -73,13 +73,13 @@ const ProjectInfoDialog: FC<Props> = (props) => {
             {activeTab === 'schedule' ? <ProjectInfoDialogScheduleTab {...state} /> : null}
             {activeTab === 'statistics' ? <ProjectInfoDialogStatisticsTab {...state} /> : null}
             {activeTab === 'advanced' ? <ProjectInfoDialogAdvancedTab {...state} /> : null}
-          </div>
-        </div>
+                </div>
+                </div>
 
         <ProjectInfoDialogFooter {...state} props={props} />
-      </div>
-    </div>
-  )
+                                  </div>
+                                </div>
+                              )
 }
 
 export default ProjectInfoDialog

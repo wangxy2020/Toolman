@@ -233,6 +233,29 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
 
   const communityYjs = getCommunityYjsStatus()
   const communityCid = getCommunityCidProviderStatus()
+  let mobileSync = {
+    syncEnabled: false,
+    agentHostEnabled: false,
+    hubRunning: false,
+    hubBaseUrl: null as string | null,
+    lastError: null as string | null,
+  }
+  try {
+    const { getMobileSyncDiagnostics } = await import('./mobile-sync-runtime.service')
+    const diagnostics = getMobileSyncDiagnostics()
+    mobileSync = {
+      syncEnabled: diagnostics.syncEnabled,
+      agentHostEnabled: diagnostics.agentHostEnabled,
+      hubRunning: diagnostics.hubRunning,
+      hubBaseUrl: diagnostics.hubBaseUrl,
+      lastError: diagnostics.lastError ?? null,
+    }
+  } catch (error) {
+    mobileSync = {
+      ...mobileSync,
+      lastError: error instanceof Error ? error.message : String(error),
+    }
+  }
 
   const snapshot = {
     collectedAt: Date.now(),
@@ -241,6 +264,7 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
     communityHub,
     communityYjs,
     communityCid,
+    mobileSync,
     p2p,
     operations: {
       ...getOperationsDiagnostics(),

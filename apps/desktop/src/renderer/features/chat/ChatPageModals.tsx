@@ -40,6 +40,7 @@ type ChatPageModalsProps = Pick<
   | 'knowledgeFolder'
   | 'networkKnowledgeFolder'
   | 'localFilesFolder'
+  | 'syncKnowledgeFolder'
   | 'showGroupCreate'
   | 'setShowGroupCreate'
   | 'p2pWorkspaces'
@@ -81,6 +82,7 @@ export function ChatPageModals({
   knowledgeFolder,
   networkKnowledgeFolder,
   localFilesFolder,
+  syncKnowledgeFolder,
   showGroupCreate,
   setShowGroupCreate,
   p2pWorkspaces,
@@ -168,6 +170,7 @@ export function ChatPageModals({
           defaultLocalFolderPath={knowledgeFolder.path}
           defaultNetworkFolderPath={networkKnowledgeFolder.path}
           defaultLocalFilesFolderPath={localFilesFolder.path}
+          defaultSyncFolderPath={syncKnowledgeFolder.path}
           onClose={() => setShowKnowledgeCreate(false)}
           onSubmit={async (input) => {
             if (!workspaceId) return

@@ -5,6 +5,7 @@ import {
   getDefaultLocalFilesFolderPath,
   getDefaultNetworkKnowledgeFolderPath,
   getDefaultSharedKnowledgeFolderPath,
+  getDefaultSyncKnowledgeFolderPath,
   getDefaultWorkspaceFolderPath,
 } from '../toolman-user-documents.service'
 
@@ -13,6 +14,7 @@ export type WorkspaceFolderSettingKey =
   | 'knowledgeFolderPath'
   | 'networkKnowledgeFolderPath'
   | 'sharedKnowledgeFolderPath'
+  | 'syncKnowledgeFolderPath'
   | 'localFilesFolderPath'
 
 export const WORKSPACE_FOLDER_SETTINGS: Array<{
@@ -31,6 +33,11 @@ export const WORKSPACE_FOLDER_SETTINGS: Array<{
     key: 'sharedKnowledgeFolderPath',
     subfolder: '共享知识库',
     defaultPath: getDefaultSharedKnowledgeFolderPath,
+  },
+  {
+    key: 'syncKnowledgeFolderPath',
+    subfolder: '同步知识库',
+    defaultPath: getDefaultSyncKnowledgeFolderPath,
   },
   { key: 'localFilesFolderPath', subfolder: '本地文件', defaultPath: getDefaultLocalFilesFolderPath },
 ]
