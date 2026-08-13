@@ -5,6 +5,7 @@ import { purgeAllKnowledgeStorageData } from '../knowledge.service'
 import { fireAndForget } from '../../lib/fire-and-forget'
 import { purgeAllMemoryData } from '../memory-entry.service'
 import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
+import { assertPathSafeToOpenInShell } from '../shell-open-guard'
 
 /** Sidecar dirs removed by「重置数据」（minimal reset） */
 export const RESET_DATA_TARGET_DIRS = ['cache', 'GPUCache', 'Code Cache', 'logs', 'agent-memory', 'agent-tasks'] as const
@@ -52,7 +53,7 @@ export function resetAppData() {
 }
 
 export async function openPathInShell(path: string) {
-  const allowedPath = assertPathWithinAllowedRoots(path)
+  const allowedPath = assertPathSafeToOpenInShell(path)
   if (!existsSync(allowedPath)) {
     return {
       opened: false,

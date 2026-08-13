@@ -17,10 +17,13 @@ import {
   saveNotesStore,
   type MobileNote,
   type MobileNotebook,
+  type NoteTombstone,
 } from '../storage/notes'
+import { loadKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
 import { DEFAULT_MODULE_PREFS, loadModulePrefs, type ModulePrefs } from '../settings/prefs'
 import { DEFAULT_SETTINGS_TAB, type SettingsTabId } from '../settings/tabs'
 import { pullAndApplySync, pushNoteChanges, countDesktopHostsOnline, type KnowledgeMetaItem } from '../sync/mobileSync'
+import { listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
 import type { MobileModuleId } from '../modules'
 import {
   MobileAppProvider,
@@ -68,6 +71,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
   const [desktopHostsOnline, setDesktopHostsOnline] = useState(0)
   const [notebooks, setNotebooks] = useState<MobileNotebook[]>([])
   const [notes, setNotes] = useState<MobileNote[]>([])
+  const [deletedNotes, setDeletedNotes] = useState<NoteTombstone[]>([])
   const [knowledgeMeta, setKnowledgeMeta] = useState<KnowledgeMetaItem[]>([])
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -123,22 +127,40 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const [authStore, identity, token, model, prefs, chat, notesStore] = await Promise.all([
-        loadAuthStore(),
-        loadIdentity(),
-        loadAccessToken(),
-        loadModelConfig(),
-        loadModulePrefs(),
-        loadChatSessions(),
-        loadNotesStore(),
-      ])
+      const [authStore, identity, token, model, prefs, chat, notesStore, knowledgeSnap] =
+        await Promise.all([
+          loadAuthStore(),
+          loadIdentity(),
+          loadAccessToken(),
+          loadModelConfig(),
+          loadModulePrefs(),
+          loadChatSessions(),
+          loadNotesStore(),
+          loadKnowledgeSnapshot(),
+        ])
       setModelConfig(model)
       setModulePrefs(prefs)
       setSessions(chat.sessions)
       setActiveSessionByScope(chat.activeSessionByScope)
       setNotebooks(notesStore.notebooks)
       setNotes(notesStore.notes)
+      setDeletedNotes(notesStore.deletedNotes)
       setActiveNoteId(notesStore.activeNoteId)
+      if (knowledgeSnap) {
+        setKnowledgeMeta(
+          listedSyncKnowledgeItems(
+            knowledgeSnap.kbs
+              .filter((kb) => kb.kind === 'sync')
+              .map((kb) => ({
+                id: kb.id,
+                name: kb.name,
+                kind: kb.kind,
+                documentCount: kb.documentCount,
+                updatedAt: kb.updatedAt,
+              })),
+          ),
+        )
+      }
       if (authStore.session) {
         setAuth(authStore.session)
       } else if (identity && token) {
@@ -155,8 +177,8 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready) return
-    void saveNotesStore({ notebooks, notes, activeNoteId })
-  }, [ready, notebooks, notes, activeNoteId])
+    void saveNotesStore({ notebooks, notes, activeNoteId, deletedNotes })
+  }, [ready, notebooks, notes, activeNoteId, deletedNotes])
 
   useEffect(() => {
     if (!ready) return
@@ -181,13 +203,23 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
     let cancelled = false
     void (async () => {
       setSyncStatus('syncing')
-      const applied = await pullAndApplySync({ cursor: syncCursor, notes, knowledgeMeta })
-      if (cancelled) return
-      setNotes(applied.notes)
-      setKnowledgeMeta(applied.knowledgeMeta)
-      setSyncCursor(applied.nextCursor)
-      setDesktopHostsOnline(applied.hostsOnline)
-      setSyncStatus('idle')
+      try {
+        const applied = await pullAndApplySync({
+          cursor: syncCursor,
+          notes,
+          deletedNotes,
+          knowledgeMeta,
+        })
+        if (cancelled) return
+        setNotes(applied.notes)
+        setDeletedNotes(applied.deletedNotes)
+        setKnowledgeMeta(applied.knowledgeMeta)
+        setSyncCursor(applied.nextCursor)
+        setDesktopHostsOnline(applied.hostsOnline)
+        setSyncStatus(applied.knowledgeError ? 'error' : 'idle')
+      } catch {
+        if (!cancelled) setSyncStatus('error')
+      }
     })()
     return () => {
       cancelled = true
@@ -201,15 +233,15 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
     if (!ready || !auth || !modulePrefs.notes.syncEnabled || !modulePrefs.notes.autoSyncOnEdit) {
       return
     }
-    if (notes.length === 0) return
+    if (notes.length === 0 && deletedNotes.length === 0) return
     const timer = setTimeout(() => {
-      void pushNoteChanges(notes, syncCursor).catch(() => {
+      void pushNoteChanges(notes, syncCursor, { deletedNotes }).catch(() => {
         // Keep local copy; surface status only on manual sync.
       })
     }, 1200)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, auth?.identityId, notes, modulePrefs.notes.syncEnabled, modulePrefs.notes.autoSyncOnEdit])
+  }, [ready, auth?.identityId, notes, deletedNotes, modulePrefs.notes.syncEnabled, modulePrefs.notes.autoSyncOnEdit])
 
   const value = useMemo(
     () => ({
@@ -238,6 +270,8 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       setNotebooks,
       notes,
       setNotes,
+      deletedNotes,
+      setDeletedNotes,
       knowledgeMeta,
       setKnowledgeMeta,
       activeNoteId,
@@ -266,6 +300,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       desktopHostsOnline,
       notebooks,
       notes,
+      deletedNotes,
       knowledgeMeta,
       activeNoteId,
       showSettings,

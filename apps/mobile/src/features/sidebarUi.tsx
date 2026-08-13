@@ -130,7 +130,14 @@ export function SidebarAddButton(props: {
 
 export function SidebarList(props: { children: ReactNode }) {
   return (
-    <ScrollView style={sidebarStyles.list} contentContainerStyle={sidebarStyles.listContent}>
+    <ScrollView
+      style={sidebarStyles.list}
+      contentContainerStyle={sidebarStyles.listContent}
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
+      // @ts-expect-error react-native-web className
+      className="tm-sidebar-scroll"
+    >
       {props.children}
     </ScrollView>
   )

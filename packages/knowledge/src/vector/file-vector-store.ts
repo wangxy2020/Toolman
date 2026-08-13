@@ -61,6 +61,10 @@ export class FileVectorStore {
     })
   }
 
+  listByDocumentId(documentId: string): VectorRecord[] {
+    return this.load().records.filter((record) => record.documentId === documentId)
+  }
+
   deleteByKbId(kbId: string): void {
     const current = this.load()
     this.save({

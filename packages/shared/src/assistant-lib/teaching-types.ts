@@ -5,6 +5,54 @@ import { VoiceTtsEngineSchema } from '../ipc/voice.js'
 export const TeachingModeSchema = z.enum(['socratic', 'open', 'off'])
 export type TeachingMode = z.infer<typeof TeachingModeSchema>
 
+export const CourseSyllabusChapterStatusSchema = z.enum([
+  'pending',
+  'generating',
+  'ready',
+  'in_progress',
+  'passed',
+])
+export type CourseSyllabusChapterStatus = z.infer<typeof CourseSyllabusChapterStatusSchema>
+
+export const CourseSyllabusChapterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  hours: z.number().positive().optional(),
+  lessonPlan: z.string().optional(),
+  assessmentQuestions: z.array(z.string()).default([]),
+  status: CourseSyllabusChapterStatusSchema.default('pending'),
+})
+export type CourseSyllabusChapter = z.infer<typeof CourseSyllabusChapterSchema>
+
+export const CourseSyllabusSchema = z.object({
+  generation: z.enum(['idle', 'generating', 'ready', 'error']).default('idle'),
+  generationError: z.string().optional(),
+  generatedCount: z.number().int().min(0).default(0),
+  totalHours: z.number().optional(),
+  chapters: z.array(CourseSyllabusChapterSchema).default([]),
+  updatedAt: z.number().int().optional(),
+})
+export type CourseSyllabus = z.infer<typeof CourseSyllabusSchema>
+
+export const ClassroomStudyRecordSchema = z.object({
+  id: z.string().min(1),
+  startedAt: z.number().int(),
+  endedAt: z.number().int().optional(),
+  chapterId: z.string().optional(),
+  chapterTitle: z.string().optional(),
+  summary: z.string().optional(),
+  mastered: z.array(z.string()).default([]),
+  stuckPoints: z.array(z.string()).default([]),
+  qaCount: z.number().int().min(0).default(0),
+})
+export type ClassroomStudyRecord = z.infer<typeof ClassroomStudyRecordSchema>
+
+export const EMPTY_COURSE_SYLLABUS: CourseSyllabus = {
+  generation: 'idle',
+  generatedCount: 0,
+  chapters: [],
+}
+
 export const ASSISTANT_LIB_SESSION_METADATA_KEY = 'toolmanAssistantLib'
 
 export const AssistantLibSessionMetaSchema = z.object({
@@ -17,15 +65,22 @@ export const AssistantLibSessionMetaSchema = z.object({
   refereeEnabled: z.boolean().optional(),
   kbIds: z.array(z.string().uuid()).optional(),
   customSystemPrompt: z.string().optional(),
+  /** Legacy markdown override; structured syllabus is preferred. */
+  lessonPlan: z.string().optional(),
+  syllabus: CourseSyllabusSchema.optional(),
   courseName: z.string().optional(),
   /** Built-in default classroom topic under the shared「课堂」agent. */
   isDefaultClassroom: z.boolean().optional(),
+  /** Built-in Toolman usage-guide course; pinned next to the default course. */
+  isGuideClassroom: z.boolean().optional(),
   /** Local textbook folder when user binds a disk path instead of a KB. */
   textbookLocalPath: z.string().min(1).optional(),
   /** Per-classroom TTS; default on when omitted. */
   autoSpeak: z.boolean().optional(),
   ttsEngine: VoiceTtsEngineSchema.optional(),
   ttsVoice: z.string().min(1).optional(),
+  /** One entry per 上课; scoped to this course session. */
+  studyRecords: z.array(ClassroomStudyRecordSchema).optional(),
 })
 
 export type AssistantLibSessionMeta = z.infer<typeof AssistantLibSessionMetaSchema>
@@ -39,6 +94,9 @@ export const SocraticStateSchema = z.object({
   openAssumptions: z.array(z.string()).default([]),
   pathIndex: z.number().int().min(0).optional(),
   pathNodes: z.array(z.string()).default([]),
+  /** True when the current syllabus chapter's assessment is passed this turn. */
+  chapterPassed: z.boolean().optional(),
+  currentChapterId: z.string().optional(),
   updatedAt: z.number().int().optional(),
 })
 
@@ -58,6 +116,7 @@ export type AssistantLibPresetId =
   | 'detective'
   | 'engineering-auditor'
   | 'blank-learner'
+  | 'toolman-guide'
 
 export type AssistantLibPresetDef = {
   id: AssistantLibPresetId

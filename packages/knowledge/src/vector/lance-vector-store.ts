@@ -39,6 +39,17 @@ function toLanceRow(record: VectorRecord) {
   }
 }
 
+function toNumberVector(value: unknown): number[] {
+  if (Array.isArray(value)) return value.map(Number)
+  if (value instanceof Float32Array || value instanceof Float64Array) {
+    return Array.from(value)
+  }
+  if (value && typeof value === 'object' && 'toArray' in value && typeof value.toArray === 'function') {
+    return Array.from(value.toArray() as ArrayLike<number>)
+  }
+  return []
+}
+
 export async function migrateJsonVectorsToLance(options: {
   vectorsDir: string
   kbId: string
@@ -108,6 +119,29 @@ export class LanceVectorStore implements VectorStore {
     const table = await this.openTable(false)
     if (!table) return
     await table.delete(`document_id = '${documentId}'`)
+  }
+
+  async listByDocumentId(documentId: string): Promise<VectorRecord[]> {
+    const table = await this.openTable(false)
+    if (!table) return []
+
+    const rows = await table.query().where(`document_id = '${documentId.replace(/'/g, "''")}'`).toArray()
+    return rows.flatMap((row) => {
+      const vector = toNumberVector(row.vector)
+      if (vector.length === 0) return []
+      return [
+        {
+          chunkId: String(row.chunk_id),
+          documentId: String(row.document_id),
+          kbId: String(row.kb_id ?? this.kbId),
+          vector,
+          metadata: {
+            title: String(row.title ?? ''),
+            filePath: String(row.file_path ?? ''),
+          },
+        },
+      ]
+    })
   }
 
   async deleteByKbId(): Promise<void> {

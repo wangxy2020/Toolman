@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useI18n } from '../i18n/useI18n'
+import { clientLog } from '../lib/client-log'
 import { reportRendererError } from '../lib/report-renderer-error'
 
 interface ErrorBoundaryProps {
@@ -22,16 +23,19 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('[ui] render error boundary caught', error, info.componentStack)
+    clientLog.error('[ui] render error boundary caught', error)
     reportRendererError({
       message: error.message,
       stack: error.stack,
       componentStack: info.componentStack ?? undefined,
     })
     // Vite Fast Refresh can orphan AuthSession context; a full reload restores the tree.
+    // Rapid session writes can also leave the DOM out of sync (removeChild → blank window).
     if (
       import.meta.hot &&
-      error.message.includes('useAuthSession must be used within AuthSessionProvider')
+      (error.message.includes('useAuthSession must be used within AuthSessionProvider') ||
+        error.message.includes('removeChild') ||
+        error.name === 'NotFoundError')
     ) {
       window.setTimeout(() => window.location.reload(), 0)
     }

@@ -2,7 +2,8 @@
  * Apply inbound Sync changes from mobile onto desktop local stores.
  */
 import type { SyncChange } from '@toolman/shared'
-import { upsertNoteItem } from './notes-data/storage'
+import { deleteNoteItem, getNoteById, upsertNoteItem } from './notes-data/storage'
+import { broadcastMobileNotesChanged } from './notes-mobile-sync-broadcast'
 import type { NoteItem } from './notes-data/types'
 
 function toNoteItem(change: SyncChange): NoteItem {
@@ -24,9 +25,20 @@ function toNoteItem(change: SyncChange): NoteItem {
 }
 
 export function applyInboundSyncChanges(changes: SyncChange[]): void {
+  let changed = false
   for (const change of changes) {
     if (change.entityKind !== 'note') continue
-    if (change.op === 'delete') continue
+    const existing = getNoteById(change.entityId)
+    const existingAt = existing?.updatedAt ?? 0
+    if (change.op === 'delete') {
+      if (existing && existingAt > change.updatedAt) continue
+      deleteNoteItem(change.entityId, { skipSyncPublish: true, deletedAt: change.updatedAt })
+      changed = true
+      continue
+    }
+    if (existing && existingAt > change.updatedAt) continue
     upsertNoteItem(toNoteItem(change), { skipSyncPublish: true })
+    changed = true
   }
+  if (changed) broadcastMobileNotesChanged()
 }

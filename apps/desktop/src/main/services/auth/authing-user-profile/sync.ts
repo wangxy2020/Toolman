@@ -10,6 +10,16 @@ import { getAuthingManagementClient, canFetchAuthingUserRoles } from '../authing
 import { fetchAuthingUserRolesViaAccessToken } from '../authing-session-roles.service.js'
 import { resolveAuthingUserIdFromAccessToken, extractAuthingRolesFromAccessToken } from '../authing-token-utils.js'
 import { extractAuthingRoleCodes, resolveAuthingRoleProfile } from './roles.js'
+import { logStructured } from '../../structured-log.service'
+
+const USER_POOL_NOT_FOUND = /用户池不存在|找不到用户池|user\s*pool.*(not\s+found|does\s+not\s+exist)/i
+
+function isBenignRoleLookupError(detail: string): boolean {
+  return (
+    USER_POOL_NOT_FOUND.test(detail) ||
+    /无权限执行此项操作|permission\s*denied|unauthorized|forbidden/i.test(detail)
+  )
+}
 
 export async function fetchAuthingUserRoles(
   authingUserId: string,
@@ -40,9 +50,13 @@ export async function fetchAuthingUserRoles(
             : error instanceof Error
               ? error.message
               : String(error)
-        console.warn(
-          `[authing-roles] Management API listRoles failed (${lookupId}), trying next id or fallbacks: ${detail}`,
-        )
+        if (!isBenignRoleLookupError(detail)) {
+          logStructured(
+            'authing-roles',
+            'warn',
+            `Management API listRoles failed (${lookupId}), trying next id or fallbacks: ${detail}`,
+          )
+        }
       }
     }
   }
@@ -68,7 +82,9 @@ export async function fetchAuthingUserRoles(
         : error instanceof Error
           ? error.message
           : String(error)
-    console.warn(`[authing-roles] Session token listRoles failed: ${detail}`)
+    if (!isBenignRoleLookupError(detail)) {
+      logStructured('authing-roles', 'warn', `Session token listRoles failed: ${detail}`)
+    }
     return []
   }
 }

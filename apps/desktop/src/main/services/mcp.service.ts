@@ -26,6 +26,7 @@ export function listServers() {
 export function upsertServer(input: unknown) {
   const server = upsertMcpServer(input)
   invalidateMcpServerCache()
+  // Persist only — do not spawn until the user tests or a session connects.
   resetMcpClientsForConfigChange(server.id)
   return server
 }

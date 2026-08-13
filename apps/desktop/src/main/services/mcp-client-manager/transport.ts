@@ -4,6 +4,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { McpServerConfig } from '@toolman/shared'
 import { resolveMcpNodeCommand, resolveMcpNodeEnv } from '../mcp-node-runtime'
+import { assertAllowedMcpStdioCommand } from '../mcp-stdio-command'
 import { buildSandboxedInheritedEnv } from '../bash-env.util'
 import {
   isPostgresMcpConfig,
@@ -12,6 +13,7 @@ import {
 } from '../mcp-postgres-verify.service'
 import type { ActiveMcpClient, McpTransport } from './types'
 import { withTimeout } from './types'
+import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
 
 export function configFingerprint(config: McpServerConfig): string {
   if (isPostgresMcpConfig(config)) {
@@ -43,8 +45,12 @@ export async function createTransport(config: McpServerConfig): Promise<McpTrans
     if (!config.command?.trim()) {
       throw new Error('stdio MCP 服务器缺少 command')
     }
+    assertAllowedMcpStdioCommand(config.command)
     const command =
       config.command === 'node' ? resolveMcpNodeCommand() : config.command
+    const cwd = config.cwd?.trim()
+      ? assertPathWithinAllowedRoots(config.cwd)
+      : undefined
     return new StdioClientTransport({
       command,
       args: config.args ?? [],
@@ -52,7 +58,7 @@ export async function createTransport(config: McpServerConfig): Promise<McpTrans
         ...resolveMcpNodeEnv(buildSandboxedInheritedEnv(process.env)),
         ...config.env,
       },
-      cwd: config.cwd,
+      cwd,
       stderr: 'pipe',
     })
   }

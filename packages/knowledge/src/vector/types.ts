@@ -9,6 +9,7 @@ export interface VectorStoreMeta {
 
 export interface VectorStore {
   upsert(records: VectorRecord[], meta: VectorStoreMeta): Promise<void>
+  listByDocumentId(documentId: string): Promise<VectorRecord[]>
   deleteByDocumentId(documentId: string): Promise<void>
   deleteByKbId(): Promise<void>
   search(queryVector: number[], topK: number, kbId?: string): Promise<VectorSearchHit[]>

@@ -109,6 +109,18 @@ export function publishNoteSyncChange(note: {
   ])
 }
 
+export function publishNoteDeleteSyncChange(noteId: string, updatedAt = Date.now()): void {
+  appendSyncChanges([
+    {
+      entityKind: 'note',
+      entityId: noteId,
+      op: 'delete',
+      updatedAt,
+      payload: {},
+    },
+  ])
+}
+
 export function publishKnowledgeMetaChanges(
   items: Array<{
     id: string

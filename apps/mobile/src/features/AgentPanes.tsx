@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import Svg, { Polyline } from 'react-native-svg'
 import { streamChatCompletion } from '../chat/streamChat'
 import { translateWithChatModel } from '../chat/translateWithModel'
 import { invokeDesktopAgent } from '../host/invokeDesktop'
 import {
   IconCopy,
-  IconEdit,
   IconGitFork,
   IconPause,
   IconPlay,
@@ -25,6 +25,7 @@ import { copyToClipboard } from '../utils/clipboard'
 import { getMobileTtsController, unlockAudioPlayback, type TtsPlaybackState } from '../voice'
 import { useSidebarLayout } from '../layout'
 import { ChatComposer } from './ChatComposer'
+import { ChatMessageContextMenu } from './ChatMessageContextMenu'
 import { MessageMarkdown } from './MessageMarkdown'
 import { ThinkingHeartbeat } from './ThinkingHeartbeat'
 import {
@@ -74,6 +75,18 @@ function formatMessageTime(timestamp: number): string {
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function eventPoint(event: {
+  nativeEvent?: { pageX?: number; pageY?: number }
+  pageX?: number
+  pageY?: number
+}): { x: number; y: number } {
+  const native = event.nativeEvent
+  return {
+    x: native?.pageX ?? event.pageX ?? 24,
+    y: native?.pageY ?? event.pageY ?? 96,
+  }
 }
 
 export function AgentLeftPane() {
@@ -269,6 +282,9 @@ export function AgentRightPane() {
   const [error, setError] = useState<string | null>(null)
   const [actionHint, setActionHint] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [userMenu, setUserMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [translations, setTranslations] = useState<Record<string, MessageTranslation>>({})
   const [visibleTranslationIds, setVisibleTranslationIds] = useState<Record<string, boolean>>({})
   const [translatingIds, setTranslatingIds] = useState<Record<string, boolean>>({})
@@ -328,6 +344,8 @@ export function AgentRightPane() {
   // Stop TTS when switching topic within the same agent page.
   useEffect(() => {
     getMobileTtsController().stop()
+    setSelectionMode(false)
+    setSelectedIds(new Set())
   }, [activeSessionId])
 
   useEffect(() => {
@@ -531,6 +549,31 @@ export function AgentRightPane() {
     if (busy || msg.role !== 'user' || !session) return
     setInput(msg.content)
     deleteMessage(msg.id)
+  }
+
+  const enterMessageSelection = (messageId: string) => {
+    setSelectionMode(true)
+    setSelectedIds(new Set([messageId]))
+  }
+
+  const toggleMessageSelected = (messageId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(messageId)) next.delete(messageId)
+      else next.add(messageId)
+      return next
+    })
+  }
+
+  const selectAllMessages = () => {
+    if (!session) return
+    setSelectionMode(true)
+    setSelectedIds(new Set(session.messages.map((item) => item.id)))
+  }
+
+  const clearUserMessageSelection = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
   }
 
   const regenerateAssistant = async (assistantId: string) => {
@@ -782,12 +825,53 @@ export function AgentRightPane() {
               busy && msg.role === 'assistant' && msg.id === session.messages[session.messages.length - 1]?.id
             const translation = translations[msg.id]
             const showTranslation = Boolean(translation && visibleTranslationIds[msg.id])
+            const checked = selectedIds.has(msg.id)
             return (
               <View
                 key={msg.id}
+                style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAssistant]}
+              >
+                {selectionMode ? (
+                  <Pressable
+                    accessibilityLabel="选择消息"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                    onPress={() => toggleMessageSelected(msg.id)}
+                    style={styles.selectHit}
+                  >
+                    <View style={[styles.selectBox, checked ? styles.selectBoxChecked : null]}>
+                      {checked ? <IconCheckMini /> : null}
+                    </View>
+                  </Pressable>
+                ) : null}
+              <Pressable
+                delayLongPress={400}
+                onPress={
+                  selectionMode
+                    ? () => toggleMessageSelected(msg.id)
+                    : undefined
+                }
+                onLongPress={
+                  isUser
+                    ? (event) => {
+                        setUserMenu({ msg, ...eventPoint(event) })
+                      }
+                    : undefined
+                }
+                // @ts-expect-error react-native-web context menu
+                onContextMenu={
+                  isUser
+                    ? (event: { preventDefault?: () => void; nativeEvent?: { pageX?: number; pageY?: number }; pageX?: number; pageY?: number }) => {
+                        event.preventDefault?.()
+                        setUserMenu({ msg, ...eventPoint(event) })
+                      }
+                    : undefined
+                }
                 style={[
                   styles.bubble,
                   isUser ? styles.bubbleUser : styles.bubbleAssistant,
+                  isUser && checked ? styles.bubbleUserSelected : null,
+                  !isUser && checked ? styles.bubbleAssistantSelected : null,
                 ]}
               >
                 <View style={[styles.bubbleMeta, isUser ? styles.bubbleMetaUser : null]}>
@@ -809,44 +893,10 @@ export function AgentRightPane() {
                 ) : null}
                 {streamingThis && !msg.content ? (
                   <View style={styles.actionsPlaceholder} />
-                ) : isUser ? (
-                  <View style={styles.actions}>
-                    <ActionIcon
-                      label={copiedId === msg.id ? '已复制' : '复制'}
-                      active={copiedId === msg.id}
-                      onPress={() => void copyMessage(msg)}
-                      disabled={!msg.content.trim()}
-                    >
-                      <IconCopy
-                        size={15}
-                        color={copiedId === msg.id ? colors.accent : colors.textSecondary}
-                      />
-                    </ActionIcon>
-                    <ActionIcon
-                      label="编辑"
-                      onPress={() => editUserMessage(msg)}
-                      disabled={busy}
-                    >
-                      <IconEdit size={15} color={colors.textSecondary} />
-                    </ActionIcon>
-                    <ActionIcon
-                      label="保存到笔记"
-                      onPress={() => saveToNote(msg)}
-                      disabled={!msg.content.trim()}
-                    >
-                      <IconSaveNote size={15} color={colors.textSecondary} />
-                    </ActionIcon>
-                    <ActionIcon
-                      label="删除"
-                      onPress={() => deleteMessage(msg.id)}
-                      disabled={busy}
-                    >
-                      <IconTrashMsg size={15} color={colors.textSecondary} />
-                    </ActionIcon>
-                  </View>
-                ) : (
+                ) : isUser ? null : (
                   renderAssistantActions(msg)
                 )}
+              </Pressable>
               </View>
             )
           })
@@ -885,7 +935,68 @@ export function AgentRightPane() {
         }}
         onClear={() => setInput('')}
       />
+
+      <ChatMessageContextMenu
+        visible={Boolean(userMenu)}
+        x={userMenu?.x ?? 0}
+        y={userMenu?.y ?? 0}
+        onClose={() => setUserMenu(null)}
+        items={
+          userMenu
+            ? [
+                {
+                  id: 'copy',
+                  label: '复制',
+                  onPress: () => {
+                    void copyMessage(userMenu.msg)
+                  },
+                },
+                {
+                  id: 'edit',
+                  label: '编辑',
+                  onPress: () => editUserMessage(userMenu.msg),
+                },
+                {
+                  id: 'delete',
+                  label: '删除',
+                  danger: true,
+                  onPress: () => deleteMessage(userMenu.msg.id),
+                },
+                {
+                  id: 'select',
+                  label: '选择',
+                  onPress: () => enterMessageSelection(userMenu.msg.id),
+                },
+                {
+                  id: 'select-all',
+                  label: '全选',
+                  onPress: selectAllMessages,
+                },
+                {
+                  id: 'cancel',
+                  label: '取消',
+                  onPress: clearUserMessageSelection,
+                },
+              ]
+            : []
+        }
+      />
     </View>
+  )
+}
+
+function IconCheckMini() {
+  return (
+    <Svg width={11} height={11} viewBox="0 0 24 24">
+      <Polyline
+        points="20 6 9 17 4 12"
+        stroke="#ffffff"
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
   )
 }
 
@@ -925,6 +1036,39 @@ const styles = StyleSheet.create({
     gap: 22,
     flexGrow: 1,
   },
+  msgRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  msgRowUser: {
+    justifyContent: 'flex-end',
+  },
+  msgRowAssistant: {
+    alignSelf: 'stretch',
+  },
+  selectHit: {
+    width: 28,
+    height: 28,
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  selectBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectBoxChecked: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
   bubble: {
     borderRadius: 12,
     paddingHorizontal: 14,
@@ -934,15 +1078,24 @@ const styles = StyleSheet.create({
   },
   bubbleUser: {
     alignSelf: 'flex-end',
-    maxWidth: '100%',
+    maxWidth: '92%',
+    flexShrink: 1,
     backgroundColor: colors.accentSoft,
   },
+  bubbleUserSelected: {
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
   bubbleAssistant: {
-    alignSelf: 'stretch',
-    width: '100%',
+    flex: 1,
+    minWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  bubbleAssistantSelected: {
+    borderColor: colors.accent,
+    backgroundColor: '#f3fbf7',
   },
   bubbleMeta: {
     marginBottom: 4,

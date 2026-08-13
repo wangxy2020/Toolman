@@ -1,4 +1,5 @@
 import type { TranslationLanguage } from '@toolman/shared'
+import { clientLog } from '../../lib/client-log'
 import { normalizeTranslationLanguages } from '../chat/translation-utils'
 import {
   detectTranslationDocumentKind,
@@ -192,7 +193,7 @@ export function saveTranslationData(data: TranslationData): void {
   try {
     localStorage.setItem(TRANSLATION_STORAGE_KEY, JSON.stringify(normalizeTranslationData(data)))
   } catch (error) {
-    console.error('[translation-storage] failed to persist translation data', error)
+    clientLog.error('[translation-storage] failed to persist translation data', error)
   }
 }
 

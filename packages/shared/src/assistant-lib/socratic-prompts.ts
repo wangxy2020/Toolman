@@ -1,3 +1,4 @@
+import { buildAssistantLibGuideCourseSystemPrompt } from './guide-course.js'
 import type { AssistantLibPresetDef } from './teaching-types.js'
 
 const SOCRATIC_CORE_RULES = [
@@ -14,7 +15,7 @@ const SOCRATIC_CORE_RULES = [
   '```',
   '7. 若需更新理解状态，再追加（**仅机器可读**，勿解释该块，勿在正文复述）：',
   '```socratic-state',
-  '{"mastered":[],"misconceptions":[],"stuckPoints":[],"confirmedClaims":[],"openAssumptions":[],"pathIndex":0,"pathNodes":[]}',
+  '{"mastered":[],"misconceptions":[],"stuckPoints":[],"confirmedClaims":[],"openAssumptions":[],"pathIndex":0,"pathNodes":[],"chapterPassed":false}',
   '```',
 ].join('\n')
 
@@ -25,7 +26,7 @@ export const ASSISTANT_LIB_PRESETS: AssistantLibPresetDef[] = [
     roleplayId: 'tutor',
     teachingMode: 'socratic',
     refereeEnabled: true,
-    description: '经典提问式导师：通过反问链引导你自己想清楚。',
+    description: '将经典提问式导师，通过反问链引导你自己想清楚。',
     systemPrompt: [
       '你是「苏格拉底导师」。语气冷静、好奇、尊重，不卖弄。',
       SOCRATIC_CORE_RULES,
@@ -75,6 +76,16 @@ export const ASSISTANT_LIB_PRESETS: AssistantLibPresetDef[] = [
       '可绑定知识库教材，结合资料提问或讲解。',
     ].join('\n\n'),
   },
+  {
+    id: 'toolman-guide',
+    name: 'Toolman使用说明',
+    roleplayId: 'guide',
+    teachingMode: 'open',
+    refereeEnabled: false,
+    hidden: true,
+    description: '内置课程：讲解 Toolman 各模块怎么用。',
+    systemPrompt: buildAssistantLibGuideCourseSystemPrompt(),
+  },
 ]
 
 /** Presets shown in the add-course dialog (default: 苏格拉底导师). */
@@ -107,7 +118,7 @@ export function buildSocraticKnowledgeHint(
     '2. **不要**输出教材原文答案或完整结论。',
     '3. 输出形式：指出用户可能忽略的概念张力，并问一个能检测理解的问题。',
     '   例：「文档提到了 X，但你刚才忽略了它对 Y 的影响——你觉得 X 与 Y 有什么联系？」',
-    '4. 用户回答正确后，再进入下一个知识点（更新 pathIndex / pathNodes）。',
+    '4. 用户必须按教学大纲章节顺序学习：完成本章验收合格后，才能进入下一章（设置 chapterPassed，并更新 pathIndex / pathNodes）。',
   ].join('\n\n')
 }
 

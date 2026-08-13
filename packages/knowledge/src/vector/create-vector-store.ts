@@ -1,4 +1,5 @@
 import { existsSync, unlinkSync } from 'node:fs'
+import type { VectorRecord } from './cosine.js'
 import { FileVectorStore, getKbVectorStorePath } from './file-vector-store.js'
 import { LanceVectorStore, migrateJsonVectorsToLance } from './lance-vector-store.js'
 import type { OpenKbVectorStoreOptions, VectorStore } from './types.js'
@@ -15,6 +16,10 @@ class FileVectorStoreAdapter implements VectorStore {
     meta: Parameters<FileVectorStore['upsert']>[1],
   ): Promise<void> {
     this.store.upsert(records, meta)
+  }
+
+  async listByDocumentId(documentId: string): Promise<VectorRecord[]> {
+    return this.store.listByDocumentId(documentId)
   }
 
   async deleteByDocumentId(documentId: string): Promise<void> {

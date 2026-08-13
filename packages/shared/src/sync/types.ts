@@ -9,7 +9,7 @@ export const SyncEntityKindSchema = z.enum([
   'classroom_session',
   'project_summary',
   'translate_job',
-  /** Lightweight knowledge-base index metadata (not vectors / files). */
+  /** Knowledge-base folder metadata in the changelog. Files/chunks/vectors use the snapshot export. */
   'knowledge_meta',
 ])
 export type SyncEntityKind = z.infer<typeof SyncEntityKindSchema>

@@ -10,6 +10,7 @@ import {
   createNoteId,
   createNotebookId,
   DEFAULT_NOTEBOOK_ID,
+  rememberDeletedNotes,
   type MobileNote,
 } from '../storage/notes'
 import { colors, shellStyles } from '../theme'
@@ -70,6 +71,8 @@ function NotesLeftPane() {
     setNotebooks,
     notes,
     setNotes,
+    deletedNotes,
+    setDeletedNotes,
     activeNoteId,
     setActiveNoteId,
     setLeftOpen,
@@ -81,7 +84,9 @@ function NotesLeftPane() {
     const seed = active?.notebookId ?? notebooks[0]?.id ?? DEFAULT_NOTEBOOK_ID
     return new Set([seed])
   })
-  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameTarget, setRenameTarget] = useState<{ kind: 'notebook' | 'note'; id: string } | null>(
+    null,
+  )
   const [draftTitle, setDraftTitle] = useState('')
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
 
@@ -115,7 +120,7 @@ function NotesLeftPane() {
     setNotebooks([...notebooks, { id, name }])
     setExpanded((prev) => new Set(prev).add(id))
     setOpenSwipeId(null)
-    setRenamingId(null)
+    setRenameTarget(null)
   }
 
   const createNote = (notebookId: string) => {
@@ -128,38 +133,49 @@ function NotesLeftPane() {
     setExpanded((prev) => new Set(prev).add(notebookId))
     setActiveNoteId(id)
     setOpenSwipeId(null)
-    setRenamingId(null)
+    setRenameTarget(null)
     setLeftOpen(false)
   }
 
-  const commitRename = (noteId: string) => {
+  const isProtectedNotebook = (notebookId: string) =>
+    notebooks.some((item) => item.id === notebookId && (item.isDefault || item.id === DEFAULT_NOTEBOOK_ID))
+
+  const commitRename = () => {
+    if (!renameTarget) return
     const next = draftTitle.trim()
-    if (next) {
+    if (renameTarget.kind === 'notebook') {
+      if (next) {
+        setNotebooks(
+          notebooks.map((item) => (item.id === renameTarget.id ? { ...item, name: next } : item)),
+        )
+      }
+    } else if (next) {
       setNotes(
         notes.map((item) =>
-          item.id === noteId ? { ...item, title: next, updatedAt: Date.now() } : item,
+          item.id === renameTarget.id ? { ...item, title: next, updatedAt: Date.now() } : item,
         ),
       )
     }
-    setRenamingId(null)
+    setRenameTarget(null)
     setDraftTitle('')
   }
 
   const deleteNote = (note: MobileNote) => {
     const remaining = notes.filter((item) => item.id !== note.id)
     setNotes(remaining)
+    setDeletedNotes(rememberDeletedNotes(deletedNotes, [note.id]))
     if (activeNoteId === note.id) {
       const sameNotebook = remaining.find((item) => item.notebookId === note.notebookId)
       setActiveNoteId(sameNotebook?.id ?? remaining[0]?.id ?? null)
     }
-    if (renamingId === note.id) {
-      setRenamingId(null)
+    if (renameTarget?.kind === 'note' && renameTarget.id === note.id) {
+      setRenameTarget(null)
       setDraftTitle('')
     }
     setOpenSwipeId(null)
   }
 
-  const confirmDelete = (note: MobileNote) => {
+  const confirmDeleteNote = (note: MobileNote) => {
     const title = note.title || '未命名笔记'
     const message = `确定删除「${title}」？此操作不可恢复。`
     const doDelete = () => deleteNote(note)
@@ -177,6 +193,56 @@ function NotesLeftPane() {
     ])
   }
 
+  const deleteNotebook = (notebookId: string) => {
+    if (isProtectedNotebook(notebookId)) return
+    const remainingNotebooks = notebooks.filter((item) => item.id !== notebookId)
+    const remainingNotes = notes.filter((item) => item.notebookId !== notebookId)
+    const removedIds = notes
+      .filter((item) => item.notebookId === notebookId)
+      .map((item) => item.id)
+    setNotebooks(remainingNotebooks)
+    setNotes(remainingNotes)
+    setDeletedNotes(rememberDeletedNotes(deletedNotes, removedIds))
+    if (activeNotebookId === notebookId) {
+      setActiveNoteId(remainingNotes[0]?.id ?? null)
+    }
+    if (renameTarget?.kind === 'notebook' && renameTarget.id === notebookId) {
+      setRenameTarget(null)
+      setDraftTitle('')
+    }
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.delete(notebookId)
+      return next
+    })
+    setOpenSwipeId(null)
+  }
+
+  const confirmDeleteNotebook = (notebookId: string, name: string) => {
+    if (isProtectedNotebook(notebookId)) return
+    const count = (notesByNotebook.get(notebookId) ?? []).length
+    const message =
+      count > 0
+        ? `确定删除「${name}」及其 ${count} 篇笔记？此操作不可恢复。`
+        : `确定删除「${name}」？此操作不可恢复。`
+    const doDelete = () => deleteNotebook(notebookId)
+
+    if (Platform.OS === 'web') {
+      if (typeof globalThis.confirm === 'function' && globalThis.confirm(message)) {
+        doDelete()
+      }
+      return
+    }
+
+    Alert.alert('删除笔记本', message, [
+      { text: '取消', style: 'cancel' },
+      { text: '删除', style: 'destructive', onPress: doDelete },
+    ])
+  }
+
+  const notebookSwipeId = (id: string) => `notebook:${id}`
+  const noteSwipeId = (id: string) => `note:${id}`
+
   return (
     <SidebarShell>
       <SidebarAddButton label="新建笔记本" onPress={createNotebook} />
@@ -188,57 +254,87 @@ function NotesLeftPane() {
             const isOpen = expanded.has(notebook.id)
             const notebookNotes = notesByNotebook.get(notebook.id) ?? []
             const isActive = notebook.id === activeNotebookId
+            const renamingNotebook =
+              renameTarget?.kind === 'notebook' && renameTarget.id === notebook.id
+            const canDeleteNotebook = !isProtectedNotebook(notebook.id)
             return (
               <View key={notebook.id} style={notesStyles.group}>
-                <View
-                  style={[
-                    notesStyles.sectionRow,
-                    isActive ? notesStyles.sectionRowActive : null,
-                  ]}
-                >
-                  <Pressable
-                    accessibilityLabel={isOpen ? '折叠笔记本' : '展开笔记本'}
-                    onPress={() => toggleExpanded(notebook.id)}
-                    style={({ pressed }) => [
-                      notesStyles.expandHit,
-                      pressed ? notesStyles.expandHitPressed : null,
+                {renamingNotebook ? (
+                  <View
+                    style={[
+                      notesStyles.notebookRenameWrap,
+                      { minHeight: layout.rowMinHeight },
+                      isActive ? notesStyles.renameWrapActive : null,
                     ]}
                   >
-                    <NotesChevron open={isOpen} />
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                    onPress={() => toggleExpanded(notebook.id)}
-                    style={notesStyles.sectionNameHit}
+                    <TextInput
+                      style={[notesStyles.renameInput, { fontSize: layout.topicFontSize }]}
+                      value={draftTitle}
+                      onChangeText={setDraftTitle}
+                      autoFocus
+                      selectTextOnFocus
+                      returnKeyType="done"
+                      onSubmitEditing={commitRename}
+                      onBlur={commitRename}
+                      placeholder="笔记本名称"
+                      placeholderTextColor={colors.textSecondary}
+                      underlineColorAndroid="transparent"
+                    />
+                  </View>
+                ) : (
+                  <SwipeableTopicRow
+                    active={isActive}
+                    variant="section"
+                    open={openSwipeId === notebookSwipeId(notebook.id)}
+                    onOpenChange={(open) =>
+                      setOpenSwipeId(open ? notebookSwipeId(notebook.id) : null)
+                    }
+                    renameA11yLabel="重命名笔记本"
+                    deleteA11yLabel="删除笔记本"
+                    onPress={() => {
+                      setOpenSwipeId(null)
+                      toggleExpanded(notebook.id)
+                    }}
+                    onRename={() => {
+                      setOpenSwipeId(null)
+                      setRenameTarget({ kind: 'notebook', id: notebook.id })
+                      setDraftTitle(notebook.name)
+                    }}
+                    onDelete={
+                      canDeleteNotebook
+                        ? () => confirmDeleteNotebook(notebook.id, notebook.name)
+                        : undefined
+                    }
+                    trailing={
+                      <Pressable
+                        accessibilityLabel="新建笔记"
+                        hitSlop={6}
+                        onPress={() => createNote(notebook.id)}
+                        style={({ pressed }) => [
+                          notesStyles.actionBtn,
+                          pressed ? notesStyles.actionBtnPressed : null,
+                        ]}
+                      >
+                        {({ pressed }) => (
+                          <IconPlus
+                            size={14}
+                            color={pressed ? colors.accent : colors.textSecondary}
+                          />
+                        )}
+                      </Pressable>
+                    }
                   >
-                    <Text
-                      style={[
-                        notesStyles.sectionName,
-                        isActive ? notesStyles.sectionNameActive : null,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {notebook.name}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel="新建笔记"
-                    hitSlop={6}
-                    onPress={() => createNote(notebook.id)}
-                    style={({ pressed }) => [
-                      notesStyles.actionBtn,
-                      pressed ? notesStyles.actionBtnPressed : null,
-                    ]}
-                  >
-                    {({ pressed }) => (
-                      <IconPlus
-                        size={14}
-                        color={pressed ? colors.accent : colors.textSecondary}
-                      />
-                    )}
-                  </Pressable>
-                </View>
+                    <View style={notesStyles.notebookTitleRow}>
+                      <NotesChevron open={isOpen} />
+                      <Text
+                        style={notesStyles.sectionName}
+                        numberOfLines={1}
+                      >
+                        {notebook.name}
+                      </Text>
+                    </View>
+                  </SwipeableTopicRow>
+                )}
                 {isOpen ? (
                   <View style={notesStyles.sectionBody}>
                     {notebookNotes.length === 0 ? (
@@ -246,7 +342,8 @@ function NotesLeftPane() {
                     ) : (
                       notebookNotes.map((note) => {
                         const active = activeNoteId === note.id
-                        const renaming = renamingId === note.id
+                        const renaming =
+                          renameTarget?.kind === 'note' && renameTarget.id === note.id
                         if (renaming) {
                           return (
                             <View
@@ -267,8 +364,8 @@ function NotesLeftPane() {
                                 autoFocus
                                 selectTextOnFocus
                                 returnKeyType="done"
-                                onSubmitEditing={() => commitRename(note.id)}
-                                onBlur={() => commitRename(note.id)}
+                                onSubmitEditing={commitRename}
+                                onBlur={commitRename}
                                 placeholder="笔记标题"
                                 placeholderTextColor={colors.textSecondary}
                                 underlineColorAndroid="transparent"
@@ -280,8 +377,10 @@ function NotesLeftPane() {
                           <SwipeableTopicRow
                             key={note.id}
                             active={active}
-                            open={openSwipeId === note.id}
-                            onOpenChange={(open) => setOpenSwipeId(open ? note.id : null)}
+                            open={openSwipeId === noteSwipeId(note.id)}
+                            onOpenChange={(open) =>
+                              setOpenSwipeId(open ? noteSwipeId(note.id) : null)
+                            }
                             style={notesStyles.noteSwipe}
                             renameA11yLabel="重命名笔记"
                             deleteA11yLabel="删除笔记"
@@ -293,16 +392,19 @@ function NotesLeftPane() {
                             onRename={() => {
                               setOpenSwipeId(null)
                               setActiveNoteId(note.id)
-                              setRenamingId(note.id)
+                              setRenameTarget({ kind: 'note', id: note.id })
                               setDraftTitle(note.title)
                             }}
-                            onDelete={() => confirmDelete(note)}
+                            onDelete={() => confirmDeleteNote(note)}
                           >
                             <Text
                               style={[
                                 sidebarStyles.itemLabel,
                                 active ? sidebarStyles.itemLabelActive : null,
-                                { fontSize: layout.topicFontSize, lineHeight: layout.topicFontSize + 6 },
+                                {
+                                  fontSize: layout.topicFontSize,
+                                  lineHeight: layout.topicFontSize + 6,
+                                },
                               ]}
                               numberOfLines={1}
                             >
@@ -406,30 +508,6 @@ const notesStyles = StyleSheet.create({
   group: {
     marginBottom: 2,
   },
-  sectionRow: {
-    marginHorizontal: 10,
-    marginVertical: 2,
-    minHeight: 34,
-    paddingRight: 8,
-    paddingLeft: 4,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sectionRowActive: {
-    // Match desktop `.tm-assistant-row--active` → `--tm-hover`
-    backgroundColor: colors.hover,
-  },
-  expandHit: {
-    width: 22,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  expandHitPressed: {
-    opacity: 0.7,
-  },
   chevron: {
     fontSize: 12,
     lineHeight: 14,
@@ -439,22 +517,28 @@ const notesStyles = StyleSheet.create({
   chevronOpen: {
     transform: [{ rotate: '90deg' }],
   },
-  sectionNameHit: {
-    flex: 1,
-    minHeight: 34,
-    justifyContent: 'center',
-    paddingVertical: 6,
-    minWidth: 0,
-  },
   sectionName: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
     color: colors.textSecondary,
   },
-  sectionNameActive: {
-    color: colors.text,
-    fontWeight: '500',
+  notebookTitleRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  notebookRenameWrap: {
+    marginHorizontal: 10,
+    marginVertical: 2,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
   /** Match desktop `.tm-assistant-action-btn`. */
   actionBtn: {

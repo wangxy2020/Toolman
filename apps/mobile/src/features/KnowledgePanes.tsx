@@ -8,25 +8,28 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { listDesktopKnowledgeMeta, searchDesktopKnowledge } from '../host/invokeDesktop'
+import { listDesktopKnowledgeMeta } from '../host/invokeDesktop'
 import { useMobileApp } from '../state/MobileAppContext'
+import { loadKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
 import { countDesktopHostsOnline, type KnowledgeMetaItem } from '../sync/mobileSync'
 import { colors } from '../theme'
 import { KnowledgeFilePanel } from './KnowledgeFilePanel'
 import {
   DEFAULT_FOLDER_LABEL,
+  DEFAULT_SYNC_FOLDER_ID,
   defaultActiveKbId,
+  formatFileSize,
   getKnowledgeSection,
+  isSystemDefaultFolderName,
   KNOWLEDGE_SIDEBAR_SECTIONS,
+  listedSyncKnowledgeItems,
+  mobileSyncKbUiId,
   type KnowledgeFileItem,
   type KnowledgeSidebarSection,
 } from './knowledgeSidebar'
@@ -35,14 +38,6 @@ import {
   SidebarList,
   SidebarShell,
 } from './sidebarUi'
-
-type SearchHit = {
-  documentTitle: string
-  kbName: string
-  score: number
-  text: string
-  sourcePath?: string | null
-}
 
 type KnowledgeUiState = {
   activeSection: KnowledgeSidebarSection
@@ -53,6 +48,8 @@ type KnowledgeUiState = {
   documentsByKb: Record<string, KnowledgeFileItem[]>
   addDocuments: (kbId: string, items: KnowledgeFileItem[]) => void
   deleteDocument: (kbId: string, docId: string) => void
+  reindexDocuments: (kbId: string, ids?: string[]) => void
+  moveDocuments: (fromKbId: string, toKbId: string, ids: string[]) => void
   expanded: Set<KnowledgeSidebarSection>
   toggleExpanded: (section: KnowledgeSidebarSection) => void
   expandSection: (section: KnowledgeSidebarSection) => void
@@ -79,16 +76,58 @@ export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
     modulePrefs,
     setDesktopHostsOnline,
   } = useMobileApp()
-  const [activeSection, setActiveSection] = useState<KnowledgeSidebarSection>('local')
-  const [activeKbId, setActiveKbId] = useState<string | null>(() => defaultActiveKbId('local'))
+  const [activeSection, setActiveSection] = useState<KnowledgeSidebarSection>('sync')
+  const [activeKbId, setActiveKbId] = useState<string | null>(() => defaultActiveKbId('sync'))
   const [activeKbName, setActiveKbName] = useState<string | null>(DEFAULT_FOLDER_LABEL)
   const [documentsByKb, setDocumentsByKb] = useState<Record<string, KnowledgeFileItem[]>>({})
   const [importError, setImportError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
-    () => new Set<KnowledgeSidebarSection>(['local', 'sync']),
+    () => new Set<KnowledgeSidebarSection>(['sync']),
   )
 
-  const syncedKbs = knowledgeMeta
+  const syncedKbs = listedSyncKnowledgeItems(knowledgeMeta.filter((item) => item.kind === 'sync'))
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const snapshot = await loadKnowledgeSnapshot()
+      if (cancelled || !snapshot) return
+      const defaultSyncKbIds = new Set(
+        snapshot.kbs
+          .filter((kb) => kb.kind === 'sync' && isSystemDefaultFolderName(kb.name))
+          .map((kb) => kb.id),
+      )
+      const uiKbId = (kbId: string) => (defaultSyncKbIds.has(kbId) ? DEFAULT_SYNC_FOLDER_ID : kbId)
+      const next: Record<string, KnowledgeFileItem[]> = {}
+      for (const doc of snapshot.documents) {
+        const file = snapshot.files.find(
+          (item) => item.documentId === doc.id && item.kbId === doc.kbId,
+        )
+        const kbId = uiKbId(doc.kbId)
+        const list = next[kbId] ?? []
+        list.push({
+          id: doc.id,
+          title: doc.title,
+          sizeLabel: formatFileSize(file?.sizeBytes ?? doc.sizeBytes ?? 0),
+          addedAt: doc.updatedAt,
+          status: doc.status === 'ready' ? 'ready' : 'pending',
+          sourceKind: doc.sourceKind,
+        })
+        next[kbId] = list
+      }
+      setDocumentsByKb((prev) => {
+        const snapshotUiKbIds = new Set(snapshot.kbs.map((kb) => mobileSyncKbUiId(kb)))
+        const staleIds = new Set([...snapshotUiKbIds, ...defaultSyncKbIds])
+        const kept = Object.fromEntries(
+          Object.entries(prev).filter(([id]) => !staleIds.has(id)),
+        )
+        return { ...kept, ...next }
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [knowledgeMeta])
 
   const refreshSyncedMeta = useCallback(async () => {
     if (!modulePrefs.knowledge.syncEnabled) return
@@ -98,13 +137,17 @@ export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
       if (hostsOnline <= 0) return
       const items = await listDesktopKnowledgeMeta()
       setKnowledgeMeta(
-        items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          kind: typeof item.kind === 'string' ? item.kind : 'local',
-          documentCount: item.documentCount,
-          updatedAt: item.updatedAt ?? Date.now(),
-        })),
+        listedSyncKnowledgeItems(
+          items
+            .filter((item) => item.kind === 'sync')
+            .map((item) => ({
+              id: item.id,
+              name: item.name,
+              kind: 'sync',
+              documentCount: item.documentCount,
+              updatedAt: item.updatedAt ?? Date.now(),
+            })),
+        ),
       )
     } catch {
       // Keep last pull; search may still work if host comes back.
@@ -135,6 +178,35 @@ export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
           ...prev,
           [kbId]: (prev[kbId] ?? []).filter((item) => item.id !== docId),
         }))
+      },
+      reindexDocuments: (kbId, ids) => {
+        const match = (id: string) => !ids || ids.includes(id)
+        setDocumentsByKb((prev) => ({
+          ...prev,
+          [kbId]: (prev[kbId] ?? []).map((item) =>
+            match(item.id) ? { ...item, status: 'pending' } : item,
+          ),
+        }))
+        setTimeout(() => {
+          setDocumentsByKb((prev) => ({
+            ...prev,
+            [kbId]: (prev[kbId] ?? []).map((item) =>
+              match(item.id) ? { ...item, status: 'ready' } : item,
+            ),
+          }))
+        }, 800)
+      },
+      moveDocuments: (fromKbId, toKbId, ids) => {
+        if (fromKbId === toKbId || ids.length === 0) return
+        setDocumentsByKb((prev) => {
+          const moving = (prev[fromKbId] ?? []).filter((item) => ids.includes(item.id))
+          if (moving.length === 0) return prev
+          return {
+            ...prev,
+            [fromKbId]: (prev[fromKbId] ?? []).filter((item) => !ids.includes(item.id)),
+            [toKbId]: [...moving, ...(prev[toKbId] ?? [])],
+          }
+        })
       },
       expanded,
       toggleExpanded: (section) => {
@@ -316,7 +388,7 @@ export function KnowledgeLeftPane() {
               </View>
               {isOpen ? (
                 <View style={styles.sectionBody}>
-                  {section.id !== 'sync' && section.defaultFolderId ? (
+                  {section.defaultFolderId ? (
                     <KnowledgeSidebarKbItem
                       label={DEFAULT_FOLDER_LABEL}
                       active={
@@ -332,7 +404,6 @@ export function KnowledgeLeftPane() {
                     <KnowledgeSidebarKbItem
                       key={kb.id}
                       label={kb.name}
-                      meta={`${kb.documentCount} 篇`}
                       active={activeSection === section.id && activeKbId === kb.id}
                       onPress={() => {
                         selectKb(section.id, kb.id, kb.name)
@@ -340,9 +411,6 @@ export function KnowledgeLeftPane() {
                       }}
                     />
                   ))}
-                  {section.id === 'sync' && remoteKbs.length === 0 ? (
-                    <Text style={styles.sectionEmpty}>{section.emptyHint}</Text>
-                  ) : null}
                   {section.id === 'shared' &&
                   !section.defaultFolderId &&
                   remoteKbs.length === 0 ? (
@@ -358,101 +426,15 @@ export function KnowledgeLeftPane() {
   )
 }
 
-function KnowledgeHostSearchPanel(props: {
-  kbId: string | null
-  kbName: string | null
-}) {
-  const { modulePrefs, setDesktopHostsOnline } = useMobileApp()
-  const [query, setQuery] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [hits, setHits] = useState<SearchHit[]>([])
-
-  const runSearch = async () => {
-    const text = query.trim()
-    if (!text) return
-    if (!modulePrefs.knowledge.preferDesktopIndex) {
-      setError('请在设置中开启「优先桌面索引」')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      const hostsOnline = await countDesktopHostsOnline()
-      setDesktopHostsOnline(hostsOnline)
-      const items = await searchDesktopKnowledge({
-        query: text,
-        kbId: props.kbId ?? undefined,
-        limit: 8,
-      })
-      setHits(items)
-    } catch (err) {
-      setHits([])
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <View style={styles.searchPanel}>
-      <Text style={styles.searchTitle}>桌面检索{props.kbName ? ` · ${props.kbName}` : ''}</Text>
-      <Text style={styles.searchHint}>向量与全文索引留在桌面；移动端通过宿主中继查询片段。</Text>
-      <View style={styles.searchRow}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="搜索知识库…"
-          placeholderTextColor={colors.textSecondary}
-          style={styles.searchInput}
-          onSubmitEditing={() => {
-            void runSearch()
-          }}
-          returnKeyType="search"
-        />
-        <Pressable
-          onPress={() => {
-            void runSearch()
-          }}
-          style={({ pressed }) => [styles.searchBtn, pressed ? styles.searchBtnPressed : null]}
-          disabled={busy}
-        >
-          {busy ? (
-            <ActivityIndicator color={colors.text} size="small" />
-          ) : (
-            <Text style={styles.searchBtnLabel}>搜索</Text>
-          )}
-        </Pressable>
-      </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <ScrollView style={styles.hitsScroll} contentContainerStyle={styles.hitsContent}>
-        {hits.length === 0 && !busy && !error ? (
-          <Text style={styles.emptyHint}>输入关键词后从桌面索引检索。</Text>
-        ) : null}
-        {hits.map((hit, index) => (
-          <View key={`${hit.documentTitle}-${index}`} style={styles.hitCard}>
-            <Text style={styles.hitTitle} numberOfLines={1}>
-              {hit.documentTitle}
-            </Text>
-            <Text style={styles.hitMeta} numberOfLines={1}>
-              {hit.kbName} · {(hit.score * 100).toFixed(0)}%
-            </Text>
-            <Text style={styles.hitBody}>{hit.text}</Text>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  )
-}
-
 export function KnowledgeRightPane() {
   const {
     activeSection,
     activeKbId,
-    activeKbName,
     documentsByKb,
     addDocuments,
     deleteDocument,
+    reindexDocuments,
+    moveDocuments,
     importError,
     setImportError,
     syncedKbs,
@@ -460,42 +442,40 @@ export function KnowledgeRightPane() {
   const section = getKnowledgeSection(activeSection)
   const documents = activeKbId ? (documentsByKb[activeKbId] ?? []) : []
   const canImport = Boolean(activeKbId) && section.showDropzone
-  const isSyncedKb = Boolean(activeKbId && syncedKbs.some((item) => item.id === activeKbId))
-  const showHostSearch = activeSection === 'sync' || isSyncedKb
 
   return (
     <View style={styles.rightRoot}>
-      {!activeKbId && activeSection !== 'sync' ? (
-        <View style={styles.emptyPane}>
-          <Text style={styles.emptyTitle}>{section.label}</Text>
-          <Text style={styles.emptyHint}>{section.hint}</Text>
-          <Text style={styles.emptyHint}>{section.emptyHint}</Text>
-        </View>
-      ) : showHostSearch ? (
-        <KnowledgeHostSearchPanel
-          kbId={isSyncedKb ? activeKbId : null}
-          kbName={isSyncedKb ? activeKbName : null}
-        />
-      ) : (
-        <>
-          {importError ? <Text style={styles.errorText}>{importError}</Text> : null}
-          <KnowledgeFilePanel
-            documents={documents}
-            mode={section.importMode}
-            showDropzone={section.showDropzone}
-            importDisabled={!canImport}
-            onImportFiles={(items) => {
-              if (!activeKbId) return
-              addDocuments(activeKbId, items)
-            }}
-            onDeleteDocument={(id) => {
-              if (!activeKbId) return
-              deleteDocument(activeKbId, id)
-            }}
-            onImportError={setImportError}
-          />
-        </>
-      )}
+      {importError ? <Text style={styles.errorText}>{importError}</Text> : null}
+      <KnowledgeFilePanel
+        documents={documents}
+        mode={section.importMode}
+        showDropzone
+        importDisabled={!canImport}
+        listKey={activeKbId}
+        syncMoveTargets={syncedKbs.map((kb) => ({ id: kb.id, name: kb.name }))}
+        onImportFiles={(items) => {
+          if (!activeKbId) return
+          addDocuments(activeKbId, items)
+        }}
+        onDeleteDocument={(id) => {
+          if (!activeKbId) return
+          deleteDocument(activeKbId, id)
+        }}
+        onReindexDocument={(id) => {
+          if (!activeKbId) return
+          reindexDocuments(activeKbId, [id])
+        }}
+        onReindexAll={() => {
+          if (!activeKbId) return
+          reindexDocuments(activeKbId)
+        }}
+        onMoveToSync={(ids, target) => {
+          if (!activeKbId) return
+          const destId = target.type === 'default' ? DEFAULT_SYNC_FOLDER_ID : target.kbId
+          moveDocuments(activeKbId, destId, ids)
+        }}
+        onImportError={setImportError}
+      />
     </View>
   )
 }
@@ -616,109 +596,10 @@ const styles = StyleSheet.create({
     minHeight: 0,
     backgroundColor: colors.bg,
   },
-  emptyPane: {
-    flex: 1,
-    padding: 24,
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  emptyHint: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
   errorText: {
     marginHorizontal: 20,
     marginTop: 10,
     fontSize: 12,
     color: colors.danger,
-  },
-  searchPanel: {
-    flex: 1,
-    minHeight: 0,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 10,
-  },
-  searchTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  searchHint: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.textSecondary,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    minHeight: 40,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.inputBg,
-  },
-  searchBtn: {
-    minWidth: 64,
-    height: 40,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
-    paddingHorizontal: 12,
-  },
-  searchBtnPressed: {
-    opacity: 0.85,
-  },
-  searchBtnLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  hitsScroll: {
-    flex: 1,
-    minHeight: 0,
-  },
-  hitsContent: {
-    paddingBottom: 24,
-    gap: 10,
-  },
-  hitCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: 12,
-    gap: 4,
-    backgroundColor: colors.inputBg,
-  },
-  hitTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  hitMeta: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  hitBody: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 20,
-    color: colors.text,
   },
 })

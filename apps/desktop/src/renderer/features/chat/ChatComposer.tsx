@@ -44,7 +44,7 @@ interface ChatComposerProps {
   onPrefillConsumed: () => void
   onUpdateAppSettings: (patch: Partial<ChatComposerAppSettings>) => void
   onSaveToNote: (messageId: string) => void
-  onCreateSession: () => void
+  onCreateSession?: () => void
   onClearSession: () => void
   onSend?: (contentBlocks: ContentBlock[]) => void | Promise<void>
   loadQuickPhrasesFn?: () => QuickPhrase[]

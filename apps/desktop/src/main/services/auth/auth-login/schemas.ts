@@ -26,11 +26,13 @@ export const OtpLoginPayloadSchema = z.object({
   intent: z.enum(['login', 'register']).optional(),
 })
 
-export const CnEmailPasswordLoginPayloadSchema = z.object({
+export const CnPasswordLoginPayloadSchema = z.object({
   account: z.string().min(1),
   password: z.string().min(6),
   intent: z.literal('login').optional(),
 })
+
+export const CnEmailPasswordLoginPayloadSchema = CnPasswordLoginPayloadSchema
 
 export const CnRegisterPayloadSchema = z.object({
   account: z.string().min(1),

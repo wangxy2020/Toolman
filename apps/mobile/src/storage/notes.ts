@@ -19,10 +19,29 @@ export type MobileNote = {
   updatedAt: number
 }
 
+export type NoteTombstone = {
+  id: string
+  deletedAt: number
+}
+
 export type NotesStore = {
   notebooks: MobileNotebook[]
   notes: MobileNote[]
   activeNoteId: string | null
+  deletedNotes: NoteTombstone[]
+}
+
+export function rememberDeletedNotes(
+  existing: NoteTombstone[],
+  ids: string[],
+  deletedAt = Date.now(),
+): NoteTombstone[] {
+  const next = new Map(existing.map((item) => [item.id, item.deletedAt]))
+  for (const id of ids) {
+    const previous = next.get(id) ?? 0
+    if (deletedAt >= previous) next.set(id, deletedAt)
+  }
+  return Array.from(next.entries()).map(([id, at]) => ({ id, deletedAt: at }))
 }
 
 function createDefaultNotebooks(): MobileNotebook[] {
@@ -33,6 +52,7 @@ const EMPTY: NotesStore = {
   notebooks: createDefaultNotebooks(),
   notes: [],
   activeNoteId: null,
+  deletedNotes: [],
 }
 
 async function getItem(key: string): Promise<string | null> {
@@ -140,6 +160,13 @@ function ensureDefaultNotebook(notebooks: MobileNotebook[]): MobileNotebook[] {
   return [...createDefaultNotebooks(), ...notebooks]
 }
 
+function normalizeTombstone(value: unknown): NoteTombstone | null {
+  if (!value || typeof value !== 'object') return null
+  const item = value as Partial<NoteTombstone>
+  if (typeof item.id !== 'string' || typeof item.deletedAt !== 'number') return null
+  return { id: item.id, deletedAt: item.deletedAt }
+}
+
 export async function loadNotesStore(): Promise<NotesStore> {
   try {
     const raw = await getItem(STORE_KEY)
@@ -148,6 +175,7 @@ export async function loadNotesStore(): Promise<NotesStore> {
       notebooks?: unknown
       notes?: unknown
       activeNoteId?: unknown
+      deletedNotes?: unknown
     }
     let notebooks = Array.isArray(parsed.notebooks)
       ? parsed.notebooks.map(normalizeNotebook).filter((n): n is MobileNotebook => Boolean(n))
@@ -171,11 +199,18 @@ export async function loadNotesStore(): Promise<NotesStore> {
       }
     }
 
+    const liveIds = new Set(notes.map((note) => note.id))
+    const deletedNotes = Array.isArray(parsed.deletedNotes)
+      ? parsed.deletedNotes
+          .map(normalizeTombstone)
+          .filter((item): item is NoteTombstone => item != null && !liveIds.has(item.id))
+      : []
+
     const activeNoteId =
       typeof parsed.activeNoteId === 'string' && notes.some((n) => n.id === parsed.activeNoteId)
         ? parsed.activeNoteId
         : (notes[0]?.id ?? null)
-    return { notebooks, notes, activeNoteId }
+    return { notebooks, notes, activeNoteId, deletedNotes }
   } catch {
     return { ...EMPTY, notebooks: createDefaultNotebooks() }
   }
@@ -188,6 +223,7 @@ export async function saveNotesStore(store: NotesStore): Promise<void> {
       notebooks: store.notebooks,
       notes: store.notes,
       activeNoteId: store.activeNoteId,
+      deletedNotes: store.deletedNotes,
     }),
   )
 }

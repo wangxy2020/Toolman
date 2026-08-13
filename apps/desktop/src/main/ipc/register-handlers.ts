@@ -2,7 +2,9 @@ import { ipcMain } from 'electron'
 import { toErrorMessage, ipcErr, IpcChannel } from '@toolman/shared'
 import { ipcHandlers } from './handlers/ipc-handler-map'
 import { wrapHandlerWithAuthGate, mapAuthGateError } from './auth-gate'
+import { isTrustedIpcSender } from './trusted-sender'
 import { logStructured } from '../services/structured-log.service'
+import { PathSandboxError } from '../services/path-sandbox.service'
 import type { HandlerFn } from './handlers/ipc-handler-map'
 
 export function registerIpcHandlers(): void {
@@ -23,10 +25,24 @@ export function registerIpcHandlers(): void {
 
     const guardedHandler = wrapHandlerWithAuthGate(channel, handler)
     ipcMain.removeHandler(channel)
-    ipcMain.handle(channel, async (_event, input) => {
+    ipcMain.handle(channel, async (event, input) => {
+      if (!isTrustedIpcSender(event)) {
+        return ipcErr({
+          code: 'PERMISSION_DENIED',
+          message: 'Untrusted IPC sender',
+          retryable: false,
+        })
+      }
       try {
         return await guardedHandler(input)
       } catch (error) {
+        if (error instanceof PathSandboxError) {
+          return ipcErr({
+            code: 'VALIDATION_ERROR',
+            message: error.message,
+            retryable: false,
+          })
+        }
         if (error && typeof error === 'object' && 'issues' in error) {
           return ipcErr({
             code: 'VALIDATION_ERROR',
@@ -44,14 +60,15 @@ export function registerIpcHandlers(): void {
     registered += 1
   }
 
-  const requiredTranslationChannels = [
+  const requiredChannels = [
     IpcChannel.TranslationDocumentParsePages,
     IpcChannel.TranslationDocumentRenderPage,
     IpcChannel.FileReadBinary,
+    IpcChannel.AssistantLibSyllabusGenerate,
   ] as const
-  for (const channel of requiredTranslationChannels) {
+  for (const channel of requiredChannels) {
     if (typeof ipcHandlers[channel] !== 'function') {
-      logStructured('ipc', 'error', `required translation handler missing: ${channel}`)
+      logStructured('ipc', 'error', `required handler missing: ${channel}`)
     }
   }
 
@@ -60,4 +77,8 @@ export function registerIpcHandlers(): void {
     'info',
     `registered ${registered} handlers${skipped > 0 ? ` (${skipped} skipped)` : ''}`,
   )
+
+  void import('../services/copyright-provenance.service').then(({ recordProvenanceBeacon }) => {
+    recordProvenanceBeacon('app.ipc.ready')
+  })
 }

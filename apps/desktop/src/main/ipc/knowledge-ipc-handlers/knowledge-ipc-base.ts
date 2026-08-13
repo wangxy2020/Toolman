@@ -81,6 +81,15 @@ export const knowledgeBaseIpcHandlers: KnowledgeHandlerMap = {
     }
   },
 
+  [IpcChannel.KnowledgeDocumentRelocate]: async (input) => {
+    try {
+      return ipcOk(await knowledgeDocumentService.relocateKnowledgeDocuments(input))
+    } catch (error) {
+      const message = toErrorMessage(error, 'Relocate failed')
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+
   [IpcChannel.KnowledgeKbReindex]: async (input) => {
     try {
       return ipcOk(await knowledgeDocumentService.reindexKnowledgeBaseDocuments(input))

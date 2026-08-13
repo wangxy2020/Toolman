@@ -73,8 +73,6 @@ export function SettingsRightPane() {
       return <KnowledgeSettingsPanel />
     case 'notes':
       return <NotesSettingsPanel />
-    case 'translate':
-      return <TranslateSettingsPanel />
     case 'group':
       return <GroupSettingsPanel />
     case 'community':
@@ -404,46 +402,6 @@ function NotesSettingsPanel() {
           label="编辑后自动纳入同步队列"
           value={prefs.autoSyncOnEdit}
           onChange={(v) => void patch({ autoSyncOnEdit: v })}
-        />
-      </Section>
-      {message ? <Text style={styles.hint}>{message}</Text> : null}
-    </SettingsScroll>
-  )
-}
-
-function TranslateSettingsPanel() {
-  const { modulePrefs, setModulePrefs } = useMobileApp()
-  const prefs = modulePrefs.translate
-  const [targetLang, setTargetLang] = useState(prefs.targetLang)
-  const [message, setMessage] = useState<string | null>(null)
-
-  const save = async (patch: Partial<ModulePrefs['translate']>) => {
-    const next = {
-      ...modulePrefs,
-      translate: { ...prefs, ...patch },
-    }
-    setModulePrefs(next)
-    await saveModulePrefs(next)
-    setMessage('翻译设置已保存')
-  }
-
-  return (
-    <SettingsScroll>
-      <Section title="语言与管线">
-        <Field
-          label="默认目标语言"
-          value={targetLang}
-          onChangeText={setTargetLang}
-          placeholder="zh-CN"
-        />
-        <PrimaryButton
-          label="保存目标语言"
-          onPress={() => void save({ targetLang: targetLang.trim() || 'zh-CN' })}
-        />
-        <Toggle
-          label="PDF/重文档优先桌面管线"
-          value={prefs.preferDesktopPipeline}
-          onChange={(v) => void save({ preferDesktopPipeline: v })}
         />
       </Section>
       {message ? <Text style={styles.hint}>{message}</Text> : null}

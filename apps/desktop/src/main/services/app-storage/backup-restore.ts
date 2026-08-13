@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app, dialog } from 'electron'
 import { assertValidRestoreBackupPath } from './stats'
 import { BACKUP_MANIFEST_VERSION } from './types'
+import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
 
 export async function backupAppData(input?: { notesDataJson?: string }) {
   const result = await dialog.showOpenDialog({
@@ -86,17 +87,18 @@ export async function backupAppData(input?: { notesDataJson?: string }) {
 }
 
 export async function restoreAppData(input: { backupPath: string; restoreKnowledge?: boolean }) {
-  assertValidRestoreBackupPath(input.backupPath)
+  const backupPath = assertPathWithinAllowedRoots(input.backupPath)
+  assertValidRestoreBackupPath(backupPath)
 
   const userData = app.getPath('userData')
   const dbPath = join(userData, 'toolman.db')
 
-  if (statSync(input.backupPath).isFile()) {
-    cpSync(input.backupPath, dbPath)
+  if (statSync(backupPath).isFile()) {
+    cpSync(backupPath, dbPath)
     return { restored: true, includesKnowledge: false, requiresRestart: true }
   }
 
-  const bundleDb = join(input.backupPath, 'toolman.db')
+  const bundleDb = join(backupPath, 'toolman.db')
   if (!existsSync(bundleDb)) {
     throw new Error('备份包中未找到 toolman.db')
   }
@@ -104,7 +106,7 @@ export async function restoreAppData(input: { backupPath: string; restoreKnowled
   cpSync(bundleDb, dbPath)
 
   let includesKnowledge = false
-  const knowledgeBackup = join(input.backupPath, 'knowledge')
+  const knowledgeBackup = join(backupPath, 'knowledge')
   if (input.restoreKnowledge !== false && existsSync(knowledgeBackup)) {
     const knowledgeDir = join(userData, 'knowledge')
     if (existsSync(knowledgeDir)) {
@@ -114,7 +116,7 @@ export async function restoreAppData(input: { backupPath: string; restoreKnowled
     includesKnowledge = true
   }
 
-  const p2pBackup = join(input.backupPath, 'p2p-workspaces')
+  const p2pBackup = join(backupPath, 'p2p-workspaces')
   if (existsSync(p2pBackup)) {
     const p2pDir = join(userData, 'p2p-workspaces')
     if (existsSync(p2pDir)) {
@@ -123,7 +125,7 @@ export async function restoreAppData(input: { backupPath: string; restoreKnowled
     cpSync(p2pBackup, p2pDir, { recursive: true })
   }
 
-  const attachmentsBackup = join(input.backupPath, 'notes-attachments')
+  const attachmentsBackup = join(backupPath, 'notes-attachments')
   if (existsSync(attachmentsBackup)) {
     const attachmentsDir = join(userData, 'notes-attachments')
     if (existsSync(attachmentsDir)) {
@@ -133,7 +135,7 @@ export async function restoreAppData(input: { backupPath: string; restoreKnowled
   }
 
   let notesDataJson: string | undefined
-  const notesBackup = join(input.backupPath, 'notes-data.json')
+  const notesBackup = join(backupPath, 'notes-data.json')
   if (existsSync(notesBackup)) {
     notesDataJson = readFileSync(notesBackup, 'utf8')
   }

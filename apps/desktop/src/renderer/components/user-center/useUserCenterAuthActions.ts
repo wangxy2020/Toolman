@@ -19,7 +19,6 @@ export interface UserCenterAuthSubmitContext {
   confirmPassword: string
   account: string
   smsCode: string
-  cnAccountIsEmail: boolean
   mergeState: {
     mergeToken: string
     maskedPhone: string
@@ -131,9 +130,7 @@ export function createUserCenterAuthActions(ctx: UserCenterAuthSubmitContext) {
                       confirmPassword: ctx.confirmPassword,
                       intent: 'register' as const,
                     }
-                  : ctx.cnAccountIsEmail
-                    ? { account: ctx.account.trim(), password: ctx.password, intent: 'login' as const }
-                    : { account: ctx.account.trim(), code: ctx.smsCode.trim(), intent: 'login' as const }
+                  : { account: ctx.account.trim(), password: ctx.password, intent: 'login' as const }
                 : undefined,
         })
       }

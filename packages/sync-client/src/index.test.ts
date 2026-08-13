@@ -33,4 +33,42 @@ describe('ToolmanSyncClient', () => {
     expect(out.accepted).toBe(1)
     expect(calls[0]?.url).toBe('https://hub.example/api/v1/sync/push')
   })
+
+  it('rewrites unbound fetch / connection errors into a hub hint', async () => {
+    const client = new ToolmanSyncClient({
+      baseUrl: 'http://127.0.0.1:17890',
+      getAccessToken: async () => null,
+      fetchImpl: (async () => {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+      }) as typeof fetch,
+    })
+
+    await expect(client.pull({ deviceId: 'd1', cursor: null, limit: 100 })).rejects.toThrow(
+      /无法连接桌面同步服务/,
+    )
+  })
+
+  it('loads a knowledge snapshot from the export endpoint', async () => {
+    const client = new ToolmanSyncClient({
+      baseUrl: 'https://hub.example',
+      getAccessToken: async () => null,
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            schemaVersion: 1,
+            exportedAt: 1,
+            kbs: [],
+            documents: [],
+            chunks: [],
+            vectors: [],
+            files: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )) as typeof fetch,
+    })
+
+    const snapshot = await client.exportKnowledgeSnapshot()
+    expect(snapshot.schemaVersion).toBe(1)
+    expect(snapshot.kbs).toEqual([])
+  })
 })

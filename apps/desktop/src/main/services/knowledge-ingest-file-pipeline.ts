@@ -18,6 +18,7 @@ import {
   updateDocumentStage,
 } from './knowledge-ingest-shared'
 import { appendDocumentFts, removeDocumentFts } from './knowledge-fts.service'
+import { logStructured } from './structured-log.service'
 
 async function runIngestContent(options: {
   repo: DocumentRepository
@@ -137,8 +138,10 @@ export async function parseAndEmbedFile(options: {
     if (odlParsed) {
       parsed = odlParsed
     } else if (shouldParseInWorker(filePath, ocrEnabled)) {
-      console.info(
-        `[knowledge-ingest] ODL fallback → glm-ocr worker for ${filePath.split(/[/\\]/).pop() ?? filePath}`,
+      logStructured(
+        'knowledge-ingest',
+        'info',
+        `ODL fallback → glm-ocr worker for ${filePath.split(/[/\\]/).pop() ?? filePath}`,
       )
       // Stop soft pulse and reset so per-page OCR progress is visible from the start.
       stopPulse()

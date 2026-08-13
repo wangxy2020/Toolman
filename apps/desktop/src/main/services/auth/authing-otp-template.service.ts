@@ -1,9 +1,10 @@
-import { EmailTemplateType, ManagementClient } from 'authing-js-sdk'
+import { EmailTemplateType } from 'authing-js-sdk'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 
 import { OTP_CODE_TTL_SECONDS } from './auth-otp.constants.js'
 import { getAuthingConfig, getAuthingOtpTtlSeconds } from './authing-auth.config.js'
+import { getAuthingManagementClient } from './authing-management-client.service.js'
 
 const VERIFY_EMAIL_TEMPLATE_TYPES = new Set<EmailTemplateType>([
   EmailTemplateType.ChangePassword,
@@ -43,17 +44,14 @@ export async function ensureAuthingOtpTemplateTtl(): Promise<void> {
   if (templateTtlEnsured) return
 
   const config = getAuthingConfig()
-  if (!config?.appSecret) {
+  const management = getAuthingManagementClient()
+  if (!config?.appSecret || !management) {
     templateTtlEnsured = true
     return
   }
 
   try {
     const ttlSeconds = getAuthingOtpTtlSeconds(OTP_CODE_TTL_SECONDS)
-    const management = new ManagementClient({
-      userPoolId: config.userPoolId,
-      secret: config.appSecret,
-    })
     const internals = management as unknown as ManagementInternals
 
     const token = await internals.tokenProvider.getToken()

@@ -9,10 +9,12 @@ export function GroupResourcePickerModal({
   title,
   hint,
   confirmLabel,
+  emptyLabel,
   groups,
   loading = false,
   loadingGroupId = null,
   error: externalError = null,
+  initialSelectedGroupIds,
   onClose,
   onConfirm,
   onGroupExpand,
@@ -22,10 +24,12 @@ export function GroupResourcePickerModal({
     title,
     hint,
     confirmLabel,
+    emptyLabel,
     groups,
     loading,
     loadingGroupId,
     error: externalError,
+    initialSelectedGroupIds,
     onClose,
     onConfirm,
     onGroupExpand,
@@ -49,7 +53,7 @@ export function GroupResourcePickerModal({
   } = picker
 
   return (
-    <div className="tm-modal-overlay" onClick={onClose}>
+    <div className="tm-modal-overlay tm-modal-overlay--resource-picker" onClick={onClose}>
       <div
         className="tm-modal tm-modal--knowledge-create tm-modal--resource-picker"
         onClick={(e) => e.stopPropagation()}
@@ -70,7 +74,7 @@ export function GroupResourcePickerModal({
           {loading && groups.length === 0 ? (
             <p className="tm-kb-file-panel-empty">{t('groupPage.picker.loading')}</p>
           ) : selectableGroups.length === 0 ? (
-            <p className="tm-kb-file-panel-empty">{t('groupPage.picker.empty')}</p>
+            <p className="tm-kb-file-panel-empty">{emptyLabel ?? t('groupPage.picker.empty')}</p>
           ) : (
             <GroupResourcePickerModalList
               t={t}

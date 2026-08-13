@@ -44,6 +44,7 @@ export enum IpcChannel {
   KnowledgeDocumentIngest = 'knowledge:document:ingest',
   KnowledgeDocumentDelete = 'knowledge:document:delete',
   KnowledgeDocumentReindex = 'knowledge:document:reindex',
+  KnowledgeDocumentRelocate = 'knowledge:document:relocate',
   KnowledgeKbReindex = 'knowledge:kb:reindex',
   KnowledgeCourseOutline = 'knowledge:course:outline',
   KnowledgeFtsRebuild = 'knowledge:fts:rebuild',
@@ -150,6 +151,8 @@ export enum IpcChannel {
   SessionDelete = 'agent:session:delete',
   SessionFork = 'agent:session:fork',
   SessionClearMessages = 'agent:session:clear-messages',
+  AssistantLibSyllabusGenerate = 'assistant-lib:syllabus:generate',
+  AssistantLibSyllabusStream = 'assistant-lib:syllabus:stream',
 
   MessageList = 'agent:message:list',
   MessageDelete = 'agent:message:delete',
@@ -455,6 +458,8 @@ export const P2P_PUSH_CHANNELS = [
   'p2p:group-chat:message',
   'p2p:group-chat:cleared',
   'p2p:member:changed',
+  'p2p:workspace:dissolved',
+  'p2p:network:snapshot-updated',
 ] as const
 
 export type P2pPushChannel = (typeof P2P_PUSH_CHANNELS)[number]
@@ -462,11 +467,37 @@ export type P2pPushChannel = (typeof P2P_PUSH_CHANNELS)[number]
 /** App update status push (via window.api.subscribe) */
 export const APP_UPDATE_STATUS_CHANNEL = 'app:update:status-changed' as const
 
+export const NOTES_MOBILE_SYNC_CHANNEL = 'notes:mobile-sync' as const
+export const COMMUNITY_FEDERATED_CATALOG_CHANNEL = 'community:federated:catalog:update' as const
+export const COMMUNITY_YJS_UPDATE_CHANNEL = 'community:yjs:update' as const
+
 export const SUBSCRIBE_CHANNELS = [
   IpcChannel.MessageStream,
   IpcChannel.MessageSessionReload,
   IpcChannel.KnowledgeIngestStream,
+  IpcChannel.AssistantLibSyllabusStream,
   IpcChannel.TaskStream,
+  IpcChannel.AgentToolApprovalRequest,
+  IpcChannel.KnowledgeFileDedupStream,
+  APP_UPDATE_STATUS_CHANNEL,
+  NOTES_MOBILE_SYNC_CHANNEL,
+  COMMUNITY_FEDERATED_CATALOG_CHANNEL,
+  COMMUNITY_YJS_UPDATE_CHANNEL,
+  ...P2P_PUSH_CHANNELS,
 ] as const
 
 export type SubscribeChannel = (typeof SUBSCRIBE_CHANNELS)[number]
+
+const IPC_INVOKE_CHANNEL_SET = new Set(
+  (Object.values(IpcChannel) as string[]).filter((value) => value.includes(':')),
+)
+
+const IPC_SUBSCRIBE_CHANNEL_SET = new Set<string>(SUBSCRIBE_CHANNELS)
+
+export function isIpcInvokeChannel(channel: string): boolean {
+  return IPC_INVOKE_CHANNEL_SET.has(channel)
+}
+
+export function isIpcSubscribeChannel(channel: string): boolean {
+  return IPC_SUBSCRIBE_CHANNEL_SET.has(channel)
+}

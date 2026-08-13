@@ -218,7 +218,7 @@ export type AuthResult =
   | { ok: true; session: MobileAuthSession }
   | { ok: false; message: string }
 
-/** Persist Firebase / OAuth identity into the local mobile auth store. */
+/** Persist Firebase / OAuth / Authing identity into the local mobile auth store. */
 export async function establishExternalSession(input: {
   externalId: string
   email: string | null
@@ -226,14 +226,18 @@ export async function establishExternalSession(input: {
   accessToken: string
   provider: 'firebase_email' | 'firebase_google' | 'firebase_apple' | 'authing'
   region: AuthRegion
+  phone?: string | null
 }): Promise<AuthResult> {
   const identityId =
     input.provider === 'authing' ? `ag-${input.externalId}` : `fb-${input.externalId}`
   const email = (input.email ?? '').trim().toLowerCase()
-  const accountKey = email || `${input.provider}:${input.externalId}`
+  const phone = input.phone?.replace(/^\+86/, '').replace(/\s+/g, '') || null
+  const accountKind: AuthAccountKind = phone && !email ? 'phone' : 'email'
+  const accountKey = email || phone || `${input.provider}:${input.externalId}`
   const displayName =
     input.displayName?.trim() ||
     (email.includes('@') ? email.split('@')[0] : null) ||
+    phone ||
     'Toolman 用户'
 
   const store = await loadAuthStore()
@@ -250,9 +254,9 @@ export async function establishExternalSession(input: {
       identityId,
       displayName: displayName || prev.displayName,
       accountKey,
-      accountKind: 'email',
+      accountKind,
       email: email || prev.email,
-      phone: prev.phone,
+      phone: phone || prev.phone,
       region: input.region,
       updatedAt: now,
     }
@@ -261,9 +265,9 @@ export async function establishExternalSession(input: {
       identityId,
       displayName,
       accountKey,
-      accountKind: 'email',
+      accountKind,
       email,
-      phone: null,
+      phone,
       passwordHash: OAUTH_PASSWORD_MARKER,
       salt: input.provider,
       region: input.region,
@@ -282,7 +286,7 @@ export async function establishExternalSession(input: {
 
   const session: MobileAuthSession = {
     ...toSession(account, input.accessToken),
-    email: email || account.displayName,
+    email: email || phone || account.displayName,
   }
   await saveAuthStore({ accounts, session })
   await persistSessionCredentials(session)

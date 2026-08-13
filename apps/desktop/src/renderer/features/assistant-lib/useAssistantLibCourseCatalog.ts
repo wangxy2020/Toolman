@@ -45,6 +45,10 @@ export function resolveLearningChapterId(
 ): string | null {
   if (chapters.length === 0) return null
   const state = parseSocraticState(session.metadata)
+  if (state.currentChapterId) {
+    const current = chapters.find((chapter) => chapter.id === state.currentChapterId)
+    if (current) return current.id
+  }
   const pathIndex = state.pathIndex ?? Math.max(0, state.pathNodes.length - 1)
   const hints = [
     state.pathNodes[pathIndex],

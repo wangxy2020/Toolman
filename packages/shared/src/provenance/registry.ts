@@ -6,6 +6,7 @@ import type { ProvenanceBeaconEvent } from '../ipc/provenance.js'
  */
 export const TOOLMAN_ONE_SHOT_BEACON_EVENTS = [
   'app.start',
+  'app.ipc.ready',
   'app.renderer.ready',
   'app.diagnostics.view',
   'app.about.view',
@@ -31,7 +32,8 @@ export const TOOLMAN_PROVENANCE_REGISTRY = {
     repeatableEvents: TOOLMAN_REPEATABLE_BEACON_EVENTS,
     rendererHelper: 'apps/desktop/src/renderer/lib/record-provenance-beacon.ts',
     callSites: {
-      appStart: 'bootstrapCopyrightProvenance() — apps/desktop/src/main/index.ts',
+      appStart: 'bootstrapCopyrightProvenance() — apps/desktop/src/main/index-bootstrap.ts',
+      ipcReady: 'registerIpcHandlers() — apps/desktop/src/main/ipc/register-handlers.ts',
       rendererReady: 'ProvenanceBootstrap — apps/desktop/src/renderer/main.tsx',
       diagnosticsView: 'useDiagnosticsSettings.ts',
       aboutView: 'AboutSettingsPanel.tsx',
@@ -42,8 +44,12 @@ export const TOOLMAN_PROVENANCE_REGISTRY = {
     template: 'TOOLMAN_COPYRIGHT_HEADER in packages/shared/src/provenance/copyright.ts',
     entryPoints: [
       'apps/desktop/src/main/index.ts',
+      'apps/desktop/src/preload/index.ts',
       'apps/desktop/src/renderer/main.tsx',
       'apps/desktop/src/renderer/index.html (meta copyright)',
+      'apps/desktop/src/main/workers/parse-file.worker.ts',
+      'apps/desktop/src/main/workers/db.worker.ts',
+      'apps/mobile/app/_layout.tsx',
       'crates/toolman-p2p/src/lib.rs',
       'crates/toolman-libp2p/src/lib.rs',
       'crates/toolman-community-hub/src/lib.rs',

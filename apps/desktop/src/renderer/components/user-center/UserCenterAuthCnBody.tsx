@@ -88,9 +88,6 @@ export function UserCenterAuthCnBody({
     smsCode,
     password,
     confirmPassword,
-    cnAccountIsEmail,
-    setSmsCode,
-    setPassword,
     submitResetPassword,
     submit,
     setError,
@@ -181,8 +178,7 @@ export function UserCenterAuthCnBody({
     )
   }
 
-  const loginPhoneReady = account.trim() && smsCode.trim()
-  const loginEmailReady = account.trim() && password.trim()
+  const loginReady = account.trim() && password.trim()
   return renderAuthPrimary(
     <>
       <AuthTextInput
@@ -192,35 +188,16 @@ export function UserCenterAuthCnBody({
         value={account}
         disabled={authBusy || !phoneConfigured}
         onChange={(value) => {
-          const nextIsEmail = value.includes('@')
-          const prevIsEmail = cnAccountIsEmail
           setAccount(value)
           setOtpChannel(null)
-          if (nextIsEmail !== prevIsEmail) {
-            setSmsCode('')
-            setPassword('')
-          }
         }}
       />
-      {cnAccountIsEmail ? (
-        renderPasswordFields()
-      ) : (
-        <>
-          <div className="tm-auth-entry-otp-hint-slot" aria-live="polite">
-            {otpHint}
-          </div>
-          {renderCodeRow()}
-        </>
-      )}
+      {renderPasswordFields()}
     </>,
     <button
       type="button"
       className="tm-auth-entry-submit-btn"
-      disabled={
-        authBusy ||
-        !phoneConfigured ||
-        (cnAccountIsEmail ? !loginEmailReady : !loginPhoneReady)
-      }
+      disabled={authBusy || !phoneConfigured || !loginReady}
       onClick={() => void submit('tencent_phone')}
     >
       {cnPrimaryActionLabel(account)}

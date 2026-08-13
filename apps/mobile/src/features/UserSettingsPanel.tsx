@@ -4,22 +4,21 @@ import {
   changePassword,
   cnPrimaryActionLabel,
   deleteAccount,
-  isCnEmailAccountInput,
   loginWithAccount,
   logoutLocal,
-  resetPasswordWithAccount,
   setSubscriptionSku,
   updateDisplayName,
 } from '../auth/localAuth'
 import {
   firebaseEmailAuth,
   firebaseOAuthLogin,
-  firebaseSendPasswordReset,
 } from '../auth/firebaseAuth'
 import { isMobileFirebaseConfigured } from '../auth/firebaseConfig'
 import {
+  loginWithAuthingPassword,
   registerWithVerificationCode,
-  sendRegisterVerificationCode,
+  resetPasswordWithVerificationCode,
+  sendAuthingVerificationCode,
 } from '../auth/authingOtp'
 import type { MobileAuthSession } from '../auth/types'
 import {
@@ -80,9 +79,10 @@ export function UserSettingsPanel() {
     setDesktopHostsOnline,
     notes,
     setNotes,
+    deletedNotes,
+    setDeletedNotes,
     knowledgeMeta,
     setKnowledgeMeta,
-    desktopHostsOnline,
     syncStatus,
   } = useMobileApp()
 
@@ -95,18 +95,27 @@ export function UserSettingsPanel() {
       auth={auth}
       setAuth={setAuth}
       syncStatus={syncStatus}
-      desktopHostsOnline={desktopHostsOnline}
       onSync={async () => {
         setSyncStatus('syncing')
         try {
-          await pushNoteChanges(notes, syncCursor)
-          const applied = await pullAndApplySync({ cursor: syncCursor, notes, knowledgeMeta })
+          await pushNoteChanges(notes, syncCursor, { deletedNotes })
+          const applied = await pullAndApplySync({
+            cursor: syncCursor,
+            notes,
+            deletedNotes,
+            knowledgeMeta,
+          })
           setNotes(applied.notes)
+          setDeletedNotes(applied.deletedNotes)
           setKnowledgeMeta(applied.knowledgeMeta)
           setSyncCursor(applied.nextCursor)
           setDesktopHostsOnline(applied.hostsOnline)
+          if (applied.knowledgeError) {
+            setSyncStatus('error')
+            return applied.knowledgeError
+          }
           setSyncStatus('idle')
-          return '同步完成'
+          return `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档）`
         } catch (error) {
           setSyncStatus('error')
           return error instanceof Error ? error.message : String(error)
@@ -143,14 +152,17 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
   const [smsCode, setSmsCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [displayName, setDisplayName] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const [smsCooldown, setSmsCooldown] = useState(0)
   const [otpHint, setOtpHint] = useState<string | null>(null)
   const firebaseReady = isMobileFirebaseConfigured()
-  const accountIsEmail = isCnEmailAccountInput(account)
+  const showOtpRow = view === 'register' || view === 'forgot'
+  const showConfirmPassword = view === 'register' || view === 'forgot'
+  const formReady =
+    Boolean(account.trim() && password.trim()) &&
+    (view === 'login' || Boolean(smsCode.trim() && confirmPassword.trim()))
 
   useEffect(() => {
     if (smsCooldown <= 0) return
@@ -181,28 +193,20 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
     view === 'register'
       ? '使用手机号或邮箱注册，验证码验证后即可完成。'
       : view === 'forgot'
-        ? accountIsEmail || !account.trim()
-          ? '输入注册邮箱，我们将发送密码重置链接；手机号可直接设置新密码。'
-          : '输入注册手机号，设置新密码。'
+        ? '通过注册手机号或邮箱接收验证码，设置新密码。'
         : '加入我们，解锁全部功能，你的电脑将如虎添翼。'
-
-  const accountPlaceholder =
-    view === 'forgot' ? '请输入注册手机或邮箱' : '请输入手机或邮箱'
 
   const primaryLabel = (() => {
     if (busy) {
       if (view === 'register') return '注册中…'
-      if (view === 'forgot') return accountIsEmail ? '发送中…' : '提交中…'
+      if (view === 'forgot') return '提交中…'
       return '登录中…'
     }
-    if (view === 'forgot') return accountIsEmail ? '发送重置邮件' : '重置密码'
+    if (view === 'forgot') return '重置密码'
     if (view === 'register') return cnPrimaryActionLabel('register', account)
     return cnPrimaryActionLabel('login', account)
   })()
 
-  const showPasswordFields = view !== 'forgot' || !accountIsEmail
-  const showConfirmPassword =
-    view === 'register' || (view === 'forgot' && !accountIsEmail && Boolean(account.trim()))
   const messageIsOk =
     Boolean(message) &&
     (message!.includes('已') || message!.includes('请查收') || message!.includes('邮件') || message!.includes('验证码'))
@@ -212,7 +216,10 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
     setMessage(null)
     setOtpHint(null)
     try {
-      const result = await sendRegisterVerificationCode(account)
+      const result = await sendAuthingVerificationCode(
+        account,
+        view === 'forgot' ? 'reset' : 'register',
+      )
       if (!result.ok) {
         setMessage(result.message)
         return
@@ -229,6 +236,14 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
     }
   }
 
+  const resetGuestFields = () => {
+    setMessage(null)
+    setSmsCode('')
+    setPassword('')
+    setConfirmPassword('')
+    setOtpHint(null)
+  }
+
   return (
     <SettingsScroll>
       <View style={styles.authCard}>
@@ -236,26 +251,16 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
         <Text style={styles.authSubtitle}>{subtitle}</Text>
 
         <View style={styles.authForm}>
-          {view === 'register' ? (
-            <AuthTextField
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="怎么称呼你（可选）"
-            />
-          ) : null}
-
           <AuthTextField
             value={account}
             onChangeText={(value) => {
               setAccount(value)
-              if (view === 'register') {
-                setOtpHint(null)
-              }
+              setOtpHint(null)
             }}
-            placeholder={accountPlaceholder}
+            placeholder={view === 'forgot' ? '请输入注册手机或邮箱' : '请输入手机或邮箱'}
           />
 
-          {view === 'register' ? (
+          {showOtpRow ? (
             <>
               {otpHint ? <Text style={styles.authInlineHint}>{otpHint}</Text> : null}
               <View style={styles.otpRow}>
@@ -284,16 +289,12 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
             </>
           ) : null}
 
-          {showPasswordFields ? (
-            <AuthTextField
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder={view === 'forgot' ? '请输入新密码' : '请输入密码'}
-            />
-          ) : (
-            <Text style={styles.authInlineHint}>我们将向该邮箱发送 Firebase 密码重置链接…</Text>
-          )}
+          <AuthTextField
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder={view === 'forgot' ? '请输入新密码' : '请输入密码'}
+          />
 
           {showConfirmPassword ? (
             <AuthTextField
@@ -305,29 +306,20 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
           ) : null}
 
           <Pressable
-            style={[styles.authSubmit, busy ? styles.btnDisabled : null]}
-            disabled={busy}
+            style={[styles.authSubmit, busy || !formReady ? styles.btnDisabled : null]}
+            disabled={busy || !formReady}
             onPress={() =>
               void run(async () => {
                 if (view === 'forgot') {
-                  if (accountIsEmail) {
-                    if (!firebaseReady) {
-                      setMessage('国际登录未配置')
-                      return
-                    }
-                    const result = await firebaseSendPasswordReset(account)
-                    if (!result.ok) {
-                      setMessage(result.message)
-                      return
-                    }
-                    setMessage('密码重置邮件已发送，请查收邮箱并完成重置。')
+                  if (password !== confirmPassword) {
+                    setMessage('两次输入的密码不一致')
                     return
                   }
-                  const result = await resetPasswordWithAccount({
+                  const result = await resetPasswordWithVerificationCode({
                     account,
-                    newPassword: password,
+                    code: smsCode,
+                    password,
                     confirmPassword,
-                    region: 'cn',
                   })
                   if (!result.ok) {
                     setMessage(result.message)
@@ -337,42 +329,45 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
                   setView('login')
                   setPassword('')
                   setConfirmPassword('')
+                  setSmsCode('')
+                  setOtpHint(null)
                   return
                 }
 
                 if (view === 'login') {
-                  if (accountIsEmail && firebaseReady) {
-                    const result = await firebaseEmailAuth({
-                      email: account,
-                      password,
-                      intent: 'login',
-                    })
-                    if (!result.ok) {
-                      const local = await loginWithAccount({
-                        account,
-                        password,
-                        region: 'cn',
-                      })
-                      if (local.ok) {
-                        onSession(local.session)
-                        return
-                      }
-                      setMessage(result.message)
-                      return
-                    }
-                    onSession(result.session)
+                  const remote = await loginWithAuthingPassword({ account, password })
+                  if (remote.ok) {
+                    onSession(remote.session)
                     return
                   }
-                  const result = await loginWithAccount({
+
+                  const local = await loginWithAccount({
                     account,
                     password,
                     region: 'cn',
                   })
-                  if (!result.ok) {
-                    setMessage(result.message)
+                  if (local.ok) {
+                    onSession(local.session)
                     return
                   }
-                  onSession(result.session)
+
+                  if (account.includes('@') && firebaseReady) {
+                    const firebase = await firebaseEmailAuth({
+                      email: account,
+                      password,
+                      intent: 'login',
+                    })
+                    if (firebase.ok) {
+                      onSession(firebase.session)
+                      return
+                    }
+                    setMessage(remote.message === 'Authing 未配置' ? firebase.message : remote.message)
+                    return
+                  }
+
+                  setMessage(
+                    remote.message === 'Authing 未配置' ? local.message : remote.message,
+                  )
                   return
                 }
 
@@ -390,7 +385,6 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
                   code: smsCode,
                   password,
                   confirmPassword,
-                  displayName,
                 })
                 if (!result.ok) {
                   setMessage(result.message)
@@ -456,9 +450,7 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
                   style={styles.authFooterLink}
                   onPress={() => {
                     setView('register')
-                    setMessage(null)
-                    setSmsCode('')
-                    setOtpHint(null)
+                    resetGuestFields()
                   }}
                 >
                   立即注册
@@ -468,31 +460,34 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
                 style={styles.authFooterLink}
                 onPress={() => {
                   setView('forgot')
-                  setMessage(null)
-                  setPassword('')
-                  setConfirmPassword('')
-                  setSmsCode('')
-                  setOtpHint(null)
+                  resetGuestFields()
                 }}
               >
                 忘记密码？
               </Text>
             </>
-          ) : (
+          ) : view === 'register' ? (
             <Text style={styles.authFooterMuted}>
               已有账号？
               <Text
                 style={styles.authFooterLink}
                 onPress={() => {
                   setView('login')
-                  setMessage(null)
-                  setConfirmPassword('')
-                  setSmsCode('')
-                  setOtpHint(null)
+                  resetGuestFields()
                 }}
               >
                 立即登录
               </Text>
+            </Text>
+          ) : (
+            <Text
+              style={styles.authFooterLink}
+              onPress={() => {
+                setView('login')
+                resetGuestFields()
+              }}
+            >
+              返回登录
             </Text>
           )}
         </View>
@@ -509,7 +504,6 @@ function LoggedInAccountPanel(props: {
   auth: MobileAuthSession
   setAuth: (s: MobileAuthSession | null) => void
   syncStatus: string
-  desktopHostsOnline: number
   onSync: () => Promise<string>
 }) {
   const { auth, setAuth } = props
@@ -517,6 +511,7 @@ function LoggedInAccountPanel(props: {
   const [displayName, setDisplayName] = useState(auth.displayName)
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -524,18 +519,47 @@ function LoggedInAccountPanel(props: {
 
   const skuLabel = auth.subscriptionSku === 'pro' ? '专业版' : '社区版'
   const accountLabel = auth.accountKind === 'phone' ? auth.phone ?? auth.email : auth.email
+  const isVip = auth.communityRole === 'enterprise' || auth.subscriptionSku === 'pro'
+  const profileRoleLabel =
+    auth.communityRole === 'founder'
+      ? '超级管理员'
+      : auth.communityRole === 'admin'
+        ? '管理员'
+        : isVip
+          ? 'VIP'
+          : '普通用户'
 
   if (view === 'password') {
     return (
       <SettingsScroll>
         <SecondaryButton label="← 返回" onPress={() => setView('main')} />
         <Section title="修改密码">
-          <Field label="当前密码" value={oldPassword} onChangeText={setOldPassword} secureTextEntry />
-          <Field label="新密码" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
+          <Field
+            value={oldPassword}
+            onChangeText={setOldPassword}
+            secureTextEntry
+            placeholder="请输入原密码"
+          />
+          <Field
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry
+            placeholder="请输入新密码"
+          />
+          <Field
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+            placeholder="请再次输入新密码"
+          />
           <PrimaryButton
-            label={busy ? '保存中…' : '保存新密码'}
+            label={busy ? '保存中…' : '确认修改'}
             onPress={() =>
               void (async () => {
+                if (newPassword !== confirmPassword) {
+                  setMessage('两次输入的密码不一致')
+                  return
+                }
                 setBusy(true)
                 setMessage(null)
                 try {
@@ -544,10 +568,11 @@ function LoggedInAccountPanel(props: {
                     oldPassword,
                     newPassword,
                   })
-                  setMessage(result.ok ? '密码已更新' : result.message)
+                  setMessage(result.ok ? '密码已更新，请使用新密码登录。' : result.message)
                   if (result.ok) {
                     setOldPassword('')
                     setNewPassword('')
+                    setConfirmPassword('')
                     setView('main')
                   }
                 } catch (error) {
@@ -570,9 +595,6 @@ function LoggedInAccountPanel(props: {
         <SecondaryButton label="← 返回" onPress={() => setView('main')} />
         <Section title="会员">
           <Text style={styles.meta}>当前方案：{skuLabel}</Text>
-          <Text style={styles.hint}>
-            专业版可解锁更大群组等权益。移动端正式支付即将接入；当前可先体验权益开关。
-          </Text>
           {auth.subscriptionSku !== 'pro' ? (
             <PrimaryButton
               label="开通专业版"
@@ -623,10 +645,7 @@ function LoggedInAccountPanel(props: {
       <SettingsScroll>
         <SecondaryButton label="← 返回" onPress={() => setView('main')} />
         <Section title="注销账户">
-          <Text style={styles.hint}>
-            注销后将删除本机账户数据并退出登录，此操作不可恢复。请输入登录密码，并在下方填写 DELETE
-            确认。
-          </Text>
+          <Text style={styles.hint}>注销后不可恢复，请输入密码并填写 DELETE 确认。</Text>
           <Field
             label="登录密码"
             value={deletePassword}
@@ -666,13 +685,15 @@ function LoggedInAccountPanel(props: {
 
   return (
     <SettingsScroll>
-      <Section title="个人资料">
-        <Text style={styles.meta}>
-          {auth.displayName} · {skuLabel} · 已登录
-        </Text>
-        <Text style={styles.hint}>
-          {accountLabel} · {auth.region === 'cn' ? '国内' : '国际'}
-        </Text>
+      <Section
+        title="个人资料"
+        trailing={
+          <Text style={[styles.sectionTrailing, isVip ? styles.sectionTrailingVip : null]}>
+            {profileRoleLabel}
+          </Text>
+        }
+      >
+        <Text style={styles.meta}>{accountLabel}</Text>
         <Field label="显示名" value={displayName} onChangeText={setDisplayName} />
         <PrimaryButton
           label="保存资料"
@@ -696,45 +717,26 @@ function LoggedInAccountPanel(props: {
             })()
           }
         />
+        <ActionRow title={skuLabel} onPress={() => setView('vip')} />
       </Section>
 
-      <Section title="会员">
+      <Section title="账户">
+        <ActionRow title="修改密码" onPress={() => setView('password')} />
         <ActionRow
-          title={`当前方案：${skuLabel}`}
-          subtitle="升级专业版 / 管理会员"
-          onPress={() => setView('vip')}
-        />
-      </Section>
-
-      <Section title="安全">
-        <ActionRow title="修改密码" subtitle="更新登录密码" onPress={() => setView('password')} />
-        <ActionRow
-          title="绑定手机"
-          subtitle={auth.phone ? `已绑定 ${auth.phone}` : '即将支持短信绑定'}
-          disabled
-          onPress={() => undefined}
-        />
-        <ActionRow title="绑定微信" subtitle="即将支持" disabled onPress={() => undefined} />
-      </Section>
-
-      <Section title="同步">
-        <Text style={styles.meta}>
-          状态：{syncStatusLabel(props.syncStatus)}
-          {props.desktopHostsOnline > 0
-            ? ` · 桌面宿主 ${props.desktopHostsOnline}`
-            : ' · 无桌面宿主'}
-        </Text>
-        <SecondaryButton
-          label="立即同步"
+          title={
+            props.syncStatus === 'idle'
+              ? '已同步'
+              : props.syncStatus === 'syncing'
+                ? '同步中'
+                : '立即同步'
+          }
+          disabled={props.syncStatus === 'syncing'}
           onPress={() =>
             void (async () => {
               setMessage(await props.onSync())
             })()
           }
         />
-      </Section>
-
-      <Section title="账户操作">
         <SecondaryButton
           label="退出登录"
           onPress={() =>
@@ -773,17 +775,4 @@ function ActionRow(props: {
       <Text style={styles.linkText}>{props.disabled ? '' : '›'}</Text>
     </Pressable>
   )
-}
-
-function syncStatusLabel(status: string): string {
-  switch (status) {
-    case 'syncing':
-      return '同步中'
-    case 'error':
-      return '同步异常'
-    case 'offline':
-      return '离线'
-    default:
-      return '已同步'
-  }
 }

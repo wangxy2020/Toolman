@@ -2,6 +2,7 @@ import type { DiagnosticLogEntry, DiagnosticLogLevel } from '@toolman/shared'
 
 const PROVENANCE_EVENT_LABELS: Record<string, string> = {
   'app.start': 'App started',
+  'app.ipc.ready': 'IPC handlers ready',
   'app.renderer.ready': 'Renderer UI ready',
   'app.session.heartbeat': 'Session heartbeat',
   'app.diagnostics.view': 'Diagnostics panel opened',

@@ -1411,6 +1411,14 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   display: flex;
   flex-direction: column;
   padding-top: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tm-sidebar-content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .tm-sidebar-add {
@@ -1437,6 +1445,14 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   flex: 1;
   overflow: auto;
   padding: 2px 0 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tm-sidebar-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .tm-list-item {
@@ -12516,6 +12532,10 @@ html.theme-dark .tm-auth-guard-btn--primary:hover:not(:disabled) {
 .tm-modal.tm-modal--resource-picker {
   width: min(560px, 100%);
   max-height: min(680px, 88vh);
+}
+
+.tm-modal-overlay.tm-modal-overlay--resource-picker {
+  z-index: 1500;
 }
 
 .tm-modal.tm-modal--resource-picker .tm-modal-body {

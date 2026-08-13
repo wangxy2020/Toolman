@@ -51,7 +51,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['@toolman/shared'] })],
     build: {
       reportCompressedSize: false,
       rollupOptions: {
@@ -61,6 +61,7 @@ export default defineConfig({
     resolve: {
       alias: {
         '@preload': resolve('src/preload'),
+        '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
       },
     },
   },
@@ -80,6 +81,13 @@ export default defineConfig({
     },
     build: {
       reportCompressedSize: false,
+      ...(isReleaseBuild
+        ? {
+            esbuild: {
+              drop: ['console', 'debugger'],
+            },
+          }
+        : {}),
     },
     resolve: {
       alias: {

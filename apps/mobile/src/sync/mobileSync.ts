@@ -1,7 +1,15 @@
 import { ToolmanSyncClient } from '@toolman/sync-client'
-import type { SyncChange } from '@toolman/shared'
+import {
+  bytesToBase64,
+  KNOWLEDGE_SNAPSHOT_DOWNLOAD_FILE_MAX_BYTES,
+  type KnowledgeSnapshot,
+  type SyncChange,
+} from '@toolman/shared'
 import { getOrCreateDeviceId, loadAccessToken } from '../storage/secure'
-import { DEFAULT_NOTEBOOK_ID, type MobileNote } from '../storage/notes'
+import { type MobileNote, type NoteTombstone } from '../storage/notes'
+import { saveKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
+import { isSystemDefaultFolderName, listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
+import { mergeNotesFromSyncChanges } from './noteSyncMerge'
 
 /** Local desktop Sync Hub by default; override with EXPO_PUBLIC_SYNC_BASE_URL for cloud. */
 const DEFAULT_SYNC_BASE =
@@ -15,10 +23,14 @@ export type KnowledgeMetaItem = {
   updatedAt: number
 }
 
+/** Bind fetch to the global object — Expo Web throws Illegal invocation on unbound Window.fetch. */
+const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
+
 export function createMobileSyncClient(baseUrl = DEFAULT_SYNC_BASE): ToolmanSyncClient {
   return new ToolmanSyncClient({
     baseUrl,
     getAccessToken: loadAccessToken,
+    fetchImpl: boundFetch,
   })
 }
 
@@ -40,87 +52,134 @@ export async function countDesktopHostsOnline(
 
 export type AppliedSync = {
   notes: MobileNote[]
+  deletedNotes: NoteTombstone[]
   knowledgeMeta: KnowledgeMetaItem[]
   nextCursor: string | null
   hostsOnline: number
+  snapshot: KnowledgeSnapshot | null
+  documentCount: number
+  knowledgeError?: string
 }
 
-/** Pull remote changes and merge notes + knowledge metadata (LWW). */
+async function hydrateOmittedFiles(
+  client: ToolmanSyncClient,
+  snapshot: KnowledgeSnapshot,
+): Promise<KnowledgeSnapshot> {
+  const files = []
+  for (const file of snapshot.files) {
+    if (file.contentB64 || file.omitReason === 'missing') {
+      files.push(file)
+      continue
+    }
+    if (file.sizeBytes > KNOWLEDGE_SNAPSHOT_DOWNLOAD_FILE_MAX_BYTES) {
+      files.push(file)
+      continue
+    }
+    try {
+      const bytes = await client.downloadKnowledgeFile(file.kbId, file.documentId)
+      files.push({
+        ...file,
+        contentB64: bytesToBase64(bytes),
+        sizeBytes: bytes.byteLength,
+        omitted: false,
+        omitReason: undefined,
+      })
+    } catch {
+      files.push(file)
+    }
+  }
+  return { ...snapshot, files }
+}
+
+/** Pull remote changes and merge notes + full sync-KB snapshot (files, chunks, vectors). */
 export async function pullAndApplySync(options: {
   client?: ToolmanSyncClient
   cursor: string | null
   notes: MobileNote[]
+  deletedNotes?: NoteTombstone[]
   knowledgeMeta?: KnowledgeMetaItem[]
 }): Promise<AppliedSync> {
   const client = options.client ?? createMobileSyncClient()
   const deviceId = await getOrCreateDeviceId()
 
-  let pull: { changes: SyncChange[]; nextCursor: string | null } | null = null
-  try {
-    pull = await client.pull({ deviceId, cursor: options.cursor, limit: 100 })
-  } catch {
-    pull = null
+  const pull = await client.pull({ deviceId, cursor: options.cursor, limit: 100 })
+
+  const merged = mergeNotesFromSyncChanges(
+    options.notes,
+    options.deletedNotes ?? [],
+    pull.changes,
+  )
+  const metaById = new Map(
+    (options.knowledgeMeta ?? [])
+      .filter((item) => item.kind === 'sync')
+      .map((item) => [item.id, item]),
+  )
+  for (const change of pull.changes) {
+    applyKnowledgeMetaChange(metaById, change)
   }
 
-  const byId = new Map(options.notes.map((n) => [n.id, n]))
-  const metaById = new Map((options.knowledgeMeta ?? []).map((item) => [item.id, item]))
-  if (pull) {
-    for (const change of pull.changes) {
-      applyNoteChange(byId, change)
-      applyKnowledgeMetaChange(metaById, change)
+  let snapshot: KnowledgeSnapshot | null = null
+  let knowledgeError: string | undefined
+  try {
+    snapshot = await hydrateOmittedFiles(client, await client.exportKnowledgeSnapshot())
+    await saveKnowledgeSnapshot(snapshot)
+    for (const kb of snapshot.kbs) {
+      if (kb.kind !== 'sync' || isSystemDefaultFolderName(kb.name)) continue
+      metaById.set(kb.id, {
+        id: kb.id,
+        name: kb.name,
+        kind: kb.kind,
+        documentCount: kb.documentCount,
+        updatedAt: kb.updatedAt,
+      })
     }
+  } catch (error) {
+    knowledgeError = error instanceof Error ? error.message : String(error)
   }
 
   const hostsOnline = await countDesktopHostsOnline(client)
 
   return {
-    notes: Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt),
-    knowledgeMeta: Array.from(metaById.values()).sort((a, b) => b.updatedAt - a.updatedAt),
-    nextCursor: pull?.nextCursor ?? options.cursor,
+    notes: merged.notes,
+    deletedNotes: merged.deletedNotes,
+    knowledgeMeta: listedSyncKnowledgeItems(
+      Array.from(metaById.values())
+        .filter((item) => item.kind === 'sync')
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+    ),
+    nextCursor: pull.nextCursor ?? options.cursor,
     hostsOnline,
+    snapshot,
+    documentCount: snapshot?.documents.length ?? 0,
+    knowledgeError,
   }
 }
 
 export async function pushNoteChanges(
   notes: MobileNote[],
   cursor: string | null,
-  client = createMobileSyncClient(),
+  extras?: { client?: ToolmanSyncClient; deletedNotes?: NoteTombstone[] },
 ): Promise<void> {
+  const client = extras?.client ?? createMobileSyncClient()
   const deviceId = await getOrCreateDeviceId()
-  const changes: SyncChange[] = notes.map((note) => ({
-    entityKind: 'note',
-    entityId: note.id,
-    op: 'upsert',
-    updatedAt: note.updatedAt,
-    payload: { title: note.title, body: note.body, notebookId: note.notebookId },
-  }))
+  const changes: SyncChange[] = [
+    ...notes.map((note) => ({
+      entityKind: 'note' as const,
+      entityId: note.id,
+      op: 'upsert' as const,
+      updatedAt: note.updatedAt,
+      payload: { title: note.title, body: note.body, notebookId: note.notebookId },
+    })),
+    ...(extras?.deletedNotes ?? []).map((item) => ({
+      entityKind: 'note' as const,
+      entityId: item.id,
+      op: 'delete' as const,
+      updatedAt: item.deletedAt,
+      payload: {},
+    })),
+  ]
   if (changes.length === 0) return
   await client.push({ deviceId, cursor, changes })
-}
-
-function applyNoteChange(byId: Map<string, MobileNote>, change: SyncChange): void {
-  if (change.entityKind !== 'note') return
-  if (change.op === 'delete') {
-    byId.delete(change.entityId)
-    return
-  }
-  const existing = byId.get(change.entityId)
-  if (existing && existing.updatedAt > change.updatedAt) return
-  const title =
-    typeof change.payload?.title === 'string' ? change.payload.title : existing?.title ?? '未命名'
-  const body =
-    typeof change.payload?.body === 'string' ? change.payload.body : existing?.body ?? ''
-  const notebookId =
-    typeof change.payload?.notebookId === 'string'
-      ? change.payload.notebookId
-      : existing?.notebookId ?? DEFAULT_NOTEBOOK_ID
-  byId.set(change.entityId, {
-    id: change.entityId,
-    notebookId,
-    title,
-    body,
-    updatedAt: change.updatedAt,
-  })
 }
 
 function applyKnowledgeMetaChange(
@@ -138,6 +197,11 @@ function applyKnowledgeMetaChange(
     typeof change.payload?.name === 'string' ? change.payload.name : existing?.name ?? '未命名知识库'
   const kind =
     typeof change.payload?.kind === 'string' ? change.payload.kind : existing?.kind ?? 'local'
+  // Mobile only keeps extra desktop「同步知识库」entries — 默认文件夹 is the virtual row.
+  if (kind !== 'sync' || isSystemDefaultFolderName(name)) {
+    byId.delete(change.entityId)
+    return
+  }
   const documentCount =
     typeof change.payload?.documentCount === 'number'
       ? change.payload.documentCount

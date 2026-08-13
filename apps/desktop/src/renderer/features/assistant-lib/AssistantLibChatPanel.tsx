@@ -1,13 +1,53 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   applySocraticStateFromAssistantText,
+  applySyllabusLearningProgress,
+  assistantLibSessionMetadataPatch,
+  formatSyllabusMarkdown,
   IpcChannel,
+  parseAssistantLibSessionMeta,
   parseSocraticState,
+  touchLatestClassroomStudyRecord,
+  type CourseSyllabus,
+  type SocraticState,
 } from '@toolman/shared'
 import { ChatComposer } from '../chat/ChatComposer'
 import { getMessageText, getUserFacingMessageText } from '../chat/message-utils'
 import type { ChatPageState } from '../chat/useChatPage'
 import { useI18n } from '../../i18n/useI18n'
+
+function socraticStateSignature(state: SocraticState): string {
+  return JSON.stringify({
+    topic: state.topic ?? '',
+    mastered: state.mastered,
+    misconceptions: state.misconceptions,
+    stuckPoints: state.stuckPoints,
+    confirmedClaims: state.confirmedClaims,
+    openAssumptions: state.openAssumptions,
+    pathIndex: state.pathIndex ?? 0,
+    pathNodes: state.pathNodes,
+    chapterPassed: Boolean(state.chapterPassed),
+    currentChapterId: state.currentChapterId ?? '',
+  })
+}
+
+function syllabusSignature(syllabus: CourseSyllabus | null | undefined): string {
+  if (!syllabus) return ''
+  return JSON.stringify({
+    generation: syllabus.generation,
+    generationError: syllabus.generationError ?? '',
+    generatedCount: syllabus.generatedCount,
+    totalHours: syllabus.totalHours ?? 0,
+    chapters: syllabus.chapters.map((chapter) => ({
+      id: chapter.id,
+      title: chapter.title,
+      hours: chapter.hours ?? 0,
+      lessonPlan: chapter.lessonPlan ?? '',
+      assessmentQuestions: chapter.assessmentQuestions,
+      status: chapter.status,
+    })),
+  })
+}
 
 type Props = Pick<
   ChatPageState,
@@ -58,23 +98,56 @@ export function AssistantLibChatPanel(props: Props) {
   const understanding = useMemo(() => {
     return parseSocraticState(chat.activeSession?.metadata)
   }, [chat.activeSession?.metadata])
+  const persistInFlight = useRef(false)
 
   useEffect(() => {
-    if (!chat.activeSession || !latestAssistant || latestAssistant.status !== 'completed') return
+    const session = chat.activeSession
+    if (!session || !latestAssistant || latestAssistant.status !== 'completed') return
+    if (persistInFlight.current) return
     // Keep machine fences in the raw message for parsing; do not surface them in chat UI.
     const text = getMessageText(latestAssistant)
-    const nextState = applySocraticStateFromAssistantText(understanding, text)
-    if (JSON.stringify(understanding) === JSON.stringify(nextState)) return
+    const parsedState = applySocraticStateFromAssistantText(understanding, text)
+    const meta = parseAssistantLibSessionMeta(session.metadata)
+    const progressed = applySyllabusLearningProgress(meta?.syllabus, parsedState)
+    const nextState = progressed.state
+    const nextSyllabus = progressed.syllabus
+    const nextStudyRecords = touchLatestClassroomStudyRecord(meta?.studyRecords, {
+      mastered: nextState.mastered,
+      stuckPoints: nextState.stuckPoints,
+      qaCount: chat.messages.filter((item) => item.role === 'user').length,
+    })
+    const syllabusChanged = syllabusSignature(meta?.syllabus) !== syllabusSignature(nextSyllabus)
+    const stateChanged = socraticStateSignature(understanding) !== socraticStateSignature(nextState)
+    const recordsChanged =
+      JSON.stringify(meta?.studyRecords ?? []) !== JSON.stringify(nextStudyRecords)
+    if (!stateChanged && !syllabusChanged && !recordsChanged) return
+    persistInFlight.current = true
+    const metadata = meta
+      ? assistantLibSessionMetadataPatch(session.metadata, {
+          ...meta,
+          syllabus: nextSyllabus,
+          lessonPlan: formatSyllabusMarkdown(nextSyllabus) || meta.lessonPlan,
+          studyRecords: nextStudyRecords,
+        })
+      : session.metadata
     void window.api
       .invoke(IpcChannel.SessionUpdate, {
-        id: chat.activeSession.id,
+        id: session.id,
         metadata: {
-          ...chat.activeSession.metadata,
+          ...metadata,
           socraticState: nextState,
         },
       })
       .then(() => chat.loadSessions())
-  }, [chat, latestAssistant, understanding])
+      .finally(() => {
+        persistInFlight.current = false
+      })
+  }, [
+    chat.activeSession,
+    chat.loadSessions,
+    latestAssistant,
+    understanding,
+  ])
 
   if (!chat.activeSession) {
     return (
@@ -109,7 +182,6 @@ export function AssistantLibChatPanel(props: Props) {
         onEditUserMessage={props.handleEditUserMessage}
         onPrefillConsumed={props.handlePrefillConsumed}
         onUpdateAppSettings={updateAppSettings}
-        onCreateSession={() => void chat.createSession(activeAssistant?.id)}
         onClearSession={() => void chat.clearSessionMessages()}
         onSaveToNote={(messageId) => {
           const message = chat.messages.find((item) => item.id === messageId)

@@ -15,7 +15,6 @@ export function UserCenterAuthFooter({
   const {
     authBusy,
     showCnAuth,
-    cnAccountIsEmail,
     region,
     setRegion,
     resetFormFields,
@@ -32,7 +31,7 @@ export function UserCenterAuthFooter({
         >
           {t('user.auth.footerNoAccount')}<span>{t('user.auth.registerNow')}</span>
         </button>
-        {showCnAuth && cnAccountIsEmail ? (
+        {showCnAuth ? (
           <button
             type="button"
             className="tm-user-center-footer-link"

@@ -42,6 +42,19 @@ app.whenReady().then(() => {
   }
 
   registerIpcHandlers()
+  const viteHot = (import.meta as ImportMeta & {
+    hot?: {
+      accept: (
+        dep: string,
+        cb: (mod: { registerIpcHandlers?: () => void } | undefined) => void,
+      ) => void
+    }
+  }).hot
+  if (viteHot) {
+    viteHot.accept('./ipc/register-handlers', (mod) => {
+      mod?.registerIpcHandlers?.()
+    })
+  }
   createWindow()
 
   bootstrapMainProcessServices()

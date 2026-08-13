@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   IpcChannel,
-  isAssistantLibDefaultClassroomSession,
+  appendClassroomStudyRecord,
+  assistantLibSessionMetadataPatch,
+  buildStartClassUserMessage,
+  currentSyllabusChapter,
+  endOpenClassroomStudyRecords,
+  isAssistantLibGuideCourseSession,
+  isClassroomLive,
+  looksLikeAssistantLibDefaultClassroom,
+  looksLikeAssistantLibGuideCourse,
+  parseAssistantLibSessionMeta,
+  parseCourseSyllabus,
   parseSocraticState,
   type KnowledgeBase,
 } from '@toolman/shared'
@@ -16,6 +26,7 @@ import {
 import { AssistantLibSettingsDialog } from './AssistantLibSettingsDialog'
 import { AssistantLibToolbar } from './AssistantLibToolbar'
 import { createLocalTextbookKnowledgeBase } from './create-textbook-kb'
+import { safeInvoke } from '../../lib/ipc-client'
 import {
   setAssistantLibPanelView,
   useAssistantLibPanelView,
@@ -73,7 +84,7 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
     props.chat.assistants,
     props.chat.sessions,
   )
-  const { busy, error, startCourse, ensureDefaultClassroom } = useAssistantLibBootstrap({
+  const { busy, error, startCourse, ensureClassroom } = useAssistantLibBootstrap({
     workspaceId: props.workspaceId,
     defaultModelId: props.defaultModelId,
     assistants: props.chat.assistants,
@@ -88,25 +99,29 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const linked = await ensureDefaultClassroom()
-      if (cancelled || !linked) return
+      const linked = await ensureClassroom()
+      if (cancelled || !linked?.session) return
       const activeBelongsToLib = activeAssistantId === linked.assistant.id
-      if (!activeBelongsToLib) {
+      const activeWasRemoved = Boolean(
+        activeSessionId && linked.removedDefaultIds.includes(activeSessionId),
+      )
+      if (!activeBelongsToLib || activeWasRemoved) {
         await selectSession(linked.session.id)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [ensureDefaultClassroom, activeAssistantId, selectSession])
+  }, [ensureClassroom, activeAssistantId, activeSessionId, selectSession])
 
   const activeLearningSession = useMemo(() => {
     if (activeSessionId && sharedAssistant && activeAssistantId === sharedAssistant.id) {
-      return learningSessions.find((item) => item.id === activeSessionId) ?? null
+      const current = learningSessions.find((item) => item.id === activeSessionId)
+      if (current && !looksLikeAssistantLibDefaultClassroom(current)) return current
     }
     return (
-      learningSessions.find((item) => isAssistantLibDefaultClassroomSession(item.metadata)) ??
-      learningSessions[0] ??
+      learningSessions.find((item) => isAssistantLibGuideCourseSession(item.metadata)) ??
+      learningSessions.find((item) => !looksLikeAssistantLibDefaultClassroom(item)) ??
       null
     )
   }, [learningSessions, activeAssistantId, activeSessionId, sharedAssistant])
@@ -114,6 +129,12 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
   useEffect(() => {
     setAssistantLibPanelView('agent')
   }, [])
+
+  useEffect(() => {
+    return window.api.subscribe(IpcChannel.AssistantLibSyllabusStream, () => {
+      void props.chat.loadSessions()
+    })
+  }, [props.chat])
 
   useEffect(() => {
     if (!props.workspaceId) return
@@ -133,6 +154,28 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
     const data = result.data as { items?: KnowledgeBase[] }
     setKnowledgeBases(data.items ?? [])
   }, [props.workspaceId])
+
+  const handleDeleteLearningSession = useCallback(
+    async (sessionId: string) => {
+      const session = learningSessions.find((item) => item.id === sessionId)
+      if (
+        session &&
+        isAssistantLibGuideCourseSession(session.metadata) &&
+        sharedAssistant
+      ) {
+        await window.api.invoke(IpcChannel.AssistantUpdate, {
+          id: sharedAssistant.id,
+          parameters: {
+            ...sharedAssistant.parameters,
+            assistantLibGuideDismissed: true,
+          },
+        })
+        await props.handleReloadAssistants()
+      }
+      await props.chat.deleteSession(sessionId)
+    },
+    [learningSessions, props, sharedAssistant],
+  )
 
   const handleStart = useCallback(
     async (input: AssistantLibCreateCourseInput) => {
@@ -162,6 +205,16 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
         await props.chat.selectSession(result.session.id)
         setAssistantLibPanelView('agent')
         closeAssistantLibCreateCourse()
+        if (kbIds?.length && props.defaultModelId) {
+          const generated = await safeInvoke(IpcChannel.AssistantLibSyllabusGenerate, {
+            workspaceId: props.workspaceId,
+            sessionId: result.session.id,
+            modelId: props.defaultModelId,
+          })
+          if (!generated.ok) {
+            props.setStatusMessage?.(generated.error.message)
+          }
+        }
         if (kbIds?.length && result.assistant.id) {
           const assistantId = result.assistant.id
           const byAssistant = props.appSettings.kbEnabledByAssistantId ?? {}
@@ -190,10 +243,100 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
     )
   }, [activeLearningSession, t])
 
+  const handleStartClass = useCallback(async () => {
+    const session = activeLearningSession
+    if (!session) {
+      props.setStatusMessage?.(t('assistantLibPage.selectPresetHint'))
+      return
+    }
+    if (props.chat.sending) return
+    const meta = parseAssistantLibSessionMeta(session.metadata)
+    if (!meta) return
+    const syllabus = parseCourseSyllabus(meta.syllabus)
+    const chapter = syllabus ? currentSyllabusChapter(syllabus) : null
+    const state = parseSocraticState(session.metadata)
+    const studyRecords = appendClassroomStudyRecord(meta.studyRecords, {
+      chapterId: chapter?.id,
+      chapterTitle: chapter?.title,
+    })
+    const metadata = assistantLibSessionMetadataPatch(session.metadata, {
+      ...meta,
+      studyRecords,
+    })
+    const updated = await safeInvoke(IpcChannel.SessionUpdate, {
+      id: session.id,
+      metadata,
+    })
+    if (!updated.ok) {
+      props.setStatusMessage?.(updated.error.message)
+      return
+    }
+    await props.chat.loadSessions()
+    if (props.chat.activeSessionId !== session.id) {
+      await props.chat.selectSession(session.id)
+    }
+    setAssistantLibPanelView('agent')
+    await props.chat.sendMessage([
+      {
+        type: 'text',
+        text: buildStartClassUserMessage({
+          courseName:
+            meta.courseName?.trim() ||
+            session.title ||
+            t('assistantLibPage.defaultCourse'),
+          syllabus: syllabus ?? undefined,
+          records: studyRecords,
+          state,
+        }),
+      },
+    ])
+  }, [activeLearningSession, props, t])
+
+  const handleStopClass = useCallback(async () => {
+    const session = activeLearningSession
+    if (!session) return
+    if (props.chat.sending) {
+      await props.chat.abortStreaming()
+    }
+    const meta = parseAssistantLibSessionMeta(session.metadata)
+    if (!meta) return
+    const studyRecords = endOpenClassroomStudyRecords(meta.studyRecords)
+    const metadata = assistantLibSessionMetadataPatch(session.metadata, {
+      ...meta,
+      studyRecords,
+    })
+    const updated = await safeInvoke(IpcChannel.SessionUpdate, {
+      id: session.id,
+      metadata,
+    })
+    if (!updated.ok) {
+      props.setStatusMessage?.(updated.error.message)
+      return
+    }
+    await props.chat.loadSessions()
+    setAssistantLibPanelView('agent')
+  }, [activeLearningSession, props])
+
+  const classLive = isClassroomLive(
+    parseAssistantLibSessionMeta(activeLearningSession?.metadata)?.studyRecords,
+  )
+
+  const handleToggleClass = useCallback(() => {
+    if (classLive) return handleStopClass()
+    return handleStartClass()
+  }, [classLive, handleStartClass, handleStopClass])
+
   const showRecords = panelView === 'records'
   const secondaryLabel = showRecords
     ? t('assistantLibPage.records.title')
-    : (activeLearningSession?.title ?? t('assistantLibPage.defaultCourse'))
+    : activeLearningSession
+      ? looksLikeAssistantLibDefaultClassroom(activeLearningSession)
+        ? t('assistantLibPage.defaultCourse')
+        : looksLikeAssistantLibGuideCourse(activeLearningSession)
+          ? t('assistantLibPage.guideCourse')
+          : (parseAssistantLibSessionMeta(activeLearningSession.metadata)?.courseName?.trim() ||
+            activeLearningSession.title)
+      : t('assistantLibPage.defaultCourse')
 
   return (
     <main
@@ -220,13 +363,9 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
           <AssistantLibToolbar
             activeView={panelView}
             shareDisabled={!activeLearningSession}
-            onShareNote={() => {
-              props.notes.createNoteFromMessage(
-                activeLearningSession?.title ?? t('assistantLibPage.classroomNotes'),
-                shareSummary(),
-              )
-              props.setActiveView('notes')
-            }}
+            classLive={classLive}
+            classToggleDisabled={!activeLearningSession}
+            onToggleClass={() => void handleToggleClass()}
             onShareGroup={async () => {
               await navigator.clipboard.writeText(shareSummary())
               props.setStatusMessage?.(t('assistantLibPage.shareCopied'))
@@ -240,7 +379,7 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
 
       {showRecords ? (
         <AssistantLibClassroomRecords
-          sessions={activeLearningSession ? [activeLearningSession] : []}
+          session={activeLearningSession}
           onOpenSession={(sessionId) => {
             void props.chat.selectSession(sessionId)
             setAssistantLibPanelView('agent')
@@ -289,7 +428,8 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
           onSaved={props.handleReloadAssistants}
           onKnowledgeBasesChanged={reloadKnowledgeBases}
           onStatusMessage={props.setStatusMessage}
-          onDeleteSession={(sessionId) => props.chat.deleteSession(sessionId)}
+          onDeleteSession={handleDeleteLearningSession}
+          defaultModelId={props.defaultModelId}
         />
       ) : null}
     </main>

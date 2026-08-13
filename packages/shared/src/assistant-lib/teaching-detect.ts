@@ -45,6 +45,12 @@ export function assistantLibSessionMetadataPatch(
     learningLabel?: string
   },
 ): Record<string, unknown> {
+  const previous = parseAssistantLibSessionMeta(metadata)
+  const nextLessonPlan =
+    patch.lessonPlan !== undefined ? patch.lessonPlan.trim() : (previous?.lessonPlan ?? '')
+  const nextSyllabus = patch.syllabus !== undefined ? patch.syllabus : previous?.syllabus
+  const nextStudyRecords =
+    patch.studyRecords !== undefined ? patch.studyRecords : (previous?.studyRecords ?? [])
   return {
     ...(metadata ?? {}),
     [ASSISTANT_LIB_SESSION_METADATA_KEY]: {
@@ -60,8 +66,16 @@ export function assistantLibSessionMetadataPatch(
       ...(patch.customSystemPrompt?.trim()
         ? { customSystemPrompt: patch.customSystemPrompt.trim() }
         : {}),
+      ...(nextLessonPlan ? { lessonPlan: nextLessonPlan } : {}),
+      ...(nextSyllabus ? { syllabus: nextSyllabus } : {}),
+      ...(nextStudyRecords.length > 0 ? { studyRecords: nextStudyRecords } : {}),
       ...(patch.courseName?.trim() ? { courseName: patch.courseName.trim() } : {}),
-      ...(patch.isDefaultClassroom ? { isDefaultClassroom: true as const } : {}),
+      ...(previous?.isDefaultClassroom || patch.isDefaultClassroom
+        ? { isDefaultClassroom: true as const }
+        : {}),
+      ...(previous?.isGuideClassroom || patch.isGuideClassroom
+        ? { isGuideClassroom: true as const }
+        : {}),
       ...(patch.textbookLocalPath?.trim()
         ? { textbookLocalPath: patch.textbookLocalPath.trim() }
         : {}),
@@ -96,6 +110,19 @@ export function isAssistantLibDefaultClassroomSession(
   return parseAssistantLibSessionMeta(metadata)?.isDefaultClassroom === true
 }
 
+export function isAssistantLibGuideCourseSession(
+  metadata: Record<string, unknown> | undefined | null,
+): boolean {
+  return parseAssistantLibSessionMeta(metadata)?.isGuideClassroom === true
+}
+
+/** Default course — cannot be deleted. The usage-guide course can be removed. */
+export function isAssistantLibBuiltinClassroomSession(
+  metadata: Record<string, unknown> | undefined | null,
+): boolean {
+  return isAssistantLibDefaultClassroomSession(metadata)
+}
+
 
 export function parseSocraticState(metadata: Record<string, unknown> | undefined | null): SocraticState {
   const parsed = SocraticStateSchema.safeParse(metadata?.socraticState)
@@ -112,6 +139,8 @@ export function mergeSocraticState(base: SocraticState, patch: Partial<SocraticS
     openAssumptions: patch.openAssumptions ?? base.openAssumptions,
     pathIndex: patch.pathIndex ?? base.pathIndex,
     pathNodes: patch.pathNodes ?? base.pathNodes,
+    chapterPassed: patch.chapterPassed ?? base.chapterPassed,
+    currentChapterId: patch.currentChapterId ?? base.currentChapterId,
     updatedAt: Date.now(),
   }
 }

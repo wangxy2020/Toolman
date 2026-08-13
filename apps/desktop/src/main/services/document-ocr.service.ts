@@ -16,6 +16,7 @@ import {
   listProviders,
 } from './provider.service'
 import { resolveWorkspaceDocProcessorContext } from './workspace-doc-processor.service'
+import { logStructured } from './structured-log.service'
 
 const gateway = createModelGateway()
 
@@ -364,9 +365,11 @@ async function recognizeImageBuffer(
     try {
       return await recognizeWithResolvedModel(glmOcr, buffer, mimeType, options)
     } catch (error) {
-      console.warn(
-        `[document-ocr] glm-ocr failed (${glmOcr.modelId}); falling back to other vision models:`,
-        error instanceof Error ? error.message : error,
+      logStructured(
+        'document-ocr',
+        'warn',
+        `glm-ocr failed (${glmOcr.modelId}); falling back to other vision models`,
+        { error: error instanceof Error ? error.message : String(error) },
       )
     }
   }

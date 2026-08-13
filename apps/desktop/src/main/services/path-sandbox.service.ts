@@ -16,6 +16,8 @@ export class PathSandboxError extends Error {
 }
 
 export function collectAllowedPathRoots(): string[] {
+  // Read/write roots for user-selected documents. Desktop/Downloads stay here so
+  // file pickers and export dialogs work; OS-open of executables is blocked separately.
   const roots = new Set<string>([
     app.getPath('userData'),
     getCommunityDataDir(),

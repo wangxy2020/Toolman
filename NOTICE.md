@@ -19,7 +19,7 @@ https://github.com/wangxy2020/Toolman
 Release builds embed a SHA-256 build fingerprint (`buildId` / `buildFingerprint`) derived
 from the product version, git commit, build timestamp, and license metadata. The desktop
 app records non-invasive provenance beacons locally at
-`{userData}/diagnostics/provenance.jsonl` (startup, renderer ready, diagnostics/about
+`{userData}/diagnostics/provenance.jsonl` (startup, IPC ready, renderer ready, diagnostics/about
 views, periodic session heartbeat). These records help verify authentic Toolman builds
 and do not include message content or API credentials.
 

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  findAssistantLibDefaultClassroomSession,
-  isAssistantLibDefaultClassroomSession,
+  findAssistantLibGuideCourseSession,
+  isAssistantLibGuideCourseSession,
+  isSyllabusChapterLocked,
   looksLikeAssistantLibDefaultClassroom,
+  looksLikeAssistantLibGuideCourse,
   parseAssistantLibSessionMeta,
+  parseCourseSyllabus,
   type Session,
 } from '@toolman/shared'
 import { IconChevronRight, IconPlus, IconTopic } from '../../components/icons'
@@ -23,10 +26,12 @@ type Props = {
   onSelectSession: (id: string) => void
 }
 
-function resolveCourseLabel(session: Session, defaultLabel: string): string {
+function resolveCourseLabel(session: Session, defaultLabel: string, guideLabel: string): string {
   if (looksLikeAssistantLibDefaultClassroom(session)) return defaultLabel
   const meta = parseAssistantLibSessionMeta(session.metadata)
-  return meta?.courseName?.trim() || session.title || defaultLabel
+  const custom = meta?.courseName?.trim() || session.title?.trim()
+  if (looksLikeAssistantLibGuideCourse(session)) return custom || guideLabel
+  return custom || defaultLabel
 }
 
 export function AssistantLibSidebar({
@@ -38,15 +43,18 @@ export function AssistantLibSidebar({
   const { t } = useI18n()
 
   const orderedSessions = useMemo(() => {
-    const assistantId = sessions.find((session) => session.assistantId)?.assistantId ?? null
-    const keeper = assistantId
-      ? findAssistantLibDefaultClassroomSession(sessions, assistantId)
-      : (sessions.find((session) => looksLikeAssistantLibDefaultClassroom(session)) ?? null)
-    const others = sessions.filter(
-      (session) =>
-        session.id !== keeper?.id && !looksLikeAssistantLibDefaultClassroom(session),
+    const visible = sessions.filter(
+      (session) => !looksLikeAssistantLibDefaultClassroom(session),
     )
-    return keeper ? [keeper, ...others] : others
+    const assistantId = visible.find((session) => session.assistantId)?.assistantId ?? null
+    const guideKeeper = assistantId
+      ? findAssistantLibGuideCourseSession(visible, assistantId)
+      : (visible.find((session) => looksLikeAssistantLibGuideCourse(session)) ?? null)
+    const others = visible.filter(
+      (session) =>
+        session.id !== guideKeeper?.id && !looksLikeAssistantLibGuideCourse(session),
+    )
+    return [...(guideKeeper ? [guideKeeper] : []), ...others]
   }, [sessions])
 
   const { chaptersForSession, isLoadingSession, errorForSession } = useAssistantLibCourseCatalog(
@@ -59,7 +67,7 @@ export function AssistantLibSidebar({
     {},
   )
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const defaultExpandedRef = useRef(false)
+  const seenBuiltinExpandRef = useRef<Set<string>>(new Set())
   const seenKbBindingRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
@@ -70,11 +78,9 @@ export function AssistantLibSidebar({
     setExpanded((prev) => {
       const next = new Set(prev)
       for (const session of orderedSessions) {
-        if (
-          !defaultExpandedRef.current &&
-          isAssistantLibDefaultClassroomSession(session.metadata)
-        ) {
-          defaultExpandedRef.current = true
+        const isBuiltin = isAssistantLibGuideCourseSession(session.metadata)
+        if (isBuiltin && !seenBuiltinExpandRef.current.has(session.id)) {
+          seenBuiltinExpandRef.current.add(session.id)
           next.add(session.id)
         }
         if (session.id === activeSessionId) {
@@ -120,9 +126,27 @@ export function AssistantLibSidebar({
             orderedSessions.map((session) => {
               const isActive = session.id === activeSessionId
               const isOpen = expanded.has(session.id)
-              const label = resolveCourseLabel(session, t('assistantLibPage.defaultCourse'))
-              const hasKb = Boolean(resolveCourseKbId(session))
-              const chapters = chaptersForSession(session)
+              const label = resolveCourseLabel(
+                session,
+                t('assistantLibPage.defaultCourse'),
+                t('assistantLibPage.guideCourse'),
+              )
+              const syllabus = parseCourseSyllabus(
+                parseAssistantLibSessionMeta(session.metadata)?.syllabus,
+              )
+              const catalogChapters = chaptersForSession(session)
+              const chapters =
+                syllabus && syllabus.chapters.length > 0
+                  ? syllabus.chapters.map((chapter) => ({
+                      id: chapter.id,
+                      title: chapter.title,
+                      label: chapter.title,
+                      status: chapter.status,
+                    }))
+                  : catalogChapters.map((chapter) => ({
+                      ...chapter,
+                      status: undefined as string | undefined,
+                    }))
               const loading = isLoadingSession(session)
               const loadError = errorForSession(session)
               const selectedChapterId =
@@ -187,34 +211,41 @@ export function AssistantLibSidebar({
                       <div className="tm-session-empty">{t('common.loading')}</div>
                     ) : loadError ? (
                       <div className="tm-session-empty">{loadError}</div>
-                    ) : !hasKb ? (
-                      <div className="tm-session-empty">
-                        {t('assistantLibPage.emptyCatalogNoKb')}
-                      </div>
                     ) : chapters.length === 0 ? (
                       <div className="tm-session-empty">
-                        {t('assistantLibPage.emptyCatalogNoChapters')}
+                        {t('assistantLibPage.emptyCatalogNoKb')}
                       </div>
                     ) : (
                       chapters.map((chapter) => {
                         const chapterActive =
                           isActive && selectedChapterId === chapter.id
-                        const level = chapter.level ?? 1
+                        const locked = Boolean(
+                          syllabus && isSyllabusChapterLocked(syllabus, chapter.id),
+                        )
+                        const level = 'level' in chapter ? (chapter.level ?? 1) : 1
                         return (
                           <button
                             key={chapter.id}
                             type="button"
+                            disabled={locked}
                             className={[
                               'tm-session-item',
                               'tm-session-item--with-icon',
                               level > 1 ? 'tm-session-item--nested' : '',
                               chapterActive ? 'tm-session-item--active' : '',
+                              locked ? 'tm-session-item--locked' : '',
+                              chapter.status === 'passed' ? 'tm-session-item--passed' : '',
                             ]
                               .filter(Boolean)
                               .join(' ')}
                             style={level > 1 ? { paddingLeft: `${18 + (level - 1) * 12}px` } : undefined}
-                            title={chapter.title}
+                            title={
+                              locked
+                                ? t('assistantLibPage.records.chapterLocked')
+                                : chapter.title
+                            }
                             onClick={() => {
+                              if (locked) return
                               setAssistantLibPanelView('agent')
                               setChapterOverrideBySession((prev) => ({
                                 ...prev,

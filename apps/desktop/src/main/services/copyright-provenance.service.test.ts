@@ -45,4 +45,17 @@ describe('copyright-provenance.service', () => {
     expect(diagnostics.beaconCount).toBe(2)
     expect(diagnostics.lastBeaconEvent).toBe('app.renderer.ready')
   })
+
+  it('does not duplicate app.ipc.ready in the same process', async () => {
+    const { recordProvenanceBeacon, getProvenanceDiagnostics } = await import(
+      './copyright-provenance.service'
+    )
+
+    recordProvenanceBeacon('app.ipc.ready')
+    recordProvenanceBeacon('app.ipc.ready')
+
+    const diagnostics = getProvenanceDiagnostics()
+    expect(diagnostics.beaconCount).toBe(1)
+    expect(diagnostics.lastBeaconEvent).toBe('app.ipc.ready')
+  })
 })

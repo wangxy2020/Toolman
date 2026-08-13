@@ -45,4 +45,10 @@ describe('path-sandbox.service', () => {
     const { assertPathWithinAllowedRoots } = await import('./path-sandbox.service')
     expect(() => assertPathWithinAllowedRoots('/etc/passwd')).toThrow('路径不在允许访问的范围内')
   })
+
+  it('allows desktop and downloads for user document reads', async () => {
+    const { assertPathWithinAllowedRoots } = await import('./path-sandbox.service')
+    expect(assertPathWithinAllowedRoots('/tmp/Desktop/notes.pdf')).toContain('Desktop')
+    expect(assertPathWithinAllowedRoots('/tmp/Downloads/file.txt')).toContain('Downloads')
+  })
 })

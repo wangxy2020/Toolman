@@ -10,14 +10,16 @@ let managementClient: ManagementClient | null = null
 
 export function getAuthingManagementClient(): ManagementClient | null {
   const config = getAuthingConfig()
+  const poolId = config?.userPoolId?.trim()
   const secret = config?.userPoolSecret?.trim()
-  if (!config || !secret || secret === config.userPoolId) {
+  // Management API requires the real user-pool id, not the application id.
+  if (!config || !poolId || !secret || secret === poolId) {
     return null
   }
 
   if (!managementClient) {
     managementClient = new ManagementClient({
-      userPoolId: config.userPoolId,
+      userPoolId: poolId,
       secret,
       host: resolveAuthingManagementHost(),
     })

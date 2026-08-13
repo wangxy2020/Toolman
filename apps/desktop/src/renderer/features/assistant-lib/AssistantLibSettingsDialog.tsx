@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   IpcChannel,
   assistantLibSessionMetadataPatch,
+  formatSyllabusMarkdown,
   getAssistantLibPreset,
   isAssistantLibDefaultClassroomSession,
+  isAssistantLibGuideCourseSession,
   listSelectableAssistantLibPresets,
   parseAssistantLibSessionMeta,
+  parseCourseSyllabus,
   type AssistantLibPresetId,
   type KnowledgeBase,
   type Session,
@@ -15,14 +18,92 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useI18n } from '../../i18n/useI18n'
 import { AgentSettingsToggle } from '../chat/agent-settings-modal-components'
 import { AssistantSettingsHelpHint } from '../chat/assistant-settings-components'
-import { buildStoragePathForKb } from '../knowledge/knowledge-import-paths'
+import { MessageMarkdown } from '../chat/MessageMarkdown'
+import { DEFAULT_MESSAGE_SETTINGS } from '../chat/message-settings'
 import { getPathBasename } from '../knowledge/knowledge-path-utils'
 import { CURATED_EDGE_TTS_VOICES, resolveCuratedEdgeTtsVoice } from '../voice/tts-provider-factory'
-import { AssistantLibLocalKbPickerModal } from './AssistantLibLocalKbPickerModal'
+import {
+  AssistantLibLocalKbPickerModal,
+  resolveTextbookKbDisplayPath,
+} from './AssistantLibLocalKbPickerModal'
 import { createLocalTextbookKnowledgeBase } from './create-textbook-kb'
+import { safeInvoke } from '../../lib/ipc-client'
 
 type TextbookSource = 'knowledge' | 'local'
-type SettingsTab = 'basic' | 'danger'
+type SettingsTab = 'basic' | 'teaching' | 'lesson' | 'danger'
+
+const LESSON_PLAN_MARKDOWN_SETTINGS = {
+  ...DEFAULT_MESSAGE_SETTINGS,
+  fancyCodeBlocks: false,
+  wrapCodeBlocks: true,
+}
+
+function AssistantLibMarkdownDocPane({
+  hint,
+  editLabel,
+  doneLabel,
+  emptyLabel,
+  ariaLabel,
+  value,
+  editing,
+  busy,
+  banner,
+  headerActions,
+  onEditingChange,
+  onChange,
+}: {
+  hint: string
+  editLabel: string
+  doneLabel: string
+  emptyLabel: string
+  ariaLabel: string
+  value: string
+  editing: boolean
+  busy: boolean
+  banner?: ReactNode
+  headerActions?: ReactNode
+  onEditingChange: (editing: boolean) => void
+  onChange: (value: string) => void
+}) {
+  return (
+    <>
+      <div className="tm-alib-lesson-plan-header">
+        <div className="tm-alib-lesson-plan-header-copy">
+          <p className="tm-kb-settings-hint">{hint}</p>
+          {banner}
+        </div>
+        <div className="tm-alib-lesson-plan-header-actions">
+          {headerActions}
+          <button
+            type="button"
+            className="tm-kb-settings-inline-btn"
+            disabled={busy}
+            onClick={() => onEditingChange(!editing)}
+          >
+            {editing ? doneLabel : editLabel}
+          </button>
+        </div>
+      </div>
+      <div className="tm-alib-lesson-plan-body">
+        {editing ? (
+          <textarea
+            className="tm-alib-lesson-plan-editor"
+            rows={Math.max(16, value.split('\n').length + 2)}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label={ariaLabel}
+          />
+        ) : value.trim() ? (
+          <div className="tm-alib-lesson-plan-preview">
+            <MessageMarkdown text={value} settings={LESSON_PLAN_MARKDOWN_SETTINGS} />
+          </div>
+        ) : (
+          <p className="tm-kb-settings-hint">{emptyLabel}</p>
+        )}
+      </div>
+    </>
+  )
+}
 
 type Props = {
   workspaceId: string
@@ -35,6 +116,7 @@ type Props = {
   onKnowledgeBasesChanged?: () => void | Promise<void>
   onStatusMessage?: (message: string) => void
   onDeleteSession?: (sessionId: string) => void | Promise<void>
+  defaultModelId?: string | null
 }
 
 type ClassroomDraft = {
@@ -45,13 +127,16 @@ type ClassroomDraft = {
   kbId: string
   kbPath: string
   filePaths: string[]
+  customSystemPrompt: string
+  lessonPlan: string
   autoSpeak: boolean
   ttsEngine: VoiceTtsEngine
   ttsVoice: string
 }
 
-function resolveCourseLabel(session: Session, defaultLabel: string): string {
+function resolveCourseLabel(session: Session, defaultLabel: string, guideLabel: string): string {
   if (isAssistantLibDefaultClassroomSession(session.metadata)) return defaultLabel
+  if (isAssistantLibGuideCourseSession(session.metadata)) return guideLabel
   const meta = parseAssistantLibSessionMeta(session.metadata)
   return meta?.courseName?.trim() || session.title || defaultLabel
 }
@@ -78,8 +163,13 @@ function draftFromSession(
     refereeEnabled: meta?.refereeEnabled ?? preset?.refereeEnabled ?? true,
     textbookSource: 'knowledge',
     kbId,
-    kbPath: kb ? buildStoragePathForKb(defaultLocalFolderPath, kb.name) || kb.name : '',
+    kbPath: kb ? resolveTextbookKbDisplayPath(kb, defaultLocalFolderPath) : '',
     filePaths: [],
+    customSystemPrompt: meta?.customSystemPrompt?.trim() || preset?.systemPrompt || '',
+    lessonPlan:
+      meta?.lessonPlan?.trim() ||
+      (meta?.syllabus ? formatSyllabusMarkdown(meta.syllabus) : '') ||
+      '',
     autoSpeak: meta?.autoSpeak ?? true,
     ttsEngine: meta?.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
     ttsVoice: resolveCuratedEdgeTtsVoice(meta?.ttsVoice),
@@ -97,9 +187,10 @@ export function AssistantLibSettingsDialog({
   onKnowledgeBasesChanged,
   onStatusMessage,
   onDeleteSession,
+  defaultModelId,
 }: Props) {
   const { t } = useI18n()
-  const presets = useMemo(() => listSelectableAssistantLibPresets(), [])
+  const selectablePresets = useMemo(() => listSelectableAssistantLibPresets(), [])
 
   const targetSession = useMemo(() => {
     if (activeSessionId) {
@@ -107,7 +198,8 @@ export function AssistantLibSettingsDialog({
       if (active) return active
     }
     return (
-      sessions.find((session) => isAssistantLibDefaultClassroomSession(session.metadata)) ??
+      sessions.find((session) => isAssistantLibGuideCourseSession(session.metadata)) ??
+      sessions.find((session) => !isAssistantLibDefaultClassroomSession(session.metadata)) ??
       sessions[0] ??
       null
     )
@@ -119,25 +211,92 @@ export function AssistantLibSettingsDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editingDoc, setEditingDoc] = useState(false)
   const isDefaultClassroom = Boolean(
     targetSession && isAssistantLibDefaultClassroomSession(targetSession.metadata),
   )
+  const isGuideClassroom = Boolean(
+    targetSession && isAssistantLibGuideCourseSession(targetSession.metadata),
+  )
+  const targetSessionId = targetSession?.id ?? null
 
   useEffect(() => {
     if (!targetSession) {
       setDraft(null)
+      setActiveTab('basic')
+      setEditingDoc(false)
       return
     }
     setDraft(draftFromSession(targetSession, knowledgeBases, defaultLocalFolderPath))
     setActiveTab('basic')
+    setEditingDoc(false)
     setError(null)
-  }, [targetSession, knowledgeBases, defaultLocalFolderPath])
+    // Reset the tab only when switching classrooms, not when session objects refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetSessionId])
+
+  useEffect(() => {
+    setDraft((prev) => {
+      if (!prev) return prev
+      const kb = knowledgeBases.find((item) => item.id === prev.kbId) ?? null
+      const kbPath = kb ? resolveTextbookKbDisplayPath(kb, defaultLocalFolderPath) : prev.kbPath
+      if (kbPath === prev.kbPath) return prev
+      return { ...prev, kbPath }
+    })
+  }, [knowledgeBases, defaultLocalFolderPath])
+
+  useEffect(() => {
+    if (!targetSession || editingDoc) return
+    const meta = parseAssistantLibSessionMeta(targetSession.metadata)
+    const markdown =
+      meta?.lessonPlan?.trim() ||
+      (meta?.syllabus ? formatSyllabusMarkdown(meta.syllabus) : '')
+    setDraft((prev) => {
+      if (!prev || prev.lessonPlan === markdown) return prev
+      return { ...prev, lessonPlan: markdown }
+    })
+  }, [editingDoc, targetSession])
+
+  const selectTab = (tab: SettingsTab) => {
+    setActiveTab(tab)
+    setEditingDoc(false)
+  }
+
+  const syllabus = targetSession
+    ? parseCourseSyllabus(parseAssistantLibSessionMeta(targetSession.metadata)?.syllabus)
+    : null
+  const syllabusGenerating = syllabus?.generation === 'generating'
+  const handleGenerateSyllabus = () => {
+    if (!targetSession) return
+    if (!defaultModelId) {
+      setError(t('assistantLibPage.syllabusNeedModel'))
+      return
+    }
+    setError(null)
+    void safeInvoke(IpcChannel.AssistantLibSyllabusGenerate, {
+      workspaceId,
+      sessionId: targetSession.id,
+      modelId: defaultModelId,
+    }).then((result) => {
+      if (!result.ok) setError(result.error.message)
+    })
+  }
 
   const courseLabel = targetSession
-    ? resolveCourseLabel(targetSession, t('assistantLibPage.defaultCourse'))
+    ? resolveCourseLabel(
+        targetSession,
+        t('assistantLibPage.defaultCourse'),
+        t('assistantLibPage.guideCourse'),
+      )
     : t('assistantLibPage.defaultCourse')
+  const presets = useMemo(() => {
+    if (!draft) return selectablePresets
+    if (selectablePresets.some((item) => item.id === draft.presetId)) return selectablePresets
+    const current = getAssistantLibPreset(draft.presetId)
+    return current ? [current, ...selectablePresets] : selectablePresets
+  }, [draft, selectablePresets])
   const selectedPreset = draft
-    ? (presets.find((item) => item.id === draft.presetId) ?? presets[0])
+    ? (presets.find((item) => item.id === draft.presetId) ?? getAssistantLibPreset(draft.presetId) ?? presets[0])
     : null
 
   const pathDisplay = useMemo(() => {
@@ -248,8 +407,14 @@ export function AssistantLibSettingsDialog({
           kbIds,
           courseName,
           isDefaultClassroom: isDefaultClassroom || undefined,
+          isGuideClassroom: isGuideClassroom || undefined,
           textbookLocalPath: meta?.textbookLocalPath,
-          customSystemPrompt: meta?.customSystemPrompt,
+          customSystemPrompt:
+            draft.customSystemPrompt.trim() &&
+            draft.customSystemPrompt.trim() !== (preset?.systemPrompt.trim() ?? '')
+              ? draft.customSystemPrompt
+              : undefined,
+          lessonPlan: draft.lessonPlan,
           autoSpeak: draft.autoSpeak,
           ttsEngine: draft.ttsEngine,
           ttsVoice:
@@ -334,9 +499,33 @@ export function AssistantLibSettingsDialog({
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={() => setActiveTab('basic')}
+                  onClick={() => selectTab('basic')}
                 >
                   <span>{t('assistantLibPage.settingsBasicTab')}</span>
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'tm-kb-settings-modal-nav-item',
+                    activeTab === 'teaching' ? 'tm-kb-settings-modal-nav-item--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => selectTab('teaching')}
+                >
+                  <span>{t('assistantLibPage.settingsTeachingTab')}</span>
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'tm-kb-settings-modal-nav-item',
+                    activeTab === 'lesson' ? 'tm-kb-settings-modal-nav-item--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => selectTab('lesson')}
+                >
+                  <span>{t('assistantLibPage.settingsLessonTab')}</span>
                 </button>
                 <button
                   type="button"
@@ -346,13 +535,20 @@ export function AssistantLibSettingsDialog({
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={() => setActiveTab('danger')}
+                  onClick={() => selectTab('danger')}
                 >
                   <span>{t('assistantLibPage.settingsDangerTab')}</span>
                 </button>
               </nav>
 
-              <div className="tm-kb-settings-modal-content">
+              <div
+                className={[
+                  'tm-kb-settings-modal-content',
+                  activeTab === 'teaching' || activeTab === 'lesson' ? 'tm-alib-lesson-content' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
                 {error ? (
                   <p className="tm-kb-settings-hint tm-pm-project-info-error">{error}</p>
                 ) : null}
@@ -378,35 +574,45 @@ export function AssistantLibSettingsDialog({
                       />
                     </div>
 
-                    <div className="tm-kb-settings-row">
+                    <div className="tm-kb-settings-row tm-kb-settings-row--top">
                       <label className="tm-kb-settings-label" htmlFor="alib-settings-preset">
                         {t('assistantLibPage.teachingMode')}
                       </label>
-                      <select
-                        id="alib-settings-preset"
-                        className="tm-kb-settings-input"
-                        value={draft.presetId}
-                        onChange={(event) => {
-                          const presetId = event.target.value as AssistantLibPresetId
-                          const nextPreset = getAssistantLibPreset(presetId)
-                          updateDraft({
-                            presetId,
-                            refereeEnabled: nextPreset?.refereeEnabled ?? draft.refereeEnabled,
-                          })
-                        }}
-                      >
-                        {presets.map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {t(`assistantLibPage.presets.${preset.id}`)}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="tm-alib-settings-preset-field">
+                        <select
+                          id="alib-settings-preset"
+                          className="tm-kb-settings-input"
+                          value={draft.presetId}
+                          onChange={(event) => {
+                            const presetId = event.target.value as AssistantLibPresetId
+                            const nextPreset = getAssistantLibPreset(presetId)
+                            const previousPreset = getAssistantLibPreset(draft.presetId)
+                            const usingDefaultLesson =
+                              !draft.customSystemPrompt.trim() ||
+                              draft.customSystemPrompt.trim() ===
+                                (previousPreset?.systemPrompt.trim() ?? '')
+                            updateDraft({
+                              presetId,
+                              refereeEnabled: nextPreset?.refereeEnabled ?? draft.refereeEnabled,
+                              ...(usingDefaultLesson
+                                ? { customSystemPrompt: nextPreset?.systemPrompt ?? '' }
+                                : {}),
+                            })
+                          }}
+                        >
+                          {presets.map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {t(`assistantLibPage.presets.${preset.id}`)}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedPreset ? (
+                          <p className="tm-kb-settings-hint">
+                            {t(`assistantLibPage.presetDescs.${selectedPreset.id}`)}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
-                    {selectedPreset ? (
-                      <p className="tm-kb-settings-hint">
-                        {t(`assistantLibPage.presetDescs.${selectedPreset.id}`)}
-                      </p>
-                    ) : null}
 
                     <div className="tm-kb-settings-row">
                       <span className="tm-kb-settings-label">
@@ -569,6 +775,79 @@ export function AssistantLibSettingsDialog({
                   </div>
                 ) : null}
 
+                {activeTab === 'teaching' ? (
+                  <AssistantLibMarkdownDocPane
+                    hint={t('assistantLibPage.teachingPromptHint')}
+                    editLabel={t('assistantLibPage.teachingPromptEdit')}
+                    doneLabel={t('assistantLibPage.teachingPromptDone')}
+                    emptyLabel={t('assistantLibPage.teachingPromptEmpty')}
+                    ariaLabel={t('assistantLibPage.settingsTeachingTab')}
+                    value={draft.customSystemPrompt}
+                    editing={editingDoc}
+                    busy={busy}
+                    onEditingChange={setEditingDoc}
+                    onChange={(value) => updateDraft({ customSystemPrompt: value })}
+                  />
+                ) : null}
+
+                {activeTab === 'lesson' ? (
+                  <AssistantLibMarkdownDocPane
+                    hint={t('assistantLibPage.lessonPlanHint')}
+                    editLabel={t('assistantLibPage.lessonPlanEdit')}
+                    doneLabel={t('assistantLibPage.lessonPlanDone')}
+                    emptyLabel={t('assistantLibPage.lessonPlanEmpty')}
+                    ariaLabel={t('assistantLibPage.settingsLessonTab')}
+                    value={draft.lessonPlan}
+                    editing={editingDoc && !syllabusGenerating}
+                    busy={busy || syllabusGenerating}
+                    headerActions={
+                      defaultModelId ? (
+                        <button
+                          type="button"
+                          className="tm-kb-settings-inline-btn"
+                          disabled={busy || syllabusGenerating}
+                          onClick={handleGenerateSyllabus}
+                        >
+                          {syllabusGenerating
+                            ? t('assistantLibPage.syllabusGenerating')
+                            : t('assistantLibPage.syllabusGenerate')}
+                        </button>
+                      ) : null
+                    }
+                    banner={
+                      syllabus ? (
+                        <div className="tm-alib-syllabus-progress">
+                          <span>
+                            {syllabus.generation === 'generating'
+                              ? syllabus.chapters.length === 0
+                                ? t('assistantLibPage.syllabusGenerating')
+                                : t('assistantLibPage.syllabusProgress', {
+                                    current: Math.max(
+                                      1,
+                                      syllabus.chapters.findIndex(
+                                        (item) => item.status === 'generating',
+                                      ) + 1,
+                                    ),
+                                    total: syllabus.chapters.length,
+                                  })
+                              : syllabus.generation === 'error'
+                                ? syllabus.generationError || t('assistantLibPage.syllabusFailed')
+                                : t('assistantLibPage.syllabusReady', {
+                                    passed: syllabus.chapters.filter(
+                                      (item) => item.status === 'passed',
+                                    ).length,
+                                    total: syllabus.chapters.length,
+                                    hours: syllabus.totalHours ?? 0,
+                                  })}
+                          </span>
+                        </div>
+                      ) : null
+                    }
+                    onEditingChange={setEditingDoc}
+                    onChange={(value) => updateDraft({ lessonPlan: value })}
+                  />
+                ) : null}
+
                 {activeTab === 'danger' ? (
                   <div className="tm-kb-settings-form tm-alib-settings-danger">
                     <span className="tm-group-settings-section-title">
@@ -610,7 +889,7 @@ export function AssistantLibSettingsDialog({
                 >
                   {t('common.cancel')}
                 </button>
-                {activeTab === 'basic' ? (
+                {activeTab !== 'danger' ? (
                   <button
                     type="button"
                     className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--primary"

@@ -85,6 +85,46 @@ export async function removeKbVectors(
   }
 }
 
+export async function moveDocumentVectors(options: {
+  vectorsDir: string
+  sourceKbId: string
+  destKbId: string
+  documentId: string
+  destPath: string
+  sourceBackend?: VectorBackend
+  destBackend?: VectorBackend
+  embedModel: string
+}): Promise<number> {
+  const source = await openKbVectorStore({
+    vectorsDir: options.vectorsDir,
+    kbId: options.sourceKbId,
+    backend: options.sourceBackend,
+  })
+  const records = await source.listByDocumentId(options.documentId)
+  if (records.length === 0) return 0
+
+  const remapped = records.map((record) => ({
+    ...record,
+    kbId: options.destKbId,
+    metadata: {
+      ...record.metadata,
+      filePath: options.destPath,
+    },
+  }))
+
+  const dest = await openKbVectorStore({
+    vectorsDir: options.vectorsDir,
+    kbId: options.destKbId,
+    backend: options.destBackend,
+  })
+  await dest.upsert(remapped, {
+    dimension: remapped[0]?.vector.length ?? 0,
+    model: options.embedModel,
+  })
+  await source.deleteByDocumentId(options.documentId)
+  return remapped.length
+}
+
 export { ingestContent, type IngestContentInput, type IngestContentResult } from './content-ingest.js'
 
 export async function ingestUrlContent(input: {

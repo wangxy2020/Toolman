@@ -29,7 +29,7 @@ export class CommunityHttpClient {
       throw new Error('CommunityHttpClient requires baseUrl or port')
     }
     this.identityId = options.identityId ?? COMMUNITY_HUB_IDENTITY_ID
-    this.fetchImpl = options.fetchImpl ?? fetch
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.resolveAuth = options.resolveAuth
   }
 

@@ -7,6 +7,7 @@ import {
 } from '@toolman/shared'
 import { isSystemDefaultMcpServer } from './defaults'
 import { getServers, refreshCache, saveAll } from './persistence'
+import { assertAllowedMcpStdioCommand } from '../mcp-stdio-command'
 
 /** 启动时合并系统预置 MCP，确保旧配置升级后可见 */
 export function bootstrapMcpPresets(): McpServerConfig[] {
@@ -65,7 +66,12 @@ export function upsertMcpServer(input: unknown): McpServerConfig {
     return next
   }
 
-  if (!data.command?.trim()) {
+  if (data.type === 'stdio') {
+    if (!data.command?.trim()) {
+      throw new Error('MCP 服务器需要配置 command')
+    }
+    assertAllowedMcpStdioCommand(data.command)
+  } else if (!data.command?.trim() && data.type !== 'sse' && data.type !== 'streamableHttp') {
     throw new Error('MCP 服务器需要配置 command')
   }
 

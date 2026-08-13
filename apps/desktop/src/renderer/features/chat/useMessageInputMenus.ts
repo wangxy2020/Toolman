@@ -16,6 +16,7 @@ export function useMessageInputMenus({
   setPhraseActiveIndex,
   loadQuickPhrasesFn,
   extraSlashCommands = [],
+  allowNewSession = true,
 }: {
   toolbarMode: 'agent' | 'group'
   groupIsOwner: boolean
@@ -28,13 +29,15 @@ export function useMessageInputMenus({
   setPhraseActiveIndex: (index: number) => void
   loadQuickPhrasesFn?: () => QuickPhrase[]
   extraSlashCommands?: SlashCommandItem[]
+  allowNewSession?: boolean
 }) {
   const slashCommands = useMemo(
-    () => [
-      ...(toolbarMode === 'group' ? getGroupSlashCommands(groupIsOwner) : SLASH_COMMANDS),
-      ...(toolbarMode === 'agent' ? extraSlashCommands : []),
-    ],
-    [extraSlashCommands, groupIsOwner, toolbarMode],
+    () =>
+      [
+        ...(toolbarMode === 'group' ? getGroupSlashCommands(groupIsOwner) : SLASH_COMMANDS),
+        ...(toolbarMode === 'agent' ? extraSlashCommands : []),
+      ].filter((item) => allowNewSession || item.action !== 'new-session'),
+    [allowNewSession, extraSlashCommands, groupIsOwner, toolbarMode],
   )
   const localizedSlashCommands = useMemo(
     () =>

@@ -3,7 +3,6 @@ export type SettingsTabId =
   | 'agent'
   | 'knowledge'
   | 'notes'
-  | 'translate'
   | 'group'
   | 'community'
   | 'classroom'
@@ -19,7 +18,6 @@ export const SETTINGS_TABS: Array<{
   { id: 'agent', label: '智能体', hint: '模型与对话默认项' },
   { id: 'knowledge', label: '知识库', hint: '检索与桌面索引' },
   { id: 'notes', label: '笔记', hint: '同步与自动保存' },
-  { id: 'translate', label: '翻译', hint: '目标语言与管线' },
   { id: 'group', label: '群组', hint: '群组消息与桥接' },
   { id: 'community', label: '社区', hint: 'Hub 与访客模式' },
   { id: 'classroom', label: '课堂', hint: '课堂智能体宿主' },

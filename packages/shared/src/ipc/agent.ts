@@ -407,6 +407,8 @@ export const AssistantSchema = z.object({
     teachingMode: z.enum(['socratic', 'open', 'off']).optional(),
     /** Preset id from assistant classroom (e.g. socratic-tutor). */
     assistantLibPresetId: z.string().min(1).optional(),
+    /** User removed the seeded Toolman usage-guide course; do not recreate it. */
+    assistantLibGuideDismissed: z.boolean().optional(),
     /** Roleplay companion id (detective / auditor / …). */
     roleplayId: z.string().min(1).optional(),
     /** When true (default for socratic), run post-reply answer-leak referee. */

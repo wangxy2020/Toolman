@@ -1,9 +1,10 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { logStructured } from './services/structured-log.service'
 import { recordDiagnosticEvent } from './services/diagnostics-log'
 import { attachRendererCrashHandler } from './services/local-operations.service'
 import { isAuthOAuthPopupUrl } from './services/auth/auth-oauth-popup'
+import { openExternalUrl } from './services/open-external.service'
 
 export const ELECTRON_CHROME_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -113,7 +114,7 @@ export function createWindow(): void {
         },
       }
     }
-    shell.openExternal(details.url)
+    openExternalUrl(details.url)
     return { action: 'deny' }
   })
 
@@ -125,9 +126,7 @@ export function createWindow(): void {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (shouldBlockInAppNavigation(url)) {
       event.preventDefault()
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        void shell.openExternal(url)
-      }
+      openExternalUrl(url)
     }
   })
 
@@ -136,6 +135,10 @@ export function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+export function getMainWindow(): BrowserWindow | null {
+  return mainWindow
 }
 
 export function showMainWindow(): void {

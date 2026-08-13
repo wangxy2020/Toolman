@@ -25,6 +25,7 @@ export interface NotesData {
   notebooks: NotebookItem[]
   notes: NoteItem[]
   syncFolderPath: string | null
+  deletedNotes?: Array<{ id: string; deletedAt: number }>
 }
 
 export interface NotesSearchHit {

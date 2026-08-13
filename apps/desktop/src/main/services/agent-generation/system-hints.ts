@@ -27,6 +27,7 @@ import {
 } from '../agent-runtime.service'
 import { resolveWorkingDirectory } from '../permission.service'
 import { listRelevantMemories } from '../memory.service'
+import { logStructured } from '../structured-log.service'
 import { searchWeb } from '../web-search.service'
 import {
   resolveEffectiveKbIds,
@@ -97,7 +98,9 @@ export async function buildRuntimeSystemHints(
           snapshot = buildPmRuntimeSnapshot(session.workspaceId, tab)
         }
       } catch (error) {
-        console.warn('[pm] runtime snapshot failed', error)
+        logStructured('pm', 'warn', 'runtime snapshot failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
         if (
           session.workspaceId &&
           (tab === 'resource_management' || tab === 'progress_management')
@@ -105,7 +108,9 @@ export async function buildRuntimeSystemHints(
           try {
             snapshot = buildPmResourceCatalogFallbackSnapshot(session.workspaceId, tab)
           } catch (fallbackError) {
-            console.warn('[pm] resource catalog fallback failed', fallbackError)
+            logStructured('pm', 'warn', 'resource catalog fallback failed', {
+              error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+            })
             snapshot = null
           }
         } else {

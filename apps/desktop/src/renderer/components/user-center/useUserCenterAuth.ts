@@ -15,7 +15,6 @@ import { useAuthProviderConfig } from '../../features/user/useAuthProviderConfig
 import { inferDefaultAuthRegion } from '../../features/user/user-account-utils'
 import type { ViewMode } from './types'
 import { createUserCenterAuthActions } from './useUserCenterAuthActions'
-import { isCnEmailAccountInput } from './useUserCenterAuthLabels'
 
 export {
   cnPrimaryActionLabel,
@@ -138,7 +137,6 @@ export function useUserCenterAuth(options: {
         ? profile.intlAuthEnabled && !profile.cnAuthEnabled
         : region === 'intl')
   const authBusy = busy || profileLoading || providerConfigLoading
-  const cnAccountIsEmail = isCnEmailAccountInput(account)
 
   const showDevAuthHints = shouldShowAuthDevHints(isPackagedApp)
 
@@ -172,7 +170,6 @@ export function useUserCenterAuth(options: {
         confirmPassword,
         account,
         smsCode,
-        cnAccountIsEmail,
         mergeState,
         codeIntent,
         t,
@@ -195,7 +192,6 @@ export function useUserCenterAuth(options: {
       confirmPassword,
       account,
       smsCode,
-      cnAccountIsEmail,
       mergeState,
       codeIntent,
       t,
@@ -238,7 +234,6 @@ export function useUserCenterAuth(options: {
     showIntlAuth,
     showCnAuth,
     authBusy,
-    cnAccountIsEmail,
     firebaseConfigHint,
     cnConfigHint,
     sendVerificationCode,

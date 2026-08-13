@@ -2,7 +2,11 @@ import { isDevModeEnvEnabled } from './auth-dev-guard.js'
 
 export interface AuthingConfig {
   appId: string
-  /** User pool ID for Management API; falls back to appId when unset. */
+  /**
+   * User pool ID for Management API only.
+   * Empty when `TOOLMAN_AUTHING_USER_POOL_ID` is unset — never infer from appId
+   * (app ID ≠ user pool ID; using appId causes Authing “用户池不存在”).
+   */
   userPoolId: string
   /** Application secret (AuthenticationClient). */
   appSecret: string
@@ -71,11 +75,10 @@ export function getAuthingConfig(): AuthingConfig | null {
 
   const portRaw = readEnv(['TOOLMAN_AUTHING_OAUTH_CALLBACK_PORT'])
   const oauthCallbackPort = portRaw ? Number.parseInt(portRaw, 10) : 42873
-  const resolvedUserPoolId = userPoolId ?? appId
 
   return {
     appId,
-    userPoolId: resolvedUserPoolId,
+    userPoolId: userPoolId ?? '',
     appSecret: appSecret ?? '',
     userPoolSecret: userPoolSecret ?? '',
     appHost: appHost.replace(/\/$/, ''),

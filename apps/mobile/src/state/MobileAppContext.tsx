@@ -4,7 +4,7 @@ import type { AgentChatScope } from '../chat/agentScopes'
 import type { MobileModuleId } from '../modules'
 import type { ModulePrefs } from '../settings/prefs'
 import type { SettingsTabId } from '../settings/tabs'
-import type { MobileNote, MobileNotebook } from '../storage/notes'
+import type { MobileNote, MobileNotebook, NoteTombstone } from '../storage/notes'
 import type { KnowledgeMetaItem } from '../sync/mobileSync'
 
 export type AuthSession = MobileAuthSession | null
@@ -68,6 +68,8 @@ export type MobileAppState = {
   setNotebooks: (notebooks: MobileNotebook[]) => void
   notes: MobileNote[]
   setNotes: (notes: MobileNote[]) => void
+  deletedNotes: NoteTombstone[]
+  setDeletedNotes: (items: NoteTombstone[]) => void
   knowledgeMeta: KnowledgeMetaItem[]
   setKnowledgeMeta: (items: KnowledgeMetaItem[]) => void
   activeNoteId: string | null

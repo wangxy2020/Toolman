@@ -30,6 +30,7 @@ alwaysApply: false
 | 事件 | 触发点 | 重复策略 |
 |------|--------|----------|
 | `app.start` | `bootstrapCopyrightProvenance()` — main | 每进程一次 |
+| `app.ipc.ready` | `registerIpcHandlers()` — main | 每进程一次 |
 | `app.renderer.ready` | `main.tsx` → `recordProvenanceBeacon` | 每进程一次 |
 | `app.diagnostics.view` | `useDiagnosticsSettings` | 每进程一次 |
 | `app.about.view` | `AboutSettingsPanel` | 每进程一次 |

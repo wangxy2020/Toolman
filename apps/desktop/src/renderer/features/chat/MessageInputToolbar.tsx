@@ -45,7 +45,7 @@ export function MessageInputToolbar({ input }: { input: MessageInputState }) {
     <div className="tm-input-toolbar">
       {toolbarMode === 'agent' ? (
         <InputToolButton
-          label={t('chat.input.newTopic')}
+          label={onCreateSession ? t('chat.input.newTopic') : t('chat.input.newTopicDisabled')}
           disabled={!onCreateSession}
           onClick={() => onCreateSession?.()}
         >

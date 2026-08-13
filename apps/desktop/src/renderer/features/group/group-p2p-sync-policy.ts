@@ -7,6 +7,7 @@
  */
 
 import { IpcChannel } from '@toolman/shared'
+import { clientLog } from '../../lib/client-log'
 
 export type GroupSharedResourceType = 'Agent' | 'Knowledge' | 'Note' | 'Workflow'
 
@@ -29,7 +30,7 @@ export async function bootstrapGroupWorkspace(workspaceId: string, options?: { f
     ...(options?.force ? { force: true } : {}),
   })
   if (!result.ok) {
-    console.warn(`[group-p2p] bootstrap failed: ${result.error.message}`)
+    clientLog.warn(`[group-p2p] bootstrap failed: ${result.error.message}`)
     return false
   }
   bootstrappedWorkspaceIds.add(workspaceId)

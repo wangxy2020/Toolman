@@ -1,5 +1,5 @@
-import { BookOpen } from 'lucide-react'
-import { IconActivity, IconGroup, IconNotes, IconSliders } from '../../components/icons'
+import { BookOpen, GraduationCap } from 'lucide-react'
+import { IconActivity, IconGroup, IconSliders } from '../../components/icons'
 import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
 import {
@@ -10,20 +10,33 @@ import { openAssistantLibSettings } from './assistant-lib-ui'
 
 type Props = {
   activeView: AssistantLibPanelView
-  onShareNote: () => void
   onShareGroup: () => void
   shareDisabled?: boolean
+  classLive?: boolean
+  onToggleClass?: () => void
+  classToggleDisabled?: boolean
 }
 
 export function AssistantLibToolbar({
   activeView,
-  onShareNote,
   onShareGroup,
   shareDisabled = false,
+  classLive = false,
+  onToggleClass,
+  classToggleDisabled = false,
 }: Props) {
   const { t } = useI18n()
   return (
     <>
+      <HeaderIconButton
+        label={classLive ? t('assistantLibPage.stopClass') : t('assistantLibPage.startClass')}
+        disabled={classToggleDisabled || !onToggleClass}
+        active={classLive}
+        aria-pressed={classLive}
+        onClick={() => onToggleClass?.()}
+      >
+        <GraduationCap size={16} />
+      </HeaderIconButton>
       <HeaderIconButton
         label={t('assistantLibPage.toolbarChat')}
         active={activeView === 'agent'}
@@ -31,13 +44,6 @@ export function AssistantLibToolbar({
         onClick={() => setAssistantLibPanelView('agent')}
       >
         <BookOpen size={16} />
-      </HeaderIconButton>
-      <HeaderIconButton
-        label={t('assistantLibPage.classroomNotes')}
-        disabled={shareDisabled}
-        onClick={onShareNote}
-      >
-        <IconNotes size={16} />
       </HeaderIconButton>
       <HeaderIconButton
         label={t('assistantLibPage.records.title')}

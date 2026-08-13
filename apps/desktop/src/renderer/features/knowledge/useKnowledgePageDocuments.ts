@@ -323,6 +323,10 @@ export function useKnowledgePageDocuments(
 
   const handleMoveToSync = async (target: SyncMoveTarget) => {
     if (!workspaceId) return
+    if (!importTarget.kbId) {
+      documents.setError(t('knowledgePage.contextMenu.moveToSyncNeedSelection'))
+      return
+    }
     if (selectedIds.size === 0) {
       documents.setError(t('knowledgePage.contextMenu.moveToSyncNeedSelection'))
       return
@@ -330,11 +334,11 @@ export function useKnowledgePageDocuments(
 
     const result = await moveKnowledgeFilesToSync({
       workspaceId,
+      sourceKbId: importTarget.kbId,
       documentIds: Array.from(selectedIds),
       panelDocuments,
       target,
       syncKnowledgeFolderPath: syncKnowledgeFolderPath ?? syncDefaultKb.folderPath,
-      remove: documents.remove,
       setError: (message) => {
         if (message === 'selected-files-need-path') {
           documents.setError(t('knowledgePage.contextMenu.moveToSyncNeedPath'))
@@ -344,6 +348,7 @@ export function useKnowledgePageDocuments(
       },
     })
 
+    await documents.load()
     onKbChanged?.()
     if (!result) return
 

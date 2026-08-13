@@ -221,6 +221,33 @@ export const KnowledgeDocumentReindexOutputSchema = z.object({
   message: z.string().optional(),
 })
 
+export const KnowledgeDocumentRelocateInputSchema = z.object({
+  workspaceId: UuidSchema,
+  sourceKbId: UuidSchema,
+  destKbId: UuidSchema,
+  items: z
+    .array(
+      z.object({
+        documentId: UuidSchema,
+        destPath: z.string().min(1).max(4096),
+      }),
+    )
+    .min(1)
+    .max(50),
+})
+
+export const KnowledgeDocumentRelocateOutputSchema = z.object({
+  moved: z.number().int().nonnegative(),
+  ingested: z.number().int().nonnegative(),
+  failed: z.array(
+    z.object({
+      documentId: z.string(),
+      path: z.string(),
+      message: z.string(),
+    }),
+  ),
+})
+
 export const KnowledgeKbReindexInputSchema = z.object({
   workspaceId: UuidSchema,
   kbId: UuidSchema,

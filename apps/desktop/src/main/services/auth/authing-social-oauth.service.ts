@@ -1,9 +1,8 @@
 import { createServer, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
-import { shell } from 'electron'
-
 import { AuthLoginError } from './auth-login.error.js'
+import { openExternalUrl } from '../open-external.service.js'
 import {
   getAuthingConfig,
   getAuthingOAuthRedirectUri,
@@ -208,7 +207,10 @@ async function runAuthingSocialOAuth(
       }
 
       activeOAuthHandlers = { resolve: finishResolve, reject: finishReject }
-      void shell.openExternal(authUrl)
+      if (!openExternalUrl(authUrl)) {
+        finishReject(new AuthLoginError('无法打开授权页'))
+        return
+      }
       setTimeout(() => {
         finishReject(new AuthLoginError('授权超时，请重试'))
       }, OAUTH_TIMEOUT_MS)

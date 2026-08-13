@@ -1,3 +1,9 @@
+/**
+ * Toolman parse-file worker
+ * Copyright (C) 2024–2026 Toolman Contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Source: https://github.com/wangxy2020/Toolman
+ */
 import { parentPort } from 'node:worker_threads'
 import { toErrorMessage } from '@toolman/shared'
 import { hashFileStream, parseFile, type ParseFileOptions } from '@toolman/knowledge'

@@ -91,6 +91,7 @@ export function useMessageInput(props: MessageInputProps) {
     setPhraseActiveIndex,
     loadQuickPhrasesFn,
     extraSlashCommands,
+    allowNewSession: Boolean(onCreateSession),
   })
 
   const { stagePathsAsAttachments, handleUploadFiles, handleInputPaste } = useMessageInputAttachments({

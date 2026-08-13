@@ -34,6 +34,7 @@ describe('getAuthingManagementClient', () => {
 
   it('honors explicit management host override', () => {
     vi.stubEnv('TOOLMAN_AUTHING_APP_ID', 'app-id')
+    vi.stubEnv('TOOLMAN_AUTHING_USER_POOL_ID', 'pool-id')
     vi.stubEnv('TOOLMAN_AUTHING_USER_POOL_SECRET', 'pool-secret')
     vi.stubEnv('TOOLMAN_AUTHING_APP_HOST', 'https://my-app.authing.cn')
     vi.stubEnv('TOOLMAN_AUTHING_MANAGEMENT_HOST', 'https://core.example.com')
@@ -43,5 +44,14 @@ describe('getAuthingManagementClient', () => {
     expect(ManagementClientMock).toHaveBeenCalledWith(
       expect.objectContaining({ host: 'https://core.example.com' }),
     )
+  })
+
+  it('does not create a management client when user pool id is missing', () => {
+    vi.stubEnv('TOOLMAN_AUTHING_APP_ID', 'app-id')
+    vi.stubEnv('TOOLMAN_AUTHING_APP_SECRET', 'app-secret')
+    vi.stubEnv('TOOLMAN_AUTHING_APP_HOST', 'https://my-app.authing.cn')
+
+    expect(getAuthingManagementClient()).toBeNull()
+    expect(ManagementClientMock).not.toHaveBeenCalled()
   })
 })

@@ -33,6 +33,7 @@ import { clearHybridServerProbeCache, isHybridServerReachable } from './hybrid-s
 import { ensureOdlHybridServerRunning } from './odl-hybrid-server-manager.service'
 import { assertIngestNotCancelled } from './knowledge-ingest-manager.service'
 import { withTimeout } from '../utils/async-timeout'
+import { logStructured } from './structured-log.service'
 
 export type { DocumentParseProfile, DocumentParseRequest, DocumentParseResult }
 
@@ -821,8 +822,10 @@ async function parseKnowledgeIngestHybridBatches(options: {
 
   const hybridUrl = settings.url.trim()
   if (!(await isHybridServerAvailable(hybridUrl))) {
-    console.warn(
-      `[knowledge-ingest] ODL Hybrid server unavailable at ${hybridUrl || '(empty url)'}; skipping Hybrid`,
+    logStructured(
+      'knowledge-ingest',
+      'warn',
+      `ODL Hybrid server unavailable at ${hybridUrl || '(empty url)'}; skipping Hybrid`,
     )
     return null
   }
@@ -837,8 +840,10 @@ async function parseKnowledgeIngestHybridBatches(options: {
     ),
   )
 
-  console.info(
-    `[knowledge-ingest] ODL+Hybrid batch OCR for ${basename(filePath)} (${totalPages} pages, batch=${KNOWLEDGE_HYBRID_BATCH_SIZE})`,
+  logStructured(
+    'knowledge-ingest',
+    'info',
+    `ODL+Hybrid batch OCR for ${basename(filePath)} (${totalPages} pages, batch=${KNOWLEDGE_HYBRID_BATCH_SIZE})`,
   )
   onParseProgress?.(0, totalPages, true)
 
@@ -867,14 +872,18 @@ async function parseKnowledgeIngestHybridBatches(options: {
         }
       }
     } else {
-      console.warn(
-        `[knowledge-ingest] ODL+Hybrid batch ${start}-${end}/${totalPages} returned no usable text`,
+      logStructured(
+        'knowledge-ingest',
+        'warn',
+        `ODL+Hybrid batch ${start}-${end}/${totalPages} returned no usable text`,
       )
     }
 
     onParseProgress?.(end, totalPages, false)
-    console.info(
-      `[knowledge-ingest] ODL+Hybrid batch ${end}/${totalPages} for ${basename(filePath)} (${pageByNumber.size} pages with text)`,
+    logStructured(
+      'knowledge-ingest',
+      'info',
+      `ODL+Hybrid batch ${end}/${totalPages} for ${basename(filePath)} (${pageByNumber.size} pages with text)`,
     )
   }
 
@@ -906,8 +915,10 @@ export async function tryParseIngestWithOdl(options: {
   if (!shouldUseOpenDataLoaderForPdf(filePath)) return null
 
   const hybridEnabled = resolveOdlHybridSettings().enabled
-  console.info(
-    `[knowledge-ingest] ODL${hybridEnabled ? '+Hybrid' : ''} parsing ${basename(filePath)}`,
+  logStructured(
+    'knowledge-ingest',
+    'info',
+    `ODL${hybridEnabled ? '+Hybrid' : ''} parsing ${basename(filePath)}`,
   )
 
   try {
@@ -921,15 +932,19 @@ export async function tryParseIngestWithOdl(options: {
       { skipHybrid: true },
     )
     if (local.plainText.trim() && !isOdlIngestResultInsufficient(local)) {
-      console.info(
-        `[knowledge-ingest] ODL succeeded for ${basename(filePath)} (${local.totalPages} pages)`,
+      logStructured(
+        'knowledge-ingest',
+        'info',
+        `ODL succeeded for ${basename(filePath)} (${local.totalPages} pages)`,
       )
       return toParsedDocument(filePath, local.plainText)
     }
 
     if (!hybridEnabled) {
-      console.info(
-        `[knowledge-ingest] ODL text insufficient for ${basename(filePath)}; falling back to glm-ocr`,
+      logStructured(
+        'knowledge-ingest',
+        'info',
+        `ODL text insufficient for ${basename(filePath)}; falling back to glm-ocr`,
       )
       return null
     }
@@ -941,18 +956,24 @@ export async function tryParseIngestWithOdl(options: {
       onParseProgress,
     })
     if (hybrid?.plainText.trim() && !isOdlIngestResultInsufficient(hybrid)) {
-      console.info(
-        `[knowledge-ingest] ODL+Hybrid succeeded for ${basename(filePath)} (${hybrid.totalPages} pages)`,
+      logStructured(
+        'knowledge-ingest',
+        'info',
+        `ODL+Hybrid succeeded for ${basename(filePath)} (${hybrid.totalPages} pages)`,
       )
       return toParsedDocument(filePath, hybrid.plainText)
     }
-    console.info(
-      `[knowledge-ingest] ODL+Hybrid text insufficient for ${basename(filePath)}; falling back to glm-ocr`,
+    logStructured(
+      'knowledge-ingest',
+      'info',
+      `ODL+Hybrid text insufficient for ${basename(filePath)}; falling back to glm-ocr`,
     )
   } catch (error) {
-    console.warn(
-      `[knowledge-ingest] ODL${hybridEnabled ? '+Hybrid' : ''} failed for ${basename(filePath)}:`,
-      error instanceof Error ? error.message : error,
+    logStructured(
+      'knowledge-ingest',
+      'warn',
+      `ODL${hybridEnabled ? '+Hybrid' : ''} failed for ${basename(filePath)}`,
+      { error: error instanceof Error ? error.message : String(error) },
     )
   }
   return null

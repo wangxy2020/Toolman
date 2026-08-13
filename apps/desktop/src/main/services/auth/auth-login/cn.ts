@@ -2,8 +2,7 @@ import type { AuthLoginInput, AuthSession } from '@toolman/shared'
 import { AuthLoginError } from '../auth-login.error.js'
 import { formatAuthProviderNotConfiguredMessage } from '../auth-config-message.js'
 import { persistAuthLogin } from '../auth-persist.service.js'
-import { verifyCnVerificationLogin } from '../authing-otp-auth.service.js'
-import { verifyCnEmailPasswordLogin } from '../authing-password-auth.service.js'
+import { verifyCnPasswordLogin } from '../authing-password-auth.service.js'
 import { registerCnAccountWithOtp } from '../authing-register.service.js'
 import {
   loginWithAuthingDouyinOAuth,
@@ -13,9 +12,8 @@ import { completeWechatPhoneMerge } from '../tencent-wechat-auth.service.js'
 import { isCnAuthAvailable } from '../tencent-auth.config.js'
 import { parseCnAuthAccount } from '../cn-account-utils.js'
 import {
-  CnEmailPasswordLoginPayloadSchema,
+  CnPasswordLoginPayloadSchema,
   CnRegisterPayloadSchema,
-  OtpLoginPayloadSchema,
   WechatMergePayloadSchema,
 } from './schemas.js'
 
@@ -75,35 +73,19 @@ export async function loginWithCn(parsed: AuthLoginInput): Promise<AuthSession> 
         : ''
   const parsedAccount = parseCnAuthAccount(accountInput)
 
-  if (parsedAccount.channel === 'email') {
-    const payload = CnEmailPasswordLoginPayloadSchema.parse(rawPayload)
-    const passwordResult = await verifyCnEmailPasswordLogin(parsedAccount, payload.password)
-
-    return persistAuthLogin({
-      region: 'cn',
-      provider: 'tencent_phone',
-      subjectId: passwordResult.subjectId,
-      bindingLabel: passwordResult.label,
-      bindingMetadata: { email: parsedAccount.email, label: passwordResult.label },
-      accessToken: passwordResult.sessionToken,
-      expiresInSeconds: 7 * 24 * 3600,
-    })
-  }
-
-  const payload = OtpLoginPayloadSchema.parse(rawPayload)
-  const otpResult = await verifyCnVerificationLogin(
-    accountInput,
-    payload.code,
-    'login',
-  )
+  const payload = CnPasswordLoginPayloadSchema.parse(rawPayload)
+  const passwordResult = await verifyCnPasswordLogin(parsedAccount, payload.password)
 
   return persistAuthLogin({
     region: 'cn',
     provider: 'tencent_phone',
-    subjectId: otpResult.subjectId,
-    bindingLabel: otpResult.label,
-    bindingMetadata: { phone: otpResult.phone, label: otpResult.label },
-    accessToken: otpResult.sessionToken,
+    subjectId: passwordResult.subjectId,
+    bindingLabel: passwordResult.label,
+    bindingMetadata:
+      parsedAccount.channel === 'email'
+        ? { email: parsedAccount.email, label: passwordResult.label }
+        : { phone: passwordResult.phone, label: passwordResult.label },
+    accessToken: passwordResult.sessionToken,
     expiresInSeconds: 7 * 24 * 3600,
   })
 }

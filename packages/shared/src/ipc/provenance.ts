@@ -16,6 +16,7 @@ export type ToolmanBuildProvenance = z.infer<typeof ToolmanBuildProvenanceSchema
 
 export const ProvenanceBeaconEventSchema = z.enum([
   'app.start',
+  'app.ipc.ready',
   'app.renderer.ready',
   'app.session.heartbeat',
   'app.diagnostics.view',

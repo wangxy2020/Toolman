@@ -1,3 +1,9 @@
+/**
+ * Toolman db worker
+ * Copyright (C) 2024–2026 Toolman Contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Source: https://github.com/wangxy2020/Toolman
+ */
 import { parentPort, workerData } from 'node:worker_threads'
 import Database from 'better-sqlite3'
 import { createChunkFtsRepository, type ChunkFtsRow } from '@toolman/db'

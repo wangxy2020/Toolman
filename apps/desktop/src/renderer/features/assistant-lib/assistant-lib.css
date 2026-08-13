@@ -8,12 +8,6 @@
   min-height: 0;
 }
 
-.tm-alib-sidebar .tm-sidebar-content {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
 .tm-alib-sidebar .tm-assistant-name {
   display: flex;
   align-items: center;
@@ -49,108 +43,8 @@
   padding: 0 14px;
 }
 
-.tm-alib-kb-picker-modal {
-  max-width: 560px;
-}
-
-.tm-alib-kb-picker-section-label {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.7;
-  margin-bottom: 8px;
-}
-
-.tm-alib-kb-picker-list {
-  max-height: 360px;
-  overflow: auto;
-  border: 1px solid var(--tm-border, #e5e7eb);
-  border-radius: 8px;
-  padding: 4px;
-}
-
-.tm-alib-kb-picker-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border-radius: 6px;
-}
-
-.tm-alib-kb-picker-row--active {
-  background: color-mix(in srgb, var(--tm-auth-primary, #3b82f6) 12%, transparent);
-}
-
-.tm-alib-kb-picker-expand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.tm-alib-kb-picker-kb,
-.tm-alib-kb-picker-file {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.tm-alib-kb-picker-kb:hover,
-.tm-alib-kb-picker-file:hover {
-  background: var(--tm-hover, rgba(0, 0, 0, 0.04));
-}
-
-.tm-alib-kb-picker-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-}
-
-.tm-alib-kb-picker-meta {
-  flex-shrink: 0;
-  font-size: 12px;
-  opacity: 0.6;
-}
-
-.tm-alib-kb-picker-files {
-  padding: 0 0 4px 28px;
-}
-
-.tm-alib-kb-picker-file {
-  width: 100%;
-  font-size: 13px;
-}
-
-.tm-alib-kb-picker-file span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tm-alib-kb-picker-file--active {
-  color: var(--tm-auth-primary, #3b82f6);
-}
-
-.tm-alib-kb-picker-empty {
-  padding: 12px;
-  font-size: 13px;
-  opacity: 0.65;
+.tm-agent-modal--create .tm-agent-setting-block > .tm-kb-kind-radio-group + .tm-alib-textbook-path {
+  margin-top: 8px;
 }
 
 .tm-alib-settings-toggle {
@@ -172,6 +66,125 @@
   min-width: 0;
 }
 
+.tm-alib-settings-preset-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tm-kb-settings-row--top > .tm-kb-settings-label {
+  padding-top: 8px;
+}
+
+.tm-kb-settings-modal-content.tm-alib-lesson-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.tm-alib-lesson-content > .tm-pm-project-info-error {
+  flex-shrink: 0;
+  margin: 16px 24px 0;
+}
+
+.tm-alib-lesson-plan-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px 12px;
+  background: var(--tm-bg);
+}
+
+.tm-alib-lesson-plan-header-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tm-alib-lesson-plan-header .tm-kb-settings-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tm-text-secondary);
+}
+
+.tm-alib-syllabus-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tm-text-secondary);
+}
+
+.tm-session-item--locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tm-session-item--passed .tm-session-item-label {
+  opacity: 0.85;
+}
+
+.tm-alib-lesson-plan-header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.tm-alib-lesson-plan-header .tm-kb-settings-inline-btn {
+  flex-shrink: 0;
+}
+
+.tm-alib-lesson-plan-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px 24px;
+}
+
+.tm-alib-lesson-plan-preview {
+  min-width: 0;
+}
+
+.tm-alib-lesson-plan-preview .tm-md-pre {
+  overflow: visible;
+}
+
+.tm-alib-lesson-plan-editor {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+  overflow: hidden;
+  color: var(--tm-text);
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.7;
+  outline: none;
+}
+
+.tm-alib-lesson-plan-editor:focus {
+  border: none;
+  box-shadow: none;
+}
+
 .tm-alib-settings-danger {
   gap: 12px;
 }
@@ -185,6 +198,97 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.tm-alib-records-section {
+  margin-top: 20px;
+}
+
+.tm-alib-records-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.tm-alib-records-section-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tm-alib-records-section-head span {
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+}
+
+.tm-alib-records-empty-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tm-text-secondary);
+}
+
+.tm-alib-records-chapter-list,
+.tm-alib-records-meta-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tm-alib-records-chapter-item,
+.tm-alib-records-meta-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--tm-border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tm-alib-records-chapter-index {
+  flex-shrink: 0;
+  width: 1.5em;
+  color: var(--tm-text-secondary);
+}
+
+.tm-alib-records-chapter-title {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.tm-alib-records-chapter-status {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+}
+
+.tm-alib-records-chapter-status--passed {
+  color: var(--tm-success, #15803d);
+}
+
+.tm-alib-records-chapter-status--in_progress {
+  color: var(--tm-auth-primary, #2563eb);
+}
+
+.tm-alib-records-meta-list {
+  margin: 8px 0 10px;
+}
+
+.tm-alib-records-meta-list li {
+  justify-content: space-between;
+}
+
+.tm-alib-records-meta-list li span:first-child {
+  color: var(--tm-text-secondary);
 }
 
 .tm-alib-records-card-meta {

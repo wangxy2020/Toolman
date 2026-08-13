@@ -27,6 +27,7 @@ import {
   type IngestFileAtPathResult,
 } from './knowledge-ingest-shared'
 import { parseAndEmbedFile } from './knowledge-ingest-file-pipeline'
+import { logStructured } from './structured-log.service'
 
 /** Same path can be queued by UI ingest and folder watcher copy — coalesce to one run. */
 const ingestInflightByPath = new Map<string, Promise<IngestFileAtPathResult>>()
@@ -41,8 +42,10 @@ export async function ingestFileAtPath(
   const key = ingestCoalesceKey(options.workspaceId, options.kbId, options.filePath)
   const inflight = ingestInflightByPath.get(key)
   if (inflight) {
-    console.info(
-      `[knowledge-ingest] coalesce duplicate ingest for ${basename(options.filePath)} (UI + folder watcher)`,
+    logStructured(
+      'knowledge-ingest',
+      'info',
+      `coalesce duplicate ingest for ${basename(options.filePath)} (UI + folder watcher)`,
     )
     return inflight
   }

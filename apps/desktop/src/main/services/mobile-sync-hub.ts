@@ -1,7 +1,7 @@
 /**
  * Local Sync Hub HTTP server (desktop). Implements the Sync API surface used by
- * `@toolman/sync-client` so mobile can push/pull notes + knowledge metadata and
- * invoke desktop host capabilities without a cloud Hub.
+ * `@toolman/sync-client` so mobile can push/pull notes, export sync-KB
+ * files/chunks/vectors, and invoke desktop host capabilities without a cloud Hub.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AgentHostCapability, AgentHostPresence, SyncChange } from '@toolman/shared'
@@ -10,11 +10,16 @@ import {
   buildMobileAgentHostPresence,
   handleMobileAgentHostInvoke,
   isMobileAgentHostEnabled,
+  publishActiveKnowledgeMeta,
 } from './mobile-agent-host.service'
 import { applyInboundSyncChanges } from './mobile-sync-apply'
 import { appendSyncChanges, pullSyncChanges } from './mobile-sync-store'
 import { isMobileSyncEnabled } from './mobile-sync.service'
 import { resolveMobileSyncPort } from './mobile-sync.config'
+import {
+  exportMobileKnowledgeSnapshot,
+  readMobileSyncKnowledgeFile,
+} from './knowledge-mobile-export.service'
 
 let server: Server | null = null
 let listenPort: number | null = null
@@ -37,6 +42,22 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   })
   res.end(payload)
+}
+
+function sendBinary(
+  res: ServerResponse,
+  status: number,
+  bytes: Buffer,
+  headers: Record<string, string>,
+): void {
+  res.writeHead(status, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    ...headers,
+    'Content-Length': String(bytes.length),
+  })
+  res.end(bytes)
 }
 
 function sendSse(res: ServerResponse, chunks: Array<{ type: string; text?: string; error?: string }>): void {
@@ -92,6 +113,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === 'POST' && url.pathname === '/api/v1/sync/pull') {
     const raw = await readBody(req)
     const body = JSON.parse(raw || '{}') as { cursor?: string | null; limit?: number }
+    publishActiveKnowledgeMeta()
     const pulled = pullSyncChanges({
       cursor: body.cursor ?? null,
       limit: typeof body.limit === 'number' ? body.limit : 100,
@@ -100,6 +122,32 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       changes: pulled.changes,
       nextCursor: pulled.nextCursor,
       serverTime: Date.now(),
+    })
+    return
+  }
+
+  if (method === 'GET' && url.pathname === '/api/v1/sync/knowledge/export') {
+    const snapshot = await exportMobileKnowledgeSnapshot()
+    sendJson(res, 200, snapshot)
+    return
+  }
+
+  if (method === 'GET' && url.pathname === '/api/v1/sync/knowledge/files') {
+    const kbId = url.searchParams.get('kbId') ?? ''
+    const documentId = url.searchParams.get('documentId') ?? ''
+    if (!kbId || !documentId) {
+      sendJson(res, 400, { error: 'kbId and documentId required' })
+      return
+    }
+    const file = readMobileSyncKnowledgeFile({ kbId, documentId })
+    if (!file) {
+      sendJson(res, 404, { error: 'file not found' })
+      return
+    }
+    const safeName = file.fileName.replace(/["\r\n]/g, '_')
+    sendBinary(res, 200, file.bytes, {
+      'Content-Type': file.mimeType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${safeName}"`,
     })
     return
   }

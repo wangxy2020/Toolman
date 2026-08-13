@@ -13,6 +13,7 @@ import {
   DialogSelectFilesOrFoldersOutputSchema,
   ipcOk,
 } from '@toolman/shared'
+import { assertPathWithinAllowedRoots } from '../services/path-sandbox.service'
 
 function resolveDefaultPath(requested?: string): string {
   return requested ?? homedir()
@@ -75,12 +76,13 @@ export async function selectFilesOrFolders(input: unknown) {
 
 export async function saveFile(input: unknown) {
   const data = DialogSaveFileInputSchema.parse(input ?? {})
-  if (!existsSync(data.sourcePath)) {
+  const sourcePath = assertPathWithinAllowedRoots(data.sourcePath)
+  if (!existsSync(sourcePath)) {
     return ipcOk(DialogSaveFileOutputSchema.parse({ saved: false, path: null }))
   }
 
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  const defaultName = data.defaultFileName ?? basename(data.sourcePath)
+  const defaultName = data.defaultFileName ?? basename(sourcePath)
   const result = await dialog.showSaveDialog(win ?? undefined, {
     defaultPath: join(resolveDefaultPath(data.defaultPath), defaultName),
     title: '另存为',
@@ -90,6 +92,6 @@ export async function saveFile(input: unknown) {
     return ipcOk(DialogSaveFileOutputSchema.parse({ saved: false, path: null }))
   }
 
-  copyFileSync(data.sourcePath, result.filePath)
+  copyFileSync(sourcePath, result.filePath)
   return ipcOk(DialogSaveFileOutputSchema.parse({ saved: true, path: result.filePath }))
 }

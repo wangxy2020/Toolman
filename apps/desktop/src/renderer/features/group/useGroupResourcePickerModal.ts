@@ -8,10 +8,12 @@ export interface GroupResourcePickerModalProps {
   title: string
   hint: string
   confirmLabel?: string
+  emptyLabel?: string
   groups: GroupPickerGroup[]
   loading?: boolean
   loadingGroupId?: string | null
   error?: string | null
+  initialSelectedGroupIds?: string[]
   onClose: () => void
   onConfirm: (selection: GroupPickerSelection[]) => Promise<void>
   onGroupExpand?: (groupId: string) => void
@@ -21,6 +23,7 @@ export function useGroupResourcePickerModal({
   groups,
   confirmLabel,
   error: externalError = null,
+  initialSelectedGroupIds,
   onClose,
   onConfirm,
   onGroupExpand,
@@ -29,7 +32,9 @@ export function useGroupResourcePickerModal({
   const resolvedConfirmLabel = confirmLabel ?? t('groupPage.picker.add')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
-  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set())
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(
+    () => new Set(initialSelectedGroupIds?.filter(Boolean) ?? []),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

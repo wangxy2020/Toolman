@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
 import { toErrorMessage } from '@toolman/shared'
-import { basename, join, resolve, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import { scanDirectory } from '@toolman/knowledge'
 import {DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   KnowledgeFolderDeleteFileInputSchema,
@@ -10,6 +10,8 @@ import {DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   KnowledgeFolderListFilesInputSchema,
   KnowledgeFolderListFilesOutputSchema } from '@toolman/shared'
 import { resolveKnowledgeWatchConfig } from './knowledge-watch-config.service'
+import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { isExecutableLikePath } from './shell-open-guard'
 
 function ensureFolder(folderPath: string) {
   if (!existsSync(folderPath)) {
@@ -20,14 +22,15 @@ function ensureFolder(folderPath: string) {
 function isPathInsideFolder(folderPath: string, filePath: string): boolean {
   const root = resolve(folderPath)
   const target = resolve(filePath)
-  return target === root || target.startsWith(`${root}${sep}`)
+  const rel = relative(root, target)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 export { isPathInsideFolder }
 
 export function listKnowledgeFolderFiles(input: unknown) {
   const data = KnowledgeFolderListFilesInputSchema.parse(input)
-  const folderPath = data.folderPath.trim()
+  const folderPath = assertPathWithinAllowedRoots(data.folderPath.trim())
 
   if (!existsSync(folderPath)) {
     return KnowledgeFolderListFilesOutputSchema.parse({ items: [] })
@@ -58,21 +61,30 @@ export function listKnowledgeFolderFiles(input: unknown) {
 
 export function importKnowledgeFolderFiles(input: unknown) {
   const data = KnowledgeFolderImportFilesInputSchema.parse(input)
-  const folderPath = data.folderPath.trim()
+  const folderPath = assertPathWithinAllowedRoots(data.folderPath.trim())
   ensureFolder(folderPath)
 
   let imported = 0
   let skipped = 0
   const failed: Array<{ path: string; message: string }> = []
 
-  for (const sourcePath of data.filePaths) {
+  for (const rawSourcePath of data.filePaths) {
     try {
+      const sourcePath = assertPathWithinAllowedRoots(rawSourcePath)
       if (!existsSync(sourcePath)) {
-        failed.push({ path: sourcePath, message: '文件不存在' })
+        failed.push({ path: rawSourcePath, message: '文件不存在' })
         continue
       }
 
       const destinationPath = resolve(join(folderPath, basename(sourcePath)))
+      if (!isPathInsideFolder(folderPath, destinationPath)) {
+        failed.push({ path: rawSourcePath, message: '目标路径超出文件夹范围' })
+        continue
+      }
+      if (isExecutableLikePath(destinationPath)) {
+        failed.push({ path: rawSourcePath, message: '不允许导入可执行文件' })
+        continue
+      }
       if (existsSync(destinationPath)) {
         skipped += 1
         continue
@@ -82,7 +94,7 @@ export function importKnowledgeFolderFiles(input: unknown) {
       imported += 1
     } catch (error) {
       const message = toErrorMessage(error, '复制失败')
-      failed.push({ path: sourcePath, message })
+      failed.push({ path: rawSourcePath, message })
     }
   }
 
@@ -91,8 +103,8 @@ export function importKnowledgeFolderFiles(input: unknown) {
 
 export function deleteKnowledgeFolderFile(input: unknown) {
   const data = KnowledgeFolderDeleteFileInputSchema.parse(input)
-  const folderPath = data.folderPath.trim()
-  const filePath = data.filePath.trim()
+  const folderPath = assertPathWithinAllowedRoots(data.folderPath.trim())
+  const filePath = assertPathWithinAllowedRoots(data.filePath.trim())
 
   if (!isPathInsideFolder(folderPath, filePath)) {
     throw new Error('只能删除默认文件夹内的文件')

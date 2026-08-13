@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm'
 import { blobs } from '@toolman/db'
 import { copyFileChunkedSync, hashFileBytes } from '@toolman/knowledge'
 import { getDatabase } from '../bootstrap/database'
+import { assertPathWithinAllowedRoots } from './path-sandbox.service'
 
 export function getBlobsDir(): string {
   const dir = join(app.getPath('userData'), 'storage', 'blobs')
@@ -128,18 +129,19 @@ export function writeBlobFromBuffer(data: Buffer, mimeType: string): BlobRecord 
 }
 
 export function writeBlobFromPath(sourcePath: string): BlobRecord {
-  if (!existsSync(sourcePath)) {
+  const allowedPath = assertPathWithinAllowedRoots(sourcePath)
+  if (!existsSync(allowedPath)) {
     throw new Error(`文件不存在: ${sourcePath}`)
   }
 
-  const hash = hashFileBytes(sourcePath)
-  const mimeType = guessMimeType(sourcePath)
-  const sizeBytes = statSync(sourcePath).size
-  const originalName = basename(sourcePath)
+  const hash = hashFileBytes(allowedPath)
+  const mimeType = guessMimeType(allowedPath)
+  const sizeBytes = statSync(allowedPath).size
+  const originalName = basename(allowedPath)
   const targetPath = blobFilePath(hash)
 
   if (!existsSync(targetPath)) {
-    copyFileChunkedSync(sourcePath, targetPath)
+    copyFileChunkedSync(allowedPath, targetPath)
   }
 
   return upsertBlobMetadata({

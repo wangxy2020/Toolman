@@ -7,6 +7,7 @@ import * as assistantService from '../services/assistant.service'
 import { getSessionRepository } from '../db/repos'
 import * as p2pAgentShareService from '../services/p2p/agent-share.service'
 import * as p2pGroupAgentProxyService from '../services/p2p/p2p-group-agent-proxy.service'
+import { startAssistantLibSyllabusGeneration } from '../services/assistant-lib-syllabus.service'
 
 type HandlerFn = (input: unknown) => Promise<IpcResult<unknown>>
 
@@ -42,6 +43,14 @@ export const agentIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk({ cleared })
     } catch (error) {
       const message = toErrorMessage(error, 'Clear messages failed')
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
+    }
+  },
+  [IpcChannel.AssistantLibSyllabusGenerate]: async (input) => {
+    try {
+      return ipcOk(await startAssistantLibSyllabusGeneration(input))
+    } catch (error) {
+      const message = toErrorMessage(error, 'Generate syllabus failed')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: false })
     }
   },

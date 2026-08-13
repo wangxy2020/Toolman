@@ -8,7 +8,6 @@ describe('SETTINGS_TABS', () => {
       'agent',
       'knowledge',
       'notes',
-      'translate',
       'group',
       'community',
       'classroom',

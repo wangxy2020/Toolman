@@ -218,4 +218,21 @@ export function useNotesSync({
     window.addEventListener('toolman:notes-restore', handleRestore)
     return () => window.removeEventListener('toolman:notes-restore', handleRestore)
   }, [importNotesBackup, setActiveNoteId])
+
+  useEffect(() => {
+    const reloadFromMain = () => {
+      void (async () => {
+        const localData = loadNotesData()
+        let nextData = await mergeNotesFromMain(localData)
+        nextData = await reconcileNotesPlacement(nextData)
+        nextData = await syncAndReloadNotes(nextData)
+        setData(nextData)
+        setActiveNoteId((prev) => {
+          if (prev && nextData.notes.some((item) => item.id === prev)) return prev
+          return getFirstNoteInNotebook(nextData.notes, DEFAULT_NOTEBOOK_ID)?.id ?? null
+        })
+      })()
+    }
+    return window.api.subscribe('notes:mobile-sync', reloadFromMain)
+  }, [setActiveNoteId, setData])
 }

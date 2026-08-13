@@ -37,7 +37,12 @@ export function isMobileAuthingDevMode(): boolean {
   return raw === '1' || raw.toLowerCase() === 'true'
 }
 
-export function canUseAuthingRemoteOtp(): boolean {
+/** Same Authing tenant as desktop CN login (appId + host; secret optional). */
+export function canUseAuthingRemoteAuth(): boolean {
   const config = getMobileAuthingConfig()
-  return Boolean(config?.appId && config.appHost && config.appSecret) && !isMobileAuthingDevMode()
+  return Boolean(config?.appId && config.appHost) && !isMobileAuthingDevMode()
+}
+
+export function canUseAuthingRemoteOtp(): boolean {
+  return canUseAuthingRemoteAuth()
 }

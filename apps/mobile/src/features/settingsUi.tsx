@@ -14,10 +14,13 @@ export function SettingsScroll(props: { children: ReactNode }) {
   )
 }
 
-export function Section(props: { title: string; children: ReactNode }) {
+export function Section(props: { title: string; trailing?: ReactNode; children: ReactNode }) {
   return (
     <View style={settingsUiStyles.card}>
-      <Text style={settingsUiStyles.sectionTitle}>{props.title}</Text>
+      <View style={settingsUiStyles.sectionHeader}>
+        <Text style={settingsUiStyles.sectionTitle}>{props.title}</Text>
+        {props.trailing}
+      </View>
       <View style={settingsUiStyles.sectionBody}>{props.children}</View>
     </View>
   )
@@ -115,11 +118,28 @@ export const settingsUiStyles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.text,
     letterSpacing: 0.2,
+    flexShrink: 0,
+  },
+  sectionTrailing: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  sectionTrailingVip: {
+    color: colors.accent,
   },
   sectionBody: {
     gap: 12,

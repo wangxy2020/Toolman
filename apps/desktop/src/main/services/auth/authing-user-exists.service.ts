@@ -1,35 +1,11 @@
-import { ManagementClient } from 'authing-js-sdk'
-
 import { AuthLoginError } from './auth-login.error.js'
-import { getAuthingConfig } from './authing-auth.config.js'
 import { formatAuthingRegisterExistsMessage } from './authing-otp-error-utils.js'
 import { getAuthingClient } from './authing-client.service.js'
+import { getAuthingManagementClient } from './authing-management-client.service.js'
 import type { ParsedCnAuthAccount } from './cn-account-utils.js'
 
 function phoneDigits(phone: string): string {
   return phone.replace(/^\+86/, '')
-}
-
-let managementClient: ManagementClient | null = null
-
-function getAuthingManagementClient(): ManagementClient | null {
-  const config = getAuthingConfig()
-  if (!config?.appSecret) {
-    return null
-  }
-
-  if (!managementClient) {
-    managementClient = new ManagementClient({
-      userPoolId: config.userPoolId,
-      secret: config.appSecret,
-    })
-  }
-
-  return managementClient
-}
-
-export function resetAuthingManagementClientForTests(): void {
-  managementClient = null
 }
 
 async function checkAuthingUserExistsViaAuthClient(account: ParsedCnAuthAccount): Promise<boolean | null> {

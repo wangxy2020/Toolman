@@ -6,6 +6,7 @@ import {
   type IpcContractInput,
   type IpcContractOutput,
 } from '@toolman/shared'
+import { clientLog } from './client-log'
 
 export class IpcInvokeError extends Error {
   constructor(
@@ -39,7 +40,7 @@ export async function safeInvoke(
   try {
     return await window.api.invoke(channel, input)
   } catch (error) {
-    console.warn(`[ipc] ${channel} invoke failed:`, error)
+    clientLog.warn(`[ipc] ${channel} invoke failed:`, error)
     return {
       ok: false,
       error: {
@@ -55,7 +56,7 @@ export async function safeInvoke(
 export function fireAndForgetInvoke(channel: IpcChannel, input?: unknown): void {
   void safeInvoke(channel, input).then((result) => {
     if (!result.ok) {
-      console.warn(`[ipc] ${channel} returned error:`, result.error.message)
+      clientLog.warn(`[ipc] ${channel} returned error:`, result.error.message)
     }
   })
 }

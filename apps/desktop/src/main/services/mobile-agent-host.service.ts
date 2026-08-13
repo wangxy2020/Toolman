@@ -1,10 +1,15 @@
 /**
  * Desktop agent host presence / relay hooks for mobile clients (feature-flagged).
+ *
+ * Mobile knowledge sync is scoped to `kind === 'sync'` bases only
+ * （桌面「同步知识库」分区），不含本地 / 网络 / 共享等其它分区。
  */
 import {
   KnowledgeHostRequestSchema,
+  isSyncKnowledgeBaseKind,
   type AgentHostCapability,
   type AgentHostPresence,
+  type KnowledgeMetaItem,
 } from '@toolman/shared'
 import {
   isMobileAgentHostPreferenceEnabled,
@@ -22,6 +27,19 @@ function requireWorkspaceId(): string {
   const workspace = getDefaultWorkspace()
   if (!workspace) throw new Error('未找到默认工作区')
   return workspace.id
+}
+
+/** Knowledge bases under desktop「同步知识库」— the only ones mobile may sync/search. */
+function listMobileSyncKnowledgeMeta(workspaceId: string): KnowledgeMetaItem[] {
+  return listKnowledgeBases({ workspaceId })
+    .filter((kb) => isSyncKnowledgeBaseKind(kb.kind))
+    .map((kb) => ({
+      id: kb.id,
+      name: kb.name,
+      kind: kb.kind,
+      documentCount: kb.documentCount,
+      updatedAt: kb.updatedAt,
+    }))
 }
 
 export function isMobileAgentHostEnabled(): boolean {
@@ -68,23 +86,33 @@ async function handleKnowledgeHostMessage(message: string): Promise<{ ok: boolea
   }
   const request = KnowledgeHostRequestSchema.parse(parsed)
   const workspaceId = requireWorkspaceId()
+  const syncItems = listMobileSyncKnowledgeMeta(workspaceId)
 
   if (request.op === 'list-meta') {
-    const items = listKnowledgeBases({ workspaceId }).map((kb) => ({
-      id: kb.id,
-      name: kb.name,
-      kind: kb.kind,
-      documentCount: kb.documentCount,
-      updatedAt: kb.updatedAt,
-    }))
-    publishKnowledgeMetaChanges(items)
-    return { ok: true, text: JSON.stringify({ op: 'list-meta', items }) }
+    publishKnowledgeMetaChanges(syncItems)
+    return { ok: true, text: JSON.stringify({ op: 'list-meta', items: syncItems }) }
+  }
+
+  const syncKbIds = new Set(syncItems.map((item) => item.id))
+  if (request.kbId && !syncKbIds.has(request.kbId)) {
+    return {
+      ok: false,
+      text: '仅支持检索「同步知识库」中的内容',
+    }
+  }
+
+  const kbIds = request.kbId ? [request.kbId] : Array.from(syncKbIds)
+  if (kbIds.length === 0) {
+    return {
+      ok: true,
+      text: JSON.stringify({ op: 'search', items: [] }),
+    }
   }
 
   const hits = await searchKnowledge({
     workspaceId,
     query: request.query,
-    kbIds: request.kbId ? [request.kbId] : undefined,
+    kbIds,
     topK: request.limit ?? 8,
   })
   return {
@@ -133,19 +161,12 @@ export async function handleMobileAgentHostInvoke(input: {
   }
 }
 
-/** Publish current KB metadata into the Sync changelog for mobile pull. */
+/** Publish current sync-KB metadata into the Sync changelog for mobile pull. */
 export function publishActiveKnowledgeMeta(): void {
   if (!isMobileSyncEnabled()) return
   try {
     const workspaceId = requireWorkspaceId()
-    const items = listKnowledgeBases({ workspaceId }).map((kb) => ({
-      id: kb.id,
-      name: kb.name,
-      kind: kb.kind,
-      documentCount: kb.documentCount,
-      updatedAt: kb.updatedAt,
-    }))
-    publishKnowledgeMetaChanges(items)
+    publishKnowledgeMetaChanges(listMobileSyncKnowledgeMeta(workspaceId))
   } catch (error) {
     logStructured('mobile-sync', 'warn', `publish knowledge meta failed: ${String(error)}`)
   }

@@ -270,6 +270,43 @@ export class DocumentRepository {
     return this.findById(id, kbId)
   }
 
+  reassignDocumentKb(input: {
+    documentId: string
+    fromKbId: string
+    toKbId: string
+    absolutePath: string
+    sourceId: string | null
+  }): boolean {
+    const existing = this.findById(input.documentId, input.fromKbId)
+    if (!existing) return false
+
+    const now = new Date()
+    this.db
+      .update(documents)
+      .set({
+        kbId: input.toKbId,
+        sourceId: input.sourceId,
+        absolutePath: input.absolutePath,
+        updatedAt: now,
+      })
+      .where(and(eq(documents.id, input.documentId), eq(documents.kbId, input.fromKbId)))
+      .run()
+
+    this.db
+      .update(chunks)
+      .set({ kbId: input.toKbId })
+      .where(eq(chunks.documentId, input.documentId))
+      .run()
+
+    this.db
+      .update(ingestJobs)
+      .set({ kbId: input.toKbId })
+      .where(eq(ingestJobs.documentId, input.documentId))
+      .run()
+
+    return true
+  }
+
   softDelete(id: string, kbId: string): boolean {
     const existing = this.findById(id, kbId)
     if (!existing) return false
@@ -659,8 +696,16 @@ export class DocumentRepository {
   }
 
   listChunkTextsByDocument(documentId: string, kbId: string): string[] {
+    return this.listChunkRowsByDocument(documentId, kbId).map((row) => row.text)
+  }
+
+  listChunkRowsByDocument(
+    documentId: string,
+    kbId: string,
+  ): Array<{ id: string; text: string; chunkIndex: number }> {
     return this.db
       .select({
+        id: chunks.id,
         text: chunks.text,
         chunkIndex: chunks.chunkIndex,
       })
@@ -674,7 +719,7 @@ export class DocumentRepository {
       )
       .orderBy(asc(chunks.chunkIndex))
       .all()
-      .map((row) => row.text)
+      .map((row) => ({ id: row.id, text: row.text, chunkIndex: row.chunkIndex }))
   }
 
   countAllActiveChunks(): number {

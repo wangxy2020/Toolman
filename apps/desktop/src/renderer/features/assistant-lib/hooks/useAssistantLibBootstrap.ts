@@ -2,22 +2,30 @@ import { useCallback, useState } from 'react'
 import {
   ASSISTANT_LIB_ASSISTANT_MARKER,
   ASSISTANT_LIB_ASSISTANT_NAME,
-  ASSISTANT_LIB_DEFAULT_CLASSROOM_PRESET_ID,
-  ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE,
+  ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID,
+  ASSISTANT_LIB_GUIDE_COURSE_TITLE,
   ASSISTANT_LIB_PRESETS,
   assistantLibSessionMetadataPatch,
   buildAssistantLibAssistantSystemPrompt,
-  findAssistantLibDefaultClassroomSession,
+  buildAssistantLibGuideCourseSyllabus,
+  buildAssistantLibGuideCourseSystemPrompt,
+  findAssistantLibGuideCourseSession,
+  formatSyllabusMarkdown,
   getAssistantLibPreset,
   isAssistantLibAssistantName,
-  listDuplicateAssistantLibDefaultClassroomIds,
+  listAssistantLibDefaultClassroomIds,
+  listDuplicateAssistantLibGuideCourseIds,
+  parseAssistantLibSessionMeta,
   IpcChannel,
   type Assistant,
   type Session,
 } from '@toolman/shared'
 
 const ensureAssistantInFlight = new Map<string, Promise<Assistant>>()
-const ensureClassroomInFlight = new Map<string, Promise<{ assistant: Assistant; session: Session }>>()
+const ensureClassroomInFlight = new Map<
+  string,
+  Promise<{ assistant: Assistant; session: Session | null; removedDefaultIds: string[] }>
+>()
 
 async function ensureAssistantLibAssistant(options: {
   workspaceId: string
@@ -106,12 +114,23 @@ async function loadAssistantSessions(workspaceId: string, assistantId: string): 
   return items
 }
 
-async function deleteDuplicateDefaultClassrooms(
+async function deleteDefaultClassroomSessions(
+  sessions: Session[],
+  assistantId: string,
+): Promise<string[]> {
+  const ids = listAssistantLibDefaultClassroomIds(sessions, assistantId)
+  for (const id of ids) {
+    await window.api.invoke(IpcChannel.SessionDelete, { id })
+  }
+  return ids
+}
+
+async function deleteDuplicateGuideCourses(
   sessions: Session[],
   assistantId: string,
   onReady?: () => void | Promise<void>,
 ): Promise<boolean> {
-  const duplicateIds = listDuplicateAssistantLibDefaultClassroomIds(sessions, assistantId)
+  const duplicateIds = listDuplicateAssistantLibGuideCourseIds(sessions, assistantId)
   if (duplicateIds.length === 0) return false
   for (const id of duplicateIds) {
     await window.api.invoke(IpcChannel.SessionDelete, { id })
@@ -120,13 +139,83 @@ async function deleteDuplicateDefaultClassrooms(
   return true
 }
 
-async function ensureDefaultClassroomSession(options: {
+function guideCourseMetadataPatch(metadata: Record<string, unknown> | null | undefined) {
+  const previous = parseAssistantLibSessionMeta(metadata)
+  const preset = getAssistantLibPreset(ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID)
+  const syllabus =
+    previous?.syllabus?.chapters.length ? previous.syllabus : buildAssistantLibGuideCourseSyllabus()
+  const customSystemPrompt =
+    previous?.customSystemPrompt?.trim() || buildAssistantLibGuideCourseSystemPrompt()
+  return assistantLibSessionMetadataPatch(metadata, {
+    presetId: previous?.presetId || ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID,
+    roleplayId: previous?.roleplayId ?? preset?.roleplayId,
+    learningLabel: previous?.learningLabel ?? '学习',
+    teachingMode: previous?.teachingMode ?? preset?.teachingMode ?? 'open',
+    refereeEnabled: previous?.refereeEnabled ?? preset?.refereeEnabled ?? false,
+    kbIds: previous?.kbIds,
+    customSystemPrompt,
+    courseName: previous?.courseName?.trim() || ASSISTANT_LIB_GUIDE_COURSE_TITLE,
+    isGuideClassroom: true,
+    syllabus,
+    lessonPlan: previous?.lessonPlan?.trim() || formatSyllabusMarkdown(syllabus),
+    autoSpeak: previous?.autoSpeak ?? true,
+    ttsEngine: previous?.ttsEngine ?? 'edge',
+  })
+}
+
+async function ensureGuideClassroomSession(options: {
+  workspaceId: string
+  assistant: Assistant
+  sessions: Session[]
+  onReady?: () => void | Promise<void>
+}): Promise<Session | null> {
+  const cached = findAssistantLibGuideCourseSession(options.sessions, options.assistant.id)
+  const source = cached
+    ? options.sessions
+    : await loadAssistantSessions(options.workspaceId, options.assistant.id)
+  const existing = cached ?? findAssistantLibGuideCourseSession(source, options.assistant.id)
+  if (existing) {
+    await deleteDuplicateGuideCourses(source, options.assistant.id, options.onReady)
+    const meta = parseAssistantLibSessionMeta(existing.metadata)
+    const needsSeed =
+      !meta?.isGuideClassroom ||
+      !meta.syllabus?.chapters.length ||
+      !meta.customSystemPrompt?.trim()
+    if (!needsSeed) return existing
+    const updated = await window.api.invoke(IpcChannel.SessionUpdate, {
+      id: existing.id,
+      title: existing.title || ASSISTANT_LIB_GUIDE_COURSE_TITLE,
+      metadata: guideCourseMetadataPatch(existing.metadata),
+    })
+    if (updated.ok) {
+      await options.onReady?.()
+      return (updated.data as Session) ?? existing
+    }
+    return existing
+  }
+
+  if (options.assistant.parameters.assistantLibGuideDismissed) return null
+
+  const created = await window.api.invoke(IpcChannel.SessionCreate, {
+    workspaceId: options.workspaceId,
+    assistantId: options.assistant.id,
+    title: ASSISTANT_LIB_GUIDE_COURSE_TITLE,
+    metadata: guideCourseMetadataPatch(null),
+  })
+  if (!created.ok) {
+    throw new Error(created.error.message || '创建 Toolman 使用说明课程失败')
+  }
+  await options.onReady?.()
+  return created.data as Session
+}
+
+async function ensureAssistantLibClassroom(options: {
   workspaceId: string
   modelId: string
   assistants: Assistant[]
   sessions: Session[]
   onReady?: () => void | Promise<void>
-}): Promise<{ assistant: Assistant; session: Session }> {
+}): Promise<{ assistant: Assistant; session: Session | null; removedDefaultIds: string[] }> {
   const inflightKey = options.workspaceId
   const inflight = ensureClassroomInFlight.get(inflightKey)
   if (inflight) return inflight
@@ -139,42 +228,30 @@ async function ensureDefaultClassroomSession(options: {
       onReady: options.onReady,
     })
 
-    const cached = findAssistantLibDefaultClassroomSession(options.sessions, assistant.id)
-    if (cached) {
-      await deleteDuplicateDefaultClassrooms(options.sessions, assistant.id, options.onReady)
-      return { assistant, session: cached }
-    }
-
     const loaded = await loadAssistantSessions(options.workspaceId, assistant.id)
-    const existing = findAssistantLibDefaultClassroomSession(loaded, assistant.id)
-    if (existing) {
-      await deleteDuplicateDefaultClassrooms(loaded, assistant.id)
+    const merged = new Map<string, Session>()
+    for (const session of [...options.sessions, ...loaded]) {
+      if (session.assistantId === assistant.id) merged.set(session.id, session)
+    }
+    let sessions = [...merged.values()]
+
+    const removedDefaultIds = await deleteDefaultClassroomSessions(sessions, assistant.id)
+    if (removedDefaultIds.length > 0) {
+      sessions = sessions.filter((session) => !removedDefaultIds.includes(session.id))
       await options.onReady?.()
-      return { assistant, session: existing }
     }
 
-    const preset = getAssistantLibPreset(ASSISTANT_LIB_DEFAULT_CLASSROOM_PRESET_ID)
-    const created = await window.api.invoke(IpcChannel.SessionCreate, {
+    const guide = await ensureGuideClassroomSession({
       workspaceId: options.workspaceId,
-      assistantId: assistant.id,
-      title: ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE,
-      metadata: assistantLibSessionMetadataPatch(null, {
-        presetId: ASSISTANT_LIB_DEFAULT_CLASSROOM_PRESET_ID,
-        roleplayId: preset?.roleplayId,
-        learningLabel: '学习',
-        teachingMode: preset?.teachingMode ?? 'socratic',
-        refereeEnabled: preset?.refereeEnabled ?? true,
-        courseName: ASSISTANT_LIB_DEFAULT_CLASSROOM_TITLE,
-        isDefaultClassroom: true,
-        autoSpeak: true,
-        ttsEngine: 'edge',
-      }),
+      assistant,
+      sessions,
+      onReady: options.onReady,
     })
-    if (!created.ok) {
-      throw new Error(created.error.message || '创建默认课堂话题失败')
+    return {
+      assistant,
+      session: guide ?? sessions[0] ?? null,
+      removedDefaultIds,
     }
-    await options.onReady?.()
-    return { assistant, session: created.data as Session }
   })().finally(() => {
     ensureClassroomInFlight.delete(inflightKey)
   })
@@ -195,9 +272,10 @@ export function useAssistantLibBootstrap(options: {
 
   const { workspaceId, defaultModelId, assistants, sessions, onReady } = options
 
-  const ensureDefaultClassroom = useCallback(async (): Promise<{
+  const ensureClassroom = useCallback(async (): Promise<{
     assistant: Assistant
-    session: Session
+    session: Session | null
+    removedDefaultIds: string[]
   } | null> => {
     if (!workspaceId || !defaultModelId) {
       setError('请先配置工作区与模型')
@@ -205,7 +283,7 @@ export function useAssistantLibBootstrap(options: {
     }
     try {
       setError(null)
-      return await ensureDefaultClassroomSession({
+      return await ensureAssistantLibClassroom({
         workspaceId,
         modelId: defaultModelId,
         assistants,
@@ -286,7 +364,7 @@ export function useAssistantLibBootstrap(options: {
     busy,
     error,
     startCourse,
-    ensureDefaultClassroom,
+    ensureClassroom,
     presets: ASSISTANT_LIB_PRESETS,
   }
 }

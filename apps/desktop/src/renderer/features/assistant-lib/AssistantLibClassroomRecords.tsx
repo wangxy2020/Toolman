@@ -1,7 +1,11 @@
-import { useMemo } from 'react'
 import {
+  looksLikeAssistantLibDefaultClassroom,
+  looksLikeAssistantLibGuideCourse,
   parseAssistantLibSessionMeta,
+  parseCourseSyllabus,
   parseSocraticState,
+  type ClassroomStudyRecord,
+  type CourseSyllabusChapter,
   type Session,
   type SocraticState,
 } from '@toolman/shared'
@@ -10,7 +14,7 @@ import { useI18n } from '../../i18n/useI18n'
 import { CommunityPanelHeader } from '../community/CommunityPanelHeader'
 
 type Props = {
-  sessions: Session[]
+  session: Session | null
   onOpenSession?: (sessionId: string) => void
 }
 
@@ -28,15 +32,25 @@ function formatDate(ts: number, locale: string): string {
   }
 }
 
-function formatDuration(session: Session, t: (key: string, vars?: Record<string, string | number>) => string): string {
-  const start = session.createdAt
-  const end = session.lastMessageAt ?? session.updatedAt
+function formatDuration(
+  start: number,
+  end: number,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const minutes = Math.max(1, Math.round(Math.max(0, end - start) / 60000))
   if (minutes < 60) return t('assistantLibPage.records.durationMinutes', { count: minutes })
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
   if (rest === 0) return t('assistantLibPage.records.durationHours', { count: hours })
   return t('assistantLibPage.records.durationHoursMinutes', { hours, minutes: rest })
+}
+
+function chapterStatusKey(status: CourseSyllabusChapter['status']): string {
+  if (status === 'passed') return 'chapterPassed'
+  if (status === 'in_progress') return 'chapterCurrent'
+  if (status === 'generating') return 'chapterGenerating'
+  if (status === 'pending') return 'chapterPending'
+  return 'chapterReady'
 }
 
 function collectTags(state: SocraticState): Array<{ key: string; label: string; tone: string }> {
@@ -55,33 +69,45 @@ function collectTags(state: SocraticState): Array<{ key: string; label: string; 
   return tags
 }
 
-export function AssistantLibClassroomRecords({ sessions, onOpenSession }: Props) {
+export function AssistantLibClassroomRecords({ session, onOpenSession }: Props) {
   const { t, language } = useI18n()
   const dateLocale = getDateLocale(language)
-
-  const stats = useMemo(() => {
-    let mastered = 0
-    let open = 0
-    let qa = 0
-    for (const session of sessions) {
-      const state = parseSocraticState(session.metadata)
-      mastered += state.mastered.length + state.confirmedClaims.length
-      open += state.openAssumptions.length + state.stuckPoints.length
-      qa += session.messageCount ?? 0
-    }
-    return {
-      sessions: sessions.length,
-      mastered,
-      open,
-      qa,
-    }
-  }, [sessions])
+  const meta = session ? parseAssistantLibSessionMeta(session.metadata) : null
+  const state = parseSocraticState(session?.metadata)
+  const syllabus = parseCourseSyllabus(meta?.syllabus)
+  const chapters = syllabus?.chapters ?? []
+  const studyRecords = [...(meta?.studyRecords ?? [])].reverse()
+  const courseTitle = session
+    ? looksLikeAssistantLibDefaultClassroom(session)
+      ? t('assistantLibPage.defaultCourse')
+      : looksLikeAssistantLibGuideCourse(session)
+        ? t('assistantLibPage.guideCourse')
+        : meta?.courseName?.trim() || session.title
+    : t('assistantLibPage.defaultClassroom')
+  const passedChapters = chapters.filter((item) => item.status === 'passed').length
+  const tags = collectTags(state)
 
   const statCards = [
-    { key: 'sessions', label: t('assistantLibPage.records.statSessions'), value: stats.sessions },
-    { key: 'mastered', label: t('assistantLibPage.records.statMastered'), value: stats.mastered },
-    { key: 'open', label: t('assistantLibPage.records.statOpen'), value: stats.open },
-    { key: 'qa', label: t('assistantLibPage.records.statQa'), value: stats.qa },
+    {
+      key: 'records',
+      label: t('assistantLibPage.records.statLessons'),
+      value: studyRecords.length,
+    },
+    {
+      key: 'passed',
+      label: t('assistantLibPage.records.statPassed'),
+      value: passedChapters,
+    },
+    {
+      key: 'chapters',
+      label: t('assistantLibPage.records.statChapters'),
+      value: chapters.length,
+    },
+    {
+      key: 'qa',
+      label: t('assistantLibPage.records.statQa'),
+      value: session?.messageCount ?? 0,
+    },
   ]
 
   return (
@@ -89,130 +115,165 @@ export function AssistantLibClassroomRecords({ sessions, onOpenSession }: Props)
       <div className="tm-community-market tm-community-user-center tm-alib-records">
         <CommunityPanelHeader
           title={t('assistantLibPage.records.title')}
-          subtitle={t('assistantLibPage.records.subtitle')}
+          subtitle={t('assistantLibPage.records.subtitleNamed', { name: courseTitle })}
         />
 
         <div className="tm-kb-file-panel tm-community-user-center-body">
-          <div
-            className="tm-user-center-stat-grid"
-            style={{ ['--tm-stat-cols' as string]: statCards.length }}
-          >
-            {statCards.map((item) => (
-              <div key={item.key} className="tm-user-center-stat-card">
-                <span className="tm-user-center-stat-label">{item.label}</span>
-                <span className="tm-user-center-stat-value">{item.value}</span>
+          {!session ? (
+            <div className="tm-user-center-empty">{t('assistantLibPage.records.empty')}</div>
+          ) : (
+            <>
+              <div
+                className="tm-user-center-stat-grid"
+                style={{ ['--tm-stat-cols' as string]: statCards.length }}
+              >
+                {statCards.map((item) => (
+                  <div key={item.key} className="tm-user-center-stat-card">
+                    <span className="tm-user-center-stat-label">{item.label}</span>
+                    <span className="tm-user-center-stat-value">{item.value}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="tm-user-center-feed">
-            <div className="tm-user-center-feed-meta">
-              <span>{t('assistantLibPage.records.listCount', { count: sessions.length })}</span>
-              <span>{t('assistantLibPage.records.sortByLatest')}</span>
-            </div>
-            <div className="tm-user-center-feed-body">
-              {sessions.length === 0 ? (
-                <div className="tm-user-center-empty">{t('assistantLibPage.records.empty')}</div>
-              ) : (
-                <div className="tm-user-center-feed-list">
-                  {sessions.map((session) => {
-                    const state = parseSocraticState(session.metadata)
-                    const meta = parseAssistantLibSessionMeta(session.metadata)
-                    const title =
-                      meta?.courseName?.trim() || session.title || t('assistantLibPage.defaultClassroom')
-                    const tags = collectTags(state)
-                    const chapters =
-                      state.pathNodes.length > 0
-                        ? state.pathNodes.join(' → ')
-                        : state.topic || t('assistantLibPage.records.valueEmpty')
-                    const mainContent =
-                      state.confirmedClaims[0] ||
-                      state.mastered[0] ||
-                      t('assistantLibPage.records.valueEmpty')
-                    const qaCount = session.messageCount ?? 0
-                    const testCount = state.misconceptions.length + state.stuckPoints.length
-
-                    return (
-                      <article key={session.id} className="tm-user-center-feed-card">
-                        <div className="tm-user-center-feed-card-top">
-                          <div className="tm-alib-records-card-meta">
-                            <span className="tm-user-center-feed-tag">
-                              <span className="tm-user-center-feed-tag-dot" aria-hidden="true" />
-                              {meta?.learningLabel || t('assistantLibPage.learningBadge')}
-                            </span>
-                            <span className="tm-user-center-feed-date">
-                              {formatDate(session.createdAt, dateLocale)}
-                            </span>
-                          </div>
-                          {onOpenSession ? (
-                            <button
-                              type="button"
-                              className="tm-user-center-text-btn tm-user-center-text-btn--primary"
-                              onClick={() => onOpenSession(session.id)}
-                            >
-                              {t('assistantLibPage.records.openClassroom')}
-                            </button>
-                          ) : null}
-                        </div>
-                        <h4 className="tm-user-center-feed-title">{title}</h4>
-                        <dl className="tm-alib-records-fields">
-                          <div>
-                            <dt>{t('assistantLibPage.records.fieldDate')}</dt>
-                            <dd>{formatDate(session.createdAt, dateLocale)}</dd>
-                          </div>
-                          <div>
-                            <dt>{t('assistantLibPage.records.fieldDuration')}</dt>
-                            <dd>{formatDuration(session, t)}</dd>
-                          </div>
-                          <div>
-                            <dt>{t('assistantLibPage.records.fieldChapter')}</dt>
-                            <dd>{chapters}</dd>
-                          </div>
-                          <div>
-                            <dt>{t('assistantLibPage.records.fieldMain')}</dt>
-                            <dd>{mainContent}</dd>
-                          </div>
-                          <div>
-                            <dt>{t('assistantLibPage.records.fieldQa')}</dt>
-                            <dd>{t('assistantLibPage.records.qaCount', { count: qaCount })}</dd>
-                          </div>
-                          <div>
-                            <dt>{t('assistantLibPage.records.fieldTest')}</dt>
-                            <dd>
-                              {testCount > 0
-                                ? t('assistantLibPage.records.testCount', { count: testCount })
-                                : t('assistantLibPage.records.valueEmpty')}
-                            </dd>
-                          </div>
-                          <div className="tm-alib-records-fields-span">
-                            <dt>{t('assistantLibPage.records.fieldUnderstanding')}</dt>
-                            <dd>
-                              {tags.length === 0 ? (
-                                t('assistantLibPage.records.understandingEmpty')
-                              ) : (
-                                <ul className="tm-alib-records-tag-list">
-                                  {tags.map((tag) => (
-                                    <li
-                                      key={tag.key}
-                                      className={`tm-alib-records-tag tm-alib-records-tag--${tag.tone}`}
-                                    >
-                                      {tag.label}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </dd>
-                          </div>
-                        </dl>
-                      </article>
-                    )
-                  })}
+              <section className="tm-alib-records-section">
+                <div className="tm-alib-records-section-head">
+                  <h3>{t('assistantLibPage.records.chapterList')}</h3>
+                  {onOpenSession ? (
+                    <button
+                      type="button"
+                      className="tm-user-center-text-btn tm-user-center-text-btn--primary"
+                      onClick={() => onOpenSession(session.id)}
+                    >
+                      {t('assistantLibPage.records.openClassroom')}
+                    </button>
+                  ) : null}
                 </div>
-              )}
-            </div>
-          </div>
+                {chapters.length === 0 ? (
+                  <p className="tm-alib-records-empty-hint">
+                    {t('assistantLibPage.records.chapterListEmpty')}
+                  </p>
+                ) : (
+                  <ol className="tm-alib-records-chapter-list">
+                    {chapters.map((chapter, index) => (
+                      <li key={chapter.id} className="tm-alib-records-chapter-item">
+                        <span className="tm-alib-records-chapter-index">{index + 1}</span>
+                        <span className="tm-alib-records-chapter-title">{chapter.title}</span>
+                        <span
+                          className={`tm-alib-records-chapter-status tm-alib-records-chapter-status--${chapter.status}`}
+                        >
+                          {t(`assistantLibPage.records.${chapterStatusKey(chapter.status)}`)}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+
+              <section className="tm-alib-records-section">
+                <div className="tm-alib-records-section-head">
+                  <h3>{t('assistantLibPage.records.studyList')}</h3>
+                  <span>
+                    {t('assistantLibPage.records.listCount', { count: studyRecords.length })}
+                  </span>
+                </div>
+                {studyRecords.length === 0 ? (
+                  <p className="tm-alib-records-empty-hint">
+                    {t('assistantLibPage.records.studyEmpty')}
+                  </p>
+                ) : (
+                  <div className="tm-user-center-feed-list">
+                    {studyRecords.map((record, index) => (
+                      <StudyRecordCard
+                        key={record.id}
+                        record={record}
+                        index={studyRecords.length - index}
+                        dateLocale={dateLocale}
+                        t={t}
+                        fallbackTags={index === 0 ? tags : []}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
         </div>
       </div>
     </div>
+  )
+}
+
+function StudyRecordCard({
+  record,
+  index,
+  dateLocale,
+  t,
+  fallbackTags,
+}: {
+  record: ClassroomStudyRecord
+  index: number
+  dateLocale: string
+  t: (key: string, vars?: Record<string, string | number>) => string
+  fallbackTags: Array<{ key: string; label: string; tone: string }>
+}) {
+  const end = record.endedAt ?? Date.now()
+  const tags =
+    record.mastered.length > 0 || record.stuckPoints.length > 0
+      ? [
+          ...record.mastered.map((item) => ({
+            key: `m:${item}`,
+            label: item,
+            tone: 'mastered',
+          })),
+          ...record.stuckPoints.map((item) => ({
+            key: `s:${item}`,
+            label: item,
+            tone: 'stuck',
+          })),
+        ]
+      : fallbackTags
+
+  return (
+    <article className="tm-user-center-feed-card">
+      <div className="tm-user-center-feed-card-top">
+        <div className="tm-alib-records-card-meta">
+          <span className="tm-user-center-feed-tag">
+            <span className="tm-user-center-feed-tag-dot" aria-hidden="true" />
+            {t('assistantLibPage.records.lessonIndex', { index })}
+          </span>
+          <span className="tm-user-center-feed-date">{formatDate(record.startedAt, dateLocale)}</span>
+        </div>
+      </div>
+      <h4 className="tm-user-center-feed-title">
+        {record.chapterTitle?.trim() || t('assistantLibPage.records.chapterUnspecified')}
+      </h4>
+      <ul className="tm-alib-records-meta-list">
+        <li>
+          <span>{t('assistantLibPage.records.fieldDate')}</span>
+          <span>{formatDate(record.startedAt, dateLocale)}</span>
+        </li>
+        <li>
+          <span>{t('assistantLibPage.records.fieldDuration')}</span>
+          <span>{formatDuration(record.startedAt, end, t)}</span>
+        </li>
+        <li>
+          <span>{t('assistantLibPage.records.fieldQa')}</span>
+          <span>{t('assistantLibPage.records.qaCount', { count: record.qaCount })}</span>
+        </li>
+      </ul>
+      {tags.length === 0 ? (
+        <p className="tm-alib-records-empty-hint">
+          {t('assistantLibPage.records.understandingEmpty')}
+        </p>
+      ) : (
+        <ul className="tm-alib-records-tag-list">
+          {tags.map((tag) => (
+            <li key={tag.key} className={`tm-alib-records-tag tm-alib-records-tag--${tag.tone}`}>
+              {tag.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
   )
 }

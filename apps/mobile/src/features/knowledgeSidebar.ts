@@ -27,6 +27,15 @@ export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{
   showDropzone: boolean
 }> = [
   {
+    id: 'sync',
+    label: '同步知识库',
+    hint: '与桌面同步的知识库：文档原文、切片与向量会随「立即同步」一并拉取。',
+    emptyHint: '暂无同步知识库',
+    defaultFolderId: DEFAULT_SYNC_FOLDER_ID,
+    importMode: 'file',
+    showDropzone: true,
+  },
+  {
     id: 'local',
     label: '本地知识库',
     hint: '浏览本机索引与文档；上传与向量化优先在桌面完成。',
@@ -45,26 +54,36 @@ export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{
     showDropzone: true,
   },
   {
-    id: 'sync',
-    label: '同步知识库',
-    hint: '与桌面/账户同步的知识库索引元数据。',
-    emptyHint: '暂无同步知识库',
-    defaultFolderId: DEFAULT_SYNC_FOLDER_ID,
-    importMode: 'file',
-    showDropzone: true,
-  },
-  {
     id: 'shared',
     label: '共享知识库',
     hint: '群组或他人共享的知识库副本。',
     emptyHint: '暂无共享知识库',
     defaultFolderId: null,
     importMode: 'file',
-    showDropzone: false,
+    showDropzone: true,
   },
 ]
 
 export const DEFAULT_FOLDER_LABEL = '默认文件夹'
+
+export const SYSTEM_DEFAULT_FOLDER_KB_NAMES = new Set([
+  DEFAULT_FOLDER_LABEL,
+  '默认网络文件夹',
+  '默认本地文件',
+])
+
+export function isSystemDefaultFolderName(name: string): boolean {
+  return SYSTEM_DEFAULT_FOLDER_KB_NAMES.has(name)
+}
+
+/** Desktop's built-in 默认文件夹 is shown as the virtual row, not a second synced item. */
+export function listedSyncKnowledgeItems<T extends { name: string }>(items: T[]): T[] {
+  return items.filter((item) => !isSystemDefaultFolderName(item.name))
+}
+
+export function mobileSyncKbUiId(kb: { id: string; name: string }): string {
+  return isSystemDefaultFolderName(kb.name) ? DEFAULT_SYNC_FOLDER_ID : kb.id
+}
 
 export function getKnowledgeSection(
   id: KnowledgeSidebarSection,

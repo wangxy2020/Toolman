@@ -1,3 +1,9 @@
+/**
+ * Toolman mobile
+ * Copyright (C) 2024–2026 Toolman Contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Source: https://github.com/wangxy2020/Toolman
+ */
 import { useEffect } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -63,14 +69,18 @@ const WEB_SCROLLBAR_CSS = `
   background: var(--tm-scrollbar-track);
 }
 
-/* Agent message stream: keep scroll, hide the vertical scrollbar. */
+/* Agent message stream + module sidebars: keep scroll, hide the scrollbar (match desktop). */
 .tm-agent-stream-scroll,
-.tm-agent-stream-scroll div {
+.tm-agent-stream-scroll div,
+.tm-sidebar-scroll,
+.tm-sidebar-scroll div {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
 .tm-agent-stream-scroll::-webkit-scrollbar,
-.tm-agent-stream-scroll div::-webkit-scrollbar {
+.tm-agent-stream-scroll div::-webkit-scrollbar,
+.tm-sidebar-scroll::-webkit-scrollbar,
+.tm-sidebar-scroll div::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   display: none !important;
