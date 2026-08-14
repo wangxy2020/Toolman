@@ -10,7 +10,6 @@ import { getAgentTask, listAgentTasksByAssistant, updateAgentTaskRecord } from '
 import { emitTaskResumed } from '../task-event.service'
 import { enqueueTaskRun } from './task-queue.service'
 import { isTaskResumable, normalizeInterruptedTask, resumeTaskIfNeeded } from './task-resume.service'
-import { enqueuePeriodicHeartbeatTask } from './periodic-heartbeat-task'
 
 export type TaskSchedulerTickResult = 'idle' | 'scheduled'
 
@@ -92,33 +91,6 @@ export function runTaskSchedulerTick(options: {
     if (scheduleTaskIfNeeded(task.id)) {
       return 'scheduled'
     }
-  }
-
-  return 'idle'
-}
-
-export function runTaskSchedulerTickWithPeriodic(options: {
-  assistantId: string
-  workspaceId: string
-  sessionId: string
-  sessionMetadata?: Record<string, unknown>
-}): TaskSchedulerTickResult {
-  const tick = runTaskSchedulerTick({
-    assistantId: options.assistantId,
-    sessionMetadata: options.sessionMetadata,
-  })
-  if (tick === 'scheduled') {
-    return tick
-  }
-
-  if (
-    enqueuePeriodicHeartbeatTask({
-      workspaceId: options.workspaceId,
-      assistantId: options.assistantId,
-      sessionId: options.sessionId,
-    })
-  ) {
-    return 'scheduled'
   }
 
   return 'idle'

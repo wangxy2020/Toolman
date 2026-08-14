@@ -5,7 +5,6 @@ export {
   removeP2pKnowledgeDocuments,
   unshareP2pKnowledge,
   setP2pKnowledgeDocumentPermission,
-  listP2pSharedResources,
   maybeSyncSharedKnowledgeDocument,
 } from './knowledge-sync-share.service'
 

@@ -10,19 +10,13 @@ import { AuthLoginError, readAuthServiceErrorMessage } from './auth-login.error.
 import {
   getDevSmsHint,
   issueSmsChallenge,
-  verifySmsChallenge,
 } from './auth-sms-challenge.service.js'
 import { getAuthingClient } from './authing-client.service.js'
 import { getAuthingConfig, getAuthingOtpTtlSeconds, isAuthingConfigured, isAuthingDevMode } from './authing-auth.config.js'
 import { formatAuthingServiceError } from './authing-error-utils.js'
-import {
-  formatAuthingOtpVerifyError,
-  formatAuthingRegisterExistsMessage,
-} from './authing-otp-error-utils.js'
 import { ensureAuthingOtpTemplateTtl } from './authing-otp-template.service.js'
 import {
   assertAuthingRegisterAccountAvailable,
-  checkAuthingUserExists,
 } from './authing-user-exists.service.js'
 import {
   maskCnAuthAccount,
@@ -30,7 +24,7 @@ import {
   type CnAuthAccountChannel,
   type ParsedCnAuthAccount,
 } from './cn-account-utils.js'
-import { sendPhoneSmsCode, verifyPhoneSmsLogin, type TencentPhoneAuthResult } from './tencent-phone-auth.service.js'
+import { sendPhoneSmsCode } from './tencent-phone-auth.service.js'
 
 function getOtpTtlSeconds(): number {
   return getAuthingOtpTtlSeconds(OTP_CODE_TTL_SECONDS)
@@ -47,21 +41,6 @@ function buildOtpSendResult(
     retryAfterSeconds,
     expiresInSeconds: getOtpTtlSeconds(),
   }
-}
-
-function formatVerifyError(
-  account: ParsedCnAuthAccount,
-  intent: 'login' | 'register',
-  error: unknown,
-  accountExists: boolean,
-): string {
-  if (intent === 'register' && accountExists) {
-    return formatAuthingRegisterExistsMessage(account.channel)
-  }
-
-  const message = readAuthServiceErrorMessage(error)
-  const formatted = formatAuthingOtpVerifyError(message, getOtpTtlSeconds() / 60)
-  return formatAuthingServiceError(formatted, formatted)
 }
 
 type AuthenticationClientLike = ReturnType<typeof getAuthingClient> & {
@@ -197,89 +176,4 @@ export async function sendCnVerificationCode(input: AuthSendSmsCodeInput): Promi
     maskedAccount: result.maskedAccount ?? result.maskedPhone ?? maskCnAuthAccount(account),
     expiresInSeconds: getOtpTtlSeconds(),
   }))
-}
-
-async function authenticateAuthingOtp(
-  account: ParsedCnAuthAccount,
-  code: string,
-  intent: 'login' | 'register',
-) {
-  const client = getAuthingClient()
-
-  if (account.channel !== 'phone' || !account.phone) {
-    throw new AuthLoginError('当前仅支持手机号验证码登录')
-  }
-
-  const digits = phoneDigits(account.phone)
-  const countryCode = phoneCountryCode(account.phone)
-  if (intent === 'register') {
-    return client.registerByPhoneCode(digits, code, undefined, undefined, {
-      phoneCountryCode: countryCode,
-      generateToken: true,
-    })
-  }
-  return client.loginByPhoneCode(digits, code, { phoneCountryCode: countryCode })
-}
-
-export async function verifyCnVerificationLogin(
-  accountInput: string,
-  codeInput: string,
-  intent: 'login' | 'register' = 'login',
-): Promise<TencentPhoneAuthResult & { channel: ParsedCnAuthAccount['channel'] }> {
-  const account = parseCnAuthAccount(accountInput)
-  const code = codeInput.trim()
-  if (!/^\d{4,8}$/.test(code)) {
-    throw new AuthLoginError('请输入有效验证码')
-  }
-
-  if (account.channel === 'email') {
-    throw new AuthLoginError('邮箱登录请使用密码')
-  }
-
-  if (isAuthingConfigured() && !isAuthingDevMode()) {
-    try {
-      await assertAuthingRegisterAccountAvailable(account, intent)
-      const user = await authenticateAuthingOtp(account, code, intent)
-
-      const token = user.token
-      if (!token) {
-        throw new AuthLoginError('Authing 登录未返回 token')
-      }
-
-      const label = maskCnAuthAccount(account)
-
-      return {
-        channel: 'phone',
-        phone: account.phone ?? account.normalized,
-        subjectId: user.id,
-        sessionToken: token,
-        label,
-      }
-    } catch (error) {
-      if (error instanceof AuthLoginError) {
-        throw error
-      }
-
-      const accountExists = await checkAuthingUserExists(account)
-      if (intent === 'register' && accountExists) {
-        throw new AuthLoginError(formatAuthingRegisterExistsMessage(account.channel))
-      }
-
-      throw new AuthLoginError(formatVerifyError(account, intent, error, accountExists))
-    }
-  }
-
-  if (isAuthingDevMode()) {
-    verifySmsChallenge(account.normalized, code)
-    return {
-      channel: 'phone',
-      phone: account.normalized,
-      subjectId: account.normalized,
-      sessionToken: account.normalized,
-      label: maskCnAuthAccount(account),
-    }
-  }
-
-  const phoneResult = verifyPhoneSmsLogin(account.phone ?? account.normalized, code)
-  return { ...phoneResult, channel: 'phone' }
 }

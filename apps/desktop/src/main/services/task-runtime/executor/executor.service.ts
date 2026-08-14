@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import {
   TaskExecuteInputSchema,
+  TASK_RETRY_DELAY_MS,
   isTaskBudgetExhausted,
   isTaskToolStepRecord,
   parseTaskToolStepInput,
@@ -220,6 +221,23 @@ function resumeExecutingIfNeeded(task: AgentTask): AgentTask {
   return task
 }
 
+async function delayExecutorRetry(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    throw new ExecutorError('任务执行已取消', 'INVALID_STATE')
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, TASK_RETRY_DELAY_MS)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new ExecutorError('任务执行已取消', 'INVALID_STATE'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 function shouldRunStageGate(task: AgentTask, options: TaskExecutorOptions): boolean {
   if (options.reflectAfterStep === false) return false
   if (options.reflectAfterStep === 'each') return true
@@ -321,6 +339,7 @@ export async function runTaskExecutor(input: unknown, options: TaskExecutorOptio
         }
 
         currentTask = resumeExecutingIfNeeded(currentTask)
+        await delayExecutorRetry(options.signal)
       }
     }
   } finally {

@@ -28,7 +28,6 @@ export const groupPageCoreZhCN = {
     unknownNotebook: '未知笔记本',
     unknownMember: '未知成员',
     memberSelf: '我',
-    comingSoon: '{{title}} · 即将推出',
     types: {
       knowledge: '知识库',
       notes: '笔记',

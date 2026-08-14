@@ -126,6 +126,7 @@ function migrateAccount(raw: Record<string, unknown>): MobileAuthAccountRecord |
         : typeof raw.phone === 'string'
           ? raw.phone
           : null,
+    wechatBound: raw.wechatBound === true,
     passwordHash,
     salt,
     region: raw.region === 'intl' ? 'intl' : 'cn',
@@ -198,6 +199,7 @@ function toSession(account: MobileAuthAccountRecord, accessToken: string): Mobil
     displayName: account.displayName,
     email: account.accountKind === 'email' ? account.email : account.phone ?? account.accountKey,
     phone: account.phone,
+    wechatBound: Boolean(account.wechatBound),
     accountKind: account.accountKind,
     accessToken,
     region: account.region,
@@ -257,6 +259,7 @@ export async function establishExternalSession(input: {
       accountKind,
       email: email || prev.email,
       phone: phone || prev.phone,
+      wechatBound: prev.wechatBound,
       region: input.region,
       updatedAt: now,
     }
@@ -268,6 +271,7 @@ export async function establishExternalSession(input: {
       accountKind,
       email,
       phone,
+      wechatBound: false,
       passwordHash: OAUTH_PASSWORD_MARKER,
       salt: input.provider,
       region: input.region,
@@ -337,6 +341,7 @@ export async function registerWithAccount(input: {
     accountKind: parsed.accountKind,
     email: parsed.email,
     phone: parsed.phone,
+    wechatBound: false,
     passwordHash,
     salt,
     region: input.region,
@@ -354,21 +359,6 @@ export async function registerWithAccount(input: {
   })
   await persistSessionCredentials(session)
   return { ok: true, session }
-}
-
-/** @deprecated Prefer registerWithAccount */
-export async function registerWithEmail(input: {
-  email: string
-  password: string
-  displayName: string
-  region: AuthRegion
-}): Promise<AuthResult> {
-  return registerWithAccount({
-    account: input.email,
-    password: input.password,
-    displayName: input.displayName,
-    region: input.region,
-  })
 }
 
 export async function loginWithAccount(input: {
@@ -397,15 +387,6 @@ export async function loginWithAccount(input: {
   await saveAuthStore({ accounts, session })
   await persistSessionCredentials(session)
   return { ok: true, session }
-}
-
-/** @deprecated Prefer loginWithAccount */
-export async function loginWithEmail(input: {
-  email: string
-  password: string
-}): Promise<AuthResult> {
-  const region: AuthRegion = input.email.includes('@') ? 'intl' : 'cn'
-  return loginWithAccount({ account: input.email, password: input.password, region })
 }
 
 /** Keep sync credentials in sync with the auth session. */
@@ -495,18 +476,6 @@ export async function resetPasswordWithAccount(input: {
   return { ok: true }
 }
 
-/** @deprecated Prefer resetPasswordWithAccount */
-export async function resetPasswordWithEmail(input: {
-  email: string
-  newPassword: string
-}): Promise<{ ok: true } | { ok: false; message: string }> {
-  return resetPasswordWithAccount({
-    account: input.email,
-    newPassword: input.newPassword,
-    region: input.email.includes('@') ? 'intl' : 'cn',
-  })
-}
-
 export async function deleteAccount(input: {
   identityId: string
   password: string
@@ -573,6 +542,39 @@ export async function updateDisplayName(input: {
   const accounts = [...store.accounts]
   accounts[idx] = account
   const session = { ...store.session, displayName: name }
+  await saveAuthStore({ accounts, session })
+  await persistSessionCredentials(session)
+  return { ok: true, session }
+}
+
+export async function bindPhoneToAccount(input: {
+  identityId: string
+  phone: string
+}): Promise<AuthResult> {
+  const parsed = parseAccountInput(input.phone, 'cn')
+  if (!parsed.ok) return parsed
+  if (parsed.accountKind !== 'phone' || !parsed.phone) {
+    return { ok: false, message: '请输入有效的 11 位手机号' }
+  }
+  const store = await loadAuthStore()
+  const idx = store.accounts.findIndex((a) => a.identityId === input.identityId)
+  if (idx < 0 || !store.session || store.session.identityId !== input.identityId) {
+    return { ok: false, message: '请先登录' }
+  }
+  const taken = store.accounts.some(
+    (item, i) => i !== idx && item.phone === parsed.phone,
+  )
+  if (taken) {
+    return { ok: false, message: '该手机号已绑定其他账户' }
+  }
+  const account: MobileAuthAccountRecord = {
+    ...store.accounts[idx]!,
+    phone: parsed.phone,
+    updatedAt: Date.now(),
+  }
+  const accounts = [...store.accounts]
+  accounts[idx] = account
+  const session = toSession(account, store.session.accessToken)
   await saveAuthStore({ accounts, session })
   await persistSessionCredentials(session)
   return { ok: true, session }

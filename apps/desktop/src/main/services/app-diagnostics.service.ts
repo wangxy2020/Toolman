@@ -4,9 +4,13 @@ import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ingestJobs, messages } from '@toolman/db'
-import {AppGetDiagnosticsOutputSchema,
+import {
+  AppDiagnosticsMobileSyncSchema,
+  AppGetDiagnosticsOutputSchema,
+  DEFAULT_MOBILE_SYNC_DIAGNOSTICS,
   summarizeIceServers,
-  type AppGetDiagnosticsOutput } from '@toolman/shared'
+  type AppGetDiagnosticsOutput,
+} from '@toolman/shared'
 import { getDatabase } from '../bootstrap/database'
 import { getCommunityHubStatus } from './community/community-bridge.service'
 import { getHubHealth } from './community/community-ipc.facade'
@@ -233,23 +237,19 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
 
   const communityYjs = getCommunityYjsStatus()
   const communityCid = getCommunityCidProviderStatus()
-  let mobileSync = {
-    syncEnabled: false,
-    agentHostEnabled: false,
-    hubRunning: false,
-    hubBaseUrl: null as string | null,
-    lastError: null as string | null,
-  }
+  let mobileSync = { ...DEFAULT_MOBILE_SYNC_DIAGNOSTICS }
   try {
     const { getMobileSyncDiagnostics } = await import('./mobile-sync-runtime.service')
     const diagnostics = getMobileSyncDiagnostics()
-    mobileSync = {
+    mobileSync = AppDiagnosticsMobileSyncSchema.parse({
       syncEnabled: diagnostics.syncEnabled,
       agentHostEnabled: diagnostics.agentHostEnabled,
+      classroomSyncEnabled: diagnostics.classroomSyncEnabled,
       hubRunning: diagnostics.hubRunning,
       hubBaseUrl: diagnostics.hubBaseUrl,
+      advertisedUrls: diagnostics.advertisedUrls ?? [],
       lastError: diagnostics.lastError ?? null,
-    }
+    })
   } catch (error) {
     mobileSync = {
       ...mobileSync,

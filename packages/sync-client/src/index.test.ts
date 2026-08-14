@@ -34,7 +34,29 @@ describe('ToolmanSyncClient', () => {
     expect(calls[0]?.url).toBe('https://hub.example/api/v1/sync/push')
   })
 
-  it('rewrites unbound fetch / connection errors into a hub hint', async () => {
+  it('unwraps community hub { ok, data } envelopes', async () => {
+    const client = new ToolmanSyncClient({
+      baseUrl: 'https://hub.example',
+      getAccessToken: async () => null,
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { accepted: 2, rejected: [], serverTime: 9 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )) as typeof fetch,
+    })
+
+    const out = await client.push({
+      deviceId: 'd1',
+      cursor: null,
+      changes: [],
+    })
+    expect(out.accepted).toBe(2)
+  })
+
+  it('rewrites unbound fetch / connection errors into a Sync Hub hint', async () => {
     const client = new ToolmanSyncClient({
       baseUrl: 'http://127.0.0.1:17890',
       getAccessToken: async () => null,
@@ -44,7 +66,7 @@ describe('ToolmanSyncClient', () => {
     })
 
     await expect(client.pull({ deviceId: 'd1', cursor: null, limit: 100 })).rejects.toThrow(
-      /无法连接桌面同步服务/,
+      /无法连接同步服务/,
     )
   })
 

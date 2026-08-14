@@ -1,5 +1,5 @@
 import type { ContentBlock } from '@toolman/shared'
-import { getBlobStoragePath, writeBlobFromPath } from '../blob.service'
+import { writeBlobFromPath } from '../blob.service'
 import { stageAttachmentPath } from '../chat-attachment-stage.service'
 import type { ParsedChatImage } from './helpers'
 
@@ -14,22 +14,6 @@ export function parseChatImageAttachment(path: string): ParsedChatImage {
     blobHash: staged.blobHash,
     mimeType: staged.mimeType,
   }
-}
-
-export function contentBlocksNeedStaging(blocks: ContentBlock[]): boolean {
-  return blocks.some(
-    (block) =>
-      (block.type === 'file' && !block.blobHash?.trim()) ||
-      (block.type === 'image' && !block.blobHash?.trim()),
-  )
-}
-
-export function contentBlocksNeedResolution(blocks: ContentBlock[]): boolean {
-  return blocks.some(
-    (block) =>
-      (block.type === 'file' && !block.content?.trim()) ||
-      (block.type === 'image' && !block.blobHash?.trim()),
-  )
 }
 
 /** 将附件复制到应用本地存储（快速），避免依赖工作区外原始路径 */
@@ -81,5 +65,3 @@ export async function stageUserContentBlocks(blocks: ContentBlock[]): Promise<Co
 
   return staged
 }
-
-export { getBlobStoragePath }

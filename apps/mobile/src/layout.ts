@@ -3,9 +3,12 @@ import { useWindowDimensions } from 'react-native'
 /** Shortest edge ≥ 600 ≈ iPad / large tablets (portrait or landscape). */
 export const TABLET_SHORTEST_EDGE = 600
 
+/** Match desktop `--tm-sidebar-width` (module sidebar and settings nav). */
+export const SIDEBAR_WIDTH = 200
+
 export type SidebarLayout = {
   isTablet: boolean
-  /** Agent / notes left column width. */
+  /** Agent / notes / settings left column width. */
   sidebarWidth: number
   /** “新建话题” and topic row shared touch height. */
   rowMinHeight: number
@@ -20,9 +23,7 @@ export function getSidebarLayout(width: number, height: number): SidebarLayout {
   const isTablet = shortest >= TABLET_SHORTEST_EDGE
   return {
     isTablet,
-    // Phone: a bit wider than desktop 200 so swipe actions fit.
-    // iPad: ~280–300 keeps titles readable without eating the chat pane.
-    sidebarWidth: isTablet ? 288 : 228,
+    sidebarWidth: SIDEBAR_WIDTH,
     // Top module capsule ≈ track padding (3+3) + nav chip minHeight 32 → ~38.
     // Sidebar rows must not exceed that outer frame.
     rowMinHeight: 34,

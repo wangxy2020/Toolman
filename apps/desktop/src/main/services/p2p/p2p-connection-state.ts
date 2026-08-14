@@ -1,16 +1,20 @@
 import type { P2pConnectionInfo, P2pConnectionMode, P2pConnectionState } from '@toolman/shared'
+import { P2pConnectionModeSchema, P2pConnectionStateSchema } from '@toolman/shared'
 import type { NativeConnectionInfo } from './p2p-bridge'
 
-const KNOWN_STATES = new Set<P2pConnectionState>([
-  'idle',
-  'signaling',
-  'connecting',
-  'connected',
-  'reconnecting',
-  'closed',
-])
+export function parseNativeConnectionState(
+  state: string,
+  fallback: P2pConnectionState = 'idle',
+): P2pConnectionState {
+  const parsed = P2pConnectionStateSchema.safeParse(state)
+  return parsed.success ? parsed.data : fallback
+}
 
-const KNOWN_MODES = new Set<P2pConnectionMode>(['lan', 'wan'])
+export function parseNativeConnectionMode(mode: string | undefined): P2pConnectionMode | undefined {
+  if (!mode) return undefined
+  const parsed = P2pConnectionModeSchema.safeParse(mode)
+  return parsed.success ? parsed.data : undefined
+}
 
 export const knownConnections = new Map<string, P2pConnectionInfo>()
 export const peerConnectionModes = new Map<string, P2pConnectionMode>()
@@ -19,12 +23,8 @@ export const reconnectAttempts = new Map<string, number>()
 export const iceRestartInFlight = new Set<string>()
 
 export function mapNativeConnection(connection: NativeConnectionInfo): P2pConnectionInfo {
-  const state = KNOWN_STATES.has(connection.state as P2pConnectionState)
-    ? (connection.state as P2pConnectionState)
-    : 'idle'
-  const connectionMode = KNOWN_MODES.has(connection.connectionMode as P2pConnectionMode)
-    ? (connection.connectionMode as P2pConnectionMode)
-    : undefined
+  const state = parseNativeConnectionState(connection.state)
+  const connectionMode = parseNativeConnectionMode(connection.connectionMode)
 
   if (connectionMode) {
     peerConnectionModes.set(connection.peerDeviceId, connectionMode)
@@ -52,5 +52,3 @@ export function getKnownP2pConnections(): P2pConnectionInfo[] {
 export function isPeerConnected(peerDeviceId: string): boolean {
   return knownConnections.get(peerDeviceId)?.state === 'connected'
 }
-
-export const KNOWN_CONNECTION_STATES = KNOWN_STATES

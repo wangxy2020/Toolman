@@ -71,7 +71,3 @@ export async function saveKnowledgeSnapshot(snapshot: KnowledgeSnapshot): Promis
     if (Platform.OS !== 'web') return
   }
 }
-
-export function getCachedKnowledgeSnapshot(): KnowledgeSnapshot | null {
-  return memorySnapshot
-}

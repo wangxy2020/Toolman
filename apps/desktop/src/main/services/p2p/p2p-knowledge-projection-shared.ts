@@ -1,7 +1,7 @@
 import { logStructured } from '../structured-log.service'
 import type { WorkspaceEvent } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
-import { listWorkspaceEventsSince } from './p2p-event.service'
+import { iterateWorkspaceEventPages } from './p2p-event.service'
 import { parseKnowledgeDocumentPermissionsFromPayload } from './p2p-knowledge-share-metadata'
 import { stripGroupPrefixedName } from './p2p-group-resource-naming'
 import { getActiveWorkspaceMember } from './p2p-permission.guard'
@@ -17,13 +17,8 @@ import { projectKnowledgeDeletedEvent } from './p2p-knowledge-projection-deleted
 export function reconcileKnowledgeSharedResources(workspaceId: string): void {
   const terminalByKb = new Map<string, WorkspaceEvent>()
 
-  let sinceSeq = 0
-  while (true) {
-    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
-    if (batch.length === 0) break
-
+  iterateWorkspaceEventPages(workspaceId, (batch) => {
     for (const event of batch) {
-      sinceSeq = event.seq
       if (event.resourceType !== 'Knowledge') continue
       if (
         event.eventType !== 'Shared' &&
@@ -36,9 +31,7 @@ export function reconcileKnowledgeSharedResources(workspaceId: string): void {
       const kbId = readPayloadString(event.payload, 'kb_id') ?? event.resourceId
       terminalByKb.set(kbId, event)
     }
-
-    if (batch.length < 200) break
-  }
+  })
 
   for (const event of terminalByKb.values()) {
     try {

@@ -1,9 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
 import { ChatComposer } from './ChatComposer'
 import { ChatHeader } from './ChatHeader'
 import { MessageSettingsPanel } from './MessageSettingsPanel'
-import { AgentTasksMenu } from './tasks/AgentTasksMenu'
-import { countActiveAgentTasks } from './tasks/task-panel-utils'
 import { getMessageText } from './message-utils'
 import type { ChatPageState } from './useChatPage'
 
@@ -14,7 +11,6 @@ type ChatPageAgentViewProps = Pick<
   | 'activeAssistant'
   | 'workspace'
   | 'chat'
-  | 'agentTaskPanel'
   | 'headerModelIds'
   | 'handleModelChange'
   | 'handleSelectWorkspaceFolder'
@@ -50,7 +46,6 @@ export function ChatPageAgentView({
   activeAssistant,
   workspace,
   chat,
-  agentTaskPanel,
   headerModelIds,
   handleModelChange,
   handleSelectWorkspaceFolder,
@@ -79,21 +74,6 @@ export function ChatPageAgentView({
   resetSettings,
   setShowMessageSettings,
 }: ChatPageAgentViewProps) {
-  const [tasksMenuOpen, setTasksMenuOpen] = useState(false)
-  const tasksButtonRef = useRef<HTMLButtonElement>(null)
-  const activeTaskCount = useMemo(
-    () => countActiveAgentTasks(agentTaskPanel.tasks),
-    [agentTaskPanel.tasks],
-  )
-
-  const handleTaskMenuReload = useCallback(() => {
-    void agentTaskPanel.reload()
-  }, [agentTaskPanel])
-
-  const handleTaskMenuSilentReload = useCallback(() => {
-    void agentTaskPanel.reload({ silent: true })
-  }, [agentTaskPanel])
-
   return (
     <>
       <main
@@ -119,33 +99,6 @@ export function ChatPageAgentView({
           hasConfiguredProvider={chat.hasConfiguredProvider}
           onOpenSettings={() => handleOpenSettings('model-service')}
           groupProxyMode={groupProxyMode}
-          agentTasksMenu={{
-            open: tasksMenuOpen,
-            buttonRef: tasksButtonRef,
-            activeCount: activeTaskCount,
-            onToggle: () => setTasksMenuOpen((open) => !open),
-          }}
-        />
-
-        <AgentTasksMenu
-          open={tasksMenuOpen}
-          anchorRef={tasksButtonRef}
-          tasks={agentTaskPanel.tasks}
-          loading={agentTaskPanel.loading}
-          error={agentTaskPanel.error}
-          selectedTaskId={agentTaskPanel.selectedTaskId}
-          selectedTask={agentTaskPanel.selectedTask}
-          sessionActiveTaskId={chat.sessionActiveTaskId}
-          controllingTaskId={agentTaskPanel.controllingTaskId}
-          controlTask={agentTaskPanel.controlTask}
-          onSelectTask={agentTaskPanel.onSelectTask}
-          onPauseTask={agentTaskPanel.onPauseTask}
-          onResumeTask={agentTaskPanel.onResumeTask}
-          onCancelTask={agentTaskPanel.onCancelTask}
-          onReload={handleTaskMenuReload}
-          onSilentReload={handleTaskMenuSilentReload}
-          latestMessageTaskId={agentTaskPanel.latestMessageTaskId}
-          onClose={() => setTasksMenuOpen(false)}
         />
 
         {chat.error && (

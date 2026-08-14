@@ -1,5 +1,6 @@
 import type { AgentTask } from '@toolman/shared'
 
+import { fireAndForget } from '../../../lib/fire-and-forget'
 import { logStructured } from '../../structured-log.service'
 import type { TaskOrchestratorOptions } from '../orchestrator/orchestrator.service'
 import {
@@ -36,11 +37,11 @@ export function scheduleTaskRun(
   })
 
   pendingRuns.set(taskId, promise)
-  promise.finally(() => {
+  void promise.finally(() => {
     pendingRuns.delete(taskId)
   })
 
-  void drainTaskQueue()
+  fireAndForget('task-runtime', drainTaskQueue())
   return promise
 }
 
@@ -90,7 +91,7 @@ async function drainTaskQueue(): Promise<void> {
   } finally {
     draining = false
     if (queue.length > 0) {
-      void drainTaskQueue()
+      fireAndForget('task-runtime', drainTaskQueue())
     }
   }
 }

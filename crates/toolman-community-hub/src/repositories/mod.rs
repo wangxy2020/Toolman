@@ -1,6 +1,7 @@
 pub mod comment_repository;
 pub mod device_blacklist_repository;
 pub mod device_presence_repository;
+pub mod device_sync_repository;
 pub mod dislike_repository;
 pub mod favorite_repository;
 pub mod fetch_log_repository;
@@ -29,6 +30,10 @@ pub use device_blacklist_repository::{
 pub use device_presence_repository::{
     DeviceKind, DevicePresenceRecord, DevicePresenceRepository, DevicePresenceRepositoryError,
     UpsertDevicePresenceInput, DEVICE_ONLINE_TTL_MS,
+};
+pub use device_sync_repository::{
+    DeviceSyncChangeRecord, DeviceSyncRepository, DeviceSyncRepositoryError,
+    UpsertDeviceSyncChangeInput,
 };
 pub use dislike_repository::{
     CreateDislikeInput, DislikeRepository, DislikeRepositoryError,

@@ -17,8 +17,6 @@ export function AgentSettingsModalSecondaryTabs({ state }: { state: AgentSetting
     permissionMode,
     setPermissionMode,
     autonomousMode,
-    longTaskMode,
-    setLongTaskMode,
     toolStates,
     setToolStates,
     mcpServerIds,
@@ -73,15 +71,9 @@ export function AgentSettingsModalSecondaryTabs({ state }: { state: AgentSetting
       <AgentSettingsPermissionTab
         value={permissionMode}
         autonomousMode={autonomousMode}
-        longTaskMode={longTaskMode}
         onChange={(mode) => {
           setPermissionMode(mode)
-          setLongTaskMode(false)
           void save({ parameters: { ...getParameters(), permissionMode: mode, longTaskMode: false } })
-        }}
-        onLongTaskModeChange={() => {
-          setLongTaskMode(true)
-          void save({ parameters: { ...getParameters(), longTaskMode: true } })
         }}
       />
     )

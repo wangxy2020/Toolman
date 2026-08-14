@@ -10,8 +10,10 @@ import { useCrashReportUpload } from './useCrashReportUpload'
 const EMPTY_MOBILE_SYNC: AppDiagnosticsMobileSync = {
   syncEnabled: false,
   agentHostEnabled: false,
+  classroomSyncEnabled: false,
   hubRunning: false,
   hubBaseUrl: null,
+  advertisedUrls: [],
   lastError: null,
 }
 

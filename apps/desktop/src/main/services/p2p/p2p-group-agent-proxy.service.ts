@@ -12,9 +12,7 @@ export { openP2pGroupAgentSession } from './p2p-group-agent-proxy-open-session'
 export { replaceProxySessionMessages } from './p2p-group-agent-proxy-messages'
 
 export {
-  parseAgentSharePermissionForSession,
   syncGroupProxyAssistantModels,
   cleanupLocalProxySessionsForResource,
   syncLocalProxySessionPermissions,
-  toIpcSessionFromId,
 } from './p2p-group-agent-proxy-maintenance'

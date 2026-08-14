@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import Svg, { Polyline } from 'react-native-svg'
+import { stripSocraticMachineBlocks } from '@toolman/shared'
 import { streamChatCompletion } from '../chat/streamChat'
 import { translateWithChatModel } from '../chat/translateWithModel'
 import { invokeDesktopAgent } from '../host/invokeDesktop'
@@ -16,7 +17,7 @@ import {
   IconTranslate,
   IconTrashMsg,
 } from '../icons/composer-icons'
-import { createMobileSyncClient } from '../sync/mobileSync'
+import { createReachableMobileSyncClient } from '../sync/mobileSync'
 import { resolveAgentChatScope, type AgentChatScope } from '../chat/agentScopes'
 import { useMobileApp, type ChatMessage, type ChatSession } from '../state/MobileAppContext'
 import type { ModulePrefs } from '../settings/prefs'
@@ -272,9 +273,14 @@ export function AgentRightPane() {
     setNotes,
     notes,
     notebooks,
+    classroomCourses,
   } = useMobileApp()
   const agentScope = resolveAgentChatScope(module)
-  const scopedSessions = sessions.filter((item) => item.agentScope === agentScope)
+  const courseIds = new Set(classroomCourses.map((course) => course.id))
+  const scopedSessions =
+    agentScope === 'classroom'
+      ? sessions.filter((item) => item.agentScope === 'classroom' && courseIds.has(item.id))
+      : sessions.filter((item) => item.agentScope === agentScope)
   const session =
     scopedSessions.find((item) => item.id === activeSessionId) ?? scopedSessions[0] ?? null
   const [input, setInput] = useState('')
@@ -360,12 +366,13 @@ export function AgentRightPane() {
     scrollStreamToEnd(false)
   }, [session?.id, session?.messages.length, lastMessage?.content, busy])
 
-  const ensureSession = (): ChatSession => {
+  const ensureSession = (): ChatSession | null => {
     if (activeSessionId) {
       const existing = scopedSessions.find((item) => item.id === activeSessionId)
       if (existing) return existing
     }
     if (scopedSessions[0]) return scopedSessions[0]
+    if (agentScope === 'classroom') return null
     const created: ChatSession = {
       id: newId('sess'),
       title: '新话题',
@@ -423,7 +430,21 @@ export function AgentRightPane() {
 
     await streamChatCompletion({
       config: modelConfig,
-      messages: historyForApi,
+      messages: (() => {
+        const prompt = [
+          modulePrefs.agent.systemPrompt.trim(),
+          modulePrefs.app.memoryEnabled
+            ? modulePrefs.app.language === 'en'
+              ? `Long-term memory is enabled (retention ${modulePrefs.app.memoryRetentionDays} days). Remember the user's preferences and keep replies consistent across sessions.`
+              : `长期记忆已启用（保留 ${modulePrefs.app.memoryRetentionDays} 天）。请记住用户跨会话的偏好与约定，并在回复中保持一致。`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+        return prompt
+          ? [{ role: 'system', content: prompt }, ...historyForApi]
+          : historyForApi
+      })(),
       signal: controller.signal,
       handlers: {
         onDelta: appendDelta,
@@ -444,7 +465,7 @@ export function AgentRightPane() {
       desktopHostsOnline > 0
     ) {
       try {
-        const client = createMobileSyncClient()
+        const client = await createReachableMobileSyncClient()
         const hosts = await client.listHosts()
         const host = hosts.find((item) => item.agentHost && item.deviceKind === 'desktop')
         if (host) {
@@ -478,6 +499,10 @@ export function AgentRightPane() {
     // Unlock in the same user gesture so auto-speak can play after the stream ends.
     unlockAudioPlayback()
     const base = ensureSession()
+    if (!base) {
+      setError('请先在侧栏选择一门课程')
+      return
+    }
     setInput('')
     setError(null)
     setBusy(true)
@@ -678,7 +703,7 @@ export function AgentRightPane() {
   }
 
   const saveToNote = (msg: ChatMessage) => {
-    const body = msg.content.trim()
+    const body = stripSocraticMachineBlocks(msg.content)
     if (!body) return
     const notebookId =
       notebooks.find((item) => item.isDefault)?.id ?? notebooks[0]?.id ?? 'notebook-default'
@@ -816,7 +841,9 @@ export function AgentRightPane() {
       >
         {!session || session.messages.length === 0 ? (
           <Text style={shellStyles.emptyHint}>
-            在下方输入问题开始对话。可先点击「Toolman」配置 API，或新建左侧会话。对话会保存在本机。
+            {agentScope === 'classroom'
+              ? '在下方提问开始上课。'
+              : '在下方输入问题开始对话。可先点击「Toolman」配置 API，或新建左侧会话。对话会保存在本机。'}
           </Text>
         ) : (
           session.messages.map((msg) => {
@@ -879,7 +906,10 @@ export function AgentRightPane() {
                   <Text style={styles.bubbleTime}>{formatMessageTime(msg.createdAt)}</Text>
                 </View>
                 {msg.content ? (
-                  <MessageMarkdown text={msg.content} align={isUser ? 'right' : 'left'} />
+                  <MessageMarkdown
+                    text={stripSocraticMachineBlocks(msg.content)}
+                    align={isUser ? 'right' : 'left'}
+                  />
                 ) : streamingThis ? (
                   <ThinkingHeartbeat />
                 ) : null}
@@ -920,19 +950,23 @@ export function AgentRightPane() {
         onToggleDesktopHost={() => patchToolbar({ useDesktopHost: !useDesktopHost })}
         paddingLeft={STREAM_PAD_SIDE}
         paddingRight={STREAM_PAD_SIDE}
-        onNewTopic={() => {
-          const created: ChatSession = {
-            id: newId('sess'),
-            title: '新话题',
-            updatedAt: Date.now(),
-            messages: [],
-            agentScope,
-          }
-          upsertSession(created)
-          setActiveSessionId(created.id)
-          setInput('')
-          setError(null)
-        }}
+        onNewTopic={
+          agentScope === 'classroom'
+            ? undefined
+            : () => {
+                const created: ChatSession = {
+                  id: newId('sess'),
+                  title: '新话题',
+                  updatedAt: Date.now(),
+                  messages: [],
+                  agentScope,
+                }
+                upsertSession(created)
+                setActiveSessionId(created.id)
+                setInput('')
+                setError(null)
+              }
+        }
         onClear={() => setInput('')}
       />
 

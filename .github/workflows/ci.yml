@@ -94,7 +94,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared + sync-client
-        run: pnpm --filter @toolman/shared --filter @toolman/sync-client build
+        run: pnpm --filter @toolman/shared build && pnpm --filter @toolman/sync-client build
 
       - name: Mobile typecheck
         run: pnpm --filter @toolman/mobile typecheck

@@ -1,14 +1,8 @@
 import { logStructured } from '../structured-log.service'
-import type { P2pSharedResource } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
 import { getKnowledgeBaseRepository } from '../../db/repos'
-import { listP2pSharedResourcesForWorkspace } from './p2p-shared-resource-list.service'
 import { syncP2pKnowledgeDocument } from './knowledge-sync-document.service'
 import { getSharedResourceRepo } from './knowledge-sync-shared-resource'
-
-export function listP2pSharedResources(rawInput: unknown): { resources: P2pSharedResource[] } {
-  return listP2pSharedResourcesForWorkspace(rawInput)
-}
 
 export async function maybeSyncSharedKnowledgeDocument(
   sourceWorkspaceId: string,

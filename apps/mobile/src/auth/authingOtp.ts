@@ -188,9 +188,29 @@ export async function sendAuthingVerificationCode(
   }
 }
 
-/** @deprecated Prefer sendAuthingVerificationCode(account, 'register') */
-export async function sendRegisterVerificationCode(accountRaw: string): Promise<SendRegisterCodeResult> {
-  return sendAuthingVerificationCode(accountRaw, 'register')
+export async function verifyAuthingPhoneCode(
+  phoneRaw: string,
+  code: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const parsed = parseAccountInput(phoneRaw, 'cn')
+  if (!parsed.ok) return parsed
+  if (parsed.accountKind !== 'phone' || !parsed.phone) {
+    return { ok: false, message: '请输入有效的 11 位手机号' }
+  }
+  if (!/^\d{4,8}$/.test(code.trim())) {
+    return { ok: false, message: '请输入有效验证码' }
+  }
+  if (isMobileAuthingDevMode() || !canUseAuthingRemoteAuth()) {
+    return verifyLocalChallenge(parsed.accountKey, code)
+  }
+  try {
+    await getClient().loginByPhoneCode(phoneDigits(parsed.phone), code.trim(), {
+      phoneCountryCode: '+86',
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: formatAuthingError(error, '验证码错误或已过期') }
+  }
 }
 
 async function sessionFromAuthingUser(
@@ -236,36 +256,6 @@ export async function loginWithAuthingPassword(input: {
     } else {
       return { ok: false, message: '请输入手机号或邮箱' }
     }
-    return sessionFromAuthingUser(user, parsed)
-  } catch (error) {
-    return { ok: false, message: formatAuthingError(error, '登录失败，请重试') }
-  }
-}
-
-export async function loginWithAuthingOtp(input: {
-  account: string
-  code: string
-}): Promise<AuthResult> {
-  const parsed = parseAccountInput(input.account, 'cn')
-  if (!parsed.ok) return parsed
-  if (!/^\d{4,8}$/.test(input.code.trim())) {
-    return { ok: false, message: '请输入有效验证码' }
-  }
-
-  if (isMobileAuthingDevMode() || !canUseAuthingRemoteAuth()) {
-    const verified = verifyLocalChallenge(parsed.accountKey, input.code)
-    if (!verified.ok) return verified
-    return { ok: false, message: '开发模式请使用本机已注册账号的密码登录' }
-  }
-
-  try {
-    const auth = getClient()
-    if (!parsed.phone) {
-      return { ok: false, message: '验证码登录目前仅支持手机号，邮箱请使用密码登录' }
-    }
-    const user = await auth.loginByPhoneCode(phoneDigits(parsed.phone), input.code.trim(), {
-      phoneCountryCode: '+86',
-    })
     return sessionFromAuthingUser(user, parsed)
   } catch (error) {
     return { ok: false, message: formatAuthingError(error, '登录失败，请重试') }

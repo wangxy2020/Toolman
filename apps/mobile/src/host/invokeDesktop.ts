@@ -1,14 +1,13 @@
 import {
   KnowledgeHostListMetaResponseSchema,
-  KnowledgeHostSearchResponseSchema,
   type AgentHostCapability,
   type KnowledgeHostRequest,
 } from '@toolman/shared'
-import { createMobileSyncClient, getMobileSyncBaseUrl } from '../sync/mobileSync'
+import { createReachableMobileSyncClient, getMobileSyncBaseUrl } from '../sync/mobileSync'
 
 async function resolveDesktopHostDeviceId(preferred?: string): Promise<string | null> {
   if (preferred) return preferred
-  const client = createMobileSyncClient()
+  const client = await createReachableMobileSyncClient()
   const hosts = await client.listHosts()
   return hosts.find((item) => item.agentHost && item.deviceKind === 'desktop')?.deviceId ?? null
 }
@@ -20,7 +19,7 @@ export async function invokeDesktopAgent(options: {
   onDelta: (text: string) => void
   onError: (message: string) => void
 }): Promise<void> {
-  const client = createMobileSyncClient()
+  const client = await createReachableMobileSyncClient()
   try {
     for await (const chunk of client.invokeHost({
       hostDeviceId: options.hostDeviceId,
@@ -56,7 +55,7 @@ async function invokeKnowledgeHost(
     )
   }
 
-  const client = createMobileSyncClient()
+  const client = await createReachableMobileSyncClient()
   let text = ''
   for await (const chunk of client.invokeHost({
     hostDeviceId: deviceId,
@@ -76,22 +75,4 @@ async function invokeKnowledgeHost(
 export async function listDesktopKnowledgeMeta(hostDeviceId?: string) {
   const raw = await invokeKnowledgeHost({ op: 'list-meta' }, hostDeviceId)
   return KnowledgeHostListMetaResponseSchema.parse(JSON.parse(raw)).items
-}
-
-export async function searchDesktopKnowledge(options: {
-  query: string
-  kbId?: string
-  limit?: number
-  hostDeviceId?: string
-}) {
-  const raw = await invokeKnowledgeHost(
-    {
-      op: 'search',
-      query: options.query,
-      kbId: options.kbId,
-      limit: options.limit ?? 8,
-    },
-    options.hostDeviceId,
-  )
-  return KnowledgeHostSearchResponseSchema.parse(JSON.parse(raw)).items
 }

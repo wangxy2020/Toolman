@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import {
+  ContentBlockSchema,
   SessionClearMessagesInputSchema,
   SessionCreateInputSchema,
   SessionDeleteInputSchema,
@@ -8,14 +9,30 @@ import {
   SessionGetInputSchema,
   SessionListInputSchema,
   SessionUpdateInputSchema,
+  isAssistantLibSession,
+  type ContentBlock,
   type Session,
 } from '@toolman/shared'
-import { blocksToText, createMessageRepository, createSessionRepository, runInTransaction, sessions } from '@toolman/db'
+import { createMessageRepository, createSessionRepository, fromContentBlocks, runInTransaction, sessions } from '@toolman/db'
 import { assistants } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 import { toIpcSession } from '../mappers/chat'
 import { inheritGroupProxySessionMetadata } from './p2p/p2p-group-agent-proxy.service'
+import {
+  publishClassroomSessionDeleteSyncChange,
+  publishClassroomSessionSyncChange,
+} from './classroom-mobile-sync'
+
+function parseCopiedContentBlocks(json: string, fallbackText: string): ContentBlock[] {
+  try {
+    const parsed = ContentBlockSchema.array().safeParse(JSON.parse(json) as unknown)
+    if (parsed.success) return parsed.data
+  } catch {
+    // corrupt JSON — fall back to plain text
+  }
+  return [{ type: 'text', text: fallbackText }]
+}
 
 export function createSession(input: unknown): Session {
   const data = SessionCreateInputSchema.parse(input)
@@ -41,7 +58,13 @@ export function createSession(input: unknown): Session {
     metadata: data.metadata ?? inheritGroupProxySessionMetadata(data.workspaceId, assistantId),
   })
 
-  return toIpcSession(sessions.findRowById(row.id)!)
+  const session = toIpcSession(sessions.findRowById(row.id)!)
+  try {
+    publishClassroomSessionSyncChange(session)
+  } catch {
+    // Sync must not block session create.
+  }
+  return session
 }
 
 export function listSessions(input: unknown) {
@@ -80,12 +103,29 @@ export function updateSession(input: unknown): Session | null {
   })
 
   const row = sessions.findRowById(data.id)
-  return row ? toIpcSession(row) : null
+  const session = row ? toIpcSession(row) : null
+  if (session) {
+    try {
+      publishClassroomSessionSyncChange(session)
+    } catch {
+      // Sync must not block session update.
+    }
+  }
+  return session
 }
 
 export function deleteSession(input: unknown): boolean {
   const data = SessionDeleteInputSchema.parse(input)
-  return getSessionRepository().delete(data.id)
+  const existing = getSession(data)
+  const deleted = getSessionRepository().delete(data.id)
+  if (deleted && existing && isAssistantLibSession(existing.metadata)) {
+    try {
+      publishClassroomSessionDeleteSyncChange(existing.id)
+    } catch {
+      // Sync must not block session delete.
+    }
+  }
+  return deleted
 }
 
 export function clearSessionMessages(input: unknown): number {
@@ -147,9 +187,7 @@ export function forkSession(input: unknown): Session {
   }
 
   const copiedRows = allRows.slice(0, forkIndex + 1)
-  const forkText = blocksToText(
-    JSON.parse(forkRow.contentBlocksJson) as Array<{ type: string; text?: string }>,
-  )
+  const forkText = fromContentBlocks(forkRow.contentBlocksJson, forkRow.content)
 
   const idMap = new Map<string, string>()
   for (const row of copiedRows) {
@@ -170,7 +208,7 @@ export function forkSession(input: unknown): Session {
     })
 
     for (const row of copiedRows) {
-      const contentBlocks = JSON.parse(row.contentBlocksJson) as Array<{ type: string; text?: string }>
+      const contentBlocks = parseCopiedContentBlocks(row.contentBlocksJson, row.content)
       const status = row.status === 'streaming' ? 'aborted' : row.status
 
       messages.createWithId({

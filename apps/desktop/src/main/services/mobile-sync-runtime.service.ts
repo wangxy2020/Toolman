@@ -15,13 +15,20 @@ import {
 } from './mobile-sync.service'
 import {
   getMobileSyncHubBaseUrl,
+  getMobileSyncHubPort,
   startMobileSyncHub,
   stopMobileSyncHub,
 } from './mobile-sync-hub'
 import { getNotesData } from './notes-data/storage'
 import { publishNoteSyncChange } from './mobile-sync-store'
+import { seedClassroomSessionSyncChanges } from './classroom-mobile-sync'
+import {
+  isClassroomSyncPreferenceEnabled,
+  setClassroomSyncPreferenceEnabled,
+} from './mobile-sync.config'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
+import { advertisedHttpUrls } from './network-advertise'
 
 function seedMobileSyncChangelog(): void {
   try {
@@ -39,6 +46,7 @@ function seedMobileSyncChangelog(): void {
       })
     }
     publishActiveKnowledgeMeta()
+    seedClassroomSessionSyncChanges()
   } catch (error) {
     logStructured(
       'mobile-sync',
@@ -49,11 +57,14 @@ function seedMobileSyncChangelog(): void {
 }
 
 export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
+  const syncPort = getMobileSyncHubPort()
   return {
     syncEnabled: isMobileSyncEnabled(),
     agentHostEnabled: isMobileAgentHostEnabled(),
+    classroomSyncEnabled: isClassroomSyncPreferenceEnabled(),
     hubRunning: Boolean(getMobileSyncHubBaseUrl()),
     hubBaseUrl: getMobileSyncHubBaseUrl(),
+    advertisedUrls: advertisedHttpUrls(syncPort),
     lastError: null,
   }
 }
@@ -88,4 +99,14 @@ export async function setMobileAgentHostEnabled(
 ): Promise<AppDiagnosticsMobileSync> {
   setMobileAgentHostPreferenceEnabled(enabled)
   return ensureMobileSyncRuntime()
+}
+
+export async function setClassroomSyncEnabled(
+  enabled: boolean,
+): Promise<AppDiagnosticsMobileSync> {
+  setClassroomSyncPreferenceEnabled(enabled)
+  if (enabled) {
+    return setMobileSyncEnabled(true)
+  }
+  return getMobileSyncDiagnostics()
 }

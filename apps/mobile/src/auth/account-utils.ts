@@ -46,3 +46,9 @@ export function cnPrimaryActionLabel(view: 'login' | 'register', account: string
   }
   return isCnEmailAccountInput(account) ? '邮箱登录' : '手机号登录'
 }
+
+export function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 7) return phone
+  return `${digits.slice(0, 3)}****${digits.slice(-4)}`
+}

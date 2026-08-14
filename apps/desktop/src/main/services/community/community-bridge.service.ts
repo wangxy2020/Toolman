@@ -9,8 +9,6 @@ export {
 
 export {
   getCommunityHubStatus,
-  getCommunityHubBaseUrl,
-  isCommunityHubRunning,
   getCommunityHttpClient,
   markCommunityHubOfflineReadOnly,
   clearCommunityHubOfflineReadOnly,

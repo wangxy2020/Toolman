@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, eq, isNull, ne } from 'drizzle-orm'
 import type { ToolmanDatabase } from '../index.js'
 import { messages } from '../schema/session.js'
+import type { ContentBlock } from '@toolman/shared'
 import type {
   CreateMessageInput,
   ListMessagesQuery,
@@ -18,10 +19,7 @@ function blocksToText(blocks: Array<{ type: string; text?: string }>): string {
     .join('\n')
 }
 
-function toContentBlocks(
-  content: string,
-  blocks?: Array<{ type: string; text?: string }>,
-): string {
+function toContentBlocks(content: string, blocks?: ContentBlock[]): string {
   if (blocks) return JSON.stringify(blocks)
   return JSON.stringify([{ type: 'text', text: content }])
 }
@@ -29,7 +27,9 @@ function toContentBlocks(
 function fromContentBlocks(json: string, plain: string | null): string {
   if (plain) return plain
   try {
-    return blocksToText(JSON.parse(json) as Array<{ type: string; text?: string }>)
+    const parsed = JSON.parse(json) as unknown
+    if (!Array.isArray(parsed)) return ''
+    return blocksToText(parsed as Array<{ type: string; text?: string }>)
   } catch {
     return ''
   }

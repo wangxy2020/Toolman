@@ -17,6 +17,17 @@ describe('sync contracts', () => {
     expect(change.entityKind).toBe('note')
   })
 
+  it('parses classroom session changes', () => {
+    const change = SyncChangeSchema.parse({
+      entityKind: 'classroom_session',
+      entityId: 'c1',
+      op: 'upsert',
+      updatedAt: 1,
+      payload: { title: 'Rust' },
+    })
+    expect(change.entityKind).toBe('classroom_session')
+  })
+
   it('parses host presence', () => {
     const presence = AgentHostPresenceSchema.parse({
       deviceId: 'd1',

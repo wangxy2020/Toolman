@@ -4,7 +4,6 @@ import {
   P2pResourceUnshareInputSchema,
 } from '@toolman/shared'
 import { appendP2pEvent } from './p2p-event.service'
-import { listP2pSharedResourcesForWorkspace } from './p2p-shared-resource-list.service'
 import {
   assertCanManageSharedResource,
   assertWorkspaceMemberAccess,
@@ -76,10 +75,6 @@ export async function unshareP2pNote(rawInput: unknown): Promise<{ unshared: tru
   })
 
   return { unshared: true }
-}
-
-export function listP2pSharedNotes(rawInput: unknown): { resources: P2pSharedResource[] } {
-  return listP2pSharedResourcesForWorkspace(rawInput)
 }
 
 export function listP2pNoteShareTargets(noteId: string): { workspaceIds: string[] } {

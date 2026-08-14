@@ -89,7 +89,6 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               activeAssistant={page.activeAssistant}
               workspace={page.workspace}
               chat={page.chat}
-              agentTaskPanel={page.agentTaskPanel}
               headerModelIds={page.headerModelIds}
               handleModelChange={page.handleModelChange}
               handleSelectWorkspaceFolder={page.handleSelectWorkspaceFolder}

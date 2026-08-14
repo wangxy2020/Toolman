@@ -61,8 +61,6 @@ export const PM_FEATURE_SCHEDULE_TYPES = [
   'instrument',
 ] as const satisfies readonly PmFeatureType[]
 
-export type PmFeatureScheduleType = (typeof PM_FEATURE_SCHEDULE_TYPES)[number]
-
 export type PmFeatureViewFilter = PmFeatureType | 'scheduleAll'
 
 export function isPmFeatureCostPrimaryType(

@@ -9,6 +9,9 @@ export const PaginationSchema = z.object({
   limit: z.number().int().min(1).max(100).default(20),
 })
 
+/** Handlers that ignore payload (or accept `undefined`). */
+export const IpcEmptyInputSchema = z.unknown().optional()
+
 export const IpcErrorCodeSchema = z.enum([
   'VALIDATION_ERROR',
   'NOT_FOUND',

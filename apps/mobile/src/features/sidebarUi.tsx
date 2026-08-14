@@ -84,6 +84,20 @@ export const sidebarStyles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
   },
+  itemNested: {
+    paddingLeft: 22,
+  },
+  groupLabelWrap: {
+    marginTop: 12,
+    marginHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  groupLabel: {
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
 })
 
 export function SidebarAddButton(props: {
@@ -147,6 +161,7 @@ export function SidebarItem(props: {
   label: string
   meta?: string
   active?: boolean
+  nested?: boolean
   onPress: () => void
 }) {
   const active = Boolean(props.active)
@@ -156,6 +171,7 @@ export function SidebarItem(props: {
       onPress={props.onPress}
       style={({ pressed }) => [
         sidebarStyles.item,
+        props.nested ? sidebarStyles.itemNested : null,
         { minHeight: layout.rowMinHeight },
         active ? sidebarStyles.itemActive : null,
         pressed && !active ? sidebarStyles.itemPressed : null,
@@ -172,6 +188,24 @@ export function SidebarItem(props: {
         {props.label}
       </Text>
       {props.meta ? <Text style={sidebarStyles.itemMeta}>{props.meta}</Text> : null}
+    </Pressable>
+  )
+}
+
+export function SidebarGroupLabel(props: { label: string; onPress?: () => void }) {
+  const layout = useSidebarLayout()
+  return (
+    <Pressable
+      onPress={props.onPress}
+      disabled={!props.onPress}
+      style={({ pressed }) => [
+        sidebarStyles.groupLabelWrap,
+        pressed && props.onPress ? sidebarStyles.itemPressed : null,
+      ]}
+    >
+      <Text style={[sidebarStyles.groupLabel, { fontSize: Math.max(11, layout.topicFontSize - 1) }]}>
+        {props.label}
+      </Text>
     </Pressable>
   )
 }

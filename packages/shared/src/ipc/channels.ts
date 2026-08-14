@@ -9,6 +9,7 @@ export enum IpcChannel {
   AppGetDiagnostics = 'app:diagnostics:get',
   MobileSyncSetEnabled = 'mobile:sync:set-enabled',
   MobileAgentHostSetEnabled = 'mobile:agent-host:set-enabled',
+  ClassroomSyncSetEnabled = 'classroom:sync:set-enabled',
   AppProvenanceBeacon = 'app:provenance:beacon',
 
   AppCrashReportGetStatus = 'app:crash-report:status:get',

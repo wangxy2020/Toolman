@@ -6,6 +6,7 @@ import type { ModulePrefs } from '../settings/prefs'
 import type { SettingsTabId } from '../settings/tabs'
 import type { MobileNote, MobileNotebook, NoteTombstone } from '../storage/notes'
 import type { KnowledgeMetaItem } from '../sync/mobileSync'
+import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 
 export type AuthSession = MobileAuthSession | null
 
@@ -72,6 +73,8 @@ export type MobileAppState = {
   setDeletedNotes: (items: NoteTombstone[]) => void
   knowledgeMeta: KnowledgeMetaItem[]
   setKnowledgeMeta: (items: KnowledgeMetaItem[]) => void
+  classroomCourses: MobileClassroomCourse[]
+  setClassroomCourses: (courses: MobileClassroomCourse[]) => void
   activeNoteId: string | null
   setActiveNoteId: (id: string | null) => void
   showSettings: boolean

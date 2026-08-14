@@ -95,5 +95,3 @@ export const AddMultipleRowsDialog: FC<Props> = ({
     </div>
   )
 }
-
-export default AddMultipleRowsDialog

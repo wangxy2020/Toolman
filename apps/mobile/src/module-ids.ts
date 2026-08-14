@@ -19,3 +19,5 @@ export const TOP_NAV_MODULE_IDS = [
   'classroom',
   'projects',
 ] as const satisfies ReadonlyArray<Exclude<MobileModuleId, 'translate'>>
+
+export type TopNavModuleId = (typeof TOP_NAV_MODULE_IDS)[number]

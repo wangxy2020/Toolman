@@ -10,6 +10,7 @@ export type MobileAuthSession = {
   /** Login identifier shown in UI (email or phone). */
   email: string
   phone: string | null
+  wechatBound: boolean
   accountKind: AuthAccountKind
   accessToken: string
   region: AuthRegion
@@ -28,6 +29,7 @@ export type MobileAuthAccountRecord = {
   accountKind: AuthAccountKind
   email: string
   phone: string | null
+  wechatBound: boolean
   /** SHA-256 hex of `salt:password` */
   passwordHash: string
   salt: string

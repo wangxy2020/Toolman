@@ -28,7 +28,6 @@ export const groupPageCoreEn = {
     unknownNotebook: 'Unknown notebook',
     unknownMember: 'Unknown member',
     memberSelf: 'Me',
-    comingSoon: '{{title}} · Coming soon',
     types: {
       knowledge: 'knowledge bases',
       notes: 'notes',

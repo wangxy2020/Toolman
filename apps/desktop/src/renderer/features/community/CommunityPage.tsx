@@ -1,17 +1,6 @@
 import { useState, useMemo, type ReactNode } from 'react'
 
-import {
-  IconKnowledge,
-  IconMessageBoard,
-  IconMcp,
-  IconNews,
-  IconSkill,
-  IconSliders,
-  IconFlag,
-  IconSubscribe,
-  IconTaskList,
-  IconWorkflow,
-} from '../../components/icons'
+import { IconSliders } from '../../components/icons'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { useI18n } from '../../i18n/useI18n'
@@ -28,7 +17,6 @@ import { useCommunityHubOfflineStatus } from './useCommunityHubOfflineStatus'
 import { CommunityListSortProvider, useCommunityListSortContext } from './CommunityListSortContext'
 import { CommunityListSortToolbar } from './CommunityListSortToolbar'
 import { CommunityHubOfflineBanner } from './CommunityHubOfflineBanner'
-import { CommunityPlaceholderPanel } from './CommunityPlaceholderPanel'
 import { KnowledgeMarketPanel } from './KnowledgeMarketPanel'
 import { McpMarketPanel } from './McpMarketPanel'
 import { MessageBoardPanel } from './MessageBoardPanel'
@@ -53,17 +41,17 @@ const SORTABLE_ACTIONS = new Set([
   'tasks',
 ])
 
-const PANEL_ICONS: Record<string, ReactNode> = {
-  subscribe: <IconSubscribe size={28} />,
-  workflow: <IconWorkflow size={28} />,
-  skills: <IconSkill size={28} />,
-  mcp: <IconMcp size={28} />,
-  knowledge: <IconKnowledge size={28} />,
-  tasks: <IconTaskList size={28} />,
-  news: <IconNews size={28} />,
-  messages: <IconMessageBoard size={28} />,
-  management: <IconFlag size={28} />,
-}
+const PANEL_TITLE_ACTIONS = new Set([
+  'subscribe',
+  'workflow',
+  'skills',
+  'mcp',
+  'knowledge',
+  'tasks',
+  'news',
+  'messages',
+  'management',
+])
 
 interface Props {
   activeAction?: string
@@ -123,17 +111,11 @@ export function CommunityPage({
   const config = getModulePageConfig('community', t)
 
   const effectiveAction = activeAction
-  const panel = useMemo(() => {
-    const icon = PANEL_ICONS[effectiveAction]
-    if (!icon) return undefined
-    return {
-      title: t(`communityPage.panels.${effectiveAction}.title`),
-      hint: t(`communityPage.panels.${effectiveAction}.subtitle`),
-      icon,
-    }
+  const panelTitle = useMemo(() => {
+    if (!PANEL_TITLE_ACTIONS.has(effectiveAction)) return undefined
+    return t(`communityPage.panels.${effectiveAction}.title`)
   }, [effectiveAction, t])
   const sectionLabel = communitySectionLabel(sidebarSection, t)
-  const panelTitle = panel?.title
   const showSort = SORTABLE_ACTIONS.has(effectiveAction)
 
   const pageContent = (
@@ -192,24 +174,12 @@ export function CommunityPage({
               <UserCenterPanel />
             </div>
             {effectiveAction === 'management' ? <AdminModerationPanel /> : null}
-            {effectiveAction !== 'mcp' &&
-            effectiveAction !== 'news' &&
-            effectiveAction !== 'messages' &&
-            effectiveAction !== 'skills' &&
-            effectiveAction !== 'workflow' &&
-            effectiveAction !== 'tasks' &&
-            effectiveAction !== 'knowledge' &&
-            effectiveAction !== 'subscribe' &&
-            effectiveAction !== 'management' ? (
-              panel ? (
-                <CommunityPlaceholderPanel title={panel.title} hint={panel.hint} icon={panel.icon} />
-              ) : (
-                <div className="tm-module-empty">
-                  <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
-                  <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
-                </div>
-              )
-            ) : null}
+            {PANEL_TITLE_ACTIONS.has(effectiveAction) ? null : (
+              <div className="tm-module-empty">
+                <h2 className="tm-module-empty-title">{config.contentEmptyTitle}</h2>
+                <p className="tm-module-empty-hint">{config.contentEmptyHint}</p>
+              </div>
+            )}
           </div>
         </CommunityPageStatusArea>
       </main>

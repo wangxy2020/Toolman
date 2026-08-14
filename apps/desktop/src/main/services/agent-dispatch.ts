@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import type { ContentBlock } from '@toolman/shared'
 
 import type { AssistantRow } from '@toolman/db'
@@ -44,14 +45,17 @@ export function dispatchAssistantResponse(options: {
       assistantMessageIds: options.assistantMessageIds.slice(1),
     })
 
-    void runChatTaskOrchestration({
+    fireAndForget(
+      'agent',
+      runChatTaskOrchestration({
       taskId,
       sessionId: options.sessionId,
       assistantMessageId: options.assistantMessageIds[0]!,
       modelId: options.modelIds[0]!,
       userText: options.userText,
       abortControllers,
-    })
+    }),
+    )
     return
   }
 
@@ -59,7 +63,9 @@ export function dispatchAssistantResponse(options: {
     const assistantMessageId = options.assistantMessageIds[i]!
     const modelId = options.modelIds[i]!
 
-    void runGeneration({
+    fireAndForget(
+      'agent',
+      runGeneration({
       sessionId: options.sessionId,
       assistantMessageId,
       userMessageId: options.userMessageId,
@@ -87,6 +93,7 @@ export function dispatchAssistantResponse(options: {
         kbScoreThreshold: options.sendOptions?.kbScoreThreshold,
         documentOcrEnabled: options.sendOptions?.documentOcrEnabled ?? isDocumentOcrEnabled(),
       },
-    })
+    }),
+    )
   }
 }

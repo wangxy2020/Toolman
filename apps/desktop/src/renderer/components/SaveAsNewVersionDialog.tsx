@@ -104,5 +104,3 @@ export const SaveAsNewVersionDialog: FC<Props> = ({
     </div>
   )
 }
-
-export default SaveAsNewVersionDialog

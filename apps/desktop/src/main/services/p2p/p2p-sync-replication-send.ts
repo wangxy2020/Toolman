@@ -43,6 +43,7 @@ export async function sendEventsBatch(
     await sendEventsBatchChunked(peerDeviceId, workspaceId, wireEvents)
 
     const lastSeq = events.at(-1)?.seq ?? cursor
+    if (lastSeq <= cursor) break
     getCursorRepo().updateSentSeq(workspaceId, peerDeviceId, lastSeq)
     for (const event of events) {
       markP2pEventSynced(event.eventId)

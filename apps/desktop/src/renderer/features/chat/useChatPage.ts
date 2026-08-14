@@ -16,7 +16,6 @@ import type { ChatPageProps } from './chat-page-types'
 import { useChatPageNavigation } from './useChatPageNavigation'
 import { useChatPageModals } from './useChatPageModals'
 import { useChatPageCrossModule } from './useChatPageCrossModule'
-import { useAgentTaskPanel } from './tasks/useAgentTaskPanel'
 
 export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
   const { t } = useI18n()
@@ -72,14 +71,6 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     translation.enterContrastSection,
   ])
 
-  const agentTaskPanel = useAgentTaskPanel({
-    workspaceId: chat.activeSession?.workspaceId ?? navigation.workspaceId,
-    sessionId: chat.activeSessionId,
-    assistantId: crossModule.activeAssistant?.id,
-    sessionActiveTaskId: chat.sessionActiveTaskId,
-    messages: chat.messages,
-  })
-
   return {
     t,
     appSettings,
@@ -94,7 +85,6 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     resetSettings,
     systemPaths,
     ...crossModule,
-    agentTaskPanel,
     knowledge,
     p2pWorkspaces,
     knowledgeFolder,

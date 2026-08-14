@@ -9,25 +9,8 @@ import {
 } from 'react-native'
 import { IconPlus, IconRefresh } from '../icons/composer-icons'
 import { colors } from '../theme'
-import {
-  COMMUNITY_ACTION_LABELS,
-  COMMUNITY_SORT_OPTIONS,
-  type CommunitySortField,
-} from './communitySidebar'
+import { COMMUNITY_ACTION_LABELS } from './communitySidebar'
 import type { CommunityListItem } from './communityHubClient'
-
-export function CommunityOfflineBanner(props: { visible: boolean; message?: string }) {
-  if (!props.visible) return null
-  return (
-    <View style={uiStyles.offlineBanner}>
-      <Text style={uiStyles.offlineTitle}>社区 Hub 离线</Text>
-      <Text style={uiStyles.offlineHint}>
-        {props.message ??
-          '当前为本地缓存只读模式，发布、点赞等写操作暂不可用。请在设置 → 社区配置 Hub，并确认桌面端 Community Hub 已启动。'}
-      </Text>
-    </View>
-  )
-}
 
 export function CommunityPanelHeader(props: {
   title: string
@@ -113,32 +96,6 @@ export function CommunityRefreshButton(props: {
   )
 }
 
-export function CommunitySortToolbar(props: {
-  sortField: CommunitySortField
-  sortAscending: boolean
-  onSortFieldChange: (field: CommunitySortField) => void
-}) {
-  return (
-    <View style={uiStyles.sortRow}>
-      {COMMUNITY_SORT_OPTIONS.map((option) => {
-        const active = props.sortField === option.id
-        return (
-          <Pressable
-            key={option.id}
-            onPress={() => props.onSortFieldChange(option.id)}
-            style={[uiStyles.sortItem, active ? uiStyles.sortItemActive : null]}
-          >
-            <Text style={[uiStyles.sortLabel, active ? uiStyles.sortLabelActive : null]}>
-              {option.label}
-              {active ? (props.sortAscending ? ' ↑' : ' ↓') : ''}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
-}
-
 export function CommunityListCard(props: {
   item: CommunityListItem
   selected?: boolean
@@ -153,20 +110,26 @@ export function CommunityListCard(props: {
         style={({ pressed }) => [uiStyles.fileCard, pressed ? uiStyles.fileCardPressed : null]}
       >
         <View style={uiStyles.fileCardMain}>
-          <Text style={uiStyles.fileCardTitle} numberOfLines={1}>
+          <Text style={uiStyles.fileCardTitle} numberOfLines={2}>
             {item.title}
           </Text>
-          {item.meta ? (
-            <Text style={uiStyles.fileCardMeta} numberOfLines={1}>
-              {item.meta}
+          {item.infoRows.length > 0 ? (
+            <View style={uiStyles.infoList}>
+              {item.infoRows.map((row) => (
+                <View key={`${row.label}-${row.value}`} style={uiStyles.infoRow}>
+                  <Text style={uiStyles.infoLabel}>{row.label}</Text>
+                  <Text style={uiStyles.infoValue} numberOfLines={1}>
+                    {row.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {item.description ? (
+            <Text style={uiStyles.fileCardDesc} numberOfLines={3}>
+              {item.description}
             </Text>
           ) : null}
-          <Text
-            style={[uiStyles.fileCardDesc, !item.description ? uiStyles.fileCardDescEmpty : null]}
-            numberOfLines={2}
-          >
-            {item.description || ' '}
-          </Text>
         </View>
       </Pressable>
       <View style={uiStyles.actionRow}>
@@ -255,19 +218,12 @@ export function CommunityCategoryChips<T extends string>(props: {
   )
 }
 
-export function sortCommunityItems(
-  items: CommunityListItem[],
-  field: CommunitySortField,
-  ascending: boolean,
-): CommunityListItem[] {
-  const sorted = [...items].sort((a, b) => {
-    let cmp = 0
-    if (field === 'name') cmp = a.title.localeCompare(b.title, 'zh-CN')
-    else if (field === 'size') cmp = a.sizeBytes - b.sizeBytes
-    else cmp = a.createdAt - b.createdAt
-    return ascending ? cmp : -cmp
+export function sortCommunityItems(items: CommunityListItem[]): CommunityListItem[] {
+  return [...items].sort((a, b) => {
+    const byTime = b.createdAt - a.createdAt
+    if (byTime !== 0) return byTime
+    return a.title.localeCompare(b.title, 'zh-CN')
   })
-  return sorted
 }
 
 export function CommunityEmptyState(props: { hint: string; meta?: string }) {
@@ -280,32 +236,10 @@ export function CommunityEmptyState(props: { hint: string; meta?: string }) {
 }
 
 export const uiStyles = StyleSheet.create({
-  offlineBanner: {
-    marginHorizontal: 12,
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#fff7ed',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#fed7aa',
-    gap: 4,
-  },
-  offlineTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#c2410c',
-  },
-  offlineHint: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: '#9a3412',
-  },
   panelHeader: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingTop: 24,
     paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
@@ -313,16 +247,18 @@ export const uiStyles = StyleSheet.create({
   panelHeaderText: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: 2,
   },
   panelTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.15,
     color: colors.text,
   },
   panelSubtitle: {
     fontSize: 12,
     lineHeight: 17,
+    fontWeight: '500',
     color: colors.textSecondary,
   },
   panelActions: {
@@ -377,34 +313,8 @@ export const uiStyles = StyleSheet.create({
   btnDisabled: {
     opacity: 0.5,
   },
-  sortRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  sortItem: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: colors.hover,
-  },
-  sortItemActive: {
-    backgroundColor: colors.accentSoft,
-  },
-  sortLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  sortLabelActive: {
-    color: colors.accent,
-    fontWeight: '600',
-  },
   listItem: {
-    marginHorizontal: 12,
+    marginHorizontal: 20,
     marginVertical: 6,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
@@ -432,17 +342,31 @@ export const uiStyles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  fileCardMeta: {
+  infoList: {
+    marginTop: 6,
+    gap: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoLabel: {
+    width: 64,
     fontSize: 11,
     color: colors.textSecondary,
   },
+  infoValue: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    color: colors.text,
+  },
   fileCardDesc: {
+    marginTop: 6,
     fontSize: 12,
     lineHeight: 17,
     color: colors.textSecondary,
-  },
-  fileCardDescEmpty: {
-    opacity: 0,
   },
   actionRow: {
     flexDirection: 'row',
@@ -464,7 +388,7 @@ export const uiStyles = StyleSheet.create({
   emptyBody: {
     gap: 8,
     paddingVertical: 36,
-    paddingHorizontal: 8,
+    paddingHorizontal: 20,
     alignItems: 'center',
   },
   emptyHint: {
@@ -484,7 +408,7 @@ export const uiStyles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
     paddingTop: 10,
   },
   statCard: {
@@ -516,7 +440,7 @@ export const uiStyles = StyleSheet.create({
     color: colors.accent,
   },
   chipRow: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
     paddingVertical: 10,
     gap: 8,
     flexDirection: 'row',

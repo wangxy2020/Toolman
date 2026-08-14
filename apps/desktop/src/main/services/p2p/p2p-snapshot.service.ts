@@ -12,7 +12,6 @@ export {
   createWorkspaceSnapshot,
   maybeAutoSnapshot,
   getLatestWorkspaceSnapshot,
-  loadSnapshotCompressed,
 } from './p2p-snapshot-create'
 
 export {

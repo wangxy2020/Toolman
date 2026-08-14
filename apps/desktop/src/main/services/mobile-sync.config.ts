@@ -10,6 +10,7 @@ import { z } from 'zod'
 const MobileSyncPreferencesSchema = z.object({
   syncEnabled: z.boolean().default(false),
   agentHostEnabled: z.boolean().default(false),
+  classroomSyncEnabled: z.boolean().default(false),
   /** Optional override; empty → default port 17890. */
   port: z.number().int().positive().optional(),
 })
@@ -19,6 +20,7 @@ export type MobileSyncPreferences = z.infer<typeof MobileSyncPreferencesSchema>
 const DEFAULT_PREFS: MobileSyncPreferences = {
   syncEnabled: false,
   agentHostEnabled: false,
+  classroomSyncEnabled: false,
 }
 
 function getConfigPath(): string {
@@ -65,6 +67,20 @@ export function isMobileAgentHostPreferenceEnabled(): boolean {
   const env = envTriState('TOOLMAN_MOBILE_AGENT_HOST')
   if (env !== null) return env
   return readMobileSyncPreferences().agentHostEnabled
+}
+
+/** Classroom course sync: persisted preference (independent of env hub override). */
+export function isClassroomSyncPreferenceEnabled(): boolean {
+  return readMobileSyncPreferences().classroomSyncEnabled === true
+}
+
+export function setClassroomSyncPreferenceEnabled(enabled: boolean): MobileSyncPreferences {
+  const current = readMobileSyncPreferences()
+  return writeMobileSyncPreferences({
+    ...current,
+    classroomSyncEnabled: enabled,
+    ...(enabled ? { syncEnabled: true } : {}),
+  })
 }
 
 export function resolveMobileSyncPort(): number {

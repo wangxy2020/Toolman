@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import { existsSync } from 'node:fs'
 import chokidar, { type FSWatcher } from 'chokidar'
 import { isNull } from 'drizzle-orm'
@@ -50,7 +51,7 @@ function queuePath(key: string, filePath: string, debounceMs: number) {
     key,
     setTimeout(() => {
       debounceTimers.delete(key)
-      void flushPending(key)
+      fireAndForget('knowledge', flushPending(key))
     }, debounceMs),
   )
 }
@@ -69,6 +70,7 @@ async function flushPending(key: string) {
     status: 'indexing',
   })
 
+  try {
   for (const filePath of batch) {
     if (!existsSync(filePath)) {
       await handleRemovedFile({
@@ -88,6 +90,10 @@ async function flushPending(key: string) {
   }
 
   refreshKbStats(target.workspaceId, target.kbId, { status: 'idle' })
+  } catch (error) {
+    refreshKbStats(target.workspaceId, target.kbId, { status: 'error' })
+    throw error
+  }
 }
 
 function startWatcher(target: WatchTarget) {
@@ -132,7 +138,7 @@ function stopWatcherByKey(key: string) {
 
   const watcher = watchers.get(key)
   if (watcher) {
-    void watcher.close()
+    fireAndForget('knowledge', watcher.close())
     watchers.delete(key)
   }
 }

@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
@@ -111,7 +112,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
       })
 
       ws.addEventListener('message', (event) => {
-        void this.handleStreamMessage(String(event.data))
+        fireAndForget('im-channel', this.handleStreamMessage(String(event.data)))
       })
 
       ws.addEventListener('close', () => {
@@ -141,7 +142,7 @@ export class DingtalkChannelAdapter implements ChannelAdapter {
     if (this.reconnectTimer || this.stopped) return
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
-      void this.connectStream(appKey, appSecret)
+      fireAndForget('im-channel', this.connectStream(appKey, appSecret))
     }, 5000)
   }
 

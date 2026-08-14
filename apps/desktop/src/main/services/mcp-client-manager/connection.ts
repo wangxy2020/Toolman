@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { toErrorMessage } from '@toolman/shared'
 import { getMcpServer } from '../mcp-server-config.service'
@@ -118,10 +119,10 @@ export async function disconnectAllMcpServers(): Promise<void> {
 
 export function resetMcpClientsForConfigChange(serverId?: string): void {
   if (serverId) {
-    void disconnectMcpServer(serverId)
+    fireAndForget('mcp', disconnectMcpServer(serverId))
     return
   }
-  void disconnectAllMcpServers()
+  fireAndForget('mcp', disconnectAllMcpServers())
 }
 
 export async function testMcpServer(serverId: string) {

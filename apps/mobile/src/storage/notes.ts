@@ -167,6 +167,78 @@ function normalizeTombstone(value: unknown): NoteTombstone | null {
   return { id: item.id, deletedAt: item.deletedAt }
 }
 
+export function normalizeNotesStore(parsed: {
+  notebooks?: unknown
+  notes?: unknown
+  activeNoteId?: unknown
+  deletedNotes?: unknown
+}): NotesStore {
+  let notebooks = Array.isArray(parsed.notebooks)
+    ? parsed.notebooks.map(normalizeNotebook).filter((n): n is MobileNotebook => Boolean(n))
+    : []
+  notebooks = ensureDefaultNotebook(notebooks)
+  const defaultId =
+    notebooks.find((item) => item.isDefault)?.id ?? notebooks[0]?.id ?? DEFAULT_NOTEBOOK_ID
+  const notes = Array.isArray(parsed.notes)
+    ? parsed.notes
+        .map((item) => normalizeNote(item, defaultId))
+        .filter((n): n is MobileNote => Boolean(n))
+    : []
+  notes.sort((a, b) => b.updatedAt - a.updatedAt)
+
+  const notebookIds = new Set(notebooks.map((item) => item.id))
+  for (const note of notes) {
+    if (!notebookIds.has(note.notebookId)) {
+      note.notebookId = defaultId
+    }
+  }
+
+  const liveIds = new Set(notes.map((note) => note.id))
+  const deletedNotes = Array.isArray(parsed.deletedNotes)
+    ? parsed.deletedNotes
+        .map(normalizeTombstone)
+        .filter((item): item is NoteTombstone => item != null && !liveIds.has(item.id))
+    : []
+
+  const activeNoteId =
+    typeof parsed.activeNoteId === 'string' && notes.some((n) => n.id === parsed.activeNoteId)
+      ? parsed.activeNoteId
+      : (notes[0]?.id ?? null)
+  return { notebooks, notes, activeNoteId, deletedNotes }
+}
+
+export function parseNotesBackup(raw: string): NotesStore | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      notebooks?: unknown
+      notes?: unknown
+      activeNoteId?: unknown
+      deletedNotes?: unknown
+    }
+    if (!parsed || typeof parsed !== 'object') return null
+    const store = normalizeNotesStore(parsed)
+    if (store.notes.length === 0 && !Array.isArray((parsed as { notes?: unknown }).notes)) {
+      return null
+    }
+    return store
+  } catch {
+    return null
+  }
+}
+
+export function serializeNotesBackup(store: NotesStore): string {
+  return JSON.stringify(
+    {
+      notebooks: store.notebooks,
+      notes: store.notes,
+      activeNoteId: store.activeNoteId,
+      deletedNotes: store.deletedNotes,
+    },
+    null,
+    2,
+  )
+}
+
 export async function loadNotesStore(): Promise<NotesStore> {
   try {
     const raw = await getItem(STORE_KEY)
@@ -177,40 +249,7 @@ export async function loadNotesStore(): Promise<NotesStore> {
       activeNoteId?: unknown
       deletedNotes?: unknown
     }
-    let notebooks = Array.isArray(parsed.notebooks)
-      ? parsed.notebooks.map(normalizeNotebook).filter((n): n is MobileNotebook => Boolean(n))
-      : []
-    notebooks = ensureDefaultNotebook(notebooks)
-    const defaultId =
-      notebooks.find((item) => item.isDefault)?.id ??
-      notebooks[0]?.id ??
-      DEFAULT_NOTEBOOK_ID
-    const notes = Array.isArray(parsed.notes)
-      ? parsed.notes
-          .map((item) => normalizeNote(item, defaultId))
-          .filter((n): n is MobileNote => Boolean(n))
-      : []
-    notes.sort((a, b) => b.updatedAt - a.updatedAt)
-
-    const notebookIds = new Set(notebooks.map((item) => item.id))
-    for (const note of notes) {
-      if (!notebookIds.has(note.notebookId)) {
-        note.notebookId = defaultId
-      }
-    }
-
-    const liveIds = new Set(notes.map((note) => note.id))
-    const deletedNotes = Array.isArray(parsed.deletedNotes)
-      ? parsed.deletedNotes
-          .map(normalizeTombstone)
-          .filter((item): item is NoteTombstone => item != null && !liveIds.has(item.id))
-      : []
-
-    const activeNoteId =
-      typeof parsed.activeNoteId === 'string' && notes.some((n) => n.id === parsed.activeNoteId)
-        ? parsed.activeNoteId
-        : (notes[0]?.id ?? null)
-    return { notebooks, notes, activeNoteId, deletedNotes }
+    return normalizeNotesStore(parsed)
   } catch {
     return { ...EMPTY, notebooks: createDefaultNotebooks() }
   }

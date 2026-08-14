@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import { statSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import {
@@ -10,8 +11,6 @@ import { INGEST_NO_PROGRESS_MS } from './knowledge-ingest-timeouts'
 import { resolveMainWorkerScript } from '../lib/resolve-main-worker'
 
 const LARGE_FILE_BYTES = 512 * 1024
-
-export type WorkerParseFileOptions = Pick<ParseFileOptions, 'enhanced' | 'pdfTextQuality' | 'ocr'>
 
 const WORKER_PARSE_BASE_TIMEOUT_MS = 20 * 60 * 1000
 const WORKER_PARSE_MS_PER_MB = 90 * 1000
@@ -148,7 +147,7 @@ export function parseFileInWorker(
     const cleanup = () => {
       clearTimeout(timeoutId)
       clearInterval(noProgressTimer)
-      void worker.terminate()
+      fireAndForget('parse-file-worker', worker.terminate())
     }
 
     const finish = (handler: () => void) => {

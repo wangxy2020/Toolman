@@ -1,5 +1,5 @@
 import type { KnowledgeBaseKind, P2pKnowledgeDocumentPermission, WorkspaceEvent } from '@toolman/shared'
-import { listWorkspaceEventsSince } from './p2p-event.service'
+import { iterateWorkspaceEventPages } from './p2p-event.service'
 
 export interface KnowledgeShareMetadata {
   description?: string | null
@@ -93,24 +93,16 @@ export function findLatestKnowledgeDocumentContentEvent(
   kbId: string,
   documentId: string,
 ): WorkspaceEvent | null {
-  let sinceSeq = 0
   let latest: WorkspaceEvent | null = null
-
-  while (true) {
-    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
-    if (batch.length === 0) break
-
+  iterateWorkspaceEventPages(workspaceId, (batch) => {
     for (const event of batch) {
-      sinceSeq = event.seq
       if (event.resourceType !== 'Knowledge' || event.eventType !== 'Updated') continue
       if (readPayloadString(event.payload, 'kb_id') !== kbId) continue
       if (readPayloadString(event.payload, 'doc_id') !== documentId) continue
       if (!readPayloadString(event.payload, 'content_hash')) continue
       latest = event
     }
-
-    if (batch.length < 200) break
-  }
+  })
 
   return latest
 }

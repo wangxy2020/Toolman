@@ -164,22 +164,6 @@ export async function firebaseEmailAuth(input: {
   }
 }
 
-export async function firebaseSendPasswordReset(email: string): Promise<{ ok: true } | { ok: false; message: string }> {
-  const trimmed = email.trim()
-  if (!trimmed.includes('@')) {
-    return { ok: false, message: '请输入注册邮箱' }
-  }
-  try {
-    await postIdentityToolkit('accounts:sendOobCode', {
-      requestType: 'PASSWORD_RESET',
-      email: trimmed,
-    })
-    return { ok: true }
-  } catch (error) {
-    return { ok: false, message: formatFirebaseClientError(error) }
-  }
-}
-
 export async function firebaseOAuthLogin(
   provider: 'firebase_google' | 'firebase_apple',
 ): Promise<AuthResult> {

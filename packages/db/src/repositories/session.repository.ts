@@ -33,6 +33,18 @@ function toSession(row: SessionRow): PersistedChatSession {
   }
 }
 
+function parseSessionMetadata(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    // ignore malformed metadata
+  }
+  return {}
+}
+
 export class SessionRepository {
   constructor(private readonly db: ToolmanDatabase) {}
 
@@ -128,8 +140,8 @@ export class SessionRepository {
     const now = new Date()
     const metadata =
       input.metadata !== undefined
-        ? { ...JSON.parse(existing.metadataJson), ...input.metadata }
-        : JSON.parse(existing.metadataJson)
+        ? { ...parseSessionMetadata(existing.metadataJson), ...input.metadata }
+        : parseSessionMetadata(existing.metadataJson)
 
     this.db
       .update(sessions)

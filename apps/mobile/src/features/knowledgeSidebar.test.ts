@@ -5,6 +5,7 @@ import {
   isSystemDefaultFolderName,
   listedSyncKnowledgeItems,
   mobileSyncKbUiId,
+  knowledgeBasesForSection,
 } from './knowledgeSidebar'
 
 describe('KNOWLEDGE_SIDEBAR_SECTIONS', () => {
@@ -31,5 +32,29 @@ describe('listedSyncKnowledgeItems', () => {
     expect(isSystemDefaultFolderName('默认文件夹')).toBe(true)
     expect(mobileSyncKbUiId({ id: 'uuid-1', name: '默认文件夹' })).toBe(DEFAULT_SYNC_FOLDER_ID)
     expect(mobileSyncKbUiId({ id: 'uuid-2', name: '产品手册' })).toBe('uuid-2')
+  })
+})
+
+describe('knowledgeBasesForSection', () => {
+  it('lists created local/network KBs under their own section', () => {
+    const created = [
+      { id: 'l1', name: '产品文档', kind: 'local' },
+      { id: 'n1', name: '官网', kind: 'network' },
+    ]
+    expect(knowledgeBasesForSection('local', created, []).map((kb) => kb.id)).toEqual(['l1'])
+    expect(knowledgeBasesForSection('network', created, []).map((kb) => kb.id)).toEqual(['n1'])
+    expect(knowledgeBasesForSection('shared', created, [])).toEqual([])
+  })
+
+  it('puts created sync KBs ahead of desktop-synced ones without duplicates', () => {
+    const created = [{ id: 's1', name: '现场资料', kind: 'sync' }]
+    const synced = [
+      { id: 's1', name: '现场资料' },
+      { id: 'desk', name: '桌面同步库' },
+    ]
+    expect(knowledgeBasesForSection('sync', created, synced).map((kb) => kb.id)).toEqual([
+      's1',
+      'desk',
+    ])
   })
 })

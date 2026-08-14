@@ -44,7 +44,7 @@ function writeStore(store: CatalogStore): void {
   writeFileSync(catalogPath(), JSON.stringify(store, null, 2), 'utf8')
 }
 
-/** Durable「全部项目」catalog. Missing key → built-in defaults (not yet persisted). */
+/** Durable「全部项目」catalog. Missing key returns built-in defaults until the user saves. */
 export function getSharedResourceCatalog(workspaceId: string): {
   rows: PmSharedResourceCatalogRow[]
   isDefault: boolean

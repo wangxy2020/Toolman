@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import { statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { toErrorMessage } from '@toolman/shared'
@@ -185,7 +186,7 @@ async function ingestFileAtPathOnce(
     })
 
     if (!skipP2pSync) {
-      void maybeSyncSharedKnowledgeDocument(workspaceId, kbId, docRow.id)
+      fireAndForget('p2p', maybeSyncSharedKnowledgeDocument(workspaceId, kbId, docRow.id))
     }
 
     refreshKbStats(workspaceId, kbId)

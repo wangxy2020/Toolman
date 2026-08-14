@@ -1,10 +1,8 @@
-import { parseSessionActiveTaskId } from '@toolman/shared'
-
 import { listAssistants } from './assistant.service'
 import { logStructured } from './structured-log.service'
 import { sendMessage } from './agent.service'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
-import { runTaskSchedulerTickWithPeriodic } from './task-runtime/task-queue/task-scheduler.service'
+import { fireAndForget } from '../lib/fire-and-forget'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
 
@@ -25,7 +23,7 @@ export function startHeartbeatScheduler(workspaceId: string = DEFAULT_WORKSPACE_
   }
 
   heartbeatTimer = setInterval(() => {
-    void runHeartbeatTick(workspaceId)
+    fireAndForget('heartbeat', runHeartbeatTick(workspaceId))
   }, 60_000)
 }
 
@@ -38,7 +36,8 @@ export function stopHeartbeatScheduler(): void {
 }
 
 async function runHeartbeatTick(workspaceId: string): Promise<void> {
-  const assistants = listAssistants({ workspaceId })
+  try {
+    const assistants = listAssistants({ workspaceId })
   const sessions = getSessionRepository()
   const now = Date.now()
 
@@ -65,33 +64,6 @@ async function runHeartbeatTick(workspaceId: string): Promise<void> {
       .some((row) => row.status === 'streaming')
     if (hasActiveStream) continue
 
-    const sessionMetadata = (() => {
-      try {
-        const parsed = JSON.parse(session.metadataJson) as unknown
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-          ? (parsed as Record<string, unknown>)
-          : {}
-      } catch {
-        return {}
-      }
-    })()
-    const activeTaskId = parseSessionActiveTaskId(sessionMetadata)
-    const schedulerResult = runTaskSchedulerTickWithPeriodic({
-      assistantId: assistant.id,
-      workspaceId,
-      sessionId: session.id,
-      sessionMetadata,
-    })
-    if (schedulerResult === 'scheduled') {
-      lastHeartbeatAt.set(assistant.id, now)
-      logStructured(
-        'heartbeat',
-        'info',
-        `task scheduler tick: assistant=${assistant.id} session=${session.id} task=${activeTaskId ?? 'none'}`,
-      )
-      continue
-    }
-
     lastHeartbeatAt.set(assistant.id, now)
     inFlightHeartbeats.add(assistant.id)
 
@@ -114,5 +86,8 @@ async function runHeartbeatTick(workspaceId: string): Promise<void> {
     } finally {
       inFlightHeartbeats.delete(assistant.id)
     }
+  }
+  } catch (error) {
+    logStructured('heartbeat', 'error', `tick failed`, { detail: error })
   }
 }

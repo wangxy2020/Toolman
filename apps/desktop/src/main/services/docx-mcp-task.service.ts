@@ -21,7 +21,6 @@ export {
   findDocxMcpToolName,
 } from './docx-mcp-task/tools'
 export {
-  buildDocxContinueEditNudge,
   shouldContinueDocxEditing,
 } from './docx-mcp-task/editing'
 export {

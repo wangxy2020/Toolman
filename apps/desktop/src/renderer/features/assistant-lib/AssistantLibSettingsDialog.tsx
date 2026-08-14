@@ -28,9 +28,10 @@ import {
 } from './AssistantLibLocalKbPickerModal'
 import { createLocalTextbookKnowledgeBase } from './create-textbook-kb'
 import { safeInvoke } from '../../lib/ipc-client'
+import { AssistantLibSettingsSyncTab } from './AssistantLibSettingsSyncTab'
 
 type TextbookSource = 'knowledge' | 'local'
-type SettingsTab = 'basic' | 'teaching' | 'lesson' | 'danger'
+type SettingsTab = 'basic' | 'teaching' | 'lesson' | 'sync' | 'danger'
 
 const LESSON_PLAN_MARKDOWN_SETTINGS = {
   ...DEFAULT_MESSAGE_SETTINGS,
@@ -530,6 +531,18 @@ export function AssistantLibSettingsDialog({
                   type="button"
                   className={[
                     'tm-kb-settings-modal-nav-item',
+                    activeTab === 'sync' ? 'tm-kb-settings-modal-nav-item--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => selectTab('sync')}
+                >
+                  <span>{t('assistantLibPage.settingsSyncTab')}</span>
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'tm-kb-settings-modal-nav-item',
                     activeTab === 'danger' ? 'tm-kb-settings-modal-nav-item--active' : '',
                   ]
                     .filter(Boolean)
@@ -847,6 +860,8 @@ export function AssistantLibSettingsDialog({
                   />
                 ) : null}
 
+                {activeTab === 'sync' ? <AssistantLibSettingsSyncTab /> : null}
+
                 {activeTab === 'danger' ? (
                   <div className="tm-kb-settings-form tm-alib-settings-danger">
                     <span className="tm-group-settings-section-title">
@@ -888,7 +903,7 @@ export function AssistantLibSettingsDialog({
                 >
                   {t('common.cancel')}
                 </button>
-                {activeTab !== 'danger' ? (
+                {activeTab !== 'danger' && activeTab !== 'sync' ? (
                   <button
                     type="button"
                     className="tm-kb-settings-modal-footer-btn tm-kb-settings-modal-footer-btn--primary"

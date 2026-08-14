@@ -8,6 +8,7 @@ export function SettingsScroll(props: { children: ReactNode }) {
       style={settingsUiStyles.rightRoot}
       contentContainerStyle={settingsUiStyles.scroll}
       showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
     >
       {props.children}
     </ScrollView>
@@ -29,15 +30,18 @@ export function Section(props: { title: string; trailing?: ReactNode; children: 
 export function Field(props: {
   label?: string
   value: string
-  onChangeText: (value: string) => void
+  onChangeText?: (value: string) => void
   secureTextEntry?: boolean
   placeholder?: string
+  editable?: boolean
+  keyboardType?: 'default' | 'numeric' | 'number-pad' | 'decimal-pad' | 'url'
 }) {
+  const editable = props.editable !== false
   return (
     <View style={settingsUiStyles.field}>
       {props.label ? <Text style={settingsUiStyles.label}>{props.label}</Text> : null}
       <TextInput
-        style={settingsUiStyles.input}
+        style={[settingsUiStyles.input, editable ? null : settingsUiStyles.inputReadonly]}
         value={props.value}
         onChangeText={props.onChangeText}
         secureTextEntry={props.secureTextEntry}
@@ -45,6 +49,8 @@ export function Field(props: {
         placeholderTextColor={colors.textSecondary}
         autoCapitalize="none"
         autoCorrect={false}
+        editable={editable}
+        keyboardType={props.keyboardType}
         underlineColorAndroid="transparent"
       />
     </View>
@@ -99,18 +105,58 @@ export function SecondaryButton(props: { label: string; onPress: () => void }) {
   )
 }
 
+/** Compact header control (desktop `.tm-mcp-add-btn` / reset). */
+export function HeaderAction(props: {
+  label: string
+  onPress: () => void
+  tone?: 'accent' | 'muted'
+  icon?: ReactNode
+}) {
+  const accent = props.tone !== 'muted'
+  return (
+    <Pressable
+      onPress={props.onPress}
+      hitSlop={6}
+      style={({ pressed }) => [
+        settingsUiStyles.headerAction,
+        pressed
+          ? accent
+            ? settingsUiStyles.headerActionPressedAccent
+            : settingsUiStyles.headerActionPressed
+          : null,
+      ]}
+    >
+      {props.icon}
+      <Text
+        style={[
+          settingsUiStyles.headerActionLabel,
+          accent ? settingsUiStyles.headerActionLabelAccent : null,
+        ]}
+      >
+        {props.label}
+      </Text>
+    </Pressable>
+  )
+}
+
 export const settingsUiStyles = StyleSheet.create({
   rightRoot: {
     flex: 1,
     backgroundColor: colors.bg,
   },
   scroll: {
-    padding: 20,
-    gap: 14,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 40,
-    maxWidth: 640,
+    gap: 14,
+    width: '100%',
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
+    flexGrow: 1,
   },
   card: {
+    width: '100%',
+    alignSelf: 'stretch',
     backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
@@ -139,6 +185,29 @@ export const settingsUiStyles = StyleSheet.create({
     textAlign: 'right',
   },
   sectionTrailingVip: {
+    color: colors.accent,
+  },
+  headerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  headerActionPressed: {
+    backgroundColor: colors.hover,
+  },
+  headerActionPressedAccent: {
+    backgroundColor: colors.accentSoft,
+  },
+  headerActionLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  headerActionLabelAccent: {
     color: colors.accent,
   },
   sectionBody: {
@@ -309,6 +378,10 @@ export const settingsUiStyles = StyleSheet.create({
     backgroundColor: colors.bg,
     color: colors.text,
     fontSize: 14,
+  },
+  inputReadonly: {
+    backgroundColor: colors.inputBg,
+    color: colors.textSecondary,
   },
   btn: {
     backgroundColor: colors.accent,

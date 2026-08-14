@@ -1,5 +1,6 @@
 import { toErrorMessage } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../../diagnostics-log'
+import { stat } from 'node:fs/promises'
 import {
   COMMUNITY_HUB_DEFAULT_PORT,
   COMMUNITY_HUB_HOST,
@@ -7,6 +8,7 @@ import {
   resolveCommunityHubBinaryPath,
 } from '../community-paths'
 import { CommunityHttpClient } from '../community-http.client'
+import type { CommunityHealthData } from '../community-http/community-http.types'
 import { resolveCommunityHubAuth } from '../community-hub-auth.service'
 import { hasAnyCommunityHubCache } from '../community-hub-cache.service'
 import { waitForHealth } from './health'
@@ -24,7 +26,29 @@ import {
   setHttpClient,
 } from './state'
 import { getCommunityHubStatus } from './status'
-import type { CommunityHubStatus } from './types'
+import type { CommunityHubPortFile, CommunityHubStatus } from './types'
+
+export async function incompatibleLocalHubReason(
+  health: CommunityHealthData,
+  options?: { portFile?: CommunityHubPortFile | null; binaryPath?: string | null },
+): Promise<string | null> {
+  if ((health.rate_limit_rpm ?? 0) > 0) {
+    return `rate_limit_rpm=${health.rate_limit_rpm}`
+  }
+  const startedAt = options?.portFile?.startedAt
+  const binaryPath = options?.binaryPath
+  if (typeof startedAt === 'number' && binaryPath) {
+    try {
+      const binaryStat = await stat(binaryPath)
+      if (binaryStat.mtimeMs > startedAt) {
+        return 'newer community hub binary'
+      }
+    } catch {
+      // ignore missing binary
+    }
+  }
+  return null
+}
 
 export async function connectRemoteCommunityHub(baseUrl: string): Promise<CommunityHubStatus> {
   const client = new CommunityHttpClient({
@@ -145,10 +169,13 @@ export async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus
         continue
       }
 
-      const rateLimitRpm = health.rate_limit_rpm ?? 0
-      if (rateLimitRpm > 0) {
+      const reason = await incompatibleLocalHubReason(health, {
+        portFile: portFile?.port === port ? portFile : null,
+        binaryPath,
+      })
+      if (reason) {
         log(
-          `skipping attach to hub on port ${port} (rate_limit_rpm=${rateLimitRpm}); will spawn an unlimited hub instead`,
+          `skipping attach to hub on port ${port} (${reason}); will spawn an updated sidecar instead`,
         )
         if (portFile?.port === port && portFile.pid) {
           await stopCommunityHubProcessByPid(portFile.pid)

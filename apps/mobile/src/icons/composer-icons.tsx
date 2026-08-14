@@ -183,16 +183,6 @@ export function IconSend({ size = 18, color = '#fff' }: IconProps) {
   )
 }
 
-export function IconMonitor({ size = 18, color = '#1a1a1a' }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect x="2" y="3" width="20" height="14" rx="2" {...stroke(color)} />
-      <Line x1="8" y1="21" x2="16" y2="21" {...stroke(color)} />
-      <Line x1="12" y1="17" x2="12" y2="21" {...stroke(color)} />
-    </Svg>
-  )
-}
-
 export function IconCopy({ size = 18, color = '#1a1a1a' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -226,25 +216,6 @@ export function IconRefresh({ size = 18, color = '#1a1a1a' }: IconProps) {
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M21 12a9 9 0 1 1-2.64-6.36" {...stroke(color)} strokeLinecap="round" />
       <Path d="M21 3v6h-6" {...stroke(color)} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  )
-}
-
-export function IconEdit({ size = 18, color = '#1a1a1a' }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M12 20h9"
-        {...stroke(color)}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
-        {...stroke(color)}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </Svg>
   )
 }

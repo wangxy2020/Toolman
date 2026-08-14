@@ -1,5 +1,6 @@
 import {
   IpcChannel,
+  getIpcChannelContract,
   type IpcResult,
 } from '@toolman/shared'
 
@@ -27,5 +28,9 @@ function formatIpcErrorMessage(message: string): string {
 }
 
 export async function invokeIpc<T>(channel: IpcChannel, input?: unknown): Promise<T> {
-  return unwrap((await window.api.invoke(channel, input)) as IpcResult<T>)
+  const contract = getIpcChannelContract(channel)
+  const parsedInput = contract ? contract.input.parse(input ?? {}) : input
+  const data = unwrap((await window.api.invoke(channel, parsedInput)) as IpcResult<T>)
+  if (!contract) return data
+  return contract.output.parse(data) as T
 }

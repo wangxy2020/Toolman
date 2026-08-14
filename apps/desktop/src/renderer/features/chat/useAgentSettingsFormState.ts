@@ -16,7 +16,6 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
   const [modelId, setModelId] = useState(initial.modelId)
   const [workingDirectory, setWorkingDirectory] = useState(initial.workingDirectory)
   const [autonomousMode, setAutonomousMode] = useState(initial.autonomousMode)
-  const [longTaskMode, setLongTaskMode] = useState(initial.longTaskMode)
   const [heartbeatEnabled, setHeartbeatEnabled] = useState(initial.heartbeatEnabled)
   const [heartbeatInterval, setHeartbeatInterval] = useState(initial.heartbeatInterval)
   const [permissionMode, setPermissionMode] = useState(initial.permissionMode)
@@ -44,7 +43,6 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
     setModelId(next.modelId)
     setWorkingDirectory(next.workingDirectory)
     setAutonomousMode(next.autonomousMode)
-    setLongTaskMode(next.longTaskMode)
     setHeartbeatEnabled(next.heartbeatEnabled)
     setHeartbeatInterval(next.heartbeatInterval)
     setPermissionMode(next.permissionMode)
@@ -72,7 +70,6 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
     modelId,
     workingDirectory,
     autonomousMode,
-    longTaskMode,
     heartbeatEnabled,
     heartbeatInterval,
     permissionMode,
@@ -101,7 +98,6 @@ export function useAgentSettingsFormState(assistant: Assistant, displayModelId: 
     setModelId,
     setWorkingDirectory,
     setAutonomousMode,
-    setLongTaskMode,
     setHeartbeatEnabled,
     setHeartbeatInterval,
     setPermissionMode,

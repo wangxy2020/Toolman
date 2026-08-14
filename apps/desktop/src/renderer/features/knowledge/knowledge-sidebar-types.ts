@@ -55,7 +55,7 @@ export function isDeletableSavedSharedKnowledgeBase(
   return item.kind === 'shared' && !isP2pSharedKnowledgeMirrorDescription(item.description)
 }
 
-/** Visible sidebar sections. `local-files` kept in the type for legacy routes but hidden for now. */
+/** Visible sidebar sections. */
 export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{
   id: KnowledgeSidebarSection
   label: string

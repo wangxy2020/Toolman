@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import { createModelGateway, ProviderError } from '@toolman/model-gateway'
 import {
   AssistantLibSyllabusGenerateInputSchema,
@@ -307,8 +308,11 @@ export async function startAssistantLibSyllabusGeneration(input: unknown): Promi
   const data = AssistantLibSyllabusGenerateInputSchema.parse(input)
   if (inflight.has(data.sessionId)) return { started: false }
   inflight.add(data.sessionId)
-  void runSyllabusGeneration(data).finally(() => {
-    inflight.delete(data.sessionId)
-  })
+  fireAndForget(
+    'assistant-lib',
+    runSyllabusGeneration(data).finally(() => {
+      inflight.delete(data.sessionId)
+    }),
+  )
   return { started: true }
 }

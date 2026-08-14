@@ -5,11 +5,15 @@ import { colors } from '../theme'
 type Props = {
   text: string
   align?: 'left' | 'right'
+  /** `note` matches desktop `.tm-notes-editor-body` (16px / 1.7). */
+  variant?: 'chat' | 'note'
 }
+
+type ListItem = { marker: string; text: string }
 
 type Block =
   | { type: 'heading'; level: 1 | 2 | 3; text: string }
-  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'list'; items: ListItem[] }
   | { type: 'code'; lang: string; text: string }
   | { type: 'quote'; text: string }
   | { type: 'hr' }
@@ -19,15 +23,17 @@ type Block =
  * Lightweight Markdown renderer for chat bubbles (RN + web).
  * Covers the common assistant patterns: headings, lists, bold, code.
  */
-export function MessageMarkdown({ text, align = 'left' }: Props) {
+export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Props) {
   const source = text.replace(/\r\n/g, '\n').trimEnd()
   if (!source.trim()) return null
 
   const blocks = parseBlocks(source)
   const alignStyle = align === 'right' ? styles.alignRight : null
+  const s = variant === 'note' ? noteStyles : styles
+  const selectable = variant === 'note'
 
   return (
-    <View style={styles.root}>
+    <View style={s.root}>
       {blocks.map((block, index) => {
         const key = `${block.type}-${index}`
         switch (block.type) {
@@ -35,9 +41,10 @@ export function MessageMarkdown({ text, align = 'left' }: Props) {
             return (
               <Text
                 key={key}
+                selectable={selectable}
                 style={[
-                  styles.paragraph,
-                  block.level === 1 ? styles.h1 : block.level === 2 ? styles.h2 : styles.h3,
+                  s.paragraph,
+                  block.level === 1 ? s.h1 : block.level === 2 ? s.h2 : s.h3,
                   alignStyle,
                 ]}
               >
@@ -46,14 +53,17 @@ export function MessageMarkdown({ text, align = 'left' }: Props) {
             )
           case 'list':
             return (
-              <View key={key} style={styles.list}>
+              <View key={key} style={s.list}>
                 {block.items.map((item, itemIndex) => (
-                  <View key={`${key}-${itemIndex}`} style={styles.listItem}>
-                    <Text style={styles.listBullet}>
-                      {block.ordered ? `${itemIndex + 1}.` : '•'}
+                  <View key={`${key}-${itemIndex}`} style={s.listItem}>
+                    <Text selectable={selectable} style={s.listBullet}>
+                      {item.marker}
                     </Text>
-                    <Text style={[styles.paragraph, styles.listText, alignStyle]}>
-                      {renderInline(item, `${key}-${itemIndex}`)}
+                    <Text
+                      selectable={selectable}
+                      style={[s.paragraph, s.listText, alignStyle]}
+                    >
+                      {renderInline(item.text, `${key}-${itemIndex}`)}
                     </Text>
                   </View>
                 ))}
@@ -61,25 +71,27 @@ export function MessageMarkdown({ text, align = 'left' }: Props) {
             )
           case 'code':
             return (
-              <View key={key} style={styles.codeBlock}>
-                {block.lang ? <Text style={styles.codeLang}>{block.lang}</Text> : null}
-                <Text style={styles.codeText}>{block.text}</Text>
+              <View key={key} style={s.codeBlock}>
+                {block.lang ? <Text style={s.codeLang}>{block.lang}</Text> : null}
+                <Text selectable={selectable} style={s.codeText}>
+                  {block.text}
+                </Text>
               </View>
             )
           case 'quote':
             return (
-              <View key={key} style={styles.quote}>
-                <Text style={[styles.paragraph, styles.quoteText, alignStyle]}>
+              <View key={key} style={s.quote}>
+                <Text selectable={selectable} style={[s.paragraph, s.quoteText, alignStyle]}>
                   {renderInline(block.text, key)}
                 </Text>
               </View>
             )
           case 'hr':
-            return <View key={key} style={styles.hr} />
+            return <View key={key} style={s.hr} />
           case 'paragraph':
           default:
             return (
-              <Text key={key} style={[styles.paragraph, alignStyle]}>
+              <Text key={key} selectable={selectable} style={[s.paragraph, alignStyle]}>
                 {renderInline(block.text, key)}
               </Text>
             )
@@ -97,16 +109,20 @@ function parseBlocks(source: string): Block[] {
   while (i < lines.length) {
     const line = lines[i] ?? ''
 
-    if (/^```/.test(line)) {
-      const lang = line.slice(3).trim()
+    if (/^\s*```/.test(line)) {
+      const indent = line.match(/^\s*/)?.[0].length ?? 0
+      const lang = line.trim().slice(3).trim()
       const body: string[] = []
       i += 1
-      while (i < lines.length && !/^```/.test(lines[i] ?? '')) {
-        body.push(lines[i] ?? '')
+      while (i < lines.length && !/^\s*```/.test(lines[i] ?? '')) {
+        const raw = lines[i] ?? ''
+        body.push(raw.startsWith(' '.repeat(indent)) ? raw.slice(indent) : raw.trimStart())
         i += 1
       }
       if (i < lines.length) i += 1
-      blocks.push({ type: 'code', lang, text: body.join('\n') })
+      if (!/^socratic-(?:card|state)$/i.test(lang)) {
+        blocks.push({ type: 'code', lang, text: body.join('\n') })
+      }
       continue
     }
 
@@ -127,23 +143,36 @@ function parseBlocks(source: string): Block[] {
       continue
     }
 
-    const unordered = /^\s*[-*+]\s+(.+)$/.exec(line)
-    const ordered = /^\s*\d+[.)]\s+(.+)$/.exec(line)
+    const unordered = /^\s*[-*+]\s+/.test(line)
+    const ordered = /^\s*(\d+)[.)]\s+(.+)$/.exec(line)
     if (unordered || ordered) {
-      const items: string[] = []
+      const items: ListItem[] = []
       const isOrdered = Boolean(ordered)
+      const start = isOrdered ? Number(ordered![1]) : 1
       while (i < lines.length) {
         const current = lines[i] ?? ''
-        const u = /^\s*[-*+]\s+(.+)$/.exec(current)
-        const o = /^\s*\d+[.)]\s+(.+)$/.exec(current)
-        if (isOrdered ? o : u) {
-          items.push((isOrdered ? o![1]! : u![1]!).trim())
+        if (isOrdered) {
+          const o = /^\s*(\d+)[.)]\s+(.+)$/.exec(current)
+          if (!o) break
+          items.push({ marker: `${start + items.length}.`, text: o[2]!.trim() })
           i += 1
           continue
         }
-        break
+        const task = /^\s*[-*+]\s+\[([ xX])\]\s*(.*)$/.exec(current)
+        if (task) {
+          items.push({
+            marker: task[1]!.toLowerCase() === 'x' ? '☑' : '☐',
+            text: (task[2] ?? '').trim(),
+          })
+          i += 1
+          continue
+        }
+        const u = /^\s*[-*+]\s+(.+)$/.exec(current)
+        if (!u) break
+        items.push({ marker: '•', text: u[1]!.trim() })
+        i += 1
       }
-      blocks.push({ type: 'list', ordered: isOrdered, items })
+      blocks.push({ type: 'list', items })
       continue
     }
 
@@ -189,7 +218,7 @@ function parseBlocks(source: string): Block[] {
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = []
   const pattern =
-    /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g
+    /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|`[^`\n]+?`|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\[\[[^\]]+\]\]|\*[^*\n]+?\*|_[^_\n]+?_)/g
   let last = 0
   let match: RegExpExecArray | null
   let idx = 0
@@ -207,10 +236,36 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           {token.slice(2, -2)}
         </Text>,
       )
+    } else if (token.startsWith('~~') && token.endsWith('~~')) {
+      nodes.push(
+        <Text key={`${keyPrefix}-s-${idx++}`} style={styles.strike}>
+          {token.slice(2, -2)}
+        </Text>,
+      )
     } else if (token.startsWith('`') && token.endsWith('`')) {
       nodes.push(
         <Text key={`${keyPrefix}-c-${idx++}`} style={styles.inlineCode}>
           {token.slice(1, -1)}
+        </Text>,
+      )
+    } else if (token.startsWith('![')) {
+      const alt = token.match(/^!\[([^\]]*)\]/)?.[1] ?? ''
+      if (alt) {
+        nodes.push(<Fragment key={`${keyPrefix}-img-${idx++}`}>{alt}</Fragment>)
+      }
+    } else if (token.startsWith('[[') && token.endsWith(']]')) {
+      const inner = token.slice(2, -2)
+      const label = inner.split('|')[1]?.trim() || inner.split('|')[0]?.trim() || inner
+      nodes.push(
+        <Text key={`${keyPrefix}-w-${idx++}`} style={styles.link}>
+          {label}
+        </Text>,
+      )
+    } else if (token.startsWith('[') && token.includes('](')) {
+      const label = token.match(/^\[([^\]]+)\]/)?.[1] ?? token
+      nodes.push(
+        <Text key={`${keyPrefix}-a-${idx++}`} style={styles.link}>
+          {label}
         </Text>,
       )
     } else if (
@@ -271,6 +326,12 @@ const styles = StyleSheet.create({
   italic: {
     fontStyle: 'italic',
   },
+  strike: {
+    textDecorationLine: 'line-through',
+  },
+  link: {
+    color: colors.accent,
+  },
   inlineCode: {
     fontFamily: 'Menlo, Monaco, Consolas, monospace',
     fontSize: 13,
@@ -286,7 +347,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   listBullet: {
-    width: 18,
+    width: 22,
     fontSize: 15,
     lineHeight: 24,
     color: colors.textSecondary,
@@ -331,5 +392,91 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginVertical: 4,
+  },
+})
+
+/** Desktop `.tm-notes-editor-body`: 16px, line-height 1.7; headings from `.tm-notes-rich-body`. */
+const noteStyles = StyleSheet.create({
+  root: {
+    gap: 8,
+  },
+  paragraph: {
+    fontSize: 16,
+    lineHeight: 27,
+    color: colors.text,
+  },
+  h1: {
+    fontSize: 26,
+    fontWeight: '700',
+    lineHeight: 44,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  h2: {
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 37,
+    marginTop: 9,
+    marginBottom: 5,
+  },
+  h3: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 31,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  list: {
+    gap: 6,
+    marginVertical: 2,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  listBullet: {
+    width: 22,
+    fontSize: 16,
+    lineHeight: 27,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  listText: {
+    flex: 1,
+  },
+  codeBlock: {
+    borderRadius: 8,
+    backgroundColor: colors.inputBg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+    marginVertical: 4,
+  },
+  codeLang: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  codeText: {
+    fontFamily: 'Menlo, Monaco, Consolas, monospace',
+    fontSize: 15,
+    lineHeight: 25,
+    color: colors.text,
+  },
+  quote: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.border,
+    paddingLeft: 12,
+    paddingVertical: 2,
+    marginVertical: 4,
+  },
+  quoteText: {
+    color: colors.textSecondary,
+  },
+  hr: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: 8,
   },
 })

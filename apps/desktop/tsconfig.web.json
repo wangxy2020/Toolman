@@ -4,7 +4,11 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@toolman/shared": ["../../packages/shared/src/index.ts"]
+    }
   },
   "include": ["src/renderer/**/*"]
 }

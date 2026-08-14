@@ -1,11 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { isAgentChatScope, resolveAgentChatScope } from '../chat/agentScopes'
+import { isAgentChatScope } from '../chat/agentScopes'
+import { AgentSettingsModal } from '../features/AgentSettingsModal'
+import { CommunitySettingsModal } from '../features/CommunitySettingsModal'
+import { KnowledgeSettingsModal } from '../features/KnowledgeSettingsModal'
+import { NotesSettingsModal } from '../features/NotesSettingsModal'
+import { ProjectSettingsModal } from '../features/ProjectSettingsModal'
+import { useOptionalClassroomUi } from '../features/ClassroomPanes'
+import { useOptionalGroupChat } from '../features/GroupPanes'
 import { IconMoreHorizontal } from '../icons/nav-icons'
+import { useI18n } from '../i18n'
 import type { MobileModuleId } from '../modules'
-import type { SettingsTabId } from '../settings/tabs'
-import { useMobileApp, type ChatSession } from '../state/MobileAppContext'
+import { useMobileApp } from '../state/MobileAppContext'
 import { colors, shellStyles } from '../theme'
 
 type MenuItem = {
@@ -14,72 +21,87 @@ type MenuItem = {
   onPress: () => void
 }
 
-function newId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
 function buildMenuItems(options: {
   module: MobileModuleId
   showSettings: boolean
-  openSettingsTab: (tab: SettingsTabId) => void
   closeSettings: () => void
-  createAgentSession: () => void
-  createNote: () => void
-  openLeftPane: () => void
+  openClassroomSettings: () => void
+  openClassroomRecords: () => void
+  openGroupSettings: () => void
+  openAgentSettings: () => void
+  openKnowledgeSettings: () => void
+  openNotesSettings: () => void
+  openCommunitySettings: () => void
+  openProjectSettings: () => void
+  closeLabel: string
+  classroomRecordsLabel: string
+  courseSettingsLabel: string
+  agentSettingsLabel: string
+  groupSettingsLabel: string
+  knowledgeSettingsLabel: string
+  notesSettingsLabel: string
+  communitySettingsLabel: string
+  projectSettingsLabel: string
 }): MenuItem[] {
   const {
     module,
     showSettings,
-    openSettingsTab,
     closeSettings,
-    createAgentSession,
-    createNote,
-    openLeftPane,
+    openClassroomSettings,
+    openClassroomRecords,
+    openGroupSettings,
+    openAgentSettings,
+    openKnowledgeSettings,
+    openNotesSettings,
+    openCommunitySettings,
+    openProjectSettings,
+    closeLabel,
+    classroomRecordsLabel,
+    courseSettingsLabel,
+    agentSettingsLabel,
+    groupSettingsLabel,
+    knowledgeSettingsLabel,
+    notesSettingsLabel,
+    communitySettingsLabel,
+    projectSettingsLabel,
   } = options
 
   if (showSettings) {
+    return [{ id: 'close', label: closeLabel, onPress: closeSettings }]
+  }
+
+  if (module === 'classroom') {
     return [
-      { id: 'user', label: '用户信息', onPress: () => openSettingsTab('user') },
-      { id: 'system', label: '系统设置', onPress: () => openSettingsTab('system') },
-      { id: 'close', label: '关闭设置', onPress: closeSettings },
+      { id: 'records', label: classroomRecordsLabel, onPress: openClassroomRecords },
+      { id: 'settings', label: courseSettingsLabel, onPress: openClassroomSettings },
     ]
+  }
+
+  if (module === 'group') {
+    return [{ id: 'settings', label: groupSettingsLabel, onPress: openGroupSettings }]
+  }
+
+  if (module === 'knowledge') {
+    return [{ id: 'settings', label: knowledgeSettingsLabel, onPress: openKnowledgeSettings }]
+  }
+
+  if (module === 'notes') {
+    return [{ id: 'settings', label: notesSettingsLabel, onPress: openNotesSettings }]
+  }
+
+  if (module === 'community') {
+    return [{ id: 'settings', label: communitySettingsLabel, onPress: openCommunitySettings }]
+  }
+
+  if (module === 'projects') {
+    return [{ id: 'settings', label: projectSettingsLabel, onPress: openProjectSettings }]
   }
 
   if (isAgentChatScope(module)) {
-    const settingsTab: SettingsTabId =
-      module === 'agent' ? 'agent' : module === 'classroom' ? 'classroom' : 'projects'
-    const settingsLabel =
-      module === 'agent' ? '智能体设置' : module === 'classroom' ? '课堂设置' : '项目设置'
-    return [
-      { id: 'new-topic', label: '新建话题', onPress: createAgentSession },
-      { id: 'settings', label: settingsLabel, onPress: () => openSettingsTab(settingsTab) },
-    ]
+    return [{ id: 'settings', label: agentSettingsLabel, onPress: openAgentSettings }]
   }
 
-  switch (module) {
-    case 'knowledge':
-      return [
-        { id: 'add-kb', label: '添加知识库', onPress: openLeftPane },
-        { id: 'settings', label: '知识库设置', onPress: () => openSettingsTab('knowledge') },
-      ]
-    case 'notes':
-      return [
-        { id: 'new-note', label: '新建笔记', onPress: createNote },
-        { id: 'settings', label: '笔记设置', onPress: () => openSettingsTab('notes') },
-      ]
-    case 'group':
-      return [
-        { id: 'create-group', label: '创建群组', onPress: openLeftPane },
-        { id: 'settings', label: '群组设置', onPress: () => openSettingsTab('group') },
-      ]
-    case 'community':
-      return [
-        { id: 'explore', label: '探索社区', onPress: openLeftPane },
-        { id: 'settings', label: '社区设置', onPress: () => openSettingsTab('community') },
-      ]
-    default:
-      return [{ id: 'settings', label: '设置', onPress: () => openSettingsTab('system') }]
-  }
+  return []
 }
 
 /** Top-bar overflow menu; items depend on the active module / settings page. */
@@ -89,88 +111,92 @@ export function ModuleOverflowMenu() {
     module,
     showSettings,
     setShowSettings,
-    setSettingsTab,
     setLeftOpen,
-    upsertSession,
-    setActiveSessionId,
-    notes,
-    setNotes,
-    notebooks,
-    activeNoteId,
-    setActiveNoteId,
   } = useMobileApp()
   const [open, setOpen] = useState(false)
+  const [agentSettingsOpen, setAgentSettingsOpen] = useState(false)
+  const [knowledgeSettingsOpen, setKnowledgeSettingsOpen] = useState(false)
+  const [notesSettingsOpen, setNotesSettingsOpen] = useState(false)
+  const [communitySettingsOpen, setCommunitySettingsOpen] = useState(false)
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
+  const groupChat = useOptionalGroupChat()
+  const classroomUi = useOptionalClassroomUi()
+  const { t } = useI18n()
 
   const items = useMemo(
     () =>
       buildMenuItems({
         module,
         showSettings,
-        openSettingsTab: (tab) => {
-          setSettingsTab(tab)
-          setShowSettings(true)
-          setLeftOpen(false)
-        },
+        closeLabel: t('settings.close'),
+        classroomRecordsLabel: t('overflow.classroomRecords'),
+        courseSettingsLabel: t('overflow.courseSettings'),
+        agentSettingsLabel: t('overflow.agentSettings'),
+        groupSettingsLabel: t('overflow.groupSettings'),
+        knowledgeSettingsLabel: t('overflow.knowledgeSettings'),
+        notesSettingsLabel: t('overflow.notesSettings'),
+        communitySettingsLabel: t('overflow.communitySettings'),
+        projectSettingsLabel: t('overflow.projectSettings'),
         closeSettings: () => {
           setShowSettings(false)
           setLeftOpen(false)
         },
-        createAgentSession: () => {
-          const agentScope = resolveAgentChatScope(module)
-          const session: ChatSession = {
-            id: newId('sess'),
-            title: '新话题',
-            updatedAt: Date.now(),
-            messages: [],
-            agentScope,
-          }
-          upsertSession(session)
-          setActiveSessionId(session.id)
-          setShowSettings(false)
-          setLeftOpen(true)
-        },
-        createNote: () => {
-          const id = `note-${Date.now().toString(36)}`
-          const notebookId =
-            notes.find((item) => item.id === activeNoteId)?.notebookId ??
-            notebooks.find((item) => item.isDefault)?.id ??
-            notebooks[0]?.id ??
-            'notebook-default'
-          setNotes([
-            { id, notebookId, title: '新笔记', body: '', updatedAt: Date.now() },
-            ...notes,
-          ])
-          setActiveNoteId(id)
+        openClassroomSettings: () => {
           setShowSettings(false)
           setLeftOpen(false)
+          classroomUi?.openCourseSettings()
         },
-        openLeftPane: () => {
+        openClassroomRecords: () => {
           setShowSettings(false)
-          setLeftOpen(true)
+          setLeftOpen(false)
+          classroomUi?.openRecords()
+        },
+        openGroupSettings: () => {
+          setShowSettings(false)
+          setLeftOpen(false)
+          groupChat?.openSettingsModal()
+        },
+        openAgentSettings: () => {
+          setShowSettings(false)
+          setLeftOpen(false)
+          setAgentSettingsOpen(true)
+        },
+        openKnowledgeSettings: () => {
+          setLeftOpen(false)
+          setKnowledgeSettingsOpen(true)
+        },
+        openNotesSettings: () => {
+          setLeftOpen(false)
+          setNotesSettingsOpen(true)
+        },
+        openCommunitySettings: () => {
+          setLeftOpen(false)
+          setCommunitySettingsOpen(true)
+        },
+        openProjectSettings: () => {
+          setLeftOpen(false)
+          setProjectSettingsOpen(true)
         },
       }),
     [
+      classroomUi,
+      groupChat,
       module,
-      notes,
-      notebooks,
-      activeNoteId,
-      setActiveNoteId,
-      setActiveSessionId,
       setLeftOpen,
-      setNotes,
-      setSettingsTab,
       setShowSettings,
       showSettings,
-      upsertSession,
+      t,
     ],
   )
+
+  if (items.length === 0) return null
 
   return (
     <>
       <Pressable
         style={[shellStyles.iconBtn, open ? shellStyles.iconBtnActive : null]}
         onPress={() => setOpen(true)}
-        accessibilityLabel="功能菜单"
+        accessibilityLabel={t('shell.moreMenu')}
         hitSlop={8}
       >
         <IconMoreHorizontal size={18} color={open ? colors.accent : colors.textSecondary} />
@@ -198,12 +224,28 @@ export function ModuleOverflowMenu() {
                   pressed ? styles.menuItemPressed : null,
                 ]}
               >
-                <Text style={styles.menuItemLabel}>{item.label}</Text>
+                <Text style={styles.menuItemLabel} numberOfLines={1}>
+                  {item.label}
+                </Text>
               </Pressable>
             ))}
           </View>
         </View>
       </Modal>
+      <AgentSettingsModal visible={agentSettingsOpen} onClose={() => setAgentSettingsOpen(false)} />
+      <KnowledgeSettingsModal
+        visible={knowledgeSettingsOpen}
+        onClose={() => setKnowledgeSettingsOpen(false)}
+      />
+      <NotesSettingsModal visible={notesSettingsOpen} onClose={() => setNotesSettingsOpen(false)} />
+      <CommunitySettingsModal
+        visible={communitySettingsOpen}
+        onClose={() => setCommunitySettingsOpen(false)}
+      />
+      <ProjectSettingsModal
+        visible={projectSettingsOpen}
+        onClose={() => setProjectSettingsOpen(false)}
+      />
     </>
   )
 }
@@ -216,9 +258,9 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   menu: {
-    minWidth: 168,
-    maxWidth: 240,
-    borderRadius: 10,
+    alignSelf: 'flex-end',
+    minWidth: 132,
+    borderRadius: 8,
     backgroundColor: colors.bg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -230,8 +272,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   menuItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     backgroundColor: colors.bg,
   },
   menuItemBorder: {

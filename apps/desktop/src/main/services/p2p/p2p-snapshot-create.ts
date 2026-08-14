@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {
@@ -145,10 +145,4 @@ export function maybeAutoSnapshot(workspaceId: string): P2pSnapshotRow | null {
 
 export function getLatestWorkspaceSnapshot(workspaceId: string): P2pSnapshotRow | null {
   return getSnapshotRepo().findLatest(workspaceId)
-}
-
-export function loadSnapshotCompressed(workspaceId: string, snapshotSeq: number): Buffer | null {
-  const filePath = snapshotFilePath(workspaceId, snapshotSeq)
-  if (!existsSync(filePath)) return null
-  return readFileSync(filePath)
 }

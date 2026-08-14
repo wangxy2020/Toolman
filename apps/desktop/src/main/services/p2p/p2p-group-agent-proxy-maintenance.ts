@@ -2,21 +2,11 @@ import { eq } from 'drizzle-orm'
 import { assistants } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { getSessionRepository } from '../../db/repos'
-import { toIpcSession } from '../../mappers/chat'
 import { updateAssistant } from '../assistant.service'
 import { deleteSession } from '../session.service'
 import { getDefaultWorkspace } from '../workspace.service'
-import { readAgentShareMetadata } from './agent-share.service'
 import { readSessionProxyMetadata } from './p2p-group-agent-proxy-metadata'
 import { resolveSharedAgentModelId } from './p2p-group-agent-proxy-model'
-
-export function parseAgentSharePermissionForSession(
-  metadataJson: string | null | undefined,
-  sourceSessionId: string,
-): 'read' | 'callable' {
-  const metadata = readAgentShareMetadata(metadataJson)
-  return metadata.sessionPermissions?.[sourceSessionId] ?? 'read'
-}
 
 export function syncGroupProxyAssistantModels(workspaceId: string): void {
   const db = getDatabase()
@@ -98,9 +88,4 @@ export function syncLocalProxySessionPermissions(input: {
       },
     })
   }
-}
-
-export function toIpcSessionFromId(sessionId: string) {
-  const row = getSessionRepository().findRowById(sessionId)
-  return row ? toIpcSession(row) : null
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { loadAuthStore } from '../auth/localAuth'
 import type { MobileAuthSession } from '../auth/types'
 import {
@@ -20,10 +20,18 @@ import {
   type NoteTombstone,
 } from '../storage/notes'
 import { loadKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
-import { DEFAULT_MODULE_PREFS, loadModulePrefs, type ModulePrefs } from '../settings/prefs'
+import { loadClassroomCourses, saveClassroomCourses } from '../storage/classroomCourses'
+import { DEFAULT_MODULE_PREFS, loadModulePrefs, saveModulePrefs, type ModulePrefs } from '../settings/prefs'
+import { isTopNavModuleId } from '../settings/nav-visibility'
+import { I18nProvider } from '../i18n'
 import { DEFAULT_SETTINGS_TAB, type SettingsTabId } from '../settings/tabs'
 import { pullAndApplySync, pushNoteChanges, countDesktopHostsOnline, type KnowledgeMetaItem } from '../sync/mobileSync'
+import {
+  applyClassroomCoursesToSessions,
+  type MobileClassroomCourse,
+} from '../sync/classroomSyncMerge'
 import { listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
+import { orderClassroomCourses } from '../features/classroomSidebar'
 import type { MobileModuleId } from '../modules'
 import {
   MobileAppProvider,
@@ -37,6 +45,16 @@ const EMPTY_ACTIVE: Record<AgentChatScope, string | null> = {
   agent: null,
   classroom: null,
   projects: null,
+}
+
+function classroomSessionFromCourse(course: MobileClassroomCourse): ChatSession {
+  return {
+    id: course.id,
+    title: course.courseName || course.title,
+    updatedAt: course.updatedAt,
+    messages: [],
+    agentScope: 'classroom',
+  }
 }
 
 function legacySessionFromSecure(
@@ -55,6 +73,7 @@ function legacySessionFromSecure(
     entitlements: [],
     communityRole: null,
     lastLoginAt: Date.now(),
+    wechatBound: false,
   }
 }
 
@@ -73,6 +92,8 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
   const [notes, setNotes] = useState<MobileNote[]>([])
   const [deletedNotes, setDeletedNotes] = useState<NoteTombstone[]>([])
   const [knowledgeMeta, setKnowledgeMeta] = useState<KnowledgeMetaItem[]>([])
+  const [classroomCourses, setClassroomCourses] = useState<MobileClassroomCourse[]>([])
+  const classroomCourseIdsRef = useRef<string[]>([])
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>(DEFAULT_SETTINGS_TAB)
@@ -127,7 +148,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const [authStore, identity, token, model, prefs, chat, notesStore, knowledgeSnap] =
+      const [authStore, identity, token, model, prefs, chat, notesStore, knowledgeSnap, classroomStore] =
         await Promise.all([
           loadAuthStore(),
           loadIdentity(),
@@ -137,15 +158,22 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
           loadChatSessions(),
           loadNotesStore(),
           loadKnowledgeSnapshot(),
+          loadClassroomCourses(),
         ])
       setModelConfig(model)
       setModulePrefs(prefs)
+      if (prefs.app.restoreLastSession && isTopNavModuleId(prefs.app.lastModule)) {
+        const last = prefs.app.lastModule
+        if (prefs.nav.visibleModuleIds.includes(last)) setModule(last)
+      }
       setSessions(chat.sessions)
       setActiveSessionByScope(chat.activeSessionByScope)
       setNotebooks(notesStore.notebooks)
       setNotes(notesStore.notes)
       setDeletedNotes(notesStore.deletedNotes)
       setActiveNoteId(notesStore.activeNoteId)
+      setClassroomCourses(classroomStore)
+      classroomCourseIdsRef.current = classroomStore.map((course) => course.id)
       if (knowledgeSnap) {
         setKnowledgeMeta(
           listedSyncKnowledgeItems(
@@ -182,6 +210,32 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready) return
+    void saveClassroomCourses(classroomCourses)
+  }, [ready, classroomCourses])
+
+  useEffect(() => {
+    if (!ready) return
+    const prevIds = classroomCourseIdsRef.current
+    setSessions((prev) =>
+      applyClassroomCoursesToSessions(
+        prev,
+        prevIds,
+        classroomCourses,
+        classroomSessionFromCourse,
+      ),
+    )
+    const visibleIds = new Set(orderClassroomCourses(classroomCourses).map((course) => course.id))
+    setActiveSessionByScope((active) => {
+      if (active.classroom && visibleIds.has(active.classroom)) return active
+      const nextId = orderClassroomCourses(classroomCourses)[0]?.id ?? null
+      if (active.classroom === nextId) return active
+      return { ...active, classroom: nextId }
+    })
+    classroomCourseIdsRef.current = classroomCourses.map((course) => course.id)
+  }, [ready, classroomCourses])
+
+  useEffect(() => {
+    if (!ready) return
     let cancelled = false
     void (async () => {
       const hostsOnline = await countDesktopHostsOnline()
@@ -209,11 +263,13 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
           notes,
           deletedNotes,
           knowledgeMeta,
+          classroomCourses,
         })
         if (cancelled) return
         setNotes(applied.notes)
         setDeletedNotes(applied.deletedNotes)
         setKnowledgeMeta(applied.knowledgeMeta)
+        setClassroomCourses(applied.classroomCourses)
         setSyncCursor(applied.nextCursor)
         setDesktopHostsOnline(applied.hostsOnline)
         setSyncStatus(applied.knowledgeError ? 'error' : 'idle')
@@ -240,6 +296,19 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
     }, 1200)
     return () => clearTimeout(timer)
   }, [ready, auth?.identityId, notes, deletedNotes, modulePrefs.notes.syncEnabled, modulePrefs.notes.autoSyncOnEdit])
+
+  const prefsRef = useRef(modulePrefs)
+  prefsRef.current = modulePrefs
+
+  useEffect(() => {
+    if (!ready) return
+    const prefs = prefsRef.current
+    if (!prefs.app.restoreLastSession) return
+    if (!isTopNavModuleId(module) || prefs.app.lastModule === module) return
+    const next = { ...prefs, app: { ...prefs.app, lastModule: module } }
+    setModulePrefs(next)
+    void saveModulePrefs(next)
+  }, [module, ready])
 
   const value = useMemo(
     () => ({
@@ -272,6 +341,8 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       setDeletedNotes,
       knowledgeMeta,
       setKnowledgeMeta,
+      classroomCourses,
+      setClassroomCourses,
       activeNoteId,
       setActiveNoteId,
       showSettings,
@@ -300,6 +371,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       notes,
       deletedNotes,
       knowledgeMeta,
+      classroomCourses,
       activeNoteId,
       showSettings,
       settingsTab,
@@ -308,5 +380,9 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
   )
 
   if (!ready) return null
-  return <MobileAppProvider value={value}>{children}</MobileAppProvider>
+  return (
+    <I18nProvider language={modulePrefs.app.language}>
+      <MobileAppProvider value={value}>{children}</MobileAppProvider>
+    </I18nProvider>
+  )
 }

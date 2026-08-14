@@ -1,8 +1,6 @@
 export * from './channels.js'
 export * from './base.js'
 export * from './agent.js'
-// Deprecated DTO layer — prefer Zod schemas in `./agent.js`. Kept as a deep import only.
-// export * from './chat-persistence.js'
 export * from './workspace.js'
 export * from './tools.js'
 export * from './mcp.js'

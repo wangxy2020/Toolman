@@ -38,6 +38,18 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/desktop/src/main/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: ['./apps/desktop/tsconfig.node.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: true }],
+    },
+  },
+  {
     files: ['apps/mobile/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [

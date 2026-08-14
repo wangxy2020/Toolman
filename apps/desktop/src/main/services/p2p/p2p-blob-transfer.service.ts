@@ -6,7 +6,6 @@ export {
   fetchBlobFromPeers,
   fetchKnowledgeBlobForSave,
   pushBlobToPeers,
-  scheduleBlobFetch,
 } from './p2p-blob-fetch'
 
 export {

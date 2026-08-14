@@ -3,6 +3,8 @@ import { logStructured } from '../structured-log.service'
 import { P2pBridge } from './p2p-bridge'
 import { handleP2pFileChannelMessage } from './p2p-blob-transfer.service'
 import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
+import { GROUP_CHAT_CHANNEL } from './p2p-group-chat-constants'
+import { AGENT_RELAY_CHANNEL } from './p2p-agent-relay/state'
 import { describeReplicationMessage } from './p2p-events-channel'
 import { dispatchP2pAgentRelayMessage } from './p2p-sync-lifecycle'
 import { parseReplicationMessage } from './p2p-sync-protocol'
@@ -30,14 +32,14 @@ export async function processP2pIncomingMessages(): Promise<void> {
       continue
     }
 
-    if (item.channel === 'agent-relay') {
+    if (item.channel === AGENT_RELAY_CHANNEL) {
       await runIncomingChannelHandler('agent relay message', () =>
         dispatchP2pAgentRelayMessage(item.peerDeviceId, item.data),
       )
       continue
     }
 
-    if (item.channel === 'group-chat') {
+    if (item.channel === GROUP_CHAT_CHANNEL) {
       await runIncomingChannelHandler('group chat message', () =>
         handleP2pGroupChatChannelMessage(item.peerDeviceId, item.data),
       )

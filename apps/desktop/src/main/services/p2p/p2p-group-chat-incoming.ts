@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 import {
@@ -138,10 +139,6 @@ function handleIncomingP2pGroupChatClear(peerDeviceId: string, workspaceId: stri
   broadcastP2pGroupChatCleared(workspaceId)
 }
 
-export function handleP2pGroupChatClearFromPeer(peerDeviceId: string, workspaceId: string): void {
-  handleIncomingP2pGroupChatClear(peerDeviceId, workspaceId)
-}
-
 function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: unknown): void {
   const message = P2pGroupChatMessageSchema.parse(wireMessage)
   const connected = getKnownP2pConnections().some(
@@ -158,7 +155,9 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
     const workspace = getWorkspaceRepo().findById(message.workspaceId)
     const localDeviceId = getP2pDeviceInfo().deviceId
     if (workspace?.ownerDeviceId === localDeviceId) {
-      void applyRemoteMemberJoin(
+      fireAndForget(
+        'p2p',
+        applyRemoteMemberJoin(
         {
           workspaceId: message.workspaceId,
           member: {
@@ -174,6 +173,7 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
           peerDeviceId,
         },
         { requirePeerTrust: false },
+      ),
       )
     } else if (workspace?.ownerDeviceId === peerDeviceId) {
       ensureOwnerMemberRecord(message.workspaceId)
@@ -205,5 +205,5 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
   }
 
   broadcastP2pGroupChatMessage(message)
-  void maybeRelayGroupChatAfterReceive(peerDeviceId, message)
+  fireAndForget('p2p', maybeRelayGroupChatAfterReceive(peerDeviceId, message))
 }

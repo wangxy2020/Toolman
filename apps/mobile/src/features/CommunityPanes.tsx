@@ -1,6 +1,5 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -19,6 +18,8 @@ import {
 import { isCommunityModerator } from '../auth/localAuth'
 import { useMobileApp } from '../state/MobileAppContext'
 import { colors, shellStyles } from '../theme'
+import { resolveCommunityHubBaseUrl, pickReachableCommunityHubBaseUrl } from '../settings/communityHubUrl'
+import { listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from '../sync/desktopDevHost'
 import {
   fetchCommunityMessages,
   fetchCommunityNews,
@@ -26,7 +27,14 @@ import {
   fetchCommunityTasks,
   probeCommunityHub,
   type CommunityListItem,
+  type CommunityResourceType,
 } from './communityHubClient'
+import {
+  CommunityMessagePublishModal,
+  CommunityNewsSourcesModal,
+  CommunityResourcePublishModal,
+  CommunityTaskPublishModal,
+} from './CommunityPublishModals'
 import {
   COMMUNITY_SIDEBAR_SECTIONS,
   getCommunitySection,
@@ -34,7 +42,6 @@ import {
   MODERATION_SUBTABS,
   USER_CENTER_SECTIONS,
   type CommunitySidebarSection,
-  type CommunitySortField,
   type ModerationCategoryId,
   type UserCenterSectionId,
 } from './communitySidebar'
@@ -42,12 +49,10 @@ import {
   CommunityCategoryChips,
   CommunityEmptyState,
   CommunityListCard,
-  CommunityOfflineBanner,
   CommunityPanelHeader,
   CommunityPublishButton,
   CommunityRefreshButton,
   CommunitySecondaryButton,
-  CommunitySortToolbar,
   CommunityStatGrid,
   sortCommunityItems,
 } from './communityPanelUi'
@@ -57,6 +62,7 @@ import {
   SidebarList,
   SidebarShell,
 } from './sidebarUi'
+import { useRegisterModulePanelStatus } from './modulePageStatus'
 
 type CommunityUiState = {
   activeSection: CommunitySidebarSection
@@ -108,9 +114,7 @@ export function CommunityLeftPane() {
       <SidebarAddButton
         label="探索社区"
         disabled
-        onPress={() => {
-          /* Desktop: coming soon */
-        }}
+        onPress={() => undefined}
       />
       <SidebarList>
         {sections.map((section) => (
@@ -136,43 +140,50 @@ function useHubListLoader(
   loading: boolean
   offline: boolean
   error: string | null
+  hubBaseUrl: string
+  triedHubUrls: string[]
   reload: () => void
 } {
   const { auth, modulePrefs } = useMobileApp()
-  const hubBaseUrl = modulePrefs.community.hubBaseUrl.trim()
+  const configuredHub = modulePrefs.community.hubBaseUrl
   const section = getCommunitySection(sectionId)
   const [items, setItems] = useState<CommunityListItem[]>([])
   const [loading, setLoading] = useState(false)
-  const [offline, setOffline] = useState(!hubBaseUrl)
+  const [offline, setOffline] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hubBaseUrl, setHubBaseUrl] = useState(() => resolveCommunityHubBaseUrl(configuredHub))
+  const [triedHubUrls, setTriedHubUrls] = useState<string[]>([])
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     const run = async () => {
-      if (!hubBaseUrl) {
-        setItems([])
-        setOffline(true)
-        setError(null)
-        setLoading(false)
-        return
-      }
       setLoading(true)
       setError(null)
       try {
-        const online = await probeCommunityHub(hubBaseUrl)
+        const packagerHostnames = listDesktopDevHostnames()
+        const picked = await pickReachableCommunityHubBaseUrl(configuredHub, probeCommunityHub, {
+          packagerHostnames,
+          includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
+        })
         if (cancelled) return
-        setOffline(!online)
+        setHubBaseUrl(picked.url)
+        setTriedHubUrls(picked.tried)
+        setOffline(!picked.online)
+        if (!picked.online) {
+          setItems([])
+          return
+        }
         const userId = auth?.identityId ?? null
         let next: CommunityListItem[] = []
         if (section.listKind === 'news') {
-          next = await fetchCommunityNews(hubBaseUrl, userId)
+          next = await fetchCommunityNews(picked.url, userId)
         } else if (section.listKind === 'messages') {
-          next = await fetchCommunityMessages(hubBaseUrl, userId)
+          next = await fetchCommunityMessages(picked.url, userId)
         } else if (section.listKind === 'market' && section.resourceType) {
-          next = await fetchCommunityResources(hubBaseUrl, section.resourceType, userId)
+          next = await fetchCommunityResources(picked.url, section.resourceType, userId)
         } else if (section.listKind === 'tasks') {
-          next = await fetchCommunityTasks(hubBaseUrl, userId)
+          next = await fetchCommunityTasks(picked.url, userId)
         }
         if (!cancelled) setItems(next)
       } catch (err) {
@@ -189,13 +200,15 @@ function useHubListLoader(
     return () => {
       cancelled = true
     }
-  }, [auth?.identityId, hubBaseUrl, section.listKind, section.resourceType, tick])
+  }, [auth?.identityId, configuredHub, section.listKind, section.resourceType, tick])
 
   return {
     items,
     loading,
     offline,
     error,
+    hubBaseUrl,
+    triedHubUrls,
     reload: () => setTick((n) => n + 1),
   }
 }
@@ -209,36 +222,65 @@ function comingSoon(label: string) {
   Alert.alert(label, message)
 }
 
+function notifyLoginRequired() {
+  const message = '请先登录或注册后再发布。'
+  if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+    globalThis.alert(message)
+    return
+  }
+  Alert.alert('需要登录', message)
+}
+
 function CommunityListSectionPanel({
   sectionId,
 }: {
   sectionId: Exclude<CommunitySidebarSection, 'mine' | 'management'>
 }) {
   const section = getCommunitySection(sectionId)
-  const { modulePrefs } = useMobileApp()
-  const { items, loading, offline, error, reload } = useHubListLoader(sectionId)
+  const { auth, modulePrefs } = useMobileApp()
+  const { items, loading, offline, error, reload, hubBaseUrl, triedHubUrls } = useHubListLoader(sectionId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [sortField, setSortField] = useState<CommunitySortField>('createdAt')
-  const [sortAscending, setSortAscending] = useState(false)
+  const [publishOpen, setPublishOpen] = useState(false)
+  const [rssOpen, setRssOpen] = useState(false)
 
-  const sorted = useMemo(
-    () => sortCommunityItems(items, sortField, sortAscending),
-    [items, sortAscending, sortField],
-  )
+  const sorted = useMemo(() => sortCommunityItems(items), [items])
+  const userId = auth?.identityId ?? null
+  const guestBlocked = modulePrefs.community.guestReadOnly && !auth
 
-  const onSortFieldChange = useCallback((field: CommunitySortField) => {
-    setSortField((prev) => {
-      if (prev === field) {
-        setSortAscending((asc) => !asc)
-        return prev
+  const pageStatus = useMemo(() => {
+    if (error) return { tone: 'error' as const, message: error }
+    if (offline) {
+      return {
+        tone: 'warning' as const,
+        message: '无法连接社区 Hub。请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
+        meta: triedHubUrls.join(' · ') || hubBaseUrl,
       }
-      setSortAscending(field === 'name')
-      return field
-    })
-  }, [])
+    }
+    if (loading) return { tone: 'info' as const, message: '加载中…' }
+    return { tone: 'muted' as const, message: '就绪', meta: `共 ${sorted.length} 条` }
+  }, [error, hubBaseUrl, loading, offline, sorted.length, triedHubUrls])
 
-  const guestBlocked = modulePrefs.community.guestReadOnly
-  const publishDisabled = offline || guestBlocked
+  useRegisterModulePanelStatus('community-page', pageStatus)
+
+  const openPublish = () => {
+    if (offline) return
+    if (guestBlocked) {
+      notifyLoginRequired()
+      return
+    }
+    setPublishOpen(true)
+  }
+
+  const openRss = () => {
+    if (offline) return
+    if (guestBlocked) {
+      notifyLoginRequired()
+      return
+    }
+    setRssOpen(true)
+  }
+
+  const resourceType = section.resourceType as CommunityResourceType | undefined
 
   return (
     <View style={styles.panelRoot}>
@@ -250,39 +292,27 @@ function CommunityListSectionPanel({
             {section.showPublish !== false && section.publishLabel ? (
               <CommunityPublishButton
                 label={section.publishLabel}
-                disabled={publishDisabled}
-                onPress={() => comingSoon(section.publishLabel!)}
+                disabled={offline}
+                onPress={openPublish}
               />
             ) : null}
             {section.showRss ? (
               <CommunitySecondaryButton
                 label="RSS 源"
                 disabled={offline}
-                onPress={() => comingSoon('RSS 源')}
+                onPress={openRss}
               />
             ) : null}
             <CommunityRefreshButton loading={loading} onPress={reload} />
           </>
         }
       />
-      <CommunityOfflineBanner
-        visible={offline}
-        message={
-          error
-            ? error
-            : modulePrefs.community.hubBaseUrl.trim()
-              ? undefined
-              : '未配置 Hub Base URL。请在设置 → 社区填写地址后刷新。'
-        }
-      />
-      {section.sortable ? (
-        <CommunitySortToolbar
-          sortField={sortField}
-          sortAscending={sortAscending}
-          onSortFieldChange={onSortFieldChange}
-        />
-      ) : null}
-      <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}>
+      <ScrollView
+        style={styles.panelScroll}
+        contentContainerStyle={styles.panelScrollContent}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+      >
         {loading && sorted.length === 0 ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={colors.accent} />
@@ -302,6 +332,43 @@ function CommunityListSectionPanel({
           ))
         )}
       </ScrollView>
+      {section.listKind === 'messages' ? (
+        <CommunityMessagePublishModal
+          visible={publishOpen}
+          hubBaseUrl={hubBaseUrl}
+          userId={userId}
+          onClose={() => setPublishOpen(false)}
+          onPublished={reload}
+        />
+      ) : null}
+      {section.listKind === 'tasks' ? (
+        <CommunityTaskPublishModal
+          visible={publishOpen}
+          hubBaseUrl={hubBaseUrl}
+          userId={userId}
+          onClose={() => setPublishOpen(false)}
+          onPublished={reload}
+        />
+      ) : null}
+      {section.listKind === 'market' && resourceType ? (
+        <CommunityResourcePublishModal
+          visible={publishOpen}
+          hubBaseUrl={hubBaseUrl}
+          userId={userId}
+          resourceType={resourceType}
+          onClose={() => setPublishOpen(false)}
+          onPublished={reload}
+        />
+      ) : null}
+      {section.showRss ? (
+        <CommunityNewsSourcesModal
+          visible={rssOpen}
+          hubBaseUrl={hubBaseUrl}
+          userId={userId}
+          onClose={() => setRssOpen(false)}
+          onPublished={reload}
+        />
+      ) : null}
     </View>
   )
 }
@@ -316,6 +383,13 @@ function MinePanel() {
     count: 0,
   }))
   const active = USER_CENTER_SECTIONS.find((item) => item.id === tab)!
+
+  useRegisterModulePanelStatus(
+    'community-page',
+    auth
+      ? { tone: 'muted', message: '就绪', meta: `共 0 条` }
+      : { tone: 'warning', message: '请先登录或注册后查看个人发布、安装与收藏' },
+  )
 
   return (
     <View style={styles.panelRoot}>
@@ -335,7 +409,12 @@ function MinePanel() {
         <Text style={styles.feedMetaText}>共 0 条</Text>
         <Text style={styles.feedMetaText}>按最新排序</Text>
       </View>
-      <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}>
+      <ScrollView
+        style={styles.panelScroll}
+        contentContainerStyle={styles.panelScrollContent}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+      >
         <CommunityEmptyState
           hint={
             auth
@@ -366,11 +445,22 @@ function ManagementPanel() {
   }))
   const activeSub = subTabs.find((item) => item.id === subTab) ?? subTabs[0]!
 
+  useRegisterModulePanelStatus(
+    'community-page',
+    canAccessManagement
+      ? { tone: 'muted', message: '就绪', meta: `共 0 条` }
+      : { tone: 'error', message: '需要管理权限' },
+  )
+
   if (!canAccessManagement) {
     return (
       <View style={styles.panelRoot}>
         <CommunityPanelHeader title={section.title} subtitle={section.subtitle} />
-        <ScrollView contentContainerStyle={styles.panelScrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.panelScrollContent}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+        >
           <CommunityEmptyState hint="需要管理权限" />
         </ScrollView>
       </View>
@@ -406,7 +496,12 @@ function ManagementPanel() {
         <Text style={styles.feedMetaText}>共 0 条</Text>
         <Text style={styles.feedMetaText}>最近扫描：—</Text>
       </View>
-      <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}>
+      <ScrollView
+        style={styles.panelScroll}
+        contentContainerStyle={styles.panelScrollContent}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+      >
         <CommunityEmptyState
           hint={`「${activeSub.label}」暂无条目`}
           meta="完整审核与处置流程与桌面端一致，数据对接后将显示队列。"
@@ -462,7 +557,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 20,
     paddingTop: 10,
   },
   identityBadge: {
@@ -477,7 +572,7 @@ const styles = StyleSheet.create({
   feedMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 4,
   },

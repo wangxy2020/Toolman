@@ -16,24 +16,29 @@ import {
   type MobileProviderId,
 } from '../settings/provider-presets'
 import { sanitizeApiKey } from '../chat/apiHeaders'
-import { SETTINGS_TABS } from '../settings/tabs'
+import { SETTINGS_TABS, SYSTEM_SETTINGS_SECTIONS, DEFAULT_SYSTEM_SECTION } from '../settings/tabs'
+import { useI18n } from '../i18n'
 import { useMobileApp } from '../state/MobileAppContext'
 import { colors } from '../theme'
 import {
   CURATED_EDGE_TTS_VOICES,
   resolveCuratedEdgeTtsVoice,
 } from '../voice'
+import { AboutSettingsPanel } from './AboutSettingsPanel'
+import { DiagnosticsSettingsPanel } from './DiagnosticsSettingsPanel'
+import { DisplaySettingsPanel } from './DisplaySettingsPanel'
+import { GeneralSettingsPanel } from './GeneralSettingsPanel'
+import { MemorySettingsPanel } from './MemorySettingsPanel'
+import { QuickPhrasesSettingsPanel } from './QuickPhrasesSettingsPanel'
 import { UserSettingsPanel } from './UserSettingsPanel'
 import {
   Field,
-  PrimaryButton,
-  SecondaryButton,
   Section,
   SettingsScroll,
   Toggle,
   settingsUiStyles,
 } from './settingsUi'
-import { SidebarItem, SidebarList, SidebarShell } from './sidebarUi'
+import { SidebarGroupLabel, SidebarItem, SidebarList, SidebarShell } from './sidebarUi'
 
 function describeApiKey(raw: string): string {
   const key = sanitizeApiKey(raw)
@@ -45,6 +50,7 @@ function describeApiKey(raw: string): string {
 
 export function SettingsLeftPane() {
   const { settingsTab, setSettingsTab } = useMobileApp()
+  const { t } = useI18n()
 
   return (
     <SidebarShell>
@@ -52,9 +58,22 @@ export function SettingsLeftPane() {
         {SETTINGS_TABS.map((tab) => (
           <SidebarItem
             key={tab.id}
-            label={tab.label}
+            label={t(tab.labelKey)}
             active={settingsTab === tab.id}
             onPress={() => setSettingsTab(tab.id)}
+          />
+        ))}
+        <SidebarGroupLabel
+          label={t('settings.system')}
+          onPress={() => setSettingsTab(DEFAULT_SYSTEM_SECTION)}
+        />
+        {SYSTEM_SETTINGS_SECTIONS.map((section) => (
+          <SidebarItem
+            key={section.id}
+            nested
+            label={t(section.labelKey)}
+            active={settingsTab === section.id}
+            onPress={() => setSettingsTab(section.id)}
           />
         ))}
       </SidebarList>
@@ -69,22 +88,20 @@ export function SettingsRightPane() {
       return <UserSettingsPanel />
     case 'agent':
       return <AgentSettingsPanel />
-    case 'knowledge':
-      return <KnowledgeSettingsPanel />
-    case 'notes':
-      return <NotesSettingsPanel />
-    case 'group':
-      return <GroupSettingsPanel />
-    case 'community':
-      return <CommunitySettingsPanel />
-    case 'classroom':
-      return <ClassroomSettingsPanel />
-    case 'projects':
-      return <ProjectsSettingsPanel />
-    case 'system':
-      return <SystemSettingsPanel />
+    case 'general':
+      return <GeneralSettingsPanel />
+    case 'display':
+      return <DisplaySettingsPanel />
+    case 'memory':
+      return <MemorySettingsPanel />
+    case 'quick-phrases':
+      return <QuickPhrasesSettingsPanel />
+    case 'diagnostics':
+      return <DiagnosticsSettingsPanel />
+    case 'about':
+      return <AboutSettingsPanel />
     default:
-      return null
+      return <GeneralSettingsPanel />
   }
 }
 
@@ -148,7 +165,7 @@ function AgentSettingsPanel() {
     const next = { ...modulePrefs, agent: { ...prefs, ...patch } }
     setModulePrefs(next)
     await saveModulePrefs(next)
-    setMessage('智能体偏好已保存')
+    setMessage('模型服务偏好已保存')
   }
 
   return (
@@ -177,7 +194,7 @@ function AgentSettingsPanel() {
         </Text>
       </Section>
 
-      <Section title="API 大模型">
+      <Section title="API 模型">
         <Field label="Base URL" value={baseUrl} onChangeText={setBaseUrl} />
         <Field
           label="API Key"
@@ -345,207 +362,5 @@ function AgentSettingsPanel() {
   )
 }
 
-
-function KnowledgeSettingsPanel() {
-  const { modulePrefs, setModulePrefs } = useMobileApp()
-  const prefs = modulePrefs.knowledge
-  const [message, setMessage] = useState<string | null>(null)
-
-  const patch = async (patch: Partial<ModulePrefs['knowledge']>) => {
-    const next = { ...modulePrefs, knowledge: { ...prefs, ...patch } }
-    setModulePrefs(next)
-    await saveModulePrefs(next)
-    setMessage('知识库设置已保存')
-  }
-
-  return (
-    <SettingsScroll>
-      <Section title="同步与索引">
-        <Toggle
-          label="同步知识库索引元数据"
-          value={prefs.syncEnabled}
-          onChange={(v) => void patch({ syncEnabled: v })}
-        />
-        <Toggle
-          label="索引/上传优先桌面"
-          value={prefs.preferDesktopIndex}
-          onChange={(v) => void patch({ preferDesktopIndex: v })}
-        />
-      </Section>
-      <Text style={styles.hint}>检索问答使用智能体页已配置的 API 模型。</Text>
-      {message ? <Text style={styles.hint}>{message}</Text> : null}
-    </SettingsScroll>
-  )
-}
-
-function NotesSettingsPanel() {
-  const { modulePrefs, setModulePrefs } = useMobileApp()
-  const prefs = modulePrefs.notes
-  const [message, setMessage] = useState<string | null>(null)
-
-  const patch = async (patch: Partial<ModulePrefs['notes']>) => {
-    const next = { ...modulePrefs, notes: { ...prefs, ...patch } }
-    setModulePrefs(next)
-    await saveModulePrefs(next)
-    setMessage('笔记设置已保存')
-  }
-
-  return (
-    <SettingsScroll>
-      <Section title="同步">
-        <Toggle
-          label="启用笔记同步"
-          value={prefs.syncEnabled}
-          onChange={(v) => void patch({ syncEnabled: v })}
-        />
-        <Toggle
-          label="编辑后自动纳入同步队列"
-          value={prefs.autoSyncOnEdit}
-          onChange={(v) => void patch({ autoSyncOnEdit: v })}
-        />
-      </Section>
-      {message ? <Text style={styles.hint}>{message}</Text> : null}
-    </SettingsScroll>
-  )
-}
-
-function GroupSettingsPanel() {
-  return <HostBridgePanel prefsKey="group" />
-}
-
-function ClassroomSettingsPanel() {
-  return <HostBridgePanel prefsKey="classroom" />
-}
-
-function ProjectsSettingsPanel() {
-  return <HostBridgePanel prefsKey="projects" />
-}
-
-function HostBridgePanel(props: {
-  prefsKey: 'group' | 'classroom' | 'projects'
-}) {
-  const { modulePrefs, setModulePrefs, desktopHostsOnline } = useMobileApp()
-  const prefs = modulePrefs[props.prefsKey]
-  const [message, setMessage] = useState<string | null>(null)
-
-  const patch = async (preferDesktopHost: boolean) => {
-    const next = {
-      ...modulePrefs,
-      [props.prefsKey]: { preferDesktopHost },
-    }
-    setModulePrefs(next)
-    await saveModulePrefs(next)
-    setMessage('设置已保存')
-  }
-
-  return (
-    <SettingsScroll>
-      <Section title="桌面宿主">
-        <Text style={styles.meta}>
-          当前在线宿主：{desktopHostsOnline > 0 ? desktopHostsOnline : '无'}
-        </Text>
-        <Toggle
-          label="优先经桌面宿主调用"
-          value={prefs.preferDesktopHost}
-          onChange={(v) => void patch(v)}
-        />
-      </Section>
-      {message ? <Text style={styles.hint}>{message}</Text> : null}
-    </SettingsScroll>
-  )
-}
-
-function CommunitySettingsPanel() {
-  const { modulePrefs, setModulePrefs } = useMobileApp()
-  const prefs = modulePrefs.community
-  const [hubBaseUrl, setHubBaseUrl] = useState(prefs.hubBaseUrl)
-  const [message, setMessage] = useState<string | null>(null)
-
-  const save = async (patch: Partial<ModulePrefs['community']>) => {
-    const next = {
-      ...modulePrefs,
-      community: { ...prefs, ...patch },
-    }
-    setModulePrefs(next)
-    await saveModulePrefs(next)
-    setMessage('社区设置已保存')
-  }
-
-  return (
-    <SettingsScroll>
-      <Section title="Hub">
-        <Field
-          label="Hub Base URL"
-          value={hubBaseUrl}
-          onChangeText={setHubBaseUrl}
-          placeholder="https://…"
-        />
-        <PrimaryButton
-          label="保存 Hub 地址"
-          onPress={() => void save({ hubBaseUrl: hubBaseUrl.trim() })}
-        />
-        <Toggle
-          label="未登录时仅访客只读"
-          value={prefs.guestReadOnly}
-          onChange={(v) => void save({ guestReadOnly: v })}
-        />
-      </Section>
-      {message ? <Text style={styles.hint}>{message}</Text> : null}
-    </SettingsScroll>
-  )
-}
-
-function SystemSettingsPanel() {
-  const { syncStatus, desktopHostsOnline } = useMobileApp()
-  const [analyticsOptIn, setAnalyticsOptIn] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-
-  return (
-    <SettingsScroll>
-      <Section title="关于">
-        <Text style={styles.meta}>Toolman Mobile</Text>
-        <Text style={styles.meta}>版本 0.1.0 · Expo / React Native</Text>
-        <Text style={styles.meta}>与桌面端共用账户（identity_id）</Text>
-      </Section>
-
-      <Section title="运行状态">
-        <Text style={styles.meta}>同步状态：{syncStatusLabel(syncStatus)}</Text>
-        <Text style={styles.meta}>
-          桌面宿主：{desktopHostsOnline > 0 ? `${desktopHostsOnline} 在线` : '无'}
-        </Text>
-      </Section>
-
-      <Section title="通用">
-        <Toggle
-          label="匿名诊断信息（可选）"
-          value={analyticsOptIn}
-          onChange={(v) => {
-            setAnalyticsOptIn(v)
-            setMessage(v ? '已开启诊断上报偏好（占位）' : '已关闭诊断上报偏好')
-          }}
-        />
-        <SecondaryButton
-          label="打开隐私说明"
-          onPress={() => setMessage('详见 docs/mobile/PRIVACY.md')}
-        />
-      </Section>
-
-      {message ? <Text style={styles.hint}>{message}</Text> : null}
-    </SettingsScroll>
-  )
-}
-
-function syncStatusLabel(status: string): string {
-  switch (status) {
-    case 'syncing':
-      return '同步中'
-    case 'error':
-      return '同步异常'
-    case 'offline':
-      return '离线'
-    default:
-      return '已同步'
-  }
-}
 
 const styles = settingsUiStyles

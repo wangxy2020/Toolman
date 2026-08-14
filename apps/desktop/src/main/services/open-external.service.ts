@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import { app, shell } from 'electron'
 import { logStructured } from './structured-log.service'
 
@@ -23,6 +24,6 @@ export function openExternalUrl(url: string): boolean {
     logStructured('window', 'warn', 'blocked openExternal', { url })
     return false
   }
-  void shell.openExternal(url)
+  fireAndForget('window', shell.openExternal(url))
   return true
 }

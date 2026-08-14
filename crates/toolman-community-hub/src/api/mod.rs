@@ -19,9 +19,12 @@ mod tasks;
 mod users;
 
 use axum::Router;
-use axum::extract::DefaultBodyLimit;
-use axum::middleware::from_fn_with_state;
+use axum::extract::{DefaultBodyLimit, Request};
+use axum::http::{HeaderName, HeaderValue, Method};
+use axum::middleware::{from_fn, from_fn_with_state, Next};
+use axum::response::Response;
 use axum::routing::get;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::rate_limit;
@@ -37,6 +40,29 @@ pub use jwt::{
     bearer_token_from_headers, hub_token_subject_from_headers, validate_hub_jwt, ResolvedIdentity,
 };
 pub use error::{ApiError, ApiErrorCode};
+
+fn cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::mirror_request())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers(Any)
+}
+
+async fn allow_private_network(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        HeaderName::from_static("access-control-allow-private-network"),
+        HeaderValue::from_static("true"),
+    );
+    response
+}
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -63,6 +89,8 @@ pub fn router(state: AppState) -> Router {
         )
         .layer(DefaultBodyLimit::max(HUB_MAX_REQUEST_BODY_BYTES))
         .layer(RequestBodyLimitLayer::new(HUB_MAX_REQUEST_BODY_BYTES))
+        .layer(cors_layer())
+        .layer(from_fn(allow_private_network))
         .with_state(state)
 }
 
@@ -159,6 +187,43 @@ mod tests {
             .expect("response");
 
         assert_eq!(response.status(), StatusCode::OK);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn health_cors_preflight_allows_browser_and_private_network() {
+        let (app, pool, data_dir) = test_app().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/health")
+                    .header("origin", "http://localhost:8081")
+                    .header("access-control-request-method", "GET")
+                    .header("access-control-request-private-network", "true")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("preflight");
+
+        assert!(response.status().is_success());
+        assert_eq!(
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .and_then(|value| value.to_str().ok()),
+            Some("http://localhost:8081")
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get("access-control-allow-private-network")
+                .and_then(|value| value.to_str().ok()),
+            Some("true")
+        );
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);
@@ -565,6 +630,7 @@ mod tests {
         assert_eq!(payload["data"]["semantic_search"], "disabled");
         assert_eq!(payload["data"]["rate_limit_rpm"], 600);
         assert_eq!(payload["data"]["federation_peering"], true);
+        assert_eq!(payload["data"]["device_sync"], false);
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);
@@ -625,6 +691,27 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn device_sync_routes_are_not_on_community_hub() {
+        let (app, pool, data_dir) = test_app().await;
+
+        let push = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/sync/push")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .expect("push");
+        assert_eq!(push.status(), StatusCode::NOT_FOUND);
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);

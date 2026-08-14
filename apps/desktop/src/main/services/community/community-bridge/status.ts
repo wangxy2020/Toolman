@@ -10,14 +10,6 @@ export function getCommunityHubStatus(): CommunityHubStatus {
   return { ...currentStatus }
 }
 
-export function getCommunityHubBaseUrl(): string | null {
-  return currentStatus.baseUrl
-}
-
-export function isCommunityHubRunning(): boolean {
-  return currentStatus.running
-}
-
 export function getCommunityHttpClient() {
   return httpClient
 }

@@ -3,7 +3,7 @@ import { P2pSharedResourceRepository } from '@toolman/db'
 import { buildP2pNoteShareMetadata } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getNoteById, upsertNoteItem } from '../notes-data.service'
-import { listWorkspaceEventsSince } from './p2p-event.service'
+import { iterateWorkspaceEventPages } from './p2p-event.service'
 import {
   applyLoroOplog,
   getTextFromLoroDoc,
@@ -202,13 +202,8 @@ export function applyNoteUpdatedEvent(event: WorkspaceEvent): void {
 export function reconcileNoteSharedResources(workspaceId: string): void {
   const terminalByNote = new Map<string, WorkspaceEvent>()
 
-  let sinceSeq = 0
-  while (true) {
-    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
-    if (batch.length === 0) break
-
+  iterateWorkspaceEventPages(workspaceId, (batch) => {
     for (const event of batch) {
-      sinceSeq = event.seq
       if (event.resourceType !== 'Note') continue
       if (
         event.eventType !== 'Shared' &&
@@ -222,9 +217,7 @@ export function reconcileNoteSharedResources(workspaceId: string): void {
         typeof event.payload.note_id === 'string' ? event.payload.note_id : event.resourceId
       terminalByNote.set(noteId, event)
     }
-
-    if (batch.length < 200) break
-  }
+  })
 
   for (const event of terminalByNote.values()) {
     if (event.eventType === 'Deleted') {

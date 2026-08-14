@@ -11,6 +11,8 @@ export {
   getP2pEvent,
   getWorkspaceLatestSeq,
   listWorkspaceEventsSince,
+  iterateWorkspaceEventPages,
+  WORKSPACE_EVENT_PAGE_SIZE,
   markP2pEventSynced,
 } from './p2p-event-query'
 

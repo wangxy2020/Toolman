@@ -87,5 +87,3 @@ export async function verifyCnPasswordLogin(
     throw new AuthLoginError(formatPasswordAuthError(error))
   }
 }
-
-export const verifyCnEmailPasswordLogin = verifyCnPasswordLogin

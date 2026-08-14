@@ -96,12 +96,13 @@ export const settingsPagesDiagnosticsEn = {
       title: 'Mobile sync',
       syncToggle: 'Local Sync Hub',
       syncToggleHint:
-        'Serves notes and knowledge metadata on 127.0.0.1 for the mobile client. Restart the desktop app fully if the toggle has no effect.',
+        'Serves notes, classroom, and knowledge metadata on all interfaces. Use a LAN/Tailscale URL on a physical phone; restart the desktop app fully if the toggle has no effect.',
       hostToggle: 'Desktop host (incl. knowledge search)',
       hostToggleHint:
         'Advertise agent / knowledge-search to mobile; enabling host also starts Sync Hub',
       hub: 'Hub status',
-      baseUrl: 'Base URL',
+      baseUrl: 'Local URL',
+      reachable: 'Reachable URLs',
     },
     p2p: {
       title: 'P2P groups',
@@ -116,17 +117,6 @@ export const settingsPagesDiagnosticsEn = {
       workspacesConnections: 'Groups / online connections',
       workspacesCount: '{{workspaces}} group(s) · {{connections}} online connection(s)',
       noConnections: 'No recorded P2P connections currently.',
-    },
-    provenance: {
-      title: 'Copyright & build fingerprint',
-      copyright: 'Copyright notice',
-      license: 'License',
-      buildId: 'Build ID',
-      buildFingerprint: 'Code fingerprint',
-      gitCommit: 'Git commit',
-      builtAt: 'Built at',
-      beaconCount: 'Session beacon count',
-      dirty: ' (includes uncommitted changes)',
     },
     operations: {
       title: 'Operations',

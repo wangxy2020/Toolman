@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import { randomUUID } from 'node:crypto'
 import {
   buildStoredUserContent,
@@ -168,14 +169,17 @@ export async function sendMessage(input: unknown) {
       assistantMessageIds: assistantMessageIds.slice(1),
     })
 
-    void runChatTaskOrchestration({
+    fireAndForget(
+      'agent',
+      runChatTaskOrchestration({
       taskId,
       sessionId: data.sessionId,
       assistantMessageId: assistantMessageIds[0]!,
       modelId: modelIds[0]!,
       userText,
       abortControllers,
-    })
+    }),
+    )
 
     return { userMessageId, assistantMessageIds, userContentBlocks: stagedBlocks }
   }
@@ -184,7 +188,9 @@ export async function sendMessage(input: unknown) {
     const assistantMessageId = assistantMessageIds[i]!
     const modelId = modelIds[i]!
 
-    void runGeneration({
+    fireAndForget(
+      'agent',
+      runGeneration({
       sessionId: data.sessionId,
       assistantMessageId,
       userMessageId,
@@ -209,7 +215,8 @@ export async function sendMessage(input: unknown) {
         isHeartbeat: data.options?.isHeartbeat,
         isChannelMessage: data.options?.isChannelMessage,
       },
-    })
+    }),
+    )
   }
 
   return { userMessageId, assistantMessageIds, userContentBlocks: stagedBlocks }

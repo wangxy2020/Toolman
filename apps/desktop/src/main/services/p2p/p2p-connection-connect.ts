@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import type { P2pConnectionInfo, P2pConnectionState } from '@toolman/shared'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
@@ -12,8 +13,8 @@ import {
   isPeerConnected,
   knownConnections,
   mapNativeConnection,
+  parseNativeConnectionState,
   peerConnectionModes,
-  KNOWN_CONNECTION_STATES,
 } from './p2p-connection-state'
 import {
   broadcastConnectionError,
@@ -52,9 +53,9 @@ async function pollConnections(): Promise<void> {
 
 function startPolling(): void {
   if (pollTimer) return
-  void pollConnections()
+  fireAndForget('p2p', pollConnections())
   pollTimer = setInterval(() => {
-    void pollConnections()
+    fireAndForget('p2p', pollConnections())
   }, POLL_INTERVAL_MS)
 }
 
@@ -107,9 +108,7 @@ async function connectP2pPeerOnce(
 
   try {
     const result = await P2pBridge.connectionConnect(peerDeviceId, workspaceId)
-    const state = KNOWN_CONNECTION_STATES.has(result.state as P2pConnectionState)
-      ? (result.state as P2pConnectionState)
-      : 'connecting'
+    const state = parseNativeConnectionState(result.state, 'connecting')
     broadcastP2pConnectionStateChange({
       peerDeviceId,
       state,

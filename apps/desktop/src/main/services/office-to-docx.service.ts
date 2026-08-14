@@ -3,7 +3,6 @@ export { OfficeToDocxError } from './office-to-docx/types'
 export {
   isNativeDocxPath,
   isLegacyWordPath,
-  isFormatPreservingConversionMethod,
   hasMicrosoftWordInstalled,
   hasFormatPreservingConverter,
   shouldAllowPlaintextFallback,

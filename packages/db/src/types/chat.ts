@@ -1,3 +1,5 @@
+import type { ContentBlock } from '@toolman/shared'
+
 /**
  * Persistence-layer chat types used by `@toolman/db` repositories.
  *
@@ -63,7 +65,7 @@ export interface CreateMessageInput {
   modelId?: string | null
   status?: 'pending' | 'streaming' | 'completed' | 'aborted' | 'failed'
   parentMessageId?: string | null
-  contentBlocks?: Array<{ type: string; text?: string }>
+  contentBlocks?: ContentBlock[]
   /** 为 false 时不更新 session.messageCount（批量插入时用） */
   touchSession?: boolean
   metadata?: Record<string, unknown>
@@ -73,7 +75,7 @@ export interface UpdateMessageInput {
   content?: string
   role?: MessageRole
   status?: 'pending' | 'streaming' | 'completed' | 'aborted' | 'failed'
-  contentBlocks?: Array<{ type: string; text?: string }>
+  contentBlocks?: ContentBlock[]
   error?: { code: string; message: string; retryable: boolean } | null
   tokenUsage?: { prompt: number; completion: number; total: number } | null
 }

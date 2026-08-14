@@ -20,6 +20,8 @@ export interface CommunityHealthData {
   user_count?: number
   resource_count?: number
   federation_peering?: boolean
+  /** Legacy flag; private classroom/notes sync is the desktop Sync Hub, not Community Hub. */
+  device_sync?: boolean
 }
 
 export class CommunityHttpError extends Error {

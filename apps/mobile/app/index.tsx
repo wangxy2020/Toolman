@@ -1,5 +1,10 @@
 import { AgentLeftPane, AgentRightPane } from '../src/features/AgentPanes'
 import {
+  ClassroomLeftPane,
+  ClassroomRightPane,
+  ClassroomUiProvider,
+} from '../src/features/ClassroomPanes'
+import {
   CommunityLeftPane,
   CommunityRightPane,
   CommunityUiProvider,
@@ -15,6 +20,11 @@ import {
   KnowledgeUiProvider,
 } from '../src/features/KnowledgePanes'
 import { ModuleLeftPane, ModuleRightPane } from '../src/features/ModulePanes'
+import {
+  ProjectLeftPane,
+  ProjectRightPane,
+  ProjectUiProvider,
+} from '../src/features/ProjectPanes'
 import { SettingsLeftPane, SettingsRightPane } from '../src/features/SettingsPanes'
 import { isAgentChatScope } from '../src/chat/agentScopes'
 import { AppShell } from '../src/shell/AppShell'
@@ -34,7 +44,20 @@ export default function HomeScreen() {
   }
 
   // Each agent page has its own sessions + pane instance (same shared modelConfig).
-  if (isAgentChatScope(module)) {
+  // Projects uses the desktop-like domain sidebar instead of agent topics.
+  if (module === 'classroom') {
+    return (
+      <ClassroomUiProvider>
+        <AppShell
+          key="classroom"
+          left={<ClassroomLeftPane />}
+          right={<ClassroomRightPane />}
+        />
+      </ClassroomUiProvider>
+    )
+  }
+
+  if (isAgentChatScope(module) && module !== 'projects') {
     return (
       <AppShell
         key={module}
@@ -65,6 +88,14 @@ export default function HomeScreen() {
       <CommunityUiProvider>
         <AppShell left={<CommunityLeftPane />} right={<CommunityRightPane />} />
       </CommunityUiProvider>
+    )
+  }
+
+  if (module === 'projects') {
+    return (
+      <ProjectUiProvider>
+        <AppShell left={<ProjectLeftPane />} right={<ProjectRightPane />} />
+      </ProjectUiProvider>
     )
   }
 

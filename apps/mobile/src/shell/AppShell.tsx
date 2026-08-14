@@ -8,11 +8,15 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { IconPanelLeft } from '../icons/nav-icons'
+import { useI18n } from '../i18n'
 import { useSidebarLayout } from '../layout'
-import { MOBILE_MODULES } from '../modules'
+import { type MobileModuleId } from '../modules'
 import { useMobileApp } from '../state/MobileAppContext'
 import { colors, shellStyles } from '../theme'
+import { ModulePageStatusBar, ModulePageStatusProvider } from '../features/modulePageStatus'
 import { ModuleOverflowMenu } from './ModuleOverflowMenu'
+
+const STATUS_BAR_MODULES = new Set<MobileModuleId>(['knowledge', 'notes', 'community', 'projects'])
 
 type Props = {
   left: ReactNode
@@ -34,10 +38,13 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
     setLeftOpen,
     showSettings,
     setShowSettings,
+    modulePrefs,
   } = useMobileApp()
+  const { t } = useI18n()
 
   const docked = sidebarMode === 'docked'
   const drawerVisible = !docked && leftOpen
+  const showModuleStatusBar = !showSettings && STATUS_BAR_MODULES.has(module)
   const slide = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
@@ -74,7 +81,7 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
             }}
             disabled={docked}
             accessibilityLabel={
-              docked ? '设置中分栏固定' : leftOpen ? '关闭分栏' : '打开分栏'
+              docked ? t('shell.sidebarPinned') : leftOpen ? t('shell.closeSidebar') : t('shell.openSidebar')
             }
             hitSlop={8}
           >
@@ -97,7 +104,7 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
               setShowSettings(next)
               if (!next) setLeftOpen(false)
             }}
-            accessibilityLabel={showSettings ? '关闭设置' : '打开设置'}
+            accessibilityLabel={showSettings ? t('shell.closeSettings') : t('shell.openSettings')}
           >
             <Text style={[shellStyles.brand, showSettings ? shellStyles.brandActive : null]}>
               Toolman
@@ -112,14 +119,14 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
             style={shellStyles.topBarCenter}
             contentContainerStyle={shellStyles.topBarCenterContent}
           >
-            {MOBILE_MODULES.map((item) => (
+            {modulePrefs.nav.visibleModuleIds.map((id) => (
               <ModuleChip
-                key={item.id}
-                label={item.label}
-                active={!showSettings && module === item.id}
+                key={id}
+                label={t(`modules.${id}`)}
+                active={!showSettings && module === id}
                 onPress={() => {
                   setShowSettings(false)
-                  setModule(item.id)
+                  setModule(id)
                   setLeftOpen(false)
                 }}
               />
@@ -136,11 +143,11 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
         {docked ? (
           <>
             <View style={[shellStyles.dockedSidebar, { width: sidebarWidth }]}>{left}</View>
-            <View style={shellStyles.mainPane}>{right}</View>
+            <MainPane withStatusBar={showModuleStatusBar}>{right}</MainPane>
           </>
         ) : (
           <>
-            <View style={shellStyles.mainPane}>{right}</View>
+            <MainPane withStatusBar={showModuleStatusBar}>{right}</MainPane>
 
             <View
               style={shellStyles.drawerLayer}
@@ -167,6 +174,20 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
         )}
       </View>
     </View>
+  )
+}
+
+function MainPane(props: { children: ReactNode; withStatusBar: boolean }) {
+  if (!props.withStatusBar) {
+    return <View style={shellStyles.mainPane}>{props.children}</View>
+  }
+  return (
+    <ModulePageStatusProvider>
+      <View style={shellStyles.mainPane}>
+        <View style={shellStyles.mainPaneBody}>{props.children}</View>
+        <ModulePageStatusBar />
+      </View>
+    </ModulePageStatusProvider>
   )
 }
 

@@ -1,5 +1,5 @@
 import type { WorkspaceEvent } from '@toolman/shared'
-import { listWorkspaceEventsSince } from './p2p-event.service'
+import { iterateWorkspaceEventPages } from './p2p-event.service'
 import { projectAgentDeletedEvent } from './p2p-agent-projection-events'
 import { projectAgentSharedEvent } from './p2p-agent-projection-shared'
 import { readPayloadString } from './p2p-agent-projection-utils'
@@ -8,13 +8,8 @@ export function reconcileAgentSharedResources(workspaceId: string): void {
   const terminalByAgent = new Map<string, WorkspaceEvent>()
   const packageJsonByAgent = new Map<string, string>()
 
-  let sinceSeq = 0
-  while (true) {
-    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
-    if (batch.length === 0) break
-
+  iterateWorkspaceEventPages(workspaceId, (batch) => {
     for (const event of batch) {
-      sinceSeq = event.seq
       if (event.resourceType !== 'Agent') continue
 
       const assistantId = readPayloadString(event.payload, 'assistant_id') ?? event.resourceId
@@ -37,9 +32,7 @@ export function reconcileAgentSharedResources(workspaceId: string): void {
 
       terminalByAgent.set(assistantId, event)
     }
-
-    if (batch.length < 200) break
-  }
+  })
 
   for (const event of terminalByAgent.values()) {
     if (event.eventType === 'Deleted') {

@@ -92,12 +92,13 @@ export const settingsPagesDiagnosticsZhCN = {
       title: '移动端同步',
       syncToggle: '本地 Sync Hub',
       syncToggleHint:
-        '开启后在本机 127.0.0.1 提供笔记与知识库元数据同步；移动端默认同地址连接。若开关无效请完全重启桌面端。',
+        '开启后在本机提供笔记、课堂与知识库元数据同步（监听所有网卡）。真机请用下方局域网 / Tailscale 地址直连本机 Sync Hub；跨网同步不走社区 Hub。若开关无效请完全重启桌面端。',
       hostToggle: '桌面宿主（含知识检索）',
       hostToggleHint:
         '向移动端声明 agent / knowledge-search 能力；开启宿主会同时打开 Sync Hub',
       hub: 'Hub 状态',
-      baseUrl: '服务地址',
+      baseUrl: '本机地址',
+      reachable: '可达地址',
     },
     p2p: {
       title: 'P2P 群组',
@@ -112,17 +113,6 @@ export const settingsPagesDiagnosticsZhCN = {
       workspacesConnections: '群组 / 在线连接',
       workspacesCount: '{{workspaces}} 个群组 · {{connections}} 条在线连接',
       noConnections: '当前没有已记录的 P2P 连接。',
-    },
-    provenance: {
-      title: '版权与构建指纹',
-      copyright: '版权声明',
-      license: '许可证',
-      buildId: '构建 ID',
-      buildFingerprint: '代码指纹',
-      gitCommit: 'Git 提交',
-      builtAt: '构建时间',
-      beaconCount: '会话埋点次数',
-      dirty: '（含未提交改动）',
     },
     operations: {
       title: '运维',

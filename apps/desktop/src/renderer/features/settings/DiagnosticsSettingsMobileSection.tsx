@@ -24,10 +24,15 @@ export function DiagnosticsSettingsMobileSection({
   const mobile = snapshot.mobileSync ?? {
     syncEnabled: false,
     agentHostEnabled: false,
+    classroomSyncEnabled: false,
     hubRunning: false,
     hubBaseUrl: null,
+    advertisedUrls: [],
     lastError: null,
   }
+  const reachable = (mobile.advertisedUrls ?? []).filter(
+    (url) => url && !url.includes('127.0.0.1'),
+  )
 
   return (
     <SettingsCollapsibleSection
@@ -64,6 +69,11 @@ export function DiagnosticsSettingsMobileSection({
       <SettingsRow label={t('settings.diagnostics.mobileSync.baseUrl')}>
         <span className="tm-settings-static">{mobile.hubBaseUrl ?? '—'}</span>
       </SettingsRow>
+      {reachable.length > 0 ? (
+        <SettingsRow label={t('settings.diagnostics.mobileSync.reachable')}>
+          <span className="tm-settings-static">{reachable.join(' · ')}</span>
+        </SettingsRow>
+      ) : null}
       {mobile.lastError ? <p className="tm-settings-error">{mobile.lastError}</p> : null}
     </SettingsCollapsibleSection>
   )

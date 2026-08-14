@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { app } from 'electron'
 import { toErrorMessage } from '@toolman/shared'
 import { recordDiagnosticEvent } from '../diagnostics-log'
@@ -97,7 +98,7 @@ function scheduleLibp2pRestart(reason: string): void {
       ...restartStatus,
       nextDelayMs: null,
     }
-    void restartLibp2pNetwork(reason)
+    fireAndForget('libp2p', restartLibp2pNetwork(reason))
   }, delayMs)
 }
 
@@ -204,7 +205,7 @@ export async function bootstrapLibp2pNetwork(): Promise<boolean> {
     recordDiagnosticEvent('libp2p', 'error', message)
     return false
   } finally {
-    void pollAndBroadcast()
+    fireAndForget('libp2p', pollAndBroadcast())
   }
 }
 

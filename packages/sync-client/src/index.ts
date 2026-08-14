@@ -13,16 +13,24 @@ import {
 export type SyncClientOptions = {
   baseUrl: string
   getAccessToken: () => Promise<string | null>
+  getIdentityId?: () => Promise<string | null>
   fetchImpl?: typeof fetch
 }
 
-async function authHeaders(getAccessToken: () => Promise<string | null>): Promise<HeadersInit> {
-  const token = await getAccessToken()
+async function authHeaders(
+  getAccessToken: () => Promise<string | null>,
+  getIdentityId?: () => Promise<string | null>,
+): Promise<HeadersInit> {
+  const [token, identityId] = await Promise.all([
+    getAccessToken(),
+    getIdentityId ? getIdentityId() : Promise.resolve(null),
+  ])
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
   }
   if (token) headers.Authorization = `Bearer ${token}`
+  if (identityId) headers['X-Community-User-Id'] = identityId
   return headers
 }
 
@@ -38,21 +46,35 @@ function formatSyncNetworkError(baseUrl: string, error: unknown): Error {
     )
   ) {
     return new Error(
-      `无法连接桌面同步服务（${baseUrl}）。请在桌面端设置 → 系统诊断中开启「本地 Sync Hub」，并确保移动端与桌面在同一网络。`,
+      `无法连接同步服务（${baseUrl}）。请在桌面端开启「与移动端同步」并完全重启；真机请填写电脑的局域网 / Tailscale 地址（端口 17890）。`,
     )
   }
   return error instanceof Error ? error : new Error(detail)
 }
 
+async function readJson<T>(res: Response): Promise<T> {
+  const json: unknown = await res.json()
+  if (json && typeof json === 'object' && 'data' in json && 'ok' in json) {
+    return (json as { data: T }).data
+  }
+  return json as T
+}
+
 export class ToolmanSyncClient {
   private readonly baseUrl: string
   private readonly getAccessToken: () => Promise<string | null>
+  private readonly getIdentityId?: () => Promise<string | null>
   private readonly fetchImpl: typeof fetch
 
   constructor(options: SyncClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '')
     this.getAccessToken = options.getAccessToken
+    this.getIdentityId = options.getIdentityId
     this.fetchImpl = options.fetchImpl ?? defaultFetch
+  }
+
+  private headers(): Promise<HeadersInit> {
+    return authHeaders(this.getAccessToken, this.getIdentityId)
   }
 
   private async request(url: string, init: RequestInit): Promise<Response> {
@@ -66,43 +88,43 @@ export class ToolmanSyncClient {
   async push(input: SyncPushInput): Promise<SyncPushOutput> {
     const res = await this.request(`${this.baseUrl}/api/v1/sync/push`, {
       method: 'POST',
-      headers: await authHeaders(this.getAccessToken),
+      headers: await this.headers(),
       body: JSON.stringify(input),
     })
     if (!res.ok) {
       throw new Error(`sync push failed (${res.status})`)
     }
-    return (await res.json()) as SyncPushOutput
+    return readJson<SyncPushOutput>(res)
   }
 
   async pull(input: SyncPullInput): Promise<SyncPullOutput> {
     const res = await this.request(`${this.baseUrl}/api/v1/sync/pull`, {
       method: 'POST',
-      headers: await authHeaders(this.getAccessToken),
+      headers: await this.headers(),
       body: JSON.stringify(input),
     })
     if (!res.ok) {
       throw new Error(`sync pull failed (${res.status})`)
     }
-    return (await res.json()) as SyncPullOutput
+    return readJson<SyncPullOutput>(res)
   }
 
   async listHosts(): Promise<AgentHostPresence[]> {
     const res = await this.request(`${this.baseUrl}/api/v1/sync/hosts`, {
       method: 'GET',
-      headers: await authHeaders(this.getAccessToken),
+      headers: await this.headers(),
     })
     if (!res.ok) {
       throw new Error(`list hosts failed (${res.status})`)
     }
-    const data = (await res.json()) as { hosts?: AgentHostPresence[] }
+    const data = await readJson<{ hosts?: AgentHostPresence[] }>(res)
     return data.hosts ?? []
   }
 
   async *invokeHost(input: AgentHostInvokeInput): AsyncGenerator<AgentHostInvokeChunk> {
     const res = await this.request(`${this.baseUrl}/api/v1/sync/hosts/invoke`, {
       method: 'POST',
-      headers: await authHeaders(this.getAccessToken),
+      headers: await this.headers(),
       body: JSON.stringify(input),
     })
     if (!res.ok) {
@@ -142,7 +164,7 @@ export class ToolmanSyncClient {
   async exportKnowledgeSnapshot(): Promise<KnowledgeSnapshot> {
     const res = await this.request(`${this.baseUrl}/api/v1/sync/knowledge/export`, {
       method: 'GET',
-      headers: await authHeaders(this.getAccessToken),
+      headers: await this.headers(),
     })
     if (!res.ok) {
       throw new Error(`knowledge export failed (${res.status})`)
@@ -154,7 +176,7 @@ export class ToolmanSyncClient {
     const params = new URLSearchParams({ kbId, documentId })
     const res = await this.request(`${this.baseUrl}/api/v1/sync/knowledge/files?${params}`, {
       method: 'GET',
-      headers: await authHeaders(this.getAccessToken),
+      headers: await this.headers(),
     })
     if (!res.ok) {
       throw new Error(`knowledge file download failed (${res.status})`)

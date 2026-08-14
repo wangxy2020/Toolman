@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import {
+  bindPhoneToAccount,
   changePassword,
   cnPrimaryActionLabel,
   deleteAccount,
@@ -9,6 +10,7 @@ import {
   setSubscriptionSku,
   updateDisplayName,
 } from '../auth/localAuth'
+import { maskPhone } from '../auth/account-utils'
 import {
   firebaseEmailAuth,
   firebaseOAuthLogin,
@@ -19,6 +21,7 @@ import {
   registerWithVerificationCode,
   resetPasswordWithVerificationCode,
   sendAuthingVerificationCode,
+  verifyAuthingPhoneCode,
 } from '../auth/authingOtp'
 import type { MobileAuthSession } from '../auth/types'
 import {
@@ -67,7 +70,7 @@ function SocialProviderIcon({ id }: { id: SocialProvider }) {
 }
 
 type GuestView = 'login' | 'register' | 'forgot'
-type AccountView = 'main' | 'password' | 'vip' | 'delete'
+type AccountView = 'main' | 'password' | 'vip' | 'delete' | 'bind_phone' | 'bind_wechat'
 
 export function UserSettingsPanel() {
   const {
@@ -83,6 +86,8 @@ export function UserSettingsPanel() {
     setDeletedNotes,
     knowledgeMeta,
     setKnowledgeMeta,
+    classroomCourses,
+    setClassroomCourses,
     syncStatus,
   } = useMobileApp()
 
@@ -104,10 +109,12 @@ export function UserSettingsPanel() {
             notes,
             deletedNotes,
             knowledgeMeta,
+            classroomCourses,
           })
           setNotes(applied.notes)
           setDeletedNotes(applied.deletedNotes)
           setKnowledgeMeta(applied.knowledgeMeta)
+          setClassroomCourses(applied.classroomCourses)
           setSyncCursor(applied.nextCursor)
           setDesktopHostsOnline(applied.hostsOnline)
           if (applied.knowledgeError) {
@@ -115,7 +122,7 @@ export function UserSettingsPanel() {
             return applied.knowledgeError
           }
           setSyncStatus('idle')
-          return `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档）`
+          return `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门`
         } catch (error) {
           setSyncStatus('error')
           return error instanceof Error ? error.message : String(error)
@@ -509,6 +516,11 @@ function LoggedInAccountPanel(props: {
   const { auth, setAuth } = props
   const [view, setView] = useState<AccountView>('main')
   const [displayName, setDisplayName] = useState(auth.displayName)
+  const [bindPhone, setBindPhone] = useState('')
+  const [bindCode, setBindCode] = useState('')
+  const [smsCooldown, setSmsCooldown] = useState(0)
+  const [sendingCode, setSendingCode] = useState(false)
+  const [otpHint, setOtpHint] = useState<string | null>(null)
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -520,6 +532,8 @@ function LoggedInAccountPanel(props: {
   const skuLabel = auth.subscriptionSku === 'pro' ? '专业版' : '社区版'
   const accountLabel = auth.accountKind === 'phone' ? auth.phone ?? auth.email : auth.email
   const isVip = auth.communityRole === 'enterprise' || auth.subscriptionSku === 'pro'
+  const hasPhoneBinding = Boolean(auth.phone)
+  const hasWechatBinding = Boolean(auth.wechatBound)
   const profileRoleLabel =
     auth.communityRole === 'founder'
       ? '超级管理员'
@@ -528,6 +542,34 @@ function LoggedInAccountPanel(props: {
         : isVip
           ? 'VIP'
           : '普通用户'
+
+  useEffect(() => {
+    if (smsCooldown <= 0) return
+    const timer = setTimeout(() => setSmsCooldown((value) => Math.max(0, value - 1)), 1000)
+    return () => clearTimeout(timer)
+  }, [smsCooldown])
+
+  const sendBindPhoneCode = async () => {
+    setSendingCode(true)
+    setMessage(null)
+    setOtpHint(null)
+    try {
+      const result = await sendAuthingVerificationCode(bindPhone, 'login')
+      if (!result.ok) {
+        setMessage(result.message)
+        return
+      }
+      setSmsCooldown(result.retryAfterSeconds)
+      setOtpHint(
+        result.devHint ??
+          `验证码已发送至手机，${Math.max(1, Math.round(result.expiresInSeconds / 60))} 分钟内有效。`,
+      )
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSendingCode(false)
+    }
+  }
 
   if (view === 'password') {
     return (
@@ -683,6 +725,101 @@ function LoggedInAccountPanel(props: {
     )
   }
 
+  if (view === 'bind_phone') {
+    return (
+      <SettingsScroll>
+        <SecondaryButton label="← 返回" onPress={() => setView('main')} />
+        <Section title="绑定手机号">
+          <Text style={styles.hint}>账户找回与国内功能</Text>
+          <Field
+            label="手机号"
+            value={bindPhone}
+            onChangeText={(value) => {
+              setBindPhone(value)
+              setOtpHint(null)
+            }}
+            placeholder="请输入 11 位手机号"
+          />
+          {otpHint ? <Text style={styles.hint}>{otpHint}</Text> : null}
+          <View style={styles.otpRow}>
+            <View style={styles.otpInputGrow}>
+              <Field
+                value={bindCode}
+                onChangeText={setBindCode}
+                placeholder="请输入验证码"
+              />
+            </View>
+            <Pressable
+              style={[
+                styles.otpSendBtn,
+                busy || sendingCode || !bindPhone.trim() || smsCooldown > 0
+                  ? styles.otpSendBtnDisabled
+                  : null,
+              ]}
+              disabled={busy || sendingCode || !bindPhone.trim() || smsCooldown > 0}
+              onPress={() => void sendBindPhoneCode()}
+            >
+              <Text style={styles.otpSendBtnText}>
+                {sendingCode ? '发送中…' : smsCooldown > 0 ? `${smsCooldown}s` : '获取验证码'}
+              </Text>
+            </Pressable>
+          </View>
+          <PrimaryButton
+            label={busy ? '绑定中…' : '确认绑定'}
+            onPress={() =>
+              void (async () => {
+                if (busy) return
+                setBusy(true)
+                setMessage(null)
+                try {
+                  const verified = await verifyAuthingPhoneCode(bindPhone, bindCode)
+                  if (!verified.ok) {
+                    setMessage(verified.message)
+                    return
+                  }
+                  const result = await bindPhoneToAccount({
+                    identityId: auth.identityId,
+                    phone: bindPhone,
+                  })
+                  if (!result.ok) {
+                    setMessage(result.message)
+                    return
+                  }
+                  setAuth(result.session)
+                  setBindCode('')
+                  setOtpHint(null)
+                  setMessage('手机号已绑定')
+                  setView('main')
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : String(error))
+                } finally {
+                  setBusy(false)
+                }
+              })()
+            }
+          />
+        </Section>
+        {message ? <Text style={styles.hint}>{message}</Text> : null}
+      </SettingsScroll>
+    )
+  }
+
+  if (view === 'bind_wechat') {
+    return (
+      <SettingsScroll>
+        <SecondaryButton label="← 返回" onPress={() => setView('main')} />
+        <Section title="绑定微信">
+          <Text style={styles.hint}>授权后可在微信与手机号之间共用同一 Toolman 账户。</Text>
+          <PrimaryButton
+            label="打开微信授权"
+            onPress={() => setMessage('移动端暂未接入微信授权，请使用桌面端绑定。')}
+          />
+        </Section>
+        {message ? <Text style={styles.hint}>{message}</Text> : null}
+      </SettingsScroll>
+    )
+  }
+
   return (
     <SettingsScroll>
       <Section
@@ -718,18 +855,17 @@ function LoggedInAccountPanel(props: {
           }
         />
         <ActionRow title={skuLabel} onPress={() => setView('vip')} />
-      </Section>
-
-      <Section title="账户">
-        <ActionRow title="修改密码" onPress={() => setView('password')} />
         <ActionRow
           title={
             props.syncStatus === 'idle'
               ? '已同步'
               : props.syncStatus === 'syncing'
                 ? '同步中'
-                : '立即同步'
+                : props.syncStatus === 'error'
+                  ? '同步异常，点此重试'
+                  : '立即同步'
           }
+          subtitle="与桌面端同步笔记、知识库与课堂"
           disabled={props.syncStatus === 'syncing'}
           onPress={() =>
             void (async () => {
@@ -737,6 +873,30 @@ function LoggedInAccountPanel(props: {
             })()
           }
         />
+        <ActionRow
+          title={hasPhoneBinding ? `已绑定 ${maskPhone(auth.phone!)}` : '绑定手机号'}
+          subtitle={hasPhoneBinding ? undefined : '账户找回与国内功能'}
+          disabled={hasPhoneBinding}
+          onPress={() => {
+            setBindPhone(auth.phone ?? '')
+            setBindCode('')
+            setOtpHint(null)
+            setMessage(null)
+            setView('bind_phone')
+          }}
+        />
+        <ActionRow
+          title={hasWechatBinding ? '已绑定微信' : '绑定微信'}
+          disabled={hasWechatBinding}
+          onPress={() => {
+            setMessage(null)
+            setView('bind_wechat')
+          }}
+        />
+      </Section>
+
+      <Section title="账户">
+        <ActionRow title="修改密码" onPress={() => setView('password')} />
         <SecondaryButton
           label="退出登录"
           onPress={() =>

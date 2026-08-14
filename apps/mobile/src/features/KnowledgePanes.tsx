@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -17,9 +18,17 @@ import Svg, { Path } from 'react-native-svg'
 import { listDesktopKnowledgeMeta } from '../host/invokeDesktop'
 import { useMobileApp } from '../state/MobileAppContext'
 import { loadKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
+import {
+  createKnowledgeBaseId,
+  loadCreatedKnowledgeBases,
+  saveCreatedKnowledgeBases,
+  type MobileCreatedKb,
+} from '../storage/createdKnowledgeBases'
 import { countDesktopHostsOnline, type KnowledgeMetaItem } from '../sync/mobileSync'
 import { colors } from '../theme'
+import { KnowledgeCreateModal, type KnowledgeCreateForm } from './KnowledgeCreateModal'
 import { KnowledgeFilePanel } from './KnowledgeFilePanel'
+import { useRegisterModulePanelError, useRegisterModulePanelStatus } from './modulePageStatus'
 import {
   DEFAULT_FOLDER_LABEL,
   DEFAULT_SYNC_FOLDER_ID,
@@ -27,6 +36,7 @@ import {
   formatFileSize,
   getKnowledgeSection,
   isSystemDefaultFolderName,
+  knowledgeBasesForSection,
   KNOWLEDGE_SIDEBAR_SECTIONS,
   listedSyncKnowledgeItems,
   mobileSyncKbUiId,
@@ -58,15 +68,24 @@ type KnowledgeUiState = {
   importError: string | null
   setImportError: (message: string | null) => void
   syncedKbs: KnowledgeMetaItem[]
+  createdKbs: MobileCreatedKb[]
   refreshSyncedMeta: () => Promise<void>
+  openCreateModal: () => void
+  closeCreateModal: () => void
+  createKnowledgeBase: (input: KnowledgeCreateForm) => void
+  updateCreatedKnowledgeBase: (id: string, patch: Partial<MobileCreatedKb>) => void
 }
 
 const KnowledgeUiContext = createContext<KnowledgeUiState | null>(null)
 
-function useKnowledgeUi(): KnowledgeUiState {
+export function useKnowledgeUi(): KnowledgeUiState {
   const ctx = useContext(KnowledgeUiContext)
   if (!ctx) throw new Error('useKnowledgeUi requires KnowledgeUiProvider')
   return ctx
+}
+
+export function useOptionalKnowledgeUi(): KnowledgeUiState | null {
+  return useContext(KnowledgeUiContext)
 }
 
 export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
@@ -81,11 +100,58 @@ export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
   const [activeKbName, setActiveKbName] = useState<string | null>(DEFAULT_FOLDER_LABEL)
   const [documentsByKb, setDocumentsByKb] = useState<Record<string, KnowledgeFileItem[]>>({})
   const [importError, setImportError] = useState<string | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [createdKbs, setCreatedKbs] = useState<MobileCreatedKb[]>([])
   const [expanded, setExpanded] = useState<Set<KnowledgeSidebarSection>>(
     () => new Set<KnowledgeSidebarSection>(['sync']),
   )
 
   const syncedKbs = listedSyncKnowledgeItems(knowledgeMeta.filter((item) => item.kind === 'sync'))
+  const createdKbsReady = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void loadCreatedKnowledgeBases().then((items) => {
+      if (cancelled) return
+      createdKbsReady.current = true
+      setCreatedKbs((prev) => {
+        if (prev.length === 0) return items
+        const existingIds = new Set(prev.map((kb) => kb.id))
+        return [...prev, ...items.filter((kb) => !existingIds.has(kb.id))]
+      })
+      setDocumentsByKb((prev) => {
+        const next = { ...prev }
+        for (const kb of items) {
+          if (next[kb.id]) continue
+          if (kb.kind === 'network' && kb.networkUrl) {
+            next[kb.id] = [
+              {
+                id: `url-${kb.id}`,
+                title: kb.networkUrl,
+                sizeLabel: 'URL',
+                addedAt: kb.updatedAt,
+                status: 'ready',
+                sourceKind: 'url',
+                absolutePath: kb.networkUrl,
+              },
+            ]
+          } else {
+            next[kb.id] = []
+          }
+        }
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!createdKbsReady.current) return
+    void saveCreatedKnowledgeBases(createdKbs)
+  }, [createdKbs])
 
   useEffect(() => {
     let cancelled = false
@@ -157,6 +223,83 @@ export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshSyncedMeta()
   }, [refreshSyncedMeta])
+
+  const createKnowledgeBase = useCallback((input: KnowledgeCreateForm) => {
+    const kb: MobileCreatedKb = {
+      id: createKnowledgeBaseId(),
+      name: input.name,
+      kind: input.kind,
+      description: input.description,
+      networkUrl: input.networkUrl,
+      updatedAt: Date.now(),
+    }
+    setCreateSubmitting(true)
+    setCreatedKbs((prev) => [kb, ...prev])
+    setActiveSection(input.kind)
+    setActiveKbId(kb.id)
+    setActiveKbName(kb.name)
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.add(input.kind)
+      return next
+    })
+    if (input.kind === 'network' && input.networkUrl) {
+      setDocumentsByKb((prev) => ({
+        ...prev,
+        [kb.id]: [
+          {
+            id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+            title: input.networkUrl!,
+            sizeLabel: 'URL',
+            addedAt: Date.now(),
+            status: 'ready',
+            sourceKind: 'url',
+            absolutePath: input.networkUrl,
+          },
+          ...(prev[kb.id] ?? []),
+        ],
+      }))
+    } else {
+      setDocumentsByKb((prev) => ({ ...prev, [kb.id]: prev[kb.id] ?? [] }))
+    }
+    setImportError(null)
+    setCreateModalOpen(false)
+    setCreateSubmitting(false)
+  }, [])
+
+  const updateCreatedKnowledgeBase = useCallback((id: string, patch: Partial<MobileCreatedKb>) => {
+    setCreatedKbs((prev) =>
+      prev.map((kb) => (kb.id === id ? { ...kb, ...patch, updatedAt: Date.now() } : kb)),
+    )
+    if (typeof patch.name === 'string' && patch.name.trim()) {
+      setActiveKbName((current) => (activeKbId === id ? patch.name!.trim() : current))
+    }
+    if (typeof patch.networkUrl === 'string' && patch.networkUrl.trim()) {
+      const nextUrl = patch.networkUrl.trim()
+      setDocumentsByKb((prev) => {
+        const docs = prev[id] ?? []
+        const nextDocs =
+          docs.length === 0
+            ? [
+                {
+                  id: `doc-${Date.now().toString(36)}`,
+                  title: nextUrl,
+                  sizeLabel: 'URL',
+                  addedAt: Date.now(),
+                  status: 'ready' as const,
+                  sourceKind: 'url' as const,
+                  absolutePath: nextUrl,
+                },
+              ]
+            : docs.map((doc, index) =>
+                index === 0 && doc.sourceKind === 'url'
+                  ? { ...doc, title: nextUrl, absolutePath: nextUrl }
+                  : doc,
+              )
+        return { ...prev, [id]: nextDocs }
+      })
+    }
+  }, [activeKbId])
 
   const value = useMemo<KnowledgeUiState>(
     () => ({
@@ -253,21 +396,39 @@ export function KnowledgeUiProvider({ children }: { children: ReactNode }) {
       importError,
       setImportError,
       syncedKbs,
+      createdKbs,
       refreshSyncedMeta,
+      openCreateModal: () => setCreateModalOpen(true),
+      closeCreateModal: () => setCreateModalOpen(false),
+      createKnowledgeBase,
+      updateCreatedKnowledgeBase,
     }),
     [
       activeKbId,
       activeKbName,
       activeSection,
+      createdKbs,
+      createKnowledgeBase,
       documentsByKb,
       expanded,
       importError,
       refreshSyncedMeta,
       syncedKbs,
+      updateCreatedKnowledgeBase,
     ],
   )
 
-  return <KnowledgeUiContext.Provider value={value}>{children}</KnowledgeUiContext.Provider>
+  return (
+    <KnowledgeUiContext.Provider value={value}>
+      {children}
+      <KnowledgeCreateModal
+        visible={createModalOpen}
+        submitting={createSubmitting}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={createKnowledgeBase}
+      />
+    </KnowledgeUiContext.Provider>
+  )
 }
 
 function SectionChevron({ open }: { open: boolean }) {
@@ -338,21 +499,18 @@ export function KnowledgeLeftPane() {
     selectSection,
     selectKb,
     syncedKbs,
+    createdKbs,
+    openCreateModal,
   } = useKnowledgeUi()
 
-  const kbsForSection = (sectionId: KnowledgeSidebarSection) => {
-    // Desktop knowledge bases always appear under「同步知识库」only.
-    if (sectionId === 'sync') return syncedKbs
-    return []
-  }
+  const kbsForSection = (sectionId: KnowledgeSidebarSection) =>
+    knowledgeBasesForSection(sectionId, createdKbs, syncedKbs)
 
   return (
     <SidebarShell>
       <SidebarAddButton
         label="添加知识库"
-        onPress={() => {
-          setLeftOpen(false)
-        }}
+        onPress={openCreateModal}
       />
       <SidebarList>
         {KNOWLEDGE_SIDEBAR_SECTIONS.map((section) => {
@@ -438,21 +596,47 @@ export function KnowledgeRightPane() {
     importError,
     setImportError,
     syncedKbs,
+    createdKbs,
   } = useKnowledgeUi()
   const section = getKnowledgeSection(activeSection)
   const documents = activeKbId ? (documentsByKb[activeKbId] ?? []) : []
   const canImport = Boolean(activeKbId) && section.showDropzone
+  const pendingCount = documents.filter((item) => item.status === 'pending').length
+
+  useRegisterModulePanelError('knowledge-import', importError, () => setImportError(null))
+  useRegisterModulePanelStatus(
+    'knowledge-ingest',
+    pendingCount > 0
+      ? { tone: 'info', message: `正在处理 ${pendingCount} 个文档…` }
+      : null,
+  )
+  useRegisterModulePanelStatus(
+    'knowledge-ready',
+    importError || pendingCount > 0
+      ? null
+      : {
+          tone: 'muted',
+          message: '就绪',
+          meta: activeKbId ? `${documents.length} 个文档` : undefined,
+        },
+  )
 
   return (
     <View style={styles.rightRoot}>
-      {importError ? <Text style={styles.errorText}>{importError}</Text> : null}
       <KnowledgeFilePanel
         documents={documents}
         mode={section.importMode}
         showDropzone
         importDisabled={!canImport}
         listKey={activeKbId}
-        syncMoveTargets={syncedKbs.map((kb) => ({ id: kb.id, name: kb.name }))}
+        syncMoveTargets={[
+          ...createdKbs
+            .filter((kb) => kb.kind === 'sync')
+            .map((kb) => ({ id: kb.id, name: kb.name })),
+          ...syncedKbs
+            .filter((kb) => !createdKbs.some((created) => created.id === kb.id))
+            .map((kb) => ({ id: kb.id, name: kb.name })),
+        ]}
         onImportFiles={(items) => {
           if (!activeKbId) return
           addDocuments(activeKbId, items)
@@ -595,11 +779,5 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.bg,
-  },
-  errorText: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    fontSize: 12,
-    color: colors.danger,
   },
 })

@@ -134,17 +134,23 @@ export const AppDiagnosticsCommunityCidSchema = z.object({
 export const AppDiagnosticsMobileSyncSchema = z.object({
   syncEnabled: z.boolean(),
   agentHostEnabled: z.boolean(),
+  classroomSyncEnabled: z.boolean().default(false),
   hubRunning: z.boolean(),
   hubBaseUrl: z.string().nullable(),
+  /** Loopback + LAN / Tailscale URLs the phone can use when not on 127.0.0.1. */
+  advertisedUrls: z.array(z.string()).default([]),
   lastError: z.string().nullable().optional(),
 })
 export type AppDiagnosticsMobileSync = z.infer<typeof AppDiagnosticsMobileSyncSchema>
+export type AppDiagnosticsMobileSyncInput = z.input<typeof AppDiagnosticsMobileSyncSchema>
 
-const DEFAULT_MOBILE_SYNC_DIAGNOSTICS: AppDiagnosticsMobileSync = {
+export const DEFAULT_MOBILE_SYNC_DIAGNOSTICS: AppDiagnosticsMobileSync = {
   syncEnabled: false,
   agentHostEnabled: false,
+  classroomSyncEnabled: false,
   hubRunning: false,
   hubBaseUrl: null,
+  advertisedUrls: [],
   lastError: null,
 }
 
@@ -173,3 +179,8 @@ export const MobileAgentHostSetEnabledInputSchema = z.object({
   enabled: z.boolean(),
 })
 export type MobileAgentHostSetEnabledInput = z.infer<typeof MobileAgentHostSetEnabledInputSchema>
+
+export const ClassroomSyncSetEnabledInputSchema = z.object({
+  enabled: z.boolean(),
+})
+export type ClassroomSyncSetEnabledInput = z.infer<typeof ClassroomSyncSetEnabledInputSchema>

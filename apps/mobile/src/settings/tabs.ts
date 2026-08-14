@@ -1,28 +1,39 @@
-export type SettingsTabId =
-  | 'user'
-  | 'agent'
-  | 'knowledge'
-  | 'notes'
-  | 'group'
-  | 'community'
-  | 'classroom'
-  | 'projects'
-  | 'system'
+export type SystemSectionId =
+  | 'general'
+  | 'display'
+  | 'memory'
+  | 'quick-phrases'
+  | 'diagnostics'
+  | 'about'
+
+export type SettingsTabId = 'user' | 'agent' | SystemSectionId
 
 export const SETTINGS_TABS: Array<{
-  id: SettingsTabId
-  label: string
-  hint: string
+  id: Exclude<SettingsTabId, SystemSectionId>
+  labelKey: string
 }> = [
-  { id: 'user', label: '用户信息', hint: '账户、同步与设备' },
-  { id: 'agent', label: '智能体', hint: '模型与对话默认项' },
-  { id: 'knowledge', label: '知识库', hint: '检索与桌面索引' },
-  { id: 'notes', label: '笔记', hint: '同步与自动保存' },
-  { id: 'group', label: '群组', hint: '群组消息与桥接' },
-  { id: 'community', label: '社区', hint: 'Hub 与访客模式' },
-  { id: 'classroom', label: '课堂', hint: '课堂智能体宿主' },
-  { id: 'projects', label: '项目', hint: '项目管理宿主' },
-  { id: 'system', label: '系统设置', hint: '关于、诊断与通用选项' },
+  { id: 'user', labelKey: 'settings.user' },
+  { id: 'agent', labelKey: 'settings.modelService' },
+]
+
+/** Desktop settings nav, trimmed for mobile (no window chrome, MCP/skills, shortcuts, etc.). */
+export const SYSTEM_SETTINGS_SECTIONS: Array<{
+  id: SystemSectionId
+  labelKey: string
+}> = [
+  { id: 'general', labelKey: 'settings.general' },
+  { id: 'display', labelKey: 'settings.display' },
+  { id: 'memory', labelKey: 'settings.memory' },
+  { id: 'quick-phrases', labelKey: 'settings.quickPhrases' },
+  { id: 'diagnostics', labelKey: 'settings.diagnostics' },
+  { id: 'about', labelKey: 'settings.about' },
 ]
 
 export const DEFAULT_SETTINGS_TAB: SettingsTabId = 'user'
+export const DEFAULT_SYSTEM_SECTION: SystemSectionId = 'general'
+
+const SYSTEM_SECTION_IDS = new Set<string>(SYSTEM_SETTINGS_SECTIONS.map((item) => item.id))
+
+export function isSystemSection(id: SettingsTabId): id is SystemSectionId {
+  return SYSTEM_SECTION_IDS.has(id)
+}

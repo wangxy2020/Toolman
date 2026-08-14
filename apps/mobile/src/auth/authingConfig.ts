@@ -42,7 +42,3 @@ export function canUseAuthingRemoteAuth(): boolean {
   const config = getMobileAuthingConfig()
   return Boolean(config?.appId && config.appHost) && !isMobileAuthingDevMode()
 }
-
-export function canUseAuthingRemoteOtp(): boolean {
-  return canUseAuthingRemoteAuth()
-}

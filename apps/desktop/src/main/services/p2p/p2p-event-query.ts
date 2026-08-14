@@ -73,6 +73,25 @@ export function listWorkspaceEventsSince(
   return rows.map(mapEventRow)
 }
 
+export const WORKSPACE_EVENT_PAGE_SIZE = 200
+
+/** Page through workspace events; stops if the seq cursor does not advance. */
+export function iterateWorkspaceEventPages(
+  workspaceId: string,
+  onPage: (events: WorkspaceEvent[]) => void,
+): void {
+  let sinceSeq = 0
+  while (true) {
+    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, WORKSPACE_EVENT_PAGE_SIZE)
+    if (batch.length === 0) break
+    const lastSeq = batch.at(-1)?.seq
+    if (lastSeq == null || lastSeq <= sinceSeq) break
+    onPage(batch)
+    sinceSeq = lastSeq
+    if (batch.length < WORKSPACE_EVENT_PAGE_SIZE) break
+  }
+}
+
 export function markP2pEventSynced(eventId: string): void {
   getEventRepo().markSynced(eventId)
 }

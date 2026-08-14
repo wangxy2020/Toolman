@@ -1,19 +1,29 @@
 import { ToolmanSyncClient } from '@toolman/sync-client'
 import {
   bytesToBase64,
+  DEFAULT_LOCAL_SYNC_BASE_URL,
+  DEFAULT_LOCAL_SYNC_IDENTITY_ID,
+  isSyncHubHealthPayload,
+  isSyncHubHostsPayload,
   KNOWLEDGE_SNAPSHOT_DOWNLOAD_FILE_MAX_BYTES,
+  listSyncBaseUrlCandidates,
   type KnowledgeSnapshot,
   type SyncChange,
 } from '@toolman/shared'
-import { getOrCreateDeviceId, loadAccessToken } from '../storage/secure'
+import { getOrCreateDeviceId, loadAccessToken, loadIdentity } from '../storage/secure'
 import { type MobileNote, type NoteTombstone } from '../storage/notes'
 import { saveKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
 import { isSystemDefaultFolderName, listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
 import { mergeNotesFromSyncChanges } from './noteSyncMerge'
+import {
+  mergeClassroomCoursesFromSyncChanges,
+  type MobileClassroomCourse,
+} from './classroomSyncMerge'
+import { resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
+import { loadModulePrefs } from '../settings/prefs'
+import { listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from './desktopDevHost'
 
-/** Local desktop Sync Hub by default; override with EXPO_PUBLIC_SYNC_BASE_URL for cloud. */
-const DEFAULT_SYNC_BASE =
-  process.env.EXPO_PUBLIC_SYNC_BASE_URL?.trim() || 'http://127.0.0.1:17890'
+let cachedSyncBaseUrl: string | null = null
 
 export type KnowledgeMetaItem = {
   id: string
@@ -26,24 +36,116 @@ export type KnowledgeMetaItem = {
 /** Bind fetch to the global object — Expo Web throws Illegal invocation on unbound Window.fetch. */
 const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
 
-export function createMobileSyncClient(baseUrl = DEFAULT_SYNC_BASE): ToolmanSyncClient {
+async function loadSyncIdentityId(): Promise<string> {
+  return (await loadIdentity())?.identityId ?? DEFAULT_LOCAL_SYNC_IDENTITY_ID
+}
+
+export function createMobileSyncClient(baseUrl?: string): ToolmanSyncClient {
   return new ToolmanSyncClient({
-    baseUrl,
+    baseUrl: baseUrl ?? cachedSyncBaseUrl ?? DEFAULT_LOCAL_SYNC_BASE_URL,
     getAccessToken: loadAccessToken,
+    getIdentityId: loadSyncIdentityId,
     fetchImpl: boundFetch,
   })
 }
 
+async function probeJson(
+  url: string,
+  signal: AbortSignal,
+): Promise<unknown | null> {
+  const res = await boundFetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal,
+  })
+  if (!res.ok) return null
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+/** Accept only the desktop Sync Hub — never Community Hub catalog (`:3721`). */
+async function probeSyncBaseUrl(baseUrl: string): Promise<boolean> {
+  const origin = baseUrl.replace(/\/+$/, '')
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 2500)
+  try {
+    const health = await probeJson(`${origin}/health`, ctrl.signal)
+    if (isSyncHubHealthPayload(health)) return true
+    const hosts = await probeJson(`${origin}/api/v1/sync/hosts`, ctrl.signal)
+    return isSyncHubHostsPayload(hosts)
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export function resetMobileSyncBaseUrlCache(): void {
+  cachedSyncBaseUrl = null
+}
+
+function unreachableSyncHubMessage(tried: string[]): string {
+  const list = tried.length > 0 ? tried.join('、') : DEFAULT_LOCAL_SYNC_BASE_URL
+  return (
+    `无法连接桌面 Sync Hub（${list}）。` +
+    '请在桌面端开启「与移动端同步」或课堂「同步设置」后完全重启桌面端；' +
+    '真机请在设置 → 用户信息填写电脑的局域网 / Tailscale 地址（端口 17890）。'
+  )
+}
+
+export async function resolveReachableMobileSyncBaseUrl(
+  communityHubBaseUrl?: string | null,
+): Promise<string> {
+  const prefs = await loadModulePrefs()
+  const configuredCommunity =
+    communityHubBaseUrl === undefined ? prefs.community.hubBaseUrl : communityHubBaseUrl
+  const packagerHostnames = listDesktopDevHostnames()
+  const candidates = listSyncBaseUrlCandidates({
+    configuredSyncBaseUrl: prefs.sync?.hubBaseUrl,
+    envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
+    communityHubBaseUrl: resolveCommunityHubBaseUrl(configuredCommunity),
+    packagerHostnames,
+    includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
+  })
+  if (
+    cachedSyncBaseUrl &&
+    candidates.includes(cachedSyncBaseUrl) &&
+    (await probeSyncBaseUrl(cachedSyncBaseUrl))
+  ) {
+    return cachedSyncBaseUrl
+  }
+  for (const url of candidates) {
+    if (await probeSyncBaseUrl(url)) {
+      cachedSyncBaseUrl = url
+      return url
+    }
+  }
+  throw new Error(unreachableSyncHubMessage(candidates))
+}
+
+export async function createReachableMobileSyncClient(
+  communityHubBaseUrl?: string | null,
+): Promise<ToolmanSyncClient> {
+  return createMobileSyncClient(await resolveReachableMobileSyncBaseUrl(communityHubBaseUrl))
+}
+
 export function getMobileSyncBaseUrl(): string {
-  return DEFAULT_SYNC_BASE
+  return (
+    cachedSyncBaseUrl ??
+    (process.env.EXPO_PUBLIC_SYNC_BASE_URL?.trim() || DEFAULT_LOCAL_SYNC_BASE_URL)
+  )
 }
 
 /** Live probe of desktop agent hosts (does not depend on prior sync state). */
 export async function countDesktopHostsOnline(
-  client = createMobileSyncClient(),
+  client?: ToolmanSyncClient,
 ): Promise<number> {
   try {
-    const hosts = await client.listHosts()
+    const syncClient = client ?? (await createReachableMobileSyncClient())
+    const hosts = await syncClient.listHosts()
     return hosts.filter((h) => h.agentHost && h.deviceKind === 'desktop').length
   } catch {
     return 0
@@ -54,6 +156,7 @@ export type AppliedSync = {
   notes: MobileNote[]
   deletedNotes: NoteTombstone[]
   knowledgeMeta: KnowledgeMetaItem[]
+  classroomCourses: MobileClassroomCourse[]
   nextCursor: string | null
   hostsOnline: number
   snapshot: KnowledgeSnapshot | null
@@ -98,8 +201,9 @@ export async function pullAndApplySync(options: {
   notes: MobileNote[]
   deletedNotes?: NoteTombstone[]
   knowledgeMeta?: KnowledgeMetaItem[]
+  classroomCourses?: MobileClassroomCourse[]
 }): Promise<AppliedSync> {
-  const client = options.client ?? createMobileSyncClient()
+  const client = options.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
 
   const pull = await client.pull({ deviceId, cursor: options.cursor, limit: 100 })
@@ -107,6 +211,10 @@ export async function pullAndApplySync(options: {
   const merged = mergeNotesFromSyncChanges(
     options.notes,
     options.deletedNotes ?? [],
+    pull.changes,
+  )
+  const classroomCourses = mergeClassroomCoursesFromSyncChanges(
+    options.classroomCourses ?? [],
     pull.changes,
   )
   const metaById = new Map(
@@ -147,6 +255,7 @@ export async function pullAndApplySync(options: {
         .filter((item) => item.kind === 'sync')
         .sort((a, b) => b.updatedAt - a.updatedAt),
     ),
+    classroomCourses,
     nextCursor: pull.nextCursor ?? options.cursor,
     hostsOnline,
     snapshot,
@@ -160,7 +269,7 @@ export async function pushNoteChanges(
   cursor: string | null,
   extras?: { client?: ToolmanSyncClient; deletedNotes?: NoteTombstone[] },
 ): Promise<void> {
-  const client = extras?.client ?? createMobileSyncClient()
+  const client = extras?.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
   const changes: SyncChange[] = [
     ...notes.map((note) => ({

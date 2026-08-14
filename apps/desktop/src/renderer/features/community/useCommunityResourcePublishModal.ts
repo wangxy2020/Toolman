@@ -85,11 +85,11 @@ export function useCommunityResourcePublishModal({
     void (async () => {
       const workspaces = await window.api.invoke(IpcChannel.P2pWorkspaceList, { filter: 'mine' })
       if (!workspaces.ok || !workspaces.data) return
-      const workspaceId = (workspaces.data as { items: Array<{ id: string }> }).items[0]?.id
+      const workspaceId = workspaces.data.workspaces[0]?.id
       if (!workspaceId) return
       const result = await window.api.invoke(IpcChannel.KnowledgeBaseList, { workspaceId })
       if (!result.ok || !result.data) return
-      const items = (result.data as { items: KnowledgeBase[] }).items.filter(
+      const items = result.data.items.filter(
         (item) => item.kind === 'shared' || item.kind === 'local',
       )
       setKnowledgeBases(items)

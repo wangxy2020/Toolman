@@ -149,9 +149,10 @@ export async function syncMissingSharedKnowledgeDocuments(workspaceId: string): 
   while (true) {
     const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
     if (batch.length === 0) break
+    const lastSeq = batch.at(-1)?.seq
+    if (lastSeq == null || lastSeq <= sinceSeq) break
 
     for (const event of batch) {
-      sinceSeq = event.seq
       if (event.resourceType !== 'Knowledge' || event.eventType !== 'Updated') {
         continue
       }
@@ -190,6 +191,7 @@ export async function syncMissingSharedKnowledgeDocuments(workspaceId: string): 
       }
     }
 
+    sinceSeq = lastSeq
     if (batch.length < 200) break
   }
 

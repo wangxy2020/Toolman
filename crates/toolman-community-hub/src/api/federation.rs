@@ -29,7 +29,12 @@ fn service(state: &AppState) -> FederationService {
 }
 
 fn resolve_base_url(state: &AppState) -> String {
-    format!("http://{}:{}", state.config.host, state.config.port)
+    let host = if state.config.host == "0.0.0.0" || state.config.host == "::" {
+        "127.0.0.1"
+    } else {
+        state.config.host.as_str()
+    };
+    format!("http://{}:{}", host, state.config.port)
 }
 
 async fn list_catalog(

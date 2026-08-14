@@ -1,3 +1,4 @@
+import { fireAndForget } from '../lib/fire-and-forget'
 import type { PdfParserBackend } from '@toolman/shared'
 import {
   DEFAULT_ODL_HYBRID_SETTINGS,
@@ -38,9 +39,12 @@ export function syncRuntimeAppSettings(patch: RuntimeAppSettingsPatch): RuntimeA
     ...(odlHybrid ? { odlHybrid: normalizeOdlHybridSettings(odlHybrid) } : {}),
   }
   if (runtimeSettings.odlHybrid.enabled) {
-    void reconcileOdlHybridServer(prevHybridEnabled ? 'settings-updated' : 'settings-enabled')
+    fireAndForget(
+      'odl-hybrid',
+      reconcileOdlHybridServer(prevHybridEnabled ? 'settings-updated' : 'settings-enabled'),
+    )
   } else if (prevHybridEnabled) {
-    void reconcileOdlHybridServer('settings-disabled')
+    fireAndForget('odl-hybrid', reconcileOdlHybridServer('settings-disabled'))
   }
   return runtimeSettings
 }

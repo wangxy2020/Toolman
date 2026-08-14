@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../../lib/fire-and-forget'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { COMMUNITY_HUB_HOST } from '../community-paths'
 import { getCommunityHubMode, resolveCommunityHubBaseUrl } from '../community-hub.config'
@@ -34,7 +35,7 @@ export function attachProcessLogging(process: ChildProcess): void {
   process.on('exit', (code, signal) => {
     if (currentStatus.running) {
       log(`sidecar exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`)
-      void markStopped()
+      fireAndForget('community.hub', markStopped())
     }
   })
 }

@@ -11,8 +11,6 @@ export type CommunitySidebarSection =
   | 'mine'
   | 'management'
 
-export const DEFAULT_COMMUNITY_SIDEBAR_SECTION: CommunitySidebarSection = 'news'
-
 export type CommunityListKind = 'news' | 'messages' | 'market' | 'tasks'
 
 export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
@@ -27,7 +25,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
   showInstall?: boolean
   listKind?: CommunityListKind
   resourceType?: 'knowledge' | 'mcp' | 'skill' | 'workflow'
-  sortable?: boolean
 }> = [
   {
     id: 'news',
@@ -39,7 +36,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     showPublish: false,
     showRss: true,
     listKind: 'news',
-    sortable: true,
   },
   {
     id: 'messages',
@@ -50,7 +46,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     publishLabel: '发布留言',
     showPublish: true,
     listKind: 'messages',
-    sortable: true,
   },
   {
     id: 'knowledge',
@@ -63,7 +58,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     showInstall: true,
     listKind: 'market',
     resourceType: 'knowledge',
-    sortable: true,
   },
   {
     id: 'mcp',
@@ -76,7 +70,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     showInstall: true,
     listKind: 'market',
     resourceType: 'mcp',
-    sortable: true,
   },
   {
     id: 'skills',
@@ -89,7 +82,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     showInstall: true,
     listKind: 'market',
     resourceType: 'skill',
-    sortable: true,
   },
   {
     id: 'workflow',
@@ -102,7 +94,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     showInstall: true,
     listKind: 'market',
     resourceType: 'workflow',
-    sortable: true,
   },
   {
     id: 'tasks',
@@ -113,7 +104,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
     publishLabel: '发布任务',
     showPublish: true,
     listKind: 'tasks',
-    sortable: true,
   },
   {
     id: 'mine',
@@ -189,14 +179,6 @@ export const MODERATION_SUBTABS: Record<
   ],
   logs: [{ id: 'logs', label: '处置日志' }],
 }
-
-export type CommunitySortField = 'createdAt' | 'size' | 'name'
-
-export const COMMUNITY_SORT_OPTIONS: Array<{ id: CommunitySortField; label: string }> = [
-  { id: 'createdAt', label: '创建时间' },
-  { id: 'size', label: '大小' },
-  { id: 'name', label: '名称' },
-]
 
 export const COMMUNITY_ACTION_LABELS = {
   like: '点赞',

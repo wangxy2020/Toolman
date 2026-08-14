@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createDefaultTaskTokenBudget } from './token-budget.js'
-import { isTaskBudgetExhausted, isTaskRetryLimitReached, TASK_MAX_RETRY_COUNT } from './limits.js'
+import { isTaskBudgetExhausted, isTaskRetryLimitReached, TASK_MAX_RETRY_COUNT, TASK_RETRY_DELAY_MS } from './limits.js'
 
 describe('task runtime limits', () => {
   it('defines max retry count as 3', () => {
@@ -14,6 +14,10 @@ describe('task runtime limits', () => {
 
     budget.used.total = budget.maxTotalTokens
     expect(isTaskBudgetExhausted(budget)).toBe(true)
+  })
+
+  it('defines a retry delay so the executor does not busy-loop', () => {
+    expect(TASK_RETRY_DELAY_MS).toBeGreaterThan(0)
   })
 
   it('detects retry limit', () => {

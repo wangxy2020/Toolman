@@ -98,6 +98,19 @@ export function defaultActiveKbId(section: KnowledgeSidebarSection): string | nu
   return getKnowledgeSection(section).defaultFolderId
 }
 
+export function knowledgeBasesForSection(
+  sectionId: KnowledgeSidebarSection,
+  createdKbs: Array<{ id: string; name: string; kind: string }>,
+  syncedKbs: Array<{ id: string; name: string }>,
+): Array<{ id: string; name: string }> {
+  const created = createdKbs.filter((kb) => kb.kind === sectionId)
+  if (sectionId === 'sync') {
+    const createdIds = new Set(created.map((kb) => kb.id))
+    return [...created, ...syncedKbs.filter((kb) => !createdIds.has(kb.id))]
+  }
+  return created
+}
+
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'
   if (bytes < 1024) return `${bytes} B`

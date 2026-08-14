@@ -4,18 +4,23 @@
  * files/chunks/vectors, and invoke desktop host capabilities without a cloud Hub.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { AgentHostCapability, AgentHostPresence, SyncChange } from '@toolman/shared'
+import {
+  SYNC_HUB_SERVICE_NAME,
+  type AgentHostCapability,
+  type AgentHostPresence,
+  type SyncChange,
+} from '@toolman/shared'
 import { logStructured } from './structured-log.service'
 import {
   buildMobileAgentHostPresence,
   handleMobileAgentHostInvoke,
-  isMobileAgentHostEnabled,
   publishActiveKnowledgeMeta,
 } from './mobile-agent-host.service'
 import { applyInboundSyncChanges } from './mobile-sync-apply'
 import { appendSyncChanges, pullSyncChanges } from './mobile-sync-store'
 import { isMobileSyncEnabled } from './mobile-sync.service'
 import { resolveMobileSyncPort } from './mobile-sync.config'
+import { advertisedHttpUrls } from './network-advertise'
 import {
   exportMobileKnowledgeSnapshot,
   readMobileSyncKnowledgeFile,
@@ -33,14 +38,31 @@ function readBody(req: IncomingMessage): Promise<string> {
   })
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body)
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
+function sendCorsHeaders(
+  extra: Record<string, string> = {},
+  req?: IncomingMessage,
+): Record<string, string> {
+  const requested = req?.headers['access-control-request-headers']
+  const required = 'Authorization, Content-Type, Accept, X-Community-User-Id'
+  const allowHeaders =
+    typeof requested === 'string' && requested.trim()
+      ? `${requested}, ${required}`
+      : required
+  return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  })
+    'Access-Control-Allow-Headers': allowHeaders,
+    'Access-Control-Allow-Private-Network': 'true',
+    'Access-Control-Max-Age': '86400',
+    ...extra,
+  }
+}
+
+function sendJson(res: ServerResponse, status: number, body: unknown, req?: IncomingMessage): void {
+  const payload = JSON.stringify(body)
+  res.writeHead(status, sendCorsHeaders({
+    'Content-Type': 'application/json; charset=utf-8',
+  }, req))
   res.end(payload)
 }
 
@@ -50,23 +72,19 @@ function sendBinary(
   bytes: Buffer,
   headers: Record<string, string>,
 ): void {
-  res.writeHead(status, {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  res.writeHead(status, sendCorsHeaders({
     ...headers,
     'Content-Length': String(bytes.length),
-  })
+  }))
   res.end(bytes)
 }
 
 function sendSse(res: ServerResponse, chunks: Array<{ type: string; text?: string; error?: string }>): void {
-  res.writeHead(200, {
+  res.writeHead(200, sendCorsHeaders({
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
-  })
+  }))
   for (const chunk of chunks) {
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
   }
@@ -79,7 +97,21 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   const url = new URL(req.url ?? '/', 'http://127.0.0.1')
 
   if (method === 'OPTIONS') {
-    sendJson(res, 204, {})
+    res.writeHead(204, sendCorsHeaders({}, req))
+    res.end()
+    return
+  }
+
+  if (
+    method === 'GET' &&
+    (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/api/v1/health')
+  ) {
+    sendJson(res, 200, {
+      status: 'ok',
+      service: SYNC_HUB_SERVICE_NAME,
+      health: '/health',
+      hosts: '/api/v1/sync/hosts',
+    })
     return
   }
 
@@ -205,13 +237,13 @@ export async function startMobileSyncHub(): Promise<{ baseUrl: string } | null> 
 
   await new Promise<void>((resolve, reject) => {
     server!.once('error', reject)
-    server!.listen(port, '127.0.0.1', () => resolve())
+    server!.listen(port, '0.0.0.0', () => resolve())
   })
   listenPort = port
   logStructured(
     'mobile-sync',
-    'info',
-    `local Sync Hub listening at http://127.0.0.1:${port} (agentHost=${isMobileAgentHostEnabled()})`,
+    'warn',
+    `Sync Hub listening: ${advertisedHttpUrls(port).join(', ')}`,
   )
   return { baseUrl: `http://127.0.0.1:${port}` }
 }

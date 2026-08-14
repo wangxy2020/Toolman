@@ -24,6 +24,8 @@ import {
   IconTranslate,
 } from '../icons/composer-icons'
 import { colors } from '../theme'
+import { useI18n } from '../i18n'
+import { loadQuickPhrases, type QuickPhrase } from '../storage/quickPhrases'
 import { GROUP_CHAT_EMOJIS } from './group-chat-emojis'
 import { GROUP_SLASH_COMMANDS } from './group-slash-commands'
 
@@ -86,6 +88,8 @@ export function ChatComposer({
   const [fieldHeight, setFieldHeight] = useState(FIELD_DEFAULT)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [slashOpen, setSlashOpen] = useState(false)
+  const [phraseOpen, setPhraseOpen] = useState(false)
+  const [phrases, setPhrases] = useState<QuickPhrase[]>([])
   const heightRef = useRef(FIELD_DEFAULT)
   const startYRef = useRef(0)
   const startHRef = useRef(FIELD_DEFAULT)
@@ -94,12 +98,19 @@ export function ChatComposer({
   const canSendRef = useRef(canSend)
   canSendRef.current = canSend
   const isGroup = mode === 'group'
-  const popupOpen = emojiOpen || slashOpen
+  const { t } = useI18n()
+  const popupOpen = emojiOpen || slashOpen || phraseOpen
 
   const closePopups = () => {
     setEmojiOpen(false)
     setSlashOpen(false)
+    setPhraseOpen(false)
   }
+
+  useEffect(() => {
+    if (!phraseOpen) return
+    void loadQuickPhrases().then(setPhrases)
+  }, [phraseOpen])
 
   useEffect(() => {
     onPopupOpenChange?.(popupOpen)
@@ -191,17 +202,18 @@ export function ChatComposer({
               active={emojiOpen}
               onPress={() => {
                 setSlashOpen(false)
+                setPhraseOpen(false)
                 setEmojiOpen((open) => !open)
               }}
               disabled={disabled || busy}
             >
               <IconEmoji size={18} color={emojiOpen ? activeColor : iconColor} />
             </ToolBtn>
-          ) : (
-            <ToolBtn label="新话题" onPress={onNewTopic} disabled={!onNewTopic || busy}>
+          ) : onNewTopic ? (
+            <ToolBtn label="新话题" onPress={onNewTopic} disabled={busy}>
               <IconNewTopic size={18} color={iconColor} />
             </ToolBtn>
-          )}
+          ) : null}
           <ToolBtn label="上传文件" disabled>
             <IconPaperclip size={18} color={iconColor} />
           </ToolBtn>
@@ -232,6 +244,7 @@ export function ChatComposer({
               isGroup
                 ? () => {
                     setEmojiOpen(false)
+                    setPhraseOpen(false)
                     setSlashOpen((open) => !open)
                   }
                 : undefined
@@ -243,8 +256,17 @@ export function ChatComposer({
               color={isGroup && slashOpen ? activeColor : iconColor}
             />
           </ToolBtn>
-          <ToolBtn label="快捷短语" disabled>
-            <IconShortcut size={18} color={iconColor} />
+          <ToolBtn
+            label={t('chat.quickPhrases')}
+            active={phraseOpen}
+            onPress={() => {
+              setEmojiOpen(false)
+              setSlashOpen(false)
+              setPhraseOpen((open) => !open)
+            }}
+            disabled={disabled || busy}
+          >
+            <IconShortcut size={18} color={phraseOpen ? activeColor : iconColor} />
           </ToolBtn>
           {!isGroup ? (
             <ToolBtn label="清空输入" onPress={onClear} disabled={!onClear || busy || !value}>
@@ -320,6 +342,47 @@ export function ChatComposer({
                 <Text style={styles.slashKbd}>▲▼ 选择</Text>
                 <Text style={styles.slashKbd}>↵ 确认</Text>
               </View>
+            </View>
+          </View>
+        ) : null}
+
+        {phraseOpen ? (
+          <View style={styles.slashMenu} accessibilityLabel={t('chat.quickPhrases')}>
+            <ScrollView
+              style={styles.slashBody}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {phrases.length === 0 ? (
+                <Text style={styles.slashDesc}>{t('quickPhrases.empty')}</Text>
+              ) : (
+                phrases.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => {
+                      onChangeText(value ? `${value}${item.text}` : item.text)
+                      setPhraseOpen(false)
+                    }}
+                    style={({ pressed }) => [
+                      styles.slashRow,
+                      pressed ? styles.slashRowActive : null,
+                    ]}
+                  >
+                    <View style={styles.slashRowLeft}>
+                      <IconShortcut size={14} color={colors.text} />
+                      <Text style={styles.slashCommand} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                    </View>
+                    <Text style={styles.slashDesc} numberOfLines={1}>
+                      {item.text}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+            <View style={styles.slashFooter}>
+              <Text style={styles.slashFooterTitle}>{t('chat.quickPhrases')}</Text>
             </View>
           </View>
         ) : null}

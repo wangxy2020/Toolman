@@ -73,6 +73,7 @@ vi.mock('./mobile-sync-runtime.service', () => ({
     hubRunning: false,
     hubBaseUrl: null,
     lastError: null,
+    classroomSyncEnabled: false,
   }),
 }))
 

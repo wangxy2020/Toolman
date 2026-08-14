@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
@@ -105,7 +106,7 @@ export class DiscordChannelAdapter implements ChannelAdapter {
     })
 
     ws.addEventListener('message', (event) => {
-      void this.handleGatewayMessage(token, String(event.data))
+      fireAndForget('im-channel', this.handleGatewayMessage(token, String(event.data)))
     })
 
     ws.addEventListener('close', () => {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native'
 import type { MobileModuleId } from '../modules'
 import { IconPlus } from '../icons/composer-icons'
 import { useSidebarLayout } from '../layout'
@@ -14,6 +14,10 @@ import {
   type MobileNote,
 } from '../storage/notes'
 import { colors, shellStyles } from '../theme'
+import { useRegisterModulePanelStatus } from './modulePageStatus'
+import { NotesRichBodyEditor } from './NotesRichBodyEditor'
+import { extractNoteOutline, prepareNoteMarkdown } from './noteBodyDisplay'
+import { MessageMarkdown } from './MessageMarkdown'
 import {
   SidebarAddButton,
   SidebarList,
@@ -23,7 +27,7 @@ import {
 import { SwipeableTopicRow } from './SwipeableTopicRow'
 
 const MODULE_COPY: Record<
-  Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community'>,
+  Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community' | 'projects'>,
   {
     listTitle: string
     hint: string
@@ -48,12 +52,6 @@ const MODULE_COPY: Record<
     hint: '教材摄取在桌面；可经桌面宿主调用课堂智能体。',
     addLabel: '开课',
     emptyHint: '暂无课堂',
-  },
-  projects: {
-    listTitle: '项目',
-    hint: '轻量看板/任务；可经桌面宿主调用项目管理智能体。',
-    addLabel: '新建项目',
-    emptyHint: '暂无项目',
   },
 }
 
@@ -428,7 +426,7 @@ function NotesLeftPane() {
 export function ModuleLeftPane({
   moduleId,
 }: {
-  moduleId: Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community'>
+  moduleId: Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community' | 'projects'>
 }) {
   const copy = MODULE_COPY[moduleId]
   const { setLeftOpen } = useMobileApp()
@@ -453,48 +451,121 @@ export function ModuleLeftPane({
 }
 
 /** Content-only modules (no chat). Agent-capable modules use `AgentRightPane` instead. */
-export function ModuleRightPane({
-  moduleId,
-}: {
-  moduleId: Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community'>
-}) {
-  const copy = MODULE_COPY[moduleId]
-  const { notes, setNotes, activeNoteId } = useMobileApp()
+function NotesRightPane({ note }: { note: MobileNote | null }) {
+  const { notes, setNotes, syncStatus, modulePrefs } = useMobileApp()
+  const { width } = useWindowDimensions()
+  const notesPrefs = modulePrefs.notes
+  const charCount = note ? Array.from(note.body).length : 0
+  const outline = note ? extractNoteOutline(note.body) : []
+  const showOutline = notesPrefs.showOutline && outline.length > 0 && width >= 720
+  const sideBySide = notesPrefs.openMode === 'live-preview' && width >= 900
+  const showEditor = notesPrefs.openMode !== 'preview-only'
+  const showPreview = notesPrefs.openMode !== 'edit-only'
 
-  if (moduleId === 'notes') {
-    const note = notes.find((item) => item.id === activeNoteId) ?? notes[0] ?? null
-    if (!note) {
-      return <Text style={shellStyles.emptyHint}>选择或新建笔记</Text>
+  const status = useMemo(() => {
+    if (!note) return { tone: 'muted' as const, message: '选择或新建笔记' }
+    if (syncStatus === 'syncing') {
+      return { tone: 'info' as const, message: '正在同步笔记…', meta: `${charCount} 字` }
     }
-    return (
-      <View style={{ flex: 1, padding: 14, gap: 8 }}>
+    if (syncStatus === 'error') {
+      return { tone: 'error' as const, message: '笔记同步失败', meta: `${charCount} 字` }
+    }
+    if (syncStatus === 'offline') {
+      return { tone: 'warning' as const, message: '离线，笔记仅保存在本地', meta: `${charCount} 字` }
+    }
+    return { tone: 'muted' as const, message: '就绪', meta: `${charCount} 字` }
+  }, [charCount, note, syncStatus])
+
+  useRegisterModulePanelStatus('notes-page', status)
+
+  if (!note) {
+    return <Text style={shellStyles.emptyHint}>选择或新建笔记</Text>
+  }
+
+  const patchNote = (patch: Partial<MobileNote>) => {
+    setNotes(
+      notes.map((item) =>
+        item.id === note.id ? { ...item, ...patch, updatedAt: Date.now() } : item,
+      ),
+    )
+  }
+
+  return (
+    <View style={styles.pageRow}>
+      <ScrollView
+        style={styles.page}
+        contentContainerStyle={[
+          styles.pageContent,
+          notesPrefs.narrowColumn ? styles.pageContentNarrow : null,
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+        // @ts-expect-error react-native-web className
+        className="tm-notes-page-scroll"
+      >
         <TextInput
           style={styles.titleInput}
           value={note.title}
-          onChangeText={(title) =>
-            setNotes(
-              notes.map((item) =>
-                item.id === note.id ? { ...item, title, updatedAt: Date.now() } : item,
-              ),
-            )
-          }
-        />
-        <TextInput
-          style={styles.bodyInput}
-          multiline
-          value={note.body}
-          onChangeText={(body) =>
-            setNotes(
-              notes.map((item) =>
-                item.id === note.id ? { ...item, body, updatedAt: Date.now() } : item,
-              ),
-            )
-          }
-          placeholder="写点什么…"
+          onChangeText={(title) => patchNote({ title })}
+          placeholder="无标题"
           placeholderTextColor={colors.textSecondary}
         />
-      </View>
-    )
+        <View style={[styles.editorSplit, sideBySide ? styles.editorSplitRow : null]}>
+          {showEditor ? (
+            <View style={styles.editorCol}>
+              <NotesRichBodyEditor
+                key={note.id}
+                value={note.body}
+                placeholder="写点什么…"
+                fontSize={notesPrefs.fontSize}
+                onChange={(body) => patchNote({ body })}
+              />
+            </View>
+          ) : null}
+          {showPreview ? (
+            <View style={styles.editorCol}>
+              {note.body.trim() ? (
+                <MessageMarkdown text={prepareNoteMarkdown(note.body)} variant="note" />
+              ) : (
+                <Text style={styles.previewEmpty}>预览</Text>
+              )}
+            </View>
+          ) : null}
+        </View>
+      </ScrollView>
+      {showOutline ? (
+        <View style={styles.outline}>
+          <Text style={styles.outlineTitle}>大纲</Text>
+          {outline.map((item) => (
+            <Text
+              key={item.id}
+              style={[
+                styles.outlineItem,
+                item.level === 2 ? styles.outlineL2 : item.level === 3 ? styles.outlineL3 : null,
+              ]}
+              numberOfLines={1}
+            >
+              {item.text}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+export function ModuleRightPane({
+  moduleId,
+}: {
+  moduleId: Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community' | 'projects'>
+}) {
+  const copy = MODULE_COPY[moduleId]
+  const { notes, activeNoteId } = useMobileApp()
+
+  if (moduleId === 'notes') {
+    const note = notes.find((item) => item.id === activeNoteId) ?? notes[0] ?? null
+    return <NotesRightPane note={note} />
   }
 
   return (
@@ -595,27 +666,87 @@ const notesStyles = StyleSheet.create({
 })
 
 const styles = StyleSheet.create({
-  titleInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
-  bodyInput: {
+  pageRow: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 15,
-    /** Match desktop `.tm-notes-editor-body` line-height: 1.7. */
-    lineHeight: 26,
+    flexDirection: 'row',
+    minWidth: 0,
+    minHeight: 0,
+  },
+  /** Desktop `.tm-notes-editor-pane--edit`. */
+  page: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    minWidth: 0,
+  },
+  pageContent: {
+    flexGrow: 1,
+    paddingTop: 24,
+    /** Match agent stream (`STREAM_PAD_SIDE`); equal L/R so the 8px web scrollbar cannot skew the page. */
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingBottom: 16,
+  },
+  pageContentNarrow: {
+    maxWidth: 720,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  editorSplit: {
+    gap: 16,
+    width: '100%',
+  },
+  editorSplitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  editorCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  previewEmpty: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  outline: {
+    width: 180,
+    flexShrink: 0,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.border,
+    paddingHorizontal: 12,
+    paddingTop: 24,
+    paddingBottom: 16,
+    backgroundColor: colors.bg,
+    gap: 6,
+  },
+  outlineTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  outlineItem: {
+    fontSize: 12,
+    lineHeight: 18,
     color: colors.text,
-    backgroundColor: colors.surface,
-    textAlignVertical: 'top',
+  },
+  outlineL2: {
+    paddingLeft: 8,
+    color: colors.textSecondary,
+  },
+  outlineL3: {
+    paddingLeft: 16,
+    color: colors.textSecondary,
+  },
+  titleInput: {
+    width: '100%',
+    borderWidth: 0,
+    padding: 0,
+    marginBottom: 10,
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 36,
+    color: colors.text,
+    backgroundColor: 'transparent',
+    ...Platform.select({ web: { outlineWidth: 0 }, default: {} }),
   },
 })

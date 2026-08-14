@@ -6,7 +6,4 @@ export {
 
 export { setP2pKnowledgeDocumentPermission } from './knowledge-sync-share-permission'
 
-export {
-  listP2pSharedResources,
-  maybeSyncSharedKnowledgeDocument,
-} from './knowledge-sync-share-list'
+export { maybeSyncSharedKnowledgeDocument } from './knowledge-sync-share-list'

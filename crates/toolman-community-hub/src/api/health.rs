@@ -21,6 +21,8 @@ pub struct HealthData {
     pub crash_report_count: i64,
     /// F1 peering API surface is available on this Hub build (catalog sync lands in PR2).
     pub federation_peering: bool,
+    /// Always false: private device changelog belongs on the desktop Sync Hub, not this catalog.
+    pub device_sync: bool,
     pub max_upload_bytes: usize,
 }
 
@@ -55,6 +57,7 @@ pub async fn health(State(state): State<AppState>) -> Json<ApiResponse<HealthDat
         resource_count: resource_count.0,
         crash_report_count: crash_report_count.0,
         federation_peering: true,
+        device_sync: false,
         max_upload_bytes: HUB_MAX_REQUEST_BODY_BYTES,
     }))
 }

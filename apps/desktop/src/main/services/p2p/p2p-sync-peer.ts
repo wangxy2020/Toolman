@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { orderMeshCatchUpPeers, toErrorMessage, type MeshPeerSyncCandidate } from '@toolman/shared'
 import { logStructured } from '../structured-log.service'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
@@ -154,7 +155,7 @@ export async function handleP2pPeerConnected(
 ): Promise<void> {
   if (!isPeerTrusted(workspaceId, peerDeviceId)) return
   await recoverWorkspaceSyncAfterReconnect(workspaceId, peerDeviceId)
-  void reconcileWorkspaceMemberMesh(workspaceId)
+  fireAndForget('p2p', reconcileWorkspaceMemberMesh(workspaceId))
 }
 
 export async function requestSnapshotFromOwner(

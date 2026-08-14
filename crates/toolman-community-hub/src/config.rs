@@ -6,6 +6,7 @@ use tracing::{info, warn};
 
 pub const ENV_DATA_DIR: &str = "COMMUNITY_HUB_DATA_DIR";
 pub const ENV_PORT: &str = "COMMUNITY_HUB_PORT";
+pub const ENV_HOST: &str = "COMMUNITY_HUB_HOST";
 pub const ENV_REQUIRE_REVIEW: &str = "COMMUNITY_HUB_REQUIRE_REVIEW";
 pub const ENV_CONFIG_FILE: &str = "COMMUNITY_HUB_CONFIG_FILE";
 pub const ENV_JWT_SECRET: &str = "COMMUNITY_HUB_JWT_SECRET";
@@ -15,7 +16,8 @@ pub const ENV_SEMANTIC_SEARCH: &str = "COMMUNITY_HUB_SEMANTIC_SEARCH";
 pub const ENV_EMBEDDING_URL: &str = "COMMUNITY_HUB_EMBEDDING_URL";
 
 pub const DEFAULT_PORT: u16 = 3721;
-pub const DEFAULT_HOST: &str = "127.0.0.1";
+/// Bind all interfaces so phones on LAN / Tailscale can reach the sidecar.
+pub const DEFAULT_HOST: &str = "0.0.0.0";
 pub const DEFAULT_RATE_LIMIT_RPM: u64 = 600;
 
 const HUB_CONFIG_FILE: &str = "hub.json";
@@ -42,7 +44,7 @@ impl Default for HubConfigFile {
 pub struct HubConfig {
     pub data_dir: PathBuf,
     pub port: u16,
-    pub host: &'static str,
+    pub host: String,
     pub require_review: bool,
     pub jwt_secret: Option<String>,
     pub packages_dir: PathBuf,
@@ -78,6 +80,7 @@ impl HubConfig {
         let data_dir = resolve_data_dir()?;
         let file_config = load_hub_config_file(&data_dir)?;
         let port = resolve_port(&file_config);
+        let host = resolve_host();
         let require_review = resolve_require_review(&file_config);
         let jwt_secret = resolve_jwt_secret();
         let rate_limit_rpm = resolve_rate_limit_rpm();
@@ -93,7 +96,7 @@ impl HubConfig {
         Ok(Self {
             data_dir,
             port,
-            host: DEFAULT_HOST,
+            host,
             require_review,
             jwt_secret,
             packages_dir,
@@ -111,7 +114,7 @@ impl HubConfig {
         Self {
             data_dir: data_dir.clone(),
             port: DEFAULT_PORT,
-            host: DEFAULT_HOST,
+            host: DEFAULT_HOST.to_string(),
             require_review: false,
             jwt_secret: None,
             packages_dir: data_dir.join("packages"),
@@ -235,6 +238,17 @@ fn resolve_port(file_config: &HubConfigFile) -> u16 {
     file_config.port
 }
 
+fn resolve_host() -> String {
+    if let Ok(value) = std::env::var(ENV_HOST) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+        warn!(value = %value, "invalid {ENV_HOST}, using fallback");
+    }
+    DEFAULT_HOST.to_string()
+}
+
 fn resolve_require_review(file_config: &HubConfigFile) -> bool {
     if let Ok(value) = std::env::var(ENV_REQUIRE_REVIEW) {
         return matches!(value.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "on");
@@ -263,7 +277,7 @@ fn resolve_rate_limit_rpm() -> u64 {
         }
         warn!(value = %value, "invalid {ENV_RATE_LIMIT_RPM}, using default");
     }
-    // Desktop sidecar binds loopback only; throttling local IPC traffic breaks UX.
+    // Desktop sidecar is reachable on LAN / Tailscale; keep RPM unset unless explicitly set.
     0
 }
 
@@ -419,5 +433,13 @@ mod tests {
         std::env::remove_var(ENV_RATE_LIMIT_RPM);
         std::env::remove_var(ENV_SEMANTIC_SEARCH);
         std::env::remove_var(ENV_EMBEDDING_URL);
+    }
+
+    #[test]
+    fn env_overrides_listen_host() {
+        std::env::set_var(ENV_HOST, "127.0.0.1");
+        assert_eq!(resolve_host(), "127.0.0.1");
+        std::env::remove_var(ENV_HOST);
+        assert_eq!(resolve_host(), DEFAULT_HOST);
     }
 }

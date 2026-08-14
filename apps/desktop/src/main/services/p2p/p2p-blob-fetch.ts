@@ -1,5 +1,4 @@
 import { logStructured } from '../structured-log.service'
-import { fireAndForget } from '../../lib/fire-and-forget'
 import { toErrorMessage } from '@toolman/shared'
 import { randomUUID } from 'node:crypto'
 import { blobExists } from '../blob.service'
@@ -216,16 +215,4 @@ export async function pushBlobToPeers(
       filesFetched: peers.length,
     })
   }
-}
-
-export function scheduleBlobFetch(
-  workspaceId: string,
-  contentHash: string | null | undefined,
-  mimeType?: string,
-): void {
-  if (!contentHash || blobExists(contentHash)) return
-  fireAndForget(
-    'p2p.blob_fetch',
-    fetchBlobFromPeers(workspaceId, contentHash, mimeType),
-  )
 }

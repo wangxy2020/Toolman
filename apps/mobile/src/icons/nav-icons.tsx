@@ -73,19 +73,6 @@ export function IconCommunity({ size = 20, color = 'currentColor' }: IconProps) 
   )
 }
 
-export function IconTranslateNav({ size = 20, color = 'currentColor' }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d="m5 8 6 6" {...strokeProps(color)} />
-      <Path d="m4 14 6-6 2-3" {...strokeProps(color)} />
-      <Path d="M2 5h12" {...strokeProps(color)} />
-      <Path d="M7 2h1" {...strokeProps(color)} />
-      <Path d="m22 22-5-10-5 10" {...strokeProps(color)} />
-      <Path d="M14 18h6" {...strokeProps(color)} />
-    </Svg>
-  )
-}
-
 export function IconClassroom({ size = 20, color = 'currentColor' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -122,15 +109,6 @@ export function IconMoreHorizontal({ size = 20, color = 'currentColor' }: IconPr
       <Circle cx="5" cy="12" r="1.6" fill={color} stroke="none" />
       <Circle cx="12" cy="12" r="1.6" fill={color} stroke="none" />
       <Circle cx="19" cy="12" r="1.6" fill={color} stroke="none" />
-    </Svg>
-  )
-}
-
-export function IconUser({ size = 20, color = 'currentColor' }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" {...strokeProps(color)} />
-      <Circle cx="12" cy="7" r="4" {...strokeProps(color)} />
     </Svg>
   )
 }

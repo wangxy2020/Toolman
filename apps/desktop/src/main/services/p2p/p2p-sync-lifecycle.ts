@@ -1,4 +1,5 @@
 import type { P2pConnectionInfo, WorkspaceEvent } from '@toolman/shared'
+import { fireAndForget } from '../../lib/fire-and-forget'
 
 type LocalEventHandler = (event: WorkspaceEvent) => void
 type ReconnectHandler = (workspaceId: string, peerDeviceId?: string) => void | Promise<void>
@@ -37,16 +38,16 @@ export function registerP2pSyncHandlers(handlers: {
 export function notifyLocalP2pEventAppended(event: WorkspaceEvent): void {
   queueMicrotask(() => {
     localEventHandler?.(event)
-    autoSnapshotHandler?.(event.workspaceId)
+    fireAndForget('p2p', autoSnapshotHandler?.(event.workspaceId))
   })
 }
 
 export function notifyP2pReconnect(workspaceId: string, peerDeviceId?: string): void {
-  void reconnectHandler?.(workspaceId, peerDeviceId)
+  fireAndForget('p2p', reconnectHandler?.(workspaceId, peerDeviceId))
 }
 
 export function notifyP2pPeerConnected(workspaceId: string, peerDeviceId: string): void {
-  void peerConnectedHandler?.(workspaceId, peerDeviceId)
+  fireAndForget('p2p', peerConnectedHandler?.(workspaceId, peerDeviceId))
 }
 
 export function applyP2pConnectionSnapshot(connections: P2pConnectionInfo[]): void {

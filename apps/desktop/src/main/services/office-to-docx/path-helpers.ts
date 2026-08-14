@@ -16,10 +16,6 @@ export function isLegacyWordPath(filePath: string, fileName?: string): boolean {
   return kind === 'doc' || kind === 'wps'
 }
 
-export function isFormatPreservingConversionMethod(method: OfficeToDocxMethod): boolean {
-  return method === 'copy' || method === 'office-oxide' || method === 'libreoffice' || method === 'microsoft-word'
-}
-
 export function hasMicrosoftWordInstalled(capabilities: OfficeConversionCapabilities): boolean {
   return capabilities.microsoftWordMac || capabilities.microsoftWordWindows
 }

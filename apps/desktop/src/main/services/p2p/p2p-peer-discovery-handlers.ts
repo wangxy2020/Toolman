@@ -59,7 +59,7 @@ export function handlePeerDiscoveryOnline(peerDeviceId: string): void {
         if (!ownerReconcileQueued) {
           ownerReconcileQueued = true
           const module = await import('./p2p-member.service')
-          void module.runOwnerPeerReconcileTick()
+          fireAndForget('p2p', module.runOwnerPeerReconcileTick())
         }
         continue
       }

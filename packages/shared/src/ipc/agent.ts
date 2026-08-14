@@ -443,6 +443,8 @@ export const AssistantListInputSchema = z.object({
   pinnedOnly: z.boolean().default(false),
 })
 
+export const AssistantListOutputSchema = z.array(AssistantSchema)
+
 export const AssistantCreateInputSchema = z.object({
   workspaceId: UuidSchema,
   name: z.string().min(1).max(64),

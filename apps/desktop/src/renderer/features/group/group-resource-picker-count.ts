@@ -1,9 +1,5 @@
 import type { GroupPickerGroup } from './group-resource-picker-types'
 
-function itemKey(groupId: string, itemId: string) {
-  return `${groupId}:${itemId}`
-}
-
 function getSelectableItems(group: GroupPickerGroup) {
   return group.items.filter((item) => !item.disabled && !item.displayOnly)
 }
@@ -31,5 +27,3 @@ export function computeGroupPickerSelectionCount(options: {
 
   return count
 }
-
-export { itemKey, getSelectableItems }

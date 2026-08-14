@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cnPrimaryActionLabel, parseAccountInput } from './account-utils'
+import { cnPrimaryActionLabel, parseAccountInput, maskPhone } from './account-utils'
 import { sha256Hex, sha256HexSync } from './sha256'
 
 describe('parseAccountInput', () => {
@@ -28,6 +28,12 @@ describe('cnPrimaryActionLabel', () => {
   it('switches by account shape', () => {
     expect(cnPrimaryActionLabel('login', 'a@b.com')).toBe('邮箱登录')
     expect(cnPrimaryActionLabel('login', '13800138000')).toBe('手机号登录')
+  })
+})
+
+describe('maskPhone', () => {
+  it('masks mainland mobile numbers', () => {
+    expect(maskPhone('13800138000')).toBe('138****8000')
   })
 })
 

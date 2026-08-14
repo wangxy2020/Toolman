@@ -6,17 +6,13 @@ import type { PermissionMode } from './agent-settings-constants'
 interface Props {
   value: PermissionMode
   autonomousMode: boolean
-  longTaskMode: boolean
   onChange: (mode: PermissionMode) => void
-  onLongTaskModeChange: (enabled: boolean) => void
 }
 
 export function AgentSettingsPermissionTab({
   value,
   autonomousMode,
-  longTaskMode,
   onChange,
-  onLongTaskModeChange,
 }: Props) {
   const { t } = useI18n()
   const permissionModes = useMemo(() => getPermissionModes(t), [t])
@@ -30,10 +26,6 @@ export function AgentSettingsPermissionTab({
         <p className="tm-agent-permission-effective-hint">
           {t('agent.permissionTab.autonomousActive')}
         </p>
-      ) : longTaskMode ? (
-        <p className="tm-agent-permission-effective-hint">
-          {t('agent.permissionTab.effectiveLongTask')}
-        </p>
       ) : (
         <p className="tm-agent-permission-effective-hint">
           {t('agent.permissionTab.effectiveNormal', { mode: effectiveLabel?.title ?? value })}
@@ -41,7 +33,7 @@ export function AgentSettingsPermissionTab({
       )}
       <div className="tm-perm-grid">
         {permissionModes.map((mode) => {
-          const selected = !longTaskMode && value === mode.id
+          const selected = value === mode.id
           return (
             <button
               key={mode.id}
@@ -59,20 +51,6 @@ export function AgentSettingsPermissionTab({
             </button>
           )
         })}
-      </div>
-
-      <div className="tm-perm-long-task-section">
-        <button
-          type="button"
-          className={`tm-perm-card tm-perm-card--long-task ${longTaskMode ? 'tm-perm-card--active' : ''}`}
-          onClick={() => onLongTaskModeChange(true)}
-          disabled={autonomousMode}
-          data-testid="long-task-mode-setting"
-        >
-          {longTaskMode && <span className="tm-perm-card-check">✓</span>}
-          <div className="tm-perm-card-title">{t('agent.permissionTab.longTaskMode.title')}</div>
-          <div className="tm-perm-card-desc">{t('agent.permissionTab.longTaskMode.description')}</div>
-        </button>
       </div>
     </div>
   )

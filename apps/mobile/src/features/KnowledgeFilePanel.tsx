@@ -359,7 +359,12 @@ export function KnowledgeFilePanel(props: {
           <Text style={styles.empty}>{isUrlMode ? '暂无网页' : '暂无文件'}</Text>
         </Pressable>
       ) : (
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+        >
           {documents.map((doc) => {
             const isUrl = doc.sourceKind === 'url' || isUrlMode
             const ext = fileExtension(doc.title)

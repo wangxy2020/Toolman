@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { toErrorMessage } from '@toolman/shared'
 import {
   COMMUNITY_HUB_DEFAULT_PORT,
@@ -19,7 +19,7 @@ import {
   readCommunityHubConfig,
   resolveCommunityHubBaseUrl,
 } from '../community-hub.config'
-import { tryAttachRunningCommunityHub, connectRemoteCommunityHub } from './connection'
+import { tryAttachRunningCommunityHub, connectRemoteCommunityHub, incompatibleLocalHubReason } from './connection'
 import { waitForHealth } from './health'
 import {
   allocateCommunityHubPort,
@@ -92,11 +92,14 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
       ...process.env,
       COMMUNITY_HUB_DATA_DIR: dataDir,
       COMMUNITY_HUB_PORT: String(port),
+      COMMUNITY_HUB_HOST: process.env.COMMUNITY_HUB_HOST?.trim() || '0.0.0.0',
       COMMUNITY_HUB_DEFAULT_IDENTITY_ID:
         process.env.COMMUNITY_HUB_DEFAULT_IDENTITY_ID?.trim() || DEFAULT_LOCAL_IDENTITY_ID,
       COMMUNITY_HUB_DEV_TEST_ROLES:
         process.env.COMMUNITY_HUB_DEV_TEST_ROLES ?? 'false',
       COMMUNITY_HUB_JWT_SECRET: jwtSecret,
+      COMMUNITY_HUB_ALLOW_HEADER_AUTH:
+        process.env.COMMUNITY_HUB_ALLOW_HEADER_AUTH ?? 'true',
       COMMUNITY_HUB_REQUIRE_REVIEW:
         process.env.COMMUNITY_HUB_REQUIRE_REVIEW ?? (app.isPackaged ? 'true' : 'true'),
       COMMUNITY_HUB_RATE_LIMIT_RPM:
@@ -213,56 +216,24 @@ async function restartCommunityHubIfBinaryUpdated(): Promise<void> {
   if (!binaryPath) return
 
   const portFile = await readCommunityHubPortFile()
-  if (!portFile?.pid) return
+  if (!portFile?.pid || !portFile.port) return
 
-  if (portFile.port) {
-    const client = new CommunityHttpClient({
-      port: portFile.port,
-      host: COMMUNITY_HUB_HOST,
-      resolveAuth: resolveCommunityHubAuth,
-    })
-    try {
-      const health = await client.health()
-      if (health.status === 'healthy') {
-        if ((health.rate_limit_rpm ?? 0) > 0) {
-          log(
-            `replacing rate-limited community hub sidecar (rate_limit_rpm=${health.rate_limit_rpm})`,
-          )
-          if (childProcess?.pid === portFile.pid) {
-            await stopCommunityHub()
-          } else if (portFile.pid) {
-            await stopCommunityHubProcessByPid(portFile.pid)
-            await removeCommunityHubPortFile()
-          }
-          return
-        }
-        return
-      }
-    } catch {
-      // Hub not responding — only restart if this process owns the sidecar.
-    }
-  }
-
-  if (childProcess?.pid !== portFile.pid) {
-    return
-  }
-
+  const client = new CommunityHttpClient({
+    port: portFile.port,
+    host: COMMUNITY_HUB_HOST,
+    resolveAuth: resolveCommunityHubAuth,
+  })
   try {
-    const binaryStat = await stat(binaryPath)
-    if (binaryStat.mtimeMs <= portFile.startedAt) return
-
-    log('detected newer community hub binary, restarting owned sidecar')
-    try {
-      process.kill(portFile.pid, 'SIGTERM')
-    } catch {
-      // sidecar may already be stopped
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1_000))
-  } catch (error) {
-    log('failed to inspect community hub binary for restart', error)
-  } finally {
-    if (childProcess?.pid === portFile.pid) {
-      await removeCommunityHubPortFile()
-    }
+    const health = await client.health()
+    if (health.status !== 'healthy') return
+    const reason = await incompatibleLocalHubReason(health, { portFile, binaryPath })
+    if (!reason) return
+    log(`replacing community hub sidecar (${reason})`)
+    await stopCommunityHubProcessByPid(portFile.pid)
+    await removeCommunityHubPortFile()
+  } catch {
+    // Do not kill the pid: another desktop instance (P2P user A) may own a
+    // healthy sidecar that is still starting, or this instance cannot reach it.
+    log('community hub sidecar not responding; will attach or spawn')
   }
 }

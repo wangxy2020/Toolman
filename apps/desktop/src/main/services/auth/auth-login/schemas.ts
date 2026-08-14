@@ -19,20 +19,11 @@ export const IdTokenLoginPayloadSchema = z.object({
   idToken: z.string().min(1),
 })
 
-export const OtpLoginPayloadSchema = z.object({
-  account: z.string().min(1).optional(),
-  phone: z.string().min(1).optional(),
-  code: z.string().min(4),
-  intent: z.enum(['login', 'register']).optional(),
-})
-
 export const CnPasswordLoginPayloadSchema = z.object({
   account: z.string().min(1),
   password: z.string().min(6),
   intent: z.literal('login').optional(),
 })
-
-export const CnEmailPasswordLoginPayloadSchema = CnPasswordLoginPayloadSchema
 
 export const CnRegisterPayloadSchema = z.object({
   account: z.string().min(1),

@@ -1,10 +1,16 @@
 import { ipcMain } from 'electron'
-import { toErrorMessage, ipcErr, IpcChannel } from '@toolman/shared'
+import {
+  toErrorMessage,
+  ipcErr,
+  IpcChannel,
+  getIpcChannelContract,
+} from '@toolman/shared'
 import { ipcHandlers } from './handlers/ipc-handler-map'
 import { wrapHandlerWithAuthGate, mapAuthGateError } from './auth-gate'
 import { isTrustedIpcSender } from './trusted-sender'
 import { logStructured } from '../services/structured-log.service'
 import { PathSandboxError } from '../services/path-sandbox.service'
+import { fireAndForget } from '../lib/fire-and-forget'
 import type { HandlerFn } from './handlers/ipc-handler-map'
 
 export function registerIpcHandlers(): void {
@@ -34,7 +40,18 @@ export function registerIpcHandlers(): void {
         })
       }
       try {
-        return await guardedHandler(input)
+        const contract = getIpcChannelContract(channel)
+        const parsedInput = contract ? contract.input.parse(input ?? {}) : input
+        const result = await guardedHandler(parsedInput)
+        if (result.ok && contract) {
+          const parsedOutput = contract.output.safeParse(result.data)
+          if (!parsedOutput.success) {
+            logStructured('ipc', 'warn', `contract output mismatch: ${channel}`)
+            return result
+          }
+          return { ...result, data: parsedOutput.data }
+        }
+        return result
       } catch (error) {
         if (error instanceof PathSandboxError) {
           return ipcErr({
@@ -78,7 +95,10 @@ export function registerIpcHandlers(): void {
     `registered ${registered} handlers${skipped > 0 ? ` (${skipped} skipped)` : ''}`,
   )
 
-  void import('../services/copyright-provenance.service').then(({ recordProvenanceBeacon }) => {
-    recordProvenanceBeacon('app.ipc.ready')
-  })
+  fireAndForget(
+    'ipc',
+    import('../services/copyright-provenance.service').then(({ recordProvenanceBeacon }) => {
+      recordProvenanceBeacon('app.ipc.ready')
+    }),
+  )
 }

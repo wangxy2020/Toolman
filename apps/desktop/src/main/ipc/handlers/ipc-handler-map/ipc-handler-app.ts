@@ -18,6 +18,7 @@ import {
   CrashReportUploadStatusSchema,
   MobileAgentHostSetEnabledInputSchema,
   MobileSyncSetEnabledInputSchema,
+  ClassroomSyncSetEnabledInputSchema,
   RendererErrorReportInputSchema,
   RuntimeAppSettingsSyncInputSchema,
   ipcOk,
@@ -87,6 +88,19 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(await setMobileAgentHostEnabled(parsed.enabled))
     } catch (error) {
       const message = toErrorMessage(error, 'Failed to update mobile agent host')
+      return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
+    }
+  },
+
+  [IpcChannel.ClassroomSyncSetEnabled]: async (input) => {
+    try {
+      const parsed = ClassroomSyncSetEnabledInputSchema.parse(input)
+      const { setClassroomSyncEnabled } = await import(
+        '../../../services/mobile-sync-runtime.service'
+      )
+      return ipcOk(await setClassroomSyncEnabled(parsed.enabled))
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to update classroom sync')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })
     }
   },

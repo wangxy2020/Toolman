@@ -2,6 +2,7 @@
  * Apply inbound Sync changes from mobile onto desktop local stores.
  */
 import type { SyncChange } from '@toolman/shared'
+import { applyClassroomSyncChanges } from './classroom-mobile-sync'
 import { deleteNoteItem, getNoteById, upsertNoteItem } from './notes-data/storage'
 import { broadcastMobileNotesChanged } from './notes-mobile-sync-broadcast'
 import type { NoteItem } from './notes-data/types'
@@ -41,4 +42,9 @@ export function applyInboundSyncChanges(changes: SyncChange[]): void {
     changed = true
   }
   if (changed) broadcastMobileNotesChanged()
+  try {
+    applyClassroomSyncChanges(changes)
+  } catch {
+    // Classroom apply is best-effort; notes already persisted.
+  }
 }

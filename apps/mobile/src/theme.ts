@@ -28,8 +28,7 @@ export const shellStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
     backgroundColor: colors.bg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomWidth: 0,
     zIndex: 2,
   },
   topBarSide: {
@@ -126,8 +125,13 @@ export const shellStyles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
   },
-  /** Settings-only: permanent left nav (width applied at runtime for iPad). */
+  mainPaneBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  /** Settings-only: permanent left nav (same width as module drawer). */
   dockedSidebar: {
+    flexShrink: 0,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.border,
     backgroundColor: colors.surface,

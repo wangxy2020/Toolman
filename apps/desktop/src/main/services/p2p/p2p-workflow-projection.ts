@@ -2,7 +2,7 @@ import { P2pSharedResourceRepository } from '@toolman/db'
 import type { WorkspaceEvent } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { upsertStoredWorkflow } from '../community/workflow-store.service'
-import { listWorkspaceEventsSince } from './p2p-event.service'
+import { iterateWorkspaceEventPages } from './p2p-event.service'
 import {
   findSharedResourceForProjection,
   resolveSharedResourceId,
@@ -170,13 +170,8 @@ export function reconcileWorkflowSharedResources(workspaceId: string): void {
   const terminalByWorkflow = new Map<string, WorkspaceEvent>()
   const workflowJsonById = new Map<string, string>()
 
-  let sinceSeq = 0
-  while (true) {
-    const batch = listWorkspaceEventsSince(workspaceId, sinceSeq, 200)
-    if (batch.length === 0) break
-
+  iterateWorkspaceEventPages(workspaceId, (batch) => {
     for (const event of batch) {
-      sinceSeq = event.seq
       if (event.resourceType !== 'Workflow') continue
 
       const workflowId = readPayloadString(event.payload, 'workflow_id') ?? event.resourceId
@@ -199,9 +194,7 @@ export function reconcileWorkflowSharedResources(workspaceId: string): void {
 
       terminalByWorkflow.set(workflowId, event)
     }
-
-    if (batch.length < 200) break
-  }
+  })
 
   for (const event of terminalByWorkflow.values()) {
     if (event.eventType === 'Deleted') {

@@ -1,3 +1,4 @@
+import { fireAndForget } from './lib/fire-and-forget'
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { logStructured } from './services/structured-log.service'
@@ -91,10 +92,10 @@ export function createWindow(): void {
 
     logStructured('auth', 'warn', `OAuth page loaded in main window; restoring app shell`)
     if (isDev && process.env['ELECTRON_RENDERER_URL']) {
-      void mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL'])
+      fireAndForget('window', mainWindow?.loadURL(process.env['ELECTRON_RENDERER_URL']))
       return
     }
-    void mainWindow?.loadFile(join(__dirname, '../renderer/index.html'))
+    fireAndForget('window', mainWindow?.loadFile(join(__dirname, '../renderer/index.html')))
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -131,9 +132,9 @@ export function createWindow(): void {
   })
 
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    fireAndForget('window', mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']))
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    fireAndForget('window', mainWindow.loadFile(join(__dirname, '../renderer/index.html')))
   }
 }
 

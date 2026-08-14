@@ -18,7 +18,6 @@ type ChatPageMainContentProps = Pick<
   | 'activeAssistant'
   | 'workspace'
   | 'chat'
-  | 'agentTaskPanel'
   | 'headerModelIds'
   | 'handleModelChange'
   | 'handleSelectWorkspaceFolder'

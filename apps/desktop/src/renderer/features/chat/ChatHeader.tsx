@@ -1,7 +1,5 @@
-import type { RefObject } from 'react'
 import type { Assistant, Provider, Workspace } from '@toolman/shared'
 import { IconSliders } from '../../components/icons'
-import { IconTaskList } from '../../components/icons/rich-text'
 import { HeaderIconButton } from '../../components/layout/HeaderIconButton'
 import { CodeEditorSelector } from './CodeEditorSelector'
 import { AssistantNameSelector } from './AssistantNameSelector'
@@ -24,12 +22,6 @@ interface Props {
   hasConfiguredProvider: boolean
   onOpenSettings: () => void
   groupProxyMode?: boolean
-  agentTasksMenu?: {
-    open: boolean
-    buttonRef: RefObject<HTMLButtonElement | null>
-    activeCount: number
-    onToggle: () => void
-  }
 }
 
 export function ChatHeader({
@@ -46,7 +38,6 @@ export function ChatHeader({
   hasConfiguredProvider,
   onOpenSettings,
   groupProxyMode = false,
-  agentTasksMenu,
 }: Props) {
   const { t } = useI18n()
   return (
@@ -76,25 +67,6 @@ export function ChatHeader({
           </button>
         )}
 
-        {agentTasksMenu ? (
-          <HeaderIconButton
-            ref={agentTasksMenu.buttonRef}
-            className="tm-agent-tasks-menu-btn"
-            label={t('chat.tasks.menuButtonTitle')}
-            active={agentTasksMenu.open}
-            aria-pressed={agentTasksMenu.open}
-            aria-expanded={agentTasksMenu.open}
-            data-testid="agent-tasks-menu-button"
-            onClick={agentTasksMenu.onToggle}
-          >
-            <IconTaskList size={16} />
-            {agentTasksMenu.activeCount > 0 ? (
-              <span className="tm-agent-tasks-menu-badge" aria-hidden="true">
-                {agentTasksMenu.activeCount}
-              </span>
-            ) : null}
-          </HeaderIconButton>
-        ) : null}
         <CodeEditorSelector workspace={workspace} onChange={onCodeEditorChange} />
         <HeaderIconButton
           label={t('chat.messageSettings')}

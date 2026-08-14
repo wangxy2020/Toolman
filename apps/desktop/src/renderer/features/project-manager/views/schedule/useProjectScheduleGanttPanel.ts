@@ -1953,7 +1953,6 @@ export function useProjectScheduleGanttPanel({
           if (selectedProjectId) setProjectInfoOpen(true)
           break
         case 'link':
-          // Placeholder for a future link feature.
           break
         case 'undo':
           await handleUndo()

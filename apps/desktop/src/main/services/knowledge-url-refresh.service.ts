@@ -6,6 +6,7 @@ import { logStructured } from './structured-log.service'
 import { listWorkspaces } from './workspace.service'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { ingestUrlDocument, refreshKbStats } from './knowledge-ingest.service'
+import { fireAndForget } from '../lib/fire-and-forget'
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000
 
@@ -67,6 +68,7 @@ async function refreshNetworkKnowledgeBaseUrls(
 }
 
 async function runUrlRefreshCheck() {
+  try {
   const kbRepo = getKnowledgeBaseRepository()
 
   const now = Date.now()
@@ -88,14 +90,17 @@ async function runUrlRefreshCheck() {
       }
     }
   }
+  } catch (error) {
+    logStructured('knowledge', 'error', `URL refresh scheduler tick failed`, { detail: error })
+  }
 }
 
 export function startKnowledgeUrlRefreshScheduler() {
   if (timer) return
 
-  void runUrlRefreshCheck()
+  fireAndForget('knowledge', runUrlRefreshCheck())
   timer = setInterval(() => {
-    void runUrlRefreshCheck()
+    fireAndForget('knowledge', runUrlRefreshCheck())
   }, CHECK_INTERVAL_MS)
 }
 

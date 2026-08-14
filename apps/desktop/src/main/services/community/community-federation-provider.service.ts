@@ -25,11 +25,6 @@ import {
 } from './community-federated-catalog.service'
 
 let started = false
-let catalogMessagesReceived = 0
-
-export function getCommunityFederationProviderStats() {
-  return { catalogMessagesReceived }
-}
 
 function subscribeFederationTopics(): void {
   if (!Libp2pBridge.isAvailable()) return
@@ -91,17 +86,13 @@ function handleFederationInboxMessage(topic: string, data: Buffer): void {
       const deleteParsed = FederatedCatalogDeleteWireMessageSchema.safeParse(raw)
       if (deleteParsed.success) {
         if (!verifyFederatedCatalogDeleteWireMessage(deleteParsed.data)) return
-        if (removeFederatedCatalogEntry(deleteParsed.data.resourceId)) {
-          catalogMessagesReceived += 1
-        }
+        removeFederatedCatalogEntry(deleteParsed.data.resourceId)
         return
       }
 
       const parsed = FederatedCatalogWireMessageSchema.parse(raw)
       if (!verifyFederatedCatalogWireMessage(parsed)) return
-      if (upsertFederatedCatalogEntry(parsed.entry, { origin: 'catalog' })) {
-        catalogMessagesReceived += 1
-      }
+      upsertFederatedCatalogEntry(parsed.entry, { origin: 'catalog' })
     } catch {
       // ignore malformed catalog wire messages
     }

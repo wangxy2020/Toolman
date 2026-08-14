@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import { randomUUID } from 'node:crypto'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
@@ -65,7 +66,7 @@ export async function sendP2pGroupChatMessage(
 
   appendGroupChatMessage(message)
   broadcastP2pGroupChatMessage(message)
-  void relayMessageToPeers(message)
+  fireAndForget('p2p', relayMessageToPeers(message))
   void appendGroupChatWalEvent(input.workspaceId, member.id, {
     v: 1,
     kind: 'group.chat.message',
@@ -87,7 +88,7 @@ export function clearP2pGroupChatMessages(rawInput: unknown): { cleared: boolean
 
   clearGroupChatMessages(input.workspaceId)
   broadcastP2pGroupChatCleared(input.workspaceId)
-  void relayClearToPeers(input.workspaceId)
+  fireAndForget('p2p', relayClearToPeers(input.workspaceId))
   const clearedAt = Date.now()
   void appendGroupChatWalEvent(input.workspaceId, member.id, {
     v: 1,

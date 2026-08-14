@@ -29,7 +29,6 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     setSending: (sending: boolean) => void
     buildSendOptionsForSession: ReturnType<typeof useChatSend>['buildSendOptionsForSession']
     effectiveModelIds: string[]
-    autonomousTaskMode: boolean
   } | null>(null)
 
   const handleSelectSessionRef = useRef<(sessionId: string) => Promise<void>>(async () => {})
@@ -44,7 +43,6 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         mcpServerIds: [],
       },
     handleSelectSession: (sessionId) => handleSelectSessionRef.current(sessionId),
-    getAutonomousTaskMode: () => sendStateRef.current?.autonomousTaskMode === true,
   })
 
   const sendState = useChatSend(session, streamingRefs, {
@@ -63,7 +61,6 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     setSending: sendState.setSending,
     buildSendOptionsForSession: sendState.buildSendOptionsForSession,
     effectiveModelIds: sendState.effectiveModelIds,
-    autonomousTaskMode: sendState.autonomousTaskMode,
   }
 
   const handleSelectSession = useCallback(
@@ -184,11 +181,6 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
     deleteAssistant,
     sendMessage: sendState.sendMessage,
     abortStreaming: sendState.abortStreaming,
-    autonomousTaskMode: sendState.autonomousTaskMode,
-    longTaskEnabled: sendState.longTaskEnabled,
-    sessionActiveTaskId: sendState.sessionActiveTaskId,
-    sessionTaskBindingLocked: sendState.sessionTaskBindingLocked,
-    boundTask: sendState.boundTask,
     deleteMessage: messagesState.deleteMessage,
     regenerateMessage: messagesState.regenerateMessage,
     beginEditUserMessage: messagesState.beginEditUserMessage,

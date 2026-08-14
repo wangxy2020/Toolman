@@ -7,7 +7,6 @@ interface Props {
   selectedProjectId: string | null
 }
 
-/** Calendar view placeholder — content cleared pending redesign. */
 const ProjectScheduleCalendarPanel: FC<Props> = () => {
   const { t } = useI18n()
   return (

@@ -1,3 +1,4 @@
+import { fireAndForget } from '../../lib/fire-and-forget'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
@@ -150,7 +151,7 @@ export class WechatChannelAdapter implements ChannelAdapter {
     }
 
     this.lastEventAt = Date.now()
-    void this.handleInbound(config, chatId, text)
+    fireAndForget('im-channel', this.handleInbound(config, chatId, text))
     return true
   }
 

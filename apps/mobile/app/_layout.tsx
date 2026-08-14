@@ -28,59 +28,14 @@ input {
 }
 `
 
-/** Match desktop `theme.css` unified scrollbars (agent stream + other panes). */
+/** Hide scrollbars on every pane; keep scrolling (match desktop module pages). */
 const WEB_SCROLLBAR_CSS = `
-:root {
-  --tm-text-secondary: #8b8f96;
-  --tm-text-muted: #b0b4bb;
-  --tm-scrollbar-track: transparent;
-  --tm-scrollbar-thumb: color-mix(in srgb, var(--tm-text-muted) 50%, transparent);
-  --tm-scrollbar-thumb-hover: color-mix(in srgb, var(--tm-text-secondary) 70%, transparent);
-}
-
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--tm-scrollbar-thumb) var(--tm-scrollbar-track);
-}
-
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-*::-webkit-scrollbar-track {
-  background: var(--tm-scrollbar-track);
-}
-
-*::-webkit-scrollbar-thumb {
-  background: var(--tm-scrollbar-thumb);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--tm-scrollbar-thumb-hover);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-corner {
-  background: var(--tm-scrollbar-track);
-}
-
-/* Agent message stream + module sidebars: keep scroll, hide the scrollbar (match desktop). */
-.tm-agent-stream-scroll,
-.tm-agent-stream-scroll div,
-.tm-sidebar-scroll,
-.tm-sidebar-scroll div {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
-.tm-agent-stream-scroll::-webkit-scrollbar,
-.tm-agent-stream-scroll div::-webkit-scrollbar,
-.tm-sidebar-scroll::-webkit-scrollbar,
-.tm-sidebar-scroll div::-webkit-scrollbar {
+
+*::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   display: none !important;
