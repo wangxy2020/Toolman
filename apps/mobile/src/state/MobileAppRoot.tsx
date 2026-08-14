@@ -225,7 +225,6 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       cancelled = true
     }
     // intentional: bootstrap sync once after auth ready (notes already loaded)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, auth?.identityId])
 
   // Local auto-save is above; optionally push edits to Sync API when enabled.
@@ -240,7 +239,6 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       })
     }, 1200)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, auth?.identityId, notes, deletedNotes, modulePrefs.notes.syncEnabled, modulePrefs.notes.autoSyncOnEdit])
 
   const value = useMemo(

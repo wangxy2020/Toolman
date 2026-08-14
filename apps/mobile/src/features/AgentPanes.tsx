@@ -518,7 +518,7 @@ export function AgentRightPane() {
     const idx = session.messages.findIndex((m) => m.id === messageId)
     if (idx < 0) return
     const target = session.messages[idx]!
-    let removeIds = new Set([messageId])
+    const removeIds = new Set([messageId])
     // Desktop-like: deleting a user turn also drops the following assistant reply.
     if (target.role === 'user') {
       const next = session.messages[idx + 1]

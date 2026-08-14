@@ -21,7 +21,7 @@ export type DesktopSyncState = {
   lastError: string | null
 }
 
-let state: DesktopSyncState = {
+const state: DesktopSyncState = {
   cursor: null,
   lastPushAt: null,
   lastPullAt: null,

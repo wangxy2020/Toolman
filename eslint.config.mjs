@@ -79,4 +79,14 @@ export default tseslint.config(
       '@typescript-eslint/no-require-imports': 'off',
     },
   },
+  {
+    files: ['**/metro.config.js', '**/babel.config.js', '**/*.config.cjs'],
+    languageOptions: {
+      globals: nodeGlobals,
+      sourceType: 'commonjs',
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 )

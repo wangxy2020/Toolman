@@ -105,9 +105,9 @@ export function ChatComposer({
     onPopupOpenChange?.(popupOpen)
   }, [onPopupOpenChange, popupOpen])
 
+  // Only dismiss-token changes should close popups; closePopups is stable here.
   useEffect(() => {
     if (popupDismissToken > 0) closePopups()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popupDismissToken])
 
   useEffect(() => {

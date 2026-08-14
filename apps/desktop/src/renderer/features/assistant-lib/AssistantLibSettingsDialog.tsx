@@ -232,7 +232,6 @@ export function AssistantLibSettingsDialog({
     setEditingDoc(false)
     setError(null)
     // Reset the tab only when switching classrooms, not when session objects refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetSessionId])
 
   useEffect(() => {
