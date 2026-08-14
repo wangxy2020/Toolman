@@ -1,3 +1,7 @@
+//! Toolman community hub
+//! Copyright (C) 2024–2026 Toolman Contributors
+//! SPDX-License-Identifier: AGPL-3.0-or-later
+//! Source: https://github.com/wangxy2020/Toolman
 use std::net::SocketAddr;
 
 use axum::Router;

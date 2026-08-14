@@ -33,17 +33,18 @@ alwaysApply: false
 | `app.ipc.ready` | `registerIpcHandlers()` — main | 每进程一次 |
 | `app.renderer.ready` | `main.tsx` → `recordProvenanceBeacon` | 每进程一次 |
 | `app.diagnostics.view` | `useDiagnosticsSettings` | 每进程一次 |
-| `app.about.view` | `AboutSettingsPanel` | 每进程一次 |
+| `app.about.view` | 桌面 `AboutSettingsPanel`；移动 `AboutSettingsPanel` | 每进程一次 |
 | `app.session.heartbeat` | main 定时器 | 可重复（6h） |
 
 - Schema / IPC：`packages/shared/src/ipc/provenance.ts`，channel `AppProvenanceBeacon`。
 - Main 记录：`copyright-provenance.service.ts`（去重 + 写 `{userData}/diagnostics/provenance.jsonl`）。
 - Renderer **必须**经 `apps/desktop/src/renderer/lib/record-provenance-beacon.ts` 调用，**禁止**在其它组件直接 `invoke(AppProvenanceBeacon, …)`。
+- 移动端经 `apps/mobile/src/lib/record-provenance-beacon.ts` 调用同一套事件（`app.start` / `app.about.view`），**禁止**另起 analytics。
 - **禁止**第二套 bootstrap、重复 heartbeat、或散落 analytics 写 provenance 日志。
 
 ## 新入口文件版权头
 
-主进程 / renderer 根入口保留块注释头，内容与 `TOOLMAN_COPYRIGHT_HEADER` 一致（Electron 入口无法 runtime 注入）。Rust crate 根 `lib.rs` 同理（含 `toolman-docx-core`）。
+主进程 / renderer 根入口保留块注释头，内容与 `TOOLMAN_COPYRIGHT_HEADER` 一致（Electron 入口无法 runtime 注入）。Rust crate 根 `lib.rs` / 二进制 `main.rs` 同理。
 
 ## 自检
 

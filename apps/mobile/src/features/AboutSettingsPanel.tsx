@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Image,
   type ImageSourcePropType,
@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import Constants from 'expo-constants'
 import Svg, { Path, Polyline } from 'react-native-svg'
+import { TOOLMAN_COPYRIGHT_NOTICE, TOOLMAN_SPDX_LICENSE } from '@toolman/shared'
 import {
   ABOUT_LINK_ACTIONS,
   ABOUT_LINK_IDS,
@@ -22,6 +23,7 @@ import {
   type AboutLinkId,
 } from '../settings/about'
 import { colors } from '../theme'
+import { recordProvenanceBeacon } from '../lib/record-provenance-beacon'
 import { SettingsScroll } from './settingsUi'
 
 const appIcon = require('../../assets/icon.png') as ImageSourcePropType
@@ -97,6 +99,10 @@ export function AboutSettingsPanel() {
   const [updateLabel, setUpdateLabel] = useState('检查更新')
   const [updateHint, setUpdateHint] = useState<string | null>(null)
 
+  useEffect(() => {
+    recordProvenanceBeacon('app.about.view')
+  }, [])
+
   const checkUpdate = () => {
     if (updateBusy) return
     setUpdateBusy(true)
@@ -144,6 +150,7 @@ export function AboutSettingsPanel() {
             <Text style={styles.name}>Toolman</Text>
             <Text style={styles.tagline}>一款为创造者而生的 AI 助手</Text>
             <Text style={styles.versionBadge}>v{APP_VERSION}</Text>
+            <Text style={styles.copyright}>{TOOLMAN_COPYRIGHT_NOTICE} · {TOOLMAN_SPDX_LICENSE}</Text>
           </View>
           <OutlineButton label={updateLabel} onPress={checkUpdate} disabled={updateBusy} />
         </View>
@@ -303,6 +310,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     overflow: 'hidden',
+  },
+  copyright: {
+    marginTop: 8,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.textSecondary,
   },
   updateHint: {
     marginTop: 0,

@@ -1,4 +1,6 @@
-export const TOOLMAN_GITHUB_URL = 'https://github.com/wangxy2020/Toolman'
+import { TOOLMAN_SOURCE_REPOSITORY } from '@toolman/shared'
+
+export const TOOLMAN_GITHUB_URL = TOOLMAN_SOURCE_REPOSITORY
 
 const TOOLMAN_LICENSE_URL = `${TOOLMAN_GITHUB_URL}/blob/main/LICENSE`
 export const TOOLMAN_THIRD_PARTY_NOTICES_URL = `${TOOLMAN_GITHUB_URL}/blob/main/THIRD_PARTY_NOTICES.md`

@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar'
 import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { MobileAppRoot } from '../src/state/MobileAppRoot'
+import { recordProvenanceBeacon } from '../src/lib/record-provenance-beacon'
 
 const WEB_FOCUS_CSS = `
 textarea:focus,
@@ -57,6 +58,9 @@ function useWebChromeStyles() {
 
 export default function RootLayout() {
   useWebChromeStyles()
+  useEffect(() => {
+    recordProvenanceBeacon('app.start')
+  }, [])
   return (
     <SafeAreaProvider>
       <MobileAppRoot>
