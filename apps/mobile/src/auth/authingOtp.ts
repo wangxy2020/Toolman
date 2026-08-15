@@ -70,6 +70,9 @@ function formatAuthingError(error: unknown, fallback: string): string {
       if (/用户池不存在|应用不存在/i.test(message)) {
         return 'Authing 配置有误，请检查应用 ID 与认证域名。'
       }
+      if (/无权限登录此应用|not\s+allowed\s+to\s+login\s+(to\s+)?this\s+app/i.test(message)) {
+        return '该账号已注册，但未被授权登录此 Authing 应用。请到控制台 → 应用 → 访问授权，将默认权限改为「允许所有用户访问」。'
+      }
       if (/超过.*(设备|登录|会话)|max.*(device|session)|device.*(limit|exceed)|too many.*(device|session)/i.test(message)) {
         return '该账号已达到最多 3 台设备同时登录，请先在其他设备退出后再试。'
       }
