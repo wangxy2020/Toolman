@@ -16,13 +16,7 @@ import { colors, shellStyles } from '../theme'
 import { ModulePageStatusBar, ModulePageStatusProvider } from '../features/modulePageStatus'
 import { ModuleOverflowMenu } from './ModuleOverflowMenu'
 
-const STATUS_BAR_MODULES = new Set<MobileModuleId>([
-  'knowledge',
-  'notes',
-  'classroom',
-  'community',
-  'projects',
-])
+const STATUS_BAR_MODULES = new Set<MobileModuleId>(['knowledge', 'notes', 'community', 'projects'])
 
 type Props = {
   left: ReactNode
