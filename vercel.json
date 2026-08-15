@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "bash scripts/ensure-opendataloader-stub.sh && HUSKY=0 pnpm install --frozen-lockfile",
+  "buildCommand": "bash scripts/vercel-build-mobile.sh",
+  "outputDirectory": "apps/mobile/.vercel-out",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/"
+    }
+  ]
+}
