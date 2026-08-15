@@ -3,12 +3,11 @@
   "framework": null,
   "installCommand": "bash scripts/ensure-opendataloader-stub.sh && HUSKY=0 pnpm install --frozen-lockfile",
   "buildCommand": "bash scripts/vercel-build-mobile.sh",
-  "outputDirectory": "apps/mobile/.vercel-out",
-  "cleanUrls": true,
+  "outputDirectory": "apps/mobile/dist",
   "rewrites": [
     {
-      "source": "/:path*",
-      "destination": "/"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
