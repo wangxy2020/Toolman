@@ -12,11 +12,11 @@ jobs:
       - name: Mirror the GitHub organization repos to Gitee
         uses: Yikun/hub-mirror-action@master
         with:
-          src: github/你的GitHub用户名
-          dst: gitee/你的Gitee用户名
+          src: github/wangxy2020
+          dst: gitee/wangxy
           dst_key: ${{ secrets.GITEE_SSH_KEY }}
           dst_token: ${{ secrets.GITEE_TOKEN }}
           account_type: user
           # 仅同步当前仓库
-          static_list: "你的仓库名"
+          static_list: "Toolman"
           force_update: true
