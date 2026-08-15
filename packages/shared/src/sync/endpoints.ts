@@ -37,6 +37,26 @@ export function isLoopbackHostname(hostname: string): boolean {
   return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]'
 }
 
+/** LAN / Tailscale / emulator hosts that may run the desktop sidecar. Public DNS names are not. */
+export function isPrivateOrLoopbackHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase()
+  if (!host) return false
+  if (isLoopbackHostname(host)) return true
+  if (host === '10.0.2.2') return true
+  if (host.endsWith('.local')) return true
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return false
+  const [a, b] = host.split('.').map((part) => Number(part))
+  if (a === 10) return true
+  if (a === 192 && b === 168) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
+  return false
+}
+
+export function isOfficialCommunityHubHost(hostname: string): boolean {
+  return hostname.trim().toLowerCase() === 'hub.toolman.app'
+}
+
 /** Parse `192.168.1.8:8081`, `http://10.0.0.4:3721/`, or a bare hostname. */
 export function hostnameFromHostOrUrl(raw: string): string | null {
   const trimmed = raw.trim()
@@ -47,10 +67,6 @@ export function hostnameFromHostOrUrl(raw: string): string | null {
   } catch {
     return null
   }
-}
-
-function isOfficialCommunityHubHost(hostname: string): boolean {
-  return hostname.trim().toLowerCase() === 'hub.toolman.app'
 }
 
 /** True when JSON is the desktop Sync Hub `/health` body (not Community Hub). */
@@ -96,7 +112,10 @@ export function listCommunityHubProbeCandidates(
 ): string[] {
   const fromPackager = (options?.packagerHostnames ?? [])
     .map((value) => (value ? hostnameFromHostOrUrl(value) : null))
-    .filter((host): host is string => host != null && !isOfficialCommunityHubHost(host))
+    .filter(
+      (host): host is string =>
+        host != null && !isOfficialCommunityHubHost(host) && isPrivateOrLoopbackHostname(host),
+    )
     .map((host) => siblingHttpOrigin(`http://${host}`, DEFAULT_LOCAL_COMMUNITY_HUB_PORT))
   const includeLoopback = options?.includeLoopback !== false
 
@@ -111,7 +130,7 @@ export function listCommunityHubProbeCandidates(
 
 function syncOriginForHostname(hostname: string): string | null {
   const host = hostname.trim()
-  if (!host || isOfficialCommunityHubHost(host)) return null
+  if (!host || isOfficialCommunityHubHost(host) || !isPrivateOrLoopbackHostname(host)) return null
   return siblingHttpOrigin(`http://${host}`, DEFAULT_LOCAL_SYNC_PORT)
 }
 

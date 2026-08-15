@@ -10,7 +10,11 @@ import {
 import { isCommunityModerator } from '../auth/localAuth'
 import { useMobileApp } from '../state/MobileAppContext'
 import { resolveCommunityHubBaseUrl, pickReachableCommunityHubBaseUrl } from '../settings/communityHubUrl'
-import { listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from '../sync/desktopDevHost'
+import {
+  isHostedWebPage,
+  listDesktopDevHostnames,
+  shouldProbeLoopbackSyncHub,
+} from '../sync/desktopDevHost'
 import {
   fetchCommunityMessages,
   fetchCommunityNews,
@@ -179,6 +183,7 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
         itemCount: sorted.length,
         hubBaseUrl,
         triedHubUrls,
+        hostedWeb: isHostedWebPage(),
       }),
     [error, hubBaseUrl, loading, offline, sorted.length, triedHubUrls],
   )

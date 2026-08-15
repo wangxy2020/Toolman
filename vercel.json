@@ -8,6 +8,14 @@
     "api/tts/synthesize.ts": {
       "maxDuration": 30,
       "includeFiles": "apps/mobile/src/voice/synthesizeEdgeTts.ts"
+    },
+    "api/llm/chat.ts": {
+      "maxDuration": 30,
+      "includeFiles": "apps/mobile/src/chat/llmProxyRequest.ts"
+    },
+    "api/community-hub/[...path].ts": {
+      "maxDuration": 30,
+      "includeFiles": "apps/mobile/src/features/communityHubProxy.ts"
     }
   },
   "rewrites": [

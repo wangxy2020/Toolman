@@ -286,6 +286,7 @@ export function AgentRightPane() {
           pane.agentScope === 'classroom' ? undefined : pane.startNewTopic
         }
         onClear={() => pane.setInput('')}
+        onError={pane.setError}
       />
 
       <ChatMessageContextMenu

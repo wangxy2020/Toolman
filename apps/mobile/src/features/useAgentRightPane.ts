@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ScrollView } from 'react-native'
 import { stripSocraticMachineBlocks } from '@toolman/shared'
 import { streamChatCompletion } from '../chat/streamChat'
+import { resolveTranslationTarget, translationLanguageLabel } from '../chat/translation-utils'
 import { translateWithChatModel } from '../chat/translateWithModel'
 import { invokeDesktopAgent } from '../host/invokeDesktop'
 import { createReachableMobileSyncClient } from '../sync/mobileSync'
@@ -418,13 +419,16 @@ export function useAgentRightPane() {
       return
     }
 
-    const targetLanguage = modulePrefs.translate.targetLang || 'zh-CN'
+    const targetLanguage = resolveTranslationTarget(
+      msg.content,
+      modulePrefs.agent.translationLanguages,
+    )
     setTranslatingIds((prev) => ({ ...prev, [msg.id]: true }))
     setError(null)
     const result = await translateWithChatModel({
       config: modelConfig,
       text: msg.content,
-      targetLang: targetLanguage,
+      targetLang: translationLanguageLabel(targetLanguage),
     })
     setTranslatingIds((prev) => ({ ...prev, [msg.id]: false }))
     if (!result.ok) {
@@ -509,6 +513,7 @@ export function useAgentRightPane() {
     setInput,
     busy,
     error,
+    setError,
     actionHint,
     copiedId,
     userMenu,

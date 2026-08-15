@@ -1,5 +1,7 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import {
+  Animated,
+  Easing,
   Platform,
   Pressable,
   ScrollView,
@@ -14,7 +16,6 @@ import {
   IconGlobe,
   IconGraduationCap,
   IconKnowledgeTool,
-  IconMic,
   IconNewTopic,
   IconPaperclip,
   IconResizeHandle,
@@ -28,6 +29,7 @@ import { useI18n } from '../i18n'
 import { GROUP_CHAT_EMOJIS } from './group-chat-emojis'
 import { GROUP_SLASH_COMMANDS } from './group-slash-commands'
 import { useChatComposer, type ChatComposerProps } from './useChatComposer'
+import { useComposerInputActions } from './useComposerInputActions'
 
 export type { ChatComposerProps }
 
@@ -56,6 +58,7 @@ export function ChatComposer({
   popupDismissToken = 0,
   paddingLeft = DEFAULT_PAD_X,
   paddingRight = DEFAULT_PAD_X,
+  onError,
 }: ChatComposerProps) {
   const { t } = useI18n()
   const {
@@ -86,6 +89,13 @@ export function ChatComposer({
     onClearChat,
     onPopupOpenChange,
     popupDismissToken,
+  })
+  const inputActions = useComposerInputActions({
+    value,
+    onChangeText,
+    disabled,
+    busy,
+    onError,
   })
 
   const iconColor = colors.text
@@ -312,16 +322,22 @@ export function ChatComposer({
               </Pressable>
             ) : (
               <>
-                {!isGroup ? (
-                  <>
-                    <Pressable style={styles.footerIcon} disabled accessibilityLabel="翻译">
-                      <IconTranslate size={18} color={iconColor} />
-                    </Pressable>
-                    <Pressable style={styles.footerIcon} disabled accessibilityLabel="语音输入">
-                      <IconMic size={18} color={iconColor} />
-                    </Pressable>
-                  </>
-                ) : null}
+                <Pressable
+                  style={[
+                    styles.footerIcon,
+                    inputActions.translating ? styles.footerIconActive : null,
+                  ]}
+                  disabled={!inputActions.canTranslate}
+                  onPress={() => void inputActions.translateInput()}
+                  accessibilityLabel={inputActions.translating ? '翻译中' : '翻译'}
+                >
+                  <Spinning spinning={inputActions.translating}>
+                    <IconTranslate
+                      size={18}
+                      color={inputActions.canTranslate || inputActions.translating ? iconColor : mutedColor}
+                    />
+                  </Spinning>
+                </Pressable>
                 <Pressable
                   style={[styles.sendBtn, !canSend ? styles.sendBtnDisabled : null]}
                   disabled={!canSend}
@@ -336,6 +352,43 @@ export function ChatComposer({
         </View>
       </View>
     </View>
+  )
+}
+
+function Spinning({ spinning, children }: { spinning: boolean; children: ReactNode }) {
+  const rotate = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (!spinning) {
+      rotate.stopAnimation()
+      rotate.setValue(0)
+      return
+    }
+    const loop = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 800,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [rotate, spinning])
+  return (
+    <Animated.View
+      style={{
+        transform: [
+          {
+            rotate: rotate.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['0deg', '360deg'],
+            }),
+          },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
   )
 }
 
@@ -559,6 +612,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  footerIconActive: {
+    backgroundColor: colors.accentSoft,
   },
   sendBtn: {
     width: 36,

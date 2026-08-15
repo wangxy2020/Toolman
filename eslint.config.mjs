@@ -92,7 +92,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/metro.config.js', '**/babel.config.js', '**/*.config.cjs'],
+    files: ['**/metro.config.js', '**/babel.config.js', '**/app.config.js', '**/*.config.cjs'],
     languageOptions: {
       globals: nodeGlobals,
       sourceType: 'commonjs',

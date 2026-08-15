@@ -4,7 +4,12 @@
  */
 
 import { Platform } from 'react-native'
-import { hostnameOfBaseUrl, isLoopbackHostname } from '@toolman/shared'
+import {
+  hostnameOfBaseUrl,
+  isLoopbackHostname,
+  isOfficialCommunityHubHost,
+} from '@toolman/shared'
+import { isHostedWebPage, pageHostname } from '../sync/desktopDevHost'
 import {
   formatBoardMessageTitle,
   formatCommunityDate,
@@ -60,17 +65,13 @@ function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, '')
 }
 
-function pageHostname(): string {
-  if (typeof globalThis === 'undefined' || !('location' in globalThis)) return ''
-  return (globalThis as { location?: { hostname?: string } }).location?.hostname ?? ''
-}
-
-/** Expo web talks to the desktop sidecar through a same-origin Metro proxy to avoid CORS. */
+/** Expo web talks to the desktop sidecar through a same-origin proxy to avoid CORS. */
 function shouldUseCommunityHubProxy(baseUrl: string): boolean {
   if (Platform.OS !== 'web') return false
   const host = hostnameOfBaseUrl(baseUrl)
   if (!host) return false
   if (isLoopbackHostname(host)) return true
+  if (isOfficialCommunityHubHost(host) && isHostedWebPage()) return true
   const pageHost = pageHostname()
   return Boolean(pageHost) && pageHost === host
 }
@@ -203,6 +204,16 @@ function requireUserId(userId?: string | null): string {
   return id
 }
 
+export function isCommunityHubHealthBody(text: string): boolean {
+  if (!text.trim()) return false
+  try {
+    const payload = JSON.parse(text) as { ok?: boolean }
+    return payload.ok !== false
+  } catch {
+    return false
+  }
+}
+
 export async function probeCommunityHub(baseUrl: string): Promise<boolean> {
   const base = normalizeBaseUrl(baseUrl)
   if (!base) return false
@@ -217,13 +228,7 @@ export async function probeCommunityHub(baseUrl: string): Promise<boolean> {
       })
       if (!res.ok) return false
       const text = await res.text()
-      if (!text) return res.ok
-      try {
-        const payload = JSON.parse(text) as { ok?: boolean }
-        return payload.ok !== false
-      } catch {
-        return true
-      }
+      return isCommunityHubHealthBody(text)
     } catch {
       return false
     } finally {

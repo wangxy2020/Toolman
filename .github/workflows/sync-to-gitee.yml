@@ -3,20 +3,48 @@ name: Sync to Gitee
 on:
   push:
     branches:
-      - main # 或 master，根据你的默认分支调整
+      - main
+  workflow_dispatch:
 
 jobs:
-  build:
+  sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Mirror the GitHub organization repos to Gitee
-        uses: Yikun/hub-mirror-action@master
-        with:
-          src: github/wangxy2020
-          dst: gitee/wangxy
-          dst_key: ${{ secrets.GITEE_SSH_KEY }}
-          dst_token: ${{ secrets.GITEE_TOKEN }}
-          account_type: user
-          # 仅同步当前仓库
-          static_list: "Toolman"
-          force_update: true
+      - name: Mirror GitHub repo to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: wangxy
+          GITEE_REPO: Toolman
+        run: |
+          set -euo pipefail
+          if [ -z "${GITEE_TOKEN}" ]; then
+            echo "::error::GITEE_TOKEN is empty. Add a Gitee private token (projects scope) at Settings → Secrets → Actions."
+            exit 1
+          fi
+
+          status="$(
+            curl -sS -o /tmp/gitee-repo.json -w '%{http_code}' \
+              "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}?access_token=${GITEE_TOKEN}"
+          )"
+          if [ "${status}" = '401' ] || [ "${status}" = '403' ]; then
+            echo "::error::Gitee rejected GITEE_TOKEN (HTTP ${status}). Create a new private token with the projects scope and update the secret."
+            exit 1
+          fi
+          if [ "${status}" = '404' ]; then
+            create_status="$(
+              curl -sS -o /tmp/gitee-create.json -w '%{http_code}' \
+                -X POST 'https://gitee.com/api/v5/user/repos' \
+                -H 'Content-Type: application/json' \
+                -d "{\"name\":\"${GITEE_REPO}\",\"access_token\":\"${GITEE_TOKEN}\",\"private\":false}"
+            )"
+            if [ "${create_status}" != '201' ]; then
+              echo "::error::Failed to create gitee.com/${GITEE_OWNER}/${GITEE_REPO} (HTTP ${create_status})."
+              exit 1
+            fi
+          elif [ "${status}" != '200' ]; then
+            echo "::error::Unexpected Gitee API status ${status} for ${GITEE_OWNER}/${GITEE_REPO}."
+            exit 1
+          fi
+
+          git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" mirror.git
+          git -C mirror.git push --mirror "https://oauth2:${GITEE_TOKEN}@gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git"

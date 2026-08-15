@@ -37,6 +37,7 @@ export type ChatComposerProps = {
   /** Outer horizontal padding; defaults match stream / desktop gutter. */
   paddingLeft?: number
   paddingRight?: number
+  onError?: (message: string | null) => void
 }
 
 export function clampComposerFieldHeight(value: number): number {

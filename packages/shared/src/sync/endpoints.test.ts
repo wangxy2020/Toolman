@@ -3,12 +3,22 @@ import { OFFICIAL_TOOLMAN_HUB_URL } from '../community/hub-config.js'
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
   DEFAULT_LOCAL_SYNC_BASE_URL,
+  isPrivateOrLoopbackHostname,
   isSyncHubHealthPayload,
   isSyncHubHostsPayload,
   listCommunityHubProbeCandidates,
   listSyncBaseUrlCandidates,
   siblingHttpOrigin,
 } from './endpoints.js'
+
+describe('isPrivateOrLoopbackHostname', () => {
+  it('keeps LAN and Tailscale hosts, rejects public DNS', () => {
+    expect(isPrivateOrLoopbackHostname('192.168.1.8')).toBe(true)
+    expect(isPrivateOrLoopbackHostname('100.64.1.8')).toBe(true)
+    expect(isPrivateOrLoopbackHostname('toolman.local')).toBe(true)
+    expect(isPrivateOrLoopbackHostname('toolman.vercel.app')).toBe(false)
+  })
+})
 
 describe('sync endpoint candidates', () => {
   it('probes configured, local, then official community hubs', () => {
@@ -66,6 +76,21 @@ describe('sync endpoint candidates', () => {
     expect(
       listSyncBaseUrlCandidates({
         packagerHostnames: ['192.168.1.8:8081'],
+        includeLoopback: false,
+      }),
+    ).toEqual(['http://192.168.1.8:17890'])
+  })
+
+  it('ignores public hosted hostnames such as Vercel', () => {
+    expect(
+      listCommunityHubProbeCandidates('', {
+        packagerHostnames: ['toolman.vercel.app', '192.168.1.8:8081'],
+        includeLoopback: false,
+      }),
+    ).toEqual(['http://192.168.1.8:3721', OFFICIAL_TOOLMAN_HUB_URL])
+    expect(
+      listSyncBaseUrlCandidates({
+        packagerHostnames: ['toolman.vercel.app', '192.168.1.8:8081'],
         includeLoopback: false,
       }),
     ).toEqual(['http://192.168.1.8:17890'])

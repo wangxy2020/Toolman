@@ -32,7 +32,7 @@ import {
 } from './classroomSyncMerge'
 import { resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { loadModulePrefs } from '../settings/prefs'
-import { listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from './desktopDevHost'
+import { isHostedWebPage, listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from './desktopDevHost'
 
 let cachedSyncBaseUrl: string | null = null
 
@@ -107,11 +107,12 @@ export function resetMobileSyncBaseUrlCache(): void {
 
 function unreachableSyncHubMessage(tried: string[]): string {
   const list = tried.length > 0 ? tried.join('、') : DEFAULT_LOCAL_SYNC_BASE_URL
-  return (
-    `无法连接桌面 Sync Hub（${list}）。` +
+  const hostedHint =
+    '托管网页无法访问电脑上的 HTTP Sync Hub（浏览器会拦截混合内容）。请用桌面端、本机网页预览或真机，并在设置填写电脑的局域网 / Tailscale / HTTPS 隧道地址（端口 17890）。'
+  const localHint =
     '请在桌面端开启「与移动端同步」或课堂「同步设置」后完全重启桌面端；' +
     '真机请在设置 → 用户信息填写电脑的局域网 / Tailscale 地址（端口 17890）。'
-  )
+  return `无法连接桌面 Sync Hub（${list}）。${isHostedWebPage() ? hostedHint : localHint}`
 }
 
 export async function resolveReachableMobileSyncBaseUrl(
