@@ -16,9 +16,15 @@ import {
   type PmFeatureType,
 } from './pm-features-catalog'
 import { formatCostTotalPrice, PM_COST_PRIMARY_TYPES } from '../cost/pm-cost-catalog'
-import { DEFAULT_COST_COLUMN_VISIBILITY } from '../cost/pm-cost-column-prefs'
 import { PmDecimalTableInput } from '../../PmDecimalTableInput'
 import type { ProjectManagementFilesPanelState } from './useProjectManagementFilesPanel'
+import {
+  flattenYearBandMonthRows,
+  formatMonthHeadTitle,
+  resolveMatrixDisplayEntries,
+  resolveMatrixLayout,
+  resolveMeteringColumnVisibility,
+} from './pm-files-panel-matrix-utils'
 
 export interface ProjectManagementFilesPanelMatrixProps {
   state: ProjectManagementFilesPanelState
@@ -92,8 +98,8 @@ export const ProjectManagementFilesPanelMatrix: FC<ProjectManagementFilesPanelMa
     selectedId,
   } = state
 
-  const layout = isMeteringCostView ? 'horizontal' : matrixLayout
-  const mCol = meteringColumnVisibility ?? DEFAULT_COST_COLUMN_VISIBILITY
+  const layout = resolveMatrixLayout(isMeteringCostView, matrixLayout)
+  const mCol = resolveMeteringColumnVisibility(meteringColumnVisibility)
 
   return (
     <>
@@ -438,11 +444,7 @@ export const ProjectManagementFilesPanelMatrix: FC<ProjectManagementFilesPanelMa
                           <th
                             key={monthKey}
                             className="tm-pm-features-table-col-month"
-                            title={
-                              parsed
-                                ? `${parsed.year}-${String(parsed.monthIndex + 1).padStart(2, '0')} · ${monthFromGanttHint}`
-                                : monthFromGanttHint
-                            }
+                            title={formatMonthHeadTitle(parsed, monthFromGanttHint)}
                           >
                             {parsed
                               ? t('projectManagerPage.files.table.columns.monthPart', {
@@ -487,69 +489,61 @@ export const ProjectManagementFilesPanelMatrix: FC<ProjectManagementFilesPanelMa
                 <col className="tm-pm-resource-table-col-spacer" />
               </colgroup>
               <tbody>
-                {(() => {
-                  if (yearBands.length === 0) {
+                {yearBands.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={3 + visibleRows.length + 1}
+                      className="tm-pm-resource-table-cell--center"
+                    >
+                      —
+                    </td>
+                  </tr>
+                ) : (
+                  flattenYearBandMonthRows(yearBands).map((item) => {
+                    const parsed = parseMonthKey(item.monthKey)
                     return (
-                      <tr>
-                        <td
-                          colSpan={3 + visibleRows.length + 1}
-                          className="tm-pm-resource-table-cell--center"
-                        >
-                          —
+                      <tr key={item.monthKey}>
+                        <td className="tm-pm-resource-table-index">
+                          <span className="tm-pm-resource-table-index-text">{item.rowNumber}</span>
                         </td>
+                        {item.monthIndexInBand === 0 ? (
+                          <td
+                            className="tm-pm-resource-table-cell--center tm-pm-features-table-year"
+                            rowSpan={item.yearRowSpan}
+                          >
+                            {t('projectManagerPage.files.table.columns.monthYear', {
+                              year: String(item.year),
+                            })}
+                          </td>
+                        ) : null}
+                        <td className="tm-pm-resource-table-cell--center tm-pm-features-table-month">
+                          {parsed
+                            ? t('projectManagerPage.files.table.columns.monthPart', {
+                                month: String(parsed.monthIndex + 1),
+                              })
+                            : item.monthKey}
+                        </td>
+                        {visibleRows.map((row) => {
+                          const rollup = rollups.get(row.id)
+                          return (
+                            <td
+                              key={row.id}
+                              className="tm-pm-resource-table-cell--center tm-pm-features-table-month"
+                            >
+                              <span
+                                className="tm-pm-features-table-rollup"
+                                title={monthFromGanttHint}
+                              >
+                                {formatRollupMonthQuantity(rollup?.monthly[item.monthKey])}
+                              </span>
+                            </td>
+                          )
+                        })}
+                        <td className="tm-pm-resource-table-col-spacer" aria-hidden />
                       </tr>
                     )
-                  }
-                  let rowNumber = 0
-                  return yearBands.flatMap((band) =>
-                    band.monthKeys.map((monthKey, monthIndex) => {
-                      rowNumber += 1
-                      const parsed = parseMonthKey(monthKey)
-                      const currentNo = rowNumber
-                      return (
-                        <tr key={monthKey}>
-                          <td className="tm-pm-resource-table-index">
-                            <span className="tm-pm-resource-table-index-text">{currentNo}</span>
-                          </td>
-                          {monthIndex === 0 ? (
-                            <td
-                              className="tm-pm-resource-table-cell--center tm-pm-features-table-year"
-                              rowSpan={band.monthKeys.length}
-                            >
-                              {t('projectManagerPage.files.table.columns.monthYear', {
-                                year: String(band.year),
-                              })}
-                            </td>
-                          ) : null}
-                          <td className="tm-pm-resource-table-cell--center tm-pm-features-table-month">
-                            {parsed
-                              ? t('projectManagerPage.files.table.columns.monthPart', {
-                                  month: String(parsed.monthIndex + 1),
-                                })
-                              : monthKey}
-                          </td>
-                          {visibleRows.map((row) => {
-                            const rollup = rollups.get(row.id)
-                            return (
-                              <td
-                                key={row.id}
-                                className="tm-pm-resource-table-cell--center tm-pm-features-table-month"
-                              >
-                                <span
-                                  className="tm-pm-features-table-rollup"
-                                  title={monthFromGanttHint}
-                                >
-                                  {formatRollupMonthQuantity(rollup?.monthly[monthKey])}
-                                </span>
-                              </td>
-                            )
-                          })}
-                          <td className="tm-pm-resource-table-col-spacer" aria-hidden />
-                        </tr>
-                      )
-                    }),
-                  )
-                })()}
+                  })
+                )}
               </tbody>
             </table>
           ) : (
@@ -630,10 +624,11 @@ export const ProjectManagementFilesPanelMatrix: FC<ProjectManagementFilesPanelMa
               </colgroup>
               <tbody>
                 {(() => {
-                  const displayEntries =
-                    isFundsView && fundsDisplayEntries
-                      ? fundsDisplayEntries
-                      : visibleRows.map((row) => ({ kind: 'row' as const, row }))
+                  const displayEntries = resolveMatrixDisplayEntries(
+                    isFundsView,
+                    fundsDisplayEntries,
+                    visibleRows,
+                  )
                   let detailIndex = 0
                   const entryRows = displayEntries.map((entry) => {
                     if (entry.kind === 'section') {

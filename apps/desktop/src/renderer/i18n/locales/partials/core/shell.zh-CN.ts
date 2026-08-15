@@ -57,7 +57,7 @@ export const shellZhCN = {
       translate: '翻译',
       'assistant-lib': '课堂',
       'code-tools': '代码工具',
-      projects: '项目管理',
+      projects: '项目',
     },
   },
   errors: {

@@ -70,6 +70,26 @@ describe('ToolmanSyncClient', () => {
     )
   })
 
+  it('sends the Sync Hub pairing token header', async () => {
+    let captured: HeadersInit | undefined
+    const client = new ToolmanSyncClient({
+      baseUrl: 'https://hub.example',
+      getAccessToken: async () => 'community',
+      getSyncToken: async () => 'hub-token-value',
+      fetchImpl: (async (_input, init) => {
+        captured = init?.headers
+        return new Response(
+          JSON.stringify({ accepted: 0, rejected: [], serverTime: 1 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }) as typeof fetch,
+    })
+    await client.push({ deviceId: 'd1', cursor: null, changes: [] })
+    const raw = new Headers(captured)
+    expect(raw.get('X-Toolman-Sync-Token')).toBe('hub-token-value')
+    expect(raw.get('Authorization')).toBe('Bearer hub-token-value')
+  })
+
   it('loads a knowledge snapshot from the export endpoint', async () => {
     const client = new ToolmanSyncClient({
       baseUrl: 'https://hub.example',

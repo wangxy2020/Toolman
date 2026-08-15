@@ -77,6 +77,8 @@ export type ModulePrefs = {
   /** Desktop Sync Hub (`:17890`) — not Community Hub. */
   sync: {
     hubBaseUrl: string
+    /** Pairing token from desktop Diagnostics. */
+    hubToken: string
   }
   app: {
     language: AppLanguage
@@ -145,6 +147,7 @@ export const DEFAULT_MODULE_PREFS: ModulePrefs = {
   },
   sync: {
     hubBaseUrl: '',
+    hubToken: '',
   },
   app: {
     language: 'zh-CN',
@@ -268,7 +271,11 @@ export async function loadModulePrefs(): Promise<ModulePrefs> {
         syncEnabled: classroomSyncEnabled,
       },
       projects: { ...DEFAULT_MODULE_PREFS.projects },
-      sync: { ...DEFAULT_MODULE_PREFS.sync, ...parsed.sync },
+      sync: {
+        hubBaseUrl:
+          typeof parsed.sync?.hubBaseUrl === 'string' ? parsed.sync.hubBaseUrl : '',
+        hubToken: typeof parsed.sync?.hubToken === 'string' ? parsed.sync.hubToken : '',
+      },
       app: {
         ...DEFAULT_MODULE_PREFS.app,
         ...parsed.app,

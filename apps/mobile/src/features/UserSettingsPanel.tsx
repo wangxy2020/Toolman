@@ -1,28 +1,4 @@
-import { useEffect, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import {
-  bindPhoneToAccount,
-  changePassword,
-  cnPrimaryActionLabel,
-  deleteAccount,
-  loginWithAccount,
-  logoutLocal,
-  setSubscriptionSku,
-  updateDisplayName,
-} from '../auth/localAuth'
-import { maskPhone } from '../auth/account-utils'
-import {
-  firebaseEmailAuth,
-  firebaseOAuthLogin,
-} from '../auth/firebaseAuth'
-import { isMobileFirebaseConfigured } from '../auth/firebaseConfig'
-import {
-  loginWithAuthingPassword,
-  registerWithVerificationCode,
-  resetPasswordWithVerificationCode,
-  sendAuthingVerificationCode,
-  verifyAuthingPhoneCode,
-} from '../auth/authingOtp'
 import type { MobileAuthSession } from '../auth/types'
 import {
   IconApple,
@@ -31,8 +7,6 @@ import {
   IconWechat,
 } from '../icons/auth-social-icons'
 import { colors } from '../theme'
-import { pullAndApplySync, pushNoteChanges } from '../sync/mobileSync'
-import { useMobileApp } from '../state/MobileAppContext'
 import {
   Field,
   PrimaryButton,
@@ -41,19 +15,12 @@ import {
   SettingsScroll,
   settingsUiStyles as styles,
 } from './settingsUi'
-
-type SocialProvider = 'wechat' | 'douyin' | 'google' | 'apple'
-
-const SOCIAL_ITEMS: Array<{
-  id: SocialProvider
-  label: string
-  enabled: boolean
-}> = [
-  { id: 'wechat', label: '微信', enabled: false },
-  { id: 'douyin', label: '抖音', enabled: false },
-  { id: 'google', label: 'Google', enabled: true },
-  { id: 'apple', label: 'Apple', enabled: true },
-]
+import { SOCIAL_ITEMS, type SocialProvider } from './userSettingsUtils'
+import {
+  useGuestAuth,
+  useLoggedInAccount,
+  useUserSettingsPanel,
+} from './useUserSettingsPanel'
 
 function SocialProviderIcon({ id }: { id: SocialProvider }) {
   const muted = '#9ca3af'
@@ -69,27 +36,8 @@ function SocialProviderIcon({ id }: { id: SocialProvider }) {
   }
 }
 
-type GuestView = 'login' | 'register' | 'forgot'
-type AccountView = 'main' | 'password' | 'vip' | 'delete' | 'bind_phone' | 'bind_wechat'
-
 export function UserSettingsPanel() {
-  const {
-    auth,
-    setAuth,
-    syncCursor,
-    setSyncCursor,
-    setSyncStatus,
-    setDesktopHostsOnline,
-    notes,
-    setNotes,
-    deletedNotes,
-    setDeletedNotes,
-    knowledgeMeta,
-    setKnowledgeMeta,
-    classroomCourses,
-    setClassroomCourses,
-    syncStatus,
-  } = useMobileApp()
+  const { auth, setAuth, syncStatus, onSync } = useUserSettingsPanel()
 
   if (!auth) {
     return <GuestAuthPanel onSession={setAuth} />
@@ -100,34 +48,7 @@ export function UserSettingsPanel() {
       auth={auth}
       setAuth={setAuth}
       syncStatus={syncStatus}
-      onSync={async () => {
-        setSyncStatus('syncing')
-        try {
-          await pushNoteChanges(notes, syncCursor, { deletedNotes })
-          const applied = await pullAndApplySync({
-            cursor: syncCursor,
-            notes,
-            deletedNotes,
-            knowledgeMeta,
-            classroomCourses,
-          })
-          setNotes(applied.notes)
-          setDeletedNotes(applied.deletedNotes)
-          setKnowledgeMeta(applied.knowledgeMeta)
-          setClassroomCourses(applied.classroomCourses)
-          setSyncCursor(applied.nextCursor)
-          setDesktopHostsOnline(applied.hostsOnline)
-          if (applied.knowledgeError) {
-            setSyncStatus('error')
-            return applied.knowledgeError
-          }
-          setSyncStatus('idle')
-          return `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门`
-        } catch (error) {
-          setSyncStatus('error')
-          return error instanceof Error ? error.message : String(error)
-        }
-      }}
+      onSync={onSync}
     />
   )
 }
@@ -154,102 +75,34 @@ function AuthTextField(props: {
 }
 
 function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => void }) {
-  const [view, setView] = useState<GuestView>('login')
-  const [account, setAccount] = useState('')
-  const [smsCode, setSmsCode] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [sendingCode, setSendingCode] = useState(false)
-  const [smsCooldown, setSmsCooldown] = useState(0)
-  const [otpHint, setOtpHint] = useState<string | null>(null)
-  const firebaseReady = isMobileFirebaseConfigured()
-  const showOtpRow = view === 'register' || view === 'forgot'
-  const showConfirmPassword = view === 'register' || view === 'forgot'
-  const formReady =
-    Boolean(account.trim() && password.trim()) &&
-    (view === 'login' || Boolean(smsCode.trim() && confirmPassword.trim()))
-
-  useEffect(() => {
-    if (smsCooldown <= 0) return
-    const timer = setTimeout(() => setSmsCooldown((value) => Math.max(0, value - 1)), 1000)
-    return () => clearTimeout(timer)
-  }, [smsCooldown])
-
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true)
-    setMessage(null)
-    try {
-      await fn()
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const title =
-    view === 'register'
-      ? '注册 Toolman 账户'
-      : view === 'forgot'
-        ? '找回密码'
-        : '登录 Toolman 账户'
-
-  const subtitle =
-    view === 'register'
-      ? '使用手机号或邮箱注册，验证码验证后即可完成。'
-      : view === 'forgot'
-        ? '通过注册手机号或邮箱接收验证码，设置新密码。'
-        : '加入我们，解锁全部功能，你的电脑将如虎添翼。'
-
-  const primaryLabel = (() => {
-    if (busy) {
-      if (view === 'register') return '注册中…'
-      if (view === 'forgot') return '提交中…'
-      return '登录中…'
-    }
-    if (view === 'forgot') return '重置密码'
-    if (view === 'register') return cnPrimaryActionLabel('register', account)
-    return cnPrimaryActionLabel('login', account)
-  })()
-
-  const messageIsOk =
-    Boolean(message) &&
-    (message!.includes('已') || message!.includes('请查收') || message!.includes('邮件') || message!.includes('验证码'))
-
-  const sendCode = async () => {
-    setSendingCode(true)
-    setMessage(null)
-    setOtpHint(null)
-    try {
-      const result = await sendAuthingVerificationCode(
-        account,
-        view === 'forgot' ? 'reset' : 'register',
-      )
-      if (!result.ok) {
-        setMessage(result.message)
-        return
-      }
-      setSmsCooldown(result.retryAfterSeconds)
-      setOtpHint(
-        result.devHint ??
-          `验证码已发送至${result.channel === 'email' ? '邮箱' : '手机'}，${Math.max(1, Math.round(result.expiresInSeconds / 60))} 分钟内有效。`,
-      )
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSendingCode(false)
-    }
-  }
-
-  const resetGuestFields = () => {
-    setMessage(null)
-    setSmsCode('')
-    setPassword('')
-    setConfirmPassword('')
-    setOtpHint(null)
-  }
+  const {
+    view,
+    account,
+    smsCode,
+    setSmsCode,
+    password,
+    setPassword,
+    confirmPassword,
+    setConfirmPassword,
+    message,
+    busy,
+    sendingCode,
+    smsCooldown,
+    otpHint,
+    firebaseReady,
+    showOtpRow,
+    showConfirmPassword,
+    formReady,
+    title,
+    subtitle,
+    primaryLabel,
+    messageIsOk,
+    sendCode,
+    goToView,
+    onAccountChange,
+    submitForm,
+    loginWithSocial,
+  } = useGuestAuth(onSession)
 
   return (
     <SettingsScroll>
@@ -260,10 +113,7 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
         <View style={styles.authForm}>
           <AuthTextField
             value={account}
-            onChangeText={(value) => {
-              setAccount(value)
-              setOtpHint(null)
-            }}
+            onChangeText={onAccountChange}
             placeholder={view === 'forgot' ? '请输入注册手机或邮箱' : '请输入手机或邮箱'}
           />
 
@@ -315,91 +165,7 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
           <Pressable
             style={[styles.authSubmit, busy || !formReady ? styles.btnDisabled : null]}
             disabled={busy || !formReady}
-            onPress={() =>
-              void run(async () => {
-                if (view === 'forgot') {
-                  if (password !== confirmPassword) {
-                    setMessage('两次输入的密码不一致')
-                    return
-                  }
-                  const result = await resetPasswordWithVerificationCode({
-                    account,
-                    code: smsCode,
-                    password,
-                    confirmPassword,
-                  })
-                  if (!result.ok) {
-                    setMessage(result.message)
-                    return
-                  }
-                  setMessage('密码已重置，请使用新密码登录。')
-                  setView('login')
-                  setPassword('')
-                  setConfirmPassword('')
-                  setSmsCode('')
-                  setOtpHint(null)
-                  return
-                }
-
-                if (view === 'login') {
-                  const remote = await loginWithAuthingPassword({ account, password })
-                  if (remote.ok) {
-                    onSession(remote.session)
-                    return
-                  }
-
-                  const local = await loginWithAccount({
-                    account,
-                    password,
-                    region: 'cn',
-                  })
-                  if (local.ok) {
-                    onSession(local.session)
-                    return
-                  }
-
-                  if (account.includes('@') && firebaseReady) {
-                    const firebase = await firebaseEmailAuth({
-                      email: account,
-                      password,
-                      intent: 'login',
-                    })
-                    if (firebase.ok) {
-                      onSession(firebase.session)
-                      return
-                    }
-                    setMessage(remote.message === 'Authing 未配置' ? firebase.message : remote.message)
-                    return
-                  }
-
-                  setMessage(
-                    remote.message === 'Authing 未配置' ? local.message : remote.message,
-                  )
-                  return
-                }
-
-                if (password !== confirmPassword) {
-                  setMessage('两次输入的密码不一致')
-                  return
-                }
-                if (!smsCode.trim()) {
-                  setMessage('请输入验证码')
-                  return
-                }
-
-                const result = await registerWithVerificationCode({
-                  account,
-                  code: smsCode,
-                  password,
-                  confirmPassword,
-                })
-                if (!result.ok) {
-                  setMessage(result.message)
-                  return
-                }
-                onSession(result.session)
-              })
-            }
+            onPress={submitForm}
           >
             <Text style={styles.authSubmitText}>{primaryLabel}</Text>
           </Pressable>
@@ -425,20 +191,7 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
                   ]}
                   onPress={() => {
                     if (!item.enabled) return
-                    void run(async () => {
-                      if (!firebaseReady) {
-                        setMessage('国际登录未配置')
-                        return
-                      }
-                      const result = await firebaseOAuthLogin(
-                        item.id === 'apple' ? 'firebase_apple' : 'firebase_google',
-                      )
-                      if (!result.ok) {
-                        setMessage(result.message)
-                        return
-                      }
-                      onSession(result.session)
-                    })
+                    loginWithSocial(item.id)
                   }}
                 >
                   <SocialProviderIcon id={item.id} />
@@ -453,47 +206,23 @@ function GuestAuthPanel({ onSession }: { onSession: (s: MobileAuthSession) => vo
             <>
               <Text style={styles.authFooterMuted}>
                 没有账号？
-                <Text
-                  style={styles.authFooterLink}
-                  onPress={() => {
-                    setView('register')
-                    resetGuestFields()
-                  }}
-                >
+                <Text style={styles.authFooterLink} onPress={() => goToView('register')}>
                   立即注册
                 </Text>
               </Text>
-              <Text
-                style={styles.authFooterLink}
-                onPress={() => {
-                  setView('forgot')
-                  resetGuestFields()
-                }}
-              >
+              <Text style={styles.authFooterLink} onPress={() => goToView('forgot')}>
                 忘记密码？
               </Text>
             </>
           ) : view === 'register' ? (
             <Text style={styles.authFooterMuted}>
               已有账号？
-              <Text
-                style={styles.authFooterLink}
-                onPress={() => {
-                  setView('login')
-                  resetGuestFields()
-                }}
-              >
+              <Text style={styles.authFooterLink} onPress={() => goToView('login')}>
                 立即登录
               </Text>
             </Text>
           ) : (
-            <Text
-              style={styles.authFooterLink}
-              onPress={() => {
-                setView('login')
-                resetGuestFields()
-              }}
-            >
+            <Text style={styles.authFooterLink} onPress={() => goToView('login')}>
               返回登录
             </Text>
           )}
@@ -513,63 +242,52 @@ function LoggedInAccountPanel(props: {
   syncStatus: string
   onSync: () => Promise<string>
 }) {
-  const { auth, setAuth } = props
-  const [view, setView] = useState<AccountView>('main')
-  const [displayName, setDisplayName] = useState(auth.displayName)
-  const [bindPhone, setBindPhone] = useState('')
-  const [bindCode, setBindCode] = useState('')
-  const [smsCooldown, setSmsCooldown] = useState(0)
-  const [sendingCode, setSendingCode] = useState(false)
-  const [otpHint, setOtpHint] = useState<string | null>(null)
-  const [oldPassword, setOldPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [deletePassword, setDeletePassword] = useState('')
-  const [deleteConfirm, setDeleteConfirm] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  const skuLabel = auth.subscriptionSku === 'pro' ? '专业版' : '社区版'
-  const accountLabel = auth.accountKind === 'phone' ? auth.phone ?? auth.email : auth.email
-  const isVip = auth.communityRole === 'enterprise' || auth.subscriptionSku === 'pro'
-  const hasPhoneBinding = Boolean(auth.phone)
-  const hasWechatBinding = Boolean(auth.wechatBound)
-  const profileRoleLabel =
-    auth.communityRole === 'founder'
-      ? '超级管理员'
-      : auth.communityRole === 'admin'
-        ? '管理员'
-        : isVip
-          ? 'VIP'
-          : '普通用户'
-
-  useEffect(() => {
-    if (smsCooldown <= 0) return
-    const timer = setTimeout(() => setSmsCooldown((value) => Math.max(0, value - 1)), 1000)
-    return () => clearTimeout(timer)
-  }, [smsCooldown])
-
-  const sendBindPhoneCode = async () => {
-    setSendingCode(true)
-    setMessage(null)
-    setOtpHint(null)
-    try {
-      const result = await sendAuthingVerificationCode(bindPhone, 'login')
-      if (!result.ok) {
-        setMessage(result.message)
-        return
-      }
-      setSmsCooldown(result.retryAfterSeconds)
-      setOtpHint(
-        result.devHint ??
-          `验证码已发送至手机，${Math.max(1, Math.round(result.expiresInSeconds / 60))} 分钟内有效。`,
-      )
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSendingCode(false)
-    }
-  }
+  const {
+    view,
+    setView,
+    displayName,
+    setDisplayName,
+    bindPhone,
+    bindCode,
+    setBindCode,
+    smsCooldown,
+    sendingCode,
+    otpHint,
+    oldPassword,
+    setOldPassword,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    deletePassword,
+    setDeletePassword,
+    deleteConfirm,
+    setDeleteConfirm,
+    message,
+    busy,
+    skuLabel,
+    accountLabel,
+    isVip,
+    hasPhoneBinding,
+    hasWechatBinding,
+    profileRoleLabel,
+    syncTitle,
+    bindPhoneTitle,
+    isPro,
+    syncing,
+    sendBindPhoneCode,
+    submitPasswordChange,
+    submitSkuChange,
+    submitDeleteAccount,
+    submitBindPhone,
+    notifyWechatUnavailable,
+    saveDisplayName,
+    syncNow,
+    logout,
+    openBindPhone,
+    openBindWechat,
+    onBindPhoneChange,
+  } = useLoggedInAccount(props)
 
   if (view === 'password') {
     return (
@@ -596,34 +314,7 @@ function LoggedInAccountPanel(props: {
           />
           <PrimaryButton
             label={busy ? '保存中…' : '确认修改'}
-            onPress={() =>
-              void (async () => {
-                if (newPassword !== confirmPassword) {
-                  setMessage('两次输入的密码不一致')
-                  return
-                }
-                setBusy(true)
-                setMessage(null)
-                try {
-                  const result = await changePassword({
-                    identityId: auth.identityId,
-                    oldPassword,
-                    newPassword,
-                  })
-                  setMessage(result.ok ? '密码已更新，请使用新密码登录。' : result.message)
-                  if (result.ok) {
-                    setOldPassword('')
-                    setNewPassword('')
-                    setConfirmPassword('')
-                    setView('main')
-                  }
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : String(error))
-                } finally {
-                  setBusy(false)
-                }
-              })()
-            }
+            onPress={() => void submitPasswordChange()}
           />
         </Section>
         {message ? <Text style={styles.hint}>{message}</Text> : null}
@@ -637,43 +328,15 @@ function LoggedInAccountPanel(props: {
         <SecondaryButton label="← 返回" onPress={() => setView('main')} />
         <Section title="会员">
           <Text style={styles.meta}>当前方案：{skuLabel}</Text>
-          {auth.subscriptionSku !== 'pro' ? (
-            <PrimaryButton
-              label="开通专业版"
-              onPress={() =>
-                void (async () => {
-                  const result = await setSubscriptionSku({
-                    identityId: auth.identityId,
-                    sku: 'pro',
-                  })
-                  if (!result.ok) {
-                    setMessage(result.message)
-                    return
-                  }
-                  setAuth(result.session)
-                  setMessage('已开通专业版')
-                  setView('main')
-                })()
-              }
-            />
-          ) : (
+          {isPro ? (
             <SecondaryButton
               label="恢复社区版"
-              onPress={() =>
-                void (async () => {
-                  const result = await setSubscriptionSku({
-                    identityId: auth.identityId,
-                    sku: 'community',
-                  })
-                  if (!result.ok) {
-                    setMessage(result.message)
-                    return
-                  }
-                  setAuth(result.session)
-                  setMessage('已恢复社区版')
-                  setView('main')
-                })()
-              }
+              onPress={() => void submitSkuChange('community')}
+            />
+          ) : (
+            <PrimaryButton
+              label="开通专业版"
+              onPress={() => void submitSkuChange('pro')}
             />
           )}
         </Section>
@@ -695,28 +358,7 @@ function LoggedInAccountPanel(props: {
             secureTextEntry
           />
           <Field label="输入 DELETE 确认" value={deleteConfirm} onChangeText={setDeleteConfirm} />
-          <Pressable
-            style={styles.dangerBtn}
-            onPress={() =>
-              void (async () => {
-                setMessage(null)
-                try {
-                  const result = await deleteAccount({
-                    identityId: auth.identityId,
-                    password: deletePassword,
-                    confirmation: deleteConfirm,
-                  })
-                  if (!result.ok) {
-                    setMessage(result.message)
-                    return
-                  }
-                  setAuth(null)
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : String(error))
-                }
-              })()
-            }
-          >
+          <Pressable style={styles.dangerBtn} onPress={() => void submitDeleteAccount()}>
             <Text style={styles.dangerBtnText}>确认注销</Text>
           </Pressable>
         </Section>
@@ -734,10 +376,7 @@ function LoggedInAccountPanel(props: {
           <Field
             label="手机号"
             value={bindPhone}
-            onChangeText={(value) => {
-              setBindPhone(value)
-              setOtpHint(null)
-            }}
+            onChangeText={onBindPhoneChange}
             placeholder="请输入 11 位手机号"
           />
           {otpHint ? <Text style={styles.hint}>{otpHint}</Text> : null}
@@ -766,37 +405,7 @@ function LoggedInAccountPanel(props: {
           </View>
           <PrimaryButton
             label={busy ? '绑定中…' : '确认绑定'}
-            onPress={() =>
-              void (async () => {
-                if (busy) return
-                setBusy(true)
-                setMessage(null)
-                try {
-                  const verified = await verifyAuthingPhoneCode(bindPhone, bindCode)
-                  if (!verified.ok) {
-                    setMessage(verified.message)
-                    return
-                  }
-                  const result = await bindPhoneToAccount({
-                    identityId: auth.identityId,
-                    phone: bindPhone,
-                  })
-                  if (!result.ok) {
-                    setMessage(result.message)
-                    return
-                  }
-                  setAuth(result.session)
-                  setBindCode('')
-                  setOtpHint(null)
-                  setMessage('手机号已绑定')
-                  setView('main')
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : String(error))
-                } finally {
-                  setBusy(false)
-                }
-              })()
-            }
+            onPress={() => void submitBindPhone()}
           />
         </Section>
         {message ? <Text style={styles.hint}>{message}</Text> : null}
@@ -810,10 +419,7 @@ function LoggedInAccountPanel(props: {
         <SecondaryButton label="← 返回" onPress={() => setView('main')} />
         <Section title="绑定微信">
           <Text style={styles.hint}>授权后可在微信与手机号之间共用同一 Toolman 账户。</Text>
-          <PrimaryButton
-            label="打开微信授权"
-            onPress={() => setMessage('移动端暂未接入微信授权，请使用桌面端绑定。')}
-          />
+          <PrimaryButton label="打开微信授权" onPress={notifyWechatUnavailable} />
         </Section>
         {message ? <Text style={styles.hint}>{message}</Text> : null}
       </SettingsScroll>
@@ -832,80 +438,30 @@ function LoggedInAccountPanel(props: {
       >
         <Text style={styles.meta}>{accountLabel}</Text>
         <Field label="显示名" value={displayName} onChangeText={setDisplayName} />
-        <PrimaryButton
-          label="保存资料"
-          onPress={() =>
-            void (async () => {
-              setMessage(null)
-              try {
-                const result = await updateDisplayName({
-                  identityId: auth.identityId,
-                  displayName,
-                })
-                if (!result.ok) {
-                  setMessage(result.message)
-                  return
-                }
-                setAuth(result.session)
-                setMessage('资料已保存')
-              } catch (error) {
-                setMessage(error instanceof Error ? error.message : String(error))
-              }
-            })()
-          }
-        />
+        <PrimaryButton label="保存资料" onPress={() => void saveDisplayName()} />
         <ActionRow title={skuLabel} onPress={() => setView('vip')} />
         <ActionRow
-          title={
-            props.syncStatus === 'idle'
-              ? '已同步'
-              : props.syncStatus === 'syncing'
-                ? '同步中'
-                : props.syncStatus === 'error'
-                  ? '同步异常，点此重试'
-                  : '立即同步'
-          }
-          subtitle="与桌面端同步笔记、知识库与课堂"
-          disabled={props.syncStatus === 'syncing'}
-          onPress={() =>
-            void (async () => {
-              setMessage(await props.onSync())
-            })()
-          }
+          title={syncTitle}
+          subtitle="打开应用时同步一次，之后约每 3 分钟检查变化；也可点此立即同步"
+          disabled={syncing}
+          onPress={() => void syncNow()}
         />
         <ActionRow
-          title={hasPhoneBinding ? `已绑定 ${maskPhone(auth.phone!)}` : '绑定手机号'}
+          title={bindPhoneTitle}
           subtitle={hasPhoneBinding ? undefined : '账户找回与国内功能'}
           disabled={hasPhoneBinding}
-          onPress={() => {
-            setBindPhone(auth.phone ?? '')
-            setBindCode('')
-            setOtpHint(null)
-            setMessage(null)
-            setView('bind_phone')
-          }}
+          onPress={openBindPhone}
         />
         <ActionRow
           title={hasWechatBinding ? '已绑定微信' : '绑定微信'}
           disabled={hasWechatBinding}
-          onPress={() => {
-            setMessage(null)
-            setView('bind_wechat')
-          }}
+          onPress={openBindWechat}
         />
       </Section>
 
       <Section title="账户">
         <ActionRow title="修改密码" onPress={() => setView('password')} />
-        <SecondaryButton
-          label="退出登录"
-          onPress={() =>
-            void (async () => {
-              await logoutLocal()
-              setAuth(null)
-            })()
-          }
-        />
+        <SecondaryButton label="退出登录" onPress={() => void logout()} />
         <Pressable style={styles.dangerBtn} onPress={() => setView('delete')}>
           <Text style={styles.dangerBtnText}>注销账户…</Text>
         </Pressable>

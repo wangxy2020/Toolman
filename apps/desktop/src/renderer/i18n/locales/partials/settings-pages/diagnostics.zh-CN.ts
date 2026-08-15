@@ -92,10 +92,17 @@ export const settingsPagesDiagnosticsZhCN = {
       title: '移动端同步',
       syncToggle: '本地 Sync Hub',
       syncToggleHint:
-        '开启后在本机提供笔记、课堂与知识库元数据同步（监听所有网卡）。真机请用下方局域网 / Tailscale 地址直连本机 Sync Hub；跨网同步不走社区 Hub。若开关无效请完全重启桌面端。',
+        '默认开启。Hub 默认只监听本机 127.0.0.1，接口需要配对令牌。打开知识库、笔记或课堂页时发布有变化的数据，移动端约每 3 分钟增量拉取。',
       hostToggle: '桌面宿主（含知识检索）',
       hostToggleHint:
         '向移动端声明 agent / knowledge-search 能力；开启宿主会同时打开 Sync Hub',
+      lanToggle: '允许局域网访问',
+      lanToggleHint:
+        '默认关闭。开启后监听 0.0.0.0，真机可用下方局域网 / Tailscale 地址连接，仍需配对令牌。',
+      hubToken: '配对令牌',
+      hubTokenHint: '移动端「系统诊断」中填写此令牌。不要发到社区 Hub 或聊天里。',
+      copyToken: '复制',
+      copiedToken: '已复制',
       hub: 'Hub 状态',
       baseUrl: '本机地址',
       reachable: '可达地址',

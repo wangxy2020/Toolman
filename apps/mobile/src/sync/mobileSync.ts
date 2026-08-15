@@ -4,15 +4,26 @@ import {
   DEFAULT_LOCAL_SYNC_BASE_URL,
   DEFAULT_LOCAL_SYNC_IDENTITY_ID,
   isSyncHubHealthPayload,
-  isSyncHubHostsPayload,
   KNOWLEDGE_SNAPSHOT_DOWNLOAD_FILE_MAX_BYTES,
   listSyncBaseUrlCandidates,
+  mergeKnowledgeSnapshot,
   type KnowledgeSnapshot,
   type SyncChange,
 } from '@toolman/shared'
-import { getOrCreateDeviceId, loadAccessToken, loadIdentity } from '../storage/secure'
+import { getOrCreateDeviceId, loadIdentity } from '../storage/secure'
 import { type MobileNote, type NoteTombstone } from '../storage/notes'
-import { saveKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
+import { loadKnowledgeSnapshot, saveKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
+import {
+  loadMobileSyncState,
+  saveMobileSyncState,
+  type MobileSyncState,
+} from './syncState'
+import { applyNotePushStamps, selectDirtyNoteChanges } from './notePushDelta'
+import {
+  applyClassroomPushStamps,
+  selectDirtyClassroomChanges,
+  stampClassroomCourses,
+} from './classroomPushDelta'
 import { isSystemDefaultFolderName, listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
 import { mergeNotesFromSyncChanges } from './noteSyncMerge'
 import {
@@ -40,10 +51,19 @@ async function loadSyncIdentityId(): Promise<string> {
   return (await loadIdentity())?.identityId ?? DEFAULT_LOCAL_SYNC_IDENTITY_ID
 }
 
+export async function loadSyncHubToken(): Promise<string | null> {
+  const fromEnv = process.env.EXPO_PUBLIC_SYNC_TOKEN?.trim()
+  if (fromEnv) return fromEnv
+  const prefs = await loadModulePrefs()
+  const token = prefs.sync?.hubToken?.trim()
+  return token || null
+}
+
 export function createMobileSyncClient(baseUrl?: string): ToolmanSyncClient {
   return new ToolmanSyncClient({
     baseUrl: baseUrl ?? cachedSyncBaseUrl ?? DEFAULT_LOCAL_SYNC_BASE_URL,
-    getAccessToken: loadAccessToken,
+    getAccessToken: loadSyncHubToken,
+    getSyncToken: loadSyncHubToken,
     getIdentityId: loadSyncIdentityId,
     fetchImpl: boundFetch,
   })
@@ -73,9 +93,7 @@ async function probeSyncBaseUrl(baseUrl: string): Promise<boolean> {
   const timer = setTimeout(() => ctrl.abort(), 2500)
   try {
     const health = await probeJson(`${origin}/health`, ctrl.signal)
-    if (isSyncHubHealthPayload(health)) return true
-    const hosts = await probeJson(`${origin}/api/v1/sync/hosts`, ctrl.signal)
-    return isSyncHubHostsPayload(hosts)
+    return isSyncHubHealthPayload(health)
   } catch {
     return false
   } finally {
@@ -162,6 +180,7 @@ export type AppliedSync = {
   snapshot: KnowledgeSnapshot | null
   documentCount: number
   knowledgeError?: string
+  syncState: MobileSyncState
 }
 
 async function hydrateOmittedFiles(
@@ -194,7 +213,16 @@ async function hydrateOmittedFiles(
   return { ...snapshot, files }
 }
 
-/** Pull remote changes and merge notes + full sync-KB snapshot (files, chunks, vectors). */
+export const AUTO_SYNC_PAGE_MODULES: ReadonlySet<string> = new Set([
+  'notes',
+  'knowledge',
+  'classroom',
+])
+
+export const AUTO_SYNC_INTERVAL_MS = 180_000
+export const AUTO_SYNC_MIN_GAP_MS = 30_000
+
+/** Pull remote changes and merge notes + optional sync-KB snapshot (files, chunks, vectors). */
 export async function pullAndApplySync(options: {
   client?: ToolmanSyncClient
   cursor: string | null
@@ -202,50 +230,106 @@ export async function pullAndApplySync(options: {
   deletedNotes?: NoteTombstone[]
   knowledgeMeta?: KnowledgeMetaItem[]
   classroomCourses?: MobileClassroomCourse[]
+  includeNotes?: boolean
+  includeClassroom?: boolean
+  includeKnowledge?: boolean
+  /** Full or incremental KB snapshot when meta changed or no local copy exists. */
+  includeKnowledgeSnapshot?: boolean
+  syncState?: MobileSyncState
 }): Promise<AppliedSync> {
+  const includeNotes = options.includeNotes !== false
+  const includeClassroom = options.includeClassroom !== false
+  const includeKnowledge = options.includeKnowledge !== false
+  const includeKnowledgeSnapshot = options.includeKnowledgeSnapshot ?? includeKnowledge
   const client = options.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
+  const syncState = options.syncState ?? (await loadMobileSyncState())
 
-  const pull = await client.pull({ deviceId, cursor: options.cursor, limit: 100 })
+  const pulledChanges: SyncChange[] = []
+  let cursor = options.cursor
+  for (let page = 0; page < 50; page += 1) {
+    const pull = await client.pull({ deviceId, cursor, limit: 100 })
+    pulledChanges.push(...pull.changes)
+    const nextCursor = pull.nextCursor ?? cursor
+    const hasMore = pull.hasMore === true || pull.changes.length >= 100
+    cursor = nextCursor
+    if (!hasMore || pull.changes.length === 0) break
+  }
 
-  const merged = mergeNotesFromSyncChanges(
-    options.notes,
-    options.deletedNotes ?? [],
-    pull.changes,
-  )
-  const classroomCourses = mergeClassroomCoursesFromSyncChanges(
-    options.classroomCourses ?? [],
-    pull.changes,
-  )
+  const merged = includeNotes
+    ? mergeNotesFromSyncChanges(
+        options.notes,
+        options.deletedNotes ?? [],
+        pulledChanges,
+      )
+    : { notes: options.notes, deletedNotes: options.deletedNotes ?? [] }
+  const classroomCourses = includeClassroom
+    ? mergeClassroomCoursesFromSyncChanges(
+        options.classroomCourses ?? [],
+        pulledChanges,
+      )
+    : (options.classroomCourses ?? [])
   const metaById = new Map(
     (options.knowledgeMeta ?? [])
       .filter((item) => item.kind === 'sync')
       .map((item) => [item.id, item]),
   )
-  for (const change of pull.changes) {
-    applyKnowledgeMetaChange(metaById, change)
+  let knowledgeMetaChanged = false
+  if (includeKnowledge) {
+    for (const change of pulledChanges) {
+      if (change.entityKind !== 'knowledge_meta') continue
+      knowledgeMetaChanged = true
+      applyKnowledgeMetaChange(metaById, change)
+    }
   }
 
   let snapshot: KnowledgeSnapshot | null = null
   let knowledgeError: string | undefined
-  try {
-    snapshot = await hydrateOmittedFiles(client, await client.exportKnowledgeSnapshot())
-    await saveKnowledgeSnapshot(snapshot)
-    for (const kb of snapshot.kbs) {
-      if (kb.kind !== 'sync' || isSystemDefaultFolderName(kb.name)) continue
-      metaById.set(kb.id, {
-        id: kb.id,
-        name: kb.name,
-        kind: kb.kind,
-        documentCount: kb.documentCount,
-        updatedAt: kb.updatedAt,
-      })
+  let knowledgeSince = syncState.knowledgeSince
+  const previousSnapshot = includeKnowledge ? await loadKnowledgeSnapshot() : null
+  const shouldExport =
+    includeKnowledge &&
+    includeKnowledgeSnapshot &&
+    (knowledgeMetaChanged || !previousSnapshot)
+  if (shouldExport) {
+    try {
+      const incoming = await client.exportKnowledgeSnapshot(
+        previousSnapshot ? knowledgeSince : undefined,
+      )
+      snapshot = await hydrateOmittedFiles(
+        client,
+        mergeKnowledgeSnapshot(previousSnapshot, incoming),
+      )
+      await saveKnowledgeSnapshot(snapshot)
+      knowledgeSince = snapshot.documents.reduce(
+        (max, doc) => Math.max(max, doc.updatedAt),
+        snapshot.exportedAt,
+      )
+      for (const kb of snapshot.kbs) {
+        if (kb.kind !== 'sync' || isSystemDefaultFolderName(kb.name)) continue
+        metaById.set(kb.id, {
+          id: kb.id,
+          name: kb.name,
+          kind: kb.kind,
+          documentCount: kb.documentCount,
+          updatedAt: kb.updatedAt,
+        })
+      }
+    } catch (error) {
+      knowledgeError = error instanceof Error ? error.message : String(error)
     }
-  } catch (error) {
-    knowledgeError = error instanceof Error ? error.message : String(error)
+  } else {
+    snapshot = previousSnapshot
   }
 
   const hostsOnline = await countDesktopHostsOnline(client)
+  let nextState: MobileSyncState = {
+    ...syncState,
+    cursor: cursor ?? options.cursor,
+    knowledgeSince,
+  }
+  if (includeClassroom) nextState = stampClassroomCourses(nextState, classroomCourses)
+  await saveMobileSyncState(nextState)
 
   return {
     notes: merged.notes,
@@ -256,39 +340,58 @@ export async function pullAndApplySync(options: {
         .sort((a, b) => b.updatedAt - a.updatedAt),
     ),
     classroomCourses,
-    nextCursor: pull.nextCursor ?? options.cursor,
+    nextCursor: nextState.cursor,
     hostsOnline,
     snapshot,
     documentCount: snapshot?.documents.length ?? 0,
     knowledgeError,
+    syncState: nextState,
   }
 }
+
+export { applyNotePushStamps, selectDirtyNoteChanges } from './notePushDelta'
+export {
+  applyClassroomPushStamps,
+  selectDirtyClassroomChanges,
+  stampClassroomCourses,
+} from './classroomPushDelta'
+export { classifySyncFailure, formatSyncFailureMessage } from './syncFailure'
 
 export async function pushNoteChanges(
   notes: MobileNote[],
   cursor: string | null,
-  extras?: { client?: ToolmanSyncClient; deletedNotes?: NoteTombstone[] },
-): Promise<void> {
+  extras?: {
+    client?: ToolmanSyncClient
+    deletedNotes?: NoteTombstone[]
+    syncState?: MobileSyncState
+  },
+): Promise<MobileSyncState> {
   const client = extras?.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
-  const changes: SyncChange[] = [
-    ...notes.map((note) => ({
-      entityKind: 'note' as const,
-      entityId: note.id,
-      op: 'upsert' as const,
-      updatedAt: note.updatedAt,
-      payload: { title: note.title, body: note.body, notebookId: note.notebookId },
-    })),
-    ...(extras?.deletedNotes ?? []).map((item) => ({
-      entityKind: 'note' as const,
-      entityId: item.id,
-      op: 'delete' as const,
-      updatedAt: item.deletedAt,
-      payload: {},
-    })),
-  ]
-  if (changes.length === 0) return
+  const syncState = extras?.syncState ?? (await loadMobileSyncState())
+  const deletedNotes = extras?.deletedNotes ?? []
+  const changes = selectDirtyNoteChanges(notes, deletedNotes, syncState)
+  if (changes.length === 0) return syncState
   await client.push({ deviceId, cursor, changes })
+  const next = applyNotePushStamps(syncState, notes, deletedNotes, changes)
+  await saveMobileSyncState(next)
+  return next
+}
+
+export async function pushClassroomChanges(
+  courses: MobileClassroomCourse[],
+  cursor: string | null,
+  extras?: { client?: ToolmanSyncClient; syncState?: MobileSyncState },
+): Promise<MobileSyncState> {
+  const client = extras?.client ?? (await createReachableMobileSyncClient())
+  const deviceId = await getOrCreateDeviceId()
+  const syncState = extras?.syncState ?? (await loadMobileSyncState())
+  const changes = selectDirtyClassroomChanges(courses, syncState)
+  if (changes.length === 0) return syncState
+  await client.push({ deviceId, cursor, changes })
+  const next = applyClassroomPushStamps(syncState, courses, changes)
+  await saveMobileSyncState(next)
+  return next
 }
 
 function applyKnowledgeMetaChange(

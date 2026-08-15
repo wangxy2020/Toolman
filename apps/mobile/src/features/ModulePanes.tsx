@@ -1,23 +1,17 @@
-import { useMemo, useState } from 'react'
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { MobileModuleId } from '../modules'
 import { IconPlus } from '../icons/composer-icons'
 import { useSidebarLayout } from '../layout'
 import { useMobileApp } from '../state/MobileAppContext'
-import {
-  buildNotebookName,
-  buildNoteTitle,
-  createNoteId,
-  createNotebookId,
-  DEFAULT_NOTEBOOK_ID,
-  rememberDeletedNotes,
-  type MobileNote,
-} from '../storage/notes'
 import { colors, shellStyles } from '../theme'
-import { useRegisterModulePanelStatus } from './modulePageStatus'
 import { NotesRichBodyEditor } from './NotesRichBodyEditor'
-import { extractNoteOutline, prepareNoteMarkdown } from './noteBodyDisplay'
+import { prepareNoteMarkdown } from './noteBodyDisplay'
 import { MessageMarkdown } from './MessageMarkdown'
+import {
+  MODULE_COPY,
+  notebookSwipeId,
+  noteSwipeId,
+} from './notesPaneUtils'
 import {
   SidebarAddButton,
   SidebarList,
@@ -25,35 +19,8 @@ import {
   sidebarStyles,
 } from './sidebarUi'
 import { SwipeableTopicRow } from './SwipeableTopicRow'
-
-const MODULE_COPY: Record<
-  Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community' | 'projects'>,
-  {
-    listTitle: string
-    hint: string
-    addLabel: string
-    emptyHint: string
-  }
-> = {
-  notes: {
-    listTitle: '笔记',
-    hint: '笔记与桌面同账户同步（Sync API）。',
-    addLabel: '新建笔记本',
-    emptyHint: '暂无笔记本',
-  },
-  translate: {
-    listTitle: '翻译任务',
-    hint: '重 PDF 管线可在桌面完成；移动端负责任务列表与阅读。',
-    addLabel: '新建对照',
-    emptyHint: '暂无对照',
-  },
-  classroom: {
-    listTitle: '课堂',
-    hint: '教材摄取在桌面；可经桌面宿主调用课堂智能体。',
-    addLabel: '开课',
-    emptyHint: '暂无课堂',
-  },
-}
+import { useNotesLeftPane } from './useNotesLeftPane'
+import { useNotesRightPane } from './useNotesRightPane'
 
 function NotesChevron({ open }: { open: boolean }) {
   return (
@@ -64,182 +31,29 @@ function NotesChevron({ open }: { open: boolean }) {
 }
 
 function NotesLeftPane() {
+  const layout = useSidebarLayout()
   const {
     notebooks,
-    setNotebooks,
-    notes,
-    setNotes,
-    deletedNotes,
-    setDeletedNotes,
+    notesByNotebook,
     activeNoteId,
-    setActiveNoteId,
-    setLeftOpen,
-  } = useMobileApp()
-  const layout = useSidebarLayout()
-
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const active = notes.find((item) => item.id === activeNoteId)
-    const seed = active?.notebookId ?? notebooks[0]?.id ?? DEFAULT_NOTEBOOK_ID
-    return new Set([seed])
-  })
-  const [renameTarget, setRenameTarget] = useState<{ kind: 'notebook' | 'note'; id: string } | null>(
-    null,
-  )
-  const [draftTitle, setDraftTitle] = useState('')
-  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
-
-  const notesByNotebook = useMemo(() => {
-    const map = new Map<string, MobileNote[]>()
-    for (const note of notes) {
-      const list = map.get(note.notebookId) ?? []
-      list.push(note)
-      map.set(note.notebookId, list)
-    }
-    return map
-  }, [notes])
-
-  const activeNotebookId = useMemo(() => {
-    const active = notes.find((item) => item.id === activeNoteId)
-    return active?.notebookId ?? null
-  }, [notes, activeNoteId])
-
-  const toggleExpanded = (notebookId: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(notebookId)) next.delete(notebookId)
-      else next.add(notebookId)
-      return next
-    })
-  }
-
-  const createNotebook = () => {
-    const id = createNotebookId()
-    const name = buildNotebookName(notebooks)
-    setNotebooks([...notebooks, { id, name }])
-    setExpanded((prev) => new Set(prev).add(id))
-    setOpenSwipeId(null)
-    setRenameTarget(null)
-  }
-
-  const createNote = (notebookId: string) => {
-    const id = createNoteId()
-    const title = buildNoteTitle(notes, notebookId)
-    setNotes([
-      { id, notebookId, title, body: '', updatedAt: Date.now() },
-      ...notes,
-    ])
-    setExpanded((prev) => new Set(prev).add(notebookId))
-    setActiveNoteId(id)
-    setOpenSwipeId(null)
-    setRenameTarget(null)
-    setLeftOpen(false)
-  }
-
-  const isProtectedNotebook = (notebookId: string) =>
-    notebooks.some((item) => item.id === notebookId && (item.isDefault || item.id === DEFAULT_NOTEBOOK_ID))
-
-  const commitRename = () => {
-    if (!renameTarget) return
-    const next = draftTitle.trim()
-    if (renameTarget.kind === 'notebook') {
-      if (next) {
-        setNotebooks(
-          notebooks.map((item) => (item.id === renameTarget.id ? { ...item, name: next } : item)),
-        )
-      }
-    } else if (next) {
-      setNotes(
-        notes.map((item) =>
-          item.id === renameTarget.id ? { ...item, title: next, updatedAt: Date.now() } : item,
-        ),
-      )
-    }
-    setRenameTarget(null)
-    setDraftTitle('')
-  }
-
-  const deleteNote = (note: MobileNote) => {
-    const remaining = notes.filter((item) => item.id !== note.id)
-    setNotes(remaining)
-    setDeletedNotes(rememberDeletedNotes(deletedNotes, [note.id]))
-    if (activeNoteId === note.id) {
-      const sameNotebook = remaining.find((item) => item.notebookId === note.notebookId)
-      setActiveNoteId(sameNotebook?.id ?? remaining[0]?.id ?? null)
-    }
-    if (renameTarget?.kind === 'note' && renameTarget.id === note.id) {
-      setRenameTarget(null)
-      setDraftTitle('')
-    }
-    setOpenSwipeId(null)
-  }
-
-  const confirmDeleteNote = (note: MobileNote) => {
-    const title = note.title || '未命名笔记'
-    const message = `确定删除「${title}」？此操作不可恢复。`
-    const doDelete = () => deleteNote(note)
-
-    if (Platform.OS === 'web') {
-      if (typeof globalThis.confirm === 'function' && globalThis.confirm(message)) {
-        doDelete()
-      }
-      return
-    }
-
-    Alert.alert('删除笔记', message, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: doDelete },
-    ])
-  }
-
-  const deleteNotebook = (notebookId: string) => {
-    if (isProtectedNotebook(notebookId)) return
-    const remainingNotebooks = notebooks.filter((item) => item.id !== notebookId)
-    const remainingNotes = notes.filter((item) => item.notebookId !== notebookId)
-    const removedIds = notes
-      .filter((item) => item.notebookId === notebookId)
-      .map((item) => item.id)
-    setNotebooks(remainingNotebooks)
-    setNotes(remainingNotes)
-    setDeletedNotes(rememberDeletedNotes(deletedNotes, removedIds))
-    if (activeNotebookId === notebookId) {
-      setActiveNoteId(remainingNotes[0]?.id ?? null)
-    }
-    if (renameTarget?.kind === 'notebook' && renameTarget.id === notebookId) {
-      setRenameTarget(null)
-      setDraftTitle('')
-    }
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.delete(notebookId)
-      return next
-    })
-    setOpenSwipeId(null)
-  }
-
-  const confirmDeleteNotebook = (notebookId: string, name: string) => {
-    if (isProtectedNotebook(notebookId)) return
-    const count = (notesByNotebook.get(notebookId) ?? []).length
-    const message =
-      count > 0
-        ? `确定删除「${name}」及其 ${count} 篇笔记？此操作不可恢复。`
-        : `确定删除「${name}」？此操作不可恢复。`
-    const doDelete = () => deleteNotebook(notebookId)
-
-    if (Platform.OS === 'web') {
-      if (typeof globalThis.confirm === 'function' && globalThis.confirm(message)) {
-        doDelete()
-      }
-      return
-    }
-
-    Alert.alert('删除笔记本', message, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: doDelete },
-    ])
-  }
-
-  const notebookSwipeId = (id: string) => `notebook:${id}`
-  const noteSwipeId = (id: string) => `note:${id}`
+    activeNotebookId,
+    expanded,
+    renameTarget,
+    draftTitle,
+    setDraftTitle,
+    openSwipeId,
+    createNotebook,
+    createNote,
+    commitRename,
+    confirmDeleteNote,
+    confirmDeleteNotebook,
+    isProtectedNotebook,
+    onNotebookPress,
+    beginRenameNotebook,
+    selectNote,
+    beginRenameNote,
+    setSwipeOpen,
+  } = useNotesLeftPane()
 
   return (
     <SidebarShell>
@@ -284,20 +98,11 @@ function NotesLeftPane() {
                     active={isActive}
                     variant="section"
                     open={openSwipeId === notebookSwipeId(notebook.id)}
-                    onOpenChange={(open) =>
-                      setOpenSwipeId(open ? notebookSwipeId(notebook.id) : null)
-                    }
+                    onOpenChange={(open) => setSwipeOpen(notebookSwipeId(notebook.id), open)}
                     renameA11yLabel="重命名笔记本"
                     deleteA11yLabel="删除笔记本"
-                    onPress={() => {
-                      setOpenSwipeId(null)
-                      toggleExpanded(notebook.id)
-                    }}
-                    onRename={() => {
-                      setOpenSwipeId(null)
-                      setRenameTarget({ kind: 'notebook', id: notebook.id })
-                      setDraftTitle(notebook.name)
-                    }}
+                    onPress={() => onNotebookPress(notebook.id)}
+                    onRename={() => beginRenameNotebook(notebook)}
                     onDelete={
                       canDeleteNotebook
                         ? () => confirmDeleteNotebook(notebook.id, notebook.name)
@@ -376,23 +181,12 @@ function NotesLeftPane() {
                             key={note.id}
                             active={active}
                             open={openSwipeId === noteSwipeId(note.id)}
-                            onOpenChange={(open) =>
-                              setOpenSwipeId(open ? noteSwipeId(note.id) : null)
-                            }
+                            onOpenChange={(open) => setSwipeOpen(noteSwipeId(note.id), open)}
                             style={notesStyles.noteSwipe}
                             renameA11yLabel="重命名笔记"
                             deleteA11yLabel="删除笔记"
-                            onPress={() => {
-                              setOpenSwipeId(null)
-                              setActiveNoteId(note.id)
-                              setLeftOpen(false)
-                            }}
-                            onRename={() => {
-                              setOpenSwipeId(null)
-                              setActiveNoteId(note.id)
-                              setRenameTarget({ kind: 'note', id: note.id })
-                              setDraftTitle(note.title)
-                            }}
+                            onPress={() => selectNote(note)}
+                            onRename={() => beginRenameNote(note)}
                             onDelete={() => confirmDeleteNote(note)}
                           >
                             <Text
@@ -451,43 +245,20 @@ export function ModuleLeftPane({
 }
 
 /** Content-only modules (no chat). Agent-capable modules use `AgentRightPane` instead. */
-function NotesRightPane({ note }: { note: MobileNote | null }) {
-  const { notes, setNotes, syncStatus, modulePrefs } = useMobileApp()
-  const { width } = useWindowDimensions()
-  const notesPrefs = modulePrefs.notes
-  const charCount = note ? Array.from(note.body).length : 0
-  const outline = note ? extractNoteOutline(note.body) : []
-  const showOutline = notesPrefs.showOutline && outline.length > 0 && width >= 720
-  const sideBySide = notesPrefs.openMode === 'live-preview' && width >= 900
-  const showEditor = notesPrefs.openMode !== 'preview-only'
-  const showPreview = notesPrefs.openMode !== 'edit-only'
-
-  const status = useMemo(() => {
-    if (!note) return { tone: 'muted' as const, message: '选择或新建笔记' }
-    if (syncStatus === 'syncing') {
-      return { tone: 'info' as const, message: '正在同步笔记…', meta: `${charCount} 字` }
-    }
-    if (syncStatus === 'error') {
-      return { tone: 'error' as const, message: '笔记同步失败', meta: `${charCount} 字` }
-    }
-    if (syncStatus === 'offline') {
-      return { tone: 'warning' as const, message: '离线，笔记仅保存在本地', meta: `${charCount} 字` }
-    }
-    return { tone: 'muted' as const, message: '就绪', meta: `${charCount} 字` }
-  }, [charCount, note, syncStatus])
-
-  useRegisterModulePanelStatus('notes-page', status)
+function NotesRightPane() {
+  const {
+    note,
+    notesPrefs,
+    outline,
+    showOutline,
+    sideBySide,
+    showEditor,
+    showPreview,
+    patchNote,
+  } = useNotesRightPane()
 
   if (!note) {
     return <Text style={shellStyles.emptyHint}>选择或新建笔记</Text>
-  }
-
-  const patchNote = (patch: Partial<MobileNote>) => {
-    setNotes(
-      notes.map((item) =>
-        item.id === note.id ? { ...item, ...patch, updatedAt: Date.now() } : item,
-      ),
-    )
   }
 
   return (
@@ -561,11 +332,9 @@ export function ModuleRightPane({
   moduleId: Exclude<MobileModuleId, 'agent' | 'knowledge' | 'group' | 'community' | 'projects'>
 }) {
   const copy = MODULE_COPY[moduleId]
-  const { notes, activeNoteId } = useMobileApp()
 
   if (moduleId === 'notes') {
-    const note = notes.find((item) => item.id === activeNoteId) ?? notes[0] ?? null
-    return <NotesRightPane note={note} />
+    return <NotesRightPane />
   }
 
   return (

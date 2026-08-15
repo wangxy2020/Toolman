@@ -1,9 +1,3 @@
-import {
-  DialogSelectFilesOutputSchema,
-  IpcChannel,
-  isAssistantLibSession,
-  isP2pSharedKnowledgeMirrorDescription,
-} from '@toolman/shared'
 import { MiddleSidebar } from '../../components/layout/MiddleSidebar'
 import { ModuleSidebar } from '../../components/layout/ModuleSidebar'
 import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
@@ -14,95 +8,61 @@ import { ProjectSidebar } from '../project-manager/ProjectSidebar'
 import { TranslationSidebar } from '../translation/TranslationSidebar'
 import { AssistantLibSidebar } from '../assistant-lib/AssistantLibSidebar'
 import {
-  buildContrastExportContent,
-  buildDocumentExportContent,
-  hasContrastExportContent,
-  hasDocumentExportContent,
-} from '../translation/translation-export'
-import { isTranslationDocumentPath } from '../translation/translation-document-utils'
-import { DEFAULT_TRANSLATION_SECTION } from '../translation/translation-sidebar-types'
-import { useI18n } from '../../i18n/useI18n'
-import {
-  COMMUNITY_SECTION_TO_ACTION,
-  type CommunitySidebarSection,
-} from '../community/community-sidebar-types'
-import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
   DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID,
   DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID,
   FILE_DEDUP_TOOL_ID,
   FILE_REGISTRY_TOOL_ID,
-  knowledgeSectionForKind,
-  type KnowledgeSidebarSection,
 } from '../knowledge/knowledge-sidebar-types'
-import type { ChatPageState } from './useChatPage'
+import { useChatPageSidebars, type ChatPageSidebarsProps } from './useChatPageSidebars'
 
-type ChatPageSidebarsProps = Pick<
-  ChatPageState,
-  | 'showContentSidebar'
-  | 'activeView'
-  | 'setActiveView'
-  | 'sidebarAssistants'
-  | 'chat'
-  | 'handleDeleteAssistant'
-  | 'setShowAssistants'
-  | 'knowledge'
-  | 'knowledgeSection'
-  | 'setKnowledgeSection'
-  | 'setShowKnowledgeCreate'
-  | 'notes'
-  | 'setNotesIngestTarget'
-  | 'setStatusMessage'
-  | 'communitySidebarSection'
-  | 'setCommunitySidebarSection'
-  | 'setCommunityAction'
-  | 'p2pWorkspaces'
-  | 'registrationGate'
-  | 'setShowGroupCreate'
-  | 'setShowGroupJoin'
-  | 'setPendingJoinCancelId'
-  | 'setShowGroupJoinPending'
-  | 'projectSidebarTab'
-  | 'setProjectSidebarTab'
-  | 'translationSection'
-  | 'setTranslationSection'
-  | 'setTranslationWorkspaceKey'
-  | 'translation'
->
+export type { ChatPageSidebarsProps }
+export { useChatPageSidebars } from './useChatPageSidebars'
 
-export function ChatPageSidebars({
-  showContentSidebar,
-  activeView,
-  setActiveView,
-  sidebarAssistants,
-  chat,
-  handleDeleteAssistant,
-  setShowAssistants,
-  knowledge,
-  knowledgeSection,
-  setKnowledgeSection,
-  setShowKnowledgeCreate,
-  notes,
-  setNotesIngestTarget,
-  setStatusMessage,
-  communitySidebarSection,
-  setCommunitySidebarSection,
-  setCommunityAction,
-  p2pWorkspaces,
-  registrationGate,
-  setShowGroupCreate,
-  setShowGroupJoin,
-  setPendingJoinCancelId,
-  setShowGroupJoinPending,
-  projectSidebarTab,
-  setProjectSidebarTab,
-  translationSection,
-  setTranslationSection,
-  setTranslationWorkspaceKey,
-  translation,
-}: ChatPageSidebarsProps) {
-  const { t } = useI18n()
+export function ChatPageSidebars(props: ChatPageSidebarsProps) {
+  const {
+    showContentSidebar,
+    activeView,
+    sidebarAssistants,
+    chat,
+    handleDeleteAssistant,
+    setShowAssistants,
+    knowledge,
+    knowledgeSection,
+    setShowKnowledgeCreate,
+    notes,
+    communitySidebarSection,
+    p2pWorkspaces,
+    registrationGate,
+    setShowGroupCreate,
+    setShowGroupJoin,
+    setPendingJoinCancelId,
+    setShowGroupJoinPending,
+    projectSidebarTab,
+    setProjectSidebarTab,
+    translationSection,
+    setTranslationSection,
+    translation,
+  } = props
+
+  const {
+    assistantLibSessions,
+    assistantLibWorkspaceId,
+    handleSelectKnowledge,
+    handleSelectKnowledgeSection,
+    handleSelectCommunitySection,
+    handleSelectContrast,
+    handleSelectDocument,
+    handleDeleteContrast,
+    handleDeleteDocument,
+    handleAddContrastToNotes,
+    handleAddDocumentToNotes,
+    handleAddContrastToKnowledge,
+    handleAddDocumentToKnowledge,
+    handleCreateContrast,
+    handleOpenDocument,
+  } = useChatPageSidebars(props)
 
   if (!showContentSidebar) return null
 
@@ -130,70 +90,32 @@ export function ChatPageSidebars({
         activeId={knowledge.activeId}
         activeSection={knowledgeSection}
         loading={knowledge.loading}
-        onSelect={(id) => {
-          const item = knowledge.items.find((kb) => kb.id === id)
-          knowledge.setActiveId(id)
-          if (item) {
-            setKnowledgeSection(knowledgeSectionForKind(item.kind))
-          }
-        }}
+        onSelect={handleSelectKnowledge}
         onSelectDefaultFolder={() => {
           knowledge.setActiveId(DEFAULT_KNOWLEDGE_FOLDER_ID)
-          setKnowledgeSection('local')
+          props.setKnowledgeSection('local')
         }}
         onSelectDefaultSyncFolder={() => {
           knowledge.setActiveId(DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID)
-          setKnowledgeSection('sync')
+          props.setKnowledgeSection('sync')
         }}
         onSelectDefaultNetworkFolder={() => {
           knowledge.setActiveId(DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID)
-          setKnowledgeSection('network')
+          props.setKnowledgeSection('network')
         }}
         onSelectDefaultLocalFilesFolder={() => {
           knowledge.setActiveId(DEFAULT_LOCAL_FILES_FOLDER_ID)
-          setKnowledgeSection('local-files')
+          props.setKnowledgeSection('local-files')
         }}
         onSelectFileRegistry={() => {
           knowledge.setActiveId(FILE_REGISTRY_TOOL_ID)
-          setKnowledgeSection('file-tools')
+          props.setKnowledgeSection('file-tools')
         }}
         onSelectFileDedup={() => {
           knowledge.setActiveId(FILE_DEDUP_TOOL_ID)
-          setKnowledgeSection('file-tools')
+          props.setKnowledgeSection('file-tools')
         }}
-        onSelectSection={(section: KnowledgeSidebarSection) => {
-          setKnowledgeSection(section)
-          if (section === 'network') {
-            knowledge.setActiveId(DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID)
-          } else if (section === 'sync') {
-            knowledge.setActiveId(DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID)
-          } else if (section === 'shared') {
-            const firstSaved = knowledge.items.find(
-              (item) =>
-                item.kind === 'shared' &&
-                !isP2pSharedKnowledgeMirrorDescription(item.description) &&
-                item.documentCount > 0,
-            )
-            if (firstSaved) {
-              knowledge.setActiveId(firstSaved.id)
-            }
-          } else if (section === 'local-files') {
-            knowledge.setActiveId(DEFAULT_LOCAL_FILES_FOLDER_ID)
-          } else if (section === 'file-tools') {
-            knowledge.setActiveId(FILE_REGISTRY_TOOL_ID)
-          } else if (section === 'local' && !knowledge.activeId) {
-            knowledge.setActiveId(DEFAULT_KNOWLEDGE_FOLDER_ID)
-          } else if (
-            section === 'local' &&
-            (knowledge.activeId === DEFAULT_NETWORK_KNOWLEDGE_FOLDER_ID ||
-              knowledge.activeId === DEFAULT_SYNC_KNOWLEDGE_FOLDER_ID ||
-              knowledge.activeId === DEFAULT_LOCAL_FILES_FOLDER_ID ||
-              knowledge.activeId === FILE_DEDUP_TOOL_ID ||
-              knowledge.activeId === FILE_REGISTRY_TOOL_ID)
-          ) {
-            knowledge.setActiveId(DEFAULT_KNOWLEDGE_FOLDER_ID)
-          }
-        }}
+        onSelectSection={handleSelectKnowledgeSection}
         onCreate={() => setShowKnowledgeCreate(true)}
         onDelete={(id) => void knowledge.remove(id)}
       />
@@ -220,10 +142,10 @@ export function ChatPageSidebars({
         onDeleteNotebook={notes.deleteNotebook}
         onDeleteNote={notes.deleteNote}
         onIngestNotebook={(notebookId, notebookName) =>
-          setNotesIngestTarget({ notebookId, notebookName })
+          props.setNotesIngestTarget({ notebookId, notebookName })
         }
         onIngestNote={(noteId, noteTitle) =>
-          setNotesIngestTarget({ noteIds: [noteId], noteTitle })
+          props.setNotesIngestTarget({ noteIds: [noteId], noteTitle })
         }
       />
     )
@@ -233,10 +155,7 @@ export function ChatPageSidebars({
     return (
       <CommunitySidebar
         activeSection={communitySidebarSection}
-        onSelectSection={(section: CommunitySidebarSection) => {
-          setCommunitySidebarSection(section)
-          setCommunityAction(COMMUNITY_SECTION_TO_ACTION[section])
-        }}
+        onSelectSection={handleSelectCommunitySection}
       />
     )
   }
@@ -252,87 +171,22 @@ export function ChatPageSidebars({
         activeDocumentId={translation.activeDocumentId}
         renameContrastId={translation.renameContrastId}
         renameDocumentId={translation.renameDocumentId}
-        onSelectContrast={(contrastId) => {
-          translation.selectContrast(contrastId)
-          setTranslationSection(DEFAULT_TRANSLATION_SECTION)
-          setTranslationWorkspaceKey((value) => value + 1)
-        }}
-        onSelectDocument={(documentId) => {
-          translation.selectDocument(documentId)
-          setTranslationSection('documents')
-          setTranslationWorkspaceKey((value) => value + 1)
-        }}
+        onSelectContrast={handleSelectContrast}
+        onSelectDocument={handleSelectDocument}
         onStartRenameContrast={translation.startRenameContrast}
         onStartRenameDocument={translation.startRenameDocument}
         onRenameContrast={translation.renameContrast}
         onRenameDocument={translation.renameDocument}
         onCancelRenameContrast={translation.cancelRenameContrast}
         onCancelRenameDocument={translation.cancelRenameDocument}
-        onDeleteContrast={(contrastId) => {
-          translation.deleteContrast(contrastId)
-          setTranslationWorkspaceKey((value) => value + 1)
-        }}
-        onDeleteDocument={(documentId) => {
-          translation.deleteDocument(documentId)
-          setTranslationWorkspaceKey((value) => value + 1)
-        }}
-        onAddContrastToNotes={(contrast) => {
-          if (!hasContrastExportContent(contrast)) {
-            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-            return
-          }
-          const title = contrast.title || t('translationPage.sidebar.untitledContrast')
-          notes.createNoteFromMessage(title, buildContrastExportContent(contrast))
-          setActiveView('notes')
-          setStatusMessage(t('translationPage.sidebar.addedToNotes', { title }))
-        }}
-        onAddDocumentToNotes={(document) => {
-          if (!hasDocumentExportContent(document)) {
-            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-            return
-          }
-          const title = document.title || document.fileName
-          notes.createNoteFromMessage(title, buildDocumentExportContent(document))
-          setActiveView('notes')
-          setStatusMessage(t('translationPage.sidebar.addedToNotes', { title }))
-        }}
-        onAddContrastToKnowledge={(contrast) => {
-          if (!hasContrastExportContent(contrast)) {
-            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-            return
-          }
-          const title = contrast.title || t('translationPage.sidebar.untitledContrast')
-          const noteId = notes.createNoteFromMessage(title, buildContrastExportContent(contrast))
-          setNotesIngestTarget({ noteIds: [noteId], noteTitle: title })
-        }}
-        onAddDocumentToKnowledge={(document) => {
-          if (!hasDocumentExportContent(document)) {
-            setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-            return
-          }
-          const title = document.title || document.fileName
-          const noteId = notes.createNoteFromMessage(title, buildDocumentExportContent(document))
-          setNotesIngestTarget({ noteIds: [noteId], noteTitle: title })
-        }}
-        onCreateContrast={() => {
-          translation.createNewContrast()
-          setTranslationSection(DEFAULT_TRANSLATION_SECTION)
-          setTranslationWorkspaceKey((value) => value + 1)
-        }}
-        onOpenDocument={() => {
-          setTranslationSection('documents')
-          void (async () => {
-            const result = await window.api.invoke(IpcChannel.DialogSelectFiles, {
-              multiple: false,
-            })
-            if (!result.ok) return
-            const { paths } = DialogSelectFilesOutputSchema.parse(result.data)
-            const filePath = paths[0]
-            if (!filePath || !isTranslationDocumentPath(filePath)) return
-            translation.openDocument(filePath)
-            setTranslationWorkspaceKey((value) => value + 1)
-          })()
-        }}
+        onDeleteContrast={handleDeleteContrast}
+        onDeleteDocument={handleDeleteDocument}
+        onAddContrastToNotes={handleAddContrastToNotes}
+        onAddDocumentToNotes={handleAddDocumentToNotes}
+        onAddContrastToKnowledge={handleAddContrastToKnowledge}
+        onAddDocumentToKnowledge={handleAddDocumentToKnowledge}
+        onCreateContrast={handleCreateContrast}
+        onOpenDocument={handleOpenDocument}
       />
     )
   }
@@ -351,15 +205,10 @@ export function ChatPageSidebars({
   }
 
   if (activeView === 'assistant-lib') {
-    const learningSessions = chat.sessions
-      .filter((session) => isAssistantLibSession(session.metadata))
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-    const workspaceId =
-      chat.activeSession?.workspaceId ?? learningSessions[0]?.workspaceId ?? null
     return (
       <AssistantLibSidebar
-        workspaceId={workspaceId}
-        sessions={learningSessions}
+        workspaceId={assistantLibWorkspaceId}
+        sessions={assistantLibSessions}
         activeSessionId={chat.activeSessionId}
         onSelectSession={(id) => void chat.selectSession(id)}
       />

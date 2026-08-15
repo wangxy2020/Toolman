@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AppGetDiagnosticsOutput } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
 import { SettingsCollapsibleSection, SettingsRow, SettingsToggle } from './SettingsShared'
@@ -10,6 +11,7 @@ interface Props {
   loading: boolean
   onSyncToggle: (enabled: boolean) => void
   onHostToggle: (enabled: boolean) => void
+  onLanToggle: (enabled: boolean) => void
 }
 
 export function DiagnosticsSettingsMobileSection({
@@ -19,8 +21,10 @@ export function DiagnosticsSettingsMobileSection({
   loading,
   onSyncToggle,
   onHostToggle,
+  onLanToggle,
 }: Props) {
   const { t } = useI18n()
+  const [copied, setCopied] = useState(false)
   const mobile = snapshot.mobileSync ?? {
     syncEnabled: false,
     agentHostEnabled: false,
@@ -29,10 +33,23 @@ export function DiagnosticsSettingsMobileSection({
     hubBaseUrl: null,
     advertisedUrls: [],
     lastError: null,
+    lanAccessEnabled: false,
   }
   const reachable = (mobile.advertisedUrls ?? []).filter(
     (url) => url && !url.includes('127.0.0.1'),
   )
+  const busy = syncToggling || loading
+
+  const copyToken = async () => {
+    if (!mobile.hubToken) return
+    try {
+      await navigator.clipboard.writeText(mobile.hubToken)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setCopied(false)
+    }
+  }
 
   return (
     <SettingsCollapsibleSection
@@ -45,7 +62,7 @@ export function DiagnosticsSettingsMobileSection({
       >
         <SettingsToggle
           checked={Boolean(mobile.syncEnabled)}
-          disabled={syncToggling || loading}
+          disabled={busy}
           onChange={onSyncToggle}
         />
       </SettingsRow>
@@ -58,6 +75,31 @@ export function DiagnosticsSettingsMobileSection({
           disabled={hostToggling || loading}
           onChange={onHostToggle}
         />
+      </SettingsRow>
+      <SettingsRow
+        label={t('settings.diagnostics.mobileSync.lanToggle')}
+        hint={t('settings.diagnostics.mobileSync.lanToggleHint')}
+      >
+        <SettingsToggle
+          checked={Boolean(mobile.lanAccessEnabled)}
+          disabled={busy}
+          onChange={onLanToggle}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label={t('settings.diagnostics.mobileSync.hubToken')}
+        hint={t('settings.diagnostics.mobileSync.hubTokenHint')}
+      >
+        <div className="tm-settings-static" style={{ wordBreak: 'break-all' }}>
+          <div>{mobile.hubToken ?? '—'}</div>
+          {mobile.hubToken ? (
+            <button type="button" className="tm-btn tm-btn--ghost tm-btn--sm" onClick={() => void copyToken()}>
+              {copied
+                ? t('settings.diagnostics.mobileSync.copiedToken')
+                : t('settings.diagnostics.mobileSync.copyToken')}
+            </button>
+          ) : null}
+        </div>
       </SettingsRow>
       <SettingsRow label={t('settings.diagnostics.mobileSync.hub')}>
         {statusBadge(

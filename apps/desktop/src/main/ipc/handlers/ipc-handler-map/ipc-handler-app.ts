@@ -72,7 +72,11 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
     try {
       const parsed = MobileSyncSetEnabledInputSchema.parse(input)
       const { setMobileSyncEnabled } = await import('../../../services/mobile-sync-runtime.service')
-      return ipcOk(await setMobileSyncEnabled(parsed.enabled))
+      return ipcOk(
+        await setMobileSyncEnabled(parsed.enabled, {
+          lanAccessEnabled: parsed.lanAccessEnabled,
+        }),
+      )
     } catch (error) {
       const message = toErrorMessage(error, 'Failed to update mobile sync')
       return ipcErr({ code: 'INTERNAL_ERROR', message, retryable: true })

@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react'
 import {
   KeyboardAvoidingView,
   Modal,
@@ -11,20 +10,10 @@ import {
   View,
 } from 'react-native'
 import { colors } from '../theme'
-import type { MobileCreatedKbKind } from '../storage/createdKnowledgeBases'
+import { KNOWLEDGE_CREATE_KINDS, type KnowledgeCreateForm } from './knowledgeCreateUtils'
+import { useKnowledgeCreateModal } from './useKnowledgeCreateModal'
 
-const KINDS: Array<{ id: MobileCreatedKbKind; label: string }> = [
-  { id: 'local', label: '本地知识库' },
-  { id: 'sync', label: '同步知识库' },
-  { id: 'network', label: '网络知识库' },
-]
-
-export type KnowledgeCreateForm = {
-  name: string
-  kind: MobileCreatedKbKind
-  description?: string
-  networkUrl?: string
-}
+export type { KnowledgeCreateForm }
 
 type Props = {
   visible: boolean
@@ -33,97 +22,23 @@ type Props = {
   onSubmit: (input: KnowledgeCreateForm) => Promise<void> | void
 }
 
-function normalizeUrl(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  return `https://${trimmed}`
-}
-
-function deriveNameFromUrl(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '') || url
-  } catch {
-    return url
-  }
-}
-
 export function KnowledgeCreateModal(props: Props) {
-  const { visible, submitting = false, onClose, onSubmit } = props
-  const [name, setName] = useState('')
-  const [kind, setKind] = useState<MobileCreatedKbKind>('local')
-  const [description, setDescription] = useState('')
-  const [networkUrl, setNetworkUrl] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!visible) return
-    setName('')
-    setKind('local')
-    setDescription('')
-    setNetworkUrl('')
-    setError(null)
-  }, [visible])
-
-  const isNetwork = kind === 'network'
-  const namePlaceholder = isNetwork
-    ? '例如：产品文档（可选，填写网络地址时自动填充）'
-    : '例如：产品文档'
-
-  const handleUrlChange = (value: string) => {
-    setNetworkUrl(value)
-    setError(null)
-    if (!name.trim() && value.trim()) {
-      const normalized = normalizeUrl(value)
-      setName(deriveNameFromUrl(normalized))
-    }
-  }
-
-  const handleSubmit = async () => {
-    const trimmedName = name.trim()
-    if (isNetwork) {
-      const normalized = normalizeUrl(networkUrl)
-      if (!normalized) {
-        setError('请输入网络地址')
-        return
-      }
-      try {
-        new URL(normalized)
-      } catch {
-        setError('请输入有效的网络地址')
-        return
-      }
-      if (!trimmedName) {
-        setError('请输入知识库名称，或填写网络地址')
-        return
-      }
-      setError(null)
-      await onSubmit({
-        name: trimmedName,
-        kind,
-        description: description.trim() || undefined,
-        networkUrl: normalized,
-      })
-      return
-    }
-
-    if (!trimmedName) {
-      setError('请输入知识库名称')
-      return
-    }
-    setError(null)
-    await onSubmit({
-      name: trimmedName,
-      kind,
-      description: description.trim() || undefined,
-    })
-  }
-
-  const kindHint = useMemo(() => {
-    if (kind === 'network') return '创建后将记录该网页地址，也可稍后继续添加更多网页。'
-    if (kind === 'sync') return '创建后可在知识库中添加文件；与桌面同步的知识库会出现在「同步知识库」。'
-    return '创建后可在知识库中添加 MD/TXT/PDF/DOCX/HTML 等文件。'
-  }, [kind])
+  const { visible, submitting = false, onClose } = props
+  const {
+    name,
+    changeName,
+    kind,
+    changeKind,
+    description,
+    setDescription,
+    networkUrl,
+    handleUrlChange,
+    error,
+    isNetwork,
+    namePlaceholder,
+    kindHint,
+    handleSubmit,
+  } = useKnowledgeCreateModal(props)
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -156,10 +71,7 @@ export function KnowledgeCreateModal(props: Props) {
             <TextInput
               style={styles.input}
               value={name}
-              onChangeText={(value) => {
-                setName(value)
-                setError(null)
-              }}
+              onChangeText={changeName}
               placeholder={namePlaceholder}
               placeholderTextColor={colors.textSecondary}
               autoFocus
@@ -167,15 +79,12 @@ export function KnowledgeCreateModal(props: Props) {
 
             <Text style={styles.label}>类型</Text>
             <View style={styles.kindRow} accessibilityRole="radiogroup">
-              {KINDS.map((item) => {
+              {KNOWLEDGE_CREATE_KINDS.map((item) => {
                 const active = kind === item.id
                 return (
                   <Pressable
                     key={item.id}
-                    onPress={() => {
-                      setKind(item.id)
-                      setError(null)
-                    }}
+                    onPress={() => changeKind(item.id)}
                     style={({ pressed }) => [styles.kindOption, pressed ? styles.kindOptionPressed : null]}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: active }}

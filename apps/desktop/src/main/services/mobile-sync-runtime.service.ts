@@ -20,11 +20,18 @@ import {
   stopMobileSyncHub,
 } from './mobile-sync-hub'
 import { getNotesData } from './notes-data/storage'
-import { publishNoteSyncChange } from './mobile-sync-store'
+import {
+  changelogHasEntityKind,
+  isMobileSyncChangelogEmpty,
+  publishNoteSyncChange,
+} from './mobile-sync-store'
 import { seedClassroomSessionSyncChanges } from './classroom-mobile-sync'
 import {
+  ensureMobileSyncHubToken,
   isClassroomSyncPreferenceEnabled,
+  isMobileSyncLanAccessEnabled,
   setClassroomSyncPreferenceEnabled,
+  setMobileSyncLanAccessEnabled,
 } from './mobile-sync.config'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
@@ -37,16 +44,21 @@ function seedMobileSyncChangelog(): void {
       identityId: device.identityId,
       deviceId: device.deviceId,
     })
-    for (const note of getNotesData().notes) {
-      publishNoteSyncChange({
-        id: note.id,
-        title: note.title,
-        content: note.content,
-        updatedAt: note.updatedAt,
-      })
+    const empty = isMobileSyncChangelogEmpty()
+    if (empty) {
+      for (const note of getNotesData().notes) {
+        publishNoteSyncChange({
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          updatedAt: note.updatedAt,
+        })
+      }
     }
     publishActiveKnowledgeMeta()
-    seedClassroomSessionSyncChanges()
+    if (empty || !changelogHasEntityKind('classroom_session')) {
+      seedClassroomSessionSyncChanges()
+    }
   } catch (error) {
     logStructured(
       'mobile-sync',
@@ -58,14 +70,19 @@ function seedMobileSyncChangelog(): void {
 
 export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
   const syncPort = getMobileSyncHubPort()
+  const lanAccessEnabled = isMobileSyncLanAccessEnabled()
   return {
     syncEnabled: isMobileSyncEnabled(),
     agentHostEnabled: isMobileAgentHostEnabled(),
     classroomSyncEnabled: isClassroomSyncPreferenceEnabled(),
     hubRunning: Boolean(getMobileSyncHubBaseUrl()),
     hubBaseUrl: getMobileSyncHubBaseUrl(),
-    advertisedUrls: advertisedHttpUrls(syncPort),
+    advertisedUrls: lanAccessEnabled
+      ? advertisedHttpUrls(syncPort)
+      : [`http://127.0.0.1:${syncPort}`],
     lastError: null,
+    hubToken: ensureMobileSyncHubToken(),
+    lanAccessEnabled,
   }
 }
 
@@ -85,7 +102,13 @@ export async function ensureMobileSyncRuntime(): Promise<AppDiagnosticsMobileSyn
   return getMobileSyncDiagnostics()
 }
 
-export async function setMobileSyncEnabled(enabled: boolean): Promise<AppDiagnosticsMobileSync> {
+export async function setMobileSyncEnabled(
+  enabled: boolean,
+  extras?: { lanAccessEnabled?: boolean },
+): Promise<AppDiagnosticsMobileSync> {
+  if (typeof extras?.lanAccessEnabled === 'boolean') {
+    setMobileSyncLanAccessEnabled(extras.lanAccessEnabled)
+  }
   setMobileSyncPreferenceEnabled(enabled)
   if (!enabled) {
     await stopMobileSyncHub()

@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react'
 import { Text } from 'react-native'
 import {
   DEFAULT_KNOWLEDGE_CHUNK_CONFIG,
@@ -7,16 +6,6 @@ import {
   KNOWLEDGE_WATCH_OFFICE_TEMP_EXCLUDE_HINT,
   KNOWLEDGE_WATCH_SUPPORTED_TYPES_HINT,
 } from '@toolman/shared'
-import { saveModulePrefs } from '../settings/prefs'
-import { useMobileApp } from '../state/MobileAppContext'
-import {
-  DEFAULT_FOLDER_LABEL,
-  DEFAULT_LOCAL_FOLDER_ID,
-  DEFAULT_NETWORK_FOLDER_ID,
-  DEFAULT_SYNC_FOLDER_ID,
-  isSystemDefaultFolderName,
-} from './knowledgeSidebar'
-import { useOptionalKnowledgeUi } from './KnowledgePanes'
 import { SettingsDialogFrame } from './SettingsDialogFrame'
 import {
   SettingsInfoRow,
@@ -24,148 +13,55 @@ import {
   SettingsTextArea,
 } from './settingsModalFields'
 import { Field, Toggle, settingsUiStyles as styles } from './settingsUi'
+import { knowledgeChunkStrategyLabel } from './knowledgeSettingsUtils'
+import { useKnowledgeSettingsModal } from './useKnowledgeSettingsModal'
 
 type Props = {
   visible: boolean
   onClose: () => void
 }
 
-type SettingsTab = 'basic' | 'watch' | 'memory' | 'advanced'
-
-function modalTitle(kind: string | null): string {
-  if (kind === 'sync') return '同步知识库设置'
-  if (kind === 'local') return '本地知识库设置'
-  if (kind === 'network') return '网络知识库设置'
-  return '知识库设置'
-}
-
 export function KnowledgeSettingsModal({ visible, onClose }: Props) {
-  const { modulePrefs, setModulePrefs } = useMobileApp()
-  const knowledgeUi = useOptionalKnowledgeUi()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
-  const [syncEnabled, setSyncEnabled] = useState(true)
-  const [preferDesktopIndex, setPreferDesktopIndex] = useState(true)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [networkUrl, setNetworkUrl] = useState('')
-  const [watchInclude, setWatchInclude] = useState('')
-  const [watchExclude, setWatchExclude] = useState('')
-  const [watchDebounceMs, setWatchDebounceMs] = useState('')
-  const [urlRefreshIntervalHours, setUrlRefreshIntervalHours] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  const createdKb = useMemo(() => {
-    if (!knowledgeUi?.activeKbId) return null
-    return knowledgeUi.createdKbs.find((item) => item.id === knowledgeUi.activeKbId) ?? null
-  }, [knowledgeUi])
-
-  const syncedKb = useMemo(() => {
-    if (!knowledgeUi?.activeKbId) return null
-    return knowledgeUi.syncedKbs.find((item) => item.id === knowledgeUi.activeKbId) ?? null
-  }, [knowledgeUi])
-
-  const isDefaultFolder =
-    knowledgeUi?.activeKbId === DEFAULT_SYNC_FOLDER_ID ||
-    knowledgeUi?.activeKbId === DEFAULT_LOCAL_FOLDER_ID ||
-    knowledgeUi?.activeKbId === DEFAULT_NETWORK_FOLDER_ID ||
-    isSystemDefaultFolderName(knowledgeUi?.activeKbName ?? '')
-
-  const kind =
-    createdKb?.kind ??
-    (knowledgeUi?.activeSection === 'network' || knowledgeUi?.activeSection === 'local'
-      ? knowledgeUi.activeSection
-      : knowledgeUi?.activeSection === 'sync'
-        ? 'sync'
-        : syncedKb?.kind ?? knowledgeUi?.activeSection ?? null)
-
-  const isLocalKb = kind === 'local'
-  const isNetworkKb = kind === 'network'
-  const isCreated = createdKb != null
-  const nameReadOnly = !isCreated || isDefaultFolder
-  const canEditWatch = isCreated && !isDefaultFolder
-
-  const tabs = useMemo(() => {
-    const next: Array<{ id: SettingsTab; label: string }> = [
-      { id: 'basic', label: '基础与模型' },
-    ]
-    if (isLocalKb) next.push({ id: 'watch', label: '文件夹监听' })
-    if (isNetworkKb) next.push({ id: 'watch', label: '网页刷新' })
-    next.push({ id: 'memory', label: '长期记忆' })
-    next.push({ id: 'advanced', label: '高级与调试' })
-    return next
-  }, [isLocalKb, isNetworkKb])
-
-  useEffect(() => {
-    if (!visible) return
-    setActiveTab('basic')
-    setError(null)
-    setSyncEnabled(modulePrefs.knowledge.syncEnabled)
-    setPreferDesktopIndex(modulePrefs.knowledge.preferDesktopIndex)
-    setName(createdKb?.name ?? knowledgeUi?.activeKbName ?? DEFAULT_FOLDER_LABEL)
-    setDescription(createdKb?.description ?? '')
-    setNetworkUrl(createdKb?.networkUrl ?? '')
-    setWatchInclude(createdKb?.watchInclude ?? KNOWLEDGE_WATCH_INCLUDE_PLACEHOLDER)
-    setWatchExclude(
-      createdKb?.watchExclude ?? DEFAULT_KNOWLEDGE_WATCH_CONFIG.exclude.join('\n'),
-    )
-    setWatchDebounceMs(
-      createdKb?.watchDebounceMs != null
-        ? String(createdKb.watchDebounceMs)
-        : String(DEFAULT_KNOWLEDGE_WATCH_CONFIG.debounceMs),
-    )
-    setUrlRefreshIntervalHours(
-      createdKb?.urlRefreshIntervalHours != null
-        ? String(createdKb.urlRefreshIntervalHours)
-        : String(DEFAULT_KNOWLEDGE_WATCH_CONFIG.urlRefreshIntervalHours),
-    )
-  }, [visible, modulePrefs.knowledge, createdKb, knowledgeUi?.activeKbName])
-
-  useEffect(() => {
-    if (tabs.some((tab) => tab.id === activeTab)) return
-    setActiveTab('basic')
-  }, [activeTab, tabs])
-
-  const handleSave = async () => {
-    const nextPrefs = {
-      ...modulePrefs,
-      knowledge: { syncEnabled, preferDesktopIndex },
-    }
-    setModulePrefs(nextPrefs)
-    await saveModulePrefs(nextPrefs)
-
-    if (isCreated && createdKb) {
-      const trimmedName = name.trim()
-      if (!trimmedName) {
-        setError('请输入知识库名称')
-        setActiveTab('basic')
-        return
-      }
-      const debounce = Number.parseInt(watchDebounceMs.trim(), 10)
-      const refreshHours = Number.parseInt(urlRefreshIntervalHours.trim(), 10)
-      knowledgeUi?.updateCreatedKnowledgeBase(createdKb.id, {
-        name: trimmedName,
-        description: description.trim() || undefined,
-        networkUrl: isNetworkKb ? networkUrl.trim() || createdKb.networkUrl : createdKb.networkUrl,
-        watchInclude: watchInclude.trim() || undefined,
-        watchExclude: watchExclude.trim() || undefined,
-        watchDebounceMs:
-          Number.isFinite(debounce) && debounce > 0 ? debounce : DEFAULT_KNOWLEDGE_WATCH_CONFIG.debounceMs,
-        urlRefreshIntervalHours:
-          Number.isFinite(refreshHours) && refreshHours >= 0
-            ? refreshHours
-            : DEFAULT_KNOWLEDGE_WATCH_CONFIG.urlRefreshIntervalHours,
-      })
-    }
-    onClose()
-  }
+  const {
+    knowledgeUi,
+    activeTab,
+    setActiveTab,
+    syncEnabled,
+    setSyncEnabled,
+    preferDesktopIndex,
+    setPreferDesktopIndex,
+    name,
+    setName,
+    description,
+    setDescription,
+    networkUrl,
+    setNetworkUrl,
+    watchInclude,
+    setWatchInclude,
+    watchExclude,
+    setWatchExclude,
+    watchDebounceMs,
+    setWatchDebounceMs,
+    urlRefreshIntervalHours,
+    setUrlRefreshIntervalHours,
+    error,
+    isLocalKb,
+    isNetworkKb,
+    isCreated,
+    nameReadOnly,
+    canEditWatch,
+    tabs,
+    title,
+    handleSave,
+  } = useKnowledgeSettingsModal({ visible, onClose })
 
   return (
     <SettingsDialogFrame
       visible={visible}
-      title={modalTitle(kind)}
+      title={title}
       tabs={tabs}
       activeTab={activeTab}
-      onTabChange={(id) => setActiveTab(id as SettingsTab)}
+      onTabChange={(id) => setActiveTab(id as typeof activeTab)}
       onClose={onClose}
       onSave={() => void handleSave()}
       saveLabel="保存配置"
@@ -188,7 +84,7 @@ export function KnowledgeSettingsModal({ visible, onClose }: Props) {
             value={description}
             onChangeText={setDescription}
             placeholder="选填"
-            editable={isCreated && !isDefaultFolder}
+            editable={isCreated && !nameReadOnly}
             minHeight={72}
           />
           {isNetworkKb ? (
@@ -217,7 +113,7 @@ export function KnowledgeSettingsModal({ visible, onClose }: Props) {
           <Field label="嵌入模型" value="由桌面端配置" editable={false} />
           <Text style={styles.hint}>用于将文档内容转换为向量，修改后需在桌面端重建索引。</Text>
           <Toggle
-            label="从桌面 Sync Hub 同步知识库元数据"
+            label="与桌面端自动同步"
             value={syncEnabled}
             onChange={setSyncEnabled}
           />
@@ -296,13 +192,7 @@ export function KnowledgeSettingsModal({ visible, onClose }: Props) {
           <Field label="重排模型" value="由桌面端配置" editable={false} />
           <Field
             label="分块策略"
-            value={
-              DEFAULT_KNOWLEDGE_CHUNK_CONFIG.strategy === 'markdown'
-                ? 'Markdown 结构'
-                : DEFAULT_KNOWLEDGE_CHUNK_CONFIG.strategy === 'fixed'
-                  ? '固定长度'
-                  : '语义分块'
-            }
+            value={knowledgeChunkStrategyLabel()}
             editable={false}
           />
           <Field

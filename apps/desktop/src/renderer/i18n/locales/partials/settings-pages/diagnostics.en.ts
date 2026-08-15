@@ -96,10 +96,17 @@ export const settingsPagesDiagnosticsEn = {
       title: 'Mobile sync',
       syncToggle: 'Local Sync Hub',
       syncToggleHint:
-        'Serves notes, classroom, and knowledge metadata on all interfaces. Use a LAN/Tailscale URL on a physical phone; restart the desktop app fully if the toggle has no effect.',
+        'On by default. The hub listens on 127.0.0.1 and requires a pairing token. Opening knowledge, notes, or classroom pages publishes changed data; the phone pulls incrementally about every 3 minutes.',
       hostToggle: 'Desktop host (incl. knowledge search)',
       hostToggleHint:
         'Advertise agent / knowledge-search to mobile; enabling host also starts Sync Hub',
+      lanToggle: 'Allow LAN access',
+      lanToggleHint:
+        'Off by default. When on, the hub binds 0.0.0.0 so a phone can use the LAN/Tailscale URL below. The pairing token is still required.',
+      hubToken: 'Pairing token',
+      hubTokenHint: 'Paste this token in mobile Diagnostics. Do not send it to Community Hub or chat.',
+      copyToken: 'Copy',
+      copiedToken: 'Copied',
       hub: 'Hub status',
       baseUrl: 'Local URL',
       reachable: 'Reachable URLs',

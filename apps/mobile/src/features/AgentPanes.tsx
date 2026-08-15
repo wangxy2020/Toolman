@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { type ReactNode } from 'react'
+import type { ChatMessage } from '../state/MobileAppContext'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import Svg, { Polyline } from 'react-native-svg'
 import { stripSocraticMachineBlocks } from '@toolman/shared'
-import { streamChatCompletion } from '../chat/streamChat'
-import { translateWithChatModel } from '../chat/translateWithModel'
-import { invokeDesktopAgent } from '../host/invokeDesktop'
 import {
   IconCopy,
   IconGitFork,
@@ -17,22 +15,10 @@ import {
   IconTranslate,
   IconTrashMsg,
 } from '../icons/composer-icons'
-import { createReachableMobileSyncClient } from '../sync/mobileSync'
-import { resolveAgentChatScope, type AgentChatScope } from '../chat/agentScopes'
-import { useMobileApp, type ChatMessage, type ChatSession } from '../state/MobileAppContext'
-import type { ModulePrefs } from '../settings/prefs'
 import { colors, shellStyles } from '../theme'
-import { copyToClipboard } from '../utils/clipboard'
-import { getMobileTtsController, unlockAudioPlayback, type TtsPlaybackState } from '../voice'
-import { useSidebarLayout } from '../layout'
-import {
-  classroomCourseIsLive,
-  startClassroomSession,
-  stopClassroomSession,
-  withUpdatedStudyRecords,
-} from './classroomClassSession'
+import { getMobileTtsController } from '../voice'
+import { STREAM_PAD_SIDE, formatMessageTime } from './agentPaneUtils'
 import { ChatComposer } from './ChatComposer'
-import { resolveClassroomSidebarFocus } from './classroomSidebar'
 import { ChatMessageContextMenu } from './ChatMessageContextMenu'
 import { MessageMarkdown } from './MessageMarkdown'
 import { ThinkingHeartbeat } from './ThinkingHeartbeat'
@@ -43,125 +29,26 @@ import {
   sidebarStyles,
 } from './sidebarUi'
 import { SwipeableTopicRow } from './SwipeableTopicRow'
-
-/** Match composer / message stream horizontal inset (12 + 8 scrollbar gutter). */
-const STREAM_PAD_SIDE = 20
-
-type MessageTranslation = { text: string; targetLanguage: string }
-
-type ComposerToolbarState = {
-  webSearchEnabled: boolean
-  kbEnabled: boolean
-  useDesktopHost: boolean
-}
-
-function defaultComposerToolbar(
-  scope: AgentChatScope,
-  prefs: ModulePrefs,
-): ComposerToolbarState {
-  return {
-    webSearchEnabled: prefs.agent.defaultWebSearch,
-    kbEnabled: scope === 'classroom' ? true : prefs.agent.defaultKb,
-    useDesktopHost:
-      scope === 'classroom'
-        ? prefs.classroom.preferDesktopHost
-        : scope === 'projects'
-          ? prefs.projects.preferDesktopHost
-          : prefs.agent.preferDesktopHost,
-  }
-}
-
-/** Match desktop `formatMessageTime`: `MM/DD HH:mm`. */
-function formatMessageTime(timestamp: number): string {
-  const date = new Date(timestamp)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${month}/${day} ${hours}:${minutes}`
-}
-
-function newId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function eventPoint(event: {
-  nativeEvent?: { pageX?: number; pageY?: number }
-  pageX?: number
-  pageY?: number
-}): { x: number; y: number } {
-  const native = event.nativeEvent
-  return {
-    x: native?.pageX ?? event.pageX ?? 24,
-    y: native?.pageY ?? event.pageY ?? 96,
-  }
-}
+import { useRegisterModulePanelStatus } from './modulePageStatus'
+import { useAgentLeftPane } from './useAgentLeftPane'
+import { useAgentRightPane } from './useAgentRightPane'
 
 export function AgentLeftPane() {
   const {
-    module,
-    sessions,
+    scopedSessions,
     activeSessionId,
-    setActiveSessionId,
-    upsertSession,
-    renameSession,
-    removeSession,
-    setLeftOpen,
-  } = useMobileApp()
-  const agentScope = resolveAgentChatScope(module)
-  const scopedSessions = sessions.filter((item) => item.agentScope === agentScope)
-  const [renamingId, setRenamingId] = useState<string | null>(null)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
-  const layout = useSidebarLayout()
-
-  const createSession = () => {
-    const session: ChatSession = {
-      id: newId('sess'),
-      title: '新话题',
-      updatedAt: Date.now(),
-      messages: [],
-      agentScope,
-    }
-    upsertSession(session)
-    setActiveSessionId(session.id)
-    setRenamingId(null)
-    setOpenSwipeId(null)
-    setLeftOpen(false)
-  }
-
-  const commitRename = (sessionId: string) => {
-    const next = draftTitle.trim()
-    if (next) {
-      renameSession(sessionId, next)
-    }
-    setRenamingId(null)
-    setDraftTitle('')
-  }
-
-  const confirmDelete = (session: ChatSession) => {
-    const message = `确定删除「${session.title}」？此操作不可恢复。`
-    const doDelete = () => {
-      if (renamingId === session.id) {
-        setRenamingId(null)
-        setDraftTitle('')
-      }
-      setOpenSwipeId(null)
-      removeSession(session.id)
-    }
-
-    if (Platform.OS === 'web') {
-      if (typeof globalThis.confirm === 'function' && globalThis.confirm(message)) {
-        doDelete()
-      }
-      return
-    }
-
-    Alert.alert('删除话题', message, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: doDelete },
-    ])
-  }
+    renamingId,
+    draftTitle,
+    setDraftTitle,
+    openSwipeId,
+    setOpenSwipeId,
+    layout,
+    createSession,
+    commitRename,
+    confirmDelete,
+    beginRename,
+    selectSession,
+  } = useAgentLeftPane()
 
   return (
     <SidebarShell>
@@ -205,17 +92,8 @@ export function AgentLeftPane() {
                 active={active}
                 open={openSwipeId === session.id}
                 onOpenChange={(open) => setOpenSwipeId(open ? session.id : null)}
-                onPress={() => {
-                  setOpenSwipeId(null)
-                  setActiveSessionId(session.id)
-                  setLeftOpen(false)
-                }}
-                onRename={() => {
-                  setOpenSwipeId(null)
-                  setActiveSessionId(session.id)
-                  setRenamingId(session.id)
-                  setDraftTitle(session.title)
-                }}
+                onPress={() => selectSession(session.id)}
+                onRename={() => beginRename(session)}
                 onDelete={() => confirmDelete(session)}
                 renameA11yLabel="重命名话题"
                 deleteA11yLabel="删除话题"
@@ -268,621 +146,48 @@ const topicStyles = StyleSheet.create({
 })
 
 export function AgentRightPane() {
-  const {
-    module,
-    sessions,
-    activeSessionId,
-    setActiveSessionId,
-    upsertSession,
-    modelConfig,
-    desktopHostsOnline,
-    modulePrefs,
-    setNotes,
-    notes,
-    notebooks,
-    classroomCourses,
-    setClassroomCourses,
-  } = useMobileApp()
-  const agentScope = resolveAgentChatScope(module)
-  const courseIds = new Set(classroomCourses.map((course) => course.id))
-  const scopedSessions =
-    agentScope === 'classroom'
-      ? sessions.filter((item) => item.agentScope === 'classroom' && courseIds.has(item.id))
-      : sessions.filter((item) => item.agentScope === agentScope)
-  const session =
-    scopedSessions.find((item) => item.id === activeSessionId) ?? scopedSessions[0] ?? null
-  const [input, setInput] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [actionHint, setActionHint] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [userMenu, setUserMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null)
-  const [selectionMode, setSelectionMode] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [translations, setTranslations] = useState<Record<string, MessageTranslation>>({})
-  const [visibleTranslationIds, setVisibleTranslationIds] = useState<Record<string, boolean>>({})
-  const [translatingIds, setTranslatingIds] = useState<Record<string, boolean>>({})
-  const [speakingId, setSpeakingId] = useState<string | null>(null)
-  const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle')
-  const [toolbarByScope, setToolbarByScope] = useState<
-    Partial<Record<AgentChatScope, ComposerToolbarState>>
-  >({})
-  const toolbar =
-    toolbarByScope[agentScope] ?? defaultComposerToolbar(agentScope, modulePrefs)
-  const { webSearchEnabled, kbEnabled, useDesktopHost } = toolbar
-  const patchToolbar = (patch: Partial<ComposerToolbarState>) => {
-    setToolbarByScope((prev) => ({
-      ...prev,
-      [agentScope]: {
-        ...(prev[agentScope] ?? defaultComposerToolbar(agentScope, modulePrefs)),
-        ...patch,
-      },
-    }))
-  }
-  const abortRef = useRef<AbortController | null>(null)
-  const streamScrollRef = useRef<ScrollView>(null)
-
-  const scrollStreamToEnd = (animated = false) => {
-    // Defer until layout commits so streaming growth is included.
-    requestAnimationFrame(() => {
-      streamScrollRef.current?.scrollToEnd({ animated })
-    })
-  }
-
-  useEffect(() => {
-    getMobileTtsController().configure({
-      engine: modulePrefs.agent.ttsEngine,
-      voice: modulePrefs.agent.ttsVoice,
-    })
-  }, [modulePrefs.agent.ttsEngine, modulePrefs.agent.ttsVoice])
-
-  useEffect(() => {
-    return getMobileTtsController().subscribe((state) => {
-      setTtsState(state.playbackState)
-      setSpeakingId(state.playingMessageId)
-      if (state.fellBack && state.lastError) {
-        setActionHint(`Edge 语音不可用，已回退系统语音（${state.lastError}）`)
-      } else if (state.lastError && state.playbackState === 'idle') {
-        setActionHint(state.lastError)
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort()
-      getMobileTtsController().stop()
-    }
-  }, [])
-
-  // Stop TTS when switching topic within the same agent page.
-  useEffect(() => {
-    getMobileTtsController().stop()
-    setSelectionMode(false)
-    setSelectedIds(new Set())
-  }, [activeSessionId])
-
-  const classroomCourse =
-    agentScope === 'classroom'
-      ? classroomCourses.find((course) => course.id === session?.id) ?? null
-      : null
-  const classLive = classroomCourseIsLive(classroomCourse)
-
-  useEffect(() => {
-    if (activeSessionId && scopedSessions.some((item) => item.id === activeSessionId)) return
-    const nextId =
-      agentScope === 'classroom'
-        ? resolveClassroomSidebarFocus(classroomCourses, activeSessionId)?.courseId ??
-          scopedSessions[0]?.id ??
-          null
-        : scopedSessions[0]?.id ?? null
-    if (nextId !== activeSessionId) setActiveSessionId(nextId)
-  }, [agentScope, activeSessionId, classroomCourses, sessions, setActiveSessionId])
-
-  // Follow new replies / streaming tokens to the bottom of the stream.
-  const lastMessage = session?.messages[session.messages.length - 1]
-  useEffect(() => {
-    scrollStreamToEnd(false)
-  }, [session?.id, session?.messages.length, lastMessage?.content, busy])
-
-  const ensureSession = (): ChatSession | null => {
-    if (activeSessionId) {
-      const existing = scopedSessions.find((item) => item.id === activeSessionId)
-      if (existing) return existing
-    }
-    if (scopedSessions[0]) return scopedSessions[0]
-    if (agentScope === 'classroom') return null
-    const created: ChatSession = {
-      id: newId('sess'),
-      title: '新话题',
-      updatedAt: Date.now(),
-      messages: [],
-      agentScope,
-    }
-    upsertSession(created)
-    return created
-  }
-
-  const autoSpeakReply = (messageId: string, content: string) => {
-    if (!modulePrefs.agent.autoSpeak) return
-    if (!content.trim()) return
-    const tts = getMobileTtsController()
-    tts.configure({
-      engine: modulePrefs.agent.ttsEngine,
-      voice: modulePrefs.agent.ttsVoice,
-    })
-    tts.speakMessage(messageId, content)
-  }
-
-  const runCompletion = async (
-    base: ChatSession,
-    historyForApi: Array<{ role: ChatMessage['role']; content: string }>,
-    userText: string,
-    assistantMsg: ChatMessage,
-  ) => {
-    let next = base
-    let receivedDelta = false
-    const appendDelta = (delta: string) => {
-      receivedDelta = true
-      const messages = next.messages.map((msg) =>
-        msg.id === assistantMsg.id ? { ...msg, content: msg.content + delta } : msg,
-      )
-      next = { ...next, messages, updatedAt: Date.now() }
-      upsertSession(next)
-    }
-
-    const finish = () => {
-      setBusy(false)
-      const final = next.messages.find((msg) => msg.id === assistantMsg.id)
-      if (final?.content.trim()) autoSpeakReply(final.id, final.content)
-    }
-
-    // Shared chat model path (all agent pages use the same modelConfig).
-    const controller = new AbortController()
-    abortRef.current = controller
-    let settled = false
-    const settle = () => {
-      if (settled) return
-      settled = true
-      finish()
-    }
-
-    await streamChatCompletion({
-      config: modelConfig,
-      messages: (() => {
-        const prompt = [
-          modulePrefs.agent.systemPrompt.trim(),
-          modulePrefs.app.memoryEnabled
-            ? modulePrefs.app.language === 'en'
-              ? `Long-term memory is enabled (retention ${modulePrefs.app.memoryRetentionDays} days). Remember the user's preferences and keep replies consistent across sessions.`
-              : `长期记忆已启用（保留 ${modulePrefs.app.memoryRetentionDays} 天）。请记住用户跨会话的偏好与约定，并在回复中保持一致。`
-            : '',
-        ]
-          .filter(Boolean)
-          .join('\n\n')
-        return prompt
-          ? [{ role: 'system', content: prompt }, ...historyForApi]
-          : historyForApi
-      })(),
-      signal: controller.signal,
-      handlers: {
-        onDelta: appendDelta,
-        onDone: () => settle(),
-        onError: (message) => {
-          if (!controller.signal.aborted) setError(message)
-          setBusy(false)
-          settled = true
-        },
-      },
-    })
-
-    // Optional desktop-host attempt only when explicitly enabled and API produced nothing.
-    if (
-      !receivedDelta &&
-      !controller.signal.aborted &&
-      useDesktopHost &&
-      desktopHostsOnline > 0
-    ) {
-      try {
-        const client = await createReachableMobileSyncClient()
-        const hosts = await client.listHosts()
-        const host = hosts.find((item) => item.agentHost && item.deviceKind === 'desktop')
-        if (host) {
-          const hostCapability =
-            agentScope === 'classroom'
-              ? 'classroom'
-              : agentScope === 'projects'
-                ? 'project-management'
-                : 'agent'
-          await invokeDesktopAgent({
-            hostDeviceId: host.deviceId,
-            capability: hostCapability,
-            message: userText,
-            onDelta: appendDelta,
-            onError: (message) => setError(message),
-          })
-        }
-      } catch (err) {
-        if (!receivedDelta) {
-          setError(err instanceof Error ? err.message : String(err))
-        }
-      }
-    }
-
-    settle()
-  }
-
-  const send = async (presetText?: string) => {
-    const text = (presetText ?? input).trim()
-    if (!text || busy) return
-    // Unlock in the same user gesture so auto-speak can play after the stream ends.
-    unlockAudioPlayback()
-    const base = ensureSession()
-    if (!base) {
-      setError('请先在侧栏选择一门课程')
-      return
-    }
-    if (!presetText) setInput('')
-    setError(null)
-    setBusy(true)
-
-    const userMsg: ChatMessage = {
-      id: newId('msg'),
-      role: 'user',
-      content: text,
-      createdAt: Date.now(),
-    }
-    const assistantMsg: ChatMessage = {
-      id: newId('msg'),
-      role: 'assistant',
-      content: '',
-      createdAt: Date.now(),
-    }
-    const next: ChatSession = {
-      ...base,
-      title: base.messages.length === 0 ? text.slice(0, 24) : base.title,
-      updatedAt: Date.now(),
-      messages: [...base.messages, userMsg, assistantMsg],
-    }
-    upsertSession(next)
-
-    await runCompletion(
-      next,
-      [
-        ...base.messages.map((msg) => ({ role: msg.role, content: msg.content })),
-        { role: 'user', content: text },
-      ],
-      text,
-      assistantMsg,
-    )
-  }
-
-  const deleteMessage = (messageId: string) => {
-    if (!session || busy) return
-    const idx = session.messages.findIndex((m) => m.id === messageId)
-    if (idx < 0) return
-    const target = session.messages[idx]!
-    const removeIds = new Set([messageId])
-    // Desktop-like: deleting a user turn also drops the following assistant reply.
-    if (target.role === 'user') {
-      const next = session.messages[idx + 1]
-      if (next?.role === 'assistant') removeIds.add(next.id)
-    }
-    upsertSession({
-      ...session,
-      updatedAt: Date.now(),
-      messages: session.messages.filter((m) => !removeIds.has(m.id)),
-    })
-  }
-
-  const copyMessage = async (msg: ChatMessage) => {
-    const ok = await copyToClipboard(msg.content)
-    if (ok) {
-      setCopiedId(msg.id)
-      setActionHint('已复制')
-      setTimeout(() => {
-        setCopiedId((id) => (id === msg.id ? null : id))
-        setActionHint(null)
-      }, 1500)
-    } else {
-      setActionHint('复制失败')
-    }
-  }
-
-  const editUserMessage = (msg: ChatMessage) => {
-    if (busy || msg.role !== 'user' || !session) return
-    setInput(msg.content)
-    deleteMessage(msg.id)
-  }
-
-  const enterMessageSelection = (messageId: string) => {
-    setSelectionMode(true)
-    setSelectedIds(new Set([messageId]))
-  }
-
-  const toggleMessageSelected = (messageId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(messageId)) next.delete(messageId)
-      else next.add(messageId)
-      return next
-    })
-  }
-
-  const selectAllMessages = () => {
-    if (!session) return
-    setSelectionMode(true)
-    setSelectedIds(new Set(session.messages.map((item) => item.id)))
-  }
-
-  const clearUserMessageSelection = () => {
-    setSelectionMode(false)
-    setSelectedIds(new Set())
-  }
-
-  const regenerateAssistant = async (assistantId: string) => {
-    if (!session || busy) return
-    const idx = session.messages.findIndex((m) => m.id === assistantId)
-    if (idx < 0) return
-    const assistant = session.messages[idx]!
-    if (assistant.role !== 'assistant') return
-    let userIdx = idx - 1
-    while (userIdx >= 0 && session.messages[userIdx]?.role !== 'user') userIdx -= 1
-    const userMsg = userIdx >= 0 ? session.messages[userIdx]! : null
-    if (!userMsg) {
-      setError('无法重新生成：缺少对应用户消息')
-      return
-    }
-
-    setError(null)
-    setBusy(true)
-    // Unlock in the same user gesture so auto-speak can play after regenerate.
-    unlockAudioPlayback()
-    // Align with desktop: drop this reply and everything after it, then regenerate.
-    const cleared: ChatMessage = { ...assistant, content: '', createdAt: Date.now() }
-    const prior = session.messages.slice(0, idx)
-    const next: ChatSession = {
-      ...session,
-      updatedAt: Date.now(),
-      messages: [...prior, cleared],
-    }
-    upsertSession(next)
-    setTranslations((prev) => {
-      const copy = { ...prev }
-      for (const msg of session.messages.slice(idx)) delete copy[msg.id]
-      return copy
-    })
-
-    await runCompletion(
-      next,
-      prior.map((m) => ({ role: m.role, content: m.content })),
-      userMsg.content,
-      cleared,
-    )
-  }
-
-  const forkFromMessage = (messageId: string) => {
-    if (!session || busy) return
-    const idx = session.messages.findIndex((m) => m.id === messageId)
-    if (idx < 0) return
-    const forked: ChatSession = {
-      id: newId('sess'),
-      title: `${session.title} · 分叉`.slice(0, 40),
-      updatedAt: Date.now(),
-      messages: session.messages.slice(0, idx + 1).map((m) => ({ ...m, id: newId('msg') })),
-      agentScope,
-    }
-    upsertSession(forked)
-    setActiveSessionId(forked.id)
-    setActionHint('已从此处分叉为新会话')
-    setTimeout(() => setActionHint(null), 1500)
-  }
-
-  const translateMessage = async (msg: ChatMessage) => {
-    if (msg.role !== 'assistant' || !msg.content.trim()) return
-    const existing = translations[msg.id]
-    if (existing && visibleTranslationIds[msg.id]) {
-      setVisibleTranslationIds((prev) => ({ ...prev, [msg.id]: false }))
-      return
-    }
-    if (existing) {
-      setVisibleTranslationIds((prev) => ({ ...prev, [msg.id]: true }))
-      return
-    }
-
-    const targetLanguage = modulePrefs.translate.targetLang || 'zh-CN'
-    setTranslatingIds((prev) => ({ ...prev, [msg.id]: true }))
-    setError(null)
-    const result = await translateWithChatModel({
-      config: modelConfig,
-      text: msg.content,
-      targetLang: targetLanguage,
-    })
-    setTranslatingIds((prev) => ({ ...prev, [msg.id]: false }))
-    if (!result.ok) {
-      setError(result.message)
-      return
-    }
-    setTranslations((prev) => ({
-      ...prev,
-      [msg.id]: { text: result.text, targetLanguage },
-    }))
-    setVisibleTranslationIds((prev) => ({ ...prev, [msg.id]: true }))
-  }
-
-  const speakMessage = (msg: ChatMessage) => {
-    // Must run in the click stack so HTMLAudio can play after async Edge fetch.
-    unlockAudioPlayback()
-    const tts = getMobileTtsController()
-    tts.configure({
-      engine: modulePrefs.agent.ttsEngine,
-      voice: modulePrefs.agent.ttsVoice,
-    })
-    tts.speakMessage(msg.id, msg.content)
-  }
-
-  const saveToNote = (msg: ChatMessage) => {
-    const body = stripSocraticMachineBlocks(msg.content)
-    if (!body) return
-    const notebookId =
-      notebooks.find((item) => item.isDefault)?.id ?? notebooks[0]?.id ?? 'notebook-default'
-    const note = {
-      id: newId('note'),
-      notebookId,
-      title: body.slice(0, 24) || '来自对话',
-      body,
-      updatedAt: Date.now(),
-    }
-    setNotes([note, ...notes])
-    setActionHint('已保存到笔记')
-    setTimeout(() => setActionHint(null), 1500)
-  }
-
-  const renderAssistantActions = (msg: ChatMessage) => {
-    const hasText = Boolean(msg.content.trim())
-    const speaking = speakingId === msg.id
-    const translating = Boolean(translatingIds[msg.id])
-    const translationVisible = Boolean(visibleTranslationIds[msg.id])
-    const icon = (active?: boolean) => (active ? colors.accent : colors.textSecondary)
-
-    return (
-      <View style={styles.actions}>
-        {speaking && ttsState === 'playing' ? (
-          <>
-            <ActionIcon
-              label="暂停"
-              active
-              onPress={() => {
-                getMobileTtsController().pause()
-              }}
-            >
-              <IconPause size={15} color={colors.accent} />
-            </ActionIcon>
-            <ActionIcon
-              label="停止"
-              active
-              onPress={() => {
-                getMobileTtsController().stop()
-                setSpeakingId(null)
-              }}
-            >
-              <IconStop size={15} color={colors.accent} />
-            </ActionIcon>
-          </>
-        ) : speaking && ttsState === 'paused' ? (
-          <>
-            <ActionIcon
-              label="继续播放"
-              active
-              onPress={() => {
-                getMobileTtsController().resume()
-              }}
-            >
-              <IconPlay size={15} color={colors.accent} />
-            </ActionIcon>
-            <ActionIcon
-              label="停止"
-              active
-              onPress={() => {
-                getMobileTtsController().stop()
-                setSpeakingId(null)
-              }}
-            >
-              <IconStop size={15} color={colors.accent} />
-            </ActionIcon>
-          </>
-        ) : (
-          <ActionIcon
-            label="语音播放"
-            onPress={() => speakMessage(msg)}
-            disabled={!hasText || busy}
-          >
-            <IconSpeaker size={15} color={icon()} />
-          </ActionIcon>
-        )}
-
-        <ActionIcon
-          label={copiedId === msg.id ? '已复制' : '复制'}
-          active={copiedId === msg.id}
-          onPress={() => void copyMessage(msg)}
-          disabled={!hasText}
-        >
-          <IconCopy size={15} color={icon(copiedId === msg.id)} />
-        </ActionIcon>
-
-        <ActionIcon
-          label={translating ? '翻译中…' : translationVisible ? '隐藏译文' : '翻译'}
-          active={translating || translationVisible}
-          onPress={() => void translateMessage(msg)}
-          disabled={!hasText || translating || busy}
-        >
-          <IconTranslate size={15} color={icon(translating || translationVisible)} />
-        </ActionIcon>
-
-        <ActionIcon
-          label="重新生成"
-          onPress={() => void regenerateAssistant(msg.id)}
-          disabled={!hasText || busy}
-        >
-          <IconRefresh size={15} color={icon()} />
-        </ActionIcon>
-
-        <ActionIcon label="从此处分叉" onPress={() => forkFromMessage(msg.id)} disabled={busy}>
-          <IconGitFork size={15} color={icon()} />
-        </ActionIcon>
-
-        <ActionIcon
-          label="保存到笔记"
-          onPress={() => saveToNote(msg)}
-          disabled={!hasText}
-        >
-          <IconSaveNote size={15} color={icon()} />
-        </ActionIcon>
-
-        <ActionIcon label="删除" onPress={() => deleteMessage(msg.id)} disabled={busy}>
-          <IconTrashMsg size={15} color={icon()} />
-        </ActionIcon>
-      </View>
-    )
-  }
+  const pane = useAgentRightPane()
+  useRegisterModulePanelStatus('classroom-sync', pane.classroomStatus)
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
-        ref={streamScrollRef}
+        ref={pane.streamScrollRef}
         style={styles.streamScroll}
         contentContainerStyle={styles.streamContent}
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
-        onContentSizeChange={() => scrollStreamToEnd(false)}
+        onContentSizeChange={() => pane.scrollStreamToEnd(false)}
         // @ts-expect-error react-native-web className
         className="tm-agent-stream-scroll"
       >
-        {!session || session.messages.length === 0 ? (
+        {!pane.session || pane.session.messages.length === 0 ? (
           <Text style={shellStyles.emptyHint}>
-            {agentScope === 'classroom'
+            {pane.agentScope === 'classroom'
               ? '在下方提问开始上课。'
               : '在下方输入问题开始对话。可先点击「Toolman」配置 API，或新建左侧会话。对话会保存在本机。'}
           </Text>
         ) : (
-          session.messages.map((msg) => {
+          pane.session.messages.map((msg) => {
             const isUser = msg.role === 'user'
             const streamingThis =
-              busy && msg.role === 'assistant' && msg.id === session.messages[session.messages.length - 1]?.id
-            const translation = translations[msg.id]
-            const showTranslation = Boolean(translation && visibleTranslationIds[msg.id])
-            const checked = selectedIds.has(msg.id)
+              pane.busy &&
+              msg.role === 'assistant' &&
+              msg.id === pane.session!.messages[pane.session!.messages.length - 1]?.id
+            const translation = pane.translations[msg.id]
+            const showTranslation = Boolean(translation && pane.visibleTranslationIds[msg.id])
+            const checked = pane.selectedIds.has(msg.id)
             return (
               <View
                 key={msg.id}
                 style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAssistant]}
               >
-                {selectionMode ? (
+                {pane.selectionMode ? (
                   <Pressable
                     accessibilityLabel="选择消息"
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked }}
-                    onPress={() => toggleMessageSelected(msg.id)}
+                    onPress={() => pane.toggleMessageSelected(msg.id)}
                     style={styles.selectHit}
                   >
                     <View style={[styles.selectBox, checked ? styles.selectBoxChecked : null]}>
@@ -890,180 +195,256 @@ export function AgentRightPane() {
                     </View>
                   </Pressable>
                 ) : null}
-              <Pressable
-                delayLongPress={400}
-                onPress={
-                  selectionMode
-                    ? () => toggleMessageSelected(msg.id)
-                    : undefined
-                }
-                onLongPress={
-                  isUser
-                    ? (event) => {
-                        setUserMenu({ msg, ...eventPoint(event) })
-                      }
-                    : undefined
-                }
-                // @ts-expect-error react-native-web context menu
-                onContextMenu={
-                  isUser
-                    ? (event: { preventDefault?: () => void; nativeEvent?: { pageX?: number; pageY?: number }; pageX?: number; pageY?: number }) => {
-                        event.preventDefault?.()
-                        setUserMenu({ msg, ...eventPoint(event) })
-                      }
-                    : undefined
-                }
-                style={[
-                  styles.bubble,
-                  isUser ? styles.bubbleUser : styles.bubbleAssistant,
-                  isUser && checked ? styles.bubbleUserSelected : null,
-                  !isUser && checked ? styles.bubbleAssistantSelected : null,
-                ]}
-              >
-                <View style={[styles.bubbleMeta, isUser ? styles.bubbleMetaUser : null]}>
-                  <Text style={styles.bubbleRole}>{isUser ? '我的' : '智能体'}</Text>
-                  <Text style={styles.bubbleTime}>{formatMessageTime(msg.createdAt)}</Text>
-                </View>
-                {msg.content ? (
-                  <MessageMarkdown
-                    text={stripSocraticMachineBlocks(msg.content)}
-                    align={isUser ? 'right' : 'left'}
-                  />
-                ) : streamingThis ? (
-                  <ThinkingHeartbeat />
-                ) : null}
-                {showTranslation && translation ? (
-                  <View style={styles.translationBox}>
-                    <Text style={styles.translationLabel}>
-                      译文（{translation.targetLanguage}）
-                    </Text>
-                    <MessageMarkdown text={translation.text} />
+                <Pressable
+                  delayLongPress={400}
+                  onPress={
+                    pane.selectionMode
+                      ? () => pane.toggleMessageSelected(msg.id)
+                      : undefined
+                  }
+                  onLongPress={
+                    isUser
+                      ? (event) => {
+                          pane.openUserMenu(msg, event)
+                        }
+                      : undefined
+                  }
+                  // @ts-expect-error react-native-web context menu
+                  onContextMenu={
+                    isUser
+                      ? (event: { preventDefault?: () => void; nativeEvent?: { pageX?: number; pageY?: number }; pageX?: number; pageY?: number }) => {
+                          event.preventDefault?.()
+                          pane.openUserMenu(msg, event)
+                        }
+                      : undefined
+                  }
+                  style={[
+                    styles.bubble,
+                    isUser ? styles.bubbleUser : styles.bubbleAssistant,
+                    isUser && checked ? styles.bubbleUserSelected : null,
+                    !isUser && checked ? styles.bubbleAssistantSelected : null,
+                  ]}
+                >
+                  <View style={[styles.bubbleMeta, isUser ? styles.bubbleMetaUser : null]}>
+                    <Text style={styles.bubbleRole}>{isUser ? '我的' : '智能体'}</Text>
+                    <Text style={styles.bubbleTime}>{formatMessageTime(msg.createdAt)}</Text>
                   </View>
-                ) : null}
-                {streamingThis && !msg.content ? (
-                  <View style={styles.actionsPlaceholder} />
-                ) : isUser ? null : (
-                  renderAssistantActions(msg)
-                )}
-              </Pressable>
+                  {msg.content ? (
+                    <MessageMarkdown
+                      text={stripSocraticMachineBlocks(msg.content)}
+                      align={isUser ? 'right' : 'left'}
+                    />
+                  ) : streamingThis ? (
+                    <ThinkingHeartbeat />
+                  ) : null}
+                  {showTranslation && translation ? (
+                    <View style={styles.translationBox}>
+                      <Text style={styles.translationLabel}>
+                        译文（{translation.targetLanguage}）
+                      </Text>
+                      <MessageMarkdown text={translation.text} />
+                    </View>
+                  ) : null}
+                  {streamingThis && !msg.content ? (
+                    <View style={styles.actionsPlaceholder} />
+                  ) : isUser ? null : (
+                    <AssistantActions
+                      msg={msg}
+                      pane={pane}
+                    />
+                  )}
+                </Pressable>
               </View>
             )
           })
         )}
       </ScrollView>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {actionHint ? <Text style={styles.hint}>{actionHint}</Text> : null}
+      {pane.error ? <Text style={styles.error}>{pane.error}</Text> : null}
+      {pane.actionHint ? <Text style={styles.hint}>{pane.actionHint}</Text> : null}
 
       <ChatComposer
-        value={input}
-        onChangeText={setInput}
-        busy={busy}
-        onSend={() => void send()}
-        onStop={() => abortRef.current?.abort()}
-        classLive={classLive}
-        classToggleDisabled={!classroomCourse}
+        value={pane.input}
+        onChangeText={pane.setInput}
+        busy={pane.busy}
+        onSend={() => void pane.send()}
+        onStop={() => pane.abortRef.current?.abort()}
+        classLive={pane.classLive}
+        classToggleDisabled={!pane.classroomCourse}
         onToggleClass={
-          agentScope === 'classroom'
-            ? () => {
-                if (!classroomCourse) return
-                if (classLive) {
-                  if (busy) abortRef.current?.abort()
-                  setClassroomCourses(
-                    withUpdatedStudyRecords(
-                      classroomCourses,
-                      classroomCourse.id,
-                      stopClassroomSession(classroomCourse),
-                    ),
-                  )
-                  return
-                }
-                if (busy) return
-                const started = startClassroomSession(classroomCourse)
-                setClassroomCourses(
-                  withUpdatedStudyRecords(
-                    classroomCourses,
-                    classroomCourse.id,
-                    started.studyRecords,
-                  ),
-                )
-                void send(started.userMessage)
-              }
-            : undefined
+          pane.agentScope === 'classroom' ? pane.toggleClass : undefined
         }
-        webSearchEnabled={webSearchEnabled}
-        onToggleWebSearch={() => patchToolbar({ webSearchEnabled: !webSearchEnabled })}
-        kbEnabled={kbEnabled}
-        onToggleKb={() => patchToolbar({ kbEnabled: !kbEnabled })}
-        useDesktopHost={useDesktopHost}
-        onToggleDesktopHost={() => patchToolbar({ useDesktopHost: !useDesktopHost })}
+        webSearchEnabled={pane.webSearchEnabled}
+        onToggleWebSearch={() => pane.patchToolbar({ webSearchEnabled: !pane.webSearchEnabled })}
+        kbEnabled={pane.kbEnabled}
+        onToggleKb={() => pane.patchToolbar({ kbEnabled: !pane.kbEnabled })}
+        useDesktopHost={pane.useDesktopHost}
+        onToggleDesktopHost={() => pane.patchToolbar({ useDesktopHost: !pane.useDesktopHost })}
         paddingLeft={STREAM_PAD_SIDE}
         paddingRight={STREAM_PAD_SIDE}
         onNewTopic={
-          agentScope === 'classroom'
-            ? undefined
-            : () => {
-                const created: ChatSession = {
-                  id: newId('sess'),
-                  title: '新话题',
-                  updatedAt: Date.now(),
-                  messages: [],
-                  agentScope,
-                }
-                upsertSession(created)
-                setActiveSessionId(created.id)
-                setInput('')
-                setError(null)
-              }
+          pane.agentScope === 'classroom' ? undefined : pane.startNewTopic
         }
-        onClear={() => setInput('')}
+        onClear={() => pane.setInput('')}
       />
 
       <ChatMessageContextMenu
-        visible={Boolean(userMenu)}
-        x={userMenu?.x ?? 0}
-        y={userMenu?.y ?? 0}
-        onClose={() => setUserMenu(null)}
+        visible={Boolean(pane.userMenu)}
+        x={pane.userMenu?.x ?? 0}
+        y={pane.userMenu?.y ?? 0}
+        onClose={() => pane.setUserMenu(null)}
         items={
-          userMenu
+          pane.userMenu
             ? [
                 {
                   id: 'copy',
                   label: '复制',
                   onPress: () => {
-                    void copyMessage(userMenu.msg)
+                    void pane.copyMessage(pane.userMenu!.msg)
                   },
                 },
                 {
                   id: 'edit',
                   label: '编辑',
-                  onPress: () => editUserMessage(userMenu.msg),
+                  onPress: () => pane.editUserMessage(pane.userMenu!.msg),
                 },
                 {
                   id: 'delete',
                   label: '删除',
                   danger: true,
-                  onPress: () => deleteMessage(userMenu.msg.id),
+                  onPress: () => pane.deleteMessage(pane.userMenu!.msg.id),
                 },
                 {
                   id: 'select',
                   label: '选择',
-                  onPress: () => enterMessageSelection(userMenu.msg.id),
+                  onPress: () => pane.enterMessageSelection(pane.userMenu!.msg.id),
                 },
                 {
                   id: 'select-all',
                   label: '全选',
-                  onPress: selectAllMessages,
+                  onPress: pane.selectAllMessages,
                 },
                 {
                   id: 'cancel',
                   label: '取消',
-                  onPress: clearUserMessageSelection,
+                  onPress: pane.clearUserMessageSelection,
                 },
               ]
             : []
         }
       />
+    </View>
+  )
+}
+
+function AssistantActions(props: {
+  msg: ChatMessage
+  pane: ReturnType<typeof useAgentRightPane>
+}) {
+  const { msg, pane } = props
+  const hasText = Boolean(msg.content.trim())
+  const speaking = pane.speakingId === msg.id
+  const translating = Boolean(pane.translatingIds[msg.id])
+  const translationVisible = Boolean(pane.visibleTranslationIds[msg.id])
+  const icon = (active?: boolean) => (active ? colors.accent : colors.textSecondary)
+
+  return (
+    <View style={styles.actions}>
+      {speaking && pane.ttsState === 'playing' ? (
+        <>
+          <ActionIcon
+            label="暂停"
+            active
+            onPress={() => {
+              getMobileTtsController().pause()
+            }}
+          >
+            <IconPause size={15} color={colors.accent} />
+          </ActionIcon>
+          <ActionIcon
+            label="停止"
+            active
+            onPress={() => {
+              getMobileTtsController().stop()
+              pane.setSpeakingId(null)
+            }}
+          >
+            <IconStop size={15} color={colors.accent} />
+          </ActionIcon>
+        </>
+      ) : speaking && pane.ttsState === 'paused' ? (
+        <>
+          <ActionIcon
+            label="继续播放"
+            active
+            onPress={() => {
+              getMobileTtsController().resume()
+            }}
+          >
+            <IconPlay size={15} color={colors.accent} />
+          </ActionIcon>
+          <ActionIcon
+            label="停止"
+            active
+            onPress={() => {
+              getMobileTtsController().stop()
+              pane.setSpeakingId(null)
+            }}
+          >
+            <IconStop size={15} color={colors.accent} />
+          </ActionIcon>
+        </>
+      ) : (
+        <ActionIcon
+          label="语音播放"
+          onPress={() => pane.speakMessage(msg)}
+          disabled={!hasText || pane.busy}
+        >
+          <IconSpeaker size={15} color={icon()} />
+        </ActionIcon>
+      )}
+
+      <ActionIcon
+        label={pane.copiedId === msg.id ? '已复制' : '复制'}
+        active={pane.copiedId === msg.id}
+        onPress={() => void pane.copyMessage(msg)}
+        disabled={!hasText}
+      >
+        <IconCopy size={15} color={icon(pane.copiedId === msg.id)} />
+      </ActionIcon>
+
+      <ActionIcon
+        label={translating ? '翻译中…' : translationVisible ? '隐藏译文' : '翻译'}
+        active={translating || translationVisible}
+        onPress={() => void pane.translateMessage(msg)}
+        disabled={!hasText || translating || pane.busy}
+      >
+        <IconTranslate size={15} color={icon(translating || translationVisible)} />
+      </ActionIcon>
+
+      <ActionIcon
+        label="重新生成"
+        onPress={() => void pane.regenerateAssistant(msg.id)}
+        disabled={!hasText || pane.busy}
+      >
+        <IconRefresh size={15} color={icon()} />
+      </ActionIcon>
+
+      <ActionIcon label="从此处分叉" onPress={() => pane.forkFromMessage(msg.id)} disabled={pane.busy}>
+        <IconGitFork size={15} color={icon()} />
+      </ActionIcon>
+
+      <ActionIcon
+        label="保存到笔记"
+        onPress={() => pane.saveToNote(msg)}
+        disabled={!hasText}
+      >
+        <IconSaveNote size={15} color={icon()} />
+      </ActionIcon>
+
+      <ActionIcon label="删除" onPress={() => pane.deleteMessage(msg.id)} disabled={pane.busy}>
+        <IconTrashMsg size={15} color={icon()} />
+      </ActionIcon>
     </View>
   )
 }
@@ -1196,14 +577,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     lineHeight: 16,
-  },
-  bubbleText: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 22,
-  },
-  bubbleTextUser: {
-    textAlign: 'right',
   },
   actions: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import {
   type NotesEditorSettings,
 } from './notes-editor-settings'
 import type { NoteItem, NotebookItem } from './notes-storage'
+import { useAutoPublishMobileSync } from '../mobile-sync/useAutoPublishMobileSync'
 import { useLoroNoteSync } from './useLoroNoteSync'
 
 interface Props {
@@ -58,6 +59,7 @@ export function NotesPage({
   onImportAttachment,
 }: Props) {
   const { t } = useI18n()
+  useAutoPublishMobileSync('notes')
   const [editorSettings, setEditorSettings] = useState(loadNotesEditorSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
 

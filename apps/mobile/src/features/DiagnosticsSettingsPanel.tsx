@@ -6,12 +6,11 @@ import { useMobileApp } from '../state/MobileAppContext'
 import {
   countDesktopHostsOnline,
   getMobileSyncBaseUrl,
-  pullAndApplySync,
-  pushNoteChanges,
   resetMobileSyncBaseUrlCache,
   resolveReachableMobileSyncBaseUrl,
 } from '../sync/mobileSync'
 import {
+  Field,
   Section,
   SettingsScroll,
   Toggle,
@@ -24,21 +23,14 @@ export function DiagnosticsSettingsPanel() {
   const { t } = useI18n()
   const {
     syncStatus,
-    setSyncStatus,
-    syncCursor,
-    setSyncCursor,
     desktopHostsOnline,
     setDesktopHostsOnline,
     notes,
-    setNotes,
-    deletedNotes,
-    setDeletedNotes,
     knowledgeMeta,
-    setKnowledgeMeta,
     classroomCourses,
-    setClassroomCourses,
     modulePrefs,
     setModulePrefs,
+    runSync,
   } = useMobileApp()
   const [hubUrl, setHubUrl] = useState(getMobileSyncBaseUrl())
   const [busy, setBusy] = useState(false)
@@ -70,44 +62,13 @@ export function DiagnosticsSettingsPanel() {
     }
   }
 
-  const runSync = async () => {
+  const handleSyncNow = async () => {
     setBusy(true)
     setMessage(null)
-    setSyncStatus('syncing')
     try {
-      if (modulePrefs.notes.syncEnabled) {
-        await pushNoteChanges(notes, syncCursor, { deletedNotes })
-      }
-      const applied = await pullAndApplySync({
-        cursor: syncCursor,
-        notes,
-        deletedNotes,
-        knowledgeMeta,
-        classroomCourses,
-      })
-      setNotes(applied.notes)
-      setDeletedNotes(applied.deletedNotes)
-      setKnowledgeMeta(applied.knowledgeMeta)
-      setClassroomCourses(applied.classroomCourses)
-      setSyncCursor(applied.nextCursor)
-      setDesktopHostsOnline(applied.hostsOnline)
+      const result = await runSync('manual')
       setHubUrl(getMobileSyncBaseUrl())
-      if (applied.knowledgeError) {
-        setSyncStatus('error')
-        setMessage(applied.knowledgeError)
-        return
-      }
-      setSyncStatus('idle')
-      setMessage(
-        t('diagnostics.syncDone', {
-          notes: applied.notes.length,
-          knowledge: applied.knowledgeMeta.length,
-          courses: applied.classroomCourses.length,
-        }),
-      )
-    } catch (error) {
-      setSyncStatus('error')
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(result)
     } finally {
       setBusy(false)
     }
@@ -144,7 +105,7 @@ export function DiagnosticsSettingsPanel() {
             ? t('diagnostics.hostOnline', { count: desktopHostsOnline })
             : t('diagnostics.hostNone')}
         </Text>
-        <Pressable onPress={() => void runSync()} disabled={busy} hitSlop={8}>
+        <Pressable onPress={() => void handleSyncNow()} disabled={busy} hitSlop={8}>
           <Text style={styles.linkText}>{t('diagnostics.syncNow')}</Text>
         </Pressable>
       </Section>
@@ -153,6 +114,18 @@ export function DiagnosticsSettingsPanel() {
         <Text style={styles.meta}>
           {t('diagnostics.hubUrl')}：{hubUrl}
         </Text>
+        <Field
+          label={t('diagnostics.hubToken')}
+          value={modulePrefs.sync.hubToken}
+          onChangeText={(hubToken) =>
+            void persistPrefs({
+              ...modulePrefs,
+              sync: { ...modulePrefs.sync, hubToken },
+            })
+          }
+          placeholder={t('diagnostics.hubTokenPlaceholder')}
+          secureTextEntry
+        />
         <Text style={styles.hint}>{t('diagnostics.hubHint')}</Text>
       </Section>
 

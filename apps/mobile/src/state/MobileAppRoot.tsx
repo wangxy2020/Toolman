@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { loadAuthStore } from '../auth/localAuth'
-import type { MobileAuthSession } from '../auth/types'
 import {
   resolveAgentChatScope,
   type AgentChatScope,
@@ -25,7 +24,12 @@ import { DEFAULT_MODULE_PREFS, loadModulePrefs, saveModulePrefs, type ModulePref
 import { isTopNavModuleId } from '../settings/nav-visibility'
 import { I18nProvider } from '../i18n'
 import { DEFAULT_SETTINGS_TAB, type SettingsTabId } from '../settings/tabs'
-import { pullAndApplySync, pushNoteChanges, countDesktopHostsOnline, type KnowledgeMetaItem } from '../sync/mobileSync'
+import {
+  AUTO_SYNC_INTERVAL_MS,
+  countDesktopHostsOnline,
+  type KnowledgeMetaItem,
+} from '../sync/mobileSync'
+import { loadMobileSyncState } from '../sync/syncState'
 import {
   applyClassroomCoursesToSessions,
   type MobileClassroomCourse,
@@ -38,44 +42,13 @@ import {
   type AuthSession,
   type ChatSession,
   type ModelConfig,
-  type SyncStatus,
 } from './MobileAppContext'
-
-const EMPTY_ACTIVE: Record<AgentChatScope, string | null> = {
-  agent: null,
-  classroom: null,
-  projects: null,
-}
-
-function classroomSessionFromCourse(course: MobileClassroomCourse): ChatSession {
-  return {
-    id: course.id,
-    title: course.courseName || course.title,
-    updatedAt: course.updatedAt,
-    messages: [],
-    agentScope: 'classroom',
-  }
-}
-
-function legacySessionFromSecure(
-  identity: { identityId: string; displayName: string },
-  accessToken: string,
-): MobileAuthSession {
-  return {
-    identityId: identity.identityId,
-    displayName: identity.displayName,
-    accessToken,
-    email: '',
-    phone: null,
-    accountKind: 'email',
-    region: 'cn',
-    subscriptionSku: 'community',
-    entitlements: [],
-    communityRole: null,
-    lastLoginAt: Date.now(),
-    wechatBound: false,
-  }
-}
+import {
+  classroomSessionFromCourse,
+  EMPTY_ACTIVE,
+  legacySessionFromSecure,
+} from './mobileAppBootstrap'
+import { useMobileAppSync } from './useMobileAppSync'
 
 export function MobileAppRoot({ children }: { children: ReactNode }) {
   const [module, setModule] = useState<MobileModuleId>('agent')
@@ -85,9 +58,6 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeSessionByScope, setActiveSessionByScope] =
     useState<Record<AgentChatScope, string | null>>(EMPTY_ACTIVE)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
-  const [syncCursor, setSyncCursor] = useState<string | null>(null)
-  const [desktopHostsOnline, setDesktopHostsOnline] = useState(0)
   const [notebooks, setNotebooks] = useState<MobileNotebook[]>([])
   const [notes, setNotes] = useState<MobileNote[]>([])
   const [deletedNotes, setDeletedNotes] = useState<NoteTombstone[]>([])
@@ -99,6 +69,29 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>(DEFAULT_SETTINGS_TAB)
   const [modulePrefs, setModulePrefs] = useState<ModulePrefs>(DEFAULT_MODULE_PREFS)
   const [ready, setReady] = useState(false)
+
+  const {
+    syncStatus,
+    setSyncStatus,
+    syncCursor,
+    setSyncCursor,
+    desktopHostsOnline,
+    setDesktopHostsOnline,
+    runSync,
+    syncStateRef,
+  } = useMobileAppSync({
+    ready,
+    auth,
+    notes,
+    deletedNotes,
+    knowledgeMeta,
+    classroomCourses,
+    modulePrefs,
+    setNotes,
+    setDeletedNotes,
+    setKnowledgeMeta,
+    setClassroomCourses,
+  })
 
   const agentScope = resolveAgentChatScope(module)
   const activeSessionId = activeSessionByScope[agentScope]
@@ -148,7 +141,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const [authStore, identity, token, model, prefs, chat, notesStore, knowledgeSnap, classroomStore] =
+      const [authStore, identity, token, model, prefs, chat, notesStore, knowledgeSnap, classroomStore, syncState] =
         await Promise.all([
           loadAuthStore(),
           loadIdentity(),
@@ -159,6 +152,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
           loadNotesStore(),
           loadKnowledgeSnapshot(),
           loadClassroomCourses(),
+          loadMobileSyncState(),
         ])
       setModelConfig(model)
       setModulePrefs(prefs)
@@ -174,6 +168,8 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       setActiveNoteId(notesStore.activeNoteId)
       setClassroomCourses(classroomStore)
       classroomCourseIdsRef.current = classroomStore.map((course) => course.id)
+      syncStateRef.current = syncState
+      setSyncCursor(syncState.cursor)
       if (knowledgeSnap) {
         setKnowledgeMeta(
           listedSyncKnowledgeItems(
@@ -248,57 +244,12 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       void countDesktopHostsOnline().then((hostsOnline) => {
         if (!cancelled) setDesktopHostsOnline(hostsOnline)
       })
-    }, 8000)
+    }, AUTO_SYNC_INTERVAL_MS)
     return () => {
       cancelled = true
       clearInterval(timer)
     }
-  }, [ready])
-
-  useEffect(() => {
-    if (!ready || !auth) return
-    let cancelled = false
-    void (async () => {
-      setSyncStatus('syncing')
-      try {
-        const applied = await pullAndApplySync({
-          cursor: syncCursor,
-          notes,
-          deletedNotes,
-          knowledgeMeta,
-          classroomCourses,
-        })
-        if (cancelled) return
-        setNotes(applied.notes)
-        setDeletedNotes(applied.deletedNotes)
-        setKnowledgeMeta(applied.knowledgeMeta)
-        setClassroomCourses(applied.classroomCourses)
-        setSyncCursor(applied.nextCursor)
-        setDesktopHostsOnline(applied.hostsOnline)
-        setSyncStatus(applied.knowledgeError ? 'error' : 'idle')
-      } catch {
-        if (!cancelled) setSyncStatus('error')
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-    // intentional: bootstrap sync once after auth ready (notes already loaded)
-  }, [ready, auth?.identityId])
-
-  // Local auto-save is above; optionally push edits to Sync API when enabled.
-  useEffect(() => {
-    if (!ready || !auth || !modulePrefs.notes.syncEnabled || !modulePrefs.notes.autoSyncOnEdit) {
-      return
-    }
-    if (notes.length === 0 && deletedNotes.length === 0) return
-    const timer = setTimeout(() => {
-      void pushNoteChanges(notes, syncCursor, { deletedNotes }).catch(() => {
-        // Keep local copy; surface status only on manual sync.
-      })
-    }, 1200)
-    return () => clearTimeout(timer)
-  }, [ready, auth?.identityId, notes, deletedNotes, modulePrefs.notes.syncEnabled, modulePrefs.notes.autoSyncOnEdit])
+  }, [ready, setDesktopHostsOnline])
 
   const prefsRef = useRef(modulePrefs)
   prefsRef.current = modulePrefs
@@ -354,6 +305,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       setSettingsTab,
       modulePrefs,
       setModulePrefs,
+      runSync,
     }),
     [
       module,
@@ -368,8 +320,11 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       renameSession,
       removeSession,
       syncStatus,
+      setSyncStatus,
       syncCursor,
+      setSyncCursor,
       desktopHostsOnline,
+      setDesktopHostsOnline,
       notebooks,
       notes,
       deletedNotes,
@@ -379,6 +334,7 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
       showSettings,
       settingsTab,
       modulePrefs,
+      runSync,
     ],
   )
 

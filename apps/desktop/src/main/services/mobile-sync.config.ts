@@ -2,15 +2,20 @@
  * Persisted preferences for desktop ↔ mobile Sync Hub / agent host.
  * Env `TOOLMAN_MOBILE_*` still overrides when set (CI / forced enable).
  */
+import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import { z } from 'zod'
 
 const MobileSyncPreferencesSchema = z.object({
-  syncEnabled: z.boolean().default(false),
-  agentHostEnabled: z.boolean().default(false),
-  classroomSyncEnabled: z.boolean().default(false),
+  syncEnabled: z.boolean().default(true),
+  agentHostEnabled: z.boolean().default(true),
+  classroomSyncEnabled: z.boolean().default(true),
+  /** When false, Hub binds 127.0.0.1 only. */
+  lanAccessEnabled: z.boolean().default(false),
+  /** Pairing token required by Sync Hub APIs (except `/health`). */
+  hubToken: z.string().min(16).optional(),
   /** Optional override; empty → default port 17890. */
   port: z.number().int().positive().optional(),
 })
@@ -18,9 +23,10 @@ const MobileSyncPreferencesSchema = z.object({
 export type MobileSyncPreferences = z.infer<typeof MobileSyncPreferencesSchema>
 
 const DEFAULT_PREFS: MobileSyncPreferences = {
-  syncEnabled: false,
-  agentHostEnabled: false,
-  classroomSyncEnabled: false,
+  syncEnabled: true,
+  agentHostEnabled: true,
+  classroomSyncEnabled: true,
+  lanAccessEnabled: false,
 }
 
 function getConfigPath(): string {
@@ -81,6 +87,35 @@ export function setClassroomSyncPreferenceEnabled(enabled: boolean): MobileSyncP
     classroomSyncEnabled: enabled,
     ...(enabled ? { syncEnabled: true } : {}),
   })
+}
+
+export function isMobileSyncLanAccessEnabled(): boolean {
+  const env = envTriState('TOOLMAN_MOBILE_SYNC_LAN')
+  if (env !== null) return env
+  return readMobileSyncPreferences().lanAccessEnabled === true
+}
+
+export function setMobileSyncLanAccessEnabled(enabled: boolean): MobileSyncPreferences {
+  const current = readMobileSyncPreferences()
+  return writeMobileSyncPreferences({
+    ...current,
+    lanAccessEnabled: enabled,
+    ...(enabled ? { syncEnabled: true } : {}),
+  })
+}
+
+export function resolveMobileSyncListenHost(): string {
+  return isMobileSyncLanAccessEnabled() ? '0.0.0.0' : '127.0.0.1'
+}
+
+export function ensureMobileSyncHubToken(): string {
+  const fromEnv = process.env.TOOLMAN_MOBILE_SYNC_TOKEN?.trim()
+  if (fromEnv && fromEnv.length >= 16) return fromEnv
+  const current = readMobileSyncPreferences()
+  if (current.hubToken && current.hubToken.length >= 16) return current.hubToken
+  const hubToken = randomBytes(32).toString('hex')
+  writeMobileSyncPreferences({ ...current, hubToken })
+  return hubToken
 }
 
 export function resolveMobileSyncPort(): number {

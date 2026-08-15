@@ -60,6 +60,9 @@ export function DiagnosticsSettingsPanel() {
             loading={loading}
             onSyncToggle={(enabled) => void setMobileSyncEnabled(enabled)}
             onHostToggle={(enabled) => void setMobileAgentHostEnabled(enabled)}
+            onLanToggle={(enabled) =>
+              void setMobileSyncEnabled(snapshot.mobileSync?.syncEnabled !== false, enabled)
+            }
           />
           <DiagnosticsSettingsHubSection snapshot={snapshot} />
           <DiagnosticsSettingsCommunitySections

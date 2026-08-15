@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import {
   KeyboardAvoidingView,
   Modal,
@@ -11,14 +11,7 @@ import {
   View,
 } from 'react-native'
 import { BUILTIN_SKILLS } from '@toolman/shared'
-import { saveModulePrefs, type AgentPermissionMode, type ModulePrefs } from '../settings/prefs'
-import {
-  getProviderPreset,
-  MOBILE_PROVIDER_PRESETS,
-  normalizeChatBaseUrl,
-  type MobileProviderId,
-} from '../settings/provider-presets'
-import { saveModelConfig } from '../storage/secure'
+import { getProviderPreset, MOBILE_PROVIDER_PRESETS } from '../settings/provider-presets'
 import { useMobileApp } from '../state/MobileAppContext'
 import { colors } from '../theme'
 import {
@@ -27,188 +20,28 @@ import {
   type VoiceTtsEngine,
 } from '../voice'
 import { useSettingsModalSize } from './settingsModalLayout'
-
-type SettingsTab =
-  | 'basic'
-  | 'prompt'
-  | 'permission'
-  | 'tools'
-  | 'skills'
-  | 'knowledge'
-  | 'advanced'
-
-const TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: 'basic', label: '基础设置' },
-  { id: 'prompt', label: '提示词设置' },
-  { id: 'permission', label: '权限模式' },
-  { id: 'tools', label: '工具集成' },
-  { id: 'skills', label: '技能' },
-  { id: 'knowledge', label: '知识库' },
-  { id: 'advanced', label: '高级设置' },
-]
-
-const PERMISSION_MODES: Array<{
-  id: AgentPermissionMode
-  title: string
-  description: string
-  warning?: string
-}> = [
-  { id: 'normal', title: '普通模式', description: '可自由读取文件，编辑或执行命令前会询问。' },
-  { id: 'plan', title: '计划模式', description: '只能读取文件和制定计划，不能编辑文件或执行命令。' },
-  { id: 'auto-edit', title: '自动编辑模式', description: '可自由读取和编辑文件，执行命令前会询问。' },
-  {
-    id: 'full-auto',
-    title: '全自动模式',
-    description: '可执行任何操作，无需询问。请谨慎使用。',
-    warning: '危险：所有工具都会在无审批情况下执行。',
-  },
-]
-
-const MCP_CATALOG: Array<{ id: string; name: string; description: string }> = [
-  { id: 'filesystem', name: 'Filesystem', description: '读写、搜索、编辑与删除本地文件' },
-  { id: 'browser', name: 'Browser', description: 'CDP 浏览器自动化与网页抓取' },
-  { id: 'github', name: 'GitHub', description: '访问 GitHub 仓库与 Issue' },
-  { id: 'sqlite', name: 'SQLite', description: '查询本地 SQLite 数据库' },
-  { id: 'fetch', name: 'Fetch', description: '官方 fetch MCP' },
-  { id: 'memory', name: 'Memory', description: '官方知识图谱记忆 MCP' },
-  { id: 'python', name: 'Python', description: '官方 Python 执行 MCP' },
-  { id: 'brave-search', name: 'Brave Search', description: 'Brave Search 官方 MCP（需 API Key）' },
-  { id: 'docx-mcp-server', name: 'Toolman DOCX MCP', description: 'Word 文档读写、批注、修订与排版' },
-  { id: 'excel-mcp-server', name: 'Toolman Excel MCP', description: 'Excel 无损审核与单元格修改' },
-  { id: 'dify', name: 'Dify Knowledge', description: '检索 Dify 知识库' },
-  { id: 'hub', name: 'Hub', description: '聚合所有 MCP 工具' },
-  { id: 'local-db', name: 'Local-db', description: '访问本地 PostgreSQL 数据库' },
-]
-
-const LANGS = [
-  { id: 'zh', label: '中文' },
-  { id: 'en', label: 'English' },
-] as const
-
-type Draft = {
-  name: string
-  description: string
-  providerId: MobileProviderId
-  model: string
-  autoSpeak: boolean
-  ttsEngine: VoiceTtsEngine
-  ttsVoice: string
-  defaultWebSearch: boolean
-  defaultKb: boolean
-  preferDesktopHost: boolean
-  heartbeatEnabled: boolean
-  heartbeatIntervalMinutes: number
-  translationLanguages: [string, string]
-  systemPrompt: string
-  permissionMode: AgentPermissionMode
-  bashEnabled: boolean
-  mcpServerIds: string[]
-  skillIds: string[]
-  kbIds: string[]
-  temperature: number
-  maxTokens: string
-  sessionRoundLimit: number
-  environmentVariables: string
-}
+import {
+  AGENT_MCP_CATALOG,
+  AGENT_PERMISSION_MODES,
+  AGENT_SETTINGS_TABS,
+  AGENT_TRANSLATION_LANGS,
+  clampAgentTemperature,
+  toggleIdList,
+  useAgentModelOptions,
+  useAgentSettingsModal,
+  type AgentSettingsDraft,
+  type AgentSettingsTab,
+} from './useAgentSettingsModal'
 
 type Props = {
   visible: boolean
   onClose: () => void
 }
 
-function draftFromState(
-  prefs: ModulePrefs['agent'],
-  providerId: string,
-  model: string,
-): Draft {
-  return {
-    name: prefs.name,
-    description: prefs.description,
-    providerId: (providerId as MobileProviderId) || 'deepseek',
-    model,
-    autoSpeak: prefs.autoSpeak,
-    ttsEngine: prefs.ttsEngine,
-    ttsVoice: prefs.ttsVoice,
-    defaultWebSearch: prefs.defaultWebSearch,
-    defaultKb: prefs.defaultKb,
-    preferDesktopHost: prefs.preferDesktopHost,
-    heartbeatEnabled: prefs.heartbeatEnabled,
-    heartbeatIntervalMinutes: prefs.heartbeatIntervalMinutes,
-    translationLanguages: [prefs.translationLanguages[0] ?? 'zh', prefs.translationLanguages[1] ?? 'en'],
-    systemPrompt: prefs.systemPrompt,
-    permissionMode: prefs.permissionMode,
-    bashEnabled: prefs.bashEnabled,
-    mcpServerIds: [...prefs.mcpServerIds],
-    skillIds: [...prefs.skillIds],
-    kbIds: [...prefs.kbIds],
-    temperature: prefs.temperature,
-    maxTokens: prefs.maxTokens,
-    sessionRoundLimit: prefs.sessionRoundLimit,
-    environmentVariables: prefs.environmentVariables,
-  }
-}
-
 export function AgentSettingsModal({ visible, onClose }: Props) {
   const { width: dialogWidth, height: dialogHeight } = useSettingsModalSize()
-  const { modelConfig, setModelConfig, modulePrefs, setModulePrefs } = useMobileApp()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
-  const [draft, setDraft] = useState<Draft | null>(null)
-
-  useEffect(() => {
-    if (!visible) return
-    setActiveTab('basic')
-    setDraft(draftFromState(modulePrefs.agent, modelConfig.providerId, modelConfig.model))
-  }, [visible])
-
-  const titleName = draft?.name.trim() || '智能体'
-
-  const updateDraft = (patch: Partial<Draft>) => {
-    setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
-  }
-
-  const handleSave = async () => {
-    if (!draft) return
-    const name = draft.name.trim() || '智能体'
-    const preset = getProviderPreset(draft.providerId)
-    const nextModel = {
-      ...modelConfig,
-      providerId: draft.providerId,
-      model: draft.model.trim() || preset.defaultModel,
-      baseUrl: normalizeChatBaseUrl(modelConfig.baseUrl, draft.providerId),
-    }
-    const nextPrefs: ModulePrefs = {
-      ...modulePrefs,
-      agent: {
-        ...modulePrefs.agent,
-        name,
-        description: draft.description.trim(),
-        autoSpeak: draft.autoSpeak,
-        ttsEngine: draft.ttsEngine,
-        ttsVoice: resolveCuratedEdgeTtsVoice(draft.ttsVoice),
-        defaultWebSearch: draft.defaultWebSearch,
-        defaultKb: draft.defaultKb,
-        preferDesktopHost: draft.preferDesktopHost,
-        heartbeatEnabled: draft.heartbeatEnabled,
-        heartbeatIntervalMinutes: Math.max(1, Number(draft.heartbeatIntervalMinutes) || 30),
-        translationLanguages: draft.translationLanguages,
-        systemPrompt: draft.systemPrompt,
-        permissionMode: draft.permissionMode,
-        bashEnabled: draft.bashEnabled,
-        mcpServerIds: draft.mcpServerIds,
-        skillIds: draft.skillIds,
-        kbIds: draft.kbIds,
-        temperature: draft.temperature,
-        maxTokens: draft.maxTokens.trim(),
-        sessionRoundLimit: Math.max(1, Number(draft.sessionRoundLimit) || 100),
-        environmentVariables: draft.environmentVariables,
-      },
-    }
-    await saveModelConfig(nextModel)
-    setModelConfig(nextModel)
-    setModulePrefs(nextPrefs)
-    await saveModulePrefs(nextPrefs)
-    onClose()
-  }
+  const { activeTab, setActiveTab, draft, titleName, updateDraft, handleSave } =
+    useAgentSettingsModal(visible, onClose)
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -236,7 +69,7 @@ export function AgentSettingsModal({ visible, onClose }: Props) {
 
             <View style={styles.body}>
               <View style={styles.nav}>
-                {TABS.map((tab) => {
+                {AGENT_SETTINGS_TABS.map((tab) => {
                   const active = activeTab === tab.id
                   return (
                     <Pressable
@@ -281,17 +114,13 @@ export function AgentSettingsModal({ visible, onClose }: Props) {
 }
 
 function TabBody(props: {
-  tab: SettingsTab
-  draft: Draft
-  updateDraft: (patch: Partial<Draft>) => void
+  tab: AgentSettingsTab
+  draft: AgentSettingsDraft
+  updateDraft: (patch: Partial<AgentSettingsDraft>) => void
 }) {
   const { tab, draft, updateDraft } = props
   const { knowledgeMeta } = useMobileApp()
-  const preset = getProviderPreset(draft.providerId)
-  const modelOptions = useMemo(() => {
-    const ids = new Set([draft.model, ...preset.suggestedModels].filter(Boolean))
-    return Array.from(ids)
-  }, [draft.model, preset.suggestedModels])
+  const { preset, modelOptions } = useAgentModelOptions(draft)
 
   if (tab === 'prompt') {
     return (
@@ -309,13 +138,13 @@ function TabBody(props: {
   }
 
   if (tab === 'permission') {
-    const effective = PERMISSION_MODES.find((item) => item.id === draft.permissionMode)?.title
-    return (
-      <View style={styles.form}>
-        <Text style={styles.sectionTitle}>权限模式</Text>
-        <Text style={styles.hint}>当前生效：{effective}</Text>
-        <View style={styles.permGrid}>
-          {PERMISSION_MODES.map((mode) => {
+        const effective = AGENT_PERMISSION_MODES.find((item) => item.id === draft.permissionMode)?.title
+        return (
+          <View style={styles.form}>
+            <Text style={styles.sectionTitle}>权限模式</Text>
+            <Text style={styles.hint}>当前生效：{effective}</Text>
+            <View style={styles.permGrid}>
+              {AGENT_PERMISSION_MODES.map((mode) => {
             const selected = draft.permissionMode === mode.id
             return (
               <Pressable
@@ -347,7 +176,7 @@ function TabBody(props: {
         />
         <Text style={[styles.sectionTitle, styles.sectionSpaced]}>MCP 服务器</Text>
         <Text style={styles.hint}>移动端可保存挂载选择；实际连接由桌面端运行。</Text>
-        {MCP_CATALOG.map((server) => (
+        {AGENT_MCP_CATALOG.map((server) => (
           <ToggleRow
             key={server.id}
             label={server.name}
@@ -355,9 +184,7 @@ function TabBody(props: {
             value={draft.mcpServerIds.includes(server.id)}
             onChange={(enabled) =>
               updateDraft({
-                mcpServerIds: enabled
-                  ? [...new Set([...draft.mcpServerIds, server.id])]
-                  : draft.mcpServerIds.filter((id) => id !== server.id),
+                mcpServerIds: toggleIdList(draft.mcpServerIds, server.id, enabled),
               })
             }
           />
@@ -378,9 +205,7 @@ function TabBody(props: {
             value={draft.skillIds.includes(skill.id)}
             onChange={(enabled) =>
               updateDraft({
-                skillIds: enabled
-                  ? [...new Set([...draft.skillIds, skill.id])]
-                  : draft.skillIds.filter((id) => id !== skill.id),
+                skillIds: toggleIdList(draft.skillIds, skill.id, enabled),
               })
             }
           />
@@ -402,14 +227,12 @@ function TabBody(props: {
               label={item.name}
               hint={`${item.documentCount} 篇文档`}
               value={draft.kbIds.includes(item.id)}
-              onChange={(enabled) =>
-                updateDraft({
-                  kbIds: enabled
-                    ? [...new Set([...draft.kbIds, item.id])]
-                    : draft.kbIds.filter((id) => id !== item.id),
-                  defaultKb: enabled ? true : draft.defaultKb,
-                })
-              }
+            onChange={(enabled) =>
+              updateDraft({
+                kbIds: toggleIdList(draft.kbIds, item.id, enabled),
+                defaultKb: enabled ? true : draft.defaultKb,
+              })
+            }
             />
           ))
         )}
@@ -428,8 +251,7 @@ function TabBody(props: {
             keyboardType="decimal-pad"
             value={String(draft.temperature)}
             onChangeText={(value) => {
-              const next = Number(value)
-              updateDraft({ temperature: Number.isFinite(next) ? Math.min(2, Math.max(0, next)) : 0 })
+              updateDraft({ temperature: clampAgentTemperature(value) })
             }}
           />
           <Text style={styles.unit}>{draft.temperature.toFixed(1)}</Text>
@@ -583,7 +405,7 @@ function TabBody(props: {
           <View style={styles.flex}>
             <ChoiceList
               value={draft.translationLanguages[0]}
-              options={LANGS.map((item) => ({ id: item.id, label: item.label }))}
+              options={AGENT_TRANSLATION_LANGS.map((item) => ({ id: item.id, label: item.label }))}
               onChange={(id) => updateDraft({ translationLanguages: [id, draft.translationLanguages[1]] })}
             />
           </View>
@@ -591,7 +413,7 @@ function TabBody(props: {
           <View style={styles.flex}>
             <ChoiceList
               value={draft.translationLanguages[1]}
-              options={LANGS.map((item) => ({ id: item.id, label: item.label }))}
+              options={AGENT_TRANSLATION_LANGS.map((item) => ({ id: item.id, label: item.label }))}
               onChange={(id) => updateDraft({ translationLanguages: [draft.translationLanguages[0], id] })}
             />
           </View>

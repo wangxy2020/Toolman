@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,9 +9,28 @@ import {
   View,
 } from 'react-native'
 import { IconPlus, IconRefresh } from '../icons/composer-icons'
+import {
+  IconComment,
+  IconDownload,
+  IconFlag,
+  IconKnowledge,
+  IconMcp,
+  IconMessageBoard,
+  IconNews,
+  IconShare,
+  IconSkill,
+  IconStar,
+  IconTaskList,
+  IconThumbDown,
+  IconThumbUp,
+  IconWorkflow,
+} from '../icons/community-icons'
 import { colors } from '../theme'
 import { COMMUNITY_ACTION_LABELS } from './communitySidebar'
-import type { CommunityListItem } from './communityHubClient'
+import type { CommunityCardIconKind, CommunityListItem } from './communityHubClient'
+import { formatCommunityCount, sortCommunityItems } from './communityListFormat'
+
+export { sortCommunityItems }
 
 export function CommunityPanelHeader(props: {
   title: string
@@ -104,57 +124,138 @@ export function CommunityListCard(props: {
 }) {
   const { item } = props
   return (
-    <View style={[uiStyles.listItem, props.selected ? uiStyles.listItemSelected : null]}>
+    <View style={uiStyles.listItem}>
       <Pressable
         onPress={props.onPress}
-        style={({ pressed }) => [uiStyles.fileCard, pressed ? uiStyles.fileCardPressed : null]}
+        style={({ pressed }) => [
+          uiStyles.fileCard,
+          props.selected ? uiStyles.fileCardSelected : null,
+          pressed ? uiStyles.fileCardPressed : null,
+        ]}
       >
+        <CommunityListCoverIcon
+          coverUrl={item.coverUrl}
+          iconKind={item.iconKind}
+          alt={item.title}
+        />
         <View style={uiStyles.fileCardMain}>
-          <Text style={uiStyles.fileCardTitle} numberOfLines={2}>
+          <Text style={uiStyles.fileCardTitle} numberOfLines={1}>
             {item.title}
           </Text>
-          {item.infoRows.length > 0 ? (
-            <View style={uiStyles.infoList}>
-              {item.infoRows.map((row) => (
-                <View key={`${row.label}-${row.value}`} style={uiStyles.infoRow}>
-                  <Text style={uiStyles.infoLabel}>{row.label}</Text>
-                  <Text style={uiStyles.infoValue} numberOfLines={1}>
-                    {row.value}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-          {item.description ? (
-            <Text style={uiStyles.fileCardDesc} numberOfLines={3}>
-              {item.description}
+          {item.meta ? (
+            <Text style={uiStyles.fileCardMeta} numberOfLines={1}>
+              {item.meta}
             </Text>
           ) : null}
+          <Text
+            style={[uiStyles.fileCardDesc, item.description ? null : uiStyles.fileCardDescEmpty]}
+            numberOfLines={2}
+          >
+            {item.description || ' '}
+          </Text>
         </View>
       </Pressable>
-      <View style={uiStyles.actionRow}>
-        <ActionChip label={COMMUNITY_ACTION_LABELS.like} count={item.likeCount} />
-        <ActionChip label={COMMUNITY_ACTION_LABELS.comment} count={item.commentCount} />
-        <ActionChip label={COMMUNITY_ACTION_LABELS.dislike} count={item.dislikeCount} />
-        <ActionChip label={COMMUNITY_ACTION_LABELS.favorite} count={item.favoriteCount} />
-        <ActionChip label={COMMUNITY_ACTION_LABELS.share} />
-        {props.showInstall ? (
-          <ActionChip label={COMMUNITY_ACTION_LABELS.install} count={item.installCount} />
-        ) : null}
-        <ActionChip label={COMMUNITY_ACTION_LABELS.report} />
+      <View
+        style={[uiStyles.actionBar, props.selected ? uiStyles.actionBarSelected : null]}
+        pointerEvents="none"
+        accessibilityRole="text"
+        accessibilityLabel="互动数据只读，请在桌面端操作"
+      >
+        <View style={uiStyles.actionBarStart}>
+          <Text style={uiStyles.actionBarReadonly}>只读</Text>
+          {props.showInstall ? (
+            <ActionIcon
+              label={COMMUNITY_ACTION_LABELS.install}
+              count={item.installCount}
+              icon={<IconDownload size={14} color={colors.textSecondary} />}
+            />
+          ) : null}
+        </View>
+        <View style={uiStyles.actionBarMain}>
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.like}
+            count={item.likeCount}
+            icon={<IconThumbUp size={14} color={colors.textSecondary} />}
+          />
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.comment}
+            count={item.commentCount}
+            icon={<IconComment size={14} color={colors.textSecondary} />}
+          />
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.dislike}
+            count={item.dislikeCount}
+            icon={<IconThumbDown size={14} color={colors.textSecondary} />}
+          />
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.favorite}
+            count={item.favoriteCount}
+            icon={<IconStar size={14} color={colors.textSecondary} />}
+          />
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.share}
+            icon={<IconShare size={14} color={colors.textSecondary} />}
+          />
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.report}
+            icon={<IconFlag size={14} color={colors.textSecondary} />}
+          />
+        </View>
       </View>
     </View>
   )
 }
 
-function ActionChip(props: { label: string; count?: number }) {
-  const text =
-    typeof props.count === 'number' && props.count > 0
-      ? `${props.label} ${props.count}`
-      : props.label
+function CommunityListCoverIcon(props: {
+  coverUrl?: string | null
+  iconKind: CommunityCardIconKind
+  alt: string
+}) {
+  const [failed, setFailed] = useState(false)
+  const showCover = Boolean(props.coverUrl) && !failed
   return (
-    <View style={uiStyles.actionChip}>
-      <Text style={uiStyles.actionChipText}>{text}</Text>
+    <View style={[uiStyles.fileCardIcon, showCover ? uiStyles.fileCardIconCover : null]}>
+      {showCover ? (
+        <Image
+          source={{ uri: props.coverUrl! }}
+          accessibilityLabel={props.alt}
+          style={uiStyles.fileCardCover}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <CommunityKindIcon kind={props.iconKind} />
+      )}
+    </View>
+  )
+}
+
+function CommunityKindIcon({ kind }: { kind: CommunityCardIconKind }) {
+  const color = colors.textSecondary
+  switch (kind) {
+    case 'messages':
+      return <IconMessageBoard size={18} color={color} />
+    case 'news':
+      return <IconNews size={18} color={color} />
+    case 'tasks':
+      return <IconTaskList size={18} color={color} />
+    case 'mcp':
+      return <IconMcp size={18} color={color} />
+    case 'skill':
+      return <IconSkill size={18} color={color} />
+    case 'workflow':
+      return <IconWorkflow size={18} color={color} />
+    default:
+      return <IconKnowledge size={18} color={color} />
+  }
+}
+
+function ActionIcon(props: { label: string; count?: number; icon: ReactNode }) {
+  return (
+    <View style={uiStyles.actionIcon} accessibilityLabel={props.label}>
+      {props.icon}
+      {props.count != null ? (
+        <Text style={uiStyles.actionCount}>{formatCommunityCount(props.count)}</Text>
+      ) : null}
     </View>
   )
 }
@@ -216,14 +317,6 @@ export function CommunityCategoryChips<T extends string>(props: {
       })}
     </ScrollView>
   )
-}
-
-export function sortCommunityItems(items: CommunityListItem[]): CommunityListItem[] {
-  return [...items].sort((a, b) => {
-    const byTime = b.createdAt - a.createdAt
-    if (byTime !== 0) return byTime
-    return a.title.localeCompare(b.title, 'zh-CN')
-  })
 }
 
 export function CommunityEmptyState(props: { hint: string; meta?: string }) {
@@ -315,74 +408,117 @@ export const uiStyles = StyleSheet.create({
   },
   listItem: {
     marginHorizontal: 20,
-    marginVertical: 6,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  listItemSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
+    marginBottom: 10,
   },
   fileCard: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    backgroundColor: colors.surface,
+  },
+  fileCardSelected: {
+    borderColor: colors.accent,
   },
   fileCardPressed: {
-    opacity: 0.9,
+    backgroundColor: colors.hover,
+  },
+  fileCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.hover,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
+  fileCardIconCover: {
+    padding: 0,
+  },
+  fileCardCover: {
+    width: 36,
+    height: 36,
   },
   fileCardMain: {
-    gap: 4,
+    flex: 1,
+    minWidth: 0,
   },
   fileCardTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '400',
     color: colors.text,
   },
-  infoList: {
-    marginTop: 6,
-    gap: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoLabel: {
-    width: 64,
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    minWidth: 0,
+  fileCardMeta: {
+    marginTop: 4,
     fontSize: 12,
-    color: colors.text,
+    color: colors.textSecondary,
   },
   fileCardDesc: {
-    marginTop: 6,
+    marginTop: 4,
+    minHeight: 36,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
     color: colors.textSecondary,
   },
-  actionRow: {
+  fileCardDescEmpty: {
+    opacity: 0,
+  },
+  actionBarReadonly: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginRight: 4,
+  },
+  actionBar: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    opacity: 0.72,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 0,
+    borderColor: colors.border,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    backgroundColor: '#f4f4f5',
+    marginTop: -1,
+  },
+  actionBarSelected: {
+    borderColor: colors.accent,
+  },
+  actionBarStart: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionBarMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     flexWrap: 'wrap',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
   },
-  actionChip: {
+  actionIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: colors.hover,
   },
-  actionChipText: {
-    fontSize: 11,
+  actionCount: {
+    minWidth: 8,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   emptyBody: {

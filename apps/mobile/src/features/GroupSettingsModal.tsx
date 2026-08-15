@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react'
 import {
   KeyboardAvoidingView,
   Modal,
@@ -10,63 +9,32 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import type { GroupWorkspace } from '../storage/groupChat'
 import { colors } from '../theme'
 import { useSettingsModalSize } from './settingsModalLayout'
+import {
+  GROUP_SETTINGS_TABS,
+  useGroupSettingsModal,
+  type GroupSettingsModalProps,
+} from './useGroupSettingsModal'
 
-type SettingsTab = 'general' | 'storage' | 'danger'
+export type { GroupSettingsModalProps }
 
-const TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: 'general', label: '基本信息' },
-  { id: 'storage', label: '存储与同步' },
-  { id: 'danger', label: '危险操作' },
-]
-
-type Props = {
-  visible: boolean
-  group: GroupWorkspace | null
-  memberCount: number
-  onClose: () => void
-  onSave: (input: { name: string; description?: string }) => void
-  onDissolve: () => void
-}
-
-export function GroupSettingsModal(props: Props) {
-  const { visible, group, memberCount, onClose, onSave, onDissolve } = props
+export function GroupSettingsModal(props: GroupSettingsModalProps) {
+  const { visible, group, memberCount, onClose, onDissolve } = props
   const { width: dialogWidth, height: dialogHeight } = useSettingsModalSize()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [confirmDissolve, setConfirmDissolve] = useState(false)
-
-  useEffect(() => {
-    if (!visible || !group) return
-    setActiveTab('general')
-    setName(group.name)
-    setDescription(group.description ?? '')
-    setError(null)
-    setConfirmDissolve(false)
-  }, [visible, group])
-
-  const isDirty = useMemo(() => {
-    if (!group) return false
-    return name.trim() !== group.name || description.trim() !== (group.description ?? '')
-  }, [description, group, name])
-
-  const handleSave = () => {
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      setError('群组名称不能为空')
-      setActiveTab('general')
-      return
-    }
-    setError(null)
-    onSave({
-      name: trimmedName,
-      description: description.trim() || undefined,
-    })
-  }
+  const {
+    activeTab,
+    setActiveTab,
+    name,
+    changeName,
+    description,
+    setDescription,
+    error,
+    confirmDissolve,
+    setConfirmDissolve,
+    isDirty,
+    handleSave,
+  } = useGroupSettingsModal(props)
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -99,7 +67,7 @@ export function GroupSettingsModal(props: Props) {
             <>
               <View style={styles.body}>
                 <View style={styles.nav}>
-                  {TABS.map((tab) => {
+                  {GROUP_SETTINGS_TABS.map((tab) => {
                     const active = activeTab === tab.id
                     return (
                       <Pressable
@@ -133,10 +101,7 @@ export function GroupSettingsModal(props: Props) {
                       <TextInput
                         style={styles.input}
                         value={name}
-                        onChangeText={(value) => {
-                          setName(value)
-                          setError(null)
-                        }}
+                        onChangeText={changeName}
                         placeholder="输入群组名称"
                         placeholderTextColor={colors.textSecondary}
                         maxLength={100}

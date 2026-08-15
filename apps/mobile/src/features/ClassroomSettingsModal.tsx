@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react'
 import {
   KeyboardAvoidingView,
   Modal,
@@ -10,81 +9,28 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import {
-  formatSyllabusMarkdown,
-  getAssistantLibPreset,
-  listSelectableAssistantLibPresets,
-  type AssistantLibPresetDef,
-  type AssistantLibPresetId,
-} from '@toolman/shared'
-import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
+import { type AssistantLibPresetDef } from '@toolman/shared'
 import { getMobileSyncBaseUrl } from '../sync/mobileSync'
 import { colors } from '../theme'
 import {
   CURATED_EDGE_TTS_VOICES,
-  DEFAULT_EDGE_TTS_VOICE,
-  resolveCuratedEdgeTtsVoice,
   type VoiceTtsEngine,
 } from '../voice'
 import {
   CLASSROOM_PRESET_DESCS,
   CLASSROOM_PRESET_LABELS,
-  classroomCourseLabel,
 } from './classroomSidebar'
 import { MessageMarkdown } from './MessageMarkdown'
 import { useSettingsModalSize } from './settingsModalLayout'
+import {
+  CLASSROOM_SETTINGS_TABS,
+  classroomPresetPatch,
+  useClassroomSettingsModal,
+  type ClassroomSettingsDraft,
+  type ClassroomSettingsModalProps,
+} from './useClassroomSettingsModal'
 
-type SettingsTab = 'basic' | 'teaching' | 'lesson' | 'sync' | 'danger'
-
-const TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: 'basic', label: '基础设置' },
-  { id: 'teaching', label: '教学模式' },
-  { id: 'lesson', label: '教学大纲' },
-  { id: 'sync', label: '同步设置' },
-  { id: 'danger', label: '危险操作' },
-]
-
-type Draft = {
-  courseName: string
-  presetId: AssistantLibPresetId
-  refereeEnabled: boolean
-  customSystemPrompt: string
-  lessonPlan: string
-  autoSpeak: boolean
-  ttsEngine: VoiceTtsEngine
-  ttsVoice: string
-}
-
-type Props = {
-  visible: boolean
-  course: MobileClassroomCourse | null
-  knowledgeNames: string[]
-  classroomSyncEnabled: boolean
-  desktopHostsOnline: number
-  onClassroomSyncEnabledChange: (enabled: boolean) => void
-  onClose: () => void
-  onSave: (course: MobileClassroomCourse) => void
-  onDelete: (courseId: string) => void
-}
-
-function draftFromCourse(course: MobileClassroomCourse): Draft {
-  const presetId = (course.presetId as AssistantLibPresetId) || 'socratic-tutor'
-  const preset = getAssistantLibPreset(presetId)
-  return {
-    courseName: course.courseName || course.title,
-    presetId,
-    refereeEnabled: course.refereeEnabled,
-    customSystemPrompt: course.customSystemPrompt.trim() || preset?.systemPrompt || '',
-    lessonPlan:
-      course.lessonPlan.trim() ||
-      (course.syllabus ? formatSyllabusMarkdown(course.syllabus) : ''),
-    autoSpeak: course.autoSpeak !== false,
-    ttsEngine: course.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
-    ttsVoice: resolveCuratedEdgeTtsVoice(course.ttsVoice || DEFAULT_EDGE_TTS_VOICE),
-  }
-}
-
-export function ClassroomSettingsModal(props: Props) {
+export function ClassroomSettingsModal(props: ClassroomSettingsModalProps) {
   const {
     visible,
     course,
@@ -93,90 +39,28 @@ export function ClassroomSettingsModal(props: Props) {
     desktopHostsOnline,
     onClassroomSyncEnabledChange,
     onClose,
-    onSave,
-    onDelete,
   } = props
   const { width: dialogWidth, height: dialogHeight } = useSettingsModalSize()
-  const presets = useMemo(
-    () => listSelectableAssistantLibPresets().filter((preset) => preset.id !== 'toolman-guide'),
-    [],
-  )
-  const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
-  const [draft, setDraft] = useState<Draft | null>(null)
-  const [editingDoc, setEditingDoc] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-
-  useEffect(() => {
-    if (!visible) return
-    setActiveTab('basic')
-    setDraft(course ? draftFromCourse(course) : null)
-    setEditingDoc(false)
-    setError(null)
-    setConfirmDelete(false)
-  }, [visible, course?.id])
-
-  const courseLabel = course ? classroomCourseLabel(course) : '课程'
-  const isGuide = course?.isGuideClassroom === true
-  const isDefault = course?.isDefaultClassroom === true
-  const shownPresets = presets
-  const selectedPreset = draft
-    ? (shownPresets.find((item) => item.id === draft.presetId) ?? null)
-    : null
-
-  const updateDraft = (patch: Partial<Draft>) => {
-    setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
-    setError(null)
-  }
-
-  const handleSave = () => {
-    if (!course || !draft) return
-    const courseName = isDefault ? '默认课程' : draft.courseName.trim()
-    if (!courseName) {
-      setError('请填写课程名称')
-      setActiveTab('basic')
-      return
-    }
-    const preset = getAssistantLibPreset(draft.presetId)
-    onSave({
-      ...course,
-      title: courseName,
-      courseName,
-      updatedAt: Date.now(),
-      presetId: draft.presetId,
-      teachingMode: preset?.teachingMode ?? course.teachingMode,
-      refereeEnabled: draft.refereeEnabled,
-      customSystemPrompt: draft.customSystemPrompt,
-      lessonPlan: draft.lessonPlan,
-      autoSpeak: draft.autoSpeak,
-      ttsEngine: draft.ttsEngine,
-      ttsVoice:
-        draft.ttsEngine === 'edge'
-          ? resolveCuratedEdgeTtsVoice(draft.ttsVoice)
-          : draft.ttsVoice,
-    })
-  }
-
-  const handleDelete = () => {
-    if (!course) return
-    if (isDefault) {
-      setError('默认课程不可删除。')
-      setConfirmDelete(false)
-      return
-    }
-    if (isGuide) {
-      setError('Toolman使用说明课程不可删除。')
-      setConfirmDelete(false)
-      return
-    }
-    onDelete(course.id)
-  }
-
-  const docValue = activeTab === 'teaching' ? (draft?.customSystemPrompt ?? '') : (draft?.lessonPlan ?? '')
-  const setDocValue = (value: string) => {
-    if (activeTab === 'teaching') updateDraft({ customSystemPrompt: value })
-    else updateDraft({ lessonPlan: value })
-  }
+  const {
+    activeTab,
+    selectTab,
+    draft,
+    editingDoc,
+    setEditingDoc,
+    error,
+    confirmDelete,
+    setConfirmDelete,
+    courseLabel,
+    isGuide,
+    isDefault,
+    shownPresets,
+    selectedPreset,
+    updateDraft,
+    handleSave,
+    handleDelete,
+    docValue,
+    setDocValue,
+  } = useClassroomSettingsModal(props)
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -210,15 +94,12 @@ export function ClassroomSettingsModal(props: Props) {
               <>
                 <View style={styles.body}>
                   <View style={styles.nav}>
-                    {TABS.map((tab) => {
+                    {CLASSROOM_SETTINGS_TABS.map((tab) => {
                       const active = activeTab === tab.id
                       return (
                         <Pressable
                           key={tab.id}
-                          onPress={() => {
-                            setActiveTab(tab.id)
-                            setEditingDoc(false)
-                          }}
+                          onPress={() => selectTab(tab.id)}
                           style={[styles.navItem, active ? styles.navItemActive : null]}
                         >
                           <Text style={[styles.navItemText, active ? styles.navItemTextActive : null]}>
@@ -348,12 +229,12 @@ export function ClassroomSettingsModal(props: Props) {
 }
 
 function BasicTab(props: {
-  draft: Draft
+  draft: ClassroomSettingsDraft
   isDefault: boolean
   shownPresets: AssistantLibPresetDef[]
   selectedPreset: AssistantLibPresetDef | null | undefined
   knowledgeNames: string[]
-  updateDraft: (patch: Partial<Draft>) => void
+  updateDraft: (patch: Partial<ClassroomSettingsDraft>) => void
 }) {
   const { draft, isDefault, shownPresets, selectedPreset, knowledgeNames, updateDraft } = props
   return (
@@ -374,18 +255,7 @@ function BasicTab(props: {
           return (
             <Pressable
               key={preset.id}
-              onPress={() => {
-                const next = getAssistantLibPreset(preset.id)
-                const previous = getAssistantLibPreset(draft.presetId)
-                const usingDefault =
-                  !draft.customSystemPrompt.trim() ||
-                  draft.customSystemPrompt.trim() === (previous?.systemPrompt.trim() ?? '')
-                updateDraft({
-                  presetId: preset.id,
-                  refereeEnabled: next?.refereeEnabled ?? draft.refereeEnabled,
-                  ...(usingDefault ? { customSystemPrompt: next?.systemPrompt ?? '' } : {}),
-                })
-              }}
+              onPress={() => updateDraft(classroomPresetPatch(draft, preset.id))}
               style={[styles.presetRow, active ? styles.presetRowActive : null]}
             >
               <Text style={[styles.presetName, active ? styles.presetNameActive : null]}>
@@ -505,7 +375,7 @@ function SyncTab(props: {
       </Text>
       <ToggleRow
         title="接收桌面端课程"
-        hint="打开后在「立即同步」时拉取课堂内容"
+        hint="打开应用时同步一次，之后约每 3 分钟检查有变化的课程；手机上课、停课会回写到桌面"
         value={props.classroomSyncEnabled}
         onChange={props.onClassroomSyncEnabledChange}
       />

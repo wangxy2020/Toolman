@@ -1,5 +1,6 @@
 import {
   KnowledgeSnapshotSchema,
+  SYNC_HUB_TOKEN_HEADER,
   type AgentHostInvokeChunk,
   type AgentHostInvokeInput,
   type AgentHostPresence,
@@ -13,6 +14,8 @@ import {
 export type SyncClientOptions = {
   baseUrl: string
   getAccessToken: () => Promise<string | null>
+  /** Desktop Sync Hub pairing token. Sent as `X-Toolman-Sync-Token` and Bearer. */
+  getSyncToken?: () => Promise<string | null>
   getIdentityId?: () => Promise<string | null>
   fetchImpl?: typeof fetch
 }
@@ -20,16 +23,20 @@ export type SyncClientOptions = {
 async function authHeaders(
   getAccessToken: () => Promise<string | null>,
   getIdentityId?: () => Promise<string | null>,
+  getSyncToken?: () => Promise<string | null>,
 ): Promise<HeadersInit> {
-  const [token, identityId] = await Promise.all([
+  const [accessToken, identityId, syncToken] = await Promise.all([
     getAccessToken(),
     getIdentityId ? getIdentityId() : Promise.resolve(null),
+    getSyncToken ? getSyncToken() : Promise.resolve(null),
   ])
+  const token = syncToken || accessToken
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
   }
   if (token) headers.Authorization = `Bearer ${token}`
+  if (syncToken) headers[SYNC_HUB_TOKEN_HEADER || 'X-Toolman-Sync-Token'] = syncToken
   if (identityId) headers['X-Community-User-Id'] = identityId
   return headers
 }
@@ -63,18 +70,20 @@ async function readJson<T>(res: Response): Promise<T> {
 export class ToolmanSyncClient {
   private readonly baseUrl: string
   private readonly getAccessToken: () => Promise<string | null>
+  private readonly getSyncToken?: () => Promise<string | null>
   private readonly getIdentityId?: () => Promise<string | null>
   private readonly fetchImpl: typeof fetch
 
   constructor(options: SyncClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '')
     this.getAccessToken = options.getAccessToken
+    this.getSyncToken = options.getSyncToken
     this.getIdentityId = options.getIdentityId
     this.fetchImpl = options.fetchImpl ?? defaultFetch
   }
 
   private headers(): Promise<HeadersInit> {
-    return authHeaders(this.getAccessToken, this.getIdentityId)
+    return authHeaders(this.getAccessToken, this.getIdentityId, this.getSyncToken)
   }
 
   private async request(url: string, init: RequestInit): Promise<Response> {
@@ -161,8 +170,10 @@ export class ToolmanSyncClient {
     }
   }
 
-  async exportKnowledgeSnapshot(): Promise<KnowledgeSnapshot> {
-    const res = await this.request(`${this.baseUrl}/api/v1/sync/knowledge/export`, {
+  async exportKnowledgeSnapshot(since?: number): Promise<KnowledgeSnapshot> {
+    const query =
+      typeof since === 'number' && since > 0 ? `?since=${encodeURIComponent(String(since))}` : ''
+    const res = await this.request(`${this.baseUrl}/api/v1/sync/knowledge/export${query}`, {
       method: 'GET',
       headers: await this.headers(),
     })

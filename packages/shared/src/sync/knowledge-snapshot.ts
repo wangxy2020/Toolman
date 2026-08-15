@@ -120,3 +120,28 @@ export function bytesToBase64(bytes: Uint8Array): string {
 export function base64ToBytes(b64: string): Uint8Array {
   return b64ToBytes(b64)
 }
+
+/** Merge an incremental export (full document list, changed bodies only) into a previous snapshot. */
+export function mergeKnowledgeSnapshot(
+  previous: KnowledgeSnapshot | null,
+  incoming: KnowledgeSnapshot,
+): KnowledgeSnapshot {
+  const liveDocIds = new Set(incoming.documents.map((doc) => doc.id))
+  const replacedDocIds = new Set<string>()
+  for (const chunk of incoming.chunks) replacedDocIds.add(chunk.documentId)
+  for (const vector of incoming.vectors) replacedDocIds.add(vector.documentId)
+  for (const file of incoming.files) replacedDocIds.add(file.documentId)
+
+  const keep = <T extends { documentId: string }>(items: T[]): T[] =>
+    items.filter((item) => liveDocIds.has(item.documentId) && !replacedDocIds.has(item.documentId))
+
+  return {
+    schemaVersion: 1,
+    exportedAt: incoming.exportedAt,
+    kbs: incoming.kbs,
+    documents: incoming.documents,
+    chunks: [...keep(previous?.chunks ?? []), ...incoming.chunks],
+    vectors: [...keep(previous?.vectors ?? []), ...incoming.vectors],
+    files: [...keep(previous?.files ?? []), ...incoming.files],
+  }
+}

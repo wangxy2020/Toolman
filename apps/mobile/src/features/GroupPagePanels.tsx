@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { IconPlus } from '../icons/composer-icons'
 import {
@@ -16,6 +16,12 @@ import {
   type GroupPickerGroup,
   type GroupPickerSelection,
 } from './GroupResourcePickerModal'
+import {
+  activeGroupMembers,
+  memberAvatarInitial,
+  memberOnlineLabel,
+} from './groupPagePanelUtils'
+import { useGroupActivityPane, useGroupSharedResourcePane } from './useGroupPagePanels'
 
 export function GroupPanelHeader(props: {
   title: string
@@ -39,7 +45,7 @@ export function GroupMembersPane(props: {
   selfMemberId: string
   onInvite: () => void
 }) {
-  const activeMembers = props.members.filter((member) => member.status === 'active')
+  const activeMembers = activeGroupMembers(props.members)
 
   return (
     <View style={styles.panelRoot}>
@@ -71,7 +77,7 @@ export function GroupMembersPane(props: {
               <View key={member.id} style={styles.memberCard}>
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberAvatarText}>
-                    {(member.displayName.trim().slice(0, 1) || '?').toUpperCase()}
+                    {memberAvatarInitial(member.displayName)}
                   </Text>
                 </View>
                 <View style={styles.memberMeta}>
@@ -95,7 +101,7 @@ export function GroupMembersPane(props: {
                   <Text
                     style={[styles.memberStatus, member.online ? styles.memberStatusOnline : null]}
                   >
-                    {member.online ? (isSelf ? '本机 · 在线' : '在线') : '离线'}
+                    {memberOnlineLabel(member.online, isSelf)}
                   </Text>
                 </View>
               </View>
@@ -116,7 +122,10 @@ export function GroupSharedResourcePane(props: {
   pickerGroups: GroupPickerGroup[]
   onAdd: (selection: GroupPickerSelection[]) => void
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const { pickerOpen, setPickerOpen, hint, handleConfirm } = useGroupSharedResourcePane({
+    kind: props.kind,
+    onAdd: props.onAdd,
+  })
   const count = props.items.length
 
   return (
@@ -158,22 +167,11 @@ export function GroupSharedResourcePane(props: {
       <GroupResourcePickerModal
         visible={pickerOpen}
         title={`选择${props.typeNoun}`}
-        hint={
-          props.kind === 'notes'
-            ? '展开笔记本可查看笔记，勾选笔记本将全选其中笔记，也可单独勾选笔记。'
-            : props.kind === 'knowledge'
-              ? '展开知识库可查看未共享文档，勾选知识库将全选可添加文件，也可单独勾选文档。'
-              : props.kind === 'agents'
-                ? '展开智能体可查看未共享话题，勾选智能体或话题将添加到群组。'
-                : '勾选要添加到群组的工作流。'
-        }
+        hint={hint}
         emptyLabel="暂无可添加的内容"
         groups={props.pickerGroups}
         onClose={() => setPickerOpen(false)}
-        onConfirm={(selection) => {
-          setPickerOpen(false)
-          props.onAdd(selection)
-        }}
+        onConfirm={handleConfirm}
       />
     </View>
   )
@@ -183,16 +181,7 @@ export function GroupActivityPane(props: {
   groupName: string
   events: GroupActivity[]
 }) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const sorted = useMemo(
-    () => [...props.events].sort((a, b) => b.timestamp - a.timestamp || b.seq - a.seq),
-    [props.events],
-  )
+  const { now, sorted } = useGroupActivityPane(props.events)
 
   return (
     <View style={styles.panelRoot}>

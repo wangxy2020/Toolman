@@ -16,7 +16,13 @@ import { colors, shellStyles } from '../theme'
 import { ModulePageStatusBar, ModulePageStatusProvider } from '../features/modulePageStatus'
 import { ModuleOverflowMenu } from './ModuleOverflowMenu'
 
-const STATUS_BAR_MODULES = new Set<MobileModuleId>(['knowledge', 'notes', 'community', 'projects'])
+const STATUS_BAR_MODULES = new Set<MobileModuleId>([
+  'knowledge',
+  'notes',
+  'classroom',
+  'community',
+  'projects',
+])
 
 type Props = {
   left: ReactNode
@@ -178,14 +184,17 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
 }
 
 function MainPane(props: { children: ReactNode; withStatusBar: boolean }) {
-  if (!props.withStatusBar) {
-    return <View style={shellStyles.mainPane}>{props.children}</View>
-  }
   return (
     <ModulePageStatusProvider>
       <View style={shellStyles.mainPane}>
-        <View style={shellStyles.mainPaneBody}>{props.children}</View>
-        <ModulePageStatusBar />
+        {props.withStatusBar ? (
+          <>
+            <View style={shellStyles.mainPaneBody}>{props.children}</View>
+            <ModulePageStatusBar />
+          </>
+        ) : (
+          props.children
+        )}
       </View>
     </ModulePageStatusProvider>
   )

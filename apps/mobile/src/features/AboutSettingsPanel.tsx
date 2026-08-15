@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import {
   Image,
   Linking,
@@ -15,15 +14,13 @@ import {
   ABOUT_LINK_ACTIONS,
   ABOUT_LINK_IDS,
   ABOUT_LINK_LABELS,
-  resolveAboutLinkUrl,
   TOOLMAN_GITHUB_URL,
   TOOLMAN_JOIN_US_QQ,
   TOOLMAN_JOIN_US_QQ_GROUP,
-  type AboutLinkId,
 } from '../settings/about'
 import { colors } from '../theme'
-import { recordProvenanceBeacon } from '../lib/record-provenance-beacon'
 import { SettingsScroll } from './settingsUi'
+import { aboutLinkInteractive, useAboutSettingsPanel } from './useAboutSettingsPanel'
 import appIcon from '../../assets/icon.png'
 import joinUsQr from '../../assets/toolman-qq-group-qr.png'
 
@@ -92,35 +89,15 @@ function OutlineButton(props: {
 }
 
 export function AboutSettingsPanel() {
-  const [joinOpen, setJoinOpen] = useState(false)
-  const [updateBusy, setUpdateBusy] = useState(false)
-  const [updateLabel, setUpdateLabel] = useState('检查更新')
-  const [updateHint, setUpdateHint] = useState<string | null>(null)
-
-  useEffect(() => {
-    recordProvenanceBeacon('app.about.view')
-  }, [])
-
-  const checkUpdate = () => {
-    if (updateBusy) return
-    setUpdateBusy(true)
-    setUpdateLabel('检查中…')
-    setUpdateHint('正在检查更新…')
-    setTimeout(() => {
-      setUpdateBusy(false)
-      setUpdateLabel('已是最新')
-      setUpdateHint('当前已是最新版本。')
-    }, 500)
-  }
-
-  const openLink = (id: AboutLinkId) => {
-    if (id === 'join') {
-      setJoinOpen(true)
-      return
-    }
-    const url = resolveAboutLinkUrl(id)
-    if (url) void Linking.openURL(url)
-  }
+  const {
+    joinOpen,
+    setJoinOpen,
+    updateBusy,
+    updateLabel,
+    updateHint,
+    checkUpdate,
+    openLink,
+  } = useAboutSettingsPanel()
 
   return (
     <SettingsScroll>
@@ -170,9 +147,8 @@ export function AboutSettingsPanel() {
 
       <View style={[styles.card, styles.linksCard]}>
         {ABOUT_LINK_IDS.map((id, index) => {
-          const externalUrl = resolveAboutLinkUrl(id)
           const isJoin = id === 'join'
-          const interactive = isJoin || Boolean(externalUrl)
+          const interactive = aboutLinkInteractive(id)
           return (
             <View key={id} style={[styles.linkRow, index > 0 ? styles.linkRowBorder : null]}>
               <View style={styles.linkLabel}>

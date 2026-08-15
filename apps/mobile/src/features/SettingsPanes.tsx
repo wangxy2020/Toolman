@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   ActivityIndicator,
   Linking,
@@ -6,25 +5,14 @@ import {
   Text,
   View,
 } from 'react-native'
-import { probeModelApi } from '../chat/probeModel'
-import { saveModelConfig } from '../storage/secure'
-import { saveModulePrefs, type ModulePrefs } from '../settings/prefs'
-import {
-  getProviderPreset,
-  MOBILE_PROVIDER_PRESETS,
-  normalizeChatBaseUrl,
-  type MobileProviderId,
-} from '../settings/provider-presets'
-import { sanitizeApiKey } from '../chat/apiHeaders'
+import { MOBILE_PROVIDER_PRESETS } from '../settings/provider-presets'
 import { SETTINGS_TABS, SYSTEM_SETTINGS_SECTIONS, DEFAULT_SYSTEM_SECTION } from '../settings/tabs'
 import { useI18n } from '../i18n'
 import { useMobileApp } from '../state/MobileAppContext'
 import { colors } from '../theme'
-import {
-  CURATED_EDGE_TTS_VOICES,
-  resolveCuratedEdgeTtsVoice,
-} from '../voice'
+import { CURATED_EDGE_TTS_VOICES } from '../voice'
 import { AboutSettingsPanel } from './AboutSettingsPanel'
+import { useAgentSettingsPanel } from './useAgentSettingsPanel'
 import { DiagnosticsSettingsPanel } from './DiagnosticsSettingsPanel'
 import { DisplaySettingsPanel } from './DisplaySettingsPanel'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
@@ -39,14 +27,6 @@ import {
   settingsUiStyles,
 } from './settingsUi'
 import { SidebarGroupLabel, SidebarItem, SidebarList, SidebarShell } from './sidebarUi'
-
-function describeApiKey(raw: string): string {
-  const key = sanitizeApiKey(raw)
-  if (!key) return '未填写'
-  const tail = key.length >= 4 ? key.slice(-4) : key
-  const prefixOk = key.startsWith('sk-')
-  return `长度 ${key.length} · 尾号 ****${tail}${prefixOk ? '' : ' · 警告：DeepSeek Key 通常以 sk- 开头'}`
-}
 
 export function SettingsLeftPane() {
   const { settingsTab, setSettingsTab } = useMobileApp()
@@ -106,67 +86,30 @@ export function SettingsRightPane() {
 }
 
 function AgentSettingsPanel() {
-  const { modelConfig, setModelConfig, modulePrefs, setModulePrefs } = useMobileApp()
-  const [providerId, setProviderId] = useState<MobileProviderId>(
-    (modelConfig.providerId as MobileProviderId) || 'deepseek',
-  )
-  const [baseUrl, setBaseUrl] = useState(modelConfig.baseUrl)
-  const [apiKey, setApiKey] = useState(modelConfig.apiKey)
-  const [model, setModel] = useState(modelConfig.model)
-  const [localModelEnabled, setLocalModelEnabled] = useState(modelConfig.localModelEnabled)
-  const [message, setMessage] = useState<string | null>(null)
-  const [probeBusy, setProbeBusy] = useState(false)
-  const [probeOk, setProbeOk] = useState<boolean | null>(null)
-  const [showApiKey, setShowApiKey] = useState(false)
-  const prefs = modulePrefs.agent
-  const preset = getProviderPreset(providerId)
-
-  const applyProvider = (id: MobileProviderId) => {
-    const next = getProviderPreset(id)
-    setProviderId(id)
-    setBaseUrl(next.defaultBaseUrl)
-    if (next.defaultModel) setModel(next.defaultModel)
-    setProbeOk(null)
-  }
-
-  const buildDraftConfig = () => ({
+  const {
     providerId,
-    baseUrl: normalizeChatBaseUrl(baseUrl.trim(), providerId),
-    apiKey: sanitizeApiKey(apiKey),
-    model: model.trim() || preset.defaultModel,
+    baseUrl,
+    setBaseUrl,
+    apiKey,
+    setApiKey,
+    model,
+    setModel,
     localModelEnabled,
-  })
-
-  const saveModel = async () => {
-    const next = buildDraftConfig()
-    await saveModelConfig(next)
-    setModelConfig(next)
-    setBaseUrl(next.baseUrl)
-    setModel(next.model)
-    setMessage(`已保存 · ${preset.name}`)
-  }
-
-  const runProbe = async () => {
-    setProbeBusy(true)
-    setProbeOk(null)
-    const draft = buildDraftConfig()
-    setMessage(`正在检测…（${describeApiKey(draft.apiKey)}）`)
-    const result = await probeModelApi(draft)
-    setProbeBusy(false)
-    setProbeOk(result.ok)
-    setMessage(
-      result.ok
-        ? result.message
-        : `${result.message}\n当前 Key：${describeApiKey(draft.apiKey)}。若尾号与控制台不一致，请清空后重新粘贴完整密钥并先「保存模型」。`,
-    )
-  }
-
-  const patchPrefs = async (patch: Partial<ModulePrefs['agent']>) => {
-    const next = { ...modulePrefs, agent: { ...prefs, ...patch } }
-    setModulePrefs(next)
-    await saveModulePrefs(next)
-    setMessage('模型服务偏好已保存')
-  }
+    setLocalModelEnabled,
+    message,
+    probeBusy,
+    probeOk,
+    showApiKey,
+    setShowApiKey,
+    prefs,
+    preset,
+    applyProvider,
+    saveModel,
+    runProbe,
+    patchPrefs,
+    apiKeyDescription,
+    patchTtsVoice,
+  } = useAgentSettingsPanel()
 
   return (
     <SettingsScroll>
@@ -203,7 +146,7 @@ function AgentSettingsPanel() {
           secureTextEntry={!showApiKey}
         />
         <View style={styles.keyMetaRow}>
-          <Text style={styles.hint}>{describeApiKey(apiKey)}</Text>
+          <Text style={styles.hint}>{apiKeyDescription}</Text>
           <Pressable onPress={() => setShowApiKey((v) => !v)} hitSlop={8}>
             <Text style={styles.linkText}>{showApiKey ? '隐藏' : '显示'}</Text>
           </Pressable>
@@ -327,9 +270,7 @@ function AgentSettingsPanel() {
                   <Pressable
                     key={item.value}
                     style={[styles.modelChip, active ? styles.modelChipActive : null]}
-                    onPress={() =>
-                      void patchPrefs({ ttsVoice: resolveCuratedEdgeTtsVoice(item.value) })
-                    }
+                    onPress={() => patchTtsVoice(item.value)}
                   >
                     <Text
                       style={[styles.modelChipText, active ? styles.modelChipTextActive : null]}

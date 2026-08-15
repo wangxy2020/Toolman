@@ -5,16 +5,30 @@
 
 import { Platform } from 'react-native'
 import { hostnameOfBaseUrl, isLoopbackHostname } from '@toolman/shared'
+import {
+  formatBoardMessageTitle,
+  formatCommunityDate,
+  formatCommunityDateTime,
+  formatNewsPreview,
+  formatTaskBudget,
+  formatTaskStatusLabel,
+  formatTaskTypeLabel,
+  joinCommunityMeta,
+} from './communityListFormat'
 
-export type CommunityInfoRow = {
-  label: string
-  value: string
-}
+export type CommunityCardIconKind =
+  | 'news'
+  | 'messages'
+  | 'knowledge'
+  | 'mcp'
+  | 'skill'
+  | 'workflow'
+  | 'tasks'
 
 export type CommunityListItem = {
   id: string
   title: string
-  infoRows: CommunityInfoRow[]
+  meta: string
   description: string
   createdAt: number
   likeCount: number
@@ -23,6 +37,7 @@ export type CommunityListItem = {
   commentCount: number
   installCount?: number
   coverUrl?: string | null
+  iconKind: CommunityCardIconKind
 }
 
 export type CommunityNewsSource = {
@@ -182,32 +197,6 @@ function unwrapItems(data: unknown): unknown[] {
   return []
 }
 
-function formatDate(ts: number): string {
-  if (!ts) return ''
-  const d = new Date(ts)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-function infoRows(rows: Array<[string, string]>): CommunityInfoRow[] {
-  return rows
-    .map(([label, value]) => ({ label, value: value.trim() }))
-    .filter((row) => row.value.length > 0)
-}
-
-const TASK_STATUS_LABEL: Record<string, string> = {
-  draft: '草稿',
-  pending_review: '待审核',
-  open: '开放',
-  assigned: '已指派',
-  in_progress: '进行中',
-  delivered: '已交付',
-  completed: '已完成',
-  cancelled: '已取消',
-  rejected: '已拒绝',
-  closed: '已关闭',
-}
-
 function requireUserId(userId?: string | null): string {
   const id = userId?.trim()
   if (!id) throw new Error('请先登录后再发布')
@@ -256,20 +245,19 @@ export async function fetchCommunityNews(
     const publishedAt = asNumber(item.publishedAt, Date.now() - index)
     const title = asString(item.title, '未命名资讯')
     const summary = asString(item.summary)
+    const contentHtml = asString(item.contentHtml)
     return {
       id: asString(item.id, `news-${index}`),
       title,
-      infoRows: infoRows([
-        ['来源', asString(item.sourceTitle)],
-        ['发布日期', formatDate(publishedAt)],
-      ]),
-      description: summary,
+      meta: joinCommunityMeta([asString(item.sourceTitle), formatCommunityDateTime(publishedAt)]),
+      description: formatNewsPreview(contentHtml || summary || title),
       createdAt: publishedAt,
       likeCount: asNumber(item.likeCount),
       dislikeCount: asNumber(item.dislikeCount),
       favoriteCount: asNumber(item.favoriteCount),
       commentCount: asNumber(item.commentCount),
       coverUrl: typeof item.coverUrl === 'string' ? item.coverUrl : null,
+      iconKind: 'news',
     }
   })
 }
@@ -286,20 +274,17 @@ export async function fetchCommunityMessages(
     const createdAt = asNumber(item.createdAt, Date.now() - index)
     const author = asRecord(item.author)
     const authorName = asString(author?.displayName, '匿名')
-    const title = body.trim().slice(0, 48) || '留言'
     return {
       id: asString(item.id, `msg-${index}`),
-      title,
-      infoRows: infoRows([
-        ['作者', authorName],
-        ['发布日期', formatDate(createdAt)],
-      ]),
-      description: body,
+      title: formatBoardMessageTitle(body),
+      meta: joinCommunityMeta([authorName, formatCommunityDateTime(createdAt)]),
+      description: formatNewsPreview(body),
       createdAt,
       likeCount: asNumber(item.likeCount),
       dislikeCount: asNumber(item.dislikeCount),
       favoriteCount: asNumber(item.favoriteCount),
       commentCount: asNumber(item.commentCount ?? item.replyCount),
+      iconKind: 'messages',
     }
   })
 }
@@ -320,20 +305,24 @@ export async function fetchCommunityResources(
     const title = asString(item.title, '未命名资源')
     const description = asString(item.description)
     const createdAt = asNumber(item.createdAt, Date.now() - index)
+    const updatedAt = asNumber(item.updatedAt, createdAt)
     const author = asRecord(item.author) ?? asRecord(item.publisher)
     const authorName = asString(author?.displayName, '社区')
     const version = asString(item.version)
     const installCount = asNumber(item.installCount ?? item.downloadCount)
+    const iconKind: CommunityCardIconKind =
+      resourceType === 'mcp' || resourceType === 'skill' || resourceType === 'workflow'
+        ? resourceType
+        : 'knowledge'
     return {
       id: asString(item.id, `res-${index}`),
       title,
-      infoRows: infoRows([
-        ['作者', authorName],
-        ['版本', version ? `v${version}` : ''],
-        ['发布日期', formatDate(createdAt)],
-        ['安装', installCount > 0 ? String(installCount) : ''],
+      meta: joinCommunityMeta([
+        version ? `v${version}` : '',
+        authorName,
+        formatCommunityDate(updatedAt),
       ]),
-      description,
+      description: formatNewsPreview(description),
       createdAt,
       likeCount: asNumber(item.likeCount),
       dislikeCount: asNumber(item.dislikeCount),
@@ -341,6 +330,7 @@ export async function fetchCommunityResources(
       commentCount: asNumber(item.commentCount),
       installCount,
       coverUrl: typeof item.coverUrl === 'string' ? item.coverUrl : null,
+      iconKind,
     }
   })
 }
@@ -358,20 +348,24 @@ export async function fetchCommunityTasks(
     const createdAt = asNumber(item.createdAt, Date.now() - index)
     const status = asString(item.status, 'open')
     const taskType = asString(item.taskType ?? item.type, '')
+    const publisher = asRecord(item.publisher) ?? asRecord(item.author)
     return {
       id: asString(item.id, `task-${index}`),
       title,
-      infoRows: infoRows([
-        ['类型', taskType],
-        ['状态', TASK_STATUS_LABEL[status] ?? status],
-        ['发布日期', formatDate(createdAt)],
+      meta: joinCommunityMeta([
+        formatTaskStatusLabel(status),
+        formatTaskTypeLabel(taskType),
+        formatTaskBudget(asNumber(item.budgetAmount), asString(item.budgetCurrency, 'CNY')),
+        asString(publisher?.displayName),
+        formatCommunityDateTime(createdAt),
       ]),
-      description,
+      description: formatNewsPreview(description),
       createdAt,
       likeCount: asNumber(item.likeCount),
       dislikeCount: asNumber(item.dislikeCount),
       favoriteCount: asNumber(item.favoriteCount),
       commentCount: asNumber(item.commentCount),
+      iconKind: 'tasks',
     }
   })
 }

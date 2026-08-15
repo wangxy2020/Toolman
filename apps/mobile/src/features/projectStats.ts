@@ -41,8 +41,49 @@ export type ProjectStatsModel = {
   emptyHint: string
 }
 
-function interpolate(template: string, value: string | number): string {
+export function interpolate(template: string, value: string | number): string {
   return template.replaceAll('{{value}}', String(value))
+}
+
+export function chunkRows<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = []
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size))
+  return rows
+}
+
+export function projectSettlementRate(project: EpcProjectRecord): number {
+  return project.contractValue > 0 ? (project.settledAmount / project.contractValue) * 100 : 0
+}
+
+export function projectOverviewFlags(project: EpcProjectRecord): {
+  warnPending: boolean
+  warnStatus: boolean
+} {
+  return {
+    warnPending: project.pendingAmount > 10_000_000,
+    warnStatus: project.status !== 'normal',
+  }
+}
+
+export function projectOverviewProgressCopy(
+  variant: 'cost' | 'progress',
+  progressPercent: number,
+  settlementRate: number,
+): { left: string; right: string } {
+  return {
+    left:
+      variant === 'cost'
+        ? interpolate('进度 {{value}}%', progressPercent)
+        : interpolate('计划 {{value}}%', progressPercent),
+    right:
+      variant === 'cost'
+        ? interpolate('结算率 {{value}}%', settlementRate.toFixed(0))
+        : interpolate('完成率 {{value}}%', settlementRate.toFixed(0)),
+  }
+}
+
+export function clampProgressPercent(value: number): number {
+  return Math.min(100, Math.max(0, value))
 }
 
 function kpi(

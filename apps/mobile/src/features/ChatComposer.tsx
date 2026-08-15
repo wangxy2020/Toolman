@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import {
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -26,45 +25,11 @@ import {
 } from '../icons/composer-icons'
 import { colors } from '../theme'
 import { useI18n } from '../i18n'
-import { loadQuickPhrases, type QuickPhrase } from '../storage/quickPhrases'
 import { GROUP_CHAT_EMOJIS } from './group-chat-emojis'
 import { GROUP_SLASH_COMMANDS } from './group-slash-commands'
+import { useChatComposer, type ChatComposerProps } from './useChatComposer'
 
-const FIELD_MIN = 56
-const FIELD_MAX = 200
-const FIELD_DEFAULT = 72
-
-export type ChatComposerProps = {
-  value: string
-  onChangeText: (text: string) => void
-  onSend: () => void
-  onStop?: () => void
-  busy?: boolean
-  disabled?: boolean
-  placeholder?: string
-  /** `agent` (default) shows agent tools; `group` is member chat (no LLM tools). */
-  mode?: 'agent' | 'group'
-  webSearchEnabled?: boolean
-  onToggleWebSearch?: () => void
-  kbEnabled?: boolean
-  onToggleKb?: () => void
-  useDesktopHost?: boolean
-  onToggleDesktopHost?: () => void
-  onNewTopic?: () => void
-  classLive?: boolean
-  onToggleClass?: () => void
-  classToggleDisabled?: boolean
-  onClear?: () => void
-  /** Clear own messages on this page (group `/clear`). */
-  onClearChat?: () => void
-  /** Fired when emoji / slash popup open state changes (for outside-dismiss overlays). */
-  onPopupOpenChange?: (open: boolean) => void
-  /** Increment to force-close open popups (outside tap from parent). */
-  popupDismissToken?: number
-  /** Outer horizontal padding; defaults match stream / desktop gutter. */
-  paddingLeft?: number
-  paddingRight?: number
-}
+export type { ChatComposerProps }
 
 const DEFAULT_PAD_X = 12
 
@@ -92,112 +57,40 @@ export function ChatComposer({
   paddingLeft = DEFAULT_PAD_X,
   paddingRight = DEFAULT_PAD_X,
 }: ChatComposerProps) {
-  const [fieldHeight, setFieldHeight] = useState(FIELD_DEFAULT)
-  const [emojiOpen, setEmojiOpen] = useState(false)
-  const [slashOpen, setSlashOpen] = useState(false)
-  const [phraseOpen, setPhraseOpen] = useState(false)
-  const [phrases, setPhrases] = useState<QuickPhrase[]>([])
-  const heightRef = useRef(FIELD_DEFAULT)
-  const startYRef = useRef(0)
-  const startHRef = useRef(FIELD_DEFAULT)
-  const rootRef = useRef<View>(null)
-  const canSend = Boolean(value.trim()) && !disabled && !busy
-  const canSendRef = useRef(canSend)
-  canSendRef.current = canSend
-  const isGroup = mode === 'group'
   const { t } = useI18n()
-  const popupOpen = emojiOpen || slashOpen || phraseOpen
-
-  const closePopups = () => {
-    setEmojiOpen(false)
-    setSlashOpen(false)
-    setPhraseOpen(false)
-  }
-
-  useEffect(() => {
-    if (!phraseOpen) return
-    void loadQuickPhrases().then(setPhrases)
-  }, [phraseOpen])
-
-  useEffect(() => {
-    onPopupOpenChange?.(popupOpen)
-  }, [onPopupOpenChange, popupOpen])
-
-  // Only dismiss-token changes should close popups; closePopups is stable here.
-  useEffect(() => {
-    if (popupDismissToken > 0) closePopups()
-  }, [popupDismissToken])
-
-  useEffect(() => {
-    if (!popupOpen) return
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closePopups()
-    }
-
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const onPointerDown = (event: PointerEvent) => {
-        const node = rootRef.current as unknown as { contains?: (n: Node) => boolean } | null
-        const target = event.target as Node
-        if (node?.contains?.(target)) return
-        closePopups()
-      }
-      document.addEventListener('pointerdown', onPointerDown, true)
-      document.addEventListener('keydown', onKeyDown)
-      return () => {
-        document.removeEventListener('pointerdown', onPointerDown, true)
-        document.removeEventListener('keydown', onKeyDown)
-      }
-    }
-
-    if (typeof document !== 'undefined') {
-      document.addEventListener('keydown', onKeyDown)
-      return () => document.removeEventListener('keydown', onKeyDown)
-    }
-    return undefined
-  }, [popupOpen])
-
-  const resizePan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        startYRef.current = e.nativeEvent.pageY
-        startHRef.current = heightRef.current
-      },
-      onPanResponderMove: (e) => {
-        const delta = startYRef.current - e.nativeEvent.pageY
-        const next = Math.min(FIELD_MAX, Math.max(FIELD_MIN, startHRef.current + delta))
-        heightRef.current = next
-        setFieldHeight(next)
-      },
-    }),
-  ).current
+  const {
+    fieldHeight,
+    emojiOpen,
+    slashOpen,
+    phraseOpen,
+    phrases,
+    rootRef,
+    canSend,
+    isGroup,
+    closePopups,
+    trySend,
+    insertEmoji,
+    applySlashCommand,
+    applyPhrase,
+    toggleEmoji,
+    toggleSlash,
+    togglePhrase,
+    resizePan,
+  } = useChatComposer({
+    value,
+    onChangeText,
+    onSend,
+    busy,
+    disabled,
+    mode,
+    onClearChat,
+    onPopupOpenChange,
+    popupDismissToken,
+  })
 
   const iconColor = colors.text
   const activeColor = colors.accent
   const mutedColor = colors.textSecondary
-
-  const trySend = () => {
-    if (!canSendRef.current) return
-    onSend()
-  }
-
-  const insertEmoji = (emoji: string) => {
-    onChangeText(`${value}${emoji}`)
-    setEmojiOpen(false)
-  }
-
-  const applySlashCommand = (command: (typeof GROUP_SLASH_COMMANDS)[number]) => {
-    setSlashOpen(false)
-    if (command.action === 'clear') {
-      onClearChat?.()
-      return
-    }
-    if (command.insert) {
-      onChangeText(command.insert)
-    }
-  }
 
   return (
     <View style={[styles.area, { paddingLeft, paddingRight }]} ref={rootRef} collapsable={false}>
@@ -217,11 +110,7 @@ export function ChatComposer({
             <ToolBtn
               label="表情"
               active={emojiOpen}
-              onPress={() => {
-                setSlashOpen(false)
-                setPhraseOpen(false)
-                setEmojiOpen((open) => !open)
-              }}
+              onPress={toggleEmoji}
               disabled={disabled || busy}
             >
               <IconEmoji size={18} color={emojiOpen ? activeColor : iconColor} />
@@ -257,15 +146,7 @@ export function ChatComposer({
           <ToolBtn
             label="斜杠命令"
             active={isGroup && slashOpen}
-            onPress={
-              isGroup
-                ? () => {
-                    setEmojiOpen(false)
-                    setPhraseOpen(false)
-                    setSlashOpen((open) => !open)
-                  }
-                : undefined
-            }
+            onPress={isGroup ? toggleSlash : undefined}
             disabled={!isGroup || disabled || busy}
           >
             <IconTerminalPrompt
@@ -276,11 +157,7 @@ export function ChatComposer({
           <ToolBtn
             label={t('chat.quickPhrases')}
             active={phraseOpen}
-            onPress={() => {
-              setEmojiOpen(false)
-              setSlashOpen(false)
-              setPhraseOpen((open) => !open)
-            }}
+            onPress={togglePhrase}
             disabled={disabled || busy}
           >
             <IconShortcut size={18} color={phraseOpen ? activeColor : iconColor} />
@@ -376,10 +253,7 @@ export function ChatComposer({
                 phrases.map((item) => (
                   <Pressable
                     key={item.id}
-                    onPress={() => {
-                      onChangeText(value ? `${value}${item.text}` : item.text)
-                      setPhraseOpen(false)
-                    }}
+                    onPress={() => applyPhrase(item.text)}
                     style={({ pressed }) => [
                       styles.slashRow,
                       pressed ? styles.slashRowActive : null,

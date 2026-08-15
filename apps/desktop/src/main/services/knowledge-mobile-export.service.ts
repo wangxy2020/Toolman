@@ -39,7 +39,9 @@ function vectorBackendForKb(embedConfigJson: string | undefined): 'file' | 'lanc
   }
 }
 
-export async function exportMobileKnowledgeSnapshot(): Promise<KnowledgeSnapshot> {
+export async function exportMobileKnowledgeSnapshot(options?: {
+  since?: number
+}): Promise<KnowledgeSnapshot> {
   const workspaceId = requireWorkspaceId()
   const vectorsDir = join(getWorkspaceKnowledgeDir(workspaceId), 'vectors')
   const kbs = listKnowledgeBases({ workspaceId }).filter((kb) => isSyncKnowledgeBaseKind(kb.kind))
@@ -65,18 +67,24 @@ export async function exportMobileKnowledgeSnapshot(): Promise<KnowledgeSnapshot
     })
 
     const listed = await listKnowledgeDocuments({ kbId: kb.id, workspaceId })
+    const since = options?.since
+    const needsBodies = listed.some(
+      (doc) => since == null || since <= 0 || doc.updatedAt > since,
+    )
     const row = kbRepo.findRowById(kb.id, workspaceId) ?? kbRepo.findRowByIdOnly(kb.id)
     const backend = vectorBackendForKb(row?.embedConfigJson)
 
     let store: Awaited<ReturnType<typeof openKbVectorStore>> | null = null
-    try {
-      store = await openKbVectorStore({ vectorsDir, kbId: kb.id, backend })
-    } catch (error) {
-      logStructured(
-        'mobile-sync',
-        'warn',
-        `open vector store failed for kb ${kb.id}: ${String(error)}`,
-      )
+    if (needsBodies) {
+      try {
+        store = await openKbVectorStore({ vectorsDir, kbId: kb.id, backend })
+      } catch (error) {
+        logStructured(
+          'mobile-sync',
+          'warn',
+          `open vector store failed for kb ${kb.id}: ${String(error)}`,
+        )
+      }
     }
 
     for (const doc of listed) {
@@ -91,6 +99,9 @@ export async function exportMobileKnowledgeSnapshot(): Promise<KnowledgeSnapshot
         sizeBytes: doc.sizeBytes ?? null,
         updatedAt: doc.updatedAt,
       })
+
+      const includeBody = since == null || since <= 0 || doc.updatedAt > since
+      if (!includeBody) continue
 
       for (const chunk of docRepo.listChunkRowsByDocument(doc.id, kb.id)) {
         chunks.push({

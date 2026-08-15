@@ -1,78 +1,19 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import type { ClassroomStudyRecord, CourseSyllabusChapter, SocraticState } from '@toolman/shared'
-import { useMobileApp } from '../state/MobileAppContext'
+import type { ClassroomStudyRecord } from '@toolman/shared'
 import { colors } from '../theme'
-import { classroomCourseLabel, resolveClassroomSettingsCourse } from './classroomSidebar'
 import { GroupPanelHeader } from './GroupPagePanels'
-
-function formatDate(timestamp: number): string {
-  try {
-    return new Date(timestamp).toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return String(timestamp)
-  }
-}
-
-function formatDuration(start: number, end: number): string {
-  const minutes = Math.max(1, Math.round(Math.max(0, end - start) / 60000))
-  if (minutes < 60) return `${minutes} 分钟`
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  if (rest === 0) return `${hours} 小时`
-  return `${hours} 小时 ${rest} 分钟`
-}
-
-function chapterStatusLabel(status: CourseSyllabusChapter['status']): string {
-  if (status === 'passed') return '已通过'
-  if (status === 'in_progress') return '学习中'
-  if (status === 'generating') return '生成中'
-  if (status === 'pending') return '待生成'
-  return '未学习'
-}
-
-function collectTags(state: SocraticState | null | undefined): Array<{
-  key: string
-  label: string
-  tone: 'mastered' | 'confirmed' | 'assumption' | 'misconception' | 'stuck'
-}> {
-  if (!state) return []
-  const tags: Array<{ key: string; label: string; tone: 'mastered' | 'confirmed' | 'assumption' | 'misconception' | 'stuck' }> =
-    []
-  for (const item of state.mastered) tags.push({ key: `m:${item}`, label: item, tone: 'mastered' })
-  for (const item of state.confirmedClaims) {
-    tags.push({ key: `c:${item}`, label: item, tone: 'confirmed' })
-  }
-  for (const item of state.openAssumptions) {
-    tags.push({ key: `a:${item}`, label: item, tone: 'assumption' })
-  }
-  for (const item of state.misconceptions) {
-    tags.push({ key: `x:${item}`, label: item, tone: 'misconception' })
-  }
-  for (const item of state.stuckPoints) tags.push({ key: `s:${item}`, label: item, tone: 'stuck' })
-  return tags
-}
+import {
+  chapterStatusLabel,
+  formatClassroomRecordDate,
+  formatClassroomRecordDuration,
+  studyRecordTags,
+  type ClassroomRecordTag,
+} from './classroomRecordsUtils'
+import { useClassroomRecordsPane } from './useClassroomRecordsPane'
 
 export function ClassroomRecordsPane(props: { onOpenClassroom: () => void }) {
-  const { classroomCourses, sessions, activeSessionId } = useMobileApp()
-  const course = resolveClassroomSettingsCourse(classroomCourses, null, activeSessionId)
-  const session = sessions.find((item) => item.id === course?.id) ?? null
-  const chapters = course?.syllabus?.chapters ?? []
-  const studyRecords = [...(course?.studyRecords ?? [])].reverse()
-  const courseTitle = course ? classroomCourseLabel(course) : '课程'
-  const passedChapters = chapters.filter((item) => item.status === 'passed').length
-  const liveTags = collectTags(course?.socraticState)
-  const statCards = [
-    { key: 'lessons', label: '上课次数', value: studyRecords.length },
-    { key: 'passed', label: '已通过', value: passedChapters },
-    { key: 'chapters', label: '章节', value: chapters.length },
-    { key: 'qa', label: '问答轮次', value: session?.messages.length ?? 0 },
-  ]
+  const { course, chapters, studyRecords, courseTitle, liveTags, statCards } =
+    useClassroomRecordsPane()
 
   return (
     <View style={styles.root}>
@@ -161,25 +102,11 @@ export function ClassroomRecordsPane(props: { onOpenClassroom: () => void }) {
 function StudyRecordCard(props: {
   record: ClassroomStudyRecord
   index: number
-  fallbackTags: ReturnType<typeof collectTags>
+  fallbackTags: ClassroomRecordTag[]
 }) {
   const { record, index, fallbackTags } = props
   const end = record.endedAt ?? Date.now()
-  const tags =
-    record.mastered.length > 0 || record.stuckPoints.length > 0
-      ? [
-          ...record.mastered.map((item) => ({
-            key: `m:${item}`,
-            label: item,
-            tone: 'mastered' as const,
-          })),
-          ...record.stuckPoints.map((item) => ({
-            key: `s:${item}`,
-            label: item,
-            tone: 'stuck' as const,
-          })),
-        ]
-      : fallbackTags
+  const tags = studyRecordTags(record, fallbackTags)
 
   return (
     <View style={styles.feedCard}>
@@ -188,17 +115,17 @@ function StudyRecordCard(props: {
           <View style={styles.lessonDot} />
           <Text style={styles.lessonTagText}>第 {index} 次上课</Text>
         </View>
-        <Text style={styles.feedDate}>{formatDate(record.startedAt)}</Text>
+        <Text style={styles.feedDate}>{formatClassroomRecordDate(record.startedAt)}</Text>
       </View>
       <Text style={styles.feedTitle}>{record.chapterTitle?.trim() || '未指定章节'}</Text>
       <View style={styles.metaList}>
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>学习日期</Text>
-          <Text style={styles.metaValue}>{formatDate(record.startedAt)}</Text>
+          <Text style={styles.metaValue}>{formatClassroomRecordDate(record.startedAt)}</Text>
         </View>
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>时长</Text>
-          <Text style={styles.metaValue}>{formatDuration(record.startedAt, end)}</Text>
+          <Text style={styles.metaValue}>{formatClassroomRecordDuration(record.startedAt, end)}</Text>
         </View>
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>问答</Text>

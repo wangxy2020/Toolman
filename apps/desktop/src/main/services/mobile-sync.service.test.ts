@@ -20,8 +20,8 @@ describe('mobile-sync.service', () => {
     delete process.env.TOOLMAN_MOBILE_AGENT_HOST
   })
 
-  it('is disabled by default and no-ops push', async () => {
-    delete process.env.TOOLMAN_MOBILE_SYNC
+  it('no-ops push when explicitly disabled', async () => {
+    process.env.TOOLMAN_MOBILE_SYNC = '0'
     expect(isMobileSyncEnabled()).toBe(false)
     await expect(
       pushDesktopSyncChanges([
@@ -50,8 +50,8 @@ describe('mobile-agent-host.service', () => {
   })
 
   it('returns null presence when host flag off', () => {
-    delete process.env.TOOLMAN_MOBILE_SYNC
-    delete process.env.TOOLMAN_MOBILE_AGENT_HOST
+    process.env.TOOLMAN_MOBILE_SYNC = '0'
+    process.env.TOOLMAN_MOBILE_AGENT_HOST = '0'
     configureMobileAgentHost({ identityId: 'id', deviceId: 'dev' })
     expect(buildMobileAgentHostPresence()).toBeNull()
   })

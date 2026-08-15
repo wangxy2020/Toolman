@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme'
+import { useGroupResourcePickerModal } from './useGroupResourcePickerModal'
 
 export type GroupPickerItem = {
   id: string
@@ -29,93 +29,18 @@ type Props = {
   onConfirm: (selection: GroupPickerSelection[]) => void
 }
 
-function itemKey(groupId: string, itemId: string): string {
-  return `${groupId}::${itemId}`
-}
-
 export function GroupResourcePickerModal(props: Props) {
-  const { visible, title, hint, emptyLabel, groups, onClose, onConfirm } = props
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
-  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(() => new Set())
-
-  const reset = () => {
-    setExpandedIds(new Set())
-    setSelectedKeys(new Set())
-    setSelectedGroupIds(new Set())
-  }
-
-  const handleClose = () => {
-    reset()
-    onClose()
-  }
-
-  const selectionCount = useMemo(() => {
-    let count = selectedKeys.size
-    for (const group of groups) {
-      if (group.items.length === 0 && selectedGroupIds.has(group.id)) count += 1
-    }
-    return count
-  }, [groups, selectedGroupIds, selectedKeys])
-
-  const toggleExpanded = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleGroup = (group: GroupPickerGroup) => {
-    if (group.items.length === 0) {
-      setSelectedGroupIds((prev) => {
-        const next = new Set(prev)
-        if (next.has(group.id)) next.delete(group.id)
-        else next.add(group.id)
-        return next
-      })
-      return
-    }
-    const keys = group.items.map((item) => itemKey(group.id, item.id))
-    const allSelected = keys.every((key) => selectedKeys.has(key))
-    setSelectedKeys((prev) => {
-      const next = new Set(prev)
-      for (const key of keys) {
-        if (allSelected) next.delete(key)
-        else next.add(key)
-      }
-      return next
-    })
-  }
-
-  const toggleItem = (groupId: string, itemId: string) => {
-    const key = itemKey(groupId, itemId)
-    setSelectedKeys((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  const handleConfirm = () => {
-    const selection: GroupPickerSelection[] = []
-    for (const group of groups) {
-      if (group.items.length === 0) {
-        if (selectedGroupIds.has(group.id)) {
-          selection.push({ groupId: group.id, groupName: group.name, items: [] })
-        }
-        continue
-      }
-      const items = group.items.filter((item) => selectedKeys.has(itemKey(group.id, item.id)))
-      if (items.length > 0) {
-        selection.push({ groupId: group.id, groupName: group.name, items })
-      }
-    }
-    reset()
-    onConfirm(selection)
-  }
+  const { visible, title, hint, emptyLabel, groups } = props
+  const {
+    selectionCount,
+    handleClose,
+    toggleExpanded,
+    toggleGroup,
+    toggleItem,
+    handleConfirm,
+    groupState,
+    isItemChecked,
+  } = useGroupResourcePickerModal(props)
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
@@ -139,15 +64,7 @@ export function GroupResourcePickerModal(props: Props) {
               <Text style={styles.empty}>{emptyLabel}</Text>
             ) : (
               groups.map((group) => {
-                const open = expandedIds.has(group.id)
-                const groupChecked =
-                  group.items.length === 0
-                    ? selectedGroupIds.has(group.id)
-                    : group.items.every((item) => selectedKeys.has(itemKey(group.id, item.id)))
-                const partial =
-                  group.items.length > 0 &&
-                  !groupChecked &&
-                  group.items.some((item) => selectedKeys.has(itemKey(group.id, item.id)))
+                const { open, groupChecked, partial } = groupState(group)
                 return (
                   <View key={group.id} style={styles.group}>
                     <View style={styles.groupRow}>
@@ -178,7 +95,7 @@ export function GroupResourcePickerModal(props: Props) {
                     </View>
                     {open && group.items.length > 0
                       ? group.items.map((item) => {
-                          const checked = selectedKeys.has(itemKey(group.id, item.id))
+                          const checked = isItemChecked(group.id, item.id)
                           return (
                             <Pressable
                               key={item.id}

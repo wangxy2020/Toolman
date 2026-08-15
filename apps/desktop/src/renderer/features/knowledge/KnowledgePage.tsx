@@ -14,12 +14,14 @@ import {
   KnowledgePageSectionContent,
   KnowledgePageSharedFilePanel,
 } from './KnowledgePageSectionContent'
+import { useAutoPublishMobileSync } from '../mobile-sync/useAutoPublishMobileSync'
 import { useKnowledgePage } from './useKnowledgePage'
 import type { KnowledgePageProps } from './knowledge-page-types'
 
 export type { KnowledgePageProps } from './knowledge-page-types'
 
 export function KnowledgePage(props: KnowledgePageProps) {
+  useAutoPublishMobileSync('knowledge')
   const {
     workspaceId,
     section,

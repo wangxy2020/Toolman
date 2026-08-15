@@ -20,6 +20,11 @@ const STORE_PATH = () => join(app.getPath('userData'), 'mobile-sync', 'changelog
 let memory: SyncStoreFile = { seq: 0, changes: [] }
 let loaded = false
 
+export function resetMobileSyncStoreForTests(): void {
+  memory = { seq: 0, changes: [] }
+  loaded = false
+}
+
 function load(): SyncStoreFile {
   if (loaded) return memory
   loaded = true
@@ -47,48 +52,67 @@ function persist(): void {
   writeFileSync(path, JSON.stringify(memory), 'utf8')
 }
 
-function upsertChange(change: SyncChange): void {
+function samePayload(left: SyncChange['payload'], right: SyncChange['payload']): boolean {
+  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {})
+}
+
+function upsertChange(change: SyncChange): boolean {
   const store = load()
-  store.seq += 1
-  const next: StoredChange = { ...change, seq: store.seq }
   const idx = store.changes.findIndex(
     (item) => item.entityKind === change.entityKind && item.entityId === change.entityId,
   )
   if (idx >= 0) {
     const prev = store.changes[idx]!
-    if (prev.updatedAt > change.updatedAt) {
-      // Keep newer local; still advance seq so pullers refresh cursor.
-      store.changes[idx] = { ...prev, seq: store.seq }
-    } else {
-      store.changes[idx] = next
+    if (prev.updatedAt > change.updatedAt) return false
+    if (
+      prev.updatedAt === change.updatedAt &&
+      prev.op === change.op &&
+      samePayload(prev.payload, change.payload)
+    ) {
+      return false
     }
-  } else {
-    store.changes.push(next)
   }
+  store.seq += 1
+  const next: StoredChange = { ...change, seq: store.seq }
+  if (idx >= 0) store.changes[idx] = next
+  else store.changes.push(next)
+  return true
+}
+
+export function isMobileSyncChangelogEmpty(): boolean {
+  return load().changes.length === 0
+}
+
+export function changelogHasEntityKind(entityKind: SyncChange['entityKind']): boolean {
+  return load().changes.some((item) => item.entityKind === entityKind)
 }
 
 export function appendSyncChanges(changes: SyncChange[]): { accepted: number } {
   if (changes.length === 0) return { accepted: 0 }
-  for (const change of changes) upsertChange(change)
-  persist()
-  return { accepted: changes.length }
+  let accepted = 0
+  for (const change of changes) {
+    if (upsertChange(change)) accepted += 1
+  }
+  if (accepted > 0) persist()
+  return { accepted }
 }
 
 export function pullSyncChanges(options: {
   cursor: string | null
   limit: number
-}): { changes: SyncChange[]; nextCursor: string | null } {
+}): { changes: SyncChange[]; nextCursor: string | null; hasMore: boolean } {
   const store = load()
   const after = options.cursor ? Number.parseInt(options.cursor, 10) : 0
   const start = Number.isFinite(after) ? after : 0
-  const slice = store.changes
+  const pending = store.changes
     .filter((item) => item.seq > start)
     .sort((a, b) => a.seq - b.seq)
-    .slice(0, options.limit)
+  const slice = pending.slice(0, options.limit)
   const nextSeq = slice.length > 0 ? slice[slice.length - 1]!.seq : start
   return {
     changes: slice.map(({ seq: _seq, ...change }) => change),
-    nextCursor: String(Math.max(nextSeq, store.seq)),
+    nextCursor: String(nextSeq),
+    hasMore: pending.length > slice.length,
   }
 }
 

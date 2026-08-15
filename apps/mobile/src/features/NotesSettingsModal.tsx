@@ -195,6 +195,7 @@ export function NotesSettingsModal({ visible, onClose }: Props) {
           </Text>
           <Toggle label="与桌面端同步笔记" value={syncEnabled} onChange={setSyncEnabled} />
           <Toggle label="编辑后自动上传" value={autoSyncOnEdit} onChange={setAutoSyncOnEdit} />
+          <Text style={styles.hint}>打开应用时同步一次，之后约每 3 分钟检查有变化的笔记；也可手动同步。编辑后会尝试上传，失败会在下次定时同步重试。</Text>
           <SettingsSectionTitle>数据备份</SettingsSectionTitle>
           <View style={fieldStyles.actionRow}>
             <SettingsInlineButton label="导出笔记 JSON" onPress={() => void handleExport()} />

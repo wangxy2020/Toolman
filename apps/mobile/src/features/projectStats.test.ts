@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildProjectStats } from './projectStats'
+import {
+  buildProjectStats,
+  clampProgressPercent,
+  projectOverviewFlags,
+  projectOverviewProgressCopy,
+  projectSettlementRate,
+} from './projectStats'
 
 describe('project stats', () => {
   it('builds cost dashboard kpis like desktop', () => {
@@ -67,5 +73,22 @@ describe('project stats', () => {
     for (const key of keys) {
       expect(buildProjectStats(key).kpis).toHaveLength(6)
     }
+  })
+
+  it('derives overview card rates and copy', () => {
+    const project = {
+      contractValue: 100,
+      settledAmount: 40,
+      pendingAmount: 20_000_000,
+      status: 'warning',
+      progressPercent: 120,
+    } as never
+    expect(projectSettlementRate(project)).toBe(40)
+    expect(projectOverviewFlags(project)).toEqual({ warnPending: true, warnStatus: true })
+    expect(projectOverviewProgressCopy('cost', 12, 40)).toEqual({
+      left: '进度 12%',
+      right: '结算率 40%',
+    })
+    expect(clampProgressPercent(120)).toBe(100)
   })
 })

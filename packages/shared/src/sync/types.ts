@@ -52,5 +52,7 @@ export const SyncPullOutputSchema = z.object({
   changes: z.array(SyncChangeSchema),
   nextCursor: z.string().nullable(),
   serverTime: z.number().int().nonnegative(),
+  /** True when more changelog rows exist after `nextCursor`. */
+  hasMore: z.boolean().optional(),
 })
 export type SyncPullOutput = z.infer<typeof SyncPullOutputSchema>

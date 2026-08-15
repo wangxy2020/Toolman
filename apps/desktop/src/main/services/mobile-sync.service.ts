@@ -30,7 +30,7 @@ export function setMobileSyncPreferenceEnabled(enabled: boolean) {
   return writeMobileSyncPreferences({
     ...current,
     syncEnabled: enabled,
-    // Turning sync off also clears agent-host until re-enabled.
-    agentHostEnabled: enabled ? current.agentHostEnabled : false,
+    // Turning the hub on also starts the desktop host so knowledge search works.
+    agentHostEnabled: enabled,
   })
 }

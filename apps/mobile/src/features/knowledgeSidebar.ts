@@ -29,7 +29,7 @@ export const KNOWLEDGE_SIDEBAR_SECTIONS: Array<{
   {
     id: 'sync',
     label: '同步知识库',
-    hint: '与桌面同步的知识库：文档原文、切片与向量会随「立即同步」一并拉取。',
+    hint: '与桌面同步的知识库：打开应用时同步一次，之后约每 3 分钟检查有变化的文档。',
     emptyHint: '暂无同步知识库',
     defaultFolderId: DEFAULT_SYNC_FOLDER_ID,
     importMode: 'file',

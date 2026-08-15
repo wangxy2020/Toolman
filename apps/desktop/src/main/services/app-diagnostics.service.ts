@@ -249,6 +249,8 @@ export async function getAppDiagnostics(): Promise<AppGetDiagnosticsOutput> {
       hubBaseUrl: diagnostics.hubBaseUrl,
       advertisedUrls: diagnostics.advertisedUrls ?? [],
       lastError: diagnostics.lastError ?? null,
+      hubToken: diagnostics.hubToken,
+      lanAccessEnabled: diagnostics.lanAccessEnabled,
     })
   } catch (error) {
     mobileSync = {

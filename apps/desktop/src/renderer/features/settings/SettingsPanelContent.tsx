@@ -1,8 +1,5 @@
-import { useCallback, useMemo } from 'react'
-import type { AppLanguage } from './app-settings'
 import type { MessageSettings } from '../chat/message-settings'
 import type { AppSettings } from './app-settings'
-import { useI18n } from '../../i18n/useI18n'
 import { DataSettingsPanel } from './DataSettingsPanel'
 import { GeneralModelEquipmentPanel } from './GeneralModelEquipmentPanel'
 import { ChannelsSettingsPanel } from './ChannelsSettingsPanel'
@@ -23,6 +20,17 @@ import {
 import type { SettingsSectionId } from './settings-nav'
 import { QuickPhrasesSettingsPanel } from './QuickPhrasesSettingsPanel'
 import { DiagnosticsSettingsPanel } from './DiagnosticsSettingsPanel'
+import {
+  parseHancomOcrStrategy,
+  parseMemoryRetentionDays,
+  parseOdlHybridBackend,
+  parseOdlHybridMode,
+  parsePdfParserBackend,
+  patchOdlHybridEnabled,
+} from './settings-document-patches'
+import { useSettingsPanelContent } from './useSettingsPanelContent'
+
+export { useSettingsPanelContent } from './useSettingsPanelContent'
 
 interface Props {
   section: SettingsSectionId
@@ -43,30 +51,7 @@ export function SettingsPanelContent({
   onMessageSettingsChange,
   onProvidersSaved,
 }: Props) {
-  const { t } = useI18n()
-  const patchApp = useCallback(
-    (patch: Partial<AppSettings>) => onAppSettingsChange(patch),
-    [onAppSettingsChange],
-  )
-
-  const languageOptions = useMemo(
-    (): { value: AppLanguage; label: string }[] => [
-      { value: 'zh-CN', label: t('language.zhCN') },
-      { value: 'en', label: t('language.en') },
-    ],
-    [t],
-  )
-
-  const shortcuts = useMemo(
-    () => [
-      { keys: '⌘ + N', action: t('settings.shortcuts.newSession') },
-      { keys: '⌘ + K', action: t('settings.shortcuts.openSearch') },
-      { keys: '⌘ + ,', action: t('settings.shortcuts.openSettings') },
-      { keys: '⌘ + Enter', action: t('settings.shortcuts.sendMessage') },
-      { keys: 'Esc', action: t('settings.shortcuts.closeOrCancel') },
-    ],
-    [t],
-  )
+  const { t, patchApp, languageOptions, shortcuts } = useSettingsPanelContent(onAppSettingsChange)
 
   const content = (() => {
     switch (section) {
@@ -175,7 +160,7 @@ export function SettingsPanelContent({
               type="number"
               min={1}
               value={appSettings.memoryRetentionDays}
-              onChange={(v) => patchApp({ memoryRetentionDays: Number(v) || 30 })}
+              onChange={(v) => patchApp({ memoryRetentionDays: parseMemoryRetentionDays(v) })}
             />
           </SettingsRow>
         </SettingsSection>
@@ -198,10 +183,7 @@ export function SettingsPanelContent({
               className="tm-settings-select tm-settings-select--pdf-parser"
               value={appSettings.pdfParserBackend}
               onChange={(event) =>
-                patchApp({
-                  pdfParserBackend:
-                    event.target.value === 'opendataloader' ? 'opendataloader' : 'builtin',
-                })
+                patchApp({ pdfParserBackend: parsePdfParserBackend(event.target.value) })
               }
             >
               <option value="builtin">{t('settings.documents.builtInParser')}</option>
@@ -215,10 +197,7 @@ export function SettingsPanelContent({
             <SettingsToggle
               checked={appSettings.odlHybrid.enabled}
               onChange={(enabled) =>
-                patchApp({
-                  odlHybrid: { ...appSettings.odlHybrid, enabled },
-                  ...(enabled ? { pdfParserBackend: 'opendataloader' as const } : {}),
-                })
+                patchApp(patchOdlHybridEnabled(appSettings.odlHybrid, enabled))
               }
             />
           </SettingsRow>
@@ -232,8 +211,7 @@ export function SettingsPanelContent({
                         patchApp({
                           odlHybrid: {
                             ...appSettings.odlHybrid,
-                            backend:
-                              event.target.value === 'docling-fast' ? 'docling-fast' : 'hancom-ai',
+                            backend: parseOdlHybridBackend(event.target.value),
                           },
                         })
                       }
@@ -262,7 +240,7 @@ export function SettingsPanelContent({
                         patchApp({
                           odlHybrid: {
                             ...appSettings.odlHybrid,
-                            mode: event.target.value === 'full' ? 'full' : 'auto',
+                            mode: parseOdlHybridMode(event.target.value),
                           },
                         })
                       }
@@ -276,14 +254,14 @@ export function SettingsPanelContent({
                       <select
                         className="tm-settings-select tm-settings-select--pdf-parser"
                         value={appSettings.odlHybrid.hancomAiOcrStrategy}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          const hancomAiOcrStrategy =
-                            value === 'off' || value === 'force' ? value : 'auto'
+                        onChange={(event) =>
                           patchApp({
-                            odlHybrid: { ...appSettings.odlHybrid, hancomAiOcrStrategy },
+                            odlHybrid: {
+                              ...appSettings.odlHybrid,
+                              hancomAiOcrStrategy: parseHancomOcrStrategy(event.target.value),
+                            },
                           })
-                        }}
+                        }
                       >
                         <option value="off">{t('settings.documents.odlHybridOcrOff')}</option>
                         <option value="auto">{t('settings.documents.odlHybridOcrAuto')}</option>

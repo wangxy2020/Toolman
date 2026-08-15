@@ -41,6 +41,8 @@ export type ChatSession = {
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline'
 
+export type MobileSyncReason = 'bootstrap' | 'page' | 'interval' | 'foreground' | 'manual'
+
 export type MobileAppState = {
   module: MobileModuleId
   setModule: (id: MobileModuleId) => void
@@ -83,6 +85,8 @@ export type MobileAppState = {
   setSettingsTab: (tab: SettingsTabId) => void
   modulePrefs: ModulePrefs
   setModulePrefs: (prefs: ModulePrefs) => void
+  /** Push local notes (if enabled) and pull desktop changelog / knowledge snapshot. */
+  runSync: (reason?: MobileSyncReason) => Promise<string>
 }
 
 const MobileAppContext = createContext<MobileAppState | null>(null)

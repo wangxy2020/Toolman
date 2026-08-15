@@ -6,23 +6,18 @@ import {
   ProjectKpiIcon,
 } from '../icons/project-kpi-icons'
 import {
+  chunkRows,
+  clampProgressPercent,
   formatProjectMoney,
+  projectOverviewFlags,
+  projectOverviewProgressCopy,
+  projectSettlementRate,
   projectStatusLabel,
   type EpcProjectRecord,
   type ProjectInsightCard,
   type ProjectKpiCard,
   type ProjectStatsModel,
 } from './projectStats'
-
-function interpolate(template: string, value: string | number): string {
-  return template.replaceAll('{{value}}', String(value))
-}
-
-function chunkRows<T>(items: T[], size: number): T[][] {
-  const rows: T[][] = []
-  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size))
-  return rows
-}
 
 export function ProjectKpiGrid({ cards }: { cards: ProjectKpiCard[] }) {
   return (
@@ -86,10 +81,9 @@ function ProjectOverviewCard(props: {
 }) {
   const { project, variant } = props
   const isCost = variant === 'cost'
-  const settlementRate =
-    project.contractValue > 0 ? (project.settledAmount / project.contractValue) * 100 : 0
-  const warnPending = project.pendingAmount > 10_000_000
-  const warnStatus = project.status !== 'normal'
+  const settlementRate = projectSettlementRate(project)
+  const { warnPending, warnStatus } = projectOverviewFlags(project)
+  const progressCopy = projectOverviewProgressCopy(variant, project.progressPercent, settlementRate)
   const badgeTone =
     project.status === 'critical'
       ? styles.badgeCritical
@@ -138,22 +132,14 @@ function ProjectOverviewCard(props: {
       </View>
 
       <View style={styles.progressMeta}>
-        <Text style={styles.progressMetaText}>
-          {isCost
-            ? interpolate('进度 {{value}}%', project.progressPercent)
-            : interpolate('计划 {{value}}%', project.progressPercent)}
-        </Text>
-        <Text style={styles.progressMetaText}>
-          {isCost
-            ? interpolate('结算率 {{value}}%', settlementRate.toFixed(0))
-            : interpolate('完成率 {{value}}%', settlementRate.toFixed(0))}
-        </Text>
+        <Text style={styles.progressMetaText}>{progressCopy.left}</Text>
+        <Text style={styles.progressMetaText}>{progressCopy.right}</Text>
       </View>
       <View style={styles.progressTrack}>
         <View
           style={[
             styles.progressFill,
-            { width: `${Math.min(100, Math.max(0, project.progressPercent))}%` },
+            { width: `${clampProgressPercent(project.progressPercent)}%` },
           ]}
         />
       </View>
@@ -208,6 +194,7 @@ export function ProjectStatsBody({ stats }: { stats: ProjectStatsModel }) {
 
   return (
     <View style={styles.body}>
+      <Text style={styles.demoBanner}>演示数据，非真实工程进度。</Text>
       <ProjectKpiGrid cards={stats.kpis} />
       {stats.section ? (
         <View style={styles.section}>
@@ -243,6 +230,12 @@ export function ProjectStatsBody({ stats }: { stats: ProjectStatsModel }) {
 const styles = StyleSheet.create({
   body: {
     gap: 16,
+  },
+  demoBanner: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   kpiGrid: {
     gap: 12,

@@ -1,28 +1,14 @@
-import { useMemo, useState } from 'react'
-import {
-  IpcChannel,
-  listSelectableAssistantLibPresets,
-  type AssistantLibPresetId,
-  type KnowledgeBase,
-} from '@toolman/shared'
-import { useI18n } from '../../i18n/useI18n'
+import type { KnowledgeBase } from '@toolman/shared'
 import {
   AssistantSettingsHelpHint,
   AssistantSettingsRequiredMark,
 } from '../chat/assistant-settings-components'
-import { getPathBasename } from '../knowledge/knowledge-path-utils'
 import { AssistantLibLocalKbPickerModal } from './AssistantLibLocalKbPickerModal'
+import type { AssistantLibCreateCourseInput } from './assistant-lib-create-course-utils'
+import { useAssistantLibCreateCourseDialog } from './hooks/useAssistantLibCreateCourseDialog'
 
-type TextbookSource = 'knowledge' | 'local'
-
-export type AssistantLibCreateCourseInput = {
-  courseName: string
-  presetId: AssistantLibPresetId
-  kbIds?: string[]
-  /** Selected local-disk files; caller creates a local KB folder and uploads them. */
-  textbookFilePaths?: string[]
-  textbookSource: TextbookSource
-}
+export type { AssistantLibCreateCourseInput }
+export { useAssistantLibCreateCourseDialog } from './hooks/useAssistantLibCreateCourseDialog'
 
 type Props = {
   workspaceId: string
@@ -33,12 +19,6 @@ type Props = {
   onStart: (input: AssistantLibCreateCourseInput) => void | Promise<void>
 }
 
-function formatSelectedFiles(paths: string[]): string {
-  if (paths.length === 0) return ''
-  if (paths.length === 1) return paths[0]
-  return `${getPathBasename(paths[0])} 等 ${paths.length} 个文件`
-}
-
 export function AssistantLibCreateCourseDialog({
   workspaceId,
   knowledgeBases,
@@ -47,89 +27,28 @@ export function AssistantLibCreateCourseDialog({
   onClose,
   onStart,
 }: Props) {
-  const { t } = useI18n()
-  const presets = useMemo(() => listSelectableAssistantLibPresets(), [])
-
-  const [courseName, setCourseName] = useState('')
-  const [presetId, setPresetId] = useState<AssistantLibPresetId>('socratic-tutor')
-  const [textbookSource, setTextbookSource] = useState<TextbookSource>('knowledge')
-  const [selectedKbId, setSelectedKbId] = useState('')
-  const [selectedKbPath, setSelectedKbPath] = useState('')
-  const [filePaths, setFilePaths] = useState<string[]>([])
-  const [kbPickerOpen, setKbPickerOpen] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-
-  const selectedPreset = presets.find((item) => item.id === presetId) ?? presets[0]
-
-  const pathDisplay = useMemo(() => {
-    if (textbookSource === 'local') return formatSelectedFiles(filePaths)
-    return selectedKbPath
-  }, [filePaths, selectedKbPath, textbookSource])
-
-  const handleBrowse = async () => {
-    setFormError(null)
-
-    if (textbookSource === 'knowledge') {
-      setKbPickerOpen(true)
-      return
-    }
-
-    const pickResult = await window.api.invoke(IpcChannel.DialogSelectFiles, {
-      multiple: true,
-      defaultPath: defaultLocalFolderPath ?? undefined,
-    })
-    if (!pickResult.ok) return
-    const { paths } = pickResult.data as { paths: string[] }
-    if (!paths?.length) return
-    setFilePaths(paths)
-  }
-
-  const handleClearSelection = () => {
-    if (textbookSource === 'knowledge') {
-      setSelectedKbId('')
-      setSelectedKbPath('')
-    } else {
-      setFilePaths([])
-    }
-    setFormError(null)
-  }
-
-  const handleSubmit = () => {
-    const trimmedName = courseName.trim()
-    if (!trimmedName) {
-      setFormError(t('assistantLibPage.courseNameRequired'))
-      return
-    }
-
-    if (textbookSource === 'knowledge') {
-      if (!selectedKbId) {
-        setFormError(t('assistantLibPage.selectKbRequired'))
-        return
-      }
-      void onStart({
-        courseName: trimmedName,
-        presetId: selectedPreset?.id ?? 'socratic-tutor',
-        textbookSource: 'knowledge',
-        kbIds: [selectedKbId],
-      })
-      return
-    }
-
-    if (filePaths.length === 0) {
-      setFormError(t('assistantLibPage.textbookFilesRequired'))
-      return
-    }
-
-    void onStart({
-      courseName: trimmedName,
-      presetId: selectedPreset?.id ?? 'socratic-tutor',
-      textbookSource: 'local',
-      textbookFilePaths: filePaths,
-    })
-  }
-
-  const hasSelection =
-    textbookSource === 'knowledge' ? Boolean(selectedKbId || selectedKbPath) : filePaths.length > 0
+  const {
+    t,
+    presets,
+    courseName,
+    setCourseName,
+    presetId,
+    setPresetId,
+    textbookSource,
+    selectedKbId,
+    kbPickerOpen,
+    setKbPickerOpen,
+    formError,
+    setFormError,
+    selectedPreset,
+    pathDisplay,
+    hasSelection,
+    handleBrowse,
+    handleClearSelection,
+    handleSubmit,
+    selectTextbookSource,
+    selectKnowledgeBase,
+  } = useAssistantLibCreateCourseDialog({ defaultLocalFolderPath, onStart })
 
   return (
     <>
@@ -198,7 +117,7 @@ export function AssistantLibCreateCourseDialog({
                       className="tm-agent-model-select"
                       value={presetId}
                       onChange={(event) =>
-                        setPresetId(event.target.value as AssistantLibPresetId)
+                        setPresetId(event.target.value as typeof presetId)
                       }
                     >
                       {presets.map((preset) => (
@@ -231,11 +150,7 @@ export function AssistantLibCreateCourseDialog({
                           type="radio"
                           name="alib-textbook-source"
                           checked={textbookSource === 'knowledge'}
-                          onChange={() => {
-                            setTextbookSource('knowledge')
-                            setFilePaths([])
-                            setFormError(null)
-                          }}
+                          onChange={() => selectTextbookSource('knowledge')}
                         />
                         <span>{t('assistantLibPage.textbookSourceKb')}</span>
                       </label>
@@ -244,12 +159,7 @@ export function AssistantLibCreateCourseDialog({
                           type="radio"
                           name="alib-textbook-source"
                           checked={textbookSource === 'local'}
-                          onChange={() => {
-                            setTextbookSource('local')
-                            setSelectedKbId('')
-                            setSelectedKbPath('')
-                            setFormError(null)
-                          }}
+                          onChange={() => selectTextbookSource('local')}
                         />
                         <span>{t('assistantLibPage.textbookSourceLocal')}</span>
                       </label>
@@ -329,12 +239,7 @@ export function AssistantLibCreateCourseDialog({
           defaultLocalFolderPath={defaultLocalFolderPath}
           selectedKbId={selectedKbId || null}
           onClose={() => setKbPickerOpen(false)}
-          onSelect={(kb, path) => {
-            setSelectedKbId(kb.id)
-            setSelectedKbPath(path)
-            setKbPickerOpen(false)
-            setFormError(null)
-          }}
+          onSelect={(kb, path) => selectKnowledgeBase(kb.id, path)}
         />
       ) : null}
     </>
