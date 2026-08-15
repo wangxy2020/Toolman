@@ -4,9 +4,15 @@
   "installCommand": "bash scripts/ensure-opendataloader-stub.sh && HUSKY=0 pnpm install --frozen-lockfile",
   "buildCommand": "bash scripts/vercel-build-mobile.sh",
   "outputDirectory": "apps/mobile/dist",
+  "functions": {
+    "api/tts/synthesize.ts": {
+      "maxDuration": 30,
+      "includeFiles": "apps/mobile/src/voice/synthesizeEdgeTts.ts"
+    }
+  },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
