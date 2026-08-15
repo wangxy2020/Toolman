@@ -13,6 +13,31 @@ import {
 
 const invoke = vi.fn()
 
+const RESOURCE_ITEM = {
+  id: '00000000-0000-0000-0000-000000000010',
+  title: 'Demo MCP',
+  description: 'desc',
+  author: {
+    id: '00000000-0000-0000-0000-000000000001',
+    displayName: 'Admin',
+  },
+  version: '1.0.0',
+  tags: [] as string[],
+  category: 'tools',
+  rating: 0,
+  ratingCount: 0,
+  downloadCount: 0,
+  installCount: 0,
+  favoriteCount: 0,
+  resourceType: 'mcp' as const,
+  license: 'MIT',
+  visibility: 'public' as const,
+  status: 'published' as const,
+  resourceSize: 0,
+  createdAt: 1,
+  updatedAt: 2,
+}
+
 beforeEach(() => {
   invoke.mockReset()
   vi.stubGlobal('window', {
@@ -27,32 +52,7 @@ describe('community-api.client', () => {
     invoke.mockResolvedValueOnce({
       ok: true,
       data: {
-        items: [
-          {
-            id: '00000000-0000-0000-0000-000000000010',
-            title: 'Demo MCP',
-            description: 'desc',
-            author: {
-              id: '00000000-0000-0000-0000-000000000001',
-              displayName: 'Admin',
-            },
-            version: '1.0.0',
-            tags: [],
-            category: 'tools',
-            rating: 0,
-            ratingCount: 0,
-            downloadCount: 0,
-            installCount: 0,
-            favoriteCount: 0,
-            resourceType: 'mcp',
-            license: 'MIT',
-            visibility: 'public',
-            status: 'published',
-            resourceSize: 0,
-            createdAt: 1,
-            updatedAt: 2,
-          },
-        ],
+        items: [RESOURCE_ITEM],
       },
     })
 
@@ -66,8 +66,7 @@ describe('community-api.client', () => {
     invoke.mockResolvedValueOnce({
       ok: true,
       data: {
-        id: '00000000-0000-0000-0000-000000000010',
-        title: 'Demo MCP',
+        ...RESOURCE_ITEM,
         description: 'detail',
         manifestJson: { schemaVersion: 1 },
       },

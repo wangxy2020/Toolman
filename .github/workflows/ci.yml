@@ -90,6 +90,16 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # file: vendor is a gitlink and is not checked out here. Write a stub
+      # so pnpm install can resolve it without Java/Maven.
+      - name: Ensure OpenDataLoader stub
+        run: |
+          STUB=vendor/open-data-loader-pdf/node/opendataloader-pdf
+          mkdir -p "$STUB"
+          if [[ ! -f "$STUB/package.json" ]]; then
+            printf '%s\n' '{"name":"@opendataloader/pdf","version":"0.0.0","private":true,"engines":{"node":">=20.19.0"},"bin":{"opendataloader-pdf":"./dist/cli.js"},"dependencies":{"commander":"^14.0.3"}}' > "$STUB/package.json"
+          fi
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
