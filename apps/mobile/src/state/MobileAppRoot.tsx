@@ -31,7 +31,7 @@ import {
   type MobileClassroomCourse,
 } from '../sync/classroomSyncMerge'
 import { listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
-import { orderClassroomCourses } from '../features/classroomSidebar'
+import { orderClassroomCourses, resolveClassroomSidebarFocus } from '../features/classroomSidebar'
 import type { MobileModuleId } from '../modules'
 import {
   MobileAppProvider,
@@ -227,7 +227,10 @@ export function MobileAppRoot({ children }: { children: ReactNode }) {
     const visibleIds = new Set(orderClassroomCourses(classroomCourses).map((course) => course.id))
     setActiveSessionByScope((active) => {
       if (active.classroom && visibleIds.has(active.classroom)) return active
-      const nextId = orderClassroomCourses(classroomCourses)[0]?.id ?? null
+      const nextId =
+        resolveClassroomSidebarFocus(classroomCourses, active.classroom)?.courseId ??
+        orderClassroomCourses(classroomCourses)[0]?.id ??
+        null
       if (active.classroom === nextId) return active
       return { ...active, classroom: nextId }
     })

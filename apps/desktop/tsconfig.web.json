@@ -10,5 +10,6 @@
       "@toolman/shared": ["../../packages/shared/src/index.ts"]
     }
   },
-  "include": ["src/renderer/**/*"]
+  "include": ["src/renderer/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.integration.test.ts"]
 }

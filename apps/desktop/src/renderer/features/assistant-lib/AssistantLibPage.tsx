@@ -13,6 +13,7 @@ import {
   parseAssistantLibSessionMeta,
   parseCourseSyllabus,
   parseSocraticState,
+  resolveOngoingClassroomFocus,
   type KnowledgeBase,
 } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
@@ -119,7 +120,20 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
       const current = learningSessions.find((item) => item.id === activeSessionId)
       if (current && !looksLikeAssistantLibDefaultClassroom(current)) return current
     }
+    const ongoingId = resolveOngoingClassroomFocus(
+      learningSessions
+        .filter((item) => !looksLikeAssistantLibDefaultClassroom(item))
+        .map((item) => {
+          const meta = parseAssistantLibSessionMeta(item.metadata)
+          return {
+            id: item.id,
+            studyRecords: meta?.studyRecords,
+            syllabus: parseCourseSyllabus(meta?.syllabus),
+          }
+        }),
+    )?.courseId
     return (
+      learningSessions.find((item) => item.id === ongoingId) ??
       learningSessions.find((item) => isAssistantLibGuideCourseSession(item.metadata)) ??
       learningSessions.find((item) => !looksLikeAssistantLibDefaultClassroom(item)) ??
       null

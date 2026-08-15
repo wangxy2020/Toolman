@@ -1,4 +1,9 @@
-import { isSyllabusChapterLocked } from '@toolman/shared'
+import {
+  currentSyllabusChapter,
+  isClassroomLive,
+  isSyllabusChapterLocked,
+  resolveOngoingClassroomFocus,
+} from '@toolman/shared'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 
 export const CLASSROOM_PRESET_LABELS: Record<string, string> = {
@@ -81,6 +86,33 @@ export function classroomSidebarEntries(
     course,
     chapters: classroomChaptersForCourse(course),
   }))
+}
+
+export function classroomFocusInputs(courses: MobileClassroomCourse[]) {
+  return orderClassroomCourses(courses).map((course) => ({
+    id: course.id,
+    studyRecords: course.studyRecords,
+    syllabus: course.syllabus,
+  }))
+}
+
+export function resolveClassroomSidebarFocus(
+  courses: MobileClassroomCourse[],
+  fallbackId?: string | null,
+) {
+  return resolveOngoingClassroomFocus(classroomFocusInputs(courses), fallbackId)
+}
+
+export function resolveClassroomLearningChapterId(
+  course: MobileClassroomCourse | null | undefined,
+): string | null {
+  if (!course) return null
+  if (isClassroomLive(course.studyRecords)) {
+    const last = course.studyRecords[course.studyRecords.length - 1]
+    if (last?.chapterId) return last.chapterId
+  }
+  if (course.socraticState?.currentChapterId) return course.socraticState.currentChapterId
+  return course.syllabus ? currentSyllabusChapter(course.syllabus)?.id ?? null : null
 }
 
 /** Settings bind to the selected course only — never fall back to the guide course. */

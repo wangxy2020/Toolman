@@ -20,9 +20,10 @@ vi.mock('./p2p-device-identity.service', () => ({
   getP2pDeviceInfo: () => ({ deviceId: 'device-1', identityId: 'identity-1' }),
 }))
 
-vi.mock('./p2p-event.service', () => ({
-  appendP2pEvent: vi.fn(),
-}))
+vi.mock('./p2p-event.service', async () => {
+  const { createP2pEventServiceMock } = await import('./p2p-event.service.mock')
+  return createP2pEventServiceMock()
+})
 
 describe('p2p-workspace-vip-pool helpers', () => {
   it('reads subscription sku from cert json', async () => {

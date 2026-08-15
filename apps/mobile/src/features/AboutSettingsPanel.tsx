@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
   Image,
-  type ImageSourcePropType,
   Linking,
   Modal,
   Pressable,
@@ -25,9 +24,8 @@ import {
 import { colors } from '../theme'
 import { recordProvenanceBeacon } from '../lib/record-provenance-beacon'
 import { SettingsScroll } from './settingsUi'
-
-const appIcon = require('../../assets/icon.png') as ImageSourcePropType
-const joinUsQr = require('../../assets/toolman-qq-group-qr.png') as ImageSourcePropType
+import appIcon from '../../assets/icon.png'
+import joinUsQr from '../../assets/toolman-qq-group-qr.png'
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.1.0'
 

@@ -4,6 +4,7 @@ import {
   buildStartClassUserMessage,
   endOpenClassroomStudyRecords,
   isClassroomLive,
+  resolveOngoingClassroomFocus,
   touchLatestClassroomStudyRecord,
 } from './classroom-study'
 import { EMPTY_SOCRATIC_STATE } from './teaching-types'
@@ -32,6 +33,63 @@ describe('isClassroomLive', () => {
     const open = appendClassroomStudyRecord([], { id: 'a', startedAt: 1, chapterTitle: '第一章' })
     expect(isClassroomLive(open)).toBe(true)
     expect(isClassroomLive(endOpenClassroomStudyRecords(open))).toBe(false)
+  })
+})
+
+describe('resolveOngoingClassroomFocus', () => {
+  it('prefers the live course and its open chapter', () => {
+    const focus = resolveOngoingClassroomFocus(
+      [
+        {
+          id: 'guide',
+          syllabus: {
+            generation: 'ready',
+            generatedCount: 1,
+            chapters: [{ id: 'g1', title: '介绍', assessmentQuestions: [], status: 'ready' }],
+          },
+        },
+        {
+          id: 'rust',
+          studyRecords: [
+            { id: 'r1', startedAt: 10, chapterId: 'c2', chapterTitle: '生命周期', mastered: [], stuckPoints: [], qaCount: 0 },
+          ],
+          syllabus: {
+            generation: 'ready',
+            generatedCount: 2,
+            chapters: [
+              { id: 'c1', title: '所有权', assessmentQuestions: [], status: 'passed' },
+              { id: 'c2', title: '生命周期', assessmentQuestions: [], status: 'in_progress' },
+            ],
+          },
+        },
+      ],
+      'guide',
+    )
+    expect(focus).toEqual({ courseId: 'rust', chapterId: 'c2' })
+  })
+
+  it('falls back to the in-progress syllabus, then fallbackId', () => {
+    expect(
+      resolveOngoingClassroomFocus([
+        {
+          id: 'guide',
+          syllabus: {
+            generation: 'ready',
+            generatedCount: 1,
+            chapters: [{ id: 'g1', title: '介绍', assessmentQuestions: [], status: 'ready' }],
+          },
+        },
+        {
+          id: 'rust',
+          syllabus: {
+            generation: 'ready',
+            generatedCount: 1,
+            chapters: [{ id: 'c1', title: '所有权', assessmentQuestions: [], status: 'in_progress' }],
+          },
+        },
+      ])?.courseId,
+    ).toBe('rust')
+    expect(resolveOngoingClassroomFocus([{ id: 'a' }, { id: 'b' }], 'b')?.courseId).toBe('b')
   })
 })
 

@@ -4,7 +4,9 @@ import {
   classroomCourseLabel,
   classroomSidebarEntries,
   orderClassroomCourses,
+  resolveClassroomLearningChapterId,
   resolveClassroomSettingsCourse,
+  resolveClassroomSidebarFocus,
 } from './classroomSidebar'
 
 function course(
@@ -68,6 +70,49 @@ describe('classroom sidebar', () => {
     ])
     expect(entries[0]?.chapters[1]?.locked).toBe(false)
     expect(entries[0]?.chapters[2]?.locked).toBe(true)
+  })
+
+  it('defaults sidebar focus to the live course chapter', () => {
+    const courses = [
+      course({
+        id: 'guide',
+        courseName: 'Toolman使用说明',
+        isGuideClassroom: true,
+        syllabus: {
+          generation: 'ready',
+          generatedCount: 1,
+          chapters: [{ id: 'g1', title: '介绍', assessmentQuestions: [], status: 'ready' }],
+        },
+      }),
+      course({
+        id: 'rust',
+        courseName: 'Rust 入门',
+        studyRecords: [
+          {
+            id: 'r1',
+            startedAt: 10,
+            chapterId: 'c2',
+            chapterTitle: '生命周期',
+            mastered: [],
+            stuckPoints: [],
+            qaCount: 0,
+          },
+        ],
+        syllabus: {
+          generation: 'ready',
+          generatedCount: 2,
+          chapters: [
+            { id: 'c1', title: '所有权', assessmentQuestions: [], status: 'passed' },
+            { id: 'c2', title: '生命周期', assessmentQuestions: [], status: 'in_progress' },
+          ],
+        },
+      }),
+    ]
+    expect(resolveClassroomSidebarFocus(courses, 'guide')).toEqual({
+      courseId: 'rust',
+      chapterId: 'c2',
+    })
+    expect(resolveClassroomLearningChapterId(courses[1])).toBe('c2')
   })
 
   it('binds course settings to the selected course instead of the guide', () => {

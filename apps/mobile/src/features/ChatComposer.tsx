@@ -13,6 +13,7 @@ import {
   IconClear,
   IconEmoji,
   IconGlobe,
+  IconGraduationCap,
   IconKnowledgeTool,
   IconMic,
   IconNewTopic,
@@ -50,6 +51,9 @@ export type ChatComposerProps = {
   useDesktopHost?: boolean
   onToggleDesktopHost?: () => void
   onNewTopic?: () => void
+  classLive?: boolean
+  onToggleClass?: () => void
+  classToggleDisabled?: boolean
   onClear?: () => void
   /** Clear own messages on this page (group `/clear`). */
   onClearChat?: () => void
@@ -78,6 +82,9 @@ export function ChatComposer({
   kbEnabled = false,
   onToggleKb,
   onNewTopic,
+  classLive = false,
+  onToggleClass,
+  classToggleDisabled = false,
   onClear,
   onClearChat,
   onPopupOpenChange,
@@ -196,6 +203,16 @@ export function ChatComposer({
     <View style={[styles.area, { paddingLeft, paddingRight }]} ref={rootRef} collapsable={false}>
       <View style={styles.box}>
         <View style={styles.toolbar}>
+          {onToggleClass ? (
+            <ToolBtn
+              label={classLive ? '停止上课' : '上课'}
+              active={classLive}
+              onPress={onToggleClass}
+              disabled={classToggleDisabled || busy}
+            >
+              <IconGraduationCap size={18} color={classLive ? activeColor : iconColor} />
+            </ToolBtn>
+          ) : null}
           {isGroup ? (
             <ToolBtn
               label="表情"

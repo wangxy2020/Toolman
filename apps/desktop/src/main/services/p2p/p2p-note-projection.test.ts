@@ -25,9 +25,10 @@ vi.mock('../notes-data.service', () => ({
   upsertNoteItem: vi.fn(),
 }))
 
-vi.mock('./p2p-event.service', () => ({
-  listWorkspaceEventsSince: vi.fn(() => []),
-}))
+vi.mock('./p2p-event.service', async () => {
+  const { createP2pEventServiceMock } = await import('./p2p-event.service.mock')
+  return createP2pEventServiceMock()
+})
 
 vi.mock('./p2p-shared-resource-id', () => ({
   findSharedResourceForProjection: vi.fn(() => null),

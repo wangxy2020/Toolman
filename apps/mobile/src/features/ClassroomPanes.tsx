@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -21,7 +22,12 @@ import { AgentRightPane } from './AgentPanes'
 import { ClassroomCreateCourseModal } from './ClassroomCreateCourseModal'
 import { ClassroomRecordsPane } from './ClassroomRecordsPane'
 import { ClassroomSettingsModal } from './ClassroomSettingsModal'
-import { classroomSidebarEntries, resolveClassroomSettingsCourse } from './classroomSidebar'
+import {
+  classroomSidebarEntries,
+  resolveClassroomLearningChapterId,
+  resolveClassroomSettingsCourse,
+  resolveClassroomSidebarFocus,
+} from './classroomSidebar'
 import {
   SidebarAddButton,
   SidebarList,
@@ -192,17 +198,21 @@ export function ClassroomLeftPane() {
   )
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [chapterByCourse, setChapterByCourse] = useState<Record<string, string>>({})
+  const seededFocusRef = useRef(false)
 
   useEffect(() => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      for (const entry of entries) {
-        if (entry.isGuide && !prev.has(entry.id)) next.add(entry.id)
-        if (entry.id === activeSessionId) next.add(entry.id)
-      }
-      return next
-    })
-  }, [activeSessionId, entries])
+    if (seededFocusRef.current || entries.length === 0) return
+    const focus = resolveClassroomSidebarFocus(classroomCourses, activeSessionId)
+    if (!focus) return
+    seededFocusRef.current = true
+    setExpanded(new Set([focus.courseId]))
+    if (focus.chapterId) {
+      setChapterByCourse({ [focus.courseId]: focus.chapterId })
+    }
+    if (focus.courseId !== activeSessionId) {
+      setActiveSessionId(focus.courseId)
+    }
+  }, [activeSessionId, classroomCourses, entries.length, setActiveSessionId])
 
   const toggleExpanded = (id: string) => {
     setExpanded((prev) => {
@@ -239,7 +249,8 @@ export function ClassroomLeftPane() {
           entries.map((entry) => {
             const isOpen = expanded.has(entry.id)
             const isActive = entry.id === activeSessionId
-            const selectedChapterId = chapterByCourse[entry.id]
+            const selectedChapterId =
+              chapterByCourse[entry.id] ?? resolveClassroomLearningChapterId(entry.course)
             return (
               <View key={entry.id} style={styles.group}>
                 <View style={[styles.courseRow, isActive ? styles.courseRowActive : null]}>

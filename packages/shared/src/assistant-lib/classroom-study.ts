@@ -30,6 +30,60 @@ export function isClassroomLive(records: ClassroomStudyRecord[] | undefined): bo
   return Boolean(last && !last.endedAt)
 }
 
+export type ClassroomFocusInput = {
+  id: string
+  studyRecords?: ClassroomStudyRecord[]
+  syllabus?: CourseSyllabus | null
+}
+
+export type ClassroomFocus = {
+  courseId: string
+  chapterId: string | null
+}
+
+function latestOpenStudyStartedAt(records: ClassroomStudyRecord[] | undefined): number {
+  const last = records?.[records.length - 1]
+  if (!last || last.endedAt) return 0
+  return last.startedAt
+}
+
+function resolveFocusChapterId(course: ClassroomFocusInput): string | null {
+  const last = course.studyRecords?.[course.studyRecords.length - 1]
+  if (last && !last.endedAt && last.chapterId) return last.chapterId
+  if (course.syllabus) return currentSyllabusChapter(course.syllabus)?.id ?? null
+  return null
+}
+
+/** Live class first, else the course still in progress, else `fallbackId` / first course. */
+export function resolveOngoingClassroomFocus(
+  courses: ClassroomFocusInput[],
+  fallbackId?: string | null,
+): ClassroomFocus | null {
+  if (courses.length === 0) return null
+
+  const live = courses.reduce<ClassroomFocusInput | null>((best, course) => {
+    const startedAt = latestOpenStudyStartedAt(course.studyRecords)
+    if (startedAt === 0) return best
+    if (!best) return course
+    return startedAt >= latestOpenStudyStartedAt(best.studyRecords) ? course : best
+  }, null)
+
+  const inProgress =
+    live ??
+    courses.find((course) =>
+      course.syllabus?.chapters.some((chapter) => chapter.status === 'in_progress'),
+    ) ??
+    courses.find((course) => course.id === fallbackId) ??
+    courses[0] ??
+    null
+
+  if (!inProgress) return null
+  return {
+    courseId: inProgress.id,
+    chapterId: resolveFocusChapterId(inProgress),
+  }
+}
+
 export function endOpenClassroomStudyRecords(
   records: ClassroomStudyRecord[] | undefined,
 ): ClassroomStudyRecord[] {

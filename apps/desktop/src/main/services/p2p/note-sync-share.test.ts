@@ -46,20 +46,23 @@ vi.mock('./p2p-permission.guard', () => ({
   assertCanShareResource: vi.fn(),
 }))
 
-vi.mock('./p2p-event.service', () => ({
-  appendP2pEvent: vi.fn(async () => ({
-    eventId: 'evt-1',
-    workspaceId: 'ws-1',
-    seq: 2,
-    resourceType: 'Note',
-    resourceId: 'note-1',
-    operatorId: 'member-1',
-    eventType: 'Updated',
-    timestamp: Date.now(),
-    payload: {},
-    sourceDeviceId: 'device-1',
-  })),
-}))
+vi.mock('./p2p-event.service', async () => {
+  const { createP2pEventServiceMock } = await import('./p2p-event.service.mock')
+  return createP2pEventServiceMock({
+    appendP2pEvent: vi.fn(async () => ({
+      eventId: 'evt-1',
+      workspaceId: 'ws-1',
+      seq: 2,
+      resourceType: 'Note',
+      resourceId: 'note-1',
+      operatorId: 'member-1',
+      eventType: 'Updated',
+      timestamp: Date.now(),
+      payload: {},
+      sourceDeviceId: 'device-1',
+    })),
+  })
+})
 
 vi.mock('../notes-data.service', () => ({
   getNoteById: vi.fn(),

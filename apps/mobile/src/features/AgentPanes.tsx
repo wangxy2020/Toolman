@@ -25,7 +25,14 @@ import { colors, shellStyles } from '../theme'
 import { copyToClipboard } from '../utils/clipboard'
 import { getMobileTtsController, unlockAudioPlayback, type TtsPlaybackState } from '../voice'
 import { useSidebarLayout } from '../layout'
+import {
+  classroomCourseIsLive,
+  startClassroomSession,
+  stopClassroomSession,
+  withUpdatedStudyRecords,
+} from './classroomClassSession'
 import { ChatComposer } from './ChatComposer'
+import { resolveClassroomSidebarFocus } from './classroomSidebar'
 import { ChatMessageContextMenu } from './ChatMessageContextMenu'
 import { MessageMarkdown } from './MessageMarkdown'
 import { ThinkingHeartbeat } from './ThinkingHeartbeat'
@@ -274,6 +281,7 @@ export function AgentRightPane() {
     notes,
     notebooks,
     classroomCourses,
+    setClassroomCourses,
   } = useMobileApp()
   const agentScope = resolveAgentChatScope(module)
   const courseIds = new Set(classroomCourses.map((course) => course.id))
@@ -354,11 +362,22 @@ export function AgentRightPane() {
     setSelectedIds(new Set())
   }, [activeSessionId])
 
+  const classroomCourse =
+    agentScope === 'classroom'
+      ? classroomCourses.find((course) => course.id === session?.id) ?? null
+      : null
+  const classLive = classroomCourseIsLive(classroomCourse)
+
   useEffect(() => {
     if (activeSessionId && scopedSessions.some((item) => item.id === activeSessionId)) return
-    const nextId = scopedSessions[0]?.id ?? null
+    const nextId =
+      agentScope === 'classroom'
+        ? resolveClassroomSidebarFocus(classroomCourses, activeSessionId)?.courseId ??
+          scopedSessions[0]?.id ??
+          null
+        : scopedSessions[0]?.id ?? null
     if (nextId !== activeSessionId) setActiveSessionId(nextId)
-  }, [agentScope, activeSessionId, sessions, setActiveSessionId])
+  }, [agentScope, activeSessionId, classroomCourses, sessions, setActiveSessionId])
 
   // Follow new replies / streaming tokens to the bottom of the stream.
   const lastMessage = session?.messages[session.messages.length - 1]
@@ -493,8 +512,8 @@ export function AgentRightPane() {
     settle()
   }
 
-  const send = async () => {
-    const text = input.trim()
+  const send = async (presetText?: string) => {
+    const text = (presetText ?? input).trim()
     if (!text || busy) return
     // Unlock in the same user gesture so auto-speak can play after the stream ends.
     unlockAudioPlayback()
@@ -503,7 +522,7 @@ export function AgentRightPane() {
       setError('请先在侧栏选择一门课程')
       return
     }
-    setInput('')
+    if (!presetText) setInput('')
     setError(null)
     setBusy(true)
 
@@ -942,6 +961,36 @@ export function AgentRightPane() {
         busy={busy}
         onSend={() => void send()}
         onStop={() => abortRef.current?.abort()}
+        classLive={classLive}
+        classToggleDisabled={!classroomCourse}
+        onToggleClass={
+          agentScope === 'classroom'
+            ? () => {
+                if (!classroomCourse) return
+                if (classLive) {
+                  if (busy) abortRef.current?.abort()
+                  setClassroomCourses(
+                    withUpdatedStudyRecords(
+                      classroomCourses,
+                      classroomCourse.id,
+                      stopClassroomSession(classroomCourse),
+                    ),
+                  )
+                  return
+                }
+                if (busy) return
+                const started = startClassroomSession(classroomCourse)
+                setClassroomCourses(
+                  withUpdatedStudyRecords(
+                    classroomCourses,
+                    classroomCourse.id,
+                    started.studyRecords,
+                  ),
+                )
+                void send(started.userMessage)
+              }
+            : undefined
+        }
         webSearchEnabled={webSearchEnabled}
         onToggleWebSearch={() => patchToolbar({ webSearchEnabled: !webSearchEnabled })}
         kbEnabled={kbEnabled}

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   findAssistantLibGuideCourseSession,
-  isAssistantLibGuideCourseSession,
   isSyllabusChapterLocked,
   looksLikeAssistantLibDefaultClassroom,
   looksLikeAssistantLibGuideCourse,
   parseAssistantLibSessionMeta,
   parseCourseSyllabus,
+  resolveOngoingClassroomFocus,
   type Session,
 } from '@toolman/shared'
 import { IconChevronRight, IconPlus, IconTopic } from '../../components/icons'
@@ -14,7 +14,6 @@ import { useI18n } from '../../i18n/useI18n'
 import { setAssistantLibPanelView } from './assistant-lib-panel-view'
 import { openAssistantLibCreateCourse } from './assistant-lib-ui'
 import {
-  resolveCourseKbId,
   resolveLearningChapterId,
   useAssistantLibCourseCatalog,
 } from './useAssistantLibCourseCatalog'
@@ -67,36 +66,35 @@ export function AssistantLibSidebar({
     {},
   )
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const seenBuiltinExpandRef = useRef<Set<string>>(new Set())
-  const seenKbBindingRef = useRef<Set<string>>(new Set())
+  const seededFocusRef = useRef(false)
 
   useEffect(() => {
     setAssistantLibPanelView('agent')
   }, [])
 
   useEffect(() => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      for (const session of orderedSessions) {
-        const isBuiltin = isAssistantLibGuideCourseSession(session.metadata)
-        if (isBuiltin && !seenBuiltinExpandRef.current.has(session.id)) {
-          seenBuiltinExpandRef.current.add(session.id)
-          next.add(session.id)
+    if (seededFocusRef.current || orderedSessions.length === 0) return
+    const focus = resolveOngoingClassroomFocus(
+      orderedSessions.map((session) => {
+        const meta = parseAssistantLibSessionMeta(session.metadata)
+        return {
+          id: session.id,
+          studyRecords: meta?.studyRecords,
+          syllabus: parseCourseSyllabus(meta?.syllabus),
         }
-        if (session.id === activeSessionId) {
-          next.add(session.id)
-        }
-        const kbId = resolveCourseKbId(session)
-        if (!kbId) continue
-        const bindingKey = `${session.id}:${kbId}`
-        if (!seenKbBindingRef.current.has(bindingKey)) {
-          seenKbBindingRef.current.add(bindingKey)
-          next.add(session.id)
-        }
-      }
-      return next
-    })
-  }, [activeSessionId, orderedSessions])
+      }),
+      activeSessionId,
+    )
+    if (!focus) return
+    seededFocusRef.current = true
+    setExpanded(new Set([focus.courseId]))
+    if (focus.chapterId) {
+      setChapterOverrideBySession({ [focus.courseId]: focus.chapterId })
+    }
+    if (focus.courseId !== activeSessionId) {
+      onSelectSession(focus.courseId)
+    }
+  }, [activeSessionId, onSelectSession, orderedSessions])
 
   const toggleExpanded = (sessionId: string) => {
     setExpanded((prev) => {

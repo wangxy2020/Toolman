@@ -5,9 +5,12 @@ import {
   syncP2pKnowledgeDocument,
 } from './knowledge-sync-document.service'
 
-vi.mock('./p2p-event.service', () => ({
-  appendP2pEvent: vi.fn(async () => ({ id: 'evt-1' })),
-}))
+vi.mock('./p2p-event.service', async () => {
+  const { createP2pEventServiceMock } = await import('./p2p-event.service.mock')
+  return createP2pEventServiceMock({
+    appendP2pEvent: vi.fn(async () => ({ id: 'evt-1' }) as never),
+  })
+})
 
 vi.mock('./p2p-permission.guard', () => ({
   assertWorkspaceMemberAccess: () => ({ id: 'member-1' }),

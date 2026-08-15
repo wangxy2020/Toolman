@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorkspaceEvent } from '@toolman/shared'
 
 const mocks = vi.hoisted(() => ({
   listWorkspaceEventsSince: vi.fn(
-    (_workspaceId: string, _sinceSeq: number, _limit: number) => [] as unknown[],
+    (_workspaceId: string, _sinceSeq: number, _limit?: number): WorkspaceEvent[] => [],
   ),
 }))
 
-vi.mock('./p2p-event.service', () => ({
-  listWorkspaceEventsSince: mocks.listWorkspaceEventsSince,
-}))
+vi.mock('./p2p-event.service', async () => {
+  const { createP2pEventServiceMock } = await import('./p2p-event.service.mock')
+  return createP2pEventServiceMock({
+    listWorkspaceEventsSince: mocks.listWorkspaceEventsSince,
+  })
+})
 
 vi.mock('../structured-log.service', () => ({
   logStructured: vi.fn(),

@@ -23,6 +23,8 @@ export default defineConfig({
       exclude: [
         '**/*.test.ts',
         '**/*.integration.test.ts',
+        '**/*.mock.ts',
+        '**/test-utils/**',
         // External channel adapters and heavy orchestration are covered by integration/e2e paths.
         '**/channels/**',
         '**/app-update/**',

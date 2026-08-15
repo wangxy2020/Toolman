@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { WorkspaceEvent } from '@toolman/shared'
 
 import {
   buildKnowledgeShareMetadata,
@@ -8,22 +9,26 @@ import {
   readKnowledgeShareMetadata,
 } from './p2p-knowledge-share-metadata'
 
-vi.mock('./p2p-event.service', () => ({
-  listWorkspaceEventsSince: vi.fn(() => [
-    {
-      seq: 1,
-      resourceType: 'Knowledge',
-      eventType: 'Updated',
-      payload: { kb_id: 'kb-1', doc_id: 'doc-1', content_hash: 'hash-1' },
-    },
-    {
-      seq: 2,
-      resourceType: 'Knowledge',
-      eventType: 'Updated',
-      payload: { kb_id: 'kb-1', doc_id: 'doc-2', content_hash: 'hash-2' },
-    },
-  ]),
-}))
+vi.mock('./p2p-event.service', async () => {
+  const { createP2pEventServiceMock } = await import('./p2p-event.service.mock')
+  return createP2pEventServiceMock({
+    listWorkspaceEventsSince: () =>
+      [
+        {
+          seq: 1,
+          resourceType: 'Knowledge',
+          eventType: 'Updated',
+          payload: { kb_id: 'kb-1', doc_id: 'doc-1', content_hash: 'hash-1' },
+        },
+        {
+          seq: 2,
+          resourceType: 'Knowledge',
+          eventType: 'Updated',
+          payload: { kb_id: 'kb-1', doc_id: 'doc-2', content_hash: 'hash-2' },
+        },
+      ] as unknown as WorkspaceEvent[],
+  })
+})
 
 describe('p2p-knowledge-share-metadata', () => {
   it('round-trips knowledge share metadata', () => {
