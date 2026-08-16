@@ -13,8 +13,8 @@ jobs:
       - name: Mirror GitHub repo to Gitee
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_OWNER: wangxy
-          GITEE_REPO: Toolman
+          GITEE_OWNER: wangxy9527
+          GITEE_REPO: toolman
         run: |
           set -euo pipefail
           if [ -z "${GITEE_TOKEN}" ]; then
