@@ -3,9 +3,13 @@ import { OFFICIAL_TOOLMAN_HUB_URL } from '../community/hub-config.js'
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
   DEFAULT_LOCAL_SYNC_BASE_URL,
+  isCommunityDeviceSyncHealthPayload,
+  isCommunityMailboxHealthPayload,
+  isForeignSyncIdentity,
   isPrivateOrLoopbackHostname,
   isSyncHubHealthPayload,
   isSyncHubHostsPayload,
+  syncHubHealthIdentityId,
   listCommunityHubProbeCandidates,
   listSyncBaseUrlCandidates,
   siblingHttpOrigin,
@@ -56,6 +60,7 @@ describe('sync endpoint candidates', () => {
       'http://100.64.1.8:17890',
       DEFAULT_LOCAL_SYNC_BASE_URL,
       'http://localhost:17890',
+      OFFICIAL_TOOLMAN_HUB_URL,
     ])
   })
 
@@ -69,6 +74,7 @@ describe('sync endpoint candidates', () => {
       'http://192.168.1.8:17890',
       DEFAULT_LOCAL_SYNC_BASE_URL,
       'http://localhost:17890',
+      OFFICIAL_TOOLMAN_HUB_URL,
     ])
   })
 
@@ -78,7 +84,7 @@ describe('sync endpoint candidates', () => {
         packagerHostnames: ['192.168.1.8:8081'],
         includeLoopback: false,
       }),
-    ).toEqual(['http://192.168.1.8:17890'])
+    ).toEqual(['http://192.168.1.8:17890', OFFICIAL_TOOLMAN_HUB_URL])
   })
 
   it('ignores public hosted hostnames such as Vercel', () => {
@@ -93,22 +99,44 @@ describe('sync endpoint candidates', () => {
         packagerHostnames: ['toolman.vercel.app', '192.168.1.8:8081'],
         includeLoopback: false,
       }),
-    ).toEqual(['http://192.168.1.8:17890'])
+    ).toEqual(['http://192.168.1.8:17890', OFFICIAL_TOOLMAN_HUB_URL])
   })
 
-  it('does not treat the official community catalog as a Sync Hub', () => {
+  it('does not derive a LAN Sync Hub from the official catalog, but uses it as WAN fallback', () => {
     expect(
       listSyncBaseUrlCandidates({
         communityHubBaseUrl: 'https://hub.toolman.app',
         includeLoopback: false,
       }),
-    ).toEqual([])
+    ).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
   })
 
   it('accepts Sync Hub health and hosts JSON, not Community Hub envelopes', () => {
     expect(isSyncHubHealthPayload({ status: 'ok', service: 'toolman-sync-hub' })).toBe(true)
     expect(isSyncHubHealthPayload({ ok: true, data: { status: 'healthy' } })).toBe(false)
+    expect(
+      isCommunityDeviceSyncHealthPayload({
+        ok: true,
+        data: { status: 'healthy', device_sync: true },
+      }),
+    ).toBe(true)
+    expect(
+      isCommunityMailboxHealthPayload({
+        ok: true,
+        data: { status: 'healthy', workspace_mailbox: true },
+      }),
+    ).toBe(true)
     expect(isSyncHubHostsPayload({ hosts: [] })).toBe(true)
     expect(isSyncHubHostsPayload({ ok: true, data: { hosts: [] } })).toBe(false)
+    expect(
+      syncHubHealthIdentityId({
+        status: 'ok',
+        service: 'toolman-sync-hub',
+        identityId: 'id-a',
+      }),
+    ).toBe('id-a')
+    expect(isForeignSyncIdentity('id-a', 'id-b')).toBe(true)
+    expect(isForeignSyncIdentity('id-a', 'id-a')).toBe(false)
+    expect(isForeignSyncIdentity(null, 'id-b')).toBe(false)
   })
 })

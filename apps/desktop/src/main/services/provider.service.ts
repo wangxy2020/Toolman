@@ -7,6 +7,7 @@ export {
   createProvider,
   updateProvider,
   testProvider,
+  revealProviderApiKey,
   deleteProvider,
   fetchProviderModels,
 } from './provider/crud'

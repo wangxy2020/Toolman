@@ -3,33 +3,17 @@ import type { TranslationLanguage } from '@toolman/shared'
 import { normalizeTranslationLanguages } from '../chat/translation-utils'
 import { loadTranslationSettings } from './translation-settings-storage'
 import {
-  buildContrastTitle,
-  createDocumentItem,
-  createEmptyContrastItem,
   loadTranslationData,
-  normalizeContrast,
-  normalizeDocument,
-  normalizeRenameTitle,
-  normalizeTranslationData,
   saveTranslationData,
-  uniqueTitle,
   type TranslationData,
-  type TranslationDocumentItem,
-  type TranslationDocumentPageSnapshot,
 } from './translation-storage'
+import { useTranslationRecordsContrasts } from './use-translation-records-contrasts'
+import { useTranslationRecordsDocuments } from './use-translation-records-documents'
 
-export interface SaveTranslationContrastInput {
-  sourceText: string
-  targetText: string
-  languages: [TranslationLanguage, TranslationLanguage]
-}
-
-export interface SaveTranslationDocumentInput {
-  sourceText: string
-  targetText: string
-  languages: [TranslationLanguage, TranslationLanguage]
-  pageSnapshots?: TranslationDocumentPageSnapshot[]
-}
+export type {
+  SaveTranslationContrastInput,
+  SaveTranslationDocumentInput,
+} from './use-translation-records-types'
 
 export function useTranslationRecords(
   workspaceId: string | null,
@@ -73,300 +57,57 @@ export function useTranslationRecords(
       .sort((left, right) => right.updatedAt - left.updatedAt)
   }, [data.documents, workspaceId])
 
-  const activeContrast = useMemo(
-    () => contrasts.find((item) => item.id === activeContrastId) ?? null,
-    [activeContrastId, contrasts],
-  )
+  const contrastApi = useTranslationRecordsContrasts({
+    workspaceId,
+    untitledLabel,
+    data,
+    setData,
+    activeContrastId,
+    setActiveContrastId,
+    setRenameContrastId,
+    setActiveDocumentId,
+    setRenameDocumentId,
+    resolveDefaultLanguages,
+    contrasts,
+  })
 
-  const activeDocument = useMemo(
-    () => documents.find((item) => item.id === activeDocumentId) ?? null,
-    [activeDocumentId, documents],
-  )
-
-  const createNewContrast = useCallback((): string | null => {
-    setRenameContrastId(null)
-    if (!workspaceId) {
-      setActiveContrastId(null)
-      return null
-    }
-
-    const contrast = createEmptyContrastItem(
-      workspaceId,
-      buildContrastTitle(data.contrasts, workspaceId, '', untitledLabel),
-      resolveDefaultLanguages(),
-    )
-
-    setData((prev) =>
-      normalizeTranslationData({
-        ...prev,
-        contrasts: [contrast, ...prev.contrasts],
-      }),
-    )
-    setActiveContrastId(contrast.id)
-    return contrast.id
-  }, [data.contrasts, resolveDefaultLanguages, untitledLabel, workspaceId])
-
-  const openDocument = useCallback(
-    (filePath: string): TranslationDocumentItem | null => {
-      if (!workspaceId || !filePath.trim()) return null
-
-      const existing = data.documents.find(
-        (item) => item.workspaceId === workspaceId && item.filePath === filePath,
-      )
-      if (existing) {
-        setActiveDocumentId(existing.id)
-        setRenameDocumentId(null)
-        return existing
-      }
-
-      const document = createDocumentItem(workspaceId, filePath, resolveDefaultLanguages())
-      const titled = normalizeDocument(
-        {
-          ...document,
-          title: uniqueTitle(document.fileName, data.documents, workspaceId),
-        },
-        workspaceId,
-      )
-
-      setData((prev) =>
-        normalizeTranslationData({
-          ...prev,
-          documents: [titled, ...prev.documents],
-        }),
-      )
-      setActiveDocumentId(titled.id)
-      setRenameDocumentId(null)
-      return titled
-    },
-    [data.documents, resolveDefaultLanguages, workspaceId],
-  )
-
-  const selectContrast = useCallback((contrastId: string) => {
-    setActiveContrastId(contrastId)
-    setRenameContrastId(null)
-  }, [])
-
-  const selectDocument = useCallback((documentId: string) => {
-    setActiveDocumentId(documentId)
-    setRenameDocumentId(null)
-  }, [])
-
-  const clearActiveDocument = useCallback(() => {
-    setActiveDocumentId(null)
-    setRenameDocumentId(null)
-  }, [])
-
-  /** Landing state when opening the translate module from navigation. */
-  const enterContrastSection = useCallback(() => {
-    setRenameContrastId(null)
-    setRenameDocumentId(null)
-    setActiveDocumentId(null)
-    setActiveContrastId(contrasts[0]?.id ?? null)
-  }, [contrasts])
-
-  const startRenameContrast = useCallback((contrastId: string) => {
-    setRenameContrastId(contrastId)
-  }, [])
-
-  const startRenameDocument = useCallback((documentId: string) => {
-    setRenameDocumentId(documentId)
-  }, [])
-
-  const cancelRenameContrast = useCallback(() => {
-    setRenameContrastId(null)
-  }, [])
-
-  const cancelRenameDocument = useCallback(() => {
-    setRenameDocumentId(null)
-  }, [])
-
-  const renameContrast = useCallback((contrastId: string, title: string) => {
-    setData((prev) => ({
-      ...prev,
-      contrasts: prev.contrasts.map((item) =>
-        item.id === contrastId
-          ? { ...item, title, updatedAt: Date.now() }
-          : item,
-      ),
-    }))
-    setRenameContrastId(null)
-  }, [])
-
-  const renameDocument = useCallback((documentId: string, title: string) => {
-    setData((prev) => ({
-      ...prev,
-      documents: prev.documents.map((item) =>
-        item.id === documentId
-          ? { ...item, title, updatedAt: Date.now() }
-          : item,
-      ),
-    }))
-    setRenameDocumentId(null)
-  }, [])
-
-  const saveContrast = useCallback(
-    (input: SaveTranslationContrastInput): string | null => {
-      if (!workspaceId) return null
-      const sourceText = input.sourceText
-      const targetText = input.targetText
-      if (!sourceText.trim() && !targetText.trim()) return null
-
-      const now = Date.now()
-      if (activeContrastId) {
-        setData((prev) => ({
-          ...prev,
-          contrasts: prev.contrasts.map((item) =>
-            item.id === activeContrastId
-              ? normalizeContrast(
-                  {
-                    ...item,
-                    sourceText,
-                    targetText,
-                    languages: input.languages,
-                    updatedAt: now,
-                  },
-                  workspaceId,
-                )
-              : item,
-          ),
-        }))
-        return activeContrastId
-      }
-
-      const contrast = createEmptyContrastItem(
-        workspaceId,
-        buildContrastTitle(data.contrasts, workspaceId, sourceText, untitledLabel),
-        input.languages,
-      )
-      const saved = normalizeContrast(
-        {
-          ...contrast,
-          sourceText,
-          targetText,
-          updatedAt: now,
-        },
-        workspaceId,
-      )
-
-      setData((prev) =>
-        normalizeTranslationData({
-          ...prev,
-          contrasts: [saved, ...prev.contrasts],
-        }),
-      )
-      setActiveContrastId(saved.id)
-      return saved.id
-    },
-    [activeContrastId, data.contrasts, untitledLabel, workspaceId],
-  )
-
-  const saveDocument = useCallback(
-    (input: SaveTranslationDocumentInput): string | null => {
-      if (!workspaceId || !activeDocumentId) return null
-      const hasSnapshots = Boolean(input.pageSnapshots && input.pageSnapshots.length > 0)
-      if (!input.sourceText.trim() && !input.targetText.trim() && !hasSnapshots) return null
-
-      const now = Date.now()
-      let saved = false
-      setData((prev) => {
-        const existing = prev.documents.find((item) => item.id === activeDocumentId)
-        if (!existing) return prev
-
-        saved = true
-        return {
-          ...prev,
-          documents: prev.documents.map((item) =>
-            item.id === activeDocumentId
-              ? normalizeDocument(
-                  {
-                    ...item,
-                    sourceText: input.sourceText || item.sourceText,
-                    targetText: input.targetText || item.targetText,
-                    pageSnapshots: hasSnapshots ? input.pageSnapshots : item.pageSnapshots,
-                    languages: input.languages,
-                    updatedAt: now,
-                  },
-                  workspaceId,
-                )
-              : item,
-          ),
-        }
-      })
-      return saved ? activeDocumentId : null
-    },
-    [activeDocumentId, workspaceId],
-  )
-
-  const updateDocumentSourceText = useCallback(
-    (documentId: string, sourceText: string): void => {
-      if (!workspaceId) return
-      setData((prev) => ({
-        ...prev,
-        documents: prev.documents.map((item) =>
-          item.id === documentId
-            ? normalizeDocument({ ...item, sourceText }, workspaceId)
-            : item,
-        ),
-      }))
-    },
-    [workspaceId],
-  )
-
-  const deleteContrast = useCallback((contrastId: string) => {
-    setData((prev) => ({
-      ...prev,
-      contrasts: prev.contrasts.filter((item) => item.id !== contrastId),
-    }))
-    setActiveContrastId((current) => (current === contrastId ? null : current))
-    setRenameContrastId((current) => (current === contrastId ? null : current))
-  }, [])
-
-  const deleteDocument = useCallback((documentId: string) => {
-    setData((prev) => ({
-      ...prev,
-      documents: prev.documents.filter((item) => item.id !== documentId),
-    }))
-    setActiveDocumentId((current) => (current === documentId ? null : current))
-    setRenameDocumentId((current) => (current === documentId ? null : current))
-  }, [])
+  const documentApi = useTranslationRecordsDocuments({
+    workspaceId,
+    untitledLabel,
+    data,
+    setData,
+    activeDocumentId,
+    setActiveDocumentId,
+    setRenameDocumentId,
+    resolveDefaultLanguages,
+    documents,
+  })
 
   return {
     contrasts,
     documents,
     activeContrastId,
     activeDocumentId,
-    activeContrast,
-    activeDocument,
+    activeContrast: contrastApi.activeContrast,
+    activeDocument: documentApi.activeDocument,
     renameContrastId,
     renameDocumentId,
-    createNewContrast,
-    openDocument,
-    selectContrast,
-    selectDocument,
-    clearActiveDocument,
-    enterContrastSection,
-    startRenameContrast,
-    startRenameDocument,
-    cancelRenameContrast,
-    cancelRenameDocument,
-    renameContrast: (contrastId: string, title: string) => {
-      const existing = data.contrasts.find((item) => item.id === contrastId)
-      renameContrast(
-        contrastId,
-        normalizeRenameTitle(title, existing?.title ?? untitledLabel),
-      )
-    },
-    renameDocument: (documentId: string, title: string) => {
-      const existing = data.documents.find((item) => item.id === documentId)
-      renameDocument(
-        documentId,
-        normalizeRenameTitle(title, existing?.title ?? untitledLabel),
-      )
-    },
-    saveContrast,
-    saveDocument,
-    updateDocumentSourceText,
-    deleteContrast,
-    deleteDocument,
+    createNewContrast: contrastApi.createNewContrast,
+    openDocument: documentApi.openDocument,
+    selectContrast: contrastApi.selectContrast,
+    selectDocument: documentApi.selectDocument,
+    clearActiveDocument: documentApi.clearActiveDocument,
+    enterContrastSection: contrastApi.enterContrastSection,
+    startRenameContrast: contrastApi.startRenameContrast,
+    startRenameDocument: documentApi.startRenameDocument,
+    cancelRenameContrast: contrastApi.cancelRenameContrast,
+    cancelRenameDocument: documentApi.cancelRenameDocument,
+    renameContrast: contrastApi.renameContrast,
+    renameDocument: documentApi.renameDocument,
+    saveContrast: contrastApi.saveContrast,
+    saveDocument: documentApi.saveDocument,
+    updateDocumentSourceText: documentApi.updateDocumentSourceText,
+    deleteContrast: contrastApi.deleteContrast,
+    deleteDocument: documentApi.deleteDocument,
   }
 }

@@ -85,6 +85,14 @@ export const integrationsIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcErr({ code: 'PROVIDER_ERROR', message, retryable: false })
     }
   },
+  [IpcChannel.ProviderRevealApiKey]: async (input) => {
+    try {
+      return ipcOk(providerService.revealProviderApiKey(input))
+    } catch (error) {
+      const message = toErrorMessage(error, 'Reveal API key failed')
+      return ipcErr({ code: 'PROVIDER_ERROR', message, retryable: false })
+    }
+  },
   [IpcChannel.ProviderFetchModels]: async (input) => {
     try {
       return ipcOk(await providerService.fetchProviderModels(input))

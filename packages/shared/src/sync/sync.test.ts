@@ -28,6 +28,17 @@ describe('sync contracts', () => {
     expect(change.entityKind).toBe('classroom_session')
   })
 
+  it('parses p2p group changes', () => {
+    const change = SyncChangeSchema.parse({
+      entityKind: 'p2p_group',
+      entityId: 'g1',
+      op: 'upsert',
+      updatedAt: 1,
+      payload: { name: '默认群组', createdAt: 1 },
+    })
+    expect(change.entityKind).toBe('p2p_group')
+  })
+
   it('parses host presence', () => {
     const presence = AgentHostPresenceSchema.parse({
       deviceId: 'd1',

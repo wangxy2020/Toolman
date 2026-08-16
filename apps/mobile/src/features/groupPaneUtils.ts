@@ -60,6 +60,27 @@ export function sharedItemsFromPickerSelection(
   return items
 }
 
+export function noteBodiesFromPickerSelection(
+  selection: GroupPickerSelection[],
+  notes: MobileNote[],
+): Record<string, string> {
+  const byId = new Map(notes.map((note) => [note.id, note.body]))
+  const bodies: Record<string, string> = {}
+  for (const group of selection) {
+    const targets =
+      group.items.length > 0
+        ? group.items
+        : notes
+            .filter((note) => note.notebookId === group.groupId)
+            .map((note) => ({ id: note.id, name: note.title }))
+    for (const item of targets) {
+      const body = byId.get(item.id)
+      if (body) bodies[item.id] = body
+    }
+  }
+  return bodies
+}
+
 export function buildGroupPickerGroups(input: {
   activeAction: GroupSidebarAction
   sharedItems: GroupSharedItem[]

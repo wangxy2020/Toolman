@@ -16,6 +16,41 @@ export const DEEPSEEK_PRESET_MODELS = [
   { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro' },
 ] as const
 
+/** Seeded so a saved API key is enough to chat without waiting on GET /models. */
+export const NETWORK_PRESET_MODELS: Record<string, ReadonlyArray<{ id: string; name: string }>> = {
+  deepseek: DEEPSEEK_PRESET_MODELS,
+  moonshot: [
+    { id: 'kimi-k2.6', name: 'kimi-k2.6' },
+    { id: 'kimi-k3', name: 'kimi-k3' },
+    { id: 'kimi-k2.5', name: 'kimi-k2.5' },
+    { id: 'moonshot-v1-8k', name: 'moonshot-v1-8k' },
+    { id: 'moonshot-v1-32k', name: 'moonshot-v1-32k' },
+    { id: 'moonshot-v1-128k', name: 'moonshot-v1-128k' },
+  ],
+  openai: [
+    { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+    { id: 'gpt-4o', name: 'gpt-4o' },
+    { id: 'o4-mini', name: 'o4-mini' },
+  ],
+  zhipu: [
+    { id: 'glm-4-flash', name: 'glm-4-flash' },
+    { id: 'glm-4-air', name: 'glm-4-air' },
+    { id: 'glm-4-plus', name: 'glm-4-plus' },
+  ],
+  qwen: [
+    { id: 'qwen-plus', name: 'qwen-plus' },
+    { id: 'qwen-turbo', name: 'qwen-turbo' },
+    { id: 'qwen-max', name: 'qwen-max' },
+  ],
+}
+
+export function getNetworkPresetModels(
+  presetId: string | null | undefined,
+): ReadonlyArray<{ id: string; name: string }> {
+  if (!presetId) return []
+  return NETWORK_PRESET_MODELS[presetId] ?? []
+}
+
 export type DeepSeekSupportedModelId = (typeof DEEPSEEK_SUPPORTED_MODEL_IDS)[number]
 
 export type DeepSeekChatOptions = {
@@ -78,13 +113,19 @@ export function normalizeOpenAiCompatibleModelKey(model: string): string {
   return model.trim().toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-')
 }
 
+/** Kimi K2.5 / K2.6 / K3 — omit sampling knobs and disable thinking on pings. */
+export function isKimiChatModelId(model: string): boolean {
+  const key = normalizeOpenAiCompatibleModelKey(model)
+  return /(^|\/)kimi-k\d/.test(key)
+}
+
 /**
- * Kimi K3 fixes temperature/top_p/n/penalties server-side; sending them returns HTTP 400.
+ * Kimi K3 (and current K2.x chat models) fix temperature/top_p/n/penalties
+ * server-side; sending them returns HTTP 400.
  * @see https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
  */
 export function isKimiFixedSamplingModelId(model: string): boolean {
-  const key = normalizeOpenAiCompatibleModelKey(model)
-  return /(^|\/)kimi-k3(?:$|[-:])/.test(key)
+  return isKimiChatModelId(model)
 }
 
 export function isMoonshotCompatibleBaseUrl(

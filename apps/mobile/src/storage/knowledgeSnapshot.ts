@@ -3,6 +3,8 @@ import {
   KnowledgeSnapshotSchema,
   type KnowledgeSnapshot,
 } from '@toolman/shared'
+import { scopedStorageKey } from './identityScope'
+import { unwrapOwnedValue, wrapOwnedValue } from './identityScopeCore'
 
 const IDB_NAME = 'toolman-mobile'
 const IDB_STORE = 'kv'
@@ -47,13 +49,17 @@ async function idbSet(key: string, value: unknown): Promise<void> {
   })
 }
 
+export function resetKnowledgeSnapshotMemory(): void {
+  memorySnapshot = null
+}
+
 export async function loadKnowledgeSnapshot(): Promise<KnowledgeSnapshot | null> {
-  if (memorySnapshot) return memorySnapshot
+  memorySnapshot = null
   if (!hasIndexedDb()) return null
   try {
-    const raw = await idbGet(IDB_KEY)
-    if (!raw) return null
-    const parsed = KnowledgeSnapshotSchema.parse(raw)
+    const owned = unwrapOwnedValue<unknown>(await idbGet(scopedStorageKey(IDB_KEY)))
+    if (!owned) return null
+    const parsed = KnowledgeSnapshotSchema.parse(owned)
     memorySnapshot = parsed
     return parsed
   } catch {
@@ -65,9 +71,25 @@ export async function saveKnowledgeSnapshot(snapshot: KnowledgeSnapshot): Promis
   memorySnapshot = snapshot
   if (!hasIndexedDb()) return
   try {
-    await idbSet(IDB_KEY, snapshot)
+    await idbSet(scopedStorageKey(IDB_KEY), wrapOwnedValue(snapshot))
   } catch {
     // Quota / private mode: keep in-memory copy for this session.
     if (Platform.OS !== 'web') return
+  }
+}
+
+export async function clearKnowledgeSnapshot(): Promise<void> {
+  memorySnapshot = null
+  if (!hasIndexedDb()) return
+  try {
+    const db = await openDb()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      const req = tx.objectStore(IDB_STORE).delete(scopedStorageKey(IDB_KEY))
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error ?? new Error('indexedDB delete failed'))
+    })
+  } catch {
+    // ignore
   }
 }

@@ -39,6 +39,7 @@ export const settingsPagesModelServiceEn = {
       placeholder: 'API key',
       hide: 'Hide',
       show: 'Show',
+      revealFailed: 'Could not read the saved API key',
       test: 'Test',
       getKeyLink: 'Get your API key here',
       multiKeyHint: 'Separate multiple keys with commas',

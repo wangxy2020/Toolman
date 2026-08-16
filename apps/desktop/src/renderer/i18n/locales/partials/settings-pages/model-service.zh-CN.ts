@@ -38,6 +38,7 @@ export const settingsPagesModelServiceZhCN = {
       placeholder: 'API 密钥',
       hide: '隐藏',
       show: '显示',
+      revealFailed: '无法读取已保存的密钥',
       test: '检测',
       getKeyLink: '点击这里获取密钥',
       multiKeyHint: '多个密钥使用逗号分隔',

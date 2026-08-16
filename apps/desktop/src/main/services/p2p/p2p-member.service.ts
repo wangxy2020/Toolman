@@ -13,10 +13,13 @@ import {
   ensureOwnerMemberRecord,
   getIdentityDisplayName,
   getMemberRepo,
+  getWorkspaceRepo,
   mapMemberRow,
-} from './p2p-member-shared'
+  toWorkspaceDto,
+} from './p2p-member-shared-repos'
+import { publishP2pGroupSyncChange } from '../group-mobile-sync'
 
-export { ensureOwnerMemberRecord } from './p2p-member-shared'
+export { ensureOwnerMemberRecord } from './p2p-member-shared-repos'
 import { recordMemberDepartureEvent } from './p2p-member-departure.service'
 import { fireAndForget } from '../../lib/fire-and-forget'
 import { P2pMemberLimitError } from './p2p-member-join/errors'
@@ -88,23 +91,35 @@ export async function prepareP2pMemberList(workspaceId: string): Promise<P2pMemb
   return listP2pMembers(workspaceId)
 }
 
+function listVisiblePersonDevices(workspaceId: string, identityId: string) {
+  return getMemberRepo()
+    .listByWorkspaceAndIdentity(workspaceId, identityId)
+    .filter((row) => row.status === 'active' || row.status === 'invited')
+}
+
 export async function removeP2pMember(rawInput: unknown): Promise<void> {
   const input = P2pMemberRemoveInputSchema.parse(rawInput)
   const { actor, target } = assertCanManageMembers(input.workspaceId, input.memberId)
+  const devices = listVisiblePersonDevices(input.workspaceId, target.identityId)
+  const targets = devices.length > 0 ? devices : [target]
 
-  await recordMemberDepartureEvent({
-    workspaceId: input.workspaceId,
-    memberId: target.id,
-    operatorId: actor.id,
-    reason: 'removed',
-    displayName: target.displayName,
-    deviceId: target.deviceId,
-  })
+  for (const device of targets) {
+    await recordMemberDepartureEvent({
+      workspaceId: input.workspaceId,
+      memberId: device.id,
+      operatorId: actor.id,
+      reason: 'removed',
+      displayName: device.displayName,
+      deviceId: device.deviceId,
+    })
+    getMemberRepo().update({
+      id: device.id,
+      status: 'removed',
+    })
+  }
 
-  getMemberRepo().update({
-    id: target.id,
-    status: 'removed',
-  })
+  const workspace = getWorkspaceRepo().findById(input.workspaceId)
+  if (workspace) publishP2pGroupSyncChange(toWorkspaceDto(workspace))
 }
 
 export function updateP2pMemberRole(rawInput: unknown): P2pMember {
@@ -115,13 +130,19 @@ export function updateP2pMemberRole(rawInput: unknown): P2pMember {
     throw new Error('不能将成员设为群主')
   }
 
-  const updated = getMemberRepo().update({
-    id: target.id,
-    role: input.role as P2pMemberRole,
-  })
-  if (!updated) {
-    throw new Error('成员不存在')
+  const devices = listVisiblePersonDevices(input.workspaceId, target.identityId)
+  const targets = devices.length > 0 ? devices : [target]
+  let updated = target
+  for (const device of targets) {
+    updated =
+      getMemberRepo().update({
+        id: device.id,
+        role: input.role as P2pMemberRole,
+      }) ?? updated
   }
+
+  const workspace = getWorkspaceRepo().findById(input.workspaceId)
+  if (workspace) publishP2pGroupSyncChange(toWorkspaceDto(workspace))
 
   return mapMemberRow(updated, input.workspaceId)
 }

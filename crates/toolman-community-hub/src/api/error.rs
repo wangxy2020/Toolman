@@ -531,6 +531,12 @@ impl From<crate::services::AdminManagementError> for ApiError {
     }
 }
 
+impl From<crate::repositories::DeviceSyncRepositoryError> for ApiError {
+    fn from(error: crate::repositories::DeviceSyncRepositoryError) -> Self {
+        Self::internal(error.to_string())
+    }
+}
+
 impl From<crate::services::PresenceServiceError> for ApiError {
     fn from(error: crate::services::PresenceServiceError) -> Self {
         match error {

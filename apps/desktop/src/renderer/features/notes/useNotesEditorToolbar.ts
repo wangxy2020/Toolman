@@ -9,7 +9,7 @@ import {
 
 import { getNotesToolbarTitles } from '../../i18n/notes-editor-labels'
 import { useI18n } from '../../i18n/useI18n'
-import type { NoteToolbarActionKey, NotesEditorToolbarProps } from './NotesEditorToolbar'
+import type { NoteToolbarActionKey, NotesEditorToolbarProps } from './notes-editor-toolbar-types'
 
 /** Relative sizes shown as 较小 / 正常 / 较大 / 更大 */
 export const FONT_SIZE_PRESETS = [

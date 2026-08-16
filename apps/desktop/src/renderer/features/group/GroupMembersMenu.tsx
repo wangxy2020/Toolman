@@ -5,7 +5,11 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { IconPlus } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import { GroupMemberContextMenu } from './GroupMemberContextMenu'
-import { canManageTargetMember } from './group-member-utils'
+import {
+  canManageTargetMember,
+  groupP2pMembersByPerson,
+  memberSelfRef,
+} from './group-member-utils'
 import { GroupMembersMenuMemberItem } from './GroupMembersMenuMemberItem'
 
 interface Props {
@@ -13,7 +17,11 @@ interface Props {
   anchorRef: React.RefObject<HTMLElement | null>
   workspaceName: string
   members: P2pMember[]
+  ownerIdentityId?: string | null
+  ownerDeviceId?: string | null
   selfMemberId: string | null
+  selfIdentityId?: string | null
+  selfDeviceId?: string | null
   selfMemberRole: P2pMemberRole | null
   canManageMembers: boolean
   loading?: boolean
@@ -37,7 +45,11 @@ export function GroupMembersMenu({
   anchorRef,
   workspaceName,
   members,
+  ownerIdentityId,
+  ownerDeviceId,
   selfMemberId,
+  selfIdentityId,
+  selfDeviceId,
   selfMemberRole,
   canManageMembers,
   loading,
@@ -64,7 +76,11 @@ export function GroupMembersMenu({
       setRemoveTarget(null)
     }
   }, [open])
-  const activeMembers = members.filter((member) => member.status === 'active')
+  const people = groupP2pMembersByPerson(members, {
+    identityId: ownerIdentityId,
+    deviceId: ownerDeviceId,
+  })
+  const self = memberSelfRef(selfMemberId, selfIdentityId, selfDeviceId)
   const canManage = Boolean(onRemoveMember && onUpdateMemberRole)
 
   useEffect(() => {
@@ -116,14 +132,14 @@ export function GroupMembersMenu({
     (event: React.MouseEvent, member: P2pMember) => {
       event.preventDefault()
       event.stopPropagation()
-      if (!canManageTargetMember(selfMemberRole ?? undefined, member, selfMemberId)) return
+      if (!canManageTargetMember(selfMemberRole ?? undefined, member, self)) return
       setContextMenu({
         x: event.clientX,
         y: event.clientY,
         member,
       })
     },
-    [selfMemberId, selfMemberRole],
+    [self, selfMemberRole],
   )
 
   const handleSelectRole = useCallback(
@@ -171,7 +187,7 @@ export function GroupMembersMenu({
           <div>
             <h3 className="tm-group-members-menu-title">{t('groupPage.members.title')}</h3>
             <p className="tm-group-members-menu-subtitle">
-              {t('groupPage.members.subtitle', { name: workspaceName, count: activeMembers.length })}
+              {t('groupPage.members.subtitle', { name: workspaceName, count: people.length })}
             </p>
           </div>
           {canManageMembers && onInvite ? (
@@ -192,18 +208,18 @@ export function GroupMembersMenu({
         {actionError ? <div className="tm-error-bar">{actionError}</div> : null}
 
         <div className="tm-group-members-menu-body">
-          {loading && activeMembers.length === 0 ? (
+          {loading && people.length === 0 ? (
             <div className="tm-session-empty">{t('groupPage.members.loading')}</div>
-          ) : activeMembers.length === 0 ? (
+          ) : people.length === 0 ? (
             <div className="tm-group-members-menu-empty">{t('groupPage.members.empty')}</div>
           ) : (
             <ul className="tm-group-member-list tm-group-members-menu-list">
-              {activeMembers.map((member) => {
+              {people.map((person) => {
                 return (
                   <GroupMembersMenuMemberItem
-                    key={member.id}
-                    member={member}
-                    selfMemberId={selfMemberId}
+                    key={person.identityId}
+                    person={person}
+                    self={self}
                     selfMemberRole={selfMemberRole}
                     canManage={canManage}
                     actionBusy={actionBusy}
@@ -223,7 +239,7 @@ export function GroupMembersMenu({
           y={contextMenu.y}
           member={contextMenu.member}
           actorRole={selfMemberRole}
-          selfMemberId={selfMemberId}
+          self={self}
           busy={actionBusy}
           onClose={() => setContextMenu(null)}
           onSelectRole={(role) => void handleSelectRole(contextMenu.member, role)}

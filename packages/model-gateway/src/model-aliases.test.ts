@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deepSeekModelSupportsVision,
+  getNetworkPresetModels,
   isDeepSeekSupportedModelId,
   isKimiFixedSamplingModelId,
   normalizeDeepSeekModelKey,
@@ -11,6 +12,7 @@ import {
   shouldOmitOpenAiSamplingParams,
   shouldRouteThinkingAsAnswer,
 } from './model-aliases.js'
+import { buildOpenAiPingBody, resolveOpenAiPingModel } from './providers/openai.js'
 
 describe('normalizeDeepSeekModelKey', () => {
   it('normalizes spaced names without changing alias', () => {
@@ -85,6 +87,7 @@ describe('shouldOmitOpenAiSamplingParams', () => {
     expect(isKimiFixedSamplingModelId('kimi-k3')).toBe(true)
     expect(isKimiFixedSamplingModelId('Kimi K3')).toBe(true)
     expect(isKimiFixedSamplingModelId('moonshotai/kimi-k3')).toBe(true)
+    expect(isKimiFixedSamplingModelId('kimi-k2.6')).toBe(true)
     expect(
       shouldOmitOpenAiSamplingParams(
         { type: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1' },
@@ -169,5 +172,35 @@ describe('shouldRouteThinkingAsAnswer', () => {
         'gemma4:26b',
       ),
     ).toBe(false)
+  })
+})
+
+describe('network preset models', () => {
+  it('seeds moonshot with kimi-k2.6 so a saved API key can chat without /models', () => {
+    expect(getNetworkPresetModels('moonshot').some((model) => model.id === 'kimi-k2.6')).toBe(true)
+    expect(getNetworkPresetModels('openai').length).toBeGreaterThan(0)
+    expect(getNetworkPresetModels('qwen').map((model) => model.id)).toContain('qwen-plus')
+  })
+})
+
+describe('openai connection ping', () => {
+  it('pings moonshot with kimi-k2.6 and thinking disabled', () => {
+    const config = { type: 'openai_compatible' as const, baseUrl: 'https://api.moonshot.cn/v1' }
+    expect(resolveOpenAiPingModel(config)).toBe('kimi-k2.6')
+    expect(buildOpenAiPingBody(config)).toMatchObject({
+      model: 'kimi-k2.6',
+      max_tokens: 1,
+      thinking: { type: 'disabled' },
+    })
+  })
+
+  it('uses the configured test model when present', () => {
+    expect(
+      resolveOpenAiPingModel({
+        type: 'openai_compatible',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        testModel: 'kimi-k2.6',
+      }),
+    ).toBe('kimi-k2.6')
   })
 })

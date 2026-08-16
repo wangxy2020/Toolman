@@ -10,7 +10,7 @@ import { getKnownP2pConnections } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { applyRemoteMemberJoin } from './p2p-member-join.service'
-import { ensureOwnerMemberRecord } from './p2p-member-shared'
+import { ensureOwnerMemberRecord } from './p2p-member-shared-repos'
 import {
   broadcastP2pGroupChatCleared,
   broadcastP2pGroupChatMessage,
@@ -27,6 +27,7 @@ import {
 } from './p2p-group-chat-signing.service'
 import { checkReplayGuard } from './p2p-replay-guard.service'
 import { maybeRelayGroupChatAfterReceive } from './p2p-group-chat-relay-internal'
+import { parseMemberCertSnapshot } from './p2p-workspace-vip-pool.service'
 
 function getMemberRepo(): P2pMemberRepository {
   return new P2pMemberRepository(getDatabase())
@@ -34,6 +35,16 @@ function getMemberRepo(): P2pMemberRepository {
 
 function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
+}
+
+function acceptUnsignedMobileGroupChat(peerDeviceId: string, workspaceId?: string): boolean {
+  if (!workspaceId) return false
+  const connected = getKnownP2pConnections().some(
+    (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
+  )
+  if (!connected) return false
+  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+  return parseMemberCertSnapshot(member?.certJson).deviceKind === 'mobile'
 }
 
 export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buffer): void {
@@ -105,6 +116,20 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
         return
       }
       handleIncomingP2pGroupChatMessage(peerDeviceId, envelope.message)
+      return
+    }
+
+    if (
+      parsed.type === 'group-chat.message' &&
+      parsed.message &&
+      acceptUnsignedMobileGroupChat(
+        peerDeviceId,
+        typeof parsed.message === 'object' && parsed.message && 'workspaceId' in parsed.message
+          ? String((parsed.message as { workspaceId?: string }).workspaceId ?? '')
+          : undefined,
+      )
+    ) {
+      handleIncomingP2pGroupChatMessage(peerDeviceId, parsed.message)
       return
     }
 

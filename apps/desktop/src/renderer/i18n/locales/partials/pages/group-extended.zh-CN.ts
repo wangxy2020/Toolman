@@ -101,6 +101,10 @@ export const groupPageExtendedZhCN = {
     loading: '加载成员中…',
     empty: '暂无成员',
     you: '（我）',
+    pendingJoin: '待加入',
+    deviceDesktop: '电脑',
+    deviceMobile: '手机',
+    deviceUnknown: '设备',
     online: '在线',
     offline: '离线',
     localOnline: '本机 · 在线',
@@ -152,6 +156,8 @@ export const groupPageExtendedZhCN = {
     emptyTitle: '暂无消息',
     emptyHint: '在这里输入消息，按 {{shortcut}} 发送',
     loading: '加载消息中…',
+    mine: '我的',
+    mineInitial: '我',
   },
   events: {
     resources: {

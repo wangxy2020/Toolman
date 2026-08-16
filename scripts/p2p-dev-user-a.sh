@@ -25,6 +25,9 @@ export TOOLMAN_DEV_IDENTITY_ID="${TOOLMAN_DEV_IDENTITY_ID:-00000000-0000-0000-00
 export TOOLMAN_MOBILE_SYNC="${TOOLMAN_MOBILE_SYNC:-1}"
 
 cd "$ROOT_DIR"
+# Repair Electron if a previous interrupted install left path.txt / dist broken.
+bash "$ROOT_DIR/scripts/ensure-electron-binary.sh"
+unset ELECTRON_RUN_AS_NODE
 node "$ROOT_DIR/scripts/write-build-provenance.mjs"
 pnpm build:p2p && pnpm build:libp2p
 pnpm --filter @toolman/desktop^... build

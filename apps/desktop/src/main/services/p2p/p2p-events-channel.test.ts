@@ -15,6 +15,7 @@ import {
   measureReplicationMessageBytes,
   sendEventsBatchChunked,
   sendReplicationMessageOnEventsChannel,
+  slimOversizedAgentWireEvent,
   splitWireEventsByPayloadBudget,
 } from './p2p-events-channel'
 import type { RemoteWorkspaceEventWire } from './p2p-sync-protocol'
@@ -94,6 +95,24 @@ describe('p2p-events-channel', () => {
         events: [hugeEvent],
       }),
     ).rejects.toBeInstanceOf(P2pEventsPayloadTooLargeError)
+  })
+
+  it('strips package_json from oversized agent events so session listings still fit', () => {
+    const event: RemoteWorkspaceEventWire = {
+      ...makeWireEvent(1, 8),
+      resourceType: 'Agent',
+      resourceId: 'ag-1',
+      payloadJson: JSON.stringify({
+        assistant_id: 'ag-1',
+        name: '助手',
+        session_ids: ['sess-1'],
+        package_json: 'x'.repeat(P2P_EVENTS_SAFE_PAYLOAD_BYTES),
+      }),
+    }
+    const slim = slimOversizedAgentWireEvent(event)
+    const payload = JSON.parse(slim.payloadJson) as { session_ids?: string[]; package_json?: string }
+    expect(payload.session_ids).toEqual(['sess-1'])
+    expect(payload.package_json).toBeUndefined()
   })
 
   it('sends chunked event batches', async () => {

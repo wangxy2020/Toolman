@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import type { P2pMember, P2pMemberRole } from '@toolman/shared'
+import type { P2pMember, P2pMemberRole, PersonSelfRef } from '@toolman/shared'
 import { IconCheck } from '../../components/icons'
 import { getGroupMemberRoleLabel } from '../../i18n/group-member-labels'
 import { useI18n } from '../../i18n/useI18n'
@@ -11,7 +11,7 @@ interface Props {
   y: number
   member: P2pMember
   actorRole: P2pMemberRole | null
-  selfMemberId: string | null
+  self: PersonSelfRef
   busy?: boolean
   onClose: () => void
   onSelectRole: (role: P2pMemberRole) => void
@@ -23,7 +23,7 @@ export function GroupMemberContextMenu({
   y,
   member,
   actorRole,
-  selfMemberId,
+  self,
   busy = false,
   onClose,
   onSelectRole,
@@ -38,7 +38,7 @@ export function GroupMemberContextMenu({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
-  const assignableRoles = getAssignableRoles(actorRole ?? undefined, member, selfMemberId)
+  const assignableRoles = getAssignableRoles(actorRole ?? undefined, member, self)
 
   return createPortal(
     <>

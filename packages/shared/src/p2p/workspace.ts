@@ -39,6 +39,7 @@ export const P2pMemberSchema = z.object({
   displayName: z.string().min(1),
   role: P2pMemberRoleSchema,
   status: P2pMemberStatusSchema,
+  deviceKind: z.enum(['desktop', 'mobile']).optional(),
   online: z.boolean(),
   connectionMode: P2pConnectionModeSchema.optional(),
   lastSeenAt: TimestampSchema.optional(),

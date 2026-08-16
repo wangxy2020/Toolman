@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import { formatSyncActionSubtitle, formatSyncActionTitle } from './userSettingsUtils'
 import { describeApiKey } from './settingsPaneUtils'
 import { buildGroupSettingsSave, isGroupSettingsDirty } from './useGroupSettingsModal'
 import { groupSharedPickerHint, sortGroupActivities } from './groupPagePanelUtils'
 
 describe('settings and group helpers', () => {
+  it('does not invite a doomed retry on hosted web', () => {
+    expect(formatSyncActionTitle('offline', true)).toBe('托管网页无法同步')
+    expect(formatSyncActionSubtitle(true)).toMatch(/HTTP Sync Hub/)
+    expect(formatSyncActionTitle('offline')).toBe('离线，点此重试')
+  })
+
   it('describes api keys without leaking the full secret', () => {
     expect(describeApiKey('')).toBe('未填写')
     expect(describeApiKey('sk-abcdefgh')).toContain('尾号 ****efgh')

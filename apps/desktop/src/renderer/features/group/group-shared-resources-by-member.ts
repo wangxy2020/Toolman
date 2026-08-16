@@ -1,4 +1,4 @@
-import type { P2pMember, P2pSharedResource } from '@toolman/shared'
+import { memberIdentityKey, type P2pMember, type P2pSharedResource } from '@toolman/shared'
 
 export interface GroupMemberResourceSection {
   memberId: string
@@ -16,33 +16,47 @@ export function resolveMemberDisplayName(
   return member?.displayName?.trim() || unknownMemberLabel
 }
 
+function personKeyForShare(sharedBy: string, members: P2pMember[]): string {
+  const member = members.find((item) => item.id === sharedBy)
+  return member ? memberIdentityKey(member) : sharedBy
+}
+
 export function groupResourcesByMember(
   resources: P2pSharedResource[],
   members: P2pMember[],
   selfMemberId: string | null,
   unknownMemberLabel: string,
 ): GroupMemberResourceSection[] {
-  const byMember = new Map<string, P2pSharedResource[]>()
+  const byPerson = new Map<string, P2pSharedResource[]>()
 
   for (const resource of resources) {
-    const memberKey = resource.sharedBy
-    const bucket = byMember.get(memberKey) ?? []
+    const personKey = personKeyForShare(resource.sharedBy, members)
+    const bucket = byPerson.get(personKey) ?? []
     bucket.push(resource)
-    byMember.set(memberKey, bucket)
+    byPerson.set(personKey, bucket)
   }
 
-  return [...byMember.entries()]
-    .map(([memberId, memberResources]) => {
+  const self = members.find((item) => item.id === selfMemberId)
+
+  return [...byPerson.entries()]
+    .map(([personKey, memberResources]) => {
       const displayNameFromResource = memberResources.find(
         (resource) => resource.sharedByDisplayName?.trim(),
       )?.sharedByDisplayName
+      const personMember =
+        members.find((item) => memberIdentityKey(item) === personKey) ??
+        members.find((item) => item.id === personKey)
 
       return {
-        memberId,
+        memberId: personMember?.id ?? personKey,
         displayName:
           displayNameFromResource?.trim() ||
-          resolveMemberDisplayName(memberId, members, unknownMemberLabel),
-        isSelf: selfMemberId != null && memberId === selfMemberId,
+          personMember?.displayName?.trim() ||
+          resolveMemberDisplayName(personKey, members, unknownMemberLabel),
+        isSelf:
+          selfMemberId != null &&
+          (personKey === selfMemberId ||
+            (self != null && memberIdentityKey(self) === personKey)),
         resources: memberResources,
       }
     })

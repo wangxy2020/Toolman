@@ -3,7 +3,7 @@ import {
   createP2pDeviceIdentityRepository,
   type P2pWorkspaceMemberRow,
 } from '@toolman/db'
-import type { P2pMember, ProductSku } from '@toolman/shared'
+import type { P2pJoinDeviceKind, P2pMember, ProductSku } from '@toolman/shared'
 import { getDatabase } from '../../../bootstrap/database'
 import { logStructured } from '../../structured-log.service'
 import * as p2pConnectionService from '../p2p-connection.service'
@@ -26,11 +26,16 @@ import {
 } from '../p2p-workspace-vip-pool.service'
 import {
   DEFAULT_IDENTITY_ID,
+  findIdentitySibling,
   getInviteRepo,
   getMemberRepo,
   getWorkspaceRepo,
+  hasWorkspaceMemberCapacity,
+  membershipFromIdentitySibling,
+  toWorkspaceDto,
 } from '../p2p-member-shared'
 import { P2pMemberLimitError } from './errors'
+import { publishP2pGroupSyncChange } from '../../group-mobile-sync'
 
 function resolveRemoteMemberIdentityId(member: P2pMember): string {
   if (member.identityId) return member.identityId
@@ -119,6 +124,15 @@ export async function activateMemberAfterOwnerTrust(
   maybeActivateWorkspaceVipPool(workspaceId)
 }
 
+function certJsonWithDeviceKind(base: string, kind?: P2pJoinDeviceKind): string {
+  if (!kind) return base
+  try {
+    return JSON.stringify({ ...JSON.parse(base), deviceKind: kind })
+  } catch {
+    return base
+  }
+}
+
 export async function applyRemoteMemberJoin(
   payload: {
     workspaceId: string
@@ -127,6 +141,7 @@ export async function applyRemoteMemberJoin(
     peerDeviceId?: string
     subscriptionSku?: ProductSku | null
     remoteDevicePublicKey?: string
+    deviceKind?: P2pJoinDeviceKind
   },
   options?: { requirePeerTrust?: boolean; allowReactivation?: boolean; forcePendingApproval?: boolean },
 ): Promise<void> {
@@ -162,9 +177,26 @@ export async function applyRemoteMemberJoin(
 
   const joinerContext = entitlementContextFromJoinerSku(payload.subscriptionSku)
   assertRemoteJoinerEligibleForWorkspace(workspace, joinerContext)
-  const memberCertJson = buildMemberCertSnapshot(joinerContext)
+  const memberCertJson = certJsonWithDeviceKind(
+    buildMemberCertSnapshot(joinerContext),
+    payload.deviceKind,
+  )
 
   const upsertPendingMember = (): P2pWorkspaceMemberRow => {
+    const remoteIdentityId = existing?.identityId ?? resolveRemoteMemberIdentityId(payload.member)
+    const sibling = findIdentitySibling(
+      payload.workspaceId,
+      remoteIdentityId,
+      payload.member.deviceId,
+    )
+    const inherited = membershipFromIdentitySibling(payload.member.role, sibling)
+    const role =
+      inherited.role === 'owner' && remoteIdentityId !== workspace.ownerIdentityId
+        ? payload.member.role === 'owner'
+          ? 'member'
+          : payload.member.role
+        : inherited.role
+
     if (existing) {
       if (existing.status !== 'active' && options?.allowReactivation === false) {
         return existing
@@ -172,8 +204,8 @@ export async function applyRemoteMemberJoin(
       return (
         getMemberRepo().update({
           id: existing.id,
-          status: 'invited',
-          role: payload.member.role,
+          status: inherited.status,
+          role,
           displayName: payload.member.displayName,
           joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
           certJson: memberCertJson,
@@ -181,7 +213,6 @@ export async function applyRemoteMemberJoin(
       )
     }
 
-    const remoteIdentityId = resolveRemoteMemberIdentityId(payload.member)
     ensureLinkedIdentityRow(
       remoteIdentityId,
       payload.member.displayName,
@@ -194,8 +225,8 @@ export async function applyRemoteMemberJoin(
       identityId: remoteIdentityId,
       deviceId: payload.member.deviceId,
       displayName: payload.member.displayName,
-      role: payload.member.role,
-      status: 'invited',
+      role,
+      status: inherited.status,
       joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
       certJson: memberCertJson,
     })
@@ -220,12 +251,21 @@ export async function applyRemoteMemberJoin(
     return
   }
 
-  const activeCount = getMemberRepo().countActiveByWorkspace(payload.workspaceId)
-  if (activeCount >= workspace.maxMembers && existing?.status !== 'active') {
+  const joinerIdentityId = existing?.identityId ?? resolveRemoteMemberIdentityId(payload.member)
+  if (
+    !hasWorkspaceMemberCapacity({
+      workspaceId: payload.workspaceId,
+      maxMembers: workspace.maxMembers,
+      joinerIdentityId,
+      existingStatus: existing?.status,
+    })
+  ) {
     throw new P2pMemberLimitError(workspace.maxMembers)
   }
 
   upsertPendingMember()
+  const workspaceRow = getWorkspaceRepo().findById(payload.workspaceId)
+  if (workspaceRow) publishP2pGroupSyncChange(toWorkspaceDto(workspaceRow))
   prepareJoinPeerTrustPrompt(
     payload.workspaceId,
     peerDeviceId,

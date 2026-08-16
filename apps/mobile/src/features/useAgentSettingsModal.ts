@@ -6,6 +6,10 @@ import {
   type MobileProviderId,
 } from '../settings/provider-presets'
 import { saveModelConfig } from '../storage/secure'
+import {
+  readProviderCredential,
+  upsertProviderCredentials,
+} from '../storage/providerCredentials'
 import { useMobileApp, type ModelConfig } from '../state/MobileAppContext'
 import {
   resolveCuratedEdgeTtsVoice,
@@ -132,11 +136,34 @@ export function buildAgentModelFromDraft(
   draft: AgentSettingsDraft,
 ): ModelConfig {
   const preset = getProviderPreset(draft.providerId)
+  const credentialsByProvider = upsertProviderCredentials(
+    modelConfig.credentialsByProvider,
+    modelConfig.providerId,
+    {
+      apiKey: modelConfig.apiKey,
+      baseUrl: modelConfig.baseUrl,
+      model: modelConfig.model,
+    },
+  )
+  const switched = draft.providerId !== modelConfig.providerId
+  const stored = readProviderCredential(credentialsByProvider, draft.providerId)
+  const apiKey = switched ? (stored?.apiKey ?? '') : modelConfig.apiKey
+  const baseUrl = switched
+    ? stored?.baseUrl || preset.defaultBaseUrl
+    : modelConfig.baseUrl
+  const model = draft.model.trim() || stored?.model || preset.defaultModel
+  const nextUrl = normalizeChatBaseUrl(baseUrl, draft.providerId)
   return {
     ...modelConfig,
     providerId: draft.providerId,
-    model: draft.model.trim() || preset.defaultModel,
-    baseUrl: normalizeChatBaseUrl(modelConfig.baseUrl, draft.providerId),
+    model,
+    baseUrl: nextUrl,
+    apiKey,
+    credentialsByProvider: upsertProviderCredentials(credentialsByProvider, draft.providerId, {
+      apiKey,
+      baseUrl: nextUrl,
+      model,
+    }),
   }
 }
 

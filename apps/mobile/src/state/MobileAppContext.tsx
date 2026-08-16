@@ -18,12 +18,35 @@ export type ModelConfig = {
   model: string
   /** Optional on-device path; off by default. */
   localModelEnabled: boolean
+  /** Per-provider API keys so switching chips does not reuse another vendor's secret. */
+  credentialsByProvider?: Record<string, { apiKey: string; baseUrl?: string; model?: string }>
 }
 
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  createdAt: number
+}
+
+export type GroupAgentProxy = {
+  workspaceId: string
+  resourceId: string
+  sourceSessionId: string
+  sourceAssistantId: string
+  groupName: string
+  sharedAgentName: string
+  permission: 'read' | 'callable'
+  ownerMemberId: string
+  ownerDeviceId?: string
+  referencedModelId?: string
+}
+
+/** Local sidebar agent (assistant), aligned with desktop MiddleSidebar groups. */
+export type MobileAgent = {
+  id: string
+  name: string
+  agentScope: AgentChatScope
   createdAt: number
 }
 
@@ -37,11 +60,21 @@ export type ChatSession = {
    * histories stay separate per page.
    */
   agentScope: AgentChatScope
+  /** Local agent (assistant) this topic belongs to. Group-proxy sessions omit this. */
+  assistantId?: string
+  /** Local proxy for a group-shared topic; invoke goes to the owner's agent. */
+  groupAgent?: GroupAgentProxy
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline'
 
 export type MobileSyncReason = 'bootstrap' | 'page' | 'interval' | 'foreground' | 'manual'
+
+export type MobileDeviceInfo = {
+  deviceId: string
+  identityId: string | null
+  kind: 'mobile'
+}
 
 export type MobileAppState = {
   module: MobileModuleId
@@ -50,9 +83,14 @@ export type MobileAppState = {
   setLeftOpen: (open: boolean) => void
   auth: AuthSession
   setAuth: (auth: AuthSession) => void
+  /** Stable per-install device id; bound to `auth.identityId` after login. */
+  device: MobileDeviceInfo
   modelConfig: ModelConfig
   setModelConfig: (config: ModelConfig) => void
   sessions: ChatSession[]
+  /** Local agents (assistants) for sidebar grouping. */
+  agents: MobileAgent[]
+  setAgents: (agents: MobileAgent[]) => void
   /** Active session id for the current module’s agent scope. */
   activeSessionId: string | null
   setActiveSessionId: (id: string | null) => void
@@ -61,6 +99,9 @@ export type MobileAppState = {
   upsertSession: (session: ChatSession) => void
   renameSession: (id: string, title: string) => void
   removeSession: (id: string) => void
+  upsertAgent: (agent: MobileAgent) => void
+  renameAgent: (id: string, name: string) => void
+  removeAgent: (id: string) => void
   syncStatus: SyncStatus
   setSyncStatus: (status: SyncStatus) => void
   syncCursor: string | null

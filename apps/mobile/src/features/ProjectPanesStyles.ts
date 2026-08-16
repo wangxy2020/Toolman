@@ -1,0 +1,200 @@
+import { StyleSheet } from 'react-native'
+import { colors } from '../theme'
+
+export const styles = StyleSheet.create({
+  panelRoot: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  panelHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  panelHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  panelActions: {
+    flexShrink: 0,
+    paddingTop: 2,
+  },
+  panelTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  panelTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.15,
+    color: colors.text,
+  },
+  demoBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  panelSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  panelScroll: {
+    flex: 1,
+  },
+  panelScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 10,
+  },
+  customizeScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 28,
+  },
+  settingsInner: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+    gap: 16,
+  },
+  settingsCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    padding: 12,
+  },
+  settingsCardTitle: {
+    marginBottom: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  settingsList: {
+    gap: 6,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.inputBg,
+  },
+  settingsDrag: {
+    opacity: 0.55,
+  },
+  settingsLabel: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    color: colors.text,
+  },
+  settingsActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  toggleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  toggleLabel: {
+    minWidth: 28,
+    fontSize: 11,
+    textAlign: 'center',
+    color: colors.textSecondary,
+  },
+  switchTrack: {
+    width: 32,
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: colors.border,
+    paddingHorizontal: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  switchTrackOn: {
+    backgroundColor: colors.accent,
+    justifyContent: 'flex-end',
+  },
+  switchThumb: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+  },
+  iconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnPressed: {
+    backgroundColor: colors.hover,
+  },
+  iconBtnDisabled: {
+    opacity: 0.35,
+  },
+  hintCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.inputBg,
+  },
+  hintTitle: {
+    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  hintList: {
+    gap: 4,
+  },
+  hintItem: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: colors.textSecondary,
+  },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.hover,
+  },
+  resetBtnPressed: {
+    backgroundColor: colors.borderLight,
+  },
+  resetBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+})

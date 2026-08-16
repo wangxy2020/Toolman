@@ -4,6 +4,7 @@ import {
   ProviderDeleteInputSchema,
   ProviderFetchModelsInputSchema,
   ProviderListInputSchema,
+  ProviderRevealApiKeyInputSchema,
   ProviderSchema,
   ProviderTestInputSchema,
   ProviderUpdateInputSchema,
@@ -18,7 +19,7 @@ import { getDatabase } from '../../bootstrap/database'
 import { encryptSecret } from '../secret-store'
 import { resolveDefaultDocProcessorProviderIdFromRuntime } from '../runtime-app-settings.service'
 import {
-  DEEPSEEK_PRESET_MODELS,
+  getNetworkPresetModels,
   isDeprecatedDeepSeekModelId,
 } from '@toolman/model-gateway'
 import {
@@ -29,11 +30,21 @@ import {
   providerHasApiKey,
   readApiKeyRotate,
   readPresetId,
+  resolveApiKey,
   rowToConfig,
+  isChatModelId,
   type ProviderRow,
 } from './helpers'
 
 const gateway = createModelGateway()
+
+function seedModelsJson(presetId: string | null | undefined, existingJson: string): string {
+  const existing = JSON.parse(existingJson) as ProviderModel[]
+  if (existing.length > 0) return existingJson
+  const presets = getNetworkPresetModels(presetId)
+  if (presets.length === 0) return existingJson
+  return JSON.stringify(presets.map((model) => enrichProviderModel({ id: model.id, name: model.name })))
+}
 
 function toProvider(row: ProviderRow): Provider {
   const config = parseConfig(row.configJson)
@@ -108,6 +119,7 @@ export function createProvider(input: unknown): Provider {
   const apiKeyRef = data.apiKey ? encryptSecret(data.apiKey) : null
 
   const configJson = data.presetId ? JSON.stringify({ presetId: data.presetId }) : '{}'
+  const modelsJson = seedModelsJson(data.presetId, '[]')
 
   const row = {
     id,
@@ -117,12 +129,13 @@ export function createProvider(input: unknown): Provider {
     baseUrl: data.baseUrl ?? (data.type === 'ollama' ? 'http://127.0.0.1:11434/v1' : null),
     apiKeyRef,
     configJson,
+    modelsJson,
     createdAt: now,
     updatedAt: now,
   }
 
   db.insert(providers).values(row).run()
-  return toProvider({ ...row, isEnabled: true, modelsJson: '[]', sortOrder: 0 })
+  return toProvider({ ...row, isEnabled: true, sortOrder: 0 })
 }
 
 export function updateProvider(input: unknown): Provider | null {
@@ -139,6 +152,10 @@ export function updateProvider(input: unknown): Provider | null {
     data.apiKey !== undefined ? persistApiKey(data.apiKey) : existing.apiKeyRef
 
   const now = new Date()
+  const nextModelsJson =
+    data.models !== undefined
+      ? JSON.stringify(data.models.map((model) => enrichProviderModel(model)))
+      : seedModelsJson(readPresetId(config), existing.modelsJson)
   db.update(providers)
     .set({
       name: data.name ?? existing.name,
@@ -146,9 +163,7 @@ export function updateProvider(input: unknown): Provider | null {
       baseUrl: data.baseUrl !== undefined ? data.baseUrl : existing.baseUrl,
       isEnabled: data.isEnabled ?? existing.isEnabled,
       apiKeyRef: nextApiKeyRef,
-      modelsJson: data.models !== undefined
-        ? JSON.stringify(data.models.map((model) => enrichProviderModel(model)))
-        : existing.modelsJson,
+      modelsJson: nextModelsJson,
       configJson: JSON.stringify(config),
       updatedAt: now,
     })
@@ -164,11 +179,35 @@ export async function testProvider(input: unknown) {
   const row = getProviderRow(data.id)
   if (!row) throw new Error('Provider not found')
 
-  const config = rowToConfig(row)
-  if (data.baseUrl !== undefined) config.baseUrl = data.baseUrl
-  if (data.apiKey !== undefined) config.apiKey = data.apiKey || null
+  const configuredModels = JSON.parse(row.modelsJson) as ProviderModel[]
+  const pingModel = configuredModels.find((model) => isChatModelId(model.id))?.id
+  const config = {
+    ...rowToConfig(row),
+    ...(data.baseUrl !== undefined ? { baseUrl: data.baseUrl } : {}),
+    ...(data.apiKey !== undefined ? { apiKey: data.apiKey || null } : {}),
+    ...(pingModel ? { testModel: pingModel } : {}),
+  }
 
-  return gateway.testConnection(config)
+  const result = await gateway.testConnection(config)
+  if (result.success) {
+    const presetId = readPresetId(parseConfig(row.configJson))
+    const seeded = seedModelsJson(presetId, row.modelsJson)
+    if (seeded !== row.modelsJson) {
+      getDatabase()
+        .update(providers)
+        .set({ modelsJson: seeded, updatedAt: new Date() })
+        .where(eq(providers.id, data.id))
+        .run()
+    }
+  }
+  return result
+}
+
+export function revealProviderApiKey(input: unknown): { apiKey: string } {
+  const { id } = ProviderRevealApiKeyInputSchema.parse(input)
+  const row = getProviderRow(id)
+  if (!row) throw new Error('Provider not found')
+  return { apiKey: resolveApiKey(row) ?? '' }
 }
 
 export function deleteProvider(input: unknown): boolean {
@@ -197,12 +236,14 @@ export async function fetchProviderModels(input: unknown) {
 
   const existing = JSON.parse(row.modelsJson) as ProviderModel[]
   const existingById = new Map(existing.map((model) => [model.id, model]))
+  const presetId = readPresetId(parseConfig(row.configJson))
+  const presets = getNetworkPresetModels(presetId)
 
   let raw: Awaited<ReturnType<typeof gateway.fetchModels>> = []
   try {
     raw = await gateway.fetchModels(rowToConfig(row))
   } catch (error) {
-    if (readPresetId(parseConfig(row.configJson)) !== 'deepseek') {
+    if (presets.length === 0) {
       throw error
     }
   }
@@ -216,11 +257,9 @@ export async function fetchProviderModels(input: unknown) {
     })
   })
 
-  const models = (
-    readPresetId(parseConfig(row.configJson)) === 'deepseek'
-      ? mergePresetModels(DEEPSEEK_PRESET_MODELS, fetched, existingById)
-      : fetched
-  ).filter((model) => !isDeprecatedDeepSeekModelId(model.id))
+  const models = mergePresetModels(presets, fetched, existingById).filter(
+    (model) => !isDeprecatedDeepSeekModelId(model.id),
+  )
 
   if (persist) {
     db.update(providers)

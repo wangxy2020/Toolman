@@ -91,6 +91,16 @@ pub async fn invite_create_offer(
 }
 
 #[napi]
+pub fn invite_submit_answer(
+    invite_id: String,
+    answer_sdp: String,
+    joiner_device_id: String,
+) -> napi::Result<()> {
+    crate::state::submit_http_invite_answer(invite_id, joiner_device_id, answer_sdp)
+        .map_err(napi::Error::from_reason)
+}
+
+#[napi]
 pub async fn invite_wait_for_answer(
     invite_id: String,
     timeout_secs: Option<u32>,

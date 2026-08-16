@@ -4,12 +4,15 @@ import { MessageInput } from '../chat/MessageInput'
 import { messageFontSizePx, sendShortcutPlaceholder } from '../chat/message-settings'
 import type { MessageSettings } from '../chat/message-settings'
 import { useI18n } from '../../i18n/useI18n'
+import type { P2pMember } from '@toolman/shared'
 import { useGroupChat } from './useGroupChat'
 
 interface Props {
   workspaceId: string
   workspaceName: string
   selfMemberId: string | null
+  selfIdentityId?: string | null
+  members?: P2pMember[]
   isOwner: boolean
   canWriteWorkspace: boolean
   messageSettings: MessageSettings
@@ -21,6 +24,8 @@ export function GroupMemberChatPanel({
   workspaceId,
   workspaceName,
   selfMemberId,
+  selfIdentityId,
+  members = [],
   isOwner,
   canWriteWorkspace,
   messageSettings,
@@ -28,7 +33,7 @@ export function GroupMemberChatPanel({
   defaultFilePath = null,
 }: Props) {
   const { t } = useI18n()
-  const chat = useGroupChat(workspaceId, selfMemberId)
+  const chat = useGroupChat(workspaceId, selfMemberId, members, selfIdentityId)
 
   const messagePanelStyle: CSSProperties = {
     '--tm-message-font-size': `${messageFontSizePx(messageSettings.messageFontSize)}px`,

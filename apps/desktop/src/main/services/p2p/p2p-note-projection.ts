@@ -6,7 +6,10 @@ import { getNoteById, upsertNoteItem } from '../notes-data.service'
 import { iterateWorkspaceEventPages } from './p2p-event.service'
 import {
   applyLoroOplog,
+  getLoroDoc,
   getTextFromLoroDoc,
+  persistLoroDoc,
+  setLoroDocText,
 } from './loro-note-doc'
 
 import { findSharedResourceForProjection, resolveSharedResourceId } from './p2p-shared-resource-id'
@@ -17,6 +20,15 @@ import {
 
 function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())
+}
+
+function applyNoteContentToLoro(workspaceId: string, noteId: string, content: string) {
+  const doc = getLoroDoc(workspaceId, noteId)
+  if (getTextFromLoroDoc(doc) !== content) {
+    setLoroDocText(doc, content)
+    persistLoroDoc(workspaceId, noteId, doc)
+  }
+  return doc
 }
 
 function readPayloadString(payload: Record<string, unknown>, key: string): string | undefined {
@@ -181,7 +193,9 @@ export function applyNoteUpdatedEvent(event: WorkspaceEvent): void {
 
   const doc = oplogBase64
     ? applyLoroOplog(event.workspaceId, noteId, oplogBase64)
-    : null
+    : contentFromPayload != null
+      ? applyNoteContentToLoro(event.workspaceId, noteId, contentFromPayload)
+      : null
   const content = contentFromPayload ?? (doc ? getTextFromLoroDoc(doc) : '')
   if (!content && !oplogBase64) {
     return

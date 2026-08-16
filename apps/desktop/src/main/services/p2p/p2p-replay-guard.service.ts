@@ -41,17 +41,19 @@ export function checkReplayGuard(input: {
   payloadHash: string
   windowMs?: number
   now?: number
+  /** Mailbox catch-up proposes may be hours old; only reject duplicates. */
+  requireFresh?: boolean
 }): { ok: true } | { ok: false; reason: string } {
   const now = input.now ?? Date.now()
   const windowMs = input.windowMs ?? DEFAULT_REPLAY_WINDOW_MS
   if (!Number.isFinite(input.at) || input.at <= 0) {
     return { ok: false, reason: 'missing timestamp' }
   }
-  if (Math.abs(now - input.at) > windowMs) {
+  if (input.requireFresh !== false && Math.abs(now - input.at) > windowMs) {
     return { ok: false, reason: 'timestamp outside replay window' }
   }
 
-  pruneReplayGuard(now, windowMs)
+  pruneReplayGuard(now, input.requireFresh === false ? Number.MAX_SAFE_INTEGER : windowMs)
   const key = `${input.scope}:${input.signerId}:${input.payloadHash}`
   const lastAt = seenAtByKey.get(key)
   if (lastAt !== undefined && input.at <= lastAt) {

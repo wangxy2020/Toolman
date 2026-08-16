@@ -90,4 +90,16 @@ describe('p2p-invite.token', () => {
   it('builds invite urls', () => {
     expect(buildInviteUrl('token-1')).toContain('token=token-1')
   })
+
+  it('embeds workspace preview fields for mobile parsers', () => {
+    const url = buildInviteUrl('token-1', undefined, {
+      workspaceId: 'ws-1',
+      workspaceName: '项目组',
+      hubUrls: ['http://192.168.1.8:17890'],
+    })
+    expect(url).toContain('wid=ws-1')
+    expect(url).toContain('name=')
+    expect(url).toContain('hub=http%3A%2F%2F192.168.1.8%3A17890')
+    expect(parseInviteInput(url).token).toBe('token-1')
+  })
 })

@@ -4,9 +4,11 @@ import { getP2pDeviceInfo } from '../p2p-device-identity.service'
 import { registerRemoteDevicePublicKey } from '../p2p-peer.service'
 import { ensureLinkedIdentityRow } from '../p2p-linked-identity.service'
 import {
+  findIdentitySibling,
   getInviteRepo,
   getMemberRepo,
   getWorkspaceRepo,
+  membershipFromIdentitySibling,
 } from '../p2p-member-shared'
 import type { decodeInviteToken } from '../p2p-invite.token'
 
@@ -81,12 +83,14 @@ export function recordJoinOnOwnerSide(
     payload.workspaceId,
     member.deviceId,
   )
+  const sibling = findIdentitySibling(payload.workspaceId, member.identityId, member.deviceId)
+  const inherited = membershipFromIdentitySibling(payload.role, sibling)
   if (existing) {
     if (existing.status !== 'active') {
       getMemberRepo().update({
         id: existing.id,
         status: 'active',
-        role: payload.role,
+        role: inherited.role,
         displayName: member.displayName,
         joinedAt: new Date(),
       })
@@ -101,7 +105,7 @@ export function recordJoinOnOwnerSide(
     identityId: member.identityId,
     deviceId: member.deviceId,
     displayName: member.displayName,
-    role: payload.role,
+    role: inherited.role,
     status: 'active',
     joinedAt: new Date(),
   })

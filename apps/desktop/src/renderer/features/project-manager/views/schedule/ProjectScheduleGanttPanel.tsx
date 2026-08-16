@@ -7,6 +7,7 @@ import { ProjectGanttMenuBar } from './ProjectGanttMenuBar'
 import { ProjectGanttTaskGrid } from './ProjectGanttTaskGrid'
 import ProjectGanttPrintTable from './ProjectGanttPrintTable'
 import { ProjectScheduleGanttPanelDialogs } from './ProjectScheduleGanttPanelDialogs'
+import { ProjectScheduleGanttPrintLegend } from './ProjectScheduleGanttPrintLegend'
 import { useProjectScheduleGanttPanel } from './useProjectScheduleGanttPanel'
 
 interface Props {
@@ -27,9 +28,9 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
   onProjectsChange,
 }) => {
   const panelState = useProjectScheduleGanttPanel({
-          workspaceId,
+    workspaceId,
     projects,
-          selectedProjectId,
+    selectedProjectId,
     dataRevision,
     onProjectsChange,
   })
@@ -254,45 +255,7 @@ const ProjectScheduleGanttPanel: FC<Props> = ({
         </div>
       </footer>
 
-      <div className="tm-pm-gantt-print-legend" aria-hidden>
-        <span className="tm-pm-gantt-print-legend-title">
-          {t('projectManagerPage.schedule.print.legend')}
-        </span>
-        <span className="tm-pm-gantt-print-legend-item">
-          <span
-            className="tm-pm-gantt-print-swatch tm-pm-gantt-print-swatch--task"
-            style={{ background: taskColors.task }}
-          />
-          {t('projectManagerPage.schedule.print.legendTask')}
-        </span>
-        <span className="tm-pm-gantt-print-legend-item">
-          <span
-            className="tm-pm-gantt-print-swatch tm-pm-gantt-print-swatch--critical"
-            style={{ background: taskColors.critical }}
-          />
-          {t('projectManagerPage.schedule.print.legendCritical')}
-        </span>
-        <span className="tm-pm-gantt-print-legend-item">
-          <span
-            className="tm-pm-gantt-print-swatch tm-pm-gantt-print-swatch--summary"
-            style={{ background: taskColors.summary }}
-          />
-          {t('projectManagerPage.schedule.print.legendSummary')}
-        </span>
-        <span className="tm-pm-gantt-print-legend-item">
-          <span
-            className="tm-pm-gantt-print-swatch tm-pm-gantt-print-swatch--milestone"
-            style={{ background: taskColors.milestone }}
-          />
-          {t('projectManagerPage.schedule.print.legendMilestone')}
-        </span>
-        <span className="tm-pm-gantt-print-legend-item">
-          <span className="tm-pm-gantt-print-swatch tm-pm-gantt-print-swatch--baseline" />
-          {t('projectManagerPage.schedule.print.legendBaseline')}
-        </span>
-      </div>
-      {/* Page numbers come from @page @bottom-center; keep a hidden stub for a11y/DOM stability. */}
-      <div className="tm-pm-gantt-print-footer" aria-hidden />
+      <ProjectScheduleGanttPrintLegend t={t} taskColors={taskColors} />
 
       <ProjectScheduleGanttPanelDialogs state={panelState} onProjectsChange={onProjectsChange} />
     </div>

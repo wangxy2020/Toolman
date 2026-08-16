@@ -51,6 +51,28 @@ describe('p2p-replay-guard', () => {
         windowMs: 60_000,
       }),
     ).toEqual({ ok: false, reason: 'timestamp outside replay window' })
+
+    expect(
+      checkReplayGuard({
+        scope: 'mailbox.propose',
+        signerId: 'device-a',
+        at: now - 10 * 60_000,
+        payloadHash: 'hash-stale',
+        now,
+        windowMs: 60_000,
+        requireFresh: false,
+      }).ok,
+    ).toBe(true)
+    expect(
+      checkReplayGuard({
+        scope: 'mailbox.propose',
+        signerId: 'device-a',
+        at: now - 10 * 60_000,
+        payloadHash: 'hash-stale',
+        now,
+        requireFresh: false,
+      }),
+    ).toEqual({ ok: false, reason: 'replay detected' })
   })
 
   it('allows newer timestamps for same payload hash', () => {

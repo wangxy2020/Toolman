@@ -1,17 +1,18 @@
-import { Platform } from 'react-native'
-import * as SecureStore from 'expo-secure-store'
 import {
   AGENT_CHAT_SCOPES,
   isAgentChatScope,
   type AgentChatScope,
 } from '../chat/agentScopes'
-import type { ChatSession } from '../state/MobileAppContext'
+import type { ChatSession, MobileAgent } from '../state/MobileAppContext'
+import { loadOwnedScoped, saveOwnedScoped } from './identityScope'
+import { Platform } from 'react-native'
+import * as SecureStore from 'expo-secure-store'
 
 const SESSIONS_KEY = 'toolman.mobile.chatSessions.v2'
-const SESSIONS_KEY_V1 = 'toolman.mobile.chatSessions.v1'
 
 export type ChatSessionsStore = {
   sessions: ChatSession[]
+  agents: MobileAgent[]
   activeSessionByScope: Record<AgentChatScope, string | null>
 }
 
@@ -21,9 +22,8 @@ const EMPTY_ACTIVE: Record<AgentChatScope, string | null> = {
   projects: null,
 }
 
-const EMPTY: ChatSessionsStore = {
-  sessions: [],
-  activeSessionByScope: { ...EMPTY_ACTIVE },
+export function emptyChatSessionsStore(): ChatSessionsStore {
+  return { sessions: [], agents: [], activeSessionByScope: { ...EMPTY_ACTIVE } }
 }
 
 async function getItem(key: string): Promise<string | null> {
@@ -53,6 +53,34 @@ async function setItem(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(key, value)
 }
 
+function normalizeGroupAgent(value: unknown): ChatSession['groupAgent'] {
+  if (!value || typeof value !== 'object') return undefined
+  const item = value as Partial<NonNullable<ChatSession['groupAgent']>>
+  if (
+    typeof item.workspaceId !== 'string' ||
+    typeof item.resourceId !== 'string' ||
+    typeof item.sourceSessionId !== 'string' ||
+    typeof item.sourceAssistantId !== 'string' ||
+    typeof item.groupName !== 'string' ||
+    typeof item.sharedAgentName !== 'string' ||
+    typeof item.ownerMemberId !== 'string'
+  ) {
+    return undefined
+  }
+  return {
+    workspaceId: item.workspaceId,
+    resourceId: item.resourceId,
+    sourceSessionId: item.sourceSessionId,
+    sourceAssistantId: item.sourceAssistantId,
+    groupName: item.groupName,
+    sharedAgentName: item.sharedAgentName,
+    permission: item.permission === 'callable' ? 'callable' : 'read',
+    ownerMemberId: item.ownerMemberId,
+    ownerDeviceId: typeof item.ownerDeviceId === 'string' ? item.ownerDeviceId : undefined,
+    referencedModelId: typeof item.referencedModelId === 'string' ? item.referencedModelId : undefined,
+  }
+}
+
 function normalizeSession(value: unknown): ChatSession | null {
   if (!value || typeof value !== 'object') return null
   const s = value as Partial<ChatSession> & { agentScope?: string }
@@ -65,18 +93,101 @@ function normalizeSession(value: unknown): ChatSession | null {
     return null
   }
   const rawScope = (value as { agentScope?: unknown }).agentScope
-  // Group page is member chat now (not LLM sessions).
   if (rawScope === 'group') return null
   const agentScope: AgentChatScope =
     typeof rawScope === 'string' && isAgentChatScope(rawScope as AgentChatScope)
       ? (rawScope as AgentChatScope)
       : 'agent'
+  const groupAgent = normalizeGroupAgent((value as { groupAgent?: unknown }).groupAgent)
+  const assistantId =
+    typeof (value as { assistantId?: unknown }).assistantId === 'string'
+      ? ((value as { assistantId: string }).assistantId)
+      : undefined
   return {
     id: s.id,
     title: s.title,
     updatedAt: s.updatedAt,
     messages: s.messages as ChatSession['messages'],
     agentScope,
+    assistantId: groupAgent ? undefined : assistantId,
+    groupAgent,
+  }
+}
+
+function normalizeAgent(value: unknown): MobileAgent | null {
+  if (!value || typeof value !== 'object') return null
+  const item = value as Partial<MobileAgent>
+  if (typeof item.id !== 'string' || typeof item.name !== 'string') return null
+  const rawScope = item.agentScope
+  const agentScope: AgentChatScope =
+    typeof rawScope === 'string' && isAgentChatScope(rawScope as AgentChatScope)
+      ? (rawScope as AgentChatScope)
+      : 'agent'
+  return {
+    id: item.id,
+    name: item.name.trim() || '智能体',
+    agentScope,
+    createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
+  }
+}
+
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Ensure each scope has agents and personal sessions are attached to one. */
+export function migrateAgentsAndSessions(
+  sessions: ChatSession[],
+  agentsInput: MobileAgent[],
+): { sessions: ChatSession[]; agents: MobileAgent[] } {
+  const agents = agentsInput.slice()
+  const byScope = new Map<AgentChatScope, MobileAgent[]>()
+  for (const scope of AGENT_CHAT_SCOPES) byScope.set(scope, [])
+  for (const agent of agents) {
+    byScope.get(agent.agentScope)?.push(agent)
+  }
+
+  const nextSessions = sessions.map((session) => ({ ...session }))
+
+  for (const scope of AGENT_CHAT_SCOPES) {
+    // Classroom course sessions are 1:1 with courses and must not gain synthetic
+    // agents / assistantId (removeAgent would otherwise wipe courses).
+    if (scope === 'classroom') {
+      for (const session of nextSessions) {
+        if (session.agentScope === 'classroom' && session.assistantId) {
+          session.assistantId = undefined
+        }
+      }
+      continue
+    }
+
+    const personal = nextSessions.filter((s) => s.agentScope === scope && !s.groupAgent)
+    let scopeAgents = byScope.get(scope) ?? []
+    if (scopeAgents.length === 0 && personal.length > 0) {
+      const defaultAgent: MobileAgent = {
+        id: newId('asst'),
+        name: '默认智能体',
+        agentScope: scope,
+        createdAt: Date.now(),
+      }
+      agents.push(defaultAgent)
+      scopeAgents = [defaultAgent]
+      byScope.set(scope, scopeAgents)
+    }
+    const fallbackId = scopeAgents[0]?.id
+    if (!fallbackId) continue
+    const known = new Set(scopeAgents.map((a) => a.id))
+    for (const session of nextSessions) {
+      if (session.agentScope !== scope || session.groupAgent) continue
+      if (!session.assistantId || !known.has(session.assistantId)) {
+        session.assistantId = fallbackId
+      }
+    }
+  }
+
+  return {
+    sessions: nextSessions,
+    agents: agents.filter((agent) => agent.agentScope !== 'classroom'),
   }
 }
 
@@ -109,34 +220,43 @@ function resolveActiveByScope(
 
 export async function loadChatSessions(): Promise<ChatSessionsStore> {
   try {
-    let raw = await getItem(SESSIONS_KEY)
-    if (!raw) raw = await getItem(SESSIONS_KEY_V1)
-    if (!raw) return EMPTY
-    const parsed = JSON.parse(raw) as {
+    const parsed = await loadOwnedScoped<{
       sessions?: unknown
+      agents?: unknown
       activeSessionByScope?: unknown
       activeSessionId?: unknown
-    }
-    const sessions = Array.isArray(parsed.sessions)
+    }>(SESSIONS_KEY, getItem)
+    if (!parsed) return emptyChatSessionsStore()
+    const rawSessions = Array.isArray(parsed.sessions)
       ? parsed.sessions.map(normalizeSession).filter((s): s is ChatSession => Boolean(s))
       : []
+    const rawAgents = Array.isArray(parsed.agents)
+      ? parsed.agents.map(normalizeAgent).filter((a): a is MobileAgent => Boolean(a))
+      : []
+    const migrated = migrateAgentsAndSessions(rawSessions, rawAgents)
     const activeSessionByScope = resolveActiveByScope(
-      sessions,
+      migrated.sessions,
       parsed.activeSessionByScope,
       parsed.activeSessionId,
     )
-    return { sessions, activeSessionByScope }
+    return {
+      sessions: migrated.sessions,
+      agents: migrated.agents,
+      activeSessionByScope,
+    }
   } catch {
-    return EMPTY
+    return emptyChatSessionsStore()
   }
 }
 
 export async function saveChatSessions(store: ChatSessionsStore): Promise<void> {
-  await setItem(
+  await saveOwnedScoped(
     SESSIONS_KEY,
-    JSON.stringify({
+    {
       sessions: store.sessions,
+      agents: store.agents,
       activeSessionByScope: store.activeSessionByScope,
-    }),
+    },
+    setItem,
   )
 }

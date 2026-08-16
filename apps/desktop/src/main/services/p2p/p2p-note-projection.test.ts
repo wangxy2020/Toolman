@@ -45,8 +45,11 @@ vi.mock('./note-notebook-placement', () => ({
 
 vi.mock('./loro-note-doc', () => ({
   applyLoroOplog: vi.fn(),
-  getTextFromLoroDoc: vi.fn(() => 'merged'),
+  getTextFromLoroDoc: vi.fn(() => ''),
   initLoroDocFromText: vi.fn(),
+  getLoroDoc: vi.fn(() => ({})),
+  setLoroDocText: vi.fn(),
+  persistLoroDoc: vi.fn(),
 }))
 
 function noteEvent(
@@ -165,5 +168,8 @@ describe('p2p-note-projection', () => {
         title: 'Shared title',
       }),
     )
+    const loro = await import('./loro-note-doc')
+    expect(loro.setLoroDocText).toHaveBeenCalled()
+    expect(loro.persistLoroDoc).toHaveBeenCalled()
   })
 })

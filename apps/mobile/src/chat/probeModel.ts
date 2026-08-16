@@ -37,8 +37,7 @@ function authHint(status: number, detail: string): string {
 
 /**
  * Probe OpenAI-compatible API — mirrors desktop `testOpenAiConnection`:
- * try `/models`, then fall back to a minimal chat completion (do not treat
- * `/models` 401 as final failure; some providers restrict that route).
+ * a 1-token chat ping (do not use GET /models; Moonshot listing is slow).
  */
 export async function probeModelApi(config: ModelConfig): Promise<ModelProbeResult> {
   const auth = buildApiAuthHeaders(config.apiKey)
@@ -52,46 +51,10 @@ export async function probeModelApi(config: ModelConfig): Promise<ModelProbeResu
   }
 
   const base = normalizeChatBaseUrl(config.baseUrl, config.providerId).replace(/\/$/, '')
-  const { headers, apiKey } = auth
+  const { headers } = auth
   const started = Date.now()
+  const kimi = /kimi-k\d/i.test(model)
 
-  // 1) Prefer /models (fast), but never stop on auth errors — fall through to chat.
-  try {
-    const modelsRes = await fetch(`${base}/models`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
-    if (modelsRes.ok) {
-      const body = (await modelsRes.json().catch(() => null)) as {
-        data?: Array<{ id?: string }>
-      } | null
-      const ids = (body?.data ?? []).map((item) => item.id).filter(Boolean) as string[]
-      const ms = Date.now() - started
-      if (ids.length === 0 || ids.includes(model)) {
-        return {
-          ok: true,
-          message: ids.length
-            ? `连接成功 (${ms}ms) · 可用模型 ${ids.length} 个 · ${model}`
-            : `连接成功 (${ms}ms) · ${model}`,
-        }
-      }
-      return {
-        ok: true,
-        message: `连接成功 (${ms}ms)，列表中未找到「${model}」，请核对模型 ID`,
-      }
-    }
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    if (msg.includes('ISO-8859-1') || msg.includes('code point')) {
-      return {
-        ok: false,
-        message: '请求头含非法字符，请重新粘贴纯 ASCII 的 API Key',
-      }
-    }
-    // Fall through to chat probe.
-  }
-
-  // 2) Minimal chat completion — authoritative check for chat usability.
   try {
     const chatRes = await fetch(`${base}/chat/completions`, {
       method: 'POST',
@@ -101,6 +64,7 @@ export async function probeModelApi(config: ModelConfig): Promise<ModelProbeResu
         stream: false,
         max_tokens: 1,
         messages: [{ role: 'user', content: 'ping' }],
+        ...(kimi ? { thinking: { type: 'disabled' } } : {}),
       }),
     })
     const ms = Date.now() - started

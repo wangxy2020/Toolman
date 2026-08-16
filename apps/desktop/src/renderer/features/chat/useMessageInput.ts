@@ -1,28 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
-import type { ContentBlock } from '@toolman/shared'
-import {
-  pendingAttachmentsToContentBlocks,
-  type PendingAttachment,
-} from './chat-attachments'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { addQuickPhrase, type QuickPhrase } from './quick-phrases'
 import { useTranslate } from './useTranslate'
 import { normalizeTranslationLanguages } from './translation-utils'
-import { getLocalFilePaths } from '../knowledge/knowledge-file-paths'
-import { useI18n } from '../../i18n/useI18n'
 import type { MessageInputProps } from './message-input-types'
 import { INPUT_MIN_HEIGHT } from './message-input-types'
-import {
-  buildMessageInputPlaceholder,
-  POST_SEND_INPUT_SUPPRESS_MS,
-  readComposerText,
-  shouldIgnoreComposerInput,
-} from './message-input-utils'
+import { buildMessageInputPlaceholder } from './message-input-utils'
 import { useMessageInputAttachments } from './message-input-attachments'
 import { useMessageInputSlashCommands } from './message-input-commands'
 import { usePhraseMenuKeyboard, useSlashMenuKeyboard } from './message-input-menu-effects'
+import { useMessageInputComposer } from './useMessageInputComposer'
 import { useMessageInputInteractions } from './useMessageInputInteractions'
 import { useMessageInputMenus } from './useMessageInputMenus'
 import { useMessageInputPrefill } from './useMessageInputPrefill'
+import { useI18n } from '../../i18n/useI18n'
+import type { PendingAttachment } from './chat-attachments'
 
 export function useMessageInput(props: MessageInputProps) {
   const {
@@ -67,17 +58,8 @@ export function useMessageInput(props: MessageInputProps) {
   const [quickPhrases, setQuickPhrases] = useState<QuickPhrase[]>([])
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [voiceHint, setVoiceHint] = useState<string | null>(null)
-  const suppressNativeInputUntilRef = useRef(0)
-  const clearTimersRef = useRef<number[]>([])
   const { translate, translating } = useTranslate()
   const languages = normalizeTranslationLanguages(translationLanguages)
-
-  useEffect(() => {
-    return () => {
-      for (const timer of clearTimersRef.current) clearTimeout(timer)
-      clearTimersRef.current = []
-    }
-  }, [])
 
   const { slashCommands, localizedSlashCommands, phraseMenuItems } = useMessageInputMenus({
     toolbarMode,
@@ -110,54 +92,32 @@ export function useMessageInput(props: MessageInputProps) {
     [createHandleSystemVoiceInput],
   )
 
-  const forceComposerEmpty = useCallback(() => {
-    setText('')
-    const node = textareaRef.current
-    if (node && node.value) node.value = ''
-  }, [textareaRef])
+  const {
+    clearTimersRef,
+    clearInput,
+    sendWithOptions,
+    canSend,
+    handleTextChange,
+    handleSubmit,
+    handleInputDragOver,
+    handleInputDrop,
+  } = useMessageInputComposer({
+    disabled,
+    text,
+    setText,
+    pendingAttachments,
+    setPendingAttachments,
+    textareaRef,
+    onSend,
+    stagePathsAsAttachments,
+  })
 
-  const clearInput = useCallback(() => {
-    for (const timer of clearTimersRef.current) clearTimeout(timer)
-    clearTimersRef.current = []
-    setPendingAttachments([])
-    suppressNativeInputUntilRef.current = Date.now() + POST_SEND_INPUT_SUPPRESS_MS
-    forceComposerEmpty()
-    // System dictation (Fn / Win+H) often commits a final insert after Enter/send.
-    clearTimersRef.current = [
-      window.setTimeout(forceComposerEmpty, 0),
-      window.setTimeout(forceComposerEmpty, 80),
-      window.setTimeout(forceComposerEmpty, 200),
-    ]
-  }, [forceComposerEmpty])
-
-  const sendWithOptions = useCallback(
-    (contentBlocks: ContentBlock[]) => {
-      onSend(contentBlocks)
-    },
-    [onSend],
-  )
-
-  const liveText = readComposerText(textareaRef.current, text)
-  const canSend = Boolean(liveText.trim() || pendingAttachments.length > 0)
-
-  const handleTextChange = useCallback(
-    (value: string) => {
-      if (shouldIgnoreComposerInput(suppressNativeInputUntilRef.current)) {
-        forceComposerEmpty()
-        return
-      }
-      setText(value)
-    },
-    [forceComposerEmpty],
-  )
-
-  const handleSubmit = () => {
-    if (disabled) return
-    const composerText = readComposerText(textareaRef.current, text)
-    if (!composerText.trim() && pendingAttachments.length === 0) return
-    sendWithOptions(pendingAttachmentsToContentBlocks(pendingAttachments, composerText))
-    clearInput()
-  }
+  useEffect(() => {
+    return () => {
+      for (const timer of clearTimersRef.current) clearTimeout(timer)
+      clearTimersRef.current = []
+    }
+  }, [clearTimersRef])
 
   const handleTranslate = async () => {
     if (!text.trim() || !defaultModelId || disabled || translating) return
@@ -169,22 +129,6 @@ export function useMessageInput(props: MessageInputProps) {
       onError?.(error instanceof Error ? error.message : t('chat.input.translateFailed'))
     }
   }
-
-  const handleInputDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes('Files')) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-  }, [])
-
-  const handleInputDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      if (!event.dataTransfer.types.includes('Files')) return
-      event.preventDefault()
-      event.stopPropagation()
-      void stagePathsAsAttachments(getLocalFilePaths(event.dataTransfer.files, event.dataTransfer))
-    },
-    [stagePathsAsAttachments],
-  )
 
   const runSlashCommand = useMessageInputSlashCommands({
     text,

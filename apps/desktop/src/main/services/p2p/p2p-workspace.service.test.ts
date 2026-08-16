@@ -21,6 +21,11 @@ vi.mock('./p2p-workspace-vip-pool.service', () => ({
   maybeActivateWorkspaceVipPool: vi.fn(),
 }))
 
+vi.mock('../group-mobile-sync', () => ({
+  publishP2pGroupSyncChange: vi.fn(),
+  publishP2pGroupDeleteSyncChange: vi.fn(),
+}))
+
 vi.mock('@toolman/db', () => {
   const workspaceRow = {
     id: 'ws-1',
@@ -54,6 +59,14 @@ vi.mock('@toolman/db', () => {
   class P2pMemberRepository {
     countActiveByWorkspace() {
       return 1
+    }
+
+    countActiveIdentitiesByWorkspace() {
+      return 1
+    }
+
+    listByWorkspaceAndIdentity() {
+      return []
     }
 
     listActiveMembershipsByDevice(deviceId: string) {

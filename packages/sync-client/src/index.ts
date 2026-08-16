@@ -1,10 +1,22 @@
 import {
   KnowledgeSnapshotSchema,
+  P2P_JOIN_INVITE_ANSWER_PATH,
+  P2P_JOIN_REGISTER_PATH,
+  P2P_MAILBOX_SESSION_PATH,
+  P2pJoinInviteAnswerOutputSchema,
+  P2pJoinRegisterOutputSchema,
+  P2pMailboxSessionOutputSchema,
   SYNC_HUB_TOKEN_HEADER,
   type AgentHostInvokeChunk,
   type AgentHostInvokeInput,
   type AgentHostPresence,
   type KnowledgeSnapshot,
+  type P2pJoinInviteAnswerInput,
+  type P2pJoinInviteAnswerOutput,
+  type P2pJoinRegisterInput,
+  type P2pJoinRegisterOutput,
+  type P2pMailboxSessionInput,
+  type P2pMailboxSessionOutput,
   type SyncPullInput,
   type SyncPullOutput,
   type SyncPushInput,
@@ -116,6 +128,63 @@ export class ToolmanSyncClient {
       throw new Error(`sync pull failed (${res.status})`)
     }
     return readJson<SyncPullOutput>(res)
+  }
+
+  async registerInvitedMember(input: P2pJoinRegisterInput): Promise<P2pJoinRegisterOutput> {
+    const res = await this.request(`${this.baseUrl}${P2P_JOIN_REGISTER_PATH}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    })
+    const json: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      const error =
+        json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : `邀请登记失败（${res.status}）`
+      throw new Error(error)
+    }
+    return P2pJoinRegisterOutputSchema.parse(json)
+  }
+
+  async submitInviteAnswer(input: P2pJoinInviteAnswerInput): Promise<P2pJoinInviteAnswerOutput> {
+    const res = await this.request(`${this.baseUrl}${P2P_JOIN_INVITE_ANSWER_PATH}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    })
+    const json: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      const error =
+        json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : `邀请应答失败（${res.status}）`
+      throw new Error(error)
+    }
+    return P2pJoinInviteAnswerOutputSchema.parse(json)
+  }
+
+  async fetchMailboxSession(input: P2pMailboxSessionInput): Promise<P2pMailboxSessionOutput> {
+    const res = await this.request(`${this.baseUrl}${P2P_MAILBOX_SESSION_PATH}`, {
+      method: 'POST',
+      headers: await this.headers(),
+      body: JSON.stringify(input),
+    })
+    const json: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      const error =
+        json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : `信箱会话失败（${res.status}）`
+      throw new Error(error)
+    }
+    return P2pMailboxSessionOutputSchema.parse(json)
   }
 
   async listHosts(): Promise<AgentHostPresence[]> {

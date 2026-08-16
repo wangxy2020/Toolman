@@ -45,6 +45,46 @@ pub static PENDING_INVITES: Lazy<AsyncMutex<HashMap<String, PendingInviteHandsha
 pub static INVITE_UDP_ANSWERS: Lazy<Mutex<HashMap<String, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+#[derive(Clone, Debug)]
+pub struct HttpInviteAnswer {
+    pub joiner_device_id: String,
+    pub answer_sdp: String,
+}
+
+pub static INVITE_HTTP_ANSWERS: Lazy<Mutex<HashMap<String, HttpInviteAnswer>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+pub fn submit_http_invite_answer(
+    invite_id: String,
+    joiner_device_id: String,
+    answer_sdp: String,
+) -> Result<(), String> {
+    let invite_id = invite_id.trim().to_string();
+    let joiner_device_id = joiner_device_id.trim().to_string();
+    let answer_sdp = answer_sdp.trim().to_string();
+    if invite_id.is_empty() || joiner_device_id.is_empty() || answer_sdp.is_empty() {
+        return Err("invite answer is missing inviteId, deviceId, or SDP".to_string());
+    }
+    INVITE_HTTP_ANSWERS
+        .lock()
+        .map_err(|_| "invite http answer lock poisoned".to_string())?
+        .insert(
+            invite_id,
+            HttpInviteAnswer {
+                joiner_device_id,
+                answer_sdp,
+            },
+        );
+    Ok(())
+}
+
+pub fn take_http_invite_answer(invite_id: &str) -> Option<HttpInviteAnswer> {
+    INVITE_HTTP_ANSWERS
+        .lock()
+        .ok()
+        .and_then(|mut answers| answers.remove(invite_id))
+}
+
 pub fn configured_ice_server_entries() -> Vec<IceServerEntry> {
     ICE_SERVERS
         .lock()

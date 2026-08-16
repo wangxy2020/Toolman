@@ -10,6 +10,18 @@ export async function bridgeInviteCreateOffer(inviteId: string, workspaceId?: st
   return loadNativeModule().inviteCreateOffer(inviteId, workspaceId ?? null)
 }
 
+export function bridgeInviteSubmitAnswer(
+  inviteId: string,
+  answerSdp: string,
+  joinerDeviceId: string,
+): void {
+  const native = loadNativeModule()
+  if (typeof native.inviteSubmitAnswer !== 'function') {
+    throw new Error('本机 P2P 模块过旧，请完全重启桌面端后再试')
+  }
+  native.inviteSubmitAnswer(inviteId, answerSdp, joinerDeviceId)
+}
+
 export async function bridgeInviteWaitForAnswer(
   inviteId: string,
   timeoutSecs = 300,

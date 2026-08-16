@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto'
 
-import type { P2pGroupChatMessage } from '@toolman/shared'
+import {
+  buildGroupChatClearSignPayload,
+  buildGroupChatMessageSignPayload,
+  type P2pGroupChatMessage,
+} from '@toolman/shared'
 
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { signDeviceMessage, verifyDeviceMessage } from './p2p-crypto.service'
 import { resolvePeerPublicKey } from './p2p-peer.service'
-
-const SIGN_PAYLOAD_VERSION = 1
 
 export interface SignedGroupChatWireEnvelope {
   v: 2
@@ -20,21 +22,13 @@ function hashContentBlocks(message: P2pGroupChatMessage): string {
   return createHash('sha256').update(JSON.stringify(message.contentBlocks)).digest('hex')
 }
 
-export function buildGroupChatMessageSignPayload(message: P2pGroupChatMessage): string {
-  return JSON.stringify({
-    v: SIGN_PAYLOAD_VERSION,
-    id: message.id,
-    workspaceId: message.workspaceId,
-    senderMemberId: message.senderMemberId,
-    senderName: message.senderName,
-    createdAt: message.createdAt,
-    contentHash: hashContentBlocks(message),
-  })
+export function buildGroupChatMessageSignPayloadForDevice(message: P2pGroupChatMessage): string {
+  return buildGroupChatMessageSignPayload(message, hashContentBlocks(message))
 }
 
 export function signGroupChatWireMessage(message: P2pGroupChatMessage): SignedGroupChatWireEnvelope {
   const device = getP2pDeviceInfo()
-  const payload = buildGroupChatMessageSignPayload(message)
+  const payload = buildGroupChatMessageSignPayloadForDevice(message)
   return {
     v: 2,
     type: 'group-chat.message',
@@ -58,7 +52,7 @@ export function verifyGroupChatWireMessage(
   }
 
   const publicKey = resolvePeerPublicKey(peerDeviceId, peerDeviceId)
-  const payload = buildGroupChatMessageSignPayload(envelope.message)
+  const payload = buildGroupChatMessageSignPayloadForDevice(envelope.message)
   const valid = verifyDeviceMessage(payload, envelope.signature, publicKey)
   if (!valid) {
     return { ok: false, reason: 'invalid group chat signature' }
@@ -74,18 +68,6 @@ export interface SignedGroupChatClearWireEnvelope {
   clearedAt: number
   signerDeviceId: string
   signature: string
-}
-
-function buildGroupChatClearSignPayload(input: {
-  workspaceId: string
-  clearedAt: number
-}): string {
-  return JSON.stringify({
-    v: SIGN_PAYLOAD_VERSION,
-    type: 'group-chat.clear',
-    workspaceId: input.workspaceId,
-    clearedAt: input.clearedAt,
-  })
 }
 
 export function signGroupChatClearWireMessage(workspaceId: string): SignedGroupChatClearWireEnvelope {

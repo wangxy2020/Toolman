@@ -39,7 +39,7 @@ export const TOOLMAN_PROVENANCE_REGISTRY = {
       diagnosticsView: 'useDiagnosticsSettings.ts',
       aboutView: 'AboutSettingsPanel.tsx',
       mobileStart: 'apps/mobile/app/_layout.tsx',
-      mobileAboutView: 'apps/mobile/src/features/AboutSettingsPanel.tsx',
+      mobileAboutView: 'apps/mobile/src/features/useAboutSettingsPanel.ts',
     },
     logFile: '{userData}/diagnostics/provenance.jsonl',
   },

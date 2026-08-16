@@ -17,10 +17,13 @@ import {
 import { getP2pDeviceInfo } from '../p2p-device-identity.service'
 import {
   ensureWorkspaceDir,
+  findIdentitySibling,
   getIdentityDisplayName,
   getMemberRepo,
   getWorkspaceRepo,
+  hasWorkspaceMemberCapacity,
   mapMemberRow,
+  membershipFromIdentitySibling,
   toWorkspaceDto,
 } from '../p2p-member-shared'
 import { P2pMemberLimitError } from './errors'
@@ -34,6 +37,7 @@ import {
   recordJoinOnOwnerSide,
 } from './join-workspace-setup'
 import { scheduleJoinPeerSync } from './join-sync'
+import { publishP2pGroupSyncChange } from '../../group-mobile-sync'
 
 export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   workspace: P2pWorkspace
@@ -57,17 +61,25 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
 
   assertJoinerEligibleForWorkspace(workspace)
 
-  const activeCount = memberRepo.countActiveByWorkspace(workspace.id)
-  if (activeCount >= workspace.maxMembers) {
-    throw new P2pMemberLimitError(workspace.maxMembers)
-  }
-
   const memberCertJson = buildMemberCertSnapshot()
 
   saveWorkspaceKey(workspace.id, payload.workspaceKeyB64)
   ensureWorkspaceDir(workspace.id)
 
   const existing = memberRepo.findByWorkspaceAndDevice(workspace.id, device.deviceId)
+  const sibling = findIdentitySibling(workspace.id, device.identityId, device.deviceId)
+  const inherited = membershipFromIdentitySibling(payload.role, sibling)
+
+  if (
+    !hasWorkspaceMemberCapacity({
+      workspaceId: workspace.id,
+      maxMembers: workspace.maxMembers,
+      joinerIdentityId: device.identityId,
+      existingStatus: existing?.status ?? sibling?.status,
+    })
+  ) {
+    throw new P2pMemberLimitError(workspace.maxMembers)
+  }
 
   if (existing?.status === 'active') {
     ensureWorkspaceKeyFromInvite(payload)
@@ -75,8 +87,10 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
     recordJoinOnOwnerSide(inviteToken, payload, existing)
     reconcileAgentSharedResources(workspace.id)
     scheduleJoinPeerSync(payload, offerSdp, member)
+    const dto = toWorkspaceDto(workspace)
+    publishP2pGroupSyncChange(dto)
     return {
-      workspace: toWorkspaceDto(workspace),
+      workspace: dto,
       member,
     }
   }
@@ -84,15 +98,15 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   let memberRow: P2pWorkspaceMemberRow
 
   if (existing) {
-    if (existing.role === 'owner') {
+    if (existing.role === 'owner' && !sibling) {
       throw new Error('你是该群组群主，无需加入')
     }
     memberRow =
       memberRepo.update({
         id: existing.id,
         displayName,
-        role: payload.role,
-        status: 'invited',
+        role: inherited.role,
+        status: inherited.status,
         joinedAt: new Date(),
         certJson: memberCertJson,
       }) ?? existing
@@ -102,8 +116,8 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
       identityId: device.identityId,
       deviceId: device.deviceId,
       displayName,
-      role: payload.role,
-      status: 'invited',
+      role: inherited.role,
+      status: inherited.status,
       joinedAt: new Date(),
       certJson: memberCertJson,
     })
@@ -121,8 +135,10 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
     maybeActivateWorkspaceVipPool(workspace.id)
   }
 
+  const dto = toWorkspaceDto(getWorkspaceRepo().findById(workspace.id) ?? workspace)
+  publishP2pGroupSyncChange(dto)
   return {
-    workspace: toWorkspaceDto(getWorkspaceRepo().findById(workspace.id) ?? workspace),
+    workspace: dto,
     member,
   }
 }

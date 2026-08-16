@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   IpcChannel,
+  collectPersonMemberIds,
   type ContentBlock,
   type Message,
   type P2pGroupChatMessage,
+  type P2pMember,
 } from '@toolman/shared'
+import { useI18n } from '../../i18n/useI18n'
 
 function toPanelMessage(message: P2pGroupChatMessage): Message {
   return {
@@ -27,7 +30,13 @@ function memberInitial(name: string): string {
   return trimmed ? trimmed.slice(0, 1).toUpperCase() : '?'
 }
 
-export function useGroupChat(workspaceId: string | null, selfMemberId: string | null) {
+export function useGroupChat(
+  workspaceId: string | null,
+  selfMemberId: string | null,
+  members: P2pMember[] = [],
+  selfIdentityId?: string | null,
+) {
+  const { t } = useI18n()
   const [messages, setMessages] = useState<Message[]>([])
   const [senderNames, setSenderNames] = useState<Record<string, string>>({})
   const [senderMemberIds, setSenderMemberIds] = useState<Record<string, string>>({})
@@ -174,22 +183,36 @@ export function useGroupChat(workspaceId: string | null, selfMemberId: string | 
     [workspaceId],
   )
 
+  const isOwnUserMessage = useCallback(
+    (message: Message) => {
+      const senderId = senderMemberIds[message.id]
+      if (!senderId) return false
+      const selfIds = collectPersonMemberIds(members, {
+        memberId: selfMemberId,
+        identityId: selfIdentityId,
+      })
+      if (selfIds.includes(senderId)) return true
+      return selfMemberId != null && senderId === selfMemberId
+    },
+    [members, selfIdentityId, selfMemberId, senderMemberIds],
+  )
+
   const getUserDisplayName = useCallback(
-    (message: Message) => senderNames[message.id] ?? '成员',
-    [senderNames],
+    (message: Message) =>
+      isOwnUserMessage(message)
+        ? t('groupPage.messages.mine')
+        : (senderNames[message.id] ?? '成员'),
+    [isOwnUserMessage, senderNames, t],
   )
 
   const getUserAvatarInitial = useCallback(
-    (message: Message) => memberInitial(senderNames[message.id] ?? '成员'),
-    [senderNames],
-  )
-
-  const isOwnUserMessage = useCallback(
-    (message: Message) => {
-      if (!selfMemberId) return false
-      return senderMemberIds[message.id] === selfMemberId
-    },
-    [selfMemberId, senderMemberIds],
+    (message: Message) =>
+      memberInitial(
+        isOwnUserMessage(message)
+          ? t('groupPage.messages.mineInitial')
+          : (senderNames[message.id] ?? '成员'),
+      ),
+    [isOwnUserMessage, senderNames, t],
   )
 
   return {

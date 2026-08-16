@@ -20,7 +20,27 @@ export async function sendRelayMessage(
   peerDeviceId: string,
   message: AgentRelayMessage,
 ): Promise<void> {
-  await sendAgentRelayOnEventsChannel(peerDeviceId, message)
+  const { depositAgentRelayToMailbox, peekRelayMailboxPeer } = await import('./mailbox-deposit')
+  const mailbox = peekRelayMailboxPeer(message.requestId)
+  if (mailbox?.mailboxOrigin) {
+    await depositAgentRelayToMailbox(mailbox.workspaceId, mailbox.memberDeviceId, message)
+    return
+  }
+  try {
+    await sendAgentRelayOnEventsChannel(peerDeviceId, message)
+  } catch (error) {
+    if (!mailbox) throw error
+    try {
+      await depositAgentRelayToMailbox(mailbox.workspaceId, mailbox.memberDeviceId, message)
+    } catch (depositError) {
+      logStructured(
+        'p2p',
+        'error',
+        `agent relay mailbox deposit failed: type=${message.type} error=${depositError instanceof Error ? depositError.message : String(depositError)}`,
+      )
+      throw error
+    }
+  }
 }
 
 export function slimStreamEventForRelay(

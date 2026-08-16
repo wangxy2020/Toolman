@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
+import { loadOwnedScoped, saveOwnedScoped } from './identityScope'
 
 export type { MobileClassroomCourse }
 
@@ -33,17 +34,31 @@ async function setItem(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(key, value)
 }
 
+async function removeItem(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      globalThis.localStorage?.removeItem(key)
+    } catch {
+      // ignore
+    }
+    return
+  }
+  try {
+    await SecureStore.deleteItemAsync(key)
+  } catch {
+    // ignore
+  }
+}
+
 export async function loadClassroomCourses(): Promise<MobileClassroomCourse[]> {
   try {
-    const raw = await getItem(KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as { courses?: MobileClassroomCourse[] }
-    return Array.isArray(parsed.courses) ? parsed.courses : []
+    const parsed = await loadOwnedScoped<{ courses?: MobileClassroomCourse[] }>(KEY, getItem)
+    return Array.isArray(parsed?.courses) ? parsed.courses : []
   } catch {
     return []
   }
 }
 
 export async function saveClassroomCourses(courses: MobileClassroomCourse[]): Promise<void> {
-  await setItem(KEY, JSON.stringify({ courses }))
+  await saveOwnedScoped(KEY, { courses }, setItem)
 }

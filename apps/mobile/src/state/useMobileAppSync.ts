@@ -12,12 +12,15 @@ import {
   formatSyncFailureMessage,
   type KnowledgeMetaItem,
 } from '../sync/mobileSync'
+import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
 import {
   EMPTY_MOBILE_SYNC_STATE,
   type MobileSyncState,
 } from '../sync/syncState'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
-import type { AuthSession, MobileSyncReason, SyncStatus } from './MobileAppContext'
+import { emptyChatSessionsStore } from '../storage/chatSessions'
+import type { AuthSession, ChatSession, MobileAgent, MobileSyncReason, SyncStatus } from './MobileAppContext'
+import type { AgentChatScope } from '../chat/agentScopes'
 
 export function useMobileAppSync(input: {
   ready: boolean
@@ -31,6 +34,9 @@ export function useMobileAppSync(input: {
   setDeletedNotes: (items: NoteTombstone[]) => void
   setKnowledgeMeta: (items: KnowledgeMetaItem[]) => void
   setClassroomCourses: (courses: MobileClassroomCourse[]) => void
+  setSessions?: (sessions: ChatSession[]) => void
+  setAgents?: (agents: MobileAgent[]) => void
+  setActiveSessionByScope?: (next: Record<AgentChatScope, string | null>) => void
 }) {
   const {
     ready,
@@ -44,6 +50,9 @@ export function useMobileAppSync(input: {
     setDeletedNotes,
     setKnowledgeMeta,
     setClassroomCourses,
+    setSessions,
+    setAgents,
+    setActiveSessionByScope,
   } = input
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
@@ -78,8 +87,13 @@ export function useMobileAppSync(input: {
     const includeNotes = prefs.notes.syncEnabled
     const includeKnowledge = prefs.knowledge.syncEnabled
     const includeClassroom = prefs.classroom.syncEnabled
-    if (!includeNotes && !includeKnowledge && !includeClassroom) {
-      return '已关闭同步'
+    const hostedBlocked = hostedWebSyncBlockedReason({
+      configuredSyncBaseUrl: prefs.sync.hubBaseUrl,
+      envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
+    })
+    if (hostedBlocked) {
+      setSyncStatus('offline')
+      return hostedBlocked
     }
     if (syncingRef.current) {
       return reason === 'manual' ? '同步进行中' : ''
@@ -130,11 +144,17 @@ export function useMobileAppSync(input: {
       setDeletedNotes(applied.deletedNotes)
       setKnowledgeMeta(applied.knowledgeMeta)
       setClassroomCourses(applied.classroomCourses)
+      if (applied.discardedForeign) {
+        const emptyChat = emptyChatSessionsStore()
+        setSessions?.(emptyChat.sessions)
+        setAgents?.(emptyChat.agents)
+        setActiveSessionByScope?.(emptyChat.activeSessionByScope)
+      }
       setSyncCursor(applied.nextCursor)
       setDesktopHostsOnline(applied.hostsOnline)
       lastAutoSyncAtRef.current = Date.now()
       setSyncStatus('idle')
-      const summary = `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门`
+      const summary = `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门，群组 ${applied.groups.length} 个`
       return applied.knowledgeError && includeKnowledge
         ? `${summary}。知识库文件稍后再试：${applied.knowledgeError}`
         : summary
@@ -144,7 +164,7 @@ export function useMobileAppSync(input: {
     } finally {
       syncingRef.current = false
     }
-  }, [setNotes, setDeletedNotes, setKnowledgeMeta, setClassroomCourses])
+  }, [setNotes, setDeletedNotes, setKnowledgeMeta, setClassroomCourses, setSessions, setAgents, setActiveSessionByScope])
 
   useEffect(() => {
     if (!ready || !auth) return

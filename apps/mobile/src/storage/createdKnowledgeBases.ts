@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
+import { loadOwnedScoped, saveOwnedScoped } from './identityScope'
 
 const STORE_KEY = 'toolman.mobile.created-kbs.v1'
 
@@ -45,6 +46,22 @@ async function setItem(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(key, value)
 }
 
+async function removeItem(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      globalThis.localStorage?.removeItem(key)
+    } catch {
+      // ignore
+    }
+    return
+  }
+  try {
+    await SecureStore.deleteItemAsync(key)
+  } catch {
+    // ignore
+  }
+}
+
 function normalizeKb(value: unknown): MobileCreatedKb | null {
   if (!value || typeof value !== 'object') return null
   const item = value as Partial<MobileCreatedKb>
@@ -72,9 +89,7 @@ function normalizeKb(value: unknown): MobileCreatedKb | null {
 
 export async function loadCreatedKnowledgeBases(): Promise<MobileCreatedKb[]> {
   try {
-    const raw = await getItem(STORE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
+    const parsed = await loadOwnedScoped<unknown>(STORE_KEY, getItem)
     if (!Array.isArray(parsed)) return []
     return parsed.map(normalizeKb).filter((item): item is MobileCreatedKb => item != null)
   } catch {
@@ -83,7 +98,7 @@ export async function loadCreatedKnowledgeBases(): Promise<MobileCreatedKb[]> {
 }
 
 export async function saveCreatedKnowledgeBases(items: MobileCreatedKb[]): Promise<void> {
-  await setItem(STORE_KEY, JSON.stringify(items))
+  await saveOwnedScoped(STORE_KEY, items, setItem)
 }
 
 export function createKnowledgeBaseId(): string {

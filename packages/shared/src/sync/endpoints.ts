@@ -76,6 +76,49 @@ export function isSyncHubHealthPayload(payload: unknown): boolean {
   return rec.service === SYNC_HUB_SERVICE_NAME && rec.status === 'ok'
 }
 
+/** Desktop Sync Hub `/health` may advertise the signed-in desktop identity. */
+export function syncHubHealthIdentityId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null
+  const rec = asHealthRecord(payload) ?? (payload as Record<string, unknown>)
+  const identityId = rec.identityId
+  return typeof identityId === 'string' && identityId.trim() ? identityId.trim() : null
+}
+
+/** Private notes / knowledge / classroom must not cross accounts. */
+export function isForeignSyncIdentity(
+  hubIdentityId?: string | null,
+  localIdentityId?: string | null,
+): boolean {
+  const hub = hubIdentityId?.trim() ?? ''
+  const local = localIdentityId?.trim() ?? ''
+  return hub.length > 0 && local.length > 0 && hub !== local
+}
+
+function asHealthRecord(payload: unknown): Record<string, unknown> | null {
+  if (!payload || typeof payload !== 'object') return null
+  const rec = payload as Record<string, unknown>
+  if (rec.data && typeof rec.data === 'object') return rec.data as Record<string, unknown>
+  return rec
+}
+
+/** Community Hub `/health` when private device-sync fallback is enabled. */
+export function isCommunityDeviceSyncHealthPayload(payload: unknown): boolean {
+  const data = asHealthRecord(payload)
+  if (!data) return false
+  return data.device_sync === true && (data.status === 'healthy' || data.status === 'ok')
+}
+
+/** Community Hub `/health` when the encrypted workspace mailbox is enabled. */
+export function isCommunityMailboxHealthPayload(payload: unknown): boolean {
+  const data = asHealthRecord(payload)
+  if (!data) return false
+  return data.workspace_mailbox === true && (data.status === 'healthy' || data.status === 'ok')
+}
+
+export function isReachableSyncEndpointHealth(payload: unknown): boolean {
+  return isSyncHubHealthPayload(payload) || isCommunityDeviceSyncHealthPayload(payload)
+}
+
 /**
  * True when JSON is the desktop Sync Hub `/api/v1/sync/hosts` body.
  * Community Hub wraps catalog replies as `{ ok, data }` and must not match.
@@ -165,6 +208,11 @@ export function listSyncBaseUrlCandidates(options?: {
   const packagerLoopback = fromPackager.filter((url) => url && isLoopbackOrigin(url))
   const communityLan = lanSync && !isLoopbackOrigin(lanSync) ? lanSync : null
   const includeLoopback = options?.includeLoopback !== false
+  const wanCommunityHub =
+    community &&
+    (isOfficialCommunityHubHost(communityHost) || /^https:/i.test(community))
+      ? community
+      : null
 
   return uniqueUrls([
     options?.configuredSyncBaseUrl,
@@ -174,5 +222,7 @@ export function listSyncBaseUrlCandidates(options?: {
     ...packagerLoopback,
     includeLoopback ? DEFAULT_LOCAL_SYNC_BASE_URL : null,
     includeLoopback ? `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}` : null,
+    wanCommunityHub,
+    OFFICIAL_TOOLMAN_HUB_URL,
   ])
 }

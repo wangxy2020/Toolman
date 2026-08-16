@@ -48,7 +48,7 @@ function mapWorkspaceRow(row: P2pWorkspaceRow, memberCount: number): P2pWorkspac
 }
 
 export function toWorkspaceDto(row: P2pWorkspaceRow): P2pWorkspace {
-  const memberCount = getMemberRepo().countActiveByWorkspace(row.id)
+  const memberCount = getMemberRepo().countActiveIdentitiesByWorkspace(row.id)
   return mapWorkspaceRow(row, memberCount)
 }
 

@@ -4,7 +4,6 @@ import {
   PanResponder,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View,
   type StyleProp,
@@ -13,19 +12,26 @@ import {
 import { useSidebarLayout } from '../layout'
 import { colors } from '../theme'
 import { asDomElement, isHorizontalSwipe, shouldRevealSwipeActions } from './swipeable-row-gesture'
+import { swipeableTopicRowStyles as styles } from './SwipeableTopicRow.styles'
+import { useSwipeableTopicRowWebDrag } from './useSwipeableTopicRowWebDrag'
 
 type SwipeableTopicRowProps = {
   active?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onPress: () => void
-  onRename: () => void
+  onRename?: () => void
   onDelete?: () => void
   children: ReactNode
   /** Optional control on the trailing edge (stays on the sliding row). */
   trailing?: ReactNode
   /** Optional wrap style (e.g. nested indent under notebook). */
   style?: StyleProp<ViewStyle>
+  /**
+   * Opaque slide surface color. Must stay opaque so actions stay hidden until swipe.
+   * Defaults to `colors.surface` (same as notes sidebar).
+   */
+  chromeColor?: string
   /** Section headers (notebooks / knowledge groups) use muted active chrome. */
   variant?: 'item' | 'section'
   renameA11yLabel?: string
@@ -44,10 +50,13 @@ const webForegroundStyle =
 export function SwipeableTopicRow(props: SwipeableTopicRowProps) {
   const { open, onOpenChange } = props
   const layout = useSidebarLayout()
+  const showRename = Boolean(props.onRename)
   const showDelete = Boolean(props.onDelete)
+  const actionCount = (showRename ? 1 : 0) + (showDelete ? 1 : 0)
   const actionWidth = layout.swipeActionWidth
-  const actionsWidth = actionWidth * (showDelete ? 2 : 1)
+  const actionsWidth = actionWidth * Math.max(1, actionCount)
   const rowMinHeight = layout.rowMinHeight
+  const chromeColor = props.chromeColor ?? colors.surface
 
   const translateX = useRef(new Animated.Value(0)).current
   const dragStart = useRef(0)
@@ -132,89 +141,15 @@ export function SwipeableTopicRow(props: SwipeableTopicRowProps) {
     [animateTo, settleFromDrag, translateX],
   )
 
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !hostNode) return
-
-    let detachDrag: (() => void) | null = null
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.button != null && event.button !== 0) return
-      const target = event.target
-      if (target instanceof Element && target.closest('[data-testid="swipe-ignore"]')) return
-
-      detachDrag?.()
-
-      const pointerId = event.pointerId
-      const startX = event.pageX
-      const startY = event.pageY
-      let lastX = startX
-      let lastT = event.timeStamp || Date.now()
-      let velocityX = 0
-      let captured = false
-      dragStart.current = openRef.current ? -actionsWidthRef.current : 0
-      didDrag.current = false
-
-      const onMove = (moveEvent: PointerEvent) => {
-        if (moveEvent.pointerId !== pointerId) return
-        const dx = moveEvent.pageX - startX
-        const dy = moveEvent.pageY - startY
-        if (!captured) {
-          if (!isHorizontalSwipe(dx, dy, 3)) return
-          captured = true
-          didDrag.current = true
-          try {
-            hostNode.setPointerCapture(pointerId)
-          } catch {
-            /* capture is optional; window listeners still track the drag */
-          }
-        }
-        moveEvent.preventDefault()
-        const now = moveEvent.timeStamp || Date.now()
-        const dt = Math.max(8, now - lastT)
-        velocityX = (moveEvent.pageX - lastX) / dt
-        lastX = moveEvent.pageX
-        lastT = now
-        const max = actionsWidthRef.current
-        translateX.setValue(Math.min(0, Math.max(-max, dragStart.current + dx)))
-      }
-
-      const onUp = (upEvent: PointerEvent) => {
-        if (upEvent.pointerId !== pointerId) return
-        detach()
-        if (!captured) return
-        settleFromDragRef.current(upEvent.pageX - startX, velocityX)
-      }
-
-      const detach = () => {
-        window.removeEventListener('pointermove', onMove, true)
-        window.removeEventListener('pointerup', onUp, true)
-        window.removeEventListener('pointercancel', onUp, true)
-        try {
-          if (hostNode.hasPointerCapture(pointerId)) hostNode.releasePointerCapture(pointerId)
-        } catch {
-          /* ignore */
-        }
-        if (detachDrag === detach) detachDrag = null
-      }
-
-      detachDrag = detach
-      window.addEventListener('pointermove', onMove, true)
-      window.addEventListener('pointerup', onUp, true)
-      window.addEventListener('pointercancel', onUp, true)
-    }
-
-    const onDragStart = (event: DragEvent) => {
-      event.preventDefault()
-    }
-
-    hostNode.addEventListener('pointerdown', onPointerDown)
-    hostNode.addEventListener('dragstart', onDragStart)
-    return () => {
-      detachDrag?.()
-      hostNode.removeEventListener('pointerdown', onPointerDown)
-      hostNode.removeEventListener('dragstart', onDragStart)
-    }
-  }, [hostNode, translateX])
+  useSwipeableTopicRowWebDrag({
+    hostNode,
+    translateX,
+    openRef,
+    actionsWidthRef,
+    dragStart,
+    didDrag,
+    settleFromDragRef,
+  })
 
   const handlePress = () => {
     if (didDrag.current) {
@@ -231,19 +166,26 @@ export function SwipeableTopicRow(props: SwipeableTopicRowProps) {
   return (
     <View
       ref={bindWrapRef}
-      style={[styles.wrap, webForegroundStyle, { minHeight: rowMinHeight }, props.style]}
+      style={[
+        styles.wrap,
+        webForegroundStyle,
+        { minHeight: rowMinHeight, backgroundColor: chromeColor },
+        props.style,
+      ]}
     >
       <View style={styles.actions}>
-        <Pressable
-          accessibilityLabel={props.renameA11yLabel ?? '重命名'}
-          style={[styles.actionBtn, styles.renameBtn, { width: actionWidth, minHeight: rowMinHeight }]}
-          onPress={() => {
-            animateTo(0, false)
-            props.onRename()
-          }}
-        >
-          <Text style={[styles.actionText, { fontSize: 12 }]}>重命名</Text>
-        </Pressable>
+        {showRename ? (
+          <Pressable
+            accessibilityLabel={props.renameA11yLabel ?? '重命名'}
+            style={[styles.actionBtn, styles.renameBtn, { width: actionWidth, minHeight: rowMinHeight }]}
+            onPress={() => {
+              animateTo(0, false)
+              props.onRename?.()
+            }}
+          >
+            <Text style={[styles.actionText, { fontSize: 12 }]}>重命名</Text>
+          </Pressable>
+        ) : null}
         {showDelete ? (
           <Pressable
             accessibilityLabel={props.deleteA11yLabel ?? '删除'}
@@ -260,14 +202,18 @@ export function SwipeableTopicRow(props: SwipeableTopicRowProps) {
 
       <Animated.View
         collapsable={false}
-        style={[styles.foreground, webForegroundStyle, { transform: [{ translateX }] }]}
+        style={[
+          styles.foreground,
+          webForegroundStyle,
+          { backgroundColor: chromeColor, transform: [{ translateX }] },
+        ]}
         {...(Platform.OS === 'web' ? null : panResponder.panHandlers)}
       >
         <View
           collapsable={false}
           style={[
             styles.foregroundRow,
-            { minHeight: rowMinHeight },
+            { minHeight: rowMinHeight, backgroundColor: chromeColor },
             props.active
               ? props.variant === 'section'
                 ? styles.rowSectionActive
@@ -296,63 +242,3 @@ export function SwipeableTopicRow(props: SwipeableTopicRowProps) {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    marginHorizontal: 10,
-    marginVertical: 2,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-  },
-  actions: {
-    ...StyleSheet.absoluteFill,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  actionBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  renameBtn: {
-    backgroundColor: colors.accent,
-  },
-  deleteBtn: {
-    backgroundColor: colors.danger,
-  },
-  actionText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  foreground: {
-    backgroundColor: colors.surface,
-  },
-  foregroundRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    backgroundColor: colors.surface,
-  },
-  trailing: {
-    justifyContent: 'center',
-    paddingRight: 8,
-  },
-  row: {
-    flex: 1,
-    minWidth: 0,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-  },
-  rowWithTrailing: {
-    paddingRight: 4,
-  },
-  rowActive: {
-    backgroundColor: colors.accentSoft,
-  },
-  rowSectionActive: {
-    backgroundColor: colors.hover,
-  },
-  rowPressed: {
-    backgroundColor: colors.hover,
-  },
-})

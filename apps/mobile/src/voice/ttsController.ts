@@ -35,6 +35,8 @@ export class MobileTtsController {
     const voice = resolveCuratedEdgeTtsVoice(config.voice ?? this.config.voice)
     this.config = { engine, voice }
     this.edge.setVoice(voice)
+    this.lastError = null
+    this.fellBack = false
   }
 
   getConfig(): MobileTtsConfig {
@@ -141,6 +143,8 @@ export class MobileTtsController {
     this.active = null
     this.playingMessageId = null
     this.playbackState = 'idle'
+    this.lastError = null
+    this.fellBack = false
     this.emit()
   }
 }

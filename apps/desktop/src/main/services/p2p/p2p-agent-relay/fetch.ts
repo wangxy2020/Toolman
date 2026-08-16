@@ -8,6 +8,7 @@ import { resolveAgentRelayResourceId } from '../p2p-shared-resource-id'
 import { assertRelayAccess } from './access'
 import { waitForRelayResponse } from './pending'
 import { getSharedResourceRepo } from './repos'
+import { rememberRelayMailboxPeer } from './mailbox-deposit'
 import { ensurePeerConnected, sendFetchOkResponse, sendRelayMessage } from './transport'
 
 export async function fetchRemoteSessionHistory(input: {
@@ -51,6 +52,7 @@ export async function handleOwnerFetch(
   peerDeviceId: string,
   message: Extract<import('@toolman/shared').AgentRelayMessage, { type: 'fetch' }>,
 ): Promise<void> {
+  rememberRelayMailboxPeer(message.requestId, message.p2pWorkspaceId, peerDeviceId)
   try {
     assertRelayAccess(
       message.p2pWorkspaceId,

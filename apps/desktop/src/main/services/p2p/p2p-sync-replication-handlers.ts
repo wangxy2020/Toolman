@@ -22,6 +22,7 @@ import {
   handleEventsRequest,
 } from './p2p-sync-replication-events'
 import { handleMemberReplicationMessage } from './p2p-sync-replication-member'
+import { sendAgentShareListings } from './p2p-agent-share-listing'
 import {
   pushMissingEventsToPeer,
   requestCatchUpFromPeer,
@@ -65,6 +66,7 @@ async function handleSyncHello(peerDeviceId: string, message: SyncHelloMessage):
     message.lastReceivedSeq,
     latestSeq,
   )
+  await sendAgentShareListings(peerDeviceId, message.workspaceId)
   await requestCatchUpFromPeer(
     peerDeviceId,
     message.workspaceId,
@@ -82,6 +84,7 @@ async function handleSyncHelloAck(peerDeviceId: string, message: SyncHelloAckMes
   if (cursorLastSent(cursor) < latestSeq) {
     await sendEventsBatch(peerDeviceId, message.workspaceId, cursorLastSent(cursor))
   }
+  await sendAgentShareListings(peerDeviceId, message.workspaceId)
 
   await requestCatchUpFromPeer(
     peerDeviceId,

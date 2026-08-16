@@ -33,6 +33,7 @@ export interface P2pMemberCertSnapshot {
   subscriptionSku?: ProductSku | null
   entitlements?: string[]
   recordedAt?: number
+  deviceKind?: 'desktop' | 'mobile'
 }
 
 function getMemberRepo(): P2pMemberRepository {

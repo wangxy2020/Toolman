@@ -4,16 +4,11 @@ import path from 'node:path'
 import { loggerService } from './epc-logger.js'
 import {
   isRustEngineAvailable,
-  rustExecuteWorkspaceIpcWorkflow,
   rustAppendPaymentDataPatch,
   rustApplyPaymentDataOverrides,
-  rustExecuteWorkspaceBoqFormatWorkflow,
-  rustExecuteWorkspacePaymentWorkflow,
-  rustExecuteWorkspaceShippingCiWorkflow,
   rustExportErrorAudit,
   rustGetMachineId,
 } from './rustCli'
-import { applyShippingCiWriteJobs } from './epcCommercialShippingCiWrites.js'
 import type {
   EpcCommercialLicenseStatus,
   EpcPaymentDataPatchParams,
@@ -30,18 +25,19 @@ import type {
   WorkspaceBoqFormatWorkflowParams,
   WorkspacePaymentWorkflowParams,
   WorkspaceIpcWorkflowParams,
-  WorkspaceShippingCiWorkflowParams
+  WorkspaceShippingCiWorkflowParams,
 } from '@toolman/shared'
 import { EPC_WORKFLOW_LOG_HEADER, formatWorkflowLogAppendBlock, workflowLogPathForWork } from '@toolman/shared'
-import { app } from 'electron'
+import { getEpcCommercialDataDir } from './epc-commercial-paths'
+import {
+  executeIpcAlignment as runIpcAlignment,
+  executeWorkspaceBoqFormatWorkflow as runBoqFormat,
+  executeWorkspaceIpcWorkflow as runIpcWorkflow,
+  executeWorkspacePaymentWorkflow as runPayment,
+  executeWorkspaceShippingCiWorkflow as runShippingCi,
+} from './epc-commercial-workflows'
 
 const logger = loggerService.withContext('EpcCommercialService')
-
-const getDataDir = (): string => {
-  const dir = path.join(app.getPath('userData'), 'epc-commercial')
-  fs.mkdirSync(dir, { recursive: true })
-  return dir
-}
 
 export class EpcCommercialService {
   getMachineId = async (): Promise<string> => {
@@ -54,12 +50,12 @@ export class EpcCommercialService {
 
   getLicenseStatus = async (): Promise<EpcCommercialLicenseStatus> => {
     const machineId = await this.getMachineId()
-    const licensePath = path.join(getDataDir(), 'license.key')
+    const licensePath = path.join(getEpcCommercialDataDir(), 'license.key')
     if (!fs.existsSync(licensePath)) {
       return {
         valid: false,
         machineId,
-        message: '未找到 license.key，请联系供应商获取离线授权文件'
+        message: '未找到 license.key，请联系供应商获取离线授权文件',
       }
     }
 
@@ -69,175 +65,25 @@ export class EpcCommercialService {
     return { valid: true, machineId, message: '已检测到 license.key（执行时将校验签名与到期时间）' }
   }
 
-  executeWorkspaceIpcWorkflow = async (params: WorkspaceIpcWorkflowParams): Promise<IpcAlignmentExecuteResponse> => {
-    if (!isRustEngineAvailable()) {
-      return {
-        ok: false,
-        errorCode: 'ENGINE_NOT_FOUND',
-        errorMessage: '未找到 epc-commercial-cli。请在项目根目录执行: pnpm epc:build'
-      }
-    }
+  executeWorkspaceIpcWorkflow = async (
+    params: WorkspaceIpcWorkflowParams,
+  ): Promise<IpcAlignmentExecuteResponse> => runIpcWorkflow(params)
 
-    const workspaceRoot = params.workspaceRoot
-    if (!fs.existsSync(workspaceRoot)) {
-      return {
-        ok: false,
-        errorCode: 'INVALID_ARGS',
-        errorMessage: `工作区目录不存在: ${workspaceRoot}`
-      }
-    }
-
-    try {
-      return await rustExecuteWorkspaceIpcWorkflow({
-        workspaceRoot,
-        period: params.period,
-        masterPricePath: params.masterPricePath,
-        dataDir: getDataDir(),
-        ignoreRevisions: params.ignoreRevisions
-      })
-    } catch (error) {
-      logger.error('executeWorkspaceIpcWorkflow failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return {
-        ok: false,
-        errorCode: 'INTERNAL_ERROR',
-        errorMessage: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
-
-  executeIpcAlignment = async (params: IpcAlignmentExecuteParams): Promise<IpcAlignmentExecuteResponse> => {
-    return this.executeWorkspaceIpcWorkflow({
-      workspaceRoot: params.ipcRootPath,
-      period: params.period,
-      masterPricePath: params.masterPricePath
-    })
-  }
+  executeIpcAlignment = async (
+    params: IpcAlignmentExecuteParams,
+  ): Promise<IpcAlignmentExecuteResponse> => runIpcAlignment(params)
 
   executeWorkspaceBoqFormatWorkflow = async (
-    params: WorkspaceBoqFormatWorkflowParams
-  ): Promise<BoqFormatWorkflowExecuteResponse> => {
-    if (!isRustEngineAvailable()) {
-      return {
-        ok: false,
-        errorCode: 'ENGINE_NOT_FOUND',
-        errorMessage: '未找到 epc-commercial-cli。请在项目根目录执行: pnpm epc:build'
-      }
-    }
-    const workspaceRoot = params.workspaceRoot
-    if (!fs.existsSync(workspaceRoot)) {
-      return {
-        ok: false,
-        errorCode: 'INVALID_ARGS',
-        errorMessage: `工作区目录不存在: ${workspaceRoot}`
-      }
-    }
-    try {
-      return await rustExecuteWorkspaceBoqFormatWorkflow({
-        workspaceRoot,
-        dataDir: getDataDir()
-      })
-    } catch (error) {
-      logger.error('executeWorkspaceBoqFormatWorkflow failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return {
-        ok: false,
-        errorCode: 'INTERNAL_ERROR',
-        errorMessage: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
+    params: WorkspaceBoqFormatWorkflowParams,
+  ): Promise<BoqFormatWorkflowExecuteResponse> => runBoqFormat(params)
 
   executeWorkspaceShippingCiWorkflow = async (
-    params: WorkspaceShippingCiWorkflowParams
-  ): Promise<ShippingCiWorkflowExecuteResponse> => {
-    if (!isRustEngineAvailable()) {
-      return {
-        ok: false,
-        errorCode: 'ENGINE_NOT_FOUND',
-        errorMessage: '未找到 epc-commercial-cli。请在项目根目录执行: pnpm epc:build'
-      }
-    }
-    const workspaceRoot = params.workspaceRoot
-    if (!fs.existsSync(workspaceRoot)) {
-      return {
-        ok: false,
-        errorCode: 'INVALID_ARGS',
-        errorMessage: `工作区目录不存在: ${workspaceRoot}`
-      }
-    }
-    try {
-      const response = await rustExecuteWorkspaceShippingCiWorkflow({
-        workspaceRoot,
-        dataDir: getDataDir(),
-        deferLedgerSuccess: true
-      })
-      if (!response.ok) {
-        return response
-      }
-      if (!response.report) {
-        return response
-      }
-      const writeError = await applyShippingCiWriteJobs(response.report, {
-        workspaceRoot,
-        dataDir: getDataDir(),
-        successes: response.report.pendingLedgerCommits ?? [],
-      })
-      if (writeError) {
-        logger.error('applyShippingCiWriteJobs failed', { errorMessage: writeError.errorMessage })
-        return writeError
-      }
-      return response
-    } catch (error) {
-      logger.error('executeWorkspaceShippingCiWorkflow failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return {
-        ok: false,
-        errorCode: 'INTERNAL_ERROR',
-        errorMessage: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
+    params: WorkspaceShippingCiWorkflowParams,
+  ): Promise<ShippingCiWorkflowExecuteResponse> => runShippingCi(params)
 
   executeWorkspacePaymentWorkflow = async (
-    params: WorkspacePaymentWorkflowParams
-  ): Promise<PaymentWorkflowExecuteResponse> => {
-    if (!isRustEngineAvailable()) {
-      return {
-        ok: false,
-        errorCode: 'ENGINE_NOT_FOUND',
-        errorMessage: '未找到 epc-commercial-cli。请在项目根目录执行: pnpm epc:build'
-      }
-    }
-    const workspaceRoot = params.workspaceRoot
-    if (!fs.existsSync(workspaceRoot)) {
-      return {
-        ok: false,
-        errorCode: 'INVALID_ARGS',
-        errorMessage: `工作区目录不存在: ${workspaceRoot}`
-      }
-    }
-    try {
-      return await rustExecuteWorkspacePaymentWorkflow({
-        workspaceRoot,
-        period: params.period,
-        dataDir: getDataDir(),
-        ignoreRevisions: params.ignoreRevisions
-      })
-    } catch (error) {
-      logger.error('executeWorkspacePaymentWorkflow failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return {
-        ok: false,
-        errorCode: 'INTERNAL_ERROR',
-        errorMessage: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
+    params: WorkspacePaymentWorkflowParams,
+  ): Promise<PaymentWorkflowExecuteResponse> => runPayment(params)
 
   private resolveWorkflowLogPath(workspaceRoot: string, work: EpcWorkflowLogParams['work']): string {
     const root = path.resolve(workspaceRoot)
@@ -307,15 +153,15 @@ export class EpcCommercialService {
     }
     try {
       return await rustExportErrorAudit({
-        dataDir: params.dataDir || getDataDir(),
+        dataDir: params.dataDir || getEpcCommercialDataDir(),
         period: params.period,
         outputPath: params.outputPath,
-        errors: params.errors
+        errors: params.errors,
       })
     } catch (error) {
       return {
         ok: false,
-        errorMessage: error instanceof Error ? error.message : String(error)
+        errorMessage: error instanceof Error ? error.message : String(error),
       }
     }
   }

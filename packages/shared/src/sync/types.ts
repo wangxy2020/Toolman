@@ -11,6 +11,8 @@ export const SyncEntityKindSchema = z.enum([
   'translate_job',
   /** Knowledge-base folder metadata in the changelog. Files/chunks/vectors use the snapshot export. */
   'knowledge_meta',
+  /** Desktop P2P workspace list (names/members). Chat/resources stay on the desktop mesh. */
+  'p2p_group',
 ])
 export type SyncEntityKind = z.infer<typeof SyncEntityKindSchema>
 

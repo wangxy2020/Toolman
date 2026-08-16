@@ -18,7 +18,7 @@ import {
 import { resolveAgentRelayResourceId } from './p2p-shared-resource-id'
 import { fetchRemoteSessionHistory } from './p2p-agent-relay.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
-import { ensureOwnerMemberRecord } from './p2p-member-shared'
+import { ensureOwnerMemberRecord } from './p2p-member-shared-repos'
 import {
   findOrRestoreProxyAssistant,
   findProxySession,

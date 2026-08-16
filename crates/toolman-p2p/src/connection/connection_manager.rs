@@ -11,6 +11,7 @@ use crate::signaling::{
 };
 use crate::state::{
     PendingInviteHandshake, PENDING_INVITES, INVITE_UDP_ANSWERS, DISCOVERY, WORKSPACE_KEYS,
+    take_http_invite_answer,
 };
 use crate::crypto::WORKSPACE_KEY_LEN;
 
@@ -350,6 +351,16 @@ impl ConnectionManager {
         let deadline = tokio::time::Instant::now() + timeout;
 
         while tokio::time::Instant::now() < deadline {
+            if let Some(http_answer) = take_http_invite_answer(&invite_id) {
+                return self
+                    .accept_invite_answer(
+                        &invite_id,
+                        &http_answer.joiner_device_id,
+                        &http_answer.answer_sdp,
+                    )
+                    .await;
+            }
+
             if let Some((joiner_device_id, answer_sdp)) =
                 Self::poll_invite_answer_signal(&invite_id, &local_device_id)?
             {

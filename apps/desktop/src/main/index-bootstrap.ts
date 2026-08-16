@@ -24,6 +24,7 @@ import { bootstrapP2pWorkspaceKeys } from './services/p2p/p2p-workspace.service'
 import { bootstrapP2pEventStore } from './services/p2p/p2p-event.service'
 import { bootstrapP2pSync } from './services/p2p/p2p-sync.service'
 import { bootstrapP2pAgentRelay } from './services/p2p/p2p-agent-relay.service'
+import { startCommunityMailboxPull } from './services/p2p/p2p-mailbox.service'
 import { bootstrapCommunityHub } from './services/community/community-bridge.service'
 import { bootstrapCopyrightProvenance } from './services/copyright-provenance.service'
 import { bootstrapAppUpdateService } from './services/app-update.service'
@@ -101,6 +102,7 @@ export function bootstrapMainProcessServices(): void {
       logStructured('p2p', 'warn', `blob resume failed: ${message}`)
     })
     bootstrapP2pAgentRelay()
+    startCommunityMailboxPull()
     startP2pConnectionMonitor()
     startP2pNetworkChangeMonitor()
     logP2pNativeStatus()

@@ -2,6 +2,7 @@ pub mod comment_repository;
 pub mod device_blacklist_repository;
 pub mod device_presence_repository;
 pub mod device_sync_repository;
+pub mod workspace_mailbox_repository;
 pub mod dislike_repository;
 pub mod favorite_repository;
 pub mod fetch_log_repository;
@@ -34,6 +35,9 @@ pub use device_presence_repository::{
 pub use device_sync_repository::{
     DeviceSyncChangeRecord, DeviceSyncRepository, DeviceSyncRepositoryError,
     UpsertDeviceSyncChangeInput,
+};
+pub use workspace_mailbox_repository::{
+    WorkspaceMailboxRecord, WorkspaceMailboxRepository, WorkspaceMailboxRepositoryError,
 };
 pub use dislike_repository::{
     CreateDislikeInput, DislikeRepository, DislikeRepositoryError,

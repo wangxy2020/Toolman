@@ -1,6 +1,4 @@
-#![allow(dead_code)]
-//! Leftover schema from a short-lived Community Hub device-changelog experiment.
-//! Private classroom/notes sync lives on the desktop Sync Hub (`:17890`), not here.
+//! Per-user private changelog mirrored from the desktop Sync Hub for WAN clients.
 
 use sqlx::SqlitePool;
 
@@ -47,9 +45,9 @@ impl DeviceSyncRepository {
     ) -> Result<i64, DeviceSyncRepositoryError> {
         let mut tx = self.pool.begin().await?;
 
-        let current: Option<(i64, i64)> = sqlx::query_as(
+        let current: Option<(i64, i64, String, String)> = sqlx::query_as(
             r#"
-            SELECT seq, updated_at
+            SELECT seq, updated_at, op, payload
             FROM device_sync_changes
             WHERE identity_id = ?1 AND entity_kind = ?2 AND entity_id = ?3
             "#,
@@ -59,6 +57,17 @@ impl DeviceSyncRepository {
         .bind(&input.entity_id)
         .fetch_optional(&mut *tx)
         .await?;
+
+        if let Some((seq, updated_at, op, payload)) = &current {
+            if *updated_at == input.updated_at && op == &input.op && payload == &input.payload {
+                tx.commit().await?;
+                return Ok(*seq);
+            }
+            if *updated_at > input.updated_at {
+                tx.commit().await?;
+                return Ok(*seq);
+            }
+        }
 
         let next_seq: i64 = {
             sqlx::query(
@@ -77,26 +86,6 @@ impl DeviceSyncRepository {
                 .fetch_one(&mut *tx)
                 .await?
         };
-
-        if let Some((_seq, updated_at)) = current {
-            if updated_at > input.updated_at {
-                sqlx::query(
-                    r#"
-                    UPDATE device_sync_changes
-                    SET seq = ?1
-                    WHERE identity_id = ?2 AND entity_kind = ?3 AND entity_id = ?4
-                    "#,
-                )
-                .bind(next_seq)
-                .bind(&input.identity_id)
-                .bind(&input.entity_kind)
-                .bind(&input.entity_id)
-                .execute(&mut *tx)
-                .await?;
-                tx.commit().await?;
-                return Ok(next_seq);
-            }
-        }
 
         sqlx::query(
             r#"

@@ -1,5 +1,9 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
+import { loadOwnedScoped, saveOwnedScoped } from '../storage/identityScope'
+import { LOCAL_ONLY_SYNC_HUB_ID } from './syncIdentity'
+
+export { LOCAL_ONLY_SYNC_HUB_ID }
 
 const STATE_KEY = 'toolman.mobile.sync-state'
 
@@ -9,6 +13,8 @@ export type MobileSyncState = {
   deletedStamps: Record<string, number>
   classroomStamps: Record<string, number>
   knowledgeSince: number
+  /** Desktop identity last used for private sync, or `local-only` after discarding a foreign hub. */
+  hubIdentityId?: string | null
 }
 
 export const EMPTY_MOBILE_SYNC_STATE: MobileSyncState = {
@@ -17,6 +23,7 @@ export const EMPTY_MOBILE_SYNC_STATE: MobileSyncState = {
   deletedStamps: {},
   classroomStamps: {},
   knowledgeSince: 0,
+  hubIdentityId: null,
 }
 
 async function getItem(key: string): Promise<string | null> {
@@ -46,11 +53,26 @@ async function setItem(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(key, value)
 }
 
+async function removeItem(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      globalThis.localStorage?.removeItem(key)
+    } catch {
+      // ignore
+    }
+    return
+  }
+  try {
+    await SecureStore.deleteItemAsync(key)
+  } catch {
+    // ignore
+  }
+}
+
 export async function loadMobileSyncState(): Promise<MobileSyncState> {
   try {
-    const raw = await getItem(STATE_KEY)
-    if (!raw) return { ...EMPTY_MOBILE_SYNC_STATE }
-    const parsed = JSON.parse(raw) as Partial<MobileSyncState>
+    const parsed = await loadOwnedScoped<Partial<MobileSyncState>>(STATE_KEY, getItem)
+    if (!parsed) return { ...EMPTY_MOBILE_SYNC_STATE }
     return {
       cursor: typeof parsed.cursor === 'string' ? parsed.cursor : null,
       noteStamps:
@@ -67,6 +89,10 @@ export async function loadMobileSyncState(): Promise<MobileSyncState> {
         typeof parsed.knowledgeSince === 'number' && Number.isFinite(parsed.knowledgeSince)
           ? parsed.knowledgeSince
           : 0,
+      hubIdentityId:
+        typeof parsed.hubIdentityId === 'string' && parsed.hubIdentityId.trim()
+          ? parsed.hubIdentityId.trim()
+          : null,
     }
   } catch {
     return { ...EMPTY_MOBILE_SYNC_STATE }
@@ -74,5 +100,5 @@ export async function loadMobileSyncState(): Promise<MobileSyncState> {
 }
 
 export async function saveMobileSyncState(state: MobileSyncState): Promise<void> {
-  await setItem(STATE_KEY, JSON.stringify(state))
+  await saveOwnedScoped(STATE_KEY, state, setItem)
 }

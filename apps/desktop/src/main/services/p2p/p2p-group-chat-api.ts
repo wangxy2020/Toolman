@@ -28,6 +28,7 @@ import {
 import { appendGroupChatWalEvent } from './p2p-group-chat-wal'
 import { getIdentityProfile } from '../identity.service'
 import { relayClearToPeers, relayMessageToPeers } from './p2p-group-chat-relay-internal'
+import { recordP2pPathMetric } from './p2p-path-metrics'
 
 function getMemberRepo(): P2pMemberRepository {
   return new P2pMemberRepository(getDatabase())
@@ -67,6 +68,7 @@ export async function sendP2pGroupChatMessage(
   appendGroupChatMessage(message)
   broadcastP2pGroupChatMessage(message)
   fireAndForget('p2p', relayMessageToPeers(message))
+  recordP2pPathMetric('meshSend')
   void appendGroupChatWalEvent(input.workspaceId, member.id, {
     v: 1,
     kind: 'group.chat.message',

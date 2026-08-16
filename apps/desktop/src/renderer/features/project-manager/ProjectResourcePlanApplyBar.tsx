@@ -2,12 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   buildPmResourcePlanFingerprint,
-  hasAppliedResourcePlanFingerprint,
   parsePmResourcePlanFromText,
   upsertAppliedResourcePlanReceipt,
   type Message,
   type PmProject,
-  type PmResourceTaskPlanSuggestion,
 } from '@toolman/shared'
 
 import { useI18n } from '../../i18n/useI18n'
@@ -22,58 +20,18 @@ import {
   pendingAgentRevisionMetadataPatch,
 } from './pm-pending-revision'
 import {
+  assignmentCount,
+  findAppliedProjectId,
+  readAppliedMap,
+  writeAppliedMap,
+} from './project-resource-plan-apply-helpers'
+import {
   readSharedResourceCatalog,
   upsertSharedResourceCatalog,
   writeSharedResourceCatalog,
   type PmResourceRow,
   type PmResourceType,
 } from './views/resource/pm-resource-catalog'
-
-function storageKey(workspaceId: string): string {
-  return `tm-pm-resource-plan-applied:${workspaceId}`
-}
-
-function readAppliedMap(workspaceId: string): Record<string, string> {
-  try {
-    const raw = sessionStorage.getItem(storageKey(workspaceId))
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, string>
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
-  }
-}
-
-function writeAppliedMap(workspaceId: string, map: Record<string, string>): void {
-  try {
-    sessionStorage.setItem(storageKey(workspaceId), JSON.stringify(map))
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-function assignmentCount(suggestions: readonly PmResourceTaskPlanSuggestion[]): number {
-  return suggestions.reduce((sum, task) => sum + task.assignments.length, 0)
-}
-
-/** Durable receipts in project metadata first; session map as optimistic fallback. */
-function findAppliedProjectId(
-  projects: PmProject[],
-  fingerprint: string,
-  workspaceId: string,
-): string | null {
-  if (!fingerprint) return null
-  for (const project of projects) {
-    if (hasAppliedResourcePlanFingerprint(project.metadata, fingerprint)) {
-      return project.id
-    }
-  }
-  const sessionId = readAppliedMap(workspaceId)[fingerprint]
-  if (sessionId && projects.some((project) => project.id === sessionId)) {
-    return sessionId
-  }
-  return null
-}
 
 interface Props {
   workspaceId: string

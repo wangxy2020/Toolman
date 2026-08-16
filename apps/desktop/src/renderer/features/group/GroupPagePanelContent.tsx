@@ -47,6 +47,8 @@ export function GroupPagePanelContent({
           workspaceId={workspace.id}
           workspaceName={workspaceName}
           selfMemberId={detail.selfMember?.id ?? null}
+          selfIdentityId={detail.selfMember?.identityId ?? null}
+          members={detail.members}
           isOwner={detail.isOwner}
           canWriteWorkspace={detail.canWriteWorkspace}
           messageSettings={messageSettings}

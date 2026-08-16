@@ -1,0 +1,92 @@
+import type {
+  ChatContentPart,
+  ChatParams,
+  ProviderConfig,
+  ToolCall,
+} from '../types.js'
+import { providerSupportsOpenAiVision } from '../model-aliases.js'
+
+export function parseToolCalls(message: {
+  tool_calls?: Array<{
+    id: string
+    type?: string
+    function?: { name?: string; arguments?: string }
+  }>
+}): ToolCall[] {
+  return (message.tool_calls ?? [])
+    .map((call) => ({
+      id: call.id,
+      name: call.function?.name ?? '',
+      arguments: call.function?.arguments ?? '{}',
+    }))
+    .filter((call) => call.name)
+}
+
+function normalizeToolArguments(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return '{}'
+  try {
+    JSON.parse(trimmed)
+    return trimmed
+  } catch {
+    return JSON.stringify(raw)
+  }
+}
+
+function formatToolCallsForOpenAi(calls: ToolCall[]): Array<{
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}> {
+  return calls.map((call) => ({
+    id: call.id,
+    type: 'function',
+    function: {
+      name: call.name,
+      arguments: normalizeToolArguments(call.arguments),
+    },
+  }))
+}
+
+function flattenVisionContentToText(parts: ChatContentPart[]): string {
+  const textParts = parts
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text?.trim() ?? '')
+    .filter(Boolean)
+  const imageCount = parts.filter((part) => part.type === 'image_url').length
+  if (imageCount === 0) {
+    return textParts.join('\n\n')
+  }
+
+  const note =
+    imageCount === 1
+      ? '[用户曾发送图片，当前模型不支持图片理解]'
+      : `[用户曾发送 ${imageCount} 张图片，当前模型不支持图片理解]`
+  return [...textParts, note].join('\n\n')
+}
+
+export function formatMessagesForOpenAi(
+  messages: ChatParams['messages'],
+  config?: ProviderConfig,
+  model?: string,
+): Array<Record<string, unknown>> {
+  const supportsVision =
+    config && model ? providerSupportsOpenAiVision(config, model) : true
+
+  return messages.map((message) => {
+    const content =
+      !supportsVision && Array.isArray(message.content)
+        ? flattenVisionContentToText(message.content)
+        : message.content
+
+    const entry: Record<string, unknown> = {
+      role: message.role,
+      content,
+    }
+    if (message.tool_call_id) entry.tool_call_id = message.tool_call_id
+    if (message.tool_calls?.length) {
+      entry.tool_calls = formatToolCallsForOpenAi(message.tool_calls)
+    }
+    return entry
+  })
+}

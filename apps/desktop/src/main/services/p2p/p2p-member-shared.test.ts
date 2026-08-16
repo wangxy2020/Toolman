@@ -35,6 +35,14 @@ vi.mock('@toolman/db', () => {
     countActiveByWorkspace() {
       return 2
     }
+
+    countActiveIdentitiesByWorkspace() {
+      return 2
+    }
+
+    listByWorkspaceAndIdentity() {
+      return []
+    }
   }
 
   class P2pPeerRepository {
@@ -46,7 +54,14 @@ vi.mock('@toolman/db', () => {
   return {
     P2pMemberRepository,
     P2pPeerRepository,
-    P2pWorkspaceRepository: class {},
+    P2pWorkspaceRepository: class {
+      findById() {
+        return {
+          ownerIdentityId: 'identity-local',
+          ownerDeviceId: 'dev-local',
+        }
+      }
+    },
     P2pInviteRepository: class {},
     identities: {},
   }
@@ -55,6 +70,7 @@ vi.mock('@toolman/db', () => {
 import {
   mapMemberRow,
   mapWorkspaceRow,
+  membershipFromIdentitySibling,
   shouldInitiatePeerConnection,
   toWorkspaceDto,
 } from './p2p-member-shared'
@@ -90,8 +106,22 @@ describe('p2p-member-shared', () => {
     expect(toWorkspaceDto(workspaceRow).name).toBe('Group')
 
     const member = mapMemberRow(memberRow, 'ws-1')
+    expect(member.displayName).toBe('Remote')
     expect(member.online).toBe(true)
     expect(member.connectionMode).toBe('lan')
+
+    const localMember = mapMemberRow({ ...memberRow, deviceId: 'dev-local', displayName: 'Stale' }, 'ws-1')
+    expect(localMember.displayName).toBe('Owner User')
+  })
+
+  it('attaches a second device to the existing person role', () => {
+    expect(
+      membershipFromIdentitySibling('member', { role: 'owner', status: 'active' }),
+    ).toEqual({ role: 'owner', status: 'active' })
+    expect(membershipFromIdentitySibling('admin', null)).toEqual({
+      role: 'admin',
+      status: 'invited',
+    })
   })
 
   it('chooses deterministic peer connection initiator', () => {

@@ -9,12 +9,31 @@ import type {
   p2pSharedResources,
   p2pSnapshots,
   p2pSyncCursors,
-  p2pWorkspaceMembers,
   p2pWorkspaces,
 } from '../schema/p2p.js'
 
 export type P2pWorkspaceRow = InferSelectModel<typeof p2pWorkspaces>
-export type P2pWorkspaceMemberRow = InferSelectModel<typeof p2pWorkspaceMembers>
+/**
+ * Explicit row shape — `InferSelectModel` on the emitted `p2pWorkspaceMembers`
+ * `.d.ts` collapses to `{ [x: string]: any }` for desktop consumers.
+ */
+export type P2pMemberRole = 'owner' | 'admin' | 'member' | 'readonly'
+export type P2pMemberStatus = 'active' | 'invited' | 'left' | 'removed'
+export interface P2pWorkspaceMemberRow {
+  id: string
+  workspaceId: string
+  identityId: string
+  deviceId: string
+  displayName: string
+  role: P2pMemberRole
+  status: P2pMemberStatus
+  invitedBy: string | null
+  joinedAt: Date | null
+  lastSeenAt: Date | null
+  certJson: string | null
+  createdAt: Date
+  updatedAt: Date
+}
 export type P2pEventRow = InferSelectModel<typeof p2pEvents>
 export type P2pDeviceIdentityRow = InferSelectModel<typeof p2pDeviceIdentity>
 export type P2pInviteRow = InferSelectModel<typeof p2pInvites>
@@ -26,8 +45,6 @@ export type P2pFileVersionRow = InferSelectModel<typeof p2pFileVersions>
 export type P2pCidIndexRow = InferSelectModel<typeof p2pCidIndex>
 
 export type P2pWorkspaceStatus = P2pWorkspaceRow['status']
-export type P2pMemberRole = P2pWorkspaceMemberRow['role']
-export type P2pMemberStatus = P2pWorkspaceMemberRow['status']
 export type P2pInvitableMemberRole = P2pInviteRow['role']
 export type P2pConnectionState = NonNullable<P2pPeerNodeRow['connectionState']>
 export type P2pResourceType = P2pEventRow['resourceType']

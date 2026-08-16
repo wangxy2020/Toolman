@@ -53,6 +53,23 @@ describe('groupResourcesByMember', () => {
     expect(sections[1]?.resources.map((item) => item.id)).toEqual(['r-1', 'r-3'])
   })
 
+  it('groups resources from two devices of the same person', () => {
+    const desk = member('m-desk', '用户A')
+    const phone: P2pMember = {
+      ...member('m-phone', '用户A'),
+      identityId: desk.identityId,
+    }
+    const sections = groupResourcesByMember(
+      [resource('r-1', desk.id), resource('r-2', phone.id)],
+      [desk, phone],
+      phone.id,
+      '未知成员',
+    )
+    expect(sections).toHaveLength(1)
+    expect(sections[0]?.isSelf).toBe(true)
+    expect(sections[0]?.resources.map((item) => item.id)).toEqual(['r-1', 'r-2'])
+  })
+
   it('falls back to unknown label when member is missing', () => {
     const sections = groupResourcesByMember(
       [resource('r-1', 'missing-member')],

@@ -54,6 +54,27 @@ export function describeReplicationMessage(message: ReplicationMessage): string 
   }
 }
 
+export function slimOversizedAgentWireEvent(
+  event: RemoteWorkspaceEventWire,
+  maxBytes: number = P2P_EVENTS_SAFE_PAYLOAD_BYTES,
+): RemoteWorkspaceEventWire {
+  if (event.resourceType !== 'Agent') return event
+  const fullBytes = measureReplicationMessageBytes({
+    type: 'events.batch',
+    workspaceId: event.workspaceId,
+    events: [event],
+  })
+  if (fullBytes <= maxBytes) return event
+  try {
+    const payload = JSON.parse(event.payloadJson) as Record<string, unknown>
+    if (!payload.package_json) return event
+    const { package_json: _packageJson, ...listing } = payload
+    return { ...event, payloadJson: JSON.stringify(listing) }
+  } catch {
+    return event
+  }
+}
+
 export function splitWireEventsByPayloadBudget(
   workspaceId: string,
   events: RemoteWorkspaceEventWire[],
@@ -127,7 +148,10 @@ export async function sendEventsBatchChunked(
 ): Promise<number> {
   if (events.length === 0) return 0
 
-  const chunks = splitWireEventsByPayloadBudget(workspaceId, events)
+  const chunks = splitWireEventsByPayloadBudget(
+    workspaceId,
+    events.map((event) => slimOversizedAgentWireEvent(event)),
+  )
   for (const chunk of chunks) {
     await sendReplicationMessageOnEventsChannel(peerDeviceId, {
       type: 'events.batch',

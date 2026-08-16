@@ -41,6 +41,7 @@ import {
   bridgeEventStoreList,
   bridgeInviteConnectAsJoiner,
   bridgeInviteCreateOffer,
+  bridgeInviteSubmitAnswer,
   bridgeInviteWaitForAnswer,
   bridgeSnapshotCompress,
   bridgeSnapshotDecompress,
@@ -68,6 +69,7 @@ export class P2pBridge {
   static connectionGetStunServers = bridgeConnectionGetStunServers
   static inviteCreateOffer = bridgeInviteCreateOffer
   static inviteWaitForAnswer = bridgeInviteWaitForAnswer
+  static inviteSubmitAnswer = bridgeInviteSubmitAnswer
   static inviteConnectAsJoiner = bridgeInviteConnectAsJoiner
   static cryptoSetWorkspaceKey = bridgeCryptoSetWorkspaceKey
   static cryptoRotateWorkspaceKey = bridgeCryptoRotateWorkspaceKey

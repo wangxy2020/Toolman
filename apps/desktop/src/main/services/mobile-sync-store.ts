@@ -87,14 +87,32 @@ export function changelogHasEntityKind(entityKind: SyncChange['entityKind']): bo
   return load().changes.some((item) => item.entityKind === entityKind)
 }
 
-export function appendSyncChanges(changes: SyncChange[]): { accepted: number } {
+type SyncChangeListener = (changes: SyncChange[]) => void
+
+let afterAppendListener: SyncChangeListener | null = null
+
+export function setSyncChangeAppendListener(listener: SyncChangeListener | null): void {
+  afterAppendListener = listener
+}
+
+export function listSyncChangelog(): SyncChange[] {
+  return load().changes.map(({ seq: _seq, ...change }) => change)
+}
+
+export function appendSyncChanges(
+  changes: SyncChange[],
+  options?: { skipWanReplicate?: boolean },
+): { accepted: number } {
   if (changes.length === 0) return { accepted: 0 }
-  let accepted = 0
+  const acceptedChanges: SyncChange[] = []
   for (const change of changes) {
-    if (upsertChange(change)) accepted += 1
+    if (upsertChange(change)) acceptedChanges.push(change)
   }
-  if (accepted > 0) persist()
-  return { accepted }
+  if (acceptedChanges.length > 0) persist()
+  if (acceptedChanges.length > 0 && !options?.skipWanReplicate) {
+    afterAppendListener?.(acceptedChanges)
+  }
+  return { accepted: acceptedChanges.length }
 }
 
 export function pullSyncChanges(options: {

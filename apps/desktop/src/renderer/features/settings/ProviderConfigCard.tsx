@@ -33,7 +33,6 @@ export function ProviderConfigCard({ preset, provider, panel }: Props) {
     apiKey,
     setApiKey,
     showKey,
-    setShowKey,
     busy,
     message,
     messageIsError,
@@ -49,6 +48,7 @@ export function ProviderConfigCard({ preset, provider, panel }: Props) {
     ensureProvider,
     handleToggle,
     handleBaseUrlBlur,
+    handleToggleShowKey,
     handleTestKey,
     openPicker,
     setAddOpen,
@@ -113,7 +113,7 @@ export function ProviderConfigCard({ preset, provider, panel }: Props) {
                     type="button"
                     className="tm-provider-input-action"
                     title={showKey ? t('settings.providers.apiKey.hide') : t('settings.providers.apiKey.show')}
-                    onClick={() => setShowKey((v) => !v)}
+                    onClick={() => void handleToggleShowKey()}
                   >
                     <IconEye hidden={showKey} />
                   </button>

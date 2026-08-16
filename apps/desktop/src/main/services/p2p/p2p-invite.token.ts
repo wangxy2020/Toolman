@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import type { P2pInvitableMemberRole } from '@toolman/shared'
+import { parseToolmanInviteUrl } from '@toolman/shared'
 import { signDeviceMessage, verifyDeviceMessage } from './p2p-crypto.service'
 import {
   decodeWanBlob,
@@ -163,40 +164,39 @@ export function extractInviteTokenFromInput(input: string): string {
 }
 
 export function parseInviteInput(input: string): { token: string; offerSdp?: string } {
-  const trimmed = input.trim()
-  if (!trimmed) {
-    throw new Error('邀请码不能为空')
+  const parsed = parseToolmanInviteUrl(input)
+  if (parsed.bundled) {
+    const { t, d } = unpackWanInviteBundle(parsed.bundled)
+    return { token: t, offerSdp: d }
   }
 
-  if (trimmed.startsWith('toolman://')) {
-    const url = new URL(trimmed)
-    const bundled = url.searchParams.get('z')
-    if (bundled) {
-      const { t, d } = unpackWanInviteBundle(bundled)
-      return { token: t, offerSdp: d }
-    }
-
-    const token = url.searchParams.get('token') ?? url.searchParams.get('inv')
-    if (!token) {
-      throw new Error('邀请链接缺少 token 参数')
-    }
-    const sdpParam = url.searchParams.get('sdp')
-    const offerSdp = sdpParam ? decodeInviteSdpParam(sdpParam) : undefined
-    return { token, offerSdp }
-  }
-
-  return { token: trimmed }
+  const offerSdp = parsed.offerSdpEncoded
+    ? decodeInviteSdpParam(parsed.offerSdpEncoded)
+    : undefined
+  return { token: parsed.token, offerSdp }
 }
 
 export function decodeInviteSdpParam(encoded: string): string {
   return decodeWanSdpParam(encoded)
 }
-export function buildInviteUrl(token: string, offerSdp?: string): string {
+export function buildInviteUrl(
+  token: string,
+  offerSdp?: string,
+  meta?: { workspaceId?: string; workspaceName?: string; hubUrls?: string[] },
+): string {
   const url = new URL('toolman://join')
   if (offerSdp) {
     url.searchParams.set('z', packWanInviteBundle(token, offerSdp))
-    return url.toString()
+  } else {
+    url.searchParams.set('token', token)
   }
-  url.searchParams.set('token', token)
+  const workspaceId = meta?.workspaceId?.trim()
+  const workspaceName = meta?.workspaceName?.trim()
+  if (workspaceId) url.searchParams.set('wid', workspaceId)
+  if (workspaceName) url.searchParams.set('name', workspaceName)
+  for (const hub of meta?.hubUrls ?? []) {
+    const trimmed = hub.trim()
+    if (trimmed) url.searchParams.append('hub', trimmed)
+  }
   return url.toString()
 }

@@ -8,7 +8,6 @@ import {
   removeDocumentVectors,
   type IngestFileResult,
 } from '@toolman/knowledge'
-import type { KnowledgeDocument } from '@toolman/shared'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { getWorkspaceKnowledgeDir } from './knowledge.service'
 import { resolveChunkConfig, resolveEmbedConfig } from './knowledge-embed.service'
@@ -59,7 +58,9 @@ export async function ingestUrlDocument(options: {
     const chunkConfig = resolveChunkConfig(kbId, workspaceId)
     const progressCtx = { workspaceId, kbId, documentId: '' as string }
 
-    let docRow: KnowledgeDocument
+    let docRow: Awaited<ReturnType<typeof repo.create>> | NonNullable<
+      ReturnType<typeof findActiveDocumentByPath>
+    >
     if (existing) {
       await removeDocumentVectors(vectorsDir, kbId, existing.id, embed.vectorBackend)
       progressCtx.documentId = existing.id

@@ -5,11 +5,22 @@ import { dispatchPendingResponse } from './pending'
 import { handleMemberStream } from './stream'
 import { parseRelayMessage } from './transport'
 
+const handledOwnerRequests = new Set<string>()
+
+function claimOwnerRelayRequest(type: string, requestId: string): boolean {
+  if (type !== 'send' && type !== 'fetch') return true
+  const key = `${type}:${requestId}`
+  if (handledOwnerRequests.has(key)) return false
+  handledOwnerRequests.add(key)
+  return true
+}
+
 export async function handleP2pAgentRelayMessage(
   peerDeviceId: string,
   data: Buffer | Uint8Array,
 ): Promise<void> {
   const message = parseRelayMessage(Buffer.from(data))
+  if (!claimOwnerRelayRequest(message.type, message.requestId)) return
 
   switch (message.type) {
     case 'fetch':

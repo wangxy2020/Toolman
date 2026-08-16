@@ -24,8 +24,15 @@ import {
   changelogHasEntityKind,
   isMobileSyncChangelogEmpty,
   publishNoteSyncChange,
+  setSyncChangeAppendListener,
 } from './mobile-sync-store'
 import { seedClassroomSessionSyncChanges } from './classroom-mobile-sync'
+import { seedP2pGroupSyncChanges } from './group-mobile-sync'
+import {
+  replicateChangesToCommunityHub,
+  startCommunityDeviceSyncLoop,
+  stopCommunityDeviceSyncLoop,
+} from './community-device-sync'
 import {
   ensureMobileSyncHubToken,
   isClassroomSyncPreferenceEnabled,
@@ -59,6 +66,9 @@ function seedMobileSyncChangelog(): void {
     if (empty || !changelogHasEntityKind('classroom_session')) {
       seedClassroomSessionSyncChanges()
     }
+    if (empty || !changelogHasEntityKind('p2p_group')) {
+      seedP2pGroupSyncChanges()
+    }
   } catch (error) {
     logStructured(
       'mobile-sync',
@@ -88,10 +98,14 @@ export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
 
 export async function ensureMobileSyncRuntime(): Promise<AppDiagnosticsMobileSync> {
   if (!isMobileSyncEnabled()) {
+    stopCommunityDeviceSyncLoop()
+    setSyncChangeAppendListener(null)
     await stopMobileSyncHub()
     return getMobileSyncDiagnostics()
   }
   seedMobileSyncChangelog()
+  setSyncChangeAppendListener(replicateChangesToCommunityHub)
+  startCommunityDeviceSyncLoop()
   try {
     await startMobileSyncHub()
   } catch (error) {
@@ -111,6 +125,8 @@ export async function setMobileSyncEnabled(
   }
   setMobileSyncPreferenceEnabled(enabled)
   if (!enabled) {
+    stopCommunityDeviceSyncLoop()
+    setSyncChangeAppendListener(null)
     await stopMobileSyncHub()
     return getMobileSyncDiagnostics()
   }

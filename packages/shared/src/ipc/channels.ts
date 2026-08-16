@@ -136,6 +136,7 @@ export enum IpcChannel {
   ProviderUpdate = 'provider:update',
   ProviderDelete = 'provider:delete',
   ProviderTest = 'provider:test',
+  ProviderRevealApiKey = 'provider:reveal-api-key',
   ProviderFetchModels = 'provider:fetch-models',
   ProviderPullModel = 'provider:pull-model',
 

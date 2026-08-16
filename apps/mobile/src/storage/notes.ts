@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
+import { loadOwnedScoped, saveOwnedScoped } from './identityScope'
 
 const STORE_KEY = 'toolman.mobile.notes.v1'
 
@@ -55,6 +56,10 @@ const EMPTY: NotesStore = {
   deletedNotes: [],
 }
 
+export function emptyNotesStore(): NotesStore {
+  return { ...EMPTY, notebooks: createDefaultNotebooks() }
+}
+
 async function getItem(key: string): Promise<string | null> {
   if (Platform.OS === 'web') {
     try {
@@ -80,6 +85,22 @@ async function setItem(key: string, value: string): Promise<void> {
     return
   }
   await SecureStore.setItemAsync(key, value)
+}
+
+async function removeItem(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      globalThis.localStorage?.removeItem(key)
+    } catch {
+      // ignore
+    }
+    return
+  }
+  try {
+    await SecureStore.deleteItemAsync(key)
+  } catch {
+    // ignore
+  }
 }
 
 function normalizeNotebook(value: unknown): MobileNotebook | null {
@@ -241,28 +262,28 @@ export function serializeNotesBackup(store: NotesStore): string {
 
 export async function loadNotesStore(): Promise<NotesStore> {
   try {
-    const raw = await getItem(STORE_KEY)
-    if (!raw) return { ...EMPTY, notebooks: createDefaultNotebooks() }
-    const parsed = JSON.parse(raw) as {
+    const parsed = await loadOwnedScoped<{
       notebooks?: unknown
       notes?: unknown
       activeNoteId?: unknown
       deletedNotes?: unknown
-    }
+    }>(STORE_KEY, getItem)
+    if (!parsed) return emptyNotesStore()
     return normalizeNotesStore(parsed)
   } catch {
-    return { ...EMPTY, notebooks: createDefaultNotebooks() }
+    return emptyNotesStore()
   }
 }
 
 export async function saveNotesStore(store: NotesStore): Promise<void> {
-  await setItem(
+  await saveOwnedScoped(
     STORE_KEY,
-    JSON.stringify({
+    {
       notebooks: store.notebooks,
       notes: store.notes,
       activeNoteId: store.activeNoteId,
       deletedNotes: store.deletedNotes,
-    }),
+    },
+    setItem,
   )
 }

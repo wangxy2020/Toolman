@@ -8,6 +8,7 @@ export function useGroupSharedResourcePane(input: {
   onAdd: (selection: GroupPickerSelection[]) => void
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [openItemId, setOpenItemId] = useState<string | null>(null)
   const hint = groupSharedPickerHint(input.kind)
 
   const handleConfirm = (selection: GroupPickerSelection[]) => {
@@ -18,6 +19,8 @@ export function useGroupSharedResourcePane(input: {
   return {
     pickerOpen,
     setPickerOpen,
+    openItemId,
+    setOpenItemId,
     hint,
     handleConfirm,
   }

@@ -1,55 +1,48 @@
-import type { IpcAlignmentReport, IpcFileResult } from '@toolman/shared'
+import type { IpcAlignmentReport } from '@toolman/shared'
 import { EPC_COMMERCIAL_WORKFLOW_STEPS } from '@toolman/shared'
 
+import { formatBoldStepStatus } from './epcCommercialDiscoveryReportUtils'
 import {
-  formatBoldStepStatus,
-  isStep1ScanSuccess,
-  summarizeDiscoveredFiles,
-} from './epcCommercialDiscoveryReportUtils'
+  EPC_STEP2_INTRO,
+  EPC_STEP3_PURPOSE,
+  EPC_STEP4_PURPOSE,
+  EPC_STEP5_PURPOSE,
+  isWork4NoPendingIdleRun,
+  type StepFooterParts,
+} from './epcCommercialWorkflowStepReportShared'
+import {
+  formatStep5OutputFilesMarkdown,
+  getStep2FooterParts,
+  getStep3FooterParts,
+  getStep4FooterParts,
+  getStep5FooterParts,
+} from './epcCommercialWorkflowStepReportFooters'
 
-export const EPC_STEP2_INTRO = '以下是待处理的工程量清单的分析结果：'
+export {
+  EPC_STEP2_INTRO,
+  EPC_STEP3_PURPOSE,
+  EPC_STEP4_PURPOSE,
+  EPC_STEP5_PURPOSE,
+  getPipelineIpcFiles,
+  WORK4_IDLE_STEPS_DETAIL,
+  isWork4NoPendingIdleRun,
+  type StepFooterParts,
+} from './epcCommercialWorkflowStepReportShared'
 
-export const EPC_STEP3_PURPOSE = '清洗后明细合计与 BOQ Value 核对。'
+export {
+  formatStep2FileLine,
+  formatStep3FileLine,
+  formatStep4FileLine,
+} from './epcCommercialWorkflowStepReportFormat'
 
-export const EPC_STEP4_PURPOSE = '按 Item 写入母表期数列，并在合计行汇总本期金额。'
-
-export const EPC_STEP5_PURPOSE = '汇总各 IPC 处理结果，形成执行记录。'
-
-export interface StepFooterParts {
-  ok: boolean
-  detail: string
-}
-
-/** 本次实际参与步骤 2～5 的 IPC（排除步骤 1 穿透跳过项） */
-export const getPipelineIpcFiles = (report: IpcAlignmentReport): IpcFileResult[] =>
-  report.files.filter((f) => !f.skippedReason?.startsWith('[步骤1-穿透识别]'))
-
-const pipelineAttempted = (report: IpcAlignmentReport): IpcFileResult[] =>
-  getPipelineIpcFiles(report).filter((f) => f.status === 'success' || f.status === 'failed')
-
-/** 步骤 1 无待处理 IPC、且本次未进入流水线时，步骤 2～5 视为正常跳过（非失败） */
-export const WORK4_IDLE_STEPS_DETAIL = '本次无待处理 IPC；步骤 2～5 已跳过（无需重复处理）'
-
-export const isWork4NoPendingIdleRun = (report: IpcAlignmentReport): boolean => {
-  if (report.failedCount > 0) {
-    return false
-  }
-  if (!isStep1ScanSuccess(report.discoveredFiles)) {
-    return false
-  }
-  const { pendingCount } = summarizeDiscoveredFiles(report.discoveredFiles)
-  if (pendingCount > 0) {
-    return false
-  }
-  return pipelineAttempted(report).length === 0
-}
-
-const resolveWork4IdleSteps2to5 = (report: IpcAlignmentReport): StepFooterParts | null => {
-  if (!isWork4NoPendingIdleRun(report)) {
-    return null
-  }
-  return { ok: true, detail: WORK4_IDLE_STEPS_DETAIL }
-}
+export {
+  getStep2FooterParts,
+  getStep3FooterParts,
+  getStep4FooterParts,
+  getStep5FooterParts,
+  getStep5OutputPaths,
+  formatStep5OutputFilesMarkdown,
+} from './epcCommercialWorkflowStepReportFooters'
 
 export const work4RequiresDiagnosticAnalysis = (
   report: IpcAlignmentReport,
@@ -87,217 +80,6 @@ export const formatWork4NarrationHints = (
     lines.push('> **诊断说明**：本次无需输出「诊断分析与人工修复建议」。')
   }
   return lines
-}
-
-const formatAmount = (amount: number): string =>
-  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-const formatCompactMoney = (amount: number, currency: string | undefined): string => {
-  const code = currency?.trim() || 'USD'
-  return `${code} ${formatAmount(amount)}`
-}
-
-const buildStepBulletDetail = (summary: string, bullets: string[]): string =>
-  bullets.length > 0 ? `${summary}\n${bullets.join('\n')}` : summary
-
-/** 步骤 2：单文件一行要点 */
-export const formatStep2FileLine = (file: IpcFileResult): string => {
-  const name = file.fileName
-  if (file.analysisOk !== true) {
-    if (file.errorMessage?.trim()) {
-      return `• ${name}：分析失败 — **${file.errorMessage.trim()}**`
-    }
-    if (file.analysisOk === false) {
-      return `• ${name}：分析失败 — **未知**`
-    }
-  }
-  if (file.status === 'skipped') {
-    return `• ${name}：已跳过`
-  }
-  const rows = file.cleanedRowCount ?? 0
-  const rowErr = file.analysisRowErrorCount ?? 0
-  const errText = rowErr > 0 ? `**${rowErr}** 处行级错误` : '无行级错误'
-  return `• ${name}：**${rows}** 行，${errText}`
-}
-
-/** 步骤 3：金额核对 */
-export const formatStep3FileLine = (file: IpcFileResult): string => {
-  const name = file.fileName
-  if (file.analysisOk !== true) {
-    return `• ${name}：未通过步骤 2`
-  }
-  if (file.reconciliationOk === true) {
-    return `• ${name}：与 BOQ Value 一致`
-  }
-  if (file.reconciliationOk === false) {
-    return `• ${name}：与 BOQ Value 不一致`
-  }
-  if (file.boqValueTotal == null) {
-    return `• ${name}：无 BOQ Value 行，已跳过核对`
-  }
-  return `• ${name}：核对结果未知`
-}
-
-/** 步骤 4：写入母表 */
-export const formatStep4FileLine = (file: IpcFileResult): string => {
-  const name = file.fileName
-  if (file.reconciliationOk === false) {
-    return `• ${name}：未通过步骤 3，未写入`
-  }
-  if (file.mergeOk === true) {
-    const sheet = file.mergeTargetSheet ?? '母表'
-    const col = file.mergePeriodColumn ?? '期数列'
-    const n = file.mergeMatchedRows ?? file.cleanedRowCount ?? 0
-    const total =
-      file.cleanedTotalAmount != null
-        ? `，合计 **${formatCompactMoney(file.cleanedTotalAmount, file.cleanedCurrency)}**`
-        : ''
-    return `• ${name}：**${sheet}** · 列 **${col}** · **${n}** 行${total}`
-  }
-  if (file.mergeOk === false) {
-    const msg = file.errorMessage ?? '写入失败'
-    return `• ${name}：**${msg}**`
-  }
-  return `• ${name}：未写入`
-}
-
-const stepSummary = (okCount: number, total: number, okLabel: string, failLabel: string): string =>
-  okCount === total
-    ? `${total} 个文件${okLabel}`
-    : `${okCount}/${total} 个文件${okLabel}，${total - okCount} 个${failLabel}`
-
-export const getStep2FooterParts = (report: IpcAlignmentReport): StepFooterParts => {
-  const idle = resolveWork4IdleSteps2to5(report)
-  if (idle) {
-    return idle
-  }
-  const attempted = pipelineAttempted(report)
-  if (attempted.length === 0) {
-    return { ok: false, detail: '无待处理 IPC' }
-  }
-  const okFiles = attempted.filter((f) => f.analysisOk === true)
-  const bullets = attempted.map(formatStep2FileLine)
-  if (okFiles.length < attempted.length) {
-    return {
-      ok: false,
-      detail: buildStepBulletDetail(stepSummary(okFiles.length, attempted.length, '完成表内校验', '分析失败'), bullets),
-    }
-  }
-  return {
-    ok: true,
-    detail: buildStepBulletDetail(stepSummary(okFiles.length, attempted.length, '完成表内校验', ''), bullets),
-  }
-}
-
-export const getStep3FooterParts = (report: IpcAlignmentReport): StepFooterParts => {
-  const idle = resolveWork4IdleSteps2to5(report)
-  if (idle) {
-    return idle
-  }
-  const step2 = getStep2FooterParts(report)
-  if (!step2.ok) {
-    return { ok: false, detail: '需先完成步骤 2' }
-  }
-  const attempted = pipelineAttempted(report).filter((f) => f.analysisOk === true)
-  if (attempted.length === 0) {
-    return { ok: false, detail: '无可核对数据' }
-  }
-  const okFiles = attempted.filter((f) => f.reconciliationOk !== false)
-  const bullets = attempted.map(formatStep3FileLine)
-  if (okFiles.length < attempted.length) {
-    return {
-      ok: false,
-      detail: buildStepBulletDetail(stepSummary(okFiles.length, attempted.length, '金额核对通过', '未通过'), bullets),
-    }
-  }
-  return {
-    ok: true,
-    detail: buildStepBulletDetail(stepSummary(okFiles.length, attempted.length, '金额核对通过', ''), bullets),
-  }
-}
-
-export const getStep4FooterParts = (report: IpcAlignmentReport): StepFooterParts => {
-  const idle = resolveWork4IdleSteps2to5(report)
-  if (idle) {
-    return idle
-  }
-  const attempted = pipelineAttempted(report).filter((f) => f.analysisOk === true && f.reconciliationOk !== false)
-  if (attempted.length === 0) {
-    return { ok: false, detail: '无通过步骤 3 的文件' }
-  }
-  const okFiles = attempted.filter((f) => f.mergeOk === true)
-  const bullets = attempted.map(formatStep4FileLine)
-  if (okFiles.length < attempted.length) {
-    return {
-      ok: false,
-      detail: buildStepBulletDetail(stepSummary(okFiles.length, attempted.length, '已写入母表', '写入失败'), bullets),
-    }
-  }
-  return {
-    ok: true,
-    detail: buildStepBulletDetail(stepSummary(okFiles.length, attempted.length, '已写入母表', ''), bullets),
-  }
-}
-
-export const getStep5FooterParts = (report: IpcAlignmentReport, workflowError?: string): StepFooterParts => {
-  const idle = resolveWork4IdleSteps2to5(report)
-  if (idle) {
-    return {
-      ok: true,
-      detail: '本次无待处理 IPC，无新增输出母表',
-    }
-  }
-  const attempted = pipelineAttempted(report)
-  if (attempted.length === 0) {
-    return {
-      ok: false,
-      detail: workflowError ?? '未处理任何 IPC',
-    }
-  }
-  if (report.failedCount > 0) {
-    return {
-      ok: false,
-      detail: `成功 **${report.successCount}** · 失败 **${report.failedCount}** · 跳过 **${report.skippedCount}**`,
-    }
-  }
-  if (report.successCount === 0) {
-    return {
-      ok: false,
-      detail: workflowError ?? `无成功记录（跳过 **${report.skippedCount}**）`,
-    }
-  }
-  return {
-    ok: true,
-    detail: `成功 **${report.successCount}** · 跳过 **${report.skippedCount}**`,
-  }
-}
-
-/** 由合同母表路径推导 canonical aligned 路径（与 Rust canonical_aligned_master_path 一致） */
-const isAlignedMasterPath = (path: string): boolean => /_aligned(?:_\d+)?\.xlsx$/i.test(path)
-
-/** 步骤 5 仅列出本次写出的 *_aligned.xlsx（可点击打开），不含合同母表原文件路径 */
-export const getStep5OutputPaths = (report: IpcAlignmentReport): string[] => {
-  const collected: string[] = []
-  for (const path of report.outputMasterPaths ?? []) {
-    const trimmed = path?.trim()
-    if (trimmed && isAlignedMasterPath(trimmed)) {
-      collected.push(trimmed)
-    }
-  }
-  const single = report.outputMasterPath?.trim()
-  if (single && isAlignedMasterPath(single)) {
-    collected.push(single)
-  }
-  return [...new Set(collected)]
-}
-
-/** 步骤 5 成功时输出文件列表（Markdown，紧接在「**成功。**」之后；每行一条完整路径） */
-export const formatStep5OutputFilesMarkdown = (report: IpcAlignmentReport): string[] => {
-  const paths = getStep5OutputPaths(report)
-  if (paths.length === 0) {
-    return []
-  }
-  return paths.map((path) => `- \`${path}\``)
 }
 
 export const WORKFLOW_STEP_PURPOSES = [EPC_STEP3_PURPOSE, EPC_STEP4_PURPOSE, EPC_STEP5_PURPOSE] as const

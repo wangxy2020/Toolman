@@ -11,6 +11,11 @@ import {
 } from './provider-model-utils'
 import { useI18n } from '../../i18n/useI18n'
 import { getProviderPresetDisplayName } from '../../i18n/settings-labels'
+import {
+  openProviderModelPicker,
+  revealStoredApiKey,
+  useProviderConfigPanelModels,
+} from './useProviderConfigPanelModels'
 
 interface UseProviderConfigPanelOptions {
   workspaceId: string
@@ -47,6 +52,7 @@ export function useProviderConfigPanel({
   useEffect(() => {
     setBaseUrl(displayBaseUrl(preset.type, provider?.baseUrl ?? null, preset))
     setApiKey('')
+    setShowKey(false)
     setMessage(null)
     setMessageIsError(false)
   }, [provider?.id, provider?.baseUrl, preset])
@@ -108,7 +114,7 @@ export function useProviderConfigPanel({
         ...(patch.apiKey !== undefined && patch.apiKey.trim() ? { apiKey: patch.apiKey.trim() } : {}),
         ...(patch.apiKeyRotate !== undefined ? { apiKeyRotate: patch.apiKeyRotate } : {}),
         ...(patch.models !== undefined ? { models: patch.models } : {}),
-    })
+      })
       if (!result.ok) {
         setMessage(result.error.message)
         return null
@@ -119,6 +125,23 @@ export function useProviderConfigPanel({
     },
     [ensureProvider, onChanged, preset, provider],
   )
+
+  const {
+    handleSaveModels,
+    handleAddModel,
+    handleEditModel,
+    handleRemoveModel,
+    handleApiKeySettingsSave,
+  } = useProviderConfigPanelModels({
+    provider,
+    setBusy,
+    setMessage,
+    setMessageIsError,
+    setEditingModel,
+    t,
+    ensureProvider,
+    saveProvider,
+  })
 
   const handleToggle = async (next: boolean) => {
     setBusy(true)
@@ -139,6 +162,21 @@ export function useProviderConfigPanel({
     setBusy(true)
     await saveProvider({ baseUrl })
     setBusy(false)
+  }
+
+  const handleToggleShowKey = async () => {
+    if (!showKey) {
+      const key = await revealStoredApiKey({
+        apiKey,
+        provider,
+        setApiKey,
+        setMessage,
+        setMessageIsError,
+        t,
+      })
+      if (key == null) return
+    }
+    setShowKey((value) => !value)
   }
 
   const handleTestKey = async () => {
@@ -168,7 +206,8 @@ export function useProviderConfigPanel({
       setMessageIsError(false)
       if (apiKey.trim()) {
         await saveProvider({ apiKey: apiKey.trim(), baseUrl })
-        setApiKey('')
+      } else {
+        onChanged()
       }
     } else {
       setMessage(
@@ -181,63 +220,16 @@ export function useProviderConfigPanel({
   }
 
   const openPicker = async () => {
-    const current = provider ?? (await ensureProvider())
-    if (!current) return
-
-    if (apiKey.trim()) {
-      await saveProvider({ apiKey: apiKey.trim(), baseUrl })
-      setApiKey('')
-    } else if (baseUrl !== displayBaseUrl(preset.type, current.baseUrl, preset)) {
-      await saveProvider({ baseUrl })
-    }
-
-    setPickerProvider(current)
-    setPickerOpen(true)
-  }
-
-  const handleSaveModels = async (nextModels: ProviderModel[]) => {
-    setBusy(true)
-    await saveProvider({ models: nextModels, isEnabled: true })
-    setBusy(false)
-    setMessage(t('settings.providers.models.updatedCount', { count: nextModels.length }))
-    setMessageIsError(false)
-  }
-
-  const handleAddModel = async (model: ProviderModel) => {
-    const current = provider ?? (await ensureProvider())
-    if (!current) throw new Error(t('settings.providers.errors.createFailed'))
-    if (current.models.some((m) => m.id === model.id)) {
-      throw new Error(t('settings.providers.models.alreadyExists'))
-    }
-    await saveProvider({ models: [...current.models, model], isEnabled: true })
-  }
-
-  const handleEditModel = async (model: ProviderModel) => {
-    if (!provider) return
-    await saveProvider({
-      models: provider.models.map((m) => (m.id === model.id ? model : m)),
+    await openProviderModelPicker({
+      provider,
+      apiKey,
+      baseUrl,
+      preset,
+      ensureProvider,
+      saveProvider,
+      setPickerProvider,
+      setPickerOpen,
     })
-    setEditingModel(null)
-    setMessage(t('settings.providers.models.settingsSaved'))
-    setMessageIsError(false)
-  }
-
-  const handleRemoveModel = async (modelId: string) => {
-    if (!provider) return
-    setBusy(true)
-    await saveProvider({
-      models: provider.models.filter((m) => m.id !== modelId),
-    })
-    setBusy(false)
-  }
-
-  const handleApiKeySettingsSave = async (data: { apiKeys: string; apiKeyRotate: boolean }) => {
-    await saveProvider({
-      ...(data.apiKeys ? { apiKey: data.apiKeys } : {}),
-      apiKeyRotate: data.apiKeyRotate,
-    })
-    setMessage(t('settings.providers.apiKey.settingsSaved'))
-    setMessageIsError(false)
   }
 
   const handleDeleteProvider = async () => {
@@ -287,6 +279,7 @@ export function useProviderConfigPanel({
     ensureProvider,
     handleToggle,
     handleBaseUrlBlur,
+    handleToggleShowKey,
     handleTestKey,
     openPicker,
     handleSaveModels,

@@ -1,5 +1,10 @@
 import type { AgentChatScope } from '../chat/agentScopes'
-import type { ChatMessage, ChatSession, SyncStatus } from '../state/MobileAppContext'
+import type {
+  ChatMessage,
+  ChatSession,
+  MobileAgent,
+  SyncStatus,
+} from '../state/MobileAppContext'
 import type { ModulePrefs } from '../settings/prefs'
 import type { ModulePanelStatusEntry } from './modulePageStatus'
 
@@ -56,14 +61,36 @@ export function eventPoint(event: {
   }
 }
 
-export function createEmptyAgentSession(agentScope: AgentChatScope): ChatSession {
+export function createEmptyAgentSession(
+  agentScope: AgentChatScope,
+  assistantId: string,
+): ChatSession {
   return {
     id: newAgentId('sess'),
     title: '新话题',
     updatedAt: Date.now(),
     messages: [],
     agentScope,
+    assistantId,
   }
+}
+
+export function createMobileAgent(
+  agentScope: AgentChatScope,
+  existing: MobileAgent[],
+): MobileAgent {
+  const count = existing.filter((agent) => agent.agentScope === agentScope).length
+  return {
+    id: newAgentId('asst'),
+    name: count === 0 ? '默认智能体' : `智能体 ${count + 1}`,
+    agentScope,
+    createdAt: Date.now(),
+  }
+}
+
+export function buildAgentName(existing: MobileAgent[], agentScope: AgentChatScope): string {
+  const count = existing.filter((agent) => agent.agentScope === agentScope).length
+  return count === 0 ? '默认智能体' : `智能体 ${count + 1}`
 }
 
 export function classroomStatusFromSync(
@@ -108,6 +135,8 @@ export function forkSessionFromMessage(
     updatedAt: Date.now(),
     messages: session.messages.slice(0, idx + 1).map((m) => ({ ...m, id: newAgentId('msg') })),
     agentScope,
+    assistantId: session.assistantId,
+    groupAgent: session.groupAgent,
   }
 }
 

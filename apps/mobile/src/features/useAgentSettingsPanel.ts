@@ -8,9 +8,11 @@ import {
   type MobileProviderId,
 } from '../settings/provider-presets'
 import { saveModelConfig } from '../storage/secure'
+import {
+  readProviderCredential,
+  upsertProviderCredentials,
+} from '../storage/providerCredentials'
 import { useMobileApp } from '../state/MobileAppContext'
-import { resolveCuratedEdgeTtsVoice } from '../voice'
-import { describeApiKey } from './settingsPaneUtils'
 
 export function useAgentSettingsPanel() {
   const { modelConfig, setModelConfig, modulePrefs, setModulePrefs } = useMobileApp()
@@ -21,6 +23,9 @@ export function useAgentSettingsPanel() {
   const [apiKey, setApiKey] = useState(modelConfig.apiKey)
   const [model, setModel] = useState(modelConfig.model)
   const [localModelEnabled, setLocalModelEnabled] = useState(modelConfig.localModelEnabled)
+  const [credentialsByProvider, setCredentialsByProvider] = useState(
+    modelConfig.credentialsByProvider ?? {},
+  )
   const [message, setMessage] = useState<string | null>(null)
   const [probeBusy, setProbeBusy] = useState(false)
   const [probeOk, setProbeOk] = useState<boolean | null>(null)
@@ -30,24 +35,45 @@ export function useAgentSettingsPanel() {
 
   const applyProvider = (id: MobileProviderId) => {
     const next = getProviderPreset(id)
+    const stashed = upsertProviderCredentials(credentialsByProvider, providerId, {
+      apiKey,
+      baseUrl,
+      model,
+    })
+    const stored = readProviderCredential(stashed, id)
+    setCredentialsByProvider(stashed)
     setProviderId(id)
-    setBaseUrl(next.defaultBaseUrl)
-    if (next.defaultModel) setModel(next.defaultModel)
+    setBaseUrl(stored?.baseUrl || next.defaultBaseUrl)
+    setApiKey(stored?.apiKey ?? '')
+    setModel(stored?.model || next.defaultModel)
+    setShowApiKey(false)
     setProbeOk(null)
+    setMessage(null)
   }
 
-  const buildDraftConfig = () => ({
-    providerId,
-    baseUrl: normalizeChatBaseUrl(baseUrl.trim(), providerId),
-    apiKey: sanitizeApiKey(apiKey),
-    model: model.trim() || preset.defaultModel,
-    localModelEnabled,
-  })
+  const buildDraftConfig = () => {
+    const nextUrl = normalizeChatBaseUrl(baseUrl.trim(), providerId)
+    const nextKey = sanitizeApiKey(apiKey)
+    const nextModel = model.trim() || preset.defaultModel
+    return {
+      providerId,
+      baseUrl: nextUrl,
+      apiKey: nextKey,
+      model: nextModel,
+      localModelEnabled,
+      credentialsByProvider: upsertProviderCredentials(credentialsByProvider, providerId, {
+        apiKey: nextKey,
+        baseUrl: nextUrl,
+        model: nextModel,
+      }),
+    }
+  }
 
   const saveModel = async () => {
     const next = buildDraftConfig()
     await saveModelConfig(next)
     setModelConfig(next)
+    setCredentialsByProvider(next.credentialsByProvider ?? {})
     setBaseUrl(next.baseUrl)
     setModel(next.model)
     setMessage(`已保存 · ${preset.name}`)
@@ -57,15 +83,11 @@ export function useAgentSettingsPanel() {
     setProbeBusy(true)
     setProbeOk(null)
     const draft = buildDraftConfig()
-    setMessage(`正在检测…（${describeApiKey(draft.apiKey)}）`)
+    setMessage('正在检测…')
     const result = await probeModelApi(draft)
     setProbeBusy(false)
     setProbeOk(result.ok)
-    setMessage(
-      result.ok
-        ? result.message
-        : `${result.message}\n当前 Key：${describeApiKey(draft.apiKey)}。若尾号与控制台不一致，请清空后重新粘贴完整密钥并先「保存模型」。`,
-    )
+    setMessage(result.message)
   }
 
   const patchPrefs = async (patch: Partial<ModulePrefs['agent']>) => {
@@ -96,8 +118,5 @@ export function useAgentSettingsPanel() {
     saveModel,
     runProbe,
     patchPrefs,
-    apiKeyDescription: describeApiKey(apiKey),
-    patchTtsVoice: (value: string) =>
-      void patchPrefs({ ttsVoice: resolveCuratedEdgeTtsVoice(value) }),
   }
 }

@@ -8,7 +8,12 @@ import {
   type P2pWorkspaceRow,
 } from '@toolman/db'
 import type { P2pInvitableMemberRole } from '@toolman/shared'
-import {P2pMemberInviteInputSchema, toErrorMessage } from '@toolman/shared'
+import {
+  DEFAULT_STUN_URLS,
+  normalizeInviteHubUrls,
+  P2pMemberInviteInputSchema,
+  toErrorMessage,
+} from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { getIdentityDisplayName } from './p2p-member-shared'
@@ -24,6 +29,12 @@ import { P2pBridge } from './p2p-bridge'
 import { startP2pConnectionMonitor } from './p2p-connection.service'
 import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
 import { applyP2pNetworkConfig } from './p2p-network.config'
+import { advertisedHttpUrls } from '../network-advertise'
+import {
+  isMobileSyncLanAccessEnabled,
+  resolveMobileSyncPort,
+  setMobileSyncLanAccessEnabled,
+} from '../mobile-sync.config'
 
 async function ensureInviteNetworkingReady(): Promise<void> {
   applyP2pNetworkConfig()
@@ -31,6 +42,32 @@ async function ensureInviteNetworkingReady(): Promise<void> {
     startP2pDiscovery()
   }
   startP2pConnectionMonitor()
+}
+
+const pendingInviteOffers = new Map<string, { offerSdp: string; expiresAt: number }>()
+
+export function rememberInviteOffer(inviteId: string, offerSdp: string, expiresAt = Date.now() + 3_600_000): void {
+  pendingInviteOffers.set(inviteId, { offerSdp, expiresAt })
+}
+
+export function getPendingInviteOffer(inviteId: string): string | undefined {
+  const row = pendingInviteOffers.get(inviteId)
+  if (!row) return undefined
+  if (row.expiresAt <= Date.now()) {
+    pendingInviteOffers.delete(inviteId)
+    return undefined
+  }
+  return row.offerSdp
+}
+
+export function listInviteIceServers(): Array<{ urls: string }> {
+  try {
+    const urls = P2pBridge.connectionGetStunServers()
+    if (urls.length > 0) return urls.map((url) => ({ urls: url }))
+  } catch {
+    // native module may be unavailable in unit tests
+  }
+  return DEFAULT_STUN_URLS.map((url) => ({ urls: url }))
 }
 
 function beginInviteHandshake(inviteId: string): void {
@@ -120,6 +157,25 @@ function createSignedInviteRecord(input: {
   return { inviteToken, inviteId, expiresAt }
 }
 
+async function resolveInviteHubUrls(): Promise<string[]> {
+  if (!isMobileSyncLanAccessEnabled()) {
+    setMobileSyncLanAccessEnabled(true)
+    try {
+      const { startMobileSyncHub } = await import('../mobile-sync-hub')
+      await startMobileSyncHub()
+    } catch (error) {
+      logStructured(
+        'p2p',
+        'warn',
+        `invite hub listen failed: ${toErrorMessage(error, String(error))}`,
+      )
+    }
+  }
+  return normalizeInviteHubUrls(
+    advertisedHttpUrls(resolveMobileSyncPort()).filter((url) => !url.includes('127.0.0.1')),
+  )
+}
+
 async function attachInviteOfferHandshake(
   inviteId: string,
   workspaceId: string,
@@ -127,6 +183,7 @@ async function attachInviteOfferHandshake(
   await ensureInviteNetworkingReady()
   try {
     const offerSdp = await P2pBridge.inviteCreateOffer(inviteId, workspaceId)
+    rememberInviteOffer(inviteId, offerSdp)
     beginInviteHandshake(inviteId)
     return offerSdp
   } catch (error) {
@@ -156,8 +213,13 @@ export async function createP2pInvite(rawInput: unknown): Promise<{
   })
 
   const offerSdp = await attachInviteOfferHandshake(inviteId, workspace.id)
+  const hubUrls = await resolveInviteHubUrls()
 
-  const inviteUrl = buildInviteUrl(inviteToken, offerSdp)
+  const inviteUrl = buildInviteUrl(inviteToken, offerSdp, {
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+    hubUrls,
+  })
   return {
     inviteToken,
     inviteUrl,

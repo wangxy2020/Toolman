@@ -102,6 +102,10 @@ export const groupPageExtendedEn = {
     loading: 'Loading members…',
     empty: 'No members yet',
     you: '(you)',
+    pendingJoin: 'Pending',
+    deviceDesktop: 'Desktop',
+    deviceMobile: 'Phone',
+    deviceUnknown: 'Device',
     online: 'Online',
     offline: 'Offline',
     localOnline: 'This device · online',
@@ -153,6 +157,8 @@ export const groupPageExtendedEn = {
     emptyTitle: 'No messages yet',
     emptyHint: 'Type a message here · {{shortcut}} to send',
     loading: 'Loading messages…',
+    mine: 'Me',
+    mineInitial: 'Me',
   },
   events: {
     resources: {

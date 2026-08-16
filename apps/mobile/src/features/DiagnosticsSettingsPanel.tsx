@@ -9,6 +9,8 @@ import {
   resetMobileSyncBaseUrlCache,
   resolveReachableMobileSyncBaseUrl,
 } from '../sync/mobileSync'
+import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
+import { formatMobileP2pPathMetrics } from '../p2p/pathMetrics'
 import {
   Field,
   Section,
@@ -47,6 +49,15 @@ export function DiagnosticsSettingsPanel() {
   const refreshConnection = async () => {
     setBusy(true)
     setMessage(null)
+    const blocked = hostedWebSyncBlockedReason({
+      configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
+      envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
+    })
+    if (blocked) {
+      setMessage(blocked)
+      setBusy(false)
+      return
+    }
     resetMobileSyncBaseUrlCache()
     try {
       const url = await resolveReachableMobileSyncBaseUrl()
@@ -66,6 +77,14 @@ export function DiagnosticsSettingsPanel() {
     setBusy(true)
     setMessage(null)
     try {
+      const blocked = hostedWebSyncBlockedReason({
+        configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
+        envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
+      })
+      if (blocked) {
+        setMessage(blocked)
+        return
+      }
       const result = await runSync('manual')
       setHubUrl(getMobileSyncBaseUrl())
       setMessage(result)
@@ -104,6 +123,9 @@ export function DiagnosticsSettingsPanel() {
           {desktopHostsOnline > 0
             ? t('diagnostics.hostOnline', { count: desktopHostsOnline })
             : t('diagnostics.hostNone')}
+        </Text>
+        <Text style={styles.meta}>
+          {t('diagnostics.p2pPath')}：{formatMobileP2pPathMetrics()}
         </Text>
         <Pressable onPress={() => void handleSyncNow()} disabled={busy} hitSlop={8}>
           <Text style={styles.linkText}>{t('diagnostics.syncNow')}</Text>

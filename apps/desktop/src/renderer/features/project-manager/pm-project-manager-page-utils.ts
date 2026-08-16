@@ -1,7 +1,16 @@
 /** Pure helpers for ProjectManagerPage orchestration (panel-view bookkeeping). */
 
+import type { PmDomain } from '@toolman/shared'
+
 import type { ProjectManagerPanelView } from './projectManagerPanelView'
-import type { ProjectSidebarMenuTab } from './projectSidebarMenuConfig'
+import {
+  isConfigurableSidebarMenuKey,
+  type ProjectSidebarMenuTab,
+} from './projectSidebarMenuConfig'
+import {
+  isPmDatabaseDomain,
+  resolvePmDatabaseListDomain,
+} from './pm-domain-config'
 
 /** Panel views that show the header project selector (project-scoped views). */
 export const HEADER_PROJECT_VIEWS = new Set<ProjectManagerPanelView>([
@@ -32,4 +41,23 @@ export function addToMountedViews(
   const next = new Set(prev)
   next.add(view)
   return next
+}
+
+/** Domain filter for the project list API under the current sidebar tab. */
+export function resolveProjectListDomain(
+  activeTab: ProjectSidebarMenuTab,
+): PmDomain | undefined {
+  if (!isConfigurableSidebarMenuKey(activeTab)) return undefined
+  if (activeTab === 'progress_management') return 'progress_management'
+  if (isPmDatabaseDomain(activeTab)) return resolvePmDatabaseListDomain(activeTab)
+  return undefined
+}
+
+/** Domain used when opening the create-project dialog for the current sidebar tab. */
+export function resolveCreateProjectDomain(activeTab: ProjectSidebarMenuTab): PmDomain {
+  return (
+    (isConfigurableSidebarMenuKey(activeTab)
+      ? resolvePmDatabaseListDomain(activeTab)
+      : undefined) ?? 'progress_management'
+  )
 }

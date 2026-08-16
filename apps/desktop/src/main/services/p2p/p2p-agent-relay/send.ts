@@ -7,7 +7,7 @@ import type {
   MessageStreamEvent,
   P2pGroupAgentProxy,
 } from '@toolman/shared'
-import { sendMessage } from '../../agent.service'
+import { listMessages, sendMessage } from '../../agent.service'
 import {
   broadcastSessionMessagesReload,
   addStreamRelayListener,
@@ -25,6 +25,7 @@ import {
   remapStreamEventForMember,
 } from './stream'
 import { activeOwnerRelays } from './state'
+import { clearRelayMailboxPeer, peekRelayMailboxPeer, rememberRelayMailboxPeer } from './mailbox-deposit'
 import { ensurePeerConnected, sendRelayMessage, slimStreamEventForRelay } from './transport'
 
 export async function relayProxySendMessage(input: {
@@ -105,6 +106,7 @@ export async function runOwnerRelaySend(
   options: { deliverStreamLocally?: boolean } = {},
 ): Promise<void> {
   logStructured('p2p', 'info', `agent relay send received: peer=${peerDeviceId} sourceSessionId=${message.sourceSessionId} local=${options.deliverStreamLocally === true}`)
+  rememberRelayMailboxPeer(message.requestId, message.p2pWorkspaceId, peerDeviceId)
   try {
     assertRelayAccess(
       message.p2pWorkspaceId,
@@ -120,13 +122,29 @@ export async function runOwnerRelaySend(
 
     let ownerAssistantMessageId: string | null = null
     const bufferedEvents: MessageStreamEvent[] = []
+    let mailboxDoneBlocks: ContentBlock[] | undefined
+    let settleGeneration: ((event: MessageStreamEvent) => void) | null = null
+    const generationFinished = new Promise<MessageStreamEvent>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('群组智能体生成超时')), 10 * 60_000)
+      settleGeneration = (event) => {
+        if (event.type !== 'message.done' && event.type !== 'message.error') return
+        clearTimeout(timer)
+        resolve(event)
+      }
+    })
+    void generationFinished.catch(() => undefined)
 
     const forwardStream = (event: MessageStreamEvent) => {
-      const relayEvent = slimStreamEventForRelay(event, message.requestId)
+      const viaMailbox = Boolean(peekRelayMailboxPeer(message.requestId)?.mailboxOrigin)
+      if (viaMailbox && event.type === 'message.delta') return
+      const relayEvent = viaMailbox ? event : slimStreamEventForRelay(event, message.requestId)
       const remapped = remapStreamEventForMember(relayEvent, {
         sessionId: message.memberSessionId,
         messageId: message.memberAssistantMessageId,
       })
+      if (viaMailbox && remapped.type === 'message.done') {
+        mailboxDoneBlocks = remapped.contentBlocks
+      }
 
       if (options.deliverStreamLocally) {
         handleMemberStream({
@@ -135,6 +153,18 @@ export async function runOwnerRelaySend(
           requestId: message.requestId,
           event: remapped,
         })
+      } else if (viaMailbox) {
+        if (event.type === 'message.error') {
+          void sendRelayMessage(peerDeviceId, {
+            v: 1,
+            type: 'send_err',
+            requestId: message.requestId,
+            message: event.error.message || '发送消息失败',
+          }).catch((error) => {
+            const errMessage = toErrorMessage(error, String(error))
+            logStructured('p2p', 'error', `agent relay mailbox error forward failed: requestId=${message.requestId} error=${errMessage}`)
+          })
+        }
       } else {
         void sendRelayMessage(peerDeviceId, {
           v: 1,
@@ -149,6 +179,7 @@ export async function runOwnerRelaySend(
 
       if (event.type === 'message.done' || event.type === 'message.error') {
         clearActiveOwnerRelay(message.requestId)
+        settleGeneration?.(event)
       }
     }
 
@@ -201,11 +232,38 @@ export async function runOwnerRelaySend(
       }
     }
 
+    const finished = await generationFinished
+    if (finished.type === 'message.error') {
+      throw new Error(finished.error.message || '发送消息失败')
+    }
+    if (finished.type === 'message.done') {
+      const remappedDone = remapStreamEventForMember(finished, {
+        sessionId: message.memberSessionId,
+        messageId: message.memberAssistantMessageId,
+      })
+      if (remappedDone.type === 'message.done' && remappedDone.contentBlocks) {
+        mailboxDoneBlocks = remappedDone.contentBlocks
+      }
+    }
+
+    if (!mailboxDoneBlocks) {
+      const stored = listMessages({ sessionId: message.sourceSessionId }).items.find(
+        (item) => item.id === ownerAssistantMessageId,
+      )
+      mailboxDoneBlocks = stored?.contentBlocks
+    }
+
     if (!options.deliverStreamLocally) {
+      logStructured(
+        'p2p',
+        'info',
+        `agent relay reply ready: requestId=${message.requestId} blocks=${mailboxDoneBlocks?.length ?? 0}`,
+      )
       await sendRelayMessage(peerDeviceId, {
         v: 1,
         type: 'send_ok',
         requestId: message.requestId,
+        contentBlocks: mailboxDoneBlocks?.filter((block) => block.type === 'text') ?? mailboxDoneBlocks,
       })
     }
   } catch (error) {
@@ -213,13 +271,18 @@ export async function runOwnerRelaySend(
     const errMessage = toErrorMessage(error, '发送消息失败')
     logStructured('p2p', 'error', `agent relay owner send failed: sourceSessionId=${message.sourceSessionId} error=${errMessage}`)
     if (options.deliverStreamLocally) {
+      clearRelayMailboxPeer(message.requestId)
       throw error
     }
-    await sendRelayMessage(peerDeviceId, {
-      v: 1,
-      type: 'send_err',
-      requestId: message.requestId,
-      message: errMessage,
-    })
+    try {
+      await sendRelayMessage(peerDeviceId, {
+        v: 1,
+        type: 'send_err',
+        requestId: message.requestId,
+        message: errMessage,
+      })
+    } finally {
+      clearRelayMailboxPeer(message.requestId)
+    }
   }
 }

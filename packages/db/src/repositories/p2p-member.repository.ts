@@ -49,6 +49,19 @@ export class P2pMemberRepository {
     )
   }
 
+  listByWorkspaceAndIdentity(workspaceId: string, identityId: string): P2pWorkspaceMemberRow[] {
+    return this.db
+      .select()
+      .from(p2pWorkspaceMembers)
+      .where(
+        and(
+          eq(p2pWorkspaceMembers.workspaceId, workspaceId),
+          eq(p2pWorkspaceMembers.identityId, identityId),
+        ),
+      )
+      .all()
+  }
+
   listByWorkspace(workspaceId: string, status?: P2pMemberStatus): P2pWorkspaceMemberRow[] {
     const conditions = [eq(p2pWorkspaceMembers.workspaceId, workspaceId)]
     if (status) {
@@ -65,6 +78,20 @@ export class P2pMemberRepository {
   countActiveByWorkspace(workspaceId: string): number {
     const row = this.db
       .select({ count: sql<number>`count(*)` })
+      .from(p2pWorkspaceMembers)
+      .where(
+        and(
+          eq(p2pWorkspaceMembers.workspaceId, workspaceId),
+          eq(p2pWorkspaceMembers.status, 'active'),
+        ),
+      )
+      .get()
+    return row?.count ?? 0
+  }
+
+  countActiveIdentitiesByWorkspace(workspaceId: string): number {
+    const row = this.db
+      .select({ count: sql<number>`count(distinct ${p2pWorkspaceMembers.identityId})` })
       .from(p2pWorkspaceMembers)
       .where(
         and(

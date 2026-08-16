@@ -17,6 +17,8 @@ if [[ ! -f "$CHANNEL_CONFIG" ]]; then
 fi
 
 cd "$ROOT_DIR"
+bash "$ROOT_DIR/scripts/ensure-electron-binary.sh"
+unset ELECTRON_RUN_AS_NODE
 node "$ROOT_DIR/scripts/write-build-provenance.mjs"
 pnpm build:p2p && pnpm build:libp2p
 pnpm --filter @toolman/desktop^... build

@@ -1,6 +1,8 @@
 mod auth;
 mod board;
 mod comments;
+mod device_sync;
+mod mailbox;
 mod diagnostics;
 mod error;
 mod federation;
@@ -84,6 +86,8 @@ pub fn router(state: AppState) -> Router {
                 .merge(diagnostics::router())
                 .merge(search_semantic::router())
                 .merge(federation::router())
+                .merge(device_sync::router())
+                .merge(mailbox::router())
                 .layer(from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
                 .layer(from_fn_with_state(state.clone(), guest_write_block_middleware)),
         )
@@ -630,7 +634,8 @@ mod tests {
         assert_eq!(payload["data"]["semantic_search"], "disabled");
         assert_eq!(payload["data"]["rate_limit_rpm"], 600);
         assert_eq!(payload["data"]["federation_peering"], true);
-        assert_eq!(payload["data"]["device_sync"], false);
+        assert_eq!(payload["data"]["device_sync"], true);
+        assert_eq!(payload["data"]["workspace_mailbox"], true);
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);
@@ -697,10 +702,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn device_sync_routes_are_not_on_community_hub() {
+    async fn device_sync_routes_require_auth_and_roundtrip() {
         let (app, pool, data_dir) = test_app().await;
 
-        let push = app
+        let denied = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -711,7 +717,88 @@ mod tests {
             )
             .await
             .expect("push");
-        assert_eq!(push.status(), StatusCode::NOT_FOUND);
+        assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+
+        let pushed = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/sync/push")
+                    .header("content-type", "application/json")
+                    .header("authorization", bearer_auth(DEFAULT_IDENTITY_ID))
+                    .body(Body::from(
+                        r#"{"changes":[{"entityKind":"note","entityId":"n1","op":"upsert","updatedAt":1,"payload":{"title":"t"}}]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .expect("auth push");
+        assert_eq!(pushed.status(), StatusCode::OK);
+
+        let pulled = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/sync/pull")
+                    .header("content-type", "application/json")
+                    .header("authorization", bearer_auth(DEFAULT_IDENTITY_ID))
+                    .body(Body::from(r#"{"cursor":null,"limit":100}"#))
+                    .unwrap(),
+            )
+            .await
+            .expect("pull");
+        assert_eq!(pulled.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(pulled.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(payload["data"]["changes"][0]["entityId"], "n1");
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
+    async fn workspace_mailbox_stores_ciphertext_without_auth_bearer() {
+        let (app, pool, data_dir) = test_app().await;
+        let put = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/sync/p2p/mailbox/put")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"workspaceId":"ws-1","deviceId":"desk-a","recipientDeviceId":"phone-b","grant":"grant-phone-b-secret","ciphertextB64":"QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=","seq":4}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .expect("put");
+        assert_eq!(put.status(), StatusCode::OK);
+
+        let pulled = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/sync/p2p/mailbox/pull")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"workspaceId":"ws-1","deviceId":"phone-b","grant":"grant-phone-b-secret","sinceSeq":0}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .expect("pull");
+        assert_eq!(pulled.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(pulled.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(payload["data"]["envelopes"][0]["seq"], 4);
+        let cipher = payload["data"]["envelopes"][0]["ciphertextB64"].as_str().unwrap();
+        assert!(!cipher.contains("hello"));
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(data_dir);

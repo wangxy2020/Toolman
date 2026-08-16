@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import { useI18n } from '../../../../i18n/useI18n'
 import { formatCostTotalPrice } from './pm-cost-catalog'
 import { syncFeatureDescriptionHeight } from './pm-cost-panel-utils'
+import { ProjectCostTableSummaryFormulaCell } from './ProjectCostTableSummaryFormulaCell'
 import type { ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
 type CostDisplayEntry = ProjectCostTablePanelState['displayEntries'][number]
@@ -63,88 +64,14 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
     : `section:${sectionKey || '__empty__'}`
   const selectionId = isTopSummary ? entry.row.id : `section:${sectionKey || '__empty__'}`
   const isRowSelected = selectedId === selectionId
-
-  const renderTotalFormulaCell = (
-    focusKey: string,
-    formula: string,
-    total: number | null,
-    onFormulaChange: (next: string) => void,
-    onSelect?: () => void,
-    pickRefName?: string | null,
-  ) => {
-    const focused = totalFormulaFocusId === focusKey
-    const trimmed = formula.trim() === '=' ? '' : formula.trim()
-    const canPick =
-      isSummaryView &&
-      totalFormulaFocusId != null &&
-      totalFormulaFocusId !== focusKey &&
-      Boolean(pickRefName?.trim())
-    return (
-      <td
-        className={[
-          'tm-pm-resource-table-cell--center',
-          'tm-pm-resource-table-col-price',
-          canPick ? 'tm-pm-cost-table-summary-formula-pickable' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        onMouseDown={(event) => {
-          if (canPick && (event.metaKey || event.ctrlKey)) {
-            // Keep the formula editor focused while picking section totals.
-            event.preventDefault()
-          }
-        }}
-        onClick={(event) => {
-          if (canPick && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault()
-            event.stopPropagation()
-            appendSectionRefToActiveFormula(pickRefName!.trim())
-          }
-        }}
-      >
-        <input
-          ref={focused ? formulaInputRef : undefined}
-          className="tm-pm-resource-table-input tm-pm-resource-table-input--center tm-pm-cost-table-section-summary-input tm-pm-cost-table-summary-formula"
-          value={focused ? formula.trim() || '=' : formatCostTotalPrice(total)}
-          placeholder={t('projectManagerPage.costTable.totalFormulaPlaceholder')}
-          title={
-            canPick
-              ? t('projectManagerPage.costTable.totalFormulaPickHint')
-              : trimmed
-                ? t('projectManagerPage.costTable.totalFormulaTitleWithResult', {
-                    formula: trimmed,
-                    result: formatCostTotalPrice(total),
-                  })
-                : t('projectManagerPage.costTable.totalFormulaHint')
-          }
-          onFocus={() => {
-            onSelect?.()
-            setTotalFormulaFocusId(focusKey)
-          }}
-          onBlur={() => {
-            setTotalFormulaFocusId((current) => (current === focusKey ? null : current))
-            // Treat lone '=' as empty → restore auto-sum of all 分部工程.
-            if (formula.trim() === '=') onFormulaChange('')
-          }}
-          onChange={(event) => onFormulaChange(event.target.value)}
-          onMouseDown={(event) => {
-            if (canPick && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault()
-            }
-          }}
-          onClick={(event) => {
-            if (canPick && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault()
-              event.stopPropagation()
-              appendSectionRefToActiveFormula(pickRefName!.trim())
-              return
-            }
-            event.stopPropagation()
-          }}
-        />
-      </td>
-    )
-  }
+  const pickRefName = isTopSummary
+    ? null
+    : nameValue.trim() || codeValue.trim() || sectionKey.trim() || null
+  const canPickFormula =
+    isSummaryView &&
+    totalFormulaFocusId != null &&
+    totalFormulaFocusId !== formulaFocusKey &&
+    Boolean(pickRefName?.trim())
 
   return (
     <tr
@@ -260,11 +187,15 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
       {columnVisibility.unitPrice ? <td /> : null}
       {columnVisibility.totalPrice ? (
         isSummaryView ? (
-          renderTotalFormulaCell(
-            formulaFocusKey,
-            formulaValue,
-            totalValue,
-            (next) => {
+          <ProjectCostTableSummaryFormulaCell
+            focusKey={formulaFocusKey}
+            formula={formulaValue}
+            total={totalValue}
+            focused={totalFormulaFocusId === formulaFocusKey}
+            canPick={canPickFormula}
+            pickRefName={pickRefName}
+            formulaInputRef={formulaInputRef}
+            onFormulaChange={(next) => {
               if (isTopSummary) {
                 patchSummaryRow(entry.row.id, { totalFormula: next })
               } else {
@@ -272,10 +203,11 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
                   sectionTotalFormula: next,
                 })
               }
-            },
-            () => setSelectedId(selectionId),
-            isTopSummary ? null : nameValue.trim() || codeValue.trim() || sectionKey.trim() || null,
-          )
+            }}
+            onSelect={() => setSelectedId(selectionId)}
+            setTotalFormulaFocusId={setTotalFormulaFocusId}
+            appendSectionRefToActiveFormula={appendSectionRefToActiveFormula}
+          />
         ) : (
           <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-price">
             <span className="tm-pm-cost-table-section-summary-total">

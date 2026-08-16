@@ -105,6 +105,7 @@ export interface P2pNativeModule {
     inviteId: string,
     timeoutSecs?: number | null,
   ): Promise<NativeConnectionConnectResult>
+  inviteSubmitAnswer(inviteId: string, answerSdp: string, joinerDeviceId: string): void
   inviteConnectAsJoiner(
     ownerDeviceId: string,
     workspaceId: string | null | undefined,

@@ -35,3 +35,6 @@ packages/db/.demo-toolman.db
 coverage/
 # EPC commercial test scratch
 apps/desktop/src/main/services/epc-commercial/__tests__/.tmp-*/
+
+# pnpm content-addressable store (local)
+.pnpm-store/

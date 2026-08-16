@@ -2,7 +2,9 @@ const NEWS_ARTICLE_HTML_MAX_LENGTH = 40_000
 
 function resolveArticleHref(href: string, baseUrl?: string | null): string | null {
   const trimmed = href.trim()
-  if (!trimmed || trimmed.startsWith('#') || trimmed.toLowerCase().startsWith('javascript:')) {
+  if (!trimmed || trimmed.startsWith('#')) return null
+  const lower = trimmed.toLowerCase()
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
     return null
   }
   if (/^https?:\/\//i.test(trimmed)) return trimmed
@@ -27,9 +29,15 @@ export function sanitizeNewsArticleHtml(html: string, baseUrl?: string | null): 
     .replace(/<\/?(html|head|body)[^>]*>/gi, '')
     .replace(/<(button|nav|audio|template|form|svg)\b[\s\S]*?<\/\1>/gi, '')
     .replace(/<(button|input|select|textarea)\b[^>]*\/?>/gi, '')
-    .replace(/\bon\w+\s*=\s*(["'])[^"']*\1/gi, '')
-    .replace(/\bhref\s*=\s*(["'])javascript:[^"']*\1/gi, 'href=$1#$1')
-    .replace(/\bsrc\s*=\s*(["'])javascript:[^"']*\1/gi, 'src=$1#$1')
+    // Quoted then unquoted on* handlers (e.g. onerror=alert(1)).
+    .replace(/\bon\w+\s*=\s*(["'])[\s\S]*?\1/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/\bsrcdoc\s*=\s*(["'])[\s\S]*?\1/gi, '')
+    .replace(/\bsrcdoc\s*=\s*[^\s>]+/gi, '')
+    .replace(/\bhref\s*=\s*(["'])\s*(?:javascript|data|vbscript):[^"']*\1/gi, 'href=$1#$1')
+    .replace(/\bsrc\s*=\s*(["'])\s*(?:javascript|data|vbscript):[^"']*\1/gi, 'src=$1#$1')
+    .replace(/\bhref\s*=\s*(?:javascript|data|vbscript):[^\s>]*/gi, 'href="#"')
+    .replace(/\bsrc\s*=\s*(?:javascript|data|vbscript):[^\s>]*/gi, 'src="#"')
 
   const bodyMatch = sanitized.match(/<body[^>]*>([\s\S]*)<\/body>/i)
   if (bodyMatch?.[1]) {

@@ -8,9 +8,7 @@ import {
   getPmAgentCapability,
   resolvePmAgentApplyKindsForMessage,
   type ContentBlock,
-  type PmProject,
 } from '@toolman/shared'
-import type { ChatPageState } from '../chat/useChatPage'
 import { useI18n } from '../../i18n/useI18n'
 import { EPC_SLASH_COMMANDS } from '../project-management-epc/epc-slash-commands'
 import {
@@ -25,45 +23,12 @@ import {
   resolvePlanSlashCommand,
 } from './planManagementQuickPhrases'
 import { PM_PLAN_SLASH_COMMANDS } from './pm-plan-slash-commands'
-import { ProjectCostCatalogApplyBar } from './ProjectCostCatalogApplyBar'
-import { ProjectCostPlanApplyBar } from './ProjectCostPlanApplyBar'
-import { ProjectPlanAgentApplyBar } from './ProjectPlanAgentApplyBar'
-import { ProjectResourceCatalogApplyBar } from './ProjectResourceCatalogApplyBar'
-import { ProjectResourcePlanApplyBar } from './ProjectResourcePlanApplyBar'
-import type { ConfigurableSidebarMenuKey } from './projectSidebarMenuConfig'
+import { ProjectManagementAgentPanelApply } from './ProjectManagementAgentPanelApply'
+import type { ProjectManagementAgentPanelProps } from './project-management-agent-panel-types'
 import { useProjectManagementAgentSession } from './useProjectManagementAgentSession'
 import { useProjectManagementEpcSend } from './useProjectManagementEpcSend'
 
-export type ProjectManagementAgentPanelProps = Pick<
-  ChatPageState,
-  | 'chat'
-  | 'messageSettings'
-  | 'messagePanelStyle'
-  | 'defaultModelId'
-  | 'translationLanguages'
-  | 'groupProxyReadOnly'
-  | 'appSettings'
-  | 'systemPaths'
-  | 'agentPrefillText'
-  | 'agentPrefillAttachments'
-  | 'chatPrefillRevision'
-  | 'handleEditUserMessage'
-  | 'handlePrefillConsumed'
-  | 'updateAppSettings'
-  | 'notes'
-  | 'setActiveView'
-> & {
-  workspaceId: string | null
-  activeTab: ConfigurableSidebarMenuKey
-  selectedProjectId?: string | null
-  projects?: PmProject[]
-  /** After create-dialog confirm: auto-send plan kickoff for this project. */
-  agentKickoffProject?: PmProject | null
-  onAgentKickoffConsumed?: () => void
-  onPlanApplied?: (projectId: string) => void
-  onProjectsChange?: () => void | Promise<void>
-  workspace?: import('@toolman/shared').Workspace | null
-}
+export type { ProjectManagementAgentPanelProps } from './project-management-agent-panel-types'
 
 /**
  * PM agent shell. Tab capabilities come from {@link getPmAgentCapability}
@@ -137,52 +102,15 @@ export function ProjectManagementAgentPanel({
   )
   const assistantFooter =
     linked && workspaceId && applyKinds.length > 0 ? (
-      <>
-        {applyKinds.includes('plan') || applyKinds.includes('schedule') ? (
-          <ProjectPlanAgentApplyBar
-            workspaceId={workspaceId}
-            messages={chat.messages}
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
-            onProjectsChange={onProjectsChange}
-          />
-        ) : null}
-        {applyKinds.includes('resourcePlan') ? (
-          <ProjectResourcePlanApplyBar
-            workspaceId={workspaceId}
-            messages={chat.messages}
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
-            onProjectsChange={onProjectsChange}
-          />
-        ) : null}
-        {applyKinds.includes('resourceCatalog') ? (
-          <ProjectResourceCatalogApplyBar
-            workspaceId={workspaceId}
-            messages={chat.messages}
-            onProjectsChange={onProjectsChange}
-          />
-        ) : null}
-        {applyKinds.includes('costPlan') ? (
-          <ProjectCostPlanApplyBar
-            workspaceId={workspaceId}
-            messages={chat.messages}
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            onPlanApplied={(projectId) => onPlanApplied?.(projectId)}
-            onProjectsChange={onProjectsChange}
-          />
-        ) : null}
-        {applyKinds.includes('costCatalog') ? (
-          <ProjectCostCatalogApplyBar
-            workspaceId={workspaceId}
-            messages={chat.messages}
-            onProjectsChange={onProjectsChange}
-          />
-        ) : null}
-      </>
+      <ProjectManagementAgentPanelApply
+        workspaceId={workspaceId}
+        messages={chat.messages}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        applyKinds={applyKinds}
+        onPlanApplied={onPlanApplied}
+        onProjectsChange={onProjectsChange}
+      />
     ) : null
 
   const loadQuickPhrasesFn = epcEnabled

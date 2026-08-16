@@ -78,6 +78,8 @@ export interface ProviderConfig {
   type: ProviderType
   baseUrl?: string | null
   apiKey?: string | null
+  /** Preferred model id for connection tests (avoids a slow GET /models). */
+  testModel?: string
 }
 
 export interface TestResult {

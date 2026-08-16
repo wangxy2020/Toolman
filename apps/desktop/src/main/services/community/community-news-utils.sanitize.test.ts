@@ -15,6 +15,14 @@ describe('sanitizeNewsArticleHtml', () => {
     expect(sanitized).toContain('src="https://example.com/a.png"')
   })
 
+  it('strips unquoted on* handlers and data: URLs', () => {
+    const html =
+      '<img src=https://example.com/a.png onerror=alert(1) /><a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a>'
+    const sanitized = sanitizeNewsArticleHtml(html)
+    expect(sanitized).not.toMatch(/\bon\w+\s*=/i)
+    expect(sanitized).not.toMatch(/data:/i)
+  })
+
   it('blocks javascript: URLs in href and src attributes', () => {
     const html = '<a href="javascript:alert(1)">Click</a><img src="javascript:alert(2)" />'
     const sanitized = sanitizeNewsArticleHtml(html)

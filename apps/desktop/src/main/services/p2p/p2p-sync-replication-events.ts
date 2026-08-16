@@ -8,6 +8,7 @@ import {
 import { parseReplicationMessage, wireToRemoteInput } from './p2p-sync-protocol'
 import { isSeqConflictError, MAX_SEQ_CONFLICT_RETRIES } from './p2p-sync-sequencing'
 import { forceP2pSync } from './p2p-sync-peer'
+import { sendAgentShareListings } from './p2p-agent-share-listing'
 import { sendEventsBatch, sendReplicationMessage } from './p2p-sync-replication-send'
 import {
   cursorLastReceived,
@@ -28,6 +29,7 @@ export async function handleEventsRequest(
 ): Promise<void> {
   assertPeerTrustedForSync(message.workspaceId, peerDeviceId)
   await sendEventsBatch(peerDeviceId, message.workspaceId, message.sinceSeq)
+  await sendAgentShareListings(peerDeviceId, message.workspaceId)
 }
 
 async function handleSeqGapDuringBatch(

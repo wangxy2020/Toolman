@@ -1,4 +1,4 @@
-import type { DocumentRepository } from '@toolman/db'
+import type { DocumentRepository, DocumentRow } from '@toolman/db'
 import type { KnowledgeDocument } from '@toolman/shared'
 
 /** Skip re-ingest only when content is unchanged and chunk rows still exist. */
@@ -19,7 +19,7 @@ export function findActiveDocumentByPath(
   repo: DocumentRepository,
   kbId: string,
   path: string,
-): KnowledgeDocument | undefined {
+): DocumentRow | undefined {
   const active = repo.findByPath(kbId, path)
   if (active) return active
 
@@ -40,7 +40,7 @@ export function findActiveDocumentById(
   repo: DocumentRepository,
   kbId: string,
   documentId: string,
-): KnowledgeDocument | undefined {
+): DocumentRow | undefined {
   const active = repo.findById(documentId, kbId)
   if (active) return active
 

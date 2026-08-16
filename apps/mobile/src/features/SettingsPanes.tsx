@@ -10,7 +10,7 @@ import { SETTINGS_TABS, SYSTEM_SETTINGS_SECTIONS, DEFAULT_SYSTEM_SECTION } from 
 import { useI18n } from '../i18n'
 import { useMobileApp } from '../state/MobileAppContext'
 import { colors } from '../theme'
-import { CURATED_EDGE_TTS_VOICES } from '../voice'
+import { IconEye } from '../icons/composer-icons'
 import { AboutSettingsPanel } from './AboutSettingsPanel'
 import { useAgentSettingsPanel } from './useAgentSettingsPanel'
 import { DiagnosticsSettingsPanel } from './DiagnosticsSettingsPanel'
@@ -107,8 +107,6 @@ function AgentSettingsPanel() {
     saveModel,
     runProbe,
     patchPrefs,
-    apiKeyDescription,
-    patchTtsVoice,
   } = useAgentSettingsPanel()
 
   return (
@@ -133,7 +131,7 @@ function AgentSettingsPanel() {
           })}
         </View>
         <Text style={styles.hint}>
-          对齐桌面端网络模型服务（OpenAI 兼容协议）。切换服务商会填充默认 Base URL 与推荐模型。
+          对齐桌面端网络模型服务（OpenAI 兼容协议）。切换服务商会填充默认 Base URL 与推荐模型，各服务商的 API Key 独立保存。
         </Text>
       </Section>
 
@@ -144,13 +142,31 @@ function AgentSettingsPanel() {
           value={apiKey}
           onChangeText={setApiKey}
           secureTextEntry={!showApiKey}
+          placeholder="API 密钥"
+          right={
+            <>
+              <Pressable
+                style={styles.fieldIconBtn}
+                onPress={() => setShowApiKey((v) => !v)}
+                hitSlop={8}
+                accessibilityLabel={showApiKey ? '隐藏 API Key' : '显示 API Key'}
+              >
+                <IconEye size={18} color={colors.textSecondary} hidden={showApiKey} />
+              </Pressable>
+              <Pressable
+                style={[styles.fieldDetectBtn, probeBusy ? styles.btnDisabled : null]}
+                disabled={probeBusy}
+                onPress={() => void runProbe()}
+              >
+                {probeBusy ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <Text style={styles.btnSecondaryText}>检测</Text>
+                )}
+              </Pressable>
+            </>
+          }
         />
-        <View style={styles.keyMetaRow}>
-          <Text style={styles.hint}>{apiKeyDescription}</Text>
-          <Pressable onPress={() => setShowApiKey((v) => !v)} hitSlop={8}>
-            <Text style={styles.linkText}>{showApiKey ? '隐藏' : '显示'}</Text>
-          </Pressable>
-        </View>
         {preset.apiKeyUrl ? (
           <Pressable onPress={() => void Linking.openURL(preset.apiKeyUrl!)}>
             <Text style={styles.linkText}>获取 / 管理 {preset.name} API Key →</Text>
@@ -189,17 +205,6 @@ function AgentSettingsPanel() {
           onChange={setLocalModelEnabled}
         />
         <View style={styles.actionRow}>
-          <Pressable
-            style={[styles.btnSecondary, styles.actionBtn, probeBusy ? styles.btnDisabled : null]}
-            disabled={probeBusy}
-            onPress={() => void runProbe()}
-          >
-            {probeBusy ? (
-              <ActivityIndicator color={colors.accent} size="small" />
-            ) : (
-              <Text style={styles.btnSecondaryText}>检测配置</Text>
-            )}
-          </Pressable>
           <Pressable style={[styles.btn, styles.actionBtn]} onPress={() => void saveModel()}>
             <Text style={styles.btnText}>保存模型</Text>
           </Pressable>
@@ -222,70 +227,6 @@ function AgentSettingsPanel() {
           value={prefs.preferDesktopHost}
           onChange={(v) => void patchPrefs({ preferDesktopHost: v })}
         />
-      </Section>
-
-      <Section title="语音（朗读）">
-        <Text style={styles.hint}>
-          与桌面一致：默认使用微软 Edge 神经语音（无需 API Key）。部分浏览器受限时会自动回退系统语音。
-        </Text>
-        <Toggle
-          label="自动朗读回复"
-          value={prefs.autoSpeak}
-          onChange={(v) => void patchPrefs({ autoSpeak: v })}
-        />
-        <Text style={styles.hint}>
-          开启后，智能体生成回答结束时自动朗读（默认开启；仍可在消息底部手动播放）。
-        </Text>
-        <Text style={styles.label}>引擎</Text>
-        <View style={styles.providerGrid}>
-          {(
-            [
-              { id: 'edge' as const, label: '微软 Edge 神经语音' },
-              { id: 'web-speech' as const, label: '系统语音' },
-            ] as const
-          ).map((item) => {
-            const active = prefs.ttsEngine === item.id
-            return (
-              <Pressable
-                key={item.id}
-                style={[styles.providerChip, active ? styles.providerChipActive : null]}
-                onPress={() => void patchPrefs({ ttsEngine: item.id })}
-              >
-                <Text
-                  style={[styles.providerChipText, active ? styles.providerChipTextActive : null]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </View>
-        {prefs.ttsEngine === 'edge' ? (
-          <>
-            <Text style={styles.label}>音色</Text>
-            <View style={styles.modelSuggestRow}>
-              {CURATED_EDGE_TTS_VOICES.map((item) => {
-                const active = prefs.ttsVoice === item.value
-                return (
-                  <Pressable
-                    key={item.value}
-                    style={[styles.modelChip, active ? styles.modelChipActive : null]}
-                    onPress={() => patchTtsVoice(item.value)}
-                  >
-                    <Text
-                      style={[styles.modelChipText, active ? styles.modelChipTextActive : null]}
-                      numberOfLines={1}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-          </>
-        ) : (
-          <Text style={styles.hint}>系统语音使用设备内置朗读，音色由系统决定。</Text>
-        )}
       </Section>
 
       {message ? (

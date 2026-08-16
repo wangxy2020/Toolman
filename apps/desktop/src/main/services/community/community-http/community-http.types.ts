@@ -20,8 +20,10 @@ export interface CommunityHealthData {
   user_count?: number
   resource_count?: number
   federation_peering?: boolean
-  /** Legacy flag; private classroom/notes sync is the desktop Sync Hub, not Community Hub. */
+  /** When true, this Hub relays the private desktop↔mobile changelog off-LAN. */
   device_sync?: boolean
+  /** Encrypted workspace mailbox; Hub stores ciphertext only. */
+  workspace_mailbox?: boolean
 }
 
 export class CommunityHttpError extends Error {

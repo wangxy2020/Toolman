@@ -38,6 +38,7 @@ export type ChatComposerProps = {
   paddingLeft?: number
   paddingRight?: number
   onError?: (message: string | null) => void
+  onAttachFile?: () => void
 }
 
 export function clampComposerFieldHeight(value: number): number {

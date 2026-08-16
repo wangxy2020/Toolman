@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { P2pWorkspace } from '@toolman/shared'
+import { countDistinctMemberIdentities, type P2pWorkspace } from '@toolman/shared'
 import { useGroupMemberLimitWarning } from './useGroupMemberLimitWarning'
 import { useP2pWorkspace } from './useP2pWorkspace'
 import { useP2pEvents } from './useP2pEvents'
@@ -74,7 +74,9 @@ export function useGroupPage({
 
   const memberLimitWarning = useGroupMemberLimitWarning({
     workspace: displayWorkspace,
-    memberCount: displayWorkspace?.memberCount ?? detail.members.length,
+    memberCount:
+      displayWorkspace?.memberCount ??
+      countDistinctMemberIdentities(detail.members, 'active'),
     session,
   })
 

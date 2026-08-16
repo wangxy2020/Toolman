@@ -8,10 +8,8 @@ import {
   createNotebookId,
   rememberDeletedNotes,
   type MobileNote,
-  type MobileNotebook,
 } from '../storage/notes'
 import {
-  applyNotebookRename,
   applyNoteRename,
   deleteNoteConfirmMessage,
   deleteNotebookConfirmMessage,
@@ -90,15 +88,9 @@ export function useNotesLeftPane() {
     isProtectedNotebook(notebooks, notebookId)
 
   const commitRename = () => {
-    if (!renameTarget) return
+    if (!renameTarget || renameTarget.kind !== 'note') return
     const next = draftTitle.trim()
-    if (renameTarget.kind === 'notebook') {
-      if (next) {
-        setNotebooks(applyNotebookRename(notebooks, renameTarget.id, next))
-      }
-    } else if (next) {
-      setNotes(applyNoteRename(notes, renameTarget.id, next))
-    }
+    if (next) setNotes(applyNoteRename(notes, renameTarget.id, next))
     setRenameTarget(null)
     setDraftTitle('')
   }
@@ -145,10 +137,6 @@ export function useNotesLeftPane() {
     if (activeNotebookId === notebookId) {
       setActiveNoteId(remainingNotes[0]?.id ?? null)
     }
-    if (renameTarget?.kind === 'notebook' && renameTarget.id === notebookId) {
-      setRenameTarget(null)
-      setDraftTitle('')
-    }
     setExpanded((prev) => {
       const next = new Set(prev)
       next.delete(notebookId)
@@ -159,6 +147,7 @@ export function useNotesLeftPane() {
 
   const confirmDeleteNotebook = (notebookId: string, name: string) => {
     if (notebookIsProtected(notebookId)) return
+    setOpenSwipeId(null)
     const count = (notesByNotebook.get(notebookId) ?? []).length
     const message = deleteNotebookConfirmMessage(name, count)
     const doDelete = () => deleteNotebook(notebookId)
@@ -179,12 +168,6 @@ export function useNotesLeftPane() {
   const onNotebookPress = (notebookId: string) => {
     setOpenSwipeId(null)
     toggleExpanded(notebookId)
-  }
-
-  const beginRenameNotebook = (notebook: MobileNotebook) => {
-    setOpenSwipeId(null)
-    setRenameTarget({ kind: 'notebook', id: notebook.id })
-    setDraftTitle(notebook.name)
   }
 
   const selectNote = (note: MobileNote) => {
@@ -221,7 +204,6 @@ export function useNotesLeftPane() {
     confirmDeleteNotebook,
     isProtectedNotebook: notebookIsProtected,
     onNotebookPress,
-    beginRenameNotebook,
     selectNote,
     beginRenameNote,
     setSwipeOpen,

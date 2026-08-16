@@ -7,7 +7,7 @@ import {
   isPmResourceCostType,
   parseCustomResourceViewFilter,
 } from './pm-resource-catalog'
-import type { ProjectResourceMenuBarProps } from './ProjectResourceMenuBar'
+import type { ProjectResourceMenuBarProps } from './ProjectResourceMenuBarTypes'
 
 type SubmenuPos = { top: number; left: number } | null
 

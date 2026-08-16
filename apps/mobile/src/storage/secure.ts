@@ -7,11 +7,15 @@ import {
   normalizeChatBaseUrl,
 } from '../settings/provider-presets'
 import { sanitizeApiKey } from '../chat/apiHeaders'
+import {
+  sanitizeCredentialMap,
+  upsertProviderCredentials,
+} from './providerCredentials'
+import { loadOrCreateDeviceIdentity } from './deviceIdentity'
 
 const MODEL_KEY = 'toolman.mobile.modelConfig'
 const TOKEN_KEY = 'toolman.mobile.accessToken'
 const IDENTITY_KEY = 'toolman.mobile.identity'
-const DEVICE_KEY = 'toolman.mobile.deviceId'
 
 const deepseek = getProviderPreset(DEFAULT_PROVIDER_ID)
 
@@ -21,6 +25,7 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   apiKey: '',
   model: deepseek.defaultModel,
   localModelEnabled: false,
+  credentialsByProvider: {},
 }
 
 function inferProviderId(raw: Partial<ModelConfig>): string {
@@ -39,15 +44,25 @@ function migrateModelConfig(raw: Partial<ModelConfig> & { providerId?: string })
   const providerId = inferProviderId(raw)
   const preset = getProviderPreset(providerId)
   const hasSavedUrl = Boolean(raw.baseUrl?.trim())
+  const apiKey = sanitizeApiKey(raw.apiKey ?? '')
+  const baseUrl = normalizeChatBaseUrl(
+    hasSavedUrl ? raw.baseUrl! : preset.defaultBaseUrl,
+    preset.id,
+  )
+  const model = raw.model?.trim() || preset.defaultModel
+  const credentialsByProvider = upsertProviderCredentials(
+    sanitizeCredentialMap(raw.credentialsByProvider),
+    providerId,
+    { apiKey, baseUrl, model },
+  )
+  const stored = credentialsByProvider[providerId]
   return {
     providerId: preset.id,
-    baseUrl: normalizeChatBaseUrl(
-      hasSavedUrl ? raw.baseUrl! : preset.defaultBaseUrl,
-      preset.id,
-    ),
-    apiKey: sanitizeApiKey(raw.apiKey ?? ''),
-    model: raw.model?.trim() || preset.defaultModel,
+    baseUrl: stored?.baseUrl || baseUrl,
+    apiKey: stored?.apiKey || apiKey,
+    model: stored?.model || model,
     localModelEnabled: raw.localModelEnabled ?? false,
+    credentialsByProvider,
   }
 }
 
@@ -145,9 +160,6 @@ export async function saveIdentity(
 }
 
 export async function getOrCreateDeviceId(): Promise<string> {
-  const existing = await getItem(DEVICE_KEY)
-  if (existing) return existing
-  const id = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-  await setItem(DEVICE_KEY, id)
-  return id
+  const device = await loadOrCreateDeviceIdentity()
+  return device.deviceId
 }

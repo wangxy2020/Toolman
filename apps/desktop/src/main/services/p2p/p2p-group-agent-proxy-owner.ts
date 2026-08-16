@@ -1,5 +1,5 @@
 import type { P2pGroupAgentProxy } from '@toolman/shared'
-import { ensureOwnerMemberRecord } from './p2p-member-shared'
+import { ensureOwnerMemberRecord } from './p2p-member-shared-repos'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { getMemberRepo, getWorkspaceRepo } from './p2p-group-agent-proxy-repos'
 

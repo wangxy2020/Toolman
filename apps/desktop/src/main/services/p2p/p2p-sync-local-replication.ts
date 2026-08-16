@@ -10,6 +10,7 @@ import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { isPeerTrusted } from './p2p-peer.service'
 import { sendEventsBatchChunked } from './p2p-events-channel'
 import { workspaceEventToWire } from './p2p-sync-protocol'
+import { depositEventToMailbox } from './p2p-mailbox.service'
 import {
   getWorkspaceOwnerDeviceId,
   isLocalWorkspaceOwner,
@@ -18,6 +19,7 @@ import { getCursorRepo } from './p2p-sync-state'
 
 export function onLocalP2pEventAppended(event: WorkspaceEvent): void {
   fireAndForget('p2p.local_replication', replicateLocalP2pEvent(event))
+  fireAndForget('p2p.mailbox_deposit', depositEventToMailbox(event))
 }
 
 export async function replicateLocalP2pEvent(event: WorkspaceEvent): Promise<void> {

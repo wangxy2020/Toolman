@@ -82,6 +82,7 @@ export const AgentRelaySendOkMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal('send_ok'),
   requestId: z.string().min(1),
+  contentBlocks: z.array(ContentBlockSchema).optional(),
 })
 
 export const AgentRelaySendErrMessageSchema = z.object({

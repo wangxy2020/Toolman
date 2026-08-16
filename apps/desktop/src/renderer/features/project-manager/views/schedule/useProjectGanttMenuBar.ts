@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../../../../i18n/useI18n'
 import { useDropdownPos } from '../../pm-menubar-chrome'
 import type { GanttScheduleView } from './pm-gantt-prefs'
-import type { ProjectGanttMenuBarProps } from './ProjectGanttMenuBar'
+import type { ProjectGanttMenuBarProps } from './ProjectGanttMenuBarTypes'
 
 export type GanttMenuDropdownKey =
   | 'view'

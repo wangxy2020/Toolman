@@ -2736,6 +2736,11 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   margin-bottom: 12px;
 }
 
+.tm-group-chat-messages-wrap .tm-stream-message--user .tm-stream-name {
+  font-weight: 400;
+  color: var(--tm-text-secondary);
+}
+
 .tm-group-chat-messages-wrap .tm-stream-message--user .tm-stream-body {
   max-width: min(78%, 560px);
 }
@@ -2778,7 +2783,7 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   justify-content: flex-end;
 }
 
-.tm-group-chat-messages-wrap .tm-stream-message--user.tm-stream-message--own .tm-stream-footer .tm-stream-tokens {
+.tm-group-chat-messages-wrap .tm-stream-footer .tm-stream-tokens {
   display: none;
 }
 

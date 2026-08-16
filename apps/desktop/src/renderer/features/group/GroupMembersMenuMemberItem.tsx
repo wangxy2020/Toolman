@@ -1,9 +1,13 @@
 import type { MouseEvent } from 'react'
-import type { P2pMember, P2pMemberRole } from '@toolman/shared'
+import { isSamePerson, type P2pMember, type P2pMemberRole, type PersonSelfRef } from '@toolman/shared'
 import { IconMoreHorizontal } from '../../components/icons'
 import { getGroupConnectionModeLabel, getGroupMemberRoleLabel } from '../../i18n/group-member-labels'
 import type { TranslateFn } from '../../i18n/I18nProvider'
-import { canManageTargetMember } from './group-member-utils'
+import {
+  canManageTargetMember,
+  selectCurrentMemberDevice,
+  type GroupedP2pPerson,
+} from './group-member-utils'
 
 function shortDeviceId(deviceId: string): string {
   if (deviceId.length <= 16) return deviceId
@@ -15,9 +19,26 @@ function memberInitial(name: string): string {
   return trimmed ? trimmed.slice(0, 1).toUpperCase() : '?'
 }
 
+function deviceKindLabel(kind: P2pMember['deviceKind'], t: TranslateFn): string {
+  if (kind === 'mobile') return t('groupPage.members.deviceMobile')
+  if (kind === 'desktop') return t('groupPage.members.deviceDesktop')
+  return t('groupPage.members.deviceUnknown')
+}
+
+function memberStatusLabel(member: P2pMember, pending: boolean, t: TranslateFn): string {
+  if (pending) return t('groupPage.members.pendingJoin')
+  if (!member.online) return t('groupPage.members.offline')
+  if (member.connectionMode) {
+    return t('groupPage.members.connectionOnline', {
+      mode: getGroupConnectionModeLabel(member.connectionMode, t),
+    })
+  }
+  return t('groupPage.members.online')
+}
+
 interface Props {
-  member: P2pMember
-  selfMemberId: string | null
+  person: GroupedP2pPerson
+  self: PersonSelfRef
   selfMemberRole: P2pMemberRole | null
   canManage: boolean
   actionBusy: boolean
@@ -26,62 +47,59 @@ interface Props {
 }
 
 export function GroupMembersMenuMemberItem({
-  member,
-  selfMemberId,
+  person,
+  self,
   selfMemberRole,
   canManage,
   actionBusy,
   t,
   onOpenManageMenu,
 }: Props) {
-  const manageable = canManage && canManageTargetMember(selfMemberRole ?? undefined, member, selfMemberId)
+  const isSelf = person.devices.some((device) => isSamePerson(device, self))
+  const current = selectCurrentMemberDevice(person, self)
+  const manageable =
+    canManage && canManageTargetMember(selfMemberRole ?? undefined, person.primary, self)
+  const pending = person.status === 'invited'
 
   return (
     <li
       className="tm-group-member-card tm-group-member-card--compact"
-      onContextMenu={manageable ? (event) => onOpenManageMenu(event, member) : undefined}
+      onContextMenu={manageable ? (event) => onOpenManageMenu(event, person.primary) : undefined}
     >
       <span className="tm-group-member-avatar" aria-hidden="true">
-        {memberInitial(member.displayName)}
+        {memberInitial(person.displayName)}
       </span>
       <div className="tm-group-member-meta">
         <span className="tm-group-member-name">
-          {member.displayName}
-          {member.id === selfMemberId ? (
-            <span className="tm-group-member-you">{t('groupPage.members.you')}</span>
-          ) : null}
+          {person.displayName}
+          {isSelf ? <span className="tm-group-member-you">{t('groupPage.members.you')}</span> : null}
         </span>
-        <span className="tm-group-member-device" title={member.deviceId}>
-          {shortDeviceId(member.deviceId)}
+        <span className="tm-group-member-device" title={current.deviceId}>
+          {deviceKindLabel(current.deviceKind, t)} {shortDeviceId(current.deviceId)}
         </span>
       </div>
       <div className="tm-group-member-end">
         <span
           className={[
             'tm-group-member-role',
-            member.role === 'owner' ? 'tm-group-member-role--owner' : '',
+            person.role === 'owner' ? 'tm-group-member-role--owner' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {getGroupMemberRoleLabel(member.role, t)}
+          {getGroupMemberRoleLabel(person.role, t)}
         </span>
         <div className="tm-group-member-status-row">
           <span
-            className={['tm-group-member-status', member.online ? 'tm-group-member-status--online' : '']
+            className={[
+              'tm-group-member-status',
+              !pending && current.online ? 'tm-group-member-status--online' : '',
+            ]
               .filter(Boolean)
               .join(' ')}
-            title={member.online ? t('groupPage.members.online') : t('groupPage.members.offline')}
+            title={memberStatusLabel(current, pending, t)}
           >
-            {member.online
-              ? member.id === selfMemberId
-                ? t('groupPage.members.localOnline')
-                : member.connectionMode
-                  ? t('groupPage.members.connectionOnline', {
-                      mode: getGroupConnectionModeLabel(member.connectionMode, t),
-                    })
-                  : t('groupPage.members.online')
-              : t('groupPage.members.offline')}
+            {memberStatusLabel(current, pending, t)}
           </span>
           {manageable ? (
             <button
@@ -89,7 +107,7 @@ export function GroupMembersMenuMemberItem({
               className="tm-group-member-manage-btn"
               title={t('groupPage.members.manageMember')}
               disabled={actionBusy}
-              onClick={(event) => onOpenManageMenu(event, member)}
+              onClick={(event) => onOpenManageMenu(event, person.primary)}
             >
               <IconMoreHorizontal size={16} />
             </button>
