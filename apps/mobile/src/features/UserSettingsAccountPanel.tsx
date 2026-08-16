@@ -1,12 +1,6 @@
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { MobileAuthSession } from '../auth/types'
-import {
-  IconApple,
-  IconDouyin,
-  IconGoogle,
-  IconWechat,
-} from '../icons/auth-social-icons'
-import { colors } from '../theme'
+import { useI18n } from '../i18n'
 import {
   Field,
   PrimaryButton,
@@ -15,14 +9,8 @@ import {
   SettingsScroll,
   settingsUiStyles as styles,
 } from './settingsUi'
-import { SOCIAL_ITEMS, type SocialProvider } from './userSettingsUtils'
-import {
-  useGuestAuth,
-  useLoggedInAccount,
-  useUserSettingsPanel,
-} from './useUserSettingsPanel'
-
-import { ActionRow, AuthTextField } from './UserSettingsShared'
+import { useLoggedInAccount } from './useUserSettingsPanel'
+import { ActionRow } from './UserSettingsShared'
 
 export function LoggedInAccountPanel(props: {
   auth: MobileAuthSession
@@ -61,6 +49,8 @@ export function LoggedInAccountPanel(props: {
     profileRoleLabel,
     syncTitle,
     syncSubtitle,
+    hubToken,
+    setHubToken,
     bindPhoneTitle,
     isPro,
     syncing,
@@ -77,6 +67,7 @@ export function LoggedInAccountPanel(props: {
     openBindWechat,
     onBindPhoneChange,
   } = useLoggedInAccount(props)
+  const { t } = useI18n()
 
   if (view === 'password') {
     return (
@@ -230,12 +221,6 @@ export function LoggedInAccountPanel(props: {
         <PrimaryButton label="保存资料" onPress={() => void saveDisplayName()} />
         <ActionRow title={skuLabel} onPress={() => setView('vip')} />
         <ActionRow
-          title={syncTitle}
-          subtitle={syncSubtitle}
-          disabled={syncing}
-          onPress={() => void syncNow()}
-        />
-        <ActionRow
           title={bindPhoneTitle}
           subtitle={hasPhoneBinding ? undefined : '账户找回与国内功能'}
           disabled={hasPhoneBinding}
@@ -245,6 +230,23 @@ export function LoggedInAccountPanel(props: {
           title={hasWechatBinding ? '已绑定微信' : '绑定微信'}
           disabled={hasWechatBinding}
           onPress={openBindWechat}
+        />
+      </Section>
+
+      <Section title={t('user.tokenSync')}>
+        <Field
+          label={t('diagnostics.hubToken')}
+          value={hubToken}
+          onChangeText={setHubToken}
+          placeholder={t('diagnostics.hubTokenPlaceholder')}
+          secureTextEntry
+        />
+        <Text style={styles.hint}>{t('user.hubTokenHint')}</Text>
+        <ActionRow
+          title={syncTitle}
+          subtitle={syncSubtitle}
+          disabled={syncing}
+          onPress={() => void syncNow()}
         />
       </Section>
 

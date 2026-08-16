@@ -1,27 +1,9 @@
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import type { MobileModuleId } from '../modules'
-import { IconPlus } from '../icons/composer-icons'
-import { useSidebarLayout } from '../layout'
-import { useMobileApp } from '../state/MobileAppContext'
+import { ScrollView, Text, TextInput, View } from 'react-native'
 import { colors, shellStyles } from '../theme'
 import { NotesRichBodyEditor } from './NotesRichBodyEditor'
 import { prepareNoteMarkdown } from './noteBodyDisplay'
 import { MessageMarkdown } from './MessageMarkdown'
-import {
-  MODULE_COPY,
-  notebookSwipeId,
-  noteSwipeId,
-} from './notesPaneUtils'
-import {
-  SidebarAddButton,
-  SidebarList,
-  SidebarShell,
-  sidebarStyles,
-} from './sidebarUi'
-import { SwipeableTopicRow } from './SwipeableTopicRow'
-import { useNotesLeftPane } from './useNotesLeftPane'
 import { useNotesRightPane } from './useNotesRightPane'
-
 import { notesStyles as styles } from './ModulePanesNotesStyles'
 
 export function NotesRightPane() {
@@ -104,4 +86,3 @@ export function NotesRightPane() {
     </View>
   )
 }
-

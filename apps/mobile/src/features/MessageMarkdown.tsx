@@ -1,6 +1,6 @@
-import { Fragment, type ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme'
+import { Text, View } from 'react-native'
+import { parseBlocks, renderInline } from './messageMarkdownParse'
+import { noteStyles, styles } from './messageMarkdownStyles'
 
 type Props = {
   text: string
@@ -9,23 +9,10 @@ type Props = {
   variant?: 'chat' | 'note'
 }
 
-type ListItem = { marker: string; text: string }
-
-type Block =
-  | { type: 'heading'; level: 1 | 2 | 3; text: string }
-  | { type: 'list'; items: ListItem[] }
-  | { type: 'code'; lang: string; text: string }
-  | { type: 'quote'; text: string }
-  | { type: 'hr' }
-  | { type: 'paragraph'; text: string }
-
 /**
  * Lightweight Markdown renderer for chat bubbles (RN + web).
  * Covers the common assistant patterns: headings, lists, bold, code.
  */
-import { parseBlocks, renderInline } from './messageMarkdownParse'
-import { noteStyles, styles } from './messageMarkdownStyles'
-
 export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Props) {
   const source = text.replace(/\r\n/g, '\n').trimEnd()
   if (!source.trim()) return null
@@ -103,4 +90,3 @@ export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Prop
     </View>
   )
 }
-

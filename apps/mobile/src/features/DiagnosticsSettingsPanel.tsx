@@ -12,7 +12,6 @@ import {
 import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
 import { formatMobileP2pPathMetrics } from '../p2p/pathMetrics'
 import {
-  Field,
   Section,
   SettingsScroll,
   Toggle,
@@ -136,18 +135,6 @@ export function DiagnosticsSettingsPanel() {
         <Text style={styles.meta}>
           {t('diagnostics.hubUrl')}：{hubUrl}
         </Text>
-        <Field
-          label={t('diagnostics.hubToken')}
-          value={modulePrefs.sync.hubToken}
-          onChangeText={(hubToken) =>
-            void persistPrefs({
-              ...modulePrefs,
-              sync: { ...modulePrefs.sync, hubToken },
-            })
-          }
-          placeholder={t('diagnostics.hubTokenPlaceholder')}
-          secureTextEntry
-        />
         <Text style={styles.hint}>{t('diagnostics.hubHint')}</Text>
       </Section>
 

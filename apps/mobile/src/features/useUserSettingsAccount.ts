@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   bindPhoneToAccount,
   changePassword,
@@ -12,18 +12,17 @@ import {
   verifyAuthingPhoneCode,
 } from '../auth/authingOtp'
 import type { MobileAuthSession } from '../auth/types'
+import { saveModulePrefs } from '../settings/prefs'
 import { useMobileApp } from '../state/MobileAppContext'
 import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
 import {
   formatAccountLabel,
   formatBindPhoneOtpHint,
   formatBindPhoneTitle,
-  formatOtpSentHint,
   formatProfileRoleLabel,
   formatSkuLabel,
   formatSyncActionSubtitle,
   formatSyncActionTitle,
-  isAuthSuccessMessage,
   isVipAccount,
   toErrorMessage,
   type AccountView,
@@ -47,7 +46,7 @@ export function useLoggedInAccount(props: {
   onSync: () => Promise<string>
 }) {
   const { auth, setAuth } = props
-  const { modulePrefs } = useMobileApp()
+  const { modulePrefs, setModulePrefs } = useMobileApp()
   const hostedBlocked = Boolean(
     hostedWebSyncBlockedReason({
       configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
@@ -213,6 +212,15 @@ export function useLoggedInAccount(props: {
     setMessage(await props.onSync())
   }
 
+  const setHubToken = (hubToken: string) => {
+    const next = {
+      ...modulePrefs,
+      sync: { ...modulePrefs.sync, hubToken },
+    }
+    setModulePrefs(next)
+    void saveModulePrefs(next)
+  }
+
   const logout = async () => {
     await logoutLocal()
     setAuth(null)
@@ -269,6 +277,8 @@ export function useLoggedInAccount(props: {
     profileRoleLabel: formatProfileRoleLabel(auth),
     syncTitle: formatSyncActionTitle(props.syncStatus, hostedBlocked),
     syncSubtitle: formatSyncActionSubtitle(hostedBlocked),
+    hubToken: modulePrefs.sync.hubToken,
+    setHubToken,
     bindPhoneTitle: formatBindPhoneTitle(auth.phone),
     isPro: auth.subscriptionSku === 'pro',
     syncing: props.syncStatus === 'syncing',

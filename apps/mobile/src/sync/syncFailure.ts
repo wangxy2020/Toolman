@@ -22,7 +22,7 @@ export function formatSyncFailureMessage(error: unknown): string {
     return '同步身份不匹配。请重启桌面端后再试（需加载最新 Sync Hub）；局域网请开启「允许局域网访问」并填写配对令牌。'
   }
   if (/401|unauthorized|未授权|配对令牌/i.test(message)) {
-    return '同步未授权。请在移动端设置中填写与桌面一致的配对令牌，并开启桌面局域网同步。'
+    return '同步未授权。请在「用户信息 → 令牌同步」填写与桌面一致的配对令牌，并开启桌面局域网同步。'
   }
   return message
 }
