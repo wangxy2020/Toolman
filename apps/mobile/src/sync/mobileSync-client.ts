@@ -103,10 +103,11 @@ async function classifySyncBaseUrl(
       (await probeJson(`${origin}/health`, ctrl.signal)) ??
       (await probeJson(`${origin}/api/v1/health`, ctrl.signal))
     if (!isReachableSyncEndpointHealth(health)) return 'miss'
-    if (
-      isSyncHubHealthPayload(health) &&
-      isForeignSyncIdentity(syncHubHealthIdentityId(health), localIdentityId)
-    ) {
+    // LAN Sync Hub authenticates with the pairing token. Its /health may still
+    // advertise the desktop guest UUID, which must not reject Authing mobile IDs
+    // (`ag-…` / `fb-…`) as a "foreign" hub.
+    if (isSyncHubHealthPayload(health)) return 'ok'
+    if (isForeignSyncIdentity(syncHubHealthIdentityId(health), localIdentityId)) {
       return 'foreign'
     }
     return 'ok'
@@ -165,7 +166,9 @@ export async function resolveReachableMobileSyncBaseUrl(
     }
     if (kind === 'foreign' && !foreignUrl) foreignUrl = url
   }
-  if (foreignUrl) throw new ForeignSyncHubError(foreignUrl)
+  if (foreignUrl) {
+    throw new ForeignSyncHubError(foreignUrl)
+  }
   throw new Error(unreachableSyncHubMessage(candidates))
 }
 

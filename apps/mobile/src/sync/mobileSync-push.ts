@@ -8,10 +8,7 @@ import {
   selectDirtyClassroomChanges,
 } from './classroomPushDelta'
 import type { MobileClassroomCourse } from './classroomSyncMerge'
-import {
-  createReachableMobileSyncClient,
-  isForeignSyncHubError,
-} from './mobileSync-client'
+import { createReachableMobileSyncClient } from './mobileSync-client'
 
 export async function pushNoteChanges(
   notes: MobileNote[],
@@ -23,13 +20,7 @@ export async function pushNoteChanges(
   },
 ): Promise<MobileSyncState> {
   const syncState = extras?.syncState ?? (await loadMobileSyncState())
-  let client
-  try {
-    client = extras?.client ?? (await createReachableMobileSyncClient())
-  } catch (error) {
-    if (isForeignSyncHubError(error)) return syncState
-    throw error
-  }
+  const client = extras?.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
   const deletedNotes = extras?.deletedNotes ?? []
   const changes = selectDirtyNoteChanges(notes, deletedNotes, syncState)
@@ -46,13 +37,7 @@ export async function pushClassroomChanges(
   extras?: { client?: ToolmanSyncClient; syncState?: MobileSyncState },
 ): Promise<MobileSyncState> {
   const syncState = extras?.syncState ?? (await loadMobileSyncState())
-  let client
-  try {
-    client = extras?.client ?? (await createReachableMobileSyncClient())
-  } catch (error) {
-    if (isForeignSyncHubError(error)) return syncState
-    throw error
-  }
+  const client = extras?.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
   const changes = selectDirtyClassroomChanges(courses, syncState)
   if (changes.length === 0) return syncState

@@ -70,6 +70,20 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
       <View style={shellStyles.topBar}>
         <View style={shellStyles.topBarSide}>
           <Pressable
+            style={[shellStyles.brandBtn, showSettings ? shellStyles.brandBtnActive : null]}
+            onPress={() => {
+              const next = !showSettings
+              setShowSettings(next)
+              if (!next) setLeftOpen(false)
+            }}
+            accessibilityLabel={showSettings ? t('shell.closeSettings') : t('shell.openSettings')}
+          >
+            <Text style={[shellStyles.brand, showSettings ? shellStyles.brandActive : null]}>
+              Toolman
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[
               shellStyles.iconBtn,
               leftOpen && !docked ? shellStyles.iconBtnActive : null,
@@ -95,20 +109,6 @@ export function AppShell({ left, right, sidebarMode = 'drawer' }: Props) {
                     : colors.textSecondary
               }
             />
-          </Pressable>
-
-          <Pressable
-            style={[shellStyles.brandBtn, showSettings ? shellStyles.brandBtnActive : null]}
-            onPress={() => {
-              const next = !showSettings
-              setShowSettings(next)
-              if (!next) setLeftOpen(false)
-            }}
-            accessibilityLabel={showSettings ? t('shell.closeSettings') : t('shell.openSettings')}
-          >
-            <Text style={[shellStyles.brand, showSettings ? shellStyles.brandActive : null]}>
-              Toolman
-            </Text>
           </Pressable>
         </View>
 

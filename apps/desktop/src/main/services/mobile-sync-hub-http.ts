@@ -8,7 +8,6 @@ import {
   ensureMobileSyncHubToken,
   isMobileSyncLanAccessEnabled,
 } from './mobile-sync.config'
-import { getLocalIdentityId } from './local-identity'
 
 export function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -123,21 +122,6 @@ export function tokensMatch(presented: string, expected: string): boolean {
 export function isLoopbackRemoteAddress(req: IncomingMessage): boolean {
   const addr = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '')
   return addr === '127.0.0.1' || addr === '::1'
-}
-
-export function readPresentedIdentity(req: IncomingMessage): string {
-  const header = req.headers['x-community-user-id']
-  return typeof header === 'string' ? header.trim() : ''
-}
-
-export function requireSameUserIdentity(req: IncomingMessage, res: ServerResponse): boolean {
-  const presented = readPresentedIdentity(req)
-  const local = getLocalIdentityId()
-  if (!presented || presented !== local) {
-    sendJson(res, 403, { error: 'sync identity mismatch' }, req)
-    return false
-  }
-  return true
 }
 
 export function requireHubAuth(req: IncomingMessage, res: ServerResponse): boolean {

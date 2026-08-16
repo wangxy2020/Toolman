@@ -4,7 +4,6 @@ import { getOrCreateDeviceId } from '../storage/secure'
 import type { MobileNote, NoteTombstone } from '../storage/notes'
 import { loadKnowledgeSnapshot, saveKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
 import { loadMobileSyncState, saveMobileSyncState, type MobileSyncState } from './syncState'
-import { shouldDiscardForeignPrivateWorkspace } from './syncIdentity'
 import { stampClassroomCourses } from './classroomPushDelta'
 import { isSystemDefaultFolderName, listedSyncKnowledgeItems } from '../features/knowledgeSidebar'
 import { mergeNotesFromSyncChanges } from './noteSyncMerge'
@@ -25,13 +24,11 @@ import type { GroupWorkspace } from '../storage/groupChat'
 import {
   countDesktopHostsOnline,
   createReachableMobileSyncClient,
-  isForeignSyncHubError,
   loadSyncIdentityId,
   type KnowledgeMetaItem,
 } from './mobileSync-client'
 import {
   applyKnowledgeMetaChange,
-  discardForeignPrivateWorkspace,
   hydrateOmittedFiles,
 } from './mobileSync-pull-helpers'
 
@@ -70,42 +67,7 @@ export async function pullAndApplySync(options: {
   const includeKnowledge = options.includeKnowledge !== false
   const includeKnowledgeSnapshot = options.includeKnowledgeSnapshot ?? includeKnowledge
   const syncState = options.syncState ?? (await loadMobileSyncState())
-  let client
-  try {
-    client = options.client ?? (await createReachableMobileSyncClient())
-  } catch (error) {
-    if (!isForeignSyncHubError(error)) throw error
-    const localIdentity = await loadSyncIdentityId()
-    const groupStore = await readGroupSyncBaseline()
-    if (shouldDiscardForeignPrivateWorkspace(localIdentity, syncState)) {
-      const discarded = await discardForeignPrivateWorkspace(syncState)
-      return {
-        notes: discarded.notes.notes,
-        deletedNotes: discarded.notes.deletedNotes,
-        knowledgeMeta: [],
-        classroomCourses: [],
-        groups: groupStore.groups,
-        nextCursor: null,
-        hostsOnline: 0,
-        snapshot: null,
-        documentCount: 0,
-        syncState: discarded.syncState,
-        discardedForeign: true,
-      }
-    }
-    return {
-      notes: options.notes,
-      deletedNotes: options.deletedNotes ?? [],
-      knowledgeMeta: includeKnowledge ? [] : (options.knowledgeMeta ?? []),
-      classroomCourses: options.classroomCourses ?? [],
-      groups: groupStore.groups,
-      nextCursor: options.cursor,
-      hostsOnline: 0,
-      snapshot: null,
-      documentCount: 0,
-      syncState,
-    }
-  }
+  const client = options.client ?? (await createReachableMobileSyncClient())
   const deviceId = await getOrCreateDeviceId()
 
   const pulledChanges: SyncChange[] = []
@@ -117,25 +79,7 @@ export async function pullAndApplySync(options: {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (!/403|identity mismatch/i.test(message)) throw error
-      const localIdentity = await loadSyncIdentityId()
-      const groupStore = await readGroupSyncBaseline()
-      if (shouldDiscardForeignPrivateWorkspace(localIdentity, syncState)) {
-        const discarded = await discardForeignPrivateWorkspace(syncState)
-        return {
-          notes: discarded.notes.notes,
-          deletedNotes: discarded.notes.deletedNotes,
-          knowledgeMeta: [],
-          classroomCourses: [],
-          groups: groupStore.groups,
-          nextCursor: null,
-          hostsOnline: 0,
-          snapshot: null,
-          documentCount: 0,
-          syncState: discarded.syncState,
-          discardedForeign: true,
-        }
-      }
-      throw error
+      throw new Error('sync identity mismatch')
     }
     pulledChanges.push(...pull.changes)
     const nextCursor = pull.nextCursor ?? cursor

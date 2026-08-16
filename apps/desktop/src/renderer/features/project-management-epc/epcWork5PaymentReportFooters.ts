@@ -14,8 +14,6 @@ import {
   type StepFooterParts,
 } from './epcWork5PaymentReportDiscovery'
 
-  '汇总本次写出的 Excel 文件路径；CSV 与处理日志仅供引擎内部使用，不在本步骤展示。'
-
 const isXlsxPath = (path: string): boolean => /\.xlsx$/i.test(path.trim())
 
 /** 步骤 5 仅列出两个 Excel 汇总表（不含 csv、log.txt） */

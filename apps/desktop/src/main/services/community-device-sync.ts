@@ -67,12 +67,33 @@ function describeHubFailure(baseUrl: string, error: unknown): string {
   return `local hub ${baseUrl}: ${detail}`
 }
 
+/** Match mobile `ag-…` / `fb-…` so Community Hub device_sync shares one bucket. */
+export function resolveDeviceSyncIdentityId(): string {
+  const session = getAuthSession()
+  for (const binding of session.bindings) {
+    if (
+      binding.provider === 'firebase_email' ||
+      binding.provider === 'firebase_google' ||
+      binding.provider === 'firebase_apple'
+    ) {
+      const subject = binding.subjectId.trim()
+      if (subject) return `fb-${subject}`
+    }
+  }
+  for (const binding of session.bindings) {
+    const subject = binding.subjectId.trim()
+    // Authing user ids are 24-char hex (same check as account deletion).
+    if (/^[a-f0-9]{24}$/i.test(subject)) return `ag-${subject}`
+  }
+  return session.identityId
+}
+
 async function createWanClient(baseUrl: string): Promise<CommunityHttpClient> {
   return new CommunityHttpClient({
     baseUrl,
     // Same as mobile WAN: identity header only. Authing Bearer is rejected by
     // the official Hub and is not required by the local sidecar.
-    resolveAuth: async () => ({ identityId: getAuthSession().identityId }),
+    resolveAuth: async () => ({ identityId: resolveDeviceSyncIdentityId() }),
   })
 }
 

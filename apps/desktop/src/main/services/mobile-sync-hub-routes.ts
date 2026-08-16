@@ -24,12 +24,10 @@ import {
 } from './knowledge-mobile-export.service'
 import { handleMobileP2pInviteAnswer, handleMobileP2pJoinRegister } from './mobile-p2p-join.service'
 import { handleMailboxPull, handleMailboxPut, handleMailboxSession } from './p2p/p2p-mailbox.service'
-import { getLocalIdentityId } from './local-identity'
 import {
   parseJsonBody,
   readBody,
   requireHubAuth,
-  requireSameUserIdentity,
   sendBinary,
   sendCorsHeaders,
   sendJson,
@@ -50,10 +48,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     method === 'GET' &&
     (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/api/v1/health')
   ) {
+    // Do not advertise desktop guest UUID as identityId — mobile Authing IDs are
+    // `ag-…` / `fb-…`, and a mismatch would mark this hub foreign and block sync.
+    // LAN sync auth is the pairing token (requireHubAuth), same as pre-0.7.0.
     sendJson(res, 200, {
       status: 'ok',
       service: SYNC_HUB_SERVICE_NAME,
-      identityId: getLocalIdentityId(),
       health: '/health',
       hosts: '/api/v1/sync/hosts',
       p2pJoin: P2P_JOIN_REGISTER_PATH,
@@ -141,7 +141,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (!requireHubAuth(req, res)) return
-  if (!requireSameUserIdentity(req, res)) return
 
   if (method === 'GET' && url.pathname === '/api/v1/sync/hosts') {
     const hosts: AgentHostPresence[] = []
