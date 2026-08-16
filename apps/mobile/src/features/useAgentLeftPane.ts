@@ -40,6 +40,7 @@ export function useAgentLeftPane() {
     renameSession,
     removeSession,
     setLeftOpen,
+    modulePrefs,
   } = useMobileApp()
   const agentScope = resolveAgentChatScope(module)
   const scopedSessions = useMemo(
@@ -91,7 +92,8 @@ export function useAgentLeftPane() {
   }
 
   const createAgent = () => {
-    const agent = createMobileAgent(agentScope, scopedAgents)
+    const { name: _name, ...seed } = modulePrefs.agent
+    const agent = createMobileAgent(agentScope, scopedAgents, seed)
     upsertAgent(agent)
     const session = createEmptyAgentSession(agentScope, agent.id)
     upsertSession(session)

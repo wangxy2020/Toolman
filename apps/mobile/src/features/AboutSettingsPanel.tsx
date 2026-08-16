@@ -1,34 +1,20 @@
-import {
-  Image,
-  Linking,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { Image, Linking, Pressable, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import Svg, { Path, Polyline } from 'react-native-svg'
 import { TOOLMAN_COPYRIGHT_NOTICE, TOOLMAN_SPDX_LICENSE } from '@toolman/shared'
 import {
   ABOUT_LINK_ACTIONS,
   ABOUT_LINK_IDS,
   ABOUT_LINK_LABELS,
   TOOLMAN_GITHUB_URL,
-  TOOLMAN_JOIN_US_QQ,
-  TOOLMAN_JOIN_US_QQ_GROUP,
 } from '../settings/about'
-import { colors } from '../theme'
 import { SettingsScroll } from './settingsUi'
 import { aboutLinkInteractive, useAboutSettingsPanel } from './useAboutSettingsPanel'
 import appIcon from '../../assets/icon.png'
-import joinUsQr from '../../assets/toolman-qq-group-qr.png'
-
-const APP_VERSION = Constants.expoConfig?.version ?? '0.1.0'
-
 import { styles } from './AboutSettingsStyles'
 import { OutlineButton, IconGithub, LinkRowIcon } from './AboutSettingsWidgets'
 import { AboutJoinUsModal } from './AboutJoinUsModal'
+
+const APP_VERSION = Constants.expoConfig?.version ?? '0.1.0'
 
 export function AboutSettingsPanel() {
   const {
@@ -117,4 +103,3 @@ export function AboutSettingsPanel() {
     </SettingsScroll>
   )
 }
-

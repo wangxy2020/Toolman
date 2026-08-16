@@ -13,6 +13,7 @@ import { applyClassroomProgressFromAssistantReply } from './classroomProgressFro
 export function createAgentRightPaneStream(deps: {
   modelConfig: ModelConfig
   modulePrefs: ModulePrefs
+  getSystemPrompt?: () => string
   agentScope: AgentChatScope
   useDesktopHost: boolean
   desktopHostsOnline: number
@@ -28,6 +29,7 @@ export function createAgentRightPaneStream(deps: {
   const {
     modelConfig,
     modulePrefs,
+    getSystemPrompt,
     agentScope,
     useDesktopHost,
     desktopHostsOnline,
@@ -97,6 +99,7 @@ export function createAgentRightPaneStream(deps: {
 
     const prompt = buildAgentSystemPrompt(modulePrefs, {
       classroomCourse: agentScope === 'classroom' ? classroomCourseRef.current : null,
+      systemPrompt: getSystemPrompt?.(),
     })
     await streamChatCompletion({
       config: modelConfig,

@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { MobileAuthSession } from '../auth/types'
 import type { AgentChatScope } from '../chat/agentScopes'
+import type { MobileAgentSettings } from '../features/agentSettingsResolve'
 import type { MobileModuleId } from '../modules'
 import type { ModulePrefs } from '../settings/prefs'
 import type { SettingsTabId } from '../settings/tabs'
@@ -48,6 +49,8 @@ export type MobileAgent = {
   name: string
   agentScope: AgentChatScope
   createdAt: number
+  /** Per-agent settings; falls back to modulePrefs.agent when missing. */
+  settings?: MobileAgentSettings
 }
 
 export type ChatSession = {

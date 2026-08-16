@@ -9,6 +9,7 @@ import {
   listSyncBaseUrlCandidates,
   syncHubHealthIdentityId,
 } from '@toolman/shared'
+import { COMMUNITY_HUB_PROXY_PREFIX } from '../features/communityHubProxy'
 import { getCurrentDataIdentity } from '../storage/identityScope'
 import { loadIdentity } from '../storage/secure'
 import { resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
@@ -54,7 +55,32 @@ export async function loadSyncHubToken(): Promise<string | null> {
 
 export type MobileSyncTransport = 'lan-hub' | 'community-hub'
 
+/** Same-origin Community Hub proxy used by hosted web (avoids browser CORS to hub.toolman.app). */
+export const COMMUNITY_HUB_SYNC_PROXY_BASE = COMMUNITY_HUB_PROXY_PREFIX
+
+export function isCommunityHubSyncProxyBase(baseUrl: string): boolean {
+  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  return (
+    normalized === COMMUNITY_HUB_SYNC_PROXY_BASE ||
+    normalized.startsWith(`${COMMUNITY_HUB_SYNC_PROXY_BASE}/`)
+  )
+}
+
+/**
+ * Hosted web must not call https://hub.toolman.app from the browser — use the
+ * Vercel/Expo same-origin proxy that community already uses.
+ */
+export function rewriteSyncBaseUrlForClient(baseUrl: string): string {
+  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  if (!normalized) return normalized
+  if (isCommunityHubSyncProxyBase(normalized)) return COMMUNITY_HUB_SYNC_PROXY_BASE
+  if (!isHostedWebPage()) return normalized
+  if (!isWanCommunitySyncUrl(normalized)) return normalized
+  return COMMUNITY_HUB_SYNC_PROXY_BASE
+}
+
 export function isWanCommunitySyncUrl(baseUrl: string): boolean {
+  if (isCommunityHubSyncProxyBase(baseUrl)) return true
   const host = hostnameOfBaseUrl(baseUrl)
   if (isOfficialCommunityHubHost(host)) return true
   try {
@@ -74,7 +100,9 @@ export type ReachableMobileSyncTarget = {
 }
 
 export function createMobileSyncClient(baseUrl?: string): ToolmanSyncClient {
-  const resolved = baseUrl ?? cachedSyncBaseUrl ?? DEFAULT_LOCAL_SYNC_BASE_URL
+  const resolved = rewriteSyncBaseUrlForClient(
+    baseUrl ?? cachedSyncBaseUrl ?? DEFAULT_LOCAL_SYNC_BASE_URL,
+  )
   const wan = isWanCommunitySyncUrl(resolved)
   return new ToolmanSyncClient({
     baseUrl: resolved,
@@ -101,29 +129,49 @@ async function probeJson(url: string, signal: AbortSignal): Promise<unknown | nu
   }
 }
 
-type SyncHubProbeKind = 'ok' | 'foreign' | 'miss'
+type SyncHubProbeKind = 'ok' | 'foreign' | 'miss' | 'no-device-sync'
+
+function asHealthRecord(payload: unknown): Record<string, unknown> | null {
+  if (!payload || typeof payload !== 'object') return null
+  const rec = payload as Record<string, unknown>
+  if (rec.data && typeof rec.data === 'object') return rec.data as Record<string, unknown>
+  return rec
+}
+
+function isCommunityHubHealthyWithoutDeviceSync(payload: unknown): boolean {
+  const data = asHealthRecord(payload)
+  if (!data) return false
+  if (data.device_sync === true) return false
+  return data.status === 'healthy' || data.status === 'ok'
+}
 
 /** Desktop Sync Hub first; Community Hub only when it advertises device_sync. */
 async function classifySyncBaseUrl(
   baseUrl: string,
   localIdentityId?: string | null,
 ): Promise<SyncHubProbeKind> {
-  const origin = baseUrl.replace(/\/+$/, '')
+  const origin = rewriteSyncBaseUrlForClient(baseUrl)
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 2500)
   try {
     const health =
       (await probeJson(`${origin}/health`, ctrl.signal)) ??
       (await probeJson(`${origin}/api/v1/health`, ctrl.signal))
-    if (!isReachableSyncEndpointHealth(health)) return 'miss'
-    // LAN Sync Hub authenticates with the pairing token. Its /health may still
-    // advertise the desktop guest UUID, which must not reject Authing mobile IDs
-    // (`ag-…` / `fb-…`) as a "foreign" hub.
-    if (isSyncHubHealthPayload(health)) return 'ok'
-    if (isForeignSyncIdentity(syncHubHealthIdentityId(health), localIdentityId)) {
-      return 'foreign'
+    if (!health) return 'miss'
+    if (isReachableSyncEndpointHealth(health)) {
+      // LAN Sync Hub authenticates with the pairing token. Its /health may still
+      // advertise the desktop guest UUID, which must not reject Authing mobile IDs
+      // (`ag-…` / `fb-…`) as a "foreign" hub.
+      if (isSyncHubHealthPayload(health)) return 'ok'
+      if (isForeignSyncIdentity(syncHubHealthIdentityId(health), localIdentityId)) {
+        return 'foreign'
+      }
+      return 'ok'
     }
-    return 'ok'
+    if (isWanCommunitySyncUrl(origin) && isCommunityHubHealthyWithoutDeviceSync(health)) {
+      return 'no-device-sync'
+    }
+    return 'miss'
   } catch {
     return 'miss'
   } finally {
@@ -139,10 +187,16 @@ export function resetMobileSyncBaseUrlCache(): void {
   cachedSyncBaseUrl = null
 }
 
-function unreachableSyncHubMessage(tried: string[]): string {
+function unreachableSyncHubMessage(
+  tried: string[],
+  options?: { noDeviceSyncUrl?: string | null },
+): string {
+  if (options?.noDeviceSyncUrl) {
+    return `已连接到社区 Hub（${options.noDeviceSyncUrl}），但未开启跨网同步（device_sync）。请升级部署官方 Hub 后重试。`
+  }
   const list = tried.length > 0 ? tried.join('、') : DEFAULT_LOCAL_SYNC_BASE_URL
   const hostedHint =
-    '网页会先试电脑局域网 Sync Hub；跨网则走官方社区 Hub。请确认已登录同一账号，且桌面端已打开同步。'
+    '网页会经同源代理访问官方社区 Hub；局域网 Sync Hub 浏览器通常不可达。请确认已登录同一账号，且桌面端已打开跨网同步。'
   const localHint =
     '同一局域网请开启桌面「与移动端同步」；跨网请登录同一账号，由官方社区 Hub 中转。'
   return `无法连接桌面 Sync Hub（${list}）。${isHostedWebPage() ? hostedHint : localHint}`
@@ -162,27 +216,31 @@ export async function resolveReachableMobileSyncBaseUrl(
     communityHubBaseUrl: resolveCommunityHubBaseUrl(configuredCommunity),
     packagerHostnames,
     includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
-  })
+  }).map(rewriteSyncBaseUrlForClient)
+  // De-dupe after hosted-web rewrite collapses official hub → proxy.
+  const uniqueCandidates = Array.from(new Set(candidates))
   if (
     cachedSyncBaseUrl &&
-    candidates.includes(cachedSyncBaseUrl) &&
+    uniqueCandidates.includes(cachedSyncBaseUrl) &&
     (await probeSyncBaseUrl(cachedSyncBaseUrl, localIdentityId))
   ) {
     return cachedSyncBaseUrl
   }
   let foreignUrl: string | null = null
-  for (const url of candidates) {
+  let noDeviceSyncUrl: string | null = null
+  for (const url of uniqueCandidates) {
     const kind = await classifySyncBaseUrl(url, localIdentityId)
     if (kind === 'ok') {
       cachedSyncBaseUrl = url
       return url
     }
     if (kind === 'foreign' && !foreignUrl) foreignUrl = url
+    if (kind === 'no-device-sync' && !noDeviceSyncUrl) noDeviceSyncUrl = url
   }
   if (foreignUrl) {
     throw new ForeignSyncHubError(foreignUrl)
   }
-  throw new Error(unreachableSyncHubMessage(candidates))
+  throw new Error(unreachableSyncHubMessage(uniqueCandidates, { noDeviceSyncUrl }))
 }
 
 export async function resolveReachableMobileSyncTarget(

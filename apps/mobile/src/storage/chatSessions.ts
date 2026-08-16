@@ -3,6 +3,7 @@ import {
   isAgentChatScope,
   type AgentChatScope,
 } from '../chat/agentScopes'
+import { normalizeAgentSettings } from '../features/agentSettingsResolve'
 import type { ChatSession, MobileAgent } from '../state/MobileAppContext'
 import { loadOwnedScoped, saveOwnedScoped } from './identityScope'
 import { Platform } from 'react-native'
@@ -123,11 +124,13 @@ function normalizeAgent(value: unknown): MobileAgent | null {
     typeof rawScope === 'string' && isAgentChatScope(rawScope as AgentChatScope)
       ? (rawScope as AgentChatScope)
       : 'agent'
+  const settings = normalizeAgentSettings(item.settings)
   return {
     id: item.id,
     name: item.name.trim() || '智能体',
     agentScope,
     createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
+    ...(settings ? { settings } : {}),
   }
 }
 

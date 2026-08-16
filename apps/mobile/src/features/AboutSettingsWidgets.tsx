@@ -1,31 +1,6 @@
-import {
-  Image,
-  Linking,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
-import Constants from 'expo-constants'
+import { Pressable, Text } from 'react-native'
 import Svg, { Path, Polyline } from 'react-native-svg'
-import { TOOLMAN_COPYRIGHT_NOTICE, TOOLMAN_SPDX_LICENSE } from '@toolman/shared'
-import {
-  ABOUT_LINK_ACTIONS,
-  ABOUT_LINK_IDS,
-  ABOUT_LINK_LABELS,
-  TOOLMAN_GITHUB_URL,
-  TOOLMAN_JOIN_US_QQ,
-  TOOLMAN_JOIN_US_QQ_GROUP,
-} from '../settings/about'
-import { colors } from '../theme'
-import { SettingsScroll } from './settingsUi'
-import { aboutLinkInteractive, useAboutSettingsPanel } from './useAboutSettingsPanel'
-import appIcon from '../../assets/icon.png'
-import joinUsQr from '../../assets/toolman-qq-group-qr.png'
 import { styles } from './AboutSettingsStyles'
-
-const APP_VERSION = Constants.expoConfig?.version ?? '0.1.0'
 
 export function IconGithub({ size = 24 }: { size?: number }) {
   return (
@@ -88,4 +63,3 @@ export function OutlineButton(props: {
     </Pressable>
   )
 }
-

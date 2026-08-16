@@ -7,10 +7,10 @@ import type { MessageTranslation } from './agentPaneUtils'
 
 export function useAgentRightPaneTranslate(input: {
   modelConfig: ModelConfig
-  modulePrefs: ModulePrefs
+  translationLanguages: ModulePrefs['agent']['translationLanguages']
   setError: (message: string | null) => void
 }) {
-  const { modelConfig, modulePrefs, setError } = input
+  const { modelConfig, translationLanguages, setError } = input
   const [translations, setTranslations] = useState<Record<string, MessageTranslation>>({})
   const [visibleTranslationIds, setVisibleTranslationIds] = useState<Record<string, boolean>>({})
   const [translatingIds, setTranslatingIds] = useState<Record<string, boolean>>({})
@@ -27,10 +27,7 @@ export function useAgentRightPaneTranslate(input: {
       return
     }
 
-    const targetLanguage = resolveTranslationTarget(
-      msg.content,
-      modulePrefs.agent.translationLanguages,
-    )
+    const targetLanguage = resolveTranslationTarget(msg.content, translationLanguages)
     setTranslatingIds((prev) => ({ ...prev, [msg.id]: true }))
     setError(null)
     const result = await translateWithChatModel({

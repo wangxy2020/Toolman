@@ -30,16 +30,21 @@ export type ComposerToolbarState = {
 export function defaultComposerToolbar(
   scope: AgentChatScope,
   prefs: ModulePrefs,
+  agentSettings?: Pick<
+    ModulePrefs['agent'],
+    'defaultWebSearch' | 'defaultKb' | 'preferDesktopHost'
+  >,
 ): ComposerToolbarState {
+  const agent = agentSettings ?? prefs.agent
   return {
-    webSearchEnabled: prefs.agent.defaultWebSearch,
-    kbEnabled: scope === 'classroom' ? true : prefs.agent.defaultKb,
+    webSearchEnabled: agent.defaultWebSearch,
+    kbEnabled: scope === 'classroom' ? true : agent.defaultKb,
     useDesktopHost:
       scope === 'classroom'
         ? prefs.classroom.preferDesktopHost
         : scope === 'projects'
           ? prefs.projects.preferDesktopHost
-          : prefs.agent.preferDesktopHost,
+          : agent.preferDesktopHost,
   }
 }
 
@@ -86,6 +91,7 @@ export function createEmptyAgentSession(
 export function createMobileAgent(
   agentScope: AgentChatScope,
   existing: MobileAgent[],
+  seedSettings?: MobileAgent['settings'],
 ): MobileAgent {
   const count = existing.filter((agent) => agent.agentScope === agentScope).length
   return {
@@ -93,6 +99,7 @@ export function createMobileAgent(
     name: count === 0 ? '默认智能体' : `智能体 ${count + 1}`,
     agentScope,
     createdAt: Date.now(),
+    ...(seedSettings ? { settings: seedSettings } : {}),
   }
 }
 
@@ -150,7 +157,10 @@ export function forkSessionFromMessage(
 
 export function buildAgentSystemPrompt(
   prefs: ModulePrefs,
-  options?: { classroomCourse?: MobileClassroomCourse | null },
+  options?: {
+    classroomCourse?: MobileClassroomCourse | null
+    systemPrompt?: string
+  },
 ): string {
   const course = options?.classroomCourse ?? null
   const parts: string[] = []
@@ -175,8 +185,9 @@ export function buildAgentSystemPrompt(
     const courseHint = buildAssistantLibCourseRuntimeHint(runtime)
     if (courseHint?.trim()) parts.push(courseHint.trim())
     else if (course.customSystemPrompt.trim()) parts.push(course.customSystemPrompt.trim())
-  } else if (prefs.agent.systemPrompt.trim()) {
-    parts.push(prefs.agent.systemPrompt.trim())
+  } else {
+    const systemPrompt = (options?.systemPrompt ?? prefs.agent.systemPrompt).trim()
+    if (systemPrompt) parts.push(systemPrompt)
   }
 
   if (prefs.app.memoryEnabled) {

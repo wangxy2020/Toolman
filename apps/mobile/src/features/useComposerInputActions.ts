@@ -6,10 +6,12 @@ import {
   VOICE_HOLD_HINT,
   type VoiceInputSession,
 } from '../chat/composerVoiceInput'
+import { resolveAgentChatScope } from '../chat/agentScopes'
 import { resolveTranslationTarget, translationLanguageLabel } from '../chat/translation-utils'
 import { translateWithChatModel } from '../chat/translateWithModel'
 import { useI18n } from '../i18n'
 import { useMobileApp } from '../state/MobileAppContext'
+import { resolveActiveAgent, resolveAgentSettings } from './agentSettingsResolve'
 
 export function useComposerInputActions(options: {
   value: string
@@ -20,12 +22,17 @@ export function useComposerInputActions(options: {
   onError?: (message: string | null) => void
 }) {
   const { value, onChangeText, disabled, busy, blurInput, onError } = options
-  const { modelConfig, modulePrefs } = useMobileApp()
+  const { modelConfig, modulePrefs, module, agents, sessions, activeSessionId } = useMobileApp()
   const { language } = useI18n()
   const [translating, setTranslating] = useState(false)
   const [listening, setListening] = useState(false)
   const voiceSessionRef = useRef<VoiceInputSession | null>(null)
   const voiceBaseRef = useRef(value)
+  const agentScope = resolveAgentChatScope(module)
+  const agentSettings = resolveAgentSettings(
+    resolveActiveAgent({ agents, sessions, activeSessionId, agentScope }),
+    modulePrefs.agent,
+  )
 
   const translateInput = async () => {
     const text = value.trim()
@@ -35,7 +42,7 @@ export function useComposerInputActions(options: {
       return
     }
     onError?.(null)
-    const target = resolveTranslationTarget(text, modulePrefs.agent.translationLanguages)
+    const target = resolveTranslationTarget(text, agentSettings.translationLanguages)
     setTranslating(true)
     const result = await translateWithChatModel({
       config: modelConfig,

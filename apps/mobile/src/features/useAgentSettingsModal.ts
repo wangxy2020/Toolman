@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { resolveAgentChatScope } from '../chat/agentScopes'
 import { saveModulePrefs, type AgentPermissionMode, type ModulePrefs } from '../settings/prefs'
 import {
   getProviderPreset,
@@ -10,11 +11,18 @@ import {
   readProviderCredential,
   upsertProviderCredentials,
 } from '../storage/providerCredentials'
-import { useMobileApp, type ModelConfig } from '../state/MobileAppContext'
+import { useMobileApp, type ModelConfig, type MobileAgent } from '../state/MobileAppContext'
 import {
   resolveCuratedEdgeTtsVoice,
   type VoiceTtsEngine,
 } from '../voice'
+import {
+  defaultAgentSettingsFromPrefs,
+  resolveActiveAgent,
+  resolveAgentSettings,
+  type MobileAgentSettings,
+} from './agentSettingsResolve'
+import { createMobileAgent } from './agentPaneUtils'
 
 export type AgentSettingsTab =
   | 'basic'
@@ -100,34 +108,65 @@ export type AgentSettingsDraft = {
 }
 
 export function draftFromAgentState(
-  prefs: ModulePrefs['agent'],
+  name: string,
+  settings: MobileAgentSettings,
   providerId: string,
   model: string,
 ): AgentSettingsDraft {
   return {
-    name: prefs.name,
-    description: prefs.description,
+    name,
+    description: settings.description,
     providerId: (providerId as MobileProviderId) || 'deepseek',
     model,
-    autoSpeak: prefs.autoSpeak,
-    ttsEngine: prefs.ttsEngine,
-    ttsVoice: prefs.ttsVoice,
-    defaultWebSearch: prefs.defaultWebSearch,
-    defaultKb: prefs.defaultKb,
-    preferDesktopHost: prefs.preferDesktopHost,
-    heartbeatEnabled: prefs.heartbeatEnabled,
-    heartbeatIntervalMinutes: prefs.heartbeatIntervalMinutes,
-    translationLanguages: [prefs.translationLanguages[0] ?? 'zh', prefs.translationLanguages[1] ?? 'en'],
-    systemPrompt: prefs.systemPrompt,
-    permissionMode: prefs.permissionMode,
-    bashEnabled: prefs.bashEnabled,
-    mcpServerIds: [...prefs.mcpServerIds],
-    skillIds: [...prefs.skillIds],
-    kbIds: [...prefs.kbIds],
-    temperature: prefs.temperature,
-    maxTokens: prefs.maxTokens,
-    sessionRoundLimit: prefs.sessionRoundLimit,
-    environmentVariables: prefs.environmentVariables,
+    autoSpeak: settings.autoSpeak,
+    ttsEngine: settings.ttsEngine,
+    ttsVoice: settings.ttsVoice,
+    defaultWebSearch: settings.defaultWebSearch,
+    defaultKb: settings.defaultKb,
+    preferDesktopHost: settings.preferDesktopHost,
+    heartbeatEnabled: settings.heartbeatEnabled,
+    heartbeatIntervalMinutes: settings.heartbeatIntervalMinutes,
+    translationLanguages: [
+      settings.translationLanguages[0] ?? 'zh',
+      settings.translationLanguages[1] ?? 'en',
+    ],
+    systemPrompt: settings.systemPrompt,
+    permissionMode: settings.permissionMode,
+    bashEnabled: settings.bashEnabled,
+    mcpServerIds: [...settings.mcpServerIds],
+    skillIds: [...settings.skillIds],
+    kbIds: [...settings.kbIds],
+    temperature: settings.temperature,
+    maxTokens: settings.maxTokens,
+    sessionRoundLimit: settings.sessionRoundLimit,
+    environmentVariables: settings.environmentVariables,
+  }
+}
+
+export function buildAgentSettingsFromDraft(draft: AgentSettingsDraft): MobileAgentSettings {
+  return {
+    preferDesktopHost: draft.preferDesktopHost,
+    defaultWebSearch: draft.defaultWebSearch,
+    defaultKb: draft.defaultKb,
+    ttsEngine: draft.ttsEngine,
+    ttsVoice: resolveCuratedEdgeTtsVoice(draft.ttsVoice),
+    autoSpeak: draft.autoSpeak,
+    description: draft.description.trim(),
+    systemPrompt: draft.systemPrompt,
+    permissionMode: draft.permissionMode,
+    heartbeatEnabled: draft.heartbeatEnabled,
+    heartbeatIntervalMinutes: Math.max(1, Number(draft.heartbeatIntervalMinutes) || 30),
+    temperature: draft.temperature,
+    maxTokens: draft.maxTokens.trim(),
+    sessionRoundLimit: Math.max(1, Number(draft.sessionRoundLimit) || 100),
+    environmentVariables: draft.environmentVariables,
+    mcpServerIds: draft.mcpServerIds,
+    skillIds: draft.skillIds,
+    kbIds: draft.kbIds,
+    bashEnabled: draft.bashEnabled,
+    translationLanguages: draft.translationLanguages,
+    providerId: draft.providerId,
+    model: draft.model.trim(),
   }
 }
 
@@ -167,36 +206,19 @@ export function buildAgentModelFromDraft(
   }
 }
 
+/** Keep modulePrefs.agent as defaults for new agents (sidebar name lives on MobileAgent). */
 export function buildAgentPrefsFromDraft(
   modulePrefs: ModulePrefs,
   draft: AgentSettingsDraft,
 ): ModulePrefs {
-  const name = draft.name.trim() || '智能体'
+  const settings = buildAgentSettingsFromDraft(draft)
+  const { providerId: _providerId, model: _model, ...agentPrefs } = settings
   return {
     ...modulePrefs,
     agent: {
       ...modulePrefs.agent,
-      name,
-      description: draft.description.trim(),
-      autoSpeak: draft.autoSpeak,
-      ttsEngine: draft.ttsEngine,
-      ttsVoice: resolveCuratedEdgeTtsVoice(draft.ttsVoice),
-      defaultWebSearch: draft.defaultWebSearch,
-      defaultKb: draft.defaultKb,
-      preferDesktopHost: draft.preferDesktopHost,
-      heartbeatEnabled: draft.heartbeatEnabled,
-      heartbeatIntervalMinutes: Math.max(1, Number(draft.heartbeatIntervalMinutes) || 30),
-      translationLanguages: draft.translationLanguages,
-      systemPrompt: draft.systemPrompt,
-      permissionMode: draft.permissionMode,
-      bashEnabled: draft.bashEnabled,
-      mcpServerIds: draft.mcpServerIds,
-      skillIds: draft.skillIds,
-      kbIds: draft.kbIds,
-      temperature: draft.temperature,
-      maxTokens: draft.maxTokens.trim(),
-      sessionRoundLimit: Math.max(1, Number(draft.sessionRoundLimit) || 100),
-      environmentVariables: draft.environmentVariables,
+      ...agentPrefs,
+      name: draft.name.trim() || modulePrefs.agent.name || '智能体',
     },
   }
 }
@@ -211,15 +233,44 @@ export function clampAgentTemperature(value: string): number {
 }
 
 export function useAgentSettingsModal(visible: boolean, onClose: () => void) {
-  const { modelConfig, setModelConfig, modulePrefs, setModulePrefs } = useMobileApp()
+  const {
+    modelConfig,
+    setModelConfig,
+    modulePrefs,
+    setModulePrefs,
+    module,
+    agents,
+    sessions,
+    activeSessionId,
+    upsertAgent,
+  } = useMobileApp()
+  const agentScope = resolveAgentChatScope(module)
   const [activeTab, setActiveTab] = useState<AgentSettingsTab>('basic')
   const [draft, setDraft] = useState<AgentSettingsDraft | null>(null)
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!visible) return
     setActiveTab('basic')
-    setDraft(draftFromAgentState(modulePrefs.agent, modelConfig.providerId, modelConfig.model))
-  }, [visible])
+    const activeAgent = resolveActiveAgent({
+      agents,
+      sessions,
+      activeSessionId,
+      agentScope,
+    })
+    const settings = resolveAgentSettings(activeAgent, modulePrefs.agent)
+    const providerId = settings.providerId || modelConfig.providerId
+    const model = settings.model || modelConfig.model
+    setEditingAgentId(activeAgent?.id ?? null)
+    setDraft(
+      draftFromAgentState(
+        activeAgent?.name ?? modulePrefs.agent.name,
+        settings,
+        providerId,
+        model,
+      ),
+    )
+  }, [visible, activeSessionId, agentScope])
 
   const titleName = draft?.name.trim() || '智能体'
 
@@ -231,6 +282,31 @@ export function useAgentSettingsModal(visible: boolean, onClose: () => void) {
     if (!draft) return
     const nextModel = buildAgentModelFromDraft(modelConfig, draft)
     const nextPrefs = buildAgentPrefsFromDraft(modulePrefs, draft)
+    const settings = buildAgentSettingsFromDraft(draft)
+    const nextName = draft.name.trim() || '智能体'
+
+    let target: MobileAgent | null =
+      (editingAgentId
+        ? agents.find((agent) => agent.id === editingAgentId) ?? null
+        : null) ??
+      resolveActiveAgent({ agents, sessions, activeSessionId, agentScope })
+
+    if (!target && agentScope !== 'classroom') {
+      target = createMobileAgent(
+        agentScope,
+        agents.filter((agent) => agent.agentScope === agentScope),
+        defaultAgentSettingsFromPrefs(modulePrefs.agent),
+      )
+    }
+
+    if (target) {
+      upsertAgent({
+        ...target,
+        name: nextName,
+        settings,
+      })
+    }
+
     await saveModelConfig(nextModel)
     setModelConfig(nextModel)
     setModulePrefs(nextPrefs)

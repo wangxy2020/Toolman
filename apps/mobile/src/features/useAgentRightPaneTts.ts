@@ -3,7 +3,11 @@ import type { ModulePrefs } from '../settings/prefs'
 import type { ChatMessage } from '../state/MobileAppContext'
 import { getMobileTtsController, unlockAudioPlayback, type TtsPlaybackState } from '../voice'
 
-export function useAgentRightPaneTts(modulePrefs: ModulePrefs) {
+export function useAgentRightPaneTts(agentSettings: {
+  ttsEngine: ModulePrefs['agent']['ttsEngine']
+  ttsVoice: string
+  autoSpeak: boolean
+}) {
   const [speakingId, setSpeakingId] = useState<string | null>(null)
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle')
   const [actionHint, setActionHint] = useState<string | null>(null)
@@ -11,10 +15,10 @@ export function useAgentRightPaneTts(modulePrefs: ModulePrefs) {
 
   useEffect(() => {
     getMobileTtsController().configure({
-      engine: modulePrefs.agent.ttsEngine,
-      voice: modulePrefs.agent.ttsVoice,
+      engine: agentSettings.ttsEngine,
+      voice: agentSettings.ttsVoice,
     })
-  }, [modulePrefs.agent.ttsEngine, modulePrefs.agent.ttsVoice])
+  }, [agentSettings.ttsEngine, agentSettings.ttsVoice])
 
   useEffect(() => {
     return getMobileTtsController().subscribe((state) => {
@@ -42,12 +46,12 @@ export function useAgentRightPaneTts(modulePrefs: ModulePrefs) {
   }, [])
 
   const autoSpeakReply = (messageId: string, content: string) => {
-    if (!modulePrefs.agent.autoSpeak) return
+    if (!agentSettings.autoSpeak) return
     if (!content.trim()) return
     const tts = getMobileTtsController()
     tts.configure({
-      engine: modulePrefs.agent.ttsEngine,
-      voice: modulePrefs.agent.ttsVoice,
+      engine: agentSettings.ttsEngine,
+      voice: agentSettings.ttsVoice,
     })
     tts.speakMessage(messageId, content)
   }
@@ -56,8 +60,8 @@ export function useAgentRightPaneTts(modulePrefs: ModulePrefs) {
     unlockAudioPlayback()
     const tts = getMobileTtsController()
     tts.configure({
-      engine: modulePrefs.agent.ttsEngine,
-      voice: modulePrefs.agent.ttsVoice,
+      engine: agentSettings.ttsEngine,
+      voice: agentSettings.ttsVoice,
     })
     tts.speakMessage(msg.id, msg.content)
   }

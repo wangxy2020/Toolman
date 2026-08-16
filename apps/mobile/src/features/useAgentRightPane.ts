@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ScrollView } from 'react-native'
 import { stripSocraticMachineBlocks } from '@toolman/shared'
-import { resolveAgentChatScope, type AgentChatScope } from '../chat/agentScopes'
+import { resolveAgentChatScope } from '../chat/agentScopes'
 import { useMobileApp, type ChatMessage, type ChatSession } from '../state/MobileAppContext'
 import { copyToClipboard } from '../utils/clipboard'
 import { classroomCourseIsLive } from './classroomClassSession'
@@ -16,6 +16,7 @@ import {
   messageIdsToDelete,
   type ComposerToolbarState,
 } from './agentPaneUtils'
+import { resolveActiveAgent, resolveAgentSettings } from './agentSettingsResolve'
 import {
   ensureAgentRightPaneSession,
   toggleAgentRightPaneClass,
@@ -56,22 +57,37 @@ export function useAgentRightPane() {
       : sessions.filter((item) => item.agentScope === agentScope)
   const session =
     scopedSessions.find((item) => item.id === activeSessionId) ?? scopedSessions[0] ?? null
+  const activeAgent = useMemo(
+    () =>
+      resolveActiveAgent({
+        agents,
+        sessions,
+        activeSessionId: session?.id ?? activeSessionId,
+        agentScope,
+      }),
+    [agents, sessions, session?.id, activeSessionId, agentScope],
+  )
+  const agentSettings = useMemo(
+    () => resolveAgentSettings(activeAgent, modulePrefs.agent),
+    [activeAgent, modulePrefs.agent],
+  )
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [userMenu, setUserMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null)
-  const [toolbarByScope, setToolbarByScope] = useState<
-    Partial<Record<AgentChatScope, ComposerToolbarState>>
-  >({})
+  const [toolbarByAgent, setToolbarByAgent] = useState<Record<string, ComposerToolbarState>>({})
+  const toolbarKey = activeAgent?.id ?? agentScope
   const toolbar =
-    toolbarByScope[agentScope] ?? defaultComposerToolbar(agentScope, modulePrefs)
+    toolbarByAgent[toolbarKey] ??
+    defaultComposerToolbar(agentScope, modulePrefs, agentSettings)
   const { webSearchEnabled, kbEnabled, useDesktopHost } = toolbar
   const patchToolbar = (patch: Partial<ComposerToolbarState>) => {
-    setToolbarByScope((prev) => ({
+    setToolbarByAgent((prev) => ({
       ...prev,
-      [agentScope]: {
-        ...(prev[agentScope] ?? defaultComposerToolbar(agentScope, modulePrefs)),
+      [toolbarKey]: {
+        ...(prev[toolbarKey] ??
+          defaultComposerToolbar(agentScope, modulePrefs, agentSettings)),
         ...patch,
       },
     }))
@@ -82,10 +98,16 @@ export function useAgentRightPane() {
     null,
   )
   const classroomCoursesRef = useRef(classroomCourses)
+  const agentSettingsRef = useRef(agentSettings)
+  agentSettingsRef.current = agentSettings
 
-  const tts = useAgentRightPaneTts(modulePrefs)
+  const tts = useAgentRightPaneTts(agentSettings)
   const selection = useAgentRightPaneSelection()
-  const translate = useAgentRightPaneTranslate({ modelConfig, modulePrefs, setError })
+  const translate = useAgentRightPaneTranslate({
+    modelConfig,
+    translationLanguages: agentSettings.translationLanguages,
+    setError,
+  })
 
   const scrollStreamToEnd = (animated = false) => {
     requestAnimationFrame(() => {
@@ -140,6 +162,7 @@ export function useAgentRightPane() {
   const { runCompletion, runGroupAgentRelay } = createAgentRightPaneStream({
     modelConfig,
     modulePrefs,
+    getSystemPrompt: () => agentSettingsRef.current.systemPrompt,
     agentScope,
     useDesktopHost,
     desktopHostsOnline,

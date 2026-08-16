@@ -3,6 +3,7 @@ export {
   AUTO_SYNC_INTERVAL_MS,
   AUTO_SYNC_MIN_GAP_MS,
   AUTO_SYNC_PAGE_MODULES,
+  COMMUNITY_HUB_SYNC_PROXY_BASE,
   ForeignSyncHubError,
   classifyMobileSyncTransport,
   countDesktopHostsOnline,
@@ -10,12 +11,14 @@ export {
   createReachableMobileSyncClient,
   getMobileSyncBaseUrl,
   getMobileSyncTransport,
+  isCommunityHubSyncProxyBase,
   isForeignSyncHubError,
   isWanCommunitySyncUrl,
   loadSyncHubToken,
   resetMobileSyncBaseUrlCache,
   resolveReachableMobileSyncBaseUrl,
   resolveReachableMobileSyncTarget,
+  rewriteSyncBaseUrlForClient,
 } from './mobileSync-client'
 
 export type { AppliedSync } from './mobileSync-pull'
