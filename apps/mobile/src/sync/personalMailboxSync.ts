@@ -29,6 +29,7 @@ export async function ensurePersonalMailboxSession(
   pairing: DevicePairingRecord,
 ): Promise<boolean> {
   try {
+    // Prefer the Hub URL embedded in the pairing offer (desktop LAN address).
     const client = createMobileSyncClient(pairing.hubBaseUrlHint || getMobileSyncBaseUrl())
     await client.fetchMailboxSession({
       workspaceId: pairing.workspaceId,
@@ -46,8 +47,9 @@ export async function pullPersonalMailboxChanges(
 ): Promise<PersonalMailboxPullResult | null> {
   const record = pairing ?? (await loadDevicePairing())
   if (!record) return null
-  const ok = await ensurePersonalMailboxSession(record)
-  if (!ok) return null
+  // Register with desktop when possible; put/pull use mailbox grant and no longer
+  // require the LAN pairing token on the session route.
+  await ensurePersonalMailboxSession(record)
   const workspaceKey = decodeWorkspaceKeyB64(record.workspaceKeyB64)
   const grant = await buildMailboxGrant({
     workspaceKey,
@@ -100,8 +102,7 @@ export async function pushPersonalMailboxChanges(input: {
   changes: SyncChange[]
 }): Promise<boolean> {
   if (input.changes.length === 0) return true
-  const ok = await ensurePersonalMailboxSession(input.pairing)
-  if (!ok) return false
+  await ensurePersonalMailboxSession(input.pairing)
   const workspaceKey = decodeWorkspaceKeyB64(input.pairing.workspaceKeyB64)
   const grant = await buildMailboxGrant({
     workspaceKey,

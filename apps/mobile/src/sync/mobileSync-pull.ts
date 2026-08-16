@@ -79,34 +79,59 @@ export async function pullAndApplySync(options: {
   const includeKnowledge = options.includeKnowledge !== false
   const includeKnowledgeSnapshot = options.includeKnowledgeSnapshot ?? includeKnowledge
   const syncState = options.syncState ?? (await loadMobileSyncState())
-  const client = options.client ?? (await createReachableMobileSyncClient())
-  const baseUrl = client.getBaseUrl()
-  const transport = classifyMobileSyncTransport(baseUrl)
+  const pairing = await loadDevicePairing()
+
+  let client: ToolmanSyncClient | null = options.client ?? null
+  let hubUnavailable: Error | null = null
+  if (!client) {
+    try {
+      client = await createReachableMobileSyncClient()
+    } catch (error) {
+      hubUnavailable = error instanceof Error ? error : new Error(String(error))
+      if (!pairing) throw hubUnavailable
+    }
+  }
+
+  const baseUrl = client?.getBaseUrl() ?? pairing?.hubBaseUrlHint ?? 'personal-mailbox'
+  const transport: MobileSyncTransport = client
+    ? classifyMobileSyncTransport(baseUrl)
+    : 'personal-mailbox'
   const deviceId = await getOrCreateDeviceId()
 
   const pulledChanges: SyncChange[] = []
   let cursor = options.cursor
-  for (let page = 0; page < 50; page += 1) {
-    let pull
+  if (client) {
     try {
-      pull = await client.pull({ deviceId, cursor, limit: 100 })
+      for (let page = 0; page < 50; page += 1) {
+        let pull
+        try {
+          pull = await client.pull({ deviceId, cursor, limit: 100 })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (/403|identity mismatch/i.test(message)) {
+            throw new Error('sync identity mismatch')
+          }
+          if (/401|unauthorized|未授权/i.test(message) && pairing) {
+            // LAN token missing/wrong — continue with paired peer transports.
+            break
+          }
+          throw error
+        }
+        pulledChanges.push(...pull.changes)
+        const nextCursor = pull.nextCursor ?? cursor
+        const hasMore = pull.hasMore === true || pull.changes.length >= 100
+        cursor = nextCursor
+        if (!hasMore || pull.changes.length === 0) break
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (!/403|identity mismatch/i.test(message)) throw error
-      throw new Error('sync identity mismatch')
+      if (!pairing) throw error
     }
-    pulledChanges.push(...pull.changes)
-    const nextCursor = pull.nextCursor ?? cursor
-    const hasMore = pull.hasMore === true || pull.changes.length >= 100
-    cursor = nextCursor
-    if (!hasMore || pull.changes.length === 0) break
   }
 
   let effectiveTransport: MobileSyncTransport = transport
-  // Prefer LAN HTTP. Attempt WebRTC only when not already on lan-hub (WAN / hosted web).
-  if (transport !== 'lan-hub') {
+  // Prefer LAN HTTP. Attempt WebRTC when not on lan-hub, or when HTTP hub is unavailable.
+  if (transport !== 'lan-hub' || !client) {
     try {
-      const pairing = await loadDevicePairing()
       if (pairing) {
         const webrtc = await tryDeviceSyncWebrtc(pairing)
         if (webrtc.ok) {
@@ -119,15 +144,23 @@ export async function pullAndApplySync(options: {
     }
   }
   try {
-    const mailbox = await pullPersonalMailboxChanges()
+    const mailbox = await pullPersonalMailboxChanges(pairing)
     if (mailbox && mailbox.changes.length > 0) {
       pulledChanges.push(...mailbox.changes)
-      if (effectiveTransport !== 'webrtc' && transport !== 'lan-hub') {
+      if (effectiveTransport !== 'webrtc' && (transport !== 'lan-hub' || !client)) {
         effectiveTransport = 'personal-mailbox'
       }
+    } else if (!client && pulledChanges.length === 0 && effectiveTransport !== 'webrtc') {
+      throw (
+        hubUnavailable ??
+        new Error(
+          '已配对但未能拉取变更。请确认桌面 Sync Hub 对浏览器可达（本机预览/局域网），或桌面端已有待同步内容。',
+        )
+      )
     }
-  } catch {
-    // Personal mailbox is best-effort when paired + Hub reachable.
+  } catch (error) {
+    if (!client && pulledChanges.length === 0 && effectiveTransport !== 'webrtc') throw error
+    // Personal mailbox is best-effort when HTTP already returned changes.
   }
 
   const merged = includeNotes
@@ -170,12 +203,12 @@ export async function pullAndApplySync(options: {
   const previousSnapshot = includeKnowledge ? await loadKnowledgeSnapshot() : null
   const shouldExport =
     includeKnowledge && includeKnowledgeSnapshot && (knowledgeMetaChanged || !previousSnapshot)
-  if (shouldExport && transport === 'community-hub') {
-    // Community Hub has no knowledge file/export APIs — keep meta, soft-degrade files.
+  if (shouldExport && (transport === 'community-hub' || !client)) {
+    // Community Hub / peer-only paths have no knowledge file/export APIs.
     snapshot = previousSnapshot
     knowledgeWanSkipped = true
     knowledgeError = KNOWLEDGE_WAN_SOFT_MESSAGE
-  } else if (shouldExport) {
+  } else if (shouldExport && client) {
     try {
       const incoming = await client.exportKnowledgeSnapshot(
         previousSnapshot ? knowledgeSince : undefined,
@@ -206,7 +239,7 @@ export async function pullAndApplySync(options: {
     snapshot = previousSnapshot
   }
 
-  const hostsOnline = await countDesktopHostsOnline(client)
+  const hostsOnline = client ? await countDesktopHostsOnline(client) : 0
   let nextState: MobileSyncState = {
     ...syncState,
     cursor: cursor ?? options.cursor,

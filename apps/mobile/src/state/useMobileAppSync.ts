@@ -148,7 +148,11 @@ export function useMobileAppSync(input: {
       const transportLabel =
         applied.transport === 'community-hub'
           ? '已通过官方社区 Hub 跨网同步'
-          : '已通过局域网 Sync Hub 同步'
+          : applied.transport === 'webrtc'
+            ? '已通过点到点 WebRTC 同步'
+            : applied.transport === 'personal-mailbox'
+              ? '已通过加密个人投递盒同步'
+              : '已通过局域网 Sync Hub 同步'
       const summary = `${transportLabel}：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门，群组 ${applied.groups.length} 个`
       if (applied.knowledgeWanSkipped && includeKnowledge) {
         return `${summary}。${applied.knowledgeError ?? '知识库文件需同局域网补拉'}`

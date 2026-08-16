@@ -125,7 +125,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_SESSION_PATH) {
-    if (!requireHubAuth(req, res)) return
+    // Personal device-pairing session authenticates via workspace grant / identity
+    // inside handleMailboxSession — do not require the LAN Sync Hub pairing token.
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
