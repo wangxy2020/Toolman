@@ -99,6 +99,13 @@ export const settingsPagesDiagnosticsZhCN = {
       lanToggle: '允许局域网访问',
       lanToggleHint:
         '默认关闭。开启后监听 0.0.0.0，真机可用下方局域网 / Tailscale 地址连接，仍需配对令牌。',
+      loopbackOnly:
+        '当前仅本机回环（127.0.0.1），手机不可达。同 Wi‑Fi 请开启「允许局域网访问」并填写配对令牌。',
+      wanToggle: '跨网同步（经官方社区 Hub）',
+      wanToggleHint:
+        '默认开启。将同账号变更镜像到官方社区 Hub，手机/网页在异网可拉取笔记、课程与群组元数据。关闭后仅局域网 Sync Hub。',
+      knowledgeWanHint:
+        '完整知识库正文与向量仅局域网可用；跨网先同步目录元数据。',
       hubToken: '配对令牌',
       hubTokenHint: '移动端「系统诊断」中填写此令牌。不要发到社区 Hub 或聊天里。',
       copyToken: '复制',

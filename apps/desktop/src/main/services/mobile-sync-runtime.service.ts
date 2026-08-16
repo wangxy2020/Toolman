@@ -37,8 +37,10 @@ import {
   ensureMobileSyncHubToken,
   isClassroomSyncPreferenceEnabled,
   isMobileSyncLanAccessEnabled,
+  isMobileSyncWanEnabled,
   setClassroomSyncPreferenceEnabled,
   setMobileSyncLanAccessEnabled,
+  setMobileSyncWanEnabled,
 } from './mobile-sync.config'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
@@ -93,6 +95,7 @@ export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
     lastError: null,
     hubToken: ensureMobileSyncHubToken(),
     lanAccessEnabled,
+    wanSyncEnabled: isMobileSyncWanEnabled(),
   }
 }
 
@@ -105,7 +108,11 @@ export async function ensureMobileSyncRuntime(): Promise<AppDiagnosticsMobileSyn
   }
   seedMobileSyncChangelog()
   setSyncChangeAppendListener(replicateChangesToCommunityHub)
-  startCommunityDeviceSyncLoop()
+  if (isMobileSyncWanEnabled()) {
+    startCommunityDeviceSyncLoop()
+  } else {
+    stopCommunityDeviceSyncLoop()
+  }
   try {
     await startMobileSyncHub()
   } catch (error) {
@@ -118,10 +125,13 @@ export async function ensureMobileSyncRuntime(): Promise<AppDiagnosticsMobileSyn
 
 export async function setMobileSyncEnabled(
   enabled: boolean,
-  extras?: { lanAccessEnabled?: boolean },
+  extras?: { lanAccessEnabled?: boolean; wanSyncEnabled?: boolean },
 ): Promise<AppDiagnosticsMobileSync> {
   if (typeof extras?.lanAccessEnabled === 'boolean') {
     setMobileSyncLanAccessEnabled(extras.lanAccessEnabled)
+  }
+  if (typeof extras?.wanSyncEnabled === 'boolean') {
+    setMobileSyncWanEnabled(extras.wanSyncEnabled)
   }
   setMobileSyncPreferenceEnabled(enabled)
   if (!enabled) {

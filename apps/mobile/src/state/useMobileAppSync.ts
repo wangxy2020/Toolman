@@ -154,7 +154,14 @@ export function useMobileAppSync(input: {
       setDesktopHostsOnline(applied.hostsOnline)
       lastAutoSyncAtRef.current = Date.now()
       setSyncStatus('idle')
-      const summary = `同步完成：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门，群组 ${applied.groups.length} 个`
+      const transportLabel =
+        applied.transport === 'community-hub'
+          ? '已通过官方社区 Hub 跨网同步'
+          : '已通过局域网 Sync Hub 同步'
+      const summary = `${transportLabel}：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门，群组 ${applied.groups.length} 个`
+      if (applied.knowledgeWanSkipped && includeKnowledge) {
+        return `${summary}。${applied.knowledgeError ?? '知识库文件需同局域网补拉'}`
+      }
       return applied.knowledgeError && includeKnowledge
         ? `${summary}。知识库文件稍后再试：${applied.knowledgeError}`
         : summary

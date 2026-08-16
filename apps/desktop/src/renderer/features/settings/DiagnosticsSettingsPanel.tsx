@@ -61,7 +61,14 @@ export function DiagnosticsSettingsPanel() {
             onSyncToggle={(enabled) => void setMobileSyncEnabled(enabled)}
             onHostToggle={(enabled) => void setMobileAgentHostEnabled(enabled)}
             onLanToggle={(enabled) =>
-              void setMobileSyncEnabled(snapshot.mobileSync?.syncEnabled !== false, enabled)
+              void setMobileSyncEnabled(snapshot.mobileSync?.syncEnabled !== false, {
+                lanAccessEnabled: enabled,
+              })
+            }
+            onWanToggle={(enabled) =>
+              void setMobileSyncEnabled(snapshot.mobileSync?.syncEnabled !== false, {
+                wanSyncEnabled: enabled,
+              })
             }
           />
           <DiagnosticsSettingsHubSection snapshot={snapshot} />

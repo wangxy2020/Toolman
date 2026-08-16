@@ -3,7 +3,9 @@ import {
   formatBoardMessageTitle,
   formatNewsPreview,
   formatTaskBudget,
+  htmlToPlainText,
   joinCommunityMeta,
+  resolveCommunityItemBody,
   sortCommunityItems,
 } from './communityListFormat'
 
@@ -34,5 +36,20 @@ describe('communityListFormat', () => {
       { createdAt: 20, title: 'A' },
     ]
     expect(sortCommunityItems(items).map((item) => item.title)).toEqual(['A', 'B', '乙'])
+  })
+
+  it('converts HTML to readable plain text for detail bodies', () => {
+    expect(htmlToPlainText('<p>第一段</p><p>第二段<br/>换行</p>')).toContain('第一段')
+    expect(htmlToPlainText('<p>第一段</p><p>第二段</p>')).toContain('第二段')
+  })
+
+  it('prefers full body over truncated description', () => {
+    expect(
+      resolveCommunityItemBody({
+        body: '完整留言正文',
+        description: '截断…',
+        title: '标题',
+      }),
+    ).toBe('完整留言正文')
   })
 })

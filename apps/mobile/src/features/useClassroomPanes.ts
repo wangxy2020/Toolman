@@ -13,10 +13,16 @@ import {
   getAssistantLibPreset,
   type AssistantLibPresetId,
 } from '@toolman/shared'
+import { Alert } from 'react-native'
+import { requestDesktopSyllabusGenerate } from '../host/invokeDesktop'
 import { saveModulePrefs } from '../settings/prefs'
 import { useMobileApp, type ChatSession } from '../state/MobileAppContext'
+import { pushClassroomChanges } from '../sync/mobileSync'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
-import { ClassroomCreateCourseModal } from './ClassroomCreateCourseModal'
+import {
+  ClassroomCreateCourseModal,
+  type ClassroomCreateCourseInput,
+} from './ClassroomCreateCourseModal'
 import { ClassroomSettingsModal } from './ClassroomSettingsModal'
 import {
   classroomSidebarEntries,
@@ -25,16 +31,24 @@ import {
   resolveClassroomSidebarFocus,
 } from './classroomSidebar'
 
-function newId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+function newCourseId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const rand = (Math.random() * 16) | 0
+    const value = char === 'x' ? rand : (rand & 0x3) | 0x8
+    return value.toString(16)
+  })
 }
 
 function createCourseAndSession(input: {
   courseName: string
   presetId: AssistantLibPresetId
+  kbIds: string[]
 }): { course: MobileClassroomCourse; session: ChatSession } {
   const preset = getAssistantLibPreset(input.presetId)
-  const id = newId('course')
+  const id = newCourseId()
   const now = Date.now()
   return {
     course: {
@@ -52,6 +66,7 @@ function createCourseAndSession(input: {
       socraticState: null,
       isGuideClassroom: false,
       isDefaultClassroom: false,
+      kbIds: input.kbIds,
     },
     session: {
       id,
@@ -60,6 +75,27 @@ function createCourseAndSession(input: {
       messages: [],
       agentScope: 'classroom',
     },
+  }
+}
+
+async function syncCourseThenGenerateSyllabus(
+  course: MobileClassroomCourse,
+  courses: MobileClassroomCourse[],
+  options: { classroomSyncEnabled: boolean; syncCursor: string | null },
+): Promise<string | null> {
+  if (!options.classroomSyncEnabled) {
+    return '请先在课程设置中开启「接收桌面端课程」同步，才能生成教学大纲'
+  }
+  try {
+    await pushClassroomChanges(courses, options.syncCursor)
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  try {
+    const result = await requestDesktopSyllabusGenerate({ sessionId: course.id })
+    return result.message ?? (result.started ? '已开始生成教学大纲' : '大纲正在生成中')
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
   }
 }
 
@@ -90,11 +126,14 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
     modulePrefs,
     setModulePrefs,
     desktopHostsOnline,
+    syncCursor,
+    runSync,
   } = useMobileApp()
   const [createOpen, setCreateOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsCourseId, setSettingsCourseId] = useState<string | null>(null)
   const [recordsOpen, setRecordsOpen] = useState(false)
+  const [kbLabelById, setKbLabelById] = useState<Record<string, string>>({})
 
   const settingsCourse = resolveClassroomSettingsCourse(
     classroomCourses,
@@ -103,10 +142,13 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
   )
 
   const knowledgeNames = useMemo(() => {
-    const ids = new Set(settingsCourse?.kbIds ?? [])
-    if (ids.size === 0) return []
-    return knowledgeMeta.filter((item) => ids.has(item.id)).map((item) => item.name)
-  }, [knowledgeMeta, settingsCourse?.kbIds])
+    const ids = settingsCourse?.kbIds ?? []
+    if (ids.length === 0) return []
+    return ids.map((id) => {
+      const fromMeta = knowledgeMeta.find((item) => item.id === id)?.name
+      return fromMeta ?? kbLabelById[id] ?? id
+    })
+  }, [kbLabelById, knowledgeMeta, settingsCourse?.kbIds])
 
   const openCreateCourse = useCallback(() => setCreateOpen(true), [])
   const openRecords = useCallback(() => setRecordsOpen(true), [])
@@ -118,12 +160,38 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
     setSettingsOpen(true)
   }, [activeSessionId, classroomCourses])
 
-  const handleCreate = (input: { courseName: string; presetId: AssistantLibPresetId }) => {
+  const rememberKbLabels = useCallback((ids: string[], labels: string[]) => {
+    if (ids.length === 0) return
+    setKbLabelById((prev) => {
+      const next = { ...prev }
+      ids.forEach((id, index) => {
+        const label = labels[index]
+        if (label) next[id] = label
+      })
+      return next
+    })
+  }, [])
+
+  const handleCreate = async (input: ClassroomCreateCourseInput) => {
     const { course, session } = createCourseAndSession(input)
-    setClassroomCourses([course, ...classroomCourses])
+    if (input.kbIds.length > 0 && input.kbLabel) {
+      rememberKbLabels(input.kbIds, [input.kbLabel])
+    }
+    const nextCourses = [course, ...classroomCourses]
+    setClassroomCourses(nextCourses)
     upsertSession(session)
     setActiveSessionId(course.id)
     setCreateOpen(false)
+
+    if (!input.generateSyllabus || input.kbIds.length === 0) return
+    const message = await syncCourseThenGenerateSyllabus(course, nextCourses, {
+      classroomSyncEnabled: modulePrefs.classroom.syncEnabled,
+      syncCursor,
+    })
+    if (message) {
+      Alert.alert('教学大纲', message)
+      if (modulePrefs.classroom.syncEnabled) void runSync('manual')
+    }
   }
 
   const handleSave = (next: MobileClassroomCourse) => {
@@ -138,6 +206,20 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
     setClassroomCourses(classroomCourses.filter((course) => course.id !== courseId))
     removeSession(courseId)
     setSettingsOpen(false)
+  }
+
+  const handleGenerateSyllabus = async (course: MobileClassroomCourse) => {
+    const latest = classroomCourses.map((item) => (item.id === course.id ? course : item))
+    if (!latest.some((item) => item.id === course.id)) {
+      latest.unshift(course)
+    }
+    setClassroomCourses(latest)
+    const message = await syncCourseThenGenerateSyllabus(course, latest, {
+      classroomSyncEnabled: modulePrefs.classroom.syncEnabled,
+      syncCursor,
+    })
+    if (message) Alert.alert('教学大纲', message)
+    if (modulePrefs.classroom.syncEnabled) void runSync('manual')
   }
 
   const handleSyncEnabled = (enabled: boolean) => {
@@ -166,12 +248,14 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
     children,
     createElement(ClassroomCreateCourseModal, {
       visible: createOpen,
+      knowledgeMeta,
       onClose: () => setCreateOpen(false),
       onCreate: handleCreate,
     }),
     createElement(ClassroomSettingsModal, {
       visible: settingsOpen,
       course: settingsCourse,
+      knowledgeMeta,
       knowledgeNames,
       classroomSyncEnabled: modulePrefs.classroom.syncEnabled,
       desktopHostsOnline,
@@ -179,6 +263,8 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
       onClose: () => setSettingsOpen(false),
       onSave: handleSave,
       onDelete: handleDelete,
+      onGenerateSyllabus: handleGenerateSyllabus,
+      onRememberKbLabels: rememberKbLabels,
     }),
   )
 }

@@ -1,4 +1,4 @@
-import type { ProductSku } from '@toolman/shared'
+import { resolveDeviceSyncIdentityId, type ProductSku } from '@toolman/shared'
 
 import { getAuthSession } from '../auth-session.service'
 import { exchangeAuthHubToken } from '../auth/auth-hub-token.service'
@@ -13,7 +13,9 @@ export interface CommunityHubAuthContext {
 let cached: {
   token: string
   expiresAt: number
-  identityId: string
+  /** Desktop session id — cache key (not the device_sync bucket id). */
+  sessionIdentityId: string
+  deviceSyncIdentityId: string
   registrationStatus: string
 } | null = null
 
@@ -23,18 +25,28 @@ export function invalidateHubTokenCache(): void {
   cached = null
 }
 
+export function resolveCommunityDeviceSyncIdentityId(): string {
+  const session = getAuthSession()
+  return resolveDeviceSyncIdentityId({
+    bindings: session.bindings,
+    fallbackIdentityId: session.identityId,
+  })
+}
+
 export async function resolveCommunityHubAuth(): Promise<CommunityHubAuthContext> {
   const session = getAuthSession()
+  const deviceSyncIdentityId = resolveCommunityDeviceSyncIdentityId()
 
   if (
     cached &&
-    cached.identityId === session.identityId &&
+    cached.sessionIdentityId === session.identityId &&
+    cached.deviceSyncIdentityId === deviceSyncIdentityId &&
     cached.registrationStatus === session.registrationStatus &&
     cached.expiresAt > Date.now() + REFRESH_SKEW_MS
   ) {
     return {
       authorization: `Bearer ${cached.token}`,
-      identityId: session.identityId,
+      identityId: deviceSyncIdentityId,
       sku: session.subscriptionSku ?? undefined,
     }
   }
@@ -44,13 +56,14 @@ export async function resolveCommunityHubAuth(): Promise<CommunityHubAuthContext
   cached = {
     token: accessToken,
     expiresAt: resolvedExpiresAt,
-    identityId: session.identityId,
+    sessionIdentityId: session.identityId,
+    deviceSyncIdentityId,
     registrationStatus: session.registrationStatus,
   }
 
   return {
     authorization: `Bearer ${accessToken}`,
-    identityId: session.identityId,
+    identityId: deviceSyncIdentityId,
     sku: session.subscriptionSku ?? undefined,
   }
 }

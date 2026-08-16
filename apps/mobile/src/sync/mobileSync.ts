@@ -1,17 +1,21 @@
-export type { KnowledgeMetaItem } from './mobileSync-client'
+export type { KnowledgeMetaItem, MobileSyncTransport, ReachableMobileSyncTarget } from './mobileSync-client'
 export {
   AUTO_SYNC_INTERVAL_MS,
   AUTO_SYNC_MIN_GAP_MS,
   AUTO_SYNC_PAGE_MODULES,
   ForeignSyncHubError,
+  classifyMobileSyncTransport,
   countDesktopHostsOnline,
   createMobileSyncClient,
   createReachableMobileSyncClient,
   getMobileSyncBaseUrl,
+  getMobileSyncTransport,
   isForeignSyncHubError,
+  isWanCommunitySyncUrl,
   loadSyncHubToken,
   resetMobileSyncBaseUrlCache,
   resolveReachableMobileSyncBaseUrl,
+  resolveReachableMobileSyncTarget,
 } from './mobileSync-client'
 
 export type { AppliedSync } from './mobileSync-pull'

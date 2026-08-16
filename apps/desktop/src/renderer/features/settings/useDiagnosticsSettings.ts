@@ -16,6 +16,7 @@ const EMPTY_MOBILE_SYNC: AppDiagnosticsMobileSync = {
   advertisedUrls: [],
   lastError: null,
   lanAccessEnabled: false,
+  wanSyncEnabled: true,
 }
 
 function normalizeSnapshot(raw: AppGetDiagnosticsOutput): AppGetDiagnosticsOutput {
@@ -112,13 +113,17 @@ export function useDiagnosticsSettings() {
     }
   }
 
-  const setMobileSyncEnabled = async (enabled: boolean, lanAccessEnabled?: boolean) => {
+  const setMobileSyncEnabled = async (
+    enabled: boolean,
+    options?: { lanAccessEnabled?: boolean; wanSyncEnabled?: boolean },
+  ) => {
     setMobileSyncToggling(true)
     setToggleError(null)
     try {
       const result = await window.api.invoke(IpcChannel.MobileSyncSetEnabled, {
         enabled,
-        lanAccessEnabled,
+        lanAccessEnabled: options?.lanAccessEnabled,
+        wanSyncEnabled: options?.wanSyncEnabled,
       })
       if (!result.ok) {
         setToggleError(result.error.message)

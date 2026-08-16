@@ -24,9 +24,30 @@ describe('migrateAgentsAndSessions', () => {
       },
     ]
     const migrated = migrateAgentsAndSessions(sessions, [])
-    expect(migrated.agents).toHaveLength(1)
-    expect(migrated.agents[0]?.agentScope).toBe('agent')
-    expect(migrated.sessions[0]?.assistantId).toBe(migrated.agents[0]?.id)
+    expect(migrated.agents.some((agent) => agent.agentScope === 'agent')).toBe(true)
+    const agentId = migrated.agents.find((agent) => agent.agentScope === 'agent')?.id
+    expect(migrated.sessions.find((session) => session.id === 's1')?.assistantId).toBe(agentId)
+  })
+
+  it('seeds default agent and topic when store is empty', () => {
+    const migrated = migrateAgentsAndSessions([], [])
+    const agentAgents = migrated.agents.filter((agent) => agent.agentScope === 'agent')
+    const projectAgents = migrated.agents.filter((agent) => agent.agentScope === 'projects')
+    expect(agentAgents).toHaveLength(1)
+    expect(agentAgents[0]?.name).toBe('默认智能体')
+    expect(projectAgents).toHaveLength(1)
+    expect(migrated.agents.every((agent) => agent.agentScope !== 'classroom')).toBe(true)
+
+    const agentSessions = migrated.sessions.filter((session) => session.agentScope === 'agent')
+    const projectSessions = migrated.sessions.filter((session) => session.agentScope === 'projects')
+    const classroomSessions = migrated.sessions.filter(
+      (session) => session.agentScope === 'classroom',
+    )
+    expect(agentSessions).toHaveLength(1)
+    expect(agentSessions[0]?.title).toBe('新话题')
+    expect(agentSessions[0]?.assistantId).toBe(agentAgents[0]?.id)
+    expect(projectSessions).toHaveLength(1)
+    expect(classroomSessions).toHaveLength(0)
   })
 
   it('does not invent classroom agents or stamp course sessions', () => {
@@ -49,8 +70,8 @@ describe('migrateAgentsAndSessions', () => {
       },
     ]
     const migrated = migrateAgentsAndSessions(sessions, pollutedAgents)
-    expect(migrated.agents).toEqual([])
-    expect(migrated.sessions[0]?.assistantId).toBeUndefined()
-    expect(migrated.sessions[0]?.id).toBe('course-1')
+    expect(migrated.agents.every((agent) => agent.agentScope !== 'classroom')).toBe(true)
+    expect(migrated.sessions.find((session) => session.id === 'course-1')?.assistantId).toBeUndefined()
+    expect(migrated.sessions.some((session) => session.agentScope === 'agent')).toBe(true)
   })
 })

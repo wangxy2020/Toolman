@@ -6,7 +6,7 @@ import {
   stopClassroomSession,
   withUpdatedStudyRecords,
 } from './classroomClassSession'
-import { createEmptyAgentSession } from './agentPaneUtils'
+import { createEmptyAgentSession, createMobileAgent } from './agentPaneUtils'
 
 export function ensureAgentRightPaneSession(input: {
   activeSessionId: string | null
@@ -14,16 +14,26 @@ export function ensureAgentRightPaneSession(input: {
   agentScope: AgentChatScope
   agents: MobileAgent[]
   upsertSession: (session: ChatSession) => void
+  upsertAgent?: (agent: MobileAgent) => void
 }): ChatSession | null {
-  const { activeSessionId, scopedSessions, agentScope, agents, upsertSession } = input
+  const { activeSessionId, scopedSessions, agentScope, agents, upsertSession, upsertAgent } =
+    input
   if (activeSessionId) {
     const existing = scopedSessions.find((item) => item.id === activeSessionId)
     if (existing) return existing
   }
   if (scopedSessions[0]) return scopedSessions[0]
   if (agentScope === 'classroom') return null
-  const assistantId = agents.find((agent) => agent.agentScope === agentScope)?.id
-  if (!assistantId) return null
+  let assistantId = agents.find((agent) => agent.agentScope === agentScope)?.id
+  if (!assistantId) {
+    if (!upsertAgent) return null
+    const agent = createMobileAgent(
+      agentScope,
+      agents.filter((item) => item.agentScope === agentScope),
+    )
+    upsertAgent(agent)
+    assistantId = agent.id
+  }
   const created = createEmptyAgentSession(agentScope, assistantId)
   upsertSession(created)
   return created

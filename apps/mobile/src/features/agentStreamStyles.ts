@@ -19,14 +19,15 @@ export const agentStreamStyles = StyleSheet.create({
     minWidth: 0,
   },
   msgBlockUser: {
-    alignItems: 'flex-end',
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
   },
   msgHead: {
     marginBottom: 8,
     minWidth: 0,
   },
   msgHeadUser: {
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
   msgName: {
     fontSize: 14,
@@ -47,7 +48,8 @@ export const agentStreamStyles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   msgRowUser: {
-    justifyContent: 'flex-end',
+    alignSelf: 'stretch',
+    justifyContent: 'flex-start',
   },
   msgRowAssistant: {
     alignSelf: 'stretch',
@@ -81,9 +83,8 @@ export const agentStreamStyles = StyleSheet.create({
     paddingBottom: 8,
   },
   bubbleUser: {
-    alignSelf: 'flex-end',
-    maxWidth: '92%',
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
     backgroundColor: colors.accentSoft,
   },
   bubbleUserSelected: {
@@ -100,6 +101,18 @@ export const agentStreamStyles = StyleSheet.create({
   bubbleAssistantSelected: {
     borderColor: colors.accent,
     backgroundColor: '#f3fbf7',
+  },
+  streamBody: {
+    gap: 0,
+  },
+  streamBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    flexWrap: 'wrap',
+  },
+  streamCursorSlot: {
+    marginLeft: 2,
+    marginBottom: 2,
   },
   actions: {
     flexDirection: 'row',

@@ -86,7 +86,9 @@ export const classroomSettingsModalStyles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: colors.hover,
   },
+  pathRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   pathText: { fontSize: 12, color: colors.textSecondary },
+  clearLink: { marginTop: 2, fontSize: 12, color: colors.accent },
   presetList: { gap: 6 },
   presetRow: {
     borderWidth: 1,

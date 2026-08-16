@@ -93,6 +93,9 @@ export function useAgentLeftPane() {
   const createAgent = () => {
     const agent = createMobileAgent(agentScope, scopedAgents)
     upsertAgent(agent)
+    const session = createEmptyAgentSession(agentScope, agent.id)
+    upsertSession(session)
+    setActiveSessionId(session.id)
     setExpanded((prev) => new Set(prev).add(agent.id))
     setOpenSwipeId(null)
     setRenameTarget({ kind: 'agent', id: agent.id })

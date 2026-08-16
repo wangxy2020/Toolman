@@ -52,7 +52,9 @@ export async function loadSyncHubToken(): Promise<string | null> {
   return token || null
 }
 
-function isWanCommunitySyncUrl(baseUrl: string): boolean {
+export type MobileSyncTransport = 'lan-hub' | 'community-hub'
+
+export function isWanCommunitySyncUrl(baseUrl: string): boolean {
   const host = hostnameOfBaseUrl(baseUrl)
   if (isOfficialCommunityHubHost(host)) return true
   try {
@@ -62,11 +64,22 @@ function isWanCommunitySyncUrl(baseUrl: string): boolean {
   }
 }
 
+export function classifyMobileSyncTransport(baseUrl: string): MobileSyncTransport {
+  return isWanCommunitySyncUrl(baseUrl) ? 'community-hub' : 'lan-hub'
+}
+
+export type ReachableMobileSyncTarget = {
+  baseUrl: string
+  transport: MobileSyncTransport
+}
+
 export function createMobileSyncClient(baseUrl?: string): ToolmanSyncClient {
   const resolved = baseUrl ?? cachedSyncBaseUrl ?? DEFAULT_LOCAL_SYNC_BASE_URL
   const wan = isWanCommunitySyncUrl(resolved)
   return new ToolmanSyncClient({
     baseUrl: resolved,
+    // Community Hub device_sync accepts X-Community-User-Id (and Hub JWT when present).
+    // Do not send the LAN pairing token or Authing access token as Bearer here.
     getAccessToken: wan ? async () => null : loadSyncHubToken,
     getSyncToken: wan ? async () => null : loadSyncHubToken,
     getIdentityId: loadSyncIdentityId,
@@ -172,6 +185,13 @@ export async function resolveReachableMobileSyncBaseUrl(
   throw new Error(unreachableSyncHubMessage(candidates))
 }
 
+export async function resolveReachableMobileSyncTarget(
+  communityHubBaseUrl?: string | null,
+): Promise<ReachableMobileSyncTarget> {
+  const baseUrl = await resolveReachableMobileSyncBaseUrl(communityHubBaseUrl)
+  return { baseUrl, transport: classifyMobileSyncTransport(baseUrl) }
+}
+
 export async function createReachableMobileSyncClient(
   communityHubBaseUrl?: string | null,
 ): Promise<ToolmanSyncClient> {
@@ -183,6 +203,10 @@ export function getMobileSyncBaseUrl(): string {
     cachedSyncBaseUrl ??
     (process.env.EXPO_PUBLIC_SYNC_BASE_URL?.trim() || DEFAULT_LOCAL_SYNC_BASE_URL)
   )
+}
+
+export function getMobileSyncTransport(): MobileSyncTransport {
+  return classifyMobileSyncTransport(getMobileSyncBaseUrl())
 }
 
 /** Live probe of desktop agent hosts (does not depend on prior sync state). */

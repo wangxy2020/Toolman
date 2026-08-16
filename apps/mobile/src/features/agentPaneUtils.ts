@@ -1,3 +1,10 @@
+import {
+  buildAssistantLibCourseRuntimeHint,
+  buildSocraticModeRuntimeHint,
+  getAssistantLibPreset,
+  isSocraticTeachingMode,
+  type AssistantLibTeachingRuntime,
+} from '@toolman/shared'
 import type { AgentChatScope } from '../chat/agentScopes'
 import type {
   ChatMessage,
@@ -6,6 +13,7 @@ import type {
   SyncStatus,
 } from '../state/MobileAppContext'
 import type { ModulePrefs } from '../settings/prefs'
+import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 import type { ModulePanelStatusEntry } from './modulePageStatus'
 
 /** Match composer / message stream horizontal inset (12 + 8 scrollbar gutter). */
@@ -140,17 +148,46 @@ export function forkSessionFromMessage(
   }
 }
 
-export function buildAgentSystemPrompt(prefs: ModulePrefs): string {
-  return [
-    prefs.agent.systemPrompt.trim(),
-    prefs.app.memoryEnabled
-      ? prefs.app.language === 'en'
+export function buildAgentSystemPrompt(
+  prefs: ModulePrefs,
+  options?: { classroomCourse?: MobileClassroomCourse | null },
+): string {
+  const course = options?.classroomCourse ?? null
+  const parts: string[] = []
+
+  if (course) {
+    const runtime: AssistantLibTeachingRuntime = {
+      teachingMode: course.teachingMode,
+      refereeEnabled: course.refereeEnabled,
+      presetId: course.presetId,
+      kbIds: course.kbIds,
+      courseSystemPrompt: course.customSystemPrompt.trim() || undefined,
+      courseName: course.courseName.trim() || course.title.trim() || undefined,
+      syllabus: course.syllabus ?? undefined,
+      studyRecords: course.studyRecords,
+    }
+    if (isSocraticTeachingMode(runtime.teachingMode)) {
+      const socratic = buildSocraticModeRuntimeHint(
+        getAssistantLibPreset(course.presetId)?.roleplayId,
+      )
+      if (socratic.trim()) parts.push(socratic.trim())
+    }
+    const courseHint = buildAssistantLibCourseRuntimeHint(runtime)
+    if (courseHint?.trim()) parts.push(courseHint.trim())
+    else if (course.customSystemPrompt.trim()) parts.push(course.customSystemPrompt.trim())
+  } else if (prefs.agent.systemPrompt.trim()) {
+    parts.push(prefs.agent.systemPrompt.trim())
+  }
+
+  if (prefs.app.memoryEnabled) {
+    parts.push(
+      prefs.app.language === 'en'
         ? `Long-term memory is enabled (retention ${prefs.app.memoryRetentionDays} days). Remember the user's preferences and keep replies consistent across sessions.`
-        : `长期记忆已启用（保留 ${prefs.app.memoryRetentionDays} 天）。请记住用户跨会话的偏好与约定，并在回复中保持一致。`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n\n')
+        : `长期记忆已启用（保留 ${prefs.app.memoryRetentionDays} 天）。请记住用户跨会话的偏好与约定，并在回复中保持一致。`,
+    )
+  }
+
+  return parts.filter(Boolean).join('\n\n')
 }
 
 export function createNoteFromMessage(

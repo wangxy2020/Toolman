@@ -4,6 +4,7 @@ import {
   Text,
   View,
 } from 'react-native'
+import { useCallback } from 'react'
 import { colors } from '../theme'
 import {
   CommunityMessagePublishModal,
@@ -11,6 +12,8 @@ import {
   CommunityResourcePublishModal,
   CommunityTaskPublishModal,
 } from './CommunityPublishModals'
+import { CommunityCommentSheet } from './CommunityCommentSheet'
+import { CommunityReportModal } from './CommunityReportModal'
 import { MODERATION_CATEGORIES } from './communitySidebar'
 import {
   CommunityCategoryChips,
@@ -22,6 +25,7 @@ import {
   CommunitySecondaryButton,
   CommunityStatGrid,
 } from './communityPanelUi'
+import { CommunityListDetailPane } from './CommunityListDetailPane'
 import { comingSoon } from './communityPaneUtils'
 import { communityPaneStyles as styles } from './CommunityPanes.styles'
 import {
@@ -30,6 +34,16 @@ import {
   useCommunityMinePanel,
   type CommunityListSectionId,
 } from './useCommunityPanes'
+
+function itemBusyAction(
+  busyId: string | null,
+  itemId: string,
+): 'like' | 'dislike' | 'favorite' | null {
+  if (!busyId || !busyId.startsWith(`${itemId}:`)) return null
+  const kind = busyId.slice(itemId.length + 1)
+  if (kind === 'like' || kind === 'dislike' || kind === 'favorite') return kind
+  return null
+}
 
 export function CommunityListSectionPanel({
   sectionId,
@@ -53,7 +67,71 @@ export function CommunityListSectionPanel({
     openPublish,
     openRss,
     resourceType,
+    interactions,
+    commentItem,
+    reportItem,
+    patchItem,
+    listKind,
+    guestBlocked,
   } = useCommunityListSection(sectionId)
+
+  const detailItem = selectedId
+    ? sorted.find((item) => item.id === selectedId) ?? null
+    : null
+
+  const handleCommentCountChange = useCallback(
+    (id: string, count: number) => {
+      patchItem(id, { commentCount: count })
+    },
+    [patchItem],
+  )
+
+  const interactionModals = (
+    <>
+      <CommunityCommentSheet
+        visible={Boolean(commentItem)}
+        item={commentItem}
+        listKind={listKind}
+        hubBaseUrl={hubBaseUrl}
+        userId={userId}
+        onClose={() => interactions.setCommentItemId(null)}
+        onCountChange={handleCommentCountChange}
+      />
+      <CommunityReportModal
+        visible={Boolean(reportItem)}
+        item={reportItem}
+        listKind={listKind}
+        hubBaseUrl={hubBaseUrl}
+        userId={userId}
+        onClose={() => interactions.setReportItemId(null)}
+      />
+    </>
+  )
+
+  if (detailItem) {
+    return (
+      <>
+        <CommunityListDetailPane
+          item={detailItem}
+          listKind={listKind}
+          hubBaseUrl={hubBaseUrl}
+          userId={userId}
+          guestBlocked={guestBlocked}
+          onBack={() => setSelectedId(null)}
+          onPatchItem={patchItem}
+          onOpenComments={() => interactions.openComments(detailItem)}
+          onOpenReport={() => interactions.openReport(detailItem)}
+          commentsExpanded={interactions.commentItemId === detailItem.id}
+          busyAction={itemBusyAction(interactions.busyId, detailItem.id)}
+          onLike={() => void interactions.runInteraction(detailItem, 'like')}
+          onDislike={() => void interactions.runInteraction(detailItem, 'dislike')}
+          onFavorite={() => void interactions.runInteraction(detailItem, 'favorite')}
+          onShare={() => void interactions.shareItem(detailItem)}
+        />
+        {interactionModals}
+      </>
+    )
+  }
 
   return (
     <View style={styles.panelRoot}>
@@ -86,7 +164,9 @@ export function CommunityListSectionPanel({
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
       >
-        <Text style={styles.readonlyHint}>列表可浏览，点赞、评论、收藏请在桌面端操作。</Text>
+        <Text style={styles.readonlyHint}>
+          未登录也可浏览全部资讯与留言。登录后可点赞、评论、收藏、转发与举报；发布需登录。
+        </Text>
         {loading && sorted.length === 0 ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={colors.accent} />
@@ -99,9 +179,19 @@ export function CommunityListSectionPanel({
             <CommunityListCard
               key={item.id}
               item={item}
-              selected={selectedId === item.id}
+              selected={false}
               showInstall={section.showInstall}
               onPress={() => setSelectedId(item.id)}
+              actions={{
+                busyAction: itemBusyAction(interactions.busyId, item.id),
+                commentsExpanded: interactions.commentItemId === item.id,
+                onLike: () => void interactions.runInteraction(item, 'like'),
+                onDislike: () => void interactions.runInteraction(item, 'dislike'),
+                onFavorite: () => void interactions.runInteraction(item, 'favorite'),
+                onComment: () => interactions.openComments(item),
+                onShare: () => void interactions.shareItem(item),
+                onReport: () => interactions.openReport(item),
+              }}
             />
           ))
         )}
@@ -143,6 +233,7 @@ export function CommunityListSectionPanel({
           onPublished={reload}
         />
       ) : null}
+      {interactionModals}
     </View>
   )
 }

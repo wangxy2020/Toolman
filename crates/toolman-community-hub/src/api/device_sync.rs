@@ -3,7 +3,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::api::auth::AuthUser;
+use crate::api::auth::DeviceSyncAuthUser;
 use crate::api::error::ApiError;
 use crate::api::response::ApiResponse;
 use crate::repositories::{DeviceSyncRepository, UpsertDeviceSyncChangeInput};
@@ -82,7 +82,7 @@ fn repo(state: &AppState) -> DeviceSyncRepository {
 
 async fn push_changes(
     State(state): State<AppState>,
-    AuthUser(user): AuthUser,
+    DeviceSyncAuthUser(user): DeviceSyncAuthUser,
     Json(body): Json<PushBody>,
 ) -> Result<Json<ApiResponse<PushData>>, ApiError> {
     if body.changes.len() > 500 {
@@ -129,7 +129,7 @@ async fn push_changes(
 
 async fn pull_changes(
     State(state): State<AppState>,
-    AuthUser(user): AuthUser,
+    DeviceSyncAuthUser(user): DeviceSyncAuthUser,
     Json(body): Json<PullBody>,
 ) -> Result<Json<ApiResponse<PullData>>, ApiError> {
     let after_seq = body

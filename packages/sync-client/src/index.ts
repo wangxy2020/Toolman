@@ -94,6 +94,10 @@ export class ToolmanSyncClient {
     this.fetchImpl = options.fetchImpl ?? defaultFetch
   }
 
+  getBaseUrl(): string {
+    return this.baseUrl
+  }
+
   private headers(): Promise<HeadersInit> {
     return authHeaders(this.getAccessToken, this.getIdentityId, this.getSyncToken)
   }

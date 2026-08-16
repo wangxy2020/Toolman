@@ -117,6 +117,9 @@ export function KnowledgeSettingsModal({ visible, onClose }: Props) {
             value={syncEnabled}
             onChange={setSyncEnabled}
           />
+          <Text style={styles.hint}>
+            完整知识库正文与向量仅局域网可用；跨网先同步目录元数据。
+          </Text>
           <Toggle
             label="检索优先走桌面宿主"
             value={preferDesktopIndex}

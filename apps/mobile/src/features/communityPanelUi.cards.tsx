@@ -22,13 +22,122 @@ import { formatCommunityCount } from './communityListFormat'
 import { colors } from '../theme'
 import { uiStyles } from './communityPanelUi.styles'
 
+export type CommunityCardActionHandlers = {
+  onLike?: () => void
+  onDislike?: () => void
+  onFavorite?: () => void
+  onComment?: () => void
+  onShare?: () => void
+  onReport?: () => void
+  busyAction?: 'like' | 'dislike' | 'favorite' | 'comment' | 'share' | 'report' | null
+  commentsExpanded?: boolean
+}
+
 export function CommunityListCard(props: {
   item: CommunityListItem
   selected?: boolean
   showInstall?: boolean
   onPress?: () => void
+  actions?: CommunityCardActionHandlers
+  /** Render only the interaction bar (e.g. under detail body). */
+  actionsOnly?: boolean
 }) {
-  const { item } = props
+  const { item, actions } = props
+  const interactive = Boolean(actions)
+  const busy = actions?.busyAction ?? null
+
+  const actionBar = (
+    <View
+      style={[
+        uiStyles.actionBar,
+        interactive ? uiStyles.actionBarInteractive : null,
+        props.selected ? uiStyles.actionBarSelected : null,
+        actions?.commentsExpanded ? uiStyles.actionBarCommentsOpen : null,
+        props.actionsOnly ? uiStyles.actionBarStandalone : null,
+      ]}
+    >
+      <View style={uiStyles.actionBarStart}>
+        {props.showInstall ? (
+          <ActionIcon
+            label={COMMUNITY_ACTION_LABELS.install}
+            count={item.installCount}
+            icon={<IconDownload size={14} color={colors.textSecondary} />}
+          />
+        ) : null}
+      </View>
+      <View style={uiStyles.actionBarMain}>
+        <ActionIcon
+          label={COMMUNITY_ACTION_LABELS.like}
+          count={item.likeCount}
+          active={item.likedByMe}
+          disabled={busy === 'like'}
+          onPress={actions?.onLike}
+          icon={
+            <IconThumbUp
+              size={14}
+              color={item.likedByMe ? colors.accent : colors.textSecondary}
+            />
+          }
+        />
+        <ActionIcon
+          label={COMMUNITY_ACTION_LABELS.comment}
+          count={item.commentCount}
+          active={actions?.commentsExpanded}
+          disabled={busy === 'comment'}
+          onPress={actions?.onComment}
+          icon={
+            <IconComment
+              size={14}
+              color={actions?.commentsExpanded ? colors.accent : colors.textSecondary}
+            />
+          }
+        />
+        <ActionIcon
+          label={COMMUNITY_ACTION_LABELS.dislike}
+          count={item.dislikeCount}
+          active={item.dislikedByMe}
+          disabled={busy === 'dislike'}
+          onPress={actions?.onDislike}
+          icon={
+            <IconThumbDown
+              size={14}
+              color={item.dislikedByMe ? colors.accent : colors.textSecondary}
+            />
+          }
+        />
+        <ActionIcon
+          label={COMMUNITY_ACTION_LABELS.favorite}
+          count={item.favoriteCount}
+          active={item.favoritedByMe}
+          disabled={busy === 'favorite'}
+          onPress={actions?.onFavorite}
+          icon={
+            <IconStar
+              size={14}
+              color={item.favoritedByMe ? colors.accent : colors.textSecondary}
+            />
+          }
+        />
+        <ActionIcon
+          label={COMMUNITY_ACTION_LABELS.share}
+          disabled={busy === 'share'}
+          onPress={actions?.onShare}
+          icon={<IconShare size={14} color={colors.textSecondary} />}
+        />
+        <ActionIcon
+          label={COMMUNITY_ACTION_LABELS.report}
+          disabled={busy === 'report'}
+          onPress={actions?.onReport}
+          icon={<IconFlag size={14} color={colors.textSecondary} />}
+        />
+      </View>
+    </View>
+  )
+
+  if (props.actionsOnly) {
+    return <View style={uiStyles.listItem}>{actionBar}</View>
+  }
+
   return (
     <View style={uiStyles.listItem}>
       <Pressable
@@ -61,53 +170,7 @@ export function CommunityListCard(props: {
           </Text>
         </View>
       </Pressable>
-      <View
-        style={[uiStyles.actionBar, props.selected ? uiStyles.actionBarSelected : null]}
-        pointerEvents="none"
-        accessibilityRole="text"
-        accessibilityLabel="互动数据只读，请在桌面端操作"
-      >
-        <View style={uiStyles.actionBarStart}>
-          <Text style={uiStyles.actionBarReadonly}>只读</Text>
-          {props.showInstall ? (
-            <ActionIcon
-              label={COMMUNITY_ACTION_LABELS.install}
-              count={item.installCount}
-              icon={<IconDownload size={14} color={colors.textSecondary} />}
-            />
-          ) : null}
-        </View>
-        <View style={uiStyles.actionBarMain}>
-          <ActionIcon
-            label={COMMUNITY_ACTION_LABELS.like}
-            count={item.likeCount}
-            icon={<IconThumbUp size={14} color={colors.textSecondary} />}
-          />
-          <ActionIcon
-            label={COMMUNITY_ACTION_LABELS.comment}
-            count={item.commentCount}
-            icon={<IconComment size={14} color={colors.textSecondary} />}
-          />
-          <ActionIcon
-            label={COMMUNITY_ACTION_LABELS.dislike}
-            count={item.dislikeCount}
-            icon={<IconThumbDown size={14} color={colors.textSecondary} />}
-          />
-          <ActionIcon
-            label={COMMUNITY_ACTION_LABELS.favorite}
-            count={item.favoriteCount}
-            icon={<IconStar size={14} color={colors.textSecondary} />}
-          />
-          <ActionIcon
-            label={COMMUNITY_ACTION_LABELS.share}
-            icon={<IconShare size={14} color={colors.textSecondary} />}
-          />
-          <ActionIcon
-            label={COMMUNITY_ACTION_LABELS.report}
-            icon={<IconFlag size={14} color={colors.textSecondary} />}
-          />
-        </View>
-      </View>
+      {actionBar}
     </View>
   )
 }
@@ -155,14 +218,49 @@ function CommunityKindIcon({ kind }: { kind: CommunityCardIconKind }) {
   }
 }
 
-function ActionIcon(props: { label: string; count?: number; icon: ReactNode }) {
+function ActionIcon(props: {
+  label: string
+  count?: number
+  icon: ReactNode
+  active?: boolean
+  disabled?: boolean
+  onPress?: () => void
+}) {
+  if (!props.onPress) {
+    return (
+      <View
+        style={[uiStyles.actionIcon, props.active ? uiStyles.actionIconActive : null]}
+        accessibilityLabel={props.label}
+      >
+        {props.icon}
+        {props.count != null ? (
+          <Text style={[uiStyles.actionCount, props.active ? uiStyles.actionCountActive : null]}>
+            {formatCommunityCount(props.count)}
+          </Text>
+        ) : null}
+      </View>
+    )
+  }
   return (
-    <View style={uiStyles.actionIcon} accessibilityLabel={props.label}>
+    <Pressable
+      onPress={props.onPress}
+      disabled={props.disabled}
+      style={({ pressed }) => [
+        uiStyles.actionIcon,
+        props.active ? uiStyles.actionIconActive : null,
+        pressed ? uiStyles.actionIconPressed : null,
+        props.disabled ? uiStyles.btnDisabled : null,
+      ]}
+      accessibilityLabel={props.label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: Boolean(props.active), disabled: Boolean(props.disabled) }}
+    >
       {props.icon}
       {props.count != null ? (
-        <Text style={uiStyles.actionCount}>{formatCommunityCount(props.count)}</Text>
+        <Text style={[uiStyles.actionCount, props.active ? uiStyles.actionCountActive : null]}>
+          {formatCommunityCount(props.count)}
+        </Text>
       ) : null}
-    </View>
+    </Pressable>
   )
 }
-

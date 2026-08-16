@@ -72,6 +72,31 @@ pub fn resolve_identity_from_headers(
     ))
 }
 
+/// Private device_sync push/pull: accept Hub JWT **or** `X-Community-User-Id`.
+/// Marketplace routes stay JWT-only when `COMMUNITY_HUB_JWT_SECRET` is set.
+pub fn resolve_device_sync_identity_from_headers(
+    headers: &HeaderMap,
+    jwt_secret: Option<&str>,
+) -> Result<ResolvedIdentity, ApiError> {
+    if let Some(secret) = jwt_secret {
+        if let Some(token) = bearer_token_from_headers(headers) {
+            return validate_hub_jwt(token, secret);
+        }
+    }
+    if let Some(identity_id) = identity_id_from_headers(headers) {
+        return Ok(ResolvedIdentity {
+            identity_id: identity_id.to_string(),
+            registration_status: "registered".to_string(),
+            sku: None,
+            email: None,
+            community_role: None,
+        });
+    }
+    Err(ApiError::unauthorized(
+        "missing Authorization Bearer token or X-Community-User-Id",
+    ))
+}
+
 fn should_use_jwt_email_as_display_name(current: &str, email: &str) -> bool {
     let current = current.trim();
     if current.eq_ignore_ascii_case(email) {
@@ -198,6 +223,40 @@ where
             )?;
 
             load_auth_user(&state, &identity).await
+        }
+    }
+}
+
+/// Auth for `/api/v1/sync/push|pull` — Hub JWT preferred, identity header allowed.
+#[derive(Debug, Clone)]
+pub struct DeviceSyncAuthUser(pub CommunityUser);
+
+impl DeviceSyncAuthUser {
+    pub fn user(&self) -> &CommunityUser {
+        &self.0
+    }
+}
+
+impl<S> FromRequestParts<S> for DeviceSyncAuthUser
+where
+    S: Send + Sync,
+    AppState: FromRef<S>,
+{
+    type Rejection = ApiError;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        let state = AppState::from_ref(state);
+
+        async move {
+            let identity = resolve_device_sync_identity_from_headers(
+                &parts.headers,
+                state.config.jwt_secret.as_deref(),
+            )?;
+            let auth = load_auth_user(&state, &identity).await?;
+            Ok(DeviceSyncAuthUser(auth.into_user()))
         }
     }
 }

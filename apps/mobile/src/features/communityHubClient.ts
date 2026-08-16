@@ -5,9 +5,14 @@
 
 export type {
   CommunityCardIconKind,
+  CommunityCommentItem,
   CommunityHubHealth,
+  CommunityInteractionKind,
+  CommunityInteractionResult,
   CommunityListItem,
   CommunityNewsSource,
+  CommunityReportReason,
+  CommunityReportTargetType,
   CommunityResourceType,
   CommunityTaskType,
   FederationPeeringInfo,
@@ -22,9 +27,25 @@ export {
 export {
   fetchCommunityMessages,
   fetchCommunityNews,
+  fetchCommunityNewsArticle,
   fetchCommunityResources,
   fetchCommunityTasks,
 } from './communityHubClient-fetch'
+
+export {
+  applyInteractionToItem,
+  buildBoardReplyTarget,
+  buildNewsCommentTarget,
+  buildResourceCommentTarget,
+  createCommunityComment,
+  createCommunityModerationReport,
+  deleteCommunityComment,
+  listCommunityComments,
+  resolveCommentTarget,
+  resolveReportTarget,
+  toggleCommunityInteraction,
+  type CommunityCommentTarget,
+} from './communityHubClient-interactions'
 
 export {
   createCommunityBoardMessage,

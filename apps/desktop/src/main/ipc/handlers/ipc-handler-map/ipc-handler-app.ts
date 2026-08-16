@@ -75,6 +75,7 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       return ipcOk(
         await setMobileSyncEnabled(parsed.enabled, {
           lanAccessEnabled: parsed.lanAccessEnabled,
+          wanSyncEnabled: parsed.wanSyncEnabled,
         }),
       )
     } catch (error) {

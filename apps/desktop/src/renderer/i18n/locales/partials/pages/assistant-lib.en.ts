@@ -61,7 +61,7 @@ export const assistantLibPageEn = {
   settingsEmpty: 'No classrooms yet. Add a course or open the Toolman user guide first.',
   settingsHint: 'Configure name, teaching mode, textbook knowledge base, and speech for this classroom.',
   settingsSyncHint:
-    'When enabled, courses, teaching modes, syllabi, and classroom records publish automatically to this computer’s Sync Hub. The phone pulls incrementally when the classroom page opens or about every 3 minutes. The hub binds localhost by default; enable LAN access and paste the pairing token for a physical phone.',
+    'When enabled, courses, teaching modes, syllabi, and classroom records publish automatically to this computer’s Sync Hub. The phone pulls incrementally when the classroom page opens or about every 3 minutes. The hub binds localhost by default; enable LAN access and paste the pairing token for a physical phone. Off-LAN, the official Community Hub syncs metadata; full knowledge bodies and vectors remain LAN-only.',
   settingsSyncToggle: 'Sync with mobile',
   settingsSyncToggleHint: 'Publishes automatically when this page is open or a course changes',
   settingsSyncScopes: 'What syncs',

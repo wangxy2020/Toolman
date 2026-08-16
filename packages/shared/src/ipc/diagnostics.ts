@@ -144,6 +144,8 @@ export const AppDiagnosticsMobileSyncSchema = z.object({
   hubToken: z.string().optional(),
   /** When false, Hub binds 127.0.0.1 only. */
   lanAccessEnabled: z.boolean().default(false),
+  /** Mirror changelog to Community Hub for off-LAN sync. */
+  wanSyncEnabled: z.boolean().default(true),
 })
 export type AppDiagnosticsMobileSync = z.infer<typeof AppDiagnosticsMobileSyncSchema>
 export type AppDiagnosticsMobileSyncInput = z.input<typeof AppDiagnosticsMobileSyncSchema>
@@ -157,6 +159,7 @@ export const DEFAULT_MOBILE_SYNC_DIAGNOSTICS: AppDiagnosticsMobileSync = {
   advertisedUrls: [],
   lastError: null,
   lanAccessEnabled: false,
+  wanSyncEnabled: true,
 }
 
 export const AppGetDiagnosticsOutputSchema = z.object({
@@ -178,6 +181,7 @@ export type AppGetDiagnosticsOutput = z.infer<typeof AppGetDiagnosticsOutputSche
 export const MobileSyncSetEnabledInputSchema = z.object({
   enabled: z.boolean(),
   lanAccessEnabled: z.boolean().optional(),
+  wanSyncEnabled: z.boolean().optional(),
 })
 export type MobileSyncSetEnabledInput = z.infer<typeof MobileSyncSetEnabledInputSchema>
 

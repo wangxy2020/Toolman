@@ -1,11 +1,13 @@
 import { newUuid } from '../p2p/bytes'
 import { unlockAudioPlayback } from '../voice'
+import type { AgentChatScope } from '../chat/agentScopes'
 import type { ChatMessage, ChatSession } from '../state/MobileAppContext'
 import { newAgentId } from './agentPaneUtils'
 
 export async function sendAgentRightPaneMessage(input: {
   text: string
   busy: boolean
+  agentScope?: AgentChatScope
   ensureSession: () => ChatSession | null
   upsertSession: (session: ChatSession) => void
   setInput: (value: string) => void
@@ -28,6 +30,7 @@ export async function sendAgentRightPaneMessage(input: {
   const {
     text,
     busy,
+    agentScope,
     ensureSession,
     upsertSession,
     setInput,
@@ -41,7 +44,11 @@ export async function sendAgentRightPaneMessage(input: {
   unlockAudioPlayback()
   const base = ensureSession()
   if (!base) {
-    setError('请先在侧栏选择一门课程')
+    setError(
+      agentScope === 'classroom'
+        ? '请先在侧栏选择一门课程'
+        : '请先在侧栏新建智能体或话题',
+    )
     return
   }
   if (base.groupAgent?.permission === 'read') {

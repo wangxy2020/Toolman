@@ -37,6 +37,7 @@ export function useAgentRightPane() {
     activeSessionId,
     setActiveSessionId,
     upsertSession,
+    upsertAgent,
     modelConfig,
     desktopHostsOnline,
     modulePrefs,
@@ -77,6 +78,10 @@ export function useAgentRightPane() {
   }
   const abortRef = useRef<AbortController | null>(null)
   const streamScrollRef = useRef<ScrollView>(null)
+  const classroomCourseRef = useRef<ReturnType<typeof useMobileApp>['classroomCourses'][number] | null>(
+    null,
+  )
+  const classroomCoursesRef = useRef(classroomCourses)
 
   const tts = useAgentRightPaneTts(modulePrefs)
   const selection = useAgentRightPaneSelection()
@@ -98,6 +103,8 @@ export function useAgentRightPane() {
     agentScope === 'classroom'
       ? classroomCourses.find((course) => course.id === session?.id) ?? null
       : null
+  classroomCourseRef.current = classroomCourse
+  classroomCoursesRef.current = classroomCourses
   const classLive = classroomCourseIsLive(classroomCourse)
   const classroomStatus = useMemo(
     () => classroomStatusFromSync(agentScope, syncStatus),
@@ -127,6 +134,7 @@ export function useAgentRightPane() {
       agentScope,
       agents,
       upsertSession,
+      upsertAgent,
     })
 
   const { runCompletion, runGroupAgentRelay } = createAgentRightPaneStream({
@@ -135,6 +143,9 @@ export function useAgentRightPane() {
     agentScope,
     useDesktopHost,
     desktopHostsOnline,
+    classroomCourseRef,
+    classroomCoursesRef,
+    setClassroomCourses,
     upsertSession,
     setBusy,
     setError,
@@ -146,6 +157,7 @@ export function useAgentRightPane() {
     await sendAgentRightPaneMessage({
       text: (presetText ?? input).trim(),
       busy,
+      agentScope,
       ensureSession,
       upsertSession,
       setInput,

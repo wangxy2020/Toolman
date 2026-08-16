@@ -17,6 +17,7 @@ const EMPTY_MOBILE_SYNC: AppDiagnosticsMobileSync = {
   advertisedUrls: [],
   lastError: null,
   lanAccessEnabled: false,
+  wanSyncEnabled: true,
 }
 
 export function AssistantLibSettingsSyncTab() {

@@ -17,8 +17,20 @@ export function ClassroomBasicTab(props: {
   selectedPreset: AssistantLibPresetDef | null | undefined
   knowledgeNames: string[]
   updateDraft: (patch: Partial<ClassroomSettingsDraft>) => void
+  onOpenKbPicker: () => void
+  onClearKb: () => void
 }) {
-  const { draft, isDefault, shownPresets, selectedPreset, knowledgeNames, updateDraft } = props
+  const {
+    draft,
+    isDefault,
+    shownPresets,
+    selectedPreset,
+    knowledgeNames,
+    updateDraft,
+    onOpenKbPicker,
+    onClearKb,
+  } = props
+  const kbLabel = draft.kbLabel || knowledgeNames.join('、')
   return (
     <View style={styles.form}>
       <Text style={styles.hint}>为当前课堂配置名称、教学模式、教材知识库与朗读。</Text>
@@ -61,12 +73,20 @@ export function ClassroomBasicTab(props: {
       />
 
       <Text style={styles.label}>教材知识库</Text>
-      <View style={styles.pathBox}>
-        <Text style={styles.pathText}>
-          {knowledgeNames.length > 0 ? knowledgeNames.join('、') : '未绑定教材'}
-        </Text>
+      <View style={styles.pathRow}>
+        <View style={[styles.pathBox, { flex: 1 }]}>
+          <Text style={styles.pathText}>{kbLabel || '未绑定教材'}</Text>
+        </View>
+        <Pressable onPress={onOpenKbPicker} style={styles.inlineBtn}>
+          <Text style={styles.inlineBtnText}>选择</Text>
+        </Pressable>
       </View>
-      <Text style={styles.hint}>教材绑定请在桌面端课程设置中修改，同步后生效。</Text>
+      {draft.kbIds.length > 0 ? (
+        <Pressable onPress={onClearKb}>
+          <Text style={styles.clearLink}>清除绑定</Text>
+        </Pressable>
+      ) : null}
+      <Text style={styles.hint}>可选择桌面端知识库，或添加教材后在桌面导入文件。</Text>
 
       <ClassroomToggleRow
         title="自动朗读"
@@ -105,8 +125,10 @@ export function ClassroomDocTab(props: {
   kind: 'teaching' | 'lesson'
   value: string
   editing: boolean
+  generating?: boolean
   onToggleEdit: () => void
   onChange: (value: string) => void
+  onGenerateSyllabus?: () => void
 }) {
   return (
     <View style={styles.form}>
@@ -116,7 +138,18 @@ export function ClassroomDocTab(props: {
             ? '当前课堂的教学模式提示词。未修改时沿用所选教学模式的默认内容。'
             : '当前课程的教学大纲，支持 Markdown 排版。'}
         </Text>
-        <Pressable onPress={props.onToggleEdit} style={styles.inlineBtn}>
+        {props.kind === 'lesson' && props.onGenerateSyllabus ? (
+          <Pressable
+            onPress={props.onGenerateSyllabus}
+            style={styles.inlineBtn}
+            disabled={props.generating}
+          >
+            <Text style={styles.inlineBtnText}>
+              {props.generating ? '生成中…' : '生成教学大纲'}
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable onPress={props.onToggleEdit} style={styles.inlineBtn} disabled={props.generating}>
           <Text style={styles.inlineBtnText}>
             {props.editing ? '完成' : props.kind === 'teaching' ? '编辑教学模式' : '编辑大纲'}
           </Text>
@@ -129,6 +162,7 @@ export function ClassroomDocTab(props: {
           onChangeText={props.onChange}
           multiline
           textAlignVertical="top"
+          editable={!props.generating}
         />
       ) : props.value.trim() ? (
         <View style={styles.preview}>
@@ -138,7 +172,7 @@ export function ClassroomDocTab(props: {
         <Text style={styles.hint}>
           {props.kind === 'teaching'
             ? '暂无教学模式内容。'
-            : '暂无教学大纲。添加课程并绑定教材后将按章节自动生成。'}
+            : '暂无教学大纲。绑定教材后可点「生成教学大纲」。'}
         </Text>
       )}
     </View>

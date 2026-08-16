@@ -163,7 +163,9 @@ export function migrateAgentsAndSessions(
 
     const personal = nextSessions.filter((s) => s.agentScope === scope && !s.groupAgent)
     let scopeAgents = byScope.get(scope) ?? []
-    if (scopeAgents.length === 0 && personal.length > 0) {
+    // First-run / wiped store: seed a default agent (and topic below) so the
+    // agent page is usable without colliding with classroom course selection.
+    if (scopeAgents.length === 0) {
       const defaultAgent: MobileAgent = {
         id: newId('asst'),
         name: '默认智能体',
@@ -182,6 +184,16 @@ export function migrateAgentsAndSessions(
       if (!session.assistantId || !known.has(session.assistantId)) {
         session.assistantId = fallbackId
       }
+    }
+    if (personal.length === 0) {
+      nextSessions.push({
+        id: newId('sess'),
+        title: '新话题',
+        updatedAt: Date.now(),
+        messages: [],
+        agentScope: scope,
+        assistantId: fallbackId,
+      })
     }
   }
 
@@ -218,6 +230,22 @@ function resolveActiveByScope(
   return next
 }
 
+function storeFromMigrated(
+  migrated: { sessions: ChatSession[]; agents: MobileAgent[] },
+  activeRaw?: unknown,
+  legacyActiveId?: unknown,
+): ChatSessionsStore {
+  return {
+    sessions: migrated.sessions,
+    agents: migrated.agents,
+    activeSessionByScope: resolveActiveByScope(
+      migrated.sessions,
+      activeRaw,
+      legacyActiveId,
+    ),
+  }
+}
+
 export async function loadChatSessions(): Promise<ChatSessionsStore> {
   try {
     const parsed = await loadOwnedScoped<{
@@ -226,26 +254,22 @@ export async function loadChatSessions(): Promise<ChatSessionsStore> {
       activeSessionByScope?: unknown
       activeSessionId?: unknown
     }>(SESSIONS_KEY, getItem)
-    if (!parsed) return emptyChatSessionsStore()
+    if (!parsed) {
+      return storeFromMigrated(migrateAgentsAndSessions([], []))
+    }
     const rawSessions = Array.isArray(parsed.sessions)
       ? parsed.sessions.map(normalizeSession).filter((s): s is ChatSession => Boolean(s))
       : []
     const rawAgents = Array.isArray(parsed.agents)
       ? parsed.agents.map(normalizeAgent).filter((a): a is MobileAgent => Boolean(a))
       : []
-    const migrated = migrateAgentsAndSessions(rawSessions, rawAgents)
-    const activeSessionByScope = resolveActiveByScope(
-      migrated.sessions,
+    return storeFromMigrated(
+      migrateAgentsAndSessions(rawSessions, rawAgents),
       parsed.activeSessionByScope,
       parsed.activeSessionId,
     )
-    return {
-      sessions: migrated.sessions,
-      agents: migrated.agents,
-      activeSessionByScope,
-    }
   } catch {
-    return emptyChatSessionsStore()
+    return storeFromMigrated(migrateAgentsAndSessions([], []))
   }
 }
 

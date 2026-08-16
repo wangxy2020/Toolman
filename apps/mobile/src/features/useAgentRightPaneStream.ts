@@ -3,10 +3,12 @@ import { streamChatCompletion } from '../chat/streamChat'
 import { invokeDesktopAgent } from '../host/invokeDesktop'
 import { sendGroupAgentRelay } from '../p2p/agentRelay'
 import type { ModulePrefs } from '../settings/prefs'
+import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 import { createReachableMobileSyncClient } from '../sync/mobileSync'
 import { unlockAudioPlayback } from '../voice'
 import type { ChatMessage, ChatSession, ModelConfig } from '../state/MobileAppContext'
 import { buildAgentSystemPrompt } from './agentPaneUtils'
+import { applyClassroomProgressFromAssistantReply } from './classroomProgressFromReply'
 
 export function createAgentRightPaneStream(deps: {
   modelConfig: ModelConfig
@@ -14,6 +16,9 @@ export function createAgentRightPaneStream(deps: {
   agentScope: AgentChatScope
   useDesktopHost: boolean
   desktopHostsOnline: number
+  classroomCourseRef: { current: MobileClassroomCourse | null }
+  classroomCoursesRef: { current: MobileClassroomCourse[] }
+  setClassroomCourses: (courses: MobileClassroomCourse[]) => void
   upsertSession: (session: ChatSession) => void
   setBusy: (busy: boolean) => void
   setError: (message: string | null) => void
@@ -26,12 +31,34 @@ export function createAgentRightPaneStream(deps: {
     agentScope,
     useDesktopHost,
     desktopHostsOnline,
+    classroomCourseRef,
+    classroomCoursesRef,
+    setClassroomCourses,
     upsertSession,
     setBusy,
     setError,
     autoSpeakReply,
     abortRef,
   } = deps
+
+  const persistClassroomProgress = (session: ChatSession, assistantText: string) => {
+    if (agentScope !== 'classroom') return
+    const courseId = session.id
+    const current =
+      classroomCoursesRef.current.find((item) => item.id === courseId) ??
+      classroomCourseRef.current
+    if (!current || current.id !== courseId) return
+    const userMessageCount = session.messages.filter((msg) => msg.role === 'user').length
+    const nextCourse = applyClassroomProgressFromAssistantReply({
+      course: current,
+      assistantText,
+      userMessageCount,
+    })
+    if (!nextCourse) return
+    setClassroomCourses(
+      classroomCoursesRef.current.map((item) => (item.id === nextCourse.id ? nextCourse : item)),
+    )
+  }
 
   const runCompletion = async (
     base: ChatSession,
@@ -53,7 +80,10 @@ export function createAgentRightPaneStream(deps: {
     const finish = () => {
       setBusy(false)
       const final = next.messages.find((msg) => msg.id === assistantMsg.id)
-      if (final?.content.trim()) autoSpeakReply(final.id, final.content)
+      if (final?.content.trim()) {
+        autoSpeakReply(final.id, final.content)
+        persistClassroomProgress(next, final.content)
+      }
     }
 
     const controller = new AbortController()
@@ -65,7 +95,9 @@ export function createAgentRightPaneStream(deps: {
       finish()
     }
 
-    const prompt = buildAgentSystemPrompt(modulePrefs)
+    const prompt = buildAgentSystemPrompt(modulePrefs, {
+      classroomCourse: agentScope === 'classroom' ? classroomCourseRef.current : null,
+    })
     await streamChatCompletion({
       config: modelConfig,
       messages: prompt

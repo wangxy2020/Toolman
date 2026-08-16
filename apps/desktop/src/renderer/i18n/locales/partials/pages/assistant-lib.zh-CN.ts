@@ -61,7 +61,7 @@ export const assistantLibPageZhCN = {
   settingsEmpty: '暂无课堂，请先添加课程或打开 Toolman使用说明。',
   settingsHint: '为当前课堂配置名称、教学模式、教材知识库与朗读。',
   settingsSyncHint:
-    '开启后，本机课堂的课程、教学模式、教学大纲与课堂记录会自动发布到本机 Sync Hub，移动端打开课堂页或约每 3 分钟增量拉取。Hub 默认只绑本机，真机需在系统诊断打开局域网访问并填写配对令牌。',
+    '开启后，本机课堂的课程、教学模式、教学大纲与课堂记录会自动发布到本机 Sync Hub，移动端打开课堂页或约每 3 分钟增量拉取。Hub 默认只绑本机，真机需在系统诊断打开局域网访问并填写配对令牌。异网可经官方社区 Hub 同步元数据；完整知识库正文与向量仅局域网可用。',
   settingsSyncToggle: '与移动端同步',
   settingsSyncToggleHint: '打开课堂页或课程变更时自动发布到移动端同步通道',
   settingsSyncScopes: '同步内容',

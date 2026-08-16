@@ -40,6 +40,34 @@ export function stripHtmlText(text: string): string {
     .trim()
 }
 
+/** Prefer paragraph breaks when turning HTML into readable plain text. */
+export function htmlToPlainText(html: string): string {
+  const withBreaks = html
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n')
+  return stripHtmlText(withBreaks)
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export function resolveCommunityItemBody(item: {
+  body?: string
+  contentHtml?: string
+  summary?: string
+  description: string
+  title: string
+}): string {
+  if (item.body?.trim()) return item.body.trim()
+  if (item.contentHtml?.trim()) {
+    const fromHtml = htmlToPlainText(item.contentHtml)
+    if (fromHtml) return fromHtml
+  }
+  if (item.summary?.trim()) return item.summary.trim()
+  return item.description.trim() || item.title
+}
+
 export function formatNewsPreview(text: string, maxLength = 120): string {
   const normalized = stripHtmlText(text)
   if (!normalized) return ''

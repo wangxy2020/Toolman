@@ -165,8 +165,20 @@ export const uiStyles = StyleSheet.create({
     backgroundColor: '#f4f4f5',
     marginTop: -1,
   },
+  actionBarInteractive: {
+    opacity: 1,
+  },
   actionBarSelected: {
     borderColor: colors.accent,
+  },
+  actionBarCommentsOpen: {
+    backgroundColor: colors.accentSoft,
+  },
+  actionBarStandalone: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    marginTop: 0,
   },
   actionBarStart: {
     flexDirection: 'row',
@@ -189,10 +201,20 @@ export const uiStyles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
+  actionIconActive: {
+    backgroundColor: colors.accentSoft,
+  },
+  actionIconPressed: {
+    backgroundColor: colors.borderLight,
+  },
   actionCount: {
     minWidth: 8,
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  actionCountActive: {
+    color: colors.accent,
+    fontWeight: '600',
   },
   emptyBody: {
     gap: 8,

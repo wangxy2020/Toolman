@@ -21,6 +21,7 @@ import { formatMessageTime } from './agentPaneUtils'
 import { agentStreamStyles as styles } from './agentStreamStyles'
 import { SpinningIcon } from './SpinningIcon'
 import { MessageMarkdown } from './MessageMarkdown'
+import { StreamCursor } from './StreamCursor'
 import { ThinkingHeartbeat } from './ThinkingHeartbeat'
 import { useAgentRightPane } from './useAgentRightPane'
 
@@ -89,10 +90,21 @@ export function AgentStreamMessage(props: {
           ]}
         >
           {msg.content ? (
-            <MessageMarkdown
-              text={stripSocraticMachineBlocks(msg.content)}
-              align={isUser ? 'right' : 'left'}
-            />
+            <View style={styles.streamBody}>
+              <View style={styles.streamBodyRow}>
+                <View style={{ flexShrink: 1, minWidth: 0 }}>
+                  <MessageMarkdown
+                    text={stripSocraticMachineBlocks(msg.content)}
+                    align="left"
+                  />
+                </View>
+                {streamingThis ? (
+                  <View style={styles.streamCursorSlot}>
+                    <StreamCursor />
+                  </View>
+                ) : null}
+              </View>
+            </View>
           ) : streamingThis ? (
             <ThinkingHeartbeat />
           ) : null}
@@ -104,7 +116,7 @@ export function AgentStreamMessage(props: {
               <MessageMarkdown text={translation.text} />
             </View>
           ) : null}
-          {streamingThis && !msg.content ? (
+          {streamingThis ? (
             <View style={styles.actionsPlaceholder} />
           ) : isUser ? null : (
             <AssistantActions msg={msg} pane={pane} />

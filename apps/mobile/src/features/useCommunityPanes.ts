@@ -1,6 +1,7 @@
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -24,6 +25,7 @@ import {
   type CommunityListItem,
   type CommunityResourceType,
 } from './communityHubClient'
+import { useCommunityListInteractions } from './useCommunityListInteractions'
 import {
   communityListPageStatus,
   communityManagementPageStatus,
@@ -89,6 +91,7 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
   hubBaseUrl: string
   triedHubUrls: string[]
   reload: () => void
+  patchItem: (id: string, patch: Partial<CommunityListItem>) => void
 } {
   const { auth, modulePrefs } = useMobileApp()
   const configuredHub = modulePrefs.community.hubBaseUrl
@@ -148,6 +151,20 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
     }
   }, [auth?.identityId, configuredHub, section.listKind, section.resourceType, tick])
 
+  const reload = useCallback(() => setTick((n) => n + 1), [])
+  const patchItem = useCallback((id: string, patch: Partial<CommunityListItem>) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item
+        const next = { ...item, ...patch }
+        // Skip no-op patches so list identity stays stable and avoid UI thrashing.
+        const keys = Object.keys(patch) as Array<keyof CommunityListItem>
+        if (keys.every((key) => next[key] === item[key])) return item
+        return next
+      }),
+    )
+  }, [])
+
   return {
     items,
     loading,
@@ -155,7 +172,8 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
     error,
     hubBaseUrl,
     triedHubUrls,
-    reload: () => setTick((n) => n + 1),
+    reload,
+    patchItem,
   }
 }
 
@@ -164,7 +182,7 @@ export type CommunityListSectionId = Exclude<CommunitySidebarSection, 'mine' | '
 export function useCommunityListSection(sectionId: CommunityListSectionId) {
   const section = getCommunitySection(sectionId)
   const { auth, modulePrefs } = useMobileApp()
-  const { items, loading, offline, error, reload, hubBaseUrl, triedHubUrls } =
+  const { items, loading, offline, error, reload, hubBaseUrl, triedHubUrls, patchItem } =
     useCommunityHubList(sectionId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
@@ -173,6 +191,15 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
   const sorted = useMemo(() => sortCommunityItems(items), [items])
   const userId = auth?.identityId ?? null
   const guestBlocked = modulePrefs.community.guestReadOnly && !auth
+  const listKind = section.listKind ?? 'news'
+
+  const interactions = useCommunityListInteractions({
+    listKind,
+    hubBaseUrl,
+    userId,
+    guestBlocked,
+    patchItem,
+  })
 
   const pageStatus = useMemo(
     () =>
@@ -201,12 +228,16 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
 
   const openRss = () => {
     if (offline) return
-    if (guestBlocked) {
-      notifyLoginRequired()
-      return
-    }
+    // Guests may browse RSS sources read-only; add/fetch still require login in the modal.
     setRssOpen(true)
   }
+
+  const commentItem = interactions.commentItemId
+    ? sorted.find((item) => item.id === interactions.commentItemId) ?? null
+    : null
+  const reportItem = interactions.reportItemId
+    ? sorted.find((item) => item.id === interactions.reportItemId) ?? null
+    : null
 
   return {
     section,
@@ -225,6 +256,12 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
     openPublish,
     openRss,
     resourceType: section.resourceType as CommunityResourceType | undefined,
+    interactions,
+    commentItem,
+    reportItem,
+    patchItem,
+    listKind,
+    guestBlocked,
   }
 }
 

@@ -22,10 +22,12 @@ import {
 } from './groupSyncMerge'
 import type { GroupWorkspace } from '../storage/groupChat'
 import {
+  classifyMobileSyncTransport,
   countDesktopHostsOnline,
   createReachableMobileSyncClient,
   loadSyncIdentityId,
   type KnowledgeMetaItem,
+  type MobileSyncTransport,
 } from './mobileSync-client'
 import {
   applyKnowledgeMetaChange,
@@ -43,9 +45,16 @@ export type AppliedSync = {
   snapshot: KnowledgeSnapshot | null
   documentCount: number
   knowledgeError?: string
+  /** Soft notice when WAN skips knowledge file export. */
+  knowledgeWanSkipped?: boolean
+  transport: MobileSyncTransport
+  baseUrl: string
   syncState: MobileSyncState
   discardedForeign?: boolean
 }
+
+const KNOWLEDGE_WAN_SOFT_MESSAGE =
+  '知识库文件需同局域网或稍后在 LAN 补拉（跨网仅同步目录元数据）'
 
 /** Pull remote changes and merge notes + optional sync-KB snapshot (files, chunks, vectors). */
 export async function pullAndApplySync(options: {
@@ -68,6 +77,8 @@ export async function pullAndApplySync(options: {
   const includeKnowledgeSnapshot = options.includeKnowledgeSnapshot ?? includeKnowledge
   const syncState = options.syncState ?? (await loadMobileSyncState())
   const client = options.client ?? (await createReachableMobileSyncClient())
+  const baseUrl = client.getBaseUrl()
+  const transport = classifyMobileSyncTransport(baseUrl)
   const deviceId = await getOrCreateDeviceId()
 
   const pulledChanges: SyncChange[] = []
@@ -123,11 +134,17 @@ export async function pullAndApplySync(options: {
 
   let snapshot: KnowledgeSnapshot | null = null
   let knowledgeError: string | undefined
+  let knowledgeWanSkipped = false
   let knowledgeSince = syncState.knowledgeSince
   const previousSnapshot = includeKnowledge ? await loadKnowledgeSnapshot() : null
   const shouldExport =
     includeKnowledge && includeKnowledgeSnapshot && (knowledgeMetaChanged || !previousSnapshot)
-  if (shouldExport) {
+  if (shouldExport && transport === 'community-hub') {
+    // Community Hub has no knowledge file/export APIs — keep meta, soft-degrade files.
+    snapshot = previousSnapshot
+    knowledgeWanSkipped = true
+    knowledgeError = KNOWLEDGE_WAN_SOFT_MESSAGE
+  } else if (shouldExport) {
     try {
       const incoming = await client.exportKnowledgeSnapshot(
         previousSnapshot ? knowledgeSince : undefined,
@@ -183,6 +200,9 @@ export async function pullAndApplySync(options: {
     snapshot,
     documentCount: snapshot?.documents.length ?? 0,
     knowledgeError,
+    knowledgeWanSkipped,
+    transport,
+    baseUrl,
     syncState: nextState,
   }
 }

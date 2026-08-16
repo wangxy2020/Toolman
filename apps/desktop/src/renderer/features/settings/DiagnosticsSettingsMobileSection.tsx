@@ -12,6 +12,7 @@ interface Props {
   onSyncToggle: (enabled: boolean) => void
   onHostToggle: (enabled: boolean) => void
   onLanToggle: (enabled: boolean) => void
+  onWanToggle: (enabled: boolean) => void
 }
 
 export function DiagnosticsSettingsMobileSection({
@@ -22,6 +23,7 @@ export function DiagnosticsSettingsMobileSection({
   onSyncToggle,
   onHostToggle,
   onLanToggle,
+  onWanToggle,
 }: Props) {
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)
@@ -34,11 +36,16 @@ export function DiagnosticsSettingsMobileSection({
     advertisedUrls: [],
     lastError: null,
     lanAccessEnabled: false,
+    wanSyncEnabled: true,
   }
   const reachable = (mobile.advertisedUrls ?? []).filter(
     (url) => url && !url.includes('127.0.0.1'),
   )
   const busy = syncToggling || loading
+  const loopbackOnly =
+    Boolean(mobile.syncEnabled) &&
+    !mobile.lanAccessEnabled &&
+    reachable.length === 0
 
   const copyToken = async () => {
     if (!mobile.hubToken) return
@@ -86,6 +93,20 @@ export function DiagnosticsSettingsMobileSection({
           onChange={onLanToggle}
         />
       </SettingsRow>
+      {loopbackOnly ? (
+        <p className="tm-settings-error">{t('settings.diagnostics.mobileSync.loopbackOnly')}</p>
+      ) : null}
+      <SettingsRow
+        label={t('settings.diagnostics.mobileSync.wanToggle')}
+        hint={t('settings.diagnostics.mobileSync.wanToggleHint')}
+      >
+        <SettingsToggle
+          checked={mobile.wanSyncEnabled !== false}
+          disabled={busy}
+          onChange={onWanToggle}
+        />
+      </SettingsRow>
+      <p className="tm-settings-row-hint">{t('settings.diagnostics.mobileSync.knowledgeWanHint')}</p>
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.hubToken')}
         hint={t('settings.diagnostics.mobileSync.hubTokenHint')}

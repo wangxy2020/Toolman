@@ -1,15 +1,19 @@
 /**
  * Mirror the desktop Sync Hub changelog to Community Hub so mobile/web can
- * sync off-LAN (same probe order as community: local sidecar first, official HTTPS next).
+ * sync off-LAN (local sidecar first, then official HTTPS Hub).
  *
- * Device-sync on Community Hub is still per logged-in identity. Cross-user
- * sharing uses the LAN Sync Hub token, not this private changelog.
+ * Device-sync buckets are keyed by Authing/Firebase identity (`ag-…` / `fb-…`).
+ * LAN Sync Hub pairing token remains the full-featured local path (incl. knowledge files).
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { app } from 'electron'
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
   OFFICIAL_TOOLMAN_HUB_URL,
   hostnameOfBaseUrl,
   isOfficialCommunityHubHost,
+  resolveDeviceSyncIdentityId,
   toErrorMessage,
   type SyncChange,
 } from '@toolman/shared'
@@ -20,7 +24,11 @@ import {
 } from './mobile-sync-store'
 import { getAuthSession } from './auth-session.service'
 import { CommunityHttpClient } from './community/community-http.client'
+import { resolveCommunityHubAuth } from './community/community-hub-auth.service'
 import { resolveCommunityHubBaseUrl } from './community/community-hub.config'
+import {
+  isMobileSyncWanEnabled,
+} from './mobile-sync.config'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
 
@@ -28,22 +36,74 @@ const WAN_SYNC_INTERVAL_MS = 60_000
 
 let applyingWan = false
 let wanCursor: string | null = null
+let wanCursorLoaded = false
 let timer: ReturnType<typeof setInterval> | null = null
 let nextHubProbeAt = 0
 let skipLogged = false
 
+function wanCursorPath(): string {
+  return join(app.getPath('userData'), 'mobile-sync', 'wan-cursor.json')
+}
+
+function loadWanCursor(): string | null {
+  if (wanCursorLoaded) return wanCursor
+  wanCursorLoaded = true
+  try {
+    const path = wanCursorPath()
+    if (!existsSync(path)) {
+      wanCursor = null
+      return wanCursor
+    }
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { cursor?: unknown }
+    wanCursor =
+      typeof parsed.cursor === 'string' && parsed.cursor.trim() ? parsed.cursor.trim() : null
+  } catch {
+    wanCursor = null
+  }
+  return wanCursor
+}
+
+function persistWanCursor(cursor: string | null): void {
+  wanCursor = cursor
+  wanCursorLoaded = true
+  try {
+    const path = wanCursorPath()
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify({ cursor }, null, 2), 'utf8')
+  } catch (error) {
+    logStructured(
+      'mobile-sync',
+      'warn',
+      `wan cursor persist failed: ${toErrorMessage(error, String(error))}`,
+    )
+  }
+}
+
+/**
+ * Prefer configured remote Hub; otherwise try local sidecar then official Hub
+ * so `mode: local` desktops still mirror into the public device_sync bucket.
+ */
 export function listCommunityDeviceSyncHubCandidates(): string[] {
   const remote = resolveCommunityHubBaseUrl()
-  if (remote) return [remote]
+  if (remote) {
+    const urls = [remote]
+    if (!isOfficialCommunityHubHost(hostnameOfBaseUrl(remote))) {
+      urls.push(OFFICIAL_TOOLMAN_HUB_URL)
+    }
+    return urls
+  }
   return [DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL, OFFICIAL_TOOLMAN_HUB_URL]
 }
 
-/** Local sidecar is up but has no device_sync — do not fall through to official Hub. */
-export function shouldStopDeviceSyncProbe(input: {
+/**
+ * Never stop probing after a local sidecar without device_sync — always allow
+ * fallthrough to the official Hub for cross-network sync.
+ */
+export function shouldStopDeviceSyncProbe(_input: {
   official: boolean
   deviceSync?: boolean
 }): boolean {
-  return !input.official && input.deviceSync !== true
+  return false
 }
 
 function noteHubUnavailable(message: string): void {
@@ -67,39 +127,38 @@ function describeHubFailure(baseUrl: string, error: unknown): string {
   return `local hub ${baseUrl}: ${detail}`
 }
 
-/** Match mobile `ag-…` / `fb-…` so Community Hub device_sync shares one bucket. */
-export function resolveDeviceSyncIdentityId(): string {
+/** @deprecated Use shared resolveDeviceSyncIdentityId via community-hub-auth. */
+export function resolveDeviceSyncIdentityIdDesktop(): string {
   const session = getAuthSession()
-  for (const binding of session.bindings) {
-    if (
-      binding.provider === 'firebase_email' ||
-      binding.provider === 'firebase_google' ||
-      binding.provider === 'firebase_apple'
-    ) {
-      const subject = binding.subjectId.trim()
-      if (subject) return `fb-${subject}`
-    }
-  }
-  for (const binding of session.bindings) {
-    const subject = binding.subjectId.trim()
-    // Authing user ids are 24-char hex (same check as account deletion).
-    if (/^[a-f0-9]{24}$/i.test(subject)) return `ag-${subject}`
-  }
-  return session.identityId
+  return resolveDeviceSyncIdentityId({
+    bindings: session.bindings,
+    fallbackIdentityId: session.identityId,
+  })
+}
+
+/** Match mobile `ag-…` / `fb-…` so Community Hub device_sync shares one bucket. */
+export function resolveDeviceSyncIdentityIdForSession(): string {
+  return resolveDeviceSyncIdentityIdDesktop()
 }
 
 async function createWanClient(baseUrl: string): Promise<CommunityHttpClient> {
   return new CommunityHttpClient({
     baseUrl,
-    // Same as mobile WAN: identity header only. Authing Bearer is rejected by
-    // the official Hub and is not required by the local sidecar.
-    resolveAuth: async () => ({ identityId: resolveDeviceSyncIdentityId() }),
+    resolveAuth: async () => {
+      try {
+        return await resolveCommunityHubAuth()
+      } catch {
+        // Guest / unsigned desktop: identity header only (device_sync allows it).
+        return { identityId: resolveDeviceSyncIdentityIdDesktop() }
+      }
+    },
   })
 }
 
 async function withDeviceSyncHub<T>(
-  run: (client: CommunityHttpClient) => Promise<T>,
+  run: (client: CommunityHttpClient, baseUrl: string) => Promise<T>,
 ): Promise<T | undefined> {
+  if (!isMobileSyncWanEnabled()) return undefined
   if (Date.now() < nextHubProbeAt) return undefined
   const errors: string[] = []
   for (const baseUrl of listCommunityDeviceSyncHubCandidates()) {
@@ -109,7 +168,7 @@ async function withDeviceSyncHub<T>(
       const health = await client.health()
       if (health.device_sync === true) {
         resetHubProbeState()
-        return await run(client)
+        return await run(client, baseUrl)
       }
       if (shouldStopDeviceSyncProbe({ official, deviceSync: health.device_sync })) {
         noteHubUnavailable(
@@ -156,7 +215,7 @@ export async function pullCommunityDeviceSync(): Promise<void> {
     await withDeviceSyncHub(async (client) => {
       const device = getP2pDeviceInfo()
       const incoming: SyncChange[] = []
-      let cursor = wanCursor
+      let cursor = loadWanCursor()
       for (let page = 0; page < 50; page += 1) {
         const pulled = await client.post<{
           changes?: SyncChange[]
@@ -172,7 +231,7 @@ export async function pullCommunityDeviceSync(): Promise<void> {
         cursor = pulled.nextCursor ?? cursor
         if (!pulled.hasMore || changes.length === 0) break
       }
-      wanCursor = cursor
+      persistWanCursor(cursor)
       if (incoming.length === 0) return
       applyingWan = true
       try {
@@ -211,4 +270,12 @@ export function stopCommunityDeviceSyncLoop(): void {
   clearInterval(timer)
   timer = null
   resetHubProbeState()
+}
+
+/** Test helper */
+export function resetCommunityDeviceSyncStateForTests(): void {
+  stopCommunityDeviceSyncLoop()
+  wanCursor = null
+  wanCursorLoaded = false
+  applyingWan = false
 }

@@ -4,6 +4,7 @@ import {
   getAssistantLibPreset,
   listSelectableAssistantLibPresets,
   type AssistantLibPresetId,
+  type KnowledgeMetaItem,
 } from '@toolman/shared'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 import {
@@ -32,11 +33,14 @@ export type ClassroomSettingsDraft = {
   autoSpeak: boolean
   ttsEngine: VoiceTtsEngine
   ttsVoice: string
+  kbIds: string[]
+  kbLabel: string
 }
 
 export type ClassroomSettingsModalProps = {
   visible: boolean
   course: MobileClassroomCourse | null
+  knowledgeMeta: KnowledgeMetaItem[]
   knowledgeNames: string[]
   classroomSyncEnabled: boolean
   desktopHostsOnline: number
@@ -44,11 +48,17 @@ export type ClassroomSettingsModalProps = {
   onClose: () => void
   onSave: (course: MobileClassroomCourse) => void
   onDelete: (courseId: string) => void
+  onGenerateSyllabus: (course: MobileClassroomCourse) => void | Promise<void>
+  onRememberKbLabels: (ids: string[], labels: string[]) => void
 }
 
-export function draftFromCourse(course: MobileClassroomCourse): ClassroomSettingsDraft {
+export function draftFromCourse(
+  course: MobileClassroomCourse,
+  knowledgeNames: string[],
+): ClassroomSettingsDraft {
   const presetId = (course.presetId as AssistantLibPresetId) || 'socratic-tutor'
   const preset = getAssistantLibPreset(presetId)
+  const kbIds = course.kbIds ?? []
   return {
     courseName: course.courseName || course.title,
     presetId,
@@ -60,6 +70,8 @@ export function draftFromCourse(course: MobileClassroomCourse): ClassroomSetting
     autoSpeak: course.autoSpeak !== false,
     ttsEngine: course.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
     ttsVoice: resolveCuratedEdgeTtsVoice(course.ttsVoice || DEFAULT_EDGE_TTS_VOICE),
+    kbIds,
+    kbLabel: knowledgeNames.join('、'),
   }
 }
 
@@ -88,6 +100,7 @@ export function applyClassroomSettingsDraft(
         draft.ttsEngine === 'edge'
           ? resolveCuratedEdgeTtsVoice(draft.ttsVoice)
           : draft.ttsVoice,
+      kbIds: draft.kbIds,
     },
   }
 }
@@ -115,7 +128,7 @@ export function classroomPresetPatch(
 }
 
 export function useClassroomSettingsModal(props: ClassroomSettingsModalProps) {
-  const { visible, course, onSave, onDelete } = props
+  const { visible, course, knowledgeNames, onSave, onDelete, onGenerateSyllabus } = props
   const presets = useMemo(
     () => listSelectableAssistantLibPresets().filter((preset) => preset.id !== 'toolman-guide'),
     [],
@@ -125,15 +138,24 @@ export function useClassroomSettingsModal(props: ClassroomSettingsModalProps) {
   const [editingDoc, setEditingDoc] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [kbPickerOpen, setKbPickerOpen] = useState(false)
+  const [generatingSyllabus, setGeneratingSyllabus] = useState(false)
 
   useEffect(() => {
     if (!visible) return
     setActiveTab('basic')
-    setDraft(course ? draftFromCourse(course) : null)
+    setDraft(course ? draftFromCourse(course, knowledgeNames) : null)
     setEditingDoc(false)
     setError(null)
     setConfirmDelete(false)
+    setKbPickerOpen(false)
+    setGeneratingSyllabus(false)
   }, [visible, course?.id])
+
+  useEffect(() => {
+    if (!visible || !draft || draft.kbLabel || knowledgeNames.length === 0) return
+    setDraft((prev) => (prev ? { ...prev, kbLabel: knowledgeNames.join('、') } : prev))
+  }, [knowledgeNames, visible])
 
   const courseLabel = course ? classroomCourseLabel(course) : '课程'
   const isGuide = course?.isGuideClassroom === true
@@ -142,6 +164,7 @@ export function useClassroomSettingsModal(props: ClassroomSettingsModalProps) {
   const selectedPreset = draft
     ? (shownPresets.find((item) => item.id === draft.presetId) ?? null)
     : null
+  const syllabusGenerating = course?.syllabus?.generation === 'generating' || generatingSyllabus
 
   const updateDraft = (patch: Partial<ClassroomSettingsDraft>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
@@ -168,6 +191,30 @@ export function useClassroomSettingsModal(props: ClassroomSettingsModalProps) {
       return
     }
     onDelete(course.id)
+  }
+
+  const handleGenerateSyllabus = async () => {
+    if (!course || !draft) return
+    if (draft.kbIds.length === 0) {
+      setError('请先绑定教材知识库后再生成大纲')
+      setActiveTab('basic')
+      return
+    }
+    const result = applyClassroomSettingsDraft(course, draft, isDefault)
+    if ('error' in result) {
+      setError(result.error)
+      setActiveTab('basic')
+      return
+    }
+    setGeneratingSyllabus(true)
+    setError(null)
+    try {
+      await onGenerateSyllabus(result.course)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setGeneratingSyllabus(false)
+    }
   }
 
   const docValue = activeTab === 'teaching' ? (draft?.customSystemPrompt ?? '') : (draft?.lessonPlan ?? '')
@@ -198,7 +245,11 @@ export function useClassroomSettingsModal(props: ClassroomSettingsModalProps) {
     updateDraft,
     handleSave,
     handleDelete,
+    handleGenerateSyllabus,
     docValue,
     setDocValue,
+    kbPickerOpen,
+    setKbPickerOpen,
+    syllabusGenerating,
   }
 }

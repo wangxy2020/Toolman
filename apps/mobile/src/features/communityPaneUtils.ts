@@ -16,7 +16,7 @@ export function comingSoon(label: string) {
 }
 
 export function notifyLoginRequired() {
-  const message = '请先登录或注册后再发布。'
+  const message = '请先登录或注册后再操作。'
   if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
     globalThis.alert(message)
     return

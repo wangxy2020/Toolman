@@ -3,10 +3,12 @@
  *
  * Mobile knowledge sync is scoped to `kind === 'sync'` bases only
  * （桌面「同步知识库」分区），不含本地 / 网络 / 共享等其它分区。
+ * Classroom textbook binding may list all vectorized KBs via `list-classroom-kb`.
  */
 import {
   KnowledgeHostRequestSchema,
   isSyncKnowledgeBaseKind,
+  isVectorizedKnowledgeBaseKind,
   type AgentHostCapability,
   type AgentHostPresence,
   type KnowledgeMetaItem,
@@ -17,11 +19,15 @@ import {
   writeMobileSyncPreferences,
 } from './mobile-sync.config'
 import { isMobileSyncEnabled } from './mobile-sync.service'
-import { listKnowledgeBases } from './knowledge.service'
+import { createKnowledgeBase, listKnowledgeBases } from './knowledge.service'
 import { searchKnowledge } from './knowledge-document.service'
 import { getDefaultWorkspace } from './workspace.service'
 import { publishKnowledgeMetaChanges } from './mobile-sync-store'
 import { logStructured } from './structured-log.service'
+import { startAssistantLibSyllabusGeneration } from './assistant-lib-syllabus.service'
+import { getSession } from './session.service'
+import { DEFAULT_LOCAL_MODEL } from '@toolman/db'
+import { DEFAULT_PROVIDER_ID } from '../bootstrap/database-defaults'
 
 function requireWorkspaceId(): string {
   const workspace = getDefaultWorkspace()
@@ -33,6 +39,18 @@ function requireWorkspaceId(): string {
 function listMobileSyncKnowledgeMeta(workspaceId: string): KnowledgeMetaItem[] {
   return listKnowledgeBases({ workspaceId })
     .filter((kb) => isSyncKnowledgeBaseKind(kb.kind))
+    .map((kb) => ({
+      id: kb.id,
+      name: kb.name,
+      kind: kb.kind,
+      documentCount: kb.documentCount,
+      updatedAt: kb.updatedAt,
+    }))
+}
+
+function listClassroomBindableKnowledgeMeta(workspaceId: string): KnowledgeMetaItem[] {
+  return listKnowledgeBases({ workspaceId })
+    .filter((kb) => isVectorizedKnowledgeBaseKind(kb.kind))
     .map((kb) => ({
       id: kb.id,
       name: kb.name,
@@ -91,6 +109,60 @@ async function handleKnowledgeHostMessage(message: string): Promise<{ ok: boolea
   if (request.op === 'list-meta') {
     publishKnowledgeMetaChanges(syncItems)
     return { ok: true, text: JSON.stringify({ op: 'list-meta', items: syncItems }) }
+  }
+
+  if (request.op === 'list-classroom-kb') {
+    const items = listClassroomBindableKnowledgeMeta(workspaceId)
+    return { ok: true, text: JSON.stringify({ op: 'list-classroom-kb', items }) }
+  }
+
+  if (request.op === 'generate-syllabus') {
+    const session = getSession(request.sessionId)
+    if (!session) {
+      return {
+        ok: false,
+        text: '桌面端尚未找到该课程会话。请先开启课堂同步并等待同步完成后再生成大纲。',
+      }
+    }
+    const modelId = request.modelId?.trim() || `${DEFAULT_PROVIDER_ID}:${DEFAULT_LOCAL_MODEL}`
+    const result = await startAssistantLibSyllabusGeneration({
+      workspaceId,
+      sessionId: request.sessionId,
+      modelId,
+    })
+    return {
+      ok: true,
+      text: JSON.stringify({
+        op: 'generate-syllabus',
+        started: result.started,
+        message: result.started
+          ? '已开始生成教学大纲，完成后会同步到手机'
+          : '大纲正在生成中，请稍候',
+      }),
+    }
+  }
+
+  if (request.op === 'create-classroom-kb') {
+    const name = request.name.trim()
+    const kb = createKnowledgeBase({
+      workspaceId,
+      name,
+      description: request.description?.trim() || `课堂课程教材（${name}）`,
+      kind: 'local',
+    })
+    return {
+      ok: true,
+      text: JSON.stringify({
+        op: 'create-classroom-kb',
+        item: {
+          id: kb.id,
+          name: kb.name,
+          kind: kb.kind,
+          documentCount: kb.documentCount,
+          updatedAt: kb.updatedAt,
+        },
+      }),
+    }
   }
 
   const syncKbIds = new Set(syncItems.map((item) => item.id))

@@ -1,7 +1,11 @@
 import {
+  KnowledgeHostCreateClassroomKbResponseSchema,
+  KnowledgeHostGenerateSyllabusResponseSchema,
+  KnowledgeHostListClassroomKbResponseSchema,
   KnowledgeHostListMetaResponseSchema,
   type AgentHostCapability,
   type KnowledgeHostRequest,
+  type KnowledgeMetaItem,
 } from '@toolman/shared'
 import { createReachableMobileSyncClient, getMobileSyncBaseUrl } from '../sync/mobileSync'
 
@@ -75,4 +79,44 @@ async function invokeKnowledgeHost(
 export async function listDesktopKnowledgeMeta(hostDeviceId?: string) {
   const raw = await invokeKnowledgeHost({ op: 'list-meta' }, hostDeviceId)
   return KnowledgeHostListMetaResponseSchema.parse(JSON.parse(raw)).items
+}
+
+export async function listDesktopClassroomKnowledgeBases(
+  hostDeviceId?: string,
+): Promise<KnowledgeMetaItem[]> {
+  const raw = await invokeKnowledgeHost({ op: 'list-classroom-kb' }, hostDeviceId)
+  return KnowledgeHostListClassroomKbResponseSchema.parse(JSON.parse(raw)).items
+}
+
+export async function createDesktopClassroomKnowledgeBase(input: {
+  name: string
+  description?: string
+  hostDeviceId?: string
+}): Promise<KnowledgeMetaItem> {
+  const raw = await invokeKnowledgeHost(
+    {
+      op: 'create-classroom-kb',
+      name: input.name,
+      description: input.description,
+    },
+    input.hostDeviceId,
+  )
+  return KnowledgeHostCreateClassroomKbResponseSchema.parse(JSON.parse(raw)).item
+}
+
+export async function requestDesktopSyllabusGenerate(input: {
+  sessionId: string
+  modelId?: string
+  hostDeviceId?: string
+}): Promise<{ started: boolean; message?: string }> {
+  const raw = await invokeKnowledgeHost(
+    {
+      op: 'generate-syllabus',
+      sessionId: input.sessionId,
+      modelId: input.modelId,
+    },
+    input.hostDeviceId,
+  )
+  const parsed = KnowledgeHostGenerateSyllabusResponseSchema.parse(JSON.parse(raw))
+  return { started: parsed.started, message: parsed.message }
 }
