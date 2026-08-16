@@ -18,8 +18,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GITEE_TOKEN}" ]; then
-            echo "::error::GITEE_TOKEN is empty. Add a Gitee private token (projects scope) at Settings → Secrets → Actions."
-            exit 1
+            echo "::notice::GITEE_TOKEN is not set — skipping Gitee mirror. Add a Gitee private token (projects scope) at Settings → Secrets and variables → Actions to enable sync."
+            exit 0
           fi
 
           status="$(
