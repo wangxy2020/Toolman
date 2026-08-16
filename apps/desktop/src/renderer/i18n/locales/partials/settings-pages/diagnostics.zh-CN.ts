@@ -104,10 +104,9 @@ export const settingsPagesDiagnosticsZhCN = {
       wanToggle: '跨网同步（经官方社区 Hub）',
       wanToggleHint:
         '默认开启。将同账号变更镜像到官方社区 Hub，手机/网页在异网可拉取笔记、课程与群组元数据。关闭后仅局域网 Sync Hub。',
-      knowledgeWanHint:
-        '完整知识库正文与向量仅局域网可用；跨网先同步目录元数据。',
       hubToken: '配对令牌',
-      hubTokenHint: '移动端「系统诊断」中填写此令牌。不要发到社区 Hub 或聊天里。',
+      hubTokenHint:
+        '完整知识库正文与向量仅局域网可用；跨网先同步目录元数据。移动端「系统诊断」中填写此令牌。不要发到社区 Hub 或聊天里。',
       copyToken: '复制',
       copiedToken: '已复制',
       hub: 'Hub 状态',

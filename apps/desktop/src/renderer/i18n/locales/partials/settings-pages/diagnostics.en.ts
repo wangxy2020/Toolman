@@ -108,10 +108,9 @@ export const settingsPagesDiagnosticsEn = {
       wanToggle: 'Cross-network sync (official Community Hub)',
       wanToggleHint:
         'On by default. Mirrors same-account changes to the official Community Hub so phones/web can pull notes, courses, and group metadata off-LAN. Off = LAN Sync Hub only.',
-      knowledgeWanHint:
-        'Full knowledge bodies and vectors are LAN-only; cross-network syncs directory metadata first.',
       hubToken: 'Pairing token',
-      hubTokenHint: 'Paste this token in mobile Diagnostics. Do not send it to Community Hub or chat.',
+      hubTokenHint:
+        'Full knowledge bodies and vectors are LAN-only; cross-network syncs directory metadata first. Paste this token in mobile Diagnostics. Do not send it to Community Hub or chat.',
       copyToken: 'Copy',
       copiedToken: 'Copied',
       hub: 'Hub status',

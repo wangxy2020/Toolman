@@ -106,15 +106,20 @@ export function DiagnosticsSettingsMobileSection({
           onChange={onWanToggle}
         />
       </SettingsRow>
-      <p className="tm-settings-row-hint">{t('settings.diagnostics.mobileSync.knowledgeWanHint')}</p>
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.hubToken')}
         hint={t('settings.diagnostics.mobileSync.hubTokenHint')}
       >
-        <div className="tm-settings-static" style={{ wordBreak: 'break-all' }}>
-          <div>{mobile.hubToken ?? '—'}</div>
+        <div className="tm-settings-token-row">
+          <span className="tm-settings-token-mask" aria-hidden={Boolean(mobile.hubToken)}>
+            {mobile.hubToken ? '••••••••••••••••' : '—'}
+          </span>
           {mobile.hubToken ? (
-            <button type="button" className="tm-btn tm-btn--ghost tm-btn--sm" onClick={() => void copyToken()}>
+            <button
+              type="button"
+              className="tm-btn tm-btn--ghost tm-btn--sm"
+              onClick={() => void copyToken()}
+            >
               {copied
                 ? t('settings.diagnostics.mobileSync.copiedToken')
                 : t('settings.diagnostics.mobileSync.copyToken')}

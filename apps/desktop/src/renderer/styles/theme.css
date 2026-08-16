@@ -13188,6 +13188,33 @@ html.theme-dark .tm-agent-workdir-browse {
   white-space: nowrap;
 }
 
+.tm-settings-token-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.tm-settings-token-mask {
+  font-size: 13px;
+  color: var(--tm-text-secondary);
+  letter-spacing: 0.08em;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-settings-token-row .tm-btn {
+  flex: 0 0 auto;
+}
+
+.tm-display-row-control:has(.tm-settings-token-row) {
+  overflow: visible;
+  min-width: fit-content;
+}
+
 .tm-settings-static--mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   word-break: normal;
