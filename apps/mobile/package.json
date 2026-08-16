@@ -1,6 +1,6 @@
 {
   "name": "@toolman/mobile",
-  "version": "0.7.0-rc.2.1",
+  "version": "0.7.0-rc.2.2",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "main": "expo-router/entry",
