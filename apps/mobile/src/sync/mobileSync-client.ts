@@ -53,7 +53,7 @@ export async function loadSyncHubToken(): Promise<string | null> {
   return token || null
 }
 
-export type MobileSyncTransport = 'lan-hub' | 'community-hub'
+export type MobileSyncTransport = 'lan-hub' | 'community-hub' | 'personal-mailbox' | 'webrtc'
 
 /** Same-origin Community Hub proxy used by hosted web (avoids browser CORS to hub.toolman.app). */
 export const COMMUNITY_HUB_SYNC_PROXY_BASE = COMMUNITY_HUB_PROXY_PREFIX
@@ -121,7 +121,18 @@ async function probeJson(url: string, signal: AbortSignal): Promise<unknown | nu
     headers: { Accept: 'application/json' },
     signal,
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    // Hosted-web proxy returns 502 when upstream Hub DNS/deploy is down.
+    if (
+      res.status === 502 &&
+      isHostedWebPage() &&
+      (url.includes(`${COMMUNITY_HUB_SYNC_PROXY_BASE}/`) ||
+        url.startsWith(COMMUNITY_HUB_SYNC_PROXY_BASE))
+    ) {
+      return { __proxyUpstreamDown: true }
+    }
+    return null
+  }
   try {
     return await res.json()
   } catch {
@@ -129,7 +140,15 @@ async function probeJson(url: string, signal: AbortSignal): Promise<unknown | nu
   }
 }
 
-type SyncHubProbeKind = 'ok' | 'foreign' | 'miss' | 'no-device-sync'
+type SyncHubProbeKind = 'ok' | 'foreign' | 'miss' | 'no-device-sync' | 'proxy-upstream-down'
+
+function isProxyUpstreamDownPayload(payload: unknown): boolean {
+  return Boolean(
+    payload &&
+      typeof payload === 'object' &&
+      (payload as { __proxyUpstreamDown?: boolean }).__proxyUpstreamDown === true,
+  )
+}
 
 function asHealthRecord(payload: unknown): Record<string, unknown> | null {
   if (!payload || typeof payload !== 'object') return null
@@ -158,6 +177,7 @@ async function classifySyncBaseUrl(
       (await probeJson(`${origin}/health`, ctrl.signal)) ??
       (await probeJson(`${origin}/api/v1/health`, ctrl.signal))
     if (!health) return 'miss'
+    if (isProxyUpstreamDownPayload(health)) return 'proxy-upstream-down'
     if (isReachableSyncEndpointHealth(health)) {
       // LAN Sync Hub authenticates with the pairing token. Its /health may still
       // advertise the desktop guest UUID, which must not reject Authing mobile IDs
@@ -189,16 +209,23 @@ export function resetMobileSyncBaseUrlCache(): void {
 
 function unreachableSyncHubMessage(
   tried: string[],
-  options?: { noDeviceSyncUrl?: string | null },
+  options?: { noDeviceSyncUrl?: string | null; proxyUpstreamDown?: boolean },
 ): string {
+  if (options?.proxyUpstreamDown) {
+    return (
+      '网页同源代理无法连接官方社区 Hub（上游不可达）。' +
+      '这不影响真机局域网同步。请用手机 + 配对令牌，或完成设备配对后走点到点/加密投递；' +
+      '若需明文跨网镜像，请自行部署 Hub 并配置 COMMUNITY_HUB_UPSTREAM。'
+    )
+  }
   if (options?.noDeviceSyncUrl) {
-    return `已连接到社区 Hub（${options.noDeviceSyncUrl}），但未开启跨网同步（device_sync）。请升级部署官方 Hub 后重试。`
+    return `已连接到社区 Hub（${options.noDeviceSyncUrl}），但未开启跨网同步（device_sync）。可忽略并改用局域网/设备配对；或升级部署官方 Hub。`
   }
   const list = tried.length > 0 ? tried.join('、') : DEFAULT_LOCAL_SYNC_BASE_URL
   const hostedHint =
-    '网页会经同源代理访问官方社区 Hub；局域网 Sync Hub 浏览器通常不可达。请确认已登录同一账号，且桌面端已打开跨网同步。'
+    '网页优先走点到点/加密投递（需设备配对）；局域网 Sync Hub 在浏览器通常不可达。真机请用局域网配对令牌。'
   const localHint =
-    '同一局域网请开启桌面「与移动端同步」；跨网请登录同一账号，由官方社区 Hub 中转。'
+    '同一局域网请开启桌面「与移动端同步」并填写配对令牌；也可粘贴设备配对码启用个人投递盒。'
   return `无法连接桌面 Sync Hub（${list}）。${isHostedWebPage() ? hostedHint : localHint}`
 }
 
@@ -228,6 +255,7 @@ export async function resolveReachableMobileSyncBaseUrl(
   }
   let foreignUrl: string | null = null
   let noDeviceSyncUrl: string | null = null
+  let proxyUpstreamDown = false
   for (const url of uniqueCandidates) {
     const kind = await classifySyncBaseUrl(url, localIdentityId)
     if (kind === 'ok') {
@@ -236,11 +264,14 @@ export async function resolveReachableMobileSyncBaseUrl(
     }
     if (kind === 'foreign' && !foreignUrl) foreignUrl = url
     if (kind === 'no-device-sync' && !noDeviceSyncUrl) noDeviceSyncUrl = url
+    if (kind === 'proxy-upstream-down') proxyUpstreamDown = true
   }
   if (foreignUrl) {
     throw new ForeignSyncHubError(foreignUrl)
   }
-  throw new Error(unreachableSyncHubMessage(uniqueCandidates, { noDeviceSyncUrl }))
+  throw new Error(
+    unreachableSyncHubMessage(uniqueCandidates, { noDeviceSyncUrl, proxyUpstreamDown }),
+  )
 }
 
 export async function resolveReachableMobileSyncTarget(

@@ -33,6 +33,9 @@ import {
   applyKnowledgeMetaChange,
   hydrateOmittedFiles,
 } from './mobileSync-pull-helpers'
+import { pullPersonalMailboxChanges } from './personalMailboxSync'
+import { tryDeviceSyncWebrtc } from './deviceSyncWebrtc'
+import { loadDevicePairing } from '../storage/devicePairing'
 
 export type AppliedSync = {
   notes: MobileNote[]
@@ -54,7 +57,7 @@ export type AppliedSync = {
 }
 
 const KNOWLEDGE_WAN_SOFT_MESSAGE =
-  '知识库文件需同局域网或稍后在 LAN 补拉（跨网仅同步目录元数据）'
+  '知识库正文与向量仅局域网 Sync Hub 可用；跨网 / 点到点首期只同步目录元数据，请稍后在 LAN 补拉文件'
 
 /** Pull remote changes and merge notes + optional sync-KB snapshot (files, chunks, vectors). */
 export async function pullAndApplySync(options: {
@@ -97,6 +100,34 @@ export async function pullAndApplySync(options: {
     const hasMore = pull.hasMore === true || pull.changes.length >= 100
     cursor = nextCursor
     if (!hasMore || pull.changes.length === 0) break
+  }
+
+  let effectiveTransport: MobileSyncTransport = transport
+  // Prefer LAN HTTP. Attempt WebRTC only when not already on lan-hub (WAN / hosted web).
+  if (transport !== 'lan-hub') {
+    try {
+      const pairing = await loadDevicePairing()
+      if (pairing) {
+        const webrtc = await tryDeviceSyncWebrtc(pairing)
+        if (webrtc.ok) {
+          pulledChanges.push(...webrtc.changes)
+          effectiveTransport = 'webrtc'
+        }
+      }
+    } catch {
+      // WebRTC is best-effort; fall through to mailbox / HTTP.
+    }
+  }
+  try {
+    const mailbox = await pullPersonalMailboxChanges()
+    if (mailbox && mailbox.changes.length > 0) {
+      pulledChanges.push(...mailbox.changes)
+      if (effectiveTransport !== 'webrtc' && transport !== 'lan-hub') {
+        effectiveTransport = 'personal-mailbox'
+      }
+    }
+  } catch {
+    // Personal mailbox is best-effort when paired + Hub reachable.
   }
 
   const merged = includeNotes
@@ -201,7 +232,7 @@ export async function pullAndApplySync(options: {
     documentCount: snapshot?.documents.length ?? 0,
     knowledgeError,
     knowledgeWanSkipped,
-    transport,
+    transport: effectiveTransport,
     baseUrl,
     syncState: nextState,
   }

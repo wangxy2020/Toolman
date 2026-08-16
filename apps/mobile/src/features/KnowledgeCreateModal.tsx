@@ -82,19 +82,29 @@ export function KnowledgeCreateModal(props: Props) {
             <View style={styles.kindRow} accessibilityRole="radiogroup">
               {KNOWLEDGE_CREATE_KINDS.map((item) => {
                 const active = kind === item.id
+                const disabled = Boolean(item.disabled)
                 return (
                   <Pressable
                     key={item.id}
+                    disabled={disabled}
                     onPress={() => changeKind(item.id)}
-                    style={({ pressed }) => [styles.kindOption, pressed ? styles.kindOptionPressed : null]}
+                    style={({ pressed }) => [
+                      styles.kindOption,
+                      pressed && !disabled ? styles.kindOptionPressed : null,
+                      disabled ? styles.kindOptionDisabled : null,
+                    ]}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
+                    accessibilityState={{ selected: active, disabled }}
                     hitSlop={6}
                   >
                     <View style={[styles.kindRadio, active ? styles.kindRadioActive : null]}>
                       {active ? <View style={styles.kindRadioDot} /> : null}
                     </View>
-                    <Text style={styles.kindLabel}>{item.label}</Text>
+                    <Text
+                      style={[styles.kindLabel, disabled ? styles.kindLabelDisabled : null]}
+                    >
+                      {item.label}
+                    </Text>
                   </Pressable>
                 )
               })}

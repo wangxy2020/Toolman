@@ -27,6 +27,7 @@ export function DiagnosticsSettingsMobileSection({
 }: Props) {
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)
+  const [copiedPairing, setCopiedPairing] = useState(false)
   const mobile = snapshot.mobileSync ?? {
     syncEnabled: false,
     agentHostEnabled: false,
@@ -36,7 +37,7 @@ export function DiagnosticsSettingsMobileSection({
     advertisedUrls: [],
     lastError: null,
     lanAccessEnabled: false,
-    wanSyncEnabled: true,
+    wanSyncEnabled: false,
   }
   const reachable = (mobile.advertisedUrls ?? []).filter(
     (url) => url && !url.includes('127.0.0.1'),
@@ -55,6 +56,17 @@ export function DiagnosticsSettingsMobileSection({
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
       setCopied(false)
+    }
+  }
+
+  const copyPairingCode = async () => {
+    if (!mobile.personalPairingCode) return
+    try {
+      await navigator.clipboard.writeText(mobile.personalPairingCode)
+      setCopiedPairing(true)
+      window.setTimeout(() => setCopiedPairing(false), 1500)
+    } catch {
+      setCopiedPairing(false)
     }
   }
 
@@ -101,19 +113,36 @@ export function DiagnosticsSettingsMobileSection({
         hint={t('settings.diagnostics.mobileSync.wanToggleHint')}
       >
         <SettingsToggle
-          checked={mobile.wanSyncEnabled !== false}
+          checked={Boolean(mobile.wanSyncEnabled)}
           disabled={busy}
           onChange={onWanToggle}
         />
+      </SettingsRow>
+      <SettingsRow
+        label={t('settings.diagnostics.mobileSync.devicePairing')}
+        hint={t('settings.diagnostics.mobileSync.devicePairingHint')}
+      >
+        <div className="tm-settings-token-row">
+          {mobile.personalPairingCode ? (
+            <button
+              type="button"
+              className="tm-btn tm-btn--ghost tm-btn--sm"
+              onClick={() => void copyPairingCode()}
+            >
+              {copiedPairing
+                ? t('settings.diagnostics.mobileSync.copiedToken')
+                : t('settings.diagnostics.mobileSync.copyPairing')}
+            </button>
+          ) : (
+            <span className="tm-settings-token-mask">—</span>
+          )}
+        </div>
       </SettingsRow>
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.hubToken')}
         hint={t('settings.diagnostics.mobileSync.hubTokenHint')}
       >
         <div className="tm-settings-token-row">
-          <span className="tm-settings-token-mask" aria-hidden={Boolean(mobile.hubToken)}>
-            {mobile.hubToken ? '••••••••••••••••' : '—'}
-          </span>
           {mobile.hubToken ? (
             <button
               type="button"
@@ -124,7 +153,9 @@ export function DiagnosticsSettingsMobileSection({
                 ? t('settings.diagnostics.mobileSync.copiedToken')
                 : t('settings.diagnostics.mobileSync.copyToken')}
             </button>
-          ) : null}
+          ) : (
+            <span className="tm-settings-token-mask">—</span>
+          )}
         </div>
       </SettingsRow>
       <SettingsRow label={t('settings.diagnostics.mobileSync.hub')}>

@@ -101,13 +101,19 @@ export const settingsPagesDiagnosticsZhCN = {
         '默认关闭。开启后监听 0.0.0.0，真机可用下方局域网 / Tailscale 地址连接，仍需配对令牌。',
       loopbackOnly:
         '当前仅本机回环（127.0.0.1），手机不可达。同 Wi‑Fi 请开启「允许局域网访问」并填写配对令牌。',
-      wanToggle: '跨网同步（经官方社区 Hub）',
+      wanToggle: '跨网明文镜像（可选 · 官方社区 Hub）',
       wanToggleHint:
-        '默认开启。将同账号变更镜像到官方社区 Hub，手机/网页在异网可拉取笔记、课程与群组元数据。关闭后仅局域网 Sync Hub。',
-      hubToken: '配对令牌',
+        '默认关闭。开启后将同账号变更明文镜像到社区 Hub（需已部署 Hub）。优先使用设备配对 + 局域网 / 点到点同步。',
+      transportHint:
+        '传输优先级：局域网 Sync Hub → 点到点 WebRTC → 加密个人投递盒 → 可选明文 device_sync（默认关闭）。',
+      devicePairing: '设备配对码',
+      devicePairingHint:
+        '复制后在手机/网页「用户信息 → 令牌同步」粘贴，完成同账号点到点配对（约 30 分钟有效）。',
+      copyPairing: '复制配对码',
+      hubToken: '局域网配对令牌',
       hubTokenHint:
-        '完整知识库正文与向量仅局域网可用；跨网先同步目录元数据。移动端「系统诊断」中填写此令牌。不要发到社区 Hub 或聊天里。',
-      copyToken: '复制',
+        '完整知识库正文与向量仅局域网可用。移动端「用户信息 → 令牌同步」填写此令牌。不要发到社区 Hub 或聊天里。',
+      copyToken: '复制令牌',
       copiedToken: '已复制',
       hub: 'Hub 状态',
       baseUrl: '本机地址',

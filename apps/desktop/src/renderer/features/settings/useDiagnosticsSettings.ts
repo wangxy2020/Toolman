@@ -16,7 +16,7 @@ const EMPTY_MOBILE_SYNC: AppDiagnosticsMobileSync = {
   advertisedUrls: [],
   lastError: null,
   lanAccessEnabled: false,
-  wanSyncEnabled: true,
+  wanSyncEnabled: false,
 }
 
 function normalizeSnapshot(raw: AppGetDiagnosticsOutput): AppGetDiagnosticsOutput {

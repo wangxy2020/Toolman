@@ -75,6 +75,11 @@ export async function applyIncomingMailbox(
     )
     return
   }
+  // Personal device-sync envelopes are handled by personal mailbox / WebRTC paths.
+  if (plaintext.type === 'device.sync.changes' || plaintext.type === 'device.sync.signal') {
+    return
+  }
+  if (plaintext.type !== 'workspace.propose') return
   if (!isLocalWorkspaceOwner(workspaceId)) return
   const sender = getMemberRepo().findByWorkspaceAndDevice(
     workspaceId,

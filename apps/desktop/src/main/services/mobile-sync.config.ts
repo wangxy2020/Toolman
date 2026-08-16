@@ -18,7 +18,7 @@ const MobileSyncPreferencesSchema = z.object({
    * Mirror private changelog to Community Hub (local sidecar + official) for
    * off-LAN mobile/web sync. Default on.
    */
-  wanSyncEnabled: z.boolean().default(true),
+  wanSyncEnabled: z.boolean().default(false),
   /** Pairing token required by Sync Hub APIs (except `/health`). */
   hubToken: z.string().min(16).optional(),
   /** Optional override; empty → default port 17890. */
@@ -32,7 +32,7 @@ const DEFAULT_PREFS: MobileSyncPreferences = {
   agentHostEnabled: true,
   classroomSyncEnabled: true,
   lanAccessEnabled: false,
-  wanSyncEnabled: true,
+  wanSyncEnabled: false,
 }
 
 function getConfigPath(): string {
@@ -110,12 +110,12 @@ export function setMobileSyncLanAccessEnabled(enabled: boolean): MobileSyncPrefe
   })
 }
 
-/** Cross-network private sync via Community Hub device_sync. */
+/** Optional plaintext Community Hub device_sync mirror (deprecated; off by default). */
 export function isMobileSyncWanEnabled(): boolean {
   const env = envTriState('TOOLMAN_MOBILE_SYNC_WAN')
   if (env !== null) return env
   if (!isMobileSyncPreferenceEnabled()) return false
-  return readMobileSyncPreferences().wanSyncEnabled !== false
+  return readMobileSyncPreferences().wanSyncEnabled === true
 }
 
 export function setMobileSyncWanEnabled(enabled: boolean): MobileSyncPreferences {

@@ -116,7 +116,6 @@ export function useKnowledgeFilePanel(props: KnowledgeFilePanelProps) {
     documents,
     mode,
     showDropzone,
-    importDisabled = false,
     listKey,
     onImportFiles,
     onDeleteDocument,
@@ -128,7 +127,8 @@ export function useKnowledgeFilePanel(props: KnowledgeFilePanelProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const dragDepth = useRef(0)
   const isUrlMode = mode === 'url'
-  const dropzoneDisabled = importDisabled || (!isUrlMode && Platform.OS !== 'web')
+  // Mobile cannot chunk/vectorize; uploads belong on desktop.
+  const dropzoneDisabled = true
 
   useEffect(() => {
     setSelectedIds(new Set())

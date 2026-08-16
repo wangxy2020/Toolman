@@ -31,6 +31,7 @@ import { workspaceEventToWire } from './p2p-sync-protocol'
 import { logP2pPathMetrics, recordP2pPathMetric } from './p2p-path-metrics'
 import { memberVisible } from './p2p-mailbox-auth'
 import { applyIncomingMailbox } from './p2p-mailbox-handlers'
+import { resolvePersonalMailboxSession } from '../personal-device-pairing.service'
 
 export async function depositEventToMailbox(event: WorkspaceEvent): Promise<void> {
   const local = getP2pDeviceInfo()
@@ -96,6 +97,12 @@ export async function handleMailboxSession(
   const parsed = P2pMailboxSessionInputSchema.safeParse(raw)
   if (!parsed.success) return { ok: false, status: 400, error: '信箱会话参数无效' }
   const input = parsed.data
+  const personal = resolvePersonalMailboxSession({
+    workspaceId: input.workspaceId,
+    deviceId: input.deviceId,
+    identityId: input.identityId,
+  })
+  if (personal) return personal
   const workspace = getWorkspaceRepo().findById(input.workspaceId)
   if (!workspace) return { ok: false, status: 404, error: '群组不存在' }
   const keyB64 = loadWorkspaceKey(input.workspaceId)

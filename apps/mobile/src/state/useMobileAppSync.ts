@@ -12,7 +12,6 @@ import {
   formatSyncFailureMessage,
   type KnowledgeMetaItem,
 } from '../sync/mobileSync'
-import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
 import {
   EMPTY_MOBILE_SYNC_STATE,
   type MobileSyncState,
@@ -87,14 +86,6 @@ export function useMobileAppSync(input: {
     const includeNotes = prefs.notes.syncEnabled
     const includeKnowledge = prefs.knowledge.syncEnabled
     const includeClassroom = prefs.classroom.syncEnabled
-    const hostedBlocked = hostedWebSyncBlockedReason({
-      configuredSyncBaseUrl: prefs.sync.hubBaseUrl,
-      envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
-    })
-    if (hostedBlocked) {
-      setSyncStatus('offline')
-      return hostedBlocked
-    }
     if (syncingRef.current) {
       return reason === 'manual' ? '同步进行中' : ''
     }

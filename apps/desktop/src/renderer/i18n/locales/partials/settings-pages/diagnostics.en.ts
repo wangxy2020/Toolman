@@ -105,13 +105,19 @@ export const settingsPagesDiagnosticsEn = {
         'Off by default. When on, the hub binds 0.0.0.0 so a phone can use the LAN/Tailscale URL below. The pairing token is still required.',
       loopbackOnly:
         'Hub is loopback-only (127.0.0.1) — phones cannot reach it. On the same Wi‑Fi, enable “Allow LAN access” and paste the pairing token.',
-      wanToggle: 'Cross-network sync (official Community Hub)',
+      wanToggle: 'Optional plaintext WAN mirror (Community Hub)',
       wanToggleHint:
-        'On by default. Mirrors same-account changes to the official Community Hub so phones/web can pull notes, courses, and group metadata off-LAN. Off = LAN Sync Hub only.',
-      hubToken: 'Pairing token',
+        'Off by default. When on, mirrors same-account changelog to Community Hub (requires a deployed Hub). Prefer device pairing + LAN / peer sync.',
+      transportHint:
+        'Transport order: LAN Sync Hub → peer WebRTC → encrypted personal mailbox → optional plaintext device_sync (off by default).',
+      devicePairing: 'Device pairing code',
+      devicePairingHint:
+        'Copy and paste into mobile/web Account → Token & sync to pair the same account for peer sync (~30 min validity).',
+      copyPairing: 'Copy pairing code',
+      hubToken: 'LAN pairing token',
       hubTokenHint:
-        'Full knowledge bodies and vectors are LAN-only; cross-network syncs directory metadata first. Paste this token in mobile Diagnostics. Do not send it to Community Hub or chat.',
-      copyToken: 'Copy',
+        'Full knowledge bodies and vectors are LAN-only. Paste this token under mobile Account → Token & sync. Do not send it to Community Hub or chat.',
+      copyToken: 'Copy token',
       copiedToken: 'Copied',
       hub: 'Hub status',
       baseUrl: 'Local URL',

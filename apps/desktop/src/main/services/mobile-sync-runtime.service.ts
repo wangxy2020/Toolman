@@ -42,6 +42,12 @@ import {
   setMobileSyncLanAccessEnabled,
   setMobileSyncWanEnabled,
 } from './mobile-sync.config'
+import { createPersonalPairingOffer } from './personal-device-pairing.service'
+import { depositPersonalSyncChanges } from './personal-mailbox-deposit'
+import {
+  startPersonalDeviceWebrtcLoop,
+  stopPersonalDeviceWebrtcLoop,
+} from './personal-device-webrtc.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
 import { advertisedHttpUrls } from './network-advertise'
@@ -83,6 +89,15 @@ function seedMobileSyncChangelog(): void {
 export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
   const syncPort = getMobileSyncHubPort()
   const lanAccessEnabled = isMobileSyncLanAccessEnabled()
+  let personalPairingCode: string | undefined
+  let personalPairingExpiresAt: number | undefined
+  try {
+    const { offer, code } = createPersonalPairingOffer()
+    personalPairingCode = code
+    personalPairingExpiresAt = offer.expiresAt
+  } catch {
+    // Pairing optional during early boot / tests.
+  }
   return {
     syncEnabled: isMobileSyncEnabled(),
     agentHostEnabled: isMobileAgentHostEnabled(),
@@ -96,23 +111,30 @@ export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
     hubToken: ensureMobileSyncHubToken(),
     lanAccessEnabled,
     wanSyncEnabled: isMobileSyncWanEnabled(),
+    personalPairingCode,
+    personalPairingExpiresAt,
   }
 }
 
 export async function ensureMobileSyncRuntime(): Promise<AppDiagnosticsMobileSync> {
   if (!isMobileSyncEnabled()) {
     stopCommunityDeviceSyncLoop()
+    stopPersonalDeviceWebrtcLoop()
     setSyncChangeAppendListener(null)
     await stopMobileSyncHub()
     return getMobileSyncDiagnostics()
   }
   seedMobileSyncChangelog()
-  setSyncChangeAppendListener(replicateChangesToCommunityHub)
+  setSyncChangeAppendListener((changes) => {
+    replicateChangesToCommunityHub(changes)
+    void depositPersonalSyncChanges(changes)
+  })
   if (isMobileSyncWanEnabled()) {
     startCommunityDeviceSyncLoop()
   } else {
     stopCommunityDeviceSyncLoop()
   }
+  startPersonalDeviceWebrtcLoop()
   try {
     await startMobileSyncHub()
   } catch (error) {
@@ -136,6 +158,7 @@ export async function setMobileSyncEnabled(
   setMobileSyncPreferenceEnabled(enabled)
   if (!enabled) {
     stopCommunityDeviceSyncLoop()
+    stopPersonalDeviceWebrtcLoop()
     setSyncChangeAppendListener(null)
     await stopMobileSyncHub()
     return getMobileSyncDiagnostics()

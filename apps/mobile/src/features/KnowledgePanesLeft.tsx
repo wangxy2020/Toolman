@@ -99,34 +99,46 @@ export function KnowledgeLeftPane() {
           const isOpen = expanded.has(section.id)
           const isActive = activeSection === section.id
           const remoteKbs = kbsForSection(section.id)
+          const sectionDisabled = section.id === 'local'
           return (
-            <View key={section.id} style={styles.group}>
-              <View style={[styles.sectionRow, isActive ? styles.sectionRowActive : null]}>
+            <View key={section.id} style={[styles.group, sectionDisabled ? styles.groupDisabled : null]}>
+              <View
+                style={[
+                  styles.sectionRow,
+                  isActive && !sectionDisabled ? styles.sectionRowActive : null,
+                ]}
+              >
                 <Pressable
                   accessibilityLabel={isOpen ? '折叠' : '展开'}
+                  disabled={sectionDisabled}
                   onPress={() => toggleExpanded(section.id)}
                   style={({ pressed }) => [
                     styles.expandHit,
-                    pressed ? styles.expandHitPressed : null,
+                    pressed && !sectionDisabled ? styles.expandHitPressed : null,
                   ]}
                 >
                   <SectionChevron open={isOpen} />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
+                  accessibilityState={{ selected: isActive, disabled: sectionDisabled }}
+                  disabled={sectionDisabled}
                   onPress={() => selectSection(section.id)}
                   style={styles.sectionNameHit}
                 >
                   <Text
-                    style={[styles.sectionName, isActive ? styles.sectionNameActive : null]}
+                    style={[
+                      styles.sectionName,
+                      isActive && !sectionDisabled ? styles.sectionNameActive : null,
+                      sectionDisabled ? styles.sectionNameDisabled : null,
+                    ]}
                     numberOfLines={1}
                   >
                     {section.label}
                   </Text>
                 </Pressable>
               </View>
-              {isOpen ? (
+              {isOpen && !sectionDisabled ? (
                 <View style={styles.sectionBody}>
                   {section.defaultFolderId ? (
                     <KnowledgeSidebarKbItem

@@ -1,14 +1,17 @@
-import { OFFICIAL_TOOLMAN_HUB_URL } from '@toolman/shared'
 import { isHostedWebPage } from './desktopDevHost'
 
 export const HOSTED_WEB_SYNC_MESSAGE =
-  '托管网页无法访问电脑上的 HTTP Sync Hub。同一局域网请用真机；跨网将走官方社区 Hub（需登录同一账号）。'
+  '托管网页无法访问电脑上的 HTTP Sync Hub。请完成设备配对后走点到点 / 加密投递；真机局域网仍可用配对令牌。官方社区 Hub 明文镜像为可选，未部署不影响局域网与点到点同步。'
 
 export function isHttpsSyncUrl(raw?: string | null): boolean {
   return Boolean(raw && /^https:\/\//i.test(raw.trim()))
 }
 
-export function hostedWebSyncBlockedReason(options?: {
+/**
+ * Soft guidance for hosted web (subtitle / diagnostics). Never hard-blocks sync —
+ * pairing + WebRTC / personal mailbox / optional Hub proxy may still succeed.
+ */
+export function hostedWebSyncSoftHint(options?: {
   configuredSyncBaseUrl?: string | null
   envSyncBaseUrl?: string | null
 }): string | null {
@@ -16,7 +19,14 @@ export function hostedWebSyncBlockedReason(options?: {
   if (isHttpsSyncUrl(options?.configuredSyncBaseUrl) || isHttpsSyncUrl(options?.envSyncBaseUrl)) {
     return null
   }
-  // Official community hub is HTTPS and can relay private sync when LAN is unreachable.
-  if (isHttpsSyncUrl(OFFICIAL_TOOLMAN_HUB_URL)) return null
   return HOSTED_WEB_SYNC_MESSAGE
+}
+
+/** @deprecated Prefer soft hint; hosted web no longer hard-blocks sync attempts. */
+export function hostedWebSyncBlockedReason(options?: {
+  configuredSyncBaseUrl?: string | null
+  envSyncBaseUrl?: string | null
+}): string | null {
+  void options
+  return null
 }

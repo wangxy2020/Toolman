@@ -1,5 +1,6 @@
-import { toErrorMessage } from '@toolman/shared'
+import { DEVICE_SYNC_DATA_CHANNEL, toErrorMessage } from '@toolman/shared'
 import { logStructured } from '../structured-log.service'
+import { handlePersonalDeviceSyncChannelMessage } from '../personal-device-webrtc.service'
 import { P2pBridge } from './p2p-bridge'
 import { handleP2pFileChannelMessage } from './p2p-blob-transfer.service'
 import { handleP2pGroupChatChannelMessage } from './p2p-group-chat.service'
@@ -43,6 +44,13 @@ export async function processP2pIncomingMessages(): Promise<void> {
       await runIncomingChannelHandler('group chat message', () =>
         handleP2pGroupChatChannelMessage(item.peerDeviceId, item.data),
       )
+      continue
+    }
+
+    if (item.channel === DEVICE_SYNC_DATA_CHANNEL) {
+      await runIncomingChannelHandler('personal device-sync channel', async () => {
+        await handlePersonalDeviceSyncChannelMessage(item.peerDeviceId, item.data)
+      })
       continue
     }
 

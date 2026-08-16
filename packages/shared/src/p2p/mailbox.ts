@@ -71,6 +71,19 @@ export const P2pMailboxPlaintextSchema = z.discriminatedUnion('type', [
     senderDeviceId: z.string().min(1),
     relay: z.unknown(),
   }),
+  z.object({
+    type: z.literal('device.sync.changes'),
+    senderDeviceId: z.string().min(1),
+    changes: z.array(z.unknown()).max(500),
+    depositedAt: z.number().int().nonnegative(),
+  }),
+  z.object({
+    type: z.literal('device.sync.signal'),
+    senderDeviceId: z.string().min(1),
+    kind: z.enum(['offer', 'answer', 'ice']),
+    payload: z.record(z.unknown()),
+    depositedAt: z.number().int().nonnegative(),
+  }),
 ])
 export type P2pMailboxPlaintext = z.infer<typeof P2pMailboxPlaintextSchema>
 

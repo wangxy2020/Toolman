@@ -14,7 +14,15 @@ import {
 import type { MobileAuthSession } from '../auth/types'
 import { saveModulePrefs } from '../settings/prefs'
 import { useMobileApp } from '../state/MobileAppContext'
-import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
+import { hostedWebSyncSoftHint } from '../sync/hostedWebSync'
+import { getOrCreateDeviceId } from '../storage/secure'
+import {
+  clearDevicePairing,
+  formatPairingStatus,
+  loadDevicePairing,
+  redeemDevicePairingCode,
+} from '../storage/devicePairing'
+import { Platform } from 'react-native'
 import {
   formatAccountLabel,
   formatBindPhoneOtpHint,
@@ -47,12 +55,11 @@ export function useLoggedInAccount(props: {
 }) {
   const { auth, setAuth } = props
   const { modulePrefs, setModulePrefs } = useMobileApp()
-  const hostedBlocked = Boolean(
-    hostedWebSyncBlockedReason({
-      configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
-      envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
-    }),
-  )
+  const hostedSoftHint = hostedWebSyncSoftHint({
+    configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
+    envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
+  })
+  const hostedBlocked = Boolean(hostedSoftHint)
   const [view, setView] = useState<AccountView>('main')
   const [displayName, setDisplayName] = useState(auth.displayName)
   const [bindPhone, setBindPhone] = useState('')
@@ -67,8 +74,48 @@ export function useLoggedInAccount(props: {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [pairingCode, setPairingCode] = useState('')
+  const [pairingStatus, setPairingStatus] = useState('未配对桌面设备')
+  const [devicePaired, setDevicePaired] = useState(false)
 
   useSmsCooldown(smsCooldown, setSmsCooldown)
+
+  useEffect(() => {
+    void loadDevicePairing().then((record) => {
+      setPairingStatus(formatPairingStatus(record))
+      setDevicePaired(Boolean(record))
+    })
+  }, [auth.identityId])
+
+  const redeemPairing = async () => {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const deviceId = await getOrCreateDeviceId()
+      const role = Platform.OS === 'web' ? 'web' : 'mobile'
+      const record = await redeemDevicePairingCode({
+        code: pairingCode,
+        localDeviceId: deviceId,
+        role,
+      })
+      setPairingStatus(formatPairingStatus(record))
+      setDevicePaired(true)
+      setPairingCode('')
+      setMessage('设备配对成功')
+    } catch (error) {
+      setMessage(toErrorMessage(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const clearPairing = async () => {
+    await clearDevicePairing()
+    setPairingStatus(formatPairingStatus(null))
+    setDevicePaired(false)
+    setPairingCode('')
+    setMessage('已清除设备配对')
+  }
 
   const sendBindPhoneCode = async () => {
     setSendingCode(true)
@@ -201,14 +248,6 @@ export function useLoggedInAccount(props: {
   }
 
   const syncNow = async () => {
-    const blocked = hostedWebSyncBlockedReason({
-      configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
-      envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
-    })
-    if (blocked) {
-      setMessage(blocked)
-      return
-    }
     setMessage(await props.onSync())
   }
 
@@ -279,6 +318,12 @@ export function useLoggedInAccount(props: {
     syncSubtitle: formatSyncActionSubtitle(hostedBlocked),
     hubToken: modulePrefs.sync.hubToken,
     setHubToken,
+    pairingCode,
+    setPairingCode,
+    pairingStatus,
+    devicePaired,
+    redeemPairing,
+    clearPairing,
     bindPhoneTitle: formatBindPhoneTitle(auth.phone),
     isPro: auth.subscriptionSku === 'pro',
     syncing: props.syncStatus === 'syncing',

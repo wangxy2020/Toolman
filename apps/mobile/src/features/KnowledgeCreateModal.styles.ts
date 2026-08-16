@@ -100,6 +100,9 @@ export const knowledgeCreateModalStyles = StyleSheet.create({
   kindOptionPressed: {
     opacity: 0.78,
   },
+  kindOptionDisabled: {
+    opacity: 0.4,
+  },
   kindRadio: {
     width: 16,
     height: 16,
@@ -123,6 +126,9 @@ export const knowledgeCreateModalStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     color: colors.text,
+  },
+  kindLabelDisabled: {
+    color: colors.textSecondary,
   },
   hint: {
     fontSize: 12,

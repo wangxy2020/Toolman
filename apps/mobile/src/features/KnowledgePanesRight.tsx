@@ -26,7 +26,6 @@ export function KnowledgeRightPane() {
   const { syncStatus } = useMobileApp()
   const section = getKnowledgeSection(activeSection)
   const documents = activeKbId ? (documentsByKb[activeKbId] ?? []) : []
-  const canImport = Boolean(activeKbId) && section.showDropzone
   const pendingCount = documents.filter((item) => item.status === 'pending').length
 
   useRegisterModulePanelError('knowledge-import', importError, () => setImportError(null))
@@ -67,7 +66,7 @@ export function KnowledgeRightPane() {
         documents={documents}
         mode={section.importMode}
         showDropzone
-        importDisabled={!canImport}
+        importDisabled
         listKey={activeKbId}
         syncMoveTargets={[
           ...createdKbs

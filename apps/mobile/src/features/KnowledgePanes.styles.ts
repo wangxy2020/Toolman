@@ -5,6 +5,9 @@ export const knowledgePaneStyles = StyleSheet.create({
   group: {
     marginBottom: 2,
   },
+  groupDisabled: {
+    opacity: 0.45,
+  },
   sectionRow: {
     marginHorizontal: 10,
     marginVertical: 2,
@@ -53,6 +56,9 @@ export const knowledgePaneStyles = StyleSheet.create({
   sectionNameActive: {
     color: colors.text,
     fontWeight: '500',
+  },
+  sectionNameDisabled: {
+    color: colors.textSecondary,
   },
   sectionBody: {
     paddingBottom: 2,

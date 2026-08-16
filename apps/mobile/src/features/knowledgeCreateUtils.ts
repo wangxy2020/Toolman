@@ -7,8 +7,12 @@ export type KnowledgeCreateForm = {
   networkUrl?: string
 }
 
-export const KNOWLEDGE_CREATE_KINDS: Array<{ id: MobileCreatedKbKind; label: string }> = [
-  { id: 'local', label: '本地知识库' },
+export const KNOWLEDGE_CREATE_KINDS: Array<{
+  id: MobileCreatedKbKind
+  label: string
+  disabled?: boolean
+}> = [
+  { id: 'local', label: '本地知识库', disabled: true },
   { id: 'sync', label: '同步知识库' },
   { id: 'network', label: '网络知识库' },
 ]

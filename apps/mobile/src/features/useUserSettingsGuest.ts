@@ -22,7 +22,6 @@ import {
 } from '../auth/authingOtp'
 import type { MobileAuthSession } from '../auth/types'
 import { useMobileApp } from '../state/MobileAppContext'
-import { hostedWebSyncBlockedReason } from '../sync/hostedWebSync'
 import {
   formatAccountLabel,
   formatBindPhoneOtpHint,

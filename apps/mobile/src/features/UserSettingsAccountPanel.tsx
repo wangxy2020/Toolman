@@ -51,6 +51,12 @@ export function LoggedInAccountPanel(props: {
     syncSubtitle,
     hubToken,
     setHubToken,
+    pairingCode,
+    setPairingCode,
+    pairingStatus,
+    devicePaired,
+    redeemPairing,
+    clearPairing,
     bindPhoneTitle,
     isPro,
     syncing,
@@ -234,6 +240,7 @@ export function LoggedInAccountPanel(props: {
       </Section>
 
       <Section title={t('user.tokenSync')}>
+        <Text style={styles.hint}>{t('user.transportHint')}</Text>
         <Field
           label={t('diagnostics.hubToken')}
           value={hubToken}
@@ -241,7 +248,38 @@ export function LoggedInAccountPanel(props: {
           placeholder={t('diagnostics.hubTokenPlaceholder')}
           secureTextEntry
         />
-        <Text style={styles.hint}>{t('user.hubTokenHint')}</Text>
+        <Text style={styles.meta}>
+          {t('user.devicePairingStatus')}：{pairingStatus}
+        </Text>
+        {devicePaired ? (
+          <Field
+            label={t('user.devicePairing')}
+            value={'•'.repeat(12)}
+            editable={false}
+          />
+        ) : (
+          <Field
+            label={t('user.devicePairing')}
+            value={pairingCode ? '•'.repeat(Math.min(pairingCode.length, 16)) : ''}
+            onChangeText={(next) => {
+              const capped = pairingCode ? '•'.repeat(Math.min(pairingCode.length, 16)) : ''
+              if (next === capped) return
+              if (!next || /^•+$/.test(next)) {
+                setPairingCode('')
+                return
+              }
+              setPairingCode(next.replace(/•/g, ''))
+            }}
+            placeholder={t('user.devicePairingPlaceholder')}
+          />
+        )}
+        {!devicePaired ? (
+          <PrimaryButton
+            label={busy ? '…' : t('user.devicePairingRedeem')}
+            onPress={() => void redeemPairing()}
+          />
+        ) : null}
+        <SecondaryButton label={t('user.devicePairingClear')} onPress={() => void clearPairing()} />
         <ActionRow
           title={syncTitle}
           subtitle={syncSubtitle}

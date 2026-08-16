@@ -19,7 +19,7 @@ export type KnowledgeCreateModalProps = {
 export function useKnowledgeCreateModal(props: KnowledgeCreateModalProps) {
   const { visible, onSubmit } = props
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<MobileCreatedKbKind>('local')
+  const [kind, setKind] = useState<MobileCreatedKbKind>('sync')
   const [description, setDescription] = useState('')
   const [networkUrl, setNetworkUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +27,7 @@ export function useKnowledgeCreateModal(props: KnowledgeCreateModalProps) {
   useEffect(() => {
     if (!visible) return
     setName('')
-    setKind('local')
+    setKind('sync')
     setDescription('')
     setNetworkUrl('')
     setError(null)

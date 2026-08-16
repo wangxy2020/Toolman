@@ -2,9 +2,13 @@ import {
   KnowledgeSnapshotSchema,
   P2P_JOIN_INVITE_ANSWER_PATH,
   P2P_JOIN_REGISTER_PATH,
+  P2P_MAILBOX_PULL_PATH,
+  P2P_MAILBOX_PUT_PATH,
   P2P_MAILBOX_SESSION_PATH,
   P2pJoinInviteAnswerOutputSchema,
   P2pJoinRegisterOutputSchema,
+  P2pMailboxPullOutputSchema,
+  P2pMailboxPutOutputSchema,
   P2pMailboxSessionOutputSchema,
   SYNC_HUB_TOKEN_HEADER,
   type AgentHostInvokeChunk,
@@ -15,6 +19,10 @@ import {
   type P2pJoinInviteAnswerOutput,
   type P2pJoinRegisterInput,
   type P2pJoinRegisterOutput,
+  type P2pMailboxPullInput,
+  type P2pMailboxPullOutput,
+  type P2pMailboxPutInput,
+  type P2pMailboxPutOutput,
   type P2pMailboxSessionInput,
   type P2pMailboxSessionOutput,
   type SyncPullInput,
@@ -189,6 +197,46 @@ export class ToolmanSyncClient {
       throw new Error(error)
     }
     return P2pMailboxSessionOutputSchema.parse(json)
+  }
+
+  async putMailbox(input: P2pMailboxPutInput): Promise<P2pMailboxPutOutput> {
+    const res = await this.request(`${this.baseUrl}${P2P_MAILBOX_PUT_PATH}`, {
+      method: 'POST',
+      headers: await this.headers(),
+      body: JSON.stringify(input),
+    })
+    const json: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      const error =
+        json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : `信箱投递失败（${res.status}）`
+      throw new Error(error)
+    }
+    if (json && typeof json === 'object' && 'data' in json) {
+      return P2pMailboxPutOutputSchema.parse((json as { data: unknown }).data)
+    }
+    return P2pMailboxPutOutputSchema.parse(json)
+  }
+
+  async pullMailbox(input: P2pMailboxPullInput): Promise<P2pMailboxPullOutput> {
+    const res = await this.request(`${this.baseUrl}${P2P_MAILBOX_PULL_PATH}`, {
+      method: 'POST',
+      headers: await this.headers(),
+      body: JSON.stringify(input),
+    })
+    const json: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      const error =
+        json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : `信箱拉取失败（${res.status}）`
+      throw new Error(error)
+    }
+    if (json && typeof json === 'object' && 'data' in json) {
+      return P2pMailboxPullOutputSchema.parse((json as { data: unknown }).data)
+    }
+    return P2pMailboxPullOutputSchema.parse(json)
   }
 
   async listHosts(): Promise<AgentHostPresence[]> {
