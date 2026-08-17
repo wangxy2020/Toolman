@@ -33,8 +33,9 @@ export const P2pDiscoveryListNodesOutputSchema = z.object({
 // --- Device identity ---
 
 export const P2pDeviceGetInfoOutputSchema = z.object({
-  deviceId: UuidSchema,
-  identityId: UuidSchema,
+  deviceId: z.string().min(1),
+  /** Local UUID, Authing `ag-…`, or Firebase `fb-…`. */
+  identityId: z.string().min(1),
   publicKey: z.string().min(1),
   publicKeyFingerprint: z.string().min(1),
   privateKeyRef: z.string().min(1),

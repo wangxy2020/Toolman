@@ -33,7 +33,7 @@ export interface P2pMemberCertSnapshot {
   subscriptionSku?: ProductSku | null
   entitlements?: string[]
   recordedAt?: number
-  deviceKind?: 'desktop' | 'mobile'
+  deviceKind?: 'desktop' | 'mobile' | 'web'
 }
 
 function getMemberRepo(): P2pMemberRepository {
@@ -59,6 +59,7 @@ export function buildMemberCertSnapshot(context: EntitlementContext = getEntitle
     subscriptionSku: context.subscriptionSku ?? 'community',
     entitlements: context.entitlements ?? [],
     recordedAt: Date.now(),
+    deviceKind: 'desktop',
   } satisfies P2pMemberCertSnapshot)
 }
 

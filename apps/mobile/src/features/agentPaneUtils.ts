@@ -19,6 +19,14 @@ import type { ModulePanelStatusEntry } from './modulePageStatus'
 /** Match composer / message stream horizontal inset (12 + 8 scrollbar gutter). */
 export const STREAM_PAD_SIDE = 20
 
+/** Desktop `.tm-stream-indent`: avatar 28px + 10px gap. */
+export const STREAM_AVATAR_INDENT = 38
+
+export function streamAvatarInitial(name: string, fallback: string): string {
+  const first = Array.from(name.trim())[0]
+  return first ?? fallback
+}
+
 export type MessageTranslation = { text: string; targetLanguage: string }
 
 export type ComposerToolbarState = {

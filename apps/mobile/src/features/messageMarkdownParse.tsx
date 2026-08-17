@@ -1,14 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
-import { Text, View } from 'react-native'
-import { colors } from '../theme'
+import { Text } from 'react-native'
 import { styles } from './messageMarkdownStyles'
-
-type Props = {
-  text: string
-  align?: 'left' | 'right'
-  /** `note` matches desktop `.tm-notes-editor-body` (16px / 1.7). */
-  variant?: 'chat' | 'note'
-}
 
 type ListItem = { marker: string; text: string }
 

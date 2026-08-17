@@ -11,7 +11,7 @@ describe('groupVisibleMembersByPerson', () => {
     const people = groupVisibleMembersByPerson([
       {
         id: 'desk-a',
-        displayName: '用户A',
+        displayName: 'Alice',
         role: 'owner',
         deviceId: 'desk-a',
         identityId: 'id-a',
@@ -21,7 +21,7 @@ describe('groupVisibleMembersByPerson', () => {
       },
       {
         id: 'phone-a',
-        displayName: '用户A',
+        displayName: 'Alice',
         role: 'owner',
         deviceId: 'phone-a',
         identityId: 'id-a',
@@ -40,9 +40,10 @@ describe('groupVisibleMembersByPerson', () => {
 })
 
 describe('member card labels', () => {
-  it('shows only device kind and short id', () => {
-    expect(memberDeviceLine('desktop', 'device-a', (id) => id)).toBe('电脑 device-a')
-    expect(memberDeviceLine('mobile', 'device-b', (id) => id)).toBe('手机 device-b')
+  it('shows only device kind', () => {
+    expect(memberDeviceLine('desktop')).toBe('桌面')
+    expect(memberDeviceLine('mobile')).toBe('移动')
+    expect(memberDeviceLine('web')).toBe('网页')
   })
 
   it('shows online or offline without a local-device prefix', () => {

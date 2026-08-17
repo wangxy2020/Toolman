@@ -54,7 +54,7 @@ export function resetKnowledgeSnapshotMemory(): void {
 }
 
 export async function loadKnowledgeSnapshot(): Promise<KnowledgeSnapshot | null> {
-  memorySnapshot = null
+  if (memorySnapshot) return memorySnapshot
   if (!hasIndexedDb()) return null
   try {
     const owned = unwrapOwnedValue<unknown>(await idbGet(scopedStorageKey(IDB_KEY)))
@@ -63,7 +63,7 @@ export async function loadKnowledgeSnapshot(): Promise<KnowledgeSnapshot | null>
     memorySnapshot = parsed
     return parsed
   } catch {
-    return null
+    return memorySnapshot
   }
 }
 

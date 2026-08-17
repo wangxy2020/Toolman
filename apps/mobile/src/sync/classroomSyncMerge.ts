@@ -22,9 +22,13 @@ export type MobileClassroomCourse = {
   isGuideClassroom: boolean
   isDefaultClassroom: boolean
   kbIds?: string[]
+  /** Local display labels for bound textbook KBs (not synced). */
+  kbLabels?: string[]
   autoSpeak?: boolean
   ttsEngine?: 'edge' | 'web-speech'
   ttsVoice?: string
+  /** Chat model from program settings (`providerId:modelName`). */
+  modelId?: string
 }
 
 export function mergeClassroomCoursesFromSyncChanges(
@@ -132,8 +136,13 @@ function courseFromPayload(
     kbIds: Array.isArray(meta.kbIds)
       ? meta.kbIds.filter((id): id is string => typeof id === 'string')
       : (existing?.kbIds ?? []),
+    kbLabels: existing?.kbLabels,
     autoSpeak: typeof meta.autoSpeak === 'boolean' ? meta.autoSpeak : existing?.autoSpeak,
     ttsEngine: meta.ttsEngine === 'web-speech' || meta.ttsEngine === 'edge' ? meta.ttsEngine : existing?.ttsEngine,
     ttsVoice: typeof meta.ttsVoice === 'string' ? meta.ttsVoice : existing?.ttsVoice,
+    modelId:
+      typeof meta.modelId === 'string' && meta.modelId.trim()
+        ? meta.modelId.trim()
+        : existing?.modelId,
   }
 }

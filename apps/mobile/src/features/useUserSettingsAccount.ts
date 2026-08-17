@@ -15,6 +15,7 @@ import type { MobileAuthSession } from '../auth/types'
 import { saveModulePrefs } from '../settings/prefs'
 import { useMobileApp } from '../state/MobileAppContext'
 import { hostedWebSyncSoftHint } from '../sync/hostedWebSync'
+import { resetMobileSyncBaseUrlCache } from '../sync/mobileSync'
 import { getOrCreateDeviceId } from '../storage/secure'
 import {
   clearDevicePairing,
@@ -260,6 +261,16 @@ export function useLoggedInAccount(props: {
     void saveModulePrefs(next)
   }
 
+  const setHubBaseUrl = (hubBaseUrl: string) => {
+    const next = {
+      ...modulePrefs,
+      sync: { ...modulePrefs.sync, hubBaseUrl },
+    }
+    setModulePrefs(next)
+    resetMobileSyncBaseUrlCache()
+    void saveModulePrefs(next)
+  }
+
   const logout = async () => {
     await logoutLocal()
     setAuth(null)
@@ -318,6 +329,8 @@ export function useLoggedInAccount(props: {
     syncSubtitle: formatSyncActionSubtitle(hostedBlocked),
     hubToken: modulePrefs.sync.hubToken,
     setHubToken,
+    hubBaseUrl: modulePrefs.sync.hubBaseUrl ?? '',
+    setHubBaseUrl,
     pairingCode,
     setPairingCode,
     pairingStatus,

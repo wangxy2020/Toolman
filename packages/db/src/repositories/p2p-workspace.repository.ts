@@ -23,6 +23,7 @@ export interface UpdateP2pWorkspaceInput {
   avatarHash?: string | null
   maxMembers?: number
   status?: P2pWorkspaceStatus
+  ownerIdentityId?: string
   settingsJson?: string
   lastEventSeq?: number
   lastSnapshotSeq?: number
@@ -111,6 +112,7 @@ export class P2pWorkspaceRepository {
         avatarHash: input.avatarHash !== undefined ? input.avatarHash : existing.avatarHash,
         maxMembers: input.maxMembers ?? existing.maxMembers,
         status: input.status ?? existing.status,
+        ownerIdentityId: input.ownerIdentityId ?? existing.ownerIdentityId,
         settingsJson: input.settingsJson ?? existing.settingsJson,
         lastEventSeq: input.lastEventSeq ?? existing.lastEventSeq,
         lastSnapshotSeq: input.lastSnapshotSeq ?? existing.lastSnapshotSeq,

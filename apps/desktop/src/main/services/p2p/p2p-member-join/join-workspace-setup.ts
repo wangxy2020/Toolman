@@ -1,10 +1,11 @@
+import { resolveJoinedDeviceRole } from '@toolman/shared'
 import { hashInviteToken, hashWorkspaceKey, type P2pWorkspaceMemberRow, type P2pWorkspaceRow } from '@toolman/db'
 import { listP2pDiscoveredNodes } from '../p2p-discovery.service'
-import { getP2pDeviceInfo } from '../p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from '../p2p-device-identity.service'
 import { registerRemoteDevicePublicKey } from '../p2p-peer.service'
 import { ensureLinkedIdentityRow } from '../p2p-linked-identity.service'
 import {
-  findIdentitySibling,
+  findSamePersonSibling,
   getInviteRepo,
   getMemberRepo,
   getWorkspaceRepo,
@@ -83,14 +84,31 @@ export function recordJoinOnOwnerSide(
     payload.workspaceId,
     member.deviceId,
   )
-  const sibling = findIdentitySibling(payload.workspaceId, member.identityId, member.deviceId)
+  const joinerIdentityId = member.identityId
+  const sibling = findSamePersonSibling({
+    workspaceId: payload.workspaceId,
+    joinerIdentityId,
+    excludeDeviceId: member.deviceId,
+    localPersonIdentityId: getP2pPersonIdentityId(),
+    localDeviceId: ownerDevice.deviceId,
+  })
   const inherited = membershipFromIdentitySibling(payload.role, sibling)
+  const role = resolveJoinedDeviceRole({
+    inheritedRole: inherited.role,
+    requestedRole: payload.role,
+    joinerIdentityId,
+    ownerIdentityId: payload.ownerIdentityId,
+    ownerDeviceId: payload.ownerDeviceId,
+    sibling,
+  })
   if (existing) {
     if (existing.status !== 'active') {
+      ensureLinkedIdentityRow(joinerIdentityId, member.displayName)
       getMemberRepo().update({
         id: existing.id,
+        identityId: joinerIdentityId,
         status: 'active',
-        role: inherited.role,
+        role,
         displayName: member.displayName,
         joinedAt: new Date(),
       })
@@ -98,14 +116,14 @@ export function recordJoinOnOwnerSide(
     return
   }
 
-  ensureLinkedIdentityRow(member.identityId, member.displayName)
+  ensureLinkedIdentityRow(joinerIdentityId, member.displayName)
 
   getMemberRepo().create({
     workspaceId: payload.workspaceId,
-    identityId: member.identityId,
+    identityId: joinerIdentityId,
     deviceId: member.deviceId,
     displayName: member.displayName,
-    role: inherited.role,
+    role,
     status: 'active',
     joinedAt: new Date(),
   })

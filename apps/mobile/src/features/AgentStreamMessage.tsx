@@ -17,7 +17,7 @@ import {
 } from '../icons/composer-icons'
 import { colors } from '../theme'
 import { getMobileTtsController } from '../voice'
-import { formatMessageTime } from './agentPaneUtils'
+import { formatMessageTime, streamAvatarInitial } from './agentPaneUtils'
 import { agentStreamStyles as styles } from './agentStreamStyles'
 import { SpinningIcon } from './SpinningIcon'
 import { MessageMarkdown } from './MessageMarkdown'
@@ -31,6 +31,8 @@ export function AgentStreamMessage(props: {
 }) {
   const { msg, pane } = props
   const isUser = msg.role === 'user'
+  const displayName = isUser ? pane.userDisplayName : pane.assistantName
+  const avatarLabel = isUser ? streamAvatarInitial(displayName, '用') : 'A'
   const streamingThis =
     pane.busy &&
     msg.role === 'assistant' &&
@@ -40,10 +42,22 @@ export function AgentStreamMessage(props: {
   const checked = pane.selectedIds.has(msg.id)
 
   return (
-    <View style={[styles.msgBlock, isUser ? styles.msgBlockUser : null]}>
-      <View style={[styles.msgHead, isUser ? styles.msgHeadUser : null]}>
-        <Text style={styles.msgName}>{isUser ? '我的' : '智能体'}</Text>
-        <Text style={styles.msgTime}>{formatMessageTime(msg.createdAt)}</Text>
+    <View style={styles.msgBlock}>
+      <View style={styles.msgHead}>
+        <View
+          style={[styles.avatar, isUser ? styles.avatarUser : styles.avatarAssistant]}
+          accessibilityLabel={displayName}
+        >
+          <Text style={[styles.avatarText, isUser ? styles.avatarTextUser : styles.avatarTextAssistant]}>
+            {avatarLabel}
+          </Text>
+        </View>
+        <View style={styles.msgMeta}>
+          <Text style={styles.msgName} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={styles.msgTime}>{formatMessageTime(msg.createdAt)}</Text>
+        </View>
       </View>
       <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAssistant]}>
         {pane.selectionMode ? (

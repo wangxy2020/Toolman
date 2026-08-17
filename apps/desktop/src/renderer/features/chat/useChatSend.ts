@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import {
   IpcChannel,
+  resolveAssistantLibSessionModelId,
   resolveAssistantLibTeachingRuntime,
   type Assistant,
   type ContentBlock,
@@ -129,6 +130,8 @@ export function useChatSend(
       const modelId = resolveGroupProxyAssistantModelId(activeAssistant, session.activeSession)
       return modelId ? [modelId] : selectedModelIds
     }
+    const courseModelId = resolveAssistantLibSessionModelId(session.activeSession?.metadata)
+    if (courseModelId) return [courseModelId]
     const assistantModelId = activeAssistant?.modelId?.trim()
     if (assistantModelId && selectedModelIds.length <= 1) {
       return [assistantModelId]

@@ -1,8 +1,9 @@
-import { hashWorkspaceKey } from '@toolman/db'
+import { hashWorkspaceKey, type P2pWorkspaceRow } from '@toolman/db'
 import type { P2pWorkspace, P2pWorkspaceListFilter } from '@toolman/shared'
 import {
   P2pWorkspaceCreateInputSchema,
   P2pWorkspaceUpdateInputSchema,
+  preferUsableMemberIdentityId,
 } from '@toolman/shared'
 import { generateWorkspaceKey } from './p2p-crypto.service'
 import { assertRegisteredForP2p } from './p2p-auth.guard'
@@ -12,9 +13,10 @@ import {
   refreshOwnedWorkspaceVipPools,
 } from './p2p-workspace-vip-pool.service'
 import { createDefaultWorkspaceInvite } from './p2p-invite.service'
-import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from './p2p-device-identity.service'
 import { saveWorkspaceKey, loadAllWorkspaceKeys } from './p2p-workspace-key.store'
 import { getIdentityDisplayName } from './p2p-member-shared'
+import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 import { appendP2pEvent } from './p2p-event.service'
 import { startP2pConnectionMonitor } from './p2p-connection.service'
 import { isP2pDiscoveryRunning, startP2pDiscovery } from './p2p-discovery.service'
@@ -27,7 +29,6 @@ import {
   getWorkspaceRepo,
   toWorkspaceDto,
 } from './p2p-workspace-access'
-import type { P2pWorkspaceRow } from '@toolman/db'
 
 export function bootstrapP2pWorkspaceKeys(): void {
   loadAllWorkspaceKeys()
@@ -40,6 +41,10 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   assertRegisteredForP2p()
   const input = P2pWorkspaceCreateInputSchema.parse(rawInput)
   const device = getP2pDeviceInfo()
+  const displayName = getIdentityDisplayName()
+  const ownerIdentityId =
+    preferUsableMemberIdentityId(getP2pPersonIdentityId(), device.identityId) ?? device.identityId
+  ensureLinkedIdentityRow(ownerIdentityId, displayName)
   const workspaceKey = generateWorkspaceKey()
   const workspaceKeyHash = hashWorkspaceKey(workspaceKey)
 
@@ -48,7 +53,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
     description: input.description,
     maxMembers: resolveWorkspaceMaxMembers(input.maxMembers),
     ownerDeviceId: device.deviceId,
-    ownerIdentityId: device.identityId,
+    ownerIdentityId,
     workspaceKeyHash,
   })
 
@@ -58,9 +63,9 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   const now = new Date()
   const ownerMember = getMemberRepo().create({
     workspaceId: row.id,
-    identityId: device.identityId,
+    identityId: ownerIdentityId,
     deviceId: device.deviceId,
-    displayName: getIdentityDisplayName(),
+    displayName,
     role: 'owner',
     status: 'active',
     joinedAt: now,
@@ -87,7 +92,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
     payload: {
       member_id: ownerMember.id,
       device_id: device.deviceId,
-      identity_id: device.identityId,
+      identity_id: ownerIdentityId,
       display_name: getIdentityDisplayName(),
       role: 'owner',
       workspace_name: row.name,

@@ -12,6 +12,7 @@ interface Props {
   workspaceName: string
   selfMemberId: string | null
   selfIdentityId?: string | null
+  selfDeviceId?: string | null
   members?: P2pMember[]
   isOwner: boolean
   canWriteWorkspace: boolean
@@ -25,6 +26,7 @@ export function GroupMemberChatPanel({
   workspaceName,
   selfMemberId,
   selfIdentityId,
+  selfDeviceId,
   members = [],
   isOwner,
   canWriteWorkspace,
@@ -33,7 +35,7 @@ export function GroupMemberChatPanel({
   defaultFilePath = null,
 }: Props) {
   const { t } = useI18n()
-  const chat = useGroupChat(workspaceId, selfMemberId, members, selfIdentityId)
+  const chat = useGroupChat(workspaceId, selfMemberId, members, selfIdentityId, selfDeviceId)
 
   const messagePanelStyle: CSSProperties = {
     '--tm-message-font-size': `${messageFontSizePx(messageSettings.messageFontSize)}px`,
@@ -77,6 +79,7 @@ export function GroupMemberChatPanel({
           getUserDisplayName={chat.getUserDisplayName}
           getUserAvatarInitial={chat.getUserAvatarInitial}
           isOwnUserMessage={chat.isOwnUserMessage}
+          userMessageAlign="chat"
         />
       </div>
 

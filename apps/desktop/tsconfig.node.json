@@ -9,7 +9,6 @@
     "src/main/**/*",
     "src/preload/**/*"
   ],
-  // Vitest mocks are checked by tests + p2p-event.service.mock.ts, not husky tsc.
   "exclude": [
     "src/**/*.test.ts",
     "src/**/*.integration.test.ts"

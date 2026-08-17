@@ -2,9 +2,14 @@ import { randomUUID } from 'node:crypto'
 import {
   P2pMailboxSessionInputSchema,
   canForwardWorkspaceAsGateway,
+  inferMemberDeviceKind,
+  isUsableMemberIdentityId,
   openMailboxPlaintext,
+  parseP2pClientDeviceKind,
+  preferMemberDisplayName,
   sealMailboxPlaintext,
   workspaceKeyFromB64,
+  type P2pClientDeviceKind,
   type WorkspaceEvent,
 } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
@@ -32,6 +37,21 @@ import { logP2pPathMetrics, recordP2pPathMetric } from './p2p-path-metrics'
 import { memberVisible } from './p2p-mailbox-auth'
 import { applyIncomingMailbox } from './p2p-mailbox-handlers'
 import { resolvePersonalMailboxSession } from '../personal-device-pairing.service'
+
+function certJsonWithDeviceKind(
+  existing: string | null | undefined,
+  kind: P2pClientDeviceKind,
+): string {
+  try {
+    const parsed = existing?.trim() ? (JSON.parse(existing) as Record<string, unknown>) : {}
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return JSON.stringify({ ...parsed, deviceKind: kind })
+    }
+  } catch {
+    /* ignore */
+  }
+  return JSON.stringify({ deviceKind: kind })
+}
 
 export async function depositEventToMailbox(event: WorkspaceEvent): Promise<void> {
   const local = getP2pDeviceInfo()
@@ -119,15 +139,17 @@ export async function handleMailboxSession(
   }
   if (!existing && sibling && samePerson) {
     const inherited = membershipFromIdentitySibling(sibling.role, sibling)
+    const kind = inferMemberDeviceKind(input.deviceId, parseP2pClientDeviceKind(input.deviceKind))
     getMemberRepo().create({
       id: randomUUID(),
       workspaceId: input.workspaceId,
       identityId: sibling.identityId,
       deviceId: input.deviceId,
-      displayName: input.displayName?.trim() || sibling.displayName,
+      displayName:
+        preferMemberDisplayName(input.displayName, sibling.displayName) || sibling.displayName,
       role: inherited.role,
       status: inherited.status,
-      certJson: JSON.stringify({ deviceKind: 'mobile' }),
+      certJson: JSON.stringify({ deviceKind: kind }),
     })
     publishP2pGroupSyncChange(toWorkspaceDto(workspace))
     logStructured(
@@ -135,6 +157,31 @@ export async function handleMailboxSession(
       'info',
       `mailbox session added same-identity device ${input.deviceId} to ${input.workspaceId}`,
     )
+  } else if (existing) {
+    const requestedKind = parseP2pClientDeviceKind(input.deviceKind)
+    const nextName = preferMemberDisplayName(input.displayName, existing.displayName)
+    const nextCert = requestedKind
+      ? certJsonWithDeviceKind(existing.certJson, requestedKind)
+      : undefined
+    const rebindIdentity = Boolean(
+      requestedIdentity &&
+        isUsableMemberIdentityId(requestedIdentity) &&
+        existing.identityId !== requestedIdentity &&
+        !isUsableMemberIdentityId(existing.identityId),
+    )
+    const patch: {
+      id: string
+      identityId?: string
+      displayName?: string
+      certJson?: string
+    } = { id: existing.id }
+    if (rebindIdentity) patch.identityId = requestedIdentity
+    if (nextName && nextName !== existing.displayName) patch.displayName = nextName
+    if (nextCert && nextCert !== existing.certJson) patch.certJson = nextCert
+    if (patch.identityId || patch.displayName || patch.certJson) {
+      getMemberRepo().update(patch)
+      publishP2pGroupSyncChange(toWorkspaceDto(workspace))
+    }
   }
 
   touchMemberLastSeen(input.workspaceId, input.deviceId)

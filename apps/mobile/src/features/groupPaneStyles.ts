@@ -109,32 +109,67 @@ export const groupPaneStyles = StyleSheet.create({
     paddingHorizontal: STREAM_PAD_SIDE,
     paddingTop: 12,
     paddingBottom: 16,
-    gap: 14,
+    gap: 18,
   },
   bubbleWrap: {
-    maxWidth: '88%',
-    gap: 4,
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+    gap: 8,
   },
   bubbleWrapOwn: {
-    alignSelf: 'flex-end',
     alignItems: 'flex-end',
   },
   bubbleWrapPeer: {
-    alignSelf: 'flex-start',
     alignItems: 'flex-start',
   },
-  bubbleMeta: {
-    gap: 2,
+  msgHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    maxWidth: '100%',
   },
-  bubbleMetaOwn: {
+  msgHeadOwn: {
+    flexDirection: 'row-reverse',
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarPeer: {
+    backgroundColor: '#e8f0fe',
+  },
+  avatarOwn: {
+    backgroundColor: colors.accentSoft,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  avatarTextPeer: {
+    color: '#1a73e8',
+  },
+  avatarTextOwn: {
+    color: colors.accent,
+  },
+  msgMeta: {
+    minWidth: 0,
+  },
+  msgMetaOwn: {
     alignItems: 'flex-end',
   },
   bubbleRole: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    lineHeight: 14,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    lineHeight: 18,
   },
   bubbleTime: {
+    marginTop: 2,
     fontSize: 12,
     color: colors.textSecondary,
     lineHeight: 16,
@@ -143,9 +178,13 @@ export const groupPaneStyles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    maxWidth: '78%',
+    marginLeft: 38,
   },
   bubbleBodyOwn: {
     backgroundColor: colors.accentSoft,
+    marginLeft: 0,
+    marginRight: 38,
   },
   bubbleBodyPeer: {
     backgroundColor: colors.hover,

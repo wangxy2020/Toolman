@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { loadGroupChatStore, type GroupMember, type GroupWorkspace } from '../storage/groupChat'
+import { loadGroupChatStore, type GroupMember } from '../storage/groupChat'
 import { ensureMailboxForDesktopGroup } from '../p2p/mailboxBootstrap'
 import { getMailboxTarget, resumePersistedMailboxSync } from '../p2p/mailboxSync'
 import { hasLiveSession } from '../p2p/session'
@@ -43,18 +43,18 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
     (members: GroupMember[], workspaceId: string): GroupMember[] => {
       const mailbox = getMailboxTarget(workspaceId)
       const live = hasLiveSession(workspaceId)
+      const ownerDeviceId = mailbox?.ownerDeviceId
       return members.map((member) => ({
         ...member,
         online:
           member.deviceId === selfDeviceId ||
-          member.identityId === selfIdentityId ||
-          (live &&
-            (member.role === 'owner' || member.deviceId === mailbox?.ownerDeviceId)) ||
-          Boolean(mailbox && member.deviceId === mailbox.ownerDeviceId) ||
+          (Boolean(ownerDeviceId) &&
+            member.deviceId === ownerDeviceId &&
+            (live || Boolean(mailbox))) ||
           member.online,
       }))
     },
-    [selfDeviceId, selfIdentityId],
+    [selfDeviceId],
   )
 
   const applySyncSnapshot = useCallback((snapshot: GroupSyncSnapshot) => {
@@ -142,19 +142,25 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
     setSharedByGroup,
   })
 
+  const desktopGroupKey = groups
+    .filter((group) => group.origin === 'desktop')
+    .map((group) => group.id)
+    .sort()
+    .join(',')
+
   useEffect(() => {
     if (!ready) return
     resumePersistedMailboxSync(selfDeviceId)
-    for (const group of groups) {
-      if (group.origin !== 'desktop') continue
+    if (!desktopGroupKey) return
+    for (const workspaceId of desktopGroupKey.split(',')) {
       void ensureMailboxForDesktopGroup({
-        workspaceId: group.id,
+        workspaceId,
         deviceId: selfDeviceId,
         identityId: selfIdentityId,
         displayName: selfName,
       })
     }
-  }, [ready, groups, selfDeviceId, selfIdentityId, selfName])
+  }, [ready, desktopGroupKey, selfDeviceId, selfIdentityId, selfName])
 
   const { applyInvites, createOrReuseInvite, joinGroupByInvite } = useGroupChatInvites({
     self,
@@ -177,7 +183,7 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
 
   useEffect(() => {
     if (!ready) return
-    let cancelled = false
+    const cancelled = false
     const flush = () => {
       void consumePendingInvites().then((pending) => {
         if (!cancelled) applyInvites(pending)

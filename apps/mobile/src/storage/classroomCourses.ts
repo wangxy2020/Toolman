@@ -34,22 +34,6 @@ async function setItem(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(key, value)
 }
 
-async function removeItem(key: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    try {
-      globalThis.localStorage?.removeItem(key)
-    } catch {
-      // ignore
-    }
-    return
-  }
-  try {
-    await SecureStore.deleteItemAsync(key)
-  } catch {
-    // ignore
-  }
-}
-
 export async function loadClassroomCourses(): Promise<MobileClassroomCourse[]> {
   try {
     const parsed = await loadOwnedScoped<{ courses?: MobileClassroomCourse[] }>(KEY, getItem)

@@ -24,8 +24,7 @@ export function formatSyncFailureMessage(error: unknown): string {
   if (/401|unauthorized|未授权|配对令牌/i.test(message)) {
     return (
       '同步未授权。本机/局域网网页请填写与桌面一致的「局域网配对令牌」；' +
-      '若已粘贴设备配对码，请确认桌面 Sync Hub 已开启且浏览器能访问（本机预览最稳）。' +
-      '托管 HTTPS 网页无法直连局域网 Hub，需桌面在线可达的投递通道。'
+      '托管 HTTPS 请重新粘贴设备配对码并走点到点（无法直连局域网 HTTP Hub，也不依赖官方 Hub）。'
     )
   }
   return message

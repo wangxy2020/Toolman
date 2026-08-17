@@ -24,6 +24,7 @@ import {
   type ClassroomCreateCourseInput,
 } from './ClassroomCreateCourseModal'
 import { ClassroomSettingsModal } from './ClassroomSettingsModal'
+import { resolveBoundClassroomKbLabel } from './classroomKbDisplay'
 import {
   classroomSidebarEntries,
   resolveClassroomLearningChapterId,
@@ -46,6 +47,7 @@ function createCourseAndSession(input: {
   courseName: string
   presetId: AssistantLibPresetId
   kbIds: string[]
+  kbLabels?: string[]
 }): { course: MobileClassroomCourse; session: ChatSession } {
   const preset = getAssistantLibPreset(input.presetId)
   const id = newCourseId()
@@ -67,6 +69,7 @@ function createCourseAndSession(input: {
       isGuideClassroom: false,
       isDefaultClassroom: false,
       kbIds: input.kbIds,
+      kbLabels: input.kbLabels,
     },
     session: {
       id,
@@ -92,7 +95,10 @@ async function syncCourseThenGenerateSyllabus(
     return error instanceof Error ? error.message : String(error)
   }
   try {
-    const result = await requestDesktopSyllabusGenerate({ sessionId: course.id })
+    const result = await requestDesktopSyllabusGenerate({
+      sessionId: course.id,
+      modelId: course.modelId,
+    })
     return result.message ?? (result.started ? '已开始生成教学大纲' : '大纲正在生成中')
   } catch (error) {
     return error instanceof Error ? error.message : String(error)
@@ -144,11 +150,14 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
   const knowledgeNames = useMemo(() => {
     const ids = settingsCourse?.kbIds ?? []
     if (ids.length === 0) return []
-    return ids.map((id) => {
-      const fromMeta = knowledgeMeta.find((item) => item.id === id)?.name
-      return fromMeta ?? kbLabelById[id] ?? id
-    })
-  }, [kbLabelById, knowledgeMeta, settingsCourse?.kbIds])
+    return ids.map((id, index) =>
+      resolveBoundClassroomKbLabel({
+        id,
+        item: knowledgeMeta.find((item) => item.id === id),
+        remembered: kbLabelById[id] ?? settingsCourse?.kbLabels?.[index],
+      }),
+    )
+  }, [kbLabelById, knowledgeMeta, settingsCourse?.kbIds, settingsCourse?.kbLabels])
 
   const openCreateCourse = useCallback(() => setCreateOpen(true), [])
   const openRecords = useCallback(() => setRecordsOpen(true), [])
@@ -173,10 +182,13 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const handleCreate = async (input: ClassroomCreateCourseInput) => {
-    const { course, session } = createCourseAndSession(input)
     if (input.kbIds.length > 0 && input.kbLabel) {
       rememberKbLabels(input.kbIds, [input.kbLabel])
     }
+    const { course, session } = createCourseAndSession({
+      ...input,
+      kbLabels: input.kbLabel ? [input.kbLabel] : undefined,
+    })
     const nextCourses = [course, ...classroomCourses]
     setClassroomCourses(nextCourses)
     upsertSession(session)

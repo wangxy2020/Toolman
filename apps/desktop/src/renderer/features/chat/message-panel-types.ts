@@ -46,6 +46,8 @@ export interface MessagePanelProps {
   onPauseTts?: () => void
   onResumeTts?: () => void
   onStopTts?: () => void
+  /** Group member chat: own messages right, received left. */
+  userMessageAlign?: 'agent' | 'chat'
 }
 
 export type MessageTurn =

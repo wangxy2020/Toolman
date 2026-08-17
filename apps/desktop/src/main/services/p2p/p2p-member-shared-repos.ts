@@ -12,11 +12,18 @@ import {
   type P2pWorkspaceRow,
 } from '@toolman/db'
 import type { P2pMember, P2pWorkspace } from '@toolman/shared'
+import {
+  inferMemberDeviceKind,
+  isMemberRecentlySeen,
+  parseP2pClientDeviceKind,
+  preferUsableMemberIdentityId,
+  resolvePeerMemberDisplayName,
+} from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getLocalIdentityId } from '../local-identity'
 import * as p2pConnectionService from './p2p-connection.service'
 import { isP2pPeerDiscoverableOnline, listP2pDiscoveredNodes } from './p2p-discovery.service'
-import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from './p2p-device-identity.service'
 import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 
 export const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
@@ -55,12 +62,18 @@ export function ensureWorkspaceDir(workspaceId: string): void {
 }
 
 export function mapWorkspaceRow(row: P2pWorkspaceRow, memberCount: number): P2pWorkspace {
+  const localDeviceId = getP2pDeviceInfo().deviceId
+  const ownerIdentityId =
+    row.ownerDeviceId === localDeviceId
+      ? (preferUsableMemberIdentityId(getP2pPersonIdentityId(), row.ownerIdentityId) ??
+        row.ownerIdentityId)
+      : row.ownerIdentityId
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     ownerDeviceId: row.ownerDeviceId,
-    ownerIdentityId: row.ownerIdentityId,
+    ownerIdentityId,
     maxMembers: row.maxMembers,
     status: row.status,
     memberCount,
@@ -75,7 +88,19 @@ export function toWorkspaceDto(row: P2pWorkspaceRow): P2pWorkspace {
   return mapWorkspaceRow(row, memberCount)
 }
 
-function resolveMemberOnline(row: P2pWorkspaceMemberRow, _workspaceId: string): boolean {
+function getIdentityDisplayNameById(identityId: string | null | undefined): string | undefined {
+  if (!preferUsableMemberIdentityId(identityId)) return undefined
+  const db = getDatabase()
+  const row = db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, identityId!.trim()))
+    .get()
+  const name = row?.displayName?.trim()
+  return name || undefined
+}
+
+function resolveMemberOnline(row: P2pWorkspaceMemberRow, workspaceId: string): boolean {
   const localDeviceId = getP2pDeviceInfo().deviceId
   if (row.deviceId === localDeviceId) return true
 
@@ -87,22 +112,46 @@ function resolveMemberOnline(row: P2pWorkspaceMemberRow, _workspaceId: string): 
     return true
   }
 
-  return isP2pPeerDiscoverableOnline(row.deviceId)
+  if (isP2pPeerDiscoverableOnline(row.deviceId)) return true
+
+  const peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, row.deviceId)
+  const lastSeenAt = row.lastSeenAt?.getTime() ?? peer?.lastSeenAt?.getTime() ?? null
+  return isMemberRecentlySeen(lastSeenAt)
+}
+
+function parseCertDeviceKind(
+  certJson: string | null | undefined,
+): ReturnType<typeof parseP2pClientDeviceKind> {
+  if (!certJson?.trim()) return undefined
+  try {
+    const parsed = JSON.parse(certJson) as { deviceKind?: unknown }
+    return parseP2pClientDeviceKind(parsed.deviceKind)
+  } catch {
+    return undefined
+  }
 }
 
 export function mapMemberRow(row: P2pWorkspaceMemberRow, workspaceId: string): P2pMember {
   const peer = getPeerRepo().findByWorkspaceAndDevice(workspaceId, row.deviceId)
   const localDeviceId = getP2pDeviceInfo().deviceId
-  const displayName =
-    row.deviceId === localDeviceId ? getIdentityDisplayName() : row.displayName
+  const isLocal = row.deviceId === localDeviceId
+  const identityId = isLocal
+    ? (preferUsableMemberIdentityId(getP2pPersonIdentityId(), row.identityId) ?? row.identityId)
+    : row.identityId
+  const displayName = resolvePeerMemberDisplayName(
+    isLocal ? getIdentityDisplayName() : undefined,
+    row.displayName,
+    getIdentityDisplayNameById(identityId),
+  )
   return {
     id: row.id,
     workspaceId: row.workspaceId,
-    identityId: row.identityId,
+    identityId,
     deviceId: row.deviceId,
     displayName,
     role: row.role,
     status: row.status,
+    deviceKind: inferMemberDeviceKind(row.deviceId, parseCertDeviceKind(row.certJson)),
     online: resolveMemberOnline(row, workspaceId),
     connectionMode: p2pConnectionService.getPeerConnectionMode(row.deviceId),
     lastSeenAt: row.lastSeenAt?.getTime() ?? peer?.lastSeenAt?.getTime(),

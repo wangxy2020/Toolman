@@ -8,6 +8,7 @@ import {
   P2pMemberStatusSchema,
   P2pSharedResourcePermissionSchema,
   P2pAgentSessionPermissionSchema,
+  P2pClientDeviceKindSchema,
   P2pKnowledgeDocumentPermissionSchema,
   P2pSharedResourceStatusSchema,
   P2pShareableResourceTypeSchema,
@@ -19,7 +20,8 @@ export const P2pWorkspaceSchema = z.object({
   name: z.string(),
   description: z.string().nullable().optional(),
   ownerDeviceId: z.string().min(1),
-  ownerIdentityId: UuidSchema,
+  /** Local UUID, Authing `ag-…`, or Firebase `fb-…`. */
+  ownerIdentityId: z.string().min(1),
   maxMembers: z.number().int().min(1).max(50),
   vipPoolEnabled: z.boolean().optional(),
   status: P2pWorkspaceStatusSchema,
@@ -34,12 +36,13 @@ export type P2pWorkspace = z.infer<typeof P2pWorkspaceSchema>
 export const P2pMemberSchema = z.object({
   id: UuidSchema,
   workspaceId: UuidSchema,
-  identityId: UuidSchema,
+  /** Local UUID, Authing `ag-…`, or Firebase `fb-…`. */
+  identityId: z.string().min(1),
   deviceId: z.string().min(1),
   displayName: z.string().min(1),
   role: P2pMemberRoleSchema,
   status: P2pMemberStatusSchema,
-  deviceKind: z.enum(['desktop', 'mobile']).optional(),
+  deviceKind: P2pClientDeviceKindSchema.optional(),
   online: z.boolean(),
   connectionMode: P2pConnectionModeSchema.optional(),
   lastSeenAt: TimestampSchema.optional(),

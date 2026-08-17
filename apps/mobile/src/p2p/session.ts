@@ -8,6 +8,7 @@ import { messageToBytes, toArrayBuffer } from './bytes'
 import { handleFileChannelJson } from './blobMesh'
 import { handleEventsPlaintext } from './groupChatMesh'
 import { emitMeshEvent } from './meshEvents'
+import { ignoreAsyncError } from './asyncFail'
 
 export type LiveMeshSession = {
   workspaceId: string
@@ -146,7 +147,7 @@ function bindChannel(session: LiveMeshSession, channel: RTCDataChannel): void {
   if (channel.label === P2P_FILES_CHANNEL) session.files = channel
   if (channel.label === P2P_EVENTS_CHANNEL) session.events = channel
   channel.onmessage = (event) => {
-    void dispatchChannel(session, channel.label, event.data).catch(() => undefined)
+    ignoreAsyncError(dispatchChannel(session, channel.label, event.data), 'p2p channel')
   }
 }
 

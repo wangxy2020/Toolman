@@ -14,7 +14,10 @@ import {
   type DevicePairingRecord,
 } from '@toolman/shared'
 import { resolveDeviceSyncIdentityIdDesktop } from './community-device-sync'
-import { getMobileSyncHubBaseUrl } from './mobile-sync-hub'
+import { getMobileSyncHubBaseUrl, getMobileSyncHubPort } from './mobile-sync-hub'
+import { isMobileSyncLanAccessEnabled } from './mobile-sync.config'
+import { advertisedHttpUrls } from './network-advertise'
+import { getP2pIceServers } from './p2p/p2p-network.config'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { saveWorkspaceKey } from './p2p/p2p-workspace-key.store'
 
@@ -88,6 +91,13 @@ export function createPersonalPairingOffer(): { offer: DevicePairingOffer; code:
   const store = ensureStore()
   const now = Date.now()
   const hubBaseUrl = getMobileSyncHubBaseUrl()
+  const port = getMobileSyncHubPort()
+  const reachableHubUrls = isMobileSyncLanAccessEnabled()
+    ? advertisedHttpUrls(port)
+    : hubBaseUrl
+      ? [hubBaseUrl]
+      : []
+  const iceServers = getP2pIceServers().slice(0, 8)
   const offer: DevicePairingOffer = {
     v: 1,
     identityId: store.identityId,
@@ -95,6 +105,8 @@ export function createPersonalPairingOffer(): { offer: DevicePairingOffer; code:
     workspaceKeyB64: store.workspaceKeyB64,
     grant: store.grant,
     hubBaseUrlHint: hubBaseUrl || undefined,
+    reachableHubUrls: reachableHubUrls.length > 0 ? reachableHubUrls : undefined,
+    iceServers: iceServers.length > 0 ? iceServers : undefined,
     createdAt: now,
     expiresAt: now + OFFER_TTL_MS,
   }

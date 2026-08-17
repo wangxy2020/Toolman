@@ -26,6 +26,8 @@ describe('p2p-shared-by-member.service', () => {
       certJson: null,
       invitedBy: null,
       lastSeenAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     expect(
@@ -47,6 +49,8 @@ describe('p2p-shared-by-member.service', () => {
       certJson: null,
       invitedBy: null,
       lastSeenAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
     vi.spyOn(P2pEventRepository.prototype, 'findLatestByOperatorId').mockReturnValue({
       id: 'event-1',

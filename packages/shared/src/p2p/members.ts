@@ -1,4 +1,4 @@
-import type { P2pMemberRole, P2pMemberStatus } from './types.js'
+import type { P2pClientDeviceKind, P2pMemberRole, P2pMemberStatus } from './types.js'
 
 export type IdentityMemberLike = {
   id?: string
@@ -39,6 +39,42 @@ export const UNKNOWN_MEMBER_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 export function isUsableMemberIdentityId(identityId?: string | null): boolean {
   const value = identityId?.trim() ?? ''
   return value.length > 0 && value !== UNKNOWN_MEMBER_IDENTITY_ID
+}
+
+/** Skip the unknown placeholder so two guests are not treated as the same person. */
+export function identityIdForSiblingLookup(identityId?: string | null): string | null {
+  const value = identityId?.trim() ?? ''
+  return isUsableMemberIdentityId(value) ? value : null
+}
+
+export function preferUsableMemberIdentityId(
+  ...ids: Array<string | null | undefined>
+): string | undefined {
+  return ids.map((id) => id?.trim()).find((id) => isUsableMemberIdentityId(id))
+}
+
+export function parseP2pClientDeviceKind(value: unknown): P2pClientDeviceKind | undefined {
+  if (value === 'desktop' || value === 'mobile' || value === 'web') return value
+  return undefined
+}
+
+export function inferMemberDeviceKind(
+  deviceId: string,
+  explicit?: P2pClientDeviceKind | null,
+): P2pClientDeviceKind {
+  const parsed = parseP2pClientDeviceKind(explicit)
+  if (parsed) return parsed
+  if (deviceId.startsWith('web-')) return 'web'
+  if (deviceId.startsWith('mobile-')) return 'mobile'
+  return 'desktop'
+}
+
+/** Mailbox / web clients poll about every 15s; keep them online across a few missed ticks. */
+export const P2P_MAILBOX_PRESENCE_TTL_MS = 45_000
+
+export function isMemberRecentlySeen(lastSeenAt?: number | null, now = Date.now()): boolean {
+  if (!lastSeenAt || lastSeenAt <= 0) return false
+  return now - lastSeenAt <= P2P_MAILBOX_PRESENCE_TTL_MS
 }
 
 export function memberIdentityKey(member: IdentityMemberLike): string {
@@ -84,6 +120,47 @@ export function collectPersonMemberIds<T extends IdentityMemberLike & { id: stri
   return members.filter((member) => isSamePerson(member, self)).map((member) => member.id)
 }
 
+/** Local membership for this login: prefer this device, then any device of the same person. */
+export function findSelfWorkspaceMember<T extends IdentityMemberLike>(
+  members: T[],
+  self: PersonSelfRef,
+): T | undefined {
+  if (self.deviceId) {
+    const byDevice = members.find((member) => member.deviceId === self.deviceId)
+    if (byDevice) return byDevice
+  }
+  return members.find((member) => isSamePerson(member, self))
+}
+
+function findMemberBySenderId<T extends IdentityMemberLike & { id: string }>(
+  members: T[],
+  senderId: string,
+): T | undefined {
+  return (
+    members.find((member) => member.id === senderId) ??
+    members.find((member) => member.deviceId === senderId) ??
+    members.find(
+      (member) => isUsableMemberIdentityId(member.identityId) && member.identityId === senderId,
+    )
+  )
+}
+
+/** True when this group-chat sender is the local person (any of their devices). */
+export function isOwnGroupChatSender(
+  senderMemberId: string | null | undefined,
+  members: Array<IdentityMemberLike & { id: string }>,
+  self: PersonSelfRef,
+): boolean {
+  const senderId = senderMemberId?.trim() ?? ''
+  if (!senderId) return false
+  if (self.memberId && senderId === self.memberId) return true
+  if (self.deviceId && senderId === self.deviceId) return true
+  if (isUsableMemberIdentityId(self.identityId) && senderId === self.identityId) return true
+  const senderMember = findMemberBySenderId(members, senderId)
+  if (senderMember && isSamePerson(senderMember, self)) return true
+  return collectPersonMemberIds(members, self).includes(senderId)
+}
+
 export type WorkspaceOwnerRef = {
   identityId?: string | null
   deviceId?: string | null
@@ -91,15 +168,41 @@ export type WorkspaceOwnerRef = {
 
 const PLACEHOLDER_MEMBER_NAME =
   /^(用户[A-Za-z0-9]+|P2P用户.*|群主|本地用户|远程用户|我|未知成员|未知用户)$/i
+const IDENTITY_LIKE_NAME = /^(ag-|fb-)[^\s]+$/i
+const UUID_NAME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function isPlaceholderMemberName(name?: string | null): boolean {
   const value = name?.trim() ?? ''
-  return value.length === 0 || PLACEHOLDER_MEMBER_NAME.test(value)
+  if (value.length === 0) return true
+  return PLACEHOLDER_MEMBER_NAME.test(value) || IDENTITY_LIKE_NAME.test(value) || UUID_NAME.test(value)
 }
 
 export function preferMemberDisplayName(...names: Array<string | undefined | null>): string {
   const cleaned = names.map((name) => name?.trim()).filter((name): name is string => Boolean(name))
   return cleaned.find((name) => !isPlaceholderMemberName(name)) ?? cleaned[0] ?? ''
+}
+
+export const DEFAULT_PEER_MEMBER_NAME = '成员'
+
+/** Roster / chat label for someone else: profile 显示名称. Placeholders become 「成员」. */
+export function resolvePeerMemberDisplayName(
+  ...names: Array<string | undefined | null>
+): string {
+  const cleaned = names.map((name) => name?.trim()).filter((name): name is string => Boolean(name))
+  return cleaned.find((name) => !isPlaceholderMemberName(name)) || DEFAULT_PEER_MEMBER_NAME
+}
+
+export function resolveLivePeerMemberDisplayName<T extends IdentityMemberLike & { id: string }>(
+  members: T[],
+  senderId: string | undefined,
+  storedName?: string | null,
+): string {
+  const member = senderId?.trim() ? findMemberBySenderId(members, senderId.trim()) : undefined
+  const personNames = member
+    ? members.filter((item) => isSamePerson(item, member)).map((item) => item.displayName)
+    : []
+  return resolvePeerMemberDisplayName(...personNames, member?.displayName, storedName)
 }
 
 export function isWorkspaceOwnerPerson(
@@ -140,8 +243,7 @@ export function groupVisibleMembersByPerson<T extends IdentityMemberLike>(
     return {
       identityId,
       devices,
-      displayName:
-        preferMemberDisplayName(...devices.map((item) => item.displayName)) || identityId,
+      displayName: resolvePeerMemberDisplayName(...devices.map((item) => item.displayName)),
       role: resolveWorkspacePersonRole(devices, owner),
       online: devices.some((item) => item.online),
       status: devices.some((item) => item.status === 'active') ? 'active' : 'invited',
@@ -162,6 +264,32 @@ export function resolvePersonDeviceMembership(input: {
     role: input.sibling.role,
     status: input.sibling.status === 'active' ? 'active' : 'invited',
   }
+}
+
+/**
+ * Keep owner on a second device of the owner person (desktop + phone + web).
+ * Only demote a claimed owner role when this login is not the workspace owner.
+ */
+export function resolveJoinedDeviceRole(input: {
+  inheritedRole: P2pMemberRole
+  requestedRole: P2pMemberRole
+  joinerIdentityId?: string | null
+  ownerIdentityId?: string | null
+  ownerDeviceId?: string | null
+  sibling?: { role?: string | null; deviceId?: string | null; identityId?: string | null } | null
+}): P2pMemberRole {
+  if (input.inheritedRole !== 'owner') return input.inheritedRole
+  const joiner = input.joinerIdentityId?.trim() ?? ''
+  const owner = input.ownerIdentityId?.trim() ?? ''
+  const isOwnerPerson =
+    (isUsableMemberIdentityId(joiner) && isUsableMemberIdentityId(owner) && joiner === owner) ||
+    input.sibling?.role === 'owner' ||
+    Boolean(input.ownerDeviceId && input.sibling?.deviceId === input.ownerDeviceId) ||
+    (isUsableMemberIdentityId(input.sibling?.identityId) &&
+      isUsableMemberIdentityId(owner) &&
+      input.sibling?.identityId === owner)
+  if (isOwnerPerson) return 'owner'
+  return input.requestedRole === 'owner' ? 'member' : input.requestedRole
 }
 
 export function countDistinctMemberIdentities(

@@ -75,6 +75,7 @@ export function DiagnosticsSettingsMobileSection({
       title={t('settings.diagnostics.mobileSync.title')}
       defaultCollapsed={false}
     >
+      <p className="tm-settings-row-hint">{t('settings.diagnostics.mobileSync.transportHint')}</p>
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.syncToggle')}
         hint={t('settings.diagnostics.mobileSync.syncToggleHint')}
@@ -108,16 +109,6 @@ export function DiagnosticsSettingsMobileSection({
       {loopbackOnly ? (
         <p className="tm-settings-error">{t('settings.diagnostics.mobileSync.loopbackOnly')}</p>
       ) : null}
-      <SettingsRow
-        label={t('settings.diagnostics.mobileSync.wanToggle')}
-        hint={t('settings.diagnostics.mobileSync.wanToggleHint')}
-      >
-        <SettingsToggle
-          checked={Boolean(mobile.wanSyncEnabled)}
-          disabled={busy}
-          onChange={onWanToggle}
-        />
-      </SettingsRow>
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.devicePairing')}
         hint={t('settings.diagnostics.mobileSync.devicePairingHint')}
@@ -169,10 +160,25 @@ export function DiagnosticsSettingsMobileSection({
         <span className="tm-settings-static">{mobile.hubBaseUrl ?? '—'}</span>
       </SettingsRow>
       {reachable.length > 0 ? (
-        <SettingsRow label={t('settings.diagnostics.mobileSync.reachable')}>
+        <SettingsRow
+          label={t('settings.diagnostics.mobileSync.reachable')}
+          hint={t('settings.diagnostics.mobileSync.httpsFallbackHint')}
+        >
           <span className="tm-settings-static">{reachable.join(' · ')}</span>
         </SettingsRow>
-      ) : null}
+      ) : (
+        <p className="tm-settings-row-hint">{t('settings.diagnostics.mobileSync.httpsFallbackHint')}</p>
+      )}
+      <SettingsRow
+        label={t('settings.diagnostics.mobileSync.wanToggle')}
+        hint={t('settings.diagnostics.mobileSync.wanToggleHint')}
+      >
+        <SettingsToggle
+          checked={Boolean(mobile.wanSyncEnabled)}
+          disabled={busy}
+          onChange={onWanToggle}
+        />
+      </SettingsRow>
       {mobile.lastError ? <p className="tm-settings-error">{mobile.lastError}</p> : null}
     </SettingsCollapsibleSection>
   )

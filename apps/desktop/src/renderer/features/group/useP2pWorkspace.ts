@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   canManageWorkspaceMembers,
   canWriteWorkspace,
+  findSelfWorkspaceMember,
   IpcChannel,
   type P2pMember,
   type P2pMemberRole,
@@ -23,6 +24,7 @@ export function useP2pWorkspace({
   const [workspace, setWorkspace] = useState<P2pWorkspace | null>(null)
   const [members, setMembers] = useState<P2pMember[]>([])
   const [selfDeviceId, setSelfDeviceId] = useState<string | null>(null)
+  const [selfIdentityId, setSelfIdentityId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const onWorkspaceUpdatedRef = useRef(onWorkspaceUpdated)
@@ -36,7 +38,7 @@ export function useP2pWorkspace({
     onWorkspaceInvalidRef.current = onWorkspaceInvalid
   }, [onWorkspaceInvalid])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceId) {
       setWorkspace(null)
       setMembers([])
@@ -44,8 +46,10 @@ export function useP2pWorkspace({
       return
     }
 
-    setLoading(true)
-    setError(null)
+    if (!opts?.silent) {
+      setLoading(true)
+      setError(null)
+    }
 
     const [workspaceResult, membersResult, deviceResult] = await Promise.all([
       window.api.invoke(IpcChannel.P2pWorkspaceGet, { id: workspaceId }),
@@ -53,18 +57,13 @@ export function useP2pWorkspace({
       window.api.invoke(IpcChannel.P2pDeviceGetInfo),
     ])
 
-    setLoading(false)
+    if (!opts?.silent) {
+      setLoading(false)
+    }
 
     if (!workspaceResult.ok) {
       setError(workspaceResult.error.message)
       if (workspaceResult.error.message.includes('群组不存在')) {
-        onWorkspaceInvalidRef.current?.()
-      }
-      return
-    }
-    if (!membersResult.ok) {
-      setError(membersResult.error.message)
-      if (membersResult.error.message.includes('群组不存在')) {
         onWorkspaceInvalidRef.current?.()
       }
       return
@@ -78,16 +77,26 @@ export function useP2pWorkspace({
       onWorkspaceInvalidRef.current?.()
       return
     }
-    const nextMembers = (membersResult.data as { members: P2pMember[] }).members
 
     setWorkspace(nextWorkspace)
-    setMembers(nextMembers)
     onWorkspaceUpdatedRef.current?.(nextWorkspace)
 
     if (deviceResult.ok) {
-      const device = deviceResult.data as { deviceId: string }
+      const device = deviceResult.data as { deviceId: string; identityId?: string }
       setSelfDeviceId(device.deviceId)
+      if (device.identityId) setSelfIdentityId(device.identityId)
     }
+
+    if (!membersResult.ok) {
+      setError(membersResult.error.message)
+      if (membersResult.error.message.includes('群组不存在')) {
+        onWorkspaceInvalidRef.current?.()
+      }
+      return
+    }
+
+    const nextMembers = (membersResult.data as { members: P2pMember[] }).members
+    setMembers(nextMembers)
   }, [workspaceId])
 
   useEffect(() => {
@@ -103,7 +112,7 @@ export function useP2pWorkspace({
       if (data?.workspaceId && data.workspaceId !== workspaceId) return
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
-        void load()
+        void load({ silent: true })
       }, 300)
     }
 
@@ -139,14 +148,28 @@ export function useP2pWorkspace({
     }
   }, [workspaceId, load])
 
+  useEffect(() => {
+    if (!workspaceId) return
+    const timer = setInterval(() => {
+      void load({ silent: true })
+    }, 15_000)
+    return () => clearInterval(timer)
+  }, [workspaceId, load])
+
   const applyWorkspace = useCallback((nextWorkspace: P2pWorkspace) => {
     setWorkspace((current) => (current?.id === nextWorkspace.id ? nextWorkspace : current))
   }, [])
 
   const selfMember = useMemo(
-    () => members.find((member) => member.deviceId === selfDeviceId) ?? null,
-    [members, selfDeviceId],
+    () =>
+      findSelfWorkspaceMember(members, {
+        deviceId: selfDeviceId,
+        identityId: selfIdentityId,
+      }) ?? null,
+    [members, selfDeviceId, selfIdentityId],
   )
+
+  const isOwnerDevice = Boolean(selfDeviceId && workspace?.ownerDeviceId === selfDeviceId)
 
   const prevMemberStatusRef = useRef<P2pMember['status'] | null>(null)
   const [joinApprovedNotice, setJoinApprovedNotice] = useState<{ workspaceName: string } | null>(
@@ -214,12 +237,15 @@ export function useP2pWorkspace({
     workspace,
     members,
     selfMember,
-    canManageMembers:
-      selfMember?.status === 'active' && canManageWorkspaceMembers(selfMember?.role),
-    canWriteWorkspace:
-      selfMember?.status === 'active' && canWriteWorkspace(selfMember?.role),
-    isReadonly: selfMember?.role === 'readonly',
-    isOwner: selfMember?.role === 'owner',
+    selfDeviceId,
+    canManageMembers: selfMember
+      ? selfMember.status === 'active' && canManageWorkspaceMembers(selfMember.role)
+      : isOwnerDevice,
+    canWriteWorkspace: selfMember
+      ? selfMember.status === 'active' && canWriteWorkspace(selfMember.role)
+      : isOwnerDevice,
+    isReadonly: selfMember ? selfMember.role === 'readonly' : !isOwnerDevice,
+    isOwner: selfMember?.role === 'owner' || (!selfMember && isOwnerDevice),
     isMembershipPending: selfMember?.status === 'invited',
     loading,
     error,

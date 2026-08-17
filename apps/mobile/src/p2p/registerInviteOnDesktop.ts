@@ -9,6 +9,7 @@ import type { InviteSelf } from './applyInvite'
 import type { PendingP2pInvite } from './inviteParse'
 import { loadOrCreateDeviceKeys } from './deviceKeys'
 import { listRegisterHubCandidates } from './registerHubs'
+import { localP2pClientDeviceKind } from './deviceKind'
 
 export { listRegisterHubCandidates } from './registerHubs'
 
@@ -59,7 +60,7 @@ export async function registerPendingInviteOnDesktop(input: {
     displayName: input.self.displayName,
     deviceId: input.self.deviceId,
     identityId: input.self.identityId,
-    deviceKind: 'mobile' as const,
+    deviceKind: localP2pClientDeviceKind(),
     publicKeyB64: keys?.publicKeyB64,
   }
 

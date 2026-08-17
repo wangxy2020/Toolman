@@ -27,6 +27,7 @@ export function areMessagePanelPropsEqual(
     prev.ttsPlaybackState === next.ttsPlaybackState &&
     prev.getUserDisplayName === next.getUserDisplayName &&
     prev.getUserAvatarInitial === next.getUserAvatarInitial &&
-    prev.isOwnUserMessage === next.isOwnUserMessage
+    prev.isOwnUserMessage === next.isOwnUserMessage &&
+    prev.userMessageAlign === next.userMessageAlign
   )
 }

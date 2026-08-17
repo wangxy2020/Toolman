@@ -1,19 +1,24 @@
 /**
- * Answer personal device-sync WebRTC offers deposited into the local mailbox,
+ * Answer personal device-sync WebRTC offers deposited into the local Sync Hub mailbox,
  * then push recent SyncChange batches over the native `device-sync` channel.
+ * Also applies inbound `device.sync.changes` from the encrypted personal mailbox.
+ * Signaling/mailbox stay on the desktop Sync Hub (P2P) — no official Hub.
  */
 import {
   DEVICE_SYNC_DATA_CHANNEL,
   DeviceSyncChannelMessageSchema,
+  SyncChangeSchema,
   openMailboxPlaintext,
   personalSyncWorkspaceId,
   sealMailboxPlaintext,
   workspaceKeyFromB64,
   type SyncChange,
 } from '@toolman/shared'
-import { listSyncChangelog } from './mobile-sync-store'
+import { appendSyncChanges, listSyncChangelog } from './mobile-sync-store'
+import { applyInboundSyncChanges } from './mobile-sync-apply'
 import {
   getOrCreatePersonalPairingStore,
+  listPairedPersonalDevices,
 } from './personal-device-pairing.service'
 import { P2pBridge } from './p2p/p2p-bridge'
 import { pullMailboxRecords, putMailboxRecord } from './p2p/p2p-mailbox-store'
@@ -112,13 +117,49 @@ async function handleOffer(plain: {
     answerSdp: joined.answerSdp,
   })
 
-  // Give the DataChannel a moment to settle, then push changelog.
   await new Promise((resolve) => setTimeout(resolve, 400))
   await pushChangesToPeer(plain.senderDeviceId)
 }
 
+function applyPersonalMailboxChanges(changes: SyncChange[]): void {
+  if (changes.length === 0) return
+  applyInboundSyncChanges(changes)
+  appendSyncChanges(changes)
+}
+
+async function handlePersonalEnvelope(input: {
+  workspaceId: string
+  workspaceKey: Uint8Array
+  ciphertextB64: string
+}): Promise<void> {
+  const plain = await openMailboxPlaintext({
+    workspaceKey: input.workspaceKey,
+    workspaceId: input.workspaceId,
+    ciphertextB64: input.ciphertextB64,
+  })
+  const local = getP2pDeviceInfo()
+  if (plain.type === 'device.sync.signal') {
+    if (plain.kind !== 'offer') return
+    if (plain.senderDeviceId === local.deviceId) return
+    await handleOffer({
+      senderDeviceId: plain.senderDeviceId,
+      payload: plain.payload,
+    })
+    return
+  }
+  if (plain.type !== 'device.sync.changes') return
+  if (plain.senderDeviceId === local.deviceId) return
+  const changes: SyncChange[] = []
+  for (const raw of plain.changes) {
+    const parsed = SyncChangeSchema.safeParse(raw)
+    if (parsed.success) changes.push(parsed.data)
+  }
+  applyPersonalMailboxChanges(changes)
+}
+
 async function pollPersonalDeviceSyncOffers(): Promise<void> {
   if (answering) return
+  if (listPairedPersonalDevices().length === 0) return
   answering = true
   try {
     const store = getOrCreatePersonalPairingStore()
@@ -134,23 +175,16 @@ async function pollPersonalDeviceSyncOffers(): Promise<void> {
     for (const envelope of envelopes) {
       sinceSeq = Math.max(sinceSeq, envelope.seq)
       try {
-        const plain = await openMailboxPlaintext({
-          workspaceKey,
+        await handlePersonalEnvelope({
           workspaceId,
+          workspaceKey,
           ciphertextB64: envelope.ciphertextB64,
-        })
-        if (plain.type !== 'device.sync.signal') continue
-        if (plain.kind !== 'offer') continue
-        if (plain.senderDeviceId === local.deviceId) continue
-        await handleOffer({
-          senderDeviceId: plain.senderDeviceId,
-          payload: plain.payload,
         })
       } catch (error) {
         logStructured(
           'mobile-sync',
           'warn',
-          `personal webrtc offer failed: ${toErrorMessage(error, String(error))}`,
+          `personal mailbox apply failed: ${toErrorMessage(error, String(error))}`,
         )
       }
     }

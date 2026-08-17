@@ -73,10 +73,12 @@ export async function pushNoteChanges(
 
   if (!client) {
     throw new Error(
-      '无法连接 Sync Hub，且个人投递失败。请确认已完成设备配对，且浏览器能访问桌面 Sync Hub（本机预览或局域网）。',
+      '无法连接 Sync Hub，且个人投递失败。请完成设备配对；localhost/真机局域网可直连桌面，托管网页需 HTTPS 桌面地址或点到点 WebRTC（不依赖官方 Hub）。',
     )
   }
-  throw new Error('同步未授权。请填写正确的局域网配对令牌，或依赖已配对的加密投递（需可达桌面 Sync Hub）。')
+  throw new Error(
+    '同步未授权。请填写局域网配对令牌，或依赖已配对的点到点 / 投递（桌面 Sync Hub 需对端可达）。',
+  )
 }
 
 export async function pushClassroomChanges(
@@ -110,8 +112,10 @@ export async function pushClassroomChanges(
 
   if (!client) {
     throw new Error(
-      '无法连接 Sync Hub，且个人投递失败。请确认已完成设备配对，且浏览器能访问桌面 Sync Hub（本机预览或局域网）。',
+      '无法连接 Sync Hub，且个人投递失败。请完成设备配对；localhost/真机局域网可直连桌面，托管网页需 HTTPS 桌面地址或点到点 WebRTC（不依赖官方 Hub）。',
     )
   }
-  throw new Error('同步未授权。请填写正确的局域网配对令牌，或依赖已配对的加密投递（需可达桌面 Sync Hub）。')
+  throw new Error(
+    '同步未授权。请填写局域网配对令牌，或依赖已配对的点到点 / 投递（桌面 Sync Hub 需对端可达）。',
+  )
 }

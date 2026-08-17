@@ -20,6 +20,7 @@ import {
 } from './mobile-sync.config'
 import { isMobileSyncEnabled } from './mobile-sync.service'
 import { createKnowledgeBase, listKnowledgeBases } from './knowledge.service'
+import { listKnowledgeDocuments } from './knowledge-document/list-ingest'
 import { searchKnowledge } from './knowledge-document.service'
 import { getDefaultWorkspace } from './workspace.service'
 import { publishKnowledgeMetaChanges } from './mobile-sync-store'
@@ -48,16 +49,44 @@ function listMobileSyncKnowledgeMeta(workspaceId: string): KnowledgeMetaItem[] {
     }))
 }
 
-function listClassroomBindableKnowledgeMeta(workspaceId: string): KnowledgeMetaItem[] {
-  return listKnowledgeBases({ workspaceId })
-    .filter((kb) => isVectorizedKnowledgeBaseKind(kb.kind))
-    .map((kb) => ({
+function readableClassroomDocumentTitle(doc: { title: string; absolutePath?: string | null }): string | null {
+  const title = doc.title.trim()
+  if (title && !/^[0-9a-f-]{16,}$/i.test(title)) return title
+  const base = doc.absolutePath?.trim().split(/[/\\]/).pop()?.trim()
+  if (base && !/^[0-9a-f-]{16,}$/i.test(base)) return base
+  return title || null
+}
+
+async function listClassroomBindableKnowledgeMeta(workspaceId: string): Promise<KnowledgeMetaItem[]> {
+  const bases = listKnowledgeBases({ workspaceId }).filter((kb) =>
+    isVectorizedKnowledgeBaseKind(kb.kind),
+  )
+  const items: KnowledgeMetaItem[] = []
+  for (const kb of bases) {
+    let documentTitles: string[] = []
+    try {
+      const docs = await listKnowledgeDocuments({ kbId: kb.id, workspaceId })
+      const seen = new Set<string>()
+      for (const doc of docs) {
+        const title = readableClassroomDocumentTitle(doc)
+        if (!title || seen.has(title)) continue
+        seen.add(title)
+        documentTitles.push(title)
+        if (documentTitles.length >= 8) break
+      }
+    } catch {
+      documentTitles = []
+    }
+    items.push({
       id: kb.id,
       name: kb.name,
       kind: kb.kind,
       documentCount: kb.documentCount,
       updatedAt: kb.updatedAt,
-    }))
+      ...(documentTitles.length > 0 ? { documentTitles } : {}),
+    })
+  }
+  return items
 }
 
 export function isMobileAgentHostEnabled(): boolean {
@@ -112,7 +141,7 @@ async function handleKnowledgeHostMessage(message: string): Promise<{ ok: boolea
   }
 
   if (request.op === 'list-classroom-kb') {
-    const items = listClassroomBindableKnowledgeMeta(workspaceId)
+    const items = await listClassroomBindableKnowledgeMeta(workspaceId)
     return { ok: true, text: JSON.stringify({ op: 'list-classroom-kb', items }) }
   }
 

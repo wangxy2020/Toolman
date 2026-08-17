@@ -16,7 +16,7 @@ import {
   messageIdsToDelete,
   type ComposerToolbarState,
 } from './agentPaneUtils'
-import { resolveActiveAgent, resolveAgentSettings } from './agentSettingsResolve'
+import { resolveActiveAgent, resolveAgentSettings, resolveClassroomTtsSettings } from './agentSettingsResolve'
 import {
   ensureAgentRightPaneSession,
   toggleAgentRightPaneClass,
@@ -101,7 +101,25 @@ export function useAgentRightPane() {
   const agentSettingsRef = useRef(agentSettings)
   agentSettingsRef.current = agentSettings
 
-  const tts = useAgentRightPaneTts(agentSettings)
+  const classroomCourse =
+    agentScope === 'classroom'
+      ? classroomCourses.find((course) => course.id === session?.id) ?? null
+      : null
+  classroomCourseRef.current = classroomCourse
+  classroomCoursesRef.current = classroomCourses
+
+  const ttsSettings = useMemo(
+    () =>
+      agentScope === 'classroom'
+        ? resolveClassroomTtsSettings(classroomCourse, agentSettings)
+        : {
+            autoSpeak: agentSettings.autoSpeak,
+            ttsEngine: agentSettings.ttsEngine,
+            ttsVoice: agentSettings.ttsVoice,
+          },
+    [agentScope, agentSettings, classroomCourse],
+  )
+  const tts = useAgentRightPaneTts(ttsSettings)
   const selection = useAgentRightPaneSelection()
   const translate = useAgentRightPaneTranslate({
     modelConfig,
@@ -121,12 +139,6 @@ export function useAgentRightPane() {
     selection.resetSelection()
   }, [activeSessionId])
 
-  const classroomCourse =
-    agentScope === 'classroom'
-      ? classroomCourses.find((course) => course.id === session?.id) ?? null
-      : null
-  classroomCourseRef.current = classroomCourse
-  classroomCoursesRef.current = classroomCourses
   const classLive = classroomCourseIsLive(classroomCourse)
   const classroomStatus = useMemo(
     () => classroomStatusFromSync(agentScope, syncStatus),
@@ -312,5 +324,11 @@ export function useAgentRightPane() {
     regenerateAssistant, forkFromMessage, translateMessage: translate.translateMessage,
     speakMessage: tts.speakMessage, saveToNote, toggleClass, startNewTopic, openUserMenu,
     groupAgentReadOnly: session?.groupAgent?.permission === 'read',
+    userDisplayName: '用户',
+    assistantName:
+      session?.groupAgent?.sharedAgentName?.trim() ||
+      activeAgent?.name?.trim() ||
+      modulePrefs.agent.name?.trim() ||
+      '智能体',
   }
 }

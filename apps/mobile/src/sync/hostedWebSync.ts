@@ -1,7 +1,7 @@
 import { isHostedWebPage } from './desktopDevHost'
 
 export const HOSTED_WEB_SYNC_MESSAGE =
-  '托管网页无法访问电脑上的 HTTP Sync Hub。请完成设备配对后走点到点 / 加密投递；真机局域网仍可用配对令牌。官方社区 Hub 明文镜像为可选，未部署不影响局域网与点到点同步。'
+  '托管网页无法直连电脑上的 HTTP Sync Hub。请先完成设备配对，双方在线时走 WebRTC（信令经投递盒 / 可达桌面）。不会配 TURN、只要网页能同步时，再填写 HTTPS 桌面地址作为兜底。不依赖官方 Hub。'
 
 export function isHttpsSyncUrl(raw?: string | null): boolean {
   return Boolean(raw && /^https:\/\//i.test(raw.trim()))

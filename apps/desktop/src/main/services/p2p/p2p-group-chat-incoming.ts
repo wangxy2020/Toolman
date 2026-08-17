@@ -1,9 +1,6 @@
 import { fireAndForget } from '../../lib/fire-and-forget'
 import { logStructured } from '../structured-log.service'
-import { toErrorMessage } from '@toolman/shared'
-import {
-  P2pGroupChatMessageSchema,
-} from '@toolman/shared'
+import { P2pGroupChatMessageSchema, preferMemberDisplayName, toErrorMessage } from '@toolman/shared'
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { getKnownP2pConnections } from './p2p-connection.service'
@@ -11,6 +8,7 @@ import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { applyRemoteMemberJoin } from './p2p-member-join.service'
 import { ensureOwnerMemberRecord } from './p2p-member-shared-repos'
+import { touchMemberLastSeen } from './p2p-member-shared-membership'
 import {
   broadcastP2pGroupChatCleared,
   broadcastP2pGroupChatMessage,
@@ -211,7 +209,10 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
     member.displayName !== message.senderName &&
     member.deviceId === peerDeviceId
   ) {
-    getMemberRepo().update({ id: member.id, displayName: message.senderName })
+    const nextName = preferMemberDisplayName(message.senderName, member.displayName)
+    if (nextName && nextName !== member.displayName) {
+      getMemberRepo().update({ id: member.id, displayName: nextName })
+    }
   }
 
   if (member && member.id !== message.senderMemberId) {
@@ -229,6 +230,7 @@ function handleIncomingP2pGroupChatMessage(peerDeviceId: string, wireMessage: un
     return
   }
 
+  touchMemberLastSeen(message.workspaceId, peerDeviceId)
   broadcastP2pGroupChatMessage(message)
   fireAndForget('p2p', maybeRelayGroupChatAfterReceive(peerDeviceId, message))
 }

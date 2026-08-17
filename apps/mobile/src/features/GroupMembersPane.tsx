@@ -2,7 +2,6 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { IconPlus } from '../icons/composer-icons'
 import {
   groupMemberRoleLabel,
-  shortDeviceId,
   type GroupMember,
 } from '../storage/groupChat'
 import { colors } from '../theme'
@@ -15,6 +14,7 @@ import {
   memberDeviceLine,
   memberOnlineLabel,
 } from './groupPagePanelUtils'
+import { resolvePeerMemberDisplayName } from '@toolman/shared'
 
 export function GroupMembersPane(props: {
   groupName: string
@@ -57,17 +57,20 @@ export function GroupMembersPane(props: {
         ) : (
           people.map((person) => {
             const isSelf = person.devices.some((member) => isSelfGroupMember(member, self))
+            const displayName = isSelf
+              ? '我的'
+              : resolvePeerMemberDisplayName(person.displayName)
+            const avatarLabel = isSelf ? '我' : memberAvatarInitial(displayName)
             return (
               <View key={person.key} style={styles.memberCard}>
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberAvatarText}>
-                    {memberAvatarInitial(person.displayName)}
+                    {avatarLabel}
                   </Text>
                 </View>
                 <View style={styles.memberMeta}>
                   <Text style={styles.memberName} numberOfLines={1}>
-                    {person.displayName}
-                    {isSelf ? <Text style={styles.memberYou}>（我）</Text> : null}
+                    {displayName}
                   </Text>
                   {person.devices.map((member) => (
                     <Text
@@ -78,7 +81,7 @@ export function GroupMembersPane(props: {
                       ]}
                       numberOfLines={1}
                     >
-                      {memberDeviceLine(member.deviceKind, member.deviceId, shortDeviceId)}
+                      {memberDeviceLine(member.deviceKind)}
                     </Text>
                   ))}
                 </View>

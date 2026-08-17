@@ -12,6 +12,8 @@ export function useAgentRightPaneTts(agentSettings: {
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle')
   const [actionHint, setActionHint] = useState<string | null>(null)
   const ttsHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settingsRef = useRef(agentSettings)
+  settingsRef.current = agentSettings
 
   useEffect(() => {
     getMobileTtsController().configure({
@@ -46,22 +48,24 @@ export function useAgentRightPaneTts(agentSettings: {
   }, [])
 
   const autoSpeakReply = (messageId: string, content: string) => {
-    if (!agentSettings.autoSpeak) return
+    const settings = settingsRef.current
+    if (!settings.autoSpeak) return
     if (!content.trim()) return
     const tts = getMobileTtsController()
     tts.configure({
-      engine: agentSettings.ttsEngine,
-      voice: agentSettings.ttsVoice,
+      engine: settings.ttsEngine,
+      voice: settings.ttsVoice,
     })
     tts.speakMessage(messageId, content)
   }
 
   const speakMessage = (msg: ChatMessage) => {
     unlockAudioPlayback()
+    const settings = settingsRef.current
     const tts = getMobileTtsController()
     tts.configure({
-      engine: agentSettings.ttsEngine,
-      voice: agentSettings.ttsVoice,
+      engine: settings.ttsEngine,
+      voice: settings.ttsVoice,
     })
     tts.speakMessage(msg.id, msg.content)
   }

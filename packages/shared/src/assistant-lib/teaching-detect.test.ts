@@ -10,10 +10,12 @@ import {
   resolveAssistantLibTeachingRuntime,
 } from './agent-link.js'
 import {
+  assistantLibSessionMetadataPatch,
   isAssistantLibBuiltinClassroomSession,
   isAssistantLibGuideCourseSession,
   looksLikeSocraticAnswerLeak,
   isTeachingAssistantParameters,
+  resolveAssistantLibSessionModelId,
 } from './teaching-detect.js'
 
 describe('socratic referee heuristics', () => {
@@ -169,5 +171,27 @@ describe('socratic referee heuristics', () => {
     expect(runtime.teachingMode).toBe('socratic')
     expect(runtime.roleplayId).toBe('detective')
     expect(runtime.courseSystemPrompt).toBeTruthy()
+  })
+
+  it('reads and patches a per-course chat model', () => {
+    const metadata = {
+      toolmanAssistantLib: {
+        enabled: true,
+        presetId: 'socratic-tutor',
+        learningLabel: '学习',
+        modelId: 'prov:gpt-4o-mini',
+      },
+    }
+    expect(resolveAssistantLibSessionModelId(metadata)).toBe('prov:gpt-4o-mini')
+    const kept = assistantLibSessionMetadataPatch(metadata, {
+      presetId: 'socratic-tutor',
+      courseName: 'Rust',
+    })
+    expect(resolveAssistantLibSessionModelId(kept)).toBe('prov:gpt-4o-mini')
+    const cleared = assistantLibSessionMetadataPatch(metadata, {
+      presetId: 'socratic-tutor',
+      modelId: '',
+    })
+    expect(resolveAssistantLibSessionModelId(cleared)).toBeNull()
   })
 })

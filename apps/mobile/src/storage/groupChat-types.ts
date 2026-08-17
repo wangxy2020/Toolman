@@ -29,7 +29,7 @@ export type GroupChatMessage = {
 
 export type GroupMemberRole = 'owner' | 'admin' | 'member' | 'readonly'
 
-export type GroupDeviceKind = 'desktop' | 'mobile'
+export type GroupDeviceKind = 'desktop' | 'mobile' | 'web'
 
 export type GroupMember = {
   id: string

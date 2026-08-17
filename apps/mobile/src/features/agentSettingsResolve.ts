@@ -27,6 +27,22 @@ export function defaultAgentSettingsFromPrefs(
   return { ...rest }
 }
 
+export function resolveClassroomTtsSettings(
+  course: {
+    autoSpeak?: boolean
+    ttsEngine?: 'edge' | 'web-speech'
+    ttsVoice?: string
+  } | null,
+  defaults: Pick<MobileAgentSettings, 'autoSpeak' | 'ttsEngine' | 'ttsVoice'>,
+): Pick<MobileAgentSettings, 'autoSpeak' | 'ttsEngine' | 'ttsVoice'> {
+  if (!course) return defaults
+  return {
+    autoSpeak: course.autoSpeak !== false,
+    ttsEngine: course.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
+    ttsVoice: course.ttsVoice?.trim() || defaults.ttsVoice,
+  }
+}
+
 export function resolveAgentSettings(
   agent: AgentLike | null | undefined,
   defaults: ModulePrefs['agent'],

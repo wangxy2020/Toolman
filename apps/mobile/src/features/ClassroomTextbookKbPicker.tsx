@@ -12,9 +12,16 @@ import {
 import type { KnowledgeMetaItem } from '@toolman/shared'
 import { colors } from '../theme'
 import {
+  classroomKbDisplayName,
+  classroomKbDocumentSummary,
+  classroomKbTitlesFromSnapshot,
+  enrichClassroomKbItemWithTitles,
+} from './classroomKbDisplay'
+import {
   createDesktopClassroomKnowledgeBase,
   listDesktopClassroomKnowledgeBases,
 } from '../host/invokeDesktop'
+import { loadKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
 
 type Props = {
   visible: boolean
@@ -39,6 +46,7 @@ function mergeKbItems(
 export function ClassroomTextbookKbPicker(props: Props) {
   const { visible, selectedKbId, fallbackItems, onClose, onSelect } = props
   const [items, setItems] = useState<KnowledgeMetaItem[]>([])
+  const [snapshotTitlesByKb, setSnapshotTitlesByKb] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -46,17 +54,49 @@ export function ClassroomTextbookKbPicker(props: Props) {
   const [createName, setCreateName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const listed = useMemo(() => mergeKbItems(items, fallbackItems), [fallbackItems, items])
+  const listed = useMemo(() => {
+    return mergeKbItems(items, fallbackItems).map((item) =>
+      enrichClassroomKbItemWithTitles(item, snapshotTitlesByKb[item.id]),
+    )
+  }, [fallbackItems, items, snapshotTitlesByKb])
 
   const refresh = async () => {
     setLoading(true)
     setError(null)
     try {
-      const next = await listDesktopClassroomKnowledgeBases()
+      const [next, snapshot] = await Promise.all([
+        listDesktopClassroomKnowledgeBases(),
+        loadKnowledgeSnapshot().catch(() => null),
+      ])
+      const titlesByKb: Record<string, string[]> = {}
+      if (snapshot) {
+        for (const kb of new Set([
+          ...snapshot.documents.map((doc) => doc.kbId),
+          ...next.map((item) => item.id),
+          ...fallbackItems.map((item) => item.id),
+        ])) {
+          const titles = classroomKbTitlesFromSnapshot(kb, snapshot)
+          if (titles.length > 0) titlesByKb[kb] = titles
+        }
+      }
+      setSnapshotTitlesByKb(titlesByKb)
       setItems(next)
     } catch (err) {
       setItems([])
       setError(err instanceof Error ? err.message : String(err))
+      try {
+        const snapshot = await loadKnowledgeSnapshot()
+        const titlesByKb: Record<string, string[]> = {}
+        if (snapshot) {
+          for (const kb of fallbackItems.map((item) => item.id)) {
+            const titles = classroomKbTitlesFromSnapshot(kb, snapshot)
+            if (titles.length > 0) titlesByKb[kb] = titles
+          }
+        }
+        setSnapshotTitlesByKb(titlesByKb)
+      } catch {
+        setSnapshotTitlesByKb({})
+      }
     } finally {
       setLoading(false)
     }
@@ -143,11 +183,9 @@ export function ClassroomTextbookKbPicker(props: Props) {
                     style={[styles.row, active ? styles.rowActive : null]}
                   >
                     <Text style={[styles.rowTitle, active ? styles.rowTitleActive : null]}>
-                      {item.name}
+                      {classroomKbDisplayName(item)}
                     </Text>
-                    <Text style={styles.rowMeta}>
-                      {item.kind} · {item.documentCount} 篇文档
-                    </Text>
+                    <Text style={styles.rowMeta}>{classroomKbDocumentSummary(item)}</Text>
                   </Pressable>
                 )
               })

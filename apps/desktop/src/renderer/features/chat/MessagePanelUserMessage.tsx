@@ -29,6 +29,7 @@ export function MessagePanelUserMessage({
   editing,
   sending,
   isOwn = false,
+  align = 'agent',
 }: {
   message: Message
   messageSettings: MessageSettings
@@ -45,6 +46,7 @@ export function MessagePanelUserMessage({
   editing?: boolean
   sending?: boolean
   isOwn?: boolean
+  align?: 'agent' | 'chat'
 }) {
   const text = getUserVisibleText(message.contentBlocks)
   const copyText = getUserMessageCopyText(message.contentBlocks)
@@ -54,7 +56,9 @@ export function MessagePanelUserMessage({
       className={[
         'tm-stream-message',
         'tm-stream-message--user',
-        isOwn ? 'tm-stream-message--own' : '',
+        isOwn ? 'tm-stream-message--own' : 'tm-stream-message--peer',
+        align === 'chat' ? 'tm-chat-align' : '',
+        align === 'chat' ? (isOwn ? 'tm-chat-align--own' : 'tm-chat-align--peer') : '',
       ]
         .filter(Boolean)
         .join(' ')}

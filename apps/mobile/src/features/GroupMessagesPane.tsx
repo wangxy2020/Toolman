@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { resolveLivePeerMemberDisplayName } from '@toolman/shared'
 import { useMobileApp } from '../state/MobileAppContext'
 import { shellStyles } from '../theme'
 import { copyToClipboard } from '../utils/clipboard'
 import { ChatComposer } from './ChatComposer'
 import { groupPaneStyles as styles } from './groupPaneStyles'
 import { STREAM_PAD_SIDE, formatMessageTime } from './groupPaneUtils'
+import { isSelfGroupMember, memberAvatarInitial } from './groupPagePanelUtils'
 import { MessageMarkdown } from './MessageMarkdown'
 import { useGroupChat } from './useGroupChat'
 
@@ -28,13 +30,18 @@ export function GroupMessagesPane() {
   const [popupDismissToken, setPopupDismissToken] = useState(0)
   const streamScrollRef = useRef<ScrollView>(null)
   const selfMemberId = auth?.identityId ?? 'local-self'
-  const selfName = auth?.displayName?.trim() || '我'
+  const selfName = auth?.displayName?.trim() || ''
   const selfIds = new Set(
     [
       selfMemberId,
       device.deviceId,
       ...members
-        .filter((member) => member.deviceId === device.deviceId || member.identityId === selfMemberId)
+        .filter((member) =>
+          isSelfGroupMember(member, {
+            identityId: auth?.identityId,
+            deviceId: device.deviceId,
+          }),
+        )
         .map((member) => member.id),
     ].filter(Boolean),
   )
@@ -77,7 +84,7 @@ export function GroupMessagesPane() {
     sendMessage({
       content: text,
       senderMemberId: selfMemberId,
-      senderName: selfName,
+      senderName: selfName || '成员',
     })
     setInput('')
     setMenuMessageId(null)
@@ -120,6 +127,10 @@ export function GroupMessagesPane() {
             messages.map((msg) => {
               const isOwn = selfIds.has(msg.senderMemberId)
               const showActions = menuMessageId === msg.id
+              const displayName = isOwn
+                ? '我的'
+                : resolveLivePeerMemberDisplayName(members, msg.senderMemberId, msg.senderName)
+              const avatarName = isOwn ? '我' : displayName
               return (
                 <Pressable
                   key={msg.id}
@@ -134,11 +145,16 @@ export function GroupMessagesPane() {
                   }}
                   style={[styles.bubbleWrap, isOwn ? styles.bubbleWrapOwn : styles.bubbleWrapPeer]}
                 >
-                  <View style={[styles.bubbleMeta, isOwn ? styles.bubbleMetaOwn : null]}>
-                    <Text style={styles.bubbleRole}>
-                      {isOwn ? '我的' : msg.senderName || '成员'}
-                    </Text>
-                    <Text style={styles.bubbleTime}>{formatMessageTime(msg.createdAt)}</Text>
+                  <View style={[styles.msgHead, isOwn ? styles.msgHeadOwn : null]}>
+                    <View style={[styles.avatar, isOwn ? styles.avatarOwn : styles.avatarPeer]}>
+                      <Text style={[styles.avatarText, isOwn ? styles.avatarTextOwn : styles.avatarTextPeer]}>
+                        {memberAvatarInitial(avatarName)}
+                      </Text>
+                    </View>
+                    <View style={[styles.msgMeta, isOwn ? styles.msgMetaOwn : null]}>
+                      <Text style={styles.bubbleRole}>{displayName}</Text>
+                      <Text style={styles.bubbleTime}>{formatMessageTime(msg.createdAt)}</Text>
+                    </View>
                   </View>
                   <View
                     style={[
@@ -147,7 +163,7 @@ export function GroupMessagesPane() {
                     ]}
                   >
                     {msg.content ? (
-                      <MessageMarkdown text={msg.content} align={isOwn ? 'right' : 'left'} />
+                      <MessageMarkdown text={msg.content} align="left" />
                     ) : null}
                     {msg.attachment ? (
                       <Text style={styles.attachmentLabel}>

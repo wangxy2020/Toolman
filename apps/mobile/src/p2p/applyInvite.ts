@@ -1,6 +1,7 @@
-import { isInviteExpired, resolvePersonDeviceMembership } from '@toolman/shared'
+import { isInviteExpired, resolveJoinedDeviceRole, resolvePersonDeviceMembership } from '@toolman/shared'
 import type { GroupInvite, GroupMember, GroupWorkspace } from '../storage/groupChat'
 import type { PendingP2pInvite } from './inviteParse'
+import { localP2pClientDeviceKind } from './deviceKind'
 
 export type InviteSelf = {
   identityId: string
@@ -94,7 +95,7 @@ export function applyPendingInvite(input: {
     role: inherited.role,
     deviceId: input.self.deviceId,
     identityId: input.self.identityId,
-    deviceKind: 'mobile',
+    deviceKind: localP2pClientDeviceKind(),
     online: true,
     status: inherited.status,
   }
@@ -104,12 +105,14 @@ export function applyPendingInvite(input: {
       ...current,
       ...selfMember,
       status: current.status === 'active' ? 'active' : inherited.status,
-      role:
-        inherited.role === 'owner' &&
-        Boolean(input.invite.ownerIdentityId) &&
-        input.self.identityId !== input.invite.ownerIdentityId
-          ? 'member'
-          : inherited.role,
+      role: resolveJoinedDeviceRole({
+        inheritedRole: inherited.role,
+        requestedRole: asRole(input.invite.role),
+        joinerIdentityId: input.self.identityId,
+        ownerIdentityId: input.invite.ownerIdentityId,
+        ownerDeviceId: input.invite.ownerDeviceId,
+        sibling,
+      }),
     }
   } else {
     members.push(selfMember)

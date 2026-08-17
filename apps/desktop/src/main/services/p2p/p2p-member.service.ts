@@ -1,10 +1,12 @@
 import {
   P2pMemberRemoveInputSchema,
   P2pMemberUpdateRoleInputSchema,
+  isUsableMemberIdentityId,
   type P2pMember,
   type P2pMemberRole,
 } from '@toolman/shared'
-import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from './p2p-device-identity.service'
+import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 import {
   assertCanManageMembers as assertCanManageMembersGuard,
   assertWorkspaceMembershipAccess,
@@ -58,11 +60,34 @@ export {
 }
 
 function ensureLocalMemberDisplayNameForWorkspace(workspaceId: string): void {
-  const localDeviceId = getP2pDeviceInfo().deviceId
-  const identityName = getIdentityDisplayName()
-  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, localDeviceId)
-  if (member && member.displayName !== identityName) {
-    getMemberRepo().update({ id: member.id, displayName: identityName })
+  try {
+    const localDeviceId = getP2pDeviceInfo().deviceId
+    const identityName = getIdentityDisplayName()
+    const personIdentityId = getP2pPersonIdentityId()
+    const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, localDeviceId)
+    if (!member) return
+    const nextIdentityId =
+      isUsableMemberIdentityId(personIdentityId) && member.identityId !== personIdentityId
+        ? personIdentityId
+        : undefined
+    const nextDisplayName = member.displayName !== identityName ? identityName : undefined
+    if (!nextIdentityId && !nextDisplayName) return
+    if (nextIdentityId) {
+      ensureLinkedIdentityRow(nextIdentityId, identityName)
+    }
+    getMemberRepo().update({
+      id: member.id,
+      identityId: nextIdentityId,
+      displayName: nextDisplayName,
+    })
+    if (nextIdentityId) {
+      const workspace = getWorkspaceRepo().findById(workspaceId)
+      if (workspace?.ownerDeviceId === localDeviceId && workspace.ownerIdentityId !== nextIdentityId) {
+        getWorkspaceRepo().update({ id: workspaceId, ownerIdentityId: nextIdentityId })
+      }
+    }
+  } catch {
+    // Person-identity rebind is best-effort; listing members must still succeed.
   }
 }
 

@@ -9,6 +9,7 @@ import { unlockAudioPlayback } from '../voice'
 import type { ChatMessage, ChatSession, ModelConfig } from '../state/MobileAppContext'
 import { buildAgentSystemPrompt } from './agentPaneUtils'
 import { applyClassroomProgressFromAssistantReply } from './classroomProgressFromReply'
+import { resolveCourseSendModelConfig } from './useClassroomSettingsModal'
 
 export function createAgentRightPaneStream(deps: {
   modelConfig: ModelConfig
@@ -101,8 +102,12 @@ export function createAgentRightPaneStream(deps: {
       classroomCourse: agentScope === 'classroom' ? classroomCourseRef.current : null,
       systemPrompt: getSystemPrompt?.(),
     })
+    const sendConfig =
+      agentScope === 'classroom'
+        ? resolveCourseSendModelConfig(modelConfig, classroomCourseRef.current?.modelId)
+        : modelConfig
     await streamChatCompletion({
-      config: modelConfig,
+      config: sendConfig,
       messages: prompt
         ? [{ role: 'system', content: prompt }, ...historyForApi]
         : historyForApi,

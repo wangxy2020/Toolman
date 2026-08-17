@@ -38,6 +38,43 @@ export function applyMemberRoster(
   return [...next, ...localExtras]
 }
 
+export function sameGroupMemberRoster(left: GroupMember[], right: GroupMember[]): boolean {
+  if (left.length !== right.length) return false
+  return left.every((member, index) => {
+    const other = right[index]
+    return Boolean(
+      other &&
+        member.id === other.id &&
+        member.deviceId === other.deviceId &&
+        member.identityId === other.identityId &&
+        member.displayName === other.displayName &&
+        member.role === other.role &&
+        member.status === other.status &&
+        member.deviceKind === other.deviceKind &&
+        member.online === other.online,
+    )
+  })
+}
+
+export function patchGroupOwnerFromRoster(
+  groups: GroupWorkspace[],
+  workspaceId: string,
+  owner: { identityId?: string; deviceId?: string },
+): GroupWorkspace[] {
+  let changed = false
+  const next = groups.map((group) => {
+    if (group.id !== workspaceId) return group
+    const ownerIdentityId = owner.identityId ?? group.ownerIdentityId
+    const ownerDeviceId = owner.deviceId ?? group.ownerDeviceId
+    if (ownerIdentityId === group.ownerIdentityId && ownerDeviceId === group.ownerDeviceId) {
+      return group
+    }
+    changed = true
+    return { ...group, ownerIdentityId, ownerDeviceId }
+  })
+  return changed ? next : groups
+}
+
 export function mergeGroupsFromSyncChanges(
   groups: GroupWorkspace[],
   changes: SyncChange[],

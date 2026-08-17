@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { mergeGroupMembersFromSyncChanges, mergeGroupsFromSyncChanges } from './groupSyncMerge'
+import {
+  mergeGroupMembersFromSyncChanges,
+  mergeGroupsFromSyncChanges,
+  patchGroupOwnerFromRoster,
+  sameGroupMemberRoster,
+} from './groupSyncMerge'
 
 describe('mergeGroupsFromSyncChanges', () => {
   it('upserts desktop groups from changelog payload', () => {
@@ -196,5 +201,44 @@ describe('mergeGroupMembersFromSyncChanges', () => {
       ],
     )
     expect(merged.g1?.[0]?.online).toBe(true)
+  })
+})
+
+describe('roster UI updates', () => {
+  it('does not replace groups when owner fields are unchanged', () => {
+    const groups = [
+      {
+        id: 'g1',
+        name: '默认群组',
+        createdAt: 1,
+        updatedAt: 1,
+        origin: 'desktop' as const,
+        ownerIdentityId: 'id-a',
+        ownerDeviceId: 'desk-a',
+      },
+    ]
+    expect(
+      patchGroupOwnerFromRoster(groups, 'g1', { identityId: 'id-a', deviceId: 'desk-a' }),
+    ).toBe(groups)
+    expect(patchGroupOwnerFromRoster(groups, 'g1', { deviceId: 'desk-b' })[0]?.ownerDeviceId).toBe(
+      'desk-b',
+    )
+  })
+
+  it('treats identical member snapshots as unchanged', () => {
+    const members = [
+      {
+        id: 'm1',
+        displayName: 'Alice',
+        role: 'owner' as const,
+        deviceId: 'desk-a',
+        identityId: 'id-a',
+        deviceKind: 'desktop' as const,
+        online: true,
+        status: 'active' as const,
+      },
+    ]
+    expect(sameGroupMemberRoster(members, [{ ...members[0]! }])).toBe(true)
+    expect(sameGroupMemberRoster(members, [{ ...members[0]!, online: false }])).toBe(false)
   })
 })

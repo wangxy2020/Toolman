@@ -43,8 +43,11 @@ export function normalizeMember(value: unknown): GroupMember | null {
     role,
     deviceId: typeof m.deviceId === 'string' ? m.deviceId : m.id,
     identityId: typeof m.identityId === 'string' && m.identityId ? m.identityId : undefined,
-    deviceKind: m.deviceKind === 'mobile' || m.deviceKind === 'desktop' ? m.deviceKind : undefined,
-    online: m.online !== false,
+    deviceKind:
+      m.deviceKind === 'mobile' || m.deviceKind === 'desktop' || m.deviceKind === 'web'
+        ? m.deviceKind
+        : undefined,
+    online: m.online === true,
     status: m.status === 'invited' ? 'invited' : 'active',
   }
 }

@@ -43,6 +43,7 @@ export function Field(props: {
   secureTextEntry?: boolean
   placeholder?: string
   editable?: boolean
+  maxLength?: number
   keyboardType?: 'default' | 'numeric' | 'number-pad' | 'decimal-pad' | 'url'
   right?: ReactNode
 }) {
@@ -67,6 +68,7 @@ export function Field(props: {
           autoCorrect={false}
           editable={editable}
           keyboardType={props.keyboardType}
+          maxLength={props.maxLength}
           underlineColorAndroid="transparent"
         />
         {props.right}

@@ -11,8 +11,8 @@ export const modalsEn = {
       title: 'Join group',
       inviteLabel: 'Invite code / link',
       invitePlaceholder: 'Paste toolman://join?... or invite code',
-      displayNameLabel: 'Display name in group (optional)',
-      displayNamePlaceholder: 'Name shown to other members',
+      displayNameLabel: 'Display name (from user profile)',
+      displayNamePlaceholder: 'Shown as the display name in user info',
       inviteRequired: 'Please enter an invite code or link',
       joinFailed: 'Failed to join group',
       wanDefaultWarning:

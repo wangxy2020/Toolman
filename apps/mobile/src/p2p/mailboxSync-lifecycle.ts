@@ -17,6 +17,7 @@ import {
   type MailboxSyncTarget,
 } from './mailboxSync-helpers'
 import { pullMailboxOnce } from './mailboxSync-pull'
+import { ignoreAsyncError } from './asyncFail'
 
 export async function putMailboxPlaintext(
   target: MailboxSyncTarget,
@@ -79,7 +80,7 @@ export function startMailboxSync(target: MailboxSyncTarget): void {
   persistTarget(target)
   if (mailboxTimers.has(target.workspaceId)) return
   const tick = () => {
-    void pullMailboxOnce(target).catch(() => undefined)
+    ignoreAsyncError(pullMailboxOnce(target), 'mailbox pull')
   }
   tick()
   mailboxTimers.set(target.workspaceId, setInterval(tick, 15_000))

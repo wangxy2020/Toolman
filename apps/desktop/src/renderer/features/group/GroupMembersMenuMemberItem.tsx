@@ -1,18 +1,13 @@
 import type { MouseEvent } from 'react'
-import { isSamePerson, type P2pMember, type P2pMemberRole, type PersonSelfRef } from '@toolman/shared'
+import { isSamePerson, resolvePeerMemberDisplayName, type P2pMember, type P2pMemberRole, type PersonSelfRef } from '@toolman/shared'
 import { IconMoreHorizontal } from '../../components/icons'
 import { getGroupConnectionModeLabel, getGroupMemberRoleLabel } from '../../i18n/group-member-labels'
 import type { TranslateFn } from '../../i18n/I18nProvider'
 import {
-  canManageTargetMember,
+  canManageTargetPerson,
   selectCurrentMemberDevice,
   type GroupedP2pPerson,
 } from './group-member-utils'
-
-function shortDeviceId(deviceId: string): string {
-  if (deviceId.length <= 16) return deviceId
-  return `${deviceId.slice(0, 8)}…${deviceId.slice(-4)}`
-}
 
 function memberInitial(name: string): string {
   const trimmed = name.trim()
@@ -21,6 +16,7 @@ function memberInitial(name: string): string {
 
 function deviceKindLabel(kind: P2pMember['deviceKind'], t: TranslateFn): string {
   if (kind === 'mobile') return t('groupPage.members.deviceMobile')
+  if (kind === 'web') return t('groupPage.members.deviceWeb')
   if (kind === 'desktop') return t('groupPage.members.deviceDesktop')
   return t('groupPage.members.deviceUnknown')
 }
@@ -58,8 +54,14 @@ export function GroupMembersMenuMemberItem({
   const isSelf = person.devices.some((device) => isSamePerson(device, self))
   const current = selectCurrentMemberDevice(person, self)
   const manageable =
-    canManage && canManageTargetMember(selfMemberRole ?? undefined, person.primary, self)
+    canManage && canManageTargetPerson(selfMemberRole ?? undefined, person, self)
   const pending = person.status === 'invited'
+  const displayName = isSelf
+    ? t('groupPage.messages.mine')
+    : resolvePeerMemberDisplayName(person.displayName)
+  const avatarInitial = isSelf
+    ? t('groupPage.messages.mineInitial')
+    : memberInitial(displayName)
 
   return (
     <li
@@ -67,15 +69,27 @@ export function GroupMembersMenuMemberItem({
       onContextMenu={manageable ? (event) => onOpenManageMenu(event, person.primary) : undefined}
     >
       <span className="tm-group-member-avatar" aria-hidden="true">
-        {memberInitial(person.displayName)}
+        {avatarInitial}
       </span>
       <div className="tm-group-member-meta">
-        <span className="tm-group-member-name">
-          {person.displayName}
-          {isSelf ? <span className="tm-group-member-you">{t('groupPage.members.you')}</span> : null}
-        </span>
-        <span className="tm-group-member-device" title={current.deviceId}>
-          {deviceKindLabel(current.deviceKind, t)} {shortDeviceId(current.deviceId)}
+        <span className="tm-group-member-name">{displayName}</span>
+        <span className="tm-group-member-devices">
+          {person.devices.map((device) => (
+            <span
+              key={device.deviceId}
+              className={[
+                'tm-group-member-device',
+                !pending && device.online ? 'tm-group-member-device--online' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              title={`${deviceKindLabel(device.deviceKind, t)} · ${device.deviceId} · ${memberStatusLabel(device, pending, t)}`}
+            >
+              {deviceKindLabel(device.deviceKind, t)}
+              {' · '}
+              {memberStatusLabel(device, pending, t)}
+            </span>
+          ))}
         </span>
       </div>
       <div className="tm-group-member-end">
@@ -93,13 +107,17 @@ export function GroupMembersMenuMemberItem({
           <span
             className={[
               'tm-group-member-status',
-              !pending && current.online ? 'tm-group-member-status--online' : '',
+              !pending && person.online ? 'tm-group-member-status--online' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             title={memberStatusLabel(current, pending, t)}
           >
-            {memberStatusLabel(current, pending, t)}
+            {pending
+              ? t('groupPage.members.pendingJoin')
+              : person.online
+                ? t('groupPage.members.online')
+                : t('groupPage.members.offline')}
           </span>
           {manageable ? (
             <button

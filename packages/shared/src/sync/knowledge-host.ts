@@ -32,6 +32,8 @@ export const KnowledgeMetaItemSchema = z.object({
   kind: KnowledgeBaseKindSchema.or(z.string()),
   documentCount: z.number().int().nonnegative().default(0),
   updatedAt: z.number().int().nonnegative().optional(),
+  /** Textbook file names for classroom binding UI. */
+  documentTitles: z.array(z.string().min(1)).max(20).optional(),
 })
 export type KnowledgeMetaItem = z.infer<typeof KnowledgeMetaItemSchema>
 

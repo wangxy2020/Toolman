@@ -94,7 +94,7 @@ export async function joinOwnerViaWebRtc(input: {
     ownerDeviceId: input.ownerDeviceId,
     deviceId: input.deviceId,
     memberId: input.memberId,
-    displayName: input.displayName || '我',
+    displayName: input.displayName?.trim() || '成员',
     workspaceKey,
     pc,
   })

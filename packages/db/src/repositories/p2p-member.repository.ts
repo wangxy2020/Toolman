@@ -19,6 +19,7 @@ export interface CreateP2pMemberInput {
 
 export interface UpdateP2pMemberInput {
   id: string
+  identityId?: string
   displayName?: string
   role?: P2pMemberRole
   status?: P2pMemberStatus
@@ -158,6 +159,7 @@ export class P2pMemberRepository {
     this.db
       .update(p2pWorkspaceMembers)
       .set({
+        identityId: input.identityId ?? existing.identityId,
         displayName: input.displayName ?? existing.displayName,
         role: input.role ?? existing.role,
         status: input.status ?? existing.status,

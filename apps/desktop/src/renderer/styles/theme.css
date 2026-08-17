@@ -2733,6 +2733,8 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 }
 
 .tm-group-chat-messages-wrap .tm-stream-message--user {
+  display: flex;
+  flex-direction: column;
   margin-bottom: 12px;
 }
 
@@ -2741,23 +2743,40 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   color: var(--tm-text-secondary);
 }
 
+.tm-group-chat-messages-wrap .tm-stream-message--user .tm-stream-message-head {
+  width: max-content;
+  max-width: 100%;
+}
+
 .tm-group-chat-messages-wrap .tm-stream-message--user .tm-stream-body {
+  width: fit-content;
   max-width: min(78%, 560px);
+}
+
+.tm-group-chat-messages-wrap .tm-stream-message--user .tm-stream-content,
+.tm-group-chat-messages-wrap .tm-stream-message--user .tm-md {
+  width: fit-content;
+  max-width: 100%;
 }
 
 .tm-group-chat-messages-wrap .tm-stream-message--user .tm-stream-content {
   padding: 10px 14px;
   border-radius: 12px;
   background: var(--tm-bg-secondary, #f1f5f9);
+  text-align: left;
+}
+
+.tm-group-chat-messages-wrap .tm-stream-message--user:not(.tm-stream-message--own) {
+  align-items: flex-start;
 }
 
 .tm-group-chat-messages-wrap .tm-stream-message--user:not(.tm-stream-message--own) .tm-stream-body {
   margin-left: var(--tm-stream-indent);
+  margin-right: 0;
+  align-self: flex-start;
 }
 
 .tm-group-chat-messages-wrap .tm-stream-message--user.tm-stream-message--own {
-  display: flex;
-  flex-direction: column;
   align-items: flex-end;
   --tm-stream-indent: 0;
 }
@@ -2772,6 +2791,7 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 
 .tm-group-chat-messages-wrap .tm-stream-message--user.tm-stream-message--own .tm-stream-body {
   margin-left: 0;
+  margin-right: 38px;
   align-self: flex-end;
 }
 
@@ -5258,12 +5278,23 @@ html.theme-dark .tm-invite-action-btn {
   color: var(--tm-text-secondary);
 }
 
+.tm-group-member-devices {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .tm-group-member-device {
   font-size: 11px;
   color: var(--tm-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tm-group-member-device--online {
+  color: var(--tm-text);
 }
 
 .tm-group-member-end {
@@ -8378,6 +8409,72 @@ html.theme-dark .tm-dedup-error {
   font-size: 14px;
   color: var(--tm-text);
   word-break: break-word;
+}
+
+/* Group member chat: hug bubble width so own/peer alignment is visible. */
+.tm-chat-align {
+  display: flex !important;
+  flex-direction: column;
+  width: 100%;
+}
+
+.tm-chat-align--peer {
+  align-items: flex-start;
+}
+
+.tm-chat-align--own {
+  align-items: flex-end;
+}
+
+.tm-chat-align .tm-stream-message-head {
+  width: max-content;
+  max-width: 100%;
+}
+
+.tm-chat-align--own .tm-stream-message-head {
+  flex-direction: row-reverse;
+}
+
+.tm-chat-align--own .tm-stream-meta {
+  text-align: right;
+}
+
+.tm-chat-align .tm-stream-body {
+  width: max-content;
+  max-width: min(78%, 560px);
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.tm-chat-align--peer .tm-stream-body {
+  margin-left: var(--tm-stream-indent, 38px);
+  align-self: flex-start;
+}
+
+.tm-chat-align--own .tm-stream-body {
+  margin-right: 38px;
+  align-self: flex-end;
+}
+
+.tm-chat-align .tm-stream-content,
+.tm-chat-align .tm-md {
+  width: auto !important;
+  max-width: 100%;
+}
+
+.tm-chat-align .tm-stream-content {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--tm-bg-secondary, #f1f5f9);
+  text-align: left;
+}
+
+.tm-chat-align--own .tm-stream-content {
+  background: color-mix(in srgb, var(--tm-accent) 12%, var(--tm-bg-secondary, #f1f5f9));
+}
+
+.tm-chat-align--own .tm-stream-footer {
+  justify-content: flex-end;
 }
 
 .tm-message-content {

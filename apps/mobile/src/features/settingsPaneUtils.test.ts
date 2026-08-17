@@ -7,7 +7,7 @@ import { groupSharedPickerHint, sortGroupActivities } from './groupPagePanelUtil
 describe('settings and group helpers', () => {
   it('does not invite a doomed retry on hosted web', () => {
     expect(formatSyncActionTitle('idle', true)).toBe('立即同步（托管网页）')
-    expect(formatSyncActionSubtitle(true)).toMatch(/HTTP Sync Hub/)
+    expect(formatSyncActionSubtitle(true)).toMatch(/WebRTC/)
     expect(formatSyncActionTitle('offline')).toBe('离线，点此重试')
     expect(formatSyncActionTitle('offline', true)).toBe('离线，点此重试')
   })

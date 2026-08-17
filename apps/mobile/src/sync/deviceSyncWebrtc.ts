@@ -14,13 +14,16 @@ import {
   type DevicePairingRecord,
   type SyncChange,
 } from '@toolman/shared'
-import { ToolmanSyncClient } from '@toolman/sync-client'
-import { getMobileSyncBaseUrl, loadSyncHubToken } from './mobileSync-client'
+import {
+  createPersonalMailboxClient,
+  listPersonalMailboxBaseUrls,
+  mailboxSeqKey,
+} from './personalMailboxHubs'
 
-const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
 const ICE_GATHER_TIMEOUT_MS = 6_000
-const ANSWER_WAIT_MS = 6_000
+const ANSWER_WAIT_MS = 8_000
 const CHANNEL_WAIT_MS = 8_000
+const signalSeqByHub = new Map<string, number>()
 
 export type DeviceSyncSignal = {
   kind: 'offer' | 'answer' | 'ice'
@@ -32,7 +35,15 @@ export type DeviceSyncWebrtcResult =
   | { ok: true; changes: SyncChange[]; transport: 'webrtc' }
   | { ok: false }
 
-function toRtcIceServers(): RTCIceServer[] {
+function toRtcIceServers(pairing: DevicePairingRecord): RTCIceServer[] {
+  const fromPairing = pairing.iceServers ?? []
+  if (fromPairing.length > 0) {
+    return fromPairing.map((server) => ({
+      urls: server.urls,
+      username: server.username,
+      credential: server.credential,
+    }))
+  }
   return DEFAULT_STUN_URLS.map((urls) => ({ urls }))
 }
 
@@ -80,20 +91,23 @@ export async function depositDeviceSyncSignal(input: {
         depositedAt: Date.now(),
       },
     })
-    const client = new ToolmanSyncClient({
-      baseUrl: input.pairing.hubBaseUrlHint || getMobileSyncBaseUrl(),
-      getAccessToken: async () => null,
-      getSyncToken: loadSyncHubToken,
-      fetchImpl: boundFetch,
-    })
-    await client.putMailbox({
-      workspaceId: input.pairing.workspaceId,
-      deviceId: input.pairing.localDeviceId,
-      recipientDeviceId: input.recipientDeviceId,
-      grant,
-      ciphertextB64,
-    })
-    return true
+    let deposited = false
+    for (const baseUrl of listPersonalMailboxBaseUrls(input.pairing)) {
+      try {
+        const client = createPersonalMailboxClient(baseUrl)
+        await client.putMailbox({
+          workspaceId: input.pairing.workspaceId,
+          deviceId: input.pairing.localDeviceId,
+          recipientDeviceId: input.recipientDeviceId,
+          grant,
+          ciphertextB64,
+        })
+        deposited = true
+      } catch {
+        // try next hub
+      }
+    }
+    return deposited
   } catch {
     return false
   }
@@ -101,61 +115,65 @@ export async function depositDeviceSyncSignal(input: {
 
 export async function pullDeviceSyncSignals(
   pairing: DevicePairingRecord,
-  sinceSeq = 0,
-): Promise<{ signals: DeviceSyncSignal[]; nextSeq: number }> {
+): Promise<{ signals: DeviceSyncSignal[] }> {
   const workspaceKey = decodeWorkspaceKeyB64(pairing.workspaceKeyB64)
   const grant = await buildMailboxGrant({
     workspaceKey,
     workspaceId: pairing.workspaceId,
     deviceId: pairing.localDeviceId,
   })
-  const client = new ToolmanSyncClient({
-    baseUrl: pairing.hubBaseUrlHint || getMobileSyncBaseUrl(),
-    getAccessToken: async () => null,
-    getSyncToken: loadSyncHubToken,
-    fetchImpl: boundFetch,
-  })
-  const pulled = await client.pullMailbox({
-    workspaceId: pairing.workspaceId,
-    deviceId: pairing.localDeviceId,
-    grant,
-    sinceSeq,
-    limit: 50,
-  })
   const signals: DeviceSyncSignal[] = []
-  let nextSeq = sinceSeq
-  for (const envelope of pulled.envelopes ?? []) {
-    nextSeq = Math.max(nextSeq, envelope.seq)
+  const seen = new Set<string>()
+  for (const baseUrl of listPersonalMailboxBaseUrls(pairing)) {
+    const key = mailboxSeqKey(pairing.workspaceId, baseUrl)
+    const sinceSeq = signalSeqByHub.get(key) ?? 0
     try {
-      const plain = await openMailboxPlaintext({
-        workspaceKey,
+      const client = createPersonalMailboxClient(baseUrl)
+      const pulled = await client.pullMailbox({
         workspaceId: pairing.workspaceId,
-        ciphertextB64: envelope.ciphertextB64,
+        deviceId: pairing.localDeviceId,
+        grant,
+        sinceSeq,
+        limit: 50,
       })
-      if (plain.type !== 'device.sync.signal') continue
-      if (plain.senderDeviceId === pairing.localDeviceId) continue
-      signals.push({
-        kind: plain.kind,
-        payload: plain.payload,
-        senderDeviceId: plain.senderDeviceId,
-      })
+      let nextSeq = sinceSeq
+      for (const envelope of pulled.envelopes ?? []) {
+        nextSeq = Math.max(nextSeq, envelope.seq)
+        const dedupe = `${envelope.seq}:${envelope.ciphertextB64}`
+        if (seen.has(dedupe)) continue
+        seen.add(dedupe)
+        try {
+          const plain = await openMailboxPlaintext({
+            workspaceKey,
+            workspaceId: pairing.workspaceId,
+            ciphertextB64: envelope.ciphertextB64,
+          })
+          if (plain.type !== 'device.sync.signal') continue
+          if (plain.senderDeviceId === pairing.localDeviceId) continue
+          signals.push({
+            kind: plain.kind,
+            payload: plain.payload,
+            senderDeviceId: plain.senderDeviceId,
+          })
+        } catch {
+          // skip
+        }
+      }
+      if (nextSeq > sinceSeq) signalSeqByHub.set(key, nextSeq)
     } catch {
-      // skip
+      // try next hub
     }
   }
-  return { signals, nextSeq }
+  return { signals }
 }
 
 async function waitForAnswerSdp(
   pairing: DevicePairingRecord,
   inviteId: string,
-  sinceSeq: number,
 ): Promise<string | null> {
   const deadline = Date.now() + ANSWER_WAIT_MS
-  let seq = sinceSeq
   while (Date.now() < deadline) {
-    const pulled = await pullDeviceSyncSignals(pairing, seq)
-    seq = pulled.nextSeq
+    const pulled = await pullDeviceSyncSignals(pairing)
     for (const signal of pulled.signals) {
       if (signal.kind !== 'answer') continue
       if (signal.payload.inviteId !== inviteId) continue
@@ -230,7 +248,7 @@ export async function tryDeviceSyncWebrtc(
   if (typeof RTCPeerConnection === 'undefined') return { ok: false }
 
   const inviteId = `psync-${pairing.localDeviceId}-${Date.now()}`
-  const pc = new RTCPeerConnection({ iceServers: toRtcIceServers() })
+  const pc = new RTCPeerConnection({ iceServers: toRtcIceServers(pairing) })
   const channel = pc.createDataChannel(DEVICE_SYNC_DATA_CHANNEL, { ordered: true })
 
   try {
@@ -248,7 +266,7 @@ export async function tryDeviceSyncWebrtc(
     })
     if (!deposited) return { ok: false }
 
-    const answerSdp = await waitForAnswerSdp(pairing, inviteId, 0)
+    const answerSdp = await waitForAnswerSdp(pairing, inviteId)
     if (!answerSdp) return { ok: false }
 
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp })

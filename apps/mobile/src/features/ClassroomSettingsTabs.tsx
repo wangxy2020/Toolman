@@ -4,6 +4,7 @@ import { getMobileSyncBaseUrl } from '../sync/mobileSync'
 import { CURATED_EDGE_TTS_VOICES, type VoiceTtsEngine } from '../voice'
 import { CLASSROOM_PRESET_DESCS, CLASSROOM_PRESET_LABELS } from './classroomSidebar'
 import { classroomSettingsModalStyles as styles } from './classroomSettingsModalStyles'
+import { ClassroomSelect } from './ClassroomSelect'
 import { MessageMarkdown } from './MessageMarkdown'
 import {
   classroomPresetPatch,
@@ -16,6 +17,8 @@ export function ClassroomBasicTab(props: {
   shownPresets: AssistantLibPresetDef[]
   selectedPreset: AssistantLibPresetDef | null | undefined
   knowledgeNames: string[]
+  modelOptions: Array<{ modelId: string; label: string }>
+  defaultModelOptionLabel: string
   updateDraft: (patch: Partial<ClassroomSettingsDraft>) => void
   onOpenKbPicker: () => void
   onClearKb: () => void
@@ -26,6 +29,8 @@ export function ClassroomBasicTab(props: {
     shownPresets,
     selectedPreset,
     knowledgeNames,
+    modelOptions,
+    defaultModelOptionLabel,
     updateDraft,
     onOpenKbPicker,
     onClearKb,
@@ -33,7 +38,7 @@ export function ClassroomBasicTab(props: {
   const kbLabel = draft.kbLabel || knowledgeNames.join('、')
   return (
     <View style={styles.form}>
-      <Text style={styles.hint}>为当前课堂配置名称、教学模式、教材知识库与朗读。</Text>
+      <Text style={styles.hint}>为当前课堂配置名称、大模型、教学模式、教材知识库与朗读。</Text>
       <Text style={styles.label}>课程名称</Text>
       <TextInput
         style={[styles.input, isDefault ? styles.inputDisabled : null]}
@@ -41,6 +46,24 @@ export function ClassroomBasicTab(props: {
         onChangeText={(value) => updateDraft({ courseName: value })}
         editable={!isDefault}
       />
+
+      <Text style={styles.label}>大模型</Text>
+      {modelOptions.length === 0 ? (
+        <Text style={styles.hint}>请先在「设置 → 模型服务」中填写模型名称并保存。</Text>
+      ) : (
+        <ClassroomSelect
+          accessibilityLabel="课程大模型"
+          value={draft.modelId}
+          options={[
+            { id: '', label: defaultModelOptionLabel },
+            ...modelOptions.map((item) => ({ id: item.modelId, label: item.label })),
+          ]}
+          onChange={(id) => updateDraft({ modelId: id })}
+        />
+      )}
+      <Text style={styles.hint}>
+        从「设置 → 模型服务」中已添加的模型里选择。未选择时使用默认模型。
+      </Text>
 
       <Text style={styles.label}>教学模式</Text>
       <View style={styles.presetList}>
@@ -90,13 +113,14 @@ export function ClassroomBasicTab(props: {
 
       <ClassroomToggleRow
         title="自动朗读"
-        hint="助手回答完成后自动朗读（默认开启）"
+        hint="助手回答完成后自动朗读。关闭后请点保存，之后的回答不再自动朗读。"
         value={draft.autoSpeak}
         onChange={(value) => updateDraft({ autoSpeak: value })}
       />
 
       <Text style={styles.label}>语音引擎</Text>
-      <ClassroomChoiceList
+      <ClassroomSelect
+        accessibilityLabel="语音引擎"
         value={draft.ttsEngine}
         options={[
           { id: 'edge', label: 'Edge 在线语音' },
@@ -107,7 +131,8 @@ export function ClassroomBasicTab(props: {
       {draft.ttsEngine === 'edge' ? (
         <>
           <Text style={styles.label}>Edge 音色</Text>
-          <ClassroomChoiceList
+          <ClassroomSelect
+            accessibilityLabel="Edge 音色"
             value={draft.ttsVoice}
             options={CURATED_EDGE_TTS_VOICES.map((voice) => ({
               id: voice.value,
@@ -228,27 +253,3 @@ function ClassroomToggleRow(props: {
   )
 }
 
-function ClassroomChoiceList(props: {
-  value: string
-  options: Array<{ id: string; label: string }>
-  onChange: (id: string) => void
-}) {
-  return (
-    <View style={styles.presetList}>
-      {props.options.map((option) => {
-        const active = option.id === props.value
-        return (
-          <Pressable
-            key={option.id}
-            onPress={() => props.onChange(option.id)}
-            style={[styles.presetRow, active ? styles.presetRowActive : null]}
-          >
-            <Text style={[styles.presetName, active ? styles.presetNameActive : null]}>
-              {option.label}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
-}

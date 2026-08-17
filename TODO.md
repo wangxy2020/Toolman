@@ -1,8 +1,9 @@
 # Toolman 待办任务清单
 
-> 扫描日期：2026-08-14  
+> 扫描日期：2026-08-17  
 > 范围：`apps/desktop/src`、`apps/mobile/src`、`packages/*/src`  
-> 结论：源码内已无 `// TODO` / `FIXME` / `HACK`，也无大段注释掉的实现。下列条目来自产品占位（`available: false`、`disabled`、reserved 面板等），不是行内 TODO。
+> 结论：源码内已无 `// TODO` / `FIXME` / `HACK`，也无大段注释掉的实现。下列条目来自产品占位（`available: false`、`disabled`、reserved 面板等），不是行内 TODO。  
+> 本轮 `pnpm typecheck`（Husky pre-commit 同款）全部通过；超过 300 行文件仅做清单，未批量拆分（避免破坏现网功能）。
 
 ## 导航与模块
 

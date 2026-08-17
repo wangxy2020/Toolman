@@ -49,7 +49,7 @@ export async function hydrateOmittedFiles(
   return { ...snapshot, files }
 }
 
-export async function discardForeignPrivateWorkspace(syncState: MobileSyncState): Promise<{
+export async function discardForeignPrivateWorkspace(_syncState: MobileSyncState): Promise<{
   notes: ReturnType<typeof emptyNotesStore>
   classroomCourses: []
   syncState: MobileSyncState

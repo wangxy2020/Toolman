@@ -35,6 +35,14 @@ export function parseAssistantLibSessionMeta(
   return parsed.success ? parsed.data : null
 }
 
+/** Course-level chat model; null means follow the workspace / assistant default. */
+export function resolveAssistantLibSessionModelId(
+  metadata: Record<string, unknown> | undefined | null,
+): string | null {
+  const modelId = parseAssistantLibSessionMeta(metadata)?.modelId?.trim()
+  return modelId || null
+}
+
 export function isAssistantLibSession(metadata: Record<string, unknown> | undefined | null): boolean {
   return Boolean(parseAssistantLibSessionMeta(metadata))
 }
@@ -51,6 +59,8 @@ export function assistantLibSessionMetadataPatch(
   const nextSyllabus = patch.syllabus !== undefined ? patch.syllabus : previous?.syllabus
   const nextStudyRecords =
     patch.studyRecords !== undefined ? patch.studyRecords : (previous?.studyRecords ?? [])
+  const nextModelId =
+    patch.modelId !== undefined ? patch.modelId.trim() : (previous?.modelId?.trim() ?? '')
   return {
     ...(metadata ?? {}),
     [ASSISTANT_LIB_SESSION_METADATA_KEY]: {
@@ -82,6 +92,7 @@ export function assistantLibSessionMetadataPatch(
       ...(typeof patch.autoSpeak === 'boolean' ? { autoSpeak: patch.autoSpeak } : {}),
       ...(patch.ttsEngine ? { ttsEngine: patch.ttsEngine } : {}),
       ...(patch.ttsVoice?.trim() ? { ttsVoice: patch.ttsVoice.trim() } : {}),
+      ...(nextModelId ? { modelId: nextModelId } : {}),
     },
     socraticState: metadata?.socraticState ?? EMPTY_SOCRATIC_STATE,
   }

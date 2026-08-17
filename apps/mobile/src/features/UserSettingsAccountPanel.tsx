@@ -51,6 +51,8 @@ export function LoggedInAccountPanel(props: {
     syncSubtitle,
     hubToken,
     setHubToken,
+    hubBaseUrl,
+    setHubBaseUrl,
     pairingCode,
     setPairingCode,
     pairingStatus,
@@ -223,7 +225,12 @@ export function LoggedInAccountPanel(props: {
         }
       >
         <Text style={styles.meta}>{accountLabel}</Text>
-        <Field label="显示名" value={displayName} onChangeText={setDisplayName} />
+        <Field
+          label="显示名称"
+          value={displayName}
+          onChangeText={(value) => setDisplayName(value.slice(0, 10))}
+          maxLength={10}
+        />
         <PrimaryButton label="保存资料" onPress={() => void saveDisplayName()} />
         <ActionRow title={skuLabel} onPress={() => setView('vip')} />
         <ActionRow
@@ -241,13 +248,6 @@ export function LoggedInAccountPanel(props: {
 
       <Section title={t('user.tokenSync')}>
         <Text style={styles.hint}>{t('user.transportHint')}</Text>
-        <Field
-          label={t('diagnostics.hubToken')}
-          value={hubToken}
-          onChangeText={setHubToken}
-          placeholder={t('diagnostics.hubTokenPlaceholder')}
-          secureTextEntry
-        />
         <Text style={styles.meta}>
           {t('user.devicePairingStatus')}：{pairingStatus}
         </Text>
@@ -273,6 +273,7 @@ export function LoggedInAccountPanel(props: {
             placeholder={t('user.devicePairingPlaceholder')}
           />
         )}
+        <Text style={styles.hint}>{t('user.devicePairingHint')}</Text>
         {!devicePaired ? (
           <PrimaryButton
             label={busy ? '…' : t('user.devicePairingRedeem')}
@@ -280,6 +281,22 @@ export function LoggedInAccountPanel(props: {
           />
         ) : null}
         <SecondaryButton label={t('user.devicePairingClear')} onPress={() => void clearPairing()} />
+        <Field
+          label={t('diagnostics.hubToken')}
+          value={hubToken}
+          onChangeText={setHubToken}
+          placeholder={t('diagnostics.hubTokenPlaceholder')}
+          secureTextEntry
+        />
+        <Text style={styles.hint}>{t('user.hubTokenHint')}</Text>
+        <Field
+          label={t('user.httpsDesktopUrl')}
+          value={hubBaseUrl}
+          onChangeText={setHubBaseUrl}
+          placeholder={t('user.httpsDesktopUrlPlaceholder')}
+          keyboardType="url"
+        />
+        <Text style={styles.hint}>{t('user.httpsDesktopUrlHint')}</Text>
         <ActionRow
           title={syncTitle}
           subtitle={syncSubtitle}

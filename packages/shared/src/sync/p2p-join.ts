@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { P2pMemberRoleSchema } from '../p2p/types.js'
+import { P2pClientDeviceKindSchema, P2pMemberRoleSchema } from '../p2p/types.js'
 import { isPrivateOrLoopbackHostname, normalizeSyncBaseUrl } from './endpoints.js'
 
 /** Invite-authenticated join register on the owner's Sync Hub. */
 export const P2P_JOIN_REGISTER_PATH = '/api/v1/sync/p2p/register-invited-member'
 
-export const P2pJoinDeviceKindSchema = z.enum(['desktop', 'mobile'])
+export const P2pJoinDeviceKindSchema = P2pClientDeviceKindSchema
 export type P2pJoinDeviceKind = z.infer<typeof P2pJoinDeviceKindSchema>
 
 export const P2pJoinRegisterInputSchema = z.object({

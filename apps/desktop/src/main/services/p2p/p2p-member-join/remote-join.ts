@@ -4,10 +4,11 @@ import {
   type P2pWorkspaceMemberRow,
 } from '@toolman/db'
 import type { P2pJoinDeviceKind, P2pMember, ProductSku } from '@toolman/shared'
+import { preferUsableMemberIdentityId, resolveJoinedDeviceRole } from '@toolman/shared'
 import { getDatabase } from '../../../bootstrap/database'
 import { logStructured } from '../../structured-log.service'
 import * as p2pConnectionService from '../p2p-connection.service'
-import { getP2pDeviceInfo } from '../p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from '../p2p-device-identity.service'
 import {
   assertPeerTrustedForSync,
   isPeerTrusted,
@@ -26,7 +27,7 @@ import {
 } from '../p2p-workspace-vip-pool.service'
 import {
   DEFAULT_IDENTITY_ID,
-  findIdentitySibling,
+  findSamePersonSibling,
   getInviteRepo,
   getMemberRepo,
   getWorkspaceRepo,
@@ -183,19 +184,30 @@ export async function applyRemoteMemberJoin(
   )
 
   const upsertPendingMember = (): P2pWorkspaceMemberRow => {
-    const remoteIdentityId = existing?.identityId ?? resolveRemoteMemberIdentityId(payload.member)
-    const sibling = findIdentitySibling(
-      payload.workspaceId,
-      remoteIdentityId,
-      payload.member.deviceId,
-    )
+    const incomingIdentityId = resolveRemoteMemberIdentityId(payload.member)
+    const remoteIdentityId =
+      preferUsableMemberIdentityId(incomingIdentityId, existing?.identityId) ?? incomingIdentityId
+    const sibling = findSamePersonSibling({
+      workspaceId: payload.workspaceId,
+      joinerIdentityId: remoteIdentityId,
+      excludeDeviceId: payload.member.deviceId,
+      localPersonIdentityId: getP2pPersonIdentityId(),
+      localDeviceId: device.deviceId,
+    })
     const inherited = membershipFromIdentitySibling(payload.member.role, sibling)
-    const role =
-      inherited.role === 'owner' && remoteIdentityId !== workspace.ownerIdentityId
-        ? payload.member.role === 'owner'
-          ? 'member'
-          : payload.member.role
-        : inherited.role
+    const role = resolveJoinedDeviceRole({
+      inheritedRole: inherited.role,
+      requestedRole: payload.member.role,
+      joinerIdentityId: remoteIdentityId,
+      ownerIdentityId: workspace.ownerIdentityId,
+      ownerDeviceId: workspace.ownerDeviceId,
+      sibling,
+    })
+    ensureLinkedIdentityRow(
+      remoteIdentityId,
+      payload.member.displayName,
+      payload.remoteDevicePublicKey,
+    )
 
     if (existing) {
       if (existing.status !== 'active' && options?.allowReactivation === false) {
@@ -206,18 +218,13 @@ export async function applyRemoteMemberJoin(
           id: existing.id,
           status: inherited.status,
           role,
+          identityId: remoteIdentityId,
           displayName: payload.member.displayName,
           joinedAt: payload.member.joinedAt ? new Date(payload.member.joinedAt) : new Date(),
           certJson: memberCertJson,
         }) ?? existing
       )
     }
-
-    ensureLinkedIdentityRow(
-      remoteIdentityId,
-      payload.member.displayName,
-      payload.remoteDevicePublicKey,
-    )
 
     return getMemberRepo().create({
       id: payload.member.id,
@@ -237,21 +244,34 @@ export async function applyRemoteMemberJoin(
     existing?.status === 'active' &&
     isPeerTrusted(payload.workspaceId, peerDeviceId)
   ) {
-    if (
-      payload.member.displayName.trim() &&
-      existing.displayName !== payload.member.displayName
-    ) {
-      getMemberRepo().update({
-        id: existing.id,
-        displayName: payload.member.displayName,
-      })
+    const incomingIdentityId = resolveRemoteMemberIdentityId(payload.member)
+    const nextIdentityId = preferUsableMemberIdentityId(incomingIdentityId, existing.identityId)
+    const nextDisplayName = payload.member.displayName.trim()
+    const patch: { id: string; displayName?: string; identityId?: string } = { id: existing.id }
+    if (nextDisplayName && existing.displayName !== nextDisplayName) {
+      patch.displayName = nextDisplayName
+    }
+    if (nextIdentityId && existing.identityId !== nextIdentityId) {
+      ensureLinkedIdentityRow(
+        nextIdentityId,
+        payload.member.displayName,
+        payload.remoteDevicePublicKey,
+      )
+      patch.identityId = nextIdentityId
+    }
+    if (patch.displayName || patch.identityId) {
+      getMemberRepo().update(patch)
       broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
     }
     reconcileAfterRemoteJoin(payload.workspaceId)
     return
   }
 
-  const joinerIdentityId = existing?.identityId ?? resolveRemoteMemberIdentityId(payload.member)
+  const joinerIdentityId =
+    preferUsableMemberIdentityId(
+      resolveRemoteMemberIdentityId(payload.member),
+      existing?.identityId,
+    ) ?? resolveRemoteMemberIdentityId(payload.member)
   if (
     !hasWorkspaceMemberCapacity({
       workspaceId: payload.workspaceId,

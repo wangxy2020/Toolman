@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  bindPhoneToAccount,
-  changePassword,
-  deleteAccount,
-  loginWithAccount,
-  logoutLocal,
-  setSubscriptionSku,
-  updateDisplayName,
-} from '../auth/localAuth'
+import { loginWithAccount } from '../auth/localAuth'
 import {
   firebaseEmailAuth,
   firebaseOAuthLogin,
@@ -18,27 +10,17 @@ import {
   registerWithVerificationCode,
   resetPasswordWithVerificationCode,
   sendAuthingVerificationCode,
-  verifyAuthingPhoneCode,
 } from '../auth/authingOtp'
 import type { MobileAuthSession } from '../auth/types'
 import { useMobileApp } from '../state/MobileAppContext'
 import {
-  formatAccountLabel,
-  formatBindPhoneOtpHint,
-  formatBindPhoneTitle,
   formatOtpSentHint,
-  formatProfileRoleLabel,
-  formatSkuLabel,
-  formatSyncActionSubtitle,
-  formatSyncActionTitle,
   guestAuthSubtitle,
   guestAuthTitle,
   guestPrimaryLabel,
   isAuthSuccessMessage,
   isGuestFormReady,
-  isVipAccount,
   toErrorMessage,
-  type AccountView,
   type GuestView,
   type SocialProvider,
 } from './userSettingsUtils'

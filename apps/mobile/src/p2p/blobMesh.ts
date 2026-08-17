@@ -2,7 +2,6 @@ import {
   chunkCountForSize,
   P2P_BLOB_CHUNK_SIZE,
   P2P_MOBILE_BLOB_MAX_BYTES,
-  type FileChannelMessage,
 } from '@toolman/shared'
 import { b64ToBytes, bytesToB64, newUuid, sha256Hex } from './bytes'
 import { emitMeshEvent } from './meshEvents'

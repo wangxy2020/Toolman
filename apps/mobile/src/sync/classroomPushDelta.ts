@@ -28,6 +28,7 @@ function courseToChange(course: MobileClassroomCourse): SyncChange | null {
       autoSpeak: course.autoSpeak,
       ttsEngine: course.ttsEngine,
       ttsVoice: course.ttsVoice,
+      ...(course.modelId?.trim() ? { modelId: course.modelId.trim() } : {}),
       studyRecords: course.studyRecords,
     },
     socraticState: course.socraticState ?? undefined,

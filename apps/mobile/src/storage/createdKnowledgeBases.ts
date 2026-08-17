@@ -46,22 +46,6 @@ async function setItem(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(key, value)
 }
 
-async function removeItem(key: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    try {
-      globalThis.localStorage?.removeItem(key)
-    } catch {
-      // ignore
-    }
-    return
-  }
-  try {
-    await SecureStore.deleteItemAsync(key)
-  } catch {
-    // ignore
-  }
-}
-
 function normalizeKb(value: unknown): MobileCreatedKb | null {
   if (!value || typeof value !== 'object') return null
   const item = value as Partial<MobileCreatedKb>

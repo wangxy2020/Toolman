@@ -1,6 +1,7 @@
 /**
- * Personal (point-to-point) encrypted mailbox over LAN Sync Hub.
+ * Personal (point-to-point) encrypted mailbox.
  * Carries sealed SyncChange batches between paired devices.
+ * On hosted HTTPS, uses Community Hub / same-origin proxy — never LAN HTTP hints.
  */
 import {
   SyncChangeSchema,
@@ -11,13 +12,14 @@ import {
   type SyncChange,
   type DevicePairingRecord,
 } from '@toolman/shared'
-import { ToolmanSyncClient } from '@toolman/sync-client'
-import { createMobileSyncClient, getMobileSyncBaseUrl, loadSyncHubToken } from './mobileSync-client'
 import { loadDevicePairing } from '../storage/devicePairing'
+import {
+  createPersonalMailboxClient,
+  listPersonalMailboxBaseUrls,
+  mailboxSeqKey,
+} from './personalMailboxHubs'
 
-const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
-
-const mailboxSeqByWorkspace = new Map<string, number>()
+const mailboxSeqByHub = new Map<string, number>()
 
 export type PersonalMailboxPullResult = {
   transport: 'personal-mailbox'
@@ -28,18 +30,20 @@ export type PersonalMailboxPullResult = {
 export async function ensurePersonalMailboxSession(
   pairing: DevicePairingRecord,
 ): Promise<boolean> {
-  try {
-    // Prefer the Hub URL embedded in the pairing offer (desktop LAN address).
-    const client = createMobileSyncClient(pairing.hubBaseUrlHint || getMobileSyncBaseUrl())
-    await client.fetchMailboxSession({
-      workspaceId: pairing.workspaceId,
-      deviceId: pairing.localDeviceId,
-      identityId: pairing.identityId,
-    })
-    return true
-  } catch {
-    return false
+  for (const baseUrl of listPersonalMailboxBaseUrls(pairing)) {
+    try {
+      const client = createPersonalMailboxClient(baseUrl)
+      await client.fetchMailboxSession({
+        workspaceId: pairing.workspaceId,
+        deviceId: pairing.localDeviceId,
+        identityId: pairing.identityId,
+      })
+      return true
+    } catch {
+      // try next hub (Community Hub has no session route)
+    }
   }
+  return false
 }
 
 export async function pullPersonalMailboxChanges(
@@ -47,8 +51,6 @@ export async function pullPersonalMailboxChanges(
 ): Promise<PersonalMailboxPullResult | null> {
   const record = pairing ?? (await loadDevicePairing())
   if (!record) return null
-  // Register with desktop when possible; put/pull use mailbox grant and no longer
-  // require the LAN pairing token on the session route.
   await ensurePersonalMailboxSession(record)
   const workspaceKey = decodeWorkspaceKeyB64(record.workspaceKeyB64)
   const grant = await buildMailboxGrant({
@@ -56,43 +58,54 @@ export async function pullPersonalMailboxChanges(
     workspaceId: record.workspaceId,
     deviceId: record.localDeviceId,
   })
-  const client = new ToolmanSyncClient({
-    baseUrl: record.hubBaseUrlHint || getMobileSyncBaseUrl(),
-    getAccessToken: async () => null,
-    getSyncToken: loadSyncHubToken,
-    fetchImpl: boundFetch,
-  })
-  const sinceSeq = mailboxSeqByWorkspace.get(record.workspaceId) ?? 0
-  const pulled = await client.pullMailbox({
-    workspaceId: record.workspaceId,
-    deviceId: record.localDeviceId,
-    grant,
-    sinceSeq,
-    limit: 100,
-  })
   const changes: SyncChange[] = []
   let lastSender: string | null = null
-  let maxSeq = sinceSeq
-  for (const envelope of pulled.envelopes ?? []) {
-    maxSeq = Math.max(maxSeq, envelope.seq)
+  const seen = new Set<string>()
+  let anyHub = false
+
+  for (const baseUrl of listPersonalMailboxBaseUrls(record)) {
+    const key = mailboxSeqKey(record.workspaceId, baseUrl)
+    const sinceSeq = mailboxSeqByHub.get(key) ?? 0
     try {
-      const plain = await openMailboxPlaintext({
-        workspaceKey,
+      const client = createPersonalMailboxClient(baseUrl)
+      const pulled = await client.pullMailbox({
         workspaceId: record.workspaceId,
-        ciphertextB64: envelope.ciphertextB64,
+        deviceId: record.localDeviceId,
+        grant,
+        sinceSeq,
+        limit: 100,
       })
-      if (plain.type !== 'device.sync.changes') continue
-      if (plain.senderDeviceId === record.localDeviceId) continue
-      lastSender = plain.senderDeviceId
-      for (const raw of plain.changes) {
-        const parsed = SyncChangeSchema.safeParse(raw)
-        if (parsed.success) changes.push(parsed.data)
+      anyHub = true
+      let maxSeq = sinceSeq
+      for (const envelope of pulled.envelopes ?? []) {
+        maxSeq = Math.max(maxSeq, envelope.seq)
+        const dedupe = `${envelope.seq}:${envelope.ciphertextB64}`
+        if (seen.has(dedupe)) continue
+        seen.add(dedupe)
+        try {
+          const plain = await openMailboxPlaintext({
+            workspaceKey,
+            workspaceId: record.workspaceId,
+            ciphertextB64: envelope.ciphertextB64,
+          })
+          if (plain.type !== 'device.sync.changes') continue
+          if (plain.senderDeviceId === record.localDeviceId) continue
+          lastSender = plain.senderDeviceId
+          for (const raw of plain.changes) {
+            const parsed = SyncChangeSchema.safeParse(raw)
+            if (parsed.success) changes.push(parsed.data)
+          }
+        } catch {
+          // skip undecryptable
+        }
       }
+      if (maxSeq > sinceSeq) mailboxSeqByHub.set(key, maxSeq)
     } catch {
-      // skip undecryptable
+      // try next hub
     }
   }
-  if (maxSeq > sinceSeq) mailboxSeqByWorkspace.set(record.workspaceId, maxSeq)
+
+  if (!anyHub && changes.length === 0) return null
   return { transport: 'personal-mailbox', changes, appliedFromDeviceId: lastSender }
 }
 
@@ -119,18 +132,21 @@ export async function pushPersonalMailboxChanges(input: {
       depositedAt: Date.now(),
     },
   })
-  const client = new ToolmanSyncClient({
-    baseUrl: input.pairing.hubBaseUrlHint || getMobileSyncBaseUrl(),
-    getAccessToken: async () => null,
-    getSyncToken: loadSyncHubToken,
-    fetchImpl: boundFetch,
-  })
-  await client.putMailbox({
-    workspaceId: input.pairing.workspaceId,
-    deviceId: input.pairing.localDeviceId,
-    recipientDeviceId: input.recipientDeviceId,
-    grant,
-    ciphertextB64,
-  })
-  return true
+  let deposited = false
+  for (const baseUrl of listPersonalMailboxBaseUrls(input.pairing)) {
+    try {
+      const client = createPersonalMailboxClient(baseUrl)
+      await client.putMailbox({
+        workspaceId: input.pairing.workspaceId,
+        deviceId: input.pairing.localDeviceId,
+        recipientDeviceId: input.recipientDeviceId,
+        grant,
+        ciphertextB64,
+      })
+      deposited = true
+    } catch {
+      // try next hub
+    }
+  }
+  return deposited
 }

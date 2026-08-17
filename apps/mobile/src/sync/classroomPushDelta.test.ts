@@ -54,6 +54,16 @@ describe('classroom push delta', () => {
     })
   })
 
+  it('includes the course model id in the sync payload', () => {
+    const [change] = selectDirtyClassroomChanges(
+      [course({ updatedAt: 30, modelId: 'deepseek:deepseek-v4-flash' })],
+      { classroomStamps: { c1: 10 } },
+    )
+    expect(change?.payload).toMatchObject({
+      meta: { modelId: 'deepseek:deepseek-v4-flash' },
+    })
+  })
+
   it('stamps after a successful push', () => {
     const next = applyClassroomPushStamps(
       { cursor: null, noteStamps: {}, deletedStamps: {}, knowledgeSince: 0, classroomStamps: {} },

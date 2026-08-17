@@ -15,6 +15,7 @@ import {
   ClassroomSyncTab,
 } from './ClassroomSettingsTabs'
 import { ClassroomTextbookKbPicker } from './ClassroomTextbookKbPicker'
+import { formatClassroomKbSelectionLabel } from './classroomKbDisplay'
 import { classroomSettingsModalStyles as styles } from './classroomSettingsModalStyles'
 import {
   CLASSROOM_SETTINGS_TABS,
@@ -48,6 +49,8 @@ export function ClassroomSettingsModal(props: ClassroomSettingsModalProps) {
     isDefault,
     shownPresets,
     selectedPreset,
+    modelOptions,
+    defaultModelOptionLabel,
     updateDraft,
     handleSave,
     handleDelete,
@@ -124,6 +127,8 @@ export function ClassroomSettingsModal(props: ClassroomSettingsModalProps) {
                           shownPresets={shownPresets}
                           selectedPreset={selectedPreset}
                           knowledgeNames={knowledgeNames}
+                          modelOptions={modelOptions}
+                          defaultModelOptionLabel={defaultModelOptionLabel}
                           updateDraft={updateDraft}
                           onOpenKbPicker={() => setKbPickerOpen(true)}
                           onClearKb={() => updateDraft({ kbIds: [], kbLabel: '' })}
@@ -240,8 +245,9 @@ export function ClassroomSettingsModal(props: ClassroomSettingsModalProps) {
         fallbackItems={knowledgeMeta}
         onClose={() => setKbPickerOpen(false)}
         onSelect={(item) => {
-          updateDraft({ kbIds: [item.id], kbLabel: item.name })
-          onRememberKbLabels([item.id], [item.name])
+          const label = formatClassroomKbSelectionLabel(item)
+          updateDraft({ kbIds: [item.id], kbLabel: label })
+          onRememberKbLabels([item.id], [label])
           setKbPickerOpen(false)
         }}
       />

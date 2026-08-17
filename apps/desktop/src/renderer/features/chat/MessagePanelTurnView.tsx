@@ -31,6 +31,7 @@ export type MessageTurnViewProps = {
   getUserDisplayName?: (message: Message) => string
   getUserAvatarInitial?: (message: Message) => string
   isOwnUserMessage?: (message: Message) => boolean
+  userMessageAlign?: 'agent' | 'chat'
   assistantFooterMessageId?: string | null
   assistantFooter?: ReactNode
   speakingMessageId?: string | null
@@ -51,6 +52,7 @@ export function MessagePanelTurnView({
   getUserDisplayName,
   getUserAvatarInitial,
   isOwnUserMessage,
+  userMessageAlign = 'agent',
   onRequestDeleteMessage,
   onRegenerateMessage,
   onEditUserMessage,
@@ -95,6 +97,7 @@ export function MessagePanelTurnView({
         editing={editingUserMessageId === message.id}
         sending={sending}
         isOwn={isOwnUserMessage?.(message) ?? false}
+        align={userMessageAlign}
       />
     )
   }

@@ -17,6 +17,7 @@ import {
   type MailboxSyncTarget,
 } from './mailboxSync'
 import { hasLiveSession, sendEventsJson } from './session'
+import { ignoreAsyncError } from './asyncFail'
 
 const RELAY_TIMEOUT_MS = 10 * 60_000
 
@@ -200,7 +201,7 @@ function waitForRelay(
     }, RELAY_TIMEOUT_MS)
     const pollOnce = () => {
       const target = getMailboxTarget(workspaceId)
-      if (target) void drainMailbox(target).catch(() => undefined)
+      if (target) ignoreAsyncError(drainMailbox(target), 'mailbox drain')
     }
     pollOnce()
     const poll = setInterval(pollOnce, 1_000)

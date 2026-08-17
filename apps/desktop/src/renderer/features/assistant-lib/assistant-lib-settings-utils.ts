@@ -35,6 +35,8 @@ export type AssistantLibClassroomDraft = {
   autoSpeak: boolean
   ttsEngine: VoiceTtsEngine
   ttsVoice: string
+  /** Empty = follow workspace default model. */
+  modelId: string
 }
 
 export function resolveAssistantLibCourseLabel(
@@ -90,6 +92,7 @@ export function draftFromSession(
     autoSpeak: meta?.autoSpeak ?? true,
     ttsEngine: meta?.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
     ttsVoice: resolveCuratedEdgeTtsVoice(meta?.ttsVoice),
+    modelId: meta?.modelId?.trim() ?? '',
   }
 }
 
@@ -181,6 +184,7 @@ export function buildClassroomSettingsMetadata(
     autoSpeak: draft.autoSpeak,
     ttsEngine: draft.ttsEngine,
     ttsVoice: draft.ttsEngine === 'edge' ? resolveCuratedEdgeTtsVoice(draft.ttsVoice) : undefined,
+    modelId: draft.modelId.trim(),
   })
 }
 

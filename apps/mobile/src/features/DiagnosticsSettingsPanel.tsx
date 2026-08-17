@@ -12,6 +12,7 @@ import {
 import { hostedWebSyncSoftHint } from '../sync/hostedWebSync'
 import { formatMobileP2pPathMetrics } from '../p2p/pathMetrics'
 import {
+  Field,
   Section,
   SettingsScroll,
   Toggle,
@@ -125,6 +126,21 @@ export function DiagnosticsSettingsPanel() {
           {t('diagnostics.hubUrl')}：{hubUrl}
         </Text>
         <Text style={styles.hint}>{t('diagnostics.hubHint')}</Text>
+        <Field
+          label={t('user.httpsDesktopUrl')}
+          value={modulePrefs.sync.hubBaseUrl ?? ''}
+          onChangeText={(hubBaseUrl) =>
+            void persistPrefs({
+              ...modulePrefs,
+              sync: { ...modulePrefs.sync, hubBaseUrl },
+            }).then(() => {
+              resetMobileSyncBaseUrlCache()
+            })
+          }
+          placeholder={t('user.httpsDesktopUrlPlaceholder')}
+          keyboardType="url"
+        />
+        <Text style={styles.hint}>{t('user.httpsDesktopUrlHint')}</Text>
       </Section>
 
       <Section title={t('diagnostics.syncToggles')}>

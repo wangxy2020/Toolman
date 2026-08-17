@@ -14,7 +14,6 @@ interface Props {
 export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props) {
   const { t } = useI18n()
   const [inviteInput, setInviteInput] = useState('')
-  const [displayName, setDisplayName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [memberLimitOpen, setMemberLimitOpen] = useState(false)
@@ -51,7 +50,6 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
     try {
       await onSubmit({
         inviteToken: trimmed,
-        displayName: displayName.trim() || undefined,
       })
       onClose()
     } catch (err) {
@@ -95,17 +93,6 @@ export function GroupJoinModal({ onClose, onSubmit, onUpgradeMembership }: Props
               placeholder={t('modals.groupJoin.invitePlaceholder')}
               rows={4}
               autoFocus
-            />
-          </label>
-
-          <label className="tm-model-form-field">
-            <span className="tm-model-form-label">{t('modals.groupJoin.displayNameLabel')}</span>
-            <input
-              className="tm-model-form-input"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={t('modals.groupJoin.displayNamePlaceholder')}
-              maxLength={100}
             />
           </label>
         </div>

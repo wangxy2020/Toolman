@@ -1,4 +1,10 @@
-import { P2pMemberJoinInputSchema, type P2pMember, type P2pWorkspace } from '@toolman/shared'
+import {
+  P2pMemberJoinInputSchema,
+  preferUsableMemberIdentityId,
+  resolveJoinedDeviceRole,
+  type P2pMember,
+  type P2pWorkspace,
+} from '@toolman/shared'
 import type { P2pWorkspaceMemberRow } from '@toolman/db'
 import { assertRegisteredForP2p } from '../p2p-auth.guard'
 import {
@@ -14,10 +20,10 @@ import {
   buildMemberCertSnapshot,
   maybeActivateWorkspaceVipPool,
 } from '../p2p-workspace-vip-pool.service'
-import { getP2pDeviceInfo } from '../p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from '../p2p-device-identity.service'
 import {
   ensureWorkspaceDir,
-  findIdentitySibling,
+  findSamePersonSibling,
   getIdentityDisplayName,
   getMemberRepo,
   getWorkspaceRepo,
@@ -26,6 +32,7 @@ import {
   membershipFromIdentitySibling,
   toWorkspaceDto,
 } from '../p2p-member-shared'
+import { ensureLinkedIdentityRow } from '../p2p-linked-identity.service'
 import { P2pMemberLimitError } from './errors'
 import {
   stopAllBackgroundJoinNotifications,
@@ -52,8 +59,11 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   validateLocalInviteRecord(inviteToken, payload)
 
   const device = getP2pDeviceInfo()
-  const displayName = input.displayName?.trim() || getIdentityDisplayName()
+  const displayName = getIdentityDisplayName()
   const memberRepo = getMemberRepo()
+  const personIdentityId =
+    preferUsableMemberIdentityId(getP2pPersonIdentityId(), device.identityId) ?? device.identityId
+  ensureLinkedIdentityRow(personIdentityId, displayName)
 
   const workspace = ensureWorkspaceFromInvite(payload)
   ensureOwnerMemberFromInvite(payload, workspace.id)
@@ -67,14 +77,28 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   ensureWorkspaceDir(workspace.id)
 
   const existing = memberRepo.findByWorkspaceAndDevice(workspace.id, device.deviceId)
-  const sibling = findIdentitySibling(workspace.id, device.identityId, device.deviceId)
+  const sibling = findSamePersonSibling({
+    workspaceId: workspace.id,
+    joinerIdentityId: personIdentityId,
+    excludeDeviceId: device.deviceId,
+    localPersonIdentityId: personIdentityId,
+    localDeviceId: device.deviceId,
+  })
   const inherited = membershipFromIdentitySibling(payload.role, sibling)
+  const role = resolveJoinedDeviceRole({
+    inheritedRole: inherited.role,
+    requestedRole: payload.role,
+    joinerIdentityId: personIdentityId,
+    ownerIdentityId: workspace.ownerIdentityId,
+    ownerDeviceId: workspace.ownerDeviceId,
+    sibling,
+  })
 
   if (
     !hasWorkspaceMemberCapacity({
       workspaceId: workspace.id,
       maxMembers: workspace.maxMembers,
-      joinerIdentityId: device.identityId,
+      joinerIdentityId: personIdentityId,
       existingStatus: existing?.status ?? sibling?.status,
     })
   ) {
@@ -104,8 +128,9 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
     memberRow =
       memberRepo.update({
         id: existing.id,
+        identityId: personIdentityId,
         displayName,
-        role: inherited.role,
+        role,
         status: inherited.status,
         joinedAt: new Date(),
         certJson: memberCertJson,
@@ -113,10 +138,10 @@ export async function joinP2pWorkspace(rawInput: unknown): Promise<{
   } else {
     memberRow = memberRepo.create({
       workspaceId: workspace.id,
-      identityId: device.identityId,
+      identityId: personIdentityId,
       deviceId: device.deviceId,
       displayName,
-      role: inherited.role,
+      role,
       status: inherited.status,
       joinedAt: new Date(),
       certJson: memberCertJson,

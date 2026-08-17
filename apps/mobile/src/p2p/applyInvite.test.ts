@@ -133,6 +133,55 @@ describe('applyPendingInvite', () => {
     })
   })
 
+  it('keeps owner on a second device when invite owner id is still the guest UUID', () => {
+    const applied = applyPendingInvite({
+      groups: [
+        {
+          id: 'ws-a',
+          name: '项目组',
+          createdAt: 1,
+          updatedAt: 1,
+          origin: 'desktop',
+        },
+      ],
+      membersByGroup: {
+        'ws-a': [
+          {
+            id: 'desk-a',
+            displayName: '用户A',
+            role: 'owner',
+            deviceId: 'desk-a',
+            identityId: 'ag-wxymale',
+            deviceKind: 'desktop',
+            online: true,
+            status: 'active',
+          },
+        ],
+      },
+      invitesByGroup: {},
+      invite: {
+        raw: 'toolman://join?token=tok-1&wid=ws-a&name=项目组',
+        token: 'tok-1',
+        workspaceId: 'ws-a',
+        workspaceName: '项目组',
+        role: 'member',
+        ownerIdentityId: '00000000-0000-4000-8000-000000000001',
+        ownerDeviceId: 'desk-a',
+        receivedAt: 2,
+      },
+      self: {
+        identityId: 'ag-wxymale',
+        deviceId: 'phone-a',
+        displayName: '用户A',
+      },
+    })
+    expect(applied.membersByGroup['ws-a']?.find((member) => member.deviceId === 'phone-a')).toMatchObject({
+      identityId: 'ag-wxymale',
+      role: 'owner',
+      status: 'active',
+    })
+  })
+
   it('rejects an expired invite before local apply', () => {
     expect(() =>
       applyPendingInvite({

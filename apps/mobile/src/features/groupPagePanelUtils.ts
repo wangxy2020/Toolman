@@ -4,11 +4,7 @@ import {
 } from '@toolman/shared'
 import type { GroupActivity, GroupMember, GroupMemberRole, GroupSharedKind } from '../storage/groupChat'
 
-export function activeGroupMembers(members: GroupMember[]): GroupMember[] {
-  return members.filter((member) => member.status === 'active')
-}
-
-export function visibleGroupMembers(members: GroupMember[]): GroupMember[] {
+function visibleGroupMembers(members: GroupMember[]): GroupMember[] {
   return members.filter((member) => member.status === 'active' || member.status === 'invited')
 }
 
@@ -44,8 +40,11 @@ export function isSelfGroupMember(
   return isSamePerson(member, self)
 }
 
-export function deviceKindLabel(kind: GroupMember['deviceKind']): string {
-  return kind === 'mobile' ? '手机' : kind === 'desktop' ? '电脑' : '设备'
+function deviceKindLabel(kind: GroupMember['deviceKind']): string {
+  if (kind === 'web') return '网页'
+  if (kind === 'mobile') return '移动'
+  if (kind === 'desktop') return '桌面'
+  return '设备'
 }
 
 export function memberAvatarInitial(displayName: string): string {
@@ -56,12 +55,8 @@ export function memberOnlineLabel(online: boolean): string {
   return online ? '在线' : '离线'
 }
 
-export function memberDeviceLine(
-  kind: GroupMember['deviceKind'],
-  deviceId: string,
-  shortId: (id: string) => string,
-): string {
-  return `${deviceKindLabel(kind)} ${shortId(deviceId)}`
+export function memberDeviceLine(kind: GroupMember['deviceKind']): string {
+  return deviceKindLabel(kind)
 }
 
 export function groupSharedPickerHint(kind: GroupSharedKind): string {

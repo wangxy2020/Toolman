@@ -126,6 +126,7 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
           onStatusMessage={props.setStatusMessage}
           onDeleteSession={handleDeleteLearningSession}
           defaultModelId={props.defaultModelId}
+          providers={props.chat.providers}
         />
       ) : null}
     </main>

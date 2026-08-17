@@ -41,7 +41,8 @@ export default defineConfig({
       alias: {
         '@main': resolve('src/main'),
         // Bundle workspace packages from source in main.
-        // Typecheck resolves package.json → dist; `pnpm typecheck` builds deps first (see package.json).
+        // Husky typecheck uses package.json → dist after `^build` (composite tsconfig
+        // cannot path-map those sources without TS6307).
         '@toolman/shared': resolve('../../packages/shared/src/index.ts'),
         '@toolman/knowledge': resolve('../../packages/knowledge/src/index.ts'),
         '@toolman/db': resolve('../../packages/db/src/index.ts'),

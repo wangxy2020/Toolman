@@ -15,7 +15,7 @@ AI 桌面客户端，基于 Electron + React + SQLite。当前为 **Beta / 开�
 
 ### Beta 已知限制
 - **跨网 P2P 群组**：LAN 已验证；跨 NAT 需 TURN，仍在持续验收中
-- **多端个人同步**：局域网 Sync Hub + 配对令牌可用；点到点设备配对/加密投递盒已接入（见 `docs/engineering/DEVICE_SYNC_P2P_PLAN.md`）；托管网页跨网不依赖官方 Hub 明文镜像（可选）
+- **多端个人同步**：局域网 Sync Hub + 配对令牌可用；点到点设备配对 / WebRTC / 加密投递盒已接入（见 `docs/engineering/DEVICE_SYNC_P2P_PLAN.md`）。托管 HTTPS 网页无法直连局域网 HTTP Hub；请用 localhost 或真机局域网，跨网需桌面在线打洞（TURN）或自备 HTTPS 可达地址。**不依赖** `hub.toolman.app`
 - **自动更新**：需配置 OTA feed；亦可通过 GitHub Release 下载安装包
 - **会员支付**：当前为模拟支付，非真实扣款
 - **工作流 / 自动化**：导航占位，群组可共享 workflow 但本地编辑器尚未开放

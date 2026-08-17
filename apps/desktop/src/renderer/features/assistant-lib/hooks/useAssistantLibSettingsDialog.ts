@@ -9,10 +9,12 @@ import {
   parseCourseSyllabus,
   type AssistantLibPresetId,
   type KnowledgeBase,
+  type Provider,
   type Session,
 } from '@toolman/shared'
 import { useI18n } from '../../../i18n/useI18n'
 import { safeInvoke } from '../../../lib/ipc-client'
+import { buildModelOptions, formatModelDisplayLabel } from '../../chat/model-utils'
 import { resolveTextbookKbDisplayPath } from '../AssistantLibLocalKbPickerModal'
 import { createLocalTextbookKnowledgeBase } from '../create-textbook-kb'
 import {
@@ -43,6 +45,7 @@ export type UseAssistantLibSettingsDialogProps = {
   onStatusMessage?: (message: string) => void
   onDeleteSession?: (sessionId: string) => void | Promise<void>
   defaultModelId?: string | null
+  providers?: Provider[]
 }
 
 export function useAssistantLibSettingsDialog({
@@ -57,6 +60,7 @@ export function useAssistantLibSettingsDialog({
   onStatusMessage,
   onDeleteSession,
   defaultModelId,
+  providers = [],
 }: UseAssistantLibSettingsDialogProps) {
   const { t } = useI18n()
   const selectablePresets = useMemo(() => listSelectableAssistantLibPresets(), [])
@@ -123,10 +127,22 @@ export function useAssistantLibSettingsDialog({
     : null
   const syllabusGenerating = syllabus?.generation === 'generating'
   const syllabusStatusText = syllabus ? formatSyllabusStatusText(syllabus, t) : null
+  const modelOptions = useMemo(() => {
+    const options = buildModelOptions(providers)
+    const selected = draft?.modelId?.trim()
+    if (selected && !options.some((item) => item.modelId === selected)) {
+      return [
+        ...options,
+        { modelId: selected, label: formatModelDisplayLabel(selected, providers) || selected },
+      ]
+    }
+    return options
+  }, [draft?.modelId, providers])
+  const syllabusModelId = draft?.modelId?.trim() || defaultModelId || null
 
   const handleGenerateSyllabus = () => {
     if (!targetSession) return
-    if (!defaultModelId) {
+    if (!syllabusModelId) {
       setError(t('assistantLibPage.syllabusNeedModel'))
       return
     }
@@ -134,7 +150,7 @@ export function useAssistantLibSettingsDialog({
     void safeInvoke(IpcChannel.AssistantLibSyllabusGenerate, {
       workspaceId,
       sessionId: targetSession.id,
-      modelId: defaultModelId,
+      modelId: syllabusModelId,
     }).then((result) => {
       if (!result.ok) setError(result.error.message)
     })
@@ -296,5 +312,7 @@ export function useAssistantLibSettingsDialog({
     handleDeleteCourse,
     handleSave,
     handleGenerateSyllabus,
+    modelOptions,
+    syllabusModelId,
   }
 }

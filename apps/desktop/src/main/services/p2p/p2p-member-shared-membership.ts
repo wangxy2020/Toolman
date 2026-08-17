@@ -1,10 +1,15 @@
 import type { P2pGroupSyncMember, P2pMemberRole, P2pMemberStatus } from '@toolman/shared'
+import { identityIdForSiblingLookup } from '@toolman/shared'
 import type { P2pWorkspaceMemberRow } from '@toolman/db'
+import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
 import {
   getIdentityDisplayName,
   getMemberRepo,
   mapMemberRow,
 } from './p2p-member-shared-repos'
+
+const LAST_SEEN_BROADCAST_THROTTLE_MS = 5_000
+const lastSeenBroadcastAt = new Map<string, number>()
 
 /** Prefer stored display name; fall back to local identity name for this device. */
 export function resolveStoredMemberDisplayName(
@@ -24,6 +29,12 @@ export function touchMemberLastSeen(workspaceId: string, deviceId: string): void
     id: existing.id,
     lastSeenAt: new Date(),
   })
+  const key = `${workspaceId}:${deviceId}`
+  const now = Date.now()
+  const previous = lastSeenBroadcastAt.get(key) ?? 0
+  if (now - previous < LAST_SEEN_BROADCAST_THROTTLE_MS) return
+  lastSeenBroadcastAt.set(key, now)
+  broadcastP2pMemberChanged({ workspaceId })
 }
 
 export function listWorkspaceMemberRoster(workspaceId: string): P2pGroupSyncMember[] {
@@ -40,6 +51,7 @@ export function listWorkspaceMemberRoster(workspaceId: string): P2pGroupSyncMemb
         role: member.role,
         status: member.status === 'active' || member.status === 'invited' ? member.status : 'invited',
         online: member.online,
+        deviceKind: member.deviceKind,
       }
     })
 }
@@ -50,14 +62,44 @@ export function findIdentitySibling(
   identityId: string,
   excludeDeviceId: string,
 ): P2pWorkspaceMemberRow | null {
+  const usable = identityIdForSiblingLookup(identityId)
+  if (!usable) return null
   const siblings = getMemberRepo()
-    .listByWorkspaceAndIdentity(workspaceId, identityId)
+    .listByWorkspaceAndIdentity(workspaceId, usable)
     .filter(
       (row) =>
         row.deviceId !== excludeDeviceId &&
         (row.status === 'active' || row.status === 'invited'),
     )
   return siblings[0] ?? null
+}
+
+/**
+ * Same logged-in person on another device, even when the local row still stores
+ * the guest UUID and the joiner already uses Authing `ag-…` / Firebase `fb-…`.
+ */
+export function findSamePersonSibling(input: {
+  workspaceId: string
+  joinerIdentityId: string
+  excludeDeviceId: string
+  localPersonIdentityId?: string | null
+  localDeviceId?: string | null
+}): P2pWorkspaceMemberRow | null {
+  const sibling = findIdentitySibling(
+    input.workspaceId,
+    input.joinerIdentityId,
+    input.excludeDeviceId,
+  )
+  if (sibling) return sibling
+
+  const joiner = identityIdForSiblingLookup(input.joinerIdentityId)
+  const localPerson = identityIdForSiblingLookup(input.localPersonIdentityId)
+  if (!joiner || !localPerson || joiner !== localPerson) return null
+  if (!input.localDeviceId || input.localDeviceId === input.excludeDeviceId) return null
+
+  const local = getMemberRepo().findByWorkspaceAndDevice(input.workspaceId, input.localDeviceId)
+  if (!local || (local.status !== 'active' && local.status !== 'invited')) return null
+  return local
 }
 
 /**

@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { P2pMemberRoleSchema } from '../p2p/types.js'
+import { P2pClientDeviceKindSchema, P2pMemberRoleSchema } from '../p2p/types.js'
 
-export const P2pGroupDeviceKindSchema = z.enum(['desktop', 'mobile'])
+export const P2pGroupDeviceKindSchema = P2pClientDeviceKindSchema
 export type P2pGroupDeviceKind = z.infer<typeof P2pGroupDeviceKindSchema>
 
 /** Member row in a `p2p_group` changelog payload. One row per device. */

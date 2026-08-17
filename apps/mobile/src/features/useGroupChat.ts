@@ -30,7 +30,7 @@ export function GroupChatProvider({ children }: { children: ReactNode }) {
   const selfIdentityId = auth?.identityId ?? device.identityId ?? 'local-self'
   const selfDeviceId = device.deviceId || selfIdentityId
   const selfMemberId = selfIdentityId
-  const selfName = auth?.displayName?.trim() || '我'
+  const selfName = auth?.displayName?.trim() || '本地用户'
   const self: GroupChatSelf = { selfIdentityId, selfDeviceId, selfMemberId, selfName }
 
   const store = useGroupChatState(self, auth?.identityId)

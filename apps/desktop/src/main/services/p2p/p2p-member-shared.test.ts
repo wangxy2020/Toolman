@@ -19,6 +19,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./p2p-device-identity.service', () => ({
   getP2pDeviceInfo: () => ({ deviceId: 'dev-local', identityId: 'identity-local' }),
+  getP2pPersonIdentityId: () => 'identity-local',
 }))
 
 vi.mock('./p2p-connection.service', () => ({
@@ -109,9 +110,39 @@ describe('p2p-member-shared', () => {
     expect(member.displayName).toBe('Remote')
     expect(member.online).toBe(true)
     expect(member.connectionMode).toBe('lan')
+    expect(member.deviceKind).toBe('desktop')
 
     const localMember = mapMemberRow({ ...memberRow, deviceId: 'dev-local', displayName: 'Stale' }, 'ws-1')
     expect(localMember.displayName).toBe('Owner User')
+    expect(localMember.identityId).toBe('identity-local')
+  })
+
+  it('marks a mailbox client online from recent lastSeenAt', () => {
+    const mailboxMember = mapMemberRow(
+      {
+        ...memberRow,
+        id: 'member-web',
+        deviceId: 'dev-web',
+        lastSeenAt: new Date(),
+        certJson: JSON.stringify({ deviceKind: 'web' }),
+      } as P2pWorkspaceMemberRow,
+      'ws-1',
+    )
+    expect(mailboxMember.online).toBe(true)
+    expect(mailboxMember.deviceKind).toBe('web')
+  })
+
+  it('marks a stale mailbox client offline when not connected', () => {
+    const stale = mapMemberRow(
+      {
+        ...memberRow,
+        id: 'member-stale',
+        deviceId: 'dev-stale',
+        lastSeenAt: new Date('2024-01-03T00:00:00.000Z'),
+      } as P2pWorkspaceMemberRow,
+      'ws-1',
+    )
+    expect(stale.online).toBe(false)
   })
 
   it('attaches a second device to the existing person role', () => {

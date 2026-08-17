@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   IpcChannel,
-  collectPersonMemberIds,
+  isOwnGroupChatSender,
+  resolveLivePeerMemberDisplayName,
   type ContentBlock,
   type Message,
   type P2pGroupChatMessage,
   type P2pMember,
+  type PersonSelfRef,
 } from '@toolman/shared'
 import { useI18n } from '../../i18n/useI18n'
 
@@ -20,9 +22,35 @@ function toPanelMessage(message: P2pGroupChatMessage): Message {
     contentBlocks: message.contentBlocks,
     error: null,
     tokenUsage: null,
+    metadata: {
+      senderMemberId: message.senderMemberId,
+      senderName: message.senderName,
+    },
     createdAt: message.createdAt,
     updatedAt: message.createdAt,
   }
+}
+
+function metadataString(message: Message, key: string): string | undefined {
+  const value = message.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function senderMemberIdOf(message: Message, senderMemberIds: Record<string, string>): string | undefined {
+  return senderMemberIds[message.id] ?? metadataString(message, 'senderMemberId')
+}
+
+function senderNameOf(
+  message: Message,
+  senderNames: Record<string, string>,
+  members: P2pMember[],
+  senderMemberIds: Record<string, string>,
+): string {
+  return resolveLivePeerMemberDisplayName(
+    members,
+    senderMemberIdOf(message, senderMemberIds),
+    senderNames[message.id] ?? metadataString(message, 'senderName'),
+  )
 }
 
 function memberInitial(name: string): string {
@@ -35,23 +63,26 @@ export function useGroupChat(
   selfMemberId: string | null,
   members: P2pMember[] = [],
   selfIdentityId?: string | null,
+  selfDeviceId?: string | null,
 ) {
   const { t } = useI18n()
   const [messages, setMessages] = useState<Message[]>([])
   const [senderNames, setSenderNames] = useState<Record<string, string>>({})
   const [senderMemberIds, setSenderMemberIds] = useState<Record<string, string>>({})
+  const [listSelfMemberId, setListSelfMemberId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const rememberSender = useCallback((message: P2pGroupChatMessage) => {
+    setSenderNames((current) => ({ ...current, [message.id]: message.senderName }))
+    setSenderMemberIds((current) => ({ ...current, [message.id]: message.senderMemberId }))
+  }, [])
+
   const applyChatMessages = useCallback((items: P2pGroupChatMessage[]) => {
     setMessages(items.map(toPanelMessage))
-    setSenderNames(
-      Object.fromEntries(items.map((item) => [item.id, item.senderName])),
-    )
-    setSenderMemberIds(
-      Object.fromEntries(items.map((item) => [item.id, item.senderMemberId])),
-    )
+    setSenderNames(Object.fromEntries(items.map((item) => [item.id, item.senderName])))
+    setSenderMemberIds(Object.fromEntries(items.map((item) => [item.id, item.senderMemberId])))
   }, [])
 
   const loadMessages = useCallback(async () => {
@@ -66,13 +97,18 @@ export function useGroupChat(
       setError(result.error.message)
       return
     }
-    const data = result.data as { items: P2pGroupChatMessage[] }
+    const data = result.data as { items: P2pGroupChatMessage[]; selfMemberId?: string }
     applyChatMessages(data.items)
+    if (data.selfMemberId) setListSelfMemberId(data.selfMemberId)
   }, [applyChatMessages, workspaceId])
 
   useEffect(() => {
     void loadMessages()
   }, [loadMessages])
+
+  useEffect(() => {
+    setListSelfMemberId(null)
+  }, [workspaceId])
 
   useEffect(() => {
     if (!workspaceId) return
@@ -86,15 +122,11 @@ export function useGroupChat(
         }
         return [...current, toPanelMessage(message)]
       })
-      setSenderNames((current) => ({ ...current, [message.id]: message.senderName }))
-      setSenderMemberIds((current) => ({
-        ...current,
-        [message.id]: message.senderMemberId,
-      }))
+      rememberSender(message)
     })
 
     return unsubscribe
-  }, [workspaceId])
+  }, [rememberSender, workspaceId])
 
   useEffect(() => {
     if (!workspaceId) return
@@ -125,22 +157,16 @@ export function useGroupChat(
         return
       }
       const data = result.data as { message: P2pGroupChatMessage }
+      setListSelfMemberId((current) => current ?? data.message.senderMemberId)
       setMessages((current) => {
         if (current.some((item) => item.id === data.message.id)) {
           return current
         }
         return [...current, toPanelMessage(data.message)]
       })
-      setSenderNames((current) => ({
-        ...current,
-        [data.message.id]: data.message.senderName,
-      }))
-      setSenderMemberIds((current) => ({
-        ...current,
-        [data.message.id]: data.message.senderMemberId,
-      }))
+      rememberSender(data.message)
     },
-    [workspaceId],
+    [rememberSender, workspaceId],
   )
 
   const clearMessages = useCallback(async () => {
@@ -183,26 +209,28 @@ export function useGroupChat(
     [workspaceId],
   )
 
+  const resolvedSelfMemberId = selfMemberId ?? listSelfMemberId
+  const selfRef: PersonSelfRef = useMemo(
+    () => ({
+      memberId: resolvedSelfMemberId,
+      identityId: selfIdentityId,
+      deviceId: selfDeviceId,
+    }),
+    [resolvedSelfMemberId, selfDeviceId, selfIdentityId],
+  )
+
   const isOwnUserMessage = useCallback(
-    (message: Message) => {
-      const senderId = senderMemberIds[message.id]
-      if (!senderId) return false
-      const selfIds = collectPersonMemberIds(members, {
-        memberId: selfMemberId,
-        identityId: selfIdentityId,
-      })
-      if (selfIds.includes(senderId)) return true
-      return selfMemberId != null && senderId === selfMemberId
-    },
-    [members, selfIdentityId, selfMemberId, senderMemberIds],
+    (message: Message) =>
+      isOwnGroupChatSender(senderMemberIdOf(message, senderMemberIds), members, selfRef),
+    [members, selfRef, senderMemberIds],
   )
 
   const getUserDisplayName = useCallback(
     (message: Message) =>
       isOwnUserMessage(message)
         ? t('groupPage.messages.mine')
-        : (senderNames[message.id] ?? '成员'),
-    [isOwnUserMessage, senderNames, t],
+        : senderNameOf(message, senderNames, members, senderMemberIds),
+    [isOwnUserMessage, members, senderMemberIds, senderNames, t],
   )
 
   const getUserAvatarInitial = useCallback(
@@ -210,9 +238,9 @@ export function useGroupChat(
       memberInitial(
         isOwnUserMessage(message)
           ? t('groupPage.messages.mineInitial')
-          : (senderNames[message.id] ?? '成员'),
+          : senderNameOf(message, senderNames, members, senderMemberIds),
       ),
-    [isOwnUserMessage, senderNames, t],
+    [isOwnUserMessage, members, senderMemberIds, senderNames, t],
   )
 
   return {
@@ -227,6 +255,6 @@ export function useGroupChat(
     getUserDisplayName,
     getUserAvatarInitial,
     isOwnUserMessage,
-    selfMemberId,
+    selfMemberId: resolvedSelfMemberId,
   }
 }

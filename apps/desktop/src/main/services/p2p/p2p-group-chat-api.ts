@@ -34,11 +34,14 @@ function getMemberRepo(): P2pMemberRepository {
   return new P2pMemberRepository(getDatabase())
 }
 
-export function listP2pGroupChatMessages(rawInput: unknown): { items: P2pGroupChatMessage[] } {
+export function listP2pGroupChatMessages(rawInput: unknown): {
+  items: P2pGroupChatMessage[]
+  selfMemberId: string
+} {
   const input = P2pGroupChatListInputSchema.parse(rawInput)
-  assertWorkspaceMemberAccess(input.workspaceId)
+  const member = assertWorkspaceMemberAccess(input.workspaceId)
   const limit = input.limit ?? 200
-  return { items: readGroupChatMessages(input.workspaceId).slice(-limit) }
+  return { items: readGroupChatMessages(input.workspaceId).slice(-limit), selfMemberId: member.id }
 }
 
 export async function sendP2pGroupChatMessage(

@@ -34,7 +34,10 @@ export function DiagnosticsSettingsP2pSection({ snapshot }: Props) {
           t('settings.diagnostics.status.disabled'),
         )}
       </SettingsRow>
-      <SettingsRow label={t('settings.diagnostics.p2p.iceTurn')}>
+      <SettingsRow
+        label={t('settings.diagnostics.p2p.iceTurn')}
+        hint={t('settings.diagnostics.p2p.iceTurnHint')}
+      >
         <span className="tm-settings-static">{snapshot.p2p.iceServersSummary}</span>
       </SettingsRow>
       {!snapshot.p2p.wanReadiness.ready ? (

@@ -9,6 +9,10 @@ export type P2pInvitableMemberRole = z.infer<typeof P2pInvitableMemberRoleSchema
 export const P2pMemberStatusSchema = z.enum(['active', 'invited', 'left', 'removed'])
 export type P2pMemberStatus = z.infer<typeof P2pMemberStatusSchema>
 
+/** Client surface in a group roster: desktop app, mobile app, or web. */
+export const P2pClientDeviceKindSchema = z.enum(['desktop', 'mobile', 'web'])
+export type P2pClientDeviceKind = z.infer<typeof P2pClientDeviceKindSchema>
+
 export const P2pWorkspaceStatusSchema = z.enum(['active', 'archived', 'dissolved'])
 export type P2pWorkspaceStatus = z.infer<typeof P2pWorkspaceStatusSchema>
 

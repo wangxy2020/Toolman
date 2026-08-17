@@ -4,6 +4,7 @@ import {
   normalizeAgentSettings,
   resolveActiveAgent,
   resolveAgentSettings,
+  resolveClassroomTtsSettings,
 } from './agentSettingsResolve'
 
 describe('agentSettingsResolve', () => {
@@ -56,5 +57,15 @@ describe('agentSettingsResolve', () => {
       agentScope: 'agent',
     })
     expect(active?.id).toBe('a2')
+  })
+
+  it('uses the course auto-speak setting in classroom', () => {
+    const defaults = {
+      autoSpeak: true,
+      ttsEngine: 'edge' as const,
+      ttsVoice: 'zh-CN-XiaoxiaoNeural',
+    }
+    expect(resolveClassroomTtsSettings({ autoSpeak: false }, defaults).autoSpeak).toBe(false)
+    expect(resolveClassroomTtsSettings(null, defaults).autoSpeak).toBe(true)
   })
 })

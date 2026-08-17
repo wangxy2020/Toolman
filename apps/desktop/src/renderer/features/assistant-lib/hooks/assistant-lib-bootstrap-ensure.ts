@@ -158,6 +158,7 @@ function guideCourseMetadataPatch(metadata: Record<string, unknown> | null | und
     lessonPlan: previous?.lessonPlan?.trim() || formatSyllabusMarkdown(syllabus),
     autoSpeak: previous?.autoSpeak ?? true,
     ttsEngine: previous?.ttsEngine ?? 'edge',
+    modelId: previous?.modelId,
   })
 }
 

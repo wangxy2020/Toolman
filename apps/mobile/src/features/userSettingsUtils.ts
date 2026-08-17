@@ -50,7 +50,7 @@ export function formatSyncActionTitle(syncStatus: string, hostedSoftHint = false
 
 export function formatSyncActionSubtitle(hostedSoftHint = false): string {
   if (hostedSoftHint) {
-    return '托管网页无法直连电脑上的 HTTP Sync Hub。请完成设备配对后走点到点/加密投递（官方 Hub 明文镜像为可选）。'
+    return '托管网页无法直连电脑 HTTP Hub。请先完成设备配对走 WebRTC；不会配 TURN 时再填 HTTPS 桌面地址兜底。'
   }
   return '打开应用时同步一次，之后约每 3 分钟检查变化；也可点此立即同步'
 }

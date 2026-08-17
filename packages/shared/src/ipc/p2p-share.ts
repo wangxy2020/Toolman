@@ -147,6 +147,7 @@ export const P2pGroupChatListInputSchema = z.object({
 
 export const P2pGroupChatListOutputSchema = z.object({
   items: z.array(P2pGroupChatMessageSchema),
+  selfMemberId: z.string().min(1).optional(),
 })
 
 export const P2pGroupChatSendInputSchema = z.object({

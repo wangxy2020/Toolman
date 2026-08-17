@@ -6,7 +6,7 @@ import {
 } from './channel-cipher.js'
 import { toBufferSource } from './buffer-source.js'
 import { RemoteWorkspaceEventWireSchema } from './wire.js'
-import { P2pEventTypeSchema, P2pResourceTypeSchema } from './types.js'
+import { P2pEventTypeSchema, P2pResourceTypeSchema, P2pClientDeviceKindSchema } from './types.js'
 import { P2pGroupSyncMemberSchema } from '../sync/p2p-group.js'
 
 export const P2P_MAILBOX_CHANNEL = 'mailbox'
@@ -20,6 +20,7 @@ export const P2pMailboxSessionInputSchema = z.object({
   deviceId: z.string().min(1),
   identityId: z.string().min(1).optional(),
   displayName: z.string().min(1).optional(),
+  deviceKind: P2pClientDeviceKindSchema.optional(),
 })
 export type P2pMailboxSessionInput = z.infer<typeof P2pMailboxSessionInputSchema>
 

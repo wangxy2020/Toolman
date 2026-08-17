@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { applyMemberRoster } from '../sync/groupSyncMerge'
+import { applyMemberRoster, patchGroupOwnerFromRoster, sameGroupMemberRoster } from '../sync/groupSyncMerge'
 import { getMailboxTarget } from '../p2p/mailboxSync'
 import { subscribeMeshEvents } from '../p2p/meshEvents'
 import type { GroupMember, GroupSharedItem, GroupWorkspace } from '../storage/groupChat'
@@ -28,24 +28,21 @@ export function useGroupChatMesh(args: {
   useEffect(() => {
     return subscribeMeshEvents((event) => {
       if (event.type === 'roster') {
-        setMembersByGroup((prev) => ({
-          ...prev,
-          [event.workspaceId]: applyLivePresence(
-            applyMemberRoster(prev[event.workspaceId] ?? [], event.members, selfDeviceId),
+        setMembersByGroup((prev) => {
+          const current = prev[event.workspaceId] ?? []
+          const nextMembers = applyLivePresence(
+            applyMemberRoster(current, event.members, selfDeviceId),
             event.workspaceId,
-          ),
-        }))
+          )
+          if (sameGroupMemberRoster(current, nextMembers)) return prev
+          return { ...prev, [event.workspaceId]: nextMembers }
+        })
         if (event.ownerIdentityId || event.ownerDeviceId) {
           setGroups((prev) =>
-            prev.map((group) =>
-              group.id === event.workspaceId
-                ? {
-                    ...group,
-                    ownerIdentityId: event.ownerIdentityId ?? group.ownerIdentityId,
-                    ownerDeviceId: event.ownerDeviceId ?? group.ownerDeviceId,
-                  }
-                : group,
-            ),
+            patchGroupOwnerFromRoster(prev, event.workspaceId, {
+              identityId: event.ownerIdentityId,
+              deviceId: event.ownerDeviceId,
+            }),
           )
         }
         return
@@ -55,22 +52,21 @@ export function useGroupChatMesh(args: {
           const list = prev[event.workspaceId]
           if (!list) return prev
           const mailbox = getMailboxTarget(event.workspaceId)
-          return {
-            ...prev,
-            [event.workspaceId]: list.map((member) => {
-              if (member.deviceId === selfDeviceId) return { ...member, online: true }
-              if (event.type === 'presence' && member.deviceId === event.deviceId) {
-                return { ...member, online: event.online }
-              }
-              if (event.type === 'connected' && (member.role === 'owner' || member.deviceId === mailbox?.ownerDeviceId)) {
-                return { ...member, online: true }
-              }
-              if (event.type === 'disconnected' && (member.role === 'owner' || member.deviceId === mailbox?.ownerDeviceId)) {
-                return { ...member, online: false }
-              }
-              return member
-            }),
-          }
+          const next = list.map((member) => {
+            if (member.deviceId === selfDeviceId) return { ...member, online: true }
+            if (event.type === 'presence' && member.deviceId === event.deviceId) {
+              return { ...member, online: event.online }
+            }
+            if (event.type === 'connected' && member.deviceId === mailbox?.ownerDeviceId) {
+              return { ...member, online: true }
+            }
+            if (event.type === 'disconnected' && member.deviceId === mailbox?.ownerDeviceId) {
+              return { ...member, online: false }
+            }
+            return member
+          })
+          if (sameGroupMemberRoster(list, next)) return prev
+          return { ...prev, [event.workspaceId]: next }
         })
         return
       }

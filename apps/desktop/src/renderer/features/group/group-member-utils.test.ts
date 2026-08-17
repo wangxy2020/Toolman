@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { P2pMember } from '@toolman/shared'
 import {
   canManageTargetMember,
+  canManageTargetPerson,
   groupP2pMembersByPerson,
   selectCurrentMemberDevice,
   selfMemberIdsForChat,
@@ -25,7 +26,7 @@ describe('groupP2pMembersByPerson', () => {
         id: 'm-desk',
         identityId: 'id-a',
         deviceId: 'desk-a',
-        displayName: '用户A',
+        displayName: 'Alice',
         role: 'owner',
         online: true,
       }),
@@ -33,7 +34,7 @@ describe('groupP2pMembersByPerson', () => {
         id: 'm-phone',
         identityId: 'id-a',
         deviceId: 'phone-a',
-        displayName: '用户A',
+        displayName: 'Alice',
         role: 'owner',
         online: false,
         deviceKind: 'mobile',
@@ -46,6 +47,7 @@ describe('groupP2pMembersByPerson', () => {
       'm-desk',
       'm-phone',
     ])
+    expect(selfMemberIdsForChat(people[0]!.devices, null, null, 'desk-a')).toEqual(['m-desk'])
     expect(
       selectCurrentMemberDevice(people[0]!, { memberId: 'm-desk', deviceId: 'desk-a' }).deviceId,
     ).toBe('desk-a')
@@ -57,7 +59,7 @@ describe('groupP2pMembersByPerson', () => {
         id: 'm-a',
         identityId: 'id-a',
         deviceId: 'desk-a',
-        displayName: '用户A',
+        displayName: 'Alice',
         role: 'owner',
         online: true,
         deviceKind: 'desktop',
@@ -66,14 +68,14 @@ describe('groupP2pMembersByPerson', () => {
         id: 'm-b',
         identityId: 'id-b',
         deviceId: 'phone-b',
-        displayName: '用户B',
+        displayName: 'Bob',
         role: 'member',
         online: true,
         deviceKind: 'mobile',
       }),
     ])
     expect(people).toHaveLength(2)
-    expect(people.map((person) => person.displayName)).toEqual(['用户A', '用户B'])
+    expect(people.map((person) => person.displayName)).toEqual(['Alice', 'Bob'])
     const bothMarkedOwner = groupP2pMembersByPerson(
       [
         member({
@@ -106,6 +108,19 @@ describe('groupP2pMembersByPerson', () => {
     })
     expect(
       canManageTargetMember('owner', phone, { memberId: 'm-desk', identityId: 'id-a' }),
+    ).toBe(false)
+    const people = groupP2pMembersByPerson([
+      member({
+        id: 'm-desk',
+        identityId: 'id-a',
+        deviceId: 'desk-a',
+        displayName: 'Alice',
+        role: 'owner',
+      }),
+      phone,
+    ])
+    expect(
+      canManageTargetPerson('owner', people[0]!, { memberId: 'm-desk', identityId: 'id-a', deviceId: 'desk-a' }),
     ).toBe(false)
   })
 })

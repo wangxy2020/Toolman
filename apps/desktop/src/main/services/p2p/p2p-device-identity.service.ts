@@ -1,13 +1,21 @@
 import { eq } from 'drizzle-orm'
 import { app } from 'electron'
 import {
+  AuthBindingRepository,
   AuthSessionRepository,
+  P2pMemberRepository,
+  P2pWorkspaceRepository,
   createP2pDeviceIdentityRepository,
   identities,
 } from '@toolman/db'
-import type { P2pDeviceGetInfoOutput } from '@toolman/shared'
+import {
+  isUsableMemberIdentityId,
+  resolveDeviceSyncIdentityId,
+  type P2pDeviceGetInfoOutput,
+} from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getLocalIdentityId } from '../local-identity'
+import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 import { P2pBridge, type NativeDeviceInfo } from './p2p-bridge'
 
 let cachedDeviceInfo: P2pDeviceGetInfoOutput | null = null
@@ -22,6 +30,48 @@ function resolveIdentityIdForDevice(): string {
     return session.identityId ?? localIdentityId
   } catch {
     return localIdentityId
+  }
+}
+
+/**
+ * Account identity used to group this device with the phone/web of the same login.
+ * Prefers Authing `ag-…` / Firebase `fb-…` over the desktop guest UUID.
+ */
+export function getP2pPersonIdentityId(): string {
+  const fallback = resolveIdentityIdForDevice()
+  try {
+    const db = getDatabase()
+    const session = new AuthSessionRepository(db).ensureCurrent(getLocalIdentityId())
+    const identityId = session.identityId ?? fallback
+    const bindings = new AuthBindingRepository(db).listByIdentityId(identityId)
+    return resolveDeviceSyncIdentityId({
+      bindings: bindings.map((row) => ({ provider: row.provider, subjectId: row.subjectId })),
+      fallbackIdentityId: identityId,
+    })
+  } catch {
+    return fallback
+  }
+}
+
+function rebindLocalMemberPersonIdentity(deviceId: string, personIdentityId: string): void {
+  if (!isUsableMemberIdentityId(personIdentityId)) return
+  try {
+    ensureLinkedIdentityRow(personIdentityId)
+    const db = getDatabase()
+    const memberRepo = new P2pMemberRepository(db)
+    for (const row of memberRepo.listVisibleMembershipsByDevice(deviceId)) {
+      if (row.identityId !== personIdentityId) {
+        memberRepo.update({ id: row.id, identityId: personIdentityId })
+      }
+    }
+    const workspaceRepo = new P2pWorkspaceRepository(db)
+    for (const workspace of workspaceRepo.listByOwnerDevice(deviceId)) {
+      if (workspace.ownerIdentityId !== personIdentityId) {
+        workspaceRepo.update({ id: workspace.id, ownerIdentityId: personIdentityId })
+      }
+    }
+  } catch {
+    // Member table may be unavailable during early bootstrap / tests.
   }
 }
 
@@ -88,6 +138,7 @@ export function bindP2pDeviceToIdentity(identityId?: string): P2pDeviceGetInfoOu
   }
   syncDeviceIdentityRow(updated)
   cachedDeviceInfo = updated
+  rebindLocalMemberPersonIdentity(updated.deviceId, getP2pPersonIdentityId())
   return updated
 }
 
@@ -96,7 +147,9 @@ export function ensureP2pDeviceIdentity(): P2pDeviceGetInfoOutput {
 }
 
 export function refreshP2pDeviceIdentityBinding(): P2pDeviceGetInfoOutput {
-  return bindP2pDeviceToIdentity(resolveIdentityIdForDevice())
+  const info = bindP2pDeviceToIdentity(resolveIdentityIdForDevice())
+  rebindLocalMemberPersonIdentity(info.deviceId, getP2pPersonIdentityId())
+  return info
 }
 
 export function getP2pDeviceInfo(): P2pDeviceGetInfoOutput {

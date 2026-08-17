@@ -154,7 +154,7 @@ export async function pullAndApplySync(options: {
       throw (
         hubUnavailable ??
         new Error(
-          '已配对但未能拉取变更。请确认桌面 Sync Hub 对浏览器可达（本机预览/局域网），或桌面端已有待同步内容。',
+          '已配对但未能拉取变更。请确认桌面在线：localhost/局域网走 Sync Hub；托管网页需点到点 WebRTC 或 HTTPS 桌面地址（不依赖官方 Hub）。',
         )
       )
     }

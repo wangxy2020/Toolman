@@ -132,7 +132,8 @@ export async function updateDisplayName(input: {
   displayName: string
 }): Promise<AuthResult> {
   const name = input.displayName.trim()
-  if (!name) return { ok: false, message: '显示名不能为空' }
+  if (!name) return { ok: false, message: '显示名称不能为空' }
+  if (name.length > 10) return { ok: false, message: '显示名称不能超过 10 个字符' }
   const store = await loadAuthStore()
   const idx = store.accounts.findIndex((a) => a.identityId === input.identityId)
   if (idx < 0 || !store.session || store.session.identityId !== input.identityId) {

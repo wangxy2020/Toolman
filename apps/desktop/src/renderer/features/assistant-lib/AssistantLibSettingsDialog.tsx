@@ -1,5 +1,6 @@
 import {
   type KnowledgeBase,
+  type Provider,
   type Session,
 } from '@toolman/shared'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -25,6 +26,7 @@ type Props = {
   onStatusMessage?: (message: string) => void
   onDeleteSession?: (sessionId: string) => void | Promise<void>
   defaultModelId?: string | null
+  providers?: Provider[]
 }
 
 export function AssistantLibSettingsDialog({
@@ -39,6 +41,7 @@ export function AssistantLibSettingsDialog({
   onStatusMessage,
   onDeleteSession,
   defaultModelId,
+  providers,
 }: Props) {
   const {
     t,
@@ -70,6 +73,8 @@ export function AssistantLibSettingsDialog({
     handleDeleteCourse,
     handleSave,
     handleGenerateSyllabus,
+    modelOptions,
+    syllabusModelId,
   } = useAssistantLibSettingsDialog({
     workspaceId,
     sessions,
@@ -82,6 +87,7 @@ export function AssistantLibSettingsDialog({
     onStatusMessage,
     onDeleteSession,
     defaultModelId,
+    providers,
   })
 
   return (
@@ -167,6 +173,7 @@ export function AssistantLibSettingsDialog({
                       handlePresetChange,
                       handleBrowse,
                       handleClearTextbook,
+                      modelOptions,
                     }}
                   />
                 ) : null}
@@ -197,7 +204,7 @@ export function AssistantLibSettingsDialog({
                     editing={editingDoc && !syllabusGenerating}
                     busy={busy || syllabusGenerating}
                     headerActions={
-                      defaultModelId ? (
+                      syllabusModelId ? (
                         <button
                           type="button"
                           className="tm-kb-settings-inline-btn"

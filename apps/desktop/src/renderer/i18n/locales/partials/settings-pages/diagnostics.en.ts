@@ -107,21 +107,23 @@ export const settingsPagesDiagnosticsEn = {
         'Hub is loopback-only (127.0.0.1) — phones cannot reach it. On the same Wi‑Fi, enable “Allow LAN access” and paste the pairing token.',
       wanToggle: 'Optional plaintext WAN mirror (Community Hub)',
       wanToggleHint:
-        'Off by default. When on, mirrors same-account changelog to Community Hub (requires a deployed Hub). Prefer device pairing + LAN / peer sync.',
+        'Off by default and not the recommended path. When on, mirrors same-account changelog to Community Hub (requires a deployed Hub). Prefer device pairing / WebRTC.',
       transportHint:
-        'Transport order: LAN Sync Hub → peer WebRTC → encrypted personal mailbox → optional plaintext device_sync (off by default).',
-      devicePairing: 'Device pairing code',
+        'Recommended order: (1) LAN HTTP Sync Hub with pairing token (includes knowledge bodies) → (2) device pairing then peer WebRTC (signaling via mailbox / reachable desktop; WAN needs TURN) → (3) encrypted personal mailbox. An HTTPS desktop URL is only a fallback for users who will not configure TURN but still want hosted-web sync. No official Hub required.',
+      devicePairing: 'Device pairing code (recommended · WebRTC)',
       devicePairingHint:
-        'Copy and paste into mobile/web Account → Token & sync to pair the same account for peer sync (~30 min validity).',
+        'Primary path off-LAN. Copy into mobile/web Account → Token & sync to pair the same account. When both sides are online, sync uses WebRTC; signaling uses the personal mailbox. Valid ~30 min.',
       copyPairing: 'Copy pairing code',
       hubToken: 'LAN pairing token',
       hubTokenHint:
-        'Full knowledge bodies and vectors are LAN-only. Paste this token under mobile Account → Token & sync. Do not send it to Community Hub or chat.',
+        'For same Wi‑Fi / localhost. Full knowledge bodies and vectors are LAN-only. Paste under mobile Account → Token & sync. Do not send it to Community Hub or chat.',
       copyToken: 'Copy token',
       copiedToken: 'Copied',
       hub: 'Hub status',
       baseUrl: 'Local URL',
-      reachable: 'Reachable URLs',
+      reachable: 'Reachable URLs (LAN / Tailscale)',
+      httpsFallbackHint:
+        'Fallback (optional): if WAN WebRTC/TURN is not ready and you still need hosted HTTPS web sync, expose one of the URLs above as https://… (e.g. Tailscale Serve) and paste it under web Account → Token & sync → HTTPS desktop URL. This exposes Sync Hub; prefer the pairing code and hole-punching first.',
     },
     p2p: {
       title: 'P2P groups',
@@ -130,6 +132,8 @@ export const settingsPagesDiagnosticsEn = {
       displayName: 'Display name',
       lanDiscovery: 'LAN discovery',
       iceTurn: 'ICE / TURN',
+      iceTurnHint:
+        'Personal device sync and groups share ICE/TURN. When TURN is ready, paired web/phone uses WebRTC. Without TURN, hosted web can fall back to an HTTPS desktop URL.',
       wanReady: 'WAN ready',
       wanLanConnections: 'WAN / LAN connections',
       wanLanCount: '{{wan}} WAN · {{lan}} LAN',

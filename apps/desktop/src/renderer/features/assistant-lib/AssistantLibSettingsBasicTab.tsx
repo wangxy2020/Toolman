@@ -23,6 +23,7 @@ export function AssistantLibSettingsBasicTab({
     | 'handlePresetChange'
     | 'handleBrowse'
     | 'handleClearTextbook'
+    | 'modelOptions'
   >
 }) {
   const {
@@ -38,6 +39,7 @@ export function AssistantLibSettingsBasicTab({
     handlePresetChange,
     handleBrowse,
     handleClearTextbook,
+    modelOptions,
   } = state
 
   if (!draft) return null
@@ -61,6 +63,32 @@ export function AssistantLibSettingsBasicTab({
                         onChange={(event) => updateDraft({ courseName: event.target.value })}
                         disabled={isDefaultClassroom}
                       />
+                    </div>
+
+                    <div className="tm-kb-settings-row">
+                      <div className="tm-alib-settings-label-group">
+                        <label className="tm-kb-settings-label" htmlFor="alib-settings-model">
+                          {t('assistantLibPage.courseModel')}
+                        </label>
+                        <AssistantSettingsHelpHint title={t('assistantLibPage.courseModelHint')} />
+                      </div>
+                      {modelOptions.length === 0 ? (
+                        <p className="tm-kb-settings-hint">{t('assistantLibPage.courseModelEmpty')}</p>
+                      ) : (
+                        <select
+                          id="alib-settings-model"
+                          className="tm-kb-settings-input"
+                          value={draft.modelId}
+                          onChange={(event) => updateDraft({ modelId: event.target.value })}
+                        >
+                          <option value="">{t('assistantLibPage.courseModelDefault')}</option>
+                          {modelOptions.map((opt) => (
+                            <option key={opt.modelId} value={opt.modelId}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                     <div className="tm-kb-settings-row tm-kb-settings-row--top">

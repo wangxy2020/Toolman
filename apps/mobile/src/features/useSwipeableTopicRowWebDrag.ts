@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from 'react'
+import { useEffect, type MutableRefObject } from 'react'
 import { Platform, type Animated } from 'react-native'
 import { isHorizontalSwipe } from './swipeable-row-gesture'
 

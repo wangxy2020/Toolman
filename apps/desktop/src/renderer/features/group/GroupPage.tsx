@@ -70,7 +70,7 @@ export function GroupPage(props: GroupPageProps) {
             ownerDeviceId={workspace.ownerDeviceId}
             selfMemberId={detail.selfMember?.id ?? null}
             selfIdentityId={detail.selfMember?.identityId ?? null}
-            selfDeviceId={detail.selfMember?.deviceId ?? null}
+            selfDeviceId={detail.selfDeviceId ?? detail.selfMember?.deviceId ?? null}
             selfMemberRole={detail.selfMember?.role ?? null}
             canManageMembers={detail.canManageMembers}
             loading={detail.loading}

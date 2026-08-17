@@ -58,7 +58,6 @@ export function useMobileAppRootPersistence(input: {
     module,
     modulePrefs,
     setSessions,
-    setAgents,
     setActiveSessionByScope,
     setModulePrefs,
     setDesktopHostsOnline,

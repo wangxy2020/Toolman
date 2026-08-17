@@ -71,6 +71,15 @@ export function canManageTargetMember(
   return true
 }
 
+export function canManageTargetPerson(
+  actorRole: P2pMemberRole | undefined,
+  person: GroupedP2pPerson,
+  self: PersonSelfRef,
+): boolean {
+  if (person.devices.some((device) => isSamePerson(device, self))) return false
+  return canManageTargetMember(actorRole, { ...person.primary, role: person.role }, self)
+}
+
 export function getAssignableRoles(
   actorRole: P2pMemberRole | undefined,
   target: P2pMember,
@@ -89,9 +98,11 @@ export function selfMemberIdsForChat(
   members: P2pMember[],
   selfMemberId: string | null,
   selfIdentityId?: string | null,
+  selfDeviceId?: string | null,
 ): string[] {
   return collectPersonMemberIds(members, {
     memberId: selfMemberId,
     identityId: selfIdentityId,
+    deviceId: selfDeviceId,
   })
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isPlaceholderMemberName, isSamePerson } from '@toolman/shared'
 import {
   saveGroupChatStore,
   type GroupActivity,
@@ -10,6 +11,7 @@ import {
 } from '../storage/groupChat'
 import { getCurrentDataIdentity } from '../storage/identityScopeCore'
 import { setGroupSyncLocalReader } from '../sync/groupSyncBridge'
+import { localP2pClientDeviceKind } from '../p2p/deviceKind'
 import { DEFAULT_GROUP_ACTION, type GroupSidebarAction } from './groupSidebar'
 import { newId } from './groupPaneUtils'
 import type { GroupChatSelf } from './groupChatContext.types'
@@ -57,6 +59,28 @@ export function useGroupChatState(self: GroupChatSelf, authIdentityId: string | 
     authIdentityId,
   ])
 
+  useEffect(() => {
+    const name = selfName.trim()
+    if (!ready || !name || isPlaceholderMemberName(name)) return
+    setMembersByGroup((prev) => {
+      let changed = false
+      const next: Record<string, GroupMember[]> = {}
+      for (const [groupId, members] of Object.entries(prev)) {
+        next[groupId] = members.map((member) => {
+          if (
+            !isSamePerson(member, { identityId: selfIdentityId, deviceId: selfDeviceId }) ||
+            member.displayName === name
+          ) {
+            return member
+          }
+          changed = true
+          return { ...member, displayName: name }
+        })
+      }
+      return changed ? next : prev
+    })
+  }, [ready, selfDeviceId, selfIdentityId, selfName])
+
   const appendActivity = useCallback(
     (groupId: string, message: string, resourceLabel: string, sourceDeviceId?: string) => {
       setActivitiesByGroup((prev) => {
@@ -96,7 +120,7 @@ export function useGroupChatState(self: GroupChatSelf, authIdentityId: string | 
             role: 'owner',
             deviceId: selfDeviceId,
             identityId: selfIdentityId,
-            deviceKind: 'mobile',
+            deviceKind: localP2pClientDeviceKind(),
             online: true,
             status: 'active',
           },
@@ -155,7 +179,7 @@ export function useGroupChatState(self: GroupChatSelf, authIdentityId: string | 
           role: 'owner',
           deviceId: selfDeviceId,
           identityId: selfIdentityId,
-          deviceKind: 'mobile',
+          deviceKind: localP2pClientDeviceKind(),
           online: true,
           status: 'active',
         },

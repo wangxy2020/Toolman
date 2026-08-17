@@ -14,7 +14,10 @@ import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 
-/** Deposit sealed SyncChange batches into the personal mailbox for paired devices. */
+/**
+ * Deposit sealed SyncChange batches into the personal mailbox for paired devices.
+ * Backed by the local Sync Hub mailbox only (P2P / LAN). No official Hub dependency.
+ */
 export async function depositPersonalSyncChanges(changes: SyncChange[]): Promise<void> {
   if (changes.length === 0) return
   const paired = listPairedPersonalDevices()

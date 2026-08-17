@@ -18,6 +18,7 @@ import {
 import { colors } from '../theme'
 import { CLASSROOM_PRESET_DESCS, CLASSROOM_PRESET_LABELS } from './classroomSidebar'
 import { ClassroomTextbookKbPicker } from './ClassroomTextbookKbPicker'
+import { formatClassroomKbSelectionLabel } from './classroomKbDisplay'
 
 export type ClassroomCreateCourseInput = {
   courseName: string
@@ -74,7 +75,7 @@ export function ClassroomCreateCourseModal(props: Props) {
         courseName: name,
         presetId,
         kbIds: selectedKb ? [selectedKb.id] : [],
-        kbLabel: selectedKb?.name,
+        kbLabel: selectedKb ? formatClassroomKbSelectionLabel(selectedKb) : undefined,
         generateSyllabus: Boolean(selectedKb) && generateSyllabus,
       })
     } catch (err) {
@@ -156,7 +157,7 @@ export function ClassroomCreateCourseModal(props: Props) {
                   <View style={styles.pathBox}>
                     <Text style={styles.pathText} numberOfLines={2}>
                       {selectedKb
-                        ? `${selectedKb.name}（${selectedKb.documentCount} 篇）`
+                        ? formatClassroomKbSelectionLabel(selectedKb)
                         : '未选择教材'}
                     </Text>
                   </View>

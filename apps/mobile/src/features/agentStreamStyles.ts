@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors } from '../theme'
-import { STREAM_PAD_SIDE } from './agentPaneUtils'
+import { STREAM_AVATAR_INDENT, STREAM_PAD_SIDE } from './agentPaneUtils'
 
 export const agentStreamStyles = StyleSheet.create({
   streamScroll: {
@@ -18,20 +18,45 @@ export const agentStreamStyles = StyleSheet.create({
     alignSelf: 'stretch',
     minWidth: 0,
   },
-  msgBlockUser: {
-    alignSelf: 'stretch',
-    alignItems: 'flex-start',
-  },
   msgHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
     marginBottom: 8,
     minWidth: 0,
   },
-  msgHeadUser: {
-    alignItems: 'flex-start',
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarUser: {
+    backgroundColor: '#e8f0fe',
+  },
+  avatarAssistant: {
+    backgroundColor: colors.accentSoft,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  avatarTextUser: {
+    color: '#1a73e8',
+  },
+  avatarTextAssistant: {
+    color: colors.accent,
+  },
+  msgMeta: {
+    minWidth: 0,
+    flex: 1,
   },
   msgName: {
     fontSize: 14,
-    fontWeight: '400',
+    fontWeight: '600',
     color: colors.text,
     lineHeight: 18,
   },
@@ -46,6 +71,8 @@ export const agentStreamStyles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
     alignSelf: 'stretch',
+    paddingLeft: STREAM_AVATAR_INDENT,
+    minWidth: 0,
   },
   msgRowUser: {
     alignSelf: 'stretch',
@@ -81,9 +108,12 @@ export const agentStreamStyles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 8,
+    maxWidth: '100%',
   },
   bubbleUser: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minWidth: 0,
     backgroundColor: colors.accentSoft,
   },
@@ -92,7 +122,9 @@ export const agentStreamStyles = StyleSheet.create({
     borderColor: colors.accent,
   },
   bubbleAssistant: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,

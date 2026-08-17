@@ -27,6 +27,27 @@ vi.mock('@toolman/db', () => ({
       return mockEnsureCurrent()
     }
   },
+  AuthBindingRepository: class {
+    listByIdentityId() {
+      return []
+    }
+  },
+  P2pMemberRepository: class {
+    listVisibleMembershipsByDevice() {
+      return []
+    }
+    update() {
+      return null
+    }
+  },
+  P2pWorkspaceRepository: class {
+    listByOwnerDevice() {
+      return []
+    }
+    update() {
+      return null
+    }
+  },
   createP2pDeviceIdentityRepository: () => ({
     upsert: mockUpsert,
   }),
@@ -35,6 +56,10 @@ vi.mock('@toolman/db', () => ({
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn(),
+}))
+
+vi.mock('./p2p-linked-identity.service', () => ({
+  ensureLinkedIdentityRow: vi.fn(),
 }))
 
 vi.mock('./p2p-bridge', () => ({

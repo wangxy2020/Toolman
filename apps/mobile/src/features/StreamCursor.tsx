@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Animated, Easing, StyleSheet } from 'react-native'
 import { colors } from '../theme'
 
 /** Blinking bar while assistant tokens are streaming (desktop `.tm-stream-cursor`). */

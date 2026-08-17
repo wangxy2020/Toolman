@@ -67,7 +67,7 @@ export async function depositCiphertextToCommunityMailbox(input: {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body,
       })
-      if (res.ok) return
+      if (res.ok) continue
       logStructured(
         'p2p',
         'warn',

@@ -22,6 +22,7 @@ export {
   touchMemberLastSeen,
   listWorkspaceMemberRoster,
   findIdentitySibling,
+  findSamePersonSibling,
   membershipFromIdentitySibling,
   hasWorkspaceMemberCapacity,
 } from './p2p-member-shared-membership'

@@ -25,6 +25,22 @@ export const DevicePairingOfferSchema = z.object({
   grant: z.string().min(16),
   /** Optional LAN Sync Hub URL hint (may be unreachable from hosted web). */
   hubBaseUrlHint: z.string().optional(),
+  /**
+   * Desktop-advertised Sync Hub URLs for P2P mailbox / signaling
+   * (loopback, LAN, Tailscale). Hosted HTTPS may only use https:// entries.
+   */
+  reachableHubUrls: z.array(z.string().min(1)).max(16).optional(),
+  /** ICE servers from desktop (STUN/TURN) for personal WebRTC sync. */
+  iceServers: z
+    .array(
+      z.object({
+        urls: z.union([z.string(), z.array(z.string())]),
+        username: z.string().optional(),
+        credential: z.string().optional(),
+      }),
+    )
+    .max(16)
+    .optional(),
   createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
 })
@@ -38,6 +54,17 @@ export const DevicePairingRecordSchema = z.object({
   workspaceKeyB64: z.string().min(16),
   grant: z.string().min(16),
   hubBaseUrlHint: z.string().optional(),
+  reachableHubUrls: z.array(z.string().min(1)).max(16).optional(),
+  iceServers: z
+    .array(
+      z.object({
+        urls: z.union([z.string(), z.array(z.string())]),
+        username: z.string().optional(),
+        credential: z.string().optional(),
+      }),
+    )
+    .max(16)
+    .optional(),
   pairedAt: z.number().int().nonnegative(),
   role: z.enum(['mobile', 'web', 'desktop']),
 })
@@ -124,6 +151,8 @@ export function pairingRecordFromOffer(input: {
     workspaceKeyB64: offer.workspaceKeyB64,
     grant: offer.grant,
     hubBaseUrlHint: offer.hubBaseUrlHint,
+    reachableHubUrls: offer.reachableHubUrls,
+    iceServers: offer.iceServers,
     pairedAt: Date.now(),
     role,
   })
