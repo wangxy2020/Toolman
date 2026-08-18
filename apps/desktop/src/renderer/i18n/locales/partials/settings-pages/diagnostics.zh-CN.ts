@@ -100,7 +100,7 @@ export const settingsPagesDiagnosticsZhCN = {
       lanToggleHint:
         '默认关闭。开启后监听 0.0.0.0，真机可用下方局域网 / Tailscale 地址连接，仍需配对令牌。',
       loopbackOnly:
-        '当前仅本机回环（127.0.0.1）。手机请开启「允许局域网访问」并填写配对码；本机网页预览可直接同步。',
+        '当前仅本机回环（127.0.0.1）。用域名打开网页时请允许浏览器访问本地网络并填写配对码；本机 localhost 预览可直接同步。手机请开启「允许局域网访问」。',
       wanToggle: '跨网明文镜像（可选 · 官方社区 Hub）',
       wanToggleHint:
         '默认关闭，且不是推荐路径。开启后将同账号变更明文镜像到社区 Hub（需已部署 Hub）。',

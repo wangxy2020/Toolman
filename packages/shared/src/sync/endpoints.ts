@@ -219,8 +219,33 @@ export function listSyncBaseUrlCandidates(options?: {
     ...packagerLan,
     communityLan,
     ...packagerLoopback,
-    includeLoopback ? DEFAULT_LOCAL_SYNC_BASE_URL : null,
     includeLoopback ? `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}` : null,
+    includeLoopback ? DEFAULT_LOCAL_SYNC_BASE_URL : null,
     wanCommunityHub,
+  ])
+}
+
+/**
+ * Desktop Sync Hub URLs that can redeem the 4-character pairing code.
+ * Never Community Hub — that catalog cannot complete device pairing.
+ * Prefer `localhost` over `127.0.0.1` so Safari may treat the request as
+ * potentially-trustworthy mixed content from a hosted HTTPS page.
+ */
+export function listPairingRedeemBaseUrlCandidates(options?: {
+  configuredSyncBaseUrl?: string | null
+}): string[] {
+  const configured = options?.configuredSyncBaseUrl
+    ? normalizeSyncBaseUrl(options.configuredSyncBaseUrl)
+    : ''
+  const host = configured ? hostnameOfBaseUrl(configured) : ''
+  const keepConfigured =
+    Boolean(configured) &&
+    !isOfficialCommunityHubHost(host) &&
+    (/^https:/i.test(configured) || isPrivateOrLoopbackHostname(host))
+
+  return uniqueUrls([
+    keepConfigured ? configured : null,
+    `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}`,
+    DEFAULT_LOCAL_SYNC_BASE_URL,
   ])
 }

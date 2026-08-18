@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
+import { SHORT_PAIRING_CODE_LENGTH } from '@toolman/shared'
 import type { MobileAuthSession } from '../auth/types'
 import { useI18n } from '../i18n'
 import {
@@ -252,7 +253,9 @@ export function LoggedInAccountPanel(props: {
           value={pairingCode}
           onChangeText={(next) => setPairingCode(next.toUpperCase())}
           placeholder={t('user.devicePairingPlaceholder')}
-          maxLength={8}
+          maxLength={SHORT_PAIRING_CODE_LENGTH}
+          secureTextEntry={devicePaired && pairingCode.length > 0}
+          autoComplete="off"
         />
         <PrimaryButton
           label={busy ? '…' : t('user.devicePairingRedeem')}

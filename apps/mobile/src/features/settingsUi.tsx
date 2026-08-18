@@ -45,6 +45,7 @@ export function Field(props: {
   editable?: boolean
   maxLength?: number
   keyboardType?: 'default' | 'numeric' | 'number-pad' | 'decimal-pad' | 'url'
+  autoComplete?: 'off' | 'password' | 'one-time-code' | 'username'
   right?: ReactNode
 }) {
   const editable = props.editable !== false
@@ -66,6 +67,7 @@ export function Field(props: {
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}
+          autoComplete={props.autoComplete ?? 'off'}
           editable={editable}
           keyboardType={props.keyboardType}
           maxLength={props.maxLength}

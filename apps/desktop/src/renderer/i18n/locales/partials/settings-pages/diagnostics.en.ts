@@ -104,7 +104,7 @@ export const settingsPagesDiagnosticsEn = {
       lanToggleHint:
         'Off by default. When on, the hub binds 0.0.0.0 so a phone can use the LAN/Tailscale URL below. The pairing token is still required.',
       loopbackOnly:
-        'Hub is loopback-only (127.0.0.1). Phones need “Allow LAN access” and the pairing code. Same-computer web preview can sync without it.',
+        'Hub is loopback-only (127.0.0.1). On the hosted site, allow the browser local-network permission and enter the pairing code. Same-computer localhost preview can sync without it. Phones still need “Allow LAN access”.',
       wanToggle: 'Optional plaintext WAN mirror (Community Hub)',
       wanToggleHint:
         'Off by default and not the recommended path. When on, mirrors same-account changelog to Community Hub (requires a deployed Hub).',

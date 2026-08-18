@@ -71,7 +71,7 @@ const zhCN: Dict = {
   'diagnostics.hub': 'Sync Hub',
   'diagnostics.hubUrl': '当前地址',
   'diagnostics.hubHint':
-    '地址由系统自动发现（端口 17890）。本机预览一般无需配对码；真机请开桌面局域网访问并填写 4 位配对码。',
+    '地址由系统自动发现（端口 17890）。本机预览一般无需配对码；用域名打开时请允许浏览器访问本地网络。真机请开桌面局域网访问并填写 4 位配对码。',
   'user.tokenSync': '令牌同步',
   'user.devicePairing': '配对码',
   'user.devicePairingPlaceholder': '桌面端 4 位配对码',
@@ -188,7 +188,7 @@ const en: Dict = {
   'diagnostics.hub': 'Sync Hub',
   'diagnostics.hubUrl': 'Current URL',
   'diagnostics.hubHint':
-    'Discovered automatically (port 17890). Same-computer preview usually does not need a pairing code. On a phone, enable LAN access and enter the 4-character code.',
+    'Discovered automatically (port 17890). Same-computer preview usually does not need a pairing code. On the hosted site, allow the browser local-network permission. On a phone, enable LAN access and enter the 4-character code.',
   'user.tokenSync': 'Token & sync',
   'user.devicePairing': 'Pairing code',
   'user.devicePairingPlaceholder': 'Desktop 4-character code',

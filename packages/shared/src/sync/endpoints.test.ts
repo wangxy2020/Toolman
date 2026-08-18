@@ -11,6 +11,7 @@ import {
   isSyncHubHostsPayload,
   syncHubHealthIdentityId,
   listCommunityHubProbeCandidates,
+  listPairingRedeemBaseUrlCandidates,
   listSyncBaseUrlCandidates,
   siblingHttpOrigin,
 } from './endpoints.js'
@@ -58,8 +59,8 @@ describe('sync endpoint candidates', () => {
       listSyncBaseUrlCandidates({ communityHubBaseUrl: 'http://100.64.1.8:3721' }),
     ).toEqual([
       'http://100.64.1.8:17890',
-      DEFAULT_LOCAL_SYNC_BASE_URL,
       'http://localhost:17890',
+      DEFAULT_LOCAL_SYNC_BASE_URL,
     ])
   })
 
@@ -71,8 +72,8 @@ describe('sync endpoint candidates', () => {
       }),
     ).toEqual([
       'http://192.168.1.8:17890',
-      DEFAULT_LOCAL_SYNC_BASE_URL,
       'http://localhost:17890',
+      DEFAULT_LOCAL_SYNC_BASE_URL,
     ])
   })
 
@@ -107,6 +108,23 @@ describe('sync endpoint candidates', () => {
         includeLoopback: false,
       }),
     ).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
+  })
+
+  it('redeems pairing only against the desktop Sync Hub, never Community Hub', () => {
+    expect(listPairingRedeemBaseUrlCandidates()).toEqual([
+      'http://localhost:17890',
+      DEFAULT_LOCAL_SYNC_BASE_URL,
+    ])
+    expect(
+      listPairingRedeemBaseUrlCandidates({
+        configuredSyncBaseUrl: 'https://hub.toolman.app',
+      }),
+    ).toEqual(['http://localhost:17890', DEFAULT_LOCAL_SYNC_BASE_URL])
+    expect(
+      listPairingRedeemBaseUrlCandidates({
+        configuredSyncBaseUrl: 'https://desktop.ts.net',
+      }),
+    ).toEqual(['https://desktop.ts.net', 'http://localhost:17890', DEFAULT_LOCAL_SYNC_BASE_URL])
   })
 
   it('accepts Sync Hub health and hosts JSON, not Community Hub envelopes', () => {

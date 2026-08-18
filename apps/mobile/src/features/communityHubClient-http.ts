@@ -9,6 +9,7 @@ import {
   isOfficialCommunityHubHost,
 } from '@toolman/shared'
 import { isHostedWebPage, pageHostname } from '../sync/desktopDevHost'
+import { boundFetch as hubFetch, localNetworkRequestTimeoutMs } from '../sync/localNetworkFetch'
 
 const COMMUNITY_HUB_PROXY_PREFIX = '/api/community-hub'
 
@@ -44,9 +45,6 @@ function hubNetworkError(error: unknown): Error {
   }
   return error instanceof Error ? error : new Error(message)
 }
-
-/** Bind fetch to the global object — Expo Web throws Illegal invocation on unbound Window.fetch. */
-const hubFetch: typeof fetch = (input, init) => globalThis.fetch.bind(globalThis)(input, init)
 
 function toCamelKey(key: string): string {
   return key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
@@ -172,7 +170,7 @@ export async function probeCommunityHub(baseUrl: string): Promise<boolean> {
   if (!base) return false
   const probe = async (path: string): Promise<boolean> => {
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 2500)
+    const timer = setTimeout(() => ctrl.abort(), localNetworkRequestTimeoutMs(communityHubRequestUrl(base, path)))
     try {
       const res = await hubFetch(communityHubRequestUrl(base, path), {
         method: 'GET',

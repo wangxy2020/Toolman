@@ -15,6 +15,7 @@ import { loadIdentity } from '../storage/secure'
 import { resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { loadModulePrefs } from '../settings/prefs'
 import { isHostedWebPage, listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from './desktopDevHost'
+import { boundFetch, localNetworkRequestTimeoutMs } from './localNetworkFetch'
 
 let cachedSyncBaseUrl: string | null = null
 
@@ -25,9 +26,6 @@ export type KnowledgeMetaItem = {
   documentCount: number
   updatedAt: number
 }
-
-/** Bind fetch to the global object — Expo Web throws Illegal invocation on unbound Window.fetch. */
-const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
 
 export async function loadSyncIdentityId(): Promise<string | null> {
   return getCurrentDataIdentity() ?? (await loadIdentity())?.identityId ?? null
@@ -120,6 +118,7 @@ async function probeJson(url: string, signal: AbortSignal): Promise<unknown | nu
     method: 'GET',
     headers: { Accept: 'application/json' },
     signal,
+    mode: 'cors',
   })
   if (!res.ok) {
     // Hosted-web proxy returns 502 when upstream Hub DNS/deploy is down.
@@ -171,7 +170,10 @@ async function classifySyncBaseUrl(
 ): Promise<SyncHubProbeKind> {
   const origin = rewriteSyncBaseUrlForClient(baseUrl)
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 2500)
+  const timer = setTimeout(
+    () => ctrl.abort(),
+    localNetworkRequestTimeoutMs(`${origin}/health`),
+  )
   try {
     const health =
       (await probeJson(`${origin}/health`, ctrl.signal)) ??
@@ -223,7 +225,7 @@ function unreachableSyncHubMessage(
   }
   const list = tried.length > 0 ? tried.join('、') : DEFAULT_LOCAL_SYNC_BASE_URL
   const hostedHint =
-    '请先启动本机桌面端。手机请开局域网访问并填写 4 位配对码。'
+    '请先启动本机桌面端，并在浏览器弹出的本地网络权限中选择允许（建议 Chrome / Edge）。手机请开局域网访问并填写 4 位配对码。'
   const localHint =
     '请确认桌面端已开启同步。本机预览一般无需配对码；手机请开局域网访问并填写配对码。'
   return `无法连接桌面 Sync Hub（${list}）。${isHostedWebPage() ? hostedHint : localHint}`

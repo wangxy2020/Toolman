@@ -69,18 +69,24 @@ export function useLoggedInAccount(props: {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [pairingCode, setPairingCode] = useState('')
+  const storedPairingCode = isShortPairingCode(modulePrefs.sync.hubToken)
+    ? normalizePairingCode(modulePrefs.sync.hubToken)
+    : ''
+  const [pairingCode, setPairingCode] = useState(storedPairingCode)
   const [pairingStatus, setPairingStatus] = useState('未配对桌面设备')
-  const [devicePaired, setDevicePaired] = useState(false)
+  const [devicePaired, setDevicePaired] = useState(Boolean(storedPairingCode))
 
   useSmsCooldown(smsCooldown, setSmsCooldown)
 
   useEffect(() => {
+    const token = modulePrefs.sync.hubToken
+    const short = isShortPairingCode(token) ? normalizePairingCode(token) : ''
+    if (short) setPairingCode(short)
     void loadDevicePairing().then((record) => {
       setPairingStatus(formatPairingStatus(record))
-      setDevicePaired(Boolean(record))
+      setDevicePaired(Boolean(record) || Boolean(short))
     })
-  }, [auth.identityId])
+  }, [auth.identityId, modulePrefs.sync.hubToken])
 
   const redeemPairing = async () => {
     setBusy(true)
@@ -93,10 +99,13 @@ export function useLoggedInAccount(props: {
         localDeviceId: deviceId,
         role,
       })
-      setHubToken(isShortPairingCode(pairingCode) ? normalizePairingCode(pairingCode) : pairingCode.trim())
+      const code = isShortPairingCode(pairingCode)
+        ? normalizePairingCode(pairingCode)
+        : pairingCode.trim()
+      setHubToken(code)
       setPairingStatus(formatPairingStatus(record))
       setDevicePaired(true)
-      setPairingCode('')
+      setPairingCode(isShortPairingCode(code) ? code : pairingCode)
       setMessage('设备配对成功')
     } catch (error) {
       setMessage(toErrorMessage(error))
@@ -107,6 +116,8 @@ export function useLoggedInAccount(props: {
 
   const clearPairing = async () => {
     await clearDevicePairing()
+    setHubToken('')
+    resetMobileSyncBaseUrlCache()
     setPairingStatus(formatPairingStatus(null))
     setDevicePaired(false)
     setPairingCode('')

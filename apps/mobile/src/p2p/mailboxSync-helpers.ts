@@ -6,6 +6,7 @@ import {
   isPrivateOrLoopbackHostname,
 } from '@toolman/shared'
 import { scopedStorageKey } from '../storage/identityScopeCore'
+import { boundFetch } from '../sync/localNetworkFetch'
 
 export const MAILBOX_SEQ_KEY = 'toolman.mobile.p2p.mailboxCursor.v1'
 export const MAILBOX_PULL_LIMIT = 200
@@ -50,8 +51,6 @@ export function rememberMailboxSeq(workspaceId: string, hubUrl: string, seq: num
     // memory cursor is enough for this session
   }
 }
-
-export const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
 
 export type MailboxSyncTarget = {
   hubUrl: string

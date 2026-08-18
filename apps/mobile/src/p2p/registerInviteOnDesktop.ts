@@ -5,6 +5,7 @@ import {
 } from '@toolman/shared'
 import { ToolmanSyncClient } from '@toolman/sync-client'
 import { getMobileSyncBaseUrl } from '../sync/mobileSync'
+import { boundFetch, localNetworkRequestTimeoutMs } from '../sync/localNetworkFetch'
 import type { InviteSelf } from './applyInvite'
 import type { PendingP2pInvite } from './inviteParse'
 import { loadOrCreateDeviceKeys } from './deviceKeys'
@@ -17,8 +18,6 @@ export type RegisterInviteResult =
   | { ok: true; data: P2pJoinRegisterOutput; hubUrl: string }
   | { ok: false; message: string }
 
-const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
-
 function isUsableOwnerHub(baseUrl: string): boolean {
   return !isOfficialCommunityHubHost(hostnameOfBaseUrl(baseUrl))
 }
@@ -26,7 +25,10 @@ function isUsableOwnerHub(baseUrl: string): boolean {
 async function probeHub(baseUrl: string): Promise<boolean> {
   const origin = baseUrl.replace(/\/+$/, '')
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 2500)
+  const timer = setTimeout(
+    () => ctrl.abort(),
+    localNetworkRequestTimeoutMs(`${origin}/health`),
+  )
   try {
     const res = await boundFetch(`${origin}/health`, {
       method: 'GET',

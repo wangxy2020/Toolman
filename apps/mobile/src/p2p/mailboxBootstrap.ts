@@ -4,10 +4,9 @@ import { applyAgentShareListings } from './agentShareListing'
 import { emitMeshEvent } from './meshEvents'
 import { ToolmanSyncClient } from '@toolman/sync-client'
 import { getMobileSyncBaseUrl, loadSyncHubToken } from '../sync/mobileSync'
+import { boundFetch } from '../sync/localNetworkFetch'
 import { getMailboxTarget, resumePersistedMailboxSync, startMailboxSync } from './mailboxSync'
 import { localP2pClientDeviceKind } from './deviceKind'
-
-const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
 
 /** One session refresh per workspace per app session — enough to stamp deviceKind. */
 const refreshedMailboxSessions = new Set<string>()

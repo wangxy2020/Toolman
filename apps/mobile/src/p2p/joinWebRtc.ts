@@ -13,6 +13,7 @@ import {
   type P2pIceServer,
 } from '@toolman/shared'
 import { ToolmanSyncClient } from '@toolman/sync-client'
+import { boundFetch } from '../sync/localNetworkFetch'
 import { messageToBytes, toArrayBuffer } from './bytes'
 import { startMeshHandshake } from './groupChatMesh'
 import {
@@ -25,8 +26,6 @@ import {
 
 const ICE_GATHER_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 30_000
-
-const boundFetch: typeof fetch = (input, init) => globalThis.fetch.call(globalThis, input, init)
 
 export function canJoinViaWebRtc(): boolean {
   return typeof globalThis.RTCPeerConnection === 'function'
