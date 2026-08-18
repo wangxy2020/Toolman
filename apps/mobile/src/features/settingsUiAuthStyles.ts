@@ -9,7 +9,7 @@ export const settingsUiAuthStyles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     minHeight: 42,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.inputBg,
     color: colors.text,
     fontSize: 14,
   },

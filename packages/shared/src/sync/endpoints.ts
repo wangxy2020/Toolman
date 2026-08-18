@@ -145,7 +145,7 @@ export function siblingHttpOrigin(baseUrl: string, port: number): string | null 
   }
 }
 
-/** Community Hub URLs to probe: user setting, Expo/LAN desktop host, local sidecar, then official Hub. */
+/** Community Hub URLs to probe: user setting, Expo/LAN desktop host, then local sidecar. Official Hub is opt-in. */
 export function listCommunityHubProbeCandidates(
   configured?: string | null,
   options?: {
@@ -167,7 +167,6 @@ export function listCommunityHubProbeCandidates(
     ...fromPackager,
     includeLoopback ? `http://localhost:${DEFAULT_LOCAL_COMMUNITY_HUB_PORT}` : null,
     includeLoopback ? DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL : null,
-    OFFICIAL_TOOLMAN_HUB_URL,
   ])
 }
 

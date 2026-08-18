@@ -45,15 +45,15 @@ export function useProjectScheduleGanttPanel({
     projectCount: projects.length,
   })
   const data = useProjectScheduleGanttData({
-    workspaceId,
+          workspaceId,
     projects,
     selectedProjectId,
     dataRevision,
   })
   const selection = useProjectScheduleGanttSelection(selectedProjectId)
   const history = useProjectScheduleGanttHistory({
-    workspaceId,
-    selectedProjectId,
+          workspaceId,
+          selectedProjectId,
     dataRevision,
     items: data.items,
     relations: data.relations,
@@ -105,7 +105,7 @@ export function useProjectScheduleGanttPanel({
   const selectedItem =
     tree.treeRows.find((row) => row.item.id === selection.selectedId)?.item ?? null
   const { handleCommitCell } = useProjectScheduleGanttCommit({
-    workspaceId,
+            workspaceId,
     selectedProjectId,
     items: data.items,
     setItems: data.setItems,
@@ -123,7 +123,7 @@ export function useProjectScheduleGanttPanel({
     persistAutoSchedule: history.persistAutoSchedule,
   })
   const tasks = useProjectScheduleGanttTasks({
-    workspaceId,
+      workspaceId,
     selectedProjectId,
     items: data.items,
     relations: data.relations,
@@ -147,7 +147,7 @@ export function useProjectScheduleGanttPanel({
   })
   const save = useProjectScheduleGanttSave({
     workspaceId,
-    selectedProjectId,
+      selectedProjectId,
     selectedProject: data.selectedProject,
     items: data.items,
     baselines: data.baselines,
@@ -159,13 +159,13 @@ export function useProjectScheduleGanttPanel({
     suppressAutoScheduleRef: history.suppressAutoScheduleRef,
     lastScheduleFingerprintRef: history.lastScheduleFingerprintRef,
     setSelectedBaselineId: data.setSelectedBaselineId,
-    setStatusFeedback,
+      setStatusFeedback,
     t: chrome.t,
     pendingRestoreBaselineId,
     setPendingRestoreBaselineId,
   })
   const baselineUi = useProjectScheduleGanttBaseline({
-    workspaceId,
+      workspaceId,
     selectedProjectId,
     itemsRef: data.itemsRef,
     baselines: data.baselines,
@@ -178,7 +178,7 @@ export function useProjectScheduleGanttPanel({
     t: chrome.t,
   })
   const menu = useProjectScheduleGanttMenu({
-    workspaceId,
+              workspaceId,
     selectedProjectId,
     selectedBaselineId: data.selectedBaselineId,
     baselineCompareMode: data.baselineCompareMode,
@@ -205,7 +205,7 @@ export function useProjectScheduleGanttPanel({
     t: chrome.t,
   })
   const view = useProjectScheduleGanttView({
-    workspaceId,
+              workspaceId,
     selectedProjectId,
     selectedProject: data.selectedProject,
     items: data.items,

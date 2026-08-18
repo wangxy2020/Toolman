@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
     color: colors.text,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.inputBg,
   },
   presetList: { gap: 6, marginTop: 4 },
   presetRow: {

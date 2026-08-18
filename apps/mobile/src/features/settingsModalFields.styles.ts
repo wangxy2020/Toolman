@@ -22,7 +22,7 @@ export const fieldStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 6,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.inputBg,
     overflow: 'hidden',
   },
   textareaBoxReadonly: {

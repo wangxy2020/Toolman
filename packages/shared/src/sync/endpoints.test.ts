@@ -25,17 +25,15 @@ describe('isPrivateOrLoopbackHostname', () => {
 })
 
 describe('sync endpoint candidates', () => {
-  it('probes configured, local, then official community hubs', () => {
+  it('probes configured and local community hubs, not the official Hub', () => {
     expect(listCommunityHubProbeCandidates('')).toEqual([
       'http://localhost:3721',
       DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
-      OFFICIAL_TOOLMAN_HUB_URL,
     ])
     expect(listCommunityHubProbeCandidates('http://100.64.1.8:3721/')).toEqual([
       'http://100.64.1.8:3721',
       'http://localhost:3721',
       DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
-      OFFICIAL_TOOLMAN_HUB_URL,
     ])
     expect(
       listCommunityHubProbeCandidates('', {
@@ -45,8 +43,10 @@ describe('sync endpoint candidates', () => {
       'http://192.168.1.8:3721',
       'http://localhost:3721',
       DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
-      OFFICIAL_TOOLMAN_HUB_URL,
     ])
+    expect(
+      listCommunityHubProbeCandidates('https://hub.toolman.app', { includeLoopback: false }),
+    ).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
   })
 
   it('derives a LAN Sync Hub sibling from a community hub address', () => {
@@ -93,7 +93,7 @@ describe('sync endpoint candidates', () => {
         packagerHostnames: ['toolman.vercel.app', '192.168.1.8:8081'],
         includeLoopback: false,
       }),
-    ).toEqual(['http://192.168.1.8:3721', OFFICIAL_TOOLMAN_HUB_URL])
+    ).toEqual(['http://192.168.1.8:3721'])
     expect(
       listSyncBaseUrlCandidates({
         packagerHostnames: ['toolman.vercel.app', '192.168.1.8:8081'],

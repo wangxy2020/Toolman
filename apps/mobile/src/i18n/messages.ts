@@ -75,21 +75,13 @@ const zhCN: Dict = {
   'diagnostics.hubToken': '局域网配对令牌',
   'diagnostics.hubTokenPlaceholder': '从桌面端系统诊断复制',
   'user.tokenSync': '令牌同步',
-  'user.hubTokenHint':
-    '同局域网 / localhost：填写桌面「局域网配对令牌」（知识库正文仅此路径）。',
   'user.devicePairing': '设备配对码',
-  'user.devicePairingHint':
-    '推荐（跨网主路径）：粘贴桌面「设备配对码」，双方在线时走 WebRTC，信令经投递盒 / 可达桌面。',
   'user.devicePairingPlaceholder': '粘贴桌面端 tm1.… 配对码',
   'user.devicePairingRedeem': '完成配对',
   'user.devicePairingClear': '清除配对',
   'user.devicePairingStatus': '配对状态',
-  'user.httpsDesktopUrl': 'HTTPS 桌面地址（兜底）',
+  'user.httpsDesktopUrl': 'HTTPS 桌面地址',
   'user.httpsDesktopUrlPlaceholder': 'https://…（如 Tailscale Serve）',
-  'user.httpsDesktopUrlHint':
-    '仅当不会配 TURN、又要用托管网页同步时填写。会直连桌面 Sync Hub，优先仍用配对码。',
-  'user.transportHint':
-    '推荐顺序：局域网 Hub（令牌）→ 设备配对 + WebRTC → 加密投递盒。HTTPS 桌面地址是网页兜底，不是主路径。',
   'diagnostics.localData': '本机数据',
   'diagnostics.notes': '笔记',
   'diagnostics.knowledge': '知识库',
@@ -202,21 +194,13 @@ const en: Dict = {
   'diagnostics.hubToken': 'LAN pairing token',
   'diagnostics.hubTokenPlaceholder': 'Copy from desktop Diagnostics',
   'user.tokenSync': 'Token & sync',
-  'user.hubTokenHint':
-    'Same LAN / localhost: paste the desktop LAN pairing token (required for knowledge bodies).',
   'user.devicePairing': 'Device pairing code',
-  'user.devicePairingHint':
-    'Recommended (primary off-LAN path): paste the desktop pairing code. When both sides are online, sync uses WebRTC; signaling uses the mailbox / reachable desktop.',
   'user.devicePairingPlaceholder': 'Paste desktop tm1.… pairing code',
   'user.devicePairingRedeem': 'Pair device',
   'user.devicePairingClear': 'Clear pairing',
   'user.devicePairingStatus': 'Pairing status',
-  'user.httpsDesktopUrl': 'HTTPS desktop URL (fallback)',
+  'user.httpsDesktopUrl': 'HTTPS desktop URL',
   'user.httpsDesktopUrlPlaceholder': 'https://… (e.g. Tailscale Serve)',
-  'user.httpsDesktopUrlHint':
-    'Only if you will not configure TURN but still need hosted-web sync. This talks to Sync Hub directly; prefer the pairing code first.',
-  'user.transportHint':
-    'Recommended: LAN Hub (token) → device pairing + WebRTC → encrypted mailbox. An HTTPS desktop URL is a hosted-web fallback, not the main path.',
   'diagnostics.localData': 'Local data',
   'diagnostics.notes': 'Notes',
   'diagnostics.knowledge': 'Knowledge bases',

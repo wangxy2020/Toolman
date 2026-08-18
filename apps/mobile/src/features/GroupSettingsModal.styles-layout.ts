@@ -138,7 +138,7 @@ export const groupSettingsLayoutStyles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
     color: colors.text,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.inputBg,
   },
   textarea: {
     minHeight: 84,

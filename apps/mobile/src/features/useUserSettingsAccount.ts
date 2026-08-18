@@ -14,7 +14,6 @@ import {
 import type { MobileAuthSession } from '../auth/types'
 import { saveModulePrefs } from '../settings/prefs'
 import { useMobileApp } from '../state/MobileAppContext'
-import { hostedWebSyncSoftHint } from '../sync/hostedWebSync'
 import { resetMobileSyncBaseUrlCache } from '../sync/mobileSync'
 import { getOrCreateDeviceId } from '../storage/secure'
 import {
@@ -30,7 +29,6 @@ import {
   formatBindPhoneTitle,
   formatProfileRoleLabel,
   formatSkuLabel,
-  formatSyncActionSubtitle,
   formatSyncActionTitle,
   isVipAccount,
   toErrorMessage,
@@ -56,11 +54,6 @@ export function useLoggedInAccount(props: {
 }) {
   const { auth, setAuth } = props
   const { modulePrefs, setModulePrefs } = useMobileApp()
-  const hostedSoftHint = hostedWebSyncSoftHint({
-    configuredSyncBaseUrl: modulePrefs.sync.hubBaseUrl,
-    envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
-  })
-  const hostedBlocked = Boolean(hostedSoftHint)
   const [view, setView] = useState<AccountView>('main')
   const [displayName, setDisplayName] = useState(auth.displayName)
   const [bindPhone, setBindPhone] = useState('')
@@ -325,8 +318,7 @@ export function useLoggedInAccount(props: {
     hasPhoneBinding,
     hasWechatBinding: Boolean(auth.wechatBound),
     profileRoleLabel: formatProfileRoleLabel(auth),
-    syncTitle: formatSyncActionTitle(props.syncStatus, hostedBlocked),
-    syncSubtitle: formatSyncActionSubtitle(hostedBlocked),
+    syncTitle: formatSyncActionTitle(props.syncStatus),
     hubToken: modulePrefs.sync.hubToken,
     setHubToken,
     hubBaseUrl: modulePrefs.sync.hubBaseUrl ?? '',

@@ -38,9 +38,9 @@ export function communityListPageStatus(input: {
     return {
       tone: 'warning',
       message: input.hostedWeb
-        ? '无法连接社区 Hub。托管网页连接官方 Hub；本机预览请先启动桌面端。也可在社区设置填写可达的 HTTPS 地址。'
+        ? '无法连接社区 Hub。本机预览请先启动桌面端；托管网页请在社区设置填写桌面 sidecar 的 HTTPS 地址。'
         : '无法连接社区 Hub。请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
-      meta: input.triedHubUrls.join(' · ') || input.hubBaseUrl,
+      meta: input.triedHubUrls.join(' · ') || (input.hostedWeb ? undefined : input.hubBaseUrl),
     }
   }
   if (input.loading) return { tone: 'info', message: '加载中…' }

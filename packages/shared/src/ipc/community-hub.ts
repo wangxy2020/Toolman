@@ -8,6 +8,9 @@ import { FederationSyncStateStoreSchema } from '../community/federation-sync.js'
 import { TimestampSchema, UuidSchema } from './base.js'
 import { CommunityUserRoleSchema } from './community-enums.js'
 
+/** Local guest UUID, Authing `ag-…`, or Firebase `fb-…`. */
+export const CommunityHubIdentityIdSchema = z.string().min(1).max(128)
+
 // --- Hub ---
 
 export const CommunityHubHealthOutputSchema = z.object({
@@ -51,7 +54,7 @@ export type CommunityFederationStatusOutput = z.infer<typeof CommunityFederation
 
 export const CommunityUserProfileSchema = z.object({
   id: UuidSchema,
-  identityId: UuidSchema,
+  identityId: CommunityHubIdentityIdSchema,
   displayName: z.string(),
   avatarPath: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),

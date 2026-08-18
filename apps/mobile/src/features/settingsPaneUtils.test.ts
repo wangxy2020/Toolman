@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { formatSyncActionSubtitle, formatSyncActionTitle } from './userSettingsUtils'
+import { formatSyncActionTitle } from './userSettingsUtils'
 import { describeApiKey } from './settingsPaneUtils'
 import { buildGroupSettingsSave, isGroupSettingsDirty } from './useGroupSettingsModal'
 import { groupSharedPickerHint, sortGroupActivities } from './groupPagePanelUtils'
 
 describe('settings and group helpers', () => {
-  it('does not invite a doomed retry on hosted web', () => {
-    expect(formatSyncActionTitle('idle', true)).toBe('立即同步（托管网页）')
-    expect(formatSyncActionSubtitle(true)).toMatch(/WebRTC/)
+  it('maps sync status to a short action title', () => {
+    expect(formatSyncActionTitle('idle')).toBe('已同步')
     expect(formatSyncActionTitle('offline')).toBe('离线，点此重试')
-    expect(formatSyncActionTitle('offline', true)).toBe('离线，点此重试')
+    expect(formatSyncActionTitle('error')).toBe('同步失败，点此重试')
   })
 
   it('describes api keys without leaking the full secret', () => {

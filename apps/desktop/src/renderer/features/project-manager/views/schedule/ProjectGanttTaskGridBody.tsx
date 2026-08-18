@@ -30,7 +30,7 @@ export const ProjectGanttTaskGridBody: FC<ProjectGanttTaskGridBodyProps> = ({
     >
       {rows.map((row) => (
         <ProjectGanttTaskGridBodyRow
-          key={row.item.id}
+            key={row.item.id}
           row={row}
           gridProps={gridProps}
           state={state}

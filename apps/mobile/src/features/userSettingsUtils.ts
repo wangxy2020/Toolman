@@ -39,20 +39,12 @@ export function formatProfileRoleLabel(auth: MobileAuthSession): string {
   return '普通用户'
 }
 
-export function formatSyncActionTitle(syncStatus: string, hostedSoftHint = false): string {
-  if (hostedSoftHint && syncStatus === 'idle') return '立即同步（托管网页）'
+export function formatSyncActionTitle(syncStatus: string): string {
   if (syncStatus === 'idle') return '已同步'
   if (syncStatus === 'syncing') return '同步中'
   if (syncStatus === 'offline') return '离线，点此重试'
   if (syncStatus === 'error') return '同步失败，点此重试'
   return '立即同步'
-}
-
-export function formatSyncActionSubtitle(hostedSoftHint = false): string {
-  if (hostedSoftHint) {
-    return '托管网页无法直连电脑 HTTP Hub。请先完成设备配对走 WebRTC；不会配 TURN 时再填 HTTPS 桌面地址兜底。'
-  }
-  return '打开应用时同步一次，之后约每 3 分钟检查变化；也可点此立即同步'
 }
 
 export function formatBindPhoneTitle(phone: string | null | undefined): string {

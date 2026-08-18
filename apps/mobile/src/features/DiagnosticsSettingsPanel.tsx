@@ -140,7 +140,6 @@ export function DiagnosticsSettingsPanel() {
           placeholder={t('user.httpsDesktopUrlPlaceholder')}
           keyboardType="url"
         />
-        <Text style={styles.hint}>{t('user.httpsDesktopUrlHint')}</Text>
       </Section>
 
       <Section title={t('diagnostics.syncToggles')}>

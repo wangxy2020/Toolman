@@ -14,7 +14,7 @@ export const colors = {
   accentSoft: '#e8f7f0',
   hover: '#f5f5f5',
   danger: '#dc2626',
-  inputBg: '#fafafa',
+  inputBg: '#f5f5f5',
 }
 
 export const shellStyles = StyleSheet.create({

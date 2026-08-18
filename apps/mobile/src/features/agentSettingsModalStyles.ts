@@ -98,7 +98,7 @@ export const agentSettingsModalStyles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
     color: colors.text,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.inputBg,
   },
   inputReadonly: { backgroundColor: colors.hover, color: colors.textSecondary },
   textarea: { minHeight: 88, textAlignVertical: 'top' },

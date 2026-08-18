@@ -23,10 +23,19 @@ describe('resolveCommunityHubBaseUrl', () => {
 describe('pickReachableCommunityHubBaseUrl', () => {
   it('uses the first candidate the probe accepts', async () => {
     const picked = await pickReachableCommunityHubBaseUrl('', async (url) =>
-      url === OFFICIAL_TOOLMAN_HUB_URL,
+      url === 'http://localhost:3721',
     )
     expect(picked.online).toBe(true)
-    expect(picked.url).toBe(OFFICIAL_TOOLMAN_HUB_URL)
+    expect(picked.url).toBe('http://localhost:3721')
     expect(picked.tried[0]).toBe('http://localhost:3721')
+  })
+
+  it('does not auto-probe the official Hub', async () => {
+    const picked = await pickReachableCommunityHubBaseUrl('', async () => false, {
+      includeLoopback: false,
+    })
+    expect(picked.online).toBe(false)
+    expect(picked.tried).toEqual([])
+    expect(picked.tried).not.toContain(OFFICIAL_TOOLMAN_HUB_URL)
   })
 })

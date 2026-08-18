@@ -1,12 +1,13 @@
 import { z } from 'zod'
 import { TimestampSchema, UuidSchema } from './base.js'
+import { CommunityHubIdentityIdSchema } from './community-hub.js'
 import { CommunityUserRoleSchema } from './community-enums.js'
 
 // --- Admin management ---
 
 export const CommunityModeratorUserSchema = z.object({
   id: UuidSchema,
-  identityId: UuidSchema,
+  identityId: CommunityHubIdentityIdSchema,
   displayName: z.string(),
   role: CommunityUserRoleSchema,
   createdAt: TimestampSchema,
