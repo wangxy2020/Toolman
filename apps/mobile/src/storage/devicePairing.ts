@@ -1,8 +1,13 @@
 import {
+  DevicePairingOfferSchema,
   DevicePairingRecordSchema,
   decodeDevicePairingOffer,
+  isLegacyDevicePairingOfferCode,
+  isShortPairingCode,
+  normalizePairingCode,
   pairingFingerprint,
   pairingRecordFromOffer,
+  SYNC_PAIRING_REDEEM_PATH,
   type DevicePairingRecord,
 } from '@toolman/shared'
 import { Platform } from 'react-native'
@@ -49,8 +54,40 @@ export async function saveDevicePairing(record: DevicePairingRecord): Promise<vo
 }
 
 export async function clearDevicePairing(): Promise<void> {
-  // Overwrite with empty owned payload so loadOwnedScoped yields null after parse.
   await saveOwnedScoped(PAIRING_KEY, null as unknown as DevicePairingRecord, setItem)
+}
+
+async function redeemShortPairingCode(input: {
+  code: string
+  localDeviceId: string
+  role: DevicePairingRecord['role']
+}) {
+  const { resolveReachableMobileSyncBaseUrl, rewriteSyncBaseUrlForClient } = await import(
+    '../sync/mobileSync-client'
+  )
+  const base = rewriteSyncBaseUrlForClient(await resolveReachableMobileSyncBaseUrl())
+  const url = `${base.replace(/\/+$/, '')}${SYNC_PAIRING_REDEEM_PATH}`
+  const res = await globalThis.fetch.bind(globalThis)(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code: input.code,
+      localDeviceId: input.localDeviceId,
+      role: input.role,
+    }),
+  })
+  const text = await res.text()
+  let payload: { offer?: unknown; error?: string } = {}
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {}
+  } catch {
+    throw new Error('配对服务返回无效响应')
+  }
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('配对码不正确')
+    throw new Error(payload.error ?? `配对失败（${res.status}）`)
+  }
+  return DevicePairingOfferSchema.parse(payload.offer)
 }
 
 export async function redeemDevicePairingCode(input: {
@@ -58,7 +95,18 @@ export async function redeemDevicePairingCode(input: {
   localDeviceId: string
   role: DevicePairingRecord['role']
 }): Promise<DevicePairingRecord> {
-  const offer = decodeDevicePairingOffer(input.code)
+  const trimmed = input.code.trim()
+  const offer = isLegacyDevicePairingOfferCode(trimmed)
+    ? decodeDevicePairingOffer(trimmed)
+    : isShortPairingCode(trimmed)
+      ? await redeemShortPairingCode({
+          code: normalizePairingCode(trimmed),
+          localDeviceId: input.localDeviceId,
+          role: input.role,
+        })
+      : (() => {
+          throw new Error('请输入 4 位配对码')
+        })()
   const record = pairingRecordFromOffer({
     offer,
     localDeviceId: input.localDeviceId,

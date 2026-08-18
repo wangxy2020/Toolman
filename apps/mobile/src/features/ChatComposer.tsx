@@ -7,6 +7,7 @@ import { SpinningIcon } from './SpinningIcon'
 import { useChatComposer, type ChatComposerProps } from './useChatComposer'
 import { useComposerInputActions } from './useComposerInputActions'
 import { chatComposerStyles as styles } from './chatComposerStyles'
+import { isWebComposerSendHotkey, webComposerSendPlaceholder } from './composerSendHotkey'
 import {
   ChatComposerEmojiPicker,
   ChatComposerPhraseMenu,
@@ -134,9 +135,7 @@ export function ChatComposer({
           onFocus={closePopups}
           placeholder={
             Platform.OS === 'web'
-              ? isGroup
-                ? '输入群组消息，Enter 发送，Shift+Enter 换行…'
-                : '输入消息，Enter 发送，Shift+Enter 换行…'
+              ? webComposerSendPlaceholder(isGroup)
               : placeholder
           }
           placeholderTextColor={colors.textSecondary}
@@ -145,7 +144,20 @@ export function ChatComposer({
           blurOnSubmit={false}
           underlineColorAndroid="transparent"
           // @ts-expect-error react-native-web keyboard
-          onKeyDown={(e: { key: string; shiftKey?: boolean; preventDefault: () => void }) => {
+          onKeyDown={(e: {
+            key: string
+            shiftKey?: boolean
+            metaKey?: boolean
+            altKey?: boolean
+            ctrlKey?: boolean
+            preventDefault: () => void
+          }) => {
+            if (Platform.OS === 'web') {
+              if (!isWebComposerSendHotkey(e)) return
+              e.preventDefault()
+              trySend()
+              return
+            }
             if (e.key !== 'Enter' || e.shiftKey) return
             e.preventDefault()
             trySend()

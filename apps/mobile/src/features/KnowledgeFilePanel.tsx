@@ -32,6 +32,7 @@ export function KnowledgeFilePanel(props: KnowledgeFilePanelProps) {
     clearSelection,
     closeMenu,
     handleMoveToSync,
+    openDocument,
     webDragProps,
   } = useKnowledgeFilePanel(props)
 
@@ -54,6 +55,7 @@ export function KnowledgeFilePanel(props: KnowledgeFilePanelProps) {
         onReindexDocument={onReindexDocument}
         onConfirmDelete={confirmDelete}
         onToggleSelected={toggleSelected}
+        onOpenDocument={openDocument}
       />
 
       <KnowledgeFileContextMenu

@@ -1,15 +1,15 @@
 import { isHostedWebPage } from './desktopDevHost'
 
 export const HOSTED_WEB_SYNC_MESSAGE =
-  '托管网页无法直连电脑上的 HTTP Sync Hub。请先完成设备配对，双方在线时走 WebRTC（信令经投递盒 / 可达桌面）。不会配 TURN、只要网页能同步时，再填写 HTTPS 桌面地址作为兜底。不依赖官方 Hub。'
+  '本机已启动桌面端时可直接同步。若仍失败，请确认桌面端已打开，或填写 4 位配对码。'
 
 export function isHttpsSyncUrl(raw?: string | null): boolean {
   return Boolean(raw && /^https:\/\//i.test(raw.trim()))
 }
 
 /**
- * Soft guidance for hosted web (subtitle / diagnostics). Never hard-blocks sync —
- * pairing + WebRTC / personal mailbox / optional Hub proxy may still succeed.
+ * Soft guidance for hosted web. Same-computer loopback is probed automatically;
+ * do not treat hosted web as unable to reach HTTP Sync Hub.
  */
 export function hostedWebSyncSoftHint(options?: {
   configuredSyncBaseUrl?: string | null
@@ -19,7 +19,7 @@ export function hostedWebSyncSoftHint(options?: {
   if (isHttpsSyncUrl(options?.configuredSyncBaseUrl) || isHttpsSyncUrl(options?.envSyncBaseUrl)) {
     return null
   }
-  return HOSTED_WEB_SYNC_MESSAGE
+  return null
 }
 
 /** @deprecated Prefer soft hint; hosted web no longer hard-blocks sync attempts. */

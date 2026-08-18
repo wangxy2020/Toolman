@@ -3,7 +3,7 @@ import {
   groupVisibleMembersByPerson,
   isSelfGroupMember,
   memberDeviceLine,
-  memberOnlineLabel,
+  memberDevicePresenceLine,
 } from './groupPagePanelUtils'
 
 describe('groupVisibleMembersByPerson', () => {
@@ -46,8 +46,9 @@ describe('member card labels', () => {
     expect(memberDeviceLine('web')).toBe('网页')
   })
 
-  it('shows online or offline without a local-device prefix', () => {
-    expect(memberOnlineLabel(true)).toBe('在线')
-    expect(memberOnlineLabel(false)).toBe('离线')
+  it('puts online status next to the device kind', () => {
+    expect(memberDevicePresenceLine('desktop', true)).toBe('桌面 · 在线')
+    expect(memberDevicePresenceLine('web', false)).toBe('网页 · 离线')
+    expect(memberDevicePresenceLine('mobile', false, 'invited')).toBe('移动 · 待加入')
   })
 })

@@ -19,7 +19,7 @@ describe('hostnameFromHostOrUrl', () => {
 })
 
 describe('shouldProbeLoopbackFromHosts', () => {
-  it('probes loopback only for same-machine web previews', () => {
+  it('probes loopback for all web pages so same-computer desktop can sync', () => {
     expect(
       shouldProbeLoopbackFromHosts({
         platformOs: 'web',
@@ -30,10 +30,10 @@ describe('shouldProbeLoopbackFromHosts', () => {
     expect(
       shouldProbeLoopbackFromHosts({
         platformOs: 'web',
-        pageHostname: 'toolman.vercel.app',
-        hostnames: ['toolman.vercel.app'],
+        pageHostname: 'www.toolman.work',
+        hostnames: [],
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('probes loopback on native only when every packager host is loopback', () => {

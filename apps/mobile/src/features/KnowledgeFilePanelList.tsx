@@ -13,6 +13,7 @@ export type KnowledgeFilePanelListProps = {
   onReindexDocument: (id: string) => void
   onConfirmDelete: (ids: string[]) => void
   onToggleSelected: (id: string) => void
+  onOpenDocument: (doc: KnowledgeFileItem) => void
 }
 
 export function KnowledgeFilePanelList({
@@ -23,6 +24,7 @@ export function KnowledgeFilePanelList({
   onReindexDocument,
   onConfirmDelete,
   onToggleSelected,
+  onOpenDocument,
 }: KnowledgeFilePanelListProps) {
   if (documents.length === 0) {
     return (
@@ -51,7 +53,10 @@ export function KnowledgeFilePanelList({
           <Pressable
             key={doc.id}
             delayLongPress={400}
+            onPress={() => onOpenDocument(doc)}
             onLongPress={(event) => onOpenMenu(event)}
+            accessibilityRole="button"
+            accessibilityLabel={`打开 ${doc.title}`}
             style={[styles.card, selected ? styles.cardSelected : null]}
           >
             <View style={[styles.cardIcon, { backgroundColor: tone.backgroundColor }]}>

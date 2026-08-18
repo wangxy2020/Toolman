@@ -1,3 +1,5 @@
+import { getSharedAudioElement } from './audioUnlock'
+
 /**
  * Controllable HTMLAudioElement playback for Edge TTS MP3 blobs (web / RN-web).
  */
@@ -19,8 +21,10 @@ export class ControllableAudioPlayback {
 
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
+      const audio = getSharedAudioElement() ?? new Audio()
+      audio.muted = false
       audio.preload = 'auto'
+      audio.src = url
       this.audio = audio
       this.objectUrl = url
       this.signal = signal

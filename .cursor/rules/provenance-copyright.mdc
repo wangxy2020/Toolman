@@ -32,7 +32,7 @@ alwaysApply: false
 | `app.start` | `bootstrapCopyrightProvenance()` — main | 每进程一次 |
 | `app.ipc.ready` | `registerIpcHandlers()` — main | 每进程一次 |
 | `app.renderer.ready` | `main.tsx` → `recordProvenanceBeacon` | 每进程一次 |
-| `app.diagnostics.view` | `useDiagnosticsSettings` | 每进程一次 |
+| `app.diagnostics.view` | 桌面 `useDiagnosticsSettings`；移动 `DiagnosticsSettingsPanel` | 每进程一次 |
 | `app.about.view` | 桌面 `AboutSettingsPanel`；移动 `AboutSettingsPanel` | 每进程一次 |
 | `app.session.heartbeat` | main 定时器 | 可重复（6h） |
 

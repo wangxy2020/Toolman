@@ -48,8 +48,6 @@ export function LoggedInAccountPanel(props: {
     hasWechatBinding,
     profileRoleLabel,
     syncTitle,
-    hubToken,
-    setHubToken,
     hubBaseUrl,
     setHubBaseUrl,
     pairingCode,
@@ -252,8 +250,9 @@ export function LoggedInAccountPanel(props: {
         <Field
           label={t('user.devicePairing')}
           value={pairingCode}
-          onChangeText={setPairingCode}
+          onChangeText={(next) => setPairingCode(next.toUpperCase())}
           placeholder={t('user.devicePairingPlaceholder')}
+          maxLength={8}
         />
         <PrimaryButton
           label={busy ? '…' : t('user.devicePairingRedeem')}
@@ -262,13 +261,6 @@ export function LoggedInAccountPanel(props: {
         {devicePaired ? (
           <SecondaryButton label={t('user.devicePairingClear')} onPress={() => void clearPairing()} />
         ) : null}
-        <Field
-          label={t('diagnostics.hubToken')}
-          value={hubToken}
-          onChangeText={setHubToken}
-          placeholder={t('diagnostics.hubTokenPlaceholder')}
-          secureTextEntry
-        />
         <Field
           label={t('user.httpsDesktopUrl')}
           value={hubBaseUrl}

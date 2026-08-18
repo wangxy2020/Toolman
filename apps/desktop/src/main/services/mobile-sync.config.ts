@@ -2,11 +2,15 @@
  * Persisted preferences for desktop ↔ mobile Sync Hub / agent host.
  * Env `TOOLMAN_MOBILE_*` still overrides when set (CI / forced enable).
  */
-import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import { z } from 'zod'
+import {
+  generateShortPairingCode,
+  isShortPairingCode,
+  normalizePairingCode,
+} from '@toolman/shared'
 
 const MobileSyncPreferencesSchema = z.object({
   syncEnabled: z.boolean().default(true),
@@ -19,8 +23,8 @@ const MobileSyncPreferencesSchema = z.object({
    * off-LAN mobile/web sync. Default on.
    */
   wanSyncEnabled: z.boolean().default(false),
-  /** Pairing token required by Sync Hub APIs (except `/health`). */
-  hubToken: z.string().min(16).optional(),
+  /** 4-character pairing code; also authenticates Sync Hub APIs (except `/health`). */
+  hubToken: z.string().min(4).max(128).optional(),
   /** Optional override; empty → default port 17890. */
   port: z.number().int().positive().optional(),
 })
@@ -133,10 +137,22 @@ export function resolveMobileSyncListenHost(): string {
 
 export function ensureMobileSyncHubToken(): string {
   const fromEnv = process.env.TOOLMAN_MOBILE_SYNC_TOKEN?.trim()
-  if (fromEnv && fromEnv.length >= 16) return fromEnv
+  if (fromEnv) {
+    const normalized = normalizePairingCode(fromEnv)
+    if (isShortPairingCode(normalized)) return normalized
+    if (fromEnv.length >= 16) return fromEnv
+  }
   const current = readMobileSyncPreferences()
-  if (current.hubToken && current.hubToken.length >= 16) return current.hubToken
-  const hubToken = randomBytes(32).toString('hex')
+  if (current.hubToken) {
+    const normalized = normalizePairingCode(current.hubToken)
+    if (isShortPairingCode(normalized)) {
+      if (normalized !== current.hubToken) {
+        writeMobileSyncPreferences({ ...current, hubToken: normalized })
+      }
+      return normalized
+    }
+  }
+  const hubToken = generateShortPairingCode()
   writeMobileSyncPreferences({ ...current, hubToken })
   return hubToken
 }

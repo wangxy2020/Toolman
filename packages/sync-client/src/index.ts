@@ -1,3 +1,8 @@
+/**
+ * Toolman — Copyright (C) 2024–2026 Toolman Contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Source: https://github.com/wangxy2020/Toolman
+ */
 import {
   KnowledgeSnapshotSchema,
   P2P_JOIN_INVITE_ANSWER_PATH,
@@ -306,12 +311,23 @@ export class ToolmanSyncClient {
 
   async downloadKnowledgeFile(kbId: string, documentId: string): Promise<Uint8Array> {
     const params = new URLSearchParams({ kbId, documentId })
+    const headers = { ...((await this.headers()) as Record<string, string>) }
+    delete headers['Content-Type']
+    headers.Accept = '*/*'
     const res = await this.request(`${this.baseUrl}/api/v1/sync/knowledge/files?${params}`, {
       method: 'GET',
-      headers: await this.headers(),
+      headers,
     })
     if (!res.ok) {
-      throw new Error(`knowledge file download failed (${res.status})`)
+      let detail = ''
+      try {
+        detail = (await res.text()).trim().slice(0, 240)
+      } catch {
+        // status is enough when the body cannot be read
+      }
+      throw new Error(
+        `knowledge file download failed (${res.status})${detail ? `: ${detail}` : ''}`,
+      )
     }
     return new Uint8Array(await res.arrayBuffer())
   }

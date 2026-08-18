@@ -39,17 +39,17 @@ describe('personalMailboxHubs', () => {
     vi.mocked(isHostedWebPage).mockReturnValue(true)
   })
 
-  it('rejects LAN HTTP and same-origin Hub proxy on hosted HTTPS web', () => {
-    expect(isBrowserSafeMailboxUrl('http://127.0.0.1:17890')).toBe(false)
+  it('allows loopback HTTP on hosted HTTPS web, rejects LAN HTTP', () => {
+    expect(isBrowserSafeMailboxUrl('http://127.0.0.1:17890')).toBe(true)
     expect(isBrowserSafeMailboxUrl('http://192.168.1.8:17890')).toBe(false)
     expect(isBrowserSafeMailboxUrl('/api/community-hub')).toBe(false)
     expect(isBrowserSafeMailboxUrl('https://hub.toolman.app')).toBe(true)
     expect(isBrowserSafeMailboxUrl('https://desktop.ts.net')).toBe(true)
   })
 
-  it('on hosted web only keeps HTTPS reachable Hub URLs (no official Hub fallback)', () => {
+  it('on hosted web keeps loopback and HTTPS reachable Hub URLs', () => {
     const hubs = listPersonalMailboxBaseUrls(samplePairing)
-    expect(hubs).toEqual(['https://desktop.ts.net'])
+    expect(hubs).toEqual(['http://127.0.0.1:17890', 'https://desktop.ts.net'])
     expect(hubs.some((url) => url.includes('hub.toolman'))).toBe(false)
     expect(hubs.some((url) => url.includes('community-hub'))).toBe(false)
   })

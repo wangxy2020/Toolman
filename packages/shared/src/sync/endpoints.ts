@@ -1,11 +1,11 @@
-import { OFFICIAL_TOOLMAN_HUB_URL } from '../community/hub-config.js'
-
 export const DEFAULT_LOCAL_SYNC_PORT = 17890
 export const DEFAULT_LOCAL_SYNC_BASE_URL = `http://127.0.0.1:${DEFAULT_LOCAL_SYNC_PORT}`
 /** Identity string returned by the desktop Sync Hub `/health` endpoint. */
 export const SYNC_HUB_SERVICE_NAME = 'toolman-sync-hub'
 /** Pairing token for desktop Sync Hub. Prefer this over a community JWT. */
 export const SYNC_HUB_TOKEN_HEADER = 'X-Toolman-Sync-Token'
+/** Exchange the 4-character pairing code for a personal device-pairing offer. */
+export const SYNC_PAIRING_REDEEM_PATH = '/api/v1/sync/pairing/redeem'
 export const DEFAULT_LOCAL_COMMUNITY_HUB_PORT = 3721
 export const DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL = `http://127.0.0.1:${DEFAULT_LOCAL_COMMUNITY_HUB_PORT}`
 /** Matches desktop `DEFAULT_LOCAL_IDENTITY_ID` / hub seed identity. */
@@ -222,6 +222,5 @@ export function listSyncBaseUrlCandidates(options?: {
     includeLoopback ? DEFAULT_LOCAL_SYNC_BASE_URL : null,
     includeLoopback ? `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}` : null,
     wanCommunityHub,
-    OFFICIAL_TOOLMAN_HUB_URL,
   ])
 }

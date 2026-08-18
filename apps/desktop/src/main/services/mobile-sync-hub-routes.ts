@@ -6,7 +6,10 @@ import {
   P2P_MAILBOX_PUT_PATH,
   P2P_MAILBOX_SESSION_PATH,
   SYNC_HUB_SERVICE_NAME,
+  SYNC_PAIRING_REDEEM_PATH,
   SyncPushInputSchema,
+  isShortPairingCode,
+  normalizePairingCode,
   type AgentHostCapability,
   type AgentHostPresence,
 } from '@toolman/shared'
@@ -24,14 +27,23 @@ import {
 } from './knowledge-mobile-export.service'
 import { handleMobileP2pInviteAnswer, handleMobileP2pJoinRegister } from './mobile-p2p-join.service'
 import { handleMailboxPull, handleMailboxPut, handleMailboxSession } from './p2p/p2p-mailbox.service'
+import { ensureMobileSyncHubToken } from './mobile-sync.config'
 import {
+  createPersonalPairingOffer,
+  rememberPairedDevice,
+} from './personal-device-pairing.service'
+import {
+  notePairingFailure,
   parseJsonBody,
   readBody,
   requireHubAuth,
+  asciiContentType,
+  contentDispositionAttachment,
   sendBinary,
   sendCorsHeaders,
   sendJson,
   sendSse,
+  tokensMatch,
 } from './mobile-sync-hub-http'
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -61,6 +73,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       p2pMailboxPut: P2P_MAILBOX_PUT_PATH,
       p2pMailboxPull: P2P_MAILBOX_PULL_PATH,
     }, req)
+    return
+  }
+
+  if (method === 'POST' && url.pathname === SYNC_PAIRING_REDEEM_PATH) {
+    const parsed = parseJsonBody(await readBody(req))
+    if (!parsed.ok || !parsed.value || typeof parsed.value !== 'object') {
+      sendJson(res, 400, { error: 'invalid json' }, req)
+      return
+    }
+    const body = parsed.value as { code?: unknown; localDeviceId?: unknown; role?: unknown }
+    const code = typeof body.code === 'string' ? normalizePairingCode(body.code) : ''
+    if (!isShortPairingCode(code)) {
+      sendJson(res, 400, { error: 'invalid pairing code' }, req)
+      return
+    }
+    if (!tokensMatch(code, ensureMobileSyncHubToken())) {
+      if (!notePairingFailure(req)) {
+        sendJson(res, 429, { error: 'too many attempts' }, req)
+        return
+      }
+      sendJson(res, 401, { error: 'unauthorized' }, req)
+      return
+    }
+    try {
+      const { offer } = createPersonalPairingOffer()
+      const localDeviceId = typeof body.localDeviceId === 'string' ? body.localDeviceId.trim() : ''
+      const role = body.role === 'web' || body.role === 'mobile' ? body.role : 'mobile'
+      if (localDeviceId) rememberPairedDevice({ deviceId: localDeviceId, role })
+      sendJson(res, 200, { offer }, req)
+    } catch (error) {
+      sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) }, req)
+    }
     return
   }
 
@@ -215,16 +259,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       sendJson(res, 400, { error: 'kbId and documentId required' }, req)
       return
     }
-    const file = readMobileSyncKnowledgeFile({ kbId, documentId })
-    if (!file) {
-      sendJson(res, 404, { error: 'file not found' }, req)
-      return
+    try {
+      const file = readMobileSyncKnowledgeFile({ kbId, documentId })
+      if (!file) {
+        sendJson(res, 404, { error: 'file not found' }, req)
+        return
+      }
+      sendBinary(res, 200, file.bytes, {
+        'Content-Type': asciiContentType(file.mimeType),
+        'Content-Disposition': contentDispositionAttachment(file.fileName),
+      }, req)
+    } catch (error) {
+      if (!res.headersSent) {
+        sendJson(res, 500, {
+          error: error instanceof Error ? error.message : String(error),
+        }, req)
+      }
     }
-    const safeName = file.fileName.replace(/["\r\n]/g, '_')
-    sendBinary(res, 200, file.bytes, {
-      'Content-Type': file.mimeType || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${safeName}"`,
-    }, req)
     return
   }
 

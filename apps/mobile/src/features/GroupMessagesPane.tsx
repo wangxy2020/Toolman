@@ -121,7 +121,7 @@ export function GroupMessagesPane() {
         >
           {messages.length === 0 ? (
             <Text style={shellStyles.emptyHint}>
-              暂无消息{'\n'}在这里输入消息，按 Enter 发送
+              暂无消息{'\n'}在这里输入消息，Mac 用 ⌘Enter 发送，Windows 用 Alt+Enter 发送
             </Text>
           ) : (
             messages.map((msg) => {

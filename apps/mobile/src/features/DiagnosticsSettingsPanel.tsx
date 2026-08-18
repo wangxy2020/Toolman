@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Linking, Pressable, Text } from 'react-native'
 import { useI18n } from '../i18n'
 import { saveModulePrefs, type ModulePrefs } from '../settings/prefs'
@@ -11,6 +11,7 @@ import {
 } from '../sync/mobileSync'
 import { hostedWebSyncSoftHint } from '../sync/hostedWebSync'
 import { formatMobileP2pPathMetrics } from '../p2p/pathMetrics'
+import { recordProvenanceBeacon } from '../lib/record-provenance-beacon'
 import {
   Field,
   Section,
@@ -23,6 +24,9 @@ const TOOLMAN_PRIVACY_URL = 'https://github.com/wangxy2020/Toolman/blob/main/doc
 
 export function DiagnosticsSettingsPanel() {
   const { t } = useI18n()
+  useEffect(() => {
+    recordProvenanceBeacon('app.diagnostics.view')
+  }, [])
   const {
     syncStatus,
     desktopHostsOnline,

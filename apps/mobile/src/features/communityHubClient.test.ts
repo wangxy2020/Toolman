@@ -7,10 +7,11 @@ vi.mock('expo-constants', () => ({
   default: { expoConfig: {}, expoGoConfig: {} },
 }))
 vi.mock('../sync/desktopDevHost', () => ({
-  isHostedWebPage: () => false,
-  pageHostname: () => '',
+  isHostedWebPage: vi.fn(() => false),
+  pageHostname: vi.fn(() => ''),
 }))
 
+import { isHostedWebPage } from '../sync/desktopDevHost'
 import { communityHubRequestUrl, isCommunityHubHealthBody } from './communityHubClient'
 
 describe('communityHubRequestUrl', () => {
@@ -27,6 +28,14 @@ describe('communityHubRequestUrl', () => {
     expect(communityHubRequestUrl('https://hub.toolman.app', '/health')).toBe(
       'https://hub.toolman.app/health',
     )
+  })
+
+  it('talks to loopback Community Hub directly on hosted web', () => {
+    vi.mocked(isHostedWebPage).mockReturnValue(true)
+    expect(communityHubRequestUrl('http://127.0.0.1:3721', '/health')).toBe(
+      'http://127.0.0.1:3721/health',
+    )
+    vi.mocked(isHostedWebPage).mockReturnValue(false)
   })
 })
 

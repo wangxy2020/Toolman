@@ -42,7 +42,7 @@ import {
   setMobileSyncLanAccessEnabled,
   setMobileSyncWanEnabled,
 } from './mobile-sync.config'
-import { createPersonalPairingOffer } from './personal-device-pairing.service'
+import { advertisedHttpUrls } from './network-advertise'
 import { depositPersonalSyncChanges } from './personal-mailbox-deposit'
 import {
   startPersonalDeviceWebrtcLoop,
@@ -50,7 +50,6 @@ import {
 } from './personal-device-webrtc.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
-import { advertisedHttpUrls } from './network-advertise'
 
 function seedMobileSyncChangelog(): void {
   try {
@@ -89,15 +88,7 @@ function seedMobileSyncChangelog(): void {
 export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
   const syncPort = getMobileSyncHubPort()
   const lanAccessEnabled = isMobileSyncLanAccessEnabled()
-  let personalPairingCode: string | undefined
-  let personalPairingExpiresAt: number | undefined
-  try {
-    const { offer, code } = createPersonalPairingOffer()
-    personalPairingCode = code
-    personalPairingExpiresAt = offer.expiresAt
-  } catch {
-    // Pairing optional during early boot / tests.
-  }
+  const hubToken = ensureMobileSyncHubToken()
   return {
     syncEnabled: isMobileSyncEnabled(),
     agentHostEnabled: isMobileAgentHostEnabled(),
@@ -108,11 +99,10 @@ export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
       ? advertisedHttpUrls(syncPort)
       : [`http://127.0.0.1:${syncPort}`],
     lastError: null,
-    hubToken: ensureMobileSyncHubToken(),
+    hubToken,
     lanAccessEnabled,
     wanSyncEnabled: isMobileSyncWanEnabled(),
-    personalPairingCode,
-    personalPairingExpiresAt,
+    personalPairingCode: hubToken,
   }
 }
 

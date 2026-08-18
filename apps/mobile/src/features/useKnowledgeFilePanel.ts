@@ -12,6 +12,7 @@ import {
   type KnowledgeFileItem,
   type KnowledgeImportMode,
 } from './knowledgeSidebar'
+import { openKnowledgeDocument } from './openKnowledgeDocument'
 
 const ACCEPT =
   '.txt,.md,.markdown,.html,.htm,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.epub,.csv'
@@ -206,6 +207,17 @@ export function useKnowledgeFilePanel(props: KnowledgeFilePanelProps) {
     setSelectedIds(new Set())
   }
 
+  const openDocument = (doc: KnowledgeFileItem) => {
+    void openKnowledgeDocument(doc).catch((error) => {
+      const message = error instanceof Error ? error.message : '无法打开文件'
+      if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+        globalThis.alert(message)
+        return
+      }
+      Alert.alert('无法打开文件', message)
+    })
+  }
+
   const webDragProps: WebDragHandlers | undefined =
     Platform.OS === 'web'
       ? {
@@ -274,6 +286,7 @@ export function useKnowledgeFilePanel(props: KnowledgeFilePanelProps) {
     clearSelection,
     closeMenu,
     handleMoveToSync,
+    openDocument,
     webDragProps,
   }
 }

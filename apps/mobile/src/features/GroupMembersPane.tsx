@@ -11,8 +11,7 @@ import {
   groupVisibleMembersByPerson,
   isSelfGroupMember,
   memberAvatarInitial,
-  memberDeviceLine,
-  memberOnlineLabel,
+  memberDevicePresenceLine,
 } from './groupPagePanelUtils'
 import { resolvePeerMemberDisplayName } from '@toolman/shared'
 
@@ -77,11 +76,17 @@ export function GroupMembersPane(props: {
                       key={member.deviceId}
                       style={[
                         styles.memberDevice,
-                        member.online ? styles.memberDeviceOnline : null,
+                        member.status !== 'invited' && member.online
+                          ? styles.memberDeviceOnline
+                          : null,
                       ]}
                       numberOfLines={1}
                     >
-                      {memberDeviceLine(member.deviceKind)}
+                      {memberDevicePresenceLine(
+                        member.deviceKind,
+                        member.online,
+                        member.status,
+                      )}
                     </Text>
                   ))}
                 </View>
@@ -93,20 +98,6 @@ export function GroupMembersPane(props: {
                     ]}
                   >
                     {groupMemberRoleLabel(person.role)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.memberStatus,
-                      person.status === 'invited'
-                        ? null
-                        : person.online
-                          ? styles.memberStatusOnline
-                          : null,
-                    ]}
-                  >
-                    {person.status === 'invited'
-                      ? '待加入'
-                      : memberOnlineLabel(person.online)}
                   </Text>
                 </View>
               </View>

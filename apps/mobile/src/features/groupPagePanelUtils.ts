@@ -59,6 +59,15 @@ export function memberDeviceLine(kind: GroupMember['deviceKind']): string {
   return deviceKindLabel(kind)
 }
 
+export function memberDevicePresenceLine(
+  kind: GroupMember['deviceKind'],
+  online: boolean,
+  status?: GroupMember['status'],
+): string {
+  const presence = status === 'invited' ? '待加入' : memberOnlineLabel(online)
+  return `${memberDeviceLine(kind)} · ${presence}`
+}
+
 export function groupSharedPickerHint(kind: GroupSharedKind): string {
   if (kind === 'notes') {
     return '展开笔记本可查看笔记，勾选笔记本将全选其中笔记，也可单独勾选笔记。'

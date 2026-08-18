@@ -3,7 +3,7 @@
  * Never depends on official hub.toolman.app — only desktop Sync Hub URLs
  * the browser/app can actually reach (LAN / Tailscale / configured HTTPS).
  */
-import { hostnameOfBaseUrl, isPrivateOrLoopbackHostname, type DevicePairingRecord } from '@toolman/shared'
+import { hostnameOfBaseUrl, isPrivateOrLoopbackHostname, isLoopbackHostname, type DevicePairingRecord } from '@toolman/shared'
 import { Platform } from 'react-native'
 import { createMobileSyncClient, getMobileSyncBaseUrl, rewriteSyncBaseUrlForClient } from './mobileSync-client'
 import { isHostedWebPage } from './desktopDevHost'
@@ -18,9 +18,10 @@ export function isBrowserSafeMailboxUrl(baseUrl: string): boolean {
     const url = new URL(trimmed)
     if (url.protocol === 'https:') return true
     if (url.protocol !== 'http:') return false
-    // Native can use LAN HTTP. Hosted HTTPS pages cannot (mixed content).
+    // Native can use LAN HTTP. Hosted HTTPS pages may use loopback HTTP only
+    // (same-computer desktop); other LAN HTTP is mixed content.
     if (Platform.OS !== 'web') return isPrivateOrLoopbackHostname(url.hostname)
-    if (isHostedWebPage()) return false
+    if (isHostedWebPage()) return isLoopbackHostname(url.hostname)
     return isPrivateOrLoopbackHostname(url.hostname)
   } catch {
     return false

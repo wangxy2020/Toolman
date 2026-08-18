@@ -1,11 +1,49 @@
 /**
  * Capture a user gesture so HTMLAudioElement can play after async Edge TTS fetch.
- * Safe to call repeatedly; mirrors desktop `unlockAudioPlayback`.
+ * Keep one shared element — Chrome will not let a *new* Audio() play after await.
  */
-let unlocked = false
+const AUDIO_KEY = '__toolmanUnlockedAudio'
+const WARMED_TTS_KEY = '__toolmanTtsWarmed'
+
+type AudioHost = typeof globalThis & {
+  [AUDIO_KEY]?: HTMLAudioElement
+  [WARMED_TTS_KEY]?: boolean
+}
+
+export function getSharedAudioElement(): HTMLAudioElement | null {
+  if (typeof Audio === 'undefined') return null
+  const host = globalThis as AudioHost
+  if (!host[AUDIO_KEY]) {
+    const audio = new Audio()
+    audio.preload = 'auto'
+    host[AUDIO_KEY] = audio
+  }
+  return host[AUDIO_KEY] ?? null
+}
+
+function warmSpeechVoices(): void {
+  const speech = (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis
+  if (!speech) return
+  speech.getVoices()
+  speech.addEventListener('voiceschanged', () => undefined, { once: true })
+}
+
+function warmEdgeTtsApi(): void {
+  if (typeof fetch === 'undefined') return
+  const host = globalThis as AudioHost
+  if (host[WARMED_TTS_KEY]) return
+  host[WARMED_TTS_KEY] = true
+  void fetch('/api/tts/synthesize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: '好', voice: 'zh-CN-XiaoxiaoNeural' }),
+  }).catch(() => {
+    host[WARMED_TTS_KEY] = false
+  })
+}
 
 export function unlockAudioPlayback(): void {
-  if (unlocked || typeof window === 'undefined') return
+  if (typeof window === 'undefined') return
 
   try {
     const AudioContextCtor =
@@ -27,19 +65,26 @@ export function unlockAudioPlayback(): void {
     // ignore
   }
 
-  try {
-    const probe = new Audio()
-    probe.muted = true
-    void probe
-      .play()
-      .then(() => {
-        probe.pause()
-        unlocked = true
-      })
-      .catch(() => undefined)
-  } catch {
-    // ignore
+  const audio = getSharedAudioElement()
+  if (audio) {
+    try {
+      audio.muted = true
+      void audio
+        .play()
+        .then(() => {
+          audio.pause()
+          audio.muted = false
+          audio.removeAttribute('src')
+          audio.load()
+        })
+        .catch(() => {
+          audio.muted = false
+        })
+    } catch {
+      audio.muted = false
+    }
   }
 
-  unlocked = true
+  warmSpeechVoices()
+  warmEdgeTtsApi()
 }

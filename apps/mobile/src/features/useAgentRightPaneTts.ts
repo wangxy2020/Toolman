@@ -51,6 +51,7 @@ export function useAgentRightPaneTts(agentSettings: {
     const settings = settingsRef.current
     if (!settings.autoSpeak) return
     if (!content.trim()) return
+    unlockAudioPlayback()
     const tts = getMobileTtsController()
     tts.configure({
       engine: settings.ttsEngine,

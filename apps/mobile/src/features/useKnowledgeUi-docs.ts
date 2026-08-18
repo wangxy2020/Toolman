@@ -59,6 +59,8 @@ export function mergeSnapshotDocuments(
       addedAt: doc.updatedAt,
       status: doc.status === 'ready' ? 'ready' : 'pending',
       sourceKind: doc.sourceKind,
+      absolutePath:
+        doc.sourceKind === 'url' && /^https?:\/\//i.test(doc.title) ? doc.title : undefined,
     })
     next[kbId] = list
   }

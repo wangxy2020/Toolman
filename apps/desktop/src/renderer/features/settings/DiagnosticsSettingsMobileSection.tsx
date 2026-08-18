@@ -27,7 +27,6 @@ export function DiagnosticsSettingsMobileSection({
 }: Props) {
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)
-  const [copiedPairing, setCopiedPairing] = useState(false)
   const mobile = snapshot.mobileSync ?? {
     syncEnabled: false,
     agentHostEnabled: false,
@@ -39,6 +38,7 @@ export function DiagnosticsSettingsMobileSection({
     lanAccessEnabled: false,
     wanSyncEnabled: false,
   }
+  const pairingCode = mobile.personalPairingCode || mobile.hubToken || ''
   const reachable = (mobile.advertisedUrls ?? []).filter(
     (url) => url && !url.includes('127.0.0.1'),
   )
@@ -48,25 +48,14 @@ export function DiagnosticsSettingsMobileSection({
     !mobile.lanAccessEnabled &&
     reachable.length === 0
 
-  const copyToken = async () => {
-    if (!mobile.hubToken) return
+  const copyPairingCode = async () => {
+    if (!pairingCode) return
     try {
-      await navigator.clipboard.writeText(mobile.hubToken)
+      await navigator.clipboard.writeText(pairingCode)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
       setCopied(false)
-    }
-  }
-
-  const copyPairingCode = async () => {
-    if (!mobile.personalPairingCode) return
-    try {
-      await navigator.clipboard.writeText(mobile.personalPairingCode)
-      setCopiedPairing(true)
-      window.setTimeout(() => setCopiedPairing(false), 1500)
-    } catch {
-      setCopiedPairing(false)
     }
   }
 
@@ -75,7 +64,6 @@ export function DiagnosticsSettingsMobileSection({
       title={t('settings.diagnostics.mobileSync.title')}
       defaultCollapsed={false}
     >
-      <p className="tm-settings-row-hint">{t('settings.diagnostics.mobileSync.transportHint')}</p>
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.syncToggle')}
         hint={t('settings.diagnostics.mobileSync.syncToggleHint')}
@@ -114,36 +102,19 @@ export function DiagnosticsSettingsMobileSection({
         hint={t('settings.diagnostics.mobileSync.devicePairingHint')}
       >
         <div className="tm-settings-token-row">
-          {mobile.personalPairingCode ? (
-            <button
-              type="button"
-              className="tm-btn tm-btn--ghost tm-btn--sm"
-              onClick={() => void copyPairingCode()}
-            >
-              {copiedPairing
-                ? t('settings.diagnostics.mobileSync.copiedToken')
-                : t('settings.diagnostics.mobileSync.copyPairing')}
-            </button>
-          ) : (
-            <span className="tm-settings-token-mask">—</span>
-          )}
-        </div>
-      </SettingsRow>
-      <SettingsRow
-        label={t('settings.diagnostics.mobileSync.hubToken')}
-        hint={t('settings.diagnostics.mobileSync.hubTokenHint')}
-      >
-        <div className="tm-settings-token-row">
-          {mobile.hubToken ? (
-            <button
-              type="button"
-              className="tm-btn tm-btn--ghost tm-btn--sm"
-              onClick={() => void copyToken()}
-            >
-              {copied
-                ? t('settings.diagnostics.mobileSync.copiedToken')
-                : t('settings.diagnostics.mobileSync.copyToken')}
-            </button>
+          {pairingCode ? (
+            <>
+              <span className="tm-settings-static tm-settings-static--mono">{pairingCode}</span>
+              <button
+                type="button"
+                className="tm-btn tm-btn--ghost tm-btn--sm"
+                onClick={() => void copyPairingCode()}
+              >
+                {copied
+                  ? t('settings.diagnostics.mobileSync.copiedToken')
+                  : t('settings.diagnostics.mobileSync.copyPairing')}
+              </button>
+            </>
           ) : (
             <span className="tm-settings-token-mask">—</span>
           )}
@@ -160,15 +131,10 @@ export function DiagnosticsSettingsMobileSection({
         <span className="tm-settings-static">{mobile.hubBaseUrl ?? '—'}</span>
       </SettingsRow>
       {reachable.length > 0 ? (
-        <SettingsRow
-          label={t('settings.diagnostics.mobileSync.reachable')}
-          hint={t('settings.diagnostics.mobileSync.httpsFallbackHint')}
-        >
+        <SettingsRow label={t('settings.diagnostics.mobileSync.reachable')}>
           <span className="tm-settings-static">{reachable.join(' · ')}</span>
         </SettingsRow>
-      ) : (
-        <p className="tm-settings-row-hint">{t('settings.diagnostics.mobileSync.httpsFallbackHint')}</p>
-      )}
+      ) : null}
       <SettingsRow
         label={t('settings.diagnostics.mobileSync.wanToggle')}
         hint={t('settings.diagnostics.mobileSync.wanToggleHint')}

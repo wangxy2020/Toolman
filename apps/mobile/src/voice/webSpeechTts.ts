@@ -6,6 +6,35 @@ export class WebSpeechTtsEngine {
     return (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis ?? null
   }
 
+  private async ensureVoices(speech: SpeechSynthesis): Promise<SpeechSynthesisVoice[]> {
+    const existing = speech.getVoices()
+    if (existing.length > 0) return existing
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => resolve(), 2000)
+      speech.addEventListener(
+        'voiceschanged',
+        () => {
+          clearTimeout(timer)
+          resolve()
+        },
+        { once: true },
+      )
+    })
+    return speech.getVoices()
+  }
+
+  private pickVoice(
+    voices: SpeechSynthesisVoice[],
+    text: string,
+  ): SpeechSynthesisVoice | undefined {
+    if (voices.length === 0) return undefined
+    const wantZh = /[\u4e00-\u9fff]/.test(text)
+    const matchLang = (prefix: string) =>
+      voices.find((voice) => voice.lang.toLowerCase().startsWith(prefix))
+    if (wantZh) return matchLang('zh') ?? voices[0]
+    return matchLang('en') ?? voices[0]
+  }
+
   async speak(text: string, signal: AbortSignal): Promise<void> {
     const speech = this.speech
     const trimmed = text.trim()
@@ -14,9 +43,13 @@ export class WebSpeechTtsEngine {
     }
     if (signal.aborted) return
 
+    const voices = await this.ensureVoices(speech)
+    if (signal.aborted) return
     speech.cancel()
     await new Promise<void>((resolve, reject) => {
       const utter = new SpeechSynthesisUtterance(trimmed)
+      const voice = this.pickVoice(voices, trimmed)
+      if (voice) utter.voice = voice
       this.utterance = utter
       const onAbort = () => {
         speech.cancel()

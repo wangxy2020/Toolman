@@ -38,7 +38,7 @@ export const GROUP_SIDEBAR_MENUS: GroupSidebarMenu[] = [
     title: '群组消息',
     typeNoun: '消息',
     emptyTitle: '暂无消息',
-    emptyHint: '在这里输入消息，按 Enter 发送。此处发送的是群组消息，不会调用大模型。',
+    emptyHint: '在这里输入消息。网页版 Mac 用 ⌘Enter 发送，Windows 用 Alt+Enter 发送。此处发送的是群组消息，不会调用大模型。',
   },
   {
     id: 'agents',

@@ -113,4 +113,20 @@ describe('ToolmanSyncClient', () => {
     expect(snapshot.schemaVersion).toBe(1)
     expect(snapshot.kbs).toEqual([])
   })
+
+  it('includes the hub error body when a knowledge file download fails', async () => {
+    const client = new ToolmanSyncClient({
+      baseUrl: 'https://hub.example',
+      getAccessToken: async () => null,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ error: 'internal error' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })) as typeof fetch,
+    })
+
+    await expect(client.downloadKnowledgeFile('kb', 'doc')).rejects.toThrow(
+      /knowledge file download failed \(500\): \{"error":"internal error"\}/,
+    )
+  })
 })

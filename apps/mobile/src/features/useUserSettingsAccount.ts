@@ -23,6 +23,7 @@ import {
   redeemDevicePairingCode,
 } from '../storage/devicePairing'
 import { Platform } from 'react-native'
+import { isShortPairingCode, normalizePairingCode } from '@toolman/shared'
 import {
   formatAccountLabel,
   formatBindPhoneOtpHint,
@@ -92,6 +93,7 @@ export function useLoggedInAccount(props: {
         localDeviceId: deviceId,
         role,
       })
+      setHubToken(isShortPairingCode(pairingCode) ? normalizePairingCode(pairingCode) : pairingCode.trim())
       setPairingStatus(formatPairingStatus(record))
       setDevicePaired(true)
       setPairingCode('')

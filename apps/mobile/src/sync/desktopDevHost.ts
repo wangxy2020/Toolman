@@ -41,13 +41,13 @@ export function shouldProbeLoopbackFromHosts(options: {
   hostnames: string[]
 }): boolean {
   if (options.platformOs === 'web') {
-    return isLoopbackHostname(options.pageHostname)
+    return true
   }
   if (options.hostnames.length === 0) return true
   return options.hostnames.every((host) => isLoopbackHostname(host))
 }
 
-/** Loopback is only the desktop when this JS is running on the same computer. */
+/** Loopback is the desktop when this JS runs on the same computer, including hosted web. */
 export function shouldProbeLoopbackSyncHub(
   hostnames: string[] = listDesktopDevHostnames(),
 ): boolean {

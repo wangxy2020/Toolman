@@ -1,3 +1,9 @@
+/**
+ * Toolman Sync Hub
+ * Copyright (C) 2024–2026 Toolman Contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Source: https://github.com/wangxy2020/Toolman
+ */
 import { createServer, type Server } from 'node:http'
 import { logStructured } from './structured-log.service'
 import { isMobileSyncEnabled } from './mobile-sync.service'
@@ -36,8 +42,11 @@ export async function startMobileSyncHub(): Promise<{ baseUrl: string } | null> 
   ensureMobileSyncHubToken()
   server = createServer((req, res) => {
     void handleRequest(req, res).catch((error) => {
-      logStructured('mobile-sync', 'warn', `hub request failed: ${String(error)}`)
-      sendJson(res, 500, { error: 'internal error' }, req)
+      const message = error instanceof Error ? error.message : String(error)
+      logStructured('mobile-sync', 'warn', `hub request failed: ${message}`)
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: message }, req)
+      }
     })
   })
 

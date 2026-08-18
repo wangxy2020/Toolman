@@ -20,7 +20,7 @@ describe('communityListPageStatus', () => {
     })
     expect(status.tone).toBe('warning')
     expect(status.message).not.toMatch(/官方 Hub/)
-    expect(status.message).toMatch(/HTTPS/)
+    expect(status.message).toMatch(/桌面端/)
     expect(status.meta).toBeUndefined()
   })
 

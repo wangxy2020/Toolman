@@ -16,12 +16,14 @@ export function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, '')
 }
 
-/** Expo web talks to the desktop sidecar through a same-origin proxy to avoid CORS. */
+/** Expo web talks to the desktop sidecar through a same-origin proxy to avoid CORS.
+ * Hosted HTTPS pages must hit loopback directly — the Vercel proxy is not the user's desktop.
+ */
 function shouldUseCommunityHubProxy(baseUrl: string): boolean {
   if (Platform.OS !== 'web') return false
   const host = hostnameOfBaseUrl(baseUrl)
   if (!host) return false
-  if (isLoopbackHostname(host)) return true
+  if (isLoopbackHostname(host)) return !isHostedWebPage()
   if (isOfficialCommunityHubHost(host) && isHostedWebPage()) return true
   const pageHost = pageHostname()
   return Boolean(pageHost) && pageHost === host

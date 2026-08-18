@@ -60,7 +60,6 @@ describe('sync endpoint candidates', () => {
       'http://100.64.1.8:17890',
       DEFAULT_LOCAL_SYNC_BASE_URL,
       'http://localhost:17890',
-      OFFICIAL_TOOLMAN_HUB_URL,
     ])
   })
 
@@ -74,7 +73,6 @@ describe('sync endpoint candidates', () => {
       'http://192.168.1.8:17890',
       DEFAULT_LOCAL_SYNC_BASE_URL,
       'http://localhost:17890',
-      OFFICIAL_TOOLMAN_HUB_URL,
     ])
   })
 
@@ -84,7 +82,7 @@ describe('sync endpoint candidates', () => {
         packagerHostnames: ['192.168.1.8:8081'],
         includeLoopback: false,
       }),
-    ).toEqual(['http://192.168.1.8:17890', OFFICIAL_TOOLMAN_HUB_URL])
+    ).toEqual(['http://192.168.1.8:17890'])
   })
 
   it('ignores public hosted hostnames such as Vercel', () => {
@@ -99,10 +97,10 @@ describe('sync endpoint candidates', () => {
         packagerHostnames: ['toolman.vercel.app', '192.168.1.8:8081'],
         includeLoopback: false,
       }),
-    ).toEqual(['http://192.168.1.8:17890', OFFICIAL_TOOLMAN_HUB_URL])
+    ).toEqual(['http://192.168.1.8:17890'])
   })
 
-  it('does not derive a LAN Sync Hub from the official catalog, but uses it as WAN fallback', () => {
+  it('does not derive a LAN Sync Hub from the official catalog', () => {
     expect(
       listSyncBaseUrlCandidates({
         communityHubBaseUrl: 'https://hub.toolman.app',

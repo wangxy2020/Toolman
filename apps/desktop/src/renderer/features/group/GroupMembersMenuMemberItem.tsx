@@ -5,7 +5,6 @@ import { getGroupConnectionModeLabel, getGroupMemberRoleLabel } from '../../i18n
 import type { TranslateFn } from '../../i18n/I18nProvider'
 import {
   canManageTargetPerson,
-  selectCurrentMemberDevice,
   type GroupedP2pPerson,
 } from './group-member-utils'
 
@@ -52,7 +51,6 @@ export function GroupMembersMenuMemberItem({
   onOpenManageMenu,
 }: Props) {
   const isSelf = person.devices.some((device) => isSamePerson(device, self))
-  const current = selectCurrentMemberDevice(person, self)
   const manageable =
     canManage && canManageTargetPerson(selfMemberRole ?? undefined, person, self)
   const pending = person.status === 'invited'
@@ -103,23 +101,8 @@ export function GroupMembersMenuMemberItem({
         >
           {getGroupMemberRoleLabel(person.role, t)}
         </span>
-        <div className="tm-group-member-status-row">
-          <span
-            className={[
-              'tm-group-member-status',
-              !pending && person.online ? 'tm-group-member-status--online' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            title={memberStatusLabel(current, pending, t)}
-          >
-            {pending
-              ? t('groupPage.members.pendingJoin')
-              : person.online
-                ? t('groupPage.members.online')
-                : t('groupPage.members.offline')}
-          </span>
-          {manageable ? (
+        {manageable ? (
+          <div className="tm-group-member-status-row">
             <button
               type="button"
               className="tm-group-member-manage-btn"
@@ -129,8 +112,8 @@ export function GroupMembersMenuMemberItem({
             >
               <IconMoreHorizontal size={16} />
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     </li>
   )

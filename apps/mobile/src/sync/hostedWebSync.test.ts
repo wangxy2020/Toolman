@@ -19,10 +19,8 @@ describe('hostedWebSync', () => {
     ).toBeNull()
   })
 
-  it('shows soft hint when hosted web has no HTTPS sync URL', () => {
-    expect(hostedWebSyncSoftHint({ configuredSyncBaseUrl: 'http://192.168.1.8:17890' })).toMatch(
-      /WebRTC|配对|HTTPS/,
-    )
+  it('does not claim hosted web cannot reach a same-computer Sync Hub', () => {
+    expect(hostedWebSyncSoftHint({ configuredSyncBaseUrl: 'http://192.168.1.8:17890' })).toBeNull()
     expect(hostedWebSyncSoftHint({ configuredSyncBaseUrl: 'https://desktop.ts.net' })).toBeNull()
   })
 })

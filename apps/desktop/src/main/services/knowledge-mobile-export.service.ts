@@ -234,17 +234,18 @@ export function readMobileSyncKnowledgeFile(input: {
   kbId: string
   documentId: string
 }): { bytes: Buffer; mimeType: string; fileName: string } | null {
-  const workspaceId = requireWorkspaceId()
-  const kbRepo = getKnowledgeBaseRepository()
-  const kb = kbRepo.findRowById(input.kbId, workspaceId) ?? kbRepo.findRowByIdOnly(input.kbId)
-  if (!kb || !isSyncKnowledgeBaseKind(kb.kind)) return null
-
-  const doc = getDocumentRepository().findById(input.documentId, input.kbId)
+  const doc =
+    getDocumentRepository().findById(input.documentId, input.kbId) ??
+    getDocumentRepository().findDocumentById(input.documentId)
   if (!doc?.absolutePath || !existsSync(doc.absolutePath)) return null
 
-  return {
-    bytes: readFileSync(doc.absolutePath),
-    mimeType: doc.mimeType || 'application/octet-stream',
-    fileName: basename(doc.absolutePath),
+  try {
+    return {
+      bytes: readFileSync(doc.absolutePath),
+      mimeType: doc.mimeType || 'application/octet-stream',
+      fileName: basename(doc.absolutePath),
+    }
+  } catch {
+    return null
   }
 }

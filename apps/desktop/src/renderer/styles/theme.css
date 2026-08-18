@@ -5235,7 +5235,7 @@ html.theme-dark .tm-invite-action-btn {
 
 .tm-group-member-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--tm-border);
@@ -5318,19 +5318,10 @@ html.theme-dark .tm-invite-action-btn {
   color: var(--tm-accent);
 }
 
-.tm-group-member-status {
-  font-size: 11px;
-  color: var(--tm-text-secondary);
-}
-
 .tm-group-member-status-row {
   display: flex;
   align-items: center;
   gap: 2px;
-}
-
-.tm-group-member-status--online {
-  color: #16a34a;
 }
 
 .tm-group-member-manage-btn {

@@ -223,9 +223,9 @@ function unreachableSyncHubMessage(
   }
   const list = tried.length > 0 ? tried.join('、') : DEFAULT_LOCAL_SYNC_BASE_URL
   const hostedHint =
-    '网页优先走点到点/加密投递（需设备配对）；局域网 Sync Hub 在浏览器通常不可达。真机请用局域网配对令牌。'
+    '请先启动本机桌面端。手机请开局域网访问并填写 4 位配对码。'
   const localHint =
-    '同一局域网请开启桌面「与移动端同步」并填写配对令牌；也可粘贴设备配对码启用个人投递盒。'
+    '请确认桌面端已开启同步。本机预览一般无需配对码；手机请开局域网访问并填写配对码。'
   return `无法连接桌面 Sync Hub（${list}）。${isHostedWebPage() ? hostedHint : localHint}`
 }
 

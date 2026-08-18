@@ -122,13 +122,6 @@ export const groupPagePanelStyles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
     color: colors.accent,
   },
-  memberStatus: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  memberStatusOnline: {
-    color: colors.accent,
-  },
   dropzone: {
     alignItems: 'center',
     justifyContent: 'center',

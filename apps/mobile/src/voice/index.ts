@@ -5,5 +5,5 @@ export {
   resolveCuratedEdgeTtsVoice,
 } from './types'
 export { getMobileTtsController, MobileTtsController } from './ttsController'
-export { unlockAudioPlayback } from './audioUnlock'
+export { unlockAudioPlayback, getSharedAudioElement } from './audioUnlock'
 export { sanitizeSpeakableText, isSpeakableUtterance } from './sanitizeSpeakableText'
