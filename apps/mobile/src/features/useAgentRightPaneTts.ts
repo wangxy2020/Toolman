@@ -51,7 +51,8 @@ export function useAgentRightPaneTts(agentSettings: {
     const settings = settingsRef.current
     if (!settings.autoSpeak) return
     if (!content.trim()) return
-    unlockAudioPlayback()
+    // Do not call unlock here: generation is async and unlock's probe play().then(pause)
+    // used to stop the Edge TTS that starts a moment later. Send / first gesture already unlocked.
     const tts = getMobileTtsController()
     tts.configure({
       engine: settings.ttsEngine,

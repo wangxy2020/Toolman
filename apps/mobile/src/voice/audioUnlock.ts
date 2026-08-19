@@ -3,19 +3,32 @@
  * Keep one shared element — Chrome will not let a *new* Audio() play after await.
  *
  * Do not clear `src` / call `load()` after the probe: that re-locks autoplay.
+ * Do not pause the shared element unless it is still playing the silent probe —
+ * later pointerdown/unlock calls must not stop Edge TTS.
  */
 const AUDIO_KEY = '__toolmanUnlockedAudio'
 const WARMED_TTS_KEY = '__toolmanTtsWarmed'
 const SPEECH_UNLOCKED_KEY = '__toolmanSpeechUnlocked'
+const AUDIO_UNLOCKED_KEY = '__toolmanAudioUnlocked'
 
 /** 8 kHz mono 8-bit WAV with one silent sample — enough to satisfy play(). */
-const SILENT_WAV =
+export const SILENT_WAV =
   'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA'
 
 type AudioHost = typeof globalThis & {
   [AUDIO_KEY]?: HTMLAudioElement
   [WARMED_TTS_KEY]?: boolean
   [SPEECH_UNLOCKED_KEY]?: boolean
+  [AUDIO_UNLOCKED_KEY]?: boolean
+}
+
+export function isUnlockProbeSrc(src: string | null | undefined, pageHref?: string): boolean {
+  const value = src?.trim() ?? ''
+  if (!value) return true
+  if (value.startsWith('data:audio/wav')) return true
+  const href = pageHref?.trim() ?? ''
+  if (href && (value === href || value === `${href}/`)) return true
+  return false
 }
 
 export function getSharedAudioElement(): HTMLAudioElement | null {
@@ -67,8 +80,33 @@ function warmEdgeTtsApi(): void {
   })
 }
 
+export function isAudioPlaybackUnlocked(): boolean {
+  return Boolean((globalThis as AudioHost)[AUDIO_UNLOCKED_KEY])
+}
+
+export function resetAudioUnlockStateForTests(): void {
+  const host = globalThis as AudioHost
+  delete host[AUDIO_UNLOCKED_KEY]
+  delete host[WARMED_TTS_KEY]
+  delete host[SPEECH_UNLOCKED_KEY]
+  const audio = host[AUDIO_KEY]
+  if (audio) {
+    try {
+      audio.pause()
+    } catch {
+      // ignore
+    }
+  }
+  delete host[AUDIO_KEY]
+}
+
 export function unlockAudioPlayback(): void {
   if (typeof window === 'undefined') return
+  const host = globalThis as AudioHost
+  if (host[AUDIO_UNLOCKED_KEY]) {
+    warmSpeechVoices()
+    return
+  }
 
   try {
     const AudioContextCtor =
@@ -93,18 +131,27 @@ export function unlockAudioPlayback(): void {
   const audio = getSharedAudioElement()
   if (audio) {
     try {
-      if (!audio.src) audio.src = SILENT_WAV
-      audio.muted = true
-      void audio
-        .play()
-        .then(() => {
-          audio.pause()
-          audio.muted = false
-          audio.currentTime = 0
-        })
-        .catch(() => {
-          audio.muted = false
-        })
+      if (isUnlockProbeSrc(audio.src, window.location?.href)) {
+        audio.src = SILENT_WAV
+      }
+      if (!isUnlockProbeSrc(audio.src, window.location?.href) && !audio.paused) {
+        host[AUDIO_UNLOCKED_KEY] = true
+      } else {
+        audio.muted = true
+        void audio
+          .play()
+          .then(() => {
+            host[AUDIO_UNLOCKED_KEY] = true
+            if (isUnlockProbeSrc(audio.src, window.location?.href)) {
+              audio.pause()
+              audio.currentTime = 0
+            }
+            audio.muted = false
+          })
+          .catch(() => {
+            audio.muted = false
+          })
+      }
     } catch {
       audio.muted = false
     }

@@ -1,5 +1,15 @@
+let expoSpeechPromise: Promise<typeof import('expo-speech') | null> | null = null
+
+async function loadExpoSpeech(): Promise<typeof import('expo-speech') | null> {
+  if (!expoSpeechPromise) {
+    expoSpeechPromise = import('expo-speech').catch(() => null)
+  }
+  return expoSpeechPromise
+}
+
 export class WebSpeechTtsEngine {
   private utterance: SpeechSynthesisUtterance | null = null
+  private usingExpo = false
 
   private get speech(): SpeechSynthesis | null {
     if (typeof globalThis === 'undefined') return null
@@ -35,17 +45,37 @@ export class WebSpeechTtsEngine {
     return matchLang('en') ?? voices[0]
   }
 
+  private pickExpoLanguage(text: string): string {
+    return /[\u4e00-\u9fff]/.test(text) ? 'zh-CN' : 'en-US'
+  }
+
   async speak(text: string, signal: AbortSignal): Promise<void> {
-    const speech = this.speech
     const trimmed = text.trim()
-    if (!speech || !trimmed) {
-      throw new Error('当前环境不支持系统语音')
-    }
+    if (!trimmed) return
     if (signal.aborted) return
 
+    const speech = this.speech
+    if (speech) {
+      await this.speakBrowser(speech, trimmed, signal)
+      return
+    }
+
+    const expo = await loadExpoSpeech()
+    if (!expo) {
+      throw new Error('当前环境不支持系统语音')
+    }
+    await this.speakExpo(expo, trimmed, signal)
+  }
+
+  private async speakBrowser(
+    speech: SpeechSynthesis,
+    trimmed: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     const voices = await this.ensureVoices(speech)
     if (signal.aborted) return
     speech.cancel()
+    this.usingExpo = false
     await new Promise<void>((resolve, reject) => {
       const utter = new SpeechSynthesisUtterance(trimmed)
       const voice = this.pickVoice(voices, trimmed)
@@ -74,15 +104,71 @@ export class WebSpeechTtsEngine {
     })
   }
 
+  private async speakExpo(
+    expo: typeof import('expo-speech'),
+    trimmed: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (signal.aborted) return
+    this.usingExpo = true
+    await expo.stop()
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        void expo.stop()
+        cleanup()
+        resolve()
+      }
+      const cleanup = () => {
+        signal.removeEventListener('abort', onAbort)
+        this.usingExpo = false
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      expo.speak(trimmed, {
+        language: this.pickExpoLanguage(trimmed),
+        onDone: () => {
+          cleanup()
+          resolve()
+        },
+        onStopped: () => {
+          cleanup()
+          resolve()
+        },
+        onError: () => {
+          cleanup()
+          if (signal.aborted) resolve()
+          else reject(new Error('系统语音播放失败'))
+        },
+      })
+    })
+  }
+
   pause(): void {
+    if (this.usingExpo) {
+      void loadExpoSpeech().then((expo) => {
+        void expo?.pause()
+      })
+      return
+    }
     this.speech?.pause()
   }
 
   resume(): void {
+    if (this.usingExpo) {
+      void loadExpoSpeech().then((expo) => {
+        void expo?.resume()
+      })
+      return
+    }
     this.speech?.resume()
   }
 
   cancel(): void {
+    if (this.usingExpo) {
+      void loadExpoSpeech().then((expo) => {
+        void expo?.stop()
+      })
+      this.usingExpo = false
+    }
     this.speech?.cancel()
     this.utterance = null
   }

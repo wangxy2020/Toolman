@@ -1,4 +1,4 @@
-import { getSharedAudioElement } from './audioUnlock'
+import { getSharedAudioElement, SILENT_WAV } from './audioUnlock'
 
 /**
  * Controllable HTMLAudioElement playback for Edge TTS MP3 blobs (web / RN-web).
@@ -16,8 +16,13 @@ export class ControllableAudioPlayback {
       return Promise.reject(new Error('当前环境不支持音频播放'))
     }
     this.cleanup(false)
+    const previousUrl = this.objectUrl
+    this.objectUrl = null
     this.closed = false
-    if (signal.aborted) return Promise.resolve()
+    if (signal.aborted) {
+      if (previousUrl) URL.revokeObjectURL(previousUrl)
+      return Promise.resolve()
+    }
 
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob)
@@ -25,6 +30,7 @@ export class ControllableAudioPlayback {
       audio.muted = false
       audio.preload = 'auto'
       audio.src = url
+      if (previousUrl) URL.revokeObjectURL(previousUrl)
       this.audio = audio
       this.objectUrl = url
       this.signal = signal
@@ -108,8 +114,11 @@ export class ControllableAudioPlayback {
       audio.onerror = null
       try {
         audio.pause()
-        audio.removeAttribute('src')
-        audio.load()
+        // Shared element must stay unlocked. `removeAttribute('src')` + `load()`
+        // re-locks Chrome autoplay and kills the next Edge TTS play() after fetch.
+        if (revoke) {
+          audio.src = SILENT_WAV
+        }
       } catch {
         // ignore
       }
@@ -117,7 +126,7 @@ export class ControllableAudioPlayback {
 
     if (revoke && this.objectUrl) {
       URL.revokeObjectURL(this.objectUrl)
+      this.objectUrl = null
     }
-    this.objectUrl = null
   }
 }
