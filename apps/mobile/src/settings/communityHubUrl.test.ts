@@ -49,4 +49,16 @@ describe('pickReachableCommunityHubBaseUrl', () => {
     expect(picked.url).toBe(OFFICIAL_TOOLMAN_HUB_URL)
     expect(picked.tried).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
   })
+
+  it('falls back to same-computer loopback after the official Hub on hosted web', async () => {
+    const picked = await pickReachableCommunityHubBaseUrl('', async (url) => url === DEFAULT_COMMUNITY_HUB_BASE_URL, {
+      includeLoopback: true,
+      includeOfficialHub: true,
+      officialHubFirst: true,
+    })
+    expect(picked.online).toBe(true)
+    expect(picked.url).toBe(DEFAULT_COMMUNITY_HUB_BASE_URL)
+    expect(picked.tried[0]).toBe(OFFICIAL_TOOLMAN_HUB_URL)
+    expect(picked.tried).toContain(DEFAULT_COMMUNITY_HUB_BASE_URL)
+  })
 })

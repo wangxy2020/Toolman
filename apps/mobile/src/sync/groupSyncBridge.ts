@@ -41,6 +41,11 @@ export function subscribeGroupSync(
 }
 
 export function emitGroupSync(snapshot: GroupSyncSnapshot): void {
+  // An empty pull (foreign hub / identity switch) must not wipe groups the
+  // current account already has in memory or on disk.
+  if (snapshot.groups.length === 0 && lastSnapshot && lastSnapshot.groups.length > 0) {
+    return
+  }
   lastSnapshot = snapshot
   for (const listener of listeners) listener(snapshot)
 }
@@ -60,6 +65,7 @@ export async function persistGroupSyncSnapshot(
   store: GroupChatStore,
   snapshot: GroupSyncSnapshot,
 ): Promise<void> {
+  if (snapshot.groups.length === 0 && store.groups.length > 0) return
   await saveGroupChatStore({
     ...store,
     groups: snapshot.groups,

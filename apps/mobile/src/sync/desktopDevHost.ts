@@ -58,7 +58,7 @@ export function shouldProbeLoopbackSyncHub(
   })
 }
 
-/** Public community catalog: hosted pages should hit the official Hub, not phone loopback. */
+/** Public catalog: hosted pages try the official Hub first, then this computer's desktop sidecar. */
 export function communityHubProbeFlags(): {
   packagerHostnames: string[]
   includeLoopback: boolean
@@ -69,7 +69,7 @@ export function communityHubProbeFlags(): {
   const hosted = isHostedWebPage()
   return {
     packagerHostnames,
-    includeLoopback: hosted ? false : shouldProbeLoopbackSyncHub(packagerHostnames),
+    includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
     includeOfficialHub: true,
     officialHubFirst: hosted,
   }

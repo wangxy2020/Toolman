@@ -1,5 +1,5 @@
 import {
-  DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
+  DEFAULT_LOCAL_COMMUNITY_HUB_PORT,
   DEFAULT_LOCAL_SYNC_BASE_URL,
   DEFAULT_LOCAL_SYNC_PORT,
   hostnameOfBaseUrl,
@@ -134,18 +134,32 @@ export async function postJson(hubUrl: string, path: string, body: unknown): Pro
   return json
 }
 
-/** Workspace mailbox lives on the owner's Sync Hub, never hub.toolman.app. */
+/** Workspace mailbox lives on the owner's Sync Hub, never hub.toolman.app or :3721 catalog. */
+export function isWorkspaceMailboxHub(url: string): boolean {
+  const trimmed = url.trim()
+  if (!trimmed || trimmed.startsWith('/') || !/^https?:\/\//i.test(trimmed)) return false
+  const host = hostnameOfBaseUrl(trimmed)
+  if (!host || isOfficialCommunityHubHost(host)) return false
+  try {
+    const parsed = new URL(trimmed)
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
+    if (port === String(DEFAULT_LOCAL_COMMUNITY_HUB_PORT)) return false
+  } catch {
+    return false
+  }
+  return true
+}
+
 export function mailboxHubs(primary: string): string[] {
   const hubs = [
     primary,
     DEFAULT_LOCAL_SYNC_BASE_URL,
     `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}`,
-    DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
   ]
   const out: string[] = []
   for (const raw of hubs) {
     const url = raw?.trim().replace(/\/+$/, '') ?? ''
-    if (!url || out.includes(url) || isOfficialCommunityHubHost(hostnameOfBaseUrl(url))) continue
+    if (!url || out.includes(url) || !isWorkspaceMailboxHub(url)) continue
     out.push(url)
   }
   return out
@@ -158,7 +172,7 @@ export function listMailboxSessionHubs(
   const out: string[] = []
   for (const raw of [...extras, ...mailboxHubs(primary)]) {
     const url = raw?.trim().replace(/\/+$/, '') ?? ''
-    if (!url || out.includes(url) || isOfficialCommunityHubHost(hostnameOfBaseUrl(url))) continue
+    if (!url || out.includes(url) || !isWorkspaceMailboxHub(url)) continue
     out.push(url)
   }
   return out

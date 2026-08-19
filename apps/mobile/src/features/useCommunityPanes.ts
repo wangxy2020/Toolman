@@ -12,6 +12,7 @@ import { isCommunityModerator } from '../auth/localAuth'
 import { useMobileApp } from '../state/MobileAppContext'
 import { resolveCommunityHubBaseUrl, pickReachableCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { isHostedWebPage, communityHubProbeFlags } from '../sync/desktopDevHost'
+import { primeLocalNetworkAccess } from '../sync/localNetworkFetch'
 import {
   fetchCommunityMessages,
   fetchCommunityNews,
@@ -106,6 +107,7 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
       setLoading(true)
       setError(null)
       try {
+        await primeLocalNetworkAccess()
         const picked = await pickReachableCommunityHubBaseUrl(configuredHub, probeCommunityHub, {
           ...communityHubProbeFlags(),
         })

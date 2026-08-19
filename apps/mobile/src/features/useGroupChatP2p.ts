@@ -7,6 +7,7 @@ import { useGroupChatMesh } from './useGroupChatMesh'
 import { consumePendingInvites, subscribePendingInvites } from '../p2p/pendingInvites'
 import {
   peekGroupSync,
+  resetGroupSyncSnapshot,
   subscribeGroupSync,
   type GroupSyncSnapshot,
 } from '../sync/groupSyncBridge'
@@ -58,7 +59,11 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
   )
 
   const applySyncSnapshot = useCallback((snapshot: GroupSyncSnapshot) => {
-    setGroups(snapshot.groups)
+    setGroups((current) => {
+      if (snapshot.groups.length === 0 && current.length > 0) return current
+      return snapshot.groups
+    })
+    if (snapshot.groups.length === 0) return
     setMembersByGroup(
       Object.fromEntries(
         Object.entries(snapshot.membersByGroup).map(([id, members]) => [
@@ -79,6 +84,7 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
   }, [applyLivePresence, setActiveGroupId, setExpanded, setGroups, setMembersByGroup])
 
   useEffect(() => {
+    resetGroupSyncSnapshot()
     setGroups([])
     setActiveGroupId(null)
     setMessagesByGroup({})
@@ -90,7 +96,10 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
     setReady(false)
     const unsub = subscribeGroupSync(applySyncSnapshot)
     void loadGroupChatStore().then((storeData) => {
-      if (!peekGroupSync()) {
+      const live = peekGroupSync()
+      // An empty in-flight snapshot is still truthy and used to skip this
+      // account's scoped store after switching identity.
+      if (!live?.groups.length) {
         setGroups(storeData.groups)
         setActiveGroupId(storeData.activeGroupId)
         setMessagesByGroup(storeData.messagesByGroup)

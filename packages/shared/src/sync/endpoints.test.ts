@@ -66,6 +66,17 @@ describe('sync endpoint candidates', () => {
       DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
       OFFICIAL_TOOLMAN_HUB_URL,
     ])
+    expect(
+      listCommunityHubProbeCandidates('', {
+        includeLoopback: true,
+        includeOfficialHub: true,
+        officialHubFirst: true,
+      }),
+    ).toEqual([
+      OFFICIAL_TOOLMAN_HUB_URL,
+      'http://localhost:3721',
+      DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
+    ])
   })
 
   it('derives a LAN Sync Hub sibling from a community hub address', () => {

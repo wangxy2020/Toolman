@@ -86,6 +86,18 @@ describe('mailbox hubs', () => {
     expect(hubs[0]).toBe('http://192.168.1.8:17890')
     expect(hubs).toContain('http://127.0.0.1:17890')
     expect(hubs.some((url) => url.includes('hub.toolman.app'))).toBe(false)
+    expect(hubs.some((url) => url.includes(':3721'))).toBe(false)
+  })
+
+  it('ignores community proxy paths and catalog ports', () => {
+    expect(mailboxHubs('/api/community-hub')).toEqual([
+      'http://127.0.0.1:17890',
+      'http://localhost:17890',
+    ])
+    expect(mailboxHubs('http://127.0.0.1:3721')).toEqual([
+      'http://127.0.0.1:17890',
+      'http://localhost:17890',
+    ])
   })
 })
 

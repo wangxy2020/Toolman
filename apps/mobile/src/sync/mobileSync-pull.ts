@@ -65,6 +65,13 @@ const KNOWLEDGE_WAN_SOFT_MESSAGE =
 async function appliedAfterDiscardingForeign(syncState: MobileSyncState): Promise<AppliedSync> {
   const discarded = await discardForeignPrivateWorkspace(syncState)
   const groupStore = await readGroupSyncBaseline()
+  if (groupStore.groups.length > 0) {
+    emitGroupSync({
+      groups: groupStore.groups,
+      membersByGroup: groupStore.membersByGroup,
+      activeGroupId: groupStore.activeGroupId,
+    })
+  }
   return {
     notes: discarded.notes.notes,
     deletedNotes: discarded.notes.deletedNotes,
