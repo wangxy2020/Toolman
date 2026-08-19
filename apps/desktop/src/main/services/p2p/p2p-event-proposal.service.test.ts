@@ -6,6 +6,11 @@ vi.mock('./p2p-events-channel', () => ({
   sendReplicationMessageOnEventsChannel,
 }))
 
+vi.mock('./p2p-member-manage-proposal', () => ({
+  authorizeMemberManagementProposal: () => ({ ok: true }),
+  isMemberManagementProposal: () => false,
+}))
+
 import { handleRemoteEventProposal } from './p2p-event-proposal.service'
 
 describe('p2p-event-proposal.service', () => {

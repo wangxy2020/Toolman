@@ -187,6 +187,7 @@ export async function probeCommunityHub(baseUrl: string): Promise<boolean> {
     }
   }
   if (await probe('/health')) return true
-  return probe('/api/v1/health')
+  if (await probe('/api/v1/health')) return true
+  return probe('/api/v1/news/articles?sort=diverse&limit=1')
 }
 

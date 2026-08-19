@@ -1,6 +1,7 @@
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
-  OFFICIAL_TOOLMAN_HUB_URL,
+  DEFAULT_LOCAL_SYNC_BASE_URL,
+  DEFAULT_LOCAL_SYNC_PORT,
   hostnameOfBaseUrl,
   isOfficialCommunityHubHost,
   isPrivateOrLoopbackHostname,
@@ -133,7 +134,32 @@ export async function postJson(hubUrl: string, path: string, body: unknown): Pro
   return json
 }
 
+/** Workspace mailbox lives on the owner's Sync Hub, never hub.toolman.app. */
 export function mailboxHubs(primary: string): string[] {
-  const hubs = [primary, DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL, OFFICIAL_TOOLMAN_HUB_URL]
-  return hubs.filter((url, index) => hubs.indexOf(url) === index)
+  const hubs = [
+    primary,
+    DEFAULT_LOCAL_SYNC_BASE_URL,
+    `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}`,
+    DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
+  ]
+  const out: string[] = []
+  for (const raw of hubs) {
+    const url = raw?.trim().replace(/\/+$/, '') ?? ''
+    if (!url || out.includes(url) || isOfficialCommunityHubHost(hostnameOfBaseUrl(url))) continue
+    out.push(url)
+  }
+  return out
+}
+
+export function listMailboxSessionHubs(
+  primary: string,
+  extras: Array<string | null | undefined> = [],
+): string[] {
+  const out: string[] = []
+  for (const raw of [...extras, ...mailboxHubs(primary)]) {
+    const url = raw?.trim().replace(/\/+$/, '') ?? ''
+    if (!url || out.includes(url) || isOfficialCommunityHubHost(hostnameOfBaseUrl(url))) continue
+    out.push(url)
+  }
+  return out
 }

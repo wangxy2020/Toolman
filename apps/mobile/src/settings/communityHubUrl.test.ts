@@ -30,12 +30,23 @@ describe('pickReachableCommunityHubBaseUrl', () => {
     expect(picked.tried[0]).toBe('http://localhost:3721')
   })
 
-  it('does not auto-probe the official Hub', async () => {
+  it('does not auto-probe the official Hub unless asked', async () => {
     const picked = await pickReachableCommunityHubBaseUrl('', async () => false, {
       includeLoopback: false,
     })
     expect(picked.online).toBe(false)
     expect(picked.tried).toEqual([])
     expect(picked.tried).not.toContain(OFFICIAL_TOOLMAN_HUB_URL)
+  })
+
+  it('can probe the official Hub as a last-resort public catalog', async () => {
+    const picked = await pickReachableCommunityHubBaseUrl('', async (url) => url === OFFICIAL_TOOLMAN_HUB_URL, {
+      includeLoopback: false,
+      includeOfficialHub: true,
+      officialHubFirst: true,
+    })
+    expect(picked.online).toBe(true)
+    expect(picked.url).toBe(OFFICIAL_TOOLMAN_HUB_URL)
+    expect(picked.tried).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
   })
 })

@@ -64,12 +64,13 @@ const KNOWLEDGE_WAN_SOFT_MESSAGE =
 
 async function appliedAfterDiscardingForeign(syncState: MobileSyncState): Promise<AppliedSync> {
   const discarded = await discardForeignPrivateWorkspace(syncState)
+  const groupStore = await readGroupSyncBaseline()
   return {
     notes: discarded.notes.notes,
     deletedNotes: discarded.notes.deletedNotes,
     knowledgeMeta: [],
     classroomCourses: [],
-    groups: [],
+    groups: groupStore.groups,
     nextCursor: null,
     hostsOnline: 0,
     snapshot: null,

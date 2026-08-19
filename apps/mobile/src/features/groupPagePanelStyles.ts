@@ -103,11 +103,26 @@ export const groupPagePanelStyles = StyleSheet.create({
     color: colors.textSecondary,
   },
   memberDeviceOnline: {
-    color: '#16a34a',
+    color: colors.online,
   },
   memberEnd: {
     alignItems: 'flex-end',
     gap: 4,
+  },
+  memberStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  memberManageBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  memberManageBtnPressed: {
+    backgroundColor: colors.hover,
   },
   memberRole: {
     fontSize: 11,

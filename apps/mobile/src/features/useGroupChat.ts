@@ -9,6 +9,7 @@ import { canShareToDesktopGroup } from '../p2p/shareToGroup'
 import { useMobileApp } from '../state/MobileAppContext'
 import { GroupSettingsModal } from './GroupSettingsModal'
 import type { GroupChatContextValue, GroupChatSelf } from './groupChatContext.types'
+import { useGroupChatMembers } from './useGroupChatMembers'
 import { useGroupChatMessages } from './useGroupChatMessages'
 import { useGroupChatP2p } from './useGroupChatP2p'
 import { useGroupChatState } from './useGroupChatState'
@@ -35,6 +36,7 @@ export function GroupChatProvider({ children }: { children: ReactNode }) {
 
   const store = useGroupChatState(self, auth?.identityId)
   const { createOrReuseInvite, joinGroupByInvite } = useGroupChatP2p(self, store)
+  const { removeMember, updateMemberRole } = useGroupChatMembers(self, store)
   const messagesApi = useGroupChatMessages({
     self,
     activeGroupId: store.activeGroupId,
@@ -109,6 +111,8 @@ export function GroupChatProvider({ children }: { children: ReactNode }) {
       canShareToActiveGroup,
       createOrReuseInvite,
       joinGroupByInvite,
+      removeMember,
+      updateMemberRole,
       openSettingsModal: () => setSettingsOpen(true),
     }),
     [
@@ -131,6 +135,8 @@ export function GroupChatProvider({ children }: { children: ReactNode }) {
       canShareToActiveGroup,
       createOrReuseInvite,
       joinGroupByInvite,
+      removeMember,
+      updateMemberRole,
       setSettingsOpen,
     ],
   )

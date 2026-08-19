@@ -12,7 +12,11 @@ vi.mock('../sync/desktopDevHost', () => ({
 }))
 
 import { isHostedWebPage } from '../sync/desktopDevHost'
-import { communityHubRequestUrl, isCommunityHubHealthBody } from './communityHubClient'
+import {
+  communityHubRequestUrl,
+  isCommunityHubHealthBody,
+  probeCommunityHub,
+} from './communityHubClient'
 
 describe('communityHubRequestUrl', () => {
   it('uses the Expo same-origin proxy for loopback hubs on web', () => {
@@ -45,5 +49,24 @@ describe('isCommunityHubHealthBody', () => {
     expect(isCommunityHubHealthBody('{"status":"ok"}')).toBe(true)
     expect(isCommunityHubHealthBody('<!doctype html>')).toBe(false)
     expect(isCommunityHubHealthBody('')).toBe(false)
+  })
+})
+
+describe('probeCommunityHub', () => {
+  it('treats a reachable news catalog as online when /health is down', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/health')) return new Response('error', { status: 500 })
+      if (url.includes('/news/articles')) {
+        return new Response('{"ok":true,"data":{"items":[]}}', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('', { status: 404 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(probeCommunityHub('https://hub.toolman.app')).resolves.toBe(true)
+    vi.unstubAllGlobals()
   })
 })

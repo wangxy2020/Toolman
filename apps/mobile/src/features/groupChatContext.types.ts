@@ -3,6 +3,7 @@ import type {
   GroupChatMessage,
   GroupInvite,
   GroupMember,
+  GroupMemberRole,
   GroupSharedItem,
   GroupSharedKind,
   GroupWorkspace,
@@ -46,6 +47,8 @@ export type GroupChatContextValue = {
   createOrReuseInvite: () => GroupInvite | null
   joinGroupByInvite: (input: string) => { ok: true } | { ok: false; message: string }
   openSettingsModal: () => void
+  removeMember: (memberId: string) => Promise<void>
+  updateMemberRole: (memberId: string, role: GroupMemberRole) => Promise<void>
 }
 
 export type GroupChatSelf = {

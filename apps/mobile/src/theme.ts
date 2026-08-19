@@ -14,6 +14,7 @@ export const colors = {
   accentSoft: '#e8f7f0',
   hover: '#f5f5f5',
   danger: '#dc2626',
+  online: '#16a34a',
   inputBg: '#f5f5f5',
 }
 

@@ -25,6 +25,7 @@ import { listActiveAgentShareListings } from './p2p-agent-share-listing'
 import { checkReplayGuard } from './p2p-replay-guard.service'
 import { recordP2pPathMetric } from './p2p-path-metrics'
 import { authorizeMailbox, memberVisible, proposalReplayHash } from './p2p-mailbox-auth'
+import { authorizeMemberManagementProposal, isMemberManagementProposal } from './p2p-member-manage-proposal'
 
 export async function applyIncomingMailbox(
   workspaceId: string,
@@ -103,6 +104,19 @@ export async function applyIncomingMailbox(
   if (!admitted.ok) {
     logStructured('p2p', 'warn', `mailbox propose rejected: ${admitted.reason}`)
     return
+  }
+  if (isMemberManagementProposal(plaintext.proposal)) {
+    const authorized = authorizeMemberManagementProposal({
+      workspaceId,
+      senderDeviceId: plaintext.proposal.sourceDeviceId,
+      resourceId: plaintext.proposal.resourceId,
+      eventType: plaintext.proposal.eventType,
+      payload: plaintext.proposal.payload,
+    })
+    if (!authorized.ok) {
+      logStructured('p2p', 'warn', `mailbox member management rejected: ${authorized.reason}`)
+      return
+    }
   }
   await appendP2pEventLocally({
     workspaceId,

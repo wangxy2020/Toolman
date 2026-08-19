@@ -17,6 +17,8 @@ export async function pickReachableCommunityHubBaseUrl(
   options?: {
     packagerHostnames?: Array<string | null | undefined>
     includeLoopback?: boolean
+    includeOfficialHub?: boolean
+    officialHubFirst?: boolean
   },
 ): Promise<{ url: string; online: boolean; tried: string[] }> {
   const tried = listCommunityHubProbeCandidates(configured, options)

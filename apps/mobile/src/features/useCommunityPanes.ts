@@ -11,11 +11,7 @@ import {
 import { isCommunityModerator } from '../auth/localAuth'
 import { useMobileApp } from '../state/MobileAppContext'
 import { resolveCommunityHubBaseUrl, pickReachableCommunityHubBaseUrl } from '../settings/communityHubUrl'
-import {
-  isHostedWebPage,
-  listDesktopDevHostnames,
-  shouldProbeLoopbackSyncHub,
-} from '../sync/desktopDevHost'
+import { isHostedWebPage, communityHubProbeFlags } from '../sync/desktopDevHost'
 import {
   fetchCommunityMessages,
   fetchCommunityNews,
@@ -110,10 +106,8 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
       setLoading(true)
       setError(null)
       try {
-        const packagerHostnames = listDesktopDevHostnames()
         const picked = await pickReachableCommunityHubBaseUrl(configuredHub, probeCommunityHub, {
-          packagerHostnames,
-          includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
+          ...communityHubProbeFlags(),
         })
         if (cancelled) return
         setHubBaseUrl(picked.url)

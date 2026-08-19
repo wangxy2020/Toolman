@@ -91,7 +91,7 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
           online: true,
         })
       }
-      if (pulledEnvelopes && appliedListings) break
+      if (pulledEnvelopes) break
     } catch (error) {
       lastError = error
     }

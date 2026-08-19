@@ -8,7 +8,7 @@ vi.mock('react-native', () => ({
 import { communityListPageStatus } from './communityPaneUtils'
 
 describe('communityListPageStatus', () => {
-  it('does not point hosted web at the official Hub', () => {
+  it('does not tell hosted web to start a local desktop for public news', () => {
     const status = communityListPageStatus({
       error: null,
       offline: true,
@@ -19,8 +19,8 @@ describe('communityListPageStatus', () => {
       hostedWeb: true,
     })
     expect(status.tone).toBe('warning')
-    expect(status.message).not.toMatch(/官方 Hub/)
-    expect(status.message).toMatch(/桌面端/)
+    expect(status.message).not.toMatch(/请先启动本机桌面端/)
+    expect(status.message).toMatch(/社区 Hub/)
     expect(status.meta).toBeUndefined()
   })
 

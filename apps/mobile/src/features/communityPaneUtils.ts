@@ -38,7 +38,7 @@ export function communityListPageStatus(input: {
     return {
       tone: 'warning',
       message: input.hostedWeb
-        ? '无法连接社区 Hub。请先启动本机桌面端，或在社区设置填写可达地址。'
+        ? '无法连接社区 Hub。请检查网络后重试，或在社区设置填写可达地址。'
         : '无法连接社区 Hub。请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
       meta: input.triedHubUrls.join(' · ') || (input.hostedWeb ? undefined : input.hubBaseUrl),
     }

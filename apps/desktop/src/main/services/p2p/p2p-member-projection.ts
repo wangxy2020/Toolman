@@ -1,15 +1,16 @@
-import {
-  P2pMemberRepository,
-  P2pWorkspaceRepository,
-  createP2pDeviceIdentityRepository,
-} from '@toolman/db'
+import { P2pMemberRepository, P2pWorkspaceRepository, createP2pDeviceIdentityRepository } from '@toolman/db'
+import type { P2pWorkspaceMemberRow } from '@toolman/db'
 import type { P2pMemberRole, WorkspaceEvent } from '@toolman/shared'
+import { isUsableMemberIdentityId } from '@toolman/shared'
 import { fireAndForget } from '../../lib/fire-and-forget'
 import { getDatabase } from '../../bootstrap/database'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { cleanupLocalMemberDeparture } from './p2p-workspace-member-cleanup.service'
 import { revokePeerTrustForWorkspace } from './p2p-peer.service'
 import { activateLocalMemberIfJoiner, triggerJoinerResourceSyncAfterActivation } from './p2p-member-activation.service'
+import { broadcastP2pMemberChanged } from './p2p-member-broadcast'
+import { toWorkspaceDto } from './p2p-member-shared-repos'
+import { publishP2pGroupSyncChange } from '../group-mobile-sync'
 
 const DEFAULT_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -32,6 +33,25 @@ function parseMemberRole(value: unknown): P2pMemberRole {
     return value
   }
   return 'member'
+}
+
+function visibleIdentityDevices(
+  workspaceId: string,
+  identityId: string | null | undefined,
+  fallback: P2pWorkspaceMemberRow,
+) {
+  const memberRepo = getMemberRepo()
+  if (!isUsableMemberIdentityId(identityId)) return [fallback]
+  const siblings = memberRepo
+    .listByWorkspaceAndIdentity(workspaceId, identityId!)
+    .filter((row) => row.status === 'active' || row.status === 'invited')
+  return siblings.length > 0 ? siblings : [fallback]
+}
+
+function publishMemberRoster(workspaceId: string): void {
+  const workspace = getWorkspaceRepo().findById(workspaceId)
+  if (workspace) publishP2pGroupSyncChange(toWorkspaceDto(workspace))
+  broadcastP2pMemberChanged({ workspaceId })
 }
 
 export function projectMemberJoinedEvent(event: WorkspaceEvent): void {
@@ -167,24 +187,57 @@ export function projectMemberLeftEvent(event: WorkspaceEvent): void {
     return
   }
 
-  memberRepo.update({
-    id: existing.id,
-    status:
-      typeof event.payload.reason === 'string' && event.payload.reason === 'removed'
-        ? 'removed'
-        : 'left',
-  })
-
+  const removed =
+    typeof event.payload.reason === 'string' && event.payload.reason === 'removed'
+  const status = removed ? 'removed' : 'left'
+  const targets = removed
+    ? visibleIdentityDevices(event.workspaceId, existing.identityId, existing)
+    : [existing]
   const localDeviceId = getP2pDeviceInfo().deviceId
-  if (existing.deviceId !== localDeviceId) {
-    revokePeerTrustForWorkspace(event.workspaceId, existing.deviceId)
+
+  for (const target of targets) {
+    memberRepo.update({
+      id: target.id,
+      status,
+    })
+    if (target.deviceId !== localDeviceId) {
+      revokePeerTrustForWorkspace(event.workspaceId, target.deviceId)
+    }
+    if (target.deviceId === localDeviceId) {
+      fireAndForget(
+        'p2p.member_departure',
+        cleanupLocalMemberDeparture(event.workspaceId),
+      )
+    }
   }
-  if (existing.deviceId === localDeviceId) {
-    fireAndForget(
-      'p2p.member_departure',
-      cleanupLocalMemberDeparture(event.workspaceId),
-    )
+  publishMemberRoster(event.workspaceId)
+}
+
+export function projectMemberUpdatedEvent(event: WorkspaceEvent): void {
+  if (event.resourceType !== 'Member' || event.eventType !== 'Updated') {
+    return
   }
+
+  const role = parseMemberRole(event.payload.role)
+  if (role === 'owner') return
+
+  const memberId =
+    typeof event.payload.member_id === 'string' ? event.payload.member_id : event.resourceId
+  const memberRepo = getMemberRepo()
+  const existing = memberRepo.findById(memberId)
+  if (!existing || existing.workspaceId !== event.workspaceId || existing.role === 'owner') {
+    return
+  }
+
+  const targets = visibleIdentityDevices(event.workspaceId, existing.identityId, existing)
+  for (const target of targets) {
+    if (target.role === 'owner') continue
+    memberRepo.update({
+      id: target.id,
+      role,
+    })
+  }
+  publishMemberRoster(event.workspaceId)
 }
 
 export function syncWorkspaceNameFromJoinEvent(event: WorkspaceEvent): void {

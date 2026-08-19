@@ -44,6 +44,27 @@ export function admitMailboxProposal(input: {
   return { ok: true }
 }
 
+export function isMemberManagementProposal(input: {
+  resourceType: string
+  eventType: string
+}): boolean {
+  return input.resourceType === 'Member' && (input.eventType === 'Left' || input.eventType === 'Updated')
+}
+
+export function admitMemberManagementProposal(input: {
+  senderActive: boolean
+  senderCanManageMembers: boolean
+  targetIsOwner: boolean
+  targetIsSelf: boolean
+  actorIsAdmin: boolean
+  targetIsAdmin: boolean
+}): { ok: true } | { ok: false; reason: 'forbidden' } {
+  if (!input.senderActive || !input.senderCanManageMembers) return { ok: false, reason: 'forbidden' }
+  if (input.targetIsSelf || input.targetIsOwner) return { ok: false, reason: 'forbidden' }
+  if (input.actorIsAdmin && input.targetIsAdmin) return { ok: false, reason: 'forbidden' }
+  return { ok: true }
+}
+
 export type P2pPathCounters = {
   meshSends: number
   mailboxPuts: number

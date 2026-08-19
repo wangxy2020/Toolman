@@ -8,7 +8,7 @@ vi.mock('react-native', () => ({
 }))
 
 import { hostnameFromHostOrUrl } from '@toolman/shared'
-import { shouldProbeLoopbackFromHosts } from './desktopDevHost'
+import { communityHubProbeFlags, shouldProbeLoopbackFromHosts } from './desktopDevHost'
 
 describe('hostnameFromHostOrUrl', () => {
   it('parses Expo hostUri and Hub URLs', () => {
@@ -51,5 +51,16 @@ describe('shouldProbeLoopbackFromHosts', () => {
         hostnames: ['192.168.1.8'],
       }),
     ).toBe(false)
+  })
+})
+
+describe('communityHubProbeFlags', () => {
+  it('skips phone loopback on hosted web and prefers the official catalog', () => {
+    vi.stubGlobal('location', { host: 'www.toolman.work', hostname: 'www.toolman.work' })
+    const flags = communityHubProbeFlags()
+    expect(flags.includeLoopback).toBe(false)
+    expect(flags.includeOfficialHub).toBe(true)
+    expect(flags.officialHubFirst).toBe(true)
+    vi.unstubAllGlobals()
   })
 })

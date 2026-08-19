@@ -5294,7 +5294,7 @@ html.theme-dark .tm-invite-action-btn {
 }
 
 .tm-group-member-device--online {
-  color: var(--tm-text);
+  color: #16a34a;
 }
 
 .tm-group-member-end {

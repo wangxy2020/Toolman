@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { saveModulePrefs } from '../settings/prefs'
 import { pickReachableCommunityHubBaseUrl, resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { useMobileApp } from '../state/MobileAppContext'
-import { listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from '../sync/desktopDevHost'
+import { communityHubProbeFlags } from '../sync/desktopDevHost'
 import {
   fetchCommunityHubHealth,
   fetchFederationCatalogCount,
@@ -52,10 +52,8 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const packagerHostnames = listDesktopDevHostnames()
       const picked = await pickReachableCommunityHubBaseUrl(configured, probeCommunityHub, {
-        packagerHostnames,
-        includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
+        ...communityHubProbeFlags(),
       })
       setLiveUrl(picked.url)
       if (!picked.online) {

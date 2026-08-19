@@ -19,6 +19,7 @@ import {
 import {
   projectMemberJoinedEvent,
   projectMemberLeftEvent,
+  projectMemberUpdatedEvent,
   syncWorkspaceNameFromJoinEvent,
 } from './p2p-member-projection'
 import { projectWorkspaceUpdatedFromEvent } from './p2p-workspace-vip-pool.service'
@@ -64,6 +65,10 @@ function projectMemberEvent(event: WorkspaceEvent): void {
   }
   if (event.eventType === 'Left') {
     projectMemberLeftEvent(event)
+    return
+  }
+  if (event.eventType === 'Updated') {
+    projectMemberUpdatedEvent(event)
   }
 }
 

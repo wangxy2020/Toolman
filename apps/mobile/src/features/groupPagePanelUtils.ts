@@ -1,6 +1,9 @@
 import {
+  canManageWorkspaceMembers,
   groupVisibleMembersByPerson as groupVisibleMembersByIdentity,
   isSamePerson,
+  isUsableMemberIdentityId,
+  type P2pMemberRole,
 } from '@toolman/shared'
 import type { GroupActivity, GroupMember, GroupMemberRole, GroupSharedKind } from '../storage/groupChat'
 
@@ -35,9 +38,59 @@ export function groupVisibleMembersByPerson(
 
 export function isSelfGroupMember(
   member: Pick<GroupMember, 'id' | 'identityId' | 'deviceId'>,
-  self: { identityId?: string | null; deviceId?: string | null },
+  self: { identityId?: string | null; deviceId?: string | null; memberId?: string | null },
 ): boolean {
   return isSamePerson(member, self)
+}
+
+export function resolveSelfMemberRole(
+  members: GroupMember[],
+  self: { identityId?: string | null; deviceId?: string | null },
+  owner?: { identityId?: string | null; deviceId?: string | null },
+): GroupMemberRole | undefined {
+  if (
+    (isUsableMemberIdentityId(owner?.identityId) &&
+      isUsableMemberIdentityId(self.identityId) &&
+      owner?.identityId === self.identityId) ||
+    Boolean(owner?.deviceId && self.deviceId && owner.deviceId === self.deviceId)
+  ) {
+    return 'owner'
+  }
+  return members.find((member) => isSelfGroupMember(member, self))?.role
+}
+
+export function canManageTargetMember(
+  actorRole: GroupMemberRole | undefined,
+  target: Pick<GroupMember, 'id' | 'identityId' | 'deviceId' | 'role'>,
+  self: { identityId?: string | null; deviceId?: string | null },
+): boolean {
+  if (!canManageWorkspaceMembers(actorRole)) return false
+  if (isSelfGroupMember(target, self)) return false
+  if (target.role === 'owner') return false
+  if (actorRole === 'admin' && target.role === 'admin') return false
+  return true
+}
+
+export function canManageTargetPerson(
+  actorRole: GroupMemberRole | undefined,
+  person: GroupedGroupMember,
+  self: { identityId?: string | null; deviceId?: string | null },
+): boolean {
+  const target = person.devices[0]
+  if (!target) return false
+  if (person.devices.some((device) => isSelfGroupMember(device, self))) return false
+  return canManageTargetMember(actorRole, { ...target, role: person.role }, self)
+}
+
+export function getAssignableMemberRoles(
+  actorRole: GroupMemberRole | undefined,
+  target: Pick<GroupMember, 'id' | 'identityId' | 'deviceId' | 'role'>,
+  self: { identityId?: string | null; deviceId?: string | null },
+): P2pMemberRole[] {
+  if (!canManageTargetMember(actorRole, target, self)) return []
+  const roles: P2pMemberRole[] = ['member', 'readonly']
+  if (actorRole === 'owner') roles.unshift('admin')
+  return roles
 }
 
 function deviceKindLabel(kind: GroupMember['deviceKind']): string {

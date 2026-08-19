@@ -80,7 +80,9 @@ export function startMailboxSync(target: MailboxSyncTarget): void {
   persistTarget(target)
   if (mailboxTimers.has(target.workspaceId)) return
   const tick = () => {
-    ignoreAsyncError(pullMailboxOnce(target), 'mailbox pull')
+    const current = mailboxTargets.get(target.workspaceId)
+    if (!current) return
+    ignoreAsyncError(pullMailboxOnce(current), 'mailbox pull')
   }
   tick()
   mailboxTimers.set(target.workspaceId, setInterval(tick, 15_000))

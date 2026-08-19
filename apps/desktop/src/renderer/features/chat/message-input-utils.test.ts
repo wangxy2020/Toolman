@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  insertAtCursor,
   readComposerText,
   shouldIgnoreComposerInput,
   shouldSubmitOnEnter,
@@ -42,6 +43,19 @@ describe('readComposerText', () => {
     const textarea = { value: '听写结果' } as HTMLTextAreaElement
     expect(readComposerText(textarea, '旧状态')).toBe('听写结果')
     expect(readComposerText(null, '旧状态')).toBe('旧状态')
+  })
+
+  it('keeps React text when the DOM has not committed an insertion yet', () => {
+    const textarea = { value: '' } as HTMLTextAreaElement
+    expect(readComposerText(textarea, '😀')).toBe('😀')
+  })
+})
+
+describe('insertAtCursor', () => {
+  it('appends at the end when there is no live selection', () => {
+    expect(
+      insertAtCursor({ selectionStart: 2, selectionEnd: 2 }, 'hi', '!'),
+    ).toEqual({ nextText: 'hi!', cursor: 3 })
   })
 })
 

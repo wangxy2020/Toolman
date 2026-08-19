@@ -59,6 +59,8 @@ export function GroupRightPane() {
     getSharedNoteBody,
     canShareToActiveGroup,
     createOrReuseInvite,
+    removeMember,
+    updateMemberRole,
   } = useGroupChat()
   const [inviteOpen, setInviteOpen] = useState(false)
   const [invite, setInvite] = useState<GroupInvite | null>(null)
@@ -138,6 +140,8 @@ export function GroupRightPane() {
             setInvite(createOrReuseInvite())
             setInviteOpen(true)
           }}
+          onRemoveMember={removeMember}
+          onUpdateMemberRole={updateMemberRole}
         />
       ) : null}
       {activeAction === 'activity' ? (

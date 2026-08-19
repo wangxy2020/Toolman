@@ -11,6 +11,7 @@ import { getKnownP2pConnections } from './p2p-connection.service'
 import { getP2pDeviceInfo } from './p2p-device-identity.service'
 import { sendReplicationMessageOnEventsChannel } from './p2p-events-channel'
 import { workspaceEventToWire, type ReplicationMessage } from './p2p-sync-protocol'
+import { authorizeMemberManagementProposal, isMemberManagementProposal } from './p2p-member-manage-proposal'
 
 const PROPOSAL_TIMEOUT_MS = 20_000
 
@@ -113,6 +114,30 @@ export async function handleRemoteEventProposal(
       reason: '事件载荷无效',
     })
     return
+  }
+
+  if (
+    isMemberManagementProposal({
+      resourceType: message.resourceType,
+      eventType: message.eventType,
+    })
+  ) {
+    const authorized = authorizeMemberManagementProposal({
+      workspaceId: message.workspaceId,
+      senderDeviceId: message.sourceDeviceId,
+      resourceId: message.resourceId,
+      eventType: message.eventType,
+      payload,
+    })
+    if (!authorized.ok) {
+      await sendReplicationMessage(proposerDeviceId, {
+        type: 'events.propose_rejected',
+        workspaceId: message.workspaceId,
+        proposalId: message.proposalId,
+        reason: authorized.reason,
+      })
+      return
+    }
   }
 
   try {

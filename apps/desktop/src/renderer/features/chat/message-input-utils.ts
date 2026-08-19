@@ -56,7 +56,7 @@ export function buildMessageInputPlaceholder({
 }
 
 export function insertAtCursor(
-  textarea: HTMLTextAreaElement,
+  textarea: Pick<HTMLTextAreaElement, 'selectionStart' | 'selectionEnd'>,
   currentText: string,
   insertion: string,
 ): { nextText: string; cursor: number } {
@@ -69,12 +69,19 @@ export function insertAtCursor(
 /** How long to ignore native input after send (system dictation often flushes late). */
 export const POST_SEND_INPUT_SUPPRESS_MS = 450
 
-/** Prefer the live DOM value so system dictation text is not lost before React state catches up. */
+/**
+ * Prefer the live DOM value so system dictation is not lost before React state
+ * catches up. If React already has text and the DOM is still empty, the controlled
+ * `value` has not committed yet (emoji / phrase insert) — keep React text.
+ */
 export function readComposerText(
   textarea: HTMLTextAreaElement | null | undefined,
   reactText: string,
 ): string {
-  return textarea?.value ?? reactText
+  const live = textarea?.value
+  if (live == null) return reactText
+  if (live.length === 0 && reactText.length > 0) return reactText
+  return live
 }
 
 export function shouldIgnoreComposerInput(suppressUntilMs: number, nowMs = Date.now()): boolean {

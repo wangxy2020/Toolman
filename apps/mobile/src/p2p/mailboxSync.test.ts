@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { applyWorkspaceWireEvents } from './groupChatMesh'
 import { subscribeMeshEvents } from './meshEvents'
-import { getMailboxTarget, patchMailboxOwnerDevice, readMailboxSeq, rememberMailboxSeq, startMailboxSync } from './mailboxSync'
+import {
+  getMailboxTarget,
+  mailboxHubs,
+  patchMailboxOwnerDevice,
+  readMailboxSeq,
+  rememberMailboxSeq,
+  startMailboxSync,
+} from './mailboxSync'
 
 describe('mailbox event apply', () => {
   it('projects a mailbox-delivered group chat event onto the UI stream', () => {
@@ -70,6 +77,15 @@ describe('mailbox event apply', () => {
       { id: 'ag-1' },
       { id: 'sess-1', parentId: 'ag-1', permission: 'callable' },
     ])
+  })
+})
+
+describe('mailbox hubs', () => {
+  it('keeps workspace mailbox on the owner Sync Hub, not the official catalog', () => {
+    const hubs = mailboxHubs('http://192.168.1.8:17890')
+    expect(hubs[0]).toBe('http://192.168.1.8:17890')
+    expect(hubs).toContain('http://127.0.0.1:17890')
+    expect(hubs.some((url) => url.includes('hub.toolman.app'))).toBe(false)
   })
 })
 

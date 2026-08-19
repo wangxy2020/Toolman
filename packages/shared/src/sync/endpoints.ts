@@ -1,3 +1,4 @@
+import { OFFICIAL_TOOLMAN_HUB_URL } from '../community/hub-config.js'
 import { isAccountSyncIdentityId } from './device-sync-identity.js'
 
 export const DEFAULT_LOCAL_SYNC_PORT = 17890
@@ -178,12 +179,14 @@ export function siblingHttpOrigin(baseUrl: string, port: number): string | null 
   }
 }
 
-/** Community Hub URLs to probe: user setting, Expo/LAN desktop host, then local sidecar. Official Hub is opt-in. */
+/** Community Hub URLs to probe: user setting, Expo/LAN desktop host, then local sidecar. Official Hub is last-resort / hosted-web. */
 export function listCommunityHubProbeCandidates(
   configured?: string | null,
   options?: {
     packagerHostnames?: Array<string | null | undefined>
     includeLoopback?: boolean
+    includeOfficialHub?: boolean
+    officialHubFirst?: boolean
   },
 ): string[] {
   const fromPackager = (options?.packagerHostnames ?? [])
@@ -194,13 +197,18 @@ export function listCommunityHubProbeCandidates(
     )
     .map((host) => siblingHttpOrigin(`http://${host}`, DEFAULT_LOCAL_COMMUNITY_HUB_PORT))
   const includeLoopback = options?.includeLoopback !== false
+  const official = options?.includeOfficialHub === true ? OFFICIAL_TOOLMAN_HUB_URL : null
+  const loopback = includeLoopback
+    ? [
+        `http://localhost:${DEFAULT_LOCAL_COMMUNITY_HUB_PORT}`,
+        DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
+      ]
+    : []
 
-  return uniqueUrls([
-    configured,
-    ...fromPackager,
-    includeLoopback ? `http://localhost:${DEFAULT_LOCAL_COMMUNITY_HUB_PORT}` : null,
-    includeLoopback ? DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL : null,
-  ])
+  if (options?.officialHubFirst) {
+    return uniqueUrls([configured, official, ...fromPackager, ...loopback])
+  }
+  return uniqueUrls([configured, ...fromPackager, ...loopback, official])
 }
 
 function syncOriginForHostname(hostname: string): string | null {

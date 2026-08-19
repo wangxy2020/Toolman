@@ -50,6 +50,22 @@ describe('sync endpoint candidates', () => {
     expect(
       listCommunityHubProbeCandidates('https://hub.toolman.app', { includeLoopback: false }),
     ).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
+    expect(
+      listCommunityHubProbeCandidates('', {
+        includeLoopback: false,
+        includeOfficialHub: true,
+        officialHubFirst: true,
+      }),
+    ).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
+    expect(
+      listCommunityHubProbeCandidates('', {
+        includeOfficialHub: true,
+      }),
+    ).toEqual([
+      'http://localhost:3721',
+      DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
+      OFFICIAL_TOOLMAN_HUB_URL,
+    ])
   })
 
   it('derives a LAN Sync Hub sibling from a community hub address', () => {

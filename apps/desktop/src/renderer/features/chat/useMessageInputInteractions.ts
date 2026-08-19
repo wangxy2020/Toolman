@@ -42,11 +42,20 @@ export function useMessageInputInteractions({
         return
       }
 
-      const { nextText, cursor } = insertAtCursor(textarea, text, insertion)
-      setText(nextText)
+      let cursor = 0
+      setText((prev) => {
+        const current = textarea.value || prev
+        const source =
+          textarea.value.length > 0
+            ? textarea
+            : { selectionStart: current.length, selectionEnd: current.length }
+        const next = insertAtCursor(source, current, insertion)
+        cursor = next.cursor
+        return next.nextText
+      })
       requestAnimationFrame(() => focusTextarea(cursor))
     },
-    [focusTextarea, setText, text],
+    [focusTextarea, setText],
   )
 
   const handleResizeStart = useCallback((startY: number) => {

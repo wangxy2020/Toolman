@@ -6,6 +6,8 @@ import {
   formatP2pPathMetrics,
   iceServersHaveTurn,
   isInviteExpired,
+  admitMemberManagementProposal,
+  isMemberManagementProposal,
 } from './hardening.js'
 
 describe('p2p hardening', () => {
@@ -42,5 +44,27 @@ describe('p2p hardening', () => {
       reason: 'replay',
     })
     expect(admitMailboxProposal({ senderCanWrite: true, duplicate: false })).toEqual({ ok: true })
+    expect(
+      admitMemberManagementProposal({
+        senderActive: true,
+        senderCanManageMembers: true,
+        targetIsOwner: false,
+        targetIsSelf: false,
+        actorIsAdmin: false,
+        targetIsAdmin: false,
+      }),
+    ).toEqual({ ok: true })
+    expect(
+      admitMemberManagementProposal({
+        senderActive: true,
+        senderCanManageMembers: false,
+        targetIsOwner: false,
+        targetIsSelf: false,
+        actorIsAdmin: false,
+        targetIsAdmin: false,
+      }),
+    ).toEqual({ ok: false, reason: 'forbidden' })
+    expect(isMemberManagementProposal({ resourceType: 'Member', eventType: 'Left' })).toBe(true)
+    expect(isMemberManagementProposal({ resourceType: 'Note', eventType: 'Left' })).toBe(false)
   })
 })
