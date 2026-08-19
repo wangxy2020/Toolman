@@ -4,15 +4,9 @@
  * Source: https://github.com/wangxy2020/Toolman
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-const hostedWeb = vi.hoisted(() => ({ current: false }))
-
-vi.mock('./desktopDevHost', () => ({
-  isHostedWebPage: () => hostedWeb.current,
-}))
-
 import {
   fetchWithLocalNetwork,
+  isHostedPublicWebPage,
   localNetworkRequestTimeoutMs,
   targetAddressSpaceForUrl,
 } from './localNetworkFetch'
@@ -29,14 +23,23 @@ describe('targetAddressSpaceForUrl', () => {
   })
 })
 
+describe('isHostedPublicWebPage', () => {
+  it('treats public DNS as hosted and loopback as local preview', () => {
+    expect(isHostedPublicWebPage('www.toolman.work')).toBe(true)
+    expect(isHostedPublicWebPage('localhost')).toBe(false)
+    expect(isHostedPublicWebPage('127.0.0.1')).toBe(false)
+    expect(isHostedPublicWebPage('')).toBe(false)
+  })
+})
+
 describe('localNetworkRequestTimeoutMs', () => {
   afterEach(() => {
-    hostedWeb.current = false
+    vi.unstubAllGlobals()
   })
 
   it('waits for the browser permission prompt only on hosted web', () => {
     expect(localNetworkRequestTimeoutMs('http://127.0.0.1:17890/health')).toBe(2500)
-    hostedWeb.current = true
+    vi.stubGlobal('location', { hostname: 'www.toolman.work' })
     expect(localNetworkRequestTimeoutMs('http://127.0.0.1:17890/health')).toBe(25_000)
     expect(localNetworkRequestTimeoutMs('/api/community-hub/health')).toBe(2500)
   })

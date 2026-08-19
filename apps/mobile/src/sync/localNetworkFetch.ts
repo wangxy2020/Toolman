@@ -4,7 +4,6 @@
  * Source: https://github.com/wangxy2020/Toolman
  */
 import { hostnameOfBaseUrl, isLoopbackHostname, isPrivateOrLoopbackHostname } from '@toolman/shared'
-import { isHostedWebPage } from './desktopDevHost'
 
 /** Chrome Local Network Access / mixed-content exemption for public HTTPS → loopback. */
 export type FetchTargetAddressSpace = 'loopback' | 'local' | 'public' | 'unknown'
@@ -17,6 +16,16 @@ function hrefOf(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input
   if (input instanceof URL) return input.href
   return input.url
+}
+
+function pageHostname(): string {
+  if (typeof globalThis === 'undefined' || !('location' in globalThis)) return ''
+  return (globalThis as { location?: { hostname?: string } }).location?.hostname ?? ''
+}
+
+/** Public HTTPS origin (not localhost). Kept free of react-native so Vitest can import this helper. */
+export function isHostedPublicWebPage(hostname: string = pageHostname()): boolean {
+  return Boolean(hostname) && !isLoopbackHostname(hostname)
 }
 
 /**
@@ -44,7 +53,7 @@ export function targetAddressSpaceForUrl(raw: string): FetchTargetAddressSpace |
 
 /** Give the user time to click Allow on Chrome's local-network prompt. */
 export function localNetworkRequestTimeoutMs(url: string, fallbackMs = 2500): number {
-  if (isHostedWebPage() && targetAddressSpaceForUrl(url)) return 25_000
+  if (isHostedPublicWebPage() && targetAddressSpaceForUrl(url)) return 25_000
   return fallbackMs
 }
 
