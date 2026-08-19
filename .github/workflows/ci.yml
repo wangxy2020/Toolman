@@ -11,6 +11,7 @@ jobs:
   check:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'v0.')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 

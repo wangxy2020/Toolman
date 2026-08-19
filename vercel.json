@@ -13,6 +13,10 @@
       "maxDuration": 30,
       "includeFiles": "apps/mobile/src/chat/llmProxyRequest.ts"
     },
+    "api/community-hub.ts": {
+      "maxDuration": 30,
+      "includeFiles": "apps/mobile/src/features/communityHubProxy.ts"
+    },
     "api/community-hub/[...path].ts": {
       "maxDuration": 30,
       "includeFiles": "apps/mobile/src/features/communityHubProxy.ts"

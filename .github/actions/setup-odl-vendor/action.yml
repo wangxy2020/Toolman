@@ -17,13 +17,40 @@ runs:
         path: vendor/open-data-loader-pdf
         key: odl-vendor-${{ runner.os }}-${{ hashFiles('scripts/sync-opendataloader-pdf-source.sh', 'scripts/pin-opendataloader-verapdf.sh') }}-main-v2
 
-    - name: Install Maven (Linux)
-      if: runner.os == 'Linux'
+    - name: Check ODL vendor artifacts
+      id: odl-artifacts
       shell: bash
-      run: sudo apt-get update && sudo apt-get install -y maven
+      run: |
+        ODL_PKG="vendor/open-data-loader-pdf/node/opendataloader-pdf"
+        if [[ -f "$ODL_PKG/lib/opendataloader-pdf-cli.jar" && -f "$ODL_PKG/dist/index.js" ]]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+          echo "ODL vendor artifacts already present; skipping Maven"
+        else
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          echo "ODL vendor artifacts missing; Maven will be required"
+        fi
+
+    - name: Install Maven (Linux)
+      if: runner.os == 'Linux' && steps.odl-artifacts.outputs.present != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v mvn >/dev/null 2>&1; then
+          mvn -version
+          exit 0
+        fi
+        # Do not use apt-get: ubuntu-latest often holds /var/lib/dpkg/lock-frontend
+        # (unattended-upgrades). `apt-get install maven` then hangs for hours.
+        MAVEN_VERSION=3.9.9
+        curl -fsSL --retry 3 --retry-delay 2 \
+          "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
+          -o /tmp/maven.tgz
+        sudo tar -xzf /tmp/maven.tgz -C /opt
+        sudo ln -sfn "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn
+        mvn -version
 
     - name: Install Maven (macOS)
-      if: runner.os == 'macOS'
+      if: runner.os == 'macOS' && steps.odl-artifacts.outputs.present != 'true'
       shell: bash
       run: |
         if ! command -v mvn >/dev/null 2>&1; then
@@ -31,7 +58,7 @@ runs:
         fi
 
     - name: Install Maven (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && steps.odl-artifacts.outputs.present != 'true'
       shell: pwsh
       run: |
         if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {

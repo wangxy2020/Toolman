@@ -15,12 +15,18 @@ export function communityHubProxyTarget(
   requestUrl: string,
   origin = resolveCommunityHubProxyOrigin(),
 ): string {
-  const url = new URL(requestUrl)
+  const url = new URL(requestUrl, 'http://localhost')
+  const base = origin.replace(/\/+$/, '')
+  const encoded = url.searchParams.get('u')?.trim()
+  if (encoded) {
+    const hubPath = encoded.startsWith('/') ? encoded : `/${encoded}`
+    return `${base}${hubPath}`
+  }
   const rest = url.pathname.startsWith(COMMUNITY_HUB_PROXY_PREFIX)
     ? url.pathname.slice(COMMUNITY_HUB_PROXY_PREFIX.length)
     : url.pathname
   const path = rest.startsWith('/') ? rest : `/${rest}`
-  return `${origin.replace(/\/+$/, '')}${path || '/health'}${url.search}`
+  return `${base}${path || '/health'}${url.search}`
 }
 
 function forwardHeaders(request: Request): Headers {

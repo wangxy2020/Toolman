@@ -20,6 +20,11 @@ describe('communityHubProxy', () => {
     expect(communityHubProxyTarget('http://localhost/api/community-hub/health')).toBe(
       `${DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL}/health`,
     )
+    expect(
+      communityHubProxyTarget(
+        'http://localhost/api/community-hub?u=%2Fapi%2Fv1%2Fnews%2Farticles%3Fsort%3Ddiverse%26limit%3D1',
+      ),
+    ).toBe(`${DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL}/api/v1/news/articles?sort=diverse&limit=1`)
   })
 
   it('forwards Vercel to the official Hub unless overridden', () => {

@@ -33,7 +33,9 @@ function shouldUseCommunityHubProxy(baseUrl: string): boolean {
 export function communityHubRequestUrl(baseUrl: string, path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   if (shouldUseCommunityHubProxy(baseUrl)) {
-    return `${COMMUNITY_HUB_PROXY_PREFIX}${normalizedPath}`
+    // Query form avoids Vercel 404 on `/api/community-hub/api/v1/...` (catch-all
+    // only matched a single extra segment in production).
+    return `${COMMUNITY_HUB_PROXY_PREFIX}?u=${encodeURIComponent(normalizedPath)}`
   }
   return `${normalizeBaseUrl(baseUrl)}${normalizedPath}`
 }

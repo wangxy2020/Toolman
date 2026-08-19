@@ -11,6 +11,9 @@
     "api/llm/chat.ts": {
       "maxDuration": 30
     },
+    "api/community-hub.ts": {
+      "maxDuration": 30
+    },
     "api/community-hub/[...path].ts": {
       "maxDuration": 30
     }

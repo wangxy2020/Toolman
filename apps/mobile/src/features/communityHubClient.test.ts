@@ -21,11 +21,14 @@ import {
 describe('communityHubRequestUrl', () => {
   it('uses the Expo same-origin proxy for loopback hubs on web', () => {
     expect(communityHubRequestUrl('http://127.0.0.1:3721', '/health')).toBe(
-      '/api/community-hub/health',
+      '/api/community-hub?u=%2Fhealth',
     )
     expect(communityHubRequestUrl('http://localhost:3721', '/api/v1/health')).toBe(
-      '/api/community-hub/api/v1/health',
+      '/api/community-hub?u=%2Fapi%2Fv1%2Fhealth',
     )
+    expect(
+      communityHubRequestUrl('http://127.0.0.1:3721', '/api/v1/news/articles?sort=diverse&limit=1'),
+    ).toBe('/api/community-hub?u=%2Fapi%2Fv1%2Fnews%2Farticles%3Fsort%3Ddiverse%26limit%3D1')
   })
 
   it('keeps remote hubs on their own origin', () => {
