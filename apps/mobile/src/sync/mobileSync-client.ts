@@ -1,10 +1,10 @@
 import { ToolmanSyncClient } from '@toolman/sync-client'
 import {
   DEFAULT_LOCAL_SYNC_BASE_URL,
+  isForeignDesktopSyncHub,
   isForeignSyncIdentity,
   isOfficialCommunityHubHost,
   isReachableSyncEndpointHealth,
-  isSyncHubHealthPayload,
   hostnameOfBaseUrl,
   listSyncBaseUrlCandidates,
   syncHubHealthIdentityId,
@@ -15,7 +15,7 @@ import { loadIdentity } from '../storage/secure'
 import { resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { loadModulePrefs } from '../settings/prefs'
 import { isHostedWebPage, listDesktopDevHostnames, shouldProbeLoopbackSyncHub } from './desktopDevHost'
-import { boundFetch, localNetworkRequestTimeoutMs } from './localNetworkFetch'
+import { boundFetch, localNetworkRequestTimeoutMs, primeLocalNetworkAccess } from './localNetworkFetch'
 
 let cachedSyncBaseUrl: string | null = null
 
@@ -181,10 +181,7 @@ async function classifySyncBaseUrl(
     if (!health) return 'miss'
     if (isProxyUpstreamDownPayload(health)) return 'proxy-upstream-down'
     if (isReachableSyncEndpointHealth(health)) {
-      // LAN Sync Hub authenticates with the pairing token. Its /health may still
-      // advertise the desktop guest UUID, which must not reject Authing mobile IDs
-      // (`ag-…` / `fb-…`) as a "foreign" hub.
-      if (isSyncHubHealthPayload(health)) return 'ok'
+      if (isForeignDesktopSyncHub(health, localIdentityId)) return 'foreign'
       if (isForeignSyncIdentity(syncHubHealthIdentityId(health), localIdentityId)) {
         return 'foreign'
       }
@@ -248,6 +245,7 @@ export async function resolveReachableMobileSyncBaseUrl(
   }).map(rewriteSyncBaseUrlForClient)
   // De-dupe after hosted-web rewrite collapses official hub → proxy.
   const uniqueCandidates = Array.from(new Set(candidates))
+  await primeLocalNetworkAccess()
   if (
     cachedSyncBaseUrl &&
     uniqueCandidates.includes(cachedSyncBaseUrl) &&
@@ -269,6 +267,7 @@ export async function resolveReachableMobileSyncBaseUrl(
     if (kind === 'proxy-upstream-down') proxyUpstreamDown = true
   }
   if (foreignUrl) {
+    cachedSyncBaseUrl = null
     throw new ForeignSyncHubError(foreignUrl)
   }
   throw new Error(

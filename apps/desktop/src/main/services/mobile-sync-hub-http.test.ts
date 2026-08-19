@@ -8,7 +8,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-import { asciiContentType, contentDispositionAttachment } from './mobile-sync-hub-http'
+import { asciiContentType, contentDispositionAttachment, readPresentedCommunityUserId } from './mobile-sync-hub-http'
 
 describe('contentDispositionAttachment', () => {
   it('encodes Chinese filenames so Node will accept the header', () => {
@@ -32,5 +32,16 @@ describe('asciiContentType', () => {
     expect(asciiContentType(null)).toBe('application/octet-stream')
     expect(asciiContentType('application/pdf')).toBe('application/pdf')
     expect(asciiContentType('文本/pdf')).toBe('application/octet-stream')
+  })
+})
+
+describe('readPresentedCommunityUserId', () => {
+  it('reads the community identity header', () => {
+    expect(
+      readPresentedCommunityUserId({
+        headers: { 'x-community-user-id': 'ag-abc' },
+      } as never),
+    ).toBe('ag-abc')
+    expect(readPresentedCommunityUserId({ headers: {} } as never)).toBe('')
   })
 })

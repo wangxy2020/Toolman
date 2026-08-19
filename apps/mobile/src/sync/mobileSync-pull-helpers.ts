@@ -10,12 +10,14 @@ import { emptyChatSessionsStore, saveChatSessions } from '../storage/chatSession
 import { saveClassroomCourses } from '../storage/classroomCourses'
 import { saveCreatedKnowledgeBases } from '../storage/createdKnowledgeBases'
 import { clearKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
+import { EMPTY_GROUP_CHAT_STORE, saveGroupChatStore } from '../storage/groupChat'
 import {
   EMPTY_MOBILE_SYNC_STATE,
   saveMobileSyncState,
   type MobileSyncState,
 } from './syncState'
 import { LOCAL_ONLY_SYNC_HUB_ID } from './syncIdentity'
+import { emitGroupSync, resetGroupSyncSnapshot } from './groupSyncBridge'
 import { isSystemDefaultFolderName } from '../features/knowledgeSidebar'
 import type { KnowledgeMetaItem } from './mobileSync-client'
 
@@ -64,9 +66,12 @@ export async function discardForeignPrivateWorkspace(_syncState: MobileSyncState
     saveClassroomCourses([]),
     saveChatSessions(emptyChatSessionsStore()),
     saveCreatedKnowledgeBases([]),
+    saveGroupChatStore({ ...EMPTY_GROUP_CHAT_STORE }),
     clearKnowledgeSnapshot(),
     saveMobileSyncState(nextState),
   ])
+  resetGroupSyncSnapshot()
+  emitGroupSync({ groups: [], membersByGroup: {}, activeGroupId: null })
   return { notes, classroomCourses: [], syncState: nextState }
 }
 

@@ -8,8 +8,10 @@ import {
   SYNC_HUB_SERVICE_NAME,
   SYNC_PAIRING_REDEEM_PATH,
   SyncPushInputSchema,
+  isAccountSyncIdentityId,
   isShortPairingCode,
   normalizePairingCode,
+  syncRequestMayAccessHub,
   type AgentHostCapability,
   type AgentHostPresence,
 } from '@toolman/shared'
@@ -36,6 +38,7 @@ import {
   notePairingFailure,
   parseJsonBody,
   readBody,
+  readPresentedCommunityUserId,
   requireHubAuth,
   asciiContentType,
   contentDispositionAttachment,
@@ -45,6 +48,24 @@ import {
   sendSse,
   tokensMatch,
 } from './mobile-sync-hub-http'
+import { getP2pPersonIdentityId } from './p2p/p2p-device-identity.service'
+
+function advertisedSyncHubIdentityId(): string | null {
+  try {
+    const identityId = getP2pPersonIdentityId().trim()
+    return isAccountSyncIdentityId(identityId) ? identityId : null
+  } catch {
+    return null
+  }
+}
+
+function requireHubAccountMatch(req: IncomingMessage, res: ServerResponse): boolean {
+  if (syncRequestMayAccessHub(readPresentedCommunityUserId(req), advertisedSyncHubIdentityId())) {
+    return true
+  }
+  sendJson(res, 403, { error: 'identity mismatch' }, req)
+  return false
+}
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method ?? 'GET'
@@ -60,12 +81,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     method === 'GET' &&
     (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/api/v1/health')
   ) {
-    // Do not advertise desktop guest UUID as identityId — mobile Authing IDs are
-    // `ag-…` / `fb-…`, and a mismatch would mark this hub foreign and block sync.
-    // LAN sync auth is the pairing token (requireHubAuth), same as pre-0.7.0.
+    // Advertise signed-in `ag-…` / `fb-…` only. Guest UUID must stay omitted so
+    // Authing mobile clients are not marked foreign.
+    const identityId = advertisedSyncHubIdentityId()
     sendJson(res, 200, {
       status: 'ok',
       service: SYNC_HUB_SERVICE_NAME,
+      ...(identityId ? { identityId } : {}),
       health: '/health',
       hosts: '/api/v1/sync/hosts',
       p2pJoin: P2P_JOIN_REGISTER_PATH,
@@ -139,6 +161,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_PUT_PATH) {
+    if (!requireHubAccountMatch(req, res)) return
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
@@ -154,6 +177,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_PULL_PATH) {
+    if (!requireHubAccountMatch(req, res)) return
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
@@ -171,6 +195,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_SESSION_PATH) {
     // Personal device-pairing session authenticates via workspace grant / identity
     // inside handleMailboxSession — do not require the LAN Sync Hub pairing token.
+    if (!requireHubAccountMatch(req, res)) return
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
@@ -186,6 +211,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (!requireHubAuth(req, res)) return
+  if (!requireHubAccountMatch(req, res)) return
 
   if (method === 'GET' && url.pathname === '/api/v1/sync/hosts') {
     const hosts: AgentHostPresence[] = []

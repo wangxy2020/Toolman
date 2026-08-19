@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { looksLikeAuthingUserId, resolveDeviceSyncIdentityId } from './device-sync-identity.js'
+import {
+  isAccountSyncIdentityId,
+  looksLikeAuthingUserId,
+  resolveDeviceSyncIdentityId,
+} from './device-sync-identity.js'
 
 describe('resolveDeviceSyncIdentityId', () => {
   it('maps Firebase bindings to fb-{subject}', () => {
@@ -38,8 +42,25 @@ describe('resolveDeviceSyncIdentityId', () => {
     ).toBe('00000000-0000-0000-0000-000000000001')
   })
 
+  it('prefers Authing user id recovered from the session token', () => {
+    expect(
+      resolveDeviceSyncIdentityId({
+        bindings: [{ provider: 'tencent_phone', subjectId: '+8613800138000' }],
+        fallbackIdentityId: '00000000-0000-0000-0000-000000000001',
+        extraSubjectIds: ['abcdef0123456789abcdef01'],
+      }),
+    ).toBe('ag-abcdef0123456789abcdef01')
+  })
+
   it('detects Authing user ids', () => {
     expect(looksLikeAuthingUserId('abcdef0123456789abcdef01')).toBe(true)
     expect(looksLikeAuthingUserId('+8613800138000')).toBe(false)
+  })
+
+  it('treats only ag-/fb- as signed-in account identities', () => {
+    expect(isAccountSyncIdentityId('ag-abcdef0123456789abcdef01')).toBe(true)
+    expect(isAccountSyncIdentityId('fb-uid-1')).toBe(true)
+    expect(isAccountSyncIdentityId('00000000-0000-0000-0000-000000000001')).toBe(false)
+    expect(isAccountSyncIdentityId(null)).toBe(false)
   })
 })

@@ -14,13 +14,28 @@ export function looksLikeAuthingUserId(subjectId: string): boolean {
   return AUTHING_USER_ID_RE.test(subjectId.trim())
 }
 
+/** Signed-in Authing / Firebase account ids used to isolate private sync. */
+export function isAccountSyncIdentityId(identityId?: string | null): boolean {
+  const value = identityId?.trim() ?? ''
+  return value.startsWith('ag-') || value.startsWith('fb-')
+}
+
 /**
  * Prefer Firebase `fb-{uid}` / Authing `ag-{userId}` over the desktop guest UUID
  * so WAN device_sync matches mobile Authing/Firebase sessions.
  */
+function accountIdFromSubject(raw: string | null | undefined): string | null {
+  const value = raw?.trim() ?? ''
+  if (!value) return null
+  if (isAccountSyncIdentityId(value)) return value
+  if (looksLikeAuthingUserId(value)) return `ag-${value}`
+  return null
+}
+
 export function resolveDeviceSyncIdentityId(input: {
   bindings?: ReadonlyArray<DeviceSyncIdentityBinding> | null
   fallbackIdentityId: string
+  extraSubjectIds?: ReadonlyArray<string | null | undefined> | null
 }): string {
   const fallback = input.fallbackIdentityId.trim()
   const bindings = input.bindings ?? []
@@ -36,13 +51,19 @@ export function resolveDeviceSyncIdentityId(input: {
     }
   }
 
+  for (const extra of input.extraSubjectIds ?? []) {
+    const accountId = accountIdFromSubject(extra)
+    if (accountId) return accountId
+  }
+
   for (const binding of bindings) {
-    const subject = binding.subjectId.trim()
-    if (looksLikeAuthingUserId(subject)) return `ag-${subject}`
+    const accountId = accountIdFromSubject(binding.subjectId)
+    if (accountId) return accountId
   }
 
   // Mobile already stores `ag-…` / `fb-…` as the primary identityId.
-  if (fallback.startsWith('ag-') || fallback.startsWith('fb-')) return fallback
+  const fallbackAccount = accountIdFromSubject(fallback)
+  if (fallbackAccount) return fallbackAccount
 
   return fallback
 }

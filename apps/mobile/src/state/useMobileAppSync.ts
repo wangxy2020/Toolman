@@ -10,8 +10,10 @@ import {
   pushClassroomChanges,
   classifySyncFailure,
   formatSyncFailureMessage,
+  isForeignSyncHubError,
   type KnowledgeMetaItem,
 } from '../sync/mobileSync'
+import { discardForeignPrivateWorkspace } from '../sync/mobileSync-pull-helpers'
 import {
   EMPTY_MOBILE_SYNC_STATE,
   type MobileSyncState,
@@ -20,6 +22,11 @@ import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 import { emptyChatSessionsStore } from '../storage/chatSessions'
 import type { AuthSession, ChatSession, MobileAgent, MobileSyncReason, SyncStatus } from './MobileAppContext'
 import type { AgentChatScope } from '../chat/agentScopes'
+import {
+  hasLocalNetworkAccessAttempted,
+  isHostedPublicWebPage,
+  primeLocalNetworkAccess,
+} from '../sync/localNetworkFetch'
 
 export function useMobileAppSync(input: {
   ready: boolean
@@ -115,6 +122,22 @@ export function useMobileAppSync(input: {
           )
         }
       } catch (error) {
+        if (isForeignSyncHubError(error)) {
+          const discarded = await discardForeignPrivateWorkspace(syncStateRef.current)
+          syncStateRef.current = discarded.syncState
+          setNotes(discarded.notes.notes)
+          setDeletedNotes(discarded.notes.deletedNotes)
+          setKnowledgeMeta([])
+          setClassroomCourses([])
+          const emptyChat = emptyChatSessionsStore()
+          setSessions?.(emptyChat.sessions)
+          setAgents?.(emptyChat.agents)
+          setActiveSessionByScope?.(emptyChat.activeSessionByScope)
+          setSyncCursor(null)
+          setDesktopHostsOnline(0)
+          setSyncStatus('offline')
+          return formatSyncFailureMessage(error)
+        }
         setSyncStatus(classifySyncFailure(error))
         return formatSyncFailureMessage(error)
       }
@@ -140,6 +163,10 @@ export function useMobileAppSync(input: {
         setSessions?.(emptyChat.sessions)
         setAgents?.(emptyChat.agents)
         setActiveSessionByScope?.(emptyChat.activeSessionByScope)
+        setSyncCursor(null)
+        setDesktopHostsOnline(0)
+        setSyncStatus('offline')
+        return '检测到其他账号的同步节点，已跳过。请确认手机与桌面登录同一账号，并开启桌面「与移动端同步」。'
       }
       setSyncCursor(applied.nextCursor)
       setDesktopHostsOnline(applied.hostsOnline)
@@ -161,6 +188,22 @@ export function useMobileAppSync(input: {
         ? `${summary}。知识库文件稍后再试：${applied.knowledgeError}`
         : summary
     } catch (error) {
+      if (isForeignSyncHubError(error)) {
+        const discarded = await discardForeignPrivateWorkspace(syncStateRef.current)
+        syncStateRef.current = discarded.syncState
+        setNotes(discarded.notes.notes)
+        setDeletedNotes(discarded.notes.deletedNotes)
+        setKnowledgeMeta([])
+        setClassroomCourses([])
+        const emptyChat = emptyChatSessionsStore()
+        setSessions?.(emptyChat.sessions)
+        setAgents?.(emptyChat.agents)
+        setActiveSessionByScope?.(emptyChat.activeSessionByScope)
+        setSyncCursor(null)
+        setDesktopHostsOnline(0)
+        setSyncStatus('offline')
+        return formatSyncFailureMessage(error)
+      }
       setSyncStatus(classifySyncFailure(error))
       return formatSyncFailureMessage(error)
     } finally {
@@ -170,7 +213,31 @@ export function useMobileAppSync(input: {
 
   useEffect(() => {
     if (!ready || !auth) return
-    void runSync('bootstrap')
+    if (!isHostedPublicWebPage()) {
+      void runSync('bootstrap')
+      return
+    }
+    const start = () => {
+      void primeLocalNetworkAccess().then(() => {
+        void runSync('bootstrap')
+      })
+    }
+    if (hasLocalNetworkAccessAttempted()) {
+      start()
+      return
+    }
+    if (typeof window === 'undefined') return
+    const onGesture = () => {
+      window.removeEventListener('pointerdown', onGesture)
+      window.removeEventListener('keydown', onGesture)
+      start()
+    }
+    window.addEventListener('pointerdown', onGesture)
+    window.addEventListener('keydown', onGesture)
+    return () => {
+      window.removeEventListener('pointerdown', onGesture)
+      window.removeEventListener('keydown', onGesture)
+    }
   }, [ready, auth?.identityId, runSync])
 
   useEffect(() => {

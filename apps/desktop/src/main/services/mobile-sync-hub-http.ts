@@ -135,6 +135,11 @@ export function sendSse(res: ServerResponse, chunks: Array<{ type: string; text?
   res.end()
 }
 
+export function readPresentedCommunityUserId(req: IncomingMessage): string {
+  const raw = req.headers['x-community-user-id']
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
 export function readPresentedToken(req: IncomingMessage): string {
   const named = req.headers[SYNC_HUB_TOKEN_HEADER.toLowerCase()]
   if (typeof named === 'string' && named.trim()) return named.trim()

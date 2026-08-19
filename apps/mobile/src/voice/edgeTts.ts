@@ -6,6 +6,15 @@ export type EdgeTtsSpeakOptions = {
   rate?: string
 }
 
+/** SPA fallback HTML/JSON must not be treated as MP3. */
+export function isAudioSynthesizeResponse(response: Response): boolean {
+  if (!response.ok) return false
+  const type = (response.headers.get('content-type') ?? '').toLowerCase()
+  if (!type) return true
+  if (type.includes('text/html') || type.includes('application/json')) return false
+  return type.includes('audio/') || type.includes('octet-stream')
+}
+
 /**
  * Microsoft Edge neural TTS via server API (same voices as desktop).
  * Direct browser WebSocket to Edge TTS is blocked outside Microsoft Edge;
@@ -45,7 +54,7 @@ export class EdgeTtsEngine {
     })
 
     if (signal.aborted) return
-    if (!response.ok) {
+    if (!isAudioSynthesizeResponse(response)) {
       let detail = ''
       try {
         const json = (await response.json()) as { error?: string }

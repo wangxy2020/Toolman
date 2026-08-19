@@ -8,6 +8,8 @@ import {
   fetchWithLocalNetwork,
   isHostedPublicWebPage,
   localNetworkRequestTimeoutMs,
+  primeLocalNetworkAccess,
+  resetLocalNetworkPrimeStateForTests,
   targetAddressSpaceForUrl,
 } from './localNetworkFetch'
 
@@ -58,5 +60,23 @@ describe('fetchWithLocalNetwork', () => {
       expect.objectContaining({ targetAddressSpace: 'loopback' }),
     )
     vi.unstubAllGlobals()
+  })
+})
+
+describe('primeLocalNetworkAccess', () => {
+  afterEach(() => {
+    resetLocalNetworkPrimeStateForTests()
+    vi.unstubAllGlobals()
+  })
+
+  it('probes localhost first on hosted web', async () => {
+    vi.stubGlobal('location', { hostname: 'www.toolman.work' })
+    const fetchMock = vi.fn(async () => new Response('{"status":"ok"}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(primeLocalNetworkAccess()).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:17890/health',
+      expect.objectContaining({ targetAddressSpace: 'loopback' }),
+    )
   })
 })

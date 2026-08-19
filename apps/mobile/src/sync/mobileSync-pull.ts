@@ -25,17 +25,20 @@ import {
   classifyMobileSyncTransport,
   countDesktopHostsOnline,
   createReachableMobileSyncClient,
+  isForeignSyncHubError,
   loadSyncIdentityId,
   type KnowledgeMetaItem,
   type MobileSyncTransport,
 } from './mobileSync-client'
 import {
   applyKnowledgeMetaChange,
+  discardForeignPrivateWorkspace,
   hydrateOmittedFiles,
 } from './mobileSync-pull-helpers'
 import { pullPersonalMailboxChanges } from './personalMailboxSync'
 import { tryDeviceSyncWebrtc } from './deviceSyncWebrtc'
 import { loadDevicePairing } from '../storage/devicePairing'
+import { shouldDiscardForeignPrivateWorkspace } from './syncIdentity'
 
 export type AppliedSync = {
   notes: MobileNote[]
@@ -59,6 +62,25 @@ export type AppliedSync = {
 const KNOWLEDGE_WAN_SOFT_MESSAGE =
   '知识库正文与向量仅局域网 Sync Hub 可用；跨网 / 点到点首期只同步目录元数据，请稍后在 LAN 补拉文件'
 
+async function appliedAfterDiscardingForeign(syncState: MobileSyncState): Promise<AppliedSync> {
+  const discarded = await discardForeignPrivateWorkspace(syncState)
+  return {
+    notes: discarded.notes.notes,
+    deletedNotes: discarded.notes.deletedNotes,
+    knowledgeMeta: [],
+    classroomCourses: [],
+    groups: [],
+    nextCursor: null,
+    hostsOnline: 0,
+    snapshot: null,
+    documentCount: 0,
+    transport: 'lan-hub',
+    baseUrl: '',
+    syncState: discarded.syncState,
+    discardedForeign: true,
+  }
+}
+
 /** Pull remote changes and merge notes + optional sync-KB snapshot (files, chunks, vectors). */
 export async function pullAndApplySync(options: {
   client?: ToolmanSyncClient
@@ -79,6 +101,9 @@ export async function pullAndApplySync(options: {
   const includeKnowledge = options.includeKnowledge !== false
   const includeKnowledgeSnapshot = options.includeKnowledgeSnapshot ?? includeKnowledge
   const syncState = options.syncState ?? (await loadMobileSyncState())
+  if (shouldDiscardForeignPrivateWorkspace(await loadSyncIdentityId(), syncState)) {
+    return appliedAfterDiscardingForeign(syncState)
+  }
   const pairing = await loadDevicePairing()
 
   let client: ToolmanSyncClient | null = options.client ?? null
@@ -87,6 +112,7 @@ export async function pullAndApplySync(options: {
     try {
       client = await createReachableMobileSyncClient()
     } catch (error) {
+      if (isForeignSyncHubError(error)) return appliedAfterDiscardingForeign(syncState)
       hubUnavailable = error instanceof Error ? error : new Error(String(error))
       if (!pairing) throw hubUnavailable
     }
@@ -109,7 +135,7 @@ export async function pullAndApplySync(options: {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           if (/403|identity mismatch/i.test(message)) {
-            throw new Error('sync identity mismatch')
+            return appliedAfterDiscardingForeign(syncState)
           }
           if (/401|unauthorized|未授权/i.test(message) && pairing) {
             // LAN token missing/wrong — continue with paired peer transports.
@@ -124,6 +150,10 @@ export async function pullAndApplySync(options: {
         if (!hasMore || pull.changes.length === 0) break
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (isForeignSyncHubError(error) || /identity mismatch/i.test(message)) {
+        return appliedAfterDiscardingForeign(syncState)
+      }
       if (!pairing) throw error
     }
   }

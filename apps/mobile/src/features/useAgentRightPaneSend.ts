@@ -1,5 +1,5 @@
 import { newUuid } from '../p2p/bytes'
-import { unlockAudioPlayback } from '../voice'
+import { unlockWebRuntime } from '../webRuntimeUnlock'
 import type { AgentChatScope } from '../chat/agentScopes'
 import type { ChatMessage, ChatSession } from '../state/MobileAppContext'
 import { newAgentId } from './agentPaneUtils'
@@ -41,7 +41,7 @@ export async function sendAgentRightPaneMessage(input: {
     runCompletion,
   } = input
   if (!text || busy) return
-  unlockAudioPlayback()
+  unlockWebRuntime()
   const base = ensureSession()
   if (!base) {
     setError(

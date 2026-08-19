@@ -1,13 +1,21 @@
 /**
  * Capture a user gesture so HTMLAudioElement can play after async Edge TTS fetch.
  * Keep one shared element — Chrome will not let a *new* Audio() play after await.
+ *
+ * Do not clear `src` / call `load()` after the probe: that re-locks autoplay.
  */
 const AUDIO_KEY = '__toolmanUnlockedAudio'
 const WARMED_TTS_KEY = '__toolmanTtsWarmed'
+const SPEECH_UNLOCKED_KEY = '__toolmanSpeechUnlocked'
+
+/** 8 kHz mono 8-bit WAV with one silent sample — enough to satisfy play(). */
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA'
 
 type AudioHost = typeof globalThis & {
   [AUDIO_KEY]?: HTMLAudioElement
   [WARMED_TTS_KEY]?: boolean
+  [SPEECH_UNLOCKED_KEY]?: boolean
 }
 
 export function getSharedAudioElement(): HTMLAudioElement | null {
@@ -26,6 +34,23 @@ function warmSpeechVoices(): void {
   if (!speech) return
   speech.getVoices()
   speech.addEventListener('voiceschanged', () => undefined, { once: true })
+}
+
+function unlockSpeechSynthesis(): void {
+  const host = globalThis as AudioHost
+  if (host[SPEECH_UNLOCKED_KEY]) return
+  const speech = (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis
+  if (!speech || typeof SpeechSynthesisUtterance === 'undefined') return
+  host[SPEECH_UNLOCKED_KEY] = true
+  try {
+    const utter = new SpeechSynthesisUtterance(' ')
+    utter.volume = 0
+    utter.rate = 2
+    speech.speak(utter)
+    speech.cancel()
+  } catch {
+    host[SPEECH_UNLOCKED_KEY] = false
+  }
 }
 
 function warmEdgeTtsApi(): void {
@@ -68,14 +93,14 @@ export function unlockAudioPlayback(): void {
   const audio = getSharedAudioElement()
   if (audio) {
     try {
+      if (!audio.src) audio.src = SILENT_WAV
       audio.muted = true
       void audio
         .play()
         .then(() => {
           audio.pause()
           audio.muted = false
-          audio.removeAttribute('src')
-          audio.load()
+          audio.currentTime = 0
         })
         .catch(() => {
           audio.muted = false
@@ -86,5 +111,6 @@ export function unlockAudioPlayback(): void {
   }
 
   warmSpeechVoices()
+  unlockSpeechSynthesis()
   warmEdgeTtsApi()
 }

@@ -68,3 +68,73 @@ export function fetchWithLocalNetwork(
 }
 
 export const boundFetch: typeof fetch = (input, init) => fetchWithLocalNetwork(input, init)
+
+const LNA_ATTEMPTED_KEY = '__toolmanLocalNetworkAttempted'
+const LOOPBACK_HEALTH_URLS = [
+  'http://localhost:17890/health',
+  'http://127.0.0.1:17890/health',
+] as const
+
+type LnaHost = typeof globalThis & {
+  [LNA_ATTEMPTED_KEY]?: boolean
+}
+
+let primedOk = false
+let primeInFlight: Promise<boolean> | null = null
+
+export function resetLocalNetworkPrimeStateForTests(): void {
+  primedOk = false
+  primeInFlight = null
+  try {
+    delete (globalThis as LnaHost)[LNA_ATTEMPTED_KEY]
+  } catch {
+    ;(globalThis as LnaHost)[LNA_ATTEMPTED_KEY] = false
+  }
+}
+
+export function hasLocalNetworkAccessAttempted(): boolean {
+  return Boolean((globalThis as LnaHost)[LNA_ATTEMPTED_KEY]) || primedOk
+}
+
+export function markLocalNetworkAccessAttempted(): void {
+  ;(globalThis as LnaHost)[LNA_ATTEMPTED_KEY] = true
+}
+
+async function probeLoopbackHealth(): Promise<boolean> {
+  for (const url of LOOPBACK_HEALTH_URLS) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), localNetworkRequestTimeoutMs(url))
+    try {
+      const res = await fetchWithLocalNetwork(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: ctrl.signal,
+        mode: 'cors',
+      })
+      if (res.ok) return true
+    } catch {
+      // try the next loopback alias
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  return false
+}
+
+/**
+ * Start a loopback health fetch while a user gesture is still on the stack so
+ * Chrome can show the Local Network Access prompt. Must not await other work first.
+ */
+export async function primeLocalNetworkAccess(): Promise<boolean> {
+  markLocalNetworkAccessAttempted()
+  if (!isHostedPublicWebPage()) return true
+  if (primedOk) return true
+  if (!primeInFlight) {
+    primeInFlight = probeLoopbackHealth().then((ok) => {
+      if (ok) primedOk = true
+      primeInFlight = null
+      return ok
+    })
+  }
+  return primeInFlight
+}

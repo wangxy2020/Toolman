@@ -9,14 +9,15 @@ import {
   selectDirtyClassroomChanges,
 } from './classroomPushDelta'
 import type { MobileClassroomCourse } from './classroomSyncMerge'
-import { createReachableMobileSyncClient } from './mobileSync-client'
+import { createReachableMobileSyncClient, isForeignSyncHubError } from './mobileSync-client'
 import { pushPersonalMailboxChanges } from './personalMailboxSync'
 
 async function tryCreateHubClient(client?: ToolmanSyncClient): Promise<ToolmanSyncClient | null> {
   if (client) return client
   try {
     return await createReachableMobileSyncClient()
-  } catch {
+  } catch (error) {
+    if (isForeignSyncHubError(error)) throw error
     return null
   }
 }

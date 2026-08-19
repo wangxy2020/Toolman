@@ -30,7 +30,7 @@
       "headers": [
         {
           "key": "Permissions-Policy",
-          "value": "local-network-access=(self), local-network=(self), loopback-network=(self)"
+          "value": "local-network-access=(self), local-network=(self), loopback-network=(self), autoplay=(self)"
         }
       ]
     }

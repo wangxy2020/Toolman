@@ -5,11 +5,13 @@ import {
   DEFAULT_LOCAL_SYNC_BASE_URL,
   isCommunityDeviceSyncHealthPayload,
   isCommunityMailboxHealthPayload,
+  isForeignDesktopSyncHub,
   isForeignSyncIdentity,
   isPrivateOrLoopbackHostname,
   isSyncHubHealthPayload,
   isSyncHubHostsPayload,
   syncHubHealthIdentityId,
+  syncRequestMayAccessHub,
   listCommunityHubProbeCandidates,
   listPairingRedeemBaseUrlCandidates,
   listSyncBaseUrlCandidates,
@@ -154,5 +156,47 @@ describe('sync endpoint candidates', () => {
     expect(isForeignSyncIdentity('id-a', 'id-b')).toBe(true)
     expect(isForeignSyncIdentity('id-a', 'id-a')).toBe(false)
     expect(isForeignSyncIdentity(null, 'id-b')).toBe(false)
+    expect(
+      isForeignDesktopSyncHub(
+        { status: 'ok', service: 'toolman-sync-hub', identityId: 'ag-aaa' },
+        'ag-bbb',
+      ),
+    ).toBe(true)
+    expect(
+      isForeignDesktopSyncHub(
+        { status: 'ok', service: 'toolman-sync-hub', identityId: 'ag-aaa' },
+        'ag-aaa',
+      ),
+    ).toBe(false)
+    expect(
+      isForeignDesktopSyncHub(
+        { status: 'ok', service: 'toolman-sync-hub' },
+        'ag-aaa',
+      ),
+    ).toBe(true)
+    expect(
+      isForeignDesktopSyncHub(
+        {
+          status: 'ok',
+          service: 'toolman-sync-hub',
+          identityId: '00000000-0000-0000-0000-000000000001',
+        },
+        'ag-aaa',
+      ),
+    ).toBe(true)
+    expect(
+      isForeignDesktopSyncHub(
+        { status: 'ok', service: 'toolman-sync-hub', identityId: 'ag-aaa' },
+        null,
+      ),
+    ).toBe(true)
+    expect(
+      isForeignDesktopSyncHub({ status: 'ok', service: 'toolman-sync-hub' }, null),
+    ).toBe(false)
+    expect(syncRequestMayAccessHub('ag-aaa', 'ag-aaa')).toBe(true)
+    expect(syncRequestMayAccessHub('ag-bbb', 'ag-aaa')).toBe(false)
+    expect(syncRequestMayAccessHub('', 'ag-aaa')).toBe(false)
+    expect(syncRequestMayAccessHub('ag-bbb', null)).toBe(false)
+    expect(syncRequestMayAccessHub('', null)).toBe(true)
   })
 })

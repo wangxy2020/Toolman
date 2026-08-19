@@ -10,11 +10,14 @@ import {
 } from '@toolman/db'
 import {
   isUsableMemberIdentityId,
+  looksLikeAuthingUserId,
   resolveDeviceSyncIdentityId,
   type P2pDeviceGetInfoOutput,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
 import { getLocalIdentityId } from '../local-identity'
+import { decryptSecret } from '../secret-store'
+import { resolveAuthingUserIdFromAccessToken } from '../auth/authing-token-utils'
 import { ensureLinkedIdentityRow } from './p2p-linked-identity.service'
 import { P2pBridge, type NativeDeviceInfo } from './p2p-bridge'
 
@@ -44,9 +47,12 @@ export function getP2pPersonIdentityId(): string {
     const session = new AuthSessionRepository(db).ensureCurrent(getLocalIdentityId())
     const identityId = session.identityId ?? fallback
     const bindings = new AuthBindingRepository(db).listByIdentityId(identityId)
+    const accessToken = decryptSecret(session.accessTokenRef ?? session.idTokenRef)
+    const fromToken = resolveAuthingUserIdFromAccessToken(accessToken, '')
     return resolveDeviceSyncIdentityId({
       bindings: bindings.map((row) => ({ provider: row.provider, subjectId: row.subjectId })),
       fallbackIdentityId: identityId,
+      extraSubjectIds: looksLikeAuthingUserId(fromToken) ? [fromToken] : [],
     })
   } catch {
     return fallback

@@ -11,6 +11,7 @@ import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { MobileAppRoot } from '../src/state/MobileAppRoot'
 import { recordProvenanceBeacon } from '../src/lib/record-provenance-beacon'
+import { unlockWebRuntime } from '../src/webRuntimeUnlock'
 
 const WEB_FOCUS_CSS = `
 textarea:focus,
@@ -60,6 +61,16 @@ export default function RootLayout() {
   useWebChromeStyles()
   useEffect(() => {
     recordProvenanceBeacon('app.start')
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onGesture = () => unlockWebRuntime()
+    window.addEventListener('pointerdown', onGesture)
+    window.addEventListener('keydown', onGesture)
+    return () => {
+      window.removeEventListener('pointerdown', onGesture)
+      window.removeEventListener('keydown', onGesture)
+    }
   }, [])
   return (
     <SafeAreaProvider>

@@ -1,3 +1,5 @@
+import { isAccountSyncIdentityId } from './device-sync-identity.js'
+
 export const DEFAULT_LOCAL_SYNC_PORT = 17890
 export const DEFAULT_LOCAL_SYNC_BASE_URL = `http://127.0.0.1:${DEFAULT_LOCAL_SYNC_PORT}`
 /** Identity string returned by the desktop Sync Hub `/health` endpoint. */
@@ -92,6 +94,37 @@ export function isForeignSyncIdentity(
   const hub = hubIdentityId?.trim() ?? ''
   const local = localIdentityId?.trim() ?? ''
   return hub.length > 0 && local.length > 0 && hub !== local
+}
+
+/**
+ * Signed-in `ag-…` / `fb-…` clients only accept a desktop hub that advertises
+ * the same account. A missing hub identity used to look "safe" and leaked
+ * private notes to every loopback origin on the same computer.
+ */
+export function isForeignDesktopSyncHub(
+  health: unknown,
+  localIdentityId?: string | null,
+): boolean {
+  if (!isSyncHubHealthPayload(health)) return false
+  const hubId = syncHubHealthIdentityId(health)
+  const local = localIdentityId?.trim() ?? ''
+  if (isAccountSyncIdentityId(local)) return hubId !== local
+  return isAccountSyncIdentityId(hubId)
+}
+
+/**
+ * Signed-in hubs only serve the matching account. A signed-in client against a
+ * hub that cannot advertise an account id is denied (fail closed).
+ */
+export function syncRequestMayAccessHub(
+  presentedIdentityId?: string | null,
+  hubAccountIdentityId?: string | null,
+): boolean {
+  const presented = presentedIdentityId?.trim() ?? ''
+  const hub = hubAccountIdentityId?.trim() ?? ''
+  if (isAccountSyncIdentityId(hub)) return presented === hub
+  if (isAccountSyncIdentityId(presented)) return false
+  return true
 }
 
 function asHealthRecord(payload: unknown): Record<string, unknown> | null {

@@ -33,7 +33,7 @@ export type {
   GroupWorkspace,
 } from './groupChat-types'
 
-export { groupMemberRoleLabel, shortDeviceId }
+export { groupMemberRoleLabel, shortDeviceId, EMPTY_GROUP_CHAT_STORE }
 
 const STORE_KEY = 'toolman.mobile.groupChat.v1'
 
