@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const sendEventsJson = vi.fn(async () => {})
-const putMailboxProposal = vi.fn(async () => {})
-const getMailboxTarget = vi.fn(() => ({
-  hubUrl: 'http://127.0.0.1:17890',
-  workspaceId: 'ws-a',
-  deviceId: 'web-b',
-  workspaceKey: new Uint8Array(32),
-  ownerDeviceId: 'owner-a',
+const { sendEventsJson, putMailboxProposal, getMailboxTarget } = vi.hoisted(() => ({
+  sendEventsJson: vi.fn(async () => {}),
+  putMailboxProposal: vi.fn(async () => {}),
+  getMailboxTarget: vi.fn(() => ({
+    hubUrl: 'http://127.0.0.1:17890',
+    workspaceId: 'ws-a',
+    deviceId: 'web-b',
+    workspaceKey: new Uint8Array(32),
+    ownerDeviceId: 'owner-a',
+  })),
 }))
 
 vi.mock('./session', () => ({
