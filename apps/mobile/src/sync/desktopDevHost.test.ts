@@ -55,12 +55,12 @@ describe('shouldProbeLoopbackFromHosts', () => {
 })
 
 describe('communityHubProbeFlags', () => {
-  it('prefers the official catalog on hosted web, then same-computer loopback', () => {
+  it('uses this computer’s desktop sidecar on hosted web, not a central Hub', () => {
     vi.stubGlobal('location', { host: 'www.toolman.work', hostname: 'www.toolman.work' })
     const flags = communityHubProbeFlags()
     expect(flags.includeLoopback).toBe(true)
-    expect(flags.includeOfficialHub).toBe(true)
-    expect(flags.officialHubFirst).toBe(true)
+    expect(flags.includeOfficialHub).toBe(false)
+    expect(flags.officialHubFirst).toBe(false)
     vi.unstubAllGlobals()
   })
 })

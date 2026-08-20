@@ -19,13 +19,12 @@ import {
   type MobileSyncState,
 } from '../sync/syncState'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
-import { emptyChatSessionsStore } from '../storage/chatSessions'
 import type { AuthSession, ChatSession, MobileAgent, MobileSyncReason, SyncStatus } from './MobileAppContext'
 import type { AgentChatScope } from '../chat/agentScopes'
 import {
-  hasLocalNetworkAccessAttempted,
   isHostedPublicWebPage,
   primeLocalNetworkAccess,
+  whenLocalNetworkAccessGranted,
 } from '../sync/localNetworkFetch'
 
 export function useMobileAppSync(input: {
@@ -56,9 +55,6 @@ export function useMobileAppSync(input: {
     setDeletedNotes,
     setKnowledgeMeta,
     setClassroomCourses,
-    setSessions,
-    setAgents,
-    setActiveSessionByScope,
   } = input
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
@@ -129,10 +125,6 @@ export function useMobileAppSync(input: {
           setDeletedNotes(discarded.notes.deletedNotes)
           setKnowledgeMeta([])
           setClassroomCourses([])
-          const emptyChat = emptyChatSessionsStore()
-          setSessions?.(emptyChat.sessions)
-          setAgents?.(emptyChat.agents)
-          setActiveSessionByScope?.(emptyChat.activeSessionByScope)
           setSyncCursor(null)
           setDesktopHostsOnline(0)
           setSyncStatus('offline')
@@ -159,10 +151,6 @@ export function useMobileAppSync(input: {
       setKnowledgeMeta(applied.knowledgeMeta)
       setClassroomCourses(applied.classroomCourses)
       if (applied.discardedForeign) {
-        const emptyChat = emptyChatSessionsStore()
-        setSessions?.(emptyChat.sessions)
-        setAgents?.(emptyChat.agents)
-        setActiveSessionByScope?.(emptyChat.activeSessionByScope)
         setSyncCursor(null)
         setDesktopHostsOnline(0)
         setSyncStatus('offline')
@@ -195,10 +183,6 @@ export function useMobileAppSync(input: {
         setDeletedNotes(discarded.notes.deletedNotes)
         setKnowledgeMeta([])
         setClassroomCourses([])
-        const emptyChat = emptyChatSessionsStore()
-        setSessions?.(emptyChat.sessions)
-        setAgents?.(emptyChat.agents)
-        setActiveSessionByScope?.(emptyChat.activeSessionByScope)
         setSyncCursor(null)
         setDesktopHostsOnline(0)
         setSyncStatus('offline')
@@ -209,7 +193,7 @@ export function useMobileAppSync(input: {
     } finally {
       syncingRef.current = false
     }
-  }, [setNotes, setDeletedNotes, setKnowledgeMeta, setClassroomCourses, setSessions, setAgents, setActiveSessionByScope])
+  }, [setNotes, setDeletedNotes, setKnowledgeMeta, setClassroomCourses])
 
   useEffect(() => {
     if (!ready || !auth) return
@@ -222,22 +206,7 @@ export function useMobileAppSync(input: {
         void runSync('bootstrap')
       })
     }
-    if (hasLocalNetworkAccessAttempted()) {
-      start()
-      return
-    }
-    if (typeof window === 'undefined') return
-    const onGesture = () => {
-      window.removeEventListener('pointerdown', onGesture)
-      window.removeEventListener('keydown', onGesture)
-      start()
-    }
-    window.addEventListener('pointerdown', onGesture)
-    window.addEventListener('keydown', onGesture)
-    return () => {
-      window.removeEventListener('pointerdown', onGesture)
-      window.removeEventListener('keydown', onGesture)
-    }
+    return whenLocalNetworkAccessGranted(start)
   }, [ready, auth?.identityId, runSync])
 
   useEffect(() => {

@@ -49,7 +49,7 @@ describe('sync endpoint candidates', () => {
     ])
     expect(
       listCommunityHubProbeCandidates('https://hub.toolman.app', { includeLoopback: false }),
-    ).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
+    ).toEqual([])
     expect(
       listCommunityHubProbeCandidates('', {
         includeLoopback: false,

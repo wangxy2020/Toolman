@@ -6,8 +6,8 @@ import {
 import {
   bootstrapP2pWorkspaceKeys,
   createP2pWorkspace as createP2pWorkspaceImpl,
-  ensureDefaultOwnedP2pWorkspace as ensureDefaultOwnedP2pWorkspaceImpl,
   getP2pWorkspace,
+  listOwnedBuiltinDefaultP2pWorkspaceIds,
   listP2pWorkspaces,
   listPendingP2pJoinRequestIds,
   updateP2pWorkspace as updateP2pWorkspaceImpl,
@@ -35,10 +35,12 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   return result
 }
 
-export async function ensureDefaultOwnedP2pWorkspace(): Promise<P2pWorkspace | null> {
-  const workspace = await ensureDefaultOwnedP2pWorkspaceImpl()
-  if (workspace) publishP2pGroupSyncChange(workspace)
-  return workspace
+export async function removeDefaultOwnedP2pWorkspaces(): Promise<number> {
+  const ids = listOwnedBuiltinDefaultP2pWorkspaceIds()
+  for (const id of ids) {
+    await deleteP2pWorkspace(id)
+  }
+  return ids.length
 }
 
 export function updateP2pWorkspace(rawInput: unknown): P2pWorkspace {

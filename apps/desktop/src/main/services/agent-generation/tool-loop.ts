@@ -1,7 +1,5 @@
-import { toErrorMessage } from '@toolman/shared'
-import type { ChatMessage } from '@toolman/model-gateway'
-import type { Message } from '@toolman/shared'
-import { ProviderError } from '@toolman/model-gateway'
+import { toErrorMessage, type Message } from '@toolman/shared'
+import { ProviderError, type ChatMessage, type ToolCall } from '@toolman/model-gateway'
 import type { parseAssistantRuntime } from '../agent.service'
 import { evaluateToolPermission } from '../permission.service'
 import {
@@ -42,31 +40,43 @@ export async function runToolLoop(options: {
     let round = 0
     let hitToolRoundLimit = false
     while (round < runtime.sessionRoundLimit) {
-      const completion = await gateway.chatComplete(options.providerConfig, {
+      let streamedContent = ''
+      let toolCalls: ToolCall[] = []
+      for await (const chunk of gateway.chatStream(options.providerConfig, {
         model: options.model,
         messages: options.chatMessages,
         tools: options.tools,
         temperature: runtime.temperature,
         maxTokens: runtime.maxTokens,
         signal: options.signal,
-      })
-
-      if (completion.usage) {
-        options.onUsage({
-          prompt: completion.usage.prompt,
-          completion: completion.usage.completion,
-          total: completion.usage.total,
-        })
+      })) {
+        if (chunk.type === 'reasoning-delta' && chunk.text) {
+          stream.appendThinking(chunk.text)
+        }
+        if (chunk.type === 'text-delta' && chunk.text) {
+          streamedContent += chunk.text
+          stream.appendText(chunk.text)
+        }
+        if (chunk.type === 'done') {
+          if (chunk.usage) {
+            options.onUsage({
+              prompt: chunk.usage.prompt,
+              completion: chunk.usage.completion,
+              total: chunk.usage.total,
+            })
+          }
+          toolCalls = chunk.toolCalls ?? []
+        }
       }
 
-      if (completion.toolCalls.length > 0) {
+      if (toolCalls.length > 0) {
         options.chatMessages.push({
           role: 'assistant',
-          content: completion.content || '',
-          tool_calls: completion.toolCalls,
+          content: streamedContent || '',
+          tool_calls: toolCalls,
         })
 
-        for (const call of completion.toolCalls) {
+        for (const call of toolCalls) {
           let sqlStatement: string | undefined
           try {
             const parsed = JSON.parse(call.arguments) as { sql?: string }
@@ -158,22 +168,6 @@ export async function runToolLoop(options: {
         continue
       }
 
-      stream.buffers.stripPreparingStatusFromThinking()
-      stream.persistBlocks(true)
-      await streamPlainCompletion({
-        sessionId: options.sessionId,
-        assistantMessageId: options.assistantMessageId,
-        modelId: options.modelId,
-        providerConfig: options.providerConfig,
-        model: options.model,
-        chatMessages: options.chatMessages,
-        temperature: runtime.temperature,
-        maxTokens: runtime.maxTokens,
-        signal: options.signal,
-        onText: stream.appendText,
-        onThinking: stream.appendThinking,
-        onUsage: options.onUsage,
-      })
       break
     }
 
@@ -184,8 +178,6 @@ export async function runToolLoop(options: {
     }
   } catch (toolError) {
     if (toolError instanceof ProviderError) {
-      stream.buffers.stripPreparingStatusFromThinking()
-      stream.persistBlocks(true)
       await streamPlainCompletion({
         sessionId: options.sessionId,
         assistantMessageId: options.assistantMessageId,

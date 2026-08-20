@@ -134,9 +134,80 @@ export async function runOwnerRelaySend(
     })
     void generationFinished.catch(() => undefined)
 
+    let mailboxThinking = ''
+    let mailboxText = ''
+    let mailboxSnapshotTimer: ReturnType<typeof setTimeout> | null = null
+    let mailboxSnapshotFlush = Promise.resolve()
+    const queueMailboxSnapshot = (immediate = false) => {
+      const flush = () => {
+        mailboxSnapshotTimer = null
+        const thinking = mailboxThinking
+        const text = mailboxText
+        mailboxSnapshotFlush = mailboxSnapshotFlush
+          .then(async () => {
+            if (thinking) {
+              await sendRelayMessage(peerDeviceId, {
+                v: 1,
+                type: 'stream',
+                requestId: message.requestId,
+                event: {
+                  type: 'message.delta',
+                  sessionId: message.memberSessionId,
+                  messageId: message.memberAssistantMessageId,
+                  delta: { type: 'thinking', text: thinking, replace: true },
+                  timestamp: Date.now(),
+                },
+              })
+            }
+            if (text) {
+              await sendRelayMessage(peerDeviceId, {
+                v: 1,
+                type: 'stream',
+                requestId: message.requestId,
+                event: {
+                  type: 'message.delta',
+                  sessionId: message.memberSessionId,
+                  messageId: message.memberAssistantMessageId,
+                  delta: { type: 'text', text, replace: true },
+                  timestamp: Date.now(),
+                },
+              })
+            }
+          })
+          .catch((error) => {
+            const errMessage = toErrorMessage(error, String(error))
+            logStructured(
+              'p2p',
+              'error',
+              `agent relay mailbox snapshot failed: requestId=${message.requestId} error=${errMessage}`,
+            )
+          })
+      }
+      if (immediate) {
+        if (mailboxSnapshotTimer) {
+          clearTimeout(mailboxSnapshotTimer)
+          mailboxSnapshotTimer = null
+        }
+        flush()
+        return
+      }
+      if (mailboxSnapshotTimer) return
+      mailboxSnapshotTimer = setTimeout(flush, 400)
+    }
+
     const forwardStream = (event: MessageStreamEvent) => {
       const viaMailbox = Boolean(peekRelayMailboxPeer(message.requestId)?.mailboxOrigin)
-      if (viaMailbox && event.type === 'message.delta') return
+      if (viaMailbox && event.type === 'message.delta') {
+        if (event.delta.type === 'thinking') {
+          mailboxThinking = event.delta.replace
+            ? event.delta.text
+            : mailboxThinking + event.delta.text
+        } else if (event.delta.type === 'text') {
+          mailboxText = event.delta.replace ? event.delta.text : mailboxText + event.delta.text
+        }
+        queueMailboxSnapshot()
+        return
+      }
       const relayEvent = viaMailbox ? event : slimStreamEventForRelay(event, message.requestId)
       const remapped = remapStreamEventForMember(relayEvent, {
         sessionId: message.memberSessionId,
@@ -144,6 +215,7 @@ export async function runOwnerRelaySend(
       })
       if (viaMailbox && remapped.type === 'message.done') {
         mailboxDoneBlocks = remapped.contentBlocks
+        queueMailboxSnapshot(true)
       }
 
       if (options.deliverStreamLocally) {
@@ -253,6 +325,9 @@ export async function runOwnerRelaySend(
       mailboxDoneBlocks = stored?.contentBlocks
     }
 
+    queueMailboxSnapshot(true)
+    await mailboxSnapshotFlush
+
     if (!options.deliverStreamLocally) {
       logStructured(
         'p2p',
@@ -263,7 +338,7 @@ export async function runOwnerRelaySend(
         v: 1,
         type: 'send_ok',
         requestId: message.requestId,
-        contentBlocks: mailboxDoneBlocks?.filter((block) => block.type === 'text') ?? mailboxDoneBlocks,
+        contentBlocks: mailboxDoneBlocks,
       })
     }
   } catch (error) {

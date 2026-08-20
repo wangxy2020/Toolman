@@ -8,6 +8,10 @@ import {
   identityAlreadyPresent,
   identityIdForSiblingLookup,
   inferMemberDeviceKind,
+  isMailboxFirstP2pClient,
+  resolveMailboxSessionAdmission,
+  mailboxSessionAuthDenied,
+  shouldAcceptUnsignedMailboxFirstGroupChat,
   isOwnGroupChatSender,
   isPlaceholderMemberName,
   isSamePerson,
@@ -172,6 +176,78 @@ describe('groupMembersByIdentity', () => {
     expect(inferMemberDeviceKind('016c72ca-8be2-4fcc-aa5e-9d1e41919fb4')).toBe('desktop')
     expect(inferMemberDeviceKind('abc', 'web')).toBe('web')
     expect(inferMemberDeviceKind('abc', 'mobile')).toBe('mobile')
+    expect(isMailboxFirstP2pClient('mobile-msdms50h-r336hh2e')).toBe(true)
+    expect(isMailboxFirstP2pClient('web-abc')).toBe(true)
+    expect(isMailboxFirstP2pClient('016c72ca-8be2-4fcc-aa5e-9d1e41919fb4')).toBe(false)
+    expect(resolveMailboxSessionAdmission({ existingStatus: 'active', hasActiveSibling: false })).toBe(
+      'ok',
+    )
+    expect(resolveMailboxSessionAdmission({ hasActiveSibling: true })).toBe('create')
+    expect(
+      resolveMailboxSessionAdmission({ existingStatus: 'removed', hasActiveSibling: true }),
+    ).toBe('reactivate')
+    expect(
+      resolveMailboxSessionAdmission({ existingStatus: 'removed', hasActiveSibling: false }),
+    ).toBe('forbidden')
+    expect(resolveMailboxSessionAdmission({ existingStatus: 'left', hasActiveSibling: false })).toBe(
+      'forbidden',
+    )
+    expect(
+      mailboxSessionAuthDenied({
+        admission: 'create',
+        hubAuthenticated: false,
+        inviteOk: true,
+      }),
+    ).toBe('unauthorized')
+    expect(
+      mailboxSessionAuthDenied({
+        admission: 'ok',
+        hubAuthenticated: false,
+        inviteOk: true,
+      }),
+    ).toBeNull()
+    expect(
+      mailboxSessionAuthDenied({
+        admission: 'ok',
+        hubAuthenticated: false,
+        inviteOk: false,
+      }),
+    ).toBe('unauthorized')
+    expect(
+      mailboxSessionAuthDenied({
+        admission: 'create',
+        hubAuthenticated: true,
+        inviteOk: false,
+      }),
+    ).toBeNull()
+    expect(
+      shouldAcceptUnsignedMailboxFirstGroupChat({
+        peerDeviceId: 'web-abc',
+        workspaceId: 'ws-a',
+        peerConnected: true,
+      }),
+    ).toBe(true)
+    expect(
+      shouldAcceptUnsignedMailboxFirstGroupChat({
+        peerDeviceId: 'mobile-msdms50h-r336hh2e',
+        workspaceId: 'ws-a',
+        peerConnected: true,
+      }),
+    ).toBe(true)
+    expect(
+      shouldAcceptUnsignedMailboxFirstGroupChat({
+        peerDeviceId: '016c72ca-8be2-4fcc-aa5e-9d1e41919fb4',
+        workspaceId: 'ws-a',
+        peerConnected: true,
+      }),
+    ).toBe(false)
+    expect(
+      shouldAcceptUnsignedMailboxFirstGroupChat({
+        peerDeviceId: 'web-abc',
+        workspaceId: 'ws-a',
+        peerConnected: false,
+      }),
+    ).toBe(false)
     expect(isMemberRecentlySeen(Date.now() - 10_000)).toBe(true)
     expect(isMemberRecentlySeen(Date.now() - 60_000)).toBe(false)
     expect(isMemberRecentlySeen(null)).toBe(false)

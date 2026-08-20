@@ -32,6 +32,21 @@ export function memberVisible(workspaceId: string, deviceId: string): boolean {
   return Boolean(member && (member.status === 'active' || member.status === 'invited'))
 }
 
+export function mailboxInviteMatchesWorkspace(
+  inviteToken: string | undefined,
+  workspaceId: string,
+): boolean {
+  if (!inviteToken?.trim()) return false
+  try {
+    const { token } = parseInviteInput(inviteToken)
+    const payload = decodeInviteToken(token)
+    verifyInviteToken(payload)
+    return payload.workspaceId === workspaceId
+  } catch {
+    return false
+  }
+}
+
 export async function authorizeMailbox(input: {
   workspaceId: string
   deviceId: string
@@ -56,16 +71,8 @@ export async function authorizeMailbox(input: {
     return { ok: false, status: 403, error: '不是该群成员' }
   }
   if (input.inviteToken) {
-    try {
-      const { token } = parseInviteInput(input.inviteToken)
-      const payload = decodeInviteToken(token)
-      verifyInviteToken(payload)
-      if (payload.workspaceId !== input.workspaceId) {
-        return { ok: false, status: 403, error: '邀请与群组不匹配' }
-      }
+    if (mailboxInviteMatchesWorkspace(input.inviteToken, input.workspaceId)) {
       return { ok: true }
-    } catch {
-      // fall through to grant
     }
   }
   const expected = await expectedGrant(input.workspaceId, input.deviceId)

@@ -1,6 +1,8 @@
+import { isBuiltinDefaultP2pGroupName } from '@toolman/shared'
 import type {
   GroupActivity,
   GroupChatMessage,
+  GroupChatStore,
   GroupInvite,
   GroupMember,
   GroupMemberRole,
@@ -175,5 +177,25 @@ export function normalizeMessage(value: unknown): GroupChatMessage | null {
       typeof attachment.mimeType === 'string'
         ? attachment
         : undefined,
+  }
+}
+
+export function omitBuiltinDefaultGroups(store: GroupChatStore): GroupChatStore {
+  const groups = store.groups.filter((group) => !isBuiltinDefaultP2pGroupName(group.name))
+  const keepIds = new Set(groups.map((group) => group.id))
+  const omitRecord = <T,>(record: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(Object.entries(record).filter(([id]) => keepIds.has(id)))
+  return {
+    ...store,
+    groups,
+    activeGroupId:
+      store.activeGroupId && keepIds.has(store.activeGroupId)
+        ? store.activeGroupId
+        : (groups[0]?.id ?? null),
+    messagesByGroup: omitRecord(store.messagesByGroup),
+    membersByGroup: omitRecord(store.membersByGroup),
+    sharedByGroup: omitRecord(store.sharedByGroup),
+    activitiesByGroup: omitRecord(store.activitiesByGroup),
+    invitesByGroup: omitRecord(store.invitesByGroup),
   }
 }

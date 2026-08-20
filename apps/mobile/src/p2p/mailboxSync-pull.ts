@@ -38,7 +38,7 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
         workspaceId: target.workspaceId,
         deviceId: target.deviceId,
         grant,
-        inviteToken: hubUrl === target.hubUrl ? target.inviteToken : undefined,
+        inviteToken: target.inviteToken,
         sinceSeq: readMailboxSeq(target.workspaceId, hubUrl),
         limit: MAILBOX_PULL_LIMIT,
       })
@@ -58,7 +58,9 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
             ciphertextB64: envelope.ciphertextB64,
           })
           if (plaintext.type === 'workspace.event') {
-            applied += applyWorkspaceWireEvents(target.workspaceId, [plaintext.event])
+            if (plaintext.event.resourceType !== 'Agent') {
+              applied += applyWorkspaceWireEvents(target.workspaceId, [plaintext.event])
+            }
           } else if (plaintext.type === 'agent-relay.message') {
             const { handleIncomingAgentRelay } = await import('./agentRelay')
             handleIncomingAgentRelay(plaintext.relay)

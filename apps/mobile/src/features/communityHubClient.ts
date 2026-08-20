@@ -19,6 +19,7 @@ export type {
 } from './communityHubClient-types'
 
 export {
+  communityHubRequestCandidates,
   communityHubRequestUrl,
   isCommunityHubHealthBody,
   probeCommunityHub,

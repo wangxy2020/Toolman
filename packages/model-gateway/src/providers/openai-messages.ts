@@ -22,6 +22,39 @@ export function parseToolCalls(message: {
     .filter((call) => call.name)
 }
 
+export type OpenAiToolCallDelta = {
+  index?: number
+  id?: string
+  function?: { name?: string; arguments?: string }
+}
+
+/** Merge incremental OpenAI `delta.tool_calls` fragments into complete calls. */
+export function applyOpenAiToolCallDeltas(
+  acc: Map<number, ToolCall>,
+  deltas: OpenAiToolCallDelta[] | undefined,
+): void {
+  if (!deltas?.length) return
+  for (const delta of deltas) {
+    const index = typeof delta.index === 'number' ? delta.index : acc.size
+    const current = acc.get(index) ?? { id: '', name: '', arguments: '' }
+    if (delta.id) current.id = delta.id
+    if (delta.function?.name) current.name += delta.function.name
+    if (delta.function?.arguments) current.arguments += delta.function.arguments
+    acc.set(index, current)
+  }
+}
+
+export function toolCallsFromDeltaAcc(acc: Map<number, ToolCall>): ToolCall[] {
+  return [...acc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, call]) => ({
+      id: call.id,
+      name: call.name,
+      arguments: call.arguments || '{}',
+    }))
+    .filter((call) => call.name)
+}
+
 function normalizeToolArguments(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) return '{}'

@@ -1,4 +1,5 @@
 import {
+  isBuiltinDefaultP2pGroupName,
   preferMemberDisplayName,
   P2pGroupSyncPayloadSchema,
   type P2pGroupSyncMember,
@@ -92,6 +93,10 @@ export function mergeGroupsFromSyncChanges(
     if (existing && existing.updatedAt > change.updatedAt) continue
     const parsed = P2pGroupSyncPayloadSchema.safeParse(change.payload ?? {})
     if (!parsed.success) continue
+    if (isBuiltinDefaultP2pGroupName(parsed.data.name)) {
+      byId.delete(change.entityId)
+      continue
+    }
     byId.set(change.entityId, {
       id: change.entityId,
       name: parsed.data.name,
@@ -103,7 +108,38 @@ export function mergeGroupsFromSyncChanges(
       ownerDeviceId: parsed.data.ownerDeviceId ?? existing?.ownerDeviceId,
     })
   }
-  return Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt)
+  return Array.from(byId.values())
+    .filter((group) => !isBuiltinDefaultP2pGroupName(group.name))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export function mergeJoinedDesktopGroups(
+  groups: GroupWorkspace[],
+  incoming: GroupWorkspace[],
+): GroupWorkspace[] {
+  if (incoming.length === 0) return groups
+  const byId = new Map(groups.map((group) => [group.id, group]))
+  for (const group of incoming) {
+    if (isBuiltinDefaultP2pGroupName(group.name)) continue
+    const existing = byId.get(group.id)
+    byId.set(
+      group.id,
+      existing
+        ? {
+            ...existing,
+            ...group,
+            name: group.name.trim() || existing.name,
+            description: group.description ?? existing.description,
+            ownerIdentityId: group.ownerIdentityId ?? existing.ownerIdentityId,
+            ownerDeviceId: group.ownerDeviceId ?? existing.ownerDeviceId,
+            origin: 'desktop',
+          }
+        : { ...group, origin: 'desktop' },
+    )
+  }
+  return Array.from(byId.values())
+    .filter((group) => !isBuiltinDefaultP2pGroupName(group.name))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 export function mergeGroupMembersFromSyncChanges(
@@ -119,6 +155,10 @@ export function mergeGroupMembersFromSyncChanges(
     }
     const parsed = P2pGroupSyncPayloadSchema.safeParse(change.payload ?? {})
     if (!parsed.success || !parsed.data.members) continue
+    if (isBuiltinDefaultP2pGroupName(parsed.data.name)) {
+      delete next[change.entityId]
+      continue
+    }
     const previousByDevice = new Map(
       (next[change.entityId] ?? []).map((member) => [member.deviceId, member]),
     )

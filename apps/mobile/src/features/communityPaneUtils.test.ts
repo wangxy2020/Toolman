@@ -8,7 +8,7 @@ vi.mock('react-native', () => ({
 import { communityListPageStatus } from './communityPaneUtils'
 
 describe('communityListPageStatus', () => {
-  it('does not tell hosted web to start a local desktop for public news', () => {
+  it('tells hosted web to use the local desktop sidecar, not a central Hub', () => {
     const status = communityListPageStatus({
       error: null,
       offline: true,
@@ -20,7 +20,8 @@ describe('communityListPageStatus', () => {
     })
     expect(status.tone).toBe('warning')
     expect(status.message).not.toMatch(/请先启动本机桌面端/)
-    expect(status.message).toMatch(/社区 Hub/)
+    expect(status.message).toMatch(/允许访问本地网络/)
+    expect(status.message).not.toMatch(/公共社区目录/)
     expect(status.meta).toBeUndefined()
   })
 
@@ -31,9 +32,13 @@ describe('communityListPageStatus', () => {
       loading: false,
       itemCount: 0,
       hubBaseUrl: 'http://127.0.0.1:3721',
-      triedHubUrls: ['http://192.168.1.8:3721'],
+      triedHubUrls: [
+        'https://hub.toolman.app',
+        'http://localhost:3721',
+        'http://127.0.0.1:3721',
+      ],
       hostedWeb: true,
     })
-    expect(status.meta).toBe('http://192.168.1.8:3721')
+    expect(status.meta).toBe('hub.toolman.app · localhost:3721')
   })
 })

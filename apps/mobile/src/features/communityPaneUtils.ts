@@ -1,10 +1,32 @@
 import { Alert, Platform } from 'react-native'
+import { isLoopbackHostname } from '@toolman/shared'
 import type { ModulePanelStatusEntry } from './modulePageStatus'
 import {
   MODERATION_SUBTABS,
   USER_CENTER_SECTIONS,
   type ModerationCategoryId,
 } from './communitySidebar'
+
+/** Compact Hub labels so the status bar does not clip `http://127.0.0.1:3721` to `http:/`. */
+export function formatTriedCommunityHubUrls(urls: string[]): string {
+  const labels: string[] = []
+  let sawLoopback = false
+  for (const raw of urls) {
+    try {
+      const url = new URL(raw)
+      if (isLoopbackHostname(url.hostname)) {
+        if (sawLoopback) continue
+        sawLoopback = true
+        labels.push(`localhost:${url.port || '3721'}`)
+        continue
+      }
+      labels.push(url.host)
+    } catch {
+      if (raw.trim()) labels.push(raw.trim())
+    }
+  }
+  return labels.join(' · ')
+}
 
 export function comingSoon(label: string) {
   const message = `${label}将在后续版本开放；完整发布流程请使用桌面端。`
@@ -38,9 +60,11 @@ export function communityListPageStatus(input: {
     return {
       tone: 'warning',
       message: input.hostedWeb
-        ? '无法连接社区 Hub。请检查网络后重试，或在社区设置填写可达地址。'
+        ? '无法连接本机社区目录。请点击页面允许访问本地网络（连接已启动的桌面端），或在社区设置填写电脑的可达地址。'
         : '无法连接社区 Hub。请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
-      meta: input.triedHubUrls.join(' · ') || (input.hostedWeb ? undefined : input.hubBaseUrl),
+      meta:
+        formatTriedCommunityHubUrls(input.triedHubUrls) ||
+        (input.hostedWeb ? undefined : input.hubBaseUrl),
     }
   }
   if (input.loading) return { tone: 'info', message: '加载中…' }

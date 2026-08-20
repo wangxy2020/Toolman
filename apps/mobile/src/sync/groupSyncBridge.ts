@@ -42,9 +42,10 @@ export function subscribeGroupSync(
 
 export function emitGroupSync(snapshot: GroupSyncSnapshot): void {
   // An empty pull (foreign hub / identity switch) must not wipe groups the
-  // current account already has in memory or on disk.
-  if (snapshot.groups.length === 0 && lastSnapshot && lastSnapshot.groups.length > 0) {
-    return
+  // current account already has in memory, on disk, or just discovered.
+  if (snapshot.groups.length === 0) {
+    const liveCount = reader?.().groups.length ?? 0
+    if (liveCount > 0 || (lastSnapshot && lastSnapshot.groups.length > 0)) return
   }
   lastSnapshot = snapshot
   for (const listener of listeners) listener(snapshot)

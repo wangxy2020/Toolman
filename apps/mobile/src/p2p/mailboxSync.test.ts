@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyWorkspaceWireEvents } from './groupChatMesh'
 import { subscribeMeshEvents } from './meshEvents'
 import {
@@ -7,7 +7,10 @@ import {
   patchMailboxOwnerDevice,
   readMailboxSeq,
   rememberMailboxSeq,
+  resumePersistedMailboxSync,
   startMailboxSync,
+  stopAllMailboxSync,
+  isMailboxSyncRunning,
 } from './mailboxSync'
 
 describe('mailbox event apply', () => {
@@ -42,7 +45,7 @@ describe('mailbox event apply', () => {
     expect(seen).toEqual(['mailbox-hi'])
   })
 
-  it('projects shared agent topics instead of the agent name only', () => {
+  it('does not project Agent WAL; mailbox listings are the source of truth', () => {
     const items: Array<{ id: string; parentId?: string; permission?: string }> = []
     const stop = subscribeMeshEvents((event) => {
       if (event.type === 'shared' && event.item.kind === 'agents') {
@@ -73,14 +76,35 @@ describe('mailbox event apply', () => {
       },
     ])
     stop()
-    expect(items).toEqual([
-      { id: 'ag-1' },
-      { id: 'sess-1', parentId: 'ag-1', permission: 'callable' },
+    expect(items).toEqual([])
+  })
+
+  it('does not remove shared agents from an Agent Deleted envelope', () => {
+    const removed: string[] = []
+    const stop = subscribeMeshEvents((event) => {
+      if (event.type === 'shared-remove') removed.push(event.id)
+    })
+    const workspaceId = '55555555-5555-4555-8555-555555555555'
+    applyWorkspaceWireEvents(workspaceId, [
+      {
+        seq: 9,
+        resourceType: 'Agent',
+        resourceId: 'ag-1',
+        eventType: 'Deleted',
+        timestamp: 2,
+        payloadJson: JSON.stringify({ assistant_id: 'ag-1' }),
+      },
     ])
+    stop()
+    expect(removed).toEqual([])
   })
 })
 
 describe('mailbox hubs', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('keeps workspace mailbox on the owner Sync Hub, not the official catalog', () => {
     const hubs = mailboxHubs('http://192.168.1.8:17890')
     expect(hubs[0]).toBe('http://192.168.1.8:17890')
@@ -99,16 +123,29 @@ describe('mailbox hubs', () => {
       'http://localhost:17890',
     ])
   })
+
+  it('on hosted web prefers loopback Sync Hub and drops LAN HTTP', () => {
+    vi.stubGlobal('location', { hostname: 'www.toolman.work' })
+    expect(mailboxHubs('http://192.168.1.8:17890')).toEqual([
+      'http://127.0.0.1:17890',
+      'http://localhost:17890',
+    ])
+  })
 })
 
 describe('mailbox cursor', () => {
-  it('advances per hub so old envelopes cannot hide newer replies', () => {
+  afterEach(() => {
+    stopAllMailboxSync()
+    vi.unstubAllGlobals()
+  })
+
+  it('shares the pull cursor across owner Sync Hub aliases', () => {
     const workspaceId = '44444444-4444-4444-4444-444444444444'
-    rememberMailboxSeq(workspaceId, 'http://127.0.0.1:3721', 50)
-    rememberMailboxSeq(workspaceId, 'http://127.0.0.1:3721', 40)
-    rememberMailboxSeq(workspaceId, 'https://hub.example', 9)
-    expect(readMailboxSeq(workspaceId, 'http://127.0.0.1:3721')).toBe(50)
-    expect(readMailboxSeq(workspaceId, 'https://hub.example')).toBe(9)
+    rememberMailboxSeq(workspaceId, 'http://192.168.1.8:17890', 50)
+    rememberMailboxSeq(workspaceId, 'http://127.0.0.1:17890', 40)
+    expect(readMailboxSeq(workspaceId, 'http://127.0.0.1:17890')).toBe(50)
+    expect(readMailboxSeq(workspaceId, 'http://192.168.1.8:17890')).toBe(50)
+    expect(readMailboxSeq(workspaceId, 'http://localhost:17890')).toBe(50)
   })
 
   it('fills a missing owner device on an existing mailbox target', () => {
@@ -122,5 +159,32 @@ describe('mailbox cursor', () => {
     expect(getMailboxTarget(workspaceId)?.ownerDeviceId).toBeUndefined()
     expect(patchMailboxOwnerDevice(workspaceId, 'desk-a')?.ownerDeviceId).toBe('desk-a')
     expect(getMailboxTarget(workspaceId)?.ownerDeviceId).toBe('desk-a')
+  })
+
+  it('resumes a persisted mailbox by starting the pull timer', () => {
+    const store: Record<string, string> = {}
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value
+      },
+      removeItem: (key: string) => {
+        delete store[key]
+      },
+    })
+    const workspaceId = '66666666-6666-6666-6666-666666666666'
+    startMailboxSync({
+      hubUrl: 'http://127.0.0.1:17890',
+      workspaceId,
+      deviceId: 'web-a',
+      workspaceKey: new Uint8Array(32).fill(2),
+    })
+    expect(isMailboxSyncRunning(workspaceId)).toBe(true)
+    stopAllMailboxSync()
+    expect(getMailboxTarget(workspaceId)).toBeUndefined()
+    expect(isMailboxSyncRunning(workspaceId)).toBe(false)
+    resumePersistedMailboxSync('web-a')
+    expect(getMailboxTarget(workspaceId)?.deviceId).toBe('web-a')
+    expect(isMailboxSyncRunning(workspaceId)).toBe(true)
   })
 })

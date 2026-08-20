@@ -5,6 +5,7 @@ import {
   P2P_MAILBOX_PULL_PATH,
   P2P_MAILBOX_PUT_PATH,
   P2P_MAILBOX_SESSION_PATH,
+  P2P_MAILBOX_WORKSPACES_PATH,
   SYNC_HUB_SERVICE_NAME,
   SYNC_PAIRING_REDEEM_PATH,
   SyncPushInputSchema,
@@ -28,7 +29,7 @@ import {
   readMobileSyncKnowledgeFile,
 } from './knowledge-mobile-export.service'
 import { handleMobileP2pInviteAnswer, handleMobileP2pJoinRegister } from './mobile-p2p-join.service'
-import { handleMailboxPull, handleMailboxPut, handleMailboxSession } from './p2p/p2p-mailbox.service'
+import { handleMailboxPull, handleMailboxPut, handleMailboxSession, handleMailboxWorkspaces } from './p2p/p2p-mailbox.service'
 import { ensureMobileSyncHubToken } from './mobile-sync.config'
 import {
   createPersonalPairingOffer,
@@ -39,6 +40,7 @@ import {
   parseJsonBody,
   readBody,
   readPresentedCommunityUserId,
+  isHubAuthenticated,
   requireHubAuth,
   asciiContentType,
   contentDispositionAttachment,
@@ -94,6 +96,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       p2pInviteAnswer: P2P_JOIN_INVITE_ANSWER_PATH,
       p2pMailboxPut: P2P_MAILBOX_PUT_PATH,
       p2pMailboxPull: P2P_MAILBOX_PULL_PATH,
+      p2pMailboxSession: P2P_MAILBOX_SESSION_PATH,
+      p2pMailboxWorkspaces: P2P_MAILBOX_WORKSPACES_PATH,
     }, req)
     return
   }
@@ -161,7 +165,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_PUT_PATH) {
-    if (!requireHubAccountMatch(req, res)) return
+    // Workspace mailbox auth is grant / invite token inside handleMailboxPut.
+    // Do not require the personal Sync Hub account id — other-account members
+    // and grant-only web clients must still deliver.
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
@@ -177,7 +183,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_PULL_PATH) {
-    if (!requireHubAccountMatch(req, res)) return
+    // Same as put: grant / invite token, not personal account match.
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
@@ -193,15 +199,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (method === 'POST' && url.pathname === P2P_MAILBOX_SESSION_PATH) {
-    // Personal device-pairing session authenticates via workspace grant / identity
-    // inside handleMailboxSession — do not require the LAN Sync Hub pairing token.
-    if (!requireHubAccountMatch(req, res)) return
+    // Loopback / pairing token, or a valid invite inside handleMailboxSession.
+    // Do not require the same-account header — grant-only members still refresh.
     const parsed = parseJsonBody(await readBody(req))
     if (!parsed.ok) {
       sendJson(res, 400, { error: 'invalid json' }, req)
       return
     }
-    const result = await handleMailboxSession(parsed.value)
+    const result = await handleMailboxSession(parsed.value, {
+      hubAuthenticated: isHubAuthenticated(req),
+    })
+    if (!result.ok) {
+      sendJson(res, result.status, { error: result.error }, req)
+      return
+    }
+    sendJson(res, 200, result.data, req)
+    return
+  }
+
+  if (method === 'POST' && url.pathname === P2P_MAILBOX_WORKSPACES_PATH) {
+    // Same-identity mailbox-first clients list groups they already joined.
+    // LAN / WAN must present the pairing token; loopback preview is local.
+    if (!requireHubAuth(req, res)) return
+    const parsed = parseJsonBody(await readBody(req))
+    if (!parsed.ok) {
+      sendJson(res, 400, { error: 'invalid json' }, req)
+      return
+    }
+    const result = await handleMailboxWorkspaces(parsed.value)
     if (!result.ok) {
       sendJson(res, result.status, { error: result.error }, req)
       return

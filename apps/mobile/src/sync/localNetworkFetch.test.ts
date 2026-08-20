@@ -5,12 +5,15 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  bootstrapLocalNetworkAccess,
   fetchWithLocalNetwork,
   isHostedPublicWebPage,
   localNetworkRequestTimeoutMs,
   primeLocalNetworkAccess,
+  queryLocalNetworkPermissionState,
   resetLocalNetworkPrimeStateForTests,
   targetAddressSpaceForUrl,
+  whenLocalNetworkAccessGranted,
 } from './localNetworkFetch'
 
 describe('targetAddressSpaceForUrl', () => {
@@ -78,5 +81,51 @@ describe('primeLocalNetworkAccess', () => {
       'http://localhost:17890/health',
       expect.objectContaining({ targetAddressSpace: 'loopback' }),
     )
+  })
+
+  it('defers hosted work until loopback is granted', async () => {
+    vi.stubGlobal('location', { hostname: 'www.toolman.work' })
+    const fetchMock = vi.fn(async () => new Response('{"status":"ok"}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const seen: string[] = []
+    const unsub = whenLocalNetworkAccessGranted(() => seen.push('granted'))
+    expect(seen).toEqual([])
+    await primeLocalNetworkAccess()
+    expect(seen).toEqual(['granted'])
+    unsub()
+  })
+})
+
+describe('bootstrapLocalNetworkAccess', () => {
+  afterEach(() => {
+    resetLocalNetworkPrimeStateForTests()
+    vi.unstubAllGlobals()
+  })
+
+  it('does not probe on load while Chrome would still auto-deny', async () => {
+    vi.stubGlobal('location', { hostname: 'www.toolman.work' })
+    vi.stubGlobal('navigator', {
+      permissions: {
+        query: async () => ({ state: 'prompt' }),
+      },
+    })
+    const fetchMock = vi.fn(async () => new Response('{"status":"ok"}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(queryLocalNetworkPermissionState()).resolves.toBe('prompt')
+    await expect(bootstrapLocalNetworkAccess()).resolves.toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('connects on load when local-network access is already granted', async () => {
+    vi.stubGlobal('location', { hostname: 'www.toolman.work' })
+    vi.stubGlobal('navigator', {
+      permissions: {
+        query: async () => ({ state: 'granted' }),
+      },
+    })
+    const fetchMock = vi.fn(async () => new Response('{"status":"ok"}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(bootstrapLocalNetworkAccess()).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalled()
   })
 })

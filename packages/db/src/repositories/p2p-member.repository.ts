@@ -126,6 +126,17 @@ export class P2pMemberRepository {
       .filter((row) => row.status === 'active' || row.status === 'invited')
   }
 
+  listVisibleMembershipsByIdentity(identityId: string): P2pWorkspaceMemberRow[] {
+    const id = identityId.trim()
+    if (!id) return []
+    return this.db
+      .select()
+      .from(p2pWorkspaceMembers)
+      .where(eq(p2pWorkspaceMembers.identityId, id))
+      .all()
+      .filter((row) => row.status === 'active' || row.status === 'invited')
+  }
+
   create(input: CreateP2pMemberInput): P2pWorkspaceMemberRow {
     const now = new Date()
     const id = input.id ?? randomUUID()

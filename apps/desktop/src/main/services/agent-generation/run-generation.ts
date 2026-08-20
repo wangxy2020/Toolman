@@ -91,7 +91,9 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
 
     throwIfAborted(controller.signal)
 
-    const runtime = parseAssistantRuntime(assistant, workspaceId)
+    const runtime = parseAssistantRuntime(assistant, workspaceId, {
+      skipDefaultIntegrations: sendOptions?.skipDefaultIntegrations,
+    })
     runtime.toolContext.memoryEnabled = sendOptions?.memoryEnabled
     runtime.toolContext.mcpServerIds = mcpServerIds
     const effectivePermissionMode = sendOptions?.isHeartbeat

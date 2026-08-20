@@ -1,17 +1,19 @@
 import {
   buildGroupChatMessageSignPayload,
+  isMailboxFirstP2pClient,
   P2P_GROUP_CHAT_RESOURCE_TYPE,
   type P2pGroupChatMessage,
 } from '@toolman/shared'
 import type { GroupChatMessage } from '../storage/groupChat'
 import { newUuid, sha256Hex } from './bytes'
 import { signDevicePayload } from './deviceKeys'
+import { localP2pClientDeviceKind } from './deviceKind'
 import { outbox, toLocalMessage } from './groupChatMesh-helpers'
 import { getMailboxTarget, putMailboxProposal } from './mailboxSync'
 import { encodeReplicationMessage } from './meshCodec'
 import { recordP2pPathMetric } from './pathMetrics'
 import { flushShareProposeOutbox } from './sharePropose'
-import { sendEventsJson, type LiveMeshSession } from './session'
+import { hasLiveSession, sendEventsJson, type LiveMeshSession } from './session'
 
 export async function startMeshHandshake(session: LiveMeshSession): Promise<void> {
   await sendEventsJson(
@@ -87,26 +89,47 @@ export async function sendGroupChatOverMesh(input: {
     signature: signature ?? '',
   }
   const json = JSON.stringify(envelope)
+  const deposit = async (): Promise<boolean> => {
+    try {
+      const { ensureMailboxForDesktopGroup } = await import('./mailboxBootstrap')
+      await ensureMailboxForDesktopGroup({
+        workspaceId: input.workspaceId,
+        deviceId: input.deviceId,
+        force: true,
+      })
+      const mailbox = getMailboxTarget(input.workspaceId)
+      if (!mailbox?.ownerDeviceId) return false
+      await putMailboxProposal(mailbox, {
+        resourceType: P2P_GROUP_CHAT_RESOURCE_TYPE,
+        resourceId: message.id,
+        operatorId: input.senderMemberId,
+        eventType: 'Updated',
+        payload: { v: 1, kind: 'group.chat.message', message },
+        sourceDeviceId: input.deviceId,
+        timestamp: message.createdAt,
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+  // Browser/phone must not prefer LAN WebRTC: a live data channel still gets
+  // dropped on desktop (web signatures are not in the owner peer-key store).
+  if (
+    (isMailboxFirstP2pClient(input.deviceId) || localP2pClientDeviceKind() === 'web') &&
+    (await deposit())
+  ) {
+    return toLocalMessage(message)
+  }
   try {
-    await sendEventsJson(input.workspaceId, json)
-    recordP2pPathMetric('meshSend')
-  } catch {
-    const mailbox = getMailboxTarget(input.workspaceId)
-    if (mailbox) {
-      try {
-        await putMailboxProposal(mailbox, {
-          resourceType: P2P_GROUP_CHAT_RESOURCE_TYPE,
-          resourceId: message.id,
-          operatorId: input.senderMemberId,
-          eventType: 'Updated',
-          payload: { v: 1, kind: 'group.chat.message', message },
-          sourceDeviceId: input.deviceId,
-          timestamp: message.createdAt,
-        })
-      } catch {
-        outbox.push({ workspaceId: input.workspaceId, json })
-      }
+    if (hasLiveSession(input.workspaceId)) {
+      await sendEventsJson(input.workspaceId, json)
+      recordP2pPathMetric('meshSend')
     } else {
+      throw new Error('no-mesh')
+    }
+  } catch {
+    if (!(await deposit())) {
       outbox.push({ workspaceId: input.workspaceId, json })
     }
   }

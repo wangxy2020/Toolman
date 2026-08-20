@@ -58,7 +58,7 @@ export function shouldProbeLoopbackSyncHub(
   })
 }
 
-/** Public catalog: hosted pages try the official Hub first, then this computer's desktop sidecar. */
+/** Community catalog lives on a nearby desktop sidecar (P2P federation), never a central Hub. */
 export function communityHubProbeFlags(): {
   packagerHostnames: string[]
   includeLoopback: boolean
@@ -66,11 +66,10 @@ export function communityHubProbeFlags(): {
   officialHubFirst: boolean
 } {
   const packagerHostnames = listDesktopDevHostnames()
-  const hosted = isHostedWebPage()
   return {
     packagerHostnames,
     includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
-    includeOfficialHub: true,
-    officialHubFirst: hosted,
+    includeOfficialHub: false,
+    officialHubFirst: false,
   }
 }

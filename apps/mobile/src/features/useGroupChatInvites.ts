@@ -177,7 +177,14 @@ export function useGroupChatInvites({
                 ),
               )
             }
-            appendActivity(id, '已向群主电脑登记，等待对方确认', '群组', selfDeviceId)
+            appendActivity(
+              id,
+              result.data.member.status === 'active'
+                ? '已加入群组，正在同步消息'
+                : '已向群主电脑登记，等待对方确认',
+              '群组',
+              selfDeviceId,
+            )
             void completeInviteWebRtcJoin({
               invite,
               register: result.data,

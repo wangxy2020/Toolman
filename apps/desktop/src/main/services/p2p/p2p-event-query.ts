@@ -1,3 +1,4 @@
+import { WORKSPACE_EVENT_PAGE_SIZE } from './p2p-event-page'
 import type { P2pResourceType, WorkspaceEvent } from '@toolman/shared'
 import {
   assertWorkspaceMembershipAccess,
@@ -73,7 +74,7 @@ export function listWorkspaceEventsSince(
   return rows.map(mapEventRow)
 }
 
-export const WORKSPACE_EVENT_PAGE_SIZE = 200
+export { WORKSPACE_EVENT_PAGE_SIZE }
 
 /** Page through workspace events; stops if the seq cursor does not advance. */
 export function iterateWorkspaceEventPages(

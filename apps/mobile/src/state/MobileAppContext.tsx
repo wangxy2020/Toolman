@@ -28,6 +28,8 @@ export type ChatMessage = {
   role: 'user' | 'assistant' | 'system'
   content: string
   createdAt: number
+  /** Owner-model thinking text for group-relay streams. */
+  thinking?: string
 }
 
 export type GroupAgentProxy = {

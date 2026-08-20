@@ -18,6 +18,10 @@ describe('resolveCommunityHubBaseUrl', () => {
       'http://192.168.1.8:3721',
     )
   })
+
+  it('ignores the unused central Hub hostname', () => {
+    expect(resolveCommunityHubBaseUrl(OFFICIAL_TOOLMAN_HUB_URL)).toBe(DEFAULT_COMMUNITY_HUB_BASE_URL)
+  })
 })
 
 describe('pickReachableCommunityHubBaseUrl', () => {
@@ -39,7 +43,7 @@ describe('pickReachableCommunityHubBaseUrl', () => {
     expect(picked.tried).not.toContain(OFFICIAL_TOOLMAN_HUB_URL)
   })
 
-  it('can probe the official Hub as a last-resort public catalog', async () => {
+  it('can probe a public Hub URL only when explicitly asked', async () => {
     const picked = await pickReachableCommunityHubBaseUrl('', async (url) => url === OFFICIAL_TOOLMAN_HUB_URL, {
       includeLoopback: false,
       includeOfficialHub: true,
@@ -50,15 +54,15 @@ describe('pickReachableCommunityHubBaseUrl', () => {
     expect(picked.tried).toEqual([OFFICIAL_TOOLMAN_HUB_URL])
   })
 
-  it('falls back to same-computer loopback after the official Hub on hosted web', async () => {
+  it('uses same-computer loopback as the decentralized catalog', async () => {
     const picked = await pickReachableCommunityHubBaseUrl('', async (url) => url === DEFAULT_COMMUNITY_HUB_BASE_URL, {
       includeLoopback: true,
-      includeOfficialHub: true,
-      officialHubFirst: true,
+      includeOfficialHub: false,
+      officialHubFirst: false,
     })
     expect(picked.online).toBe(true)
     expect(picked.url).toBe(DEFAULT_COMMUNITY_HUB_BASE_URL)
-    expect(picked.tried[0]).toBe(OFFICIAL_TOOLMAN_HUB_URL)
+    expect(picked.tried[0]).not.toBe(OFFICIAL_TOOLMAN_HUB_URL)
     expect(picked.tried).toContain(DEFAULT_COMMUNITY_HUB_BASE_URL)
   })
 })

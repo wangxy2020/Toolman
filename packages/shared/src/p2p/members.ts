@@ -69,7 +69,60 @@ export function inferMemberDeviceKind(
   return 'desktop'
 }
 
-/** Mailbox / web clients poll about every 15s; keep them online across a few missed ticks. */
+/** Phone / web clients speak the owner's Sync Hub mailbox API (Matrix CS analogue).
+ * They are not mDNS/WebRTC mesh peers; do not try LAN discovery to reach them.
+ */
+export function isMailboxFirstP2pClient(
+  deviceId: string,
+  explicit?: P2pClientDeviceKind | null,
+): boolean {
+  return inferMemberDeviceKind(deviceId, explicit) !== 'desktop'
+}
+
+export function isVisibleMailboxMemberStatus(status?: string | null): boolean {
+  return status === 'active' || status === 'invited'
+}
+
+export type MailboxSessionAdmission = 'ok' | 'create' | 'reactivate' | 'forbidden'
+
+/**
+ * A leftover `removed` / `left` row for this device must not block mailbox
+ * session when the same person still has another active device in the group.
+ */
+export function resolveMailboxSessionAdmission(input: {
+  existingStatus?: string | null
+  hasActiveSibling: boolean
+}): MailboxSessionAdmission {
+  if (isVisibleMailboxMemberStatus(input.existingStatus)) return 'ok'
+  if (!input.hasActiveSibling) return 'forbidden'
+  return input.existingStatus ? 'reactivate' : 'create'
+}
+
+/** Sibling create/reactivate needs a paired/loopback hub. Existing members may use an invite. */
+export function mailboxSessionAuthDenied(input: {
+  admission: MailboxSessionAdmission
+  hubAuthenticated: boolean
+  inviteOk: boolean
+}): 'forbidden' | 'unauthorized' | null {
+  if (input.admission === 'forbidden') return 'forbidden'
+  if (input.admission === 'create' || input.admission === 'reactivate') {
+    return input.hubAuthenticated ? null : 'unauthorized'
+  }
+  return input.hubAuthenticated || input.inviteOk ? null : 'unauthorized'
+}
+
+/** Web/mobile mesh peers are not device-cert signed like desktop; owner may accept unsigned chat. */
+export function shouldAcceptUnsignedMailboxFirstGroupChat(input: {
+  peerDeviceId: string
+  workspaceId?: string
+  peerConnected: boolean
+  deviceKind?: P2pClientDeviceKind | null
+}): boolean {
+  if (!input.workspaceId || !input.peerConnected) return false
+  return isMailboxFirstP2pClient(input.peerDeviceId, input.deviceKind)
+}
+
+/** Mailbox clients poll about every 2s; keep them online across a few missed ticks. */
 export const P2P_MAILBOX_PRESENCE_TTL_MS = 45_000
 
 export function isMemberRecentlySeen(lastSeenAt?: number | null, now = Date.now()): boolean {

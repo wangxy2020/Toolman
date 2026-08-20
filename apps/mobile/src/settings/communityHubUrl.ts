@@ -1,6 +1,8 @@
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
   listCommunityHubProbeCandidates,
+  hostnameOfBaseUrl,
+  isOfficialCommunityHubHost,
   normalizeSyncBaseUrl,
 } from '@toolman/shared'
 
@@ -8,7 +10,10 @@ export const DEFAULT_COMMUNITY_HUB_BASE_URL = DEFAULT_LOCAL_COMMUNITY_HUB_BASE_U
 
 export function resolveCommunityHubBaseUrl(configured?: string | null): string {
   const trimmed = configured?.trim().replace(/\/+$/, '') ?? ''
-  return trimmed || DEFAULT_COMMUNITY_HUB_BASE_URL
+  if (!trimmed || isOfficialCommunityHubHost(hostnameOfBaseUrl(trimmed))) {
+    return DEFAULT_COMMUNITY_HUB_BASE_URL
+  }
+  return trimmed
 }
 
 export async function pickReachableCommunityHubBaseUrl(

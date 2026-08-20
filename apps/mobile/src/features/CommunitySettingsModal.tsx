@@ -3,7 +3,8 @@ import { Pressable, Text, View } from 'react-native'
 import { saveModulePrefs } from '../settings/prefs'
 import { pickReachableCommunityHubBaseUrl, resolveCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { useMobileApp } from '../state/MobileAppContext'
-import { communityHubProbeFlags } from '../sync/desktopDevHost'
+import { communityHubProbeFlags, isHostedWebPage } from '../sync/desktopDevHost'
+import { whenLocalNetworkAccessGranted } from '../sync/localNetworkFetch'
 import {
   fetchCommunityHubHealth,
   fetchFederationCatalogCount,
@@ -48,12 +49,14 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
 
   const resolvedUrl = liveUrl || resolveCommunityHubBaseUrl(hubBaseUrl)
 
-  const loadHub = useCallback(async (configured: string) => {
+  const loadHub = useCallback(async (configured: string, includeLoopback?: boolean) => {
     setLoading(true)
     setError(null)
     try {
+      const flags = communityHubProbeFlags()
       const picked = await pickReachableCommunityHubBaseUrl(configured, probeCommunityHub, {
-        ...communityHubProbeFlags(),
+        ...flags,
+        includeLoopback: includeLoopback ?? flags.includeLoopback,
       })
       setLiveUrl(picked.url)
       if (!picked.online) {
@@ -83,7 +86,13 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
     setHubBaseUrl(modulePrefs.community.hubBaseUrl)
     setGuestReadOnly(modulePrefs.community.guestReadOnly)
     setError(null)
-    void loadHub(resolveCommunityHubBaseUrl(modulePrefs.community.hubBaseUrl))
+    const configured = resolveCommunityHubBaseUrl(modulePrefs.community.hubBaseUrl)
+    const hosted = isHostedWebPage()
+    void loadHub(configured, hosted ? false : undefined)
+    if (!hosted) return
+    return whenLocalNetworkAccessGranted(() => {
+      void loadHub(configured, true)
+    })
   }, [visible, modulePrefs.community, loadHub])
 
   const handleSave = async () => {

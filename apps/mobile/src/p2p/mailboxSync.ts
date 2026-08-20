@@ -10,4 +10,5 @@ export {
   patchMailboxOwnerDevice,
   stopMailboxSync,
   stopAllMailboxSync,
+  isMailboxSyncRunning,
 } from './mailboxSync-lifecycle'

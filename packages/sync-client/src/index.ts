@@ -10,11 +10,13 @@ import {
   P2P_MAILBOX_PULL_PATH,
   P2P_MAILBOX_PUT_PATH,
   P2P_MAILBOX_SESSION_PATH,
+  P2P_MAILBOX_WORKSPACES_PATH,
   P2pJoinInviteAnswerOutputSchema,
   P2pJoinRegisterOutputSchema,
   P2pMailboxPullOutputSchema,
   P2pMailboxPutOutputSchema,
   P2pMailboxSessionOutputSchema,
+  P2pMailboxWorkspacesOutputSchema,
   SYNC_HUB_TOKEN_HEADER,
   type AgentHostInvokeChunk,
   type AgentHostInvokeInput,
@@ -30,6 +32,8 @@ import {
   type P2pMailboxPutOutput,
   type P2pMailboxSessionInput,
   type P2pMailboxSessionOutput,
+  type P2pMailboxWorkspacesInput,
+  type P2pMailboxWorkspacesOutput,
   type SyncPullInput,
   type SyncPullOutput,
   type SyncPushInput,
@@ -202,6 +206,26 @@ export class ToolmanSyncClient {
       throw new Error(error)
     }
     return P2pMailboxSessionOutputSchema.parse(json)
+  }
+
+  async fetchMailboxWorkspaces(input: P2pMailboxWorkspacesInput): Promise<P2pMailboxWorkspacesOutput> {
+    const res = await this.request(`${this.baseUrl}${P2P_MAILBOX_WORKSPACES_PATH}`, {
+      method: 'POST',
+      headers: await this.headers(),
+      body: JSON.stringify(input),
+    })
+    const json: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      const error =
+        json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+          ? json.error
+          : `信箱群组列表失败（${res.status}）`
+      throw new Error(error)
+    }
+    if (json && typeof json === 'object' && 'data' in json) {
+      return P2pMailboxWorkspacesOutputSchema.parse((json as { data: unknown }).data)
+    }
+    return P2pMailboxWorkspacesOutputSchema.parse(json)
   }
 
   async putMailbox(input: P2pMailboxPutInput): Promise<P2pMailboxPutOutput> {

@@ -24,7 +24,13 @@ export class MessageStreamBuffers {
 
   appendText(chunk: string): void {
     if (chunk) {
+      const previous = this.thinking
       this.stripPreparingStatusFromThinking()
+      // Plain completions often have no reasoning tokens. Keep the preparing
+      // status so desktop can persist 思考过程 + duration after message.done.
+      if (!this.thinking.trim() && previous.trim()) {
+        this.thinking = previous
+      }
       if (this.thinking.trim()) {
         this.finalizeThinkingDuration()
       }
@@ -33,7 +39,16 @@ export class MessageStreamBuffers {
   }
 
   appendStatus(chunk: string): void {
-    if (chunk && this.thinkingStartedAt === null) {
+    if (!chunk) return
+    const existing = this.thinking.trim()
+    if (
+      existing &&
+      PREPARING_STATUS_LINE.test(existing) &&
+      PREPARING_STATUS_LINE.test(chunk.trim())
+    ) {
+      return
+    }
+    if (this.thinkingStartedAt === null) {
       this.thinkingStartedAt = Date.now()
     }
     this.thinking += chunk
@@ -61,6 +76,27 @@ export class MessageStreamBuffers {
     // the brief window when reasoning tokens are painted in the UI.
   }
 
+  replaceThinking(text: string, durationSeconds?: number | null): void {
+    this.thinking = text
+    if (text && this.thinkingStartedAt === null) {
+      this.thinkingStartedAt = Date.now()
+    }
+    if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds)) {
+      this.thinkingDurationSeconds =
+        this.thinkingDurationSeconds === null
+          ? durationSeconds
+          : Math.max(this.thinkingDurationSeconds, durationSeconds)
+    }
+  }
+
+  applyThinkingDuration(durationSeconds: number): void {
+    if (!Number.isFinite(durationSeconds)) return
+    this.thinkingDurationSeconds =
+      this.thinkingDurationSeconds === null
+        ? durationSeconds
+        : Math.max(this.thinkingDurationSeconds, durationSeconds)
+  }
+
   clearThinking(): void {
     // Clear visible thinking text for a new phase (e.g. docx summary), but keep the
     // original wall-clock start so duration does not shrink to only the last segment.
@@ -71,6 +107,13 @@ export class MessageStreamBuffers {
   promoteThinkingToText(): boolean {
     const answer = this.thinking.trim()
     if (this.text.trim() || !answer) return false
+    const contentLines = answer.split('\n').map((line) => line.trim()).filter(Boolean)
+    if (
+      contentLines.length > 0 &&
+      contentLines.every((line) => PREPARING_STATUS_LINE.test(line))
+    ) {
+      return false
+    }
     this.text = answer
     this.thinking = ''
     this.thinkingStartedAt = null

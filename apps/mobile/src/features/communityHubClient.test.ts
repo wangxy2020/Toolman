@@ -13,6 +13,7 @@ vi.mock('../sync/desktopDevHost', () => ({
 
 import { isHostedWebPage } from '../sync/desktopDevHost'
 import {
+  communityHubRequestCandidates,
   communityHubRequestUrl,
   isCommunityHubHealthBody,
   probeCommunityHub,
@@ -35,6 +36,18 @@ describe('communityHubRequestUrl', () => {
     expect(communityHubRequestUrl('https://hub.toolman.app', '/health')).toBe(
       'https://hub.toolman.app/health',
     )
+  })
+
+  it('keeps the official catalog on its own origin on hosted web, with proxy fallback', () => {
+    vi.mocked(isHostedWebPage).mockReturnValue(true)
+    expect(communityHubRequestUrl('https://hub.toolman.app', '/health')).toBe(
+      'https://hub.toolman.app/health',
+    )
+    expect(communityHubRequestCandidates('https://hub.toolman.app', '/api/v1/health')).toEqual([
+      'https://hub.toolman.app/api/v1/health',
+      '/api/community-hub?u=%2Fapi%2Fv1%2Fhealth',
+    ])
+    vi.mocked(isHostedWebPage).mockReturnValue(false)
   })
 
   it('talks to loopback Community Hub directly on hosted web', () => {
@@ -71,5 +84,26 @@ describe('probeCommunityHub', () => {
     vi.stubGlobal('fetch', fetchMock)
     await expect(probeCommunityHub('https://hub.toolman.app')).resolves.toBe(true)
     vi.unstubAllGlobals()
+  })
+
+  it('falls back to the same-origin proxy when the public Hub is unreachable', async () => {
+    vi.mocked(isHostedWebPage).mockReturnValue(true)
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith('https://hub.toolman.app')) {
+        throw new TypeError('Failed to fetch')
+      }
+      if (url.startsWith('/api/community-hub') && url.includes('news')) {
+        return new Response('{"ok":true,"data":{"items":[]}}', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('{"ok":false}', { status: 502 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(probeCommunityHub('https://hub.toolman.app')).resolves.toBe(true)
+    vi.unstubAllGlobals()
+    vi.mocked(isHostedWebPage).mockReturnValue(false)
   })
 })

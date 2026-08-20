@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import {
   P2pMailboxSessionInputSchema,
+  P2pMailboxWorkspacesInputSchema,
   canForwardWorkspaceAsGateway,
   inferMemberDeviceKind,
+  isBuiltinDefaultP2pGroupName,
   isUsableMemberIdentityId,
   openMailboxPlaintext,
   parseP2pClientDeviceKind,
+  personalSyncWorkspaceId,
   preferMemberDisplayName,
+  resolveMailboxSessionAdmission,
+  mailboxSessionAuthDenied,
   sealMailboxPlaintext,
   workspaceKeyFromB64,
   type P2pClientDeviceKind,
@@ -14,9 +19,9 @@ import {
 } from '@toolman/shared'
 import { toErrorMessage } from '@toolman/shared'
 import { logStructured } from '../structured-log.service'
-import { getP2pDeviceInfo } from './p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from './p2p-device-identity.service'
 import {
-  findIdentitySibling,
+  findSamePersonSibling,
   getMemberRepo,
   getWorkspaceRepo,
   listWorkspaceMemberRoster,
@@ -26,15 +31,16 @@ import {
 } from './p2p-member-shared'
 import { publishP2pGroupSyncChange } from '../group-mobile-sync'
 import { loadWorkspaceKey } from './p2p-workspace-key.store'
-import { putMailboxRecord } from './p2p-mailbox-store'
+import { nextMailboxSeq, putMailboxRecord } from './p2p-mailbox-store'
 import {
   depositCiphertextToCommunityMailbox,
   pullCommunityMailboxEnvelopes,
 } from './p2p-mailbox-remote'
 import { listActiveAgentShareListings } from './p2p-agent-share-listing'
 import { workspaceEventToWire } from './p2p-sync-protocol'
+import { collectPagesBySeq } from './p2p-event-page'
 import { logP2pPathMetrics, recordP2pPathMetric } from './p2p-path-metrics'
-import { memberVisible } from './p2p-mailbox-auth'
+import { memberVisible, mailboxInviteMatchesWorkspace } from './p2p-mailbox-auth'
 import { applyIncomingMailbox } from './p2p-mailbox-handlers'
 import { resolvePersonalMailboxSession } from '../personal-device-pairing.service'
 
@@ -74,10 +80,11 @@ export async function depositEventToMailbox(event: WorkspaceEvent): Promise<void
     plaintext: { type: 'workspace.event', event: workspaceEventToWire(event) },
   })
   for (const member of members) {
+    const seq = nextMailboxSeq()
     putMailboxRecord({
       workspaceId: event.workspaceId,
       recipientDeviceId: member.deviceId,
-      seq: event.seq,
+      seq,
       ciphertextB64,
       depositedAt: Date.now(),
     })
@@ -87,7 +94,7 @@ export async function depositEventToMailbox(event: WorkspaceEvent): Promise<void
       recipientDeviceId: member.deviceId,
       workspaceKey,
       ciphertextB64,
-      seq: event.seq,
+      seq,
     })
   }
   if (members.length > 0) {
@@ -97,8 +104,51 @@ export async function depositEventToMailbox(event: WorkspaceEvent): Promise<void
   }
 }
 
+/** Matrix /sync analogue: copy recent room events into a mailbox-only client's inbox. */
+export async function depositCatchUpEventsToMailbox(
+  workspaceId: string,
+  recipientDeviceId: string,
+): Promise<number> {
+  const local = getP2pDeviceInfo()
+  if (recipientDeviceId === local.deviceId) return 0
+  if (!canForwardWorkspaceAsGateway(memberVisible(workspaceId, local.deviceId))) return 0
+  const keyB64 = loadWorkspaceKey(workspaceId)
+  if (!keyB64) return 0
+  const { listWorkspaceEventsSince, WORKSPACE_EVENT_PAGE_SIZE } = await import('./p2p-event-query')
+  const events = collectPagesBySeq(
+    (sinceSeq, limit) => listWorkspaceEventsSince(workspaceId, sinceSeq, limit),
+    WORKSPACE_EVENT_PAGE_SIZE,
+  )
+  if (events.length === 0) return 0
+  const workspaceKey = workspaceKeyFromB64(keyB64)
+  let deposited = 0
+  for (const event of events) {
+    const ciphertextB64 = await sealMailboxPlaintext({
+      workspaceKey,
+      workspaceId,
+      plaintext: { type: 'workspace.event', event: workspaceEventToWire(event) },
+    })
+    putMailboxRecord({
+      workspaceId,
+      recipientDeviceId,
+      seq: nextMailboxSeq(),
+      ciphertextB64,
+      depositedAt: Date.now(),
+    })
+    deposited += 1
+  }
+  recordP2pPathMetric('mailboxPut')
+  logStructured(
+    'p2p',
+    'info',
+    `mailbox catch-up ws=${workspaceId} recipient=${recipientDeviceId} events=${deposited}`,
+  )
+  return deposited
+}
+
 export async function handleMailboxSession(
   raw: unknown,
+  options?: { hubAuthenticated?: boolean },
 ): Promise<
   | {
       ok: true
@@ -130,14 +180,39 @@ export async function handleMailboxSession(
 
   const existing = getMemberRepo().findByWorkspaceAndDevice(input.workspaceId, input.deviceId)
   const requestedIdentity = input.identityId?.trim() || ''
+  const local = getP2pDeviceInfo()
   const sibling = requestedIdentity
-    ? findIdentitySibling(input.workspaceId, requestedIdentity, input.deviceId)
+    ? findSamePersonSibling({
+        workspaceId: input.workspaceId,
+        joinerIdentityId: requestedIdentity,
+        excludeDeviceId: input.deviceId,
+        localPersonIdentityId: getP2pPersonIdentityId(),
+        localDeviceId: local.deviceId,
+      })
     : null
-  const samePerson = Boolean(sibling && sibling.identityId === requestedIdentity)
-  if (!existing && !samePerson) {
+  const admission = resolveMailboxSessionAdmission({
+    existingStatus: existing?.status,
+    hasActiveSibling: Boolean(sibling),
+  })
+  const denied = mailboxSessionAuthDenied({
+    admission,
+    hubAuthenticated: options?.hubAuthenticated === true,
+    inviteOk: mailboxInviteMatchesWorkspace(input.inviteToken, input.workspaceId),
+  })
+  if (denied === 'forbidden') {
     return { ok: false, status: 403, error: '不是该群成员' }
   }
-  if (!existing && sibling && samePerson) {
+  if (denied === 'unauthorized') {
+    return {
+      ok: false,
+      status: 401,
+      error:
+        admission === 'create' || admission === 'reactivate'
+          ? '需要本机配对后才能添加同人设备'
+          : '信箱会话需要配对令牌或邀请',
+    }
+  }
+  if (admission === 'create' && sibling) {
     const inherited = membershipFromIdentitySibling(sibling.role, sibling)
     const kind = inferMemberDeviceKind(input.deviceId, parseP2pClientDeviceKind(input.deviceKind))
     getMemberRepo().create({
@@ -156,6 +231,24 @@ export async function handleMailboxSession(
       'p2p',
       'info',
       `mailbox session added same-identity device ${input.deviceId} to ${input.workspaceId}`,
+    )
+  } else if (admission === 'reactivate' && existing && sibling) {
+    const inherited = membershipFromIdentitySibling(sibling.role, sibling)
+    const kind = inferMemberDeviceKind(input.deviceId, parseP2pClientDeviceKind(input.deviceKind))
+    getMemberRepo().update({
+      id: existing.id,
+      identityId: sibling.identityId,
+      displayName:
+        preferMemberDisplayName(input.displayName, sibling.displayName) || sibling.displayName,
+      role: inherited.role,
+      status: inherited.status,
+      certJson: certJsonWithDeviceKind(existing.certJson, kind),
+    })
+    publishP2pGroupSyncChange(toWorkspaceDto(workspace))
+    logStructured(
+      'p2p',
+      'info',
+      `mailbox session reactivated same-identity device ${input.deviceId} in ${input.workspaceId}`,
     )
   } else if (existing) {
     const requestedKind = parseP2pClientDeviceKind(input.deviceKind)
@@ -184,6 +277,23 @@ export async function handleMailboxSession(
     }
   }
 
+  const sessionMember = getMemberRepo().findByWorkspaceAndDevice(
+    input.workspaceId,
+    input.deviceId,
+  )
+  if (sessionMember?.status === 'invited' && workspace.ownerDeviceId === local.deviceId) {
+    try {
+      const { activateMemberAfterOwnerTrust } = await import('./p2p-member-join/remote-join')
+      await activateMemberAfterOwnerTrust(input.workspaceId, input.deviceId)
+    } catch (error) {
+      logStructured(
+        'p2p',
+        'warn',
+        `mailbox session activate failed: ${toErrorMessage(error, String(error))}`,
+      )
+    }
+  }
+
   touchMemberLastSeen(input.workspaceId, input.deviceId)
   let sharedAgents: ReturnType<typeof listActiveAgentShareListings> = []
   try {
@@ -207,6 +317,71 @@ export async function handleMailboxSession(
       sharedAgents,
     },
   }
+}
+
+export async function handleMailboxWorkspaces(
+  raw: unknown,
+): Promise<
+  | {
+      ok: true
+      data: {
+        ok: true
+        workspaces: Array<{
+          workspaceId: string
+          name: string
+          description?: string
+          ownerDeviceId: string
+          ownerIdentityId?: string
+          createdAt?: number
+          updatedAt?: number
+        }>
+      }
+    }
+  | { ok: false; status: number; error: string }
+> {
+  const parsed = P2pMailboxWorkspacesInputSchema.safeParse(raw)
+  if (!parsed.success) return { ok: false, status: 400, error: '信箱群组列表参数无效' }
+  const input = parsed.data
+  const hubIdentity = getP2pPersonIdentityId().trim()
+  const requested = input.identityId?.trim() || ''
+  const identityId =
+    requested && requested === hubIdentity
+      ? requested
+      : isUsableMemberIdentityId(hubIdentity)
+        ? hubIdentity
+        : ''
+  const rows = [
+    ...(identityId ? getMemberRepo().listVisibleMembershipsByIdentity(identityId) : []),
+    ...getMemberRepo().listVisibleMembershipsByDevice(input.deviceId),
+  ]
+  const seen = new Set<string>()
+  const workspaces: Array<{
+    workspaceId: string
+    name: string
+    description?: string
+    ownerDeviceId: string
+    ownerIdentityId?: string
+    createdAt?: number
+    updatedAt?: number
+  }> = []
+  for (const row of rows) {
+    if (seen.has(row.workspaceId)) continue
+    seen.add(row.workspaceId)
+    if (identityId && row.workspaceId === personalSyncWorkspaceId(identityId)) continue
+    const workspace = getWorkspaceRepo().findById(row.workspaceId)
+    if (!workspace || workspace.status !== 'active') continue
+    if (isBuiltinDefaultP2pGroupName(workspace.name)) continue
+    workspaces.push({
+      workspaceId: workspace.id,
+      name: workspace.name,
+      description: workspace.description?.trim() || undefined,
+      ownerDeviceId: workspace.ownerDeviceId,
+      ownerIdentityId: workspace.ownerIdentityId,
+      createdAt: workspace.createdAt.getTime(),
+      updatedAt: workspace.updatedAt.getTime(),
+    })
+  }
+  return { ok: true, data: { ok: true, workspaces } }
 }
 
 const communityPullSince = new Map<string, number>()

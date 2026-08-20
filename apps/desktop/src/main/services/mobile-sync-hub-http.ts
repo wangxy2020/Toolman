@@ -182,12 +182,15 @@ export function notePairingFailure(req: IncomingMessage, max = 12, windowMs = 10
   return current.count <= max
 }
 
-export function requireHubAuth(req: IncomingMessage, res: ServerResponse): boolean {
+export function isHubAuthenticated(req: IncomingMessage): boolean {
   // Same-computer preview (Expo web / localhost) talks to 127.0.0.1; never require
   // the pairing code there. LAN / WAN clients still must present the token.
   if (isLoopbackRemoteAddress(req)) return true
-  const expected = ensureMobileSyncHubToken()
-  if (tokensMatch(readPresentedToken(req), expected)) return true
+  return tokensMatch(readPresentedToken(req), ensureMobileSyncHubToken())
+}
+
+export function requireHubAuth(req: IncomingMessage, res: ServerResponse): boolean {
+  if (isHubAuthenticated(req)) return true
   sendJson(res, 401, { error: 'unauthorized' }, req)
   return false
 }

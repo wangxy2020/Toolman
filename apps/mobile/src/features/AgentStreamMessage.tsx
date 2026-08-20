@@ -103,6 +103,7 @@ export function AgentStreamMessage(props: {
             !isUser && checked ? styles.bubbleAssistantSelected : null,
           ]}
         >
+          {streamingThis && !msg.content.trim() ? <ThinkingHeartbeat /> : null}
           {msg.content ? (
             <View style={styles.streamBody}>
               <View style={styles.streamBodyRow}>
@@ -119,8 +120,6 @@ export function AgentStreamMessage(props: {
                 ) : null}
               </View>
             </View>
-          ) : streamingThis ? (
-            <ThinkingHeartbeat />
           ) : null}
           {showTranslation && translation ? (
             <View style={styles.translationBox}>

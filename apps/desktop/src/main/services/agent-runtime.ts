@@ -1,6 +1,8 @@
 import {
+  contentBlocksHaveAttachments,
   getDefaultSkillIds,
   getDefaultMcpServerIds,
+  isDefaultEnabledMcpServer,
   resolveMcpServerIdsForSkills,
   shouldEnableToolsWithAttachments,
   type ContentBlock,
@@ -39,18 +41,20 @@ export function resolveAssistantWorkingDirectory(
 export function parseAssistantRuntime(
   assistant: ReturnType<typeof getAssistantRow>,
   workspaceId?: string,
+  extra?: { skipDefaultIntegrations?: boolean },
 ) {
   const params = assistant ? parseAssistantParametersJson(assistant.parametersJson) : parseAssistantParametersJson(null)
-  const isGroupProxyShell = Boolean(params.p2pGroupProxy)
+  const skipDefaultIntegrations =
+    extra?.skipDefaultIntegrations === true || Boolean(params.p2pGroupProxy)
   const permissionMode = (params.permissionMode as PermissionMode | undefined) ?? 'normal'
   const autonomousMode = Boolean(params.autonomousMode)
   const workingDirectory = resolveAssistantWorkingDirectory(assistant, workspaceId)
   const skillIds = filterEnabledSkillIds(
-    isGroupProxyShell
+    skipDefaultIntegrations
       ? (params.skillIds ?? [])
       : (params.skillIds ?? getDefaultSkillIds()),
   )
-  const baseMcpServerIds = isGroupProxyShell
+  const baseMcpServerIds = skipDefaultIntegrations
     ? (params.mcpServerIds ?? [])
     : (params.mcpServerIds ?? getDefaultMcpServerIds())
   return {
@@ -72,6 +76,15 @@ export function parseAssistantRuntime(
       assistantId: assistant?.id,
     } as ToolExecutionContext,
   }
+}
+
+/** Group-member relay: simple text must not wait on default MCP connect / tool schemas. */
+export function relayGenerationMcpServerIds(
+  mcpServerIds: string[],
+  userContentBlocks: ContentBlock[],
+): string[] {
+  if (contentBlocksHaveAttachments(userContentBlocks)) return mcpServerIds
+  return mcpServerIds.filter((id) => !isDefaultEnabledMcpServer(id))
 }
 
 export function shouldEnableTools(

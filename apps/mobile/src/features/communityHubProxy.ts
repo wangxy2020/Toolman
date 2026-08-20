@@ -1,4 +1,8 @@
-import { DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL, OFFICIAL_TOOLMAN_HUB_URL } from '@toolman/shared'
+import {
+  DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
+  hostnameOfBaseUrl,
+  isLoopbackHostname,
+} from '@toolman/shared'
 
 export const COMMUNITY_HUB_PROXY_PREFIX = '/api/community-hub'
 
@@ -6,8 +10,14 @@ export function resolveCommunityHubProxyOrigin(): string {
   const fromEnv =
     process.env.COMMUNITY_HUB_UPSTREAM?.trim() ||
     process.env.EXPO_PUBLIC_COMMUNITY_HUB_UPSTREAM?.trim()
-  if (fromEnv) return fromEnv.replace(/\/+$/, '')
-  if (process.env.VERCEL) return OFFICIAL_TOOLMAN_HUB_URL
+  const onVercel = Boolean(process.env.VERCEL)
+  if (fromEnv) {
+    const origin = fromEnv.replace(/\/+$/, '')
+    // Hosted web is decentralized: no desktop sidecar and no central Hub on Vercel.
+    if (onVercel && isLoopbackHostname(hostnameOfBaseUrl(origin))) return ''
+    return origin
+  }
+  if (onVercel) return ''
   return DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL
 }
 
@@ -39,6 +49,16 @@ function forwardHeaders(request: Request): Headers {
 }
 
 export async function proxyCommunityHubRequest(request: Request): Promise<Response> {
+  const origin = resolveCommunityHubProxyOrigin()
+  if (!origin) {
+    return Response.json(
+      {
+        ok: false,
+        error: { message: '社区为去中心化目录，请连接本机桌面端或填写可达地址' },
+      },
+      { status: 502 },
+    )
+  }
   try {
     const init: RequestInit = {
       method: request.method,
@@ -47,7 +67,7 @@ export async function proxyCommunityHubRequest(request: Request): Promise<Respon
     if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
       init.body = await request.arrayBuffer()
     }
-    const upstream = await fetch(communityHubProxyTarget(request.url), init)
+    const upstream = await fetch(communityHubProxyTarget(request.url, origin), init)
     const body = await upstream.arrayBuffer()
     const headers = new Headers()
     const contentType = upstream.headers.get('content-type')

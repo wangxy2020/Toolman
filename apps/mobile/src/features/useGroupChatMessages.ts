@@ -12,9 +12,7 @@ import { pushLocalBlob } from '../p2p/blobMesh'
 import { putBlob } from '../p2p/blobStore'
 import { sha256Hex } from '../p2p/bytes'
 import { sendGroupChatOverMesh } from '../p2p/groupChatMesh'
-import { getMailboxTarget } from '../p2p/mailboxSync'
 import { getNoteMirror } from '../p2p/noteMirror'
-import { hasLiveSession } from '../p2p/session'
 import { canShareToDesktopGroup, proposePickerShares, proposeSharedNoteUpdate } from '../p2p/shareToGroup'
 import { newId } from './groupPaneUtils'
 import type { GroupChatSelf } from './groupChatContext.types'
@@ -85,7 +83,7 @@ export function useGroupChatMessages({
         )
         appendActivity(activeGroupId, `${input.senderName} 发送了群聊消息`, '群聊', senderMemberId)
       }
-      if (group?.origin === 'desktop' && (hasLiveSession(activeGroupId) || getMailboxTarget(activeGroupId))) {
+      if (group?.origin === 'desktop') {
         void sendGroupChatOverMesh({
           workspaceId: activeGroupId,
           senderMemberId,

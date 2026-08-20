@@ -17,15 +17,31 @@ export function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, '')
 }
 
+function uniqueStrings(values: string[]): string[] {
+  const out: string[] = []
+  for (const value of values) {
+    if (value && !out.includes(value)) out.push(value)
+  }
+  return out
+}
+
+function communityHubProxyUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  // Query form avoids Vercel 404 on `/api/community-hub/api/v1/...` (catch-all
+  // only matched a single extra segment in production).
+  return `${COMMUNITY_HUB_PROXY_PREFIX}?u=${encodeURIComponent(normalizedPath)}`
+}
+
 /** Expo web talks to the desktop sidecar through a same-origin proxy to avoid CORS.
- * Hosted HTTPS pages must hit loopback directly — the Vercel proxy is not the user's desktop.
+ * Hosted HTTPS pages talk to this computer's desktop sidecar directly —
+ * the Vercel proxy is not the user's desktop, and there is no central Hub.
  */
 function shouldUseCommunityHubProxy(baseUrl: string): boolean {
   if (Platform.OS !== 'web') return false
   const host = hostnameOfBaseUrl(baseUrl)
   if (!host) return false
   if (isLoopbackHostname(host)) return !isHostedWebPage()
-  if (isOfficialCommunityHubHost(host) && isHostedWebPage()) return true
+  if (isOfficialCommunityHubHost(host)) return false
   const pageHost = pageHostname()
   return Boolean(pageHost) && pageHost === host
 }
@@ -33,11 +49,49 @@ function shouldUseCommunityHubProxy(baseUrl: string): boolean {
 export function communityHubRequestUrl(baseUrl: string, path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   if (shouldUseCommunityHubProxy(baseUrl)) {
-    // Query form avoids Vercel 404 on `/api/community-hub/api/v1/...` (catch-all
-    // only matched a single extra segment in production).
-    return `${COMMUNITY_HUB_PROXY_PREFIX}?u=${encodeURIComponent(normalizedPath)}`
+    return communityHubProxyUrl(normalizedPath)
   }
   return `${normalizeBaseUrl(baseUrl)}${normalizedPath}`
+}
+
+/** Hosted web: a configured public Hub URL is fetched from the browser; proxy is only fallback. */
+export function communityHubRequestCandidates(baseUrl: string, path: string): string[] {
+  const primary = communityHubRequestUrl(baseUrl, path)
+  if (
+    Platform.OS === 'web' &&
+    isHostedWebPage() &&
+    isOfficialCommunityHubHost(hostnameOfBaseUrl(baseUrl))
+  ) {
+    return uniqueStrings([primary, communityHubProxyUrl(path)])
+  }
+  return [primary]
+}
+
+function isRetryableHubStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504
+}
+
+async function hubFetchWithFallback(
+  baseUrl: string,
+  path: string,
+  init: RequestInit,
+): Promise<Response> {
+  const urls = communityHubRequestCandidates(baseUrl, path)
+  let lastResponse: Response | undefined
+  let lastError: unknown
+  for (const url of urls) {
+    try {
+      const res = await hubFetch(url, init)
+      if (res.ok || !isRetryableHubStatus(res.status) || url === urls[urls.length - 1]) {
+        return res
+      }
+      lastResponse = res
+    } catch (error) {
+      lastError = error
+    }
+  }
+  if (lastResponse) return lastResponse
+  throw lastError ?? new Error('无法连接社区 Hub')
 }
 
 function hubNetworkError(error: unknown): Error {
@@ -97,7 +151,7 @@ async function parseHubResponse<T>(res: Response): Promise<T> {
 
 export async function hubGet<T>(baseUrl: string, path: string, auth?: HubAuth): Promise<T> {
   try {
-    const res = await hubFetch(communityHubRequestUrl(baseUrl, path), {
+    const res = await hubFetchWithFallback(baseUrl, path, {
       method: 'GET',
       headers: hubHeaders(auth),
     })
@@ -117,7 +171,7 @@ export async function hubSend<T>(
   const headers = hubHeaders(auth)
   if (body) headers['Content-Type'] = 'application/json'
   try {
-    const res = await hubFetch(communityHubRequestUrl(baseUrl, path), {
+    const res = await hubFetchWithFallback(baseUrl, path, {
       method,
       headers,
       body: body ? JSON.stringify(mapKeys(body, toSnakeKey)) : undefined,
@@ -171,22 +225,25 @@ export async function probeCommunityHub(baseUrl: string): Promise<boolean> {
   const base = normalizeBaseUrl(baseUrl)
   if (!base) return false
   const probe = async (path: string): Promise<boolean> => {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), localNetworkRequestTimeoutMs(communityHubRequestUrl(base, path)))
-    try {
-      const res = await hubFetch(communityHubRequestUrl(base, path), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        signal: ctrl.signal,
-      })
-      if (!res.ok) return false
-      const text = await res.text()
-      return isCommunityHubHealthBody(text)
-    } catch {
-      return false
-    } finally {
-      clearTimeout(timer)
+    for (const url of communityHubRequestCandidates(base, path)) {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), localNetworkRequestTimeoutMs(url))
+      try {
+        const res = await hubFetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: ctrl.signal,
+        })
+        if (!res.ok) continue
+        const text = await res.text()
+        if (isCommunityHubHealthBody(text)) return true
+      } catch {
+        // try the next candidate (direct Hub, then same-origin proxy)
+      } finally {
+        clearTimeout(timer)
+      }
     }
+    return false
   }
   if (await probe('/health')) return true
   if (await probe('/api/v1/health')) return true

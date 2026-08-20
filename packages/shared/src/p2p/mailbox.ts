@@ -14,6 +14,8 @@ export const P2P_MAILBOX_PUT_PATH = '/api/v1/sync/p2p/mailbox/put'
 export const P2P_MAILBOX_PULL_PATH = '/api/v1/sync/p2p/mailbox/pull'
 /** Same-user Sync Hub: bootstrap mailbox key for an already-synced group. */
 export const P2P_MAILBOX_SESSION_PATH = '/api/v1/sync/p2p/mailbox/session'
+/** List P2P groups this identity already joined on the owner Sync Hub. */
+export const P2P_MAILBOX_WORKSPACES_PATH = '/api/v1/sync/p2p/mailbox/workspaces'
 
 export const P2pMailboxSessionInputSchema = z.object({
   workspaceId: z.string().min(1),
@@ -21,8 +23,34 @@ export const P2pMailboxSessionInputSchema = z.object({
   identityId: z.string().min(1).optional(),
   displayName: z.string().min(1).optional(),
   deviceKind: P2pClientDeviceKindSchema.optional(),
+  inviteToken: z.string().min(1).optional(),
 })
 export type P2pMailboxSessionInput = z.infer<typeof P2pMailboxSessionInputSchema>
+
+export const P2pMailboxWorkspacesInputSchema = z.object({
+  deviceId: z.string().min(1),
+  identityId: z.string().min(1).optional(),
+  displayName: z.string().min(1).optional(),
+  deviceKind: P2pClientDeviceKindSchema.optional(),
+})
+export type P2pMailboxWorkspacesInput = z.infer<typeof P2pMailboxWorkspacesInputSchema>
+
+export const P2pMailboxWorkspaceSummarySchema = z.object({
+  workspaceId: z.string().min(1),
+  name: z.string(),
+  description: z.string().optional(),
+  ownerDeviceId: z.string().min(1),
+  ownerIdentityId: z.string().min(1).optional(),
+  createdAt: z.number().int().nonnegative().optional(),
+  updatedAt: z.number().int().nonnegative().optional(),
+})
+export type P2pMailboxWorkspaceSummary = z.infer<typeof P2pMailboxWorkspaceSummarySchema>
+
+export const P2pMailboxWorkspacesOutputSchema = z.object({
+  ok: z.literal(true),
+  workspaces: z.array(P2pMailboxWorkspaceSummarySchema),
+})
+export type P2pMailboxWorkspacesOutput = z.infer<typeof P2pMailboxWorkspacesOutputSchema>
 
 export const P2pMailboxSharedAgentSchema = z.object({
   id: z.string().min(1),

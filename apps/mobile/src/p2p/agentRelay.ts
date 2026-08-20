@@ -1,5 +1,6 @@
 import {
   AgentRelayMessageSchema,
+  isMailboxFirstP2pClient,
   type AgentRelayMessage,
   type ContentBlock,
   type Message,
@@ -18,17 +19,26 @@ import {
 } from './mailboxSync'
 import { hasLiveSession, sendEventsJson } from './session'
 import { ignoreAsyncError } from './asyncFail'
+import { localP2pClientDeviceKind } from './deviceKind'
 
 const RELAY_TIMEOUT_MS = 10 * 60_000
 
 type RelayWaiter = {
   onDelta?: (text: string, replace?: boolean) => void
+  onThinking?: (text: string, replace?: boolean) => void
   resolve: (value: { title?: string; messages?: ChatMessage[] }) => void
   reject: (error: Error) => void
   parts?: { title?: string; messages: Message[] }[]
 }
 
 const waiters = new Map<string, RelayWaiter>()
+
+export function setAgentRelayWaiterForTest(requestId: string, waiter: RelayWaiter): () => void {
+  waiters.set(requestId, waiter)
+  return () => {
+    waiters.delete(requestId)
+  }
+}
 
 export function textFromContentBlocks(blocks: ContentBlock[] | undefined): string {
   if (!blocks) return ''
@@ -38,26 +48,56 @@ export function textFromContentBlocks(blocks: ContentBlock[] | undefined): strin
     .join('')
 }
 
-export function chatMessagesFromRelay(messages: Message[]): ChatMessage[] {
-  return messages
-    .filter((message) => message.role === 'user' || message.role === 'assistant')
-    .map((message) => ({
-      id: message.id,
-      role: message.role === 'user' ? 'user' : 'assistant',
-      content: textFromContentBlocks(message.contentBlocks),
-      createdAt: message.createdAt,
-    }))
+export function thinkingFromContentBlocks(blocks: ContentBlock[] | undefined): string {
+  if (!blocks) return ''
+  return blocks
+    .filter((block): block is Extract<ContentBlock, { type: 'thinking' }> => block.type === 'thinking')
+    .map((block) => block.text)
+    .join('')
 }
 
-function applyStreamDelta(event: MessageStreamEvent, onDelta?: (text: string, replace?: boolean) => void) {
+function shouldApplyReplaceSnapshot(text: string, replace?: boolean): boolean {
+  return !replace || Boolean(text.trim())
+}
+
+export function applyStreamDelta(
+  event: MessageStreamEvent,
+  onDelta?: (text: string, replace?: boolean) => void,
+  onThinking?: (text: string, replace?: boolean) => void,
+) {
+  if (event.type === 'message.delta' && event.delta.type === 'thinking') {
+    if (shouldApplyReplaceSnapshot(event.delta.text, event.delta.replace)) {
+      onThinking?.(event.delta.text, event.delta.replace)
+    }
+    return
+  }
   if (event.type === 'message.delta' && event.delta.type === 'text') {
-    onDelta?.(event.delta.text, event.delta.replace)
+    if (shouldApplyReplaceSnapshot(event.delta.text, event.delta.replace)) {
+      onDelta?.(event.delta.text, event.delta.replace)
+    }
     return
   }
   if (event.type === 'message.done') {
+    const thinking = thinkingFromContentBlocks(event.contentBlocks)
+    if (thinking.trim()) onThinking?.(thinking, true)
     const text = textFromContentBlocks(event.contentBlocks)
-    if (text) onDelta?.(text, true)
+    if (text.trim()) onDelta?.(text, true)
   }
+}
+
+export function chatMessagesFromRelay(messages: Message[]): ChatMessage[] {
+  return messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => {
+      const thinking = thinkingFromContentBlocks(message.contentBlocks).trim()
+      return {
+        id: message.id,
+        role: message.role === 'user' ? 'user' : 'assistant',
+        content: textFromContentBlocks(message.contentBlocks),
+        createdAt: message.createdAt,
+        ...(thinking ? { thinking } : {}),
+      }
+    })
 }
 
 export function handleIncomingAgentRelay(raw: unknown): void {
@@ -73,7 +113,7 @@ export function handleIncomingAgentRelay(raw: unknown): void {
       waiter.reject(new Error(message.event.error.message || '发送消息失败'))
       return
     }
-    applyStreamDelta(message.event, waiter.onDelta)
+    applyStreamDelta(message.event, waiter.onDelta, waiter.onThinking)
     if (message.event.type === 'message.done') {
       waiters.delete(message.requestId)
       waiter.resolve({})
@@ -82,9 +122,11 @@ export function handleIncomingAgentRelay(raw: unknown): void {
   }
   if (message.type === 'send_ok' || message.type === 'fetch_ok') {
     if (message.type === 'send_ok') {
+      const thinking = thinkingFromContentBlocks(message.contentBlocks)
       const text = textFromContentBlocks(message.contentBlocks)
-      if (text) waiter.onDelta?.(text, true)
-      if (!text.trim()) return
+      if (thinking.trim()) waiter.onThinking?.(thinking, true)
+      if (text.trim()) waiter.onDelta?.(text, true)
+      if (!text.trim() && !thinking.trim()) return
     }
     waiters.delete(message.requestId)
     waiter.resolve(
@@ -160,7 +202,11 @@ async function sendRelay(
   relay: AgentRelayMessage,
   ownerDeviceId?: string,
 ): Promise<void> {
-  if (hasLiveSession(workspaceId)) {
+  const selfDeviceId = getMailboxTarget(workspaceId)?.deviceId
+  const preferMailbox =
+    Boolean(selfDeviceId && isMailboxFirstP2pClient(selfDeviceId)) ||
+    localP2pClientDeviceKind() === 'web'
+  if (!preferMailbox && hasLiveSession(workspaceId)) {
     try {
       await sendEventsJson(
         workspaceId,
@@ -192,6 +238,7 @@ function waitForRelay(
   workspaceId: string,
   requestId: string,
   onDelta?: (text: string, replace?: boolean) => void,
+  onThinking?: (text: string, replace?: boolean) => void,
 ): Promise<{ title?: string; messages?: ChatMessage[] }> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -207,6 +254,7 @@ function waitForRelay(
     const poll = setInterval(pollOnce, 1_000)
     waiters.set(requestId, {
       onDelta,
+      onThinking,
       resolve: (value) => {
         clearTimeout(timer)
         clearInterval(poll)
@@ -250,10 +298,11 @@ export async function sendGroupAgentRelay(input: {
   memberAssistantMessageId: string
   text: string
   onDelta: (text: string, replace?: boolean) => void
+  onThinking?: (text: string, replace?: boolean) => void
   ownerDeviceId?: string
 }): Promise<void> {
   const requestId = newUuid()
-  const pending = waitForRelay(input.workspaceId, requestId, input.onDelta)
+  const pending = waitForRelay(input.workspaceId, requestId, input.onDelta, input.onThinking)
   await sendRelay(input.workspaceId, {
     v: 1,
     type: 'send',

@@ -20,7 +20,7 @@ import {
 } from './p2p-member-shared'
 import { loadWorkspaceKey } from './p2p-workspace-key.store'
 import { isLocalWorkspaceOwner } from './p2p-sync-sequencing'
-import { putMailboxRecord, pullMailboxRecords } from './p2p-mailbox-store'
+import { nextMailboxSeq, putMailboxRecord, pullMailboxRecords } from './p2p-mailbox-store'
 import { listActiveAgentShareListings } from './p2p-agent-share-listing'
 import { checkReplayGuard } from './p2p-replay-guard.service'
 import { recordP2pPathMetric } from './p2p-path-metrics'
@@ -102,7 +102,11 @@ export async function applyIncomingMailbox(
     duplicate: !replay.ok,
   })
   if (!admitted.ok) {
-    logStructured('p2p', 'warn', `mailbox propose rejected: ${admitted.reason}`)
+    logStructured(
+      'p2p',
+      admitted.reason === 'replay' ? 'info' : 'warn',
+      `mailbox propose rejected: ${admitted.reason}`,
+    )
     return
   }
   if (isMemberManagementProposal(plaintext.proposal)) {
@@ -141,7 +145,7 @@ export async function handleMailboxPut(
     return { ok: false, status: 403, error: '收件设备不是该群成员' }
   }
 
-  const seq = input.seq ?? Date.now()
+  const seq = nextMailboxSeq()
   putMailboxRecord({
     workspaceId: input.workspaceId,
     recipientDeviceId: input.recipientDeviceId,

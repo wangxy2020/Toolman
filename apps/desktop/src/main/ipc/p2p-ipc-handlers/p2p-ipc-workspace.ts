@@ -35,7 +35,7 @@ export const p2pIpcWorkspaceHandlers: P2pIpcHandlerMap = {
       const parsed = P2pWorkspaceListInputSchema.parse(input ?? {})
       const filter = parsed.filter ?? 'all'
       if (filter === 'mine' || filter === 'all') {
-        await p2pWorkspaceService.ensureDefaultOwnedP2pWorkspace()
+        await p2pWorkspaceService.removeDefaultOwnedP2pWorkspaces()
       }
       const workspaces = p2pWorkspaceService.listP2pWorkspaces(filter)
       return ipcOk(

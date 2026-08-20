@@ -73,18 +73,28 @@ const LNA_ATTEMPTED_KEY = '__toolmanLocalNetworkAttempted'
 const LOOPBACK_HEALTH_URLS = [
   'http://localhost:17890/health',
   'http://127.0.0.1:17890/health',
+  'http://localhost:3721/health',
+  'http://127.0.0.1:3721/health',
 ] as const
 
 type LnaHost = typeof globalThis & {
   [LNA_ATTEMPTED_KEY]?: boolean
 }
 
+type LnaListener = (ok: boolean) => void
+
 let primedOk = false
 let primeInFlight: Promise<boolean> | null = null
+const lnaListeners = new Set<LnaListener>()
+
+function notifyLocalNetworkAccess(ok: boolean): void {
+  for (const listener of lnaListeners) listener(ok)
+}
 
 export function resetLocalNetworkPrimeStateForTests(): void {
   primedOk = false
   primeInFlight = null
+  lnaListeners.clear()
   try {
     delete (globalThis as LnaHost)[LNA_ATTEMPTED_KEY]
   } catch {
@@ -121,20 +131,88 @@ async function probeLoopbackHealth(): Promise<boolean> {
   return false
 }
 
+const LNA_PERMISSION_NAMES = ['loopback-network', 'local-network-access', 'local-network'] as const
+
+export type LocalNetworkPermissionState = 'granted' | 'denied' | 'prompt' | 'unknown'
+
+async function queryPermissionName(name: (typeof LNA_PERMISSION_NAMES)[number]): Promise<PermissionState | null> {
+  const permissions = globalThis.navigator?.permissions
+  if (!permissions?.query) return null
+  try {
+    const status = await permissions.query({ name } as unknown as PermissionDescriptor)
+    return status.state
+  } catch {
+    return null
+  }
+}
+
+/** Chrome persists LNA per origin. We cannot grant it ourselves — only detect a prior Allow. */
+export async function queryLocalNetworkPermissionState(): Promise<LocalNetworkPermissionState> {
+  const states: PermissionState[] = []
+  for (const name of LNA_PERMISSION_NAMES) {
+    const state = await queryPermissionName(name)
+    if (state) states.push(state)
+  }
+  if (states.includes('granted')) return 'granted'
+  if (states.includes('denied')) return 'denied'
+  if (states.includes('prompt')) return 'prompt'
+  return 'unknown'
+}
+
+/**
+ * Public HTTPS pages cannot silently enable local-network access. If the user
+ * already clicked Allow, Chrome remembers it — probe immediately on load.
+ */
+export async function bootstrapLocalNetworkAccess(): Promise<boolean> {
+  if (!isHostedPublicWebPage()) return primeLocalNetworkAccess()
+  const state = await queryLocalNetworkPermissionState()
+  if (state !== 'granted') return false
+  return primeLocalNetworkAccess()
+}
+
 /**
  * Start a loopback health fetch while a user gesture is still on the stack so
  * Chrome can show the Local Network Access prompt. Must not await other work first.
+ * Do not call this on page load unless permission is already granted.
  */
 export async function primeLocalNetworkAccess(): Promise<boolean> {
   markLocalNetworkAccessAttempted()
-  if (!isHostedPublicWebPage()) return true
+  if (!isHostedPublicWebPage()) {
+    primedOk = true
+    notifyLocalNetworkAccess(true)
+    return true
+  }
   if (primedOk) return true
   if (!primeInFlight) {
     primeInFlight = probeLoopbackHealth().then((ok) => {
-      if (ok) primedOk = true
+      if (ok) {
+        primedOk = true
+        notifyLocalNetworkAccess(true)
+      }
       primeInFlight = null
       return ok
     })
   }
   return primeInFlight
+}
+
+/**
+ * Run `onGranted` once loopback is reachable. On localhost preview this is
+ * immediate. On hosted web it waits for a click-time prime so Chrome can
+ * prompt for Local Network Access instead of auto-denying a load-time fetch.
+ */
+export function whenLocalNetworkAccessGranted(onGranted: () => void): () => void {
+  if (!isHostedPublicWebPage() || primedOk) {
+    onGranted()
+    return () => {}
+  }
+  const listener: LnaListener = (ok) => {
+    if (!ok) return
+    lnaListeners.delete(listener)
+    onGranted()
+  }
+  lnaListeners.add(listener)
+  return () => {
+    lnaListeners.delete(listener)
+  }
 }

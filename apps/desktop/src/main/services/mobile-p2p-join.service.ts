@@ -8,6 +8,7 @@ import {
   type P2pJoinInviteAnswerOutput,
   type P2pJoinRegisterOutput,
   type P2pMember,
+  isMailboxFirstP2pClient,
 } from '@toolman/shared'
 import { logStructured } from './structured-log.service'
 import { publishP2pGroupSyncChange } from './group-mobile-sync'
@@ -18,7 +19,10 @@ import {
 } from './p2p/p2p-invite.token'
 import { getPendingInviteOffer, listInviteIceServers } from './p2p/p2p-invite.service'
 import { P2pBridge } from './p2p/p2p-bridge'
-import { applyRemoteMemberJoin } from './p2p/p2p-member-join/remote-join'
+import {
+  activateMemberAfterOwnerTrust,
+  applyRemoteMemberJoin,
+} from './p2p/p2p-member-join/remote-join'
 import { P2pMemberLimitError } from './p2p/p2p-member-join/errors'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import {
@@ -26,6 +30,7 @@ import {
   getWorkspaceRepo,
   listWorkspaceMemberRoster,
   toWorkspaceDto,
+  touchMemberLastSeen,
 } from './p2p/p2p-member-shared'
 import { trustPeerSilentlyForWorkspaceMesh } from './p2p/p2p-peer.service'
 
@@ -74,8 +79,25 @@ export async function handleMobileP2pJoinRegister(
         deviceKind: parsed.data.deviceKind,
         remoteDevicePublicKey: parsed.data.publicKeyB64,
       },
-      { requirePeerTrust: false, forcePendingApproval: true },
+      { requirePeerTrust: false, forcePendingApproval: true, skipTrustPrompt: true },
     )
+
+    // A verified invite is the owner's approval. Do not leave mailbox/web
+    // clients as `invited` waiting for a WebRTC trust click that never comes.
+    trustPeerSilentlyForWorkspaceMesh(
+      payload.workspaceId,
+      parsed.data.deviceId,
+      parsed.data.displayName,
+    )
+    await activateMemberAfterOwnerTrust(payload.workspaceId, parsed.data.deviceId)
+    if (isMailboxFirstP2pClient(parsed.data.deviceId, parsed.data.deviceKind)) {
+      const mailboxModule = await import('./p2p/p2p-mailbox-session')
+      await mailboxModule.depositCatchUpEventsToMailbox(
+        payload.workspaceId,
+        parsed.data.deviceId,
+      )
+    }
+    touchMemberLastSeen(payload.workspaceId, parsed.data.deviceId)
 
     const stored =
       getMemberRepo().findByWorkspaceAndDevice(payload.workspaceId, parsed.data.deviceId)
@@ -154,6 +176,8 @@ export async function handleMobileP2pInviteAnswer(
       parsed.data.deviceId,
       parsed.data.displayName,
     )
+    await activateMemberAfterOwnerTrust(payload.workspaceId, parsed.data.deviceId)
+    touchMemberLastSeen(payload.workspaceId, parsed.data.deviceId)
     const output = P2pJoinInviteAnswerOutputSchema.parse({
       ok: true,
       inviteId: payload.inviteId,

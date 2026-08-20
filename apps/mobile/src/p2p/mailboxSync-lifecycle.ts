@@ -16,7 +16,7 @@ import {
   readPersistedTargets,
   type MailboxSyncTarget,
 } from './mailboxSync-helpers'
-import { pullMailboxOnce } from './mailboxSync-pull'
+import { drainMailbox } from './mailboxSync-pull'
 import { ignoreAsyncError } from './asyncFail'
 
 export async function putMailboxPlaintext(
@@ -46,12 +46,13 @@ export async function putMailboxPlaintext(
         deviceId: target.deviceId,
         recipientDeviceId,
         grant,
-        inviteToken: hubUrl === target.hubUrl ? target.inviteToken : undefined,
+        inviteToken: target.inviteToken,
         ciphertextB64,
         seq,
       })
       stored = true
-      if (!options?.fanout) break
+      // Same owner hub is reachable as LAN + loopback; putting once is enough.
+      break
     } catch (error) {
       lastError = error
     }
@@ -72,25 +73,36 @@ export async function putMailboxProposal(
     { type: 'workspace.propose', proposal },
     target.ownerDeviceId,
     proposal.timestamp,
+    { fanout: true },
   )
 }
 
-export function startMailboxSync(target: MailboxSyncTarget): void {
+export function rememberMailboxTarget(target: MailboxSyncTarget): void {
   mailboxTargets.set(target.workspaceId, target)
   persistTarget(target)
+}
+
+export function startMailboxSync(target: MailboxSyncTarget): void {
+  rememberMailboxTarget(target)
   if (mailboxTimers.has(target.workspaceId)) return
+  let ticking = false
   const tick = () => {
     const current = mailboxTargets.get(target.workspaceId)
-    if (!current) return
-    ignoreAsyncError(pullMailboxOnce(current), 'mailbox pull')
+    if (!current || ticking) return
+    ticking = true
+    const done = drainMailbox(current)
+    ignoreAsyncError(done, 'mailbox pull')
+    void done.finally(() => {
+      ticking = false
+    })
   }
   tick()
-  mailboxTimers.set(target.workspaceId, setInterval(tick, 15_000))
+  mailboxTimers.set(target.workspaceId, setInterval(tick, 2_000))
 }
 
 export function resumePersistedMailboxSync(deviceId: string): void {
   for (const item of readPersistedTargets()) {
-    if (mailboxTargets.has(item.workspaceId)) continue
+    if (mailboxTimers.has(item.workspaceId)) continue
     if (item.deviceId && item.deviceId !== deviceId) continue
     try {
       startMailboxSync({
@@ -105,6 +117,10 @@ export function resumePersistedMailboxSync(deviceId: string): void {
       // stale key
     }
   }
+}
+
+export function isMailboxSyncRunning(workspaceId: string): boolean {
+  return mailboxTimers.has(workspaceId)
 }
 
 export function getMailboxTarget(workspaceId: string): MailboxSyncTarget | undefined {

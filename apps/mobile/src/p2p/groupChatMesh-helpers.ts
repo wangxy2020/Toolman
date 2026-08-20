@@ -96,6 +96,7 @@ export function applyShareableEvent(
     sourceDeviceId?: string
   },
 ): void {
+  if (event.resourceType === 'Agent') return
   for (const projection of projectShareableWorkspaceEvent(event)) {
     if (projection.action === 'remove') {
       if (projection.kind === 'notes') {

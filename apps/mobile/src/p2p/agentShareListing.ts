@@ -40,14 +40,5 @@ export function applyAgentShareListings(
         },
       })
     }
-    if (listing.sessionIds.length > 0) {
-      emitMeshEvent({
-        type: 'shared-prune-children',
-        workspaceId,
-        kind: 'agents',
-        parentId: listing.id,
-        keepIds: listing.sessionIds,
-      })
-    }
   }
 }

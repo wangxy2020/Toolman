@@ -3,11 +3,16 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * Source: https://github.com/wangxy2020/Toolman
  */
-import { primeLocalNetworkAccess } from './sync/localNetworkFetch'
+import { bootstrapLocalNetworkAccess, primeLocalNetworkAccess } from './sync/localNetworkFetch'
 import { unlockAudioPlayback } from './voice/audioUnlock'
 
 /** First click / keypress: unlock TTS autoplay and Chrome local-network access together. */
 export function unlockWebRuntime(): void {
   unlockAudioPlayback()
   void primeLocalNetworkAccess()
+}
+
+/** Return visits: Chrome may already have granted LNA — connect without another click. */
+export function bootstrapWebRuntime(): void {
+  void bootstrapLocalNetworkAccess()
 }

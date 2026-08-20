@@ -4,7 +4,7 @@ import {
   type P2pWorkspaceMemberRow,
 } from '@toolman/db'
 import type { P2pJoinDeviceKind, P2pMember, ProductSku } from '@toolman/shared'
-import { preferUsableMemberIdentityId, resolveJoinedDeviceRole } from '@toolman/shared'
+import { preferUsableMemberIdentityId, resolveJoinedDeviceRole, isMailboxFirstP2pClient } from '@toolman/shared'
 import { getDatabase } from '../../../bootstrap/database'
 import { logStructured } from '../../structured-log.service'
 import * as p2pConnectionService from '../p2p-connection.service'
@@ -86,13 +86,15 @@ export async function activateMemberAfterOwnerTrust(
   })
 
   try {
-    await notifyJoinerMemberApproved(workspaceId, peerDeviceId, {
-      id: updated.id,
-      deviceId: updated.deviceId,
-      displayName: updated.displayName,
-      role: updated.role,
-      identityId: updated.identityId,
-    })
+    if (!isMailboxFirstP2pClient(peerDeviceId)) {
+      await notifyJoinerMemberApproved(workspaceId, peerDeviceId, {
+        id: updated.id,
+        deviceId: updated.deviceId,
+        displayName: updated.displayName,
+        role: updated.role,
+        identityId: updated.identityId,
+      })
+    }
   } catch (error) {
     logStructured(
       'p2p',
@@ -102,16 +104,31 @@ export async function activateMemberAfterOwnerTrust(
   }
 
   try {
-    const syncModule = await import('../p2p-sync.service')
-    const pushed = await syncModule.pushWorkspaceEventsToPeer(workspaceId, peerDeviceId)
-    if (pushed > 0) {
-      logStructured(
-        'p2p',
-        'info',
-        `pushed ${pushed} historical events to ${peerDeviceId.slice(0, 8)} after approval`,
+    if (isMailboxFirstP2pClient(peerDeviceId)) {
+      const mailboxModule = await import('../p2p-mailbox-session')
+      const deposited = await mailboxModule.depositCatchUpEventsToMailbox(
+        workspaceId,
+        peerDeviceId,
       )
+      if (deposited > 0) {
+        logStructured(
+          'p2p',
+          'info',
+          `mailbox catch-up deposited ${deposited} events for ${peerDeviceId.slice(0, 8)}`,
+        )
+      }
+    } else {
+      const syncModule = await import('../p2p-sync.service')
+      const pushed = await syncModule.pushWorkspaceEventsToPeer(workspaceId, peerDeviceId)
+      if (pushed > 0) {
+        logStructured(
+          'p2p',
+          'info',
+          `pushed ${pushed} historical events to ${peerDeviceId.slice(0, 8)} after approval`,
+        )
+      }
+      await syncModule.syncWithPeer(workspaceId, peerDeviceId)
     }
-    await syncModule.syncWithPeer(workspaceId, peerDeviceId)
   } catch (error) {
     logStructured(
       'p2p',
@@ -144,7 +161,13 @@ export async function applyRemoteMemberJoin(
     remoteDevicePublicKey?: string
     deviceKind?: P2pJoinDeviceKind
   },
-  options?: { requirePeerTrust?: boolean; allowReactivation?: boolean; forcePendingApproval?: boolean },
+  options?: {
+    requirePeerTrust?: boolean
+    allowReactivation?: boolean
+    forcePendingApproval?: boolean
+    /** Invite-token joins are already approved by the owner; do not revoke trust or prompt. */
+    skipTrustPrompt?: boolean
+  },
 ): Promise<void> {
   const peerDeviceId = payload.peerDeviceId ?? payload.member.deviceId
   if (payload.member.deviceId !== peerDeviceId) {
@@ -286,20 +309,24 @@ export async function applyRemoteMemberJoin(
   upsertPendingMember()
   const workspaceRow = getWorkspaceRepo().findById(payload.workspaceId)
   if (workspaceRow) publishP2pGroupSyncChange(toWorkspaceDto(workspaceRow))
-  prepareJoinPeerTrustPrompt(
-    payload.workspaceId,
-    peerDeviceId,
-    payload.member.displayName,
-  )
-  void p2pConnectionService
-    .ensurePeerReadyForWorkspace(peerDeviceId, payload.workspaceId)
-    .catch((error) => {
-      logStructured(
-        'p2p',
-        'warn',
-        `owner connect after join request failed for ${peerDeviceId.slice(0, 8)}: ${toErrorMessage(error, 'owner connect after join request failed')}`,
-      )
-    })
+  if (!options?.skipTrustPrompt) {
+    prepareJoinPeerTrustPrompt(
+      payload.workspaceId,
+      peerDeviceId,
+      payload.member.displayName,
+    )
+  }
+  if (!isMailboxFirstP2pClient(peerDeviceId, payload.deviceKind)) {
+    void p2pConnectionService
+      .ensurePeerReadyForWorkspace(peerDeviceId, payload.workspaceId)
+      .catch((error) => {
+        logStructured(
+          'p2p',
+          'warn',
+          `owner connect after join request failed for ${peerDeviceId.slice(0, 8)}: ${toErrorMessage(error, 'owner connect after join request failed')}`,
+        )
+      })
+  }
   broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
 
   if (payload.inviteId) {

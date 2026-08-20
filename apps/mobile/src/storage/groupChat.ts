@@ -16,6 +16,7 @@ import {
   normalizeMember,
   normalizeMessage,
   normalizeShared,
+  omitBuiltinDefaultGroups,
 } from './groupChat-normalize'
 
 export type {
@@ -106,7 +107,7 @@ export async function loadGroupChatStore(): Promise<GroupChatStore> {
       groups.some((g) => g.id === parsed.activeGroupId)
         ? parsed.activeGroupId
         : (groups[0]?.id ?? null)
-    return {
+    const store = omitBuiltinDefaultGroups({
       groups,
       activeGroupId,
       messagesByGroup,
@@ -114,12 +115,16 @@ export async function loadGroupChatStore(): Promise<GroupChatStore> {
       sharedByGroup,
       activitiesByGroup,
       invitesByGroup,
+    })
+    if (store.groups.length !== groups.length) {
+      await saveGroupChatStore(store)
     }
+    return store
   } catch {
     return { ...EMPTY_GROUP_CHAT_STORE }
   }
 }
 
 export async function saveGroupChatStore(store: GroupChatStore): Promise<void> {
-  await saveScopedRaw(STORE_KEY, JSON.stringify(store), setItem)
+  await saveScopedRaw(STORE_KEY, JSON.stringify(omitBuiltinDefaultGroups(store)), setItem)
 }

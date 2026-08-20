@@ -31,7 +31,11 @@ export function createGenerationStreamContext(options: {
     persistTimer = setTimeout(flush, 300)
   }
 
-  const emitThinkingDelta = (text: string, durationSeconds?: number | null) => {
+  const emitThinkingDelta = (
+    text: string,
+    durationSeconds?: number | null,
+    replace = false,
+  ) => {
     const startedAtMs = buffers.getThinkingStartedAtMs()
     emitStreamEvent({
       type: 'message.delta',
@@ -41,6 +45,7 @@ export function createGenerationStreamContext(options: {
       delta: {
         type: 'thinking',
         text,
+        ...(replace ? { replace: true } : {}),
         ...(startedAtMs != null ? { startedAtMs } : {}),
         ...(durationSeconds != null ? { durationSeconds } : {}),
       },
@@ -50,14 +55,16 @@ export function createGenerationStreamContext(options: {
 
   const appendStatus = (text: string) => {
     buffers.appendStatus(text)
-    persistBlocks()
-    emitThinkingDelta(text)
+    persistBlocks(true)
+    const thinking = buffers.toContentBlocks().find((block) => block.type === 'thinking')
+    emitThinkingDelta(thinking?.type === 'thinking' ? thinking.text : text, null, true)
   }
 
   const appendThinking = (text: string) => {
     buffers.appendThinking(text)
     persistBlocks()
-    emitThinkingDelta(text)
+    const thinking = buffers.toContentBlocks().find((block) => block.type === 'thinking')
+    emitThinkingDelta(thinking?.type === 'thinking' ? thinking.text : text, null, true)
   }
 
   const emitThinkingDurationIfNeeded = () => {

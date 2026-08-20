@@ -58,7 +58,12 @@ export function persistRelayStreamEvent(event: MessageStreamEvent): void {
   if (delta.type === 'text') {
     buffer.appendText(delta.text)
   } else if (delta.type === 'thinking') {
-    buffer.appendThinking(delta.text)
+    if (delta.replace) {
+      buffer.replaceThinking(delta.text, delta.durationSeconds)
+    } else {
+      if (delta.text) buffer.appendThinking(delta.text)
+      if (delta.durationSeconds != null) buffer.applyThinkingDuration(delta.durationSeconds)
+    }
   } else if (delta.type === 'tool') {
     buffer.upsertTool({
       toolCallId: delta.toolCallId,

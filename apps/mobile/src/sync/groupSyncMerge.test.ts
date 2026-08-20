@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyMemberRoster,
   mergeGroupMembersFromSyncChanges,
   mergeGroupsFromSyncChanges,
+  mergeJoinedDesktopGroups,
   patchGroupOwnerFromRoster,
   sameGroupMemberRoster,
 } from './groupSyncMerge'
@@ -15,7 +17,7 @@ describe('mergeGroupsFromSyncChanges', () => {
         op: 'upsert',
         updatedAt: 20,
         payload: {
-          name: '默认群组',
+          name: '协作群',
           createdAt: 10,
           members: [
             {
@@ -37,10 +39,34 @@ describe('mergeGroupsFromSyncChanges', () => {
       },
     ])
     expect(merged).toHaveLength(2)
-    expect(merged.map((group) => group.name)).toEqual(['项目组', '默认群组'])
+    expect(merged.map((group) => group.name)).toEqual(['项目组', '协作群'])
     expect(merged.every((group) => group.origin === 'desktop')).toBe(true)
     expect(merged[1]).not.toHaveProperty('notes')
     expect(merged[1]).not.toHaveProperty('knowledge')
+  })
+
+  it('drops the builtin default group instead of syncing it', () => {
+    const merged = mergeGroupsFromSyncChanges(
+      [
+        {
+          id: 'g-default',
+          name: '默认群组',
+          createdAt: 1,
+          updatedAt: 1,
+          origin: 'desktop',
+        },
+      ],
+      [
+        {
+          entityKind: 'p2p_group',
+          entityId: 'g-new',
+          op: 'upsert',
+          updatedAt: 2,
+          payload: { name: '默认群组', createdAt: 2 },
+        },
+      ],
+    )
+    expect(merged).toEqual([])
   })
 
   it('does not copy personal note bodies from extra changelog fields', () => {
@@ -51,14 +77,14 @@ describe('mergeGroupsFromSyncChanges', () => {
         op: 'upsert',
         updatedAt: 1,
         payload: {
-          name: '默认群组',
+          name: '协作群',
           createdAt: 1,
           notes: [{ id: 'private-note', body: 'should stay on Sync Hub' }],
         },
       },
     ])
     expect(merged).toEqual([
-      expect.objectContaining({ id: 'g1', name: '默认群组', origin: 'desktop' }),
+      expect.objectContaining({ id: 'g1', name: '协作群', origin: 'desktop' }),
     ])
     expect(JSON.stringify(merged)).not.toContain('private-note')
   })
@@ -119,7 +145,7 @@ describe('mergeGroupMembersFromSyncChanges', () => {
           op: 'upsert',
           updatedAt: 2,
           payload: {
-            name: '默认群组',
+            name: '协作群',
             createdAt: 1,
             members: [
               {
@@ -183,7 +209,7 @@ describe('mergeGroupMembersFromSyncChanges', () => {
           op: 'upsert',
           updatedAt: 3,
           payload: {
-            name: '默认群组',
+            name: '协作群',
             createdAt: 1,
             members: [
               {
@@ -209,7 +235,7 @@ describe('roster UI updates', () => {
     const groups = [
       {
         id: 'g1',
-        name: '默认群组',
+        name: '协作群',
         createdAt: 1,
         updatedAt: 1,
         origin: 'desktop' as const,
@@ -240,5 +266,70 @@ describe('roster UI updates', () => {
     ]
     expect(sameGroupMemberRoster(members, [{ ...members[0]! }])).toBe(true)
     expect(sameGroupMemberRoster(members, [{ ...members[0]!, online: false }])).toBe(false)
+  })
+
+  it('promotes a local invited self row when the owner roster marks it active', () => {
+    const next = applyMemberRoster(
+      [
+        {
+          id: 'phone-b',
+          displayName: '用户B',
+          role: 'member',
+          deviceId: 'phone-b',
+          identityId: 'id-b',
+          deviceKind: 'web',
+          online: true,
+          status: 'invited',
+        },
+      ],
+      [
+        {
+          id: 'm-b',
+          displayName: '用户B',
+          role: 'member',
+          deviceId: 'phone-b',
+          identityId: 'id-b',
+          deviceKind: 'web',
+          status: 'active',
+          online: true,
+        },
+      ],
+      'phone-b',
+    )
+    expect(next).toEqual([
+      expect.objectContaining({
+        deviceId: 'phone-b',
+        status: 'active',
+        deviceKind: 'web',
+      }),
+    ])
+  })
+})
+
+describe('mergeJoinedDesktopGroups', () => {
+  it('adds hub-discovered groups without dropping ones already on this device', () => {
+    const merged = mergeJoinedDesktopGroups(
+      [
+        {
+          id: 'local-1',
+          name: '本机群',
+          createdAt: 1,
+          updatedAt: 1,
+          origin: 'local',
+        },
+      ],
+      [
+        {
+          id: 'desk-1',
+          name: '协作群',
+          createdAt: 2,
+          updatedAt: 3,
+          origin: 'desktop',
+          ownerDeviceId: 'desk-a',
+        },
+      ],
+    )
+    expect(merged.map((group) => group.id)).toEqual(['desk-1', 'local-1'])
+    expect(merged[0]?.origin).toBe('desktop')
   })
 })

@@ -3,11 +3,12 @@ import {
   DEFAULT_LOCAL_SYNC_BASE_URL,
   DEFAULT_LOCAL_SYNC_PORT,
   hostnameOfBaseUrl,
+  isLoopbackHostname,
   isOfficialCommunityHubHost,
   isPrivateOrLoopbackHostname,
 } from '@toolman/shared'
 import { scopedStorageKey } from '../storage/identityScopeCore'
-import { boundFetch } from '../sync/localNetworkFetch'
+import { boundFetch, isHostedPublicWebPage } from '../sync/localNetworkFetch'
 
 export const MAILBOX_SEQ_KEY = 'toolman.mobile.p2p.mailboxCursor.v1'
 export const MAILBOX_PULL_LIMIT = 200
@@ -15,8 +16,8 @@ export const PERSIST_KEY = 'toolman.mobile.p2p.mailboxTargets.v1'
 
 const mailboxCursors = new Map<string, number>()
 
-export function mailboxCursorStorageKey(workspaceId: string, hubUrl: string): string {
-  return `${workspaceId}::${hubUrl}`
+export function mailboxCursorStorageKey(workspaceId: string, _hubUrl?: string): string {
+  return workspaceId
 }
 
 function readPersistedMailboxCursors(): Record<string, number> {
@@ -30,11 +31,19 @@ function readPersistedMailboxCursors(): Record<string, number> {
   }
 }
 
-export function readMailboxSeq(workspaceId: string, hubUrl: string): number {
+function maxCursorForWorkspace(workspaceId: string, persisted: Record<string, number>): number {
+  let max = 0
+  for (const [key, value] of Object.entries(persisted)) {
+    if (key !== workspaceId && !key.startsWith(`${workspaceId}::`)) continue
+    if (typeof value === 'number' && Number.isFinite(value) && value > max) max = value
+  }
+  return max
+}
+
+export function readMailboxSeq(workspaceId: string, hubUrl = ''): number {
   const key = mailboxCursorStorageKey(workspaceId, hubUrl)
   const memory = mailboxCursors.get(key) ?? 0
-  const stored = readPersistedMailboxCursors()[key]
-  const persisted = typeof stored === 'number' && Number.isFinite(stored) && stored > 0 ? stored : 0
+  const persisted = maxCursorForWorkspace(workspaceId, readPersistedMailboxCursors())
   return Math.max(memory, persisted)
 }
 
@@ -151,15 +160,21 @@ export function isWorkspaceMailboxHub(url: string): boolean {
 }
 
 export function mailboxHubs(primary: string): string[] {
-  const hubs = [
-    primary,
+  const loopback = [
     DEFAULT_LOCAL_SYNC_BASE_URL,
     `http://localhost:${DEFAULT_LOCAL_SYNC_PORT}`,
   ]
+  const hubs = isHostedPublicWebPage()
+    ? [...loopback, primary]
+    : [primary, ...loopback]
   const out: string[] = []
   for (const raw of hubs) {
     const url = raw?.trim().replace(/\/+$/, '') ?? ''
     if (!url || out.includes(url) || !isWorkspaceMailboxHub(url)) continue
+    // Hosted HTTPS cannot call LAN HTTP (mixed content); loopback is the same computer.
+    if (isHostedPublicWebPage() && url.startsWith('http:') && !isLoopbackHostname(hostnameOfBaseUrl(url))) {
+      continue
+    }
     out.push(url)
   }
   return out

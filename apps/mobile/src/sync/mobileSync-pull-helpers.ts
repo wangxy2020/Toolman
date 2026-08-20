@@ -6,7 +6,6 @@ import {
   type SyncChange,
 } from '@toolman/shared'
 import { emptyNotesStore, saveNotesStore } from '../storage/notes'
-import { emptyChatSessionsStore, saveChatSessions } from '../storage/chatSessions'
 import { saveClassroomCourses } from '../storage/classroomCourses'
 import { saveCreatedKnowledgeBases } from '../storage/createdKnowledgeBases'
 import { clearKnowledgeSnapshot } from '../storage/knowledgeSnapshot'
@@ -59,13 +58,11 @@ export async function discardForeignPrivateWorkspace(_syncState: MobileSyncState
     ...EMPTY_MOBILE_SYNC_STATE,
     hubIdentityId: LOCAL_ONLY_SYNC_HUB_ID,
   }
-  // P2P groups joined via invite live on this identity, not the foreign hub's
-  // private notes. Wiping them made a second-account join vanish after the
-  // next sync probed the owner's desktop on the same computer.
+  // P2P groups, shared-agent proxy topics, and local chats live on this
+  // device. A foreign Sync Hub probe must not wipe them.
   await Promise.all([
     saveNotesStore(notes),
     saveClassroomCourses([]),
-    saveChatSessions(emptyChatSessionsStore()),
     saveCreatedKnowledgeBases([]),
     clearKnowledgeSnapshot(),
     saveMobileSyncState(nextState),

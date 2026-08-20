@@ -13,6 +13,18 @@ export type MailboxRecord = {
 const MAX_PER_RECIPIENT = 500
 const records: MailboxRecord[] = []
 let hydrated = false
+let seqClock = 0
+
+/** Mailbox envelope cursor. Must be one clock for chat, catch-up, and agent-relay. */
+export function nextMailboxSeq(): number {
+  const now = Date.now()
+  seqClock = now <= seqClock ? seqClock + 1 : now
+  return seqClock
+}
+
+function noteMailboxSeq(seq: number): void {
+  if (Number.isFinite(seq) && seq > seqClock) seqClock = seq
+}
 
 function storePath(): string | null {
   try {
@@ -60,6 +72,7 @@ function hydrate(): void {
         ciphertextB64: item.ciphertextB64,
         depositedAt: typeof item.depositedAt === 'number' ? item.depositedAt : Date.now(),
       })
+      noteMailboxSeq(item.seq)
     }
   } catch {
     // ignore
@@ -68,6 +81,7 @@ function hydrate(): void {
 
 export function putMailboxRecord(input: MailboxRecord): boolean {
   hydrate()
+  noteMailboxSeq(input.seq)
   const existing = records.findIndex(
     (row) =>
       row.workspaceId === input.workspaceId &&
@@ -119,4 +133,5 @@ export function pullMailboxRecords(input: {
 export function resetMailboxStoreForTests(): void {
   records.splice(0, records.length)
   hydrated = true
+  seqClock = 0
 }

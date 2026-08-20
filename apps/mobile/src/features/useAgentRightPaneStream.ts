@@ -167,14 +167,20 @@ export function createAgentRightPaneStream(deps: {
     const proxy = base.groupAgent
     if (!proxy) return
     let next = base
-    const appendDelta = (delta: string, replace?: boolean) => {
+    const patchAssistant = (patch: Partial<ChatMessage>) => {
       const messages = next.messages.map((msg) =>
-        msg.id === assistantMsg.id
-          ? { ...msg, content: replace ? delta : msg.content + delta }
-          : msg,
+        msg.id === assistantMsg.id ? { ...msg, ...patch } : msg,
       )
       next = { ...next, messages, updatedAt: Date.now() }
       upsertSession(next)
+    }
+    const appendDelta = (delta: string, replace?: boolean) => {
+      const current = next.messages.find((msg) => msg.id === assistantMsg.id)
+      patchAssistant({ content: replace ? delta : (current?.content ?? '') + delta })
+    }
+    const appendThinking = (delta: string, replace?: boolean) => {
+      const current = next.messages.find((msg) => msg.id === assistantMsg.id)
+      patchAssistant({ thinking: replace ? delta : (current?.thinking ?? '') + delta })
     }
     try {
       await sendGroupAgentRelay({
@@ -186,6 +192,7 @@ export function createAgentRightPaneStream(deps: {
         memberAssistantMessageId: assistantMsg.id,
         text: userText,
         onDelta: appendDelta,
+        onThinking: appendThinking,
         ownerDeviceId: proxy.ownerDeviceId,
       })
     } catch (err) {

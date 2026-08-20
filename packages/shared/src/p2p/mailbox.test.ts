@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   P2P_MAILBOX_SESSION_PATH,
+  P2P_MAILBOX_WORKSPACES_PATH,
   P2pMailboxPullOutputSchema,
   P2pMailboxSessionInputSchema,
+  P2pMailboxWorkspacesInputSchema,
+  P2pMailboxWorkspacesOutputSchema,
   buildMailboxGrant,
   hashMailboxGrant,
   openMailboxPlaintext,
@@ -114,7 +117,30 @@ describe('p2p mailbox', () => {
         workspaceId: WORKSPACE_ID,
         deviceId: 'phone-a',
         identityId: 'id-a',
+        inviteToken: 'inv-token',
       }),
-    ).toMatchObject({ deviceId: 'phone-a' })
+    ).toMatchObject({ deviceId: 'phone-a', inviteToken: 'inv-token' })
+  })
+
+  it('lists joined workspaces for a mailbox-first client', () => {
+    expect(P2P_MAILBOX_WORKSPACES_PATH).toBe('/api/v1/sync/p2p/mailbox/workspaces')
+    expect(
+      P2pMailboxWorkspacesInputSchema.parse({
+        deviceId: 'phone-b',
+        identityId: 'id-b',
+      }),
+    ).toMatchObject({ deviceId: 'phone-b', identityId: 'id-b' })
+    expect(
+      P2pMailboxWorkspacesOutputSchema.parse({
+        ok: true,
+        workspaces: [
+          {
+            workspaceId: WORKSPACE_ID,
+            name: '协作群',
+            ownerDeviceId: 'desk-a',
+          },
+        ],
+      }).workspaces,
+    ).toHaveLength(1)
   })
 })

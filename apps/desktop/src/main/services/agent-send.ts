@@ -29,6 +29,7 @@ import { clearStaleTerminalSessionBinding } from './task-runtime/session-bind'
 import {
   deriveSessionTitle,
   parseAssistantRuntime,
+  relayGenerationMcpServerIds,
   resolveRuntimeMcpServerIds,
   shouldEnableTools,
 } from './agent-runtime'
@@ -64,11 +65,9 @@ export async function sendMessage(input: unknown) {
     logStructured('p2p', 'info', `group proxy send: sessionId=${data.sessionId} ownerDeviceId=${proxyMeta.ownerDeviceId} sourceSessionId=${proxyMeta.sourceSessionId} local=${proxyMeta.ownerDeviceId === localDeviceId}`)
   }
 
-  const runtime = parseAssistantRuntime(assistant, session.workspaceId)
-  const mcpServerIds = resolveRuntimeMcpServerIds(
-    runtime.skillIds,
-    data.options?.mcpServerIds ?? runtime.mcpServerIds,
-  )
+  const runtime = parseAssistantRuntime(assistant, session.workspaceId, {
+    skipDefaultIntegrations: isRelayExecution,
+  })
   const memoryEnabled = data.options?.memoryEnabled ?? false
   const kbEnabled = data.options?.kbEnabled ?? false
 
@@ -85,6 +84,13 @@ export async function sendMessage(input: unknown) {
 
   const stagedBlocks = await stageUserContentBlocks(data.contentBlocks)
   const userText = buildStoredUserContent(stagedBlocks)
+  const resolvedMcpServerIds = resolveRuntimeMcpServerIds(
+    runtime.skillIds,
+    data.options?.mcpServerIds ?? runtime.mcpServerIds,
+  )
+  const mcpServerIds = isRelayExecution
+    ? relayGenerationMcpServerIds(resolvedMcpServerIds, stagedBlocks)
+    : resolvedMcpServerIds
 
   const taskId = data.options?.taskId
   if (!taskId && clearStaleTerminalSessionBinding(data.sessionId)) {
@@ -123,7 +129,9 @@ export async function sendMessage(input: unknown) {
         role: 'assistant',
         modelId: modelIds[i],
         content: '',
-        contentBlocks: [{ type: 'text', text: '' }],
+        contentBlocks: isRelayExecution
+          ? [{ type: 'thinking', text: '正在准备回复…\n' }]
+          : [{ type: 'text', text: '' }],
         status: 'streaming',
         touchSession: false,
       })
@@ -214,6 +222,7 @@ export async function sendMessage(input: unknown) {
         documentOcrEnabled: data.options?.documentOcrEnabled ?? isDocumentOcrEnabled(),
         isHeartbeat: data.options?.isHeartbeat,
         isChannelMessage: data.options?.isChannelMessage,
+        skipDefaultIntegrations: isRelayExecution,
       },
     }),
     )

@@ -1,17 +1,19 @@
 import { useCallback, useEffect } from 'react'
 import { loadGroupChatStore, type GroupMember } from '../storage/groupChat'
-import { ensureMailboxForDesktopGroup } from '../p2p/mailboxBootstrap'
+import { ensureMailboxForDesktopGroup, discoverJoinedDesktopGroups } from '../p2p/mailboxBootstrap'
 import { getMailboxTarget, resumePersistedMailboxSync } from '../p2p/mailboxSync'
 import { hasLiveSession } from '../p2p/session'
 import { useGroupChatMesh } from './useGroupChatMesh'
 import { consumePendingInvites, subscribePendingInvites } from '../p2p/pendingInvites'
+import { mergeJoinedDesktopGroups } from '../sync/groupSyncMerge'
 import {
   peekGroupSync,
   resetGroupSyncSnapshot,
+  setGroupSyncLocalReader,
   subscribeGroupSync,
   type GroupSyncSnapshot,
 } from '../sync/groupSyncBridge'
-import { setGroupSyncLocalReader } from '../sync/groupSyncBridge'
+import { whenLocalNetworkAccessGranted } from '../sync/localNetworkFetch'
 import { useGroupChatInvites } from './useGroupChatInvites'
 import type { GroupChatSelf } from './groupChatContext.types'
 import type { useGroupChatState } from './useGroupChatState'
@@ -159,17 +161,54 @@ export function useGroupChatP2p(self: GroupChatSelf, store: Store) {
 
   useEffect(() => {
     if (!ready) return
-    resumePersistedMailboxSync(selfDeviceId)
-    if (!desktopGroupKey) return
-    for (const workspaceId of desktopGroupKey.split(',')) {
-      void ensureMailboxForDesktopGroup({
-        workspaceId,
+    let cancelled = false
+    const start = () => {
+      if (cancelled) return
+      resumePersistedMailboxSync(selfDeviceId)
+      if (!desktopGroupKey) return
+      for (const workspaceId of desktopGroupKey.split(',')) {
+        void ensureMailboxForDesktopGroup({
+          workspaceId,
+          deviceId: selfDeviceId,
+          identityId: selfIdentityId,
+          displayName: selfName,
+        })
+      }
+    }
+    const unsub = whenLocalNetworkAccessGranted(start)
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [ready, desktopGroupKey, selfDeviceId, selfIdentityId, selfName])
+
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    const start = () => {
+      if (cancelled) return
+      void discoverJoinedDesktopGroups({
         deviceId: selfDeviceId,
         identityId: selfIdentityId,
         displayName: selfName,
+      }).then((found) => {
+        if (cancelled || found.length === 0) return
+        setGroups((prev) => mergeJoinedDesktopGroups(prev, found))
+        setActiveGroupId((current) => current ?? found[0]?.id ?? null)
+        setExpanded((prev) => {
+          const next = new Set(prev)
+          const first = found[0]?.id
+          if (first) next.add(first)
+          return next
+        })
       })
     }
-  }, [ready, desktopGroupKey, selfDeviceId, selfIdentityId, selfName])
+    const unsub = whenLocalNetworkAccessGranted(start)
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [ready, selfDeviceId, selfIdentityId, selfName, setActiveGroupId, setExpanded, setGroups])
 
   const { applyInvites, createOrReuseInvite, joinGroupByInvite } = useGroupChatInvites({
     self,

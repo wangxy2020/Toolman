@@ -2,7 +2,7 @@ import { sealMailboxPlaintext, workspaceKeyFromB64, type AgentRelayMessage } fro
 import { logStructured } from '../../structured-log.service'
 import { getP2pDeviceInfo } from '../p2p-device-identity.service'
 import { loadWorkspaceKey } from '../p2p-workspace-key.store'
-import { putMailboxRecord } from '../p2p-mailbox-store'
+import { nextMailboxSeq, putMailboxRecord } from '../p2p-mailbox-store'
 import { depositCiphertextToCommunityMailbox } from '../p2p-mailbox-remote'
 
 type RelayMailboxPeer = {
@@ -13,13 +13,6 @@ type RelayMailboxPeer = {
 
 const peers = new Map<string, RelayMailboxPeer>()
 const expiry = new Map<string, ReturnType<typeof setTimeout>>()
-let seqClock = 0
-
-function nextMailboxSeq(): number {
-  const now = Date.now()
-  seqClock = now <= seqClock ? seqClock + 1 : now
-  return seqClock
-}
 
 export function rememberRelayMailboxPeer(
   requestId: string,
@@ -55,12 +48,20 @@ export function clearRelayMailboxPeer(requestId: string): void {
   expiry.delete(requestId)
 }
 
+/** Token-by-token deltas flood the mailbox; replace snapshots are the mailbox stream. */
+export function shouldSkipMailboxRelayDelta(relay: AgentRelayMessage): boolean {
+  if (relay.type !== 'stream' || relay.event.type !== 'message.delta') return false
+  const delta = relay.event.delta
+  if (delta.type !== 'text' && delta.type !== 'thinking') return true
+  return !delta.replace
+}
+
 export async function depositAgentRelayToMailbox(
   workspaceId: string,
   recipientDeviceId: string,
   relay: AgentRelayMessage,
 ): Promise<void> {
-  if (relay.type === 'stream' && relay.event.type === 'message.delta') return
+  if (shouldSkipMailboxRelayDelta(relay)) return
   const keyB64 = loadWorkspaceKey(workspaceId)
   if (!keyB64) throw new Error('群组密钥不可用，无法投递信箱')
   const local = getP2pDeviceInfo()

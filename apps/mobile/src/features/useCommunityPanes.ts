@@ -12,7 +12,7 @@ import { isCommunityModerator } from '../auth/localAuth'
 import { useMobileApp } from '../state/MobileAppContext'
 import { resolveCommunityHubBaseUrl, pickReachableCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { isHostedWebPage, communityHubProbeFlags } from '../sync/desktopDevHost'
-import { primeLocalNetworkAccess } from '../sync/localNetworkFetch'
+import { whenLocalNetworkAccessGranted } from '../sync/localNetworkFetch'
 import {
   fetchCommunityMessages,
   fetchCommunityNews,
@@ -103,15 +103,17 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
 
   useEffect(() => {
     let cancelled = false
-    const run = async () => {
+    let gen = 0
+    const run = async (includeLoopback: boolean) => {
+      const my = ++gen
       setLoading(true)
       setError(null)
       try {
-        await primeLocalNetworkAccess()
         const picked = await pickReachableCommunityHubBaseUrl(configuredHub, probeCommunityHub, {
           ...communityHubProbeFlags(),
+          includeLoopback,
         })
-        if (cancelled) return
+        if (cancelled || my !== gen) return
         setHubBaseUrl(picked.url)
         setTriedHubUrls(picked.tried)
         setOffline(!picked.online)
@@ -130,20 +132,29 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
         } else if (section.listKind === 'tasks') {
           next = await fetchCommunityTasks(picked.url, userId)
         }
-        if (!cancelled) setItems(next)
+        if (!cancelled && my === gen) setItems(next)
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && my === gen) {
           setItems([])
           setOffline(true)
           setError(err instanceof Error ? err.message : '加载失败')
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && my === gen) setLoading(false)
       }
     }
-    void run()
+    // Hosted HTTPS must not fetch loopback on load — Chrome auto-denies LNA.
+    // There is no central Hub; retry this computer's desktop sidecar after the user allows local network.
+    const hosted = isHostedWebPage()
+    void run(hosted ? false : communityHubProbeFlags().includeLoopback)
+    const unsub = hosted
+      ? whenLocalNetworkAccessGranted(() => {
+          void run(true)
+        })
+      : () => {}
     return () => {
       cancelled = true
+      unsub()
     }
   }, [auth?.identityId, configuredHub, section.listKind, section.resourceType, tick])
 

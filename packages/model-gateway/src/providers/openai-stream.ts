@@ -18,7 +18,12 @@ import {
   throwProviderHttpError,
   yieldTextOrReasoning,
 } from './openai-shared.js'
-import { formatMessagesForOpenAi } from './openai-messages.js'
+import {
+  applyOpenAiToolCallDeltas,
+  formatMessagesForOpenAi,
+  toolCallsFromDeltaAcc,
+  type OpenAiToolCallDelta,
+} from './openai-messages.js'
 
 export async function* streamOpenAiCompatible(
   config: ProviderConfig,
@@ -47,6 +52,11 @@ export async function* streamOpenAiCompatible(
     delete body.frequency_penalty
   }
 
+  if (params.tools?.length) {
+    body.tools = params.tools
+    body.tool_choice = 'auto'
+  }
+
   if (supportsUsageInStream(config)) {
     body.stream_options = { include_usage: true }
   }
@@ -71,6 +81,7 @@ export async function* streamOpenAiCompatible(
   let buffer = ''
   let usage: StreamChunk['usage']
   let finishReason: string | undefined
+  const toolCallAcc = new Map<number, { id: string; name: string; arguments: string }>()
 
   const consumeSseLine = function* (line: string): Generator<StreamChunk> {
     const trimmed = line.trim()
@@ -87,6 +98,7 @@ export async function* streamOpenAiCompatible(
             reasoning_content?: string
             reasoning?: string
             thinking?: string
+            tool_calls?: OpenAiToolCallDelta[]
           }
           finish_reason?: string | null
         }>
@@ -103,6 +115,8 @@ export async function* streamOpenAiCompatible(
       for (const chunk of yieldTextOrReasoning(reasoning ?? '', routeThinkingAsAnswer)) {
         yield chunk
       }
+
+      applyOpenAiToolCallDeltas(toolCallAcc, delta?.tool_calls)
 
       const text = delta?.content
       if (text) yield { type: 'text-delta', text }
@@ -139,5 +153,11 @@ export async function* streamOpenAiCompatible(
     }
   }
 
-  yield { type: 'done', usage, finishReason }
+  const toolCalls = toolCallsFromDeltaAcc(toolCallAcc)
+  yield {
+    type: 'done',
+    usage,
+    finishReason,
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
+  }
 }

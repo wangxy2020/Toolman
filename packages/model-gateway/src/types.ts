@@ -71,6 +71,8 @@ export interface StreamChunk {
     completion: number
     total: number
   }
+  /** Present on `done` when the streamed completion requested tool calls. */
+  toolCalls?: ToolCall[]
   error?: string
 }
 

@@ -1,8 +1,10 @@
-import { decodeWorkspaceKeyB64, type P2pJoinRegisterOutput } from '@toolman/shared'
+import { decodeWorkspaceKeyB64, isMailboxFirstP2pClient, type P2pJoinRegisterOutput } from '@toolman/shared'
 import type { InviteSelf } from './applyInvite'
 import type { PendingP2pInvite } from './inviteParse'
 import { canJoinViaWebRtc, joinOwnerViaWebRtc } from './joinWebRtc'
+import { ensureMailboxForDesktopGroup } from './mailboxBootstrap'
 import { startMailboxSync } from './mailboxSync'
+import { localP2pClientDeviceKind } from './deviceKind'
 import { recordP2pPathMetric } from './pathMetrics'
 import { resolveJoinSession } from './unpackInvite'
 
@@ -34,6 +36,18 @@ export async function completeInviteWebRtcJoin(input: {
     } catch {
       // mailbox is optional; WebRTC join can still proceed
     }
+  }
+  await ensureMailboxForDesktopGroup({
+    workspaceId: input.register.workspaceId,
+    deviceId: input.self.deviceId,
+    identityId: input.self.identityId,
+    displayName: input.self.displayName,
+    preferredHubUrl: input.hubUrl,
+    force: true,
+  })
+
+  if (isMailboxFirstP2pClient(input.self.deviceId) || localP2pClientDeviceKind() === 'web') {
+    return { ok: true }
   }
 
   if (!canJoinViaWebRtc()) {

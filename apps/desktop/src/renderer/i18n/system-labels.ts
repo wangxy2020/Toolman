@@ -1,9 +1,8 @@
 import type { TranslateFn } from './I18nProvider'
-import { isDefaultSessionTitle } from '@toolman/shared'
+import { isBuiltinDefaultP2pGroupName, isDefaultSessionTitle } from '@toolman/shared'
 
 const BUILTIN_ASSISTANT_NAMES = new Set(['通用智能体'])
 const BUILTIN_NOTEBOOK_NAMES = new Set(['默认笔记本'])
-const BUILTIN_GROUP_NAMES = new Set(['默认群组'])
 const BUILTIN_ASSISTANT_DESCRIPTIONS = new Set(['默认 AI 对话智能体'])
 const BUILTIN_SYSTEM_PROMPTS = new Set([
   '你是一个有帮助的 AI 助手。',
@@ -25,7 +24,7 @@ export function translateNotebookName(name: string, t: TranslateFn): string {
 }
 
 export function translateGroupName(name: string, t: TranslateFn): string {
-  if (BUILTIN_GROUP_NAMES.has(name)) return t('system.defaultGroup')
+  if (isBuiltinDefaultP2pGroupName(name)) return t('system.defaultGroup')
   return name
 }
 

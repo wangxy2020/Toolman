@@ -1,8 +1,15 @@
-import { resolveCuratedEdgeTtsVoice } from '@toolman/shared'
+import { hostnameOfBaseUrl, isOfficialCommunityHubHost, resolveCuratedEdgeTtsVoice } from '@toolman/shared'
 import { isAppLanguage } from '../i18n/language'
 import { TOP_NAV_MODULE_IDS, type TopNavModuleId } from '../module-ids'
 import { normalizeNavModules } from './nav-visibility'
 import { DEFAULT_MODULE_PREFS, type ModulePrefs } from './prefs-defaults'
+
+function localOnlyCommunityHubUrl(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  return isOfficialCommunityHubHost(hostnameOfBaseUrl(trimmed)) ? '' : trimmed
+}
 
 /** Module settings pages were removed; keep those prefs at program defaults. */
 export function removedModuleSettingsNeedReset(parsed: Partial<ModulePrefs>): boolean {
@@ -86,8 +93,7 @@ export function normalizeLoadedModulePrefs(parsed: Partial<ModulePrefs>): Module
     translate: { ...DEFAULT_MODULE_PREFS.translate, ...parsed.translate },
     group: { ...DEFAULT_MODULE_PREFS.group },
     community: {
-      hubBaseUrl:
-        typeof parsed.community?.hubBaseUrl === 'string' ? parsed.community.hubBaseUrl : '',
+      hubBaseUrl: localOnlyCommunityHubUrl(parsed.community?.hubBaseUrl),
       guestReadOnly: parsed.community?.guestReadOnly !== false,
     },
     classroom: {

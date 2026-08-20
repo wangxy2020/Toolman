@@ -48,6 +48,15 @@ export function applyWorkspaceWireEvents(
   let applied = 0
   for (const event of ordered) {
     const seen = event.seq <= readLastSeq(workspaceId)
+    // Mailbox `sharedAgents` listings are the source of truth on web/mobile.
+    // Agent WAL (Deleted / incomplete session_ids) must not prune the sidebar.
+    if (event.resourceType === 'Agent') {
+      if (!seen) {
+        rememberLastSeq(workspaceId, event.seq)
+        applied += 1
+      }
+      continue
+    }
     if (!seen) {
       rememberLastSeq(workspaceId, event.seq)
       applied += 1
@@ -150,6 +159,7 @@ export async function handleEventsPlaintext(session: LiveMeshSession, raw: strin
   if (parsed.type === 'events.proposed') {
     resolveSharePropose(parsed.proposalId, true)
     rememberLastSeq(session.workspaceId, parsed.event.seq)
+    if (parsed.event.resourceType === 'Agent') return
     if (isGroupChatResource(parsed.event.resourceType)) {
       const wal = parseWalPayloadFromEvent(parsed.event.payloadJson)
       if (wal) applyWal(session.workspaceId, wal)

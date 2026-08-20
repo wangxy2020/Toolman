@@ -29,6 +29,26 @@ describe('MessageStreamBuffers thinking + tools', () => {
     })
   })
 
+  it('keeps preparing status until the model emits tokens', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    expect(buffers.toContentBlocks()[0]).toEqual({
+      type: 'thinking',
+      text: '正在准备回复…\n',
+      startedAtMs: expect.any(Number),
+    })
+  })
+
+  it('does not duplicate preparing status', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    buffers.appendStatus('正在准备回复…\n')
+    expect(buffers.toContentBlocks()[0]).toMatchObject({
+      type: 'thinking',
+      text: '正在准备回复…\n',
+    })
+  })
+
   it('preserves thinking start time across preparing-status strip for wall-clock duration', () => {
     const buffers = new MessageStreamBuffers()
     buffers.appendStatus('正在准备回复…\n')
@@ -55,6 +75,42 @@ describe('MessageStreamBuffers thinking + tools', () => {
       type: 'thinking',
       durationSeconds: expect.any(Number),
       startedAtMs: expect.any(Number),
+    })
+  })
+
+  it('keeps preparing status and duration when the answer has no model reasoning', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    buffers.appendText('你好')
+    expect(buffers.plainText()).toBe('你好')
+    expect(buffers.toContentBlocks()[0]).toMatchObject({
+      type: 'thinking',
+      text: '正在准备回复…\n',
+      durationSeconds: expect.any(Number),
+      startedAtMs: expect.any(Number),
+    })
+  })
+
+  it('does not promote preparing status to the answer', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    expect(buffers.promoteThinkingToText()).toBe(false)
+    expect(buffers.plainText()).toBe('')
+    expect(buffers.toContentBlocks()[0]).toMatchObject({
+      type: 'thinking',
+      text: '正在准备回复…\n',
+    })
+  })
+
+  it('replaces thinking text without appending', () => {
+    const buffers = new MessageStreamBuffers()
+    buffers.appendStatus('正在准备回复…\n')
+    buffers.replaceThinking('正在准备回复…\n', 4)
+    buffers.replaceThinking('正在准备回复…\n', 4)
+    expect(buffers.toContentBlocks()[0]).toMatchObject({
+      type: 'thinking',
+      text: '正在准备回复…\n',
+      durationSeconds: 4,
     })
   })
 

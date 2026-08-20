@@ -179,7 +179,9 @@ export function siblingHttpOrigin(baseUrl: string, port: number): string | null 
   }
 }
 
-/** Community Hub URLs to probe: user setting, Expo/LAN desktop host, then local sidecar. Official Hub is last-resort / hosted-web. */
+/** Community Hub URLs to probe: user setting, Expo/LAN desktop host, then local sidecar.
+ * There is no central catalog server — `hub.toolman.app` is never auto-probed.
+ */
 export function listCommunityHubProbeCandidates(
   configured?: string | null,
   options?: {
@@ -189,6 +191,11 @@ export function listCommunityHubProbeCandidates(
     officialHubFirst?: boolean
   },
 ): string[] {
+  const configuredUrl = configured ? normalizeSyncBaseUrl(configured) : ''
+  const fromUser =
+    configuredUrl && !isOfficialCommunityHubHost(hostnameOfBaseUrl(configuredUrl))
+      ? configuredUrl
+      : null
   const fromPackager = (options?.packagerHostnames ?? [])
     .map((value) => (value ? hostnameFromHostOrUrl(value) : null))
     .filter(
@@ -206,9 +213,9 @@ export function listCommunityHubProbeCandidates(
     : []
 
   if (options?.officialHubFirst) {
-    return uniqueUrls([configured, official, ...fromPackager, ...loopback])
+    return uniqueUrls([fromUser, official, ...fromPackager, ...loopback])
   }
-  return uniqueUrls([configured, ...fromPackager, ...loopback, official])
+  return uniqueUrls([fromUser, ...fromPackager, ...loopback, official])
 }
 
 function syncOriginForHostname(hostname: string): string | null {

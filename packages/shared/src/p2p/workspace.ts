@@ -130,3 +130,10 @@ export const P2pSyncPeerStatusSchema = z.object({
 })
 
 export type P2pSyncPeerStatus = z.infer<typeof P2pSyncPeerStatusSchema>
+
+/** Auto-created starter workspace; no longer seeded on desktop or mobile. */
+export const BUILTIN_DEFAULT_P2P_GROUP_NAME = '默认群组'
+
+export function isBuiltinDefaultP2pGroupName(name: string | null | undefined): boolean {
+  return name?.trim() === BUILTIN_DEFAULT_P2P_GROUP_NAME
+}

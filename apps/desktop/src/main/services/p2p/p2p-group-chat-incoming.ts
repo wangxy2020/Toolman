@@ -1,6 +1,11 @@
 import { fireAndForget } from '../../lib/fire-and-forget'
 import { logStructured } from '../structured-log.service'
-import { P2pGroupChatMessageSchema, preferMemberDisplayName, toErrorMessage } from '@toolman/shared'
+import {
+  P2pGroupChatMessageSchema,
+  preferMemberDisplayName,
+  shouldAcceptUnsignedMailboxFirstGroupChat,
+  toErrorMessage,
+} from '@toolman/shared'
 import { P2pMemberRepository, P2pWorkspaceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
 import { getKnownP2pConnections } from './p2p-connection.service'
@@ -35,14 +40,19 @@ function getWorkspaceRepo(): P2pWorkspaceRepository {
   return new P2pWorkspaceRepository(getDatabase())
 }
 
-function acceptUnsignedMobileGroupChat(peerDeviceId: string, workspaceId?: string): boolean {
-  if (!workspaceId) return false
+function acceptUnsignedMailboxFirstGroupChat(peerDeviceId: string, workspaceId?: string): boolean {
   const connected = getKnownP2pConnections().some(
     (item) => item.peerDeviceId === peerDeviceId && item.state === 'connected',
   )
-  if (!connected) return false
-  const member = getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
-  return parseMemberCertSnapshot(member?.certJson).deviceKind === 'mobile'
+  const member = workspaceId
+    ? getMemberRepo().findByWorkspaceAndDevice(workspaceId, peerDeviceId)
+    : undefined
+  return shouldAcceptUnsignedMailboxFirstGroupChat({
+    peerDeviceId,
+    workspaceId,
+    peerConnected: connected,
+    deviceKind: parseMemberCertSnapshot(member?.certJson).deviceKind,
+  })
 }
 
 export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buffer): void {
@@ -99,20 +109,29 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
     ) {
       const envelope = parsed as SignedGroupChatWireEnvelope
       const verified = verifyGroupChatWireMessage(peerDeviceId, envelope)
-      if (!verified.ok) {
+      if (verified.ok) {
+        const replay = checkReplayGuard({
+          scope: `group-chat:${envelope.message.workspaceId}`,
+          signerId: peerDeviceId,
+          at: envelope.message.createdAt,
+          payloadHash: envelope.message.id,
+        })
+        if (!replay.ok) {
+          logStructured('p2p', 'warn', `dropped replay group chat from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`)
+          return
+        }
+        handleIncomingP2pGroupChatMessage(peerDeviceId, envelope.message)
+        return
+      }
+      if (!acceptUnsignedMailboxFirstGroupChat(peerDeviceId, envelope.message.workspaceId)) {
         logStructured('p2p', 'warn', `dropped signed group chat from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`)
         return
       }
-      const replay = checkReplayGuard({
-        scope: `group-chat:${envelope.message.workspaceId}`,
-        signerId: peerDeviceId,
-        at: envelope.message.createdAt,
-        payloadHash: envelope.message.id,
-      })
-      if (!replay.ok) {
-        logStructured('p2p', 'warn', `dropped replay group chat from ${peerDeviceId.slice(0, 8)}: ${replay.reason}`)
-        return
-      }
+      logStructured(
+        'p2p',
+        'info',
+        `accepted mailbox-first group chat after signature miss from ${peerDeviceId.slice(0, 8)}: ${verified.reason}`,
+      )
       handleIncomingP2pGroupChatMessage(peerDeviceId, envelope.message)
       return
     }
@@ -120,7 +139,7 @@ export function handleP2pGroupChatChannelMessage(peerDeviceId: string, data: Buf
     if (
       parsed.type === 'group-chat.message' &&
       parsed.message &&
-      acceptUnsignedMobileGroupChat(
+      acceptUnsignedMailboxFirstGroupChat(
         peerDeviceId,
         typeof parsed.message === 'object' && parsed.message && 'workspaceId' in parsed.message
           ? String((parsed.message as { workspaceId?: string }).workspaceId ?? '')

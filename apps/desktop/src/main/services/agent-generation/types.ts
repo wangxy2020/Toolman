@@ -19,6 +19,7 @@ export type GenerationSendOptions = {
   documentOcrEnabled?: boolean
   isHeartbeat?: boolean
   isChannelMessage?: boolean
+  skipDefaultIntegrations?: boolean
 }
 
 export type RunGenerationOptions = {
