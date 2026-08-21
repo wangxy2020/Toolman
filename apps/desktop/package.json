@@ -1,6 +1,6 @@
 {
   "name": "@toolman/desktop",
-  "version": "0.7.0-rc.3.7",
+  "version": "0.7.0-rc.3.9",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "description": "Toolman desktop AI client",
