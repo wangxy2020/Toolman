@@ -1,5 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  remainingTrialConversations,
+  remainingTrialTokens,
+  type TrialQuotaState,
+} from '@toolman/shared'
 import { probeModelApi } from '../chat/probeModel'
+import { shouldUseTrialLlm } from '../chat/trialLlm'
 import { sanitizeApiKey } from '../chat/apiHeaders'
 import { saveModulePrefs, type ModulePrefs } from '../settings/prefs'
 import {
@@ -8,6 +14,7 @@ import {
   type MobileProviderId,
 } from '../settings/provider-presets'
 import { saveModelConfig } from '../storage/secure'
+import { loadTrialQuota } from '../storage/trialLlmQuota'
 import {
   readProviderCredential,
   upsertProviderCredentials,
@@ -30,8 +37,18 @@ export function useAgentSettingsPanel() {
   const [probeBusy, setProbeBusy] = useState(false)
   const [probeOk, setProbeOk] = useState<boolean | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [trialQuota, setTrialQuota] = useState<TrialQuotaState | null>(null)
   const prefs = modulePrefs.agent
   const preset = getProviderPreset(providerId)
+  const trialActive = shouldUseTrialLlm({ apiKey })
+
+  useEffect(() => {
+    if (!trialActive) {
+      setTrialQuota(null)
+      return
+    }
+    void loadTrialQuota().then(setTrialQuota)
+  }, [trialActive, message])
 
   const applyProvider = (id: MobileProviderId) => {
     const next = getProviderPreset(id)
@@ -118,5 +135,8 @@ export function useAgentSettingsPanel() {
     saveModel,
     runProbe,
     patchPrefs,
+    trialActive,
+    trialRemainingConversations: trialQuota ? remainingTrialConversations(trialQuota) : null,
+    trialRemainingTokens: trialQuota ? remainingTrialTokens(trialQuota) : null,
   }
 }

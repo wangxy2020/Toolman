@@ -31,6 +31,11 @@ import { createGenerationStreamContext } from './stream-context'
 import { emitStreamEvent } from './emit'
 import type { RunGenerationOptions } from './types'
 import { prepareGenerationWorkingCopies } from './working-copies'
+import {
+  claimDesktopTrialLlm,
+  isCloudProviderWithoutUserKey,
+  recordDesktopTrialLlmUsage,
+} from '../trial-llm.service'
 
 export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
   const {
@@ -57,15 +62,31 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
   const startedAt = Date.now()
   const stream = createGenerationStreamContext({ sessionId, assistantMessageId, modelId })
   let usage: Message['tokenUsage'] = null
+  let trialTokens = 0
   const onUsage = (value: Message['tokenUsage']) => {
     usage = value
+    trialTokens = value?.total ?? 0
   }
 
   try {
-    const { providerId, model } = parseModelId(modelId)
-    const providerConfig = getProviderConfig(providerId)
+    const { providerId, model: parsedModel } = parseModelId(modelId)
+    let providerConfig = getProviderConfig(providerId)
     if (!providerConfig) {
       throw new ProviderError(`Provider ${providerId} 未找到或未启用`)
+    }
+
+    let model = parsedModel
+    let usedTrialLlm = false
+    if (isCloudProviderWithoutUserKey(providerConfig)) {
+      const trial = claimDesktopTrialLlm()
+      if (!trial.ok) throw new ProviderError(trial.message)
+      usedTrialLlm = true
+      providerConfig = {
+        type: 'openai_compatible',
+        baseUrl: trial.baseUrl,
+        apiKey: trial.apiKey,
+      }
+      model = trial.model
     }
 
     let generationBlocks: ContentBlock[] = userContentBlocks
@@ -229,6 +250,10 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
       stream,
       onUsage,
     })
+
+    if (usedTrialLlm) {
+      recordDesktopTrialLlmUsage(trialTokens)
+    }
 
     maybeApplySocraticReferee({ assistant, sessionId, stream })
 

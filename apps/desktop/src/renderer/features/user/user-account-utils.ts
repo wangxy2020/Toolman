@@ -41,6 +41,20 @@ export function communityRoleToUserTypeKey(
   return null
 }
 
+const USER_TYPE_RANK: Record<UserTypeKey, number> = {
+  unregistered: 0,
+  normal: 1,
+  vip: 2,
+  admin: 3,
+  super_admin: 4,
+}
+
+function higherUserTypeKey(current: UserTypeKey | null, next: UserTypeKey | null): UserTypeKey | null {
+  if (!next) return current
+  if (!current) return next
+  return USER_TYPE_RANK[next] > USER_TYPE_RANK[current] ? next : current
+}
+
 export function resolveUserTypeLabel(
   session: AuthSession | null | undefined,
   communityRole?: CommunityUserRole | null,
@@ -61,21 +75,14 @@ export function resolveUserTypeLabel(
     return labels.normal
   }
 
-  const roleKey = communityRoleToUserTypeKey(communityRole ?? session.communityRole)
-  if (roleKey) {
-    return labels[roleKey]
-  }
-
-  const authingTypeKey = authUserTypeLabelKey(session.userType)
-  if (authingTypeKey && authingTypeKey !== 'normal') {
-    return labels[authingTypeKey]
-  }
-
+  let key = communityRoleToUserTypeKey(communityRole)
+  key = higherUserTypeKey(key, communityRoleToUserTypeKey(session.communityRole))
+  key = higherUserTypeKey(key, authUserTypeLabelKey(session.userType))
   if (session.subscriptionSku === 'pro') {
-    return labels.vip
+    key = higherUserTypeKey(key, 'vip')
   }
 
-  return labels.normal
+  return labels[key ?? 'normal']
 }
 
 export const PRODUCT_SKU_LABELS: Record<ProductSku, string> = {

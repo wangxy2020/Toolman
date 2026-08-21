@@ -26,6 +26,7 @@ See **[RC1_DOGFOOD.md](./RC1_DOGFOOD.md)** for the full runbook. Progress: **[RE
 - [ ] `TOOLMAN_*_DEV_MODE` unset in release env
 - [ ] `TOOLMAN_BILLING_MOCK=0` for production channel
 - [ ] **`TOOLMAN_RELEASE_ENV`** GitHub Secret 已配置（`pnpm release:print-env` 校验通过，含 Authing/Firebase + Xirsys 或 TURN）
+- [ ] `TOOLMAN_TRIAL_DEEPSEEK_API_KEY` 已写入 `TOOLMAN_RELEASE_ENV`（桌面试用）；Vercel 已配同名变量（网页/手机试用）
 - [ ] `TOOLMAN_COMMUNITY_HUB_URL` points to staging/production Hub (not `127.0.0.1`)
 - [ ] TURN / Xirsys credentials injected (`TOOLMAN_P2P_XIRSYS_*` or `TOOLMAN_P2P_TURN_*`)
 - [ ] `TOOLMAN_UPDATE_FEED_URL` configured for auto-update manifest

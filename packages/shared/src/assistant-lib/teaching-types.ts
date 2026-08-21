@@ -71,7 +71,7 @@ export const AssistantLibSessionMetaSchema = z.object({
   courseName: z.string().optional(),
   /** Built-in default classroom topic under the shared「课堂」agent. */
   isDefaultClassroom: z.boolean().optional(),
-  /** Built-in Toolman usage-guide course; pinned next to the default course. */
+  /** Built-in Toolman usage-guide course; removable from course settings. */
   isGuideClassroom: z.boolean().optional(),
   /** Local textbook folder when user binds a disk path instead of a KB. */
   textbookLocalPath: z.string().min(1).optional(),

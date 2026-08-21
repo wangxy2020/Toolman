@@ -96,6 +96,16 @@ export function getAuthingOAuthRedirectUri(port = getAuthingConfig()?.oauthCallb
   return `http://127.0.0.1:${port}/authing/callback`
 }
 
+/** Authing RBAC 权限分组。未指定时 SDK 默认 `default`；应用角色常挂在应用 ID 对应分组。 */
+export function listAuthingRoleNamespaces(): string[] {
+  const config = getAuthingConfig()
+  const extra = readEnv(['TOOLMAN_AUTHING_ROLE_NAMESPACE', 'AUTHING_ROLE_NAMESPACE'])
+  const codes = ['default', config?.appId, extra]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+  return [...new Set(codes)]
+}
+
 export function getAuthingWebConfig():
   | {
       configured: true

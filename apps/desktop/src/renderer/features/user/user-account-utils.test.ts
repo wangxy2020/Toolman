@@ -145,10 +145,12 @@ describe('user-account-utils', () => {
           registrationStatus: 'registered',
           isLoggedIn: true,
           communityRole: 'user',
+          userType: 'admin',
+          authingRoles: ['admin'],
         },
         'user',
       ),
-    ).toBe(USER_TYPE_LABELS.normal)
+    ).toBe(USER_TYPE_LABELS.admin)
   })
 
   it('resolves user type labels for guest users', () => {

@@ -2,7 +2,15 @@ import { Platform } from 'react-native'
 import type { ModelConfig } from '../state/MobileAppContext'
 import { normalizeChatBaseUrl } from '../settings/provider-presets'
 import { buildApiAuthHeaders } from './apiHeaders'
-import { extractChatCompletionText } from './llmProxyRequest'
+import { extractChatCompletionText, extractChatCompletionUsageTokens } from './llmProxyRequest'
+import {
+  claimTrialLlmRequest,
+  formatTrialFetchError,
+  readTrialProxyError,
+  recordTrialLlmSuccess,
+  resolveTrialLlmProxyUrl,
+  shouldUseTrialLlm,
+} from './trialLlm'
 
 function formatFetchError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -12,6 +20,48 @@ function formatFetchError(error: unknown): string {
   return message
 }
 
+async function completeTrialChatOnce(options: {
+  messages: Array<{ role: string; content: string }>
+  signal?: AbortSignal
+}): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
+  const claimed = await claimTrialLlmRequest()
+  if (!claimed.ok) return { ok: false, message: claimed.message }
+
+  let response: Response
+  try {
+    response = await fetch(resolveTrialLlmProxyUrl(), {
+      method: 'POST',
+      signal: options.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trial: true,
+        stream: false,
+        deviceId: claimed.deviceId,
+        messages: options.messages,
+      }),
+    })
+  } catch (error) {
+    return { ok: false, message: formatTrialFetchError(error) }
+  }
+
+  const raw = await response.text().catch(() => '')
+  if (!response.ok) {
+    return { ok: false, message: readTrialProxyError(raw, response.status) }
+  }
+
+  let payload: unknown = raw
+  try {
+    payload = raw ? JSON.parse(raw) : null
+  } catch {
+    return { ok: false, message: '试用模型返回了无法解析的内容' }
+  }
+
+  const text = extractChatCompletionText(payload)
+  if (!text) return { ok: false, message: readTrialProxyError(raw, response.status) }
+  await recordTrialLlmSuccess(extractChatCompletionUsageTokens(payload))
+  return { ok: true, text }
+}
+
 /** Non-streaming chat completion. Web uses same-origin proxy to avoid CORS. */
 export async function completeChatOnce(options: {
   config: ModelConfig
@@ -19,6 +69,10 @@ export async function completeChatOnce(options: {
   signal?: AbortSignal
 }): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
   const { config, messages, signal } = options
+  if (shouldUseTrialLlm(config)) {
+    return completeTrialChatOnce({ messages, signal })
+  }
+
   const auth = buildApiAuthHeaders(config.apiKey)
   if (!auth.ok) return { ok: false, message: auth.message }
 

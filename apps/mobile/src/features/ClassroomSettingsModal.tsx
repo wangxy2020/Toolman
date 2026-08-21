@@ -45,7 +45,6 @@ export function ClassroomSettingsModal(props: ClassroomSettingsModalProps) {
     confirmDelete,
     setConfirmDelete,
     courseLabel,
-    isGuide,
     isDefault,
     shownPresets,
     selectedPreset,
@@ -163,10 +162,8 @@ export function ClassroomSettingsModal(props: ClassroomSettingsModalProps) {
 
                       {activeTab === 'danger' ? (
                         <View style={styles.dangerCard}>
-                          {isDefault || isGuide ? (
-                            <Text style={styles.hint}>
-                              {isDefault ? '默认课程不可删除。' : 'Toolman使用说明课程不可删除。'}
-                            </Text>
+                          {isDefault ? (
+                            <Text style={styles.hint}>默认课程不可删除。</Text>
                           ) : (
                             <>
                               <Text style={styles.sectionTitle}>危险操作</Text>

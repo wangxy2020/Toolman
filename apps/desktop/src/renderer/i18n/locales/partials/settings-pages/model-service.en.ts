@@ -37,6 +37,8 @@ export const settingsPagesModelServiceEn = {
       settingsTitle: 'Key settings',
       placeholderConfigured: 'Configured (enter a new key to replace)',
       placeholder: 'API key',
+      trialHint:
+        'With no key saved, Toolman uses the DeepSeek V4 Flash trial (200k tokens or 50 chats per month, 3 requests/min). The trial key cannot be viewed or copied. When the quota runs out, enter your own API key.',
       hide: 'Hide',
       show: 'Show',
       revealFailed: 'Could not read the saved API key',

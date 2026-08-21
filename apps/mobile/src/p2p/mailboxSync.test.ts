@@ -202,3 +202,44 @@ describe('mailbox cursor', () => {
     expect(isMailboxSyncRunning(workspaceId)).toBe(true)
   })
 })
+
+describe('mailbox missing group', () => {
+  afterEach(async () => {
+    stopAllMailboxSync()
+    await waitForMailboxPulls()
+    vi.unstubAllGlobals()
+  })
+
+  it('stops quietly when every owner hub says the group is gone', async () => {
+    const store: Record<string, string> = {}
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value
+      },
+      removeItem: (key: string) => {
+        delete store[key]
+      },
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: '群组不存在' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    const workspaceId = '77777777-7777-4777-8777-777777777777'
+    startMailboxSync({
+      hubUrl: 'http://127.0.0.1:17890',
+      workspaceId,
+      deviceId: 'web-a',
+      workspaceKey: new Uint8Array(32).fill(3),
+    })
+    await waitForMailboxPulls()
+    expect(isMailboxSyncRunning(workspaceId)).toBe(false)
+    expect(getMailboxTarget(workspaceId)).toBeUndefined()
+    expect(JSON.stringify(store)).not.toContain(workspaceId)
+  })
+})

@@ -8,6 +8,7 @@ export const ALLOWED_PREFIXES = [
   'TOOLMAN_AUTH_BUILD_',
   'TOOLMAN_BUILD_REGION',
   'TOOLMAN_COMMUNITY_JWT_SECRET',
+  'TOOLMAN_TRIAL_DEEPSEEK_API_KEY',
   'TOOLMAN_P2P_XIRSYS_',
   'TOOLMAN_P2P_TURN_',
   'TOOLMAN_P2P_ICE_SERVERS',
@@ -148,6 +149,12 @@ export function validateReleaseEnv(values) {
 
   if (!values.get('TOOLMAN_COMMUNITY_JWT_SECRET')?.trim()) {
     warnings.push('未设置 TOOLMAN_COMMUNITY_JWT_SECRET（嵌入式 Hub / JWT 缓存可能受限）')
+  }
+
+  if (!values.get('TOOLMAN_TRIAL_DEEPSEEK_API_KEY')?.trim()) {
+    warnings.push(
+      '未设置 TOOLMAN_TRIAL_DEEPSEEK_API_KEY：发行包内未填用户密钥时无法走 DeepSeek V4 Flash 试用；网页/手机试用还需在 Vercel 配置同名变量',
+    )
   }
 
   if (authing && !values.get('TOOLMAN_AUTHING_USER_POOL_SECRET')?.trim()) {

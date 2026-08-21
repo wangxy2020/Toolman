@@ -36,6 +36,8 @@ export const settingsPagesModelServiceZhCN = {
       settingsTitle: '密钥设置',
       placeholderConfigured: '已配置（输入新 Key 覆盖）',
       placeholder: 'API 密钥',
+      trialHint:
+        '未填写密钥时使用试用模型 DeepSeek V4 Flash（每月 20 万 token 或 50 次对话，每分钟 3 次）。试用密钥不可查看或复制。额度用尽后请填写自己的 API Key。',
       hide: '隐藏',
       show: '显示',
       revealFailed: '无法读取已保存的密钥',

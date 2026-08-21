@@ -6,6 +6,7 @@ import {
   ASSISTANT_LIB_SESSION_METADATA_KEY,
   ClassroomSessionSyncPayloadSchema,
   isAssistantLibAssistantName,
+  isAssistantLibGuideCourseSession,
   isAssistantLibSession,
   parseAssistantLibSessionMeta,
   parseSocraticState,
@@ -181,6 +182,40 @@ function applyClassroomUpsert(change: SyncChange): boolean {
   return true
 }
 
+function parseSessionMetadata(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function markAssistantLibGuideDismissed(assistantId: string): void {
+  const db = getDatabase()
+  const row = db.select().from(assistants).where(eq(assistants.id, assistantId)).get()
+  if (!row) return
+  let params: Record<string, unknown> = {}
+  try {
+    const parsed = JSON.parse(row.parametersJson) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      params = parsed as Record<string, unknown>
+    }
+  } catch {
+    params = {}
+  }
+  if (params.assistantLibGuideDismissed === true) return
+  db.update(assistants)
+    .set({
+      parametersJson: JSON.stringify({ ...params, assistantLibGuideDismissed: true }),
+      updatedAt: new Date(),
+    })
+    .where(eq(assistants.id, assistantId))
+    .run()
+}
+
 export function applyClassroomSyncChanges(changes: SyncChange[]): boolean {
   let changed = false
   applyingInbound = true
@@ -192,8 +227,12 @@ export function applyClassroomSyncChanges(changes: SyncChange[]): boolean {
         const existing = db.select().from(sessions).where(eq(sessions.id, change.entityId)).get()
         if (!existing || existing.deletedAt) continue
         if (existing.updatedAt.getTime() > change.updatedAt) continue
-        if (!isAssistantLibSession(JSON.parse(existing.metadataJson) as Record<string, unknown>)) {
+        const metadata = parseSessionMetadata(existing.metadataJson)
+        if (!isAssistantLibSession(metadata)) {
           continue
+        }
+        if (isAssistantLibGuideCourseSession(metadata)) {
+          markAssistantLibGuideDismissed(existing.assistantId)
         }
         db.update(sessions)
           .set({ deletedAt: new Date(), updatedAt: new Date(change.updatedAt) })

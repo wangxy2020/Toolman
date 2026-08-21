@@ -19,7 +19,11 @@ vi.mock('./authing-token-utils.js', () => ({
 }))
 
 vi.mock('./authing-session-roles.service.js', () => ({
-  fetchAuthingUserRolesViaAccessToken: (...args: unknown[]) => mockFetchViaAccessToken(...args),
+  fetchAuthingUserRolesViaAccessTokenAllNamespaces: (...args: unknown[]) => mockFetchViaAccessToken(...args),
+}))
+
+vi.mock('./authing-auth.config.js', () => ({
+  listAuthingRoleNamespaces: () => ['default'],
 }))
 
 import { extractAuthingRoleCodes, fetchAuthingUserRoles } from './authing-user-profile.service.js'
@@ -38,12 +42,14 @@ describe('fetchAuthingUserRoles', () => {
     const roles = await fetchAuthingUserRoles('user-1')
 
     expect(roles).toContain('admin')
+    expect(mockListRoles).toHaveBeenCalledWith('user-1')
+    expect(mockListRoles).toHaveBeenCalledWith('user-1', 'default')
     expect(mockFetchViaAccessToken).not.toHaveBeenCalled()
   })
 
   it('falls back to session token when management API returns empty', async () => {
     mockListRoles.mockResolvedValue({ list: [] })
-    mockFetchViaAccessToken.mockResolvedValue({ list: [{ code: 'admin', name: '管理员' }] })
+    mockFetchViaAccessToken.mockResolvedValue([{ list: [{ code: 'admin', name: '管理员' }] }])
 
     const roles = await fetchAuthingUserRoles('user-1', { accessToken: 'token-abc' })
 
@@ -53,7 +59,7 @@ describe('fetchAuthingUserRoles', () => {
 
   it('falls back to session token when management API throws', async () => {
     mockListRoles.mockRejectedValue(new Error('用户池密钥不正确！'))
-    mockFetchViaAccessToken.mockResolvedValue({ list: [{ code: 'founder', name: '超级管理员' }] })
+    mockFetchViaAccessToken.mockResolvedValue([{ list: [{ code: 'founder', name: '超级管理员' }] }])
 
     const roles = await fetchAuthingUserRoles('user-1', { accessToken: 'token-abc' })
 

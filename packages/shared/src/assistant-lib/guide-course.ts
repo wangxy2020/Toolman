@@ -1,9 +1,13 @@
-import type { CourseSyllabus } from './teaching-types.js'
+import { formatSyllabusMarkdown } from './syllabus.js'
+import type { AssistantLibSessionMeta, CourseSyllabus } from './teaching-types.js'
 
 /** Built-in usage-guide course title under the shared「课堂」agent. */
 export const ASSISTANT_LIB_GUIDE_COURSE_TITLE = 'Toolman使用说明'
 
 export const ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID = 'toolman-guide' as const
+
+/** Client-only placeholder id until desktop sync provides the real session. */
+export const ASSISTANT_LIB_GUIDE_COURSE_CLIENT_ID = '6e1d7001-0000-4000-8000-746f6f6c6d61'
 
 export function buildAssistantLibGuideCourseSystemPrompt(): string {
   return [
@@ -56,7 +60,7 @@ export function buildAssistantLibGuideCourseSyllabus(): CourseSyllabus {
       status: 'ready',
       lessonPlan: [
         '侧栏「添加课程」可新建课程：填写名称、选择教学模式、绑定教材知识库。',
-        '「Toolman使用说明」会预置在侧栏，可在课程设置里删除；其他课程可通过侧栏「添加课程」创建。',
+        '「Toolman使用说明」是程序内置课程，会预置在侧栏，可在课程设置里删除；其他课程可通过侧栏「添加课程」创建。',
         '添加课程后可生成教学大纲；章节需按目录从上到下学习，通过验收才能进入下一章。',
         '右上角「上课」开始本节课，「课堂」回到对话，「课堂记录」查看当前课程的学习记录；再次点击上课可结束本节。',
         '课堂设置可改教学模式、教材、朗读；危险操作里可删除自建课程。',
@@ -122,5 +126,85 @@ export function buildAssistantLibGuideCourseSyllabus(): CourseSyllabus {
     totalHours,
     chapters,
     updatedAt: 0,
+  }
+}
+
+/** Keep chapter progress; refresh bundled titles / lesson text / questions. */
+export function mergeAssistantLibGuideCourseSyllabus(
+  existing?: CourseSyllabus | null,
+): CourseSyllabus {
+  const bundled = buildAssistantLibGuideCourseSyllabus()
+  if (!existing?.chapters.length) return bundled
+  const previous = new Map(existing.chapters.map((chapter) => [chapter.id, chapter]))
+  return {
+    ...bundled,
+    chapters: bundled.chapters.map((chapter) => {
+      const prior = previous.get(chapter.id)
+      if (!prior) return chapter
+      return { ...chapter, status: prior.status }
+    }),
+    updatedAt: existing.updatedAt ?? bundled.updatedAt,
+  }
+}
+
+export function assistantLibGuideCourseContentStale(existing?: CourseSyllabus | null): boolean {
+  const bundled = buildAssistantLibGuideCourseSyllabus()
+  const chapters = existing?.chapters ?? []
+  if (chapters.length !== bundled.chapters.length) return true
+  return bundled.chapters.some((chapter) => {
+    const prior = chapters.find((item) => item.id === chapter.id)
+    return (
+      !prior ||
+      prior.title !== chapter.title ||
+      prior.lessonPlan !== chapter.lessonPlan ||
+      JSON.stringify(prior.assessmentQuestions) !== JSON.stringify(chapter.assessmentQuestions)
+    )
+  })
+}
+
+export function isAssistantLibGuideCourseLike(course: {
+  isGuideClassroom?: boolean
+  courseName?: string
+  title?: string
+}): boolean {
+  if (course.isGuideClassroom) return true
+  const name = (course.courseName ?? course.title ?? '').trim()
+  return name === ASSISTANT_LIB_GUIDE_COURSE_TITLE
+}
+
+export function buildAssistantLibGuideCourseSessionFields(
+  existing?: AssistantLibSessionMeta | null,
+): {
+  presetId: string
+  roleplayId: string
+  learningLabel: string
+  teachingMode: 'open'
+  refereeEnabled: false
+  kbIds?: string[]
+  customSystemPrompt: string
+  courseName: string
+  isGuideClassroom: true
+  syllabus: CourseSyllabus
+  lessonPlan: string
+  autoSpeak: boolean
+  ttsEngine: 'edge'
+  modelId?: string
+} {
+  const syllabus = mergeAssistantLibGuideCourseSyllabus(existing?.syllabus)
+  return {
+    presetId: existing?.presetId || ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID,
+    roleplayId: existing?.roleplayId || 'guide',
+    learningLabel: existing?.learningLabel ?? '学习',
+    teachingMode: 'open',
+    refereeEnabled: false,
+    kbIds: existing?.kbIds,
+    customSystemPrompt: buildAssistantLibGuideCourseSystemPrompt(),
+    courseName: existing?.courseName?.trim() || ASSISTANT_LIB_GUIDE_COURSE_TITLE,
+    isGuideClassroom: true,
+    syllabus,
+    lessonPlan: formatSyllabusMarkdown(syllabus),
+    autoSpeak: existing?.autoSpeak ?? true,
+    ttsEngine: 'edge',
+    modelId: existing?.modelId,
   }
 }

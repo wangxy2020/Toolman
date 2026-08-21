@@ -297,6 +297,7 @@ export function useAssistantLibSettingsDialog({
     kbPickerOpen,
     setKbPickerOpen,
     isDefaultClassroom,
+    isGuideClassroom,
     courseLabel,
     presets,
     selectedPreset,

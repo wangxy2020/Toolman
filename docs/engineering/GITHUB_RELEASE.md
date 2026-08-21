@@ -67,6 +67,8 @@ pnpm release:desktop
    ```bash
    pnpm release:print-env   # 从 .env.local / .env.p2p.turn 生成，复制输出到 Secret
    ```
+   输出中应包含登录、P2P/TURN，以及试用 LLM 的 `TOOLMAN_TRIAL_DEEPSEEK_API_KEY`（可选但建议有）。
+   网页/手机试用还需在 **Vercel Environment Variables** 配置同名变量。
    详见 [PRODUCTION_CONFIG.md](./PRODUCTION_CONFIG.md#github-actions--toolman_release_env)
 3. 提交并打 tag（**commit 消息与 tag 同名**，如 `v0.2.0-rc.3`）：
 

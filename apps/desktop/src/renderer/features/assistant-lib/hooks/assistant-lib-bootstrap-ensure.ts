@@ -1,15 +1,12 @@
 import {
   ASSISTANT_LIB_ASSISTANT_MARKER,
   ASSISTANT_LIB_ASSISTANT_NAME,
-  ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID,
   ASSISTANT_LIB_GUIDE_COURSE_TITLE,
   assistantLibSessionMetadataPatch,
   buildAssistantLibAssistantSystemPrompt,
-  buildAssistantLibGuideCourseSyllabus,
-  buildAssistantLibGuideCourseSystemPrompt,
+  buildAssistantLibGuideCourseSessionFields,
+  assistantLibGuideCourseContentStale,
   findAssistantLibGuideCourseSession,
-  formatSyllabusMarkdown,
-  getAssistantLibPreset,
   isAssistantLibAssistantName,
   listAssistantLibDefaultClassroomIds,
   listDuplicateAssistantLibGuideCourseIds,
@@ -139,27 +136,7 @@ async function deleteDuplicateGuideCourses(
 
 function guideCourseMetadataPatch(metadata: Record<string, unknown> | null | undefined) {
   const previous = parseAssistantLibSessionMeta(metadata)
-  const preset = getAssistantLibPreset(ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID)
-  const syllabus =
-    previous?.syllabus?.chapters.length ? previous.syllabus : buildAssistantLibGuideCourseSyllabus()
-  const customSystemPrompt =
-    previous?.customSystemPrompt?.trim() || buildAssistantLibGuideCourseSystemPrompt()
-  return assistantLibSessionMetadataPatch(metadata, {
-    presetId: previous?.presetId || ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID,
-    roleplayId: previous?.roleplayId ?? preset?.roleplayId,
-    learningLabel: previous?.learningLabel ?? '学习',
-    teachingMode: previous?.teachingMode ?? preset?.teachingMode ?? 'open',
-    refereeEnabled: previous?.refereeEnabled ?? preset?.refereeEnabled ?? false,
-    kbIds: previous?.kbIds,
-    customSystemPrompt,
-    courseName: previous?.courseName?.trim() || ASSISTANT_LIB_GUIDE_COURSE_TITLE,
-    isGuideClassroom: true,
-    syllabus,
-    lessonPlan: previous?.lessonPlan?.trim() || formatSyllabusMarkdown(syllabus),
-    autoSpeak: previous?.autoSpeak ?? true,
-    ttsEngine: previous?.ttsEngine ?? 'edge',
-    modelId: previous?.modelId,
-  })
+  return assistantLibSessionMetadataPatch(metadata, buildAssistantLibGuideCourseSessionFields(previous))
 }
 
 async function ensureGuideClassroomSession(options: {
@@ -179,7 +156,8 @@ async function ensureGuideClassroomSession(options: {
     const needsSeed =
       !meta?.isGuideClassroom ||
       !meta.syllabus?.chapters.length ||
-      !meta.customSystemPrompt?.trim()
+      !meta.customSystemPrompt?.trim() ||
+      assistantLibGuideCourseContentStale(meta.syllabus)
     if (!needsSeed) return existing
     const updated = await window.api.invoke(IpcChannel.SessionUpdate, {
       id: existing.id,

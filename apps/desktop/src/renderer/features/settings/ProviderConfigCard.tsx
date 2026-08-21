@@ -140,6 +140,9 @@ export function ProviderConfigCard({ preset, provider, panel }: Props) {
                   )}
                   <span className="tm-provider-field-hint">{t('settings.providers.apiKey.multiKeyHint')}</span>
                 </div>
+                {preset.id === 'deepseek' && !provider?.hasApiKey && !apiKey.trim() ? (
+                  <p className="tm-provider-hint">{t('settings.providers.apiKey.trialHint')}</p>
+                ) : null}
               </div>
             </div>
           )}

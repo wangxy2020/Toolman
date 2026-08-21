@@ -1,4 +1,5 @@
-import { parseLlmProxyChatBody, proxyChatCompletion } from '../../src/chat/llmProxyRequest'
+import { parseLlmProxyChatBody } from '../../src/chat/llmProxyRequest'
+import { proxyChatCompletion } from '../../src/chat/llmProxyServer'
 
 type NodeRes = {
   status: (code: number) => NodeRes
@@ -19,7 +20,7 @@ export default async function handler(
       res.status(400).json({ error: parsed.error })
       return
     }
-    const result = await proxyChatCompletion(parsed)
+    const result = await proxyChatCompletion({ ...parsed, stream: false })
     res.status(result.status).json(result.body)
   } catch (error) {
     res.status(500).json({

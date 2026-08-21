@@ -36,6 +36,21 @@ describe('classroom push delta', () => {
     expect(changes[0]?.payload).toMatchObject({ title: 'Go' })
   })
 
+  it('does not push the client-only builtin guide placeholder', () => {
+    const changes = selectDirtyClassroomChanges(
+      [
+        course({
+          id: '6e1d7001-0000-4000-8000-746f6f6c6d61',
+          courseName: 'Toolman使用说明',
+          isGuideClassroom: true,
+          updatedAt: 40,
+        }),
+      ],
+      { classroomStamps: {} },
+    )
+    expect(changes).toEqual([])
+  })
+
   it('emits deletes for stamped courses that disappeared', () => {
     const changes = selectDirtyClassroomChanges([], { classroomStamps: { c1: 10 } })
     expect(changes).toEqual([

@@ -62,7 +62,7 @@ function collectEnvSearchRoots(): string[] {
 function shouldLoadReleaseEnvKey(key: string, filePath: string): boolean {
   if (!filePath.endsWith('release.env')) return true
   if (PACKAGED_FORBIDDEN_DEV_ENV_PATTERN.test(key)) return false
-  return /^(TOOLMAN_FIREBASE_|TOOLMAN_AUTHING_|TOOLMAN_TENCENT_|TOOLMAN_WECHAT_|TOOLMAN_AUTH_BUILD_|TOOLMAN_BUILD_REGION|TOOLMAN_COMMUNITY_JWT_SECRET|TOOLMAN_P2P_)/.test(
+  return /^(TOOLMAN_FIREBASE_|TOOLMAN_AUTHING_|TOOLMAN_TENCENT_|TOOLMAN_WECHAT_|TOOLMAN_AUTH_BUILD_|TOOLMAN_BUILD_REGION|TOOLMAN_COMMUNITY_JWT_SECRET|TOOLMAN_TRIAL_DEEPSEEK_API_KEY|TOOLMAN_P2P_)/.test(
     key,
   )
 }

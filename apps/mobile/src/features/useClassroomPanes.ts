@@ -16,6 +16,7 @@ import {
 import { Alert } from 'react-native'
 import { requestDesktopSyllabusGenerate } from '../host/invokeDesktop'
 import { saveModulePrefs } from '../settings/prefs'
+import { saveClassroomGuideDismissed } from '../storage/classroomCourses'
 import { useMobileApp, type ChatSession } from '../state/MobileAppContext'
 import { pushClassroomChanges } from '../sync/mobileSync'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
@@ -215,7 +216,11 @@ export function ClassroomUiProvider({ children }: { children: ReactNode }) {
   }
 
   const handleDelete = (courseId: string) => {
-    setClassroomCourses(classroomCourses.filter((course) => course.id !== courseId))
+    const course = classroomCourses.find((item) => item.id === courseId)
+    if (course?.isGuideClassroom) {
+      void saveClassroomGuideDismissed(true)
+    }
+    setClassroomCourses(classroomCourses.filter((item) => item.id !== courseId))
     removeSession(courseId)
     setSettingsOpen(false)
   }

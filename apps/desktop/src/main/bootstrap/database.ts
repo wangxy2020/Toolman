@@ -24,6 +24,7 @@ import { cleanupMisplacedP2pMirrorKnowledgeBases } from '../services/p2p/p2p-kno
 import { migrateAllLegacyGroupSavedKnowledgeBases } from '../services/p2p/p2p-group-saved-knowledge-migration.service'
 import { migrateAllDefaultFolderKnowledgeBases } from '../services/knowledge-default-folder-kb.service'
 import { bootstrapToolmanUserDocumentLayout } from '../services/knowledge-folder.service'
+import { ensureAssistantLibGuideClassroomSeed } from '../services/assistant-lib-guide-seed.service'
 import { getLocalIdentityId } from '../services/local-identity'
 import {
   DEFAULT_WORKSPACE_ID,
@@ -63,6 +64,15 @@ export function bootstrapDatabase(): void {
   seedDefaultData(db, { identityId: localIdentityId, displayName: localDisplayName })
   ensureDevIdentityRow(db, localIdentityId, localDisplayName)
   ensureWorkspaceDefaults(db)
+  try {
+    ensureAssistantLibGuideClassroomSeed()
+  } catch (error) {
+    logStructured(
+      'classroom',
+      'warn',
+      `guide course seed skipped: ${toErrorMessage(error, String(error))}`,
+    )
+  }
   initAuthSessionStore()
   fireAndForget('bootstrap', (async () => {
     await syncAuthingUserProfileAfterLogin().catch(() => undefined)

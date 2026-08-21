@@ -107,6 +107,9 @@ function AgentSettingsPanel() {
     saveModel,
     runProbe,
     patchPrefs,
+    trialActive,
+    trialRemainingConversations,
+    trialRemainingTokens,
   } = useAgentSettingsPanel()
 
   return (
@@ -136,13 +139,20 @@ function AgentSettingsPanel() {
       </Section>
 
       <Section title="API 模型">
+        {trialActive ? (
+          <Text style={styles.hint}>
+            {trialRemainingConversations === 0 || trialRemainingTokens === 0
+              ? '试用额度已用完。请在下方填写自己的 API Key 后继续。密钥由你自己保管，试用通道不会显示或复制平台密钥。'
+              : `未填写密钥时使用试用模型 DeepSeek V4 Flash。硬顶：每月 20 万 token 或 50 次对话；速率：每分钟 3 次。本月剩余 ${trialRemainingConversations ?? '…'} 次对话 · ${trialRemainingTokens ?? '…'} token。试用密钥由程序托管，不可查看或复制。`}
+          </Text>
+        ) : null}
         <Field label="Base URL" value={baseUrl} onChangeText={setBaseUrl} />
         <Field
           label="API Key"
           value={apiKey}
           onChangeText={setApiKey}
           secureTextEntry={!showApiKey}
-          placeholder="API 密钥"
+          placeholder={trialActive ? '选填；留空则继续使用试用通道' : 'API 密钥'}
           right={
             <>
               <Pressable

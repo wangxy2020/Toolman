@@ -112,9 +112,8 @@ export function applyClassroomSettingsDraft(
   }
 }
 
-export function classroomDeleteError(isDefault: boolean, isGuide: boolean): string | null {
+export function classroomDeleteError(isDefault: boolean, _isGuide = false): string | null {
   if (isDefault) return '默认课程不可删除。'
-  if (isGuide) return 'Toolman使用说明课程不可删除。'
   return null
 }
 

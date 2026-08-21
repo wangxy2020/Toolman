@@ -1,6 +1,8 @@
 import type { ModelConfig } from '../state/MobileAppContext'
 import { normalizeChatBaseUrl } from '../settings/provider-presets'
 import { buildApiAuthHeaders } from './apiHeaders'
+import { completeChatOnce } from './completeChatOnce'
+import { shouldUseTrialLlm } from './trialLlm'
 
 export type ModelProbeResult = {
   ok: boolean
@@ -40,6 +42,18 @@ function authHint(status: number, detail: string): string {
  * a 1-token chat ping (do not use GET /models; Moonshot listing is slow).
  */
 export async function probeModelApi(config: ModelConfig): Promise<ModelProbeResult> {
+  if (shouldUseTrialLlm(config)) {
+    const started = Date.now()
+    const result = await completeChatOnce({
+      config,
+      messages: [{ role: 'user', content: 'ping' }],
+    })
+    if (result.ok) {
+      return { ok: true, message: `试用通道正常 (${Date.now() - started}ms) · deepseek-v4-flash` }
+    }
+    return { ok: false, message: result.message }
+  }
+
   const auth = buildApiAuthHeaders(config.apiKey)
   if (!auth.ok) {
     return { ok: false, message: auth.message }

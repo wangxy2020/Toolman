@@ -28,8 +28,11 @@ pnpm release:print-env
 | 国内登录 | `TOOLMAN_AUTHING_APP_ID`、`TOOLMAN_AUTHING_APP_SECRET`、`TOOLMAN_AUTHING_APP_HOST` |
 | 国际登录（global 包） | `TOOLMAN_FIREBASE_API_KEY`、`TOOLMAN_FIREBASE_AUTH_DOMAIN`、`TOOLMAN_FIREBASE_PROJECT_ID` |
 | P2P / WAN（二选一） | **Xirsys（推荐）** `TOOLMAN_P2P_XIRSYS_IDENT` + `SECRET` + `CHANNEL`；或 **静态 TURN** `TOOLMAN_P2P_TURN_URL` + `USERNAME` + `CREDENTIAL` |
+| 试用 LLM（可选） | `TOOLMAN_TRIAL_DEEPSEEK_API_KEY`（桌面发行包内未填用户密钥时走 DeepSeek V4 Flash） |
 
-可选：`TOOLMAN_AUTH_BUILD_REGION=global`、`TOOLMAN_COMMUNITY_JWT_SECRET`、Xirsys 的 `TOOLMAN_P2P_XIRSYS_PATH`。
+可选：`TOOLMAN_AUTH_BUILD_REGION=global`、`TOOLMAN_COMMUNITY_JWT_SECRET`、`TOOLMAN_TRIAL_DEEPSEEK_API_KEY`、Xirsys 的 `TOOLMAN_P2P_XIRSYS_PATH`。
+
+网页版 / 移动端试用**不会**读 GitHub Secrets。同一密钥还需配到 **Vercel → Environment Variables → `TOOLMAN_TRIAL_DEEPSEEK_API_KEY`**（`www.toolman.work` 的 `/api/llm/chat`）。不要加 `EXPO_PUBLIC_` 前缀。
 
 CI 发布构建会校验上述项；缺 P2P 或登录配置时 **Release Desktop 直接失败**，避免发出无法登录 / 无法建群的安装包。
 
@@ -190,6 +193,19 @@ CI 发布构建会校验上述项；缺 P2P 或登录配置时 **Release Desktop
 |------|------|
 | `TOOLMAN_DOCS_ROOT` | 可选；文档/文件夹验证脚本 |
 
+### 试用 LLM（DeepSeek V4 Flash）
+
+未填写用户自己的 API Key 时走试用通道。密钥**不入库**、不出现在设置 UI。
+
+| 存放位置 | 变量 | 谁在用 |
+|----------|------|--------|
+| GitHub Actions Secret **`TOOLMAN_RELEASE_ENV`** | `TOOLMAN_TRIAL_DEEPSEEK_API_KEY=…` 作为其中一行 | 桌面 DMG / Portable（烘焙进 `release.env`） |
+| Vercel 项目 Environment Variables | 同名 `TOOLMAN_TRIAL_DEEPSEEK_API_KEY` | `www.toolman.work` 与手机试用（`/api/llm/chat`） |
+| 本地 `.env.local` | 同名 | `pnpm dev:p2p:a`；`pnpm release:print-env` 会把它打进 GitHub Secret 预览 |
+| 本地 `apps/mobile/.env` | 同名，**禁止** `EXPO_PUBLIC_` | 本地 Expo 网页 `/api/llm/chat` |
+
+更新 GitHub Secret：把密钥写入根目录 `.env.local` 后执行 `pnpm release:print-env`，将输出整段粘贴覆盖 **Settings → Secrets and variables → Actions → `TOOLMAN_RELEASE_ENV`**。缺此项时发行包仍可构建，但桌面试用通道会提示填写自己的 Key。
+
 ---
 
 ## Community Hub — `COMMUNITY_HUB_*`
@@ -232,6 +248,7 @@ CI 发布构建会校验上述项；缺 P2P 或登录配置时 **Release Desktop
 - [ ] Firebase / Authing 至少一条路径已配置
 - [ ] 官方 Hub URL 指向 production/staging 而非 `127.0.0.1`
 - [ ] TURN credentials 已注入（WAN 承诺 D2）
+- [ ] `TOOLMAN_TRIAL_DEEPSEEK_API_KEY` 已在 GitHub `TOOLMAN_RELEASE_ENV` 与 Vercel 各配一份（试用通道）
 - [ ] 代码签名 + notarization（macOS）完成
 
 ---

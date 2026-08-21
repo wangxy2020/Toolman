@@ -4,6 +4,7 @@ import {
   assistantLibSessionMetadataPatch,
   getAssistantLibPreset,
   IpcChannel,
+  isAssistantLibAssistantName,
   type Assistant,
   type Session,
 } from '@toolman/shared'
@@ -29,7 +30,16 @@ export function useAssistantLibBootstrap(options: {
     session: Session | null
     removedDefaultIds: string[]
   } | null> => {
-    if (!workspaceId || !defaultModelId) {
+    if (!workspaceId) {
+      setError('请先配置工作区')
+      return null
+    }
+    const modelId =
+      defaultModelId ||
+      assistants.find((item) => isAssistantLibAssistantName(item.name))?.modelId ||
+      assistants.find((item) => item.modelId)?.modelId ||
+      null
+    if (!modelId) {
       setError('请先配置工作区与模型')
       return null
     }
@@ -37,7 +47,7 @@ export function useAssistantLibBootstrap(options: {
       setError(null)
       return await ensureAssistantLibClassroom({
         workspaceId,
-        modelId: defaultModelId,
+        modelId,
         assistants,
         sessions,
         onReady,

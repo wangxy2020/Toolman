@@ -11,11 +11,13 @@ import { rosterMemberFromSync } from '../sync/groupSyncMerge'
 import { recordP2pPathMetric } from './pathMetrics'
 import {
   MAILBOX_PULL_LIMIT,
+  forgetMailboxTarget,
   hubLooksLikeOwnerDesktop,
+  isMailboxMissingGroupError,
   mailboxHubs,
-  postJson,
   readMailboxSeq,
   rememberMailboxSeq,
+  tryPostJson,
   type MailboxSyncTarget,
 } from './mailboxSync-helpers'
 
@@ -27,6 +29,8 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
     deviceId: target.deviceId,
   })
   let lastError: unknown
+  let sawMissingGroup = false
+  let sawOtherError = false
   let applied = 0
   let pulledEnvelopes = false
   let appliedListings = false
@@ -34,7 +38,7 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
   const seenEnvelopes = new Set<string>()
   for (const hubUrl of mailboxHubs(target.hubUrl)) {
     try {
-      const raw = await postJson(hubUrl, P2P_MAILBOX_PULL_PATH, {
+      const posted = await tryPostJson(hubUrl, P2P_MAILBOX_PULL_PATH, {
         workspaceId: target.workspaceId,
         deviceId: target.deviceId,
         grant,
@@ -42,6 +46,16 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
         sinceSeq: readMailboxSeq(target.workspaceId, hubUrl),
         limit: MAILBOX_PULL_LIMIT,
       })
+      if (!posted.ok) {
+        lastError = new Error(posted.error)
+        if (posted.status === 404 && isMailboxMissingGroupError(posted.error)) {
+          sawMissingGroup = true
+        } else {
+          sawOtherError = true
+        }
+        continue
+      }
+      const raw = posted.data
       const parsed = P2pMailboxPullOutputSchema.safeParse(raw)
       if (!parsed.success) continue
       let hubMaxSeq = readMailboxSeq(target.workspaceId, hubUrl)
@@ -96,10 +110,15 @@ export async function pullMailboxOnce(target: MailboxSyncTarget): Promise<number
       if (pulledEnvelopes) break
     } catch (error) {
       lastError = error
+      sawOtherError = true
     }
   }
   if (applied > 0) {
     recordP2pPathMetric('mailboxPullApplied', Date.now() - started)
+  }
+  if (!pulledEnvelopes && sawMissingGroup && !sawOtherError) {
+    forgetMailboxTarget(target.workspaceId)
+    return 0
   }
   if (!pulledEnvelopes && lastError) throw lastError
   return hasMore ? Math.max(applied, MAILBOX_PULL_LIMIT) : applied

@@ -118,12 +118,53 @@ export function persistTarget(target: MailboxSyncTarget): void {
   }
 }
 
+export function unpersistMailboxTarget(workspaceId: string): void {
+  try {
+    const next = readPersistedTargets().filter((item) => item.workspaceId !== workspaceId)
+    globalThis.localStorage?.setItem(scopedStorageKey(PERSIST_KEY), JSON.stringify(next))
+  } catch {
+    // ignore
+  }
+}
+
+export function stopMailboxTarget(workspaceId: string): void {
+  const timer = mailboxTimers.get(workspaceId)
+  if (timer) clearInterval(timer)
+  mailboxTimers.delete(workspaceId)
+  mailboxTargets.delete(workspaceId)
+}
+
+export function forgetMailboxTarget(workspaceId: string): void {
+  stopMailboxTarget(workspaceId)
+  unpersistMailboxTarget(workspaceId)
+}
+
 export function hubLooksLikeOwnerDesktop(hubUrl: string): boolean {
   const host = hostnameOfBaseUrl(hubUrl)
   return !isOfficialCommunityHubHost(host) && isPrivateOrLoopbackHostname(host)
 }
 
-export async function postJson(hubUrl: string, path: string, body: unknown): Promise<unknown> {
+export const MAILBOX_MISSING_GROUP_ERROR = '群组不存在'
+
+export function isMailboxMissingGroupError(error: unknown): boolean {
+  const message =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : ''
+  return message === MAILBOX_MISSING_GROUP_ERROR
+}
+
+export type MailboxPostResult =
+  | { ok: true; data: unknown }
+  | { ok: false; status: number; error: string }
+
+export async function tryPostJson(
+  hubUrl: string,
+  path: string,
+  body: unknown,
+): Promise<MailboxPostResult> {
   const res = await boundFetch(`${hubUrl.replace(/\/+$/, '')}${path}`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -135,12 +176,18 @@ export async function postJson(hubUrl: string, path: string, body: unknown): Pro
       json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
         ? json.error
         : `mailbox ${path} failed (${res.status})`
-    throw new Error(error)
+    return { ok: false, status: res.status, error }
   }
   if (json && typeof json === 'object' && 'data' in json) {
-    return (json as { data: unknown }).data
+    return { ok: true, data: (json as { data: unknown }).data }
   }
-  return json
+  return { ok: true, data: json }
+}
+
+export async function postJson(hubUrl: string, path: string, body: unknown): Promise<unknown> {
+  const result = await tryPostJson(hubUrl, path, body)
+  if (!result.ok) throw new Error(result.error)
+  return result.data
 }
 
 /** Workspace mailbox lives on the owner's Sync Hub, never hub.toolman.app or :3721 catalog. */

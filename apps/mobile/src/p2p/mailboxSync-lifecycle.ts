@@ -14,6 +14,7 @@ import {
   persistTarget,
   postJson,
   readPersistedTargets,
+  stopMailboxTarget,
   type MailboxSyncTarget,
 } from './mailboxSync-helpers'
 import { drainMailbox } from './mailboxSync-pull'
@@ -104,8 +105,8 @@ export function startMailboxSync(target: MailboxSyncTarget): void {
       mailboxPullInFlight.delete(done)
     })
   }
-  tick()
   mailboxTimers.set(target.workspaceId, setInterval(tick, 2_000))
+  tick()
 }
 
 export function resumePersistedMailboxSync(deviceId: string): void {
@@ -148,10 +149,7 @@ export function patchMailboxOwnerDevice(
 }
 
 export function stopMailboxSync(workspaceId: string): void {
-  const timer = mailboxTimers.get(workspaceId)
-  if (timer) clearInterval(timer)
-  mailboxTimers.delete(workspaceId)
-  mailboxTargets.delete(workspaceId)
+  stopMailboxTarget(workspaceId)
 }
 
 export function stopAllMailboxSync(): void {

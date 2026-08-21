@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bake release auth/community/P2P env into apps/desktop/resources/release.env
+ * Bake release auth/community/P2P/trial-LLM env into apps/desktop/resources/release.env
  * from .env.local, .env.p2p.turn, and/or process environment (CI secrets).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'

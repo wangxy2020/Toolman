@@ -1,4 +1,5 @@
 import {
+  ASSISTANT_LIB_GUIDE_COURSE_CLIENT_ID,
   ClassroomSessionSyncPayloadSchema,
   type SyncChange,
 } from '@toolman/shared'
@@ -50,6 +51,7 @@ export function selectDirtyClassroomChanges(
   const changes: SyncChange[] = []
   const live = new Set(courses.map((course) => course.id))
   for (const course of courses) {
+    if (course.id === ASSISTANT_LIB_GUIDE_COURSE_CLIENT_ID) continue
     if (state.classroomStamps[course.id] === course.updatedAt) continue
     const change = courseToChange(course)
     if (change) changes.push(change)

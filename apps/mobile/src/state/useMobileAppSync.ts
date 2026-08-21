@@ -18,6 +18,8 @@ import {
   EMPTY_MOBILE_SYNC_STATE,
   type MobileSyncState,
 } from '../sync/syncState'
+import { loadClassroomGuideDismissed } from '../storage/classroomCourses'
+import { ensureMobileGuideClassroomCourses } from '../features/guideClassroomEnsure'
 import type { MobileClassroomCourse } from '../sync/classroomSyncMerge'
 import type { AuthSession, ChatSession, MobileAgent, MobileSyncReason, SyncStatus } from './MobileAppContext'
 import type { AgentChatScope } from '../chat/agentScopes'
@@ -124,7 +126,7 @@ export function useMobileAppSync(input: {
           setNotes(discarded.notes.notes)
           setDeletedNotes(discarded.notes.deletedNotes)
           setKnowledgeMeta([])
-          setClassroomCourses([])
+          setClassroomCourses(ensureMobileGuideClassroomCourses([], await loadClassroomGuideDismissed()))
           setSyncCursor(null)
           setDesktopHostsOnline(0)
           setSyncStatus('offline')
@@ -149,7 +151,12 @@ export function useMobileAppSync(input: {
       setNotes(applied.notes)
       setDeletedNotes(applied.deletedNotes)
       setKnowledgeMeta(applied.knowledgeMeta)
-      setClassroomCourses(applied.classroomCourses)
+      setClassroomCourses(
+        ensureMobileGuideClassroomCourses(
+          applied.classroomCourses,
+          await loadClassroomGuideDismissed(),
+        ),
+      )
       if (applied.discardedForeign) {
         setSyncCursor(null)
         setDesktopHostsOnline(0)
