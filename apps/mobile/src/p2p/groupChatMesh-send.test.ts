@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const { sendEventsJson, putMailboxProposal, getMailboxTarget } = vi.hoisted(() => ({
+vi.mock('./session', () => ({
+  hasLiveSession: vi.fn(() => true),
   sendEventsJson: vi.fn(async () => {}),
-  putMailboxProposal: vi.fn(async () => {}),
+}))
+
+vi.mock('./mailboxSync', () => ({
   getMailboxTarget: vi.fn(() => ({
     hubUrl: 'http://127.0.0.1:17890',
     workspaceId: 'ws-a',
@@ -10,16 +13,7 @@ const { sendEventsJson, putMailboxProposal, getMailboxTarget } = vi.hoisted(() =
     workspaceKey: new Uint8Array(32),
     ownerDeviceId: 'owner-a',
   })),
-}))
-
-vi.mock('./session', () => ({
-  hasLiveSession: vi.fn(() => true),
-  sendEventsJson,
-}))
-
-vi.mock('./mailboxSync', () => ({
-  getMailboxTarget: () => getMailboxTarget(),
-  putMailboxProposal,
+  putMailboxProposal: vi.fn(async () => {}),
 }))
 
 vi.mock('./mailboxBootstrap', () => ({
@@ -30,12 +24,18 @@ vi.mock('./deviceKeys', () => ({
   signDevicePayload: vi.fn(async () => 'sig'),
 }))
 
+vi.mock('./deviceKind', () => ({
+  localP2pClientDeviceKind: vi.fn(() => 'desktop'),
+}))
+
+import { sendEventsJson } from './session'
+import { putMailboxProposal } from './mailboxSync'
 import { sendGroupChatOverMesh } from './groupChatMesh-send'
 
 describe('sendGroupChatOverMesh', () => {
   it('puts mailbox proposals for web clients even when a live session exists', async () => {
-    sendEventsJson.mockClear()
-    putMailboxProposal.mockClear()
+    vi.mocked(sendEventsJson).mockClear()
+    vi.mocked(putMailboxProposal).mockClear()
     const message = await sendGroupChatOverMesh({
       workspaceId: 'ws-a',
       senderMemberId: 'm-b',
@@ -49,8 +49,8 @@ describe('sendGroupChatOverMesh', () => {
   })
 
   it('sends over mesh for desktop peers when a live session exists', async () => {
-    sendEventsJson.mockClear()
-    putMailboxProposal.mockClear()
+    vi.mocked(sendEventsJson).mockClear()
+    vi.mocked(putMailboxProposal).mockClear()
     await sendGroupChatOverMesh({
       workspaceId: 'ws-a',
       senderMemberId: 'm-a',
