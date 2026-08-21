@@ -1,6 +1,6 @@
 export const communityPageHubZhCN = {
   settings: '社区设置',
-  settingsSubtitle: 'Community Hub 连接与资讯源配置',
+  settingsSubtitle: '本地 Hub、RSS 资讯源与联邦 Peering',
   settingsNavAria: '社区设置分类',
   refresh: '刷新',
   tabs: { hub: 'Hub 服务', federation: '联邦 Peering', news: '资讯源' },
@@ -21,8 +21,8 @@ export const communityPageHubZhCN = {
     unavailable: '不可用',
     disconnected: '未连接',
     loadFailed: '加载 Hub 状态失败',
-    remoteHint: '已连接远程 Hub（企业版 / 网络版可选）。联邦目录与 P2P 资源同步在社区版默认开启。',
-    localHint: '社区版默认本地 Hub + P2P 联邦。双开 dev:p2p 时可共享 Hub 数据目录；跨实例资源通过 libp2p 联邦同步。',
+    remoteHint: '资讯 RSS 由当前 Hub 本地拉取，不走联邦中心。留言与市场目录由桌面端 P2P 联邦同步。',
+    localHint: '资讯 RSS 由本地 Hub 拉取，不依赖联邦。留言与市场资源通过桌面 libp2p / Hub peering 共享；网页和手机写入本 Hub 后由桌面联邦出去。',
   },
   panelRefresh: '刷新',
   sort: { createdAt: '创建时间', size: '大小', name: '名称' },
@@ -47,8 +47,8 @@ export const communityPageHubZhCN = {
     submitFailed: '举报失败',
   },
   panels: {
-    news: { title: '资讯', subtitle: '查看社区动态、更新公告与 RSS 拉取文章', publish: '发布资讯', rss: 'RSS 源', empty: '暂无资讯文章', loading: '加载资讯…' },
-    messages: { title: '留言板', subtitle: '浏览社区留言与互动讨论', publish: '发布留言', empty: '暂无留言，点击右上角发布第一条留言' },
+    news: { title: '资讯', subtitle: '本机 Hub 拉取的 RSS 文章，不走联邦中心', publish: '发布资讯', rss: 'RSS 源', empty: '暂无资讯文章', loading: '加载资讯…' },
+    messages: { title: '留言板', subtitle: '网页/手机写入桌面 Hub 后由 P2P 联邦同步', publish: '发布留言', empty: '暂无留言，点击右上角发布第一条留言' },
     mcp: { title: 'MCP 市场', subtitle: '探索社区推荐的 MCP 服务器与工具集成', publish: '发布 MCP' },
     skills: { title: 'Skills 市场', subtitle: '发现与安装社区贡献的 Agent Skills', publish: '发布 Skill' },
     workflow: { title: '工作流市场', subtitle: '浏览与导入社区共享的自动化工作流', publish: '发布工作流' },
@@ -64,7 +64,7 @@ export const communityPageHubZhCN = {
   typeLabel: '类型：',
   versionLabel: '版本：',
   hubOffline: '社区 Hub 离线',
-  hubOfflineHint: '当前为本地缓存只读模式，发布、点赞等写操作暂不可用。恢复网络后将自动重新连接官方 Hub。',
+  hubOfflineHint: '当前为本地缓存只读。请启动本机桌面社区 Hub。',
   federation: {
     title: 'F1 Hub Peering',
     refresh: '刷新',

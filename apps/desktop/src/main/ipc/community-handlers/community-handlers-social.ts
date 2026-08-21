@@ -53,7 +53,11 @@ export const communitySocialHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.CommunityCommentDelete]: communityHandler((input) => deleteComment(input)),
   [IpcChannel.CommunityCommentCount]: communityHandler((input) => countComments(input)),
 
-  [IpcChannel.CommunityBoardMessageList]: communityHandler((input) => listBoardMessages(input)),
+  [IpcChannel.CommunityBoardMessageList]: communityHandler(async (input) => {
+    const listed = await listBoardMessages(input)
+    for (const item of listed.items) syncCommunityBoardMessageToYjs(item)
+    return listed
+  }),
   [IpcChannel.CommunityBoardMessageCreate]: communityHandler(async (input) => {
     const message = await createBoardMessage(input)
     syncCommunityBoardMessageToYjs(message)

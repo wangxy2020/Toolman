@@ -7,8 +7,8 @@ export const communityPanelsEn = {
       mcp: { title: 'MCP market', hint: 'Explore recommended MCP servers and tool integrations.' },
       knowledge: { title: 'Knowledge market', hint: 'Browse public knowledge bases and document collections.' },
       tasks: { title: 'Task market', hint: 'Browse and take on community tasks.' },
-      news: { title: 'News', hint: 'Community updates, announcements, and events.' },
-      messages: { title: 'Messages', hint: 'Browse community posts and discussions.' },
+      news: { title: 'News', hint: 'RSS articles fetched by this Hub, not federation.' },
+      messages: { title: 'Messages', hint: 'Web/phone write the desktop Hub; desktop P2P federates posts.' },
       management: {
         title: 'Community admin',
         hint: 'Scan online resources, handle reports, appoint admins, and ban abusive users.',

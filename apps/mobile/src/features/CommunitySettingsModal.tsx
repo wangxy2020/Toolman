@@ -176,8 +176,8 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
           <Toggle label="未登录时只读" value={guestReadOnly} onChange={setGuestReadOnly} />
           <Text style={styles.hint}>
             {hubBaseUrl.trim()
-              ? '已连接远程 Hub。联邦目录与资讯源走当前填写的 Hub 地址。'
-              : '社区版默认连接本地 Hub。双开或跨设备时请填写可达的 Hub 地址。'}
+              ? '已填写 Hub 地址。资讯 RSS 由该 Hub 本地拉取，不走联邦。留言与市场目录由桌面端 P2P 联邦同步；网页/手机写入该 Hub 后由桌面对外共享。'
+              : '资讯 RSS 由本机桌面 Hub 拉取，不依赖联邦。留言与资源共享走桌面 P2P 联邦；网页/手机连上该 Hub 即可发布。'}
           </Text>
         </>
       ) : null}

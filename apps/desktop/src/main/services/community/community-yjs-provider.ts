@@ -35,6 +35,7 @@ const ALL_DOMAINS: CommunityYjsDomain[] = ['profiles', 'board', 'comments', 'tas
 
 let started = false
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let hubBoardSyncTimer: ReturnType<typeof setInterval> | null = null
 let unsubscribeDocListeners: Array<() => void> = []
 let lastError: string | null = null
 
@@ -109,6 +110,15 @@ function pollPubsubInbox(): void {
   }
 }
 
+function syncHubBoardMessagesToYjs(): void {
+  void import('./community-ipc.board.facade')
+    .then(async ({ listBoardMessages }) => {
+      const listed = await listBoardMessages({ limit: 50 })
+      for (const item of listed.items) syncCommunityBoardMessageToYjs(item)
+    })
+    .catch(() => undefined)
+}
+
 function attachDomainListeners(): void {
   for (const domain of ALL_DOMAINS) {
     const stopDoc = observeCommunityDoc(domain, (update, origin) => {
@@ -159,6 +169,8 @@ export function startCommunityYjsProvider(): void {
   pollTimer = setInterval(() => {
     pollPubsubInbox()
   }, 2_000)
+  syncHubBoardMessagesToYjs()
+  hubBoardSyncTimer = setInterval(syncHubBoardMessagesToYjs, 15_000)
 
   recordDiagnosticEvent('community-yjs', 'info', 'provider started')
 }
@@ -186,6 +198,10 @@ export function stopCommunityYjsProvider(): void {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (hubBoardSyncTimer) {
+    clearInterval(hubBoardSyncTimer)
+    hubBoardSyncTimer = null
   }
 
   for (const stop of unsubscribeDocListeners) {

@@ -37,6 +37,10 @@ import {
 } from '../p2p-member-shared'
 import { P2pMemberLimitError } from './errors'
 import { publishP2pGroupSyncChange } from '../../group-mobile-sync'
+import {
+  mailboxSessionDeviceKind,
+  supersedeStaleMailboxFirstDevices,
+} from '../p2p-mailbox-supersede'
 
 function resolveRemoteMemberIdentityId(member: P2pMember): string {
   if (member.identityId) return member.identityId
@@ -48,6 +52,26 @@ function reconcileAfterRemoteJoin(workspaceId: string): void {
   void import('../p2p-member-reconcile-owner')
     .then((module) => module.reconcileOwnerWorkspaceMembers(workspaceId, { immediate: true }))
     .catch(() => undefined)
+}
+
+function supersedeMailboxFirstJoiner(
+  workspaceId: string,
+  deviceId: string,
+  deviceKind?: P2pJoinDeviceKind,
+): void {
+  const keepKind = mailboxSessionDeviceKind(deviceId, deviceKind)
+  if (!isMailboxFirstP2pClient(deviceId, keepKind)) return
+  if (
+    supersedeStaleMailboxFirstDevices({
+      workspaceId,
+      keepDeviceId: deviceId,
+      keepKind,
+    }) === 0
+  ) {
+    return
+  }
+  const workspaceRow = getWorkspaceRepo().findById(workspaceId)
+  if (workspaceRow) publishP2pGroupSyncChange(toWorkspaceDto(workspaceRow))
 }
 
 export async function activateMemberAfterOwnerTrust(
@@ -286,6 +310,7 @@ export async function applyRemoteMemberJoin(
       getMemberRepo().update(patch)
       broadcastP2pMemberChanged({ workspaceId: payload.workspaceId })
     }
+    supersedeMailboxFirstJoiner(payload.workspaceId, peerDeviceId, payload.deviceKind)
     reconcileAfterRemoteJoin(payload.workspaceId)
     return
   }
@@ -307,6 +332,7 @@ export async function applyRemoteMemberJoin(
   }
 
   upsertPendingMember()
+  supersedeMailboxFirstJoiner(payload.workspaceId, peerDeviceId, payload.deviceKind)
   const workspaceRow = getWorkspaceRepo().findById(payload.workspaceId)
   if (workspaceRow) publishP2pGroupSyncChange(toWorkspaceDto(workspaceRow))
   if (!options?.skipTrustPrompt) {

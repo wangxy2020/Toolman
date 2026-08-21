@@ -5,9 +5,9 @@ export const TOOLMAN_BUILD_PROVENANCE = {
   "copyrightNotice": "Copyright (C) 2024–2026 Toolman Contributors",
   "license": "AGPL-3.0-or-later",
   "repository": "https://github.com/wangxy2020/Toolman",
-  "gitCommit": "9d90538c719b2760f23e094df6adbd141f27f724",
+  "gitCommit": "7976dc29bde61ab0ddbd564da72e5064c0ff7c5f",
   "gitDirty": false,
-  "builtAt": "2026-08-20T17:26:49.540Z",
-  "buildId": "544f776cd0805777",
-  "buildFingerprint": "544f776cd0805777cad6a95b5874989c3ca43052c7f059fce8e2555cf8e40b03"
+  "builtAt": "2026-08-21T05:13:35.035Z",
+  "buildId": "d0521f1d3d6df3c6",
+  "buildFingerprint": "d0521f1d3d6df3c63551b46561f87ed118a20d1615e2b75ce91e1c04e4186548"
 } as const

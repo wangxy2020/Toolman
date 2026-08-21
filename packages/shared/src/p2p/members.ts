@@ -8,6 +8,8 @@ export type IdentityMemberLike = {
   role?: string
   displayName?: string
   online?: boolean
+  deviceKind?: P2pClientDeviceKind | null
+  lastSeenAt?: number | Date | null
 }
 
 export type PersonSelfRef = {
@@ -67,6 +69,39 @@ export function inferMemberDeviceKind(
   if (deviceId.startsWith('web-')) return 'web'
   if (deviceId.startsWith('mobile-')) return 'mobile'
   return 'desktop'
+}
+
+export function parseDeviceKindFromCertJson(
+  certJson?: string | null,
+): P2pClientDeviceKind | undefined {
+  if (!certJson?.trim()) return undefined
+  try {
+    const parsed = JSON.parse(certJson) as { deviceKind?: unknown }
+    return parseP2pClientDeviceKind(parsed.deviceKind)
+  } catch {
+    return undefined
+  }
+}
+
+export type MailboxFirstSibling = {
+  id?: string
+  deviceId: string
+  status?: string
+  deviceKind?: P2pClientDeviceKind | null
+}
+
+/** One visible web/phone per person; never collapse desktop peers. */
+export function mailboxFirstSiblingsToLeave(input: {
+  keepDeviceId: string
+  keepKind: P2pClientDeviceKind
+  siblings: MailboxFirstSibling[]
+}): MailboxFirstSibling[] {
+  if (input.keepKind === 'desktop') return []
+  return input.siblings.filter((sibling) => {
+    if (sibling.deviceId === input.keepDeviceId) return false
+    if (!isVisibleMailboxMemberStatus(sibling.status)) return false
+    return inferMemberDeviceKind(sibling.deviceId, sibling.deviceKind) === input.keepKind
+  })
 }
 
 /** Phone / web clients speak the owner's Sync Hub mailbox API (Matrix CS analogue).
@@ -292,17 +327,41 @@ export function groupVisibleMembersByPerson<T extends IdentityMemberLike>(
     (member) => !member.status || member.status === 'active' || member.status === 'invited',
   )
   return groupMembersByIdentity(visible).map(({ identityId, devices }) => {
-    const primary = devices.find((item) => item.status === 'active') ?? devices[0]!
+    const collapsed = collapseMailboxFirstDuplicateDevices(devices)
+    const primary = collapsed.find((item) => item.status === 'active') ?? collapsed[0]!
     return {
       identityId,
-      devices,
-      displayName: resolvePeerMemberDisplayName(...devices.map((item) => item.displayName)),
-      role: resolveWorkspacePersonRole(devices, owner),
-      online: devices.some((item) => item.online),
-      status: devices.some((item) => item.status === 'active') ? 'active' : 'invited',
+      devices: collapsed,
+      displayName: resolvePeerMemberDisplayName(...collapsed.map((item) => item.displayName)),
+      role: resolveWorkspacePersonRole(collapsed, owner),
+      online: collapsed.some((item) => item.online),
+      status: collapsed.some((item) => item.status === 'active') ? 'active' : 'invited',
       primary,
     }
   })
+}
+
+function collapseMailboxFirstDuplicateDevices<T extends IdentityMemberLike>(devices: T[]): T[] {
+  const chosen = new Map<string, T>()
+  for (const device of devices) {
+    const kind = inferMemberDeviceKind(device.deviceId, device.deviceKind)
+    const key = kind === 'desktop' ? `desktop:${device.deviceId}` : kind
+    const existing = chosen.get(key)
+    if (!existing) {
+      chosen.set(key, device)
+      continue
+    }
+    const score = (item: T) =>
+      (item.online ? 1_000_000_000 : 0) + lastSeenMs(item)
+    if (score(device) >= score(existing)) chosen.set(key, device)
+  }
+  return [...chosen.values()]
+}
+
+function lastSeenMs(item: IdentityMemberLike): number {
+  const value = item.lastSeenAt
+  if (value instanceof Date) return value.getTime()
+  return typeof value === 'number' ? value : 0
 }
 
 /** A second device of an existing person inherits that person's role; it does not join as a new seat. */

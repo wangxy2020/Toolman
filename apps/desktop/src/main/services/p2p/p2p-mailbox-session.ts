@@ -5,6 +5,7 @@ import {
   canForwardWorkspaceAsGateway,
   inferMemberDeviceKind,
   isBuiltinDefaultP2pGroupName,
+  isMailboxFirstP2pClient,
   isUsableMemberIdentityId,
   openMailboxPlaintext,
   parseP2pClientDeviceKind,
@@ -43,6 +44,10 @@ import { logP2pPathMetrics, recordP2pPathMetric } from './p2p-path-metrics'
 import { memberVisible, mailboxInviteMatchesWorkspace } from './p2p-mailbox-auth'
 import { applyIncomingMailbox } from './p2p-mailbox-handlers'
 import { resolvePersonalMailboxSession } from '../personal-device-pairing.service'
+import {
+  mailboxSessionDeviceKind,
+  supersedeStaleMailboxFirstDevices,
+} from './p2p-mailbox-supersede'
 
 function certJsonWithDeviceKind(
   existing: string | null | undefined,
@@ -275,6 +280,16 @@ export async function handleMailboxSession(
       getMemberRepo().update(patch)
       publishP2pGroupSyncChange(toWorkspaceDto(workspace))
     }
+  }
+
+  const keepKind = mailboxSessionDeviceKind(input.deviceId, input.deviceKind)
+  if (isMailboxFirstP2pClient(input.deviceId, keepKind)) {
+    const left = supersedeStaleMailboxFirstDevices({
+      workspaceId: input.workspaceId,
+      keepDeviceId: input.deviceId,
+      keepKind,
+    })
+    if (left > 0) publishP2pGroupSyncChange(toWorkspaceDto(workspace))
   }
 
   const sessionMember = getMemberRepo().findByWorkspaceAndDevice(

@@ -9,6 +9,8 @@ import {
   identityIdForSiblingLookup,
   inferMemberDeviceKind,
   isMailboxFirstP2pClient,
+  mailboxFirstSiblingsToLeave,
+  parseDeviceKindFromCertJson,
   resolveMailboxSessionAdmission,
   mailboxSessionAuthDenied,
   shouldAcceptUnsignedMailboxFirstGroupChat,
@@ -76,6 +78,39 @@ describe('groupMembersByIdentity', () => {
     expect(collectPersonMemberIds(people[0]!.devices, { identityId: 'a' })).toEqual([
       'm-desk',
       'm-phone',
+    ])
+  })
+
+  it('collapses stale same-kind web devices under one person', () => {
+    const people = groupVisibleMembersByPerson([
+      {
+        identityId: 'b',
+        deviceId: 'web-old-1',
+        deviceKind: 'web',
+        status: 'active',
+        online: false,
+        lastSeenAt: 1,
+      },
+      {
+        identityId: 'b',
+        deviceId: 'web-new',
+        deviceKind: 'web',
+        status: 'active',
+        online: false,
+        lastSeenAt: 9,
+      },
+      {
+        identityId: 'b',
+        deviceId: 'desk-b',
+        deviceKind: 'desktop',
+        status: 'active',
+        online: true,
+      },
+    ])
+    expect(people).toHaveLength(1)
+    expect(people[0]?.devices.map((device) => device.deviceId).sort()).toEqual([
+      'desk-b',
+      'web-new',
     ])
   })
 
@@ -179,6 +214,28 @@ describe('groupMembersByIdentity', () => {
     expect(isMailboxFirstP2pClient('mobile-msdms50h-r336hh2e')).toBe(true)
     expect(isMailboxFirstP2pClient('web-abc')).toBe(true)
     expect(isMailboxFirstP2pClient('016c72ca-8be2-4fcc-aa5e-9d1e41919fb4')).toBe(false)
+    expect(parseDeviceKindFromCertJson('{"deviceKind":"web"}')).toBe('web')
+    expect(parseDeviceKindFromCertJson('nope')).toBeUndefined()
+    expect(
+      mailboxFirstSiblingsToLeave({
+        keepDeviceId: 'web-new',
+        keepKind: 'web',
+        siblings: [
+          { id: '1', deviceId: 'web-new', status: 'active', deviceKind: 'web' },
+          { id: '2', deviceId: 'old-uuid', status: 'active', deviceKind: 'web' },
+          { id: '3', deviceId: 'desk-a', status: 'active', deviceKind: 'desktop' },
+          { id: '4', deviceId: 'mobile-a', status: 'active', deviceKind: 'mobile' },
+          { id: '5', deviceId: 'web-left', status: 'left', deviceKind: 'web' },
+        ],
+      }).map((item) => item.deviceId),
+    ).toEqual(['old-uuid'])
+    expect(
+      mailboxFirstSiblingsToLeave({
+        keepDeviceId: 'desk-a',
+        keepKind: 'desktop',
+        siblings: [{ deviceId: 'desk-b', status: 'active', deviceKind: 'desktop' }],
+      }),
+    ).toEqual([])
     expect(resolveMailboxSessionAdmission({ existingStatus: 'active', hasActiveSibling: false })).toBe(
       'ok',
     )
