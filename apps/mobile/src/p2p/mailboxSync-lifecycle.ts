@@ -82,6 +82,12 @@ export function rememberMailboxTarget(target: MailboxSyncTarget): void {
   persistTarget(target)
 }
 
+const mailboxPullInFlight = new Set<Promise<unknown>>()
+
+export async function waitForMailboxPulls(): Promise<void> {
+  await Promise.allSettled([...mailboxPullInFlight])
+}
+
 export function startMailboxSync(target: MailboxSyncTarget): void {
   rememberMailboxTarget(target)
   if (mailboxTimers.has(target.workspaceId)) return
@@ -91,9 +97,11 @@ export function startMailboxSync(target: MailboxSyncTarget): void {
     if (!current || ticking) return
     ticking = true
     const done = drainMailbox(current)
+    mailboxPullInFlight.add(done)
     ignoreAsyncError(done, 'mailbox pull')
     void done.finally(() => {
       ticking = false
+      mailboxPullInFlight.delete(done)
     })
   }
   tick()

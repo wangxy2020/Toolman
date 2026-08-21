@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyWorkspaceWireEvents } from './groupChatMesh'
 import { subscribeMeshEvents } from './meshEvents'
 import {
@@ -10,6 +10,7 @@ import {
   resumePersistedMailboxSync,
   startMailboxSync,
   stopAllMailboxSync,
+  waitForMailboxPulls,
   isMailboxSyncRunning,
 } from './mailboxSync'
 
@@ -134,8 +135,21 @@ describe('mailbox hubs', () => {
 })
 
 describe('mailbox cursor', () => {
-  afterEach(() => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify({ data: { envelopes: [] } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+  })
+
+  afterEach(async () => {
     stopAllMailboxSync()
+    await waitForMailboxPulls()
     vi.unstubAllGlobals()
   })
 
