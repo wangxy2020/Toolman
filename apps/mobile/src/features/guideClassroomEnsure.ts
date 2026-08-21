@@ -1,7 +1,6 @@
 import {
   ASSISTANT_LIB_GUIDE_COURSE_CLIENT_ID,
   ASSISTANT_LIB_GUIDE_COURSE_PRESET_ID,
-  ASSISTANT_LIB_GUIDE_COURSE_TITLE,
   buildAssistantLibGuideCourseSessionFields,
   isAssistantLibGuideCourseLike,
 } from '@toolman/shared'
