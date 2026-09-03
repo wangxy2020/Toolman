@@ -37,7 +37,7 @@ export function humanizeCommunityFetchError(error: unknown): string {
     return error.message
   }
   if (isCommunityFetchNetworkError(error)) {
-    return '无法连接 Community Hub。请确认本机 sidecar 正在运行（双实例时先启动用户 A）。'
+    return '社区服务暂时不可用（Hub 未启动或网络中断）。程序将在后台自动重试，稍后刷新即可。'
   }
   return toErrorMessage(error, 'Community 请求失败')
 }

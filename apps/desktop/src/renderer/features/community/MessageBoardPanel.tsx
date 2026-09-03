@@ -116,7 +116,7 @@ export function MessageBoardPanel() {
           if (!requireRegistration('community_write')) return
           setShowPublish(true)
         }}
-        isEmpty={sortedItems.length === 0}
+        isEmpty={sortedItems.length === 0 && !board.error}
         emptyHint={t('communityPage.panels.messages.empty')}
       >
         <ul className="tm-kb-file-list">

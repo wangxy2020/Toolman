@@ -89,6 +89,21 @@ impl UserRepository {
         record.map(TryInto::try_into).transpose()
     }
 
+    /// Look up a user by their display name (case-insensitive).
+    /// Used by the WebFinger endpoint to resolve `acct:username@host` queries.
+    pub async fn find_by_display_name(
+        &self,
+        display_name: &str,
+    ) -> Result<Option<CommunityUser>, UserRepositoryError> {
+        let query = format!("{USER_SELECT} WHERE LOWER(display_name) = LOWER(?1) LIMIT 1");
+        let record = sqlx::query_as::<_, UserRecord>(&query)
+            .bind(display_name)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        record.map(TryInto::try_into).transpose()
+    }
+
     pub async fn find_or_create_by_identity_id(
         &self,
         identity_id: &str,

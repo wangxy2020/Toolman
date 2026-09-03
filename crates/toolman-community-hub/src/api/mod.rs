@@ -70,6 +70,10 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/api/v1/health", get(health::health))
+        // WebFinger at the standard path (RFC 7033).
+        // The handler also lives at /api/v1/federation/webfinger but canonical
+        // discovery uses /.well-known/webfinger.
+        .route("/.well-known/webfinger", get(federation::webfinger_well_known))
         .nest(
             "/api/v1",
             users::router()
@@ -451,7 +455,7 @@ mod tests {
         let sources = payload["data"]
             .as_array()
             .expect("sources array");
-        assert!(sources.len() >= 3);
+        assert!(sources.len() >= 4);
 
         let ids: Vec<_> = sources
             .iter()

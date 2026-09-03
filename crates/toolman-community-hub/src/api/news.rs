@@ -113,10 +113,8 @@ async fn delete_source(
 
 async fn fetch_source(
     State(state): State<AppState>,
-    AuthUser(user): AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<FetchSourceResult>>, ApiError> {
-    user.ensure_active().map_err(ApiError::from)?;
     let result = service(&state).fetch_source(&id).await?;
     Ok(Json(ApiResponse::ok(result)))
 }

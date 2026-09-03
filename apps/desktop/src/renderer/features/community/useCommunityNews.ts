@@ -51,7 +51,7 @@ export interface LoadCommunityNewsOptions {
 
 async function fetchEnabledNewsSources(
   mode: 'all-enabled' | 'needs-initial-fetch',
-): Promise<void> {
+): Promise<string[]> {
   const sources = await listCommunityNewsSources()
   const toFetch =
     mode === 'all-enabled'
@@ -60,11 +60,16 @@ async function fetchEnabledNewsSources(
           (source) => source.enabled && (!source.lastFetchedAt || source.lastError),
         )
 
-  if (toFetch.length === 0) return
+  if (toFetch.length === 0) return []
 
+  const errors: string[] = []
   for (const source of toFetch) {
-    await fetchCommunityNewsSource({ sourceId: source.id }).catch(() => undefined)
+    await fetchCommunityNewsSource({ sourceId: source.id }).catch((error) => {
+      errors.push(error instanceof Error ? error.message : String(error))
+    })
   }
+
+  return errors
 }
 
 export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
@@ -95,7 +100,11 @@ export function useCommunityNews(options: UseCommunityNewsOptions = {}) {
     setError(null)
     try {
       if (loadOptions?.fetchFeeds) {
-        await fetchEnabledNewsSources('all-enabled')
+        const feedErrors = await fetchEnabledNewsSources('all-enabled')
+        if (feedErrors.length > 0) {
+          // Keep showing any successfully cached articles, but surface the reason.
+          setError(formatNewsListError(formatCommunityHubError(feedErrors[0]!)))
+        }
       }
 
       const list = force

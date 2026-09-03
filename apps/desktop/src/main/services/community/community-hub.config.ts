@@ -22,6 +22,9 @@ function defaultHubConfig(): CommunityHubConfig {
   return {
     mode: 'local',
     federation: { enabled: true },
+    // Default to the official Toolman Hub as the upstream seed node so that new
+    // installations can discover peers and catalog entries without manual setup.
+    upstream: OFFICIAL_TOOLMAN_HUB_URL,
   }
 }
 

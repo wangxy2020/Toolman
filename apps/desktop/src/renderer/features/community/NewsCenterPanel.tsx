@@ -30,6 +30,9 @@ export function NewsCenterPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailArticleId, setDetailArticleId] = useState<string | null>(null)
   const [showSources, setShowSources] = useState(false)
+  // If the local cache is empty after the first load, proactively fetch RSS once.
+  // (Avoid requiring user login for the initial "read" flow.)
+  const [autoFetchTriggered, setAutoFetchTriggered] = useState(false)
   const comments = useCommunityCommentExpansion()
   const { sortField, sortAscending } = useCommunityListSortContext()
   const news = useCommunityNews({
@@ -51,6 +54,16 @@ export function NewsCenterPanel() {
     window.addEventListener(COMMUNITY_NEWS_SOURCES_CHANGED_EVENT, onSourcesChanged)
     return () => window.removeEventListener(COMMUNITY_NEWS_SOURCES_CHANGED_EVENT, onSourcesChanged)
   }, [news.load])
+
+  useEffect(() => {
+    if (autoFetchTriggered) return
+    if (news.loading) return
+    if (news.error) return
+    if (news.items.length > 0) return
+
+    setAutoFetchTriggered(true)
+    void news.load({ fetchFeeds: true })
+  }, [autoFetchTriggered, news.error, news.items.length, news.loading, news.load])
 
   const listItems = useMemo(
     () =>
@@ -86,7 +99,7 @@ export function NewsCenterPanel() {
             <span>{t('communityPage.panels.news.rss')}</span>
           </CommunityPanelSecondaryButton>
         }
-        isEmpty={listItems.length === 0}
+        isEmpty={listItems.length === 0 && !news.error}
         emptyHint={t('communityPage.panels.news.empty')}
       >
         <ul className="tm-kb-file-list">

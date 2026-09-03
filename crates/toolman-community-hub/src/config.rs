@@ -317,15 +317,27 @@ pub fn default_rss_sources() -> Vec<RssSourceSeed> {
             enabled: true,
             fetch_interval_minutes: 30,
         },
+        // xinhua-news was HTTP-only and often unreachable; replaced with SSPAI (少数派)
+        // which supports HTTPS and is reliably accessible.
         RssSourceSeed {
-            id: "xinhua-news".into(),
-            title: "新华网".into(),
-            feed_url: "http://www.xinhuanet.com/politics/news_politics.xml".into(),
-            site_url: "http://www.xinhuanet.com".into(),
-            category: "news".into(),
+            id: "sspai".into(),
+            title: "少数派".into(),
+            feed_url: "https://sspai.com/feed".into(),
+            site_url: "https://sspai.com".into(),
+            category: "tech".into(),
             language: "zh".into(),
             enabled: true,
-            fetch_interval_minutes: 30,
+            fetch_interval_minutes: 60,
+        },
+        RssSourceSeed {
+            id: "infoq-cn".into(),
+            title: "InfoQ 中文".into(),
+            feed_url: "https://www.infoq.cn/feed".into(),
+            site_url: "https://www.infoq.cn".into(),
+            category: "tech".into(),
+            language: "zh".into(),
+            enabled: true,
+            fetch_interval_minutes: 60,
         },
     ]
 }
@@ -337,6 +349,8 @@ pub const DEPRECATED_RSS_SOURCE_IDS: &[&str] = &[
     "zaobao",
     "wallstreetcn",
     "yicai",
+    // Replaced: HTTP-only, frequently unreachable.
+    "xinhua-news",
 ];
 
 fn seed_rss_sources(path: &Path) -> Result<(), ConfigError> {
@@ -399,7 +413,8 @@ mod tests {
 
         let raw = fs::read_to_string(&config.rss_sources_path).expect("read rss");
         let parsed: RssSourcesFile = serde_json::from_str(&raw).expect("parse rss");
-        assert_eq!(parsed.sources.len(), 3);
+        // OpenAI + 36kr + sspai + infoq-cn = 4 (xinhua-news replaced)
+        assert_eq!(parsed.sources.len(), 4);
 
         let _ = fs::remove_dir_all(&base);
     }

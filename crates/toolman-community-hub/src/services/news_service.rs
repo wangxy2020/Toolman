@@ -250,7 +250,13 @@ impl NewsService {
         }
     }
 
-    /// Pull enabled RSS sources that have never been fetched (e.g. after first install).
+    /// Pull enabled RSS sources on a best-effort schedule.
+    ///
+    /// The previous implementation only fetched never-before-seen sources.
+    /// If the first attempt failed, `last_fetched_at` was set (and `last_error` recorded),
+    /// which effectively locked the source into "never fetch again" for the lifetime
+    /// of the app session. We now retry based on `fetch_interval_minutes`
+    /// (and also retry sooner for failed sources).
     pub async fn bootstrap_fetch_unfetched_sources(&self) -> usize {
         let sources = match RssSourceRepository::new(self.pool.clone()).list().await {
             Ok(sources) => sources,
@@ -260,11 +266,34 @@ impl NewsService {
             }
         };
 
+        let now_ms = chrono::Utc::now().timestamp_millis();
         let mut fetched = 0usize;
         for source in sources {
-            if !source.enabled || source.last_fetched_at.is_some() {
+            if !source.enabled {
                 continue;
             }
+
+            let interval_minutes = source.fetch_interval_minutes.max(1);
+            let interval_ms = interval_minutes * 60_000;
+
+            let should_fetch = match source.last_fetched_at {
+                None => true,
+                Some(last_fetched_at) => {
+                    let age_ms = now_ms.saturating_sub(last_fetched_at);
+                    // If the last fetch failed, retry sooner (cap to avoid hot loops).
+                    if source.last_error.is_some() {
+                        let retry_cap_ms = 5 * 60_000; // 5 minutes
+                        age_ms >= interval_ms.min(retry_cap_ms)
+                    } else {
+                        age_ms >= interval_ms
+                    }
+                }
+            };
+
+            if !should_fetch {
+                continue;
+            }
+
             match self.fetch_source(&source.id).await {
                 Ok(result) => {
                     tracing::info!(
@@ -356,7 +385,6 @@ impl NewsService {
             .filter(|source| {
                 source.enabled
                     && source.last_fetched_at.is_some()
-                    && source.last_error.is_none()
             })
             .collect();
 

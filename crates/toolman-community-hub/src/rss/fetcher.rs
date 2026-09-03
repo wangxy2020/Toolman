@@ -32,24 +32,61 @@ pub enum RssFetchError {
     MissingEntryIdentity,
 }
 
+/// Fetch a feed URL with realistic browser headers, a 20-second timeout, and
+/// up to 3 attempts with exponential back-off (0.5 s, 1 s, 2 s).
 pub async fn fetch_feed(url: &str) -> Result<FetchedFeed, RssFetchError> {
+    use std::time::Duration;
+
     let client = reqwest::Client::builder()
-        .user_agent("Toolman-Community-Hub/1.0")
+        // Mimic a real browser UA so sites that block custom agents let us through.
+        .user_agent(concat!(
+            "Mozilla/5.0 (compatible; Toolman-Community-Hub/1.0; ",
+            "+https://toolman.work/rss-reader)"
+        ))
+        .timeout(Duration::from_secs(20))
+        // Follow up to 10 redirects (default is already enabled in reqwest).
+        .redirect(reqwest::redirect::Policy::limited(10))
         .build()?;
 
-    let response = client.get(url).send().await?.error_for_status()?;
-    let content_type = response
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    let bytes = response.bytes().await?;
-    if bytes.is_empty() {
-        return Err(RssFetchError::EmptyResponse);
+    let mut last_err: Option<reqwest::Error> = None;
+    for attempt in 0u32..3 {
+        if attempt > 0 {
+            let backoff = Duration::from_millis(500 * (1u64 << (attempt - 1)));
+            tokio::time::sleep(backoff).await;
+        }
+
+        let result = client
+            .get(url)
+            .header(reqwest::header::ACCEPT, "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
+            .send()
+            .await;
+
+        match result {
+            Err(e) if attempt < 2 && (e.is_timeout() || e.is_connect()) => {
+                tracing::debug!(url = url, attempt = attempt + 1, error = %e, "rss fetch transient error, retrying");
+                last_err = Some(e);
+                continue;
+            }
+            Err(e) => return Err(RssFetchError::Http(e)),
+            Ok(response) => {
+                let response = response.error_for_status()?;
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_string);
+                let bytes = response.bytes().await?;
+                if bytes.is_empty() {
+                    return Err(RssFetchError::EmptyResponse);
+                }
+                let decoded = decode_feed_bytes(&bytes, content_type.as_deref());
+                return parse_feed(&decoded);
+            }
+        }
     }
 
-    let decoded = decode_feed_bytes(&bytes, content_type.as_deref());
-    parse_feed(&decoded)
+    // Only reached if all 3 attempts were transient errors.
+    Err(RssFetchError::Http(last_err.expect("attempt loop exited without error")))
 }
 
 fn decode_feed_bytes(bytes: &[u8], content_type: Option<&str>) -> Vec<u8> {
