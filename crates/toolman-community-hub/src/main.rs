@@ -50,6 +50,7 @@ async fn main() {
 
     let state = AppState::new(config, db);
     let bootstrap_pool = state.db.clone();
+    let periodic_pool = state.db.clone();
     tokio::spawn(async move {
         let fetched = NewsService::new(bootstrap_pool)
             .bootstrap_fetch_unfetched_sources()
@@ -62,7 +63,6 @@ async fn main() {
     // Periodically refresh RSS sources so the list doesn't stay empty after transient failures.
     // (Eligibility is computed inside `bootstrap_fetch_unfetched_sources` based on last_fetched_at/last_error.)
     tokio::spawn(async move {
-        let periodic_pool = state.db.clone();
         // Start after the first bootstrap to avoid bursts.
         sleep(Duration::from_secs(60 * 5)).await;
         loop {

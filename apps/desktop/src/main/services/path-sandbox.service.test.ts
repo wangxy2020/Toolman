@@ -66,6 +66,10 @@ describe('path-sandbox.service', () => {
 
   it('still blocks system files for user-selected reads', async () => {
     const { assertUserAccessiblePath } = await import('./path-sandbox.service')
-    expect(() => assertUserAccessiblePath('/etc/passwd')).toThrow('路径不在允许访问的范围内')
+    const blocked =
+      process.platform === 'win32'
+        ? `${process.env.WINDIR || 'C:\\Windows'}\\System32\\drivers\\etc\\hosts`
+        : '/etc/passwd'
+    expect(() => assertUserAccessiblePath(blocked)).toThrow('路径不在允许访问的范围内')
   })
 })

@@ -463,7 +463,9 @@ mod tests {
             .collect();
         assert!(ids.contains(&"openai-news"));
         assert!(ids.contains(&"36kr"));
-        assert!(ids.contains(&"xinhua-news"));
+        assert!(ids.contains(&"sspai"));
+        assert!(ids.contains(&"infoq-cn"));
+        assert!(!ids.contains(&"xinhua-news"));
         assert!(!ids.contains(&"hacker-news"));
 
         pool.close().await;
