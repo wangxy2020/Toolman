@@ -22,7 +22,9 @@ const sourceTextCache = new Map<string, string>()
 const pageTextCache = new Map<string, CachedPageText>()
 const parsePageCache = new Map<string, CachedParsePage>()
 const pageImageCache = new Map<string, string>()
-const MAX_IMAGE_CACHE = 24
+/** Keep visited preview rasters so scrolling back does not re-fetch. */
+export const MAX_PAGE_IMAGE_CACHE = 96
+const previewImageInflight = new Map<string, Promise<string>>()
 const MAX_PARSE_PAGE_CACHE = 2000
 const MAX_TRANSLATION_PAGE_CACHE = 2000
 
@@ -93,6 +95,15 @@ export function setCachedParsePage(
   }
 }
 
+function revokePageImageUrl(url: string) {
+  if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') return
+  try {
+    URL.revokeObjectURL(url)
+  } catch {
+    // Ignore already-revoked or non-blob URLs (tests).
+  }
+}
+
 export function getCachedPageImage(key: string): string | null {
   const url = pageImageCache.get(key)
   if (!url) return null
@@ -105,17 +116,54 @@ export function getCachedPageImage(key: string): string | null {
 export function setCachedPageImage(key: string, objectUrl: string): void {
   const previous = pageImageCache.get(key)
   if (previous && previous !== objectUrl) {
-    URL.revokeObjectURL(previous)
+    revokePageImageUrl(previous)
   }
   pageImageCache.delete(key)
   pageImageCache.set(key, objectUrl)
-  while (pageImageCache.size > MAX_IMAGE_CACHE) {
+  while (pageImageCache.size > MAX_PAGE_IMAGE_CACHE) {
     const oldestKey = pageImageCache.keys().next().value
     if (!oldestKey) break
     const oldestUrl = pageImageCache.get(oldestKey)
     pageImageCache.delete(oldestKey)
-    if (oldestUrl) URL.revokeObjectURL(oldestUrl)
+    if (oldestUrl) revokePageImageUrl(oldestUrl)
   }
+}
+
+export function listCachedPageImageUrls(
+  filePath: string,
+  renderWidth: number,
+  startPage: number,
+  endPage: number,
+): string[] {
+  const urls: string[] = []
+  const start = Math.max(1, Math.floor(startPage) || 1)
+  const end = Math.max(start, Math.floor(endPage) || start)
+  for (let page = start; page <= end; page += 1) {
+    const url = getCachedPageImage(pageImageCacheKey(filePath, page, renderWidth))
+    if (url) urls.push(url)
+  }
+  return urls
+}
+
+export function rememberPageImageInflight(key: string, factory: () => Promise<string>): Promise<string> {
+  const existing = previewImageInflight.get(key)
+  if (existing) return existing
+  const pending = factory()
+  const tracked = pending.finally(() => {
+    if (previewImageInflight.get(key) === tracked) previewImageInflight.delete(key)
+  })
+  previewImageInflight.set(key, tracked)
+  return tracked
+}
+
+export function getPageImageInflight(key: string): Promise<string> | null {
+  return previewImageInflight.get(key) ?? null
+}
+
+export function clearPageImageCache(): void {
+  for (const url of pageImageCache.values()) revokePageImageUrl(url)
+  pageImageCache.clear()
+  previewImageInflight.clear()
 }
 
 /** Hydrate page slots from in-memory cache (survives scroll / remount within session). */
@@ -130,10 +178,11 @@ export function hydratePagesFromCache(options: {
 }): DocumentPageState[] {
   const { documentId, filePath, totalPages, modelId, languages, autoDetectSource, seedPages } =
     options
+  const seededByPage = new Map(seedPages.map((page) => [page.pageNumber, page.text]))
 
   return Array.from({ length: totalPages }, (_, index) => {
     const pageNumber = index + 1
-    const seeded = seedPages.find((page) => page.pageNumber === pageNumber)?.text ?? ''
+    const seeded = seededByPage.get(pageNumber) ?? ''
     const cachedSource = getCachedSourceText(filePath, pageNumber)
     const sourceText = (cachedSource ?? seeded).trim() ? (cachedSource ?? seeded) : seeded
 

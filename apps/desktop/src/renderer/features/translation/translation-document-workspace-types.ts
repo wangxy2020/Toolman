@@ -18,6 +18,9 @@ export interface TranslationDocumentWorkspaceProps {
   onErrorChange: (message: string | null) => void
   onPageMetaChange?: (meta: { totalPages: number; currentPage: number }) => void
   pageZoom?: number
+  remarkOpenPage?: number | null
+  onRemarkOpenPageChange?: (pageNumber: number | null) => void
+  onPageRemarkChange?: (pageNumber: number, text: string) => void
   onRegisterActions?: (actions: TranslationDocumentWorkspaceHandle | null) => void
 }
 

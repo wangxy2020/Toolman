@@ -1,6 +1,11 @@
 import type { FC } from 'react'
+import { useMemo } from 'react'
 
-import type { PmDomain } from '@toolman/shared'
+import {
+  buildPlanProgressKpiCounts,
+  buildPlanProgressKpiCountsFromRecords,
+  type PmDomain,
+} from '@toolman/shared'
 
 import { useI18n } from '../../i18n/useI18n'
 import { DashboardInsights } from './dashboard/DashboardInsights'
@@ -36,6 +41,11 @@ const ProjectManagementDashboard: FC<Props> = ({
     mockFallback,
     refreshKey,
   })
+  const planCounts = useMemo(() => {
+    if (domain !== 'progress_management' || !data) return undefined
+    if (data.workItems.length > 0) return buildPlanProgressKpiCounts(data.workItems)
+    return buildPlanProgressKpiCountsFromRecords(data.records)
+  }, [data, domain])
 
   if (loading && !data) {
     return <div className="tm-pm-empty">{t('projectManagerPage.dashboard.loading')}</div>
@@ -51,7 +61,7 @@ const ProjectManagementDashboard: FC<Props> = ({
 
   return (
     <div className="tm-pm-dashboard">
-      <DashboardKpiCards variant={variant} aggregates={data.aggregates} />
+      <DashboardKpiCards variant={variant} aggregates={data.aggregates} planCounts={planCounts} />
 
       <section className="tm-pm-section">
         <div className="tm-pm-section-head">

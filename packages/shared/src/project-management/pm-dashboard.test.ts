@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPmPortfolioAggregates,
   buildPmProjectDashboardRecords,
+  buildPlanProgressKpiCounts,
   dedupePmProjectsByCode,
   resolvePmProjectDashboardRecord,
 } from './pm-dashboard.js'
@@ -141,5 +142,60 @@ describe('buildPmPortfolioAggregates', () => {
     expect(aggregates.contractTotal).toBe(150_000_000)
     expect(aggregates.settledTotal).toBe(85_000_000)
     expect(aggregates.pendingTotal).toBe(65_000_000)
+  })
+})
+
+describe('buildPlanProgressKpiCounts', () => {
+  const now = new Date(2026, 7, 15).getTime()
+
+  function workItem(patch: Partial<PmWorkItem> & Pick<PmWorkItem, 'id' | 'title'>): PmWorkItem {
+    return {
+      projectId: '11111111-1111-4111-8111-111111111111',
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      type: 'task',
+      status: 'todo',
+      priority: 'normal',
+      domain: 'progress_management',
+      progressPercent: 20,
+      sortOrder: 0,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+      ...patch,
+    }
+  }
+
+  it('counts this-month milestones, work items, and risk work', () => {
+    const items = [
+      workItem({
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+        title: 'milestone this month',
+        type: 'milestone',
+        dueDate: new Date(2026, 7, 20).getTime(),
+      }),
+      workItem({
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+        title: 'task this month',
+        startDate: new Date(2026, 7, 2).getTime(),
+      }),
+      workItem({
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
+        title: 'blocked',
+        status: 'blocked',
+        updatedAt: new Date(2026, 6, 1).getTime(),
+      }),
+      workItem({
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
+        title: 'next month',
+        type: 'milestone',
+        dueDate: new Date(2026, 8, 2).getTime(),
+        updatedAt: new Date(2026, 6, 1).getTime(),
+      }),
+    ]
+    expect(buildPlanProgressKpiCounts(items, now)).toEqual({
+      monthMilestoneCount: 1,
+      monthWorkItemCount: 2,
+      riskWorkItemCount: 1,
+    })
   })
 })

@@ -16,8 +16,8 @@ export class PathSandboxError extends Error {
 }
 
 export function collectAllowedPathRoots(): string[] {
-  // Read/write roots for user-selected documents. Desktop/Downloads stay here so
-  // file pickers and export dialogs work; OS-open of executables is blocked separately.
+  // App-managed destinations and workspace folders. User pick/drop/open uses
+  // assertUserAccessiblePath instead — those must not be limited to the work folder.
   const roots = new Set<string>([
     app.getPath('userData'),
     getCommunityDataDir(),
@@ -66,24 +66,74 @@ function isPathUnderRoot(target: string, root: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
-export function assertPathWithinAllowedRoots(inputPath: string): string {
+function resolveCheckedPath(inputPath: string): string {
   const trimmed = inputPath.trim()
   if (!trimmed) {
     throw new PathSandboxError('路径不能为空')
   }
+  const target = canonicalizePath(resolve(trimmed))
+  return existsSync(target) ? realpathSync.native(target) : target
+}
 
-  const target = resolve(trimmed)
-  for (const root of collectAllowedPathRoots()) {
-    if (isPathUnderRoot(target, root)) {
-      return existsSync(target) ? realpathSync.native(target) : target
-    }
+function collectBlockedSystemRoots(): string[] {
+  if (process.platform === 'win32') {
+    const windir = process.env.WINDIR?.trim() || 'C:\\Windows'
+    return [windir, 'C:\\Program Files\\WindowsApps']
   }
 
-  throw new PathSandboxError(
-    `路径不在允许访问的范围内：${normalizeFolderPath(trimmed)}`,
-  )
+  return [
+    '/etc',
+    '/private/etc',
+    '/System',
+    '/bin',
+    '/sbin',
+    '/usr/bin',
+    '/usr/sbin',
+    '/usr/libexec',
+    '/dev',
+    '/proc',
+    '/sys',
+    '/root',
+    '/var/root',
+    '/private/var/root',
+  ]
+}
+
+function isBlockedSystemPath(target: string): boolean {
+  return collectBlockedSystemRoots().some((root) => isPathUnderRoot(target, root))
+}
+
+function rejectOutsideMessage(inputPath: string): never {
+  throw new PathSandboxError(`路径不在允许访问的范围内：${normalizeFolderPath(inputPath.trim())}`)
+}
+
+/** App data, workspace folder, and default document roots — not user file pickers. */
+export function assertPathWithinAllowedRoots(inputPath: string): string {
+  const target = resolveCheckedPath(inputPath)
+  for (const root of collectAllowedPathRoots()) {
+    if (isPathUnderRoot(target, root)) {
+      return target
+    }
+  }
+  rejectOutsideMessage(inputPath)
 }
 
 export function assertPathsWithinAllowedRoots(paths: readonly string[]): string[] {
   return paths.map((path) => assertPathWithinAllowedRoots(path))
+}
+
+/**
+ * User-initiated pick / drop / open. Allows files anywhere the OS user can read,
+ * except sensitive system directories. LLM disk tools stay on the workspace folder.
+ */
+export function assertUserAccessiblePath(inputPath: string): string {
+  const target = resolveCheckedPath(inputPath)
+  if (isBlockedSystemPath(target)) {
+    rejectOutsideMessage(inputPath)
+  }
+  return target
+}
+
+export function assertUserAccessiblePaths(paths: readonly string[]): string[] {
+  return paths.map((path) => assertUserAccessiblePath(path))
 }

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app, dialog } from 'electron'
 import { assertValidRestoreBackupPath } from './stats'
 import { BACKUP_MANIFEST_VERSION } from './types'
-import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
+import { assertUserAccessiblePath } from '../path-sandbox.service'
 
 export async function backupAppData(input?: { notesDataJson?: string }) {
   const result = await dialog.showOpenDialog({
@@ -87,7 +87,7 @@ export async function backupAppData(input?: { notesDataJson?: string }) {
 }
 
 export async function restoreAppData(input: { backupPath: string; restoreKnowledge?: boolean }) {
-  const backupPath = assertPathWithinAllowedRoots(input.backupPath)
+  const backupPath = assertUserAccessiblePath(input.backupPath)
   assertValidRestoreBackupPath(backupPath)
 
   const userData = app.getPath('userData')

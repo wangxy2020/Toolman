@@ -7,7 +7,7 @@ export const COMMUNITY_HUB_HOST = '127.0.0.1'
 export const COMMUNITY_HUB_IDENTITY_ID = '00000000-0000-0000-0000-000000000001'
 export const COMMUNITY_HUB_HEADER = 'x-community-user-id'
 
-const BINARY_NAME =
+export const COMMUNITY_HUB_BINARY_NAME =
   process.platform === 'win32' ? 'toolman-community-hub.exe' : 'toolman-community-hub'
 
 export function getCommunityDataDir(): string {
@@ -25,19 +25,19 @@ export function getCommunityHubPortFilePath(): string {
 export function resolveCommunityHubBinaryPath(): string | null {
   const resourceCandidates =
     typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0
-      ? [join(process.resourcesPath, 'bin', BINARY_NAME)]
+      ? [join(process.resourcesPath, 'bin', COMMUNITY_HUB_BINARY_NAME)]
       : []
 
   const candidates = [
     ...resourceCandidates,
-    join(__dirname, '..', '..', '..', 'bin', BINARY_NAME),
-    join(__dirname, '..', '..', '..', '..', 'bin', BINARY_NAME),
-    join(process.cwd(), 'apps', 'desktop', 'bin', BINARY_NAME),
-    join(process.cwd(), 'bin', BINARY_NAME),
-    join(process.cwd(), 'target', 'release', BINARY_NAME),
-    join(process.cwd(), 'target', 'debug', BINARY_NAME),
-    join(process.cwd(), '..', '..', 'target', 'release', BINARY_NAME),
-    join(process.cwd(), '..', '..', 'target', 'debug', BINARY_NAME),
+    join(__dirname, '..', '..', '..', 'bin', COMMUNITY_HUB_BINARY_NAME),
+    join(__dirname, '..', '..', '..', '..', 'bin', COMMUNITY_HUB_BINARY_NAME),
+    join(process.cwd(), 'apps', 'desktop', 'bin', COMMUNITY_HUB_BINARY_NAME),
+    join(process.cwd(), 'bin', COMMUNITY_HUB_BINARY_NAME),
+    join(process.cwd(), 'target', 'release', COMMUNITY_HUB_BINARY_NAME),
+    join(process.cwd(), 'target', 'debug', COMMUNITY_HUB_BINARY_NAME),
+    join(process.cwd(), '..', '..', 'target', 'release', COMMUNITY_HUB_BINARY_NAME),
+    join(process.cwd(), '..', '..', 'target', 'debug', COMMUNITY_HUB_BINARY_NAME),
   ]
 
   for (const candidate of candidates) {
@@ -47,6 +47,10 @@ export function resolveCommunityHubBinaryPath(): string | null {
   }
 
   return null
+}
+
+export function getCommunityHubRuntimeBinaryPath(dataDir = getCommunityDataDir()): string {
+  return join(dataDir, 'bin', COMMUNITY_HUB_BINARY_NAME)
 }
 
 export function buildCommunityHubBaseUrl(port: number, host = COMMUNITY_HUB_HOST): string {

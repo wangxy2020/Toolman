@@ -101,6 +101,7 @@ export function useProjectManagementFilesRollups(args: {
         | 'finish'
         | 'remark'
         | 'sectionalWork'
+        | 'subproject'
         | 'code'
         | 'featureDescription'
         | 'unitPrice'
@@ -120,6 +121,8 @@ export function useProjectManagementFilesRollups(args: {
             return t('projectManagerPage.costTable.columns.note')
           case 'sectionalWork':
             return t('projectManagerPage.costTable.columns.sectionalWork')
+          case 'subproject':
+            return t('projectManagerPage.costTable.columns.subproject')
           case 'code':
             return t('projectManagerPage.costTable.columns.code')
           case 'featureDescription':

@@ -40,3 +40,17 @@ export function resolveTranslationTarget(
 export function translationLanguageLabel(language: TranslationLanguage): string {
   return language === 'zh' ? '中文' : 'English'
 }
+
+export type ComposerTranslateSnapshot = {
+  original: string
+  translated: string
+}
+
+export function shouldRestoreComposerTranslation(
+  currentText: string,
+  snapshot: ComposerTranslateSnapshot | null | undefined,
+): snapshot is ComposerTranslateSnapshot {
+  if (!snapshot) return false
+  const current = currentText.trim()
+  return Boolean(current) && current === snapshot.translated.trim()
+}

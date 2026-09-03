@@ -48,6 +48,8 @@ export const PmSharedCostCatalogRowSchema = z.object({
   note: z.string().default(''),
   /** Sectional / divisional work (分部工程). */
   sectionalWork: z.string().default(''),
+  /** Subproject under a subdivision (子项目). */
+  subproject: z.string().default(''),
   /** Code on 分部工程 summary row. */
   sectionCode: z.string().default(''),
   /** Note on 分部工程 summary row. */
@@ -86,6 +88,7 @@ export const PmSharedCostCatalogUpsertInputSchema = z.object({
       featureDescription: z.string().optional(),
       note: z.string().optional(),
       sectionalWork: z.string().optional(),
+      subproject: z.string().optional(),
     }),
   ),
 })
@@ -121,10 +124,12 @@ export function formatCostCatalogHintLines(
     const feature = row.featureDescription.trim()
     const note = row.note.trim()
     const section = row.sectionalWork.trim()
+    const subproject = row.subproject.trim()
     const extras = [
       row.code.trim() ? `编码 ${row.code.trim()}` : '',
       feature ? `特征 ${feature}` : '',
       section ? `分部 ${section}` : '',
+      subproject ? `子项目 ${subproject}` : '',
       note ? `说明 ${note}` : '',
     ]
       .filter(Boolean)
@@ -156,6 +161,7 @@ export function upsertSharedCostCatalogRows(
     featureDescription?: string
     note?: string
     sectionalWork?: string
+    subproject?: string
   }>,
   createId: () => string = () =>
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -189,6 +195,7 @@ export function upsertSharedCostCatalogRows(
         applicable: PM_SHARED_COST_APPLICABLE_ALL,
         note: entry.note?.trim() ?? '',
         sectionalWork: entry.sectionalWork?.trim() ?? '',
+        subproject: entry.subproject?.trim() ?? '',
         sectionCode: '',
         sectionNote: '',
         sectionName: '',
@@ -205,6 +212,7 @@ export function upsertSharedCostCatalogRows(
     const unit = entry.unit?.trim()
     const code = entry.code?.trim()
     const sectionalWork = entry.sectionalWork?.trim()
+    const subproject = entry.subproject?.trim()
     const nextRow: PmSharedCostCatalogRow = {
       ...prev,
       name,
@@ -220,6 +228,7 @@ export function upsertSharedCostCatalogRows(
       applicable: PM_SHARED_COST_APPLICABLE_ALL,
       note: entry.note !== undefined ? entry.note.trim() : prev.note,
       sectionalWork: sectionalWork != null && sectionalWork.length > 0 ? sectionalWork : prev.sectionalWork,
+      subproject: subproject != null && subproject.length > 0 ? subproject : prev.subproject,
     }
     if (
       nextRow.unit !== prev.unit ||
@@ -229,7 +238,8 @@ export function upsertSharedCostCatalogRows(
       nextRow.name !== prev.name ||
       nextRow.featureDescription !== prev.featureDescription ||
       nextRow.note !== prev.note ||
-      nextRow.sectionalWork !== prev.sectionalWork
+      nextRow.sectionalWork !== prev.sectionalWork ||
+      nextRow.subproject !== prev.subproject
     ) {
       next[existingIndex] = nextRow
       changed = true

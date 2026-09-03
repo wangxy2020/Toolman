@@ -3,7 +3,11 @@ import pdfParse from 'pdf-parse'
 import { loadPdfjsDocument } from './pdfjs-options.js'
 import { formatPdfPageMarker } from './pdf-page-markers.js'
 import { isPdfExtractedTextInsufficient } from './pdf-text-quality.js'
-import { getCachedPdfDocument, renderPdfPageForOcr } from './render-pdf-pages.js'
+import {
+  enqueuePdfDocumentTask,
+  getCachedPdfDocument,
+  renderPdfPageForOcr,
+} from './render-pdf-pages.js'
 
 type PdfTextItem = { str?: string; transform?: number[] }
 
@@ -102,19 +106,21 @@ export async function extractPdfDocumentInfo(filePath: string): Promise<{
   pageWidth: number
   pageHeight: number
 }> {
-  const document = await getCachedPdfDocument(filePath)
-  const totalPages = document.numPages
-  if (totalPages < 1) {
-    return { totalPages: 0, pageWidth: 0, pageHeight: 0 }
-  }
+  return enqueuePdfDocumentTask(async () => {
+    const document = await getCachedPdfDocument(filePath)
+    const totalPages = document.numPages
+    if (totalPages < 1) {
+      return { totalPages: 0, pageWidth: 0, pageHeight: 0 }
+    }
 
-  const firstPage = await document.getPage(1)
-  const viewport = firstPage.getViewport({ scale: 1 })
-  return {
-    totalPages,
-    pageWidth: viewport.width,
-    pageHeight: viewport.height,
-  }
+    const firstPage = await document.getPage(1)
+    const viewport = firstPage.getViewport({ scale: 1 })
+    return {
+      totalPages,
+      pageWidth: viewport.width,
+      pageHeight: viewport.height,
+    }
+  }, 0)
 }
 
 /** Extract plain text for an inclusive 1-based page range. */

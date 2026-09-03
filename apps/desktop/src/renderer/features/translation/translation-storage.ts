@@ -6,6 +6,7 @@ import {
   fileNameFromPath,
   type TranslationDocumentKind,
 } from './translation-document-utils'
+import { normalizePageRemarks } from './document-page-remarks'
 
 export const TRANSLATION_STORAGE_KEY = 'toolman:translation-data'
 
@@ -42,6 +43,8 @@ export interface TranslationDocumentItem {
   targetText: string
   /** Per-page parse / translation cache for reopen without re-running pipelines. */
   pageSnapshots?: TranslationDocumentPageSnapshot[]
+  /** Per-page overlay remarks keyed by page number. */
+  pageRemarks?: Record<string, string>
   languages: [TranslationLanguage, TranslationLanguage]
   createdAt: number
   updatedAt: number
@@ -152,6 +155,7 @@ export function normalizeDocument(
     sourceText: typeof item.sourceText === 'string' ? item.sourceText : '',
     targetText: typeof item.targetText === 'string' ? item.targetText : '',
     pageSnapshots: normalizePageSnapshots(item.pageSnapshots),
+    pageRemarks: normalizePageRemarks(item.pageRemarks),
     languages: normalizeTranslationLanguages(item.languages),
     createdAt: item.createdAt ?? item.updatedAt ?? now,
     updatedAt: item.updatedAt ?? now,

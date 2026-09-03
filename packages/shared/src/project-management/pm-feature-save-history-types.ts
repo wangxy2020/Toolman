@@ -21,6 +21,7 @@ export type PmFeatureCatalogSnapshotRow = {
   code?: string
   featureDescription?: string
   sectionalWork?: string
+  subproject?: string
   unitPrice?: number | null
   applicable: string
   sortOrder: number
@@ -80,6 +81,7 @@ export function normalizeFeatureCatalogSnapshot(
     featureDescription:
       typeof row.featureDescription === 'string' ? row.featureDescription : '',
     sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
+    subproject: typeof row.subproject === 'string' ? row.subproject : '',
     unitPrice:
       typeof row.unitPrice === 'number' && Number.isFinite(row.unitPrice) ? row.unitPrice : null,
     applicable: row.applicable,
@@ -113,6 +115,7 @@ export function parseFeatureCatalogSnapshot(raw: unknown): PmFeatureCatalogSnaps
       featureDescription:
         typeof record.featureDescription === 'string' ? record.featureDescription : '',
       sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',
+      subproject: typeof record.subproject === 'string' ? record.subproject : '',
       unitPrice:
         typeof record.unitPrice === 'number' && Number.isFinite(record.unitPrice)
           ? record.unitPrice

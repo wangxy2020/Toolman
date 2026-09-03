@@ -7,9 +7,17 @@ vi.mock('electron', () => ({
   },
 }))
 
-import { IpcChannel, ipcOk } from '@toolman/shared'
-
-import { communityHandlers } from './community-handlers'
+vi.mock('../services/community/community-bridge.service', () => ({
+  recoverCommunityHubConnection: vi.fn(async () => ({
+    running: true,
+    mode: 'local',
+    port: 3721,
+    host: '127.0.0.1',
+    baseUrl: 'http://127.0.0.1:3721',
+    binaryPath: '/tmp/toolman-community-hub',
+    offlineReadOnly: false,
+  })),
+}))
 
 vi.mock('../services/community/community-ipc.facade', () => ({
   getHubStatus: vi.fn(async () => ({
@@ -71,6 +79,10 @@ vi.mock('../services/community/community-ipc.facade', () => ({
     ],
   })),
 }))
+
+import { IpcChannel, ipcOk } from '@toolman/shared'
+
+import { communityHandlers } from './community-handlers'
 
 describe('community IPC handlers', () => {
   it('exposes community:resource:list handler for renderer invoke', async () => {

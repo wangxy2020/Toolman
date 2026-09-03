@@ -81,6 +81,7 @@ export function parseFeatureRows(raw: unknown): PmFeatureRow[] | null {
         featureDescription:
           typeof record.featureDescription === 'string' ? record.featureDescription : '',
         sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',
+        subproject: typeof record.subproject === 'string' ? record.subproject : '',
         unitPrice: parseOptionalNumber(record.unitPrice),
         applicable:
           typeof row.applicable === 'string' && row.applicable.trim()
@@ -111,6 +112,7 @@ export function createDefaultFeatureCatalog(
     code: '',
     featureDescription: '',
     sectionalWork: '',
+    subproject: '',
     unitPrice: null,
     applicable,
     sortOrder: index,
@@ -147,6 +149,7 @@ export function createEmptyFeatureRow(
     code: '',
     featureDescription: '',
     sectionalWork: '',
+    subproject: '',
     unitPrice: null,
     applicable,
     sortOrder,
@@ -188,6 +191,7 @@ export function fingerprintFeatureCatalog(rows: readonly PmFeatureRow[]): string
       code: row.code.trim(),
       featureDescription: row.featureDescription.trim(),
       sectionalWork: row.sectionalWork.trim(),
+      subproject: row.subproject.trim(),
       unitPrice: row.unitPrice,
       applicable: row.applicable,
       sortOrder: row.sortOrder,

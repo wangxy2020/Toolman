@@ -6,9 +6,10 @@ import {
   isPdfPath,
   resolveParseTimeoutMs,
   withTimeout,
+  yieldToNextPaint,
 } from './document-page-parse-helpers'
 import type { DocumentPageRefs, DocumentPageState } from './document-page-types'
-import { applySavedPageSnapshots } from './document-page-snapshots'
+import { applySavedPageSnapshots, createLightweightPagesFromSnapshots, pageCountFromSnapshots } from './document-page-snapshots'
 import type { TranslationDocumentPageSnapshot } from './translation-storage'
 
 interface BootstrapDeps {
@@ -82,12 +83,9 @@ export function useDocumentPageBootstrap({
 
     const generation = ++refs.generationRef.current
     let cancelled = false
-    const snapshotsForRestore = savedPageSnapshots
-    setBootstrapping(true)
+    const snapshotsForRestore = savedPageSnapshotsRef.current
+    const restoredCount = pageCountFromSnapshots(snapshotsForRestore)
     setBootstrapError(null)
-    setPages([])
-    setTotalPages(0)
-    setPageAspect(null)
     setTranslationArmed(false)
     setParseArmed(false)
     refs.inFlightRef.current.clear()
@@ -95,8 +93,39 @@ export function useDocumentPageBootstrap({
     refs.ocrQueueRef.current = []
     refs.pageSourceLoadRef.current.clear()
 
+    // Saved parse results must paint immediately. Waiting on PDF metadata IPC
+    // was wiping the workspace back to "正在加载文档分页" whenever snapshots
+    // were cloned (e.g. source-text autosave).
+    if (restoredCount > 0 && documentId) {
+      const initialPages = createLightweightPagesFromSnapshots(snapshotsForRestore, restoredCount)
+      refs.pagesRef.current = initialPages
+      setPages(initialPages)
+      commitTotalPages(restoredCount)
+      for (const page of initialPages) {
+        if (page.status === 'empty') {
+          refs.ocrExhaustedRef.current.add(page.pageNumber)
+        }
+      }
+      setBootstrapping(false)
+    } else {
+      setBootstrapping(true)
+      setPages([])
+      refs.pagesRef.current = []
+      setTotalPages(0)
+      setPageAspect(null)
+    }
+
     void (async () => {
       try {
+        if (restoredCount > 0) {
+          // Let the first preview IPC start before metadata reopens the same PDF.
+          await yieldToNextPaint()
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 80)
+          })
+          if (cancelled || generation !== refs.generationRef.current) return
+        }
+
         const metadataOnly = isPdfPath(filePath)
         const result = await withTimeout(
           invokeParsePages(filePath, 1, 1, workspaceId, pdfParserBackend, { metadataOnly }),
@@ -105,18 +134,22 @@ export function useDocumentPageBootstrap({
         )
         if (cancelled || generation !== refs.generationRef.current) return
         if (!result.ok) {
-          setBootstrapError(result.error.message)
+          if (restoredCount < 1) setBootstrapError(result.error.message)
           return
         }
 
         const data = TranslationDocumentParsePagesOutputSchema.parse(result.data)
-        const count = Math.max(1, data.totalPages)
+        const count = Math.max(1, data.totalPages, restoredCount)
         commitTotalPages(count)
         if (data.pageWidth && data.pageHeight && data.pageWidth > 0) {
           setPageAspect(data.pageHeight / data.pageWidth)
-        } else {
+        } else if (restoredCount < 1) {
           setPageAspect(null)
         }
+
+        // Restored documents already have page bodies. Rebuilding them here
+        // would remount markdown and stall the first PDF preview.
+        if (restoredCount > 0) return
 
         const initialPages = applySavedPageSnapshots(
           hydratePagesFromCache({
@@ -126,10 +159,16 @@ export function useDocumentPageBootstrap({
             modelId: translationParamsRef.current.modelId,
             languages: translationParamsRef.current.languages,
             autoDetectSource: translationParamsRef.current.autoDetectSource,
-            seedPages: data.pages.map((page) => ({
-              pageNumber: page.pageNumber,
-              text: page.text,
-            })),
+            seedPages: [
+              ...refs.pagesRef.current.map((page) => ({
+                pageNumber: page.pageNumber,
+                text: page.sourceText,
+              })),
+              ...data.pages.map((page) => ({
+                pageNumber: page.pageNumber,
+                text: page.text,
+              })),
+            ],
           }),
           snapshotsForRestore ?? savedPageSnapshotsRef.current,
           {
@@ -149,7 +188,9 @@ export function useDocumentPageBootstrap({
         }
       } catch (error) {
         if (cancelled || generation !== refs.generationRef.current) return
-        setBootstrapError(error instanceof Error ? error.message : 'bootstrap failed')
+        if (restoredCount < 1) {
+          setBootstrapError(error instanceof Error ? error.message : 'bootstrap failed')
+        }
       } finally {
         if (!cancelled && generation === refs.generationRef.current) {
           setBootstrapping(false)
@@ -165,7 +206,7 @@ export function useDocumentPageBootstrap({
       refs.ocrQueueRef.current = []
       refs.pageSourceLoadRef.current.clear()
     }
-  }, [commitTotalPages, documentId, enabled, filePath, pdfParserBackend, refs, savedPageSnapshots, savedPageSnapshotsRef, setBootstrapError, setBootstrapping, setPageAspect, setPages, setParseArmed, setTotalPages, setTranslationArmed, translationParamsRef, workspaceId])
+  }, [commitTotalPages, documentId, enabled, filePath, pdfParserBackend, refs, savedPageSnapshotsRef, setBootstrapError, setBootstrapping, setPageAspect, setPages, setParseArmed, setTotalPages, setTranslationArmed, translationParamsRef, workspaceId])
 
   // Re-apply persisted page snapshots when the document record updates (e.g. after save or sidebar re-select).
   useEffect(() => {

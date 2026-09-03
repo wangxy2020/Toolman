@@ -36,6 +36,7 @@ vi.mock('./memory-entry.service', () => ({
 
 vi.mock('./path-sandbox.service', () => ({
   assertPathWithinAllowedRoots: (path: string) => path,
+  assertUserAccessiblePath: (path: string) => path,
 }))
 
 vi.mock('./toolman-user-documents.service', async (importOriginal) => {

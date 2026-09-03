@@ -171,6 +171,7 @@ export function useProjectCostPlanApplyBar({
         applicable: 'all',
         note: '',
         sectionalWork: '',
+        subproject: '',
         sectionCode: '',
         sectionNote: '',
         sectionName: '',

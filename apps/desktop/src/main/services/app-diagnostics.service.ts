@@ -12,7 +12,7 @@ import {
   type AppGetDiagnosticsOutput,
 } from '@toolman/shared'
 import { getDatabase } from '../bootstrap/database'
-import { getCommunityHubStatus } from './community/community-bridge.service'
+import { getCommunityHubStatus, recoverCommunityHubConnection } from './community/community-bridge.service'
 import { getHubHealth } from './community/community-ipc.facade'
 import { getCommunityYjsStatus } from './community/community-yjs-bridge.service'
 import { getCommunityCidProviderStatus } from './community/community-cid-provider.service'
@@ -82,6 +82,7 @@ function getIngestDiagnostics(): AppGetDiagnosticsOutput['ingest'] {
 }
 
 async function getCommunityHubDiagnostics(): Promise<AppGetDiagnosticsOutput['communityHub']> {
+  await recoverCommunityHubConnection()
   const status = getCommunityHubStatus()
   const base: AppGetDiagnosticsOutput['communityHub'] = {
     running: status.running,

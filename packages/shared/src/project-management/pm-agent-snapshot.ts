@@ -101,7 +101,7 @@ export function buildPmAgentPortfolioSummary(snapshot: PmAgentSnapshot): string 
       ? [
           '',
           '### 全部项目适用的价格表（系统默认 · 权威数据源）',
-          '说明：下列条目即为工作区「全部项目」价格表（类型/编码/名称/单位/数量/单价/分部工程/说明）。智能体应直接据此分析，不要到工作目录找文件。',
+          '说明：下列条目即为工作区「全部项目」价格表（类型/编码/名称/单位/数量/单价/分部工程/子项目/说明）。智能体应直接据此分析，不要到工作目录找文件。',
           snapshot.costCatalogSummary.trim(),
         ]
       : []

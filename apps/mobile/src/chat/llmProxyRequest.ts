@@ -1,7 +1,16 @@
 export function extractChatCompletionText(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return ''
-  const choices = (payload as { choices?: Array<{ message?: { content?: unknown } }> }).choices
-  const content = choices?.[0]?.message?.content
+  const message = (payload as {
+    choices?: Array<{
+      message?: { content?: unknown; reasoning_content?: unknown; thinking?: unknown }
+    }>
+  }).choices?.[0]?.message
+  const content = message?.content
+  if (typeof content === 'string' && content.trim()) return content.trim()
+  const reasoning = message?.reasoning_content
+  if (typeof reasoning === 'string' && reasoning.trim()) return reasoning.trim()
+  const thinking = message?.thinking
+  if (typeof thinking === 'string' && thinking.trim()) return thinking.trim()
   return typeof content === 'string' ? content.trim() : ''
 }
 

@@ -9,6 +9,7 @@ import {
   type TranslationData,
   type TranslationDocumentItem,
 } from './translation-storage'
+import { setPageRemark } from './document-page-remarks'
 import type { SaveTranslationDocumentInput } from './use-translation-records-types'
 
 type Options = {
@@ -147,6 +148,7 @@ export function useTranslationRecordsDocuments(options: Options) {
                     sourceText: input.sourceText || item.sourceText,
                     targetText: input.targetText || item.targetText,
                     pageSnapshots: hasSnapshots ? input.pageSnapshots : item.pageSnapshots,
+                    pageRemarks: 'pageRemarks' in input ? input.pageRemarks : item.pageRemarks,
                     languages: input.languages,
                     updatedAt: now,
                   },
@@ -164,14 +166,41 @@ export function useTranslationRecordsDocuments(options: Options) {
   const updateDocumentSourceText = useCallback(
     (documentId: string, sourceText: string): void => {
       if (!workspaceId) return
-      setData((prev) => ({
-        ...prev,
-        documents: prev.documents.map((item) =>
-          item.id === documentId
-            ? normalizeDocument({ ...item, sourceText }, workspaceId)
-            : item,
-        ),
-      }))
+      setData((prev) => {
+        const existing = prev.documents.find((item) => item.id === documentId)
+        if (!existing || existing.sourceText === sourceText) return prev
+        return {
+          ...prev,
+          documents: prev.documents.map((item) =>
+            item.id === documentId
+              ? normalizeDocument({ ...item, sourceText }, workspaceId)
+              : item,
+          ),
+        }
+      })
+    },
+    [setData, workspaceId],
+  )
+
+  const updateDocumentPageRemark = useCallback(
+    (documentId: string, pageNumber: number, text: string): void => {
+      if (!workspaceId) return
+      setData((prev) => {
+        const existing = prev.documents.find((item) => item.id === documentId)
+        if (!existing) return prev
+        const pageRemarks = setPageRemark(existing.pageRemarks, pageNumber, text)
+        if (JSON.stringify(existing.pageRemarks ?? null) === JSON.stringify(pageRemarks ?? null)) {
+          return prev
+        }
+        return {
+          ...prev,
+          documents: prev.documents.map((item) =>
+            item.id === documentId
+              ? normalizeDocument({ ...item, pageRemarks, updatedAt: Date.now() }, workspaceId)
+              : item,
+          ),
+        }
+      })
     },
     [setData, workspaceId],
   )
@@ -198,6 +227,7 @@ export function useTranslationRecordsDocuments(options: Options) {
     renameDocument,
     saveDocument,
     updateDocumentSourceText,
+    updateDocumentPageRemark,
     deleteDocument,
   }
 }

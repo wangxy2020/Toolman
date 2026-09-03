@@ -1,5 +1,8 @@
 import { readFileSync, statSync } from 'node:fs'
+import { coalesceInflight } from './inflight-coalesce.js'
 import { loadPdfjsDocument } from './pdfjs-options.js'
+import { previewJpegCache } from './preview-jpeg-cache.js'
+import { createPreviewRenderQueue, PDF_PREVIEW_RETAIN_PAGES, previewPriorityValue } from './preview-render-queue.js'
 import { whitenRenderedPageCanvas } from './pdf-left-margin-whiten.js'
 
 export interface RenderedPdfPage {
@@ -149,7 +152,18 @@ type CachedPdfDocument = {
 }
 
 const pdfDocumentCache = new Map<string, CachedPdfDocument>()
+const pdfDocumentLoads = new Map<string, Promise<CachedPdfDocument['document']>>()
 const PDF_DOC_CACHE_LIMIT = 2
+
+async function destroyPdfDocument(document: CachedPdfDocument['document'] | undefined) {
+  const destroy = (document as { destroy?: () => Promise<void> } | undefined)?.destroy
+  if (!destroy || !document) return
+  try {
+    await destroy.call(document)
+  } catch {
+    // ignore destroy errors
+  }
+}
 
 export async function getCachedPdfDocument(filePath: string) {
   const mtimeMs = statSync(filePath).mtimeMs
@@ -159,46 +173,51 @@ export async function getCachedPdfDocument(filePath: string) {
     return cached.document
   }
 
-  const buffer = readFileSync(filePath)
-  const document = await loadPdfjsDocument(buffer)
-  pdfDocumentCache.set(filePath, { document, mtimeMs, lastUsed: Date.now() })
-
-  while (pdfDocumentCache.size > PDF_DOC_CACHE_LIMIT) {
-    let oldestKey: string | null = null
-    let oldestUsed = Number.POSITIVE_INFINITY
-    for (const [key, value] of pdfDocumentCache) {
-      if (key === filePath) continue
-      if (value.lastUsed < oldestUsed) {
-        oldestUsed = value.lastUsed
-        oldestKey = key
-      }
+  const loadKey = `${filePath}@${mtimeMs}`
+  return coalesceInflight(pdfDocumentLoads, loadKey, async () => {
+    const latest = pdfDocumentCache.get(filePath)
+    if (latest && latest.mtimeMs === mtimeMs) {
+      latest.lastUsed = Date.now()
+      return latest.document
     }
-    if (!oldestKey) break
-    const evicted = pdfDocumentCache.get(oldestKey)
-    pdfDocumentCache.delete(oldestKey)
-    const destroy = (evicted?.document as { destroy?: () => Promise<void> } | undefined)?.destroy
-    if (destroy) {
-      try {
-        await destroy.call(evicted!.document)
-      } catch {
-        // ignore destroy errors
-      }
-    }
-  }
 
-  return document
+    const buffer = readFileSync(filePath)
+    const document = await loadPdfjsDocument(buffer)
+    const previous = pdfDocumentCache.get(filePath)
+    pdfDocumentCache.set(filePath, { document, mtimeMs, lastUsed: Date.now() })
+    if (previous && previous.document !== document) {
+      void destroyPdfDocument(previous.document)
+    }
+
+    while (pdfDocumentCache.size > PDF_DOC_CACHE_LIMIT) {
+      let oldestKey: string | null = null
+      let oldestUsed = Number.POSITIVE_INFINITY
+      for (const [key, value] of pdfDocumentCache) {
+        if (key === filePath) continue
+        if (value.lastUsed < oldestUsed) {
+          oldestUsed = value.lastUsed
+          oldestKey = key
+        }
+      }
+      if (!oldestKey) break
+      const evicted = pdfDocumentCache.get(oldestKey)
+      pdfDocumentCache.delete(oldestKey)
+      await destroyPdfDocument(evicted?.document)
+    }
+
+    return document
+  })
 }
 
-/** Serialize preview renders so the Electron main process stays responsive. */
-let previewRenderChain: Promise<unknown> = Promise.resolve()
+const previewRenderQueue = createPreviewRenderQueue()
 
-function enqueuePreviewRender<T>(task: () => Promise<T>): Promise<T> {
-  const run = previewRenderChain.then(task, task)
-  previewRenderChain = run.then(
-    () => undefined,
-    () => undefined,
-  )
-  return run
+/** Serialize pdf.js page access so metadata cannot stall a visible preview raster. */
+export function enqueuePdfDocumentTask<T>(task: () => Promise<T>, priority = 0): Promise<T> {
+  return previewRenderQueue.enqueue(task, priority)
+}
+
+function previewTargetWidth(targetWidth: number): number {
+  return Math.max(200, Math.min(960, Math.round(targetWidth)))
 }
 
 /** Render a single PDF page for side-by-side document translation preview. */
@@ -206,6 +225,7 @@ export async function renderPdfPagePreview(
   filePath: string,
   pageNumber: number,
   targetWidth: number,
+  options?: { priority?: 'visible' | 'prefetch' },
 ): Promise<{
   totalPages: number
   pageNumber: number
@@ -214,19 +234,60 @@ export async function renderPdfPagePreview(
   width: number
   height: number
 }> {
-  return enqueuePreviewRender(async () => {
+  const requestedPage = Math.max(1, Math.floor(pageNumber) || 1)
+  const width = previewTargetWidth(targetWidth)
+  const mtimeMs = statSync(filePath).mtimeMs
+  const cached = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, requestedPage, width))
+  if (cached) {
+    return {
+      totalPages: cached.totalPages,
+      pageNumber: requestedPage,
+      png: cached.jpeg,
+      mimeType: cached.mimeType,
+      width: cached.width,
+      height: cached.height,
+    }
+  }
+
+  const cacheKey = previewJpegCache.key(filePath, mtimeMs, requestedPage, width)
+  const isVisible = options?.priority !== 'prefetch'
+
+  return previewRenderQueue.enqueue(
+    async () => {
+    const queued = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, requestedPage, width))
+    if (queued) {
+      return {
+        totalPages: queued.totalPages,
+        pageNumber: requestedPage,
+        png: queued.jpeg,
+        mimeType: queued.mimeType,
+        width: queued.width,
+        height: queued.height,
+      }
+    }
+
     const document = await getCachedPdfDocument(filePath)
     const totalPages = document.numPages
     if (totalPages < 1) {
       throw new Error('PDF has no pages')
     }
 
-    const safePage = Math.max(1, Math.min(Math.floor(pageNumber), totalPages))
+    const safePage = Math.max(1, Math.min(requestedPage, totalPages))
+    const safeCached = previewJpegCache.get(previewJpegCache.key(filePath, mtimeMs, safePage, width))
+    if (safeCached) {
+      return {
+        totalPages: safeCached.totalPages,
+        pageNumber: safePage,
+        png: safeCached.jpeg,
+        mimeType: safeCached.mimeType,
+        width: safeCached.width,
+        height: safeCached.height,
+      }
+    }
+
     const page = await document.getPage(safePage)
     const baseViewport = page.getViewport({ scale: 1 })
-    // targetWidth is already in device pixels (CSS width × DPR).
-    const width = Math.max(240, Math.min(1600, targetWidth))
-    const scale = Math.min(2.75, Math.max(1.25, width / baseViewport.width))
+    const scale = Math.min(1.25, Math.max(0.6, width / baseViewport.width))
     const viewport = page.getViewport({ scale })
     const { createCanvas } = await import('@napi-rs/canvas')
     const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
@@ -234,8 +295,18 @@ export async function renderPdfPagePreview(
     context.imageSmoothingEnabled = true
     await page.render({ canvasContext: context, viewport, canvas }).promise
 
-    // JPEG is much faster to encode/transfer than PNG for preview pages.
-    const jpeg = canvas.toBuffer('image/jpeg', 82)
+    const jpeg = canvas.toBuffer('image/jpeg', 78)
+    const entry = {
+      jpeg,
+      mimeType: 'image/jpeg' as const,
+      width: canvas.width,
+      height: canvas.height,
+      totalPages,
+    }
+    previewJpegCache.set(previewJpegCache.key(filePath, mtimeMs, safePage, width), entry)
+    if (safePage !== requestedPage) {
+      previewJpegCache.set(previewJpegCache.key(filePath, mtimeMs, requestedPage, width), entry)
+    }
     return {
       totalPages,
       pageNumber: safePage,
@@ -244,5 +315,13 @@ export async function renderPdfPagePreview(
       width: canvas.width,
       height: canvas.height,
     }
-  })
+    },
+    {
+      priority: previewPriorityValue(options?.priority),
+      key: cacheKey,
+      group: filePath,
+      page: requestedPage,
+      retainAround: isVisible ? PDF_PREVIEW_RETAIN_PAGES : undefined,
+    },
+  )
 }

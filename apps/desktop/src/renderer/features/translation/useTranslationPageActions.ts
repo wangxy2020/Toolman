@@ -44,6 +44,7 @@ export function useTranslationPageActions(options: {
   onOpenDocumentPath: (filePath: string) => void
   onClearActiveDocument: () => void
   showStatus: (message: string) => void
+  getPendingPageRemark?: () => { documentId: string; pageNumber: number; text: string } | null
 }) {
   const {
     t,
@@ -77,6 +78,7 @@ export function useTranslationPageActions(options: {
     onOpenDocumentPath,
     onClearActiveDocument,
     showStatus,
+    getPendingPageRemark,
   } = options
 
   const { translate, translating } = useTranslate()
@@ -100,6 +102,7 @@ export function useTranslationPageActions(options: {
     onSaveDocumentToNotes,
     onOpenDocumentPath,
     showStatus,
+    getPendingPageRemark,
   })
 
   const handleSwapLanguages = useCallback(() => {

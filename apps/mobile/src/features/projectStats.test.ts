@@ -14,10 +14,10 @@ describe('project stats', () => {
     expect(stats.kpis.map((item) => item.label)).toEqual([
       '在管项目',
       '合同总额',
-      '已结算',
-      '待支付',
-      '成本偏差率',
-      '风险项目',
+      '已计量',
+      '本月收入',
+      '本月支出',
+      '本月计划完成',
     ])
     expect(stats.section?.title).toBe('项目成本概览')
     expect(stats.insights.map((item) => item.title)).toEqual(['支付健康度', '平均执行进度'])
@@ -34,9 +34,8 @@ describe('project stats', () => {
 
   it('builds progress dashboard kpis for workbench and plan menus', () => {
     const workbench = buildProjectStats('all_projects')
-    const plan = buildProjectStats('progress_management')
     expect(workbench.variant).toBe('progress')
-    expect(plan.kpis.map((item) => item.label)).toEqual([
+    expect(workbench.kpis.map((item) => item.label)).toEqual([
       '在管项目',
       '计划进度',
       '实际完成',
@@ -45,6 +44,18 @@ describe('project stats', () => {
       '风险项目',
     ])
     expect(workbench.section?.title).toBe('项目进度概览')
+  })
+
+  it('builds plan-management kpis with month and risk work cards', () => {
+    const plan = buildProjectStats('progress_management')
+    expect(plan.kpis.map((item) => item.label)).toEqual([
+      '在管项目',
+      '计划进度',
+      '实际完成',
+      '本月里程碑',
+      '本月工作项',
+      '风险工作',
+    ])
   })
 
   it('builds security quality kpis', () => {
@@ -57,6 +68,21 @@ describe('project stats', () => {
       '质量通病',
       '本周检查项',
     ])
+  })
+
+  it('builds urgent todo stats with six kpis, six important items, and two insights', () => {
+    const stats = buildProjectStats('urgent_tasks')
+    expect(stats.kpis.map((item) => item.label)).toEqual([
+      '未完成',
+      '高优先级',
+      '逾期',
+      '阻塞中',
+      '进行中',
+      '关联项目',
+    ])
+    expect(stats.section?.title).toBe('重要事项进展')
+    expect(stats.records).toHaveLength(6)
+    expect(stats.insights.map((item) => item.title)).toEqual(['待办健康度', '平均执行进度'])
   })
 
   it('builds six kpi cards for every project menu', () => {

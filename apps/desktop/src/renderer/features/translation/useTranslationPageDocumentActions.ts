@@ -14,6 +14,7 @@ import {
   hasDocumentExportContent,
 } from './translation-export'
 import { isTranslationDocumentPath } from './translation-document-utils'
+import { resolveSavedPageRemarks } from './document-page-remarks'
 import type { TranslationDocumentWorkspaceHandle } from './TranslationDocumentWorkspace'
 import type { SaveTranslationDocumentInput } from './useTranslationRecords'
 import type {
@@ -40,6 +41,7 @@ export function useTranslationPageDocumentActions(options: {
   onSaveDocumentToNotes?: (title: string, content: string) => void
   onOpenDocumentPath: (filePath: string) => void
   showStatus: (message: string) => void
+  getPendingPageRemark?: () => { documentId: string; pageNumber: number; text: string } | null
 }) {
   const {
     t,
@@ -60,6 +62,7 @@ export function useTranslationPageDocumentActions(options: {
     onSaveDocumentToNotes,
     onOpenDocumentPath,
     showStatus,
+    getPendingPageRemark,
   } = options
 
   const handleSaveDocument = useCallback(() => {
@@ -77,11 +80,16 @@ export function useTranslationPageDocumentActions(options: {
     const resolvedTarget =
       aggregateSnapshotTargetText(pageSnapshots).trim() || targetText.trim()
 
+    const pending = getPendingPageRemark?.() ?? null
     const savedId = onSaveDocument({
       sourceText: resolvedSource,
       targetText: resolvedTarget,
       languages,
       pageSnapshots,
+      pageRemarks: resolveSavedPageRemarks(
+        activeDocument?.pageRemarks,
+        pending && pending.documentId === activeDocument?.id ? pending : null,
+      ),
     })
     if (!savedId) return
     showStatus(
@@ -90,8 +98,10 @@ export function useTranslationPageDocumentActions(options: {
   }, [
     canSave,
     documentWorkspaceRef,
+    getPendingPageRemark,
     languages,
     livePageSnapshotsRef,
+    activeDocument?.pageRemarks,
     onSaveDocument,
     setError,
     showStatus,

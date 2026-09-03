@@ -26,6 +26,19 @@ export function resolvedPageCount(totalPages: number, pagesLength: number): numb
   return Math.max(totalPages, pagesLength)
 }
 
+/** Let the first PDF preview IPC start before metadata re-opens the same file. */
+export function yieldToNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        setTimeout(resolve, 0)
+      })
+      return
+    }
+    setTimeout(resolve, 0)
+  })
+}
+
 export function reorderQueueFront(queue: number[], pageNumber: number): void {
   const index = queue.indexOf(pageNumber)
   if (index <= 0) return

@@ -56,7 +56,7 @@ export function useDocumentVisiblePage(
 
     observeRows()
     const mutationObserver = new MutationObserver(observeRows)
-    mutationObserver.observe(root, { childList: true, subtree: true })
+    mutationObserver.observe(root, { childList: true })
 
     return () => {
       observer.disconnect()

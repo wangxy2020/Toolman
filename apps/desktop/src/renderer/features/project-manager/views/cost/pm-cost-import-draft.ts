@@ -20,6 +20,7 @@ export type DraftRow = {
   quantity: number | null
   unitPrice: number | null
   sectionalWork: string
+  subproject: string
   type: PmCostType
   note: string
 }
@@ -33,6 +34,7 @@ export function emptyDraft(fallbackType: PmCostType): DraftRow {
     quantity: null,
     unitPrice: null,
     sectionalWork: '',
+    subproject: '',
     type: fallbackType,
     note: '',
   }
@@ -83,6 +85,9 @@ export function applyField(draft: DraftRow, field: CostImportHeaderField, raw: u
     case 'sectionalWork':
       draft.sectionalWork = cellText(raw)
       break
+    case 'subproject':
+      draft.subproject = cellText(raw)
+      break
     case 'type':
       draft.type = resolveImportCostType(raw, draft.type)
       break
@@ -110,6 +115,7 @@ export function draftsToCostRows(
       unitPrice: draft.unitPrice,
       note: draft.note,
       sectionalWork: draft.sectionalWork,
+      subproject: draft.subproject,
     })
   }
   return reindexCostRows(rows)

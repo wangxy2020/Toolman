@@ -116,6 +116,68 @@ export function countOverduePmWorkItems(workItems: PmWorkItem[], now = Date.now(
   ).length
 }
 
+export type PlanProgressKpiCounts = {
+  monthMilestoneCount: number
+  monthWorkItemCount: number
+  riskWorkItemCount: number
+}
+
+function startOfLocalMonth(now: number): number {
+  const date = new Date(now)
+  return new Date(date.getFullYear(), date.getMonth(), 1).getTime()
+}
+
+function startOfNextLocalMonth(now: number): number {
+  const date = new Date(now)
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1).getTime()
+}
+
+function timestampTouchesMonth(ms: number | undefined, start: number, end: number): boolean {
+  return ms != null && Number.isFinite(ms) && ms >= start && ms < end
+}
+
+export function workItemTouchesMonth(item: PmWorkItem, now = Date.now()): boolean {
+  const start = startOfLocalMonth(now)
+  const end = startOfNextLocalMonth(now)
+  return (
+    timestampTouchesMonth(item.dueDate, start, end) ||
+    timestampTouchesMonth(item.startDate, start, end) ||
+    timestampTouchesMonth(item.updatedAt, start, end)
+  )
+}
+
+export function isRiskPmWorkItem(item: PmWorkItem, now = Date.now()): boolean {
+  if (item.status === 'done' || item.status === 'cancelled') return false
+  if (item.status === 'blocked') return true
+  if (item.priority === 'urgent' || item.priority === 'high') return true
+  return item.dueDate != null && item.dueDate < now
+}
+
+export function buildPlanProgressKpiCounts(
+  workItems: PmWorkItem[],
+  now = Date.now(),
+): PlanProgressKpiCounts {
+  return {
+    monthMilestoneCount: workItems.filter(
+      (item) => item.type === 'milestone' && workItemTouchesMonth(item, now),
+    ).length,
+    monthWorkItemCount: workItems.filter((item) => workItemTouchesMonth(item, now)).length,
+    riskWorkItemCount: workItems.filter((item) => isRiskPmWorkItem(item, now)).length,
+  }
+}
+
+export function buildPlanProgressKpiCountsFromRecords(
+  records: EpcProjectRecord[],
+): PlanProgressKpiCounts {
+  return {
+    monthMilestoneCount: records.filter(
+      (record) => record.planPhase === '试运行' || record.planPhase === '竣工',
+    ).length,
+    monthWorkItemCount: records.length,
+    riskWorkItemCount: records.filter((record) => record.status !== 'normal').length,
+  }
+}
+
 export function buildPmPortfolioAggregates(
   projects: PmProject[],
   workItems: PmWorkItem[] = [],

@@ -23,9 +23,13 @@ import {
 import {
   costInsights,
   costKpis,
+  pickImportantRecords,
   progressInsights,
   progressKpis,
+  planKpis,
   securityKpis,
+  urgentInsights,
+  urgentKpis,
   verticalKpis,
 } from './projectStats-kpis'
 
@@ -60,9 +64,6 @@ export function buildProjectStats(menuKey: ProjectSidebarMenuKey): ProjectStatsM
   const records = mockRecords()
   const aggregates = mockAggregates()
   const atRisk = records.filter((item) => item.status !== 'normal')
-  const inProgress = records.filter(
-    (item) => item.progressPercent > 0 && item.progressPercent < 100,
-  ).length
   const blocked = records.filter((item) => item.status === 'critical').length
 
   switch (menuKey) {
@@ -76,6 +77,14 @@ export function buildProjectStats(menuKey: ProjectSidebarMenuKey): ProjectStatsM
         emptyHint: '暂无项目数据',
       }
     case 'progress_management':
+      return {
+        variant: 'progress',
+        kpis: planKpis(aggregates),
+        section: { title: '项目进度概览', desc: '核心 EPC 项目计划与实际进度状态' },
+        records,
+        insights: progressInsights(aggregates),
+        emptyHint: '暂无项目数据',
+      }
     case 'all_projects':
       return {
         variant: 'progress',
@@ -88,17 +97,10 @@ export function buildProjectStats(menuKey: ProjectSidebarMenuKey): ProjectStatsM
     case 'urgent_tasks':
       return {
         variant: 'progress',
-        kpis: [
-          kpi('open', '未完成工作项', `${records.length}`, '未完成工作项', 'list'),
-          kpi('urgent', '高优先级', `${atRisk.length}`, '高优先级', 'alert', atRisk.length > 0 ? 'up' : null),
-          kpi('blocked', '阻塞中', `${blocked}`, '阻塞中', 'layers', blocked > 0 ? 'up' : null),
-          kpi('projects', '关联项目', `${records.length}`, '关联项目', 'building'),
-          kpi('inProgress', '进行中', `${inProgress}`, '进行中', 'check'),
-          kpi('progress', '平均进度', `${aggregates.avgProgress.toFixed(0)}%`, '平均完成度', 'trending'),
-        ],
-        section: { title: '待办看板', desc: '按状态查看高优先级与逾期工作项' },
-        records: atRisk.length > 0 ? atRisk : records,
-        insights: [],
+        kpis: urgentKpis(records),
+        section: { title: '重要事项进展', desc: '高优先级、逾期与阻塞事项的当前进度' },
+        records: pickImportantRecords(records),
+        insights: urgentInsights(records),
         emptyHint: '暂无高优先级或逾期工作项。',
       }
     case 'key_projects':

@@ -10,8 +10,8 @@ import {DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   KnowledgeFolderListFilesInputSchema,
   KnowledgeFolderListFilesOutputSchema } from '@toolman/shared'
 import { resolveKnowledgeWatchConfig } from './knowledge-watch-config.service'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
 import { isExecutableLikePath } from './shell-open-guard'
+import { assertPathWithinAllowedRoots, assertUserAccessiblePath } from './path-sandbox.service'
 
 function ensureFolder(folderPath: string) {
   if (!existsSync(folderPath)) {
@@ -70,7 +70,7 @@ export function importKnowledgeFolderFiles(input: unknown) {
 
   for (const rawSourcePath of data.filePaths) {
     try {
-      const sourcePath = assertPathWithinAllowedRoots(rawSourcePath)
+      const sourcePath = assertUserAccessiblePath(rawSourcePath)
       if (!existsSync(sourcePath)) {
         failed.push({ path: rawSourcePath, message: '文件不存在' })
         continue

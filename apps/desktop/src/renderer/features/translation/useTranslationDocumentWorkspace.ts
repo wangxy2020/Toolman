@@ -8,9 +8,15 @@ import {
   type RefObject,
 } from 'react'
 import type { PdfParserBackend, TranslationLanguage } from '@toolman/shared'
-import { buildDocumentPageSnapshots } from './document-page-snapshots'
+import {
+  buildDocumentPageSnapshots,
+  mergeLiveSnapshotsWithSaved,
+  pagesHaveIncompleteSnapshotBodies,
+} from './document-page-snapshots'
+import { estimateDocumentRowHeight, offsetToPage } from './document-page-window'
 import { useDocumentPageTranslation, type DocumentPageState } from './useDocumentPageTranslation'
-import { useDocumentVisiblePage } from './useDocumentVisiblePage'
+import { useDocumentPageWindow } from './useDocumentPageWindow'
+import { useDocumentRowHeights } from './useDocumentRowHeights'
 import type { TranslationDocumentItem, TranslationDocumentPageSnapshot } from './translation-storage'
 import {
   DOCUMENT_PAGE_ZOOM_DEFAULT,
@@ -63,12 +69,14 @@ export function useTranslationDocumentWorkspace(options: Options) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const widthRef = useRef(0)
   const resizeTimerRef = useRef<number | null>(null)
-  const [pageBox, setPageBox] = useState<PageDisplayBox>({ width: 400 })
+  const [pageBox, setPageBox] = useState<PageDisplayBox>({ width: 0 })
   const pendingTranslateRef = useRef(false)
   const pendingParseRef = useRef(false)
   const bootstrappingRef = useRef(false)
   const modelIdRef = useRef(modelId)
   const pagesRef = useRef<DocumentPageState[]>([])
+  const savedSnapshotsRef = useRef(activeDocument?.pageSnapshots)
+  savedSnapshotsRef.current = activeDocument?.pageSnapshots
 
   const {
     totalPages,
@@ -103,26 +111,35 @@ export function useTranslationDocumentWorkspace(options: Options) {
   pagesRef.current = pages
 
   useEffect(() => {
-    onPageSnapshotsChange?.(buildDocumentPageSnapshots(pages))
+    onPageSnapshotsChange?.(
+      mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pages), savedSnapshotsRef.current),
+    )
   }, [onPageSnapshotsChange, pages])
 
   const resolvedTotalPages = Math.max(totalPages, pages.length)
-  const currentPage = useDocumentVisiblePage(scrollRef, Boolean(activeDocument) && !bootstrapping)
+  const fallbackRowHeight = estimateDocumentRowHeight(pageBox.width, pageAspect)
+  const { getRowHeight, reportHeight, version } = useDocumentRowHeights(
+    activeDocument?.id ?? null,
+    fallbackRowHeight,
+  )
+  const { currentPage, startPage, endPage } = useDocumentPageWindow(
+    scrollRef,
+    Boolean(activeDocument) && !bootstrapping,
+    resolvedTotalPages,
+    getRowHeight,
+    version,
+    fallbackRowHeight,
+  )
 
   const scrollToPage = useCallback(
     (pageNumber: number) => {
       const root = scrollRef.current
       if (!root) return
       const safePage = Math.max(1, Math.min(resolvedTotalPages || 1, Math.floor(pageNumber)))
-      const row = root.querySelector<HTMLElement>(`[data-page-number="${safePage}"]`)
-      if (row) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      } else {
-        root.scrollTo({ top: 0, behavior: 'smooth' })
-      }
+      root.scrollTo({ top: offsetToPage(safePage, getRowHeight), behavior: 'smooth' })
       focusPage(safePage)
     },
-    [focusPage, resolvedTotalPages],
+    [focusPage, getRowHeight, resolvedTotalPages],
   )
 
   const startTranslationRef = useRef(startTranslation)
@@ -177,7 +194,8 @@ export function useTranslationDocumentWorkspace(options: Options) {
       startParse: runStartParse,
       stopTranslation: () => stopTranslationRef.current(),
       stopParse: () => stopParseRef.current(),
-      getPageSnapshots: () => buildDocumentPageSnapshots(pagesRef.current),
+      getPageSnapshots: () =>
+        mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pagesRef.current), savedSnapshotsRef.current),
     }),
     [runStartParse, runStartTranslation, scrollToPage],
   )
@@ -189,7 +207,8 @@ export function useTranslationDocumentWorkspace(options: Options) {
       startParse: runStartParse,
       stopTranslation: () => stopTranslationRef.current(),
       stopParse: () => stopParseRef.current(),
-      getPageSnapshots: () => buildDocumentPageSnapshots(pagesRef.current),
+      getPageSnapshots: () =>
+        mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pagesRef.current), savedSnapshotsRef.current),
     }
     onRegisterActions?.(actions)
     return () => onRegisterActions?.(null)
@@ -204,6 +223,7 @@ export function useTranslationDocumentWorkspace(options: Options) {
   }, [onTargetTextChange, translatedText])
 
   useEffect(() => {
+    if (pagesHaveIncompleteSnapshotBodies(pages, savedSnapshotsRef.current)) return
     const sourceText = pages
       .filter((page) => page.sourceText.trim())
       .map((page) => page.sourceText.trim())
@@ -284,6 +304,11 @@ export function useTranslationDocumentWorkspace(options: Options) {
     parseArmed,
     translationArmed,
     resolvedTotalPages,
+    currentPage,
+    startPage,
+    endPage,
+    getRowHeight,
+    reportHeight,
     handleEnsurePage,
   }
 }

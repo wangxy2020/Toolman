@@ -92,6 +92,8 @@ export type PmCostRow = {
   note: string
   /** Sectional / divisional work (分部工程). */
   sectionalWork: string
+  /** Subproject under a subdivision (子项目). */
+  subproject: string
   /**
    * Code shown / edited on the 分部工程 summary row.
    * Kept in sync across rows that share the same sectionalWork key.

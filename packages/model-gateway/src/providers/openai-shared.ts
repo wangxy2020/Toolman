@@ -150,3 +150,9 @@ export function yieldTextOrReasoning(
   }
   return [{ type: 'reasoning-delta', text }]
 }
+
+/** Some Ollama thinking models leave `content` empty and put the answer in reasoning. */
+export function preferAnswerContent(mainContent: string, fallbackContent: string): string {
+  if (mainContent.trim()) return mainContent
+  return fallbackContent || mainContent
+}

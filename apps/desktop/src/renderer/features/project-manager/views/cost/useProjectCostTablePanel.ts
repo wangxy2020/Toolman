@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 
 import type { PmProject } from '@toolman/shared'
 import { readCostVersion, readMaxCostVersion } from '@toolman/shared'
@@ -67,7 +67,7 @@ export function useProjectCostTablePanel({
   variant = 'catalog',
   onOpenScheduleView: _onOpenScheduleView,
 }: ProjectCostTablePanelProps) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const isPractice = variant === 'practice'
   const isAllScope = !selectedProjectId || !projects.some((project) => project.id === selectedProjectId)
   const editingProject = useMemo(() => {
@@ -105,9 +105,16 @@ export function useProjectCostTablePanel({
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const [columnMenu, setColumnMenu] = useState<CostColumnMenuState | null>(null)
   const [columnVisibility, setColumnVisibility] = useState(() => loadCostColumnVisibility())
-  const [columnLabels, setColumnLabels] = useState<CostColumnLabels>(() => loadCostColumnLabels())
+  const [columnLabels, setColumnLabels] = useState<CostColumnLabels>(() =>
+    loadCostColumnLabels(language),
+  )
   const [editingHeaderColumn, setEditingHeaderColumn] = useState<CostLabelColumn | null>(null)
   const [headerDraft, setHeaderDraft] = useState('')
+  useEffect(() => {
+    setColumnLabels(loadCostColumnLabels(language))
+    setEditingHeaderColumn(null)
+    setHeaderDraft('')
+  }, [language])
   const headerInputRef = useRef<HTMLInputElement | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Set<string> | null>(null)
   const [pendingRestoreVersion, setPendingRestoreVersion] = useState<number | null>(null)
@@ -194,7 +201,7 @@ export function useProjectCostTablePanel({
     contextMenuRef, editingHeaderColumn, setEditingHeaderColumn, headerDraft, setHeaderDraft,
     headerInputRef, setCheckedIds, setSelectionMode, totalFormulaFocusIdRef, formulaInputRef,
     setSummaryRows, setDirty, rowsRef, updateRows: load.updateRows,
-    resolveEditableSummaryRows: rowsApi.resolveEditableSummaryRows, t,
+    resolveEditableSummaryRows: rowsApi.resolveEditableSummaryRows, t, language,
   })
   const menu = useProjectCostTableMenu({
     isPractice, selectedMeteringBaselineId, versionSwitchEntries: version.versionSwitchEntries,

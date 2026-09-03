@@ -27,6 +27,7 @@ export function createEmptyCostRow(
     applicable,
     note: '',
     sectionalWork: '',
+    subproject: '',
     sectionCode: '',
     sectionNote: '',
     sectionName: '',
@@ -64,6 +65,7 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
         : PM_COST_APPLICABLE_ALL
     const note = typeof row.note === 'string' ? row.note : ''
     const sectionalWork = typeof row.sectionalWork === 'string' ? row.sectionalWork : ''
+    const subproject = typeof row.subproject === 'string' ? row.subproject : ''
     const sectionCode = typeof row.sectionCode === 'string' ? row.sectionCode : ''
     const sectionNote = typeof row.sectionNote === 'string' ? row.sectionNote : ''
     const sectionName = typeof row.sectionName === 'string' ? row.sectionName : ''
@@ -93,6 +95,7 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
       applicable,
       note,
       sectionalWork,
+      subproject,
       sectionCode,
       sectionNote,
       sectionName,
@@ -119,6 +122,7 @@ export function fingerprintCostCatalog(rows: readonly PmCostRow[]): string {
       applicable: row.applicable,
       note: row.note,
       sectionalWork: row.sectionalWork,
+      subproject: row.subproject,
       sectionCode: row.sectionCode,
       sectionNote: row.sectionNote,
       sectionName: row.sectionName,

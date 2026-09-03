@@ -80,6 +80,8 @@ export type PmFeatureRow = {
   featureDescription: string
   /** Sectional / divisional work (分部工程). */
   sectionalWork: string
+  /** Subproject under a subdivision (子项目). */
+  subproject: string
   /** Unit price (单价); used on cost · 价格表 metering view. */
   unitPrice: number | null
   /** `'all'` = 全部项目, otherwise a project id. */

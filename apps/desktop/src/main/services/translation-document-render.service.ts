@@ -7,13 +7,15 @@ import {
   ipcOk,
   toErrorMessage,
 } from '@toolman/shared'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 export async function renderTranslationDocumentPage(input: unknown) {
   try {
     const data = TranslationDocumentRenderPageInputSchema.parse(input)
-    const filePath = assertPathWithinAllowedRoots(data.path)
-    const rendered = await renderPdfPagePreview(filePath, data.pageNumber, data.targetWidth)
+    const filePath = assertUserAccessiblePath(data.path)
+    const rendered = await renderPdfPagePreview(filePath, data.pageNumber, data.targetWidth, {
+      priority: data.priority,
+    })
     return ipcOk(
       TranslationDocumentRenderPageOutputSchema.parse({
         totalPages: rendered.totalPages,
@@ -25,6 +27,13 @@ export async function renderTranslationDocumentPage(input: unknown) {
       }),
     )
   } catch (error) {
+    if (error instanceof Error && error.message === 'PREVIEW_RENDER_DROPPED') {
+      return ipcErr({
+        code: 'ABORTED',
+        message: 'PREVIEW_RENDER_DROPPED',
+        retryable: true,
+      })
+    }
     return ipcErr({
       code: 'INTERNAL_ERROR',
       message: toErrorMessage(

@@ -7,12 +7,12 @@ import {
   resolveOpenAiModelName,
   resolveOpenAiMaxTokens,
   shouldOmitOpenAiSamplingParams,
-  shouldRouteThinkingAsAnswer,
 } from '../model-aliases.js'
 import { assertApiKey, providerFetch, resolveOpenAiBaseUrl } from '../utils.js'
 import {
   buildHeaders,
   mergeExtraBody,
+  preferAnswerContent,
   throwProviderHttpError,
 } from './openai-shared.js'
 import { formatMessagesForOpenAi, parseToolCalls } from './openai-messages.js'
@@ -25,7 +25,6 @@ export async function chatCompleteOpenAiCompatible(
 
   const baseUrl = resolveOpenAiBaseUrl(config)
   const apiModel = resolveOpenAiModelName(config, params.model)
-  const routeThinkingAsAnswer = shouldRouteThinkingAsAnswer(config, params.model)
   const omitSampling = shouldOmitOpenAiSamplingParams(config, params.model)
   const body: Record<string, unknown> = {
     model: apiModel,
@@ -81,8 +80,7 @@ export async function chatCompleteOpenAiCompatible(
   const mainContent = typeof message?.content === 'string' ? message.content : ''
   const fallbackContent =
     message?.reasoning_content?.trim() || message?.thinking?.trim() || ''
-  const content =
-    mainContent.trim() || (routeThinkingAsAnswer && fallbackContent ? fallbackContent : mainContent)
+  const content = preferAnswerContent(mainContent, fallbackContent)
   const usage = data.usage
     ? {
         prompt: data.usage.prompt_tokens ?? 0,

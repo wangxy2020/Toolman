@@ -43,3 +43,18 @@ export function resolveTranslationTarget(
 export function translationLanguageLabel(language: TranslationLanguage): string {
   return language === 'zh' ? '中文' : 'English'
 }
+
+export type ComposerTranslateSnapshot = {
+  original: string
+  translated: string
+}
+
+/** Second click on the composer translate icon restores the pre-translate text instead of round-tripping. */
+export function shouldRestoreComposerTranslation(
+  currentText: string,
+  snapshot: ComposerTranslateSnapshot | null | undefined,
+): snapshot is ComposerTranslateSnapshot {
+  if (!snapshot) return false
+  const current = currentText.trim()
+  return Boolean(current) && current === snapshot.translated.trim()
+}

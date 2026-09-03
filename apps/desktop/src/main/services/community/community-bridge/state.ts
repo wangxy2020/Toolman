@@ -11,6 +11,11 @@ import {
 export let childProcess: ChildProcess | null = null
 export let httpClient: CommunityHttpClient | null = null
 export let currentStatus: CommunityHubStatus = createInitialHubStatus()
+export let hubShutdownRequested = false
+export let hubStopIntentional = false
+
+type HubUnexpectedExitHandler = () => Promise<void>
+let unexpectedExitHandler: HubUnexpectedExitHandler | null = null
 
 export function setChildProcess(process: ChildProcess | null): void {
   childProcess = process
@@ -22,6 +27,22 @@ export function setHttpClient(client: CommunityHttpClient | null): void {
 
 export function setCurrentStatus(status: CommunityHubStatus): void {
   currentStatus = status
+}
+
+export function setHubShutdownRequested(requested: boolean): void {
+  hubShutdownRequested = requested
+}
+
+export function setHubStopIntentional(intentional: boolean): void {
+  hubStopIntentional = intentional
+}
+
+export function setHubUnexpectedExitHandler(handler: HubUnexpectedExitHandler | null): void {
+  unexpectedExitHandler = handler
+}
+
+export function getHubUnexpectedExitHandler(): HubUnexpectedExitHandler | null {
+  return unexpectedExitHandler
 }
 
 export function log(message: string, error?: unknown): void {

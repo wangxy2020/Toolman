@@ -1,3 +1,27 @@
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+
+const require = createRequire(import.meta.url)
+
+function withTrailingSlash(dir: string): string {
+  const normalized = dir.replaceAll('\\', '/')
+  return normalized.endsWith('/') ? normalized : `${normalized}/`
+}
+
+export function resolvePdfjsPackageRoot(): string {
+  try {
+    return dirname(require.resolve('pdfjs-dist/package.json'))
+  } catch {
+    const buildEntry = require.resolve('pdfjs-dist/legacy/build/pdf.mjs')
+    return join(dirname(buildEntry), '..', '..')
+  }
+}
+
+/** pdf.js 6 requires trailing slashes; Node's BinaryDataFactory reads these as filesystem paths. */
+export function resolvePdfjsAssetDir(subdir: string): string {
+  return withTrailingSlash(join(resolvePdfjsPackageRoot(), subdir))
+}
+
 export function createPdfjsLoadingOptions(buffer: Buffer) {
   return {
     data: new Uint8Array(buffer),
@@ -6,6 +30,11 @@ export function createPdfjsLoadingOptions(buffer: Buffer) {
     password: '',
     isEvalSupported: false,
     stopAtErrors: false,
+    wasmUrl: resolvePdfjsAssetDir('wasm'),
+    cMapUrl: resolvePdfjsAssetDir('cmaps'),
+    cMapPacked: true,
+    standardFontDataUrl: resolvePdfjsAssetDir('standard_fonts'),
+    iccUrl: resolvePdfjsAssetDir('iccs'),
   }
 }
 

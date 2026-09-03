@@ -26,10 +26,10 @@ export const projectManagerInfoZhCN = {
       kpi: {
         projects: { label: '在管项目', sub: '个项目' },
         contract: { label: '合同总额', sub: 'USD 口径', delta: '+4.2%' },
-        settled: { label: '已结算', sub: '结算率 {{value}}%', delta: '+2.8%' },
-        pending: { label: '待支付', sub: '含进度款与尾款', delta: '-1.1%' },
-        variance: { label: '成本偏差率', sub: '合同 vs 已结算', high: '偏高', ok: '可控' },
-        risk: { label: '风险项目', sub: '需关注 / 高风险', pending: '待处理', none: '无' },
+        settled: { label: '已计量', sub: '计量率 {{value}}%', delta: '+2.8%' },
+        pending: { label: '本月收入', sub: '本月进度款', delta: '-1.1%' },
+        variance: { label: '本月支出', sub: '本月成本发生' },
+        risk: { label: '本月计划完成', sub: '计划完成率' },
       },
       card: {
         contract: '合同额',
@@ -57,6 +57,9 @@ export const projectManagerInfoZhCN = {
         delay: { label: '里程碑延期', sub: '项待纠偏', delta: '-2' },
         variance: { label: '进度偏差率', sub: '计划 vs 实际', high: '偏高', ok: '可控' },
         risk: { label: '风险项目', sub: '需关注 / 高风险', pending: '待处理', none: '无' },
+        monthMilestones: { label: '本月里程碑', sub: '本月排期里程碑' },
+        monthWorkItems: { label: '本月工作项', sub: '本月有排期的工作项' },
+        riskWork: { label: '风险工作', sub: '逾期、阻塞或高优先级', pending: '待处理', none: '无' },
       },
       card: {
         plan: '计划进度',

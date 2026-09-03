@@ -8,7 +8,7 @@ import {
   toErrorMessage,
 } from '@toolman/shared'
 import { parsePdfDocument, clearOdlPreviewCache } from './document-parser.service'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 const nonPdfPlainTextCache = new Map<string, string>()
 
@@ -23,7 +23,7 @@ function detectKind(filePath: string): 'pdf' | 'word' | 'excel' | 'unknown' {
 export async function parseTranslationDocumentPages(input: unknown) {
   try {
     const data = TranslationDocumentParsePagesInputSchema.parse(input)
-    const filePath = assertPathWithinAllowedRoots(data.path)
+    const filePath = assertUserAccessiblePath(data.path)
     const kind = detectKind(filePath)
     const startPage = Math.min(data.startPage, data.endPage)
     const endPage = Math.max(data.startPage, data.endPage)

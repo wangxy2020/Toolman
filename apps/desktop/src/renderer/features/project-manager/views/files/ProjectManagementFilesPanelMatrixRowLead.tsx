@@ -119,6 +119,21 @@ export const ProjectManagementFilesPanelMatrixRowLead: FC<{
                             )}
                           </td>
                         ) : null}
+                        {isMeteringCostView && mCol.subproject ? (
+                          <td className="tm-pm-resource-table-col-subproject">
+                            <input
+                              className="tm-pm-resource-table-input"
+                              value={row.subproject}
+                              placeholder={t(
+                                'projectManagerPage.costTable.columns.subproject',
+                              )}
+                              onChange={(event) =>
+                                patchRow(row.id, { subproject: event.target.value })
+                              }
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </td>
+                        ) : null}
                         {isMeteringCostView && mCol.sectionalWork ? (
                           <td className="tm-pm-resource-table-col-sectional">
                             <input

@@ -7,7 +7,7 @@ import {
   ipcOk,
   toErrorMessage,
 } from '@toolman/shared'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 const DEFAULT_MAX_BYTES = 80 * 1024 * 1024
 
@@ -34,7 +34,7 @@ function mimeTypeForPath(filePath: string): string {
 export async function readFileBinary(input: unknown) {
   try {
     const data = FileReadBinaryInputSchema.parse(input)
-    const filePath = assertPathWithinAllowedRoots(data.path)
+    const filePath = assertUserAccessiblePath(data.path)
     const maxBytes = data.maxBytes ?? DEFAULT_MAX_BYTES
     const stat = statSync(filePath)
     if (!stat.isFile()) {

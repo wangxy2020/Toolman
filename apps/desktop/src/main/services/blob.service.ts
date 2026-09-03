@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm'
 import { blobs } from '@toolman/db'
 import { copyFileChunkedSync, hashFileBytes } from '@toolman/knowledge'
 import { getDatabase } from '../bootstrap/database'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 export function getBlobsDir(): string {
   const dir = join(app.getPath('userData'), 'storage', 'blobs')
@@ -129,7 +129,7 @@ export function writeBlobFromBuffer(data: Buffer, mimeType: string): BlobRecord 
 }
 
 export function writeBlobFromPath(sourcePath: string): BlobRecord {
-  const allowedPath = assertPathWithinAllowedRoots(sourcePath)
+  const allowedPath = assertUserAccessiblePath(sourcePath)
   if (!existsSync(allowedPath)) {
     throw new Error(`文件不存在: ${sourcePath}`)
   }

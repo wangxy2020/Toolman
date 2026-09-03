@@ -26,10 +26,10 @@ export const projectManagerInfoEn = {
       kpi: {
         projects: { label: 'Active projects', sub: 'EPC projects' },
         contract: { label: 'Contract total', sub: 'USD basis', delta: '+4.2%' },
-        settled: { label: 'Settled', sub: 'Settlement {{value}}%', delta: '+2.8%' },
-        pending: { label: 'Pending pay', sub: 'Progress & final payments', delta: '-1.1%' },
-        variance: { label: 'Cost variance', sub: 'Contract vs settled', high: 'High', ok: 'OK' },
-        risk: { label: 'At-risk projects', sub: 'Attention / high risk', pending: 'Open', none: 'None' },
+        settled: { label: 'Measured', sub: 'Measured {{value}}%', delta: '+2.8%' },
+        pending: { label: 'Income this month', sub: 'Progress billing this month', delta: '-1.1%' },
+        variance: { label: 'Spend this month', sub: 'Cost incurred this month' },
+        risk: { label: 'Plan complete this month', sub: 'Planned completion' },
       },
       card: {
         contract: 'Contract',
@@ -57,6 +57,9 @@ export const projectManagerInfoEn = {
         delay: { label: 'Delayed milestones', sub: 'Items to recover', delta: '-2' },
         variance: { label: 'Schedule variance', sub: 'Plan vs actual', high: 'High', ok: 'OK' },
         risk: { label: 'At-risk projects', sub: 'Attention / high risk', pending: 'Open', none: 'None' },
+        monthMilestones: { label: 'Milestones this month', sub: 'Due or scheduled this month' },
+        monthWorkItems: { label: 'Work items this month', sub: 'Items scheduled this month' },
+        riskWork: { label: 'Risk work', sub: 'Overdue, blocked, or high priority', pending: 'Open', none: 'None' },
       },
       card: {
         plan: 'Planned',

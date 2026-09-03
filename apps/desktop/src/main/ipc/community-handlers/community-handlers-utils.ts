@@ -1,5 +1,6 @@
 import { ipcErr, ipcOk, type IpcError, type IpcResult } from '@toolman/shared'
 import { CommunityHttpError, humanizeCommunityFetchError } from '../../services/community/community-http.client'
+import { recoverCommunityHubConnection } from '../../services/community/community-bridge.service'
 import { CommunityHubUnavailableError } from '../../services/community/community-ipc.facade'
 
 export type HandlerFn = (input: unknown) => Promise<IpcResult<unknown>>
@@ -43,6 +44,7 @@ export function mapCommunityError(error: unknown): IpcResult<never> {
 export function communityHandler(handler: (input: unknown) => Promise<unknown>): HandlerFn {
   return async (input) => {
     try {
+      await recoverCommunityHubConnection()
       return ipcOk(await handler(input))
     } catch (error) {
       return mapCommunityError(error)

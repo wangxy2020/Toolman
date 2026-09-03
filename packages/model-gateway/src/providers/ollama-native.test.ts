@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extractBase64ImagesFromContent,
   formatMessagesForOllamaNative,
+  resolveOllamaNativeThink,
   shouldUseOllamaNativeChat,
 } from './ollama-native.js'
 
@@ -86,6 +87,27 @@ describe('shouldUseOllamaNativeChat', () => {
           ],
         },
       ),
+    ).toBe(false)
+  })
+})
+
+describe('resolveOllamaNativeThink', () => {
+  it('enables thinking for qwen3 by default', () => {
+    expect(
+      resolveOllamaNativeThink({
+        model: 'qwen3.6:latest',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    ).toBe(true)
+  })
+
+  it('disables thinking when extraBody.think is false', () => {
+    expect(
+      resolveOllamaNativeThink({
+        model: 'qwen3.6:latest',
+        messages: [{ role: 'user', content: 'hi' }],
+        extraBody: { think: false },
+      }),
     ).toBe(false)
   })
 })

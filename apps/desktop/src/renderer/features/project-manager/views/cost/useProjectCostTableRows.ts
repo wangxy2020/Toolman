@@ -119,6 +119,7 @@ export function useProjectCostTableRows(args: {
           } else if (previous) {
             next.sectionalWork = previous.sectionalWork ?? ''
           }
+          if (previous) next.subproject = previous.subproject ?? ''
           const sectionPeer =
             [...prev, ...added].find(
               (row) =>
@@ -200,6 +201,7 @@ export function useProjectCostTableRows(args: {
         next.sectionalWork =
           prev[index]?.sectionalWork ?? previous?.sectionalWork ?? ''
       }
+      next.subproject = prev[index]?.subproject ?? previous?.subproject ?? ''
       const sectionPeer =
         previous &&
         (previous.sectionalWork?.trim() ?? '') === (next.sectionalWork?.trim() ?? '')

@@ -137,6 +137,7 @@ export const pmApiCatalogs = {
         featureDescription?: string
         note?: string
         sectionalWork?: string
+        subproject?: string
       }>
       removes?: Array<{ type?: PmSharedCostCatalogRow['type']; name: string }>
     }>
@@ -184,6 +185,7 @@ export const pmApiCatalogs = {
       featureDescription?: string
       note?: string
       sectionalWork?: string
+      subproject?: string
     }>,
   ) {
     return invoke<{ rows: PmSharedCostCatalogRow[]; changed: boolean }>(

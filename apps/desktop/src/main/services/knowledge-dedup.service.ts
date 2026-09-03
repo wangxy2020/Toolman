@@ -9,7 +9,7 @@ import {KnowledgeFileDedupDeleteInputSchema,
 import { hashFileBytes } from '@toolman/knowledge'
 import type { z } from 'zod'
 import { broadcastKnowledgeDedupEvent } from './knowledge-dedup-broadcast'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 type ScanResult = z.infer<typeof KnowledgeFileDedupScanOutputSchema>
 
@@ -97,7 +97,7 @@ export async function scanDuplicateFiles(input: unknown): Promise<ScanResult> {
   const key = scanKey(workspaceId)
   cancelledWorkspaces.delete(key)
 
-  const folderPath = assertPathWithinAllowedRoots(data.folderPath.trim())
+  const folderPath = assertUserAccessiblePath(data.folderPath.trim())
 
   let rootStat
   try {
@@ -219,7 +219,7 @@ export async function deleteDuplicateFiles(input: unknown) {
 
   for (const filePath of data.filePaths) {
     try {
-      const allowedPath = assertPathWithinAllowedRoots(filePath)
+      const allowedPath = assertUserAccessiblePath(filePath)
       // Prefer Trash / Recycle Bin over permanent unlink.
       // Electron requires a platform-native absolute path for trashItem.
       await shell.trashItem(resolve(allowedPath))

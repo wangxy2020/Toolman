@@ -9,12 +9,51 @@ export const projectManagerWorkbenchEn = {
   urgent: {
     loading: 'Loading tasks…',
     empty: 'No urgent or overdue work items.',
+    kpi: {
+      open: 'Open',
+      urgent: 'High priority',
+      overdue: 'Overdue',
+      blocked: 'Blocked',
+      inProgress: 'In progress',
+      projects: 'Projects',
+    },
     kpiSub: {
       open: 'Open work items',
       urgent: 'High priority',
+      overdue: 'Past due date',
       blocked: 'Blocked',
       projects: 'Related projects',
       inProgress: 'In progress',
+    },
+    itemsTitle: 'Important items',
+    itemsDesc: 'Progress of high-priority, overdue, and blocked work',
+    insightHealth: {
+      title: 'Todo health',
+      desc: 'Share of open items that are not overdue or blocked; keep above 85%',
+    },
+    insightProgress: {
+      title: 'Average execution progress',
+      desc: 'Mean completion of open todos, tracked against due dates',
+    },
+    card: {
+      priority: 'Priority',
+      progress: 'Progress',
+      due: 'Due',
+      progressMeta: 'Progress {{value}}%',
+    },
+    priority: {
+      low: 'Low',
+      normal: 'Normal',
+      high: 'High',
+      urgent: 'Urgent',
+    },
+    status: {
+      todo: 'To do',
+      in_progress: 'In progress',
+      done: 'Done',
+      blocked: 'Blocked',
+      cancelled: 'Cancelled',
+      overdue: 'Overdue',
     },
     columns: {
       due: 'Due',

@@ -24,6 +24,23 @@ export function getClipboardImageFiles(clipboardData: DataTransfer): File[] {
   return files
 }
 
+export function getClipboardPlainText(clipboardData: DataTransfer): string {
+  try {
+    return clipboardData.getData('text/plain') ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Word/Excel put a bitmap next to copied text. Prefer the text so we don't
+ * send an Office preview PNG (often black RGB + text in alpha) to the model.
+ */
+export function shouldStageClipboardImages(clipboardData: DataTransfer): boolean {
+  if (getClipboardImageFiles(clipboardData).length === 0) return false
+  return !getClipboardPlainText(clipboardData).trim()
+}
+
 export function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

@@ -4,6 +4,7 @@ import {
   detectSourceLanguage,
   normalizeTranslationLanguages,
   resolveTranslationTarget,
+  shouldRestoreComposerTranslation,
 } from './translation-utils'
 
 describe('translation-utils', () => {
@@ -20,5 +21,15 @@ describe('translation-utils', () => {
   it('picks the other language in the pair', () => {
     expect(resolveTranslationTarget('你好', ['zh', 'en'])).toBe('en')
     expect(resolveTranslationTarget('hello', ['zh', 'en'])).toBe('zh')
+  })
+
+  it('restores the original composer text after a translation', () => {
+    const snapshot = {
+      original: 'Your outfit is stunning. No notes.',
+      translated: '你的穿着太惊艳了。无可挑剔。',
+    }
+    expect(shouldRestoreComposerTranslation(snapshot.translated, snapshot)).toBe(true)
+    expect(shouldRestoreComposerTranslation(snapshot.original, snapshot)).toBe(false)
+    expect(shouldRestoreComposerTranslation(snapshot.translated, null)).toBe(false)
   })
 })

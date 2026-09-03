@@ -10,6 +10,7 @@ import {
 import { CommunityHttpClient } from '../community-http.client'
 import type { CommunityHealthData } from '../community-http/community-http.types'
 import { resolveCommunityHubAuth } from '../community-hub-auth.service'
+import { getCommunityHubMode, resolveCommunityHubBaseUrl } from '../community-hub.config'
 import { hasAnyCommunityHubCache } from '../community-hub-cache.service'
 import { waitForHealth } from './health'
 import {
@@ -27,6 +28,9 @@ import {
 } from './state'
 import { getCommunityHubStatus } from './status'
 import type { CommunityHubPortFile, CommunityHubStatus } from './types'
+
+const HEALTH_OK_TTL_MS = 3_000
+let lastHealthyAt = 0
 
 export async function incompatibleLocalHubReason(
   health: CommunityHealthData,
@@ -92,16 +96,49 @@ export async function connectRemoteCommunityHub(baseUrl: string): Promise<Commun
 }
 
 export async function recoverCommunityHubConnection(): Promise<CommunityHubStatus> {
-  await refreshCommunityHubClientIfNeeded()
-  return getCommunityHubStatus()
+  if (await refreshCommunityHubClientIfNeeded()) {
+    return getCommunityHubStatus()
+  }
+
+  if (getCommunityHubMode() === 'remote') {
+    const baseUrl = resolveCommunityHubBaseUrl()
+    if (baseUrl) {
+      return connectRemoteCommunityHub(baseUrl)
+    }
+    return getCommunityHubStatus()
+  }
+
+  log('local sidecar not running; restarting')
+  const { startCommunityHub } = await import('./lifecycle')
+  return startCommunityHub()
+}
+
+function markLocalHubNotRunning(): void {
+  lastHealthyAt = 0
+  if (!currentStatus.running && httpClient == null) return
+  setCurrentStatus({
+    ...currentStatus,
+    running: false,
+    error: currentStatus.error ?? 'Community hub is not running',
+  })
 }
 
 /** Re-attach when the cached client points at a dead port (common in dual-instance dev). */
 export async function refreshCommunityHubClientIfNeeded(): Promise<boolean> {
+  if (
+    httpClient &&
+    currentStatus.running &&
+    !currentStatus.offlineReadOnly &&
+    Date.now() - lastHealthyAt < HEALTH_OK_TTL_MS
+  ) {
+    return true
+  }
+
   if (httpClient) {
     try {
       const health = await httpClient.health()
       if (health.status === 'healthy') {
+        lastHealthyAt = Date.now()
         if (!currentStatus.running || currentStatus.offlineReadOnly) {
           setCurrentStatus({
             ...currentStatus,
@@ -118,6 +155,12 @@ export async function refreshCommunityHubClientIfNeeded(): Promise<boolean> {
   }
 
   setHttpClient(null)
+  lastHealthyAt = 0
+
+  if (getCommunityHubMode() === 'remote') {
+    markLocalHubNotRunning()
+    return false
+  }
 
   if (childProcess && currentStatus.port !== null) {
     const client = new CommunityHttpClient({
@@ -128,6 +171,7 @@ export async function refreshCommunityHubClientIfNeeded(): Promise<boolean> {
     try {
       const health = await client.health()
       if (health.status === 'healthy') {
+        lastHealthyAt = Date.now()
         setHttpClient(client)
         setCurrentStatus({
           ...currentStatus,
@@ -143,7 +187,12 @@ export async function refreshCommunityHubClientIfNeeded(): Promise<boolean> {
   }
 
   const attached = await tryAttachRunningCommunityHub()
-  return attached !== null && httpClient !== null
+  if (attached !== null && httpClient !== null) {
+    return true
+  }
+
+  markLocalHubNotRunning()
+  return false
 }
 
 export async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus | null> {
@@ -185,6 +234,7 @@ export async function tryAttachRunningCommunityHub(): Promise<CommunityHubStatus
       }
 
       setHttpClient(client)
+      lastHealthyAt = Date.now()
       setCurrentStatus({
         running: true,
         mode: 'local',

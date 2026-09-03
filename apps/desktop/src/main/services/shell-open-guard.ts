@@ -1,5 +1,5 @@
 import { extname } from 'node:path'
-import { PathSandboxError, assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { PathSandboxError, assertUserAccessiblePath } from './path-sandbox.service'
 
 const EXECUTABLE_EXTENSIONS = new Set([
   '.exe',
@@ -42,9 +42,9 @@ export function isExecutableLikePath(filePath: string): boolean {
   return EXECUTABLE_EXTENSIONS.has(extname(normalized).toLowerCase())
 }
 
-/** Open/reveal in the OS — same roots as reads, but never launch executables. */
+/** Open/reveal in the OS. User-picked files may live outside the workspace; never launch executables. */
 export function assertPathSafeToOpenInShell(inputPath: string): string {
-  const allowed = assertPathWithinAllowedRoots(inputPath)
+  const allowed = assertUserAccessiblePath(inputPath)
   if (isExecutableLikePath(allowed)) {
     throw new PathSandboxError('不允许通过系统打开可执行文件')
   }

@@ -18,6 +18,7 @@ import {
   shouldUseOllamaNativeChat,
   streamOllamaNativeChat,
 } from './providers/ollama-native.js'
+import { preferAnswerContent } from './providers/openai-shared.js'
 import {
   fetchAnthropicModels,
   streamAnthropic,
@@ -63,17 +64,19 @@ export class DefaultModelGateway implements ModelGateway {
     if (OPENAI_COMPAT_TYPES.includes(config.type)) {
       if (shouldUseOllamaNativeChat(config, params)) {
         let content = ''
+        let reasoning = ''
         const toolCalls: ChatCompletionResult['toolCalls'] = []
         let usage: ChatCompletionResult['usage']
         let finishReason: string | undefined
         for await (const chunk of streamOllamaNativeChat(config, params)) {
           if (chunk.type === 'text-delta' && chunk.text) content += chunk.text
+          if (chunk.type === 'reasoning-delta' && chunk.text) reasoning += chunk.text
           if (chunk.type === 'done') {
             if (chunk.usage) usage = chunk.usage
             if (chunk.finishReason) finishReason = chunk.finishReason
           }
         }
-        return { content, toolCalls, usage, finishReason }
+        return { content: preferAnswerContent(content, reasoning), toolCalls, usage, finishReason }
       }
       return chatCompleteOpenAiCompatible(config, params)
     }

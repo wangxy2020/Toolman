@@ -46,6 +46,7 @@ export function snapshotToRows(
       featureDescription:
         typeof row.featureDescription === 'string' ? row.featureDescription : '',
       sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
+      subproject: typeof row.subproject === 'string' ? row.subproject : '',
       unitPrice:
         typeof row.unitPrice === 'number' && Number.isFinite(row.unitPrice)
           ? row.unitPrice

@@ -8,7 +8,7 @@ import {
   NotesSyncExportOutputSchema,
   ipcOk,
 } from '@toolman/shared'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 function getNotesAttachmentsDir(noteId: string): string {
   const dir = join(app.getPath('userData'), 'notes-attachments', noteId)
@@ -18,7 +18,7 @@ function getNotesAttachmentsDir(noteId: string): string {
 
 export function importNotesAttachment(input: unknown) {
   const data = NotesAttachmentImportInputSchema.parse(input)
-  const sourcePath = assertPathWithinAllowedRoots(data.sourcePath)
+  const sourcePath = assertUserAccessiblePath(data.sourcePath)
   const dir = getNotesAttachmentsDir(data.noteId)
   const name = basename(sourcePath)
   const fileName = `${Date.now()}-${name}`
@@ -35,7 +35,7 @@ export function importNotesAttachment(input: unknown) {
 
 export function exportNotesSyncFile(input: unknown) {
   const data = NotesSyncExportInputSchema.parse(input)
-  const folderPath = assertPathWithinAllowedRoots(data.folderPath)
+  const folderPath = assertUserAccessiblePath(data.folderPath)
   if (!existsSync(folderPath)) mkdirSync(folderPath, { recursive: true })
   const filePath = join(folderPath, 'toolman-notes-sync.json')
   writeFileSync(filePath, data.dataJson, 'utf8')

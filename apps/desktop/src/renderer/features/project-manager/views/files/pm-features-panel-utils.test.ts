@@ -17,6 +17,7 @@ function row(
     code: '',
     featureDescription: '',
     sectionalWork: '',
+    subproject: '',
     unitPrice: null,
     applicable: 'all',
     sortOrder: 0,

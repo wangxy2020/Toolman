@@ -173,6 +173,7 @@ export function toFeatureCatalogSnapshot(rows: readonly PmFeatureRow[]): PmFeatu
     code: row.code,
     featureDescription: row.featureDescription,
     sectionalWork: row.sectionalWork,
+    subproject: row.subproject,
     unitPrice: row.unitPrice,
     applicable: row.applicable,
     sortOrder: row.sortOrder,

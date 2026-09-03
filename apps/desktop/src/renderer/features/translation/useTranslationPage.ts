@@ -33,6 +33,7 @@ export interface TranslationPageProps {
   onSaveDocumentToNotes?: (title: string, content: string) => void
   onOpenDocumentPath: (filePath: string) => void
   onUpdateDocumentSourceText: (documentId: string, sourceText: string) => void
+  onUpdateDocumentPageRemark?: (documentId: string, pageNumber: number, text: string) => void
   onClearActiveDocument: () => void
 }
 
@@ -48,6 +49,7 @@ export function useTranslationPage({
   onSaveDocumentToNotes,
   onOpenDocumentPath,
   onUpdateDocumentSourceText,
+  onUpdateDocumentPageRemark,
   onClearActiveDocument,
 }: TranslationPageProps) {
   const { t } = useI18n()
@@ -80,6 +82,11 @@ export function useTranslationPage({
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [documentTotalPages, setDocumentTotalPages] = useState(0)
   const [documentCurrentPage, setDocumentCurrentPage] = useState(1)
+  const [remarkOpenPage, setRemarkOpenPage] = useState<number | null>(null)
+  const remarkTimerRef = useRef<number | null>(null)
+  const pendingRemarkRef = useRef<{ documentId: string; pageNumber: number; text: string } | null>(
+    null,
+  )
   const contrastViewRef = useRef<TranslationContrastViewHandle | null>(null)
   const documentWorkspaceRef = useRef<TranslationDocumentWorkspaceHandle | null>(null)
   const livePageSnapshotsRef = useRef<TranslationDocumentPageSnapshot[]>([])
@@ -96,6 +103,54 @@ export function useTranslationPage({
   const handlePageSnapshotsChange = useCallback((snapshots: TranslationDocumentPageSnapshot[]) => {
     livePageSnapshotsRef.current = snapshots
   }, [])
+
+  useEffect(() => {
+    setRemarkOpenPage(null)
+  }, [activeDocument?.id])
+
+  useEffect(() => {
+    setRemarkOpenPage((openPage) =>
+      openPage == null || openPage === documentCurrentPage ? openPage : null,
+    )
+  }, [documentCurrentPage])
+
+  const canAddRemark = isDocuments && Boolean(activeDocument)
+  const flushPageRemark = useCallback(() => {
+    if (remarkTimerRef.current !== null) {
+      window.clearTimeout(remarkTimerRef.current)
+      remarkTimerRef.current = null
+    }
+    const pending = pendingRemarkRef.current
+    pendingRemarkRef.current = null
+    if (!pending || !onUpdateDocumentPageRemark) return
+    onUpdateDocumentPageRemark(pending.documentId, pending.pageNumber, pending.text)
+  }, [onUpdateDocumentPageRemark])
+  const getPendingPageRemark = useCallback(
+    () => pendingRemarkRef.current,
+    [],
+  )
+  const handleToggleRemark = useCallback(() => {
+    if (!canAddRemark) return
+    setRemarkOpenPage((openPage) => (openPage === documentCurrentPage ? null : documentCurrentPage))
+  }, [canAddRemark, documentCurrentPage])
+  const handlePageRemarkChange = useCallback(
+    (pageNumber: number, text: string) => {
+      if (!activeDocument || !onUpdateDocumentPageRemark) return
+      pendingRemarkRef.current = { documentId: activeDocument.id, pageNumber, text }
+      if (remarkTimerRef.current !== null) window.clearTimeout(remarkTimerRef.current)
+      remarkTimerRef.current = window.setTimeout(() => {
+        remarkTimerRef.current = null
+        flushPageRemark()
+      }, 400)
+    },
+    [activeDocument, flushPageRemark, onUpdateDocumentPageRemark],
+  )
+
+  useEffect(() => {
+    if (remarkOpenPage == null) flushPageRemark()
+  }, [flushPageRemark, remarkOpenPage])
+
+  useEffect(() => () => flushPageRemark(), [flushPageRemark])
 
   useTranslationPageRecordSync({
     isDocuments,
@@ -203,6 +258,7 @@ export function useTranslationPage({
     onOpenDocumentPath,
     onClearActiveDocument,
     showStatus,
+    getPendingPageRemark,
   })
 
   const statusFallback = buildTranslationPageStatusFallback({
@@ -252,7 +308,11 @@ export function useTranslationPage({
     canTranslate,
     canParse,
     canSave,
-    canSaveToNotes,
+    canAddRemark,
+    remarkOpenPage,
+    setRemarkOpenPage,
+    handleToggleRemark,
+    handlePageRemarkChange,
     handleSwapLanguages,
     handleClear,
     handleSave,

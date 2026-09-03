@@ -51,4 +51,21 @@ describe('path-sandbox.service', () => {
     expect(assertPathWithinAllowedRoots('/tmp/Desktop/notes.pdf')).toContain('Desktop')
     expect(assertPathWithinAllowedRoots('/tmp/Downloads/file.txt')).toContain('Downloads')
   })
+
+  it('lets user-selected files live outside the workspace folder', async () => {
+    const { assertUserAccessiblePath, assertPathWithinAllowedRoots } = await import(
+      './path-sandbox.service'
+    )
+    expect(assertUserAccessiblePath('/Users/test-user/Pictures/ScreenShot_2026-04-29_161251_059.png')).toContain(
+      'Pictures',
+    )
+    expect(() =>
+      assertPathWithinAllowedRoots('/Users/test-user/Pictures/ScreenShot_2026-04-29_161251_059.png'),
+    ).toThrow('路径不在允许访问的范围内')
+  })
+
+  it('still blocks system files for user-selected reads', async () => {
+    const { assertUserAccessiblePath } = await import('./path-sandbox.service')
+    expect(() => assertUserAccessiblePath('/etc/passwd')).toThrow('路径不在允许访问的范围内')
+  })
 })

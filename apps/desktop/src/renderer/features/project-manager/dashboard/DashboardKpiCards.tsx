@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useMemo } from 'react'
 
-import { formatProjectMoney, type EpcPortfolioAggregates } from '@toolman/shared'
+import { formatProjectMoney, type EpcPortfolioAggregates, type PlanProgressKpiCounts } from '@toolman/shared'
 
 import { useI18n } from '../../../i18n/useI18n'
 import { interpolateTemplate, type KpiCardModel, type ProjectDashboardVariant } from './dashboard-types'
@@ -17,9 +17,10 @@ import { PmKpiGrid } from './PmKpiGrid'
 type Props = {
   variant: ProjectDashboardVariant
   aggregates: EpcPortfolioAggregates
+  planCounts?: PlanProgressKpiCounts
 }
 
-export function DashboardKpiCards({ variant, aggregates }: Props) {
+export function DashboardKpiCards({ variant, aggregates, planCounts }: Props) {
   const { t } = useI18n()
   const isCost = variant === 'cost'
   const prefix = isCost ? 'projectManagerPage.dashboard.cost' : 'projectManagerPage.dashboard.progress'
@@ -33,6 +34,8 @@ export function DashboardKpiCards({ variant, aggregates }: Props) {
       aggregates.varianceRate > 35
         ? t(`${prefix}.kpi.variance.high`)
         : t(`${prefix}.kpi.variance.ok`)
+
+    const monthExpense = Math.max(0, aggregates.contractTotal - aggregates.settledTotal - aggregates.pendingTotal)
 
     if (isCost) {
       return [
@@ -68,26 +71,26 @@ export function DashboardKpiCards({ variant, aggregates }: Props) {
           label: t(`${prefix}.kpi.pending.label`),
           value: formatProjectMoney(aggregates.pendingTotal),
           sub: t(`${prefix}.kpi.pending.sub`),
-          trend: 'down',
-          delta: t(`${prefix}.kpi.pending.delta`),
+          trend: 'up',
+          delta: '',
           icon: <TrendingUp size={18} />,
         },
         {
           key: 'variance',
           label: t(`${prefix}.kpi.variance.label`),
-          value: `${aggregates.varianceRate.toFixed(1)}%`,
+          value: formatProjectMoney(monthExpense),
           sub: t(`${prefix}.kpi.variance.sub`),
-          trend: aggregates.varianceRate > 35 ? 'up' : 'down',
-          delta: varianceDelta,
+          trend: null,
+          delta: '',
           icon: <Layers size={18} />,
         },
         {
           key: 'risk',
           label: t(`${prefix}.kpi.risk.label`),
-          value: `${aggregates.overdueCount}`,
+          value: `${aggregates.avgProgress.toFixed(0)}%`,
           sub: t(`${prefix}.kpi.risk.sub`),
-          trend: aggregates.overdueCount > 0 ? 'up' : null,
-          delta: riskDelta,
+          trend: null,
+          delta: '',
           icon: <AlertTriangle size={18} />,
         },
       ]
@@ -121,35 +124,68 @@ export function DashboardKpiCards({ variant, aggregates }: Props) {
         delta: t(`${prefix}.kpi.actual.delta`),
         icon: <Wallet size={18} />,
       },
-      {
-        key: 'delay',
-        label: t(`${prefix}.kpi.delay.label`),
-        value: `${aggregates.overdueCount}`,
-        sub: t(`${prefix}.kpi.delay.sub`),
-        trend: 'down',
-        delta: t(`${prefix}.kpi.delay.delta`),
-        icon: <TrendingUp size={18} />,
-      },
-      {
-        key: 'variance',
-        label: t(`${prefix}.kpi.variance.label`),
-        value: `${aggregates.varianceRate.toFixed(1)}%`,
-        sub: t(`${prefix}.kpi.variance.sub`),
-        trend: aggregates.varianceRate > 35 ? 'up' : 'down',
-        delta: varianceDelta,
-        icon: <Layers size={18} />,
-      },
-      {
-        key: 'risk',
-        label: t(`${prefix}.kpi.risk.label`),
-        value: `${aggregates.overdueCount}`,
-        sub: t(`${prefix}.kpi.risk.sub`),
-        trend: aggregates.overdueCount > 0 ? 'up' : null,
-        delta: riskDelta,
-        icon: <AlertTriangle size={18} />,
-      },
+      planCounts
+        ? {
+            key: 'monthMilestones',
+            label: t(`${prefix}.kpi.monthMilestones.label`),
+            value: `${planCounts.monthMilestoneCount}`,
+            sub: t(`${prefix}.kpi.monthMilestones.sub`),
+            trend: null,
+            delta: '',
+            icon: <TrendingUp size={18} />,
+          }
+        : {
+            key: 'delay',
+            label: t(`${prefix}.kpi.delay.label`),
+            value: `${aggregates.overdueCount}`,
+            sub: t(`${prefix}.kpi.delay.sub`),
+            trend: 'down',
+            delta: t(`${prefix}.kpi.delay.delta`),
+            icon: <TrendingUp size={18} />,
+          },
+      planCounts
+        ? {
+            key: 'monthWorkItems',
+            label: t(`${prefix}.kpi.monthWorkItems.label`),
+            value: `${planCounts.monthWorkItemCount}`,
+            sub: t(`${prefix}.kpi.monthWorkItems.sub`),
+            trend: null,
+            delta: '',
+            icon: <Layers size={18} />,
+          }
+        : {
+            key: 'variance',
+            label: t(`${prefix}.kpi.variance.label`),
+            value: `${aggregates.varianceRate.toFixed(1)}%`,
+            sub: t(`${prefix}.kpi.variance.sub`),
+            trend: aggregates.varianceRate > 35 ? 'up' : 'down',
+            delta: varianceDelta,
+            icon: <Layers size={18} />,
+          },
+      planCounts
+        ? {
+            key: 'riskWork',
+            label: t(`${prefix}.kpi.riskWork.label`),
+            value: `${planCounts.riskWorkItemCount}`,
+            sub: t(`${prefix}.kpi.riskWork.sub`),
+            trend: planCounts.riskWorkItemCount > 0 ? 'up' : null,
+            delta:
+              planCounts.riskWorkItemCount > 0
+                ? t(`${prefix}.kpi.riskWork.pending`)
+                : t(`${prefix}.kpi.riskWork.none`),
+            icon: <AlertTriangle size={18} />,
+          }
+        : {
+            key: 'risk',
+            label: t(`${prefix}.kpi.risk.label`),
+            value: `${aggregates.overdueCount}`,
+            sub: t(`${prefix}.kpi.risk.sub`),
+            trend: aggregates.overdueCount > 0 ? 'up' : null,
+            delta: riskDelta,
+            icon: <AlertTriangle size={18} />,
+          },
     ]
-  }, [aggregates, isCost, prefix, t])
+  }, [aggregates, isCost, planCounts, prefix, t])
 
   return <PmKpiGrid cards={kpiCards} />
 }

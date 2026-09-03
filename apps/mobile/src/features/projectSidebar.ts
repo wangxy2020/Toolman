@@ -113,9 +113,9 @@ export const PROJECT_SIDEBAR_MENUS: ProjectSidebarMenu[] = [
       { label: '在管项目', value: '—' },
       { label: '计划进度', value: '—' },
       { label: '实际完成', value: '—' },
-      { label: '里程碑延期', value: '—' },
-      { label: '进度偏差率', value: '—' },
-      { label: '风险项目', value: '—' },
+      { label: '本月里程碑', value: '—' },
+      { label: '本月工作项', value: '—' },
+      { label: '风险工作', value: '—' },
     ],
   },
   {
@@ -127,10 +127,10 @@ export const PROJECT_SIDEBAR_MENUS: ProjectSidebarMenu[] = [
     infoRows: [
       { label: '在管项目', value: '—' },
       { label: '合同总额', value: '—' },
-      { label: '已结算', value: '—' },
-      { label: '待支付', value: '—' },
-      { label: '成本偏差率', value: '—' },
-      { label: '风险项目', value: '—' },
+      { label: '已计量', value: '—' },
+      { label: '本月收入', value: '—' },
+      { label: '本月支出', value: '—' },
+      { label: '本月计划完成', value: '—' },
     ],
   },
   {

@@ -17,6 +17,7 @@ import {
 } from './services/local-operations.service'
 import { assertProductionAuthProfile } from './services/auth/auth-dev-guard'
 import { ELECTRON_CHROME_USER_AGENT, createWindow, showMainWindow } from './index-window'
+import { attachEditableContextMenus } from './services/editable-context-menu'
 import { bootstrapCommunityHubAsync, bootstrapMainProcessServices } from './index-bootstrap'
 import { runGracefulShutdown } from './index-shutdown'
 
@@ -55,6 +56,7 @@ app.whenReady().then(() => {
       mod?.registerIpcHandlers?.()
     })
   }
+  attachEditableContextMenus()
   createWindow()
 
   bootstrapMainProcessServices()

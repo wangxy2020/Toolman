@@ -22,6 +22,7 @@ function row(partial: Partial<PmCostRow> & Pick<PmCostRow, 'id' | 'name'>): PmCo
     applicable: partial.applicable ?? 'all',
     note: partial.note ?? '',
     sectionalWork: partial.sectionalWork ?? '',
+    subproject: partial.subproject ?? '',
     sectionCode: partial.sectionCode ?? '',
     sectionNote: partial.sectionNote ?? '',
     sectionName: partial.sectionName ?? '',

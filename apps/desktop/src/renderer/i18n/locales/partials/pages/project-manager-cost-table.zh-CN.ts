@@ -8,6 +8,7 @@ export const projectManagerCostTableZhCN = {
     codePlaceholder: '编码',
     featureDescriptionPlaceholder: '特征描述',
     sectionalWorkPlaceholder: '分部工程',
+    subprojectPlaceholder: '子项目',
     notePlaceholder: '备注说明',
     printTitle: '价格表',
     saveSuccess: '价格表已保存',
@@ -32,6 +33,7 @@ export const projectManagerCostTableZhCN = {
       totalPrice: '合价（{{currency}}）',
       baseline: '基准',
       sectionalWork: '分部工程',
+      subproject: '子项目',
       note: '备注',
     },
     types: {

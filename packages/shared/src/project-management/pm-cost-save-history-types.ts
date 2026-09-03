@@ -23,6 +23,8 @@ export type PmCostCatalogSnapshotRow = {
   note: string
   /** Sectional / divisional work (分部工程); optional for legacy snapshots. */
   sectionalWork?: string
+  /** Subproject under a subdivision (子项目); optional for legacy snapshots. */
+  subproject?: string
   /** Code on 分部工程 summary row; optional for legacy snapshots. */
   sectionCode?: string
   /** Note on 分部工程 summary row; optional for legacy snapshots. */
@@ -86,6 +88,7 @@ export function normalizeCostCatalogSnapshot(
     applicable: row.applicable,
     note: typeof row.note === 'string' ? row.note : '',
     sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
+    subproject: typeof row.subproject === 'string' ? row.subproject : '',
     sectionCode: typeof row.sectionCode === 'string' ? row.sectionCode : '',
     sectionNote: typeof row.sectionNote === 'string' ? row.sectionNote : '',
     sectionName: typeof row.sectionName === 'string' ? row.sectionName : '',
@@ -117,6 +120,7 @@ export function parseCostCatalogSnapshot(raw: unknown): PmCostCatalogSnapshotRow
       applicable: row.applicable,
       note: typeof record.note === 'string' ? record.note : '',
       sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',
+      subproject: typeof record.subproject === 'string' ? record.subproject : '',
       sectionCode: typeof record.sectionCode === 'string' ? record.sectionCode : '',
       sectionNote: typeof record.sectionNote === 'string' ? record.sectionNote : '',
       sectionName: typeof record.sectionName === 'string' ? record.sectionName : '',

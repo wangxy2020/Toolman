@@ -136,6 +136,7 @@ describe('upsertSharedCostCatalogRows', () => {
           applicable: 'all',
           note: '',
           sectionalWork: '',
+          subproject: '',
           sectionCode: '',
           sectionNote: '',
         sectionName: '',

@@ -15,6 +15,14 @@ describe('llm proxy helpers', () => {
     ).toBe('你好')
   })
 
+  it('falls back to reasoning when content is empty', () => {
+    expect(
+      extractChatCompletionText({
+        choices: [{ message: { content: '', reasoning_content: '译文' } }],
+      }),
+    ).toBe('译文')
+  })
+
   it('extracts usage tokens', () => {
     expect(extractChatCompletionUsageTokens({ usage: { total_tokens: 42 } })).toBe(42)
     expect(

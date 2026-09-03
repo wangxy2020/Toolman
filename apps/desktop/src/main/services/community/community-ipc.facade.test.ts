@@ -18,6 +18,16 @@ vi.mock('./community-bridge.service', () => ({
   }),
   markCommunityHubOfflineReadOnly: vi.fn(),
   clearCommunityHubOfflineReadOnly: vi.fn(),
+  recoverCommunityHubConnection: vi.fn(async () => ({
+    running: true,
+    mode: 'local',
+    port: 3721,
+    host: '127.0.0.1',
+    baseUrl: 'http://127.0.0.1:3721',
+    binaryPath: '/tmp/toolman-community-hub',
+    offlineReadOnly: false,
+  })),
+  refreshCommunityHubClientIfNeeded: vi.fn(async () => true),
 }))
 
 vi.mock('./community-federation.config', () => ({

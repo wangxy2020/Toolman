@@ -36,6 +36,7 @@ export const PmCostCatalogUpsertEntrySchema = z.object({
   featureDescription: z.string().optional(),
   note: z.string().optional(),
   sectionalWork: z.string().optional(),
+  subproject: z.string().optional(),
 })
 
 export type PmCostCatalogUpsertEntry = z.infer<typeof PmCostCatalogUpsertEntrySchema>
@@ -164,6 +165,7 @@ function normalizeUpsertEntry(entry: unknown): unknown {
     featureDescription: row.featureDescription ?? row.feature ?? row.spec,
     note: row.note ?? row.description ?? row.remark,
     sectionalWork: row.sectionalWork ?? row.section,
+    subproject: row.subproject ?? row.subProject ?? row.childProject,
   }
 }
 
@@ -277,6 +279,7 @@ export function buildPmCostCatalogPatchFingerprint(
         featureDescription: entry.featureDescription ?? null,
         note: entry.note ?? null,
         sectionalWork: entry.sectionalWork ?? null,
+        subproject: entry.subproject ?? null,
       })),
       removes: patch.removes.map((entry) => ({
         type:
@@ -331,7 +334,7 @@ export function buildProjectCostCatalogSummaryEntry(options: {
 export const PM_COST_CATALOG_PATCH_OUTPUT_HINT = [
   '## 价格表建议输出（默认可读清单）',
   '查询/分析可直接依据上方注入的「全部项目」与各项目价格表作答。',
-  '提出增改删建议时：**默认只用 Markdown 列表/表格**写清目标价格表、操作（新增/修改/删除）、类型、编码、名称、特征描述、计量单位、数量、单价、分部工程、说明。',
+  '提出增改删建议时：**默认只用 Markdown 列表/表格**写清目标价格表、操作（新增/修改/删除）、类型、编码、名称、特征描述、计量单位、数量、单价、分部工程、子项目、说明。',
   '**禁止**在日常回答中输出 `costCatalogPatches` JSON 或 ```json 代码块；用户未要求时不要展示底层补丁格式。',
   '仅当用户明确要求「JSON」「补丁」「costCatalogPatches」「输出代码」时，再附加如下结构（可用 ```json 代码块）：',
   '{',

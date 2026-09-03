@@ -12,4 +12,5 @@ export interface SaveTranslationDocumentInput {
   targetText: string
   languages: [TranslationLanguage, TranslationLanguage]
   pageSnapshots?: TranslationDocumentPageSnapshot[]
+  pageRemarks?: Record<string, string>
 }

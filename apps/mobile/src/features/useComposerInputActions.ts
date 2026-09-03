@@ -7,7 +7,7 @@ import {
   type VoiceInputSession,
 } from '../chat/composerVoiceInput'
 import { resolveAgentChatScope } from '../chat/agentScopes'
-import { resolveTranslationTarget, translationLanguageLabel } from '../chat/translation-utils'
+import { resolveTranslationTarget, shouldRestoreComposerTranslation, translationLanguageLabel } from '../chat/translation-utils'
 import { translateWithChatModel } from '../chat/translateWithModel'
 import { useI18n } from '../i18n'
 import { useMobileApp } from '../state/MobileAppContext'
@@ -28,6 +28,7 @@ export function useComposerInputActions(options: {
   const [listening, setListening] = useState(false)
   const voiceSessionRef = useRef<VoiceInputSession | null>(null)
   const voiceBaseRef = useRef(value)
+  const translateSnapshotRef = useRef<{ original: string; translated: string } | null>(null)
   const agentScope = resolveAgentChatScope(module)
   const agentSettings = resolveAgentSettings(
     resolveActiveAgent({ agents, sessions, activeSessionId, agentScope }),
@@ -37,11 +38,19 @@ export function useComposerInputActions(options: {
   const translateInput = async () => {
     const text = value.trim()
     if (!text || disabled || busy || translating) return
+    const snapshot = translateSnapshotRef.current
+    if (shouldRestoreComposerTranslation(value, snapshot)) {
+      onChangeText(snapshot.original)
+      translateSnapshotRef.current = null
+      onError?.(null)
+      return
+    }
     if (!modelConfig.model.trim() || !modelConfig.baseUrl.trim()) {
       onError?.('请先在设置中配置模型服务')
       return
     }
     onError?.(null)
+    const original = value
     const target = resolveTranslationTarget(text, agentSettings.translationLanguages)
     setTranslating(true)
     const result = await translateWithChatModel({
@@ -54,6 +63,7 @@ export function useComposerInputActions(options: {
       onError?.(result.message)
       return
     }
+    translateSnapshotRef.current = { original, translated: result.text }
     onChangeText(result.text)
   }
 

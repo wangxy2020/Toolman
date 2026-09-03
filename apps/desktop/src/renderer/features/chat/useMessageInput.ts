@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { addQuickPhrase, type QuickPhrase } from './quick-phrases'
 import { useTranslate } from './useTranslate'
-import { normalizeTranslationLanguages } from './translation-utils'
+import { normalizeTranslationLanguages, shouldRestoreComposerTranslation } from './translation-utils'
 import type { MessageInputProps } from './message-input-types'
 import { INPUT_MIN_HEIGHT } from './message-input-types'
 import { buildMessageInputPlaceholder } from './message-input-utils'
@@ -60,6 +60,7 @@ export function useMessageInput(props: MessageInputProps) {
   const [voiceHint, setVoiceHint] = useState<string | null>(null)
   const { translate, translating } = useTranslate()
   const languages = normalizeTranslationLanguages(translationLanguages)
+  const translateSnapshotRef = useRef<{ original: string; translated: string } | null>(null)
 
   const { slashCommands, localizedSlashCommands, phraseMenuItems } = useMessageInputMenus({
     toolbarMode,
@@ -121,9 +122,18 @@ export function useMessageInput(props: MessageInputProps) {
 
   const handleTranslate = async () => {
     if (!text.trim() || !defaultModelId || disabled || translating) return
+    const snapshot = translateSnapshotRef.current
+    if (shouldRestoreComposerTranslation(text, snapshot)) {
+      setText(snapshot.original)
+      translateSnapshotRef.current = null
+      onError?.(null)
+      return
+    }
     onError?.(null)
     try {
+      const original = text
       const result = await translate({ text, modelId: defaultModelId, translationLanguages: languages })
+      translateSnapshotRef.current = { original, translated: result.text }
       setText(result.text)
     } catch (error) {
       onError?.(error instanceof Error ? error.message : t('chat.input.translateFailed'))

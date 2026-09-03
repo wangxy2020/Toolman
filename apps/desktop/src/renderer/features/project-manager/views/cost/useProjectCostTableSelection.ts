@@ -4,8 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, type RefObject } from 'react'
 import { isPmEditableEventTarget } from '../../pm-editable-dom'
 import { useI18n } from '../../../../i18n/useI18n'
 import {
+  isStockCostColumnLabel,
   saveCostColumnLabels,
   saveCostColumnVisibility,
+  type CostColumnLabelLanguage,
   type CostColumnLabels,
   type CostLabelColumn,
   type CostToggleColumn,
@@ -47,13 +49,14 @@ export function useProjectCostTableSelection(args: {
   updateRows: (updater: (prev: PmCostRow[]) => PmCostRow[], options?: { coalesceMs?: number }) => void
   resolveEditableSummaryRows: () => CostSummaryRow[]
   t: ReturnType<typeof useI18n>['t']
+  language: CostColumnLabelLanguage
 }) {
   const {
     visibleRows, columnLabels, setColumnLabels, setColumnVisibility, totalPriceColumnDefaultLabel,
     contextMenu, setContextMenu, setColumnMenu, columnMenu, contextMenuRef, editingHeaderColumn,
     setEditingHeaderColumn, headerDraft, setHeaderDraft, headerInputRef, setCheckedIds,
     setSelectionMode, totalFormulaFocusIdRef, formulaInputRef, setSummaryRows, setDirty, rowsRef,
-    updateRows, resolveEditableSummaryRows, t,
+    updateRows, resolveEditableSummaryRows, t, language,
   } = args
 
   const openColumnVisibilityMenu = useCallback((event: ReactMouseEvent) => {
@@ -73,7 +76,7 @@ export function useProjectCostTableSelection(args: {
         return t('projectManagerPage.costTable.columns.index')
       }
       const override = columnLabels[column]?.trim()
-      if (override) return override
+      if (override && !isStockCostColumnLabel(column, override)) return override
       if (column === 'totalPrice') return totalPriceColumnDefaultLabel
       return t(`projectManagerPage.costTable.columns.${column}`)
     },
@@ -100,15 +103,18 @@ export function useProjectCostTableSelection(args: {
   const commitHeaderEdit = useCallback(() => {
     if (!editingHeaderColumn) return
     const next = headerDraft.trim()
-    if (next) {
-      setColumnLabels((prev) => {
-        const updated = { ...prev, [editingHeaderColumn]: next }
-        saveCostColumnLabels(updated)
-        return updated
-      })
-    }
+    setColumnLabels((prev) => {
+      const updated = { ...prev }
+      if (!next || isStockCostColumnLabel(editingHeaderColumn, next)) {
+        delete updated[editingHeaderColumn]
+      } else {
+        updated[editingHeaderColumn] = next
+      }
+      saveCostColumnLabels(updated, language)
+      return updated
+    })
     cancelHeaderEdit()
-  }, [cancelHeaderEdit, editingHeaderColumn, headerDraft])
+  }, [cancelHeaderEdit, editingHeaderColumn, headerDraft, language, setColumnLabels])
 
   const handleHeaderKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {

@@ -31,6 +31,9 @@ export const ProjectManagementFilesPanelMatrixColgroup: FC<{ view: MatrixView }>
                   {(isMeteringCostView ? mCol.type : showTypeColumn) ? (
                     <col className="tm-pm-resource-table-col-type" />
                   ) : null}
+                  {isMeteringCostView && mCol.subproject ? (
+                    <col className="tm-pm-resource-table-col-subproject" />
+                  ) : null}
                   {isMeteringCostView && mCol.sectionalWork ? (
                     <col className="tm-pm-resource-table-col-sectional" />
                   ) : null}

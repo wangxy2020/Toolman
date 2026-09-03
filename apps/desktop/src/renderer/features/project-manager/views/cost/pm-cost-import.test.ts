@@ -26,6 +26,13 @@ describe('pm-cost-import', () => {
     expect(mapHeaderToField('特征描述')).toBe('featureDescription')
     expect(mapHeaderToField('分部工程')).toBe('sectionalWork')
     expect(mapHeaderToField('Unit Price')).toBe('unitPrice')
+    expect(mapHeaderToField('Categories')).toBe('type')
+    expect(mapHeaderToField('Subdivision Work')).toBe('sectionalWork')
+    expect(mapHeaderToField('Subproject')).toBe('subproject')
+    expect(mapHeaderToField('子项目')).toBe('subproject')
+    expect(mapHeaderToField('No')).toBe('code')
+    expect(mapHeaderToField('Work Name')).toBe('name')
+    expect(mapHeaderToField('Description')).toBe('featureDescription')
   })
 
   it('parses csv tables into cost drafts', () => {

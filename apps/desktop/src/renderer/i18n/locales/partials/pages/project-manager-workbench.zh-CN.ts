@@ -9,12 +9,51 @@ export const projectManagerWorkbenchZhCN = {
   urgent: {
     loading: '正在加载待办…',
     empty: '暂无高优先级或逾期工作项。',
+    kpi: {
+      open: '未完成',
+      urgent: '高优先级',
+      overdue: '逾期',
+      blocked: '阻塞中',
+      inProgress: '进行中',
+      projects: '关联项目',
+    },
     kpiSub: {
       open: '未完成工作项',
       urgent: '高优先级',
+      overdue: '已过截止日期',
       blocked: '阻塞中',
       projects: '关联项目',
       inProgress: '进行中',
+    },
+    itemsTitle: '重要事项进展',
+    itemsDesc: '高优先级、逾期与阻塞事项的当前进度',
+    insightHealth: {
+      title: '待办健康度',
+      desc: '未逾期且未阻塞的待办占比，建议保持在 85% 以上',
+    },
+    insightProgress: {
+      title: '平均执行进度',
+      desc: '未完成待办的平均完成度，与截止日期联动监控',
+    },
+    card: {
+      priority: '优先级',
+      progress: '执行进度',
+      due: '截止日期',
+      progressMeta: '进度 {{value}}%',
+    },
+    priority: {
+      low: '低',
+      normal: '普通',
+      high: '高',
+      urgent: '紧急',
+    },
+    status: {
+      todo: '待办',
+      in_progress: '进行中',
+      done: '已完成',
+      blocked: '阻塞',
+      cancelled: '已取消',
+      overdue: '逾期',
     },
     columns: {
       due: '截止日期',

@@ -73,6 +73,9 @@ export const ProjectManagementFilesPanelMatrixBody: FC<{ view: MatrixView }> = (
                       >
                         <td className="tm-pm-resource-table-index" />
                         {mCol.type ? <td className="tm-pm-resource-table-col-type" /> : null}
+                        {mCol.subproject ? (
+                          <td className="tm-pm-resource-table-col-subproject" />
+                        ) : null}
                         {mCol.sectionalWork ? (
                           <td className="tm-pm-resource-table-col-sectional" />
                         ) : null}

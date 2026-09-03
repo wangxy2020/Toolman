@@ -188,6 +188,17 @@ export function IconSaveNote({ size = 16 }: IconProps) {
   )
 }
 
+export function IconStickyNote({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M15.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9.5L20 16.5V5a2 2 0 0 0-2-2z" />
+      <path d="M15 21v-5h5" />
+      <path d="M8 8h6" />
+      <path d="M8 12h5" />
+    </svg>
+  )
+}
+
 export function IconGitFork({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

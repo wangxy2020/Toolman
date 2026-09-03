@@ -29,6 +29,15 @@ vi.mock('./community/community-bridge.service', () => ({
     binaryPath: null,
     offlineReadOnly: false,
   }),
+  recoverCommunityHubConnection: async () => ({
+    running: false,
+    mode: 'local',
+    port: null,
+    host: '127.0.0.1',
+    baseUrl: null,
+    binaryPath: null,
+    offlineReadOnly: false,
+  }),
 }))
 
 vi.mock('./community/community-ipc.facade', () => ({

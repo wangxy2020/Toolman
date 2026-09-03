@@ -6,7 +6,7 @@ import {
   KnowledgeFolderScanPreviewOutputSchema,
 } from '@toolman/shared'
 import { resolveKnowledgeWatchConfig } from './knowledge-watch-config.service'
-import { assertPathWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 
 const EXTENSION_LABELS: Record<string, string> = {
   md: 'Markdown',
@@ -52,7 +52,7 @@ function countFilesByType(paths: string[]) {
 
 export function scanKnowledgeFolderPreview(input: unknown) {
   const data = KnowledgeFolderScanPreviewInputSchema.parse(input)
-  const folderPath = assertPathWithinAllowedRoots(data.folderPath.trim())
+  const folderPath = assertUserAccessiblePath(data.folderPath.trim())
 
   if (!existsSync(folderPath)) {
     return KnowledgeFolderScanPreviewOutputSchema.parse({

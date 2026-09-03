@@ -103,6 +103,14 @@ export function shouldUseOllamaNativeChat(config: ProviderConfig, params: ChatPa
   return false
 }
 
+/** Honor extraBody.think so translation can disable thinking; otherwise follow the model default. */
+export function resolveOllamaNativeThink(params: ChatParams): boolean {
+  if (params.extraBody && Object.prototype.hasOwnProperty.call(params.extraBody, 'think')) {
+    return params.extraBody.think === true
+  }
+  return isOllamaNativeThinkingModelId(params.model.trim())
+}
+
 export async function* streamOllamaNativeChat(
   config: ProviderConfig,
   params: ChatParams,
@@ -110,6 +118,7 @@ export async function* streamOllamaNativeChat(
   const baseUrl = resolveOllamaNativeBaseUrl(config)
   const numPredict = resolveOpenAiMaxTokens(config, params.model, params.maxTokens) ?? 4096
   const isOcr = isOcrVisionModelId(params.model)
+  const think = resolveOllamaNativeThink(params)
 
   const response = await providerFetch(config, `${baseUrl}/api/chat`, {
     method: 'POST',
@@ -118,7 +127,7 @@ export async function* streamOllamaNativeChat(
       model: params.model.trim(),
       messages: formatMessagesForOllamaNative(params.messages),
       stream: true,
-      think: isOllamaNativeThinkingModelId(params.model.trim()),
+      think,
       options: {
         temperature: params.temperature ?? (isOcr ? 0 : 0.7),
         num_predict: numPredict,
@@ -143,6 +152,8 @@ export async function* streamOllamaNativeChat(
   const decoder = new TextDecoder()
   let buffer = ''
   let usage: StreamChunk['usage']
+  let bufferedThinking = ''
+  let hadContent = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -167,13 +178,19 @@ export async function* streamOllamaNativeChat(
         const thinking = parsed.message?.thinking
         const content = parsed.message?.content
 
-        if (thinking && isOllamaNativeThinkingModelId(params.model.trim())) {
-          yield { type: 'reasoning-delta', text: thinking }
-        } else if (isOcr && thinking) {
-          yield { type: 'text-delta', text: thinking }
+        if (thinking) {
+          if (isOcr) {
+            yield { type: 'text-delta', text: thinking }
+          } else if (think) {
+            yield { type: 'reasoning-delta', text: thinking }
+          } else {
+            // think:false (e.g. translation): keep thinking only if content never arrives.
+            bufferedThinking += thinking
+          }
         }
 
         if (content) {
+          hadContent = true
           yield { type: 'text-delta', text: content }
         }
 
@@ -186,6 +203,10 @@ export async function* streamOllamaNativeChat(
         // skip malformed chunk
       }
     }
+  }
+
+  if (!isOcr && !think && !hadContent && bufferedThinking) {
+    yield { type: 'text-delta', text: bufferedThinking }
   }
 
   yield { type: 'done', usage }

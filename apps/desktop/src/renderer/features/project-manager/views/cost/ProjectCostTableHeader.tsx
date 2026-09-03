@@ -134,6 +134,9 @@ export const ProjectCostTableHeader: FC<ProjectCostTableHeaderProps> = ({ state 
                 {columnVisibility.type
                   ? renderEditable('type', 'tm-pm-resource-table-col-type')
                   : null}
+                {columnVisibility.subproject
+                  ? renderEditable('subproject', 'tm-pm-resource-table-col-subproject')
+                  : null}
                 {columnVisibility.sectionalWork
                   ? renderEditable('sectionalWork', 'tm-pm-resource-table-col-sectional')
                   : null}

@@ -19,7 +19,7 @@ import {
   readCommunityHubConfig,
   resolveCommunityHubBaseUrl,
 } from '../community-hub.config'
-import { tryAttachRunningCommunityHub, connectRemoteCommunityHub, incompatibleLocalHubReason } from './connection'
+import { tryAttachRunningCommunityHub, connectRemoteCommunityHub, incompatibleLocalHubReason, recoverCommunityHubConnection } from './connection'
 import { waitForHealth } from './health'
 import {
   allocateCommunityHubPort,
@@ -29,23 +29,45 @@ import {
 } from './port-file'
 import {
   attachProcessLogging,
-  ensureHubBinarySigned,
+  materializeHubBinary,
   stopCommunityHub,
   stopCommunityHubProcessByPid,
 } from './process'
 import {
   childProcess,
   currentStatus,
+  hubShutdownRequested,
   httpClient,
   log,
   setChildProcess,
   setCurrentStatus,
   setHttpClient,
+  setHubShutdownRequested,
+  setHubUnexpectedExitHandler,
 } from './state'
 import { getCommunityHubStatus } from './status'
 import { HUB_START_MAX_ATTEMPTS, type CommunityHubPortFile, type CommunityHubStatus } from './types'
 
+let startInFlight: Promise<CommunityHubStatus> | null = null
+
 export async function startCommunityHub(): Promise<CommunityHubStatus> {
+  if (startInFlight) {
+    return startInFlight
+  }
+  const run = startCommunityHubUnlocked()
+  startInFlight = run.finally(() => {
+    if (startInFlight === run) {
+      startInFlight = null
+    }
+  })
+  return startInFlight
+}
+
+async function startCommunityHubUnlocked(): Promise<CommunityHubStatus> {
+  if (hubShutdownRequested) {
+    return getCommunityHubStatus()
+  }
+
   if (currentStatus.running && httpClient && currentStatus.port !== null) {
     return getCommunityHubStatus()
   }
@@ -55,12 +77,8 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
     return attached
   }
 
-  if (currentStatus.running && childProcess && currentStatus.port !== null) {
-    return getCommunityHubStatus()
-  }
-
-  const binaryPath = resolveCommunityHubBinaryPath()
-  if (!binaryPath) {
+  const sourceBinaryPath = resolveCommunityHubBinaryPath()
+  if (!sourceBinaryPath) {
     const error =
       'toolman-community-hub binary not found. Run: pnpm --filter @toolman/desktop build:community-hub'
     setCurrentStatus({
@@ -79,8 +97,11 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
 
   const dataDir = getCommunityDataDir()
   await mkdir(dataDir, { recursive: true })
+  const binaryPath = await materializeHubBinary(sourceBinaryPath, dataDir)
 
-  ensureHubBinarySigned(binaryPath)
+  if (childProcess) {
+    await stopCommunityHub(childProcess)
+  }
 
   const jwtSecret = await getHubJwtSecret()
   let lastError = 'community hub health check timed out'
@@ -170,6 +191,7 @@ export async function startCommunityHub(): Promise<CommunityHubStatus> {
 }
 
 export async function shutdownCommunityHub(): Promise<void> {
+  setHubShutdownRequested(true)
   if (getCommunityHubMode() === 'remote') {
     setHttpClient(null)
     setCurrentStatus({
@@ -185,6 +207,11 @@ export async function bootstrapCommunityHub(): Promise<CommunityHubStatus> {
   if (!app.isReady()) {
     await app.whenReady()
   }
+
+  setHubShutdownRequested(false)
+  setHubUnexpectedExitHandler(async () => {
+    await recoverCommunityHubConnection()
+  })
 
   ensureDefaultCommunityHubConfig()
   const config = readCommunityHubConfig()

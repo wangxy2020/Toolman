@@ -82,6 +82,7 @@ export function upsertSharedCostCatalog(
     featureDescription?: string
     note?: string
     sectionalWork?: string
+    subproject?: string
   }>,
 ): { rows: PmSharedCostCatalogRow[]; changed: boolean } {
   const current = getSharedCostCatalog(workspaceId)

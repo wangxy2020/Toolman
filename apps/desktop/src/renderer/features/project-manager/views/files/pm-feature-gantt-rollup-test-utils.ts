@@ -19,6 +19,7 @@ export function asCostRows(
     applicable?: string
     note?: string
     sectionalWork?: string
+    subproject?: string
     sectionCode?: string
     sectionNote?: string
     sectionName?: string
@@ -40,6 +41,7 @@ export function asCostRows(
     applicable: row.applicable ?? 'all',
     note: row.note ?? '',
     sectionalWork: row.sectionalWork ?? '',
+    subproject: row.subproject ?? '',
     sectionCode: row.sectionCode ?? '',
     sectionNote: row.sectionNote ?? '',
     sectionName: row.sectionName ?? '',
@@ -151,6 +153,7 @@ export function makeFeature(
     code: '',
     featureDescription: '',
     sectionalWork: '',
+    subproject: '',
     unitPrice: null,
     applicable: 'all',
     sortOrder: 0,

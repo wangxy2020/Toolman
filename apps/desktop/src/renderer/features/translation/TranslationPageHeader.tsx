@@ -22,12 +22,13 @@ interface Props {
   canTranslate: boolean
   canParse: boolean
   canSave: boolean
-  canSaveToNotes?: boolean
+  canAddRemark?: boolean
+  remarkActive?: boolean
   canOpenExternally?: boolean
   documentTotalPages?: number
   documentCurrentPage?: number
   onSave: () => void
-  onSaveToNotes?: () => void
+  onAddRemark?: () => void
   onSwapLanguages: () => void
   onParse: () => void
   onTranslate: () => void
@@ -90,12 +91,13 @@ export function TranslationPageHeader({
   canTranslate,
   canParse,
   canSave,
-  canSaveToNotes = false,
+  canAddRemark = false,
+  remarkActive = false,
   canOpenExternally = false,
   documentTotalPages = 0,
   documentCurrentPage = 1,
   onSave,
-  onSaveToNotes,
+  onAddRemark,
   onSwapLanguages,
   onParse,
   onTranslate,
@@ -135,11 +137,12 @@ export function TranslationPageHeader({
       ) : null}
 
       <div className="tm-chat-header-end">
-        {isDocuments && onSaveToNotes ? (
+        {isDocuments && onAddRemark ? (
           <HeaderIconButton
             label={t('translationPage.documents.saveToNotes')}
-            disabled={!canSaveToNotes}
-            onClick={onSaveToNotes}
+            disabled={!canAddRemark}
+            active={remarkActive}
+            onClick={onAddRemark}
           >
             <IconSaveNote size={16} />
           </HeaderIconButton>

@@ -13,7 +13,7 @@ import {
 } from '../mcp-postgres-verify.service'
 import type { ActiveMcpClient, McpTransport } from './types'
 import { withTimeout } from './types'
-import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
+import { assertUserAccessiblePath } from '../path-sandbox.service'
 
 export function configFingerprint(config: McpServerConfig): string {
   if (isPostgresMcpConfig(config)) {
@@ -49,7 +49,7 @@ export async function createTransport(config: McpServerConfig): Promise<McpTrans
     const command =
       config.command === 'node' ? resolveMcpNodeCommand() : config.command
     const cwd = config.cwd?.trim()
-      ? assertPathWithinAllowedRoots(config.cwd)
+      ? assertUserAccessiblePath(config.cwd)
       : undefined
     return new StdioClientTransport({
       command,

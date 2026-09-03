@@ -14,6 +14,9 @@ export const ProjectCostTableColGroup: FC<ProjectCostTableColGroupProps> = ({
     <colgroup>
       <col className="tm-pm-resource-table-col-index" />
       {columnVisibility.type ? <col className="tm-pm-resource-table-col-type" /> : null}
+      {columnVisibility.subproject ? (
+        <col className="tm-pm-resource-table-col-subproject" />
+      ) : null}
       {columnVisibility.sectionalWork ? (
         <col className="tm-pm-resource-table-col-sectional" />
       ) : null}

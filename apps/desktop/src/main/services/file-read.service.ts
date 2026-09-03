@@ -6,7 +6,7 @@ import {FileReadForChatInputSchema,
   ipcOk } from '@toolman/shared'
 import { getDefaultWorkspace } from './workspace.service'
 import { isDocumentOcrEnabled } from './runtime-app-settings.service'
-import { assertPathsWithinAllowedRoots } from './path-sandbox.service'
+import { assertUserAccessiblePath } from './path-sandbox.service'
 import {
   parseChatFileAttachment,
   parseChatImageAttachment,
@@ -38,24 +38,10 @@ export async function readFilesForChat(input: unknown) {
   }> = []
   const errors: Array<{ path: string; message: string }> = []
 
-  let allowedPaths: string[]
-  try {
-    allowedPaths = assertPathsWithinAllowedRoots(data.paths)
-  } catch (error) {
-    return ipcOk(
-      FileReadForChatOutputSchema.parse({
-        files: [],
-        images: [],
-        errors: data.paths.map((path) => ({
-          path,
-          message: toErrorMessage(error, '路径不在允许访问的范围内'),
-        })),
-      }),
-    )
-  }
-
-  for (const path of allowedPaths) {
+  for (const rawPath of data.paths) {
+    let path = rawPath
     try {
+      path = assertUserAccessiblePath(rawPath)
       const stat = statSync(path)
       if (!stat.isFile()) {
         errors.push({ path, message: '不是有效文件' })

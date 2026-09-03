@@ -47,11 +47,14 @@ export function TranslationPage(props: TranslationPageProps) {
     canTranslate,
     canParse,
     canSave,
-    canSaveToNotes,
+    canAddRemark,
+    remarkOpenPage,
+    setRemarkOpenPage,
+    handleToggleRemark,
+    handlePageRemarkChange,
     handleSwapLanguages,
     handleClear,
     handleSave,
-    handleSaveToNotes,
     handleOpenDocument,
     handleOpenExternally,
     handleParse,
@@ -71,12 +74,13 @@ export function TranslationPage(props: TranslationPageProps) {
           canTranslate={canTranslate}
           canParse={canParse}
           canSave={canSave}
-          canSaveToNotes={canSaveToNotes}
+          canAddRemark={canAddRemark}
+          remarkActive={remarkOpenPage === documentCurrentPage}
           canOpenExternally={Boolean(activeDocument?.filePath)}
           documentTotalPages={documentTotalPages}
           documentCurrentPage={documentCurrentPage}
           onSave={handleSave}
-          onSaveToNotes={isDocuments ? handleSaveToNotes : undefined}
+          onAddRemark={isDocuments ? handleToggleRemark : undefined}
           onSwapLanguages={handleSwapLanguages}
           onParse={() => void handleParse()}
           onTranslate={() => void handleTranslate()}
@@ -115,6 +119,9 @@ export function TranslationPage(props: TranslationPageProps) {
                   setDocumentCurrentPage(currentPage)
                 }}
                 pageZoom={DOCUMENT_PAGE_ZOOM_DEFAULT}
+                remarkOpenPage={remarkOpenPage}
+                onRemarkOpenPageChange={setRemarkOpenPage}
+                onPageRemarkChange={handlePageRemarkChange}
                 onRegisterActions={registerDocumentActions}
               />
             ) : (

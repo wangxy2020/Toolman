@@ -1,36 +1,15 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import {
-  IpcChannel,
-  TranslationDocumentRenderPageOutputSchema,
-} from '@toolman/shared'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import {
   getCachedPageImage,
+  listCachedPageImageUrls,
   pageImageCacheKey,
-  setCachedPageImage,
 } from './document-page-cache'
+import { ensurePdfPageImage, isPdfPreviewRenderDropped } from './document-page-preview-load'
+import { PDF_PREVIEW_WARM_RADIUS, resolvePdfPreviewRenderWidth } from './document-page-preview-policy'
 import { splitTranslationParagraphs } from './translation-paragraphs'
 import type { PageDisplayBox } from './translation-document-workspace-types'
 import type { DocumentPageState } from './useDocumentPageTranslation'
-
-function bucketSize(value: number): number {
-  if (value <= 0) return 320
-  return Math.max(160, Math.round(value / 16) * 16)
-}
-
-/** Device pixels for preview (CSS width × DPR, capped for main-process cost). */
-function resolveRenderWidth(displayWidth: number): number {
-  const dpr =
-    typeof window !== 'undefined' ? Math.min(2, Math.max(1, window.devicePixelRatio || 1)) : 1
-  return Math.min(1400, Math.round(bucketSize(displayWidth) * dpr))
-}
-
-function base64ToObjectUrl(base64: string, mimeType: string): string {
-  const binary = atob(base64)
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-  return URL.createObjectURL(new Blob([bytes], { type: mimeType }))
-}
-
 
 function resolvePdfPreviewAspectStyle(pageAspect: number | null): CSSProperties {
   if (pageAspect && pageAspect > 0) {
@@ -42,26 +21,52 @@ function resolvePdfPreviewAspectStyle(pageAspect: number | null): CSSProperties 
 function PdfPageImage({
   filePath,
   pageNumber,
+  currentPage,
   pageBox,
   pageAspect,
   active,
+  cacheEpoch,
+  onReady,
 }: {
   filePath: string
   pageNumber: number
+  currentPage: number
   pageBox: PageDisplayBox
   pageAspect: number | null
   active: boolean
+  cacheEpoch: number
+  onReady?: (pageNumber: number) => void
 }) {
   const { t } = useI18n()
-  const renderWidth = resolveRenderWidth(pageBox.width)
+  const renderWidth = resolvePdfPreviewRenderWidth(pageBox.width)
   const aspectStyle = resolvePdfPreviewAspectStyle(pageAspect)
-  const cacheKey = pageImageCacheKey(filePath, pageNumber, renderWidth)
-  const [src, setSrc] = useState<string | null>(() => getCachedPageImage(cacheKey))
+  const cacheKey = renderWidth > 0 ? pageImageCacheKey(filePath, pageNumber, renderWidth) : ''
+  const [src, setSrc] = useState<string | null>(() =>
+    cacheKey ? getCachedPageImage(cacheKey) : null,
+  )
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const requestIdRef = useRef(0)
 
+  useEffect(() => () => {
+    requestIdRef.current += 1
+  }, [])
+
   useEffect(() => {
+    if (!cacheKey) return
+    const cached = getCachedPageImage(cacheKey)
+    if (!cached) return
+    setSrc(cached)
+    setError(null)
+    setLoading(false)
+  }, [cacheEpoch, cacheKey])
+
+  useEffect(() => {
+    if (src) onReady?.(pageNumber)
+  }, [onReady, pageNumber, src])
+
+  useEffect(() => {
+    if (!active || !filePath || !cacheKey || renderWidth < 1) return
     const cached = getCachedPageImage(cacheKey)
     if (cached) {
       setSrc(cached)
@@ -70,46 +75,39 @@ function PdfPageImage({
       return
     }
 
-    // Drop stale bitmap when file/size changes; only fetch while visible.
-    setSrc(null)
-    setError(null)
-    if (!active || !filePath) {
-      setLoading(false)
-      return
-    }
-
     const requestId = ++requestIdRef.current
-    let cancelled = false
+    setError(null)
     setLoading(true)
 
-    void (async () => {
-      try {
-        const result = await window.api.invoke(IpcChannel.TranslationDocumentRenderPage, {
-          path: filePath,
+    void ensurePdfPageImage({
+      filePath,
+      pageNumber,
+      renderWidth,
+      currentPage,
+    })
+      .catch((err) => {
+        if (requestId !== requestIdRef.current) return Promise.reject(err)
+        if (!isPdfPreviewRenderDropped(err) || pageNumber !== currentPage) return Promise.reject(err)
+        return ensurePdfPageImage({
+          filePath,
           pageNumber,
-          targetWidth: renderWidth,
+          renderWidth,
+          currentPage,
         })
-        if (cancelled || requestId !== requestIdRef.current) return
-        if (!result.ok) {
-          setError(result.error.message)
-          return
-        }
-        const data = TranslationDocumentRenderPageOutputSchema.parse(result.data)
-        const objectUrl = base64ToObjectUrl(data.base64, data.mimeType)
-        setCachedPageImage(cacheKey, objectUrl)
-        setSrc(objectUrl)
-      } catch (err) {
-        if (cancelled || requestId !== requestIdRef.current) return
+      })
+      .then((url) => {
+        if (requestId !== requestIdRef.current || !url) return
+        setSrc(url)
+      })
+      .catch((err) => {
+        if (requestId !== requestIdRef.current) return
+        if (isPdfPreviewRenderDropped(err)) return
         setError(err instanceof Error ? err.message : t('translationPage.documents.previewFailed'))
-      } finally {
-        if (!cancelled && requestId === requestIdRef.current) setLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [active, cacheKey, filePath, pageNumber, renderWidth, t])
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false)
+      })
+  }, [active, cacheKey, currentPage, filePath, pageNumber, renderWidth, t])
 
   if (error) {
     return (
@@ -150,9 +148,43 @@ function PdfPageImage({
           })}
           draggable={false}
           decoding="async"
-          loading="lazy"
+          fetchPriority={pageNumber === currentPage ? 'high' : 'low'}
         />
       </div>
+    </div>
+  )
+}
+
+function PdfPreviewWarmImages({
+  filePath,
+  renderWidth,
+  currentPage,
+  totalPages,
+  cacheEpoch,
+}: {
+  filePath: string
+  renderWidth: number
+  currentPage: number
+  totalPages: number
+  cacheEpoch: number
+}) {
+  const urls = useMemo(() => {
+    if (!filePath || renderWidth < 1) return []
+    return listCachedPageImageUrls(
+      filePath,
+      renderWidth,
+      Math.max(1, currentPage - PDF_PREVIEW_WARM_RADIUS),
+      Math.min(totalPages, currentPage + PDF_PREVIEW_WARM_RADIUS),
+    )
+  }, [cacheEpoch, currentPage, filePath, renderWidth, totalPages])
+
+  if (urls.length === 0) return null
+
+  return (
+    <div className="tm-translation-doc-preview-warm" aria-hidden="true">
+      {urls.map((url) => (
+        <img key={url} src={url} alt="" />
+      ))}
     </div>
   )
 }
@@ -173,5 +205,4 @@ function SourceTextPage({ page }: { page: DocumentPageState }) {
   )
 }
 
-
-export { PdfPageImage, SourceTextPage }
+export { PdfPageImage, PdfPreviewWarmImages, SourceTextPage }

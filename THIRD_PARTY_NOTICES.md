@@ -203,15 +203,6 @@ Each component remains under its own license; full license texts are in upstream
 | @nodable/entities | undefined | MIT | desktop |
 | @opendataloader/pdf | undefined | Apache-2.0 | desktop |
 | @popperjs/core | undefined | MIT | desktop |
-| @protobufjs/aspromise | undefined | BSD-3-Clause | desktop |
-| @protobufjs/base64 | undefined | BSD-3-Clause | desktop |
-| @protobufjs/codegen | undefined | BSD-3-Clause | desktop |
-| @protobufjs/eventemitter | undefined | BSD-3-Clause | desktop |
-| @protobufjs/fetch | undefined | BSD-3-Clause | desktop |
-| @protobufjs/float | undefined | BSD-3-Clause | desktop |
-| @protobufjs/path | undefined | BSD-3-Clause | desktop |
-| @protobufjs/pool | undefined | BSD-3-Clause | desktop |
-| @protobufjs/utf8 | undefined | BSD-3-Clause | desktop |
 | @radix-ui/primitive | undefined | MIT | desktop |
 | @radix-ui/react-collection | undefined | MIT | desktop |
 | @radix-ui/react-compose-refs | undefined | MIT | desktop |
@@ -466,6 +457,7 @@ Each component remains under its own license; full license texts are in upstream
 | expo-router | undefined | MIT | desktop |
 | expo-secure-store | undefined | MIT | desktop |
 | expo-server | undefined | MIT | desktop |
+| expo-speech | undefined | MIT | desktop |
 | expo-status-bar | undefined | MIT | desktop |
 | expo-symbols | undefined | MIT | desktop |
 | exponential-backoff | undefined | Apache-2.0 | desktop |

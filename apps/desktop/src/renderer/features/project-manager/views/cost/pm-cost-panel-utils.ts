@@ -28,6 +28,7 @@ export function snapshotToRows(
       applicable: row.applicable,
       note: row.note ?? '',
       sectionalWork: row.sectionalWork ?? '',
+      subproject: row.subproject ?? '',
       sectionCode: row.sectionCode ?? '',
       sectionNote: row.sectionNote ?? '',
       sectionName: row.sectionName ?? '',

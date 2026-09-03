@@ -21,7 +21,7 @@ import {
   CommunityTaskReviewListOutputSchema,
 } from '@toolman/shared'
 
-import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
+import { assertUserAccessiblePath } from '../path-sandbox.service'
 import { buildApiQuery, fromApiJson, toApiJson } from './community-case'
 import {
   asItems,
@@ -120,7 +120,7 @@ export async function acceptTaskApplication(input: unknown) {
 export async function deliverTask(input: unknown) {
   const parsed = CommunityTaskDeliverInputSchema.parse(input)
   const client = requireClient()
-  const packagePath = assertPathWithinAllowedRoots(parsed.packagePath)
+  const packagePath = assertUserAccessiblePath(parsed.packagePath)
   const packageBytes = await readFile(packagePath)
   const data = await client.postMultipart<unknown>(`/api/v1/tasks/${parsed.taskId}/deliver`, [
     ...(parsed.notes ? [{ name: 'notes', value: parsed.notes }] : []),

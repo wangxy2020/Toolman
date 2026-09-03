@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { IpcChannel } from '@toolman/shared'
 import type { PendingAttachment } from './chat-attachments'
-import { getClipboardImageFiles, readFileAsBase64 } from './clipboard-images'
+import { getClipboardImageFiles, readFileAsBase64, shouldStageClipboardImages } from './clipboard-images'
 import type { TranslateFn } from '../../i18n/I18nProvider'
 import type { ClipboardEvent, Dispatch, SetStateAction } from 'react'
 
@@ -142,7 +142,7 @@ export function useMessageInputAttachments({
       if (!clipboardData) return
 
       const imageFiles = getClipboardImageFiles(clipboardData)
-      if (imageFiles.length === 0) return
+      if (imageFiles.length === 0 || !shouldStageClipboardImages(clipboardData)) return
 
       event.preventDefault()
       void stageClipboardImages(imageFiles)

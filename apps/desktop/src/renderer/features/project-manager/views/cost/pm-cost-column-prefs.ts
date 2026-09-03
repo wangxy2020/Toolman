@@ -1,7 +1,10 @@
 /** Price list (成本/价格表) column visibility + custom header labels (localStorage). */
 
+export type CostColumnLabelLanguage = 'zh-CN' | 'en'
+
 export const COST_TOGGLE_COLUMNS = [
   'type',
+  'subproject',
   'sectionalWork',
   'code',
   'name',
@@ -27,6 +30,7 @@ export type CostColumnLabels = Partial<Record<CostLabelColumn, string>>
 
 export const DEFAULT_COST_COLUMN_VISIBILITY: CostColumnVisibility = {
   type: true,
+  subproject: true,
   sectionalWork: true,
   code: true,
   name: true,
@@ -41,6 +45,39 @@ export const DEFAULT_COST_COLUMN_VISIBILITY: CostColumnVisibility = {
 
 const VISIBILITY_STORAGE_KEY = 'toolman.pm.cost.columnVisibility'
 const LABELS_STORAGE_KEY = 'toolman.pm.cost.columnLabels'
+
+/** Built-in headers (current + previous) — must not freeze the UI language. */
+const STOCK_COST_COLUMN_LABELS: Record<CostLabelColumn, readonly string[]> = {
+  type: ['类型', 'Type', 'Categories'],
+  sectionalWork: ['分部工程', 'Sectional work', 'Subproject', 'Subdivision Work'],
+  subproject: ['子项目', 'Subproject'],
+  code: ['编码', 'Code', 'No'],
+  name: ['工作名称', 'Work name', 'Work Name'],
+  featureDescription: ['特征描述', 'Feature description', 'Description'],
+  unit: ['单位', 'Unit'],
+  quantity: ['工程数量', 'Quantity'],
+  unitPrice: ['单价', 'Unit price'],
+  totalPrice: ['合价', 'Amount', 'Total Price'],
+  baseline: ['基准', 'Baseline'],
+  note: ['备注', 'Note', 'Notes'],
+}
+
+function labelsStorageKey(language: CostColumnLabelLanguage): string {
+  return `${LABELS_STORAGE_KEY}.${language}`
+}
+
+function normalizeLabel(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+export function isStockCostColumnLabel(column: CostLabelColumn, label: string): boolean {
+  const normalized = normalizeLabel(label)
+  if (!normalized) return true
+  return STOCK_COST_COLUMN_LABELS[column].some((item) => {
+    const stock = normalizeLabel(item)
+    return normalized === stock || normalized.startsWith(`${stock} (`) || normalized.startsWith(`${stock}（`)
+  })
+}
 
 function isToggleColumn(value: string): value is CostToggleColumn {
   return (COST_TOGGLE_COLUMNS as readonly string[]).includes(value)
@@ -81,33 +118,45 @@ export function saveCostColumnVisibility(value: CostColumnVisibility): void {
   }
 }
 
-export function loadCostColumnLabels(): CostColumnLabels {
+function parseCostColumnLabels(raw: string | null): CostColumnLabels {
+  if (!raw) return {}
+  const parsed = JSON.parse(raw) as Record<string, unknown>
+  const next: CostColumnLabels = {}
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!isLabelColumn(key)) continue
+    if (typeof value !== 'string') continue
+    const trimmed = value.trim()
+    if (!trimmed || isStockCostColumnLabel(key, trimmed)) continue
+    next[key] = trimmed
+  }
+  return next
+}
+
+export function loadCostColumnLabels(language: CostColumnLabelLanguage = 'zh-CN'): CostColumnLabels {
   try {
-    const raw = localStorage.getItem(LABELS_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const next: CostColumnLabels = {}
-    for (const [key, value] of Object.entries(parsed)) {
-      if (!isLabelColumn(key)) continue
-      if (typeof value !== 'string') continue
-      const trimmed = value.trim()
-      if (!trimmed) continue
-      next[key] = trimmed
+    const localized = parseCostColumnLabels(localStorage.getItem(labelsStorageKey(language)))
+    if (Object.keys(localized).length > 0) return localized
+    // Legacy unscoped key: only seed Chinese so English keeps i18n defaults.
+    if (language === 'zh-CN') {
+      return parseCostColumnLabels(localStorage.getItem(LABELS_STORAGE_KEY))
     }
-    return next
+    return {}
   } catch {
     return {}
   }
 }
 
-export function saveCostColumnLabels(value: CostColumnLabels): void {
+export function saveCostColumnLabels(
+  value: CostColumnLabels,
+  language: CostColumnLabelLanguage = 'zh-CN',
+): void {
   try {
     const payload: Record<string, string> = {}
     for (const key of COST_LABEL_COLUMNS) {
       const trimmed = value[key]?.trim()
-      if (trimmed) payload[key] = trimmed
+      if (trimmed && !isStockCostColumnLabel(key, trimmed)) payload[key] = trimmed
     }
-    localStorage.setItem(LABELS_STORAGE_KEY, JSON.stringify(payload))
+    localStorage.setItem(labelsStorageKey(language), JSON.stringify(payload))
   } catch {
     // Ignore quota / private-mode failures.
   }

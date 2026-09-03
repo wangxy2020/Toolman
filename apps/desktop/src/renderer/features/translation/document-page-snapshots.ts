@@ -117,6 +117,33 @@ function pageHasRestoredContent(page: DocumentPageState): boolean {
   return false
 }
 
+export function pageCountFromSnapshots(
+  snapshots: TranslationDocumentPageSnapshot[] | undefined,
+): number {
+  if (!snapshots?.length) return 0
+  return snapshots.reduce((max, page) => Math.max(max, page.pageNumber), 0)
+}
+
+function pageMatchesSnapshot(
+  page: DocumentPageState,
+  snapshot: TranslationDocumentPageSnapshot,
+): boolean {
+  const expected =
+    snapshot.status === 'empty'
+      ? 'empty'
+      : snapshot.status === 'done'
+        ? 'done'
+        : snapshot.status === 'parsed'
+          ? 'parsed'
+          : 'idle'
+  return (
+    page.status === expected &&
+    page.sourceText === snapshot.sourceText &&
+    page.translatedText === snapshot.translatedText &&
+    (page.parsedMarkdown ?? '') === (snapshot.parsedMarkdown ?? '')
+  )
+}
+
 export function applySavedPageSnapshots(
   pages: DocumentPageState[],
   snapshots: TranslationDocumentPageSnapshot[] | undefined,
@@ -132,12 +159,16 @@ export function applySavedPageSnapshots(
   if (!snapshots?.length) return pages
 
   const byPage = new Map(snapshots.map((snapshot) => [snapshot.pageNumber, snapshot]))
+  let changed = false
 
-  return pages.map((page) => {
+  const nextPages = pages.map((page) => {
     const snapshot = byPage.get(page.pageNumber)
     if (!snapshot) return page
     if (mergeWithExisting && pageHasRestoredContent(page)) return page
+    if (mergeWithExisting) return page
+    if (pageMatchesSnapshot(page, snapshot)) return page
 
+    changed = true
     const next = snapshotToPageState(page, snapshot)
 
     cachePageState(
@@ -150,5 +181,85 @@ export function applySavedPageSnapshots(
     )
 
     return next
+  })
+
+  return changed ? nextPages : pages
+}
+
+export function createLightweightPagesFromSnapshots(
+  snapshots: TranslationDocumentPageSnapshot[] | undefined,
+  totalPages: number,
+): DocumentPageState[] {
+  const count = Math.max(1, Math.floor(totalPages) || 1)
+  const byPage = new Map((snapshots ?? []).map((snapshot) => [snapshot.pageNumber, snapshot]))
+
+  return Array.from({ length: count }, (_, index) => {
+    const pageNumber = index + 1
+    const snapshot = byPage.get(pageNumber)
+    if (!snapshot) {
+      return { pageNumber, sourceText: '', translatedText: '', status: 'idle' as const }
+    }
+    if (snapshot.status === 'empty') {
+      return {
+        pageNumber,
+        sourceText: '',
+        translatedText: '',
+        status: 'empty' as const,
+        error: NO_VALID_PAGE_TEXT,
+      }
+    }
+    return {
+      pageNumber,
+      sourceText: '',
+      translatedText: '',
+      status:
+        snapshot.status === 'done'
+          ? ('done' as const)
+          : snapshot.status === 'parsed'
+            ? ('parsed' as const)
+            : ('idle' as const),
+    }
+  })
+}
+
+export function resolvePageFromSnapshot(
+  page: DocumentPageState,
+  snapshot: TranslationDocumentPageSnapshot | undefined,
+): DocumentPageState {
+  if (!snapshot) return page
+  if (pageHasRestoredContent(page)) return page
+  return snapshotToPageState(page, snapshot)
+}
+
+export function mergeLiveSnapshotsWithSaved(
+  live: TranslationDocumentPageSnapshot[],
+  saved: TranslationDocumentPageSnapshot[] | undefined,
+): TranslationDocumentPageSnapshot[] {
+  if (!saved?.length) return live
+  const byPage = new Map(saved.map((item) => [item.pageNumber, item]))
+  for (const item of live) {
+    const hasBody =
+      item.status === 'empty' ||
+      Boolean(item.sourceText.trim()) ||
+      Boolean(item.translatedText.trim()) ||
+      Boolean(item.parsedMarkdown?.trim())
+    if (hasBody) byPage.set(item.pageNumber, item)
+  }
+  return [...byPage.values()].sort((left, right) => left.pageNumber - right.pageNumber)
+}
+
+export function pagesHaveIncompleteSnapshotBodies(
+  pages: DocumentPageState[],
+  snapshots: TranslationDocumentPageSnapshot[] | undefined,
+): boolean {
+  if (!snapshots?.length) return false
+  const byPage = new Map(pages.map((page) => [page.pageNumber, page]))
+  return snapshots.some((snapshot) => {
+    if (snapshot.status === 'empty') return false
+    if (!snapshot.sourceText.trim() && !snapshot.translatedText.trim() && !snapshot.parsedMarkdown?.trim()) {
+      return false
+    }
+    const page = byPage.get(snapshot.pageNumber)
+    return !page || !pageHasRestoredContent(page)
   })
 }

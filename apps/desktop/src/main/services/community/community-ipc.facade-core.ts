@@ -7,7 +7,7 @@ import {
   getCommunityHttpClient,
   clearCommunityHubOfflineReadOnly,
   markCommunityHubOfflineReadOnly,
-  refreshCommunityHubClientIfNeeded,
+  recoverCommunityHubConnection,
 } from './community-bridge.service'
 import {
   CommunityHttpError,
@@ -38,7 +38,7 @@ export async function withRefreshedHubClient<T>(
   operation: (client: CommunityHttpClient) => Promise<T>,
 ): Promise<T> {
   const run = async () => {
-    await refreshCommunityHubClientIfNeeded()
+    await recoverCommunityHubConnection()
     return operation(requireClient())
   }
 
@@ -51,7 +51,7 @@ export async function withRefreshedHubClient<T>(
     if (!connectionFailure) {
       throw error
     }
-    await refreshCommunityHubClientIfNeeded()
+    await recoverCommunityHubConnection()
     return run()
   }
 }
@@ -65,6 +65,7 @@ export async function fetchWithHubCache<T>(
   cacheKey: string,
   fetch: (client: CommunityHttpClient) => Promise<T>,
 ): Promise<T> {
+  await recoverCommunityHubConnection()
   const client = getCommunityHttpClient()
   if (!client) {
     const cached = readCommunityHubCache<T>(cacheKey)

@@ -184,6 +184,7 @@ export const TranslationDocumentRenderPageInputSchema = z.object({
   pageNumber: z.number().int().positive(),
   /** CSS pixel width of the preview column. */
   targetWidth: z.number().positive(),
+  priority: z.enum(['visible', 'prefetch']).optional(),
 })
 
 export const TranslationDocumentRenderPageOutputSchema = z.object({

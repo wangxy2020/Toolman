@@ -107,6 +107,7 @@ export function useTranslationRecords(
     saveContrast: contrastApi.saveContrast,
     saveDocument: documentApi.saveDocument,
     updateDocumentSourceText: documentApi.updateDocumentSourceText,
+    updateDocumentPageRemark: documentApi.updateDocumentPageRemark,
     deleteContrast: contrastApi.deleteContrast,
     deleteDocument: documentApi.deleteDocument,
   }

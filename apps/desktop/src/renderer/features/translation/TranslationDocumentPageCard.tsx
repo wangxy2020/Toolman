@@ -1,7 +1,6 @@
 import { memo } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { TranslationDocumentMarkdown } from './TranslationDocumentMarkdown'
-import { TranslationDocumentTranslatedText } from './TranslationDocumentTranslatedText'
 import {
   emptyPageMessageKey,
   HYBRID_UNAVAILABLE_ERROR,
@@ -15,11 +14,14 @@ const DocumentPageCard = memo(function DocumentPageCard({
   totalPages,
   hasModel,
   parseArmed,
+  heavyContent,
 }: {
   page: DocumentPageState
   totalPages: number
   hasModel: boolean
   parseArmed: boolean
+  /** Rich markdown waits until the current PDF preview has painted. */
+  heavyContent: boolean
 }) {
   const { t } = useI18n()
   const markdownText = (page.parsedMarkdown ?? page.translatedText).trim()
@@ -63,10 +65,12 @@ const DocumentPageCard = memo(function DocumentPageCard({
       </header>
       <div className="tm-translation-doc-page-card-body">
         {displayText ? (
-          useRichPreview ? (
+          heavyContent && useRichPreview ? (
             <TranslationDocumentMarkdown text={displayText} />
           ) : (
-            <TranslationDocumentTranslatedText text={displayText} />
+            <div className="tm-translation-doc-page-card-text tm-translation-doc-page-card-text--plain">
+              {displayText}
+            </div>
           )
         ) : page.status === 'error' ? (
           <p className="tm-translation-doc-page-card-placeholder tm-translation-doc-page-card-placeholder--error">
@@ -85,6 +89,10 @@ const DocumentPageCard = memo(function DocumentPageCard({
             {page.status === 'parsing'
               ? t('translationPage.documents.pageParsing')
               : t('translationPage.documents.pageTranslating')}
+          </p>
+        ) : page.status === 'parsed' ? (
+          <p className="tm-translation-doc-page-card-placeholder">
+            {t('translationPage.documents.pageParsed')}
           </p>
         ) : (
           <p className="tm-translation-doc-page-card-placeholder">

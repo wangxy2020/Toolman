@@ -69,6 +69,7 @@ export function writeSharedCostCatalog(workspaceId: string, rows: PmCostRow[]): 
           applicable: row.applicable,
           note: row.note,
           sectionalWork: row.sectionalWork,
+          subproject: row.subproject,
           sectionCode: row.sectionCode,
           sectionNote: row.sectionNote,
           sectionName: row.sectionName,
@@ -107,6 +108,7 @@ export async function hydrateSharedCostCatalogFromMain(workspaceId: string): Pro
         applicable: row.applicable || PM_COST_APPLICABLE_ALL,
         note: row.note ?? '',
         sectionalWork: row.sectionalWork ?? '',
+        subproject: row.subproject ?? '',
         sectionCode: row.sectionCode ?? '',
         sectionNote: row.sectionNote ?? '',
         sectionName: row.sectionName ?? '',
@@ -172,6 +174,7 @@ export function upsertSharedCostCatalog(
         existing.unitPrice !== candidate.unitPrice ||
         existing.note !== candidate.note ||
         existing.sectionalWork !== candidate.sectionalWork ||
+        existing.subproject !== candidate.subproject ||
         existing.sectionCode !== candidate.sectionCode ||
         existing.sectionNote !== candidate.sectionNote ||
         existing.sectionName !== candidate.sectionName ||
@@ -185,6 +188,7 @@ export function upsertSharedCostCatalog(
           unitPrice: candidate.unitPrice,
           note: candidate.note,
           sectionalWork: candidate.sectionalWork,
+          subproject: candidate.subproject,
           sectionCode: candidate.sectionCode,
           sectionNote: candidate.sectionNote,
           sectionName: candidate.sectionName,
@@ -241,6 +245,7 @@ export function toCostCatalogSnapshot(rows: readonly PmCostRow[]): PmCostCatalog
     applicable: row.applicable,
     note: row.note,
     sectionalWork: row.sectionalWork,
+    subproject: row.subproject,
     sectionCode: row.sectionCode,
     sectionNote: row.sectionNote,
     sectionName: row.sectionName,

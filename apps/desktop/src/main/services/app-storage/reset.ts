@@ -4,7 +4,7 @@ import { app, shell } from 'electron'
 import { purgeAllKnowledgeStorageData } from '../knowledge.service'
 import { fireAndForget } from '../../lib/fire-and-forget'
 import { purgeAllMemoryData } from '../memory-entry.service'
-import { assertPathWithinAllowedRoots } from '../path-sandbox.service'
+import { assertUserAccessiblePath } from '../path-sandbox.service'
 import { assertPathSafeToOpenInShell } from '../shell-open-guard'
 
 /** Sidecar dirs removed by「重置数据」（minimal reset） */
@@ -68,7 +68,7 @@ export async function openPathInShell(path: string) {
 }
 
 export function revealPathInShell(path: string) {
-  const allowedPath = assertPathWithinAllowedRoots(path)
+  const allowedPath = assertUserAccessiblePath(path)
   shell.showItemInFolder(allowedPath)
   return { revealed: true }
 }

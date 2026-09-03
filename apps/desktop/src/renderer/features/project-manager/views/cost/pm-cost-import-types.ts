@@ -33,12 +33,13 @@ export type CostImportHeaderField = keyof Pick<
   | 'quantity'
   | 'unitPrice'
   | 'sectionalWork'
+  | 'subproject'
   | 'type'
   | 'note'
 >
 
 export const HEADER_ALIASES: Record<CostImportHeaderField, readonly string[]> = {
-  code: ['编码', '项目编码', '清单编码', '定额编码', 'code', 'itemcode', 'item_code'],
+  code: ['编码', '项目编码', '清单编码', '定额编码', 'code', 'itemcode', 'item_code', 'no'],
   name: [
     '名称',
     '工作名称',
@@ -47,6 +48,8 @@ export const HEADER_ALIASES: Record<CostImportHeaderField, readonly string[]> = 
     '定额名称',
     '工程名称',
     'name',
+    'work name',
+    'workname',
     'itemname',
     'item_name',
   ],
@@ -57,6 +60,7 @@ export const HEADER_ALIASES: Record<CostImportHeaderField, readonly string[]> = 
     '特征',
     '描述',
     'featuredescription',
+    'feature description',
     'description',
     'spec',
   ],
@@ -71,8 +75,11 @@ export const HEADER_ALIASES: Record<CostImportHeaderField, readonly string[]> = 
     '章节',
     'sectionalwork',
     'section',
+    'subdivision work',
+    'subdivisionwork',
   ],
-  type: ['类型', '费用类型', '费用名称', 'type', 'costtype'],
+  subproject: ['子项目', '子项', 'subproject', 'sub-project', 'sub project'],
+  type: ['类型', '费用类型', '费用名称', 'type', 'costtype', 'categories', 'category'],
   note: ['备注', '说明', '附注', 'note', 'remark', 'comments'],
 }
 

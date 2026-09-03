@@ -164,6 +164,7 @@ export function buildLiveFundsFeatureRows(
       code: overlay?.code ?? '',
       featureDescription: overlay?.featureDescription ?? '',
       sectionalWork: overlay?.sectionalWork ?? '',
+      subproject: overlay?.subproject ?? '',
       unitPrice:
         overlay?.unitPrice != null && Number.isFinite(overlay.unitPrice)
           ? overlay.unitPrice

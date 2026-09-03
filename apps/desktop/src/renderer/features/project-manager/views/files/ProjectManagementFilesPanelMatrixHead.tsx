@@ -96,6 +96,11 @@ export const ProjectManagementFilesPanelMatrixHead: FC<{ view: MatrixView }> = (
                         {featureColumnLabel('type')}
                       </th>
                     ) : null}
+                    {isMeteringCostView && mCol.subproject ? (
+                      <th className="tm-pm-resource-table-col-subproject">
+                        {featureColumnLabel('subproject')}
+                      </th>
+                    ) : null}
                     {isMeteringCostView && mCol.sectionalWork ? (
                       <th className="tm-pm-resource-table-col-sectional">
                         {featureColumnLabel('sectionalWork')}

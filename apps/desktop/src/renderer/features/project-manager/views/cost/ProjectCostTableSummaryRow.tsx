@@ -91,6 +91,7 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
         </span>
       </td>
       {columnVisibility.type ? <td /> : null}
+      {columnVisibility.subproject ? <td className="tm-pm-resource-table-col-subproject" /> : null}
       {columnVisibility.sectionalWork ? (
         <td className="tm-pm-resource-table-col-sectional">
           <span className="tm-pm-cost-table-section-summary-label">
