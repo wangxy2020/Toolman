@@ -164,12 +164,20 @@ pub fn require_permission(user: &CommunityUser, permission: UserPermission) -> R
     user.ensure_permission(permission).map_err(ApiError::from)
 }
 
+fn is_anonymous_news_fetch(method: &Method, path: &str) -> bool {
+    *method == Method::POST && path.contains("/news/sources/") && path.ends_with("/fetch")
+}
+
 pub async fn guest_write_block_middleware(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, ApiError> {
     let method = request.method().clone();
+    let path = request.uri().path().to_string();
+    if is_anonymous_news_fetch(&method, &path) {
+        return Ok(next.run(request).await);
+    }
     if matches!(
         method,
         Method::POST | Method::PUT | Method::PATCH | Method::DELETE

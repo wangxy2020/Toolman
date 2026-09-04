@@ -22,7 +22,7 @@ import { asItems, requireClient } from './community-ipc.facade-core'
 
 export async function listNewsSources() {
   const client = requireClient()
-  const data = await client.get<unknown[]>('/api/v1/news/sources', { authenticated: false })
+  const data = await client.get<unknown[]>('/api/v1/news/sources')
   return CommunityNewsSourceListOutputSchema.parse({ items: asItems(data) })
 }
 
@@ -43,12 +43,7 @@ export async function deleteNewsSource(input: unknown) {
 export async function fetchNewsSource(input: unknown) {
   const parsed = CommunityNewsSourceFetchInputSchema.parse(input)
   const client = requireClient()
-  // RSS pulling should be usable for read-only / guest flows.
-  const data = await client.post<unknown>(
-    `/api/v1/news/sources/${parsed.sourceId}/fetch`,
-    undefined,
-    { authenticated: false },
-  )
+  const data = await client.post<unknown>(`/api/v1/news/sources/${parsed.sourceId}/fetch`)
   return fromApiJson(data)
 }
 
@@ -63,8 +58,7 @@ export async function listNewsArticles(input: unknown) {
     limit: parsed.limit,
     offset: parsed.offset,
   })
-  // RSS articles are read-only; should not require user auth.
-  const data = await client.get<unknown[]>(`/api/v1/news/articles${query}`, { authenticated: false })
+  const data = await client.get<unknown[]>(`/api/v1/news/articles${query}`)
   return CommunityNewsListOutputSchema.parse({
     items: asItems(data).map((item) => CommunityNewsArticleSchema.parse(fromApiJson(item))),
   })
@@ -73,14 +67,13 @@ export async function listNewsArticles(input: unknown) {
 export async function getNewsArticle(input: unknown) {
   const parsed = CommunityNewsGetInputSchema.parse(input)
   const client = requireClient()
-  // Details are read-only; should not require user auth.
-  const data = await client.get<unknown>(`/api/v1/news/articles/${parsed.id}`, { authenticated: false })
+  const data = await client.get<unknown>(`/api/v1/news/articles/${parsed.id}`)
   return CommunityNewsArticleSchema.parse(fromApiJson(data))
 }
 
 export async function listRecommendedNews() {
   const client = requireClient()
-  const data = await client.get<unknown[]>('/api/v1/news/articles/recommended', { authenticated: false })
+  const data = await client.get<unknown[]>('/api/v1/news/articles/recommended')
   return CommunityNewsRecommendedOutputSchema.parse({
     items: asItems(data).map((item) => CommunityNewsArticleSchema.parse(fromApiJson(item))),
   })
@@ -116,7 +109,6 @@ export async function listNewsComments(input: unknown) {
   })
   const data = await client.get<unknown[]>(
     `/api/v1/news/articles/${parsed.articleId}/comments${query}`,
-    { authenticated: false },
   )
   return CommunityNewsCommentListOutputSchema.parse({
     items: asItems(data).map((item) => CommunityNewsCommentSchema.parse(fromApiJson(item))),

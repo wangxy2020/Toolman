@@ -518,6 +518,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn post_news_source_fetch_does_not_require_bearer_token() {
+        let (app, pool, data_dir) = test_app().await;
+        let news_service = crate::services::NewsService::new(pool.clone());
+
+        let source = news_service
+            .create_source(crate::domain::CreateRssSourceInput {
+                id: Some("anon-fetch-source".into()),
+                title: "Anon Fetch".into(),
+                feed_url: "http://127.0.0.1:1/missing.xml".into(),
+                site_url: Some("https://example.com".into()),
+                category: Some("ai".into()),
+                language: Some("en".into()),
+                enabled: Some(true),
+                fetch_interval_minutes: Some(60),
+            })
+            .await
+            .expect("create source");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/news/sources/{}/fetch", source.id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_ne!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "RSS fetch must stay anonymous even when JWT secret is configured"
+        );
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
+
+    #[tokio::test]
     async fn list_news_articles_returns_liked_by_me_with_bearer_token() {
         let secret = "test-hub-jwt-secret";
         let (app, pool, data_dir) = test_app_with_jwt(secret).await;
