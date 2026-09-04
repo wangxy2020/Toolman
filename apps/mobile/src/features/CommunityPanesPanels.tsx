@@ -54,7 +54,6 @@ export function CommunityListSectionPanel({
     section,
     sorted,
     loading,
-    offline,
     reload,
     hubBaseUrl,
     userId,
