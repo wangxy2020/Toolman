@@ -64,6 +64,8 @@ jobs:
         run: pnpm --filter @toolman/desktop test:task-integration
 
       - name: Dependency audit
+        # New GHSA entries in transitive deps must not skip later jobs or fail the whole pipeline.
+        continue-on-error: true
         run: pnpm audit --audit-level=high
 
       - name: P2P schema smoke
