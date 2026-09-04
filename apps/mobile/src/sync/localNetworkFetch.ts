@@ -71,10 +71,10 @@ export const boundFetch: typeof fetch = (input, init) => fetchWithLocalNetwork(i
 
 const LNA_ATTEMPTED_KEY = '__toolmanLocalNetworkAttempted'
 const LOOPBACK_HEALTH_URLS = [
-  'http://localhost:17890/health',
-  'http://127.0.0.1:17890/health',
   'http://localhost:3721/health',
   'http://127.0.0.1:3721/health',
+  'http://localhost:17890/health',
+  'http://127.0.0.1:17890/health',
 ] as const
 
 type LnaHost = typeof globalThis & {
@@ -115,24 +115,28 @@ export function markLocalNetworkAccessAttempted(): void {
 }
 
 async function probeLoopbackHealth(): Promise<boolean> {
-  for (const url of LOOPBACK_HEALTH_URLS) {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), localNetworkRequestTimeoutMs(url))
-    try {
-      const res = await fetchWithLocalNetwork(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        signal: ctrl.signal,
-        mode: 'cors',
-      })
-      if (res.ok) return true
-    } catch {
-      // try the next loopback alias
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-  return false
+  // Start every loopback probe in the same turn so Chrome can attach the Local
+  // Network Access prompt to the click, even if 17890 is down and 3721 is up.
+  const results = await Promise.all(
+    LOOPBACK_HEALTH_URLS.map(async (url) => {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), localNetworkRequestTimeoutMs(url))
+      try {
+        const res = await fetchWithLocalNetwork(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: ctrl.signal,
+          mode: 'cors',
+        })
+        return res.ok
+      } catch {
+        return false
+      } finally {
+        clearTimeout(timer)
+      }
+    }),
+  )
+  return results.some(Boolean)
 }
 
 const LNA_PERMISSION_NAMES = ['loopback-network', 'local-network-access', 'local-network'] as const

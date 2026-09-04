@@ -149,30 +149,14 @@ export function CommunityPage({
 
         <CommunityPageStatusArea>
           <div className="tm-module-content tm-community-module-content">
-            <div hidden={effectiveAction !== 'mcp'} aria-hidden={effectiveAction !== 'mcp'}>
-              <McpMarketPanel />
-            </div>
-            <div hidden={effectiveAction !== 'news'} aria-hidden={effectiveAction !== 'news'}>
-              <NewsCenterPanel />
-            </div>
-            <div hidden={effectiveAction !== 'messages'} aria-hidden={effectiveAction !== 'messages'}>
-              <MessageBoardPanel />
-            </div>
-            <div hidden={effectiveAction !== 'skills'} aria-hidden={effectiveAction !== 'skills'}>
-              <SkillsMarketPanel />
-            </div>
-            <div hidden={effectiveAction !== 'workflow'} aria-hidden={effectiveAction !== 'workflow'}>
-              <WorkflowMarketPanel />
-            </div>
-            <div hidden={effectiveAction !== 'tasks'} aria-hidden={effectiveAction !== 'tasks'}>
-              <TaskMarketPanel />
-            </div>
-            <div hidden={effectiveAction !== 'knowledge'} aria-hidden={effectiveAction !== 'knowledge'}>
-              <KnowledgeMarketPanel />
-            </div>
-            <div hidden={effectiveAction !== 'subscribe'} aria-hidden={effectiveAction !== 'subscribe'}>
-              <UserCenterPanel />
-            </div>
+            {effectiveAction === 'mcp' ? <McpMarketPanel /> : null}
+            {effectiveAction === 'news' ? <NewsCenterPanel /> : null}
+            {effectiveAction === 'messages' ? <MessageBoardPanel /> : null}
+            {effectiveAction === 'skills' ? <SkillsMarketPanel /> : null}
+            {effectiveAction === 'workflow' ? <WorkflowMarketPanel /> : null}
+            {effectiveAction === 'tasks' ? <TaskMarketPanel /> : null}
+            {effectiveAction === 'knowledge' ? <KnowledgeMarketPanel /> : null}
+            {effectiveAction === 'subscribe' ? <UserCenterPanel /> : null}
             {effectiveAction === 'management' ? <AdminModerationPanel /> : null}
             {PANEL_TITLE_ACTIONS.has(effectiveAction) ? null : (
               <div className="tm-module-empty">

@@ -86,9 +86,6 @@ export function CommunityResourceMarketPanel({
     error: market.error,
     onClearError: () => market.setError(null),
   })
-  useCommunityPanelStatus(`community-market-${resourceType}-user`, {
-    error: user.error,
-  })
   useRegisterModulePanelStatus(
     `community-market-${resourceType}-publish`,
     publishNotice

@@ -135,4 +135,40 @@ describe('CommunityHttpClient', () => {
     expect(headers.get('Authorization')).toBe('Bearer hub-token')
     expect(headers.get('x-community-user-id')).toBe('00000000-0000-0000-0000-000000000001')
   })
+
+  it('retries without Bearer when the hub rejects the JWT', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
+      const headers = init?.headers as Headers
+      if (headers.get('Authorization')) {
+        return Response.json(
+          {
+            ok: false,
+            error: { code: 'UNAUTHORIZED', message: 'invalid hub token: signature' },
+          },
+          { status: 401 },
+        )
+      }
+      return Response.json({
+        ok: true,
+        data: { id: 'user-1' },
+      })
+    })
+
+    const client = new CommunityHttpClient({
+      port: 3721,
+      fetchImpl,
+      resolveAuth: async () => ({
+        authorization: 'Bearer bad-token',
+        identityId: '00000000-0000-0000-0000-000000000001',
+      }),
+    })
+
+    await expect(client.get('/api/v1/users/me')).resolves.toEqual({ id: 'user-1' })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const retryHeaders = fetchImpl.mock.calls[1]?.[1]?.headers as Headers
+    expect(retryHeaders.get('Authorization')).toBeNull()
+    expect(retryHeaders.get('x-community-user-id')).toBe(
+      '00000000-0000-0000-0000-000000000001',
+    )
+  })
 })

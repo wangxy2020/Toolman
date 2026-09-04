@@ -60,9 +60,6 @@ export function TaskMarketPanel() {
     error: tasks.error,
     onClearError: () => tasks.setError(null),
   })
-  useCommunityPanelStatus('community-tasks-user', {
-    error: user.error,
-  })
   useRegisterModulePanelStatus(
     'community-tasks-publish',
     publishNotice

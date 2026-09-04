@@ -41,17 +41,37 @@ pub fn resolve_identity_from_headers(
     headers: &HeaderMap,
     jwt_secret: Option<&str>,
 ) -> Result<ResolvedIdentity, ApiError> {
+    resolve_identity_from_headers_with(
+        headers,
+        jwt_secret,
+        crate::config::is_header_auth_allowed(),
+    )
+}
+
+pub(crate) fn resolve_identity_from_headers_with(
+    headers: &HeaderMap,
+    jwt_secret: Option<&str>,
+    header_auth_allowed: bool,
+) -> Result<ResolvedIdentity, ApiError> {
     if let Some(secret) = jwt_secret {
         if let Some(token) = bearer_token_from_headers(headers) {
-            return validate_hub_jwt(token, secret);
-        }
-        if !crate::config::is_header_auth_allowed() {
+            match validate_hub_jwt(token, secret) {
+                Ok(identity) => return Ok(identity),
+                Err(error) => {
+                    if !header_auth_allowed {
+                        return Err(error);
+                    }
+                    // Desktop sidecar may mint with a rotated secret while an older
+                    // Hub process is still running. Fall through to identity header.
+                }
+            }
+        } else if !header_auth_allowed {
             return Err(ApiError::unauthorized(
                 "missing Authorization Bearer token",
             ));
         }
-        // Bearer missing: allow loopback / mobile clients that send X-Community-User-Id.
-    } else if !crate::config::is_header_auth_allowed() {
+        // Bearer missing or unusable: allow loopback / mobile clients that send X-Community-User-Id.
+    } else if !header_auth_allowed {
         return Err(ApiError::unauthorized(
             "community hub JWT secret not configured; set COMMUNITY_HUB_JWT_SECRET or COMMUNITY_HUB_ALLOW_HEADER_AUTH=1 for local dev",
         ));
@@ -296,4 +316,43 @@ pub async fn require_publish_handler(
     let auth_user = load_auth_user(&state, &identity).await?;
     require_permission(auth_user.user(), UserPermission::Publish)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    fn headers_with(bearer: Option<&str>, identity: Option<&str>) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        if let Some(token) = bearer {
+            headers.insert(
+                "authorization",
+                HeaderValue::from_str(&format!("Bearer {token}")).expect("authorization header"),
+            );
+        }
+        if let Some(id) = identity {
+            headers.insert(
+                HEADER_COMMUNITY_USER_ID,
+                HeaderValue::from_str(id).expect("identity header"),
+            );
+        }
+        headers
+    }
+
+    #[test]
+    fn invalid_bearer_falls_back_to_identity_header_when_allowed() {
+        let headers = headers_with(Some("not-a-jwt"), Some("local-user"));
+        let identity =
+            resolve_identity_from_headers_with(&headers, Some("secret"), true).expect("fallback");
+        assert_eq!(identity.identity_id, "local-user");
+    }
+
+    #[test]
+    fn invalid_bearer_is_rejected_when_header_auth_disabled() {
+        let headers = headers_with(Some("not-a-jwt"), Some("local-user"));
+        let error = resolve_identity_from_headers_with(&headers, Some("secret"), false)
+            .expect_err("jwt required");
+        assert!(error.message.contains("invalid hub token"));
+    }
 }

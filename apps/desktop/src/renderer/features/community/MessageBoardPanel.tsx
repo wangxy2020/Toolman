@@ -49,9 +49,6 @@ export function MessageBoardPanel() {
     error: board.error,
     onClearError: () => board.setError(null),
   })
-  useCommunityPanelStatus('community-message-board-user', {
-    error: user.error,
-  })
 
   const sortedItems = useMemo(
     () =>

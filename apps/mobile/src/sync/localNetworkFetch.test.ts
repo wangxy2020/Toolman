@@ -72,15 +72,16 @@ describe('primeLocalNetworkAccess', () => {
     vi.unstubAllGlobals()
   })
 
-  it('probes localhost first on hosted web', async () => {
+  it('succeeds when only the community hub is listening', async () => {
     vi.stubGlobal('location', { hostname: 'www.toolman.work' })
-    const fetchMock = vi.fn(async () => new Response('{"status":"ok"}', { status: 200 }))
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).includes(':3721')) {
+        return new Response('{"ok":true}', { status: 200 })
+      }
+      throw new TypeError('Failed to fetch')
+    })
     vi.stubGlobal('fetch', fetchMock)
     await expect(primeLocalNetworkAccess()).resolves.toBe(true)
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:17890/health',
-      expect.objectContaining({ targetAddressSpace: 'loopback' }),
-    )
   })
 
   it('defers hosted work until loopback is granted', async () => {

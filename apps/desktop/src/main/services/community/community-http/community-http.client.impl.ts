@@ -5,7 +5,7 @@ import {
 } from '../community-paths'
 import type { CommunityHubAuthContext } from '../community-hub-auth.service'
 import { acquireCommunityRequestSlot, releaseCommunityRequestSlot } from './community-http.concurrency'
-import { humanizeCommunityFetchError, isCommunityFetchNetworkError } from './community-http.errors'
+import { humanizeCommunityFetchError, isCommunityFetchNetworkError, isRetryableHubBearerError } from './community-http.errors'
 import { buildMultipartBody, postBuffer } from './community-http.multipart'
 import { parseCommunityApiResponse, sleepMs } from './community-http.parse'
 import {
@@ -19,6 +19,8 @@ export class CommunityHttpClient {
   private readonly identityId: string
   private readonly fetchImpl: typeof fetch
   private readonly resolveAuth?: () => Promise<CommunityHubAuthContext> | CommunityHubAuthContext
+  /** After a JWT 401, prefer the identity header so a stale sidecar secret does not block reads. */
+  private skipBearer = false
 
   constructor(options: CommunityHttpClientOptions) {
     if (options.baseUrl) {
@@ -228,7 +230,35 @@ export class CommunityHttpClient {
       })
 
       const text = await response.text()
-      return parseCommunityApiResponse<T>(text, response.status)
+      try {
+        return parseCommunityApiResponse<T>(text, response.status)
+      } catch (error) {
+        if (
+          init.authenticated !== false &&
+          headers.has('Authorization') &&
+          isRetryableHubBearerError(error)
+        ) {
+          this.skipBearer = true
+          headers.delete('Authorization')
+          const retryResponse = await this.fetchImpl(url, {
+            method: init.method,
+            headers,
+            body: init.body instanceof Buffer ? new Uint8Array(init.body) : init.body,
+          }).catch((retryError: unknown) => {
+            if (isCommunityFetchNetworkError(retryError)) {
+              throw new CommunityHttpError(
+                humanizeCommunityFetchError(retryError),
+                0,
+                'HUB_CONNECTION_FAILED',
+              )
+            }
+            throw retryError
+          })
+          const retryText = await retryResponse.text()
+          return parseCommunityApiResponse<T>(retryText, retryResponse.status)
+        }
+        throw error
+      }
     } finally {
       releaseCommunityRequestSlot()
     }
@@ -241,7 +271,7 @@ export class CommunityHttpClient {
 
     headers.set(COMMUNITY_HUB_HEADER, auth.identityId)
 
-    if (auth.authorization) {
+    if (auth.authorization && !this.skipBearer) {
       headers.set('Authorization', auth.authorization)
     }
   }

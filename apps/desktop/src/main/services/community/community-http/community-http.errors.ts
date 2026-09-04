@@ -25,6 +25,16 @@ export function isCommunityFetchNetworkError(error: unknown): boolean {
   )
 }
 
+export function isRetryableHubBearerError(error: unknown): boolean {
+  if (!(error instanceof CommunityHttpError) || error.status !== 401) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('missing authorization bearer token') ||
+    message.includes('invalid hub token') ||
+    message.includes('community hub jwt secret not configured')
+  )
+}
+
 export function humanizeCommunityFetchError(error: unknown): string {
   if (error instanceof CommunityHttpError) {
     if (

@@ -265,11 +265,7 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
       return
     }
     void (async () => {
-      const primed = await primeLocalNetworkAccess()
-      if (!primed) {
-        notifyDesktopHubRequired(isHostedWebPage())
-        return
-      }
+      await primeLocalNetworkAccess()
       const picked = await pickReachableCommunityHubBaseUrl(
         modulePrefs.community.hubBaseUrl,
         probeCommunityHub,
@@ -293,11 +289,7 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
       return
     }
     void (async () => {
-      const primed = await primeLocalNetworkAccess()
-      if (!primed) {
-        notifyDesktopHubRequired(isHostedWebPage())
-        return
-      }
+      await primeLocalNetworkAccess()
       const picked = await pickReachableCommunityHubBaseUrl(
         modulePrefs.community.hubBaseUrl,
         probeCommunityHub,
