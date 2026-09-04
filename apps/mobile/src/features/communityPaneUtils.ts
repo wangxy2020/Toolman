@@ -46,6 +46,17 @@ export function notifyLoginRequired() {
   Alert.alert('需要登录', message)
 }
 
+export function notifyDesktopHubRequired(hostedWeb: boolean) {
+  const message = hostedWeb
+    ? '留言、市场与发布需要连接本机桌面端。请先启动桌面端，在浏览器中允许访问本地网络，或在社区设置填写电脑的可达地址。'
+    : '留言、市场与发布需要连接社区 Hub。请先启动桌面端，或在社区设置填写电脑局域网地址。'
+  if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+    globalThis.alert(message)
+    return
+  }
+  Alert.alert('未连接社区目录', message)
+}
+
 export function communityListPageStatus(input: {
   error: string | null
   offline: boolean

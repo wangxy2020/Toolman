@@ -143,14 +143,12 @@ export function CommunityListSectionPanel({
             {section.showPublish !== false && section.publishLabel ? (
               <CommunityPublishButton
                 label={section.publishLabel}
-                disabled={offline}
                 onPress={openPublish}
               />
             ) : null}
             {section.showRss ? (
               <CommunitySecondaryButton
                 label="RSS 源"
-                disabled={offline}
                 onPress={openRss}
               />
             ) : null}

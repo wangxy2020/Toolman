@@ -25,6 +25,8 @@ import {
 import {
   fetchDirectCommunityNewsFromFeeds,
   fetchDirectCommunityNewsViaApi,
+  readCachedDirectNews,
+  writeCachedDirectNews,
 } from './communityNewsDirect'
 
 function mapEngagement(item: Record<string, unknown>) {
@@ -127,11 +129,19 @@ export async function loadCommunityNewsWithRefresh(
 }
 
 /** Public RSS when no desktop Hub is reachable. Web uses same-origin API (CORS). */
-export async function loadDirectCommunityNews(): Promise<CommunityListItem[]> {
-  if (Platform.OS === 'web') {
-    return fetchDirectCommunityNewsViaApi()
+export async function loadDirectCommunityNews(options?: {
+  force?: boolean
+}): Promise<CommunityListItem[]> {
+  if (!options?.force) {
+    const cached = readCachedDirectNews()
+    if (cached && cached.length > 0) return cached
   }
-  return fetchDirectCommunityNewsFromFeeds()
+  const items =
+    Platform.OS === 'web'
+      ? await fetchDirectCommunityNewsViaApi()
+      : await fetchDirectCommunityNewsFromFeeds()
+  if (items.length > 0) writeCachedDirectNews(items)
+  return items
 }
 
 export async function fetchCommunityMessages(

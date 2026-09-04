@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
+  clearCachedDirectNews,
   isDirectNewsItemId,
   parseRssOrAtomFeed,
+  readCachedDirectNews,
+  writeCachedDirectNews,
 } from './communityNewsDirect'
 
 const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
@@ -50,5 +53,14 @@ describe('communityNewsDirect', () => {
     expect(items[0]?.title).toBe('Hello Atom')
     expect(items[0]?.link).toBe('https://openai.com/news/hello')
     expect(items[0]?.description).toContain('Atom summary')
+  })
+
+  it('round-trips a local news cache', () => {
+    clearCachedDirectNews()
+    const items = parseRssOrAtomFeed(SAMPLE_RSS, { id: 'sspai', title: '少数派' })
+    writeCachedDirectNews(items)
+    expect(readCachedDirectNews()?.map((item) => item.id)).toEqual(items.map((item) => item.id))
+    clearCachedDirectNews()
+    expect(readCachedDirectNews()).toBeNull()
   })
 })

@@ -102,6 +102,10 @@ export function resetLocalNetworkPrimeStateForTests(): void {
   }
 }
 
+export function isLocalNetworkPrimed(): boolean {
+  return primedOk
+}
+
 export function hasLocalNetworkAccessAttempted(): boolean {
   return Boolean((globalThis as LnaHost)[LNA_ATTEMPTED_KEY]) || primedOk
 }

@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -12,7 +13,11 @@ import { isCommunityModerator } from '../auth/localAuth'
 import { useMobileApp } from '../state/MobileAppContext'
 import { resolveCommunityHubBaseUrl, pickReachableCommunityHubBaseUrl } from '../settings/communityHubUrl'
 import { isHostedWebPage, communityHubProbeFlags } from '../sync/desktopDevHost'
-import { whenLocalNetworkAccessGranted } from '../sync/localNetworkFetch'
+import {
+  isLocalNetworkPrimed,
+  primeLocalNetworkAccess,
+  whenLocalNetworkAccessGranted,
+} from '../sync/localNetworkFetch'
 import {
   fetchCommunityMessages,
   fetchCommunityResources,
@@ -30,9 +35,11 @@ import {
   communityMinePageStatus,
   communityModerationStats,
   communityUserCenterStats,
+  notifyDesktopHubRequired,
   notifyLoginRequired,
 } from './communityPaneUtils'
 import { sortCommunityItems } from './communityPanelUi'
+import { writeCachedDirectNews, readCachedDirectNews } from './communityNewsDirect'
 import {
   getCommunitySection,
   MODERATION_SUBTABS,
@@ -73,6 +80,7 @@ export function CommunityUiProvider({ children }: { children: ReactNode }) {
           setActiveSection('news')
           return
         }
+        if (isHostedWebPage()) void primeLocalNetworkAccess()
         setActiveSection(next)
       },
     }
@@ -94,20 +102,27 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
   const { auth, modulePrefs } = useMobileApp()
   const configuredHub = modulePrefs.community.hubBaseUrl
   const section = getCommunitySection(sectionId)
-  const [items, setItems] = useState<CommunityListItem[]>([])
-  const [loading, setLoading] = useState(false)
+  const cachedNews = section.listKind === 'news' ? readCachedDirectNews() : null
+  const [items, setItems] = useState<CommunityListItem[]>(() => cachedNews ?? [])
+  const [loading, setLoading] = useState(() => !(cachedNews && cachedNews.length > 0))
   const [offline, setOffline] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hubBaseUrl, setHubBaseUrl] = useState(() => resolveCommunityHubBaseUrl(configuredHub))
   const [triedHubUrls, setTriedHubUrls] = useState<string[]>([])
   const [tick, setTick] = useState(0)
+  const forceReloadRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
     let gen = 0
     const run = async (includeLoopback: boolean) => {
       const my = ++gen
-      setLoading(true)
+      const force = forceReloadRef.current
+      if (force) forceReloadRef.current = false
+      const hasNewsOnScreen =
+        section.listKind === 'news' && (readCachedDirectNews()?.length ?? 0) > 0
+      const showBlockingLoad = !(hasNewsOnScreen && !force)
+      if (showBlockingLoad) setLoading(true)
       setError(null)
       try {
         const picked = await pickReachableCommunityHubBaseUrl(configuredHub, probeCommunityHub, {
@@ -128,8 +143,9 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
             feedError = loaded.feedErrors[0] ?? null
           }
           if (next.length === 0) {
-            next = await loadDirectCommunityNews()
+            next = await loadDirectCommunityNews({ force })
           }
+          if (next.length > 0) writeCachedDirectNews(next)
           if (next.length === 0 && feedError) setError(feedError)
         } else if (!picked.online) {
           setItems([])
@@ -144,7 +160,9 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
         if (!cancelled && my === gen) setItems(next)
       } catch (err) {
         if (!cancelled && my === gen) {
-          setItems([])
+          if (!(section.listKind === 'news' && (readCachedDirectNews()?.length ?? 0) > 0)) {
+            setItems([])
+          }
           setOffline(true)
           setError(err instanceof Error ? err.message : '加载失败')
         }
@@ -152,10 +170,11 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
         if (!cancelled && my === gen) setLoading(false)
       }
     }
-    // Hosted HTTPS must not fetch loopback on load — Chrome auto-denies LNA.
-    // There is no central Hub; retry this computer's desktop sidecar after the user allows local network.
+    // Hosted HTTPS skips loopback until Chrome has granted local-network access
+    // (a click primes it). News can still load from cache / public RSS.
     const hosted = isHostedWebPage()
-    void run(hosted ? false : communityHubProbeFlags().includeLoopback)
+    const includeLoopback = !hosted || isLocalNetworkPrimed()
+    void run(includeLoopback)
     const unsub = hosted
       ? whenLocalNetworkAccessGranted(() => {
           void run(true)
@@ -167,7 +186,10 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
     }
   }, [auth?.identityId, configuredHub, section.listKind, section.resourceType, tick])
 
-  const reload = useCallback(() => setTick((n) => n + 1), [])
+  const reload = useCallback(() => {
+    forceReloadRef.current = true
+    setTick((n) => n + 1)
+  }, [])
   const patchItem = useCallback((id: string, patch: Partial<CommunityListItem>) => {
     setItems((prev) =>
       prev.map((item) => {
@@ -234,18 +256,63 @@ export function useCommunityListSection(sectionId: CommunityListSectionId) {
   useRegisterModulePanelStatus('community-page', pageStatus)
 
   const openPublish = () => {
-    if (offline) return
     if (guestBlocked) {
       notifyLoginRequired()
       return
     }
-    setPublishOpen(true)
+    if (!offline) {
+      setPublishOpen(true)
+      return
+    }
+    void (async () => {
+      const primed = await primeLocalNetworkAccess()
+      if (!primed) {
+        notifyDesktopHubRequired(isHostedWebPage())
+        return
+      }
+      const picked = await pickReachableCommunityHubBaseUrl(
+        modulePrefs.community.hubBaseUrl,
+        probeCommunityHub,
+        {
+          ...communityHubProbeFlags(),
+          includeLoopback: true,
+        },
+      )
+      if (!picked.online) {
+        notifyDesktopHubRequired(isHostedWebPage())
+        return
+      }
+      reload()
+      setPublishOpen(true)
+    })()
   }
 
   const openRss = () => {
-    if (offline) return
-    // Guests may browse RSS sources read-only; add/fetch still require login in the modal.
-    setRssOpen(true)
+    if (!offline) {
+      setRssOpen(true)
+      return
+    }
+    void (async () => {
+      const primed = await primeLocalNetworkAccess()
+      if (!primed) {
+        notifyDesktopHubRequired(isHostedWebPage())
+        return
+      }
+      const picked = await pickReachableCommunityHubBaseUrl(
+        modulePrefs.community.hubBaseUrl,
+        probeCommunityHub,
+        {
+          ...communityHubProbeFlags(),
+          includeLoopback: true,
+        },
+      )
+      if (!picked.online) {
+        notifyDesktopHubRequired(isHostedWebPage())
+        return
+      }
+      reload()
+      setRssOpen(true)
+    })()
   }
 
   const commentItem = interactions.commentItemId

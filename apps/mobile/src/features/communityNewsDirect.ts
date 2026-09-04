@@ -172,3 +172,62 @@ export async function fetchDirectCommunityNewsViaApi(
   }
   return Array.isArray(payload.data) ? payload.data : []
 }
+
+const DIRECT_NEWS_CACHE_KEY = 'toolman.community.directNews.v1'
+const DIRECT_NEWS_CACHE_TTL_MS = 20 * 60 * 1000
+
+type DirectNewsCachePayload = {
+  fetchedAt: number
+  items: CommunityListItem[]
+}
+
+let memoryNewsCache: DirectNewsCachePayload | null = null
+
+function newsStorage(): Storage | null {
+  try {
+    const storage = (globalThis as { localStorage?: Storage }).localStorage
+    return storage ?? null
+  } catch {
+    return null
+  }
+}
+
+export function readCachedDirectNews(
+  maxAgeMs = DIRECT_NEWS_CACHE_TTL_MS,
+): CommunityListItem[] | null {
+  const now = Date.now()
+  if (memoryNewsCache && now - memoryNewsCache.fetchedAt <= maxAgeMs) {
+    return memoryNewsCache.items
+  }
+  const raw = newsStorage()?.getItem(DIRECT_NEWS_CACHE_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as DirectNewsCachePayload
+    if (!Array.isArray(parsed.items) || typeof parsed.fetchedAt !== 'number') return null
+    if (now - parsed.fetchedAt > maxAgeMs) return null
+    memoryNewsCache = parsed
+    return parsed.items
+  } catch {
+    return null
+  }
+}
+
+export function writeCachedDirectNews(items: CommunityListItem[]): void {
+  if (items.length === 0) return
+  const payload: DirectNewsCachePayload = { fetchedAt: Date.now(), items }
+  memoryNewsCache = payload
+  try {
+    newsStorage()?.setItem(DIRECT_NEWS_CACHE_KEY, JSON.stringify(payload))
+  } catch {
+    // Quota / private mode — memory cache still helps within this session.
+  }
+}
+
+export function clearCachedDirectNews(): void {
+  memoryNewsCache = null
+  try {
+    newsStorage()?.removeItem(DIRECT_NEWS_CACHE_KEY)
+  } catch {
+    // ignore
+  }
+}
