@@ -15,9 +15,10 @@ import { isHostedWebPage, communityHubProbeFlags } from '../sync/desktopDevHost'
 import { whenLocalNetworkAccessGranted } from '../sync/localNetworkFetch'
 import {
   fetchCommunityMessages,
-  fetchCommunityNews,
   fetchCommunityResources,
   fetchCommunityTasks,
+  loadCommunityNewsWithRefresh,
+  loadDirectCommunityNews,
   probeCommunityHub,
   type CommunityListItem,
   type CommunityResourceType,
@@ -117,14 +118,22 @@ export function useCommunityHubList(sectionId: CommunitySidebarSection): {
         setHubBaseUrl(picked.url)
         setTriedHubUrls(picked.tried)
         setOffline(!picked.online)
-        if (!picked.online) {
-          setItems([])
-          return
-        }
         const userId = auth?.identityId ?? null
         let next: CommunityListItem[] = []
         if (section.listKind === 'news') {
-          next = await fetchCommunityNews(picked.url, userId)
+          let feedError: string | null = null
+          if (picked.online) {
+            const loaded = await loadCommunityNewsWithRefresh(picked.url, userId)
+            next = loaded.items
+            feedError = loaded.feedErrors[0] ?? null
+          }
+          if (next.length === 0) {
+            next = await loadDirectCommunityNews()
+          }
+          if (next.length === 0 && feedError) setError(feedError)
+        } else if (!picked.online) {
+          setItems([])
+          return
         } else if (section.listKind === 'messages') {
           next = await fetchCommunityMessages(picked.url, userId)
         } else if (section.listKind === 'market' && section.resourceType) {

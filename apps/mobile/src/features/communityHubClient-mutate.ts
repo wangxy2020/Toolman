@@ -162,7 +162,7 @@ export async function fetchCommunityNewsSource(
     base,
     `/api/v1/news/sources/${encodeURIComponent(sourceId)}/fetch`,
     'POST',
-    { userId: requireUserId(userId) },
+    { userId },
   )
 }
 

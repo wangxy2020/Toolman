@@ -13,6 +13,7 @@ import {
   fetchCommunityNewsArticle,
   type CommunityListItem,
 } from './communityHubClient'
+import { isDirectNewsItemId } from './communityNewsDirect'
 import { CommunityListCard } from './communityPanelUi.cards'
 import { formatCommunityCount, resolveCommunityItemBody } from './communityListFormat'
 import { communityPaneStyles as styles } from './CommunityPanes.styles'
@@ -104,7 +105,7 @@ export function CommunityListDetailPane(props: {
   ])
 
   useEffect(() => {
-    if (listKind !== 'news' || !hubBaseUrl) return
+    if (listKind !== 'news' || !hubBaseUrl || isDirectNewsItemId(item.id)) return
     if (fetchedIdRef.current === item.id) return
     fetchedIdRef.current = item.id
 

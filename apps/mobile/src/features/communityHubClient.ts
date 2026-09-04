@@ -31,6 +31,8 @@ export {
   fetchCommunityNewsArticle,
   fetchCommunityResources,
   fetchCommunityTasks,
+  loadCommunityNewsWithRefresh,
+  loadDirectCommunityNews,
 } from './communityHubClient-fetch'
 
 export {

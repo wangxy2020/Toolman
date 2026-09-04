@@ -98,7 +98,9 @@ export function CommunityNewsSourcesModal(props: SharedPublishProps) {
 
   const form = (
     <>
-      <Text style={styles.hint}>添加 RSS 后会拉取文章到资讯列表。添加源需要登录。</Text>
+      <Text style={styles.hint}>
+        添加 RSS 后会拉取文章到资讯列表。浏览与刷新已有源不需要登录；添加源需要登录。
+      </Text>
       <Text style={styles.label}>源名称</Text>
       <TextInput
         style={styles.input}

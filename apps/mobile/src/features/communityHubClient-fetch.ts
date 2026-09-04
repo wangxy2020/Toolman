@@ -1,3 +1,4 @@
+import { Platform } from 'react-native'
 import {
   formatBoardMessageTitle,
   formatCommunityDate,
@@ -17,6 +18,14 @@ import {
   normalizeBaseUrl,
   unwrapItems,
 } from './communityHubClient-http'
+import {
+  fetchCommunityNewsSource,
+  listCommunityNewsSources,
+} from './communityHubClient-mutate'
+import {
+  fetchDirectCommunityNewsFromFeeds,
+  fetchDirectCommunityNewsViaApi,
+} from './communityNewsDirect'
 
 function mapEngagement(item: Record<string, unknown>) {
   return {
@@ -95,6 +104,34 @@ export async function fetchCommunityNewsArticle(
     body: contentHtml ? undefined : summary || undefined,
     link,
   }
+}
+
+/** If the Hub cache is empty, trigger RSS fetches (no login required) and list again. */
+export async function loadCommunityNewsWithRefresh(
+  baseUrl: string,
+  userId?: string | null,
+): Promise<{ items: CommunityListItem[]; feedErrors: string[] }> {
+  const first = await fetchCommunityNews(baseUrl, userId)
+  if (first.length > 0) return { items: first, feedErrors: [] }
+
+  const sources = await listCommunityNewsSources(baseUrl)
+  const feedErrors: string[] = []
+  for (const source of sources.filter((item) => item.enabled)) {
+    try {
+      await fetchCommunityNewsSource(baseUrl, source.id)
+    } catch (error) {
+      feedErrors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  return { items: await fetchCommunityNews(baseUrl, userId), feedErrors }
+}
+
+/** Public RSS when no desktop Hub is reachable. Web uses same-origin API (CORS). */
+export async function loadDirectCommunityNews(): Promise<CommunityListItem[]> {
+  if (Platform.OS === 'web') {
+    return fetchDirectCommunityNewsViaApi()
+  }
+  return fetchDirectCommunityNewsFromFeeds()
 }
 
 export async function fetchCommunityMessages(

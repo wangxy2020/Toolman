@@ -21,6 +21,7 @@ describe('communityListPageStatus', () => {
     expect(status.tone).toBe('warning')
     expect(status.message).not.toMatch(/请先启动本机桌面端/)
     expect(status.message).toMatch(/允许访问本地网络/)
+    expect(status.message).toMatch(/资讯可直连 RSS/)
     expect(status.message).not.toMatch(/公共社区目录/)
     expect(status.meta).toBeUndefined()
   })
@@ -40,5 +41,19 @@ describe('communityListPageStatus', () => {
       hostedWeb: true,
     })
     expect(status.meta).toBe('hub.toolman.app · localhost:3721')
+  })
+
+  it('treats offline news with items as a ready RSS fallback', () => {
+    const status = communityListPageStatus({
+      error: null,
+      offline: true,
+      loading: false,
+      itemCount: 8,
+      hubBaseUrl: 'http://127.0.0.1:3721',
+      triedHubUrls: [],
+      hostedWeb: true,
+    })
+    expect(status.tone).toBe('muted')
+    expect(status.meta).toMatch(/直连 RSS/)
   })
 })

@@ -56,19 +56,25 @@ export function communityListPageStatus(input: {
   hostedWeb?: boolean
 }): ModulePanelStatusEntry {
   if (input.error) return { tone: 'error', message: input.error }
-  if (input.offline) {
+  if (input.offline && input.itemCount === 0) {
     return {
       tone: 'warning',
       message: input.hostedWeb
-        ? '无法连接本机社区目录。请点击页面允许访问本地网络（连接已启动的桌面端），或在社区设置填写电脑的可达地址。'
-        : '无法连接社区 Hub。请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
+        ? '无法连接本机社区目录。资讯可直连 RSS；留言与市场请允许访问本地网络（连接已启动的桌面端），或在社区设置填写电脑地址。'
+        : '无法连接社区 Hub。资讯可直连 RSS；留言与市场请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
       meta:
         formatTriedCommunityHubUrls(input.triedHubUrls) ||
         (input.hostedWeb ? undefined : input.hubBaseUrl),
     }
   }
   if (input.loading) return { tone: 'info', message: '加载中…' }
-  return { tone: 'muted', message: '就绪', meta: `共 ${input.itemCount} 条` }
+  return {
+    tone: 'muted',
+    message: '就绪',
+    meta: input.offline
+      ? `资讯 ${input.itemCount} 条 · 直连 RSS`
+      : `共 ${input.itemCount} 条`,
+  }
 }
 
 export function communityMinePageStatus(authed: boolean): ModulePanelStatusEntry {
