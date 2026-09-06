@@ -1,5 +1,7 @@
 import type { TranslationLanguage } from '@toolman/shared'
 import { cachePageState } from './document-page-cache'
+import { splitDocumentPageFitMarkdown, writeDocumentPageFitMarkdown } from './document-page-fit'
+import { getCachedPageFit } from './document-page-fit-cache'
 import type { TranslationDocumentPageSnapshot } from './translation-storage'
 import {
   hasDisplayableParsePreviewContent,
@@ -262,4 +264,23 @@ export function pagesHaveIncompleteSnapshotBodies(
     const page = byPage.get(snapshot.pageNumber)
     return !page || !pageHasRestoredContent(page)
   })
+}
+
+/** Write measured type settings into snapshot Markdown before save. */
+export function applyFitRecordsToSnapshots(
+  snapshots: TranslationDocumentPageSnapshot[],
+  documentId: string | null,
+): TranslationDocumentPageSnapshot[] {
+  if (!documentId || snapshots.length === 0) return snapshots
+  let changed = false
+  const next = snapshots.map((snapshot) => {
+    const fit = getCachedPageFit(documentId, snapshot.pageNumber)
+    const raw = snapshot.parsedMarkdown ?? snapshot.translatedText
+    if (!fit || !raw.trim()) return snapshot
+    const written = writeDocumentPageFitMarkdown(splitDocumentPageFitMarkdown(raw).body, fit)
+    if (written === snapshot.parsedMarkdown) return snapshot
+    changed = true
+    return { ...snapshot, parsedMarkdown: written }
+  })
+  return changed ? next : snapshots
 }

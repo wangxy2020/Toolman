@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { setCachedPageFit } from './document-page-fit-cache'
 import {
+  applyFitRecordsToSnapshots,
   applySavedPageSnapshots,
   buildDocumentPageSnapshots,
   createLightweightPagesFromSnapshots,
@@ -252,5 +254,30 @@ describe('document-page-snapshots', () => {
     )
 
     expect(merged[0]?.parsedMarkdown).toBe('# Parsed')
+  })
+
+  it('writes cached fit settings into snapshot Markdown', () => {
+    setCachedPageFit('doc-1', 1, {
+      fontSize: 11,
+      lineHeight: 1.4,
+      padding: 10,
+      scale: 0.9,
+      boxWidth: 500,
+      boxHeight: 700,
+    })
+    const next = applyFitRecordsToSnapshots(
+      [
+        {
+          pageNumber: 1,
+          sourceText: 'src',
+          translatedText: '# Parsed',
+          parsedMarkdown: '# Parsed',
+          status: 'parsed',
+        },
+      ],
+      'doc-1',
+    )
+    expect(next[0]?.parsedMarkdown).toContain('<!-- tm-doc-fit')
+    expect(next[0]?.parsedMarkdown).toContain('# Parsed')
   })
 })

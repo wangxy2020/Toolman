@@ -27,15 +27,89 @@ export function hasDisplayableParsePreviewContent(text: string, markdown?: strin
   return false
 }
 
-/** ODL HTML/markdown needs MessageMarkdown; glm-ocr plain text uses lightweight paragraphs. */
-export function isRichMarkdownPreview(text: string, markdown?: string): boolean {
-  const body = (markdown ?? text).trim()
+export function hasHtmlMarkup(text: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(text)
+}
+
+/** ODL often stores HTML tables; ReactMarkdown without raw HTML would render them as empty. */
+export function htmlPreviewToVisibleText(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  if (!hasHtmlMarkup(trimmed)) return trimmed
+  return trimmed
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n')
+    .replace(/<\/(td|th)>/gi, '\t')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** GFM pipe table — must not fall back to plain text or `|` / `---` stay visible. */
+export function hasGfmTableMarkup(text: string): boolean {
+  const body = text.trim()
   if (!body) return false
-  if (/<[a-z][\s\S]*>/i.test(body)) return true
-  if (/^#{1,6}\s/m.test(body)) return true
-  if (/^\s*[-*+]\s+/m.test(body)) return true
-  if (/^\s*\d+\.\s+/m.test(body)) return true
+  return /^\s*\|.+\|/m.test(body) && /\|[-: ]{3,}\|/.test(body)
+}
+
+export type ParsePreviewKind = 'plain' | 'markdown' | 'html'
+
+/** Cheap classifier — do not run OCR/HTML strip here; that belongs to parse, not display. */
+export function resolveParsePreviewKind(text: string, markdown?: string): ParsePreviewKind {
+  const body = (markdown ?? text).trim()
+  if (!body) return 'plain'
+  if (hasHtmlMarkup(body)) return 'html'
+  if (hasGfmTableMarkup(body)) return 'markdown'
+  if (/^#{1,6}\s/m.test(body)) return 'markdown'
+  if (/^\s*[-*+]\s+/m.test(body)) return 'markdown'
+  if (/^\s*\d+\.\s+/m.test(body)) return 'markdown'
+  return 'plain'
+}
+
+/** ODL HTML/markdown needs a rich preview; glm-ocr plain text uses lightweight paragraphs. */
+export function isRichMarkdownPreview(text: string, markdown?: string): boolean {
+  const kind = resolveParsePreviewKind(text, markdown)
+  return kind === 'html' || kind === 'markdown'
+}
+
+/** True when there is something to show, without re-running OCR collapse strip. */
+export function hasVisibleParsePreviewBody(text: string, markdown?: string): boolean {
+  const md = markdown?.trim() ?? ''
+  const plain = text.trim()
+  if (md && !isPdfPageMarkerOnly(md)) return true
+  if (plain && !isPdfPageMarkerOnly(plain)) return true
   return false
+}
+
+/** Strip active content from saved ODL HTML before innerHTML. */
+function stripPreviewStyleHints(style: string): string {
+  return style
+    .replace(/(?:^|;)\s*(?:font-size|width|min-width|max-width|white-space)\s*:[^;]*/gi, '')
+    .replace(/^;+|;+$/g, '')
+    .trim()
+}
+
+export function sanitizeDocumentPreviewHtml(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?(iframe|object|embed|link|meta)\b[^>]*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s(?:href|src)\s*=\s*(['"]?)\s*javascript:[^'">\s]*/gi, '')
+    .replace(/\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (_match, style: string) => {
+      const next = stripPreviewStyleHints(style)
+      return next ? ` style="${next}"` : ''
+    })
+    .replace(/\sstyle\s*=\s*'([^']*)'/gi, (_match, style: string) => {
+      const next = stripPreviewStyleHints(style)
+      return next ? ` style='${next}'` : ''
+    })
 }
 
 /** Strip OCR collapse noise (e.g. repeated "27") before display / cache. */

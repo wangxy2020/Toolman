@@ -48,19 +48,13 @@ export function ensurePdfPageImage(options: {
   renderWidth: number
   currentPage: number
 }): Promise<string> {
-  const { filePath, pageNumber, renderWidth, currentPage } = options
+  const { filePath, pageNumber, renderWidth } = options
   const key = pageImageCacheKey(filePath, pageNumber, renderWidth)
   const cached = getCachedPageImage(key)
   if (cached) return Promise.resolve(cached)
 
-  const priority = resolvePdfPreviewPriority(pageNumber, currentPage)
   const inflight = getPageImageInflight(key)
-  if (inflight) {
-    if (priority === 'visible') {
-      void invokePdfPageRender(options).catch(() => undefined)
-    }
-    return inflight
-  }
+  if (inflight) return inflight
 
   return rememberPageImageInflight(key, async () => {
     const existing = getCachedPageImage(key)

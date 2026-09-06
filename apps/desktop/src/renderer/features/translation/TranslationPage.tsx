@@ -35,12 +35,11 @@ export function TranslationPage(props: TranslationPageProps) {
     setDocumentError,
     documentTotalPages,
     documentCurrentPage,
-    setDocumentTotalPages,
-    setDocumentCurrentPage,
     contrastViewRef,
     documentWorkspaceRef,
     registerDocumentActions,
     handlePageSnapshotsChange,
+    handlePageMetaChange,
     sectionLabel,
     modelId,
     translating,
@@ -114,10 +113,7 @@ export function TranslationPage(props: TranslationPageProps) {
                 onParseProgressChange={setDocumentParseProgress}
                 onPageSnapshotsChange={handlePageSnapshotsChange}
                 onErrorChange={setDocumentError}
-                onPageMetaChange={({ totalPages, currentPage }) => {
-                  setDocumentTotalPages(totalPages)
-                  setDocumentCurrentPage(currentPage)
-                }}
+                onPageMetaChange={handlePageMetaChange}
                 pageZoom={DOCUMENT_PAGE_ZOOM_DEFAULT}
                 remarkOpenPage={remarkOpenPage}
                 onRemarkOpenPageChange={setRemarkOpenPage}

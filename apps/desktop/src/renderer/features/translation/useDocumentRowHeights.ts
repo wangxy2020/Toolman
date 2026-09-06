@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { MIN_MEASURED_ROW_HEIGHT, resolveMeasuredRowHeight } from './document-page-window'
 
 /** Remember mounted row heights; unmeasured pages use the average of measured ones. */
-export function useDocumentRowHeights(documentId: string | null, fallbackHeight: number) {
+export function useDocumentRowHeights(
+  documentId: string | null,
+  fallbackHeight: number,
+  uniform = false,
+) {
   const measuredRef = useRef(new Map<number, number>())
   const pendingRef = useRef(new Map<number, number>())
   const timerRef = useRef<number | null>(null)
@@ -27,12 +31,14 @@ export function useDocumentRowHeights(documentId: string | null, fallbackHeight:
   const getRowHeight = useCallback(
     (pageNumber: number) => {
       void version
+      if (uniform) return Math.max(1, fallbackHeight)
       return resolveMeasuredRowHeight(pageNumber, measuredRef.current, fallbackHeight)
     },
-    [fallbackHeight, version],
+    [fallbackHeight, uniform, version],
   )
 
   const reportHeight = useCallback((pageNumber: number, height: number) => {
+    if (uniform) return
     const rounded = Math.round(height)
     if (rounded < MIN_MEASURED_ROW_HEIGHT) return
     if (measuredRef.current.get(pageNumber) === rounded) return
@@ -49,7 +55,7 @@ export function useDocumentRowHeights(documentId: string | null, fallbackHeight:
       pendingRef.current.clear()
       if (changed) setVersion((value) => value + 1)
     }, 80)
-  }, [])
+  }, [uniform])
 
   return { getRowHeight, reportHeight, version }
 }

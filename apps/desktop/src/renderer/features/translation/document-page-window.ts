@@ -1,4 +1,6 @@
 export const DOCUMENT_PAGE_OVERSCAN = 1
+/** First page and later pages keep the same mounted row count (current ± overscan, shifted at the ends). */
+export const DOCUMENT_PAGE_WINDOW_SIZE = DOCUMENT_PAGE_OVERSCAN * 2 + 1
 export const DOCUMENT_ROW_PANE_PAD_TOP = 12
 export const DOCUMENT_ROW_GAP = 16
 export const MIN_MEASURED_ROW_HEIGHT = 48
@@ -20,9 +22,19 @@ export function resolveDocumentPageWindow(
 ): { startPage: number; endPage: number } {
   const total = Math.max(1, Math.floor(totalPages) || 1)
   const current = Math.max(1, Math.min(total, Math.floor(currentPage) || 1))
+  let start = current - overscan
+  let end = current + overscan
+  if (end > total) {
+    start -= end - total
+    end = total
+  }
+  if (start < 1) {
+    end += 1 - start
+    start = 1
+  }
   return {
-    startPage: Math.max(1, current - overscan),
-    endPage: Math.min(total, current + overscan),
+    startPage: Math.max(1, start),
+    endPage: Math.min(total, end),
   }
 }
 

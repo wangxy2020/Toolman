@@ -216,8 +216,11 @@ export function enqueuePdfDocumentTask<T>(task: () => Promise<T>, priority = 0):
   return previewRenderQueue.enqueue(task, priority)
 }
 
+const PDF_PREVIEW_MAX_RENDER_WIDTH = 2400
+const PDF_PREVIEW_JPEG_QUALITY = 96
+
 function previewTargetWidth(targetWidth: number): number {
-  return Math.max(200, Math.min(960, Math.round(targetWidth)))
+  return Math.max(200, Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.round(targetWidth)))
 }
 
 /** Render a single PDF page for side-by-side document translation preview. */
@@ -287,15 +290,15 @@ export async function renderPdfPagePreview(
 
     const page = await document.getPage(safePage)
     const baseViewport = page.getViewport({ scale: 1 })
-    const scale = Math.min(1.25, Math.max(0.6, width / baseViewport.width))
+    const scale = Math.max(0.6, width / Math.max(1, baseViewport.width))
     const viewport = page.getViewport({ scale })
     const { createCanvas } = await import('@napi-rs/canvas')
     const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
     const context = canvas.getContext('2d')
-    context.imageSmoothingEnabled = true
+    context.imageSmoothingEnabled = false
     await page.render({ canvasContext: context, viewport, canvas }).promise
 
-    const jpeg = canvas.toBuffer('image/jpeg', 78)
+    const jpeg = canvas.toBuffer('image/jpeg', PDF_PREVIEW_JPEG_QUALITY)
     const entry = {
       jpeg,
       mimeType: 'image/jpeg' as const,

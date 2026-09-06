@@ -9,7 +9,7 @@ import {
   type PdfPreviewDirection,
 } from './document-page-preview-policy'
 
-/** Fetch the visible page first, then keep neighbors and recently seen pages warm. */
+/** Fetch the visible page and the same small lookahead on open and while paging. */
 export function usePdfPreviewPolicy(
   currentPage: number,
   totalPages: number,
@@ -18,7 +18,7 @@ export function usePdfPreviewPolicy(
 ) {
   const [readyPage, setReadyPage] = useState<number | null>(null)
   const [readyFilePath, setReadyFilePath] = useState(filePath)
-  const [cacheEpoch, setCacheEpoch] = useState(0)
+  const [cacheEpoch] = useState(0)
   const [direction, setDirection] = useState<PdfPreviewDirection>(1)
   const previousPageRef = useRef(currentPage)
   const renderWidth = resolvePdfPreviewRenderWidth(displayWidth)
@@ -60,9 +60,6 @@ export function usePdfPreviewPolicy(
     let cancelled = false
 
     for (const item of fetchPages) {
-      const alreadyCached = Boolean(
-        getCachedPageImage(pageImageCacheKey(filePath, item.pageNumber, renderWidth)),
-      )
       void ensurePdfPageImage({
         filePath,
         pageNumber: item.pageNumber,
@@ -71,7 +68,6 @@ export function usePdfPreviewPolicy(
       }).then(() => {
         if (cancelled) return
         if (item.pageNumber === currentPage) setReadyPage(currentPage)
-        if (!alreadyCached) setCacheEpoch((value) => value + 1)
       }).catch(() => undefined)
     }
 

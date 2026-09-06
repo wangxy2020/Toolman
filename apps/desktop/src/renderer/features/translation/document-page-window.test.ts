@@ -12,10 +12,11 @@ import {
 } from './document-page-window'
 
 describe('document-page-window', () => {
-  it('keeps a small window around the current page', () => {
-    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 2 })
+  it('keeps the same three-page window on the first page and later pages', () => {
+    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 3 })
+    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 3 })
     expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 9, endPage: 11 })
-    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 39, endPage: 40 })
+    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 38, endPage: 40 })
   })
 
   it('maps scroll offset to a page number', () => {

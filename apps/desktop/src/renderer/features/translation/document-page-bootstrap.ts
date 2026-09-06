@@ -6,7 +6,6 @@ import {
   isPdfPath,
   resolveParseTimeoutMs,
   withTimeout,
-  yieldToNextPaint,
 } from './document-page-parse-helpers'
 import type { DocumentPageRefs, DocumentPageState } from './document-page-types'
 import { applySavedPageSnapshots, createLightweightPagesFromSnapshots, pageCountFromSnapshots } from './document-page-snapshots'
@@ -118,12 +117,9 @@ export function useDocumentPageBootstrap({
     void (async () => {
       try {
         if (restoredCount > 0) {
-          // Let the first preview IPC start before metadata reopens the same PDF.
-          await yieldToNextPaint()
-          await new Promise<void>((resolve) => {
-            window.setTimeout(resolve, 80)
-          })
-          if (cancelled || generation !== refs.generationRef.current) return
+          // Saved docs already know page count. Re-opening the PDF for metadata
+          // shares the one-at-a-time raster queue and stalls the left preview.
+          return
         }
 
         const metadataOnly = isPdfPath(filePath)

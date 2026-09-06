@@ -103,6 +103,10 @@ export function useTranslationPage({
   const handlePageSnapshotsChange = useCallback((snapshots: TranslationDocumentPageSnapshot[]) => {
     livePageSnapshotsRef.current = snapshots
   }, [])
+  const handlePageMetaChange = useCallback((meta: { totalPages: number; currentPage: number }) => {
+    setDocumentTotalPages(meta.totalPages)
+    setDocumentCurrentPage(meta.currentPage)
+  }, [])
 
   useEffect(() => {
     setRemarkOpenPage(null)
@@ -302,6 +306,7 @@ export function useTranslationPage({
     documentWorkspaceRef,
     registerDocumentActions,
     handlePageSnapshotsChange,
+    handlePageMetaChange,
     sectionLabel,
     modelId,
     translating,

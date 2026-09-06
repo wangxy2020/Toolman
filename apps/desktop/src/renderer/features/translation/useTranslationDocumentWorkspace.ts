@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type ForwardedRef,
@@ -9,6 +10,7 @@ import {
 } from 'react'
 import type { PdfParserBackend, TranslationLanguage } from '@toolman/shared'
 import {
+  applyFitRecordsToSnapshots,
   buildDocumentPageSnapshots,
   mergeLiveSnapshotsWithSaved,
   pagesHaveIncompleteSnapshotBodies,
@@ -20,6 +22,7 @@ import { useDocumentRowHeights } from './useDocumentRowHeights'
 import type { TranslationDocumentItem, TranslationDocumentPageSnapshot } from './translation-storage'
 import {
   DOCUMENT_PAGE_ZOOM_DEFAULT,
+  isPdfPath,
   measurePaneWidth,
   type PageDisplayBox,
   type TranslationDocumentWorkspaceHandle,
@@ -110,17 +113,25 @@ export function useTranslationDocumentWorkspace(options: Options) {
 
   pagesRef.current = pages
 
+  const collectPageSnapshots = useCallback(
+    () =>
+      applyFitRecordsToSnapshots(
+        mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pagesRef.current), savedSnapshotsRef.current),
+        activeDocument?.id ?? null,
+      ),
+    [activeDocument?.id],
+  )
+
   useEffect(() => {
-    onPageSnapshotsChange?.(
-      mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pages), savedSnapshotsRef.current),
-    )
-  }, [onPageSnapshotsChange, pages])
+    onPageSnapshotsChange?.(collectPageSnapshots())
+  }, [collectPageSnapshots, onPageSnapshotsChange, pages])
 
   const resolvedTotalPages = Math.max(totalPages, pages.length)
   const fallbackRowHeight = estimateDocumentRowHeight(pageBox.width, pageAspect)
   const { getRowHeight, reportHeight, version } = useDocumentRowHeights(
     activeDocument?.id ?? null,
     fallbackRowHeight,
+    isPdfPath(activeDocument?.filePath ?? ''),
   )
   const { currentPage, startPage, endPage } = useDocumentPageWindow(
     scrollRef,
@@ -194,10 +205,9 @@ export function useTranslationDocumentWorkspace(options: Options) {
       startParse: runStartParse,
       stopTranslation: () => stopTranslationRef.current(),
       stopParse: () => stopParseRef.current(),
-      getPageSnapshots: () =>
-        mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pagesRef.current), savedSnapshotsRef.current),
+      getPageSnapshots: collectPageSnapshots,
     }),
-    [runStartParse, runStartTranslation, scrollToPage],
+    [collectPageSnapshots, runStartParse, runStartTranslation, scrollToPage],
   )
 
   useEffect(() => {
@@ -207,15 +217,17 @@ export function useTranslationDocumentWorkspace(options: Options) {
       startParse: runStartParse,
       stopTranslation: () => stopTranslationRef.current(),
       stopParse: () => stopParseRef.current(),
-      getPageSnapshots: () =>
-        mergeLiveSnapshotsWithSaved(buildDocumentPageSnapshots(pagesRef.current), savedSnapshotsRef.current),
+      getPageSnapshots: collectPageSnapshots,
     }
     onRegisterActions?.(actions)
     return () => onRegisterActions?.(null)
-  }, [onRegisterActions, runStartParse, runStartTranslation, scrollToPage])
+  }, [collectPageSnapshots, onRegisterActions, runStartParse, runStartTranslation, scrollToPage])
 
   useEffect(() => {
-    onPageMetaChange?.({ totalPages: resolvedTotalPages, currentPage })
+    const timer = window.setTimeout(() => {
+      onPageMetaChange?.({ totalPages: resolvedTotalPages, currentPage })
+    }, 80)
+    return () => window.clearTimeout(timer)
   }, [currentPage, onPageMetaChange, resolvedTotalPages])
 
   useEffect(() => {
@@ -254,13 +266,14 @@ export function useTranslationDocumentWorkspace(options: Options) {
     onErrorChange(bootstrapError)
   }, [bootstrapError, onErrorChange])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = scrollRef.current
     if (!root) return
 
     const commitWidth = () => {
-      const next = measurePaneWidth(root.clientWidth, pageZoom)
-      if (Math.abs(next.width - widthRef.current) < 4) return
+      const raw = root.clientWidth || root.getBoundingClientRect().width
+      const next = measurePaneWidth(raw > 0 ? raw : 800, pageZoom)
+      if (widthRef.current >= 160 && Math.abs(next.width - widthRef.current) < 64) return
       widthRef.current = next.width
       setPageBox(next)
     }

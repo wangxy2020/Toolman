@@ -1,11 +1,13 @@
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useMemo, useState } from 'react'
 import { IconPlus } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import { documentWindowSpacersFromHeights } from './document-page-window'
 import { getPageRemark } from './document-page-remarks'
-import { shouldAttachSavedSnapshotBody } from './document-page-preview-policy'
+import { createDocumentPageBodyLookup } from './document-page-bodies'
+import type { DocumentPageFitRecord } from './document-page-fit'
+import { setCachedPageFit } from './document-page-fit-cache'
+import { resolveParseBodyAttachFlags } from './document-page-preview-policy'
 import { usePdfPreviewPolicy } from './usePdfPreviewPolicy'
-import { PdfPreviewWarmImages } from './TranslationDocumentPagePdf'
 import { TranslationDocumentPageRow } from './TranslationDocumentPageRow'
 import {
   DOCUMENT_PAGE_ZOOM_DEFAULT,
@@ -54,42 +56,25 @@ export const TranslationDocumentWorkspace = forwardRef<
     handleEnsurePage,
   } = useTranslationDocumentWorkspace({ ...props, pageZoom, ref })
   const isPdf = isPdfPath(activeDocument?.filePath ?? '')
-  const { isPreviewActive, markPageReady, renderWidth, cacheEpoch, currentPreviewReady } = usePdfPreviewPolicy(
+  const { isPreviewActive, markPageReady, cacheEpoch, currentPreviewReady } = usePdfPreviewPolicy(
     currentPage,
     resolvedTotalPages,
     isPdf ? activeDocument?.filePath ?? null : null,
     pageBox.width,
   )
-  const documentId = activeDocument?.id ?? null
-  const [hydratedDocumentId, setHydratedDocumentId] = useState(documentId)
-  const [snapshotBodiesReady, setSnapshotBodiesReady] = useState(!isPdf)
-  const [allowHeavyContent, setAllowHeavyContent] = useState(!isPdf)
-
-  if (hydratedDocumentId !== documentId) {
-    setHydratedDocumentId(documentId)
-    setSnapshotBodiesReady(!isPdf)
-    setAllowHeavyContent(!isPdf)
-  }
-
-  useEffect(() => {
-    if (currentPreviewReady) setSnapshotBodiesReady(true)
-  }, [currentPreviewReady])
-
-  useEffect(() => {
-    if (!snapshotBodiesReady) {
-      const timer = window.setTimeout(() => setSnapshotBodiesReady(true), 2500)
-      return () => window.clearTimeout(timer)
-    }
-    const frame = window.requestAnimationFrame(() => setAllowHeavyContent(true))
-    return () => window.cancelAnimationFrame(frame)
-  }, [snapshotBodiesReady])
-
-  const snapshotByPage = useMemo(() => {
-    const map = new Map(
-      (activeDocument?.pageSnapshots ?? []).map((snapshot) => [snapshot.pageNumber, snapshot] as const),
-    )
-    return map
-  }, [activeDocument?.pageSnapshots])
+  const [fitEpoch, setFitEpoch] = useState(0)
+  const bodyLookup = useMemo(
+    () => createDocumentPageBodyLookup(activeDocument?.pageSnapshots, pages, activeDocument?.id),
+    [activeDocument?.id, activeDocument?.pageSnapshots, fitEpoch, pages],
+  )
+  const handleFitPersist = useCallback(
+    (pageNumber: number, fit: DocumentPageFitRecord) => {
+      if (!activeDocument?.id) return
+      setCachedPageFit(activeDocument.id, pageNumber, fit)
+      setFitEpoch((value) => value + 1)
+    },
+    [activeDocument?.id],
+  )
   const handleRemarkClose = useCallback(() => onRemarkOpenPageChange?.(null), [onRemarkOpenPageChange])
   const handleRemarkOpen = useCallback(
     (pageNumber: number) => onRemarkOpenPageChange?.(pageNumber),
@@ -142,7 +127,6 @@ export const TranslationDocumentWorkspace = forwardRef<
     )
   }
 
-  const attachSnapshotBodies = shouldAttachSavedSnapshotBody(isPdf, snapshotBodiesReady)
   const spacers = documentWindowSpacersFromHeights(
     startPage,
     endPage,
@@ -152,25 +136,28 @@ export const TranslationDocumentWorkspace = forwardRef<
 
   return (
     <div ref={scrollRef} className="tm-translation-documents">
-      {isPdf ? (
-        <PdfPreviewWarmImages
-          filePath={activeDocument.filePath}
-          renderWidth={renderWidth}
-          currentPage={currentPage}
-          totalPages={resolvedTotalPages}
-          cacheEpoch={cacheEpoch}
-        />
-      ) : null}
       {spacers.top > 0 ? (
         <div className="tm-translation-doc-window-spacer" style={{ height: spacers.top }} aria-hidden="true" />
       ) : null}
       {pages
         .filter((page) => page.pageNumber >= startPage && page.pageNumber <= endPage)
-        .map((page) => (
-          <TranslationDocumentPageRow
+        .map((page) => {
+          const attach = resolveParseBodyAttachFlags({
+            isPdf,
+            pageNumber: page.pageNumber,
+            currentPage,
+            startPage,
+            endPage,
+            settledPage: currentPage,
+            previewReady: currentPreviewReady,
+          })
+          const attachBody = attach.attachPlain
+          const heavyContent = attach.attachRich
+          return (
+            <TranslationDocumentPageRow
             key={`${activeDocument.id}-${page.pageNumber}`}
             page={page}
-            snapshot={attachSnapshotBodies ? snapshotByPage.get(page.pageNumber) : undefined}
+            body={attachBody ? bodyLookup.get(page.pageNumber) : undefined}
             totalPages={resolvedTotalPages}
             filePath={activeDocument.filePath}
             isPdf={isPdf}
@@ -180,11 +167,8 @@ export const TranslationDocumentWorkspace = forwardRef<
             parseArmed={parseArmed}
             translationArmed={translationArmed}
             previewActive={isPreviewActive(page.pageNumber)}
-            heavyContent={
-              allowHeavyContent &&
-              page.pageNumber === currentPage &&
-              (!isPdf || currentPreviewReady)
-            }
+            attachBody={attachBody}
+            heavyContent={heavyContent}
             currentPage={currentPage}
             cacheEpoch={cacheEpoch}
             onPreviewReady={markPageReady}
@@ -195,8 +179,10 @@ export const TranslationDocumentWorkspace = forwardRef<
             onRemarkChange={onPageRemarkChange}
             onRemarkClose={onRemarkOpenPageChange ? handleRemarkClose : undefined}
             onRemarkOpen={onRemarkOpenPageChange ? handleRemarkOpen : undefined}
-          />
-        ))}
+            onFitPersist={isPdf ? handleFitPersist : undefined}
+            />
+          )
+        })}
       {spacers.bottom > 0 ? (
         <div className="tm-translation-doc-window-spacer" style={{ height: spacers.bottom }} aria-hidden="true" />
       ) : null}

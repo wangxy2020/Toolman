@@ -23,15 +23,22 @@ export function useDocumentPageWindow(
     const root = scrollRootRef.current
     if (!root) return
 
+    let frame = 0
     const sync = () => {
-      setCurrentPage(
-        pageFromMeasuredScrollTop(root.scrollTop, totalPages, getRowHeightRef.current),
-      )
+      if (frame) return
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        const next = pageFromMeasuredScrollTop(root.scrollTop, totalPages, getRowHeightRef.current)
+        setCurrentPage((previous) => (previous === next ? previous : next))
+      })
     }
 
     sync()
     root.addEventListener('scroll', sync, { passive: true })
-    return () => root.removeEventListener('scroll', sync)
+    return () => {
+      root.removeEventListener('scroll', sync)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
   }, [enabled, fallbackRowHeight, heightVersion, scrollRootRef, totalPages])
 
   const { startPage, endPage } = resolveDocumentPageWindow(currentPage, totalPages)

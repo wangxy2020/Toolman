@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import {
   getCachedPageImage,
@@ -18,7 +18,7 @@ function resolvePdfPreviewAspectStyle(pageAspect: number | null): CSSProperties 
   return { aspectRatio: '612 / 792' }
 }
 
-function PdfPageImage({
+const PdfPageImage = memo(function PdfPageImage({
   filePath,
   pageNumber,
   currentPage,
@@ -47,6 +47,8 @@ function PdfPageImage({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const requestIdRef = useRef(0)
+  const currentPageRef = useRef(currentPage)
+  currentPageRef.current = currentPage
 
   useEffect(() => () => {
     requestIdRef.current += 1
@@ -66,7 +68,7 @@ function PdfPageImage({
   }, [onReady, pageNumber, src])
 
   useEffect(() => {
-    if (!active || !filePath || !cacheKey || renderWidth < 1) return
+    if (!filePath || !cacheKey || renderWidth < 1) return
     const cached = getCachedPageImage(cacheKey)
     if (cached) {
       setSrc(cached)
@@ -77,22 +79,24 @@ function PdfPageImage({
 
     const requestId = ++requestIdRef.current
     setError(null)
-    setLoading(true)
+    setLoading((visible) => visible || !src)
 
     void ensurePdfPageImage({
       filePath,
       pageNumber,
       renderWidth,
-      currentPage,
+      currentPage: currentPageRef.current,
     })
       .catch((err) => {
         if (requestId !== requestIdRef.current) return Promise.reject(err)
-        if (!isPdfPreviewRenderDropped(err) || pageNumber !== currentPage) return Promise.reject(err)
+        if (!isPdfPreviewRenderDropped(err) || pageNumber !== currentPageRef.current) {
+          return Promise.reject(err)
+        }
         return ensurePdfPageImage({
           filePath,
           pageNumber,
           renderWidth,
-          currentPage,
+          currentPage: currentPageRef.current,
         })
       })
       .then((url) => {
@@ -107,7 +111,7 @@ function PdfPageImage({
       .finally(() => {
         if (requestId === requestIdRef.current) setLoading(false)
       })
-  }, [active, cacheKey, currentPage, filePath, pageNumber, renderWidth, t])
+  }, [cacheKey, filePath, pageNumber, renderWidth, t])
 
   if (error) {
     return (
@@ -128,7 +132,7 @@ function PdfPageImage({
         role="status"
       >
         <p>
-          {loading || active
+          {loading || (active && renderWidth > 0)
             ? t('translationPage.documents.loadingPreview')
             : t('translationPage.documents.pagePending')}
         </p>
@@ -153,7 +157,7 @@ function PdfPageImage({
       </div>
     </div>
   )
-}
+})
 
 function PdfPreviewWarmImages({
   filePath,

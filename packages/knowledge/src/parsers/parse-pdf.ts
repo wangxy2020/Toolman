@@ -106,6 +106,8 @@ export async function extractPdfDocumentInfo(filePath: string): Promise<{
   pageWidth: number
   pageHeight: number
 }> {
+  // Priority 0: never outrank a visible preview (priority 2). Still shares the
+  // serial pdf.js queue — callers that already know page count should skip this.
   return enqueuePdfDocumentTask(async () => {
     const document = await getCachedPdfDocument(filePath)
     const totalPages = document.numPages

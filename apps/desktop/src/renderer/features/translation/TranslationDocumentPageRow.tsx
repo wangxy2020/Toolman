@@ -1,15 +1,15 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { resolvePageFromSnapshot } from './document-page-snapshots'
+import { resolvePageForDisplay, type DocumentPageBody } from './document-page-bodies'
+import type { DocumentPageFitRecord } from './document-page-fit'
 import { DocumentPageCard } from './TranslationDocumentPageCard'
 import { PdfPageImage, SourceTextPage } from './TranslationDocumentPagePdf'
 import { TranslationDocumentPageRemarkLayer } from './TranslationDocumentPageRemarkLayer'
-import type { TranslationDocumentPageSnapshot } from './translation-storage'
 import type { PageDisplayBox } from './translation-document-workspace-types'
 import type { DocumentPageState } from './useDocumentPageTranslation'
 
 interface Props {
   page: DocumentPageState
-  snapshot?: TranslationDocumentPageSnapshot
+  body?: DocumentPageBody
   totalPages: number
   filePath: string
   isPdf: boolean
@@ -20,6 +20,7 @@ interface Props {
   parseArmed: boolean
   translationArmed: boolean
   previewActive: boolean
+  attachBody: boolean
   heavyContent: boolean
   currentPage: number
   cacheEpoch: number
@@ -31,11 +32,12 @@ interface Props {
   onRemarkChange?: (pageNumber: number, value: string) => void
   onRemarkClose?: () => void
   onRemarkOpen?: (pageNumber: number) => void
+  onFitPersist?: (pageNumber: number, fit: DocumentPageFitRecord) => void
 }
 
 export const TranslationDocumentPageRow = memo(function TranslationDocumentPageRow({
   page,
-  snapshot,
+  body,
   totalPages,
   filePath,
   isPdf,
@@ -45,6 +47,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   parseArmed,
   translationArmed,
   previewActive,
+  attachBody,
   heavyContent,
   currentPage,
   cacheEpoch,
@@ -56,9 +59,13 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   onRemarkChange,
   onRemarkClose,
   onRemarkOpen,
+  onFitPersist,
 }: Props) {
   const rowRef = useRef<HTMLDivElement>(null)
-  const displayPage = useMemo(() => resolvePageFromSnapshot(page, snapshot), [page, snapshot])
+  const displayPage = useMemo(
+    () => resolvePageForDisplay(page, body, attachBody),
+    [attachBody, body, page],
+  )
 
   useLayoutEffect(() => {
     const el = rowRef.current
@@ -82,7 +89,11 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   }, [onEnsurePage, page.pageNumber, parseArmed, previewActive, translationArmed])
 
   return (
-    <div ref={rowRef} className="tm-translation-doc-row" data-page-number={page.pageNumber}>
+    <div
+      ref={rowRef}
+      className={isPdf ? 'tm-translation-doc-row tm-translation-doc-row--paired' : 'tm-translation-doc-row'}
+      data-page-number={page.pageNumber}
+    >
       <section className="tm-translation-doc-row-pane tm-translation-doc-row-pane--source">
         <div className="tm-translation-doc-row-frame tm-translation-doc-row-frame--source">
           <div className="tm-translation-doc-page-preview">
@@ -124,6 +135,9 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
             hasModel={hasModel}
             parseArmed={parseArmed}
             heavyContent={heavyContent}
+            fitToPage={isPdf && attachBody}
+            savedFit={body?.fit ?? null}
+            onFitPersist={onFitPersist}
           />
         </div>
       </section>

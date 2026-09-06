@@ -2230,6 +2230,56 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   box-sizing: border-box;
 }
 
+/* PDF rows: right pane matches the left page height instead of growing with parse text. */
+.tm-translation-doc-row--paired .tm-translation-doc-row-pane--source {
+  min-height: 0;
+}
+
+.tm-translation-doc-row--paired .tm-translation-doc-row-pane--target {
+  height: 0;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.tm-translation-doc-row--paired .tm-translation-doc-row-frame--target {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tm-translation-doc-row--paired .tm-translation-doc-page-card {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tm-translation-doc-row--paired .tm-translation-doc-page-card-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tm-translation-doc-page-card-body--fit {
+  font-size: var(--tm-doc-fit-font, 12px);
+  line-height: var(--tm-doc-fit-lead, 1.6);
+  padding: var(--tm-doc-fit-pad, 16px) calc(var(--tm-doc-fit-pad, 16px) + 2px) var(--tm-doc-fit-pad, 16px);
+}
+
+.tm-translation-doc-fit {
+  transform: scale(var(--tm-doc-fit-scale, 1));
+  transform-origin: top left;
+  width: calc(100% / var(--tm-doc-fit-scale, 1));
+}
+
+.tm-translation-doc-page-card-body--fit .tm-translation-doc-markdown,
+.tm-translation-doc-page-card-body--fit .tm-translation-doc-page-card-text {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.tm-translation-doc-page-card-body--fit .tm-translation-doc-table-wrap {
+  overflow: hidden;
+}
+
 .tm-translation-doc-row-divider {
   width: 0;
   border-left: 1px dashed var(--tm-border);
@@ -2290,7 +2340,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   height: 100%;
   object-fit: contain;
   background: #fff;
-  image-rendering: -webkit-optimize-contrast;
 }
 
 .tm-translation-doc-page-image-status,
@@ -2499,14 +2548,122 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 
 .tm-translation-doc-markdown {
   min-width: 0;
-  font-size: 13px;
-  line-height: 1.6;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--tm-text);
 }
 
-.tm-translation-doc-markdown .tm-md {
+.tm-translation-doc-markdown :is(h1, h2, h3, h4, h5, h6, p, div, span, li, td, th) {
+  font-size: inherit !important;
+}
+
+.tm-translation-doc-markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 600;
+  line-height: inherit;
+}
+
+.tm-translation-doc-markdown :is(p, ul, ol, table) {
+  margin: 0.45em 0;
+}
+
+.tm-translation-doc-markdown :is(p, ul, ol, table):first-child {
+  margin-top: 0;
+}
+
+.tm-translation-doc-markdown :is(p, ul, ol, table):last-child {
+  margin-bottom: 0;
+}
+
+.tm-translation-doc-markdown table,
+.tm-translation-doc-table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
   font-size: inherit;
   line-height: inherit;
+  box-sizing: border-box;
+}
+
+.tm-translation-doc-markdown col,
+.tm-translation-doc-markdown colgroup {
+  width: auto !important;
+}
+
+.tm-translation-doc-markdown th,
+.tm-translation-doc-markdown td,
+.tm-translation-doc-table th,
+.tm-translation-doc-table td {
+  box-sizing: border-box;
+  border: 1px solid var(--tm-border);
+  padding: 0.3em 0.45em;
+  text-align: left;
+  vertical-align: top;
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(2):last-child) :is(th, td):nth-child(1),
+.tm-translation-doc-table:has(tr > :nth-child(2):last-child) :is(th, td):nth-child(1) {
+  width: 36%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(2):last-child) :is(th, td):nth-child(2),
+.tm-translation-doc-table:has(tr > :nth-child(2):last-child) :is(th, td):nth-child(2) {
+  width: 64%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(1),
+.tm-translation-doc-table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(1) {
+  width: 26%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(2),
+.tm-translation-doc-table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(2) {
+  width: 14%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(3),
+.tm-translation-doc-table:has(tr > :nth-child(3):last-child) :is(th, td):nth-child(3) {
+  width: 60%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(1),
+.tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(1) {
+  width: 9%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(2),
+.tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(2) {
+  width: 30%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(3),
+.tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(3) {
+  width: 11%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(4),
+.tm-translation-doc-table:has(tr > :nth-child(4):last-child) :is(th, td):nth-child(4) {
+  width: 50%;
+}
+
+.tm-translation-doc-markdown table:has(tr > :nth-child(5):last-child) :is(th, td),
+.tm-translation-doc-table:has(tr > :nth-child(5):last-child) :is(th, td) {
+  width: 20%;
+}
+
+.tm-translation-doc-table-wrap {
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.tm-translation-doc-table th,
+.tm-translation-doc-markdown th {
+  background: color-mix(in srgb, var(--tm-hover) 80%, var(--tm-bg));
+  font-weight: 600;
 }
 
 .tm-translation-doc-odl-raw {
