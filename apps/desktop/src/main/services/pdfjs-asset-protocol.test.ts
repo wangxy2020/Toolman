@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   mimeForPdfjsAsset,
@@ -15,13 +15,13 @@ describe('pdfjs-asset-protocol', () => {
 
   it('maps cmap/font/wasm URLs onto the package folder', () => {
     expect(resolvePdfjsProtocolFile(root, 'toolman-pdfjs://bundle/cmaps/Adobe-GB1-UCS2.bcmap')).toBe(
-      join(root, 'cmaps/Adobe-GB1-UCS2.bcmap'),
+      resolve(root, 'cmaps/Adobe-GB1-UCS2.bcmap'),
     )
     expect(resolvePdfjsProtocolFile(root, 'toolman-pdfjs://bundle/wasm/jbig2.wasm')).toBe(
-      join(root, 'wasm/jbig2.wasm'),
+      resolve(root, 'wasm/jbig2.wasm'),
     )
     expect(resolvePdfjsProtocolFile(root, 'toolman-pdfjs://bundle/standard_fonts/FoxitFixed.pfb')).toBe(
-      join(root, 'standard_fonts/FoxitFixed.pfb'),
+      resolve(root, 'standard_fonts/FoxitFixed.pfb'),
     )
   })
 

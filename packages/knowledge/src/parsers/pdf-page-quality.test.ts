@@ -134,6 +134,7 @@ describe('assessPdfPageTextQuality', () => {
 
   it('rejects Ghostscript GBK soup and prefers a shorter usable OCR channel', () => {
     expect(isMojibakeCjkText(GBK_SOUP)).toBe(true)
+    expect(isMojibakeCjkText(`证券分析${'\u0301'.repeat(8)}内在价值`)).toBe(true)
     expect(isPdfPageTextUsable(GBK_SOUP)).toBe(false)
     expect(assessPdfPageTextQuality(GBK_SOUP).reason).toBe('mojibake')
     expect(

@@ -106,42 +106,29 @@ describe('document-parser.service', () => {
     expect(result.plainText).toContain('digital PDF page')
   })
 
-  it('falls back to parseFile when OpenDataLoader returns marker-only scanned shells', async () => {
-    const markers = Array.from({ length: 48 }, (_, index) => `【第 ${index + 1} 页】`).join('\n')
+  it('does not fall back to parseFile when OpenDataLoader returns marker-only scanned shells', async () => {
+    const markers = Array.from({ length: 3 }, (_, index) => `【第 ${index + 1} 页】`).join('\n')
     vi.mocked(parsePdfWithOpenDataLoader).mockResolvedValue({
       backend: 'opendataloader',
-      totalPages: 48,
+      totalPages: 3,
       plainText: markers,
       markdown: markers,
       pages: [],
     })
-    vi.mocked(parseFile).mockResolvedValue({
-      title: 'contract.pdf',
-      plainText: '【第 1 页/48】\nOCR page one text',
-      mimeType: 'application/pdf',
-      kind: 'pdf',
-    })
 
-    const result = await parseIngestDocumentFile({
-      filePath: '/tmp/contract.pdf',
-      workspaceId: 'ws',
-      kbId: 'kb',
-      parseOptions: {
-        pdfTextQuality: 'strict',
-        ocr: {
-          enabled: true,
-          recognizePage: async () => '',
-          recognizeImage: async () => '',
-        },
-      },
-      parseTimeoutMs: 60_000,
-    })
-
-    expect(parseFile).toHaveBeenCalledOnce()
-    expect(result.plainText).toContain('OCR page one text')
+    await expect(
+      parseIngestDocumentFile({
+        filePath: '/tmp/contract.pdf',
+        workspaceId: 'ws',
+        kbId: 'kb',
+        parseOptions: {},
+        parseTimeoutMs: 60_000,
+      }),
+    ).rejects.toThrow(/PDF 部分页面解析失败（0\/3 页可用）/)
+    expect(parseFile).not.toHaveBeenCalled()
   })
 
-  it('falls back to parseFile when OpenDataLoader returns empty text', async () => {
+  it('does not fall back to parseFile when OpenDataLoader returns empty text', async () => {
     vi.mocked(parsePdfWithOpenDataLoader).mockResolvedValue({
       backend: 'opendataloader',
       totalPages: 0,
@@ -149,22 +136,16 @@ describe('document-parser.service', () => {
       markdown: '',
       pages: [],
     })
-    vi.mocked(parseFile).mockResolvedValue({
-      title: 'sample.pdf',
-      plainText: 'builtin text',
-      mimeType: 'application/pdf',
-      kind: 'pdf',
-    })
 
-    const result = await parseIngestDocumentFile({
-      filePath: '/tmp/sample.pdf',
-      workspaceId: 'ws',
-      kbId: 'kb',
-      parseOptions: {},
-      parseTimeoutMs: 60_000,
-    })
-
-    expect(parseFile).toHaveBeenCalledOnce()
-    expect(result.plainText).toBe('builtin text')
+    await expect(
+      parseIngestDocumentFile({
+        filePath: '/tmp/sample.pdf',
+        workspaceId: 'ws',
+        kbId: 'kb',
+        parseOptions: {},
+        parseTimeoutMs: 60_000,
+      }),
+    ).rejects.toThrow(/PDF 部分页面解析失败（0\/1 页可用）/)
+    expect(parseFile).not.toHaveBeenCalled()
   })
 })

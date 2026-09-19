@@ -94,17 +94,46 @@ function isGappyCjkPage(text: string): boolean {
 
 /**
  * Ghostscript / broken CID layers decode as CJK mixed with NKo, Greek, Khmer, etc.
- * Those pages look fine when rendered, so Hybrid OCR markdown must win over this layer.
+ * Count code points by numeric range so combining marks stay out of a regex class
+ * (ESLint `no-misleading-character-class`).
  */
+const EXOTIC_MOJIBAKE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x02b0, 0x036f], // modifier letters + combining diacritics
+  [0x0370, 0x03ff], // Greek
+  [0x0400, 0x052f], // Cyrillic
+  [0x0530, 0x058f], // Armenian
+  [0x07c0, 0x07ff], // NKo
+  [0x0900, 0x0d7f], // Indic
+  [0x0d80, 0x0dff], // Sinhala
+  [0x0e00, 0x0e7f], // Thai
+  [0x1780, 0x17ff], // Khmer
+  [0x1800, 0x18af], // Mongolian
+  [0x2c80, 0x2cff], // Coptic
+  [0x2de0, 0x2dff], // Cyrillic Extended-A
+  [0xa000, 0xa4cf], // Yi
+  [0xa640, 0xa69f], // Cyrillic Extended-B
+]
+
+function countExoticMojibakeChars(text: string): number {
+  let count = 0
+  for (const char of text) {
+    const code = char.codePointAt(0)
+    if (code == null) continue
+    for (const [start, end] of EXOTIC_MOJIBAKE_RANGES) {
+      if (code >= start && code <= end) {
+        count += 1
+        break
+      }
+    }
+  }
+  return count
+}
+
 export function isMojibakeCjkText(text: string): boolean {
   const body = stripPdfPageMarkers(text)
   if (!body) return false
-  const exotic =
-    body.match(
-      /[\u02b0-\u036f\u0370-\u03ff\u0400-\u052f\u0530-\u058f\u07c0-\u07ff\u0900-\u0d7f\u0d80-\u0dff\u0e00-\u0e7f\u1780-\u17ff\u1800-\u18af\u2c80-\u2cff\u2de0-\u2dff\ua000-\ua4cf\ua640-\ua69f]/g,
-    )?.length ?? 0
   // Ghostscript/GBK soup mixes a few NKo/Cyrillic glyphs into otherwise long CJK runs.
-  return exotic >= 8
+  return countExoticMojibakeChars(body) >= 8
 }
 
 function maxShortDuplicateRun(text: string): number {
