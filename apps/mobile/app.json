@@ -2,7 +2,7 @@
   "expo": {
     "name": "Toolman",
     "slug": "toolman-mobile",
-    "version": "0.7.0-rc.5.5",
+    "version": "0.7.0-rc.5.9",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
