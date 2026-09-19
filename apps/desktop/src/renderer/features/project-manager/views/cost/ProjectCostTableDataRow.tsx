@@ -3,19 +3,20 @@ import type { FC } from 'react'
 import { useI18n } from '../../../../i18n/useI18n'
 import { PmDecimalTableInput } from '../../PmDecimalTableInput'
 import {
-  PM_COST_PRACTICE_QUOTA_TYPES,
   PM_COST_PRIMARY_TYPES,
   computeCostBaselineRatio,
   computeCostRowTotalPrice,
   formatCostBaselineRatio,
   formatCostTotalPrice,
   isCostBaselineRatioOff,
-  isPmCostPracticeQuotaType,
   lookupBaselineUnitPrice,
   costRowDepth,
+  toPriceListCostType,
   type PmCostType,
 } from './pm-cost-catalog'
 import { syncFeatureDescriptionHeight } from './pm-cost-panel-utils'
+import { ProjectCostTableIpcDataCells } from './ProjectCostTableIpcCells'
+import { ProjectCostTableMeteringDataCells } from './ProjectCostTableMeteringCells'
 import type { ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
 type DisplayRowEntry = Extract<
@@ -36,7 +37,6 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
     byId,
     childrenByParentId,
     baselinePriceIndex,
-    isPractice,
     isAllScope,
     selectedId,
     setSelectedId,
@@ -44,11 +44,13 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
     setCheckedIds,
     selectionMode,
     handleRowContextMenu,
-    costQuotaView,
     handleRowTypeChange,
     handleRowNameChange,
     handleRowUnitPriceChange,
     patchRow,
+    showMeteringColumns,
+    showIpcStatementColumns,
+    ipcColumns,
   } = state
 
   const { row, index } = entry
@@ -109,43 +111,27 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
                     <td>
                       <select
                         className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
-                        value={
-                          isPractice
-                            ? isPmCostPracticeQuotaType(row.type)
-                              ? row.type
-                              : costQuotaView
-                            : row.type
-                        }
+                        value={toPriceListCostType(row.type)}
                         onChange={(event) => {
                           const type = event.target.value as PmCostType
                           handleRowTypeChange(row, type)
                         }}
                         onClick={(event) => event.stopPropagation()}
                       >
-                        {isPractice
-                          ? PM_COST_PRACTICE_QUOTA_TYPES.map((type) => (
-                              <option key={type} value={type}>
-                                {t(`projectManagerPage.costPractice.views.${type}`)}
-                              </option>
-                            ))
-                          : (
-                            <>
-                              {PM_COST_PRIMARY_TYPES.map((type) => (
-                                <option key={type} value={type}>
-                                  {t(`projectManagerPage.costTable.types.${type}`)}
-                                </option>
-                              ))}
-                              <option
-                                value="__pm_cost_resource_group__"
-                                disabled
-                                title={t(
-                                  'projectManagerPage.costTable.views.resourceCostsReserved',
-                                )}
-                              >
-                                {t('projectManagerPage.costTable.views.resourceCosts')}
-                              </option>
-                            </>
+                        {PM_COST_PRIMARY_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {t(`projectManagerPage.costTable.types.${type}`)}
+                          </option>
+                        ))}
+                        <option
+                          value="__pm_cost_resource_group__"
+                          disabled
+                          title={t(
+                            'projectManagerPage.costTable.views.resourceCostsReserved',
                           )}
+                        >
+                          {t('projectManagerPage.costTable.views.resourceCosts')}
+                        </option>
                       </select>
                     </td>
                   ) : null}
@@ -187,15 +173,19 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
                     </td>
                   ) : null}
                   {columnVisibility.name ? (
-                    <td>
-                      <input
-                        className="tm-pm-resource-table-input"
+                    <td className="tm-pm-resource-table-col-name">
+                      <textarea
+                        className="tm-pm-resource-table-input tm-pm-resource-table-input--feature"
+                        rows={1}
                         style={{ paddingLeft: `${8 + depth * 16}px` }}
                         value={row.name ?? ''}
+                        title={row.name?.trim() ? row.name : undefined}
                         placeholder={t('projectManagerPage.costTable.namePlaceholder')}
                         onChange={(event) => {
+                          syncFeatureDescriptionHeight(event.currentTarget)
                           handleRowNameChange(row, event.target.value)
                         }}
+                        onInput={(event) => syncFeatureDescriptionHeight(event.currentTarget)}
                         onClick={(event) => event.stopPropagation()}
                       />
                     </td>
@@ -222,7 +212,7 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
                     </td>
                   ) : null}
                   {columnVisibility.unit ? (
-                    <td className="tm-pm-resource-table-cell--center">
+                    <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-unit">
                       <input
                         className="tm-pm-resource-table-input tm-pm-resource-table-input--center"
                         value={row.unit}
@@ -236,6 +226,7 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
                       <PmDecimalTableInput
                         className="tm-pm-resource-table-input tm-pm-resource-table-input--number"
                         value={row.quantity}
+                        blankZero
                         onCommit={(quantity) => patchRow(row.id, { quantity })}
                         onClick={(event) => event.stopPropagation()}
                       />
@@ -246,6 +237,7 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
                       <PmDecimalTableInput
                         className="tm-pm-resource-table-input tm-pm-resource-table-input--number"
                         value={row.unitPrice}
+                        blankZero
                         onCommit={(unitPrice) => {
                           handleRowUnitPriceChange(row, unitPrice)
                         }}
@@ -254,11 +246,26 @@ export const ProjectCostTableDataRow: FC<Props> = ({ entry, state }) => {
                     </td>
                   ) : null}
                   {columnVisibility.totalPrice ? (
-                    <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-price">
+                    <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-price tm-pm-resource-table-col-total-price">
                       <span className="tm-pm-resource-table-baseline-text">
                         {formatCostTotalPrice(totalPrice)}
                       </span>
                     </td>
+                  ) : null}
+                  {showMeteringColumns ? (
+                    <ProjectCostTableMeteringDataCells
+                      row={row}
+                      onPeriodQuantityChange={(periodQuantity) =>
+                        patchRow(row.id, { periodQuantity })
+                      }
+                    />
+                  ) : null}
+                  {showIpcStatementColumns ? (
+                    <ProjectCostTableIpcDataCells
+                      row={row}
+                      ipcColumns={ipcColumns}
+                      contractAmount={totalPrice}
+                    />
                   ) : null}
                   {columnVisibility.baseline ? (
                     <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-baseline">

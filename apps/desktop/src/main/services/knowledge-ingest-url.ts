@@ -15,6 +15,7 @@ import { assertKnowledgeBaseAcceptsUrls } from './knowledge-kb-kind-guard'
 import { withTimeout } from '../utils/async-timeout'
 import { resolveEmbedTimeoutMs } from './knowledge-ingest-timeouts'
 import { findActiveDocumentByPath, shouldSkipReadyDocument } from './knowledge-document-lifecycle.util'
+import { markIngestActive, markIngestInactive } from './knowledge-ingest-manager.service'
 import {
   buildIngestProgressHandlers,
   emitIngestStage,
@@ -22,12 +23,17 @@ import {
   updateDocumentStage,
 } from './knowledge-ingest-shared'
 import { appendDocumentFts, removeDocumentFts } from './knowledge-fts.service'
+import { resolveKnowledgeIndexFingerprint } from './knowledge-index-fingerprint'
+import { resolveActiveIndexVersion } from './knowledge-index-version.service'
+import { recordReadyDocumentRevision } from './knowledge-document-revision.service'
 
 export async function ingestUrlDocument(options: {
   workspaceId: string
   kbId: string
   url: string
   sourceId?: string | null
+  indexVersion?: number
+  force?: boolean
 }): Promise<{ outcome: 'ingested' | 'skipped' | 'failed'; documentId?: string; message?: string }> {
   const { workspaceId, kbId, url, sourceId } = options
   const kb = getKnowledgeBaseRepository().findRowById(kbId, workspaceId)
@@ -42,15 +48,22 @@ export async function ingestUrlDocument(options: {
 
   const repo = getDocumentRepository()
   const vectorsDir = join(getWorkspaceKnowledgeDir(workspaceId), 'vectors')
+  let ingestDocId: string | undefined
 
   try {
     const fetched = await fetchUrlContent(url)
     const contentHash = hashText(fetched.plainText)
     const canonicalUrl = fetched.url
+    const indexFingerprint = resolveKnowledgeIndexFingerprint(workspaceId, kbId)
+    const indexVersion = options.indexVersion ?? resolveActiveIndexVersion(workspaceId, kbId)
 
     const existing = findActiveDocumentByPath(repo, kbId, canonicalUrl)
 
-    if (existing && shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)) {
+    if (
+      !options.force &&
+      existing &&
+      shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing, indexFingerprint)
+    ) {
       return { outcome: 'skipped', documentId: existing.id }
     }
 
@@ -62,7 +75,9 @@ export async function ingestUrlDocument(options: {
       ReturnType<typeof findActiveDocumentByPath>
     >
     if (existing) {
-      await removeDocumentVectors(vectorsDir, kbId, existing.id, embed.vectorBackend)
+      ingestDocId = existing.id
+      markIngestActive(existing.id)
+      await removeDocumentVectors(vectorsDir, kbId, existing.id, embed.vectorBackend, indexVersion)
       progressCtx.documentId = existing.id
       updateDocumentStage(repo, {
         workspaceId,
@@ -83,6 +98,8 @@ export async function ingestUrlDocument(options: {
         absolutePath: canonicalUrl,
         mimeType: fetched.mimeType,
       })
+      ingestDocId = docRow.id
+      markIngestActive(docRow.id)
       progressCtx.documentId = docRow.id
       emitIngestStage({
         workspaceId,
@@ -118,6 +135,7 @@ export async function ingestUrlDocument(options: {
         embedModel: embed.embedModel,
         vectorsDir,
         vectorBackend: embed.vectorBackend,
+        indexVersion,
         onEmbedProgress,
         onIndexedChunkBatch: async (chunks) => {
           await appendDocumentFts(
@@ -131,6 +149,36 @@ export async function ingestUrlDocument(options: {
       '向量化超时，请检查嵌入模型服务是否可用',
     )
 
+    const snapshotMeta = {
+      snapshotPath,
+      sourceUrl: canonicalUrl,
+      fetchedAt: fetched.fetchedAt,
+      contentHash,
+      httpStatus: fetched.httpStatus,
+      etag: fetched.etag,
+      lastModified: fetched.lastModified,
+    }
+
+    if (sourceId) {
+      repo.updateSource(sourceId, kbId, {
+        contentHash,
+        fetchedAt: new Date(fetched.fetchedAt),
+        httpStatus: fetched.httpStatus,
+        etag: fetched.etag,
+        lastModified: fetched.lastModified,
+        configJson: JSON.stringify(snapshotMeta),
+      })
+    }
+
+    const revisionId = recordReadyDocumentRevision({
+      documentId: docRow.id,
+      kbId,
+      contentHash: result.contentHash,
+      parsedHash: result.parsedHash ?? contentHash,
+      indexFingerprint,
+      indexVersion,
+    })
+
     repo.replaceChunks(
       docRow.id,
       kbId,
@@ -138,6 +186,8 @@ export async function ingestUrlDocument(options: {
         ...chunk,
         documentId: docRow.id,
         kbId,
+        revisionId,
+        indexVersion,
       })),
     )
     updateDocumentStage(repo, {
@@ -149,8 +199,12 @@ export async function ingestUrlDocument(options: {
       patch: {
         title: result.title,
         contentHash: result.contentHash,
+        parsedHash: result.parsedHash ?? contentHash,
         mimeType: result.mimeType,
-        metadataJson: JSON.stringify({ snapshotPath }),
+        indexFingerprint,
+        indexVersion,
+        currentRevisionId: revisionId,
+        metadataJson: JSON.stringify(snapshotMeta),
       },
     })
 
@@ -169,5 +223,7 @@ export async function ingestUrlDocument(options: {
       })
     }
     return { outcome: 'failed', message }
+  } finally {
+    if (ingestDocId) markIngestInactive(ingestDocId)
   }
 }

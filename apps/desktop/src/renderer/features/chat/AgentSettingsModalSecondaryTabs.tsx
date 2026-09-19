@@ -130,10 +130,7 @@ export function AgentSettingsModalSecondaryTabs({ state }: { state: AgentSetting
         kbTopK={kbTopK}
         kbScoreThreshold={kbScoreThreshold}
         kbSettings={kbSettings}
-        onKbToggle={(kbId, enabled) => {
-          const next = enabled
-            ? [...new Set([...kbIds, kbId])]
-            : kbIds.filter((id) => id !== kbId)
+        onKbIdsChange={(next) => {
           setKbIds(next)
           void save({
             parameters: {

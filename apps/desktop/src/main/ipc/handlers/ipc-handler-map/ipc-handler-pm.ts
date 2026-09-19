@@ -61,6 +61,11 @@ import {
   upsertSharedCostCatalogIpc,
 } from '../../../services/project-management/pm-shared-cost-catalog.service'
 import { smartAssignPmWorkItems } from '../../../services/project-management/pm-smart-assign.service'
+import {
+  getSyncedCostDatabaseIpc,
+  inspectCostDatabaseIpc,
+  queryCostDatabaseIpc,
+} from '../../../services/project-management/pm-cost-database.service'
 import type { HandlerFn } from './types'
 
 export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
@@ -110,5 +115,8 @@ export const pmIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.Pm_SharedCostCatalogSet]: async (input) => ipcOk(setSharedCostCatalogIpc(input)),
   [IpcChannel.Pm_SharedCostCatalogUpsert]: async (input) =>
     ipcOk(upsertSharedCostCatalogIpc(input)),
+  [IpcChannel.Pm_CostDatabaseInspect]: async (input) => ipcOk(await inspectCostDatabaseIpc(input)),
+  [IpcChannel.Pm_CostDatabaseQuery]: async (input) => ipcOk(await queryCostDatabaseIpc(input)),
+  [IpcChannel.Pm_CostDatabaseGetSynced]: async (input) => ipcOk(getSyncedCostDatabaseIpc(input)),
   [IpcChannel.Pm_WorkItemSmartAssign]: async (input) => ipcOk(smartAssignPmWorkItems(input)),
 }

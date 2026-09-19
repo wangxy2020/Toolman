@@ -3,7 +3,10 @@ import type { PmCostRow } from './pm-cost-catalog'
 const MAX_HISTORY = 50
 
 export function cloneCostRows(rows: readonly PmCostRow[]): PmCostRow[] {
-  return rows.map((row) => ({ ...row }))
+  return rows.map((row) => ({
+    ...row,
+    ...(row.ipcQuantities ? { ipcQuantities: { ...row.ipcQuantities } } : {}),
+  }))
 }
 
 /** In-memory undo/redo stack for cost table edits (before persist). */

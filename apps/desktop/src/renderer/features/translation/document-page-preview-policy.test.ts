@@ -10,7 +10,6 @@ import {
   resolvePdfPreviewFastWidth,
   resolvePdfPreviewRenderWidth,
   resolvePdfPreviewSharpWidth,
-  resolveKeptParseBodyPages,
   resolveParseBodyAttachFlags,
   shouldAttachSavedSnapshotBody,
 } from './document-page-preview-policy'
@@ -49,7 +48,11 @@ describe('document-page-preview-policy', () => {
       { pageNumber: 7, priority: 'prefetch' },
       { pageNumber: 8, priority: 'prefetch' },
       { pageNumber: 9, priority: 'prefetch' },
+      { pageNumber: 10, priority: 'prefetch' },
+      { pageNumber: 11, priority: 'prefetch' },
+      { pageNumber: 12, priority: 'prefetch' },
       { pageNumber: 3, priority: 'prefetch' },
+      { pageNumber: 2, priority: 'prefetch' },
     ])
   })
 
@@ -100,7 +103,7 @@ describe('document-page-preview-policy', () => {
         readyPage: null,
         direction: 1,
       }).map((item) => item.pageNumber),
-    ).toEqual([1, 2, 3, 4, 5, 6])
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 10,
@@ -109,7 +112,7 @@ describe('document-page-preview-policy', () => {
         direction: 1,
         extent: 'far',
       }).map((item) => item.pageNumber),
-    ).toEqual([10, 11, 12, 13, 14, 15, 9])
+    ).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 9, 8])
     expect(
       resolvePdfPreviewFetchPages({
         currentPage: 10,
@@ -118,11 +121,11 @@ describe('document-page-preview-policy', () => {
         direction: -1,
         extent: 'near',
       }).map((item) => item.pageNumber),
-    ).toEqual([10, 9, 8, 7, 6, 5, 11])
+    ).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 11, 12])
   })
 
-  it('prefetches five pages ahead on first open and while paging', () => {
-    expect(PDF_PREVIEW_PREFETCH_AHEAD).toBe(5)
+  it('prefetches eight pages ahead on first open and while paging', () => {
+    expect(PDF_PREVIEW_PREFETCH_AHEAD).toBe(8)
     const first = resolvePdfPreviewFetchPages({
       currentPage: 1,
       totalPages: 48,
@@ -135,8 +138,8 @@ describe('document-page-preview-policy', () => {
       readyPage: 8,
       direction: 1,
     }).map((item) => item.pageNumber)
-    expect(first).toEqual([1, 2, 3, 4, 5, 6])
-    expect(later).toEqual([8, 9, 10, 11, 12, 13, 7])
+    expect(first).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(later).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 7, 6])
     expect(first.length).toBeLessThanOrEqual(later.length)
   })
 
@@ -160,11 +163,13 @@ describe('document-page-preview-policy', () => {
 
   it('caps preview raster size', () => {
     expect(resolvePdfPreviewRenderWidth(0)).toBe(0)
-    expect(resolvePdfPreviewRenderWidth(800)).toBe(800)
-    expect(resolvePdfPreviewRenderWidth(1400)).toBe(1000)
+    expect(resolvePdfPreviewRenderWidth(800)).toBe(resolvePdfPreviewSharpWidth(800))
+    expect(resolvePdfPreviewRenderWidth(1400)).toBe(resolvePdfPreviewSharpWidth(1400))
     expect(resolvePdfPreviewFastWidth(800)).toBe(800)
+    expect(resolvePdfPreviewFastWidth(1400)).toBe(1000)
     expect(resolvePdfPreviewSharpWidth(800)).toBeGreaterThanOrEqual(800)
     expect(resolvePdfPreviewSharpWidth(800)).toBeLessThanOrEqual(PDF_PREVIEW_MAX_RENDER_WIDTH)
+    expect(resolvePdfPreviewSharpWidth(3000)).toBe(PDF_PREVIEW_MAX_RENDER_WIDTH)
   })
 
   it('keeps the hidden decode pool small enough to scroll past page 14', () => {
@@ -185,8 +190,6 @@ describe('document-page-preview-policy', () => {
         currentPage: 2,
         startPage: 1,
         endPage: 3,
-        settledPage: 2,
-        previewReady: false,
       }),
     ).toEqual({ attachPlain: true, attachRich: true })
     expect(
@@ -196,8 +199,6 @@ describe('document-page-preview-policy', () => {
         currentPage: 2,
         startPage: 1,
         endPage: 3,
-        settledPage: 2,
-        previewReady: false,
       }),
     ).toEqual({ attachPlain: true, attachRich: true })
     expect(
@@ -207,8 +208,6 @@ describe('document-page-preview-policy', () => {
         currentPage: 2,
         startPage: 1,
         endPage: 3,
-        settledPage: 2,
-        previewReady: true,
       }),
     ).toEqual({ attachPlain: false, attachRich: false })
     expect(
@@ -216,16 +215,7 @@ describe('document-page-preview-policy', () => {
         isPdf: false,
         pageNumber: 3,
         currentPage: 1,
-        settledPage: null,
-        previewReady: false,
       }),
     ).toEqual({ attachPlain: true, attachRich: true })
-  })
-
-  it('keeps already-mounted bodies while the row stays in the window', () => {
-    expect(resolveKeptParseBodyPages(1, 3, [1], null)).toEqual([1])
-    expect(resolveKeptParseBodyPages(1, 3, [1], 2)).toEqual([1, 2])
-    expect(resolveKeptParseBodyPages(2, 4, [1, 2], 3)).toEqual([2, 3])
-    expect(resolveKeptParseBodyPages(4, 6, [1, 2], 4)).toEqual([4])
   })
 })

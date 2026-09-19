@@ -2,22 +2,40 @@ import type { KnowledgeSearchResult } from '@toolman/shared'
 import {
   KnowledgeDocumentReindexInputSchema,
   KnowledgeKbReindexInputSchema,
-  isVectorizedKnowledgeBaseKind,
+  filterSearchableKnowledgeBaseIds,
+  knowledgeKindAllowsRetrieval,
+  resolveKnowledgeRetrievalScope,
 } from '@toolman/shared'
 import { getKnowledgeBaseRepository } from '../../db/repos'
-import { reindexDocument, reindexKnowledgeBase } from '../knowledge-ingest.service'
+import {
+  startReindexDocumentInBackground,
+  startReindexKnowledgeBaseInBackground,
+} from '../knowledge-ingest.service'
 import { searchKnowledge } from './search'
 
 function listSearchableKbIds(workspaceId: string): string[] {
-  return getKnowledgeBaseRepository()
-    .listByWorkspace(workspaceId)
-    .filter((kb) => isVectorizedKnowledgeBaseKind(kb.kind))
-    .map((kb) => kb.id)
+  return filterSearchableKnowledgeBaseIds(
+    getKnowledgeBaseRepository().listByWorkspace(workspaceId),
+  )
 }
 
-function filterSearchableKbIds(workspaceId: string, kbIds: string[]): string[] {
-  const searchable = new Set(listSearchableKbIds(workspaceId))
-  return kbIds.filter((id) => searchable.has(id))
+export function formatSearchLocalKnowledgeHits(
+  results: Array<{
+    kbName: string
+    documentTitle: string
+    score: number
+    text: string
+    pageNumber?: number
+    chunkIndex?: number
+  }>,
+): string {
+  return results
+    .map((item, index) => {
+      const page = item.pageNumber != null ? ` page_number=${item.pageNumber}` : ''
+      const chunk = item.chunkIndex != null ? ` chunk=${item.chunkIndex}` : ''
+      return `${index + 1}. document=${item.documentTitle}${page}${chunk} [${item.kbName}] (${(item.score * 100).toFixed(1)}%)\n${item.text.trim()}`
+    })
+    .join('\n\n')
 }
 
 export function formatLocalKnowledgeList(
@@ -35,7 +53,7 @@ export function formatLocalKnowledgeList(
 export function listKnowledgeBasesForTool(workspaceId: string) {
   return getKnowledgeBaseRepository()
     .listByWorkspace(workspaceId)
-    .filter((kb) => isVectorizedKnowledgeBaseKind(kb.kind))
+    .filter((kb) => knowledgeKindAllowsRetrieval(kb.kind))
     .map((kb) => ({
       id: kb.id,
       name: kb.name,
@@ -97,17 +115,34 @@ export function resolveEffectiveKbIds(options: {
   workspaceId: string
   assistant: { kbIdsJson: string } | null
   overrideKbIds?: string[]
+  explicitDenyKbIds?: string[]
 }): string[] {
+  const searchableKbIds = listSearchableKbIds(options.workspaceId)
   if (options.overrideKbIds?.length) {
-    return filterSearchableKbIds(options.workspaceId, options.overrideKbIds)
+    return resolveKnowledgeRetrievalScope({
+      searchableKbIds,
+      explicitAllow: options.overrideKbIds,
+      explicitDeny: options.explicitDenyKbIds,
+      defaultAllowAll: false,
+    })
   }
 
   const assistantKbIds = getAssistantKbIds(options.assistant)
-  if (assistantKbIds.length > 0) {
-    return filterSearchableKbIds(options.workspaceId, assistantKbIds)
-  }
+  const scoped = resolveKnowledgeRetrievalScope({
+    searchableKbIds,
+    explicitAllow: assistantKbIds,
+    explicitDeny: options.explicitDenyKbIds,
+    defaultAllowAll: assistantKbIds.length === 0,
+  })
+  if (scoped.length > 0 || assistantKbIds.length === 0) return scoped
 
-  return listSearchableKbIds(options.workspaceId)
+  // Bound KB was deleted / rebuilt — treat as unbound rather than searching nothing.
+  return resolveKnowledgeRetrievalScope({
+    searchableKbIds,
+    explicitAllow: [],
+    explicitDeny: options.explicitDenyKbIds,
+    defaultAllowAll: true,
+  })
 }
 
 export async function reindexKnowledgeDocument(input: unknown) {
@@ -116,7 +151,7 @@ export async function reindexKnowledgeDocument(input: unknown) {
   if (!kb) {
     throw new Error('知识库不存在')
   }
-  return reindexDocument({
+  return startReindexDocumentInBackground({
     workspaceId: data.workspaceId,
     kbId: data.kbId,
     documentId: data.documentId,
@@ -129,8 +164,9 @@ export async function reindexKnowledgeBaseDocuments(input: unknown) {
   if (!kb) {
     throw new Error('知识库不存在')
   }
-  return reindexKnowledgeBase({
+  return startReindexKnowledgeBaseInBackground({
     workspaceId: data.workspaceId,
     kbId: data.kbId,
+    documentIds: data.documentIds,
   })
 }

@@ -138,6 +138,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
             fitToPage={isPdf && attachBody}
             savedFit={body?.fit ?? null}
             onFitPersist={onFitPersist}
+            deferFit={page.pageNumber !== currentPage}
           />
         </div>
       </section>

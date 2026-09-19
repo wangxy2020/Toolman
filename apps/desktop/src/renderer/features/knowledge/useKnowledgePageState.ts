@@ -21,6 +21,7 @@ import { resolveBreadcrumbItemName } from './knowledge-page-operations'
 import type {
   KnowledgePageProps,
   PendingFileDelete,
+  PendingFileReindex,
   SettingsTarget,
 } from './knowledge-page-types'
 import { useKnowledgePageDedup } from './useKnowledgePageDedup'
@@ -52,6 +53,7 @@ export function useKnowledgePageState({
     NonNullable<KnowledgePageProps['active']>
   | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PendingFileDelete | null>(null)
+  const [pendingReindex, setPendingReindex] = useState<PendingFileReindex | null>(null)
 
   const isFileDedupView = section === 'file-tools' && activeId === FILE_DEDUP_TOOL_ID
   const isFileRegistryView = section === 'file-tools' && activeId === FILE_REGISTRY_TOOL_ID
@@ -262,6 +264,8 @@ export function useKnowledgePageState({
     ...dedup,
     pendingDelete,
     setPendingDelete,
+    pendingReindex,
+    setPendingReindex,
     isFileDedupView,
     isFileRegistryView,
     showingDefaultFolder,

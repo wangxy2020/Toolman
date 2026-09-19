@@ -1,27 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getCachedPageImage, pageImageCacheKey } from './document-page-cache'
-import { ensurePdfPageImage } from './document-page-preview-load'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  evictOtherPdfViewerDocuments,
+  getPdfViewerDocument,
+  prefetchPdfViewerPageBatch,
+} from './document-pdf-viewer'
 import {
   resolvePdfPreviewActive,
   resolvePdfPreviewDirection,
-  resolvePdfPreviewFetchPages,
-  resolvePdfPreviewRenderWidth,
   type PdfPreviewDirection,
 } from './document-page-preview-policy'
 
-/** Fetch the visible page and the same small lookahead on open and while paging. */
+/** Track the current page paint; windowed rows render live via PDF.js. */
 export function usePdfPreviewPolicy(
   currentPage: number,
   totalPages: number,
   filePath: string | null,
-  displayWidth: number,
 ) {
   const [readyPage, setReadyPage] = useState<number | null>(null)
   const [readyFilePath, setReadyFilePath] = useState(filePath)
-  const [cacheEpoch] = useState(0)
   const [direction, setDirection] = useState<PdfPreviewDirection>(1)
   const previousPageRef = useRef(currentPage)
-  const renderWidth = resolvePdfPreviewRenderWidth(displayWidth)
 
   if (readyFilePath !== filePath) {
     setReadyFilePath(filePath)
@@ -33,48 +31,21 @@ export function usePdfPreviewPolicy(
     if (previous !== currentPage) {
       setDirection(resolvePdfPreviewDirection(previous, currentPage))
       previousPageRef.current = currentPage
-    }
-
-    if (!filePath || renderWidth < 1) {
       setReadyPage(null)
-      return
     }
-
-    const cached = getCachedPageImage(pageImageCacheKey(filePath, currentPage, renderWidth))
-    setReadyPage(cached ? currentPage : null)
-  }, [currentPage, filePath, renderWidth])
-
-  const fetchPages = useMemo(
-    () =>
-      resolvePdfPreviewFetchPages({
-        currentPage,
-        totalPages,
-        readyPage,
-        direction,
-      }),
-    [currentPage, direction, readyPage, totalPages],
-  )
+  }, [currentPage])
 
   useEffect(() => {
-    if (!filePath || renderWidth < 1) return
-    let cancelled = false
+    if (!filePath) return
+    evictOtherPdfViewerDocuments(filePath)
+    void getPdfViewerDocument(filePath).catch(() => undefined)
+  }, [filePath])
 
-    for (const item of fetchPages) {
-      void ensurePdfPageImage({
-        filePath,
-        pageNumber: item.pageNumber,
-        renderWidth,
-        currentPage,
-      }).then(() => {
-        if (cancelled) return
-        if (item.pageNumber === currentPage) setReadyPage(currentPage)
-      }).catch(() => undefined)
-    }
-
-    return () => {
-      cancelled = true
-    }
-  }, [currentPage, fetchPages, filePath, renderWidth])
+  useEffect(() => {
+    if (!filePath || totalPages < 1) return
+    if (readyPage !== currentPage) return
+    prefetchPdfViewerPageBatch(filePath, currentPage, totalPages)
+  }, [currentPage, filePath, readyPage, totalPages])
 
   const markPageReady = useCallback(
     (pageNumber: number) => {
@@ -98,8 +69,6 @@ export function usePdfPreviewPolicy(
   return {
     isPreviewActive,
     markPageReady,
-    renderWidth,
-    cacheEpoch,
-    currentPreviewReady: !filePath || (readyFilePath === filePath && readyPage === currentPage),
+    cacheEpoch: 0,
   }
 }

@@ -4,11 +4,14 @@ import { TimestampSchema, UuidSchema } from './base.js'
 export const KnowledgeDocumentStatusSchema = z.enum([
   'queued',
   'parsing',
+  'ocr',
   'chunking',
   'embedding',
   'indexing',
   'ready',
   'failed',
+  'cancelled',
+  'stale',
 ])
 
 export const KnowledgeDocumentSourceKindSchema = z.enum(['file', 'url'])
@@ -19,8 +22,12 @@ export const KnowledgeDocumentSchema = z.object({
   kbId: UuidSchema,
   title: z.string(),
   contentHash: z.string().nullable().optional(),
+  parsedHash: z.string().nullable().optional(),
   mimeType: z.string().nullable().optional(),
   status: KnowledgeDocumentStatusSchema,
+  revisionNumber: z.number().int().positive().optional(),
+  currentRevisionId: z.string().nullable().optional(),
+  indexVersion: z.number().int().positive().optional(),
   absolutePath: z.string().nullable().optional(),
   sourceKind: KnowledgeDocumentSourceKindSchema.default('file'),
   chunkCount: z.number().int().nonnegative(),
@@ -97,7 +104,7 @@ export const KnowledgeDocumentReindexInputSchema = z.object({
 })
 
 export const KnowledgeDocumentReindexOutputSchema = z.object({
-  outcome: z.enum(['ingested', 'skipped', 'failed']),
+  outcome: z.enum(['ingested', 'skipped', 'failed', 'queued']),
   path: z.string().optional(),
   message: z.string().optional(),
 })

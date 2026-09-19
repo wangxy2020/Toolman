@@ -46,4 +46,11 @@ describe('PmDecimalTableInput helpers', () => {
     expect(formatPmDecimalDisplay(1234.5)).toBe('1,234.5')
     expect(formatPmDecimalDisplay(null)).toBe('')
   })
+
+  it('hides zero when blankZero is set', () => {
+    expect(formatPmDecimalDisplay(0)).toBe('0')
+    expect(formatPmDecimalDisplay(0, { blankZero: true })).toBe('')
+    expect(formatPmDecimalPlain(0, { blankZero: true })).toBe('')
+    expect(formatPmDecimalDisplay(0.5, { blankZero: true })).toBe('0.5')
+  })
 })

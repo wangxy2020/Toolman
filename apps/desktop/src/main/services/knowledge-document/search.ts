@@ -1,6 +1,7 @@
 import {
   KnowledgeSearchInputSchema,
   KnowledgeSearchResultSchema,
+  mergeKnowledgeRetrievalConfig,
   type KnowledgeSearchResult,
 } from '@toolman/shared'
 import {
@@ -12,7 +13,10 @@ import {
   enhanceQueryForKnowledgeSearch,
   extractPdfPageQueryHint,
   extractDocumentTitleQueryHint,
+  extractChapterQueryHint,
   documentTitleMatchesQuery,
+  chunkTextMatchesChapter,
+  parseChunkMetadata,
   type VectorSearchHit,
   type FusedSearchHit,
 } from '@toolman/knowledge'
@@ -21,6 +25,7 @@ import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repo
 import { getWorkspaceKnowledgeDir } from '../knowledge.service'
 import { resolveEmbedConfig, resolveKbScoreThreshold, resolveRerankConfig } from '../knowledge-embed.service'
 import { searchChunksFts } from '../knowledge-fts.service'
+import { resolveActiveIndexVersion } from '../knowledge-index-version.service'
 
 function chunkTextMatchesPage(
   docRepo: ReturnType<typeof getDocumentRepository>,
@@ -30,7 +35,7 @@ function chunkTextMatchesPage(
   const chunk = docRepo.getChunksByIds([chunkId])[0]
   if (!chunk) return false
 
-  if (new RegExp(`【第\\s*${pageNumber}\\s*页`).test(chunk.text)) {
+  if (new RegExp(`【第\\s*${pageNumber}(?!\\d)\\s*页`).test(chunk.text)) {
     return true
   }
 
@@ -45,7 +50,15 @@ function chunkTextMatchesPage(
 function rankSearchHitScore(
   docRepo: ReturnType<typeof getDocumentRepository>,
   hit: { chunkId: string; documentId: string; score: number },
-  options: { pageQueryHint: number | null; documentTitleHint: string | null },
+  options: {
+    pageQueryHint: number | null
+    documentTitleHint: string | null
+    titleWeight: number
+    titleMismatchPenalty: number
+    pageWeight: number
+    pageMismatchPenalty: number
+    chapterHint: ReturnType<typeof extractChapterQueryHint>
+  },
 ): number {
   let score = hit.score
   const chunk = docRepo.getChunksByIds([hit.chunkId])[0]
@@ -59,16 +72,23 @@ function rankSearchHitScore(
   const pageMatches = options.pageQueryHint
     ? chunkTextMatchesPage(docRepo, hit.chunkId, options.pageQueryHint)
     : null
+  const chapterMatches = options.chapterHint
+    ? chunkTextMatchesChapter(chunk.text, options.chapterHint)
+    : null
 
   if (options.documentTitleHint) {
-    score += docMatches ? 1.2 : -0.6
+    score += docMatches ? options.titleWeight : -options.titleMismatchPenalty
   }
   if (options.pageQueryHint) {
     if (pageMatches) {
-      score += 1.0
+      score += options.pageWeight
     } else if (docMatches) {
-      score -= 0.5
+      score -= options.pageMismatchPenalty
     }
+  }
+  // Chapter body chunks often omit the heading; boost hits, but never penalize the rest.
+  if (options.chapterHint && chapterMatches) {
+    score += options.pageWeight
   }
 
   return score
@@ -98,10 +118,13 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
   const vectorsDir = join(getWorkspaceKnowledgeDir(data.workspaceId), 'vectors')
   const hybridEnabled = data.hybridEnabled !== false
   const pageQueryHint = extractPdfPageQueryHint(data.query)
+  const chapterQueryHint = extractChapterQueryHint(data.query)
   const documentTitleHint = extractDocumentTitleQueryHint(data.query)
   const searchQuery = enhanceQueryForKnowledgeSearch(data.query)
-  const useFocusedRanking = pageQueryHint !== null || documentTitleHint !== null
-  const effectiveTopK = useFocusedRanking ? Math.max(data.topK, 10) : data.topK
+  const useFocusedRanking =
+    pageQueryHint !== null || documentTitleHint !== null || chapterQueryHint !== null
+  const focusedFloor = chapterQueryHint ? 16 : 10
+  const effectiveTopK = useFocusedRanking ? Math.max(data.topK, focusedFloor) : data.topK
   const fusedHits: Array<{
     chunkId: string
     documentId: string
@@ -110,11 +133,15 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
 
   for (const kb of targetKbs) {
     const embed = resolveEmbedConfig(data.workspaceId, kb.id)
+    const retrieval = mergeKnowledgeRetrievalConfig(kb.retrievalConfigJson, {
+      vectorWeight: data.vectorWeight,
+      ftsWeight: data.ftsWeight,
+    })
     const perKb = data.kbSettings?.[kb.id]
     const kbTopK = perKb?.topK ?? effectiveTopK
     const scoreThreshold = resolveKbScoreThreshold(
       kb.embedConfigJson,
-      perKb?.scoreThreshold ?? data.scoreThreshold,
+      perKb?.scoreThreshold ?? data.scoreThreshold ?? retrieval.scoreThreshold,
     )
     const poolSize = Math.min(kbTopK * 4, 40)
     const [queryVector] = await embedTexts(embed.embedOptions, [searchQuery])
@@ -122,6 +149,7 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
       vectorsDir,
       kbId: kb.id,
       backend: embed.vectorBackend,
+      indexVersion: resolveActiveIndexVersion(data.workspaceId, kb.id),
     })
 
     const vectorResults = (await store.search(queryVector, poolSize, kb.id))
@@ -143,8 +171,8 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
     let merged: FusedSearchHit[] = hybridEnabled
       ? fuseHybridResults(vectorResults, ftsResults, {
           topK: poolSize,
-          vectorWeight: data.vectorWeight,
-          ftsWeight: data.ftsWeight,
+          vectorWeight: retrieval.vectorWeight,
+          ftsWeight: retrieval.ftsWeight,
         })
       : vectorResults.map((hit) => ({
           ...hit,
@@ -185,10 +213,26 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
   }
 
   let sorted = fusedHits
-    .map((hit) => ({
-      ...hit,
-      score: rankSearchHitScore(docRepo, hit, { pageQueryHint, documentTitleHint }),
-    }))
+    .map((hit) => {
+      const chunk = docRepo.getChunksByIds([hit.chunkId])[0]
+      const kb = chunk ? targetKbs.find((item) => item.id === chunk.kbId) : undefined
+      const retrieval = mergeKnowledgeRetrievalConfig(kb?.retrievalConfigJson, {
+        vectorWeight: data.vectorWeight,
+        ftsWeight: data.ftsWeight,
+      })
+      return {
+        ...hit,
+        score: rankSearchHitScore(docRepo, hit, {
+          pageQueryHint,
+          documentTitleHint,
+          titleWeight: retrieval.titleWeight,
+          titleMismatchPenalty: retrieval.titleMismatchPenalty,
+          pageWeight: retrieval.pageWeight,
+          pageMismatchPenalty: retrieval.pageMismatchPenalty,
+          chapterHint: chapterQueryHint,
+        }),
+      }
+    })
     .sort((a, b) => b.score - a.score)
 
   if (documentTitleHint) {
@@ -212,6 +256,9 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
     const kb = targetKbs.find((item) => item.id === chunk.kbId)
     if (!kb) continue
 
+    const metadata = parseChunkMetadata(chunk.metadataJson)
+    const fileName = metadata.fileName ?? doc.title
+
     hits.push({
       chunkId: hit.chunkId,
       documentId: hit.documentId,
@@ -221,6 +268,12 @@ export async function searchKnowledge(input: unknown): Promise<KnowledgeSearchRe
       score: hit.score,
       text: chunk.text,
       sourcePath: doc.absolutePath,
+      ...(metadata.pageNumber != null ? { pageNumber: metadata.pageNumber } : {}),
+      ...(metadata.heading ? { heading: metadata.heading } : {}),
+      chunkIndex: chunk.chunkIndex,
+      sourceType: metadata.sourceType ?? (doc.absolutePath?.startsWith('http') ? 'url' : 'file'),
+      fileName,
+      revisionId: chunk.revisionId ?? doc.currentRevisionId,
     })
   }
 

@@ -29,7 +29,10 @@ export function buildOcrUserPrompt(pageNumber: number, totalPages: number): stri
   return `请逐字提取第 ${pageNumber}/${totalPages} 页图片中的全部可见文字，只输出识别结果，不要添加任何说明。`
 }
 
+/** Whole-document / chat OCR safety cap. Knowledge ingest uses 0 (unlimited leftover pages). */
 export const KNOWLEDGE_MAX_OCR_PAGES = 200
+/** 0 = no page cap. Knowledge ingest page pipeline and worker PDF OCR use this. */
+export const KNOWLEDGE_INGEST_OCR_MAX_PAGES = 0
 export const CHAT_OCR_MAX_PAGES = 10
 export const OCR_PAGE_TIMEOUT_MS = 5 * 60 * 1000
 export const CHAT_OCR_PAGE_TIMEOUT_MS = 2 * 60 * 1000

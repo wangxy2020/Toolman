@@ -1,4 +1,5 @@
 import { isPdfPageMarkerOnly, stripPdfPageMarkers } from './pdf-page-markers.js'
+import { isPdfPageTextUsable } from './pdf-page-quality.js'
 
 function normalizeLineForDedupe(line: string): string {
   return line.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -151,14 +152,21 @@ export function relocateOdlTableFooters(content: string): string {
   })
 }
 
-/** Pick the longest non-marker-only body from ODL output candidates. */
+/** Prefer a quality-usable ODL channel over a longer broken PDF text layer. */
 export function pickLongestUsableOdlBody(...sources: Array<string | undefined | null>): string {
   let best = ''
+  let bestUsable = false
   for (const source of sources) {
     if (!source?.trim()) continue
     const cleaned = stripPdfPageMarkers(source)
     if (!cleaned || isPdfPageMarkerOnly(cleaned)) continue
-    if (cleaned.length > best.length) best = cleaned
+    const usable = isPdfPageTextUsable(cleaned)
+    if (usable && !bestUsable) {
+      best = cleaned
+      bestUsable = true
+      continue
+    }
+    if (usable === bestUsable && cleaned.length > best.length) best = cleaned
   }
   return best
 }

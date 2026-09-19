@@ -36,9 +36,11 @@ export function useKnowledgePageDocuments(
     handleAddUrl: mutate.handleAddUrl,
     handleAddSitemap: mutate.handleAddSitemap,
     handleReindexAll: mutate.handleReindexAll,
+    handleReindexSelected: mutate.handleReindexSelected,
     handleMoveToSync: mutate.handleMoveToSync,
     handleContextMenu: selection.handleContextMenu,
     confirmDeleteDocuments: mutate.confirmDeleteDocuments,
+    confirmReindexDocuments: mutate.confirmReindexDocuments,
     onChatWithKnowledgeFiles: props.onChatWithKnowledgeFiles,
   }
 }

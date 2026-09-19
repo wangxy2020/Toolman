@@ -1,6 +1,5 @@
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
-  OFFICIAL_TOOLMAN_HUB_URL,
   P2P_MAILBOX_PULL_PATH,
   P2P_MAILBOX_PUT_PATH,
   P2pMailboxPullOutputSchema,
@@ -16,7 +15,7 @@ import { logStructured } from '../structured-log.service'
 function mailboxHubCandidates(): string[] {
   const remote = resolveCommunityHubBaseUrl()
   if (remote) return [remote]
-  return [DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL, OFFICIAL_TOOLMAN_HUB_URL]
+  return [DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL]
 }
 
 async function hubHasMailbox(baseUrl: string): Promise<boolean> {

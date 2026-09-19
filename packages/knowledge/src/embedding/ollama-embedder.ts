@@ -14,6 +14,8 @@ const OLLAMA_EMBED_CONCURRENCY = 8
 const OPENAI_EMBED_BATCH_SIZE = 8
 const OPENAI_EMBED_CONCURRENCY = 4
 const EMBED_REQUEST_TIMEOUT_MS = 120_000
+const EMBED_NETWORK_RETRY_COUNT = 3
+const EMBED_NETWORK_RETRY_DELAY_MS = 400
 
 function isOllamaEmbedBaseUrl(baseUrl: string): boolean {
   const normalized = baseUrl.toLowerCase()
@@ -29,6 +31,73 @@ function resolveEmbeddingsUrl(baseUrl: string): string {
   return trimmedBase.endsWith('/v1')
     ? `${trimmedBase}/embeddings`
     : `${trimmedBase}/v1/embeddings`
+}
+
+function embedErrorCauseCode(error: unknown): string {
+  if (!(error instanceof Error)) return ''
+  const cause = (error as Error & { cause?: unknown }).cause
+  if (cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string') {
+    return cause.code.toLowerCase()
+  }
+  if (cause instanceof Error) return cause.message.toLowerCase()
+  return ''
+}
+
+function isRetryableEmbedNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name === 'AbortError') return false
+  const message = error.message.toLowerCase()
+  const causeCode = embedErrorCauseCode(error)
+  return (
+    message.includes('fetch failed') ||
+    message.includes('econnrefused') ||
+    message.includes('econnreset') ||
+    causeCode.includes('econnrefused') ||
+    causeCode.includes('econnreset') ||
+    causeCode.includes('etimedout') ||
+    causeCode.includes('und_err')
+  )
+}
+
+export function formatEmbedNetworkError(error: unknown, baseUrl: string): Error {
+  if (error instanceof Error && error.name === 'AbortError') {
+    return new Error('Embedding API 响应超时，请检查嵌入模型服务是否可用')
+  }
+  if (!isRetryableEmbedNetworkError(error)) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+  if (isOllamaEmbedBaseUrl(baseUrl)) {
+    const host = resolveOllamaEmbedBaseUrl(baseUrl)
+    return new Error(
+      `无法连接嵌入服务 Ollama（${host}）。文件已解析，但向量化失败。请确认 Ollama 已启动，并已安装嵌入模型。`,
+    )
+  }
+  return new Error(`无法连接嵌入服务（${baseUrl.replace(/\/$/, '')}），请检查网络或 API 地址。`)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function withEmbedNetworkRetry<T>(
+  baseUrl: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= EMBED_NETWORK_RETRY_COUNT; attempt += 1) {
+    try {
+      return await run()
+    } catch (error) {
+      lastError = error
+      if (
+        !isRetryableEmbedNetworkError(error) ||
+        attempt === EMBED_NETWORK_RETRY_COUNT
+      ) {
+        throw formatEmbedNetworkError(error, baseUrl)
+      }
+      await delay(EMBED_NETWORK_RETRY_DELAY_MS * attempt)
+    }
+  }
+  throw formatEmbedNetworkError(lastError, baseUrl)
 }
 
 async function mapConcurrent<T, R>(
@@ -65,16 +134,18 @@ async function embedOllamaSingle(options: EmbedOptions, text: string): Promise<n
   const timeoutId = setTimeout(() => controller.abort(), EMBED_REQUEST_TIMEOUT_MS)
 
   try {
-    const response = await fetch(`${base}/api/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: options.model,
-        input: text,
-        truncate: true,
+    const response = await withEmbedNetworkRetry(options.baseUrl, () =>
+      fetch(`${base}/api/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: options.model,
+          input: text,
+          truncate: true,
+        }),
+        signal: controller.signal,
       }),
-      signal: controller.signal,
-    })
+    )
 
     if (!response.ok) {
       const detail = await response.text()
@@ -94,10 +165,7 @@ async function embedOllamaSingle(options: EmbedOptions, text: string): Promise<n
 
     return embedding
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Embedding API 响应超时，请检查嵌入模型服务是否可用')
-    }
-    throw error
+    throw formatEmbedNetworkError(error, options.baseUrl)
   } finally {
     clearTimeout(timeoutId)
   }
@@ -115,15 +183,17 @@ async function embedOpenAiCompatibleSingle(options: EmbedOptions, text: string):
   const timeoutId = setTimeout(() => controller.abort(), EMBED_REQUEST_TIMEOUT_MS)
 
   try {
-    const response = await fetch(resolveEmbeddingsUrl(options.baseUrl), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: options.model,
-        input: text,
+    const response = await withEmbedNetworkRetry(options.baseUrl, () =>
+      fetch(resolveEmbeddingsUrl(options.baseUrl), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: options.model,
+          input: text,
+        }),
+        signal: controller.signal,
       }),
-      signal: controller.signal,
-    })
+    )
 
     if (!response.ok) {
       const detail = await response.text()
@@ -151,10 +221,7 @@ async function embedOpenAiCompatibleSingle(options: EmbedOptions, text: string):
 
     return embedding
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Embedding API 响应超时，请检查嵌入模型服务是否可用')
-    }
-    throw error
+    throw formatEmbedNetworkError(error, options.baseUrl)
   } finally {
     clearTimeout(timeoutId)
   }

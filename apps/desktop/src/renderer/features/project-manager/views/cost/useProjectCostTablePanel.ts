@@ -1,11 +1,16 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useCallback, useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 
 import type { PmProject } from '@toolman/shared'
-import { readCostVersion, readMaxCostVersion } from '@toolman/shared'
+import {
+  lookupCostDatabaseScheduleCurrency,
+  readCostDatabaseConnection,
+  readCostVersion,
+  readMaxCostVersion,
+} from '@toolman/shared'
 
 import { useI18n } from '../../../../i18n/useI18n'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
-import type { CostPracticeQuotaView, FeaturesScheduleView } from '../files/ProjectFeaturesMenuBar'
+import type { FeaturesScheduleView } from '../files/ProjectFeaturesMenuBar'
 import type { CostViewFilter } from './ProjectCostMenuBar'
 import {
   PM_COST_APPLICABLE_ALL,
@@ -19,7 +24,12 @@ import {
   type CostColumnLabels,
   type CostLabelColumn,
 } from './pm-cost-column-prefs'
-import { resolveCostTableTotalPriceCurrency } from './pm-cost-currency'
+import { costDatabaseMetaCacheKey, mergeCostDatabaseMetadata } from './pm-cost-database-meta-cache'
+import {
+  COST_TABLE_FEATURE_COL_WIDTH_PX,
+  computeCostTableAutoColWidths,
+  estimateCostTableEntryHeight,
+} from './pm-cost-table-auto-cols'
 import { CostHistoryStack } from './pm-cost-history'
 import { isCostSectionSummaryFilter } from './pm-cost-catalog'
 import { type CostSummaryRow } from './pm-cost-summary'
@@ -27,6 +37,7 @@ import {
   readCostPracticeSaveMeta,
   readCostPracticeVersion,
 } from './pm-cost-practice-catalog'
+import { costIpcColumns } from './pm-cost-ipc-cols'
 import { type MeteringBaseline, type MeteringRollupMode } from './pm-metering-baselines'
 import { useProjectCostTableEdit } from './useProjectCostTableEdit'
 import { useProjectCostTableHistory } from './useProjectCostTableHistory'
@@ -41,7 +52,11 @@ import { useProjectCostTableScroll } from './useProjectCostTableScroll'
 import { useProjectCostTableSelection } from './useProjectCostTableSelection'
 import { useProjectCostTableStructure } from './useProjectCostTableStructure'
 import { useProjectCostTableVersion } from './useProjectCostTableVersion'
-import { useProjectCostTableView } from './useProjectCostTableView'
+import {
+  ALL_DATABASE_ROW_FILTER,
+  useProjectCostTableView,
+  type DatabaseRowFilter,
+} from './useProjectCostTableView'
 import { buildProjectCostTablePanelState } from './useProjectCostTableState'
 
 export interface ProjectCostTablePanelProps {
@@ -50,9 +65,10 @@ export interface ProjectCostTablePanelProps {
   selectedProjectId: string | null
   onProjectsChange?: () => void | Promise<void>
   /**
-   * `catalog` = 价格表；`practice` = 成本管理-实务（空表起步，独立存储，实务精简菜单）。
+   * `catalog` = 价格表；`practice` = 成本管理-实务；`database` = 成本管理-数据。
+   * 三页共用价格表菜单与表格；实务与数据各自独立存储。
    */
-  variant?: 'catalog' | 'practice'
+  variant?: 'catalog' | 'practice' | 'database'
   onOpenScheduleView?: (view: FeaturesScheduleView) => void
 }
 
@@ -68,22 +84,37 @@ export function useProjectCostTablePanel({
   onOpenScheduleView: _onOpenScheduleView,
 }: ProjectCostTablePanelProps) {
   const { t, language } = useI18n()
-  const isPractice = variant === 'practice'
+  const isDatabase = variant === 'database'
+  const isPractice = variant === 'practice' || isDatabase
   const isAllScope = !selectedProjectId || !projects.some((project) => project.id === selectedProjectId)
   const editingProject = useMemo(() => {
     if (isAllScope) return null
     return projects.find((project) => project.id === selectedProjectId) ?? null
   }, [isAllScope, projects, selectedProjectId])
-  const totalPriceColumnDefaultLabel = useMemo(() => {
-    const currency = resolveCostTableTotalPriceCurrency(editingProject?.metadata, editingProject?.code)
-    return t('projectManagerPage.costTable.columns.totalPrice', { currency })
-  }, [editingProject?.code, editingProject?.metadata, t])
+  const databaseConnection = useMemo(
+    () =>
+      readCostDatabaseConnection(
+        mergeCostDatabaseMetadata(
+          isAllScope ? readSharedCostSaveMeta(workspaceId) : editingProject?.metadata ?? {},
+          costDatabaseMetaCacheKey({
+            workspaceId,
+            projectId: isAllScope ? null : editingProject?.id,
+          }),
+        ),
+      ),
+    [editingProject?.id, editingProject?.metadata, isAllScope, workspaceId],
+  )
+  const totalPriceColumnDefaultLabel = t('projectManagerPage.costTable.columns.totalPricePlain')
   const viewApplicable = isAllScope ? PM_COST_APPLICABLE_ALL : (editingProject?.id ?? PM_COST_APPLICABLE_ALL)
-  const practiceScopeId = isAllScope ? PM_COST_APPLICABLE_ALL : (editingProject?.id ?? '')
+  const quotaScopeId = isAllScope ? PM_COST_APPLICABLE_ALL : (editingProject?.id ?? '')
+  const practiceScopeId = variant === 'database' && quotaScopeId ? `db:${quotaScopeId}` : quotaScopeId
   const canEdit = isAllScope || editingProject != null
   const scopeKey = isAllScope ? PM_COST_APPLICABLE_ALL : (editingProject?.id ?? '')
 
-  const [costQuotaView, setCostQuotaView] = useState<CostPracticeQuotaView>('constructionQuota')
+  const [databaseRowFilter, setDatabaseRowFilter] = useState<DatabaseRowFilter>(ALL_DATABASE_ROW_FILTER)
+  useEffect(() => {
+    setDatabaseRowFilter(ALL_DATABASE_ROW_FILTER)
+  }, [scopeKey])
   const [meteringViewActive, setMeteringViewActive] = useState(false)
   const [meteringBaselines, setMeteringBaselines] = useState<MeteringBaseline[]>([])
   const [selectedMeteringBaselineId, setSelectedMeteringBaselineId] = useState<string | null>(null)
@@ -144,18 +175,33 @@ export function useProjectCostTablePanel({
     tableScrollRef, headerPinInnerRef, hTrackRef, rowCount: rows.length, selectionMode,
   })
   const load = useProjectCostTableLoad({
-    workspaceId, isPractice, isAllScope, practiceScopeId, scopeKey, editingProject, dirty, setDirty,
+    workspaceId, isPractice, isAllScope, practiceScopeId, scopeKey, viewApplicable,
+    editingProject, dirty, setDirty,
     setRows, rowsRef, cleanFingerprintRef, historyStackRef, historyApplyingRef, setHistoryEpoch,
     setSelectedId, setCheckedIds, setSelectionMode, setContextMenu, setColumnMenu, setProjectInfoOpen,
     setViewFilter, setSectionFilter, setSummaryRows, setMeteringViewActive, setMeteringBaselines,
     setSelectedMeteringBaselineId, setMeteringCaptureBaselineOpen, setMeteringEditBaselineOpen,
-    setPendingMeteringDeleteBaseline, setMeteringRollupMode, onProjectsChange, t,
+    setPendingMeteringDeleteBaseline, setMeteringRollupMode, onProjectsChange, setStatusFeedback, t,
   })
   const view = useProjectCostTableView({
-    workspaceId, isPractice, isAllScope, dirty, rows, selectedId, setSelectedId, setCheckedIds,
-    setSelectionMode, costQuotaView, viewFilter, setViewFilter, sectionFilter, setSectionFilter,
-    setMeteringViewActive, summaryRows, editingProject, columnVisibility, tableScrollRef, rowsRef, t,
+    workspaceId, isAllScope, dirty, rows, selectedId, setSelectedId, setCheckedIds,
+    setSelectionMode, viewFilter, setViewFilter, sectionFilter, setSectionFilter,
+    setMeteringViewActive, summaryRows, editingProject, columnVisibility, tableScrollRef, rowsRef,
+    databaseRowFilter, t,
   })
+  const databaseSectionCurrencies = useMemo(() => {
+    const map: Record<string, string> = {}
+    if (!databaseConnection) return map
+    for (const option of view.sectionalOptions) {
+      const currency = lookupCostDatabaseScheduleCurrency(
+        option,
+        databaseConnection.schedule,
+        databaseConnection.currency,
+      )
+      if (currency) map[option] = currency
+    }
+    return map
+  }, [databaseConnection, view.sectionalOptions])
   const version = useProjectCostTableVersion({
     workspaceId, isPractice, isAllScope, practiceScopeId, editingProject, dirty, rows,
     pendingRestoreVersion, setPendingRestoreVersion, setSaving, setSelectedId,
@@ -172,7 +218,7 @@ export function useProjectCostTablePanel({
   })
   const { handlePrint } = useProjectCostTablePrint({ editingProject, t })
   const rowsApi = useProjectCostTableRows({
-    canEdit, isPractice, addType: view.addType, viewFilter, sectionFilter, viewApplicable,
+    canEdit, addType: view.addType, viewFilter, sectionFilter, viewApplicable,
     selectedId, setSelectedId, setDirty, setSummaryRows, updateRows: load.updateRows,
     editingProject, summaryRows, rowsRef, t,
   })
@@ -186,13 +232,14 @@ export function useProjectCostTablePanel({
     setSelectedId, setCheckedIds, setPendingImportRows, setStatusFeedback, t,
   })
   const metering = useProjectCostTableMetering({
-    workspaceId, isPractice, scopeKey, meteringBaselines, setMeteringBaselines,
+    workspaceId, scopeKey, meteringBaselines, setMeteringBaselines,
     selectedMeteringBaselineId, setSelectedMeteringBaselineId, setMeteringViewActive,
     setMeteringRollupMode, meteringCaptureBaselineOpen, setMeteringCaptureBaselineOpen,
-    setMeteringEditBaselineOpen, setPendingMeteringDeleteBaseline, setStatusFeedback, t,
+    setMeteringEditBaselineOpen, setPendingMeteringDeleteBaseline,
+    updateRows: load.updateRows, setStatusFeedback, t,
   })
   const edit = useProjectCostTableEdit({
-    isPractice, editingProject, baselinePriceIndex: view.baselinePriceIndex,
+    editingProject, baselinePriceIndex: view.baselinePriceIndex,
     updateRows: load.updateRows, setSummaryRows, setDirty, rowsRef, t,
   })
   const selection = useProjectCostTableSelection({
@@ -204,16 +251,86 @@ export function useProjectCostTablePanel({
     resolveEditableSummaryRows: rowsApi.resolveEditableSummaryRows, t, language,
   })
   const menu = useProjectCostTableMenu({
-    isPractice, selectedMeteringBaselineId, versionSwitchEntries: version.versionSwitchEntries,
+    selectedMeteringBaselineId, versionSwitchEntries: version.versionSwitchEntries,
     handleSave: save.handleSave, setPendingSaveAsNewVersion, handleImport: imported.handleImport,
     handlePrint, setProjectInfoOpen, handleUndo: history.handleUndo, handleRedo: history.handleRedo,
     handleAdd: rowsApi.handleAdd, setPendingAddMultiple, handleInsert: rowsApi.handleInsert,
     handleDelete: structure.handleDelete, handleIndent: structure.handleIndent,
     handleOutdent: structure.handleOutdent, handleMove: structure.handleMove,
-    setMeteringViewActive, setMeteringCaptureBaselineOpen, setMeteringEditBaselineOpen,
+    setMeteringViewActive, setViewFilter, viewFilter,
+    setMeteringCaptureBaselineOpen, setMeteringEditBaselineOpen,
     setPendingMeteringDeleteBaseline,
+    fetchCostDatabase: load.fetchCostDatabase,
   })
 
+  const costColumnLabel = useCallback(
+    (column: CostLabelColumn | 'index') => selection.costColumnLabel(column),
+    [selection.costColumnLabel],
+  )
+  const [tableViewportWidth, setTableViewportWidth] = useState(0)
+  useLayoutEffect(() => {
+    const scroll = tableScrollRef.current
+    const root = panelRootRef.current
+    const update = () => {
+      const next = scroll?.clientWidth || root?.clientWidth || 0
+      setTableViewportWidth((prev) => (prev === next ? prev : next))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    if (scroll) observer.observe(scroll)
+    if (root) observer.observe(root)
+    return () => observer.disconnect()
+  }, [view.visibleRows.length])
+  const autoColWidths = useMemo(
+    () =>
+      computeCostTableAutoColWidths({
+        rows: view.visibleRows,
+        childrenByParentId: view.childrenByParentId,
+        visibility: columnVisibility,
+        groupBy: 'subprojectSection',
+        availableWidth: tableViewportWidth,
+        baselineWidth: 72,
+        labels: {
+          subproject: costColumnLabel('subproject'),
+          sectionalWork: costColumnLabel('sectionalWork'),
+          code: costColumnLabel('code'),
+          name: costColumnLabel('name'),
+          featureDescription: costColumnLabel('featureDescription'),
+          unit: costColumnLabel('unit'),
+          quantity: costColumnLabel('quantity'),
+          unitPrice: costColumnLabel('unitPrice'),
+          totalPrice: costColumnLabel('totalPrice'),
+        },
+      }),
+    [
+      columnVisibility,
+      costColumnLabel,
+      tableViewportWidth,
+      view.childrenByParentId,
+      view.visibleRows,
+    ],
+  )
+  const rowHeights = useMemo(() => {
+    const nameWidth = autoColWidths.name ?? 120
+    const featureWidth = autoColWidths.featureDescription ?? COST_TABLE_FEATURE_COL_WIDTH_PX
+    return view.displayEntries.map((entry) => {
+      if (entry.kind !== 'row') return 36
+      return estimateCostTableEntryHeight({
+        wrapName: columnVisibility.name,
+        wrapFeature: columnVisibility.featureDescription,
+        name: entry.row.name,
+        featureDescription: entry.row.featureDescription,
+        nameWidth,
+        featureWidth,
+      })
+    })
+  }, [
+    autoColWidths.featureDescription,
+    autoColWidths.name,
+    columnVisibility.featureDescription,
+    columnVisibility.name,
+    view.displayEntries,
+  ])
   const canUndo = historyEpoch >= 0 && historyStackRef.current.canUndo
   const canRedo = historyEpoch >= 0 && historyStackRef.current.canRedo
   const saveAsNewVersionCurrentVersion = isPractice
@@ -226,10 +343,12 @@ export function useProjectCostTablePanel({
 
   return buildProjectCostTablePanelState({
     panelRootRef, tableScrollRef, headerPinInnerRef, hTrackRef, contextMenuRef, formulaInputRef,
-    isPractice, isAllScope, editingProject, canEdit, practiceScopeId,
-    totalPriceColumnLabel: selection.totalPriceColumnLabel, costColumnLabel: selection.costColumnLabel,
+    isPractice, isDatabase, isAllScope, editingProject, canEdit, practiceScopeId,
+    totalPriceColumnLabel: selection.totalPriceColumnLabel, costColumnLabel, autoColWidths, rowHeights,
     rows, dirty, byId: view.byId, childrenByParentId: view.childrenByParentId,
     selectedRow: view.selectedRow, sectionalOptions: view.sectionalOptions,
+    subprojectOptions: view.subprojectOptions, databaseRowFilter, setDatabaseRowFilter,
+    databaseSectionCurrencies,
     visibleRows: view.visibleRows, displayEntries: view.displayEntries,
     baselinePriceIndex: view.baselinePriceIndex, selectedId, setSelectedId, checkedIds, setCheckedIds,
     selectionMode, setSelectionMode, contextMenu, setContextMenu, columnMenu, columnVisibility,
@@ -239,9 +358,13 @@ export function useProjectCostTablePanel({
     commitHeaderEdit: selection.commitHeaderEdit, handleHeaderKeyDown: selection.handleHeaderKeyDown,
     handleRowContextMenu: selection.handleRowContextMenu, handleSelectAll: selection.handleSelectAll,
     handleClearSelection: selection.handleClearSelection, contextMenuDeleteIds: checkedIds,
-    costQuotaView, setCostQuotaView, viewFilter, handleViewFilterChange: view.handleViewFilterChange,
+    viewFilter,
+    showMeteringColumns: meteringViewActive && viewFilter !== 'meteringTable',
+    showIpcStatementColumns: viewFilter === 'meteringTable',
+    ipcColumns: costIpcColumns(meteringBaselines),
+    handleViewFilterChange: view.handleViewFilterChange,
     sectionFilter, handleSectionFilterChange: view.handleSectionFilterChange,
-    isSummaryView: isCostSectionSummaryFilter(sectionFilter), canUndo, canRedo, saving, statusFeedback,
+    isSummaryView: isCostSectionSummaryFilter(sectionFilter), canUndo, canRedo, saving, fetching: load.fetching, statusFeedback,
     versionSwitchEntries: version.versionSwitchEntries, practiceVersionEntries: menu.practiceVersionEntries,
     handleRestoreVersion: version.handleRestoreVersion,
     handleConfirmRestoreVersion: version.handleConfirmRestoreVersion, handleSave: save.handleSave,

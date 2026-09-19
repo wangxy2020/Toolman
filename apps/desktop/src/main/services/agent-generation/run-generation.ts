@@ -131,6 +131,12 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
       stream,
     })
 
+    const preferGemmaOllamaStreamOnly =
+      providerConfig.type === 'ollama' &&
+      (isGemmaThinkingOllamaModelId(model) || isQwenThinkingOllamaModelId(model)) &&
+      !workingCopies.docxTaskActive &&
+      !workingCopies.excelTaskActive
+
     const { hints: runtimeHints, kbResults } = await withAbortSignal(
       buildRuntimeSystemHints({
         sessionId,
@@ -138,7 +144,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
         runtime,
         userText: generationText,
         userContentBlocks: generationBlocks,
-        enableTools,
+        enableTools: enableTools && !preferGemmaOllamaStreamOnly,
         mcpServerIds,
         sendOptions,
         docxWorkingCopies: workingCopies.docxWorkingCopies,
@@ -181,7 +187,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
 
     const toolHint = runtimeHints.join('\n\n')
     assertProviderSupportsVisionInput(providerConfig, model, generationBlocks)
-    const chatMessages = buildChatMessages(
+    const chatMessages = await buildChatMessages(
       sessionId,
       assistant,
       generationBlocks,
@@ -219,12 +225,6 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<void> {
     if (excelTaskActive && (!enableTools || tools.length === 0)) {
       throw new ExcelMcpNotReadyError('Excel 表格任务需要 Excel MCP 工具，但当前未启用任何工具')
     }
-
-    const preferGemmaOllamaStreamOnly =
-      providerConfig.type === 'ollama' &&
-      (isGemmaThinkingOllamaModelId(model) || isQwenThinkingOllamaModelId(model)) &&
-      !docxTaskActive &&
-      !excelTaskActive
 
     await executeGenerationStrategy({
       enableTools,

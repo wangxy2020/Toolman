@@ -39,7 +39,7 @@ export function KnowledgePage(props: KnowledgePageProps) {
     settingsTarget, showAddUrlModal, setShowAddUrlModal, selectedIds,
     contextMenu, setContextMenu, sortField, sortAscending, dedupFolderPath,
     setDedupFolderPath, dedupScanState, setDedupScanState, dedupRefreshToken,
-    pendingDelete, setPendingDelete, isFileDedupView, isFileRegistryView,
+    pendingDelete, setPendingDelete, pendingReindex, setPendingReindex, isFileDedupView, isFileRegistryView,
     showingDefaultFolder, showingDefaultNetworkFolder, showingDefaultSyncFolder,
     showingDefaultLocalFilesFolder,
     showingSavedSharedFolder, localDefaultKb,
@@ -50,9 +50,9 @@ export function KnowledgePage(props: KnowledgePageProps) {
     syncMoveTargets, showDefaultSyncTarget,
     handleChatWithFiles, handleSortFieldChange, handleSelectAll, handleClearSelection,
     handleDeleteSelected, handleImportFiles, handleAddUrl, handleAddSitemap,
-    handleReindexAll, handleMoveToSync, handleOpenSettings, handleSelectDedupFolder, handleDedupRefresh,
+    handleReindexAll, handleReindexSelected, handleMoveToSync, handleOpenSettings, handleSelectDedupFolder, handleDedupRefresh,
     handleDedupGoParent, handleContextMenu, handleToggleSelect, handleDeleteDocument,
-    confirmDeleteDocuments, handleCloseSettings, handleSettingsSaved, onKbChanged,
+    confirmDeleteDocuments, confirmReindexDocuments, handleCloseSettings, handleSettingsSaved, onKbChanged,
   } = page
 
   const filePanelProps = {
@@ -216,7 +216,8 @@ export function KnowledgePage(props: KnowledgePageProps) {
             onClearSelection={handleClearSelection}
             onDeleteSelected={handleDeleteSelected}
             onMoveToSync={(target) => void handleMoveToSync(target)}
-            onReindexAll={() => void handleReindexAll()}
+            onReindexSelected={() => handleReindexSelected()}
+            onReindexAll={() => handleReindexAll()}
           />
         ) : null}
 
@@ -229,6 +230,17 @@ export function KnowledgePage(props: KnowledgePageProps) {
             danger
             onCancel={() => setPendingDelete(null)}
             onConfirm={() => void confirmDeleteDocuments()}
+          />
+        ) : null}
+
+        {pendingReindex ? (
+          <ConfirmDialog
+            title={t('knowledgePage.contextMenu.reindexConfirmTitle')}
+            message={pendingReindex.message}
+            confirmLabel={t('common.confirm')}
+            cancelLabel={t('common.cancel')}
+            onCancel={() => setPendingReindex(null)}
+            onConfirm={() => void confirmReindexDocuments()}
           />
         ) : null}
       </main>

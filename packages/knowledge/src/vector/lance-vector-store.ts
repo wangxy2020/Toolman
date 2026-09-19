@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
-import { join } from 'node:path'
 import { connect, type Connection, type Table } from '@lancedb/lancedb'
 import type { VectorRecord, VectorSearchHit } from './cosine.js'
-import { FileVectorStore, getKbVectorStorePath } from './file-vector-store.js'
+import { FileVectorStore, getKbLanceDir, getKbVectorStorePath } from './file-vector-store.js'
 import type { VectorStore, VectorStoreMeta } from './types.js'
 
 const connectionCache = new Map<string, Promise<Connection>>()
@@ -11,8 +10,8 @@ function tableName(kbId: string): string {
   return `kb_${kbId.replace(/-/g, '_')}`
 }
 
-function lanceDirFor(vectorsDir: string): string {
-  return join(vectorsDir, 'lance')
+function lanceDirFor(vectorsDir: string, indexVersion = 1): string {
+  return getKbLanceDir(vectorsDir, indexVersion)
 }
 
 async function getConnection(lanceDir: string): Promise<Connection> {
@@ -53,8 +52,9 @@ function toNumberVector(value: unknown): number[] {
 export async function migrateJsonVectorsToLance(options: {
   vectorsDir: string
   kbId: string
+  indexVersion?: number
 }): Promise<boolean> {
-  const jsonPath = getKbVectorStorePath(options.vectorsDir, options.kbId)
+  const jsonPath = getKbVectorStorePath(options.vectorsDir, options.kbId, options.indexVersion ?? 1)
   if (!existsSync(jsonPath)) return false
 
   const fileStore = new FileVectorStore(jsonPath)
@@ -64,7 +64,7 @@ export async function migrateJsonVectorsToLance(options: {
     return false
   }
 
-  const store = new LanceVectorStore(lanceDirFor(options.vectorsDir), options.kbId)
+  const store = new LanceVectorStore(lanceDirFor(options.vectorsDir, options.indexVersion ?? 1), options.kbId)
   await store.upsert(data.records, {
     dimension: data.dimension,
     model: data.model,

@@ -9,9 +9,32 @@ import { COMMUNITY_KNOWLEDGE_BUNDLE_MANIFEST_RELATIVE_PATHS } from '../community
 
 export const KnowledgeBundleManifestSchema = z.object({
   schemaVersion: z.number().int().positive(),
+  packageVersion: z.number().int().positive().optional(),
   name: z.string().min(1).max(128),
   description: z.string().max(512).optional(),
   files: z.array(z.string().min(1)).min(1),
+  knowledgeBase: z
+    .object({
+      kind: z.string().optional(),
+      name: z.string().optional(),
+      description: z.string().optional(),
+    })
+    .optional(),
+  documents: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        path: z.string().optional(),
+        contentHash: z.string().optional(),
+        mimeType: z.string().optional(),
+      }),
+    )
+    .optional(),
+  revisions: z.array(z.unknown()).optional(),
+  contentHashes: z.array(z.string()).optional(),
+  chunkConfig: z.record(z.unknown()).optional(),
+  embeddingConfig: z.record(z.unknown()).optional(),
+  createdAt: z.string().optional(),
 })
 
 export type KnowledgeBundleManifest = z.infer<typeof KnowledgeBundleManifestSchema>

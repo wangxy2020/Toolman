@@ -36,23 +36,44 @@ export function parsePmDecimalInput(raw: string): number | null {
   return Number.isFinite(value) ? value : null
 }
 
+export type PmDecimalFormatOptions = {
+  /** Cost quantity / unit-price cells hide a stored 0. */
+  blankZero?: boolean
+}
+
+function isBlankPmDecimal(
+  value: number | null | undefined,
+  options?: PmDecimalFormatOptions,
+): value is null | undefined {
+  return value == null || !Number.isFinite(value) || (options?.blankZero === true && value === 0)
+}
+
 /** Plain numeric text for focused editing (no thousand separators). */
-export function formatPmDecimalPlain(value: number | null | undefined): string {
-  return value == null || !Number.isFinite(value) ? '' : String(value)
+export function formatPmDecimalPlain(
+  value: number | null | undefined,
+  options?: PmDecimalFormatOptions,
+): string {
+  return isBlankPmDecimal(value, options) ? '' : String(value)
 }
 
 /** Display text with thousand separators when |value| ≥ 1000. */
-export function formatPmDecimalDisplay(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return ''
+export function formatPmDecimalDisplay(
+  value: number | null | undefined,
+  options?: PmDecimalFormatOptions,
+): string {
+  if (isBlankPmDecimal(value, options)) return ''
   return value.toLocaleString('zh-CN', {
     maximumFractionDigits: 20,
     useGrouping: Math.abs(value) >= 1000,
   })
 }
 
+const BLANK_ZERO_OPTIONS: PmDecimalFormatOptions = { blankZero: true }
+
 type Props = {
   className?: string
   value: number | null
+  blankZero?: boolean
   'aria-label'?: string
   onCommit: (value: number | null) => void
   onClick?: (event: ReactMouseEvent<HTMLInputElement>) => void
@@ -66,22 +87,24 @@ type Props = {
 export const PmDecimalTableInput: FC<Props> = ({
   className,
   value,
+  blankZero = false,
   onCommit,
   onClick,
   'aria-label': ariaLabel,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const focusedRef = useRef(false)
-  const lastValidRef = useRef(formatPmDecimalPlain(value))
+  const formatOptions = blankZero ? BLANK_ZERO_OPTIONS : undefined
+  const lastValidRef = useRef(formatPmDecimalPlain(value, formatOptions))
 
   useLayoutEffect(() => {
     if (focusedRef.current) return
     const el = inputRef.current
     if (!el) return
-    const next = formatPmDecimalDisplay(value)
-    lastValidRef.current = formatPmDecimalPlain(value)
+    const next = formatPmDecimalDisplay(value, formatOptions)
+    lastValidRef.current = formatPmDecimalPlain(value, formatOptions)
     if (el.value !== next) el.value = next
-  }, [value])
+  }, [formatOptions, value])
 
   return (
     <input
@@ -90,10 +113,10 @@ export const PmDecimalTableInput: FC<Props> = ({
       type="text"
       inputMode="decimal"
       aria-label={ariaLabel}
-      defaultValue={formatPmDecimalDisplay(value)}
+      defaultValue={formatPmDecimalDisplay(value, formatOptions)}
       onFocus={() => {
         focusedRef.current = true
-        const plain = formatPmDecimalPlain(value)
+        const plain = formatPmDecimalPlain(value, formatOptions)
         lastValidRef.current = plain
         if (inputRef.current) inputRef.current.value = plain
       }}
@@ -117,8 +140,8 @@ export const PmDecimalTableInput: FC<Props> = ({
         focusedRef.current = false
         const parsed = parsePmDecimalInput(inputRef.current?.value ?? '')
         onCommit(parsed)
-        lastValidRef.current = formatPmDecimalPlain(parsed)
-        if (inputRef.current) inputRef.current.value = formatPmDecimalDisplay(parsed)
+        lastValidRef.current = formatPmDecimalPlain(parsed, formatOptions)
+        if (inputRef.current) inputRef.current.value = formatPmDecimalDisplay(parsed, formatOptions)
       }}
       onClick={onClick}
     />

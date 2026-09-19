@@ -1,7 +1,12 @@
 import { withTimeout } from '../utils/async-timeout'
+import { ocrPageLimiter } from './document-ocr-slot'
 import { isOcrVisionModelId } from '@toolman/shared'
 import { getProviderConfig } from './provider.service'
 import { logStructured } from './structured-log.service'
+import {
+  assertIngestNotCancelled,
+  getIngestOcrAbortSignal,
+} from './knowledge-ingest-manager.service'
 import {
   CHAT_OCR_PAGE_TIMEOUT_MS,
   OCR_PAGE_TIMEOUT_MS,
@@ -12,6 +17,12 @@ import {
   normalizeOcrText,
   type ResolvedOcrVisionModel,
 } from './document-ocr-model'
+import {
+  buildOllamaOcrGenerateOptions,
+  consumeOllamaNdjsonLine,
+  isOcrTokenRepeatMessage,
+  salvageOllamaOcrAfterError,
+} from './document-ocr-ollama-ndjson'
 
 export function toOcrImageBase64(
   image: Buffer | Uint8Array | ArrayBuffer | { type?: string; data?: number[] },
@@ -31,20 +42,103 @@ export function toOcrImageBase64(
   throw new Error('Invalid image buffer for OCR')
 }
 
+function mergeOcrAbortSignal(timeoutMs: number, extra?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  if (!extra) return timeout
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([timeout, extra])
+  return extra.aborted ? extra : timeout
+}
+
 /**
  * glm-ocr works best with Ollama `/api/generate` + `images: [rawBase64]`.
  * Never pass data-URLs or Uint8Array.toString() output.
  */
+async function readOllamaOcrNdjsonStream(
+  response: Response,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('Ollama 响应无 body')
+  }
+  const decoder = new TextDecoder()
+  const acc = { text: '' }
+  let buffer = ''
+  const onAbort = () => {
+    void reader.cancel().catch(() => undefined)
+  }
+  abortSignal?.addEventListener('abort', onAbort, { once: true })
+
+  try {
+    while (true) {
+      if (abortSignal?.aborted) {
+        throw ocrAbortError(abortSignal)
+      }
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        const result = consumeOllamaNdjsonLine(line, acc)
+        if (result.kind === 'error') {
+          const salvaged = salvageOllamaOcrAfterError(result.message, acc.text)
+          if (salvaged) return salvaged
+          throw new Error(
+            isOcrTokenRepeatMessage(result.message)
+              ? `Ollama 请求失败 (500): {"error":"${result.message}"}`
+              : `Ollama 请求失败: ${result.message}`,
+          )
+        }
+      }
+    }
+    if (buffer.trim()) {
+      const result = consumeOllamaNdjsonLine(buffer, acc)
+      if (result.kind === 'error') {
+        const salvaged = salvageOllamaOcrAfterError(result.message, acc.text)
+        if (salvaged) return salvaged
+        throw new Error(`Ollama 请求失败: ${result.message}`)
+      }
+    }
+  } catch (error) {
+    if (abortSignal?.aborted) throw ocrAbortError(abortSignal)
+    throw error
+  } finally {
+    abortSignal?.removeEventListener('abort', onAbort)
+    try {
+      reader.releaseLock()
+    } catch {
+      // already cancelled/released
+    }
+  }
+
+  return acc.text
+}
+
+function ocrAbortError(signal: AbortSignal): Error {
+  const reason = signal.reason
+  const name = reason instanceof Error ? reason.name : ''
+  if (name === 'TimeoutError') {
+    return new Error('OCR 视觉模型响应超时，请检查 Ollama 是否可用')
+  }
+  return new Error('索引任务已取消')
+}
+
 async function recognizeWithOllamaNative(
   config: NonNullable<ReturnType<typeof getProviderConfig>>,
   modelId: string,
   imageBuffer: Buffer | Uint8Array | ArrayBuffer,
   timeoutMs: number,
+  abortSignal?: AbortSignal,
+  retry = false,
 ): Promise<string> {
   const baseUrl = (config.baseUrl ?? 'http://127.0.0.1:11434').replace(/\/$/, '').replace(/\/v1$/i, '')
   const imageBase64 = toOcrImageBase64(imageBuffer)
+  const generateOptions = buildOllamaOcrGenerateOptions(retry)
+  const mergedSignal = mergeOcrAbortSignal(timeoutMs, abortSignal)
 
   // Prefer /api/generate for glm-ocr (official ollama_generate mode).
+  // Stream so a token-repeat abort can still keep text already decoded.
   const useGenerate = isOcrVisionModelId(modelId)
   const url = useGenerate ? `${baseUrl}/api/generate` : `${baseUrl}/api/chat`
   const body = useGenerate
@@ -52,16 +146,12 @@ async function recognizeWithOllamaNative(
         model: modelId.trim(),
         prompt: 'Text Recognition:',
         images: [imageBase64],
-        stream: false,
-        options: {
-          temperature: 0,
-          num_ctx: 10240,
-          num_predict: 8192,
-        },
+        stream: true,
+        options: generateOptions,
       }
     : {
         model: modelId.trim(),
-        stream: false,
+        stream: true,
         messages: [
           {
             role: 'user',
@@ -69,44 +159,61 @@ async function recognizeWithOllamaNative(
             images: [imageBase64],
           },
         ],
-        options: {
-          temperature: 0,
-          num_ctx: 10240,
-          num_predict: 8192,
-        },
+        options: generateOptions,
       }
 
-  const response = await withTimeout(
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-    timeoutMs,
-    'OCR 视觉模型响应超时，请检查 Ollama 是否可用',
-  )
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: mergedSignal,
+  }).catch((error: unknown) => {
+    if (mergedSignal.aborted) throw ocrAbortError(mergedSignal)
+    const name = error instanceof Error ? error.name : ''
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      throw new Error('OCR 视觉模型响应超时，请检查 Ollama 是否可用')
+    }
+    throw error instanceof Error ? error : new Error(String(error))
+  })
 
   if (!response.ok) {
     const detail = await response.text().catch(() => response.statusText)
+    const salvaged = salvageOllamaOcrAfterError(detail, '')
+    if (salvaged) return salvaged
     throw new Error(`Ollama 请求失败 (${response.status}): ${detail}`)
   }
 
-  const payload = (await response.json()) as {
-    response?: string
-    message?: { content?: string; thinking?: string }
-    error?: string
-  }
-  if (payload.error) {
-    throw new Error(`Ollama 请求失败: ${payload.error}`)
-  }
-
-  const text = normalizeOcrText(
-    payload.response || payload.message?.content || payload.message?.thinking || '',
-  )
+  const raw = await readOllamaOcrNdjsonStream(response, mergedSignal)
+  const text = normalizeOcrText(raw)
   if (!text) {
     throw new Error('视觉模型未返回可识别的文字内容')
   }
   return text
+}
+
+async function recognizeWithOllamaNativeRetrying(
+  config: NonNullable<ReturnType<typeof getProviderConfig>>,
+  modelId: string,
+  imageBuffer: Buffer | Uint8Array | ArrayBuffer,
+  timeoutMs: number,
+  abortSignal?: AbortSignal,
+  decodeRetry = false,
+): Promise<string> {
+  if (decodeRetry) {
+    return recognizeWithOllamaNative(config, modelId, imageBuffer, timeoutMs, abortSignal, true)
+  }
+  try {
+    return await recognizeWithOllamaNative(config, modelId, imageBuffer, timeoutMs, abortSignal, false)
+  } catch (error) {
+    if (abortSignal?.aborted) {
+      throw new Error('索引任务已取消')
+    }
+    if (!isOcrTokenRepeatMessage(error instanceof Error ? error.message : String(error))) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+    logStructured('document-ocr', 'warn', 'glm-ocr token-repeat; retrying page with tighter decode limits')
+    return recognizeWithOllamaNative(config, modelId, imageBuffer, timeoutMs, abortSignal, true)
+  }
 }
 
 async function recognizeWithResolvedModel(
@@ -117,6 +224,8 @@ async function recognizeWithResolvedModel(
     pageNumber?: number
     totalPages?: number
     timeoutMs?: number
+    abortSignal?: AbortSignal
+    retry?: boolean
   },
 ): Promise<string> {
   const config = getProviderConfig(resolved.providerId)
@@ -128,7 +237,18 @@ async function recognizeWithResolvedModel(
 
   // Ollama OCR / VL models: native images[] API with raw base64.
   if (resolved.providerType === 'ollama') {
-    return recognizeWithOllamaNative(config, resolved.modelId, buffer, timeoutMs)
+    return withTimeout(
+      recognizeWithOllamaNativeRetrying(
+        config,
+        resolved.modelId,
+        buffer,
+        timeoutMs,
+        options?.abortSignal,
+        options?.retry === true,
+      ),
+      timeoutMs,
+      'OCR 视觉模型响应超时，请检查 Ollama 是否可用',
+    )
   }
 
   const dataUrl = `data:${mimeType};base64,${toOcrImageBase64(buffer)}`
@@ -170,7 +290,9 @@ async function recognizeWithResolvedModel(
 /**
  * Fallback order for page OCR after ODL/Hybrid:
  * 1) dedicated glm-ocr
- * 2) other vision / large multimodal models
+ * 2) other vision / large multimodal models — chat preview only.
+ * Knowledge ingest must not load a giant VL model after glm-ocr loops/fails;
+ * that pins tens of GB RAM while page count barely moves.
  */
 async function recognizeImageBuffer(
   buffer: Buffer | Uint8Array | ArrayBuffer,
@@ -181,19 +303,62 @@ async function recognizeImageBuffer(
     pageNumber?: number
     totalPages?: number
     timeoutMs?: number
+    documentId?: string
+    allowVisionFallback?: boolean
+    retry?: boolean
   },
 ): Promise<string> {
+  return ocrPageLimiter.run(() =>
+    recognizeImageBufferUnlocked(buffer, mimeType, workspaceId, kbId, options),
+  )
+}
+
+async function recognizeImageBufferUnlocked(
+  buffer: Buffer | Uint8Array | ArrayBuffer,
+  mimeType: string,
+  workspaceId: string,
+  kbId?: string,
+  options?: {
+    pageNumber?: number
+    totalPages?: number
+    timeoutMs?: number
+    documentId?: string
+    allowVisionFallback?: boolean
+    retry?: boolean
+  },
+): Promise<string> {
+  if (options?.documentId) {
+    assertIngestNotCancelled(options.documentId)
+  }
+  const abortSignal = getIngestOcrAbortSignal(options?.documentId)
   const glmOcr = getCachedOcrVisionModel(workspaceId, kbId, { ocrOnly: true })
   if (glmOcr) {
     try {
-      return await recognizeWithResolvedModel(glmOcr, buffer, mimeType, options)
+      return await recognizeWithResolvedModel(glmOcr, buffer, mimeType, {
+        ...options,
+        abortSignal,
+      })
     } catch (error) {
+      if (options?.documentId) assertIngestNotCancelled(options.documentId)
+      const message = error instanceof Error ? error.message : String(error)
       logStructured(
         'document-ocr',
         'warn',
-        `glm-ocr failed (${glmOcr.modelId}); falling back to other vision models`,
-        { error: error instanceof Error ? error.message : String(error) },
+        `glm-ocr failed (${glmOcr.modelId})${options?.allowVisionFallback ? '; falling back to other vision models' : ''}`,
+        { error: message },
       )
+      if (!options?.allowVisionFallback) {
+        // Knowledge ingest: skip this page rather than aborting the rest of the book.
+        if (isOcrTokenRepeatMessage(message) || /视觉模型未返回可识别/.test(message)) {
+          logStructured(
+            'document-ocr',
+            'warn',
+            `skipping OCR page ${options?.pageNumber ?? '?'} after glm-ocr token-repeat/empty result`,
+          )
+          return ''
+        }
+        throw error instanceof Error ? error : new Error(message)
+      }
     }
   }
 
@@ -209,7 +374,10 @@ async function recognizeImageBuffer(
     )
   }
 
-  return recognizeWithResolvedModel(fallback, buffer, mimeType, options)
+  return recognizeWithResolvedModel(fallback, buffer, mimeType, {
+    ...options,
+    abortSignal,
+  })
 }
 
 export async function ocrImageBuffer(
@@ -228,7 +396,7 @@ export async function ocrPdfPagePng(
   workspaceId: string,
   kbId?: string,
   mimeType = 'image/png',
-  options?: { chat?: boolean },
+  options?: { chat?: boolean; documentId?: string; retry?: boolean },
 ): Promise<string> {
   // Normalize worker-cloned buffers before any encoding.
   const bytes =
@@ -239,23 +407,28 @@ export async function ocrPdfPagePng(
     pageNumber,
     totalPages,
     timeoutMs: options?.chat ? CHAT_OCR_PAGE_TIMEOUT_MS : OCR_PAGE_TIMEOUT_MS,
+    documentId: options?.documentId,
+    allowVisionFallback: Boolean(options?.chat),
+    retry: options?.retry,
   })
 }
 
 export function createPdfOcrRecognizer(
   workspaceId: string,
-  options?: { kbId?: string; chat?: boolean },
+  options?: { kbId?: string; chat?: boolean; documentId?: string },
 ) {
   return async ({
     png,
     pageNumber,
     totalPages,
     mimeType,
+    retry,
   }: {
     png: Buffer | Uint8Array | ArrayBuffer | { type?: string; data?: number[] }
     pageNumber: number
     totalPages: number
     mimeType?: string
+    retry?: boolean
   }) =>
     ocrPdfPagePng(
       png,
@@ -264,6 +437,6 @@ export function createPdfOcrRecognizer(
       workspaceId,
       options?.kbId,
       mimeType,
-      { chat: options?.chat },
+      { chat: options?.chat, documentId: options?.documentId, retry },
     )
 }

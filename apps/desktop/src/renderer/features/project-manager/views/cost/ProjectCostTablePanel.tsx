@@ -1,11 +1,7 @@
 import type { FC } from 'react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback } from 'react'
 
 import { useI18n } from '../../../../i18n/useI18n'
-import { ProjectFeaturesMenuBar, type FeaturesMenuAction } from '../files/ProjectFeaturesMenuBar'
-import ProjectManagementFilesPanel, {
-  type ProjectManagementFilesPanelHandle,
-} from '../files/ProjectManagementFilesPanel'
 import { ProjectCostMenuBar, type CostMenuAction } from './ProjectCostMenuBar'
 import { ProjectCostTableBody } from './ProjectCostTableBody'
 import { ProjectCostTableDialogs } from './ProjectCostTableDialogs'
@@ -20,22 +16,6 @@ export type { ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
 type Props = ProjectCostTablePanelProps
 
-const METERING_FORWARDED_ACTIONS = new Set<CostMenuAction>([
-  'save',
-  'saveAsNewVersion',
-  'print',
-  'projectInfo',
-  'undo',
-  'redo',
-  'add',
-  'insert',
-  'delete',
-  'indent',
-  'outdent',
-  'moveUp',
-  'moveDown',
-])
-
 /**
  * Thin orchestrator: owns no rendering logic of its own — all state/handlers live in
  * `useProjectCostTablePanel`, all presentational JSX lives in the sibling `ProjectCostTable*`
@@ -48,14 +28,11 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
     panelRootRef,
     tableScrollRef,
     hTrackRef,
-    isPractice,
     canEdit,
     sectionalOptions,
     selectedId,
     hScrollMetrics,
     hScrollDragging,
-    costQuotaView,
-    setCostQuotaView,
     viewFilter,
     handleViewFilterChange,
     sectionFilter,
@@ -65,11 +42,8 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
     saving,
     statusFeedback,
     versionSwitchEntries,
-    practiceVersionEntries,
     handleRestoreVersion,
     handleMenuAction,
-    handleFeaturesMenuAction,
-    meteringViewActive,
     meteringBaselines,
     selectedMeteringBaselineId,
     setSelectedMeteringBaselineId,
@@ -79,33 +53,33 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
     rows,
     selectedRow,
     onHTrackPointerDown,
+    showMeteringColumns,
   } = state
 
-  const showMeteringView = !isPractice && meteringViewActive
-  const meteringPanelRef = useRef<ProjectManagementFilesPanelHandle | null>(null)
-  const [meteringHasSelection, setMeteringHasSelection] = useState(false)
-
-  const flushMeteringBeforeLeave = useCallback(async () => {
-    if (!showMeteringView) return
-    await meteringPanelRef.current?.flushIfDirty()
-  }, [showMeteringView])
+  const viewMenuVariant = props.variant ?? 'catalog'
+  const showReservedView =
+    viewFilter === 'progressPaymentSummary' || viewFilter === 'paymentSummary'
 
   const onViewFilterChange = useCallback(
     (filter: Parameters<typeof handleViewFilterChange>[0]) => {
-      void flushMeteringBeforeLeave().finally(() => {
-        handleViewFilterChange(filter)
-      })
+      handleViewFilterChange(filter)
     },
-    [flushMeteringBeforeLeave, handleViewFilterChange],
+    [handleViewFilterChange],
   )
 
   const onSectionFilterChange = useCallback(
     (filter: Parameters<typeof handleSectionFilterChange>[0]) => {
-      void flushMeteringBeforeLeave().finally(() => {
-        handleSectionFilterChange(filter)
-      })
+      handleSectionFilterChange(filter)
     },
-    [flushMeteringBeforeLeave, handleSectionFilterChange],
+    [handleSectionFilterChange],
+  )
+
+  const onDatabaseRowFilterChange = useCallback(
+    (filter: Parameters<typeof state.setDatabaseRowFilter>[0]) => {
+      state.setDatabaseRowFilter(filter)
+      handleSectionFilterChange('all')
+    },
+    [handleSectionFilterChange, state.setDatabaseRowFilter],
   )
 
   const handleCostMenuAction = useCallback(
@@ -113,76 +87,56 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
       action: CostMenuAction,
       event?: { metaKey?: boolean; ctrlKey?: boolean },
     ) => {
-      if (showMeteringView && METERING_FORWARDED_ACTIONS.has(action)) {
-        meteringPanelRef.current?.dispatchMenuAction(action as FeaturesMenuAction)
-        return
-      }
       handleMenuAction(action, event)
     },
-    [handleMenuAction, showMeteringView],
+    [handleMenuAction],
   )
 
   return (
     <div
       ref={panelRootRef}
-      className="tm-pm-gantt-page tm-pm-resource-table-page tm-pm-cost-table-page"
+      className={[
+        'tm-pm-gantt-page',
+        'tm-pm-resource-table-page',
+        'tm-pm-cost-table-page',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      {isPractice ? (
-        <ProjectFeaturesMenuBar
-          disabled={saving}
-          hasSelection={selectedId != null}
-          hasProject
-          canEdit={canEdit}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          selectedType="scheduleAll"
-          viewMenuMode="costQuota"
-          costQuotaView={costQuotaView}
-          onCostQuotaViewChange={setCostQuotaView}
-          versionSwitchEntries={practiceVersionEntries}
-          onRestoreVersion={handleRestoreVersion}
-          onAction={handleFeaturesMenuAction}
-          showTrailingMenus={false}
-        />
-      ) : (
-        <ProjectCostMenuBar
-          disabled={saving}
-          hasSelection={showMeteringView ? meteringHasSelection : selectedId != null}
-          hasProject
-          canEdit={canEdit}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          viewFilter={viewFilter}
-          onViewFilterChange={onViewFilterChange}
-          sectionFilter={sectionFilter}
-          onSectionFilterChange={onSectionFilterChange}
-          sectionalOptions={sectionalOptions}
-          versionSwitchEntries={versionSwitchEntries}
-          onRestoreVersion={handleRestoreVersion}
-          meteringActive={meteringViewActive}
-          meteringBaselines={meteringBaselines}
-          selectedMeteringBaselineId={selectedMeteringBaselineId}
-          onSelectMeteringBaseline={setSelectedMeteringBaselineId}
-          meteringRollupMode={meteringRollupMode}
-          onMeteringRollupModeChange={handleMeteringRollupModeChange}
-          onAction={handleCostMenuAction}
-        />
-      )}
+      <ProjectCostMenuBar
+        disabled={saving || state.fetching}
+        showFetch
+        fetching={state.fetching}
+        hasSelection={selectedId != null}
+        hasProject
+        canEdit={canEdit}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        showMetering={viewMenuVariant !== 'catalog'}
+        viewMenuVariant={viewMenuVariant}
+        viewFilter={viewFilter}
+        onViewFilterChange={onViewFilterChange}
+        sectionFilter={sectionFilter}
+        onSectionFilterChange={onSectionFilterChange}
+        databaseRowFilter={state.databaseRowFilter}
+        onDatabaseRowFilterChange={onDatabaseRowFilterChange}
+        subprojectOptions={state.subprojectOptions}
+        sectionalOptions={sectionalOptions}
+        versionSwitchEntries={versionSwitchEntries}
+        onRestoreVersion={handleRestoreVersion}
+        meteringActive={showMeteringColumns}
+        meteringBaselines={meteringBaselines}
+        selectedMeteringBaselineId={selectedMeteringBaselineId}
+        onSelectMeteringBaseline={setSelectedMeteringBaselineId}
+        meteringRollupMode={meteringRollupMode}
+        onMeteringRollupModeChange={handleMeteringRollupModeChange}
+        onAction={handleCostMenuAction}
+      />
 
-      {showMeteringView ? (
-        <ProjectManagementFilesPanel
-          workspaceId={props.workspaceId}
-          workspace={null}
-          systemPaths={null}
-          projects={props.projects}
-          selectedProjectId={props.selectedProjectId}
-          onOpenScheduleView={props.onOpenScheduleView}
-          onProjectsChange={props.onProjectsChange}
-          lockedViewFilter="metering"
-          embedded
-          actionBridgeRef={meteringPanelRef}
-          onEmbeddedSelectionChange={setMeteringHasSelection}
-        />
+      {showReservedView ? (
+        <div className="tm-pm-empty">
+          {t('projectManagerPage.costTable.views.pageReserved')}
+        </div>
       ) : !canEdit ? (
         <div className="tm-pm-empty">{t('projectManagerPage.costTable.needProject')}</div>
       ) : (
@@ -227,7 +181,7 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
         </div>
       )}
 
-      {showMeteringView ? null : (
+      {showReservedView ? null : (
       <footer className="tm-pm-gantt-statusbar" aria-live="polite">
         <div
           className={[
@@ -257,7 +211,7 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
       </footer>
       )}
 
-      {showMeteringView ? null : <ProjectCostTableMenus state={state} />}
+      {showReservedView ? null : <ProjectCostTableMenus state={state} />}
       <ProjectCostTableDialogs panelProps={props} state={state} />
               </div>
   )

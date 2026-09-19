@@ -7,6 +7,7 @@ import {
 
 const t = ((key: string, params?: Record<string, string | number>) => {
   if (key === 'knowledgePage.docStatus.parsing') return '解析中'
+  if (key === 'knowledgePage.docStatus.ocr') return 'OCR 中'
   if (key === 'knowledgePage.docStatus.embedding') return '嵌入中'
   if (key === 'knowledgePage.docStatus.queued') return '排队中'
   if (key === 'knowledgePage.ingestStatus.untitled') return '未命名文件'

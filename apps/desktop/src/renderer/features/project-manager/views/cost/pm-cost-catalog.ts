@@ -13,6 +13,7 @@ export {
   isPmCostPracticeQuotaType,
   isPmCostResourceType,
   isPmCostType,
+  toPriceListCostType,
   toSharedCostCatalogType,
   type PmCostPracticeQuotaType,
   type PmCostResourceType,
@@ -29,6 +30,7 @@ export {
   costRowDepth,
   deriveCostApplicable,
   formatCostBaselineRatio,
+  formatCostFixed2IfDecimal,
   formatCostTotalPrice,
   isCostBaselineRatioOff,
   lookupBaselineUnitPrice,
@@ -40,10 +42,15 @@ export {
 export {
   COST_SECTION_FILTER_SUMMARY,
   buildCostSectionalDisplayEntries,
+  compareCostSectionalWorkKeys,
+  costSectionalGroupMapKey,
   costSectionalWorkKey,
+  costSubprojectKey,
   isCostSectionSummaryFilter,
   patchCostSectionMeta,
+  uniqueSortedSectionalKeys,
   type CostSectionalDisplayEntry,
+  type CostSectionalGroupBy,
   type CostSectionalSummary,
 } from './pm-cost-catalog-sectional'
 

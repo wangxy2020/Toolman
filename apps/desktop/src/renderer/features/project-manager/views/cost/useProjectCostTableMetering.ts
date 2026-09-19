@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { useI18n } from '../../../../i18n/useI18n'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import { formatWorkItemDate, parseDateInput } from '../schedule/pm-gantt-utils'
+import type { PmCostRow } from './pm-cost-catalog'
+import { rollCostMeteringPeriodIntoPrior } from './pm-cost-metering-cols'
+import { stripCostIpcQuantities } from './pm-cost-ipc-cols'
 import {
   addMeteringBaseline,
   deleteMeteringBaseline,
@@ -19,7 +22,6 @@ import {
 
 export function useProjectCostTableMetering(args: {
   workspaceId: string
-  isPractice: boolean
   scopeKey: string
   meteringBaselines: MeteringBaseline[]
   setMeteringBaselines: (v: MeteringBaseline[]) => void
@@ -31,18 +33,19 @@ export function useProjectCostTableMetering(args: {
   setMeteringCaptureBaselineOpen: (v: boolean) => void
   setMeteringEditBaselineOpen: (v: boolean) => void
   setPendingMeteringDeleteBaseline: (v: boolean) => void
+  updateRows: (updater: (prev: PmCostRow[]) => PmCostRow[]) => void
   setStatusFeedback: ReturnType<typeof usePmStatusFeedback>[1]
   t: ReturnType<typeof useI18n>['t']
 }) {
   const {
-    workspaceId, isPractice, scopeKey, meteringBaselines, setMeteringBaselines,
+    workspaceId, scopeKey, meteringBaselines, setMeteringBaselines,
     selectedMeteringBaselineId, setSelectedMeteringBaselineId, setMeteringViewActive,
     setMeteringRollupMode, meteringCaptureBaselineOpen, setMeteringCaptureBaselineOpen,
-    setMeteringEditBaselineOpen, setPendingMeteringDeleteBaseline, setStatusFeedback, t,
+    setMeteringEditBaselineOpen, setPendingMeteringDeleteBaseline, updateRows, setStatusFeedback, t,
   } = args
 
   useEffect(() => {
-    if (isPractice || !scopeKey) {
+    if (!scopeKey) {
       setMeteringBaselines([])
       setSelectedMeteringBaselineId(null)
       setMeteringRollupMode('none')
@@ -54,16 +57,16 @@ export function useProjectCostTableMetering(args: {
       prev && loaded.some((entry) => entry.id === prev) ? prev : null,
     )
     setMeteringRollupMode(readMeteringRollupMode(workspaceId, scopeKey))
-  }, [isPractice, scopeKey, workspaceId])
+  }, [scopeKey, workspaceId])
 
   const handleMeteringRollupModeChange = useCallback(
     (mode: MeteringRollupMode) => {
       setMeteringRollupMode(mode)
-      if (!isPractice && scopeKey) {
+      if (scopeKey) {
         writeMeteringRollupMode(workspaceId, scopeKey, mode)
       }
     },
-    [isPractice, scopeKey, workspaceId],
+    [scopeKey, workspaceId],
   )
 
   const selectedMeteringBaseline = useMemo(
@@ -102,8 +105,9 @@ export function useProjectCostTableMetering(args: {
   const handleMeteringCaptureBaselineConfirm = useCallback(
     ({ name, asOfDate }: { name: string; asOfDate: string }) => {
       setMeteringCaptureBaselineOpen(false)
-      if (isPractice || !scopeKey) return
+      if (!scopeKey) return
       const created = addMeteringBaseline(workspaceId, scopeKey, { name, asOfDate })
+      updateRows((prev) => rollCostMeteringPeriodIntoPrior(prev, created.id))
       setMeteringBaselines(readMeteringBaselines(workspaceId, scopeKey))
       setSelectedMeteringBaselineId(created.id)
       setMeteringViewActive(true)
@@ -114,13 +118,13 @@ export function useProjectCostTableMetering(args: {
         }),
       })
     },
-    [isPractice, scopeKey, setStatusFeedback, t, workspaceId],
+    [scopeKey, setStatusFeedback, t, updateRows, workspaceId],
   )
 
   const handleMeteringEditBaselineConfirm = useCallback(
     ({ name, asOfDate }: { name: string; asOfDate: string }) => {
       setMeteringEditBaselineOpen(false)
-      if (isPractice || !scopeKey || !selectedMeteringBaselineId) return
+      if (!scopeKey || !selectedMeteringBaselineId) return
       const updated = updateMeteringBaseline(workspaceId, scopeKey, selectedMeteringBaselineId, {
         name,
         asOfDate,
@@ -134,21 +138,15 @@ export function useProjectCostTableMetering(args: {
         }),
       })
     },
-    [
-      isPractice,
-      scopeKey,
-      selectedMeteringBaselineId,
-      setStatusFeedback,
-      t,
-      workspaceId,
-    ],
+    [scopeKey, selectedMeteringBaselineId, setStatusFeedback, t, workspaceId],
   )
 
   const handleConfirmMeteringDeleteBaseline = useCallback(() => {
     setPendingMeteringDeleteBaseline(false)
-    if (isPractice || !scopeKey || !selectedMeteringBaselineId) return
+    if (!scopeKey || !selectedMeteringBaselineId) return
     const removed = deleteMeteringBaseline(workspaceId, scopeKey, selectedMeteringBaselineId)
     if (!removed) return
+    updateRows((prev) => stripCostIpcQuantities(prev, removed.id))
     setMeteringBaselines(readMeteringBaselines(workspaceId, scopeKey))
     setSelectedMeteringBaselineId(null)
     setStatusFeedback({
@@ -158,11 +156,11 @@ export function useProjectCostTableMetering(args: {
       }),
     })
   }, [
-    isPractice,
     scopeKey,
     selectedMeteringBaselineId,
     setStatusFeedback,
     t,
+    updateRows,
     workspaceId,
   ])
 

@@ -110,6 +110,7 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
       showGanttPanel={page.showGanttPanel}
       showResourceTablePanel={page.showResourceTablePanel}
       showCostTablePanel={page.showCostTablePanel}
+      showCostDatabasePanel={page.showCostDatabasePanel}
       showFeaturesPanel={page.showFeaturesPanel}
       showProgressDashboard={page.showProgressDashboard}
       settingsOpen={page.settingsOpen}
@@ -139,9 +140,11 @@ const ProjectManagerPage: FC<Props> = ({ activeTab, agentContext }) => {
         openScheduleFromFeatures: page.openScheduleFromFeatures,
       })}
       databasePanel={
-        <div className="tm-kb-file-panel-empty">
-          <p>{t('projectManagerPage.panel.reserved.database')}</p>
-        </div>
+        page.showCostDatabasePanel ? null : (
+          <div className="tm-kb-file-panel-empty">
+            <p>{t('projectManagerPage.panel.reserved.database')}</p>
+          </div>
+        )
       }
       statsPanel={buildPmStatsPanel({
         t,

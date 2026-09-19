@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useMemo } from 'react'
 import { IconPlus } from '../../components/icons'
 import { useI18n } from '../../i18n/useI18n'
 import { documentWindowSpacersFromHeights } from './document-page-window'
@@ -56,22 +56,19 @@ export const TranslationDocumentWorkspace = forwardRef<
     handleEnsurePage,
   } = useTranslationDocumentWorkspace({ ...props, pageZoom, ref })
   const isPdf = isPdfPath(activeDocument?.filePath ?? '')
-  const { isPreviewActive, markPageReady, cacheEpoch, currentPreviewReady } = usePdfPreviewPolicy(
+  const { isPreviewActive, markPageReady, cacheEpoch } = usePdfPreviewPolicy(
     currentPage,
     resolvedTotalPages,
     isPdf ? activeDocument?.filePath ?? null : null,
-    pageBox.width,
   )
-  const [fitEpoch, setFitEpoch] = useState(0)
   const bodyLookup = useMemo(
     () => createDocumentPageBodyLookup(activeDocument?.pageSnapshots, pages, activeDocument?.id),
-    [activeDocument?.id, activeDocument?.pageSnapshots, fitEpoch, pages],
+    [activeDocument?.id, activeDocument?.pageSnapshots, pages],
   )
   const handleFitPersist = useCallback(
     (pageNumber: number, fit: DocumentPageFitRecord) => {
       if (!activeDocument?.id) return
       setCachedPageFit(activeDocument.id, pageNumber, fit)
-      setFitEpoch((value) => value + 1)
     },
     [activeDocument?.id],
   )
@@ -148,8 +145,6 @@ export const TranslationDocumentWorkspace = forwardRef<
             currentPage,
             startPage,
             endPage,
-            settledPage: currentPage,
-            previewReady: currentPreviewReady,
           })
           const attachBody = attach.attachPlain
           const heavyContent = attach.attachRich

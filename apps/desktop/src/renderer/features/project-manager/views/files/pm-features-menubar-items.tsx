@@ -1,6 +1,7 @@
 import {
   IconChevronDown,
   IconChevronUp,
+  IconFetch,
   IconIndent,
   IconInsertRow,
   IconOutdent,
@@ -29,8 +30,10 @@ export function buildFeaturesMenuItems(input: {
   canRedo: boolean
   hasSelection: boolean
   selectedType?: FeaturesViewFilter
+  showFetch?: boolean
+  fetching?: boolean
 }): FeaturesMenuItem[] {
-  const { t, canEdit, hasProject, canUndo, canRedo, hasSelection, selectedType } = input
+  const { t, canEdit, hasProject, canUndo, canRedo, hasSelection, selectedType, showFetch, fetching } = input
   return [
     {
       key: 'save',
@@ -46,6 +49,17 @@ export function buildFeaturesMenuItems(input: {
       icon: true,
       disabled: !canEdit,
     },
+    ...(showFetch
+      ? [
+          {
+            key: 'fetch' as const,
+            title: t('projectManagerPage.files.menu.fetch'),
+            label: <IconFetch size={ICON_SIZE} />,
+            icon: true,
+            disabled: fetching,
+          },
+        ]
+      : []),
     {
       key: 'print',
       title: t('projectManagerPage.files.menu.print'),

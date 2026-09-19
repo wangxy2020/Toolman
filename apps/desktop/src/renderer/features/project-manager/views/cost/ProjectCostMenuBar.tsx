@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { IconChevronDown } from '../../../../components/icons'
 import { useMenuBarHScroll, useMenuBarTooltip } from '../../pm-menubar-chrome'
 import { ProjectCostMenuBarSectionPanel } from './ProjectCostMenuBarSectionPanel'
+import { ProjectCostMenuBarFetchPanel } from './ProjectCostMenuBarFetchPanel'
 import { ProjectCostMenuBarMeteringPanel } from './ProjectCostMenuBarMeteringPanel'
 import { ProjectCostMenuBarViewPanel } from './ProjectCostMenuBarViewPanel'
 import { buildCostMenuBarItems } from './pm-cost-menubar-items'
@@ -13,7 +14,13 @@ export type {
   CostViewFilter,
   CostMenuAction,
   CostVersionSwitchEntry,
+  CostViewMenuVariant,
+  CostPracticeViewPage,
   ProjectCostMenuBarProps,
+} from './project-cost-menu-bar-types'
+export {
+  COST_PRACTICE_VIEW_PAGES,
+  isCostPracticeViewPage,
 } from './project-cost-menu-bar-types'
 
 type Props = ProjectCostMenuBarProps
@@ -25,10 +32,17 @@ export function ProjectCostMenuBar({
   canEdit = true,
   canUndo = false,
   canRedo = false,
+  showFetch = false,
+  fetching = false,
+  showMetering = true,
+  viewMenuVariant = 'catalog',
   viewFilter,
   onViewFilterChange,
-  sectionFilter,
-  onSectionFilterChange,
+  sectionFilter: _sectionFilter,
+  onSectionFilterChange: _onSectionFilterChange,
+  databaseRowFilter,
+  onDatabaseRowFilterChange,
+  subprojectOptions,
   sectionalOptions,
   versionSwitchEntries,
   onRestoreVersion,
@@ -46,30 +60,48 @@ export function ProjectCostMenuBar({
     setViewOpen,
     typeOpen,
     setTypeOpen,
+    fetchOpen,
+    setFetchOpen,
     meteringOpen,
     setMeteringOpen,
     viewRef,
     typeRef,
+    fetchRef,
     meteringRef,
     viewPos,
     typePos,
+    fetchPos,
     meteringPos,
     viewMenuLabel,
     viewCurrentLabel,
     sectionMenuLabel,
-    sectionOptionLabel,
     sectionCurrentLabel,
+    fetchMenuLabel,
     meteringMenuLabel,
-  } = useProjectCostMenuBar({ viewFilter, sectionFilter })
+  } = useProjectCostMenuBar({
+    viewFilter,
+    viewMenuVariant,
+    databaseRowFilter,
+    subprojectOptions,
+    sectionalOptions,
+  })
   const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
   const { scrollRef, trackRef, scrollMetrics, syncScrollMetrics, onTrackPointerDown } =
     useMenuBarHScroll()
 
-  const items = buildCostMenuBarItems(t, { hasSelection, hasProject, canEdit, canUndo, canRedo })
+  const items = buildCostMenuBarItems(t, {
+    hasSelection,
+    hasProject,
+    canEdit,
+    canUndo,
+    canRedo,
+  })
 
-  const leadingItems = items.slice(0, 8)
-  const hierarchyItems = items.slice(8, 10)
-  const moveItems = items.slice(10)
+  const insertIndex = items.findIndex((item) => item.key === 'insert')
+  const indentIndex = items.findIndex((item) => item.key === 'indent')
+  const leadingItems = items.slice(0, insertIndex)
+  const hierarchyItems = items.slice(insertIndex, indentIndex)
+  const moveItems = items.slice(indentIndex)
 
   const renderToolbarItem = (item: (typeof items)[number]) => {
     const isDisabled = Boolean(disabled || item.disabled)
@@ -134,6 +166,7 @@ export function ProjectCostMenuBar({
                   if (disabled) return
                   hideTip()
                   setTypeOpen(false)
+                  setFetchOpen(false)
                   setMeteringOpen(false)
                   setViewOpen((open) => !open)
                 }}
@@ -146,6 +179,7 @@ export function ProjectCostMenuBar({
               {viewOpen ? (
                 <ProjectCostMenuBarViewPanel
                   pos={viewPos}
+                  viewMenuVariant={viewMenuVariant}
                   viewFilter={viewFilter}
                   onSelect={(filter) => {
                     onViewFilterChange(filter)
@@ -158,6 +192,42 @@ export function ProjectCostMenuBar({
 
             {leadingItems.map(renderToolbarItem)}
             {hierarchyItems.map(renderToolbarItem)}
+            {moveItems.map(renderToolbarItem)}
+
+            {showFetch ? (
+              <span className="tm-pm-resource-menubar-item tm-pm-gantt-view-menu" ref={fetchRef}>
+                <button
+                  type="button"
+                  className="tm-pm-resource-menubar-btn"
+                  aria-label={fetchMenuLabel}
+                  aria-disabled={disabled}
+                  aria-expanded={fetchOpen}
+                  onClick={() => {
+                    if (disabled) return
+                    hideTip()
+                    setViewOpen(false)
+                    setTypeOpen(false)
+                    setMeteringOpen(false)
+                    setFetchOpen((open) => !open)
+                  }}
+                  {...tipProps(fetchMenuLabel)}
+                >
+                  <span>{fetchMenuLabel}</span>
+                  <IconChevronDown size={14} />
+                </button>
+                {fetchOpen ? (
+                  <ProjectCostMenuBarFetchPanel
+                    pos={fetchPos}
+                    fetching={fetching}
+                    onSelect={(target) => {
+                      setFetchOpen(false)
+                      if (target === 'priceList') onAction('fetch')
+                      if (target === 'meteringTable') onAction('fetchMetering')
+                    }}
+                  />
+                ) : null}
+              </span>
+            ) : null}
 
             <span className="tm-pm-resource-menubar-item tm-pm-gantt-view-menu" ref={typeRef}>
               <button
@@ -170,6 +240,7 @@ export function ProjectCostMenuBar({
                   if (disabled) return
                   hideTip()
                   setViewOpen(false)
+                  setFetchOpen(false)
                   setMeteringOpen(false)
                   setTypeOpen((open) => !open)
                 }}
@@ -182,20 +253,15 @@ export function ProjectCostMenuBar({
               {typeOpen ? (
                 <ProjectCostMenuBarSectionPanel
                   pos={typePos}
-                  sectionFilter={sectionFilter}
+                  databaseRowFilter={databaseRowFilter}
+                  subprojectOptions={subprojectOptions}
                   sectionalOptions={sectionalOptions}
-                  sectionOptionLabel={sectionOptionLabel}
-                  onSelect={(filter) => {
-                    onSectionFilterChange(filter)
-                    setTypeOpen(false)
-                  }}
+                  onChange={onDatabaseRowFilterChange}
                 />
               ) : null}
-              <span className="tm-pm-resource-menubar-divider" />
             </span>
 
-            {moveItems.map(renderToolbarItem)}
-
+            {showMetering ? (
             <span className="tm-pm-resource-menubar-item tm-pm-gantt-view-menu" ref={meteringRef}>
               <button
                 type="button"
@@ -214,6 +280,7 @@ export function ProjectCostMenuBar({
                   hideTip()
                   setViewOpen(false)
                   setTypeOpen(false)
+                  setFetchOpen(false)
                   onAction('metering')
                   setMeteringOpen((open) => !open)
                 }}
@@ -237,6 +304,7 @@ export function ProjectCostMenuBar({
                 />
               ) : null}
             </span>
+            ) : null}
           </div>
         </div>
         {scrollMetrics.overflowing ? (

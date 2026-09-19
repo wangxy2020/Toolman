@@ -14,6 +14,8 @@ import {
   DEFAULT_KNOWLEDGE_CHUNK_CONFIG,
   DEFAULT_KNOWLEDGE_EMBED_CONFIG,
   DEFAULT_KNOWLEDGE_WATCH_CONFIG,
+  DEFAULT_KNOWLEDGE_RETRIEVAL_CONFIG,
+  KnowledgeRetrievalConfigSchema,
   isP2pGroupSavedKnowledgeDescription,
   isP2pSharedKnowledgeMirrorDescription,
   type KnowledgeBase,
@@ -60,6 +62,14 @@ function toKnowledgeBase(row: KnowledgeBaseRow): KnowledgeBase {
     embedConfig: parseJson(row.embedConfigJson, KnowledgeEmbedConfigSchema, DEFAULT_KNOWLEDGE_EMBED_CONFIG),
     chunkConfig: parseJson(row.chunkConfigJson, KnowledgeChunkConfigSchema, DEFAULT_KNOWLEDGE_CHUNK_CONFIG),
     watchConfig: parseJson(row.watchConfigJson, KnowledgeWatchConfigSchema, DEFAULT_KNOWLEDGE_WATCH_CONFIG),
+    retrievalConfig: parseJson(
+      row.retrievalConfigJson,
+      KnowledgeRetrievalConfigSchema,
+      DEFAULT_KNOWLEDGE_RETRIEVAL_CONFIG,
+    ),
+    activeIndexVersion: row.activeIndexVersion ?? 1,
+    visibility: row.visibility ?? 'private',
+    ownerId: row.ownerId,
     status: row.status,
     documentCount: row.documentCount,
     chunkCount: row.chunkCount,
@@ -120,6 +130,10 @@ export function createKnowledgeBase(input: unknown): KnowledgeBase {
     ...DEFAULT_KNOWLEDGE_WATCH_CONFIG,
     ...data.watchConfig,
   })
+  const retrievalConfig = KnowledgeRetrievalConfigSchema.parse({
+    ...DEFAULT_KNOWLEDGE_RETRIEVAL_CONFIG,
+    ...data.retrievalConfig,
+  })
 
   const row = getKnowledgeBaseRepository().create({
     workspaceId: data.workspaceId,
@@ -129,6 +143,7 @@ export function createKnowledgeBase(input: unknown): KnowledgeBase {
     embedConfigJson: JSON.stringify(embedConfig),
     chunkConfigJson: JSON.stringify(chunkConfig),
     watchConfigJson: JSON.stringify(watchConfig),
+    retrievalConfigJson: JSON.stringify(retrievalConfig),
   })
 
   const storagePath = resolveKnowledgeBaseStoragePath(row, { ensure: true })
@@ -161,6 +176,11 @@ export function updateKnowledgeBase(input: unknown): KnowledgeBase | null {
     KnowledgeWatchConfigSchema,
     DEFAULT_KNOWLEDGE_WATCH_CONFIG,
   )
+  const currentRetrieval = parseJson(
+    existing.retrievalConfigJson,
+    KnowledgeRetrievalConfigSchema,
+    DEFAULT_KNOWLEDGE_RETRIEVAL_CONFIG,
+  )
 
   const row = repo.update({
     id: data.id,
@@ -175,6 +195,11 @@ export function updateKnowledgeBase(input: unknown): KnowledgeBase | null {
       : undefined,
     watchConfigJson: data.watchConfig
       ? JSON.stringify(KnowledgeWatchConfigSchema.parse({ ...currentWatch, ...data.watchConfig }))
+      : undefined,
+    retrievalConfigJson: data.retrievalConfig
+      ? JSON.stringify(
+          KnowledgeRetrievalConfigSchema.parse({ ...currentRetrieval, ...data.retrievalConfig }),
+        )
       : undefined,
   })
 

@@ -25,6 +25,7 @@ export function resolvePdfjsAssetDir(subdir: string): string {
 export function createPdfjsLoadingOptions(buffer: Buffer) {
   return {
     data: new Uint8Array(buffer),
+    verbosity: 0,
     useSystemFonts: true,
     disableFontFace: true,
     password: '',
@@ -38,8 +39,34 @@ export function createPdfjsLoadingOptions(buffer: Buffer) {
   }
 }
 
+type PdfjsLegacyModule = typeof import('pdfjs-dist/legacy/build/pdf.mjs') & {
+  setVerbosityLevel?: (level: number) => void
+}
+
+let pdfjsConsolePatched = false
+
+/** pdf.js prints TrueType hint noise with `console.log('Warning: TT: ...')` even at low verbosity. */
+function quietPdfjsTrueTypeHints(): void {
+  if (pdfjsConsolePatched) return
+  pdfjsConsolePatched = true
+  const originalLog = console.log.bind(console)
+  const originalWarn = console.warn.bind(console)
+  const shouldDrop = (args: unknown[]) =>
+    typeof args[0] === 'string' && args[0].includes('TT: undefined function')
+  console.log = (...args: unknown[]) => {
+    if (shouldDrop(args)) return
+    originalLog(...args)
+  }
+  console.warn = (...args: unknown[]) => {
+    if (shouldDrop(args)) return
+    originalWarn(...args)
+  }
+}
+
 export async function loadPdfjsDocument(buffer: Buffer, timeoutMs = 120_000) {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as PdfjsLegacyModule
+  pdfjs.setVerbosityLevel?.(0)
+  quietPdfjsTrueTypeHints()
   const loadingTask = pdfjs.getDocument(createPdfjsLoadingOptions(buffer))
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined

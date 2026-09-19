@@ -1,9 +1,13 @@
 import {
   IpcChannel,
+  type CostDatabaseImportedRow,
+  type PmCostDatabaseGetSyncedInput,
+  type PmCostDatabaseInspectInput,
   type PmApplyCostPlanInput,
   type PmApplyResourcePlanInput,
   type PmApplyScheduleInput,
   type PmApplyWbsInput,
+  type PmCostDatabaseQueryInput,
   type PmProject,
   type PmSharedCostCatalogRow,
   type PmSharedResourceCatalogRow,
@@ -199,6 +203,21 @@ export const pmApiCatalogs = {
       IpcChannel.Pm_WorkItemSmartAssign,
       input,
     )
+  },
+
+  inspectCostDatabase(input: PmCostDatabaseInspectInput) {
+    return invoke<import('@toolman/shared').PmCostDatabaseInspectResult>(
+      IpcChannel.Pm_CostDatabaseInspect,
+      input,
+    )
+  },
+
+  queryCostDatabase(input: PmCostDatabaseQueryInput) {
+    return invoke<{ rows: CostDatabaseImportedRow[] }>(IpcChannel.Pm_CostDatabaseQuery, input)
+  },
+
+  getSyncedCostDatabase(input: PmCostDatabaseGetSyncedInput) {
+    return invoke<{ rows: CostDatabaseImportedRow[] }>(IpcChannel.Pm_CostDatabaseGetSynced, input)
   },
 
   listKnowledgeBases(workspaceId: string) {

@@ -28,14 +28,52 @@ const INFO_CONSOLE_ALLOWLIST: Array<{
     subsystem: 'odl-hybrid',
     matches: (message) => message === 'ODL Hybrid OCR service started',
   },
+  {
+    subsystem: 'knowledge-ingest',
+    matches: (message) =>
+      message.includes('glm-ocr') ||
+      message.includes('aborting remaining') ||
+      message.includes('page pipeline finished'),
+  },
 ]
 
 /** Subsystems whose warn/error lines stay in the diagnostic buffer but never print to the dev terminal. */
 const CONSOLE_SILENT_SUBSYSTEMS = new Set(['odl-hybrid'])
+/** Expected when the public Hub is down; keep warns in the buffer, print each distinct line once. */
+const CONSOLE_ONCE_WARN_SUBSYSTEMS = new Set(['community-federation'])
 
 const buffer: DiagnosticLogEntry[] = []
-let lastConsolePayload = ''
-let lastConsoleAt = 0
+const lastConsoleAtByKey = new Map<string, number>()
+const printedOnceConsoleKeys = new Set<string>()
+const CONSOLE_DEDUP_MS = 1500
+
+function emitToConsole(entry: DiagnosticLogEntry): void {
+  const line = formatDiagnosticForConsole(entry)
+  const dedupKey = consoleDedupKey(entry)
+  if (CONSOLE_ONCE_WARN_SUBSYSTEMS.has(entry.subsystem) && entry.level !== 'error') {
+    if (printedOnceConsoleKeys.has(dedupKey)) return
+    printedOnceConsoleKeys.add(dedupKey)
+  } else {
+    const now = Date.now()
+    const previous = lastConsoleAtByKey.get(dedupKey)
+    if (previous !== undefined && now - previous < CONSOLE_DEDUP_MS) {
+      return
+    }
+    lastConsoleAtByKey.set(dedupKey, now)
+    if (lastConsoleAtByKey.size > 80) {
+      const oldest = lastConsoleAtByKey.keys().next().value
+      if (oldest) lastConsoleAtByKey.delete(oldest)
+    }
+  }
+
+  if (entry.level === 'error') {
+    console.error(line)
+  } else if (entry.level === 'warn') {
+    console.warn(line)
+  } else {
+    console.info(line)
+  }
+}
 
 function resolveConsoleMinLevel(): DiagnosticLogLevel {
   const raw = process.env.TOOLMAN_CONSOLE_LOG_LEVEL?.trim().toLowerCase()
@@ -64,25 +102,6 @@ function shouldEmitToConsole(entry: DiagnosticLogEntry): boolean {
     return true
   }
   return shouldEmitInfoToConsole(entry.subsystem, entry.message)
-}
-
-function emitToConsole(entry: DiagnosticLogEntry): void {
-  const line = formatDiagnosticForConsole(entry)
-  const dedupKey = consoleDedupKey(entry)
-  const now = Date.now()
-  if (dedupKey === lastConsolePayload && now - lastConsoleAt < 1500) {
-    return
-  }
-  lastConsolePayload = dedupKey
-  lastConsoleAt = now
-
-  if (entry.level === 'error') {
-    console.error(line)
-  } else if (entry.level === 'warn') {
-    console.warn(line)
-  } else {
-    console.info(line)
-  }
 }
 
 export function recordDiagnosticEvent(
@@ -115,6 +134,6 @@ export function listDiagnosticEvents(limit = 30): DiagnosticLogEntry[] {
 
 export function clearDiagnosticEvents(): void {
   buffer.length = 0
-  lastConsolePayload = ''
-  lastConsoleAt = 0
+  lastConsoleAtByKey.clear()
+  printedOnceConsoleKeys.clear()
 }

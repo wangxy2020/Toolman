@@ -96,7 +96,7 @@ export const settingsCoreEn = {
       openDataLoaderParser: 'OpenDataLoader (requires Java 11+)',
       odlHybrid: 'ODL Hybrid OCR',
       odlHybridHint:
-        'Scanned PDFs use local ODL Hybrid OCR (Toolman auto-starts the service when enabled; default http://localhost:5002)',
+        'Scanned PDFs use local RapidOCR for Chinese (falls back to EasyOCR Simplified Chinese). Toolman auto-starts the service when enabled; default http://localhost:5002',
       odlHybridBackend: 'Hybrid backend',
       odlHybridBackendDocling: 'docling-fast',
       odlHybridBackendHancom: 'hancom-ai (recommended for scans)',

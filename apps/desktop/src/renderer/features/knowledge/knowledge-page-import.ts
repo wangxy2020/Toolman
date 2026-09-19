@@ -45,12 +45,17 @@ type ReindexResult = {
 }
 
 export function formatReindexResultError(result: ReindexResult): string | null {
-  if (result.failed.length === 0) return null
-  const detail = result.failed
-    .slice(0, 2)
-    .map((item) => item.message)
-    .join('；')
-  return `重建完成：成功 ${result.ingested}，跳过 ${result.skipped}，失败 ${result.failed.length}${detail ? `（${detail}）` : ''}`
+  if (result.failed.length > 0) {
+    const detail = result.failed
+      .slice(0, 2)
+      .map((item) => item.message)
+      .join('；')
+    return `重建完成：成功 ${result.ingested}，跳过 ${result.skipped}，失败 ${result.failed.length}${detail ? `（${detail}）` : ''}`
+  }
+  if (result.skipped > 0 && result.ingested === 0) {
+    return `重建未执行：${result.skipped} 个文档因文件未变化被跳过。请使用「重建索引」强制重新解析。`
+  }
+  return null
 }
 
 export interface ImportKnowledgeFilesParams {

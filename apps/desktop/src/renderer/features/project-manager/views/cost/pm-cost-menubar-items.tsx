@@ -140,6 +140,7 @@ export function buildCostMenuBarItems(
       label: <IconChevronDown size={ICON_SIZE} />,
       disabled: !hasSelection,
       icon: true,
+      dividerAfter: true,
     },
   ]
 }

@@ -14,6 +14,7 @@ import {
 import { openKbVectorStore } from '../vector/create-vector-store.js'
 import type { VectorBackend } from '../vector/types.js'
 import type { VectorRecord } from '../vector/cosine.js'
+import { hashText } from '../utils/content-hash.js'
 
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {
@@ -35,6 +36,7 @@ export interface IngestContentInput {
   embedModel: string
   vectorsDir: string
   vectorBackend?: VectorBackend
+  indexVersion?: number
   onEmbedProgress?: EmbedProgressCallback
   onIndexedChunkBatch?: (
     chunks: IngestContentResult['chunks'],
@@ -44,6 +46,7 @@ export interface IngestContentInput {
 export interface IngestContentResult {
   title: string
   contentHash: string
+  parsedHash: string
   mimeType: string
   chunks: Array<{
     id: string
@@ -156,9 +159,24 @@ function toChunkRows(
     metadataJson: JSON.stringify({
       sourceKey: input.sourceKey,
       kind: input.kind,
+      documentId: input.documentId,
+      knowledgeBaseId: input.kbId,
+      chunkIndex: chunk.index,
+      sourceType: input.kind === 'url' ? 'url' : 'file',
+      sourceUrl: input.kind === 'url' ? input.sourceKey : undefined,
+      fileName: input.title,
       ...(chunk.metadata ?? {}),
     }),
   }))
+}
+
+function parseChunkMetadataJson(metadataJson: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(metadataJson) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
 }
 
 function toVectorRecords(
@@ -166,16 +184,22 @@ function toVectorRecords(
   chunkRows: IngestContentResult['chunks'],
   vectors: number[][],
 ): VectorRecord[] {
-  return chunkRows.map((row, index) => ({
-    chunkId: row.id,
-    documentId: input.documentId,
-    kbId: input.kbId,
-    vector: vectors[index]!,
-    metadata: {
-      filePath: input.sourceKey,
-      title: input.title,
-    },
-  }))
+  return chunkRows.map((row, index) => {
+    const metadata = parseChunkMetadataJson(row.metadataJson)
+    return {
+      chunkId: row.id,
+      documentId: input.documentId,
+      kbId: input.kbId,
+      vector: vectors[index]!,
+      metadata: {
+        filePath: input.sourceKey,
+        title: input.title,
+        fileName: input.title,
+        sourceType: input.kind === 'url' ? 'url' : 'file',
+        ...(typeof metadata.pageNumber === 'number' ? { pageNumber: metadata.pageNumber } : {}),
+      },
+    }
+  })
 }
 
 export async function ingestContent(input: IngestContentInput): Promise<IngestContentResult> {
@@ -213,6 +237,7 @@ export async function ingestContent(input: IngestContentInput): Promise<IngestCo
     vectorsDir: input.vectorsDir,
     kbId: input.kbId,
     backend: input.vectorBackend,
+    indexVersion: input.indexVersion,
   })
 
   const allChunkRows: IngestContentResult['chunks'] = []
@@ -245,6 +270,7 @@ export async function ingestContent(input: IngestContentInput): Promise<IngestCo
   return {
     title: input.title,
     contentHash: input.contentHash,
+    parsedHash: hashText(plainText),
     mimeType: input.mimeType,
     chunks: allChunkRows,
     chunkCount: allChunkRows.length,

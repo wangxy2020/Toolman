@@ -130,20 +130,25 @@ function buildPlainTextFromPages(pages: DocumentPageText[], totalPages: number):
     .trim()
 }
 
-function mergePageRecords(
-  primary: DocumentPageText[],
-  secondary: Array<{ pageNumber: number; text: string }>,
+/** Keep .txt and .md as independent channels — never overwrite OCR markdown with a longer GBK layer. */
+function mergeMarkdownOntoPages(
+  pages: DocumentPageText[],
+  markdownPages: Array<{ pageNumber: number; text: string }>,
 ): DocumentPageText[] {
-  const byPage = new Map(primary.map((page) => [page.pageNumber, page]))
+  const byPage = new Map(pages.map((page) => [page.pageNumber, { ...page }]))
 
-  for (const page of secondary) {
-    const candidate = page.text.trim()
-    if (!candidate || isPdfPageMarkerOnly(candidate)) continue
+  for (const page of markdownPages) {
+    const markdown = page.text.trim()
+    if (!markdown || isPdfPageMarkerOnly(markdown)) continue
 
     const existing = byPage.get(page.pageNumber)
-    const existingBody = existing?.text.trim() ?? ''
-    if (!existing || isPdfPageMarkerOnly(existingBody) || candidate.length > existingBody.length) {
-      byPage.set(page.pageNumber, { pageNumber: page.pageNumber, text: candidate })
+    if (!existing) {
+      byPage.set(page.pageNumber, { pageNumber: page.pageNumber, text: markdown, markdown })
+      continue
+    }
+    existing.markdown = markdown
+    if (!existing.text.trim() || isPdfPageMarkerOnly(existing.text)) {
+      existing.text = markdown
     }
   }
 
@@ -162,6 +167,24 @@ function assignUnpaginatedPageRecords(
   if (!trimmed || isPdfPageMarkerOnly(trimmed)) return pageRecords
 
   return [{ pageNumber: pageRange.start, text: trimmed }]
+}
+
+function assignUnpaginatedMarkdown(
+  pageRecords: DocumentPageText[],
+  markdown: string,
+  pageRange?: { start: number; end: number },
+): DocumentPageText[] {
+  if (!pageRange || pageRange.start !== pageRange.end) return pageRecords
+  const trimmed = markdown.trim()
+  if (!trimmed || isPdfPageMarkerOnly(trimmed)) return pageRecords
+  if (pageRecords.length === 0) {
+    return [{ pageNumber: pageRange.start, text: trimmed, markdown: trimmed }]
+  }
+  const existing = pageRecords.find((page) => page.pageNumber === pageRange.start)
+  if (!existing) return pageRecords
+  if (!existing.markdown?.trim()) existing.markdown = trimmed
+  if (!existing.text.trim() || isPdfPageMarkerOnly(existing.text)) existing.text = trimmed
+  return pageRecords
 }
 
 function pageRecordsFromMarkerSplit(
@@ -195,9 +218,9 @@ export function parseOpenDataLoaderOutput(input: {
   }
 
   let pageRecords = pageRecordsFromMarkerSplit(pages)
-  pageRecords = mergePageRecords(pageRecords, splitPdfPagesByMarkers(markdown))
+  pageRecords = mergeMarkdownOntoPages(pageRecords, splitPdfPagesByMarkers(markdown))
   pageRecords = assignUnpaginatedPageRecords(pageRecords, plainFromText, input.pageRange)
-  pageRecords = assignUnpaginatedPageRecords(pageRecords, markdown, input.pageRange)
+  pageRecords = assignUnpaginatedMarkdown(pageRecords, markdown, input.pageRange)
 
   const totalPages = resolveTotalPages(json, pageRecords, plainFromText, markdown)
   const plainText =

@@ -1,5 +1,7 @@
 /** Price list (成本/价格表) column visibility + custom header labels (localStorage). */
 
+import { COST_METERING_COLUMNS } from './pm-cost-metering-cols'
+
 export type CostColumnLabelLanguage = 'zh-CN' | 'en'
 
 export const COST_TOGGLE_COLUMNS = [
@@ -20,7 +22,7 @@ export const COST_TOGGLE_COLUMNS = [
 export type CostToggleColumn = (typeof COST_TOGGLE_COLUMNS)[number]
 
 /** Columns whose header text can be renamed (excludes 序号). */
-export const COST_LABEL_COLUMNS = COST_TOGGLE_COLUMNS
+export const COST_LABEL_COLUMNS = [...COST_TOGGLE_COLUMNS, ...COST_METERING_COLUMNS] as const
 
 export type CostLabelColumn = (typeof COST_LABEL_COLUMNS)[number]
 
@@ -58,8 +60,14 @@ const STOCK_COST_COLUMN_LABELS: Record<CostLabelColumn, readonly string[]> = {
   quantity: ['工程数量', 'Quantity'],
   unitPrice: ['单价', 'Unit price'],
   totalPrice: ['合价', 'Amount', 'Total Price'],
-  baseline: ['基准', 'Baseline'],
+  baseline: ['基准', '基线', '筛选', 'Baseline', 'Filter'],
   note: ['备注', 'Note', 'Notes'],
+  periodQuantity: ['本期完成工程量', 'Period quantity'],
+  priorQuantity: ['往期完成工程量', '前期完成工程量', 'Previous period quantity', 'Prior quantity'],
+  cumulativeQuantity: ['累计完成工程量', 'Cumulative quantity'],
+  periodAmount: ['本期完成金额', 'Period amount'],
+  cumulativeAmount: ['累计完成金额', 'Cumulative amount'],
+  cumulativePercent: ['累计完成百分比', 'Cumulative percent'],
 }
 
 function labelsStorageKey(language: CostColumnLabelLanguage): string {

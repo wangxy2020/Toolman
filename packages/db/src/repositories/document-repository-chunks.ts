@@ -33,6 +33,8 @@ export function replaceChunks(
         text: row.text,
         tokenCount: row.tokenCount ?? null,
         metadataJson: row.metadataJson ?? '{}',
+        revisionId: row.revisionId ?? null,
+        indexVersion: row.indexVersion ?? 1,
         createdAt: now,
       })
       .run()

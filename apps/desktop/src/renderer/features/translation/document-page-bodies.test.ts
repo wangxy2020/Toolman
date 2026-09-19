@@ -93,4 +93,18 @@ describe('document-page-bodies', () => {
       ).translatedText,
     ).toBe('')
   })
+
+  it('keeps the translation when a leftover parse body is HTML or markdown', () => {
+    const translated: DocumentPageState = {
+      pageNumber: 1,
+      sourceText: 'Dear Sir',
+      translatedText: '尊敬的先生：\n我们已圆满完成工程。',
+      parsedMarkdown: '<p>Dear Sir</p>',
+      status: 'done',
+    }
+    const body = toDocumentPageBody(translated.translatedText, translated.parsedMarkdown)
+    const display = resolvePageForDisplay(translated, body, true)
+    expect(display.translatedText).toBe(translated.translatedText)
+    expect(display.parsedMarkdown).toBeUndefined()
+  })
 })

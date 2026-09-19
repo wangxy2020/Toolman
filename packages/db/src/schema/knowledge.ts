@@ -15,6 +15,12 @@ export const knowledgeBases = sqliteTable(
     embedConfigJson: text('embed_config_json').notNull().default('{}'),
     chunkConfigJson: text('chunk_config_json').notNull().default('{}'),
     watchConfigJson: text('watch_config_json').notNull().default('{}'),
+    retrievalConfigJson: text('retrieval_config_json').notNull().default('{}'),
+    activeIndexVersion: integer('active_index_version').notNull().default(1),
+    visibility: text('visibility', { enum: ['private', 'workspace', 'shared'] })
+      .notNull()
+      .default('private'),
+    ownerId: text('owner_id'),
     status: text('status', { enum: ['idle', 'indexing', 'reindexing', 'error'] })
       .notNull()
       .default('idle'),
@@ -39,6 +45,11 @@ export const documentSources = sqliteTable(
     }).notNull(),
     uri: text('uri').notNull(),
     configJson: text('config_json').notNull().default('{}'),
+    contentHash: text('content_hash'),
+    fetchedAt: integer('fetched_at', { mode: 'timestamp_ms' }),
+    httpStatus: integer('http_status'),
+    etag: text('etag'),
+    lastModified: text('last_modified'),
     deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
@@ -56,9 +67,21 @@ export const documents = sqliteTable(
       .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
     title: text('title').notNull().default(''),
     contentHash: text('content_hash'),
+    parsedHash: text('parsed_hash'),
     mimeType: text('mime_type'),
     status: text('status', {
-      enum: ['queued', 'parsing', 'chunking', 'embedding', 'indexing', 'ready', 'failed'],
+      enum: [
+        'queued',
+        'parsing',
+        'ocr',
+        'chunking',
+        'embedding',
+        'indexing',
+        'ready',
+        'failed',
+        'cancelled',
+        'stale',
+      ],
     })
       .notNull()
       .default('queued'),
@@ -66,6 +89,10 @@ export const documents = sqliteTable(
     blobHash: text('blob_hash').references(() => blobs.hash, { onDelete: 'set null' }),
     metadataJson: text('metadata_json').notNull().default('{}'),
     errorJson: text('error_json'),
+    revisionNumber: integer('revision_number').notNull().default(1),
+    currentRevisionId: text('current_revision_id'),
+    indexVersion: integer('index_version').notNull().default(1),
+    indexFingerprint: text('index_fingerprint'),
     deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
@@ -91,6 +118,8 @@ export const chunks = sqliteTable(
     text: text('text').notNull(),
     tokenCount: integer('token_count'),
     metadataJson: text('metadata_json').notNull().default('{}'),
+    revisionId: text('revision_id'),
+    indexVersion: integer('index_version').notNull().default(1),
     deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
@@ -114,7 +143,17 @@ export const ingestJobs = sqliteTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     stage: text('stage', {
-      enum: ['queued', 'parsing', 'chunking', 'embedding', 'indexing', 'done', 'failed'],
+      enum: [
+        'queued',
+        'parsing',
+        'ocr',
+        'chunking',
+        'embedding',
+        'indexing',
+        'done',
+        'failed',
+        'cancelled',
+      ],
     })
       .notNull()
       .default('queued'),
@@ -170,5 +209,62 @@ export const fileRegistry = sqliteTable(
     unique('file_registry_workspace_path_unique').on(t.workspaceId, t.absolutePath),
     index('file_registry_workspace_id_idx').on(t.workspaceId),
     index('file_registry_content_hash_idx').on(t.contentHash),
+  ],
+)
+
+export const knowledgeIndexVersions = sqliteTable(
+  'knowledge_index_versions',
+  {
+    id: text('id').primaryKey(),
+    kbId: text('kb_id')
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    embeddingModel: text('embedding_model').notNull().default(''),
+    embeddingDimension: integer('embedding_dimension').notNull().default(0),
+    chunkStrategy: text('chunk_strategy').notNull().default('markdown'),
+    chunkSize: integer('chunk_size').notNull().default(512),
+    chunkOverlap: integer('chunk_overlap').notNull().default(64),
+    reranker: text('reranker'),
+    vectorBackend: text('vector_backend').notNull().default('file'),
+    indexFingerprint: text('index_fingerprint'),
+    status: text('status', {
+      enum: ['building', 'ready', 'active', 'failed', 'retired'],
+    })
+      .notNull()
+      .default('active'),
+    errorJson: text('error_json'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    activatedAt: integer('activated_at', { mode: 'timestamp_ms' }),
+    retiredAt: integer('retired_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    unique('knowledge_index_versions_kb_version_unique').on(t.kbId, t.version),
+    index('knowledge_index_versions_kb_id_idx').on(t.kbId),
+  ],
+)
+
+export const documentRevisions = sqliteTable(
+  'document_revisions',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    kbId: text('kb_id')
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    revisionNumber: integer('revision_number').notNull(),
+    contentHash: text('content_hash'),
+    parsedHash: text('parsed_hash'),
+    indexFingerprint: text('index_fingerprint'),
+    indexVersion: integer('index_version').notNull().default(1),
+    isCurrent: integer('is_current').notNull().default(1),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    unique('document_revisions_doc_number_unique').on(t.documentId, t.revisionNumber),
+    index('document_revisions_document_id_idx').on(t.documentId),
+    index('document_revisions_kb_id_idx').on(t.kbId),
   ],
 )

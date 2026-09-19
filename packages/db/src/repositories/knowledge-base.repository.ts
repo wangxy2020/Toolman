@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { ToolmanDatabase } from '../index.js'
-import { knowledgeBases } from '../schema/knowledge.js'
+import { knowledgeBases, knowledgeIndexVersions } from '../schema/knowledge.js'
 import type { KnowledgeBaseRow } from '../types/knowledge.js'
 
 export interface CreateKnowledgeBaseInput {
@@ -13,6 +13,10 @@ export interface CreateKnowledgeBaseInput {
   embedConfigJson?: string
   chunkConfigJson?: string
   watchConfigJson?: string
+  retrievalConfigJson?: string
+  activeIndexVersion?: number
+  visibility?: KnowledgeBaseRow['visibility']
+  ownerId?: string | null
 }
 
 export interface UpdateKnowledgeBaseInput {
@@ -24,6 +28,10 @@ export interface UpdateKnowledgeBaseInput {
   embedConfigJson?: string
   chunkConfigJson?: string
   watchConfigJson?: string
+  retrievalConfigJson?: string
+  activeIndexVersion?: number
+  visibility?: KnowledgeBaseRow['visibility']
+  ownerId?: string | null
   status?: KnowledgeBaseRow['status']
   documentCount?: number
   chunkCount?: number
@@ -102,11 +110,27 @@ export class KnowledgeBaseRepository {
         embedConfigJson: input.embedConfigJson ?? '{}',
         chunkConfigJson: input.chunkConfigJson ?? '{}',
         watchConfigJson: input.watchConfigJson ?? '{}',
+        retrievalConfigJson: input.retrievalConfigJson ?? '{}',
+        activeIndexVersion: input.activeIndexVersion ?? 1,
+        visibility: input.visibility ?? 'private',
+        ownerId: input.ownerId ?? null,
         status: 'idle',
         documentCount: 0,
         chunkCount: 0,
         createdAt: now,
         updatedAt: now,
+      })
+      .run()
+
+    this.db
+      .insert(knowledgeIndexVersions)
+      .values({
+        id: `${id}:idx:1`,
+        kbId: id,
+        version: 1,
+        status: 'active',
+        createdAt: now,
+        activatedAt: now,
       })
       .run()
 
@@ -127,6 +151,10 @@ export class KnowledgeBaseRepository {
         embedConfigJson: input.embedConfigJson ?? existing.embedConfigJson,
         chunkConfigJson: input.chunkConfigJson ?? existing.chunkConfigJson,
         watchConfigJson: input.watchConfigJson ?? existing.watchConfigJson,
+        retrievalConfigJson: input.retrievalConfigJson ?? existing.retrievalConfigJson,
+        activeIndexVersion: input.activeIndexVersion ?? existing.activeIndexVersion,
+        visibility: input.visibility ?? existing.visibility,
+        ownerId: input.ownerId !== undefined ? input.ownerId : existing.ownerId,
         status: input.status ?? existing.status,
         documentCount: input.documentCount ?? existing.documentCount,
         chunkCount: input.chunkCount ?? existing.chunkCount,

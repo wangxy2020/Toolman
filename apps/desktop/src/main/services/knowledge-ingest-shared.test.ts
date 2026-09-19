@@ -10,11 +10,13 @@ import {
   STAGE_PROGRESS,
   ensureIngestDocument,
   refreshKbStats,
+  resolveMonotonicIngestProgress,
   updateDocumentStage,
 } from './knowledge-ingest-shared'
 
 const broadcast = vi.hoisted(() => vi.fn())
 const isCancelled = vi.hoisted(() => vi.fn(() => false))
+const isInFlight = vi.hoisted(() => vi.fn(() => false))
 const findActiveDocumentByPath = vi.hoisted(() =>
   vi.fn<() => { id: string } | null>(() => null),
 )
@@ -37,6 +39,7 @@ vi.mock('./knowledge-ingest-broadcast', () => ({
 vi.mock('./knowledge-ingest-manager.service', () => ({
   clearIngestCancel: vi.fn(),
   isIngestCancelled: isCancelled,
+  isIngestInFlight: isInFlight,
 }))
 
 vi.mock('./knowledge-document-lifecycle.util', () => ({
@@ -47,10 +50,28 @@ vi.mock('./knowledge-document-lifecycle.util', () => ({
 describe('knowledge-ingest-shared', () => {
   it('maps ingest stages to progress values', () => {
     expect(STAGE_PROGRESS.ready).toBe(100)
+    expect(STAGE_PROGRESS.ocr).toBe(25)
     expect(STAGE_PROGRESS.failed).toBe(0)
     expect(ACTIVE_INGEST_STAGES.has('queued')).toBe(true)
+    expect(ACTIVE_INGEST_STAGES.has('ocr')).toBe(true)
+    expect(IN_FLIGHT_INGEST_STAGES.has('ocr')).toBe(true)
     expect(IN_FLIGHT_INGEST_STAGES.has('embedding')).toBe(true)
     expect(IN_FLIGHT_INGEST_STAGES.has('queued')).toBe(false)
+  })
+
+  it('keeps in-flight ingest progress from jumping backwards', () => {
+    expect(
+      resolveMonotonicIngestProgress({ stage: 'parsing', requested: 20, previous: 62 }),
+    ).toBe(62)
+    expect(
+      resolveMonotonicIngestProgress({ stage: 'chunking', requested: 40, previous: 64 }),
+    ).toBe(64)
+    expect(
+      resolveMonotonicIngestProgress({ stage: 'failed', requested: 0, previous: 62 }),
+    ).toBe(0)
+    expect(
+      resolveMonotonicIngestProgress({ stage: 'queued', requested: 5, previous: 62 }),
+    ).toBe(5)
   })
 
   it('buildDocumentTitle uses the final path segment', () => {
@@ -83,6 +104,36 @@ describe('knowledge-ingest-shared', () => {
     )
   })
 
+  it('updateDocumentStage does not regress a ready document unless ingest is in flight', () => {
+    const repo = {
+      findById: vi.fn(() => ({ status: 'ready' })),
+      update: vi.fn(),
+      upsertIngestJob: vi.fn(),
+    }
+
+    updateDocumentStage(repo as never, {
+      workspaceId: 'ws-1',
+      kbId: 'kb-1',
+      documentId: 'doc-1',
+      stage: 'parsing',
+      progress: 25,
+    })
+
+    expect(repo.update).not.toHaveBeenCalled()
+    expect(repo.upsertIngestJob).not.toHaveBeenCalled()
+
+    isInFlight.mockReturnValueOnce(true)
+    updateDocumentStage(repo as never, {
+      workspaceId: 'ws-1',
+      kbId: 'kb-1',
+      documentId: 'doc-1',
+      stage: 'parsing',
+      progress: 25,
+    })
+    expect(repo.update).toHaveBeenCalledWith('doc-1', 'kb-1', { status: 'parsing' })
+    isInFlight.mockReturnValue(false)
+  })
+
   it('createParsingProgressPulse advances parsing progress until stopped', () => {
     vi.useFakeTimers()
     const repo = {
@@ -100,6 +151,40 @@ describe('knowledge-ingest-shared', () => {
     expect(repo.upsertIngestJob).toHaveBeenCalledWith(
       expect.objectContaining({ stage: 'parsing', progress: 23 }),
     )
+
+    stop()
+    vi.useRealTimers()
+  })
+
+  it('createParsingProgressPulse stops writing after the document becomes ready', () => {
+    vi.useFakeTimers()
+    const findById = vi.fn()
+      .mockReturnValueOnce({ status: 'parsing' })
+      .mockReturnValueOnce({ status: 'parsing' })
+      .mockReturnValue({ status: 'ready' })
+    const repo = {
+      findById,
+      update: vi.fn(),
+      upsertIngestJob: vi.fn(),
+    }
+    const stop = createParsingProgressPulse(
+      repo as never,
+      {
+        workspaceId: 'ws-1',
+        kbId: 'kb-1',
+        documentId: 'doc-ready',
+      },
+      1000,
+    )
+
+    vi.advanceTimersByTime(1000)
+    expect(repo.update).toHaveBeenCalledTimes(1)
+    repo.update.mockClear()
+    repo.upsertIngestJob.mockClear()
+
+    vi.advanceTimersByTime(5000)
+    expect(repo.update).not.toHaveBeenCalled()
+    expect(repo.upsertIngestJob).not.toHaveBeenCalled()
 
     stop()
     vi.useRealTimers()
@@ -155,11 +240,11 @@ describe('knowledge-ingest-shared', () => {
     expect(repo.update).toHaveBeenCalledWith(
       'doc-1',
       'kb-1',
-      expect.objectContaining({ status: 'parsing' }),
+      expect.objectContaining({ status: 'ocr' }),
     )
     expect(broadcast).toHaveBeenCalledWith(
       expect.objectContaining({
-        stage: 'parsing',
+        stage: 'ocr',
         progressDetail: { unit: 'page', current: 1, total: 2 },
       }),
     )
@@ -169,6 +254,34 @@ describe('knowledge-ingest-shared', () => {
         progressDetail: { unit: 'chunk', current: 1, total: 2 },
       }),
     )
+  })
+
+  it('does not reset Hybrid OCR progress when glm-ocr starts from page 1', () => {
+    const repo = {
+      findById: vi.fn(() => null),
+      findIngestJobByDocumentId: vi.fn(() => ({ progress: 62 })),
+      update: vi.fn(),
+      upsertIngestJob: vi.fn(),
+    }
+    const handlers = buildIngestProgressHandlers(repo as never, {
+      workspaceId: 'ws-1',
+      kbId: 'kb-1',
+      documentId: 'doc-hybrid',
+    })
+
+    handlers.onOcrProgress(210, 289)
+    handlers.onOcrProgress(0, 200, true)
+
+    const progresses = repo.upsertIngestJob.mock.calls.map(
+      (call) => (call[0] as { progress: number }).progress,
+    )
+    expect(Math.min(...progresses)).toBeGreaterThanOrEqual(62)
+    const lastEvent = broadcast.mock.calls.at(-1)?.[0] as {
+      progress: number
+      progressDetail: { unit: string; current: number; total: number }
+    }
+    expect(lastEvent.progress).toBeGreaterThanOrEqual(62)
+    expect(lastEvent.progressDetail).toEqual({ unit: 'page', current: 210, total: 289 })
   })
 
   it('recordIngestFailure creates failed documents for new paths', () => {

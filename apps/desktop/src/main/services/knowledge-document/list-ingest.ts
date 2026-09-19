@@ -14,6 +14,7 @@ import {
   purgeIndexedDocument,
   reconcileProcessingDocumentsWithoutIngestJob,
   reconcileStuckLocalFilesDocuments,
+  restoreIndexedDocumentsNotInFlight,
   startIngestFilePathsInBackground,
 } from '../knowledge-ingest.service'
 import { assertKnowledgeBaseAcceptsLocalFiles } from '../knowledge-kb-kind-guard'
@@ -34,6 +35,9 @@ export async function listKnowledgeDocuments(input: unknown): Promise<KnowledgeD
   if (kb.kind === 'local_files') {
     await reconcileStuckLocalFilesDocuments(data.workspaceId, data.kbId)
   }
+
+  // Indexed files left as parsing/queued (rebuild queue, pulse, or crash) should show ready.
+  restoreIndexedDocumentsNotInFlight(data.kbId)
 
   // Clear zombie "parsing/embedding…" rows left without an ingest job (e.g. after cancel / crash).
   reconcileProcessingDocumentsWithoutIngestJob(data.kbId)

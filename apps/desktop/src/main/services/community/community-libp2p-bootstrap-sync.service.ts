@@ -1,6 +1,11 @@
 import { recordDiagnosticEvent } from '../diagnostics-log'
 import { readLibp2pConfig, writeLibp2pConfig } from '../p2p/p2p-libp2p.config'
-import {normalizeCommunityHubBaseUrl, toErrorMessage } from '@toolman/shared'
+import {
+  hostnameOfBaseUrl,
+  isOfficialCommunityHubHost,
+  normalizeCommunityHubBaseUrl,
+  toErrorMessage,
+} from '@toolman/shared'
 import { readCommunityHubConfig } from './community-hub.config'
 import { fetchPeerLibp2pBootstrap } from './community-hub-peering.service'
 import { isCommunityFederationEnabled } from './community-federation.config'
@@ -14,7 +19,7 @@ export async function syncLibp2pBootstrapFromPeerHubs(): Promise<number> {
     ...(config.peers ?? []),
   ]
     .map(normalizeCommunityHubBaseUrl)
-    .filter(Boolean)
+    .filter((url) => url && !isOfficialCommunityHubHost(hostnameOfBaseUrl(url)))
 
   const uniquePeerUrls = [...new Set(peerUrls)]
   if (uniquePeerUrls.length === 0) return 0

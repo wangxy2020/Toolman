@@ -123,7 +123,13 @@ export const knowledgePageEn = {
     selectAll: 'Select all',
     clearSelection: 'Clear selection',
     deleteSelected: 'Delete selected',
+    reindexSelected: 'Reindex selected',
     reindexAll: 'Reindex all',
+    reindexConfirmTitle: 'Rebuild index',
+    reindexSelectedConfirm:
+      'Re-parse and re-embed the {{count}} selected document(s). Unchanged files are rebuilt too, including OCR for scans. Continue?',
+    reindexAllConfirm:
+      'Rebuild the index for all {{count}} document(s) in this knowledge base. Unchanged files are rebuilt too, including OCR for scans. Continue?',
     moveToSync: 'Move to synced knowledge',
     moveToSyncDefault: 'Default folder',
     moveToSyncEmpty: 'No synced knowledge bases yet',
@@ -136,11 +142,15 @@ export const knowledgePageEn = {
     pending: 'Awaiting sync',
     queued: 'Queued',
     parsing: 'Parsing',
+    ocr: 'OCR',
     chunking: 'Chunking',
     embedding: 'Embedding',
     indexing: 'Indexing',
     ready: 'Embedded',
+    readyPartial: 'Partially embedded',
     failed: 'Embed failed',
+    cancelled: 'Cancelled',
+    stale: 'Stale',
     processing: 'Processing',
   },
   searchDebug: {
@@ -169,11 +179,13 @@ export const knowledgePageEn = {
     stages: {
       queued: 'Queued',
       parsing: 'Parsing',
+      ocr: 'OCR',
       chunking: 'Chunking',
       embedding: 'Embedding',
       indexing: 'Indexing',
       done: 'Done',
       failed: 'Failed',
+      cancelled: 'Cancelled',
     },
   },
   memory: {

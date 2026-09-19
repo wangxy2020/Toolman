@@ -42,7 +42,10 @@ export function useProjectCostTableSave(args: {
   rowsRef: MutableRefObject<PmCostRow[]>
   summaryRows: CostSummaryRow[]
   dirty: boolean
-  applyCatalogRows: (catalog: PmCostRow[], options?: { dirty?: boolean; clearHistory?: boolean }) => void
+  applyCatalogRows: (
+    catalog: PmCostRow[],
+    options?: { dirty?: boolean; clearHistory?: boolean; skipSetRows?: boolean },
+  ) => void
   cleanFingerprintRef: MutableRefObject<string>
   onProjectsChange?: () => void | Promise<void>
   setSaving: (v: boolean) => void
@@ -93,6 +96,11 @@ export function useProjectCostTableSave(args: {
       const asNewVersion = options?.asNewVersion === true
       const note = options?.note?.trim() || undefined
       setSaving(true)
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve())
+        })
+      })
       try {
         if (isPractice) {
           if (!practiceScopeId) {
@@ -110,8 +118,11 @@ export function useProjectCostTableSave(args: {
           recordCostPracticeSaveMeta(workspaceId, practiceScopeId, payload, {
             bumpVersion: asNewVersion,
             note,
+            includeCatalog: true,
           })
-          applyCatalogRows(payload, { dirty: false })
+          const orderChanged =
+            payload.length !== rows.length || payload.some((row, index) => row.id !== rows[index]?.id)
+          applyCatalogRows(payload, { dirty: false, skipSetRows: !orderChanged })
           const nextVersion = readCostPracticeVersion(workspaceId, practiceScopeId)
           if (nextVersion > prevVersion) {
             setStatusFeedback({
@@ -251,7 +262,9 @@ export function useProjectCostTableSave(args: {
           })),
         )
         writeCostPracticeCatalog(workspaceId, practiceScopeId, payload)
-        recordCostPracticeSaveMeta(workspaceId, practiceScopeId, payload, { bumpVersion: false })
+        recordCostPracticeSaveMeta(workspaceId, practiceScopeId, payload, {
+          bumpVersion: false,
+        })
         cleanFingerprintRef.current = fingerprintCostCatalog(payload)
         return
       }

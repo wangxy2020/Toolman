@@ -56,6 +56,37 @@ describe('diagnostics-log', () => {
     expect(console.info).toHaveBeenCalledTimes(1)
   })
 
+  it('prints a community-federation warn once per process', () => {
+    recordDiagnosticEvent(
+      'community-federation',
+      'warn',
+      'hub-peer sync failed for https://hub.toolman.app',
+    )
+    recordDiagnosticEvent(
+      'community-federation',
+      'warn',
+      'hub-peer sync failed for https://hub.toolman.app',
+    )
+    recordDiagnosticEvent(
+      'community-federation',
+      'warn',
+      'bootstrap sync failed for https://hub.toolman.app',
+    )
+    expect(console.warn).toHaveBeenCalledTimes(2)
+    expect(listDiagnosticEvents(10)).toHaveLength(3)
+  })
+
+  it('prints glm-ocr ingest progress to the console', () => {
+    recordDiagnosticEvent(
+      'knowledge-ingest',
+      'info',
+      'glm-ocr page 12/289 1520 chars 11.8s',
+    )
+    expect(console.info).toHaveBeenCalledWith(
+      '[knowledge-ingest] glm-ocr page 12/289 1520 chars 11.8s',
+    )
+  })
+
   it('prints only ODL Hybrid OCR startup to console', () => {
     recordDiagnosticEvent('odl-hybrid', 'info', 'provisioning ODL Hybrid venv at /tmp/venv')
     recordDiagnosticEvent('odl-hybrid', 'warn', 'ODL Hybrid failed health check')

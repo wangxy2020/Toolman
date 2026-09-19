@@ -3,6 +3,7 @@ import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { hasHtmlMarkup, sanitizeDocumentPreviewHtml } from './translation-page-source-quality'
+import { withHtmlTextLineBreaks, withMarkdownHardLineBreaks } from './translation-paragraphs'
 
 interface Props {
   text: string
@@ -24,7 +25,7 @@ export const TranslationDocumentMarkdown = memo(function TranslationDocumentMark
     return (
       <div
         className="tm-translation-doc-markdown"
-        dangerouslySetInnerHTML={{ __html: sanitizeDocumentPreviewHtml(text) }}
+        dangerouslySetInnerHTML={{ __html: sanitizeDocumentPreviewHtml(withHtmlTextLineBreaks(text)) }}
       />
     )
   }
@@ -32,7 +33,7 @@ export const TranslationDocumentMarkdown = memo(function TranslationDocumentMark
   return (
     <div className="tm-translation-doc-markdown">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {text}
+        {withMarkdownHardLineBreaks(text)}
       </ReactMarkdown>
     </div>
   )

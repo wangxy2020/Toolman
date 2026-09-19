@@ -15,6 +15,7 @@ import {
   updateDocumentStage,
 } from './knowledge-ingest-shared'
 import { ingestFileAtPath } from './knowledge-ingest-file'
+import { resolveKnowledgeIndexFingerprint } from './knowledge-index-fingerprint'
 
 const MAX_CONCURRENT_INGEST_JOBS = 2
 
@@ -81,8 +82,22 @@ export async function prepareIngestQueue(options: {
     try {
       const contentHash = await hashFileStream(filePath)
       const existing = findActiveDocumentByPath(repo, options.kbId, filePath)
+      const indexFingerprint = resolveKnowledgeIndexFingerprint(
+        options.workspaceId,
+        options.kbId,
+      )
 
-      if (existing && shouldSkipReadyDocument(repo, options.kbId, existing.id, contentHash, existing)) {
+      if (
+        existing &&
+        shouldSkipReadyDocument(
+          repo,
+          options.kbId,
+          existing.id,
+          contentHash,
+          existing,
+          indexFingerprint,
+        )
+      ) {
         skipped += 1
         continue
       }

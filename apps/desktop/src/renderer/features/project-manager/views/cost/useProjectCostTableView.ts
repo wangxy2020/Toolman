@@ -7,21 +7,24 @@ import {
   buildCostChildrenIndex,
   buildCostSectionalDisplayEntries,
   isCostSectionSummaryFilter,
-  isPmCostPracticeQuotaType,
+  uniqueSortedSectionalKeys,
   isPmCostResourceType,
   readSharedCostCatalog,
+  toPriceListCostType,
   type PmCostRow,
   type PmCostType,
 } from './pm-cost-catalog'
 import { buildCostSectionalRollupDisplayEntries, type CostSummaryRow } from './pm-cost-summary'
 import { syncFeatureDescriptionHeight } from './pm-cost-panel-utils'
-import type { CostPracticeQuotaView } from '../files/ProjectFeaturesMenuBar'
-import type { CostViewFilter } from './ProjectCostMenuBar'
+import { isCostPracticeViewPage, type CostViewFilter } from './ProjectCostMenuBar'
 import type { CostColumnVisibility } from './pm-cost-column-prefs'
+import { matchesDatabaseRowFilter, type DatabaseRowFilter } from './pm-cost-row-filter'
+
+export type { DatabaseRowFilter } from './pm-cost-row-filter'
+export { ALL_DATABASE_ROW_FILTER } from './pm-cost-row-filter'
 
 export function useProjectCostTableView(args: {
   workspaceId: string
-  isPractice: boolean
   isAllScope: boolean
   dirty: boolean
   rows: PmCostRow[]
@@ -29,7 +32,6 @@ export function useProjectCostTableView(args: {
   setSelectedId: (id: string | null | ((current: string | null) => string | null)) => void
   setCheckedIds: import('react').Dispatch<import('react').SetStateAction<Set<string>>>
   setSelectionMode: (v: boolean) => void
-  costQuotaView: CostPracticeQuotaView
   viewFilter: CostViewFilter
   setViewFilter: (v: CostViewFilter) => void
   sectionFilter: string
@@ -40,27 +42,26 @@ export function useProjectCostTableView(args: {
   columnVisibility: CostColumnVisibility
   tableScrollRef: RefObject<HTMLDivElement | null>
   rowsRef: { current: PmCostRow[] }
+  databaseRowFilter: DatabaseRowFilter
   t: ReturnType<typeof useI18n>['t']
 }) {
   const {
-    workspaceId, isPractice, isAllScope, dirty, rows, selectedId, setSelectedId, setCheckedIds,
-    setSelectionMode, costQuotaView, viewFilter, setViewFilter, sectionFilter, setSectionFilter,
-    setMeteringViewActive, summaryRows, editingProject, columnVisibility, tableScrollRef, rowsRef, t,
+    workspaceId, isAllScope, dirty, rows, selectedId, setSelectedId, setCheckedIds,
+    setSelectionMode, viewFilter, setViewFilter, sectionFilter, setSectionFilter,
+    setMeteringViewActive, summaryRows, editingProject, columnVisibility, tableScrollRef, rowsRef,
+    databaseRowFilter, t,
   } = args
 
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const childrenByParentId = useMemo(() => buildCostChildrenIndex(rows), [rows])
   const selectedRow = selectedId ? (byId.get(selectedId) ?? null) : null
-  const selectedType: PmCostType = isPractice
-    ? isPmCostPracticeQuotaType(selectedRow?.type)
-      ? selectedRow.type
-      : costQuotaView
-    : (selectedRow?.type ?? 'other')
-  const sectionalOptions = useMemo(() => {
+  const selectedType: PmCostType = toPriceListCostType(selectedRow?.type ?? 'other')
+  const sectionalOptions = useMemo(() => uniqueSortedSectionalKeys(rows), [rows])
+  const subprojectOptions = useMemo(() => {
     const keys: string[] = []
     const seen = new Set<string>()
     for (const row of rows) {
-      const key = row.sectionalWork?.trim() ?? ''
+      const key = row.subproject?.trim() ?? ''
       if (seen.has(key)) continue
       seen.add(key)
       keys.push(key)
@@ -69,10 +70,11 @@ export function useProjectCostTableView(args: {
   }, [rows])
   const visibleRows = useMemo(() => {
     return rows.filter((row) => {
-      if (isPractice) {
-        // Match resource practice: view menu filters the type column set.
-        if (row.type !== costQuotaView) return false
-      } else if (viewFilter !== 'all' && row.type !== viewFilter) {
+      if (
+        viewFilter !== 'all' &&
+        !isCostPracticeViewPage(viewFilter) &&
+        toPriceListCostType(row.type) !== viewFilter
+      ) {
         return false
       }
       if (
@@ -82,9 +84,17 @@ export function useProjectCostTableView(args: {
       ) {
         return false
       }
+      if (!matchesDatabaseRowFilter(row, databaseRowFilter)) {
+        return false
+      }
       return true
     })
-  }, [costQuotaView, isPractice, rows, sectionFilter, viewFilter])
+  }, [
+    databaseRowFilter,
+    rows,
+    sectionFilter,
+    viewFilter,
+  ])
 
   const displayEntries = useMemo(
     () =>
@@ -99,7 +109,10 @@ export function useProjectCostTableView(args: {
                 currency,
               }),
           })
-        : buildCostSectionalDisplayEntries(visibleRows),
+        : buildCostSectionalDisplayEntries(visibleRows, {
+            groupOrder: 'natural',
+            groupBy: 'subprojectSection',
+          }),
     [
       editingProject?.code,
       editingProject?.metadata,
@@ -111,7 +124,7 @@ export function useProjectCostTableView(args: {
   )
 
   useLayoutEffect(() => {
-    if (!columnVisibility.featureDescription) return
+    if (!columnVisibility.featureDescription && !columnVisibility.name) return
     const root = tableScrollRef.current
     if (!root) return
     const syncAll = () => {
@@ -123,18 +136,21 @@ export function useProjectCostTableView(args: {
     const observer = new ResizeObserver(syncAll)
     observer.observe(root)
     return () => observer.disconnect()
-  }, [visibleRows, columnVisibility.featureDescription])
+  }, [columnVisibility.featureDescription, columnVisibility.name, visibleRows])
 
-  const addType: PmCostType = isPractice
-    ? costQuotaView
-    : viewFilter === 'all'
-      ? selectedType
-      : viewFilter
+  const addType: PmCostType =
+    viewFilter !== 'all' && !isCostPracticeViewPage(viewFilter) ? viewFilter : selectedType
 
   const handleViewFilterChange = useCallback((filter: CostViewFilter) => {
     // Resource-cost types are not available in the View menu.
     if (filter !== 'all' && isPmCostResourceType(filter)) {
       setViewFilter('all')
+      setMeteringViewActive(false)
+      return
+    }
+    if (isCostPracticeViewPage(filter)) {
+      setViewFilter(filter)
+      setMeteringViewActive(false)
       return
     }
     setMeteringViewActive(false)
@@ -143,14 +159,17 @@ export function useProjectCostTableView(args: {
     setSelectedId((prev) => {
       if (!prev) return prev
       const row = rowsRef.current.find((entry) => entry.id === prev)
-      return row && row.type === filter ? prev : null
+      const rowType = row && toPriceListCostType(row.type)
+      return rowType === filter ? prev : null
     })
     setCheckedIds((prev) => {
       if (prev.size === 0) return prev
       const next = new Set<string>()
       for (const id of prev) {
         const row = rowsRef.current.find((entry) => entry.id === id)
-        if (row?.type === filter) next.add(id)
+        if (!row) continue
+        const rowType = toPriceListCostType(row.type)
+        if (rowType === filter) next.add(id)
       }
       return next
     })
@@ -189,7 +208,7 @@ export function useProjectCostTableView(args: {
   }, [isAllScope, workspaceId, dirty])
 
   return {
-    byId, childrenByParentId, selectedRow, selectedType, sectionalOptions, visibleRows,
+    byId, childrenByParentId, selectedRow, selectedType, sectionalOptions, subprojectOptions, visibleRows,
     displayEntries, addType, handleViewFilterChange, handleSectionFilterChange, baselinePriceIndex,
   }
 }

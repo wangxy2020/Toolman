@@ -1,3 +1,5 @@
+import type { PdfIngestParseReport } from './pdf-page-parse-report.js'
+
 export type SupportedFileKind =
   | 'markdown'
   | 'text'
@@ -18,4 +20,5 @@ export interface ParsedDocument {
   plainText: string
   mimeType: string
   kind: SupportedFileKind
+  parseReport?: PdfIngestParseReport
 }

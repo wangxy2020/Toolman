@@ -5,6 +5,8 @@ import {
   createDocumentRepository,
   createMemoryEntryRepository,
   createChunkFtsRepository,
+  createKnowledgeIndexVersionRepository,
+  createDocumentRevisionRepository,
   type MessageRepository,
   type SessionRepository,
   type KnowledgeBaseRepository,
@@ -46,4 +48,12 @@ export function getChunkFtsRepository() {
     chunkFtsRepo = createChunkFtsRepository(getSqliteClient(getDatabase()))
   }
   return chunkFtsRepo
+}
+
+export function getKnowledgeIndexVersionRepository() {
+  return createKnowledgeIndexVersionRepository(getDatabase())
+}
+
+export function getDocumentRevisionRepository() {
+  return createDocumentRevisionRepository(getDatabase())
 }

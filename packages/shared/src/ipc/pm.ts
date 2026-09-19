@@ -165,3 +165,13 @@ export {
   PmSharedCostCatalogUpsertInputSchema,
   type PmSharedCostCatalogRow,
 } from '../project-management/pm-shared-cost-catalog.js'
+
+export {
+  PmCostDatabaseInspectInputSchema,
+  PmCostDatabaseQueryInputSchema,
+  PmCostDatabaseGetSyncedInputSchema,
+  type PmCostDatabaseInspectInput,
+  type PmCostDatabaseQueryInput,
+  type PmCostDatabaseGetSyncedInput,
+  type PmCostDatabaseInspectResult,
+} from '../project-management/pm-cost-database.js'

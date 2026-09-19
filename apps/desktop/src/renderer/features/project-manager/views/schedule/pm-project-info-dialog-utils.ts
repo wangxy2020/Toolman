@@ -3,6 +3,7 @@
 export {
   PM_COST_ESTIMATE_TYPES,
   PM_COST_ESTIMATE_TYPE_SET,
+  PM_COST_INFO_COST_CARD_TYPES,
   PROJECT_TYPE_OPTIONS,
   parseProjectType,
   resolveDomainTabId,
@@ -25,9 +26,11 @@ export {
 
 export {
   buildCostCurrencyMetadata,
+  buildCostDatabaseDraftMetadata,
   buildMetadata,
   emptyDraft,
   parseOptionalNumber,
+  readCostDatabaseDraft,
   toDraft,
 } from './pm-project-info-dialog-utils-draft'
 
@@ -37,4 +40,8 @@ export {
   computeScheduleBounds,
   formatDateTime,
   formatMoney,
+  groupComprehensiveAmountsByCurrency,
+  resolveCostSectionCurrency,
+  type CostAmountByCurrency,
+  type CostStatsCurrencyContext,
 } from './pm-project-info-dialog-utils-stats'

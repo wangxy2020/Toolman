@@ -1,7 +1,7 @@
 /** Highest priority pending preview runs next; one render at a time. */
 export const PREVIEW_RENDER_DROPPED = 'PREVIEW_RENDER_DROPPED'
 /** Keep pending rasters within the prefetch window of the latest visible request. */
-export const PDF_PREVIEW_RETAIN_PAGES = 8
+export const PDF_PREVIEW_RETAIN_PAGES = 10
 
 export class PreviewRenderDroppedError extends Error {
   constructor() {

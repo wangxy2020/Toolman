@@ -4647,6 +4647,142 @@ button.tm-pm-gantt-col-menu-action:disabled {
   margin-bottom: 12px;
 }
 
+.tm-pm-project-info-path-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tm-pm-project-info-path-field .tm-kb-settings-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tm-pm-project-info-path-field .tm-kb-settings-modal-footer-btn {
+  flex: 0 0 auto;
+}
+
+.tm-pm-project-info-db-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px 16px;
+}
+
+.tm-pm-project-info-db-grid .tm-kb-settings-row {
+  min-width: 0;
+}
+
+.tm-pm-project-info-db-inspect {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tm-pm-project-info-db-inspect-result {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--tm-text-secondary);
+}
+
+.tm-kb-settings-help.tm-pm-project-info-db-help[data-tooltip]::after {
+  left: 0;
+  transform: translateY(-4px);
+  white-space: normal;
+  width: max-content;
+  max-width: 280px;
+  text-align: left;
+}
+
+.tm-kb-settings-help.tm-pm-project-info-db-help[data-tooltip]:hover::after,
+.tm-kb-settings-help.tm-pm-project-info-db-help[data-tooltip]:focus-within::after {
+  transform: translateY(0);
+}
+
+.tm-pm-project-info-db-view > summary {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.tm-pm-project-info-db-view > summary::-webkit-details-marker,
+.tm-pm-project-info-db-view > summary::marker {
+  display: none;
+  content: none;
+}
+
+.tm-pm-project-info-db-view-toggle {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8f96' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 10px) center;
+  padding-right: 32px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.tm-pm-project-info-db-view-toggle[data-empty] {
+  color: var(--tm-text-muted);
+}
+
+.tm-pm-project-info-db-view[open] .tm-pm-project-info-db-view-toggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8f96' stroke-width='2'%3E%3Cpolyline points='6 15 12 9 18 15'/%3E%3C/svg%3E");
+}
+
+.tm-pm-project-info-db-view[open] > .tm-pm-project-info-db-view-body {
+  margin-top: 20px;
+  padding-left: calc(90px + 16px);
+  box-sizing: border-box;
+}
+
+.tm-pm-project-info-db-view-body,
+.tm-pm-project-info-db-view-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tm-pm-project-info-db-combo {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.tm-pm-project-info-db-combo-input {
+  width: 100%;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8f96' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 10px) center;
+  padding-right: 32px;
+  box-sizing: border-box;
+}
+
+.tm-pm-project-info-db-combo-select {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+}
+
 /* Project info tab intros: match modal body / nav (13px), not the global 12px muted hint. */
 .tm-kb-settings-modal-content .tm-kb-settings-form > .tm-kb-settings-hint:not(.tm-pm-project-info-error) {
   font-size: 13px;
@@ -4711,6 +4847,24 @@ button.tm-pm-gantt-col-menu-action:disabled {
 
 .tm-pm-project-info-stat-value-row {
   min-height: 20px;
+}
+
+.tm-pm-project-info-stat-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tm-pm-project-info-stat-currency-text {
+  width: 3.5em;
+  min-width: 2.5em;
+  max-width: 5em;
+  flex-shrink: 0;
+  line-height: 18px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tm-text);
 }
 
 .tm-pm-project-info-stat-currency-tag {
@@ -5255,6 +5409,23 @@ button.tm-pm-gantt-col-menu-action:disabled {
   text-align: center;
 }
 
+.tm-pm-resource-table-col-metering {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.tm-pm-resource-table-col-metering-qty {
+  width: 112px;
+  min-width: 112px;
+  max-width: none;
+}
+
+.tm-pm-resource-table-col-metering-amount {
+  width: 112px;
+  min-width: 112px;
+}
+
 .tm-pm-resource-table-col-baseline {
   width: 72px;
   text-align: center;
@@ -5537,8 +5708,8 @@ button.tm-pm-gantt-col-menu-action:disabled {
   overflow-wrap: anywhere;
   word-break: break-word;
   line-height: 1.35;
-  /* Match resource-list row height (36px) when content is a single line. */
-  min-height: 36px;
+  /* Sit inside the 36px cell the same way single-line inputs do. */
+  min-height: 26px;
   field-sizing: content;
 }
 
@@ -5584,6 +5755,143 @@ button.tm-pm-gantt-col-menu-action:disabled {
 .tm-pm-cost-table-page .tm-pm-resource-menubar {
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Keep the custom bottom H-scroll when real columns exceed the pane.
+   Do not invent extra width — leftover space stays in the trailing spacer. */
+.tm-pm-cost-table-page .tm-pm-resource-table-header-pin-inner {
+  width: max(100%, max-content);
+  min-width: 100%;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-scroll-inner {
+  min-width: 100%;
+  width: max(100%, max-content);
+  box-sizing: border-box;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table {
+  width: max(100%, max-content);
+  min-width: 100%;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-col-note {
+  width: 180px;
+  min-width: 140px;
+  max-width: 180px;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-col-subproject,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-sectional,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-code,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-name,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-feature,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-unit,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-spec,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-price,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-total-price,
+.tm-pm-cost-table-page .tm-pm-resource-table-col-metering {
+  max-width: none;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-col-metering {
+  width: 112px;
+  min-width: 112px;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-col-metering-qty {
+  width: 112px;
+  min-width: 112px;
+  max-width: none;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-col-metering-amount {
+  width: 112px;
+  min-width: 112px;
+  max-width: none;
+}
+
+.tm-pm-cost-table-page th.tm-pm-resource-table-col-metering-qty,
+.tm-pm-cost-table-page th.tm-pm-resource-table-col-ipc {
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-metering {
+  text-align: right;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-subproject .tm-pm-resource-table-input,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-sectional .tm-pm-resource-table-input,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-code .tm-pm-resource-table-input,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-unit .tm-pm-resource-table-input,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-spec .tm-pm-resource-table-input,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-price .tm-pm-resource-table-input {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-price,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-total-price {
+  text-align: right;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-price .tm-pm-resource-table-input--number,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-spec .tm-pm-resource-table-input--number,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-total-price {
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-price .tm-pm-resource-table-input--number {
+  text-align: right;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-total-price .tm-pm-resource-table-baseline-text,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-total-price .tm-pm-cost-table-section-summary-total {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 0;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table-col-name,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-name {
+  overflow: visible;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-name .tm-pm-resource-table-input--feature {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tm-pm-cost-table-page .tm-pm-resource-table tbody tr.tm-pm-cost-table-virtual-pad td {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  line-height: 0;
+}
+
+.tm-pm-cost-table-page .tm-pm-cost-filter-select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 6px;
+  border: 0.5px solid var(--tm-border);
+  border-radius: 4px;
+  background: var(--tm-bg, #fff);
+  color: var(--tm-text);
+  font: inherit;
+}
+
+.tm-pm-cost-table-page .tm-pm-gantt-grid-custom-hscroll {
+  flex-shrink: 0;
+  margin: 0 12px 4px 12px;
 }
 
 /* Metering: trailing spacer must absorb leftover pane width even with 0 body rows.
@@ -5662,11 +5970,11 @@ button.tm-pm-gantt-col-menu-action:disabled {
   max-width: 120px;
 }
 
-/* Encoding / item code: fit 12 digits (cell + input horizontal padding). */
+/* Encoding / item code: default floor; auto-fit overrides via col width. */
 .tm-pm-cost-table-page .tm-pm-resource-table-col-code {
   width: calc(12ch + 40px);
-  min-width: calc(12ch + 40px);
-  max-width: calc(12ch + 40px);
+  min-width: 56px;
+  max-width: none;
 }
 
 .tm-pm-cost-table-page th.tm-pm-resource-table-col-code,
@@ -5688,10 +5996,16 @@ button.tm-pm-gantt-col-menu-action:disabled {
   -webkit-user-select: text;
 }
 
-/* Same base row height as resource list (36px); taller when 特征描述 wraps. */
+/* Same base row height as resource list (36px); taller when 工作名称 / 特征描述 wrap. */
 .tm-pm-cost-table-page .tm-pm-resource-table tbody td {
   height: 36px;
   vertical-align: middle;
+}
+
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-name,
+.tm-pm-cost-table-page td.tm-pm-resource-table-col-feature {
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .tm-pm-cost-table-page .tm-pm-resource-table-col-feature,
@@ -5740,12 +6054,29 @@ button.tm-pm-gantt-col-menu-action:disabled {
   line-height: 1.35;
 }
 
+.tm-pm-cost-table-section-summary-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tm-pm-cost-table-section-summary-currency {
+  display: block;
+  padding: 4px 0;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--tm-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .tm-pm-cost-table-section-summary-input {
   font-weight: 600;
 }
 
 .tm-pm-cost-table-section-summary-total {
-  text-align: center;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 

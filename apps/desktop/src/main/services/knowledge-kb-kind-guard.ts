@@ -1,6 +1,8 @@
 import type { KnowledgeBaseRow } from '@toolman/db'
+import { knowledgeKindAcceptsLocalFiles, knowledgeKindAcceptsUrls } from '@toolman/shared'
 
 export function assertKnowledgeBaseAcceptsLocalFiles(kb: Pick<KnowledgeBaseRow, 'kind'>): void {
+  if (knowledgeKindAcceptsLocalFiles(kb.kind)) return
   if (kb.kind === 'network') {
     throw new Error('网络知识库仅支持网页 URL，不能导入本地文件')
   }
@@ -10,6 +12,7 @@ export function assertKnowledgeBaseAcceptsLocalFiles(kb: Pick<KnowledgeBaseRow, 
 }
 
 export function assertKnowledgeBaseAcceptsUrls(kb: Pick<KnowledgeBaseRow, 'kind'>): void {
+  if (knowledgeKindAcceptsUrls(kb.kind)) return
   if (kb.kind === 'local' || kb.kind === 'sync') {
     throw new Error(
       kb.kind === 'sync'

@@ -15,11 +15,10 @@ import {
   createEmptyCostSummaryRow,
   type CostSummaryRow,
 } from './pm-cost-summary'
-import type { CostViewFilter } from './ProjectCostMenuBar'
+import { isCostPracticeViewPage, type CostViewFilter } from './ProjectCostMenuBar'
 
 export function useProjectCostTableRows(args: {
   canEdit: boolean
-  isPractice: boolean
   addType: PmCostType
   viewFilter: CostViewFilter
   sectionFilter: string
@@ -35,7 +34,7 @@ export function useProjectCostTableRows(args: {
   t: ReturnType<typeof useI18n>['t']
 }) {
   const {
-    canEdit, isPractice, addType, viewFilter, sectionFilter, viewApplicable, selectedId,
+    canEdit, addType, viewFilter, sectionFilter, viewApplicable, selectedId,
     setSelectedId, setDirty, setSummaryRows, updateRows, editingProject, summaryRows, rowsRef, t,
   } = args
 
@@ -95,9 +94,8 @@ export function useProjectCostTableRows(args: {
       }
 
       updateRows((prev) => {
-        const typeAbove = isPractice
-          ? addType
-          : viewFilter !== 'all'
+        const typeAbove =
+          viewFilter !== 'all' && !isCostPracticeViewPage(viewFilter)
             ? addType
             : (prev[prev.length - 1]?.type ?? addType)
         const added: PmCostRow[] = []
@@ -144,7 +142,6 @@ export function useProjectCostTableRows(args: {
     [
       addType,
       canEdit,
-      isPractice,
       resolveEditableSummaryRows,
       sectionFilter,
       t,
@@ -185,9 +182,8 @@ export function useProjectCostTableRows(args: {
       const index = prev.findIndex((row) => row.id === selectedId)
       if (index < 0) return prev
       const parentId = prev[index]?.parentId ?? null
-      const typeAbove = isPractice
-        ? addType
-        : viewFilter !== 'all'
+      const typeAbove =
+        viewFilter !== 'all' && !isCostPracticeViewPage(viewFilter)
           ? addType
           : (prev[index - 1]?.type ?? prev[index]?.type ?? addType)
       const previous = prev[index - 1] ?? null
@@ -230,7 +226,6 @@ export function useProjectCostTableRows(args: {
   }, [
     addType,
     canEdit,
-    isPractice,
     resolveEditableSummaryRows,
     sectionFilter,
     selectedId,

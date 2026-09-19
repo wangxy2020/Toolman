@@ -11,9 +11,8 @@ import { useI18n } from '../../i18n/useI18n'
 import { alignTargetParagraphsToSource } from './translation-align'
 import { readContrastParagraphs } from './translation-contrast-dom'
 import {
-  alignTranslationParagraphs,
   joinTranslationParagraphs,
-  splitTranslationParagraphs,
+  splitContrastParagraphs,
 } from './translation-paragraphs'
 
 interface Props {
@@ -62,7 +61,7 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
     const targetColRef = useRef<HTMLDivElement | null>(null)
     const sourceFocusedRef = useRef(false)
     const lastSyncedSourceRef = useRef(sourceText)
-    const sourceParagraphsRef = useRef<string[]>(splitTranslationParagraphs(sourceText))
+    const sourceParagraphsRef = useRef<string[]>(splitContrastParagraphs(sourceText))
     const [sourceRenderKey, setSourceRenderKey] = useState(0)
 
     const sourcePlaceholder = t('translationPage.workspace.sourcePlaceholder')
@@ -75,19 +74,19 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
       },
     }))
 
-    const targetRows = useMemo(
-      () => alignTranslationParagraphs(sourceText, targetText),
-      [sourceText, targetText],
-    )
+    const targetParagraphs = useMemo(() => {
+      if (!targetText.trim()) return ['']
+      return splitContrastParagraphs(targetText).filter((part) => part.trim())
+    }, [targetText])
 
-    // Rebuild left column ONLY when source text changes externally.
+    // Rebuild left column when source changes externally, or after translation
+    // so a pasted single block is split the same way as the target.
     useEffect(() => {
       if (sourceFocusedRef.current) return
-      if (lastSyncedSourceRef.current === sourceText) return
       lastSyncedSourceRef.current = sourceText
-      sourceParagraphsRef.current = splitTranslationParagraphs(sourceText)
+      sourceParagraphsRef.current = splitContrastParagraphs(sourceText)
       setSourceRenderKey((value) => value + 1)
-    }, [sourceText])
+    }, [sourceText, targetText])
 
     useLayoutEffect(() => {
       const sourceCol = sourceColRef.current
@@ -96,13 +95,12 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
       readContrastParagraphs(sourceCol, sourcePlaceholder)
     }, [sourcePlaceholder, sourceRenderKey])
 
-    // Target text changes: refresh right column only, then pad right-side spacing.
     useLayoutEffect(() => {
       const sourceCol = sourceColRef.current
       const targetCol = targetColRef.current
       if (!sourceCol || !targetCol) return
       alignTargetParagraphsToSource(sourceCol, targetCol)
-    }, [targetText, sourceRenderKey])
+    }, [targetParagraphs, sourceRenderKey])
 
     useEffect(() => {
       const sourceCol = sourceColRef.current
@@ -115,7 +113,7 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
       observer.observe(sourceCol)
       observer.observe(targetCol)
       return () => observer.disconnect()
-    }, [targetText, sourceRenderKey])
+    }, [targetParagraphs, sourceRenderKey])
 
     const showTargetPlaceholder = !targetText.trim()
     const placeholderText = modelId
@@ -140,6 +138,15 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
               }}
               onBlur={() => {
                 sourceFocusedRef.current = false
+                const sourceCol = sourceColRef.current
+                if (!sourceCol) return
+                const next = joinTranslationParagraphs(
+                  readContrastParagraphs(sourceCol, sourcePlaceholder),
+                )
+                lastSyncedSourceRef.current = next
+                sourceParagraphsRef.current = splitContrastParagraphs(next)
+                onSourceTextChange(next)
+                setSourceRenderKey((value) => value + 1)
               }}
               onInput={() => {
                 const sourceCol = sourceColRef.current
@@ -163,7 +170,7 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
               className="tm-translation-contrast-col tm-translation-contrast-col--target"
               aria-label={t('translationPage.workspace.targetLabel')}
             >
-              {targetRows.map((row, index) => (
+              {targetParagraphs.map((paragraph, index) => (
                   <p
                     key={`target-${index}`}
                     data-para-index={index}
@@ -177,10 +184,8 @@ export const TranslationContrastView = forwardRef<TranslationContrastViewHandle,
                       .join(' ')}
                   >
                     {showTargetPlaceholder
-                      ? index === 0
-                        ? placeholderText
-                        : '\u00a0'
-                      : row.target || '\u00a0'}
+                      ? placeholderText
+                      : paragraph || '\u00a0'}
                   </p>
                 ))}
             </div>

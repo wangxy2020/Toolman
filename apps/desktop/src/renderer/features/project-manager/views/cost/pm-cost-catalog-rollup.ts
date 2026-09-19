@@ -95,12 +95,20 @@ export function suggestNextCostCode(previousCode: string): string {
   return `${prefix}${next.padStart(digits.length, '0')}`
 }
 
-export function formatCostTotalPrice(value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return '—'
-  return value.toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
+/** Money / percent text: integers stay bare; any fraction is rounded to 2 digits. */
+export function formatCostFixed2IfDecimal(value: number): string {
+  const rounded = Number.parseFloat(value.toFixed(2))
+  const hasFraction = Math.abs(rounded % 1) > 1e-9
+  return rounded.toLocaleString('zh-CN', {
+    minimumFractionDigits: hasFraction ? 2 : 0,
     maximumFractionDigits: 2,
   })
+}
+
+export function formatCostTotalPrice(value: number | null): string {
+  if (value === 0) return ''
+  if (value == null || !Number.isFinite(value)) return '—'
+  return formatCostFixed2IfDecimal(value)
 }
 
 export function costRowDepth(

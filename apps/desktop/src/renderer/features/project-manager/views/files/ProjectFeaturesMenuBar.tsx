@@ -1,8 +1,10 @@
 import { createPortal } from 'react-dom'
 
+import { ALL_DATABASE_ROW_FILTER } from '../cost/pm-cost-row-filter'
 import { useMenuBarHScroll, useMenuBarTooltip } from '../../pm-menubar-chrome'
 import { ProjectFeaturesMenuBarResourceStatsPanel } from './ProjectFeaturesMenuBarResourceStatsPanel'
 import type { ProjectFeaturesMenuBarProps } from './ProjectFeaturesMenuBarTypes'
+import { ProjectFeaturesMenuBarFilterPanel } from './ProjectFeaturesMenuBarFilterPanel'
 import { ProjectFeaturesMenuBarVersionPanel } from './ProjectFeaturesMenuBarVersionPanel'
 import { ProjectFeaturesMenuBarViewPanel } from './ProjectFeaturesMenuBarViewPanel'
 import {
@@ -13,6 +15,7 @@ import { useProjectFeaturesMenuBar } from './useProjectFeaturesMenuBar'
 
 export type {
   CostPracticeQuotaView,
+  FeaturesDatabaseRowFilter,
   FeaturesMenuAction,
   FeaturesResourceStatFilter,
   FeaturesScheduleView,
@@ -23,6 +26,7 @@ export type {
 } from './ProjectFeaturesMenuBarTypes'
 
 export {
+  COST_DATABASE_QUOTA_VIEWS,
   COST_PRACTICE_QUOTA_VIEWS,
   FEATURES_RESOURCE_STAT_FILTERS,
   isFeaturesResourceStatFilter,
@@ -46,6 +50,13 @@ export function ProjectFeaturesMenuBar({
   onQuotaViewChange,
   costQuotaView = 'constructionQuota',
   onCostQuotaViewChange,
+  costQuotaViewSet = 'practice',
+  databaseRowFilter = ALL_DATABASE_ROW_FILTER,
+  onDatabaseRowFilterChange,
+  databaseSubprojectOptions = [],
+  databaseSectionalOptions = [],
+  showFetch = false,
+  fetching = false,
   versionSwitchEntries = [],
   onRestoreVersion,
   onAction,
@@ -75,7 +86,14 @@ export function ProjectFeaturesMenuBar({
     resourceStatMode,
     resourceStatCurrent,
     viewLabel,
-  } = useProjectFeaturesMenuBar({ selectedType, scheduleView, viewMenuMode, quotaView, costQuotaView })
+  } = useProjectFeaturesMenuBar({
+    selectedType,
+    scheduleView,
+    viewMenuMode,
+    quotaView,
+    costQuotaView,
+    costQuotaViewSet,
+  })
   const { tooltip, hideTip, tipProps } = useMenuBarTooltip()
   const { scrollRef, trackRef, scrollMetrics, syncScrollMetrics, onTrackPointerDown } =
     useMenuBarHScroll()
@@ -88,12 +106,16 @@ export function ProjectFeaturesMenuBar({
     canRedo,
     hasSelection,
     selectedType,
+    showFetch,
+    fetching,
   })
   const toolbarOpts = { disabled, hideTip, onAction, tipProps }
 
-  // Edit actions through moveDown; trailing type filters after resource-stats dropdown.
-  const leadingItems = items.slice(0, 13)
-  const trailingTypeItems = showTrailingMenus ? items.slice(13) : []
+  const moveDownIndex = items.findIndex((item) => item.key === 'moveDown')
+  const leadingItems = items.slice(0, moveDownIndex === -1 ? items.length : moveDownIndex + 1)
+  const trailingTypeItems = showTrailingMenus
+    ? items.slice(moveDownIndex === -1 ? items.length : moveDownIndex + 1)
+    : []
 
   return (
     <div
@@ -132,6 +154,7 @@ export function ProjectFeaturesMenuBar({
                 onQuotaViewChange={onQuotaViewChange}
                 costQuotaView={costQuotaView}
                 onCostQuotaViewChange={onCostQuotaViewChange}
+                costQuotaViewSet={costQuotaViewSet}
                 viewLabelByMode={viewLabelByMode}
                 quotaLabelByMode={quotaLabelByMode}
                 costQuotaLabelByMode={costQuotaLabelByMode}
@@ -146,24 +169,47 @@ export function ProjectFeaturesMenuBar({
 
             {leadingItems.map((item) => renderFeaturesToolbarItem(item, toolbarOpts))}
 
-            <ProjectFeaturesMenuBarVersionPanel
-              t={t}
-              disabled={disabled}
-              hasProject={hasProject}
-              baselineRef={baselineRef}
-              baselineOpen={baselineOpen}
-              setBaselineOpen={setBaselineOpen}
-              baselinePos={baselinePos}
-              baselineMenuLabel={baselineMenuLabel}
-              versionSwitchEntries={versionSwitchEntries}
-              onRestoreVersion={onRestoreVersion}
-              hideTip={hideTip}
-              tipProps={tipProps}
-              closeSiblingMenus={() => {
-                setViewOpen(false)
-                setResourceStatsOpen(false)
-              }}
-            />
+            {costQuotaViewSet === 'database' ? (
+              <ProjectFeaturesMenuBarFilterPanel
+                t={t}
+                disabled={disabled}
+                hasProject={hasProject}
+                baselineRef={baselineRef}
+                baselineOpen={baselineOpen}
+                setBaselineOpen={setBaselineOpen}
+                baselinePos={baselinePos}
+                filterMenuLabel={baselineMenuLabel}
+                databaseRowFilter={databaseRowFilter}
+                onDatabaseRowFilterChange={onDatabaseRowFilterChange}
+                databaseSubprojectOptions={databaseSubprojectOptions}
+                databaseSectionalOptions={databaseSectionalOptions}
+                hideTip={hideTip}
+                tipProps={tipProps}
+                closeSiblingMenus={() => {
+                  setViewOpen(false)
+                  setResourceStatsOpen(false)
+                }}
+              />
+            ) : (
+              <ProjectFeaturesMenuBarVersionPanel
+                t={t}
+                disabled={disabled}
+                hasProject={hasProject}
+                baselineRef={baselineRef}
+                baselineOpen={baselineOpen}
+                setBaselineOpen={setBaselineOpen}
+                baselinePos={baselinePos}
+                baselineMenuLabel={baselineMenuLabel}
+                versionSwitchEntries={versionSwitchEntries}
+                onRestoreVersion={onRestoreVersion}
+                hideTip={hideTip}
+                tipProps={tipProps}
+                closeSiblingMenus={() => {
+                  setViewOpen(false)
+                  setResourceStatsOpen(false)
+                }}
+              />
+            )}
 
             {showTrailingMenus ? (
               <ProjectFeaturesMenuBarResourceStatsPanel

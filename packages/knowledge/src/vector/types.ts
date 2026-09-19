@@ -19,4 +19,5 @@ export interface OpenKbVectorStoreOptions {
   vectorsDir: string
   kbId: string
   backend?: VectorBackend
+  indexVersion?: number
 }

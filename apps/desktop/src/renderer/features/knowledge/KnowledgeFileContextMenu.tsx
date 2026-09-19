@@ -16,6 +16,7 @@ interface Props {
   onSelectAll: () => void
   onClearSelection: () => void
   onDeleteSelected: () => void
+  onReindexSelected?: () => void
   onReindexAll?: () => void
   onMoveToSync?: (target: SyncMoveTarget) => void
 }
@@ -32,6 +33,7 @@ export function KnowledgeFileContextMenu({
   onSelectAll,
   onClearSelection,
   onDeleteSelected,
+  onReindexSelected,
   onReindexAll,
   onMoveToSync,
 }: Props) {
@@ -128,6 +130,27 @@ export function KnowledgeFileContextMenu({
           {t('knowledgePage.contextMenu.deleteSelected')}
           {selectedCount > 0 ? ` (${selectedCount})` : ''}
         </button>
+        {onReindexSelected ? (
+          <button
+            type="button"
+            className={[
+              'tm-group-context-menu-item',
+              selectedCount === 0 || reindexAllDisabled ? 'tm-group-context-menu-item--disabled' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            role="menuitem"
+            disabled={selectedCount === 0 || reindexAllDisabled}
+            onClick={() => {
+              if (selectedCount === 0 || reindexAllDisabled) return
+              onReindexSelected()
+              onClose()
+            }}
+          >
+            {t('knowledgePage.contextMenu.reindexSelected')}
+            {selectedCount > 0 ? ` (${selectedCount})` : ''}
+          </button>
+        ) : null}
         {onMoveToSync ? (
           <div className="tm-group-context-menu-flyout">
             <button

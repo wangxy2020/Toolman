@@ -9,6 +9,7 @@ import {
   hasPdfPageMarkers,
   splitPdfPagesByMarkers,
 } from '../parsers/pdf-page-markers.js'
+import { extractMarkdownHeading, pageHasTable } from '../parsers/pdf-page-quality.js'
 
 /**
  * Chunk PDF plain text by page boundaries when page markers are present.
@@ -29,6 +30,7 @@ export function chunkPdfText(text: string, config: ChunkConfig): TextChunk[] {
 
   for (const page of pages) {
     const marker = formatPdfPageMarker(page.pageNumber)
+    const heading = extractMarkdownHeading(page.text)
     const pageChunks = chunkText(page.text, config)
     for (const chunk of pageChunks) {
       const chunkTextValue = `${marker}\n${chunk.text}`.trim()
@@ -39,6 +41,8 @@ export function chunkPdfText(text: string, config: ChunkConfig): TextChunk[] {
         metadata: {
           ...(chunk.metadata ?? {}),
           pageNumber: page.pageNumber,
+          ...(heading ? { heading } : {}),
+          ...(pageHasTable(page.text) ? { hasTable: true } : {}),
         },
       })
     }

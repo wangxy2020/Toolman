@@ -89,13 +89,13 @@ export function recordCostPracticeSaveMeta(
   workspaceId: string,
   scopeId: string,
   rows: readonly PmCostRow[],
-  options?: { savedAt?: number; bumpVersion?: boolean; note?: string },
+  options?: { savedAt?: number; bumpVersion?: boolean; note?: string; includeCatalog?: boolean },
 ): Record<string, unknown> {
   const next = buildCostSaveMetadata(readCostPracticeSaveMeta(workspaceId, scopeId), {
     costCount: rows.length,
     contentFingerprint: fingerprintCostCatalog(rows),
     savedAt: options?.savedAt ?? Date.now(),
-    catalog: toCostCatalogSnapshot(rows),
+    ...(options?.includeCatalog === false ? {} : { catalog: toCostCatalogSnapshot(rows) }),
     bumpVersion: options?.bumpVersion ?? false,
     ...(options?.note?.trim() ? { note: options.note.trim() } : {}),
   })

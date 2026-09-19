@@ -36,6 +36,20 @@ describe('group-saved-knowledge', () => {
     expect(parseP2pGroupSavedKnowledgeMeta(description)).toEqual(meta)
   })
 
+  it('preserves p2p origin snapshot fields on the local copy', () => {
+    const meta = normalizeP2pGroupSavedKnowledgeMeta('测试群', '默认文件夹', 'ws-1', {
+      originPeer: 'peer-a',
+      originGroup: '测试群',
+      snapshotId: 'snap-9',
+      sourceHash: 'abc',
+      sourceVersion: '3',
+      receivedAt: 1_700_000_000_000,
+    })
+    expect(parseP2pGroupSavedKnowledgeMeta(JSON.stringify({ groupSavedKnowledge: meta }))).toEqual(
+      meta,
+    )
+  })
+
   it('finds saved kb by workspace id regardless of shared folder segment', () => {
     const meta = normalizeP2pGroupSavedKnowledgeMeta('旧群名', undefined, 'ws-1')
     const id = findGroupSavedKnowledgeBaseId(

@@ -46,9 +46,24 @@ export function formatZodError(error: ZodError): string {
   return first ? formatZodIssue(first) : '请求参数无效'
 }
 
+function networkErrorCauseCode(error: Error): string {
+  const cause = (error as Error & { cause?: unknown }).cause
+  if (cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string') {
+    return cause.code
+  }
+  if (cause instanceof Error) return cause.message
+  return ''
+}
+
 export function toErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ZodError) {
     return formatZodError(error)
   }
-  return error instanceof Error ? error.message : fallback
+  if (!(error instanceof Error)) return fallback
+  if (error.message !== 'fetch failed') return error.message
+  const causeCode = networkErrorCauseCode(error)
+  if (/econnrefused/i.test(causeCode)) {
+    return '无法连接本地服务，请确认相关服务已启动'
+  }
+  return causeCode ? `网络请求失败（${causeCode}）` : '网络请求失败'
 }

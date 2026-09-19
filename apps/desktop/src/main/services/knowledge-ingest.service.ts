@@ -17,6 +17,7 @@ export {
   recoverInterruptedIngestJobsOnStartup,
   reconcileProcessingDocumentsWithoutIngestJob,
   recoverStaleIngestJobs,
+  restoreIndexedDocumentsNotInFlight,
   purgeIgnoredKnowledgeDocuments,
 } from './knowledge-ingest-recovery'
 
@@ -25,4 +26,6 @@ export {
   handleRemovedFile,
   reindexDocument,
   reindexKnowledgeBase,
+  startReindexDocumentInBackground,
+  startReindexKnowledgeBaseInBackground,
 } from './knowledge-ingest-reindex'

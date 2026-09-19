@@ -9,7 +9,7 @@ import {
   type FeaturesScheduleView,
   type ProjectFeaturesMenuBarProps,
   type ResourcePracticeQuotaView,
-} from './ProjectFeaturesMenuBar'
+} from './ProjectFeaturesMenuBarTypes'
 
 /**
  * Menu open-state and derived labels for `ProjectFeaturesMenuBar`. Kept separate from the
@@ -21,9 +21,10 @@ export function useProjectFeaturesMenuBar({
   viewMenuMode = 'schedule',
   quotaView = 'labor',
   costQuotaView = 'constructionQuota',
+  costQuotaViewSet = 'practice',
 }: Pick<
   ProjectFeaturesMenuBarProps,
-  'selectedType' | 'scheduleView' | 'viewMenuMode' | 'quotaView' | 'costQuotaView'
+  'selectedType' | 'scheduleView' | 'viewMenuMode' | 'quotaView' | 'costQuotaView' | 'costQuotaViewSet'
 >) {
   const { t } = useI18n()
   const [viewOpen, setViewOpen] = useState(false)
@@ -64,20 +65,32 @@ export function useProjectFeaturesMenuBar({
     material: t('projectManagerPage.resourcePractice.views.material'),
     equipment: t('projectManagerPage.resourcePractice.views.equipment'),
   }
-  const costQuotaLabelByMode: Record<PmCostPracticeQuotaType, string> = {
-    constructionQuota: t('projectManagerPage.costPractice.views.constructionQuota'),
-    budgetQuota: t('projectManagerPage.costPractice.views.budgetQuota'),
-    estimateQuota: t('projectManagerPage.costPractice.views.estimateQuota'),
-    estimateIndicator: t('projectManagerPage.costPractice.views.estimateIndicator'),
-    investmentIndicator: t('projectManagerPage.costPractice.views.investmentIndicator'),
-  }
+  const costQuotaLabelByMode: Record<PmCostPracticeQuotaType, string> =
+    costQuotaViewSet === 'database'
+      ? {
+          constructionQuota: t('projectManagerPage.costDatabase.views.constructionQuota'),
+          budgetQuota: t('projectManagerPage.costDatabase.views.budgetQuota'),
+          estimateQuota: t('projectManagerPage.costDatabase.views.estimateQuota'),
+          estimateIndicator: t('projectManagerPage.costDatabase.views.estimateIndicator'),
+          investmentIndicator: t('projectManagerPage.costPractice.views.investmentIndicator'),
+        }
+      : {
+          constructionQuota: t('projectManagerPage.costPractice.views.constructionQuota'),
+          budgetQuota: t('projectManagerPage.costPractice.views.budgetQuota'),
+          estimateQuota: t('projectManagerPage.costPractice.views.estimateQuota'),
+          estimateIndicator: t('projectManagerPage.costPractice.views.estimateIndicator'),
+          investmentIndicator: t('projectManagerPage.costPractice.views.investmentIndicator'),
+        }
   const viewCurrentLabel =
     viewMenuMode === 'resourceQuota'
       ? quotaLabelByMode[quotaView]
       : viewMenuMode === 'costQuota'
         ? costQuotaLabelByMode[costQuotaView as CostPracticeQuotaView]
         : viewLabelByMode[scheduleView]
-  const baselineMenuLabel = t('projectManagerPage.files.menu.baseline')
+  const baselineMenuLabel =
+    costQuotaViewSet === 'database'
+      ? t('projectManagerPage.files.menu.filter')
+      : t('projectManagerPage.files.menu.baseline')
   const resourceStatsMenuLabel = t('projectManagerPage.files.menu.resourceStatistics')
   const resourceStatMode = isFeaturesResourceStatFilter(selectedType)
   const resourceStatCurrent = resourceStatMode ? selectedType : null

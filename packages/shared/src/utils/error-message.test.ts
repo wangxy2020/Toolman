@@ -20,6 +20,12 @@ describe('toErrorMessage', () => {
     expect(toErrorMessage(parsed.error, 'fallback')).toBe('名称不能为空')
   })
 
+  it('unwraps fetch failed with ECONNREFUSED', () => {
+    expect(
+      toErrorMessage(new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } }), 'fallback'),
+    ).toContain('无法连接本地服务')
+  })
+
   it('uses invite-specific message for empty inviteToken', () => {
     const parsed = z.object({ inviteToken: z.string().min(1) }).safeParse({ inviteToken: '' })
     if (parsed.success) {

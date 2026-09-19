@@ -15,6 +15,7 @@ import { updateDocumentStage } from './knowledge-ingest-shared'
 const ACTIVE_INGEST_STAGES = new Set([
   'queued',
   'parsing',
+  'ocr',
   'chunking',
   'embedding',
   'indexing',
@@ -39,26 +40,25 @@ export function cancelKnowledgeIngestJob(input: unknown): boolean {
 
   requestCancelIngest(data.documentId)
 
-  const message = '索引任务已取消'
   repo.update(data.documentId, data.kbId, {
-    status: 'failed',
-    errorJson: JSON.stringify({ message }),
+    status: 'cancelled',
+    errorJson: null,
   })
   repo.upsertIngestJob({
     workspaceId: data.workspaceId,
     kbId: data.kbId,
     documentId: data.documentId,
-    stage: 'failed',
+    stage: 'cancelled',
     progress: 0,
-    errorJson: JSON.stringify({ message }),
+    errorJson: null,
   })
   broadcastKnowledgeIngestEvent({
     type: 'document.stage',
     workspaceId: data.workspaceId,
     kbId: data.kbId,
     documentId: data.documentId,
-    stage: 'failed',
-    errorMessage: message,
+    stage: 'cancelled',
+    errorMessage: null,
   })
   refreshKbStats(data.workspaceId, data.kbId)
 

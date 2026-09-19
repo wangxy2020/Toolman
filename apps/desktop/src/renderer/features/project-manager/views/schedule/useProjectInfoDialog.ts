@@ -125,7 +125,14 @@ export function useProjectInfoDialog(props: Props) {
 
   useEffect(() => {
     setActiveTab((current) => {
-      if (current === 'overview' || current === 'statistics' || current === 'advanced') return current
+      if (
+        current === 'overview' ||
+        current === 'statistics' ||
+        current === 'advanced' ||
+        current === 'data'
+      ) {
+        return current
+      }
       return domainTabId
     })
   }, [domainTabId])
@@ -147,7 +154,7 @@ export function useProjectInfoDialog(props: Props) {
     project, props, isWorkspaceFeatures, workspaceFeaturesId, t,
     setFeatureHistoryRows, setFeatureVersion, setLastSavedAt, setDeletingHistoryVersion, setError,
   })
-  const { handleSave } = useProjectInfoDialogSave({
+  const { handleSave, persistCostDatabase } = useProjectInfoDialogSave({
     props, onClose, draft, project, isCreate, isWorkspaceResource, isWorkspaceCost, isWorkspaceFeatures,
     isResourceInfo, isCostInfo, isFeaturesInfo, workspaceCostId, workspaceFeaturesId, practiceScopeId,
     createDefaults, t, setSaving, setError, setActiveTab, setResourceHistoryRows, setResourceVersion,
@@ -169,7 +176,14 @@ export function useProjectInfoDialog(props: Props) {
     return { total, milestones, done, inProgress, blocked, avgProgress, earliestStart, latestFinish }
   }, [workItems])
   const resourceStats = useMemo(() => computeResourceStats(resourceRows), [resourceRows])
-  const costStats = useMemo(() => computeCostStats(costRows), [costRows])
+  const costStats = useMemo(
+    () =>
+      computeCostStats(costRows, {
+        costCurrencies: draft.costCurrencies,
+        unsetCostCurrency: draft.unsetCostCurrency,
+      }),
+    [costRows, draft.costCurrencies, draft.unsetCostCurrency],
+  )
   const featureStats = useMemo(() => ({ total: featureRows.length }), [featureRows])
   const resourceTypeLabel = (type: PmResourceType): string =>
     t(`projectManagerPage.resourceTable.types.${type}`)
@@ -232,9 +246,18 @@ export function useProjectInfoDialog(props: Props) {
     : isWorkspaceCost
       ? [
           { id: 'cost', label: t('projectManagerPage.projectInfo.tabPrice') },
+          { id: 'data', label: t('projectManagerPage.projectInfo.tabData') },
           { id: 'statistics', label: t('projectManagerPage.projectInfo.tabStatistics') },
           { id: 'advanced', label: t('projectManagerPage.projectInfo.tabAdvanced') },
         ]
+      : isCostInfo
+        ? [
+            { id: 'overview', label: t('projectManagerPage.projectInfo.tabOverview') },
+            { id: domainTabId, label: domainTabLabel },
+            { id: 'data', label: t('projectManagerPage.projectInfo.tabData') },
+            { id: 'statistics', label: t('projectManagerPage.projectInfo.tabStatistics') },
+            { id: 'advanced', label: t('projectManagerPage.projectInfo.tabAdvanced') },
+          ]
       : [
           { id: 'overview', label: t('projectManagerPage.projectInfo.tabOverview') },
           { id: domainTabId, label: domainTabLabel },
@@ -261,5 +284,6 @@ export function useProjectInfoDialog(props: Props) {
     costHistoryRows, featureVersion, featureHistoryRows, handleDeleteScheduleHistoryEntry,
     handleDeleteResourceHistoryEntry, handleDeleteCostHistoryEntry, handleDeleteFeatureHistoryEntry,
     handleSave,
+    persistCostDatabase,
   }
 }

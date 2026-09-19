@@ -1,7 +1,15 @@
-import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 
-import type { PmProject } from '@toolman/shared'
-import { PM_COST_CONTENT_FINGERPRINT_KEY } from '@toolman/shared'
+import type { CostDatabaseConnection, CostDatabaseImportedRow, CostDatabaseViewKey, PmProject } from '@toolman/shared'
+import {
+  costDatabasePersistScopeId,
+  isCostDatabaseConnectionReady,
+  isCostDatabaseViewKey,
+  listMappedCostDatabaseViews,
+  PM_COST_CONTENT_FINGERPRINT_KEY,
+  readCostDatabaseConnection,
+  resolveCostDatabaseViewBinding,
+} from '@toolman/shared'
 
 import { pmApi } from '../../pm-api'
 import { useI18n } from '../../../../i18n/useI18n'
@@ -10,17 +18,21 @@ import {
   buildBaselinePriceIndex,
   fingerprintCostCatalog,
   hydrateSharedCostCatalogFromMain,
-  isPmCostPracticeQuotaType,
+  readSharedCostSaveMeta,
   readSharedCostCatalog,
   reindexCostRows,
   resolveProjectCostCatalog,
   sortCostRowsByTypeMenu,
   sortCostRowsLikeSharedCatalog,
+  toPriceListCostType,
   withDerivedCostApplicable,
   writeSharedCostCatalog,
   type PmCostRow,
 } from './pm-cost-catalog'
+import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import { readCostPracticeCatalog } from './pm-cost-practice-catalog'
+import { costDatabaseMetaCacheKey, mergeCostDatabaseMetadata } from './pm-cost-database-meta-cache'
+import { costDatabaseRowsToCatalog, mergeMeteringFetchRows } from './pm-cost-database-rows'
 import { cloneCostRows, type CostHistoryStack } from './pm-cost-history'
 import {
   COST_SUMMARY_ROWS_META_KEY,
@@ -31,12 +43,68 @@ import {
 import type { CostViewFilter } from './ProjectCostMenuBar'
 import type { MeteringRollupMode } from './pm-metering-baselines'
 
+function readLoadCostDatabaseConnection(
+  workspaceId: string,
+  isAllScope: boolean,
+  editingProject: { id: string; metadata?: Record<string, unknown> | null } | null,
+): ReturnType<typeof readCostDatabaseConnection> {
+  const scopeKey = costDatabaseMetaCacheKey({
+    workspaceId,
+    projectId: isAllScope ? null : editingProject?.id,
+  })
+  const fallback = isAllScope ? readSharedCostSaveMeta(workspaceId) : editingProject?.metadata
+  return readCostDatabaseConnection(mergeCostDatabaseMetadata(fallback, scopeKey))
+}
+
+function viewsToQuery(
+  connection: CostDatabaseConnection,
+  viewKey?: string,
+): CostDatabaseViewKey[] {
+  if (viewKey && isCostDatabaseViewKey(viewKey)) return [viewKey]
+  const mapped = listMappedCostDatabaseViews(connection)
+  return mapped.length > 0 ? mapped : ['constructionQuota']
+}
+
+async function queryCostDatabaseViews(
+  connection: CostDatabaseConnection,
+  workspaceId: string,
+  persistScopeId: string,
+  viewKey?: string,
+): Promise<Partial<Record<CostDatabaseViewKey, CostDatabaseImportedRow[]>>> {
+  const byView: Partial<Record<CostDatabaseViewKey, CostDatabaseImportedRow[]>> = {}
+  const results = await Promise.allSettled(
+    viewsToQuery(connection, viewKey).map(async (nextView) => {
+      const binding = resolveCostDatabaseViewBinding(connection, nextView)
+      const result = await pmApi.queryCostDatabase({
+        ...connection,
+        tableName: binding.tableName || undefined,
+        columnMap: binding.columnMap,
+        viewKey: nextView,
+        workspaceId,
+        scopeId: persistScopeId ? costDatabasePersistScopeId(persistScopeId, nextView) : undefined,
+      })
+      return { viewKey: nextView, rows: result.rows }
+    }),
+  )
+  const errors: Error[] = []
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      byView[result.value.viewKey] = result.value.rows
+    } else {
+      errors.push(result.reason instanceof Error ? result.reason : new Error(String(result.reason)))
+    }
+  }
+  if (Object.keys(byView).length === 0 && errors[0]) throw errors[0]
+  return byView
+}
+
 export function useProjectCostTableLoad(args: {
   workspaceId: string
   isPractice: boolean
   isAllScope: boolean
   practiceScopeId: string
   scopeKey: string
+  viewApplicable: string
   editingProject: PmProject | null
   dirty: boolean
   setDirty: Dispatch<SetStateAction<boolean>>
@@ -63,37 +131,49 @@ export function useProjectCostTableLoad(args: {
   setPendingMeteringDeleteBaseline: Dispatch<SetStateAction<boolean>>
   setMeteringRollupMode: Dispatch<SetStateAction<MeteringRollupMode>>
   onProjectsChange?: () => void | Promise<void>
+  setStatusFeedback: ReturnType<typeof usePmStatusFeedback>[1]
   t: ReturnType<typeof useI18n>['t']
 }) {
   const {
-    workspaceId, isPractice, isAllScope, practiceScopeId, scopeKey, editingProject, dirty,
+    workspaceId, isPractice, isAllScope, practiceScopeId, scopeKey, viewApplicable,
+    editingProject, dirty,
     setDirty, setRows, rowsRef, cleanFingerprintRef, historyStackRef, historyApplyingRef,
     setHistoryEpoch, setSelectedId, setCheckedIds, setSelectionMode, setContextMenu, setColumnMenu,
     setProjectInfoOpen, setViewFilter, setSectionFilter, setSummaryRows, setMeteringViewActive,
     setMeteringBaselines, setSelectedMeteringBaselineId, setMeteringCaptureBaselineOpen,
     setMeteringEditBaselineOpen, setPendingMeteringDeleteBaseline, setMeteringRollupMode,
-    onProjectsChange, t,
+    onProjectsChange, setStatusFeedback, t,
   } = args
+  const [fetching, setFetching] = useState(false)
   const markCleanCatalog = useCallback((catalog: PmCostRow[]) => {
     cleanFingerprintRef.current = fingerprintCostCatalog(catalog)
     rowsRef.current = catalog
   }, [])
 
   const applyCatalogRows = useCallback(
-    (catalog: PmCostRow[], options?: { dirty?: boolean; clearHistory?: boolean }) => {
-      setRows(catalog)
-      rowsRef.current = catalog
+    (
+      catalog: PmCostRow[],
+      options?: { dirty?: boolean; clearHistory?: boolean; skipSetRows?: boolean },
+    ) => {
+      const next = catalog.map((row) => {
+        const type = toPriceListCostType(row.type)
+        return type === row.type ? row : { ...row, type }
+      })
+      rowsRef.current = next
+      if (!options?.skipSetRows) {
+        setRows(next)
+      }
       if (options?.clearHistory) {
         historyStackRef.current.clear()
         setHistoryEpoch((value) => value + 1)
       }
       if (options?.dirty === false) {
-        markCleanCatalog(catalog)
+        markCleanCatalog(next)
         setDirty(false)
       } else if (options?.dirty === true) {
         setDirty(true)
       } else {
-        setDirty(fingerprintCostCatalog(catalog) !== cleanFingerprintRef.current)
+        setDirty(fingerprintCostCatalog(next) !== cleanFingerprintRef.current)
       }
     },
     [markCleanCatalog],
@@ -133,13 +213,35 @@ export function useProjectCostTableLoad(args: {
         return
       }
       const source = readCostPracticeCatalog(workspaceId, practiceScopeId)
-      const ordered = source.map((row) =>
-        isPmCostPracticeQuotaType(row.type)
-          ? row
-          : { ...row, type: 'constructionQuota' as const },
-      )
+      const typed = source.map((row) => ({
+        ...row,
+        type: toPriceListCostType(row.type),
+      }))
+      const ordered = sortCostRowsByTypeMenu(typed)
       const coerced = ordered.some((row, index) => row.type !== source[index]?.type)
-      applyCatalogRows(ordered, { dirty: coerced, clearHistory: true })
+      const normalized =
+        editingProject != null
+          ? withDerivedCostApplicable(
+              ordered,
+              buildBaselinePriceIndex(readSharedCostCatalog(workspaceId).rows),
+              editingProject.id,
+            )
+          : ordered
+      applyCatalogRows(normalized, { dirty: coerced, clearHistory: true })
+      if (editingProject) {
+        const storedSummaryRows = readCostSummaryRows(editingProject.metadata)
+        const summaryLabel = t('projectManagerPage.costTable.views.sectionSummary')
+        const normalizedSummary = normalizeCostSummaryRows(
+          storedSummaryRows,
+          [],
+          summaryLabel,
+          (currency) =>
+            t('projectManagerPage.costTable.views.sectionSummaryWithCurrency', {
+              currency,
+            }),
+        )
+        setSummaryRows(normalizedSummary.rows)
+      }
       return
     }
 
@@ -238,8 +340,8 @@ export function useProjectCostTableLoad(args: {
     isPractice,
     onProjectsChange,
     practiceScopeId,
-    scopeKey,
     t,
+    viewApplicable,
     workspaceId,
   ])
   const updateRows = useCallback(
@@ -270,5 +372,79 @@ export function useProjectCostTableLoad(args: {
     [],
   )
 
-  return { markCleanCatalog, applyCatalogRows, updateRows }
+  const fetchCostDatabase = useCallback(async (viewKey: CostDatabaseViewKey = 'constructionQuota') => {
+    if (fetching) return
+    const persistScopeId = isAllScope ? 'all' : (editingProject?.id ?? '')
+    const connection = readLoadCostDatabaseConnection(workspaceId, isAllScope, editingProject)
+    if (!isCostDatabaseConnectionReady(connection)) {
+      setStatusFeedback({
+        tone: 'error',
+        text: t('projectManagerPage.costTable.fetchNeedConnection'),
+      })
+      return
+    }
+    setFetching(true)
+    try {
+      const byView = await queryCostDatabaseViews(
+        connection,
+        workspaceId,
+        persistScopeId,
+        viewKey,
+      )
+      const imported = byView[viewKey] ?? []
+      const catalog = costDatabaseRowsToCatalog(
+        imported,
+        viewApplicable,
+        viewKey === 'budgetQuota' ? 'budgetQuota' : 'comprehensive',
+      )
+      if (catalog.length === 0) {
+        setStatusFeedback({
+          tone: 'success',
+          text: t('projectManagerPage.costTable.fetchSuccess', { count: '0' }),
+        })
+        return
+      }
+      const next =
+        viewKey === 'budgetQuota'
+          ? mergeMeteringFetchRows(rowsRef.current, catalog)
+          : sortCostRowsByTypeMenu(catalog)
+      applyCatalogRows(next, { dirty: true, clearHistory: true })
+      if (viewKey === 'budgetQuota') {
+        setMeteringViewActive(true)
+        if (isPractice) setViewFilter('all')
+      }
+      setStatusFeedback({
+        tone: 'success',
+        text: t('projectManagerPage.costTable.fetchSuccess', { count: String(catalog.length) }),
+      })
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve())
+        })
+      })
+    } catch (error) {
+      setStatusFeedback({
+        tone: 'error',
+        text: t('projectManagerPage.costTable.fetchFailed', {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      })
+    } finally {
+      setFetching(false)
+    }
+  }, [
+    applyCatalogRows,
+    editingProject,
+    fetching,
+    isAllScope,
+    isPractice,
+    setMeteringViewActive,
+    setStatusFeedback,
+    setViewFilter,
+    t,
+    viewApplicable,
+    workspaceId,
+  ])
+
+  return { markCleanCatalog, applyCatalogRows, updateRows, fetchCostDatabase, fetching }
 }

@@ -54,8 +54,9 @@ export function KnowledgeBaseFilePanelCard({
   const extension = getKnowledgeDocExtension(doc.title, doc.mimeType)
   const status = doc.status ?? 'ready'
   const processing = isKnowledgeDocProcessing(status)
+  const statusForLabel = status === 'ready' && doc.errorMessage ? 'readyPartial' : status
   const statusLabel = getKnowledgeDocStatusLabelWithDetail(
-    status,
+    statusForLabel,
     t,
     doc.ingestProgress,
     doc.ingestDetail,
@@ -146,7 +147,8 @@ export function KnowledgeBaseFilePanelCard({
               'tm-kb-file-card-status-text',
               processing ? 'tm-kb-file-card-status-text--processing' : '',
               status === 'failed' ? 'tm-kb-file-card-status-text--failed' : '',
-              status === 'ready' ? 'tm-kb-file-card-status-text--ready' : '',
+              status === 'ready' && !doc.errorMessage ? 'tm-kb-file-card-status-text--ready' : '',
+              status === 'ready' && doc.errorMessage ? 'tm-kb-file-card-status-text--failed' : '',
             ]
               .filter(Boolean)
               .join(' ')}

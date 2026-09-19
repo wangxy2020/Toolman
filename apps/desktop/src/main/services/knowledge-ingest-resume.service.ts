@@ -4,10 +4,13 @@ import {
   recoverInterruptedIngestJobsOnStartup,
   refreshKbStats,
   recoverStaleIngestJobs,
+  restoreIndexedDocumentsNotInFlight,
   startIngestFilePathsInBackground,
 } from './knowledge-ingest.service'
 import { logStructured } from './structured-log.service'
 import { getDocumentRepository } from '../db/repos'
+import { isIngestInFlight } from './knowledge-ingest-manager.service'
+import { PARSE_INCOMPLETE_INGEST_STAGES } from './knowledge-ingest-shared'
 
 function isUrlPath(path: string | null | undefined): boolean {
   if (!path) return false
@@ -16,6 +19,7 @@ function isUrlPath(path: string | null | undefined): boolean {
 
 export function resumePendingIngestJobs(): void {
   const repo = getDocumentRepository()
+  restoreIndexedDocumentsNotInFlight()
   recoverInterruptedIngestJobsOnStartup()
   reconcileProcessingDocumentsWithoutIngestJob()
   recoverStaleIngestJobs()
@@ -28,6 +32,13 @@ export function resumePendingIngestJobs(): void {
     []
 
   for (const { job, document } of pending) {
+    if (isIngestInFlight(document.id)) continue
+    if (
+      repo.countChunksByDocument(document.id, job.kbId) > 0 &&
+      !PARSE_INCOMPLETE_INGEST_STAGES.has(job.stage)
+    ) {
+      continue
+    }
     const path = document.absolutePath
     if (!path) continue
 

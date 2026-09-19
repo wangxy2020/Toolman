@@ -14,6 +14,7 @@ describe('pdfjs loading options', () => {
     expect(existsSync(join(wasmUrl, 'jbig2.wasm'))).toBe(true)
 
     const options = createPdfjsLoadingOptions(Buffer.from('%PDF-1.4'))
+    expect(options.verbosity).toBe(0)
     expect(options.wasmUrl).toBe(wasmUrl)
     expect(options.cMapUrl?.endsWith('/')).toBe(true)
     expect(options.standardFontDataUrl?.endsWith('/')).toBe(true)

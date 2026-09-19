@@ -2,6 +2,8 @@ import type { FC, KeyboardEvent as ReactKeyboardEvent, Ref } from 'react'
 
 import { useI18n } from '../../../../i18n/useI18n'
 import { ProjectCostTableColGroup } from './ProjectCostTableColGroup'
+import { ProjectCostTableIpcHeaderCells } from './ProjectCostTableIpcCells'
+import { ProjectCostTableMeteringHeaderCells } from './ProjectCostTableMeteringCells'
 import type { CostLabelColumn } from './pm-cost-column-prefs'
 import type { ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
@@ -98,7 +100,13 @@ export const ProjectCostTableHeader: FC<ProjectCostTableHeaderProps> = ({ state 
       <div ref={headerPinInnerRef} className="tm-pm-resource-table-header-pin-inner">
         <div className="tm-pm-resource-table-scroll-inner">
           <table className="tm-pm-resource-table">
-            <ProjectCostTableColGroup columnVisibility={columnVisibility} />
+            <ProjectCostTableColGroup
+              columnVisibility={columnVisibility}
+              autoColWidths={state.autoColWidths}
+              showMeteringColumns={state.showMeteringColumns}
+              showIpcStatementColumns={state.showIpcStatementColumns}
+              ipcColumns={state.ipcColumns}
+            />
             <thead onContextMenu={openColumnVisibilityMenu}>
               <tr>
                 <th className="tm-pm-resource-table-col-index">
@@ -159,8 +167,30 @@ export const ProjectCostTableHeader: FC<ProjectCostTableHeaderProps> = ({ state 
                   ? renderEditable('unitPrice', 'tm-pm-resource-table-col-price')
                   : null}
                 {columnVisibility.totalPrice
-                  ? renderEditable('totalPrice', 'tm-pm-resource-table-col-price')
+                  ? renderEditable(
+                      'totalPrice',
+                      'tm-pm-resource-table-col-price tm-pm-resource-table-col-total-price',
+                    )
                   : null}
+                {state.showMeteringColumns ? (
+                  <ProjectCostTableMeteringHeaderCells
+                    costColumnLabel={costColumnLabel}
+                    editingHeaderColumn={editingHeaderColumn}
+                    headerDraft={headerDraft}
+                    headerInputRef={editingHeaderColumn ? headerInputRef : null}
+                    onStartEdit={startHeaderEdit}
+                    onDraftChange={setHeaderDraft}
+                    onCommit={commitHeaderEdit}
+                    onKeyDown={handleHeaderKeyDown}
+                  />
+                ) : null}
+                {state.showIpcStatementColumns ? (
+                  <ProjectCostTableIpcHeaderCells
+                    ipcColumns={state.ipcColumns}
+                    cumulativeAmountLabel={costColumnLabel('cumulativeAmount')}
+                    cumulativePercentLabel={costColumnLabel('cumulativePercent')}
+                  />
+                ) : null}
                 {columnVisibility.baseline
                   ? renderEditable('baseline', 'tm-pm-resource-table-col-baseline')
                   : null}

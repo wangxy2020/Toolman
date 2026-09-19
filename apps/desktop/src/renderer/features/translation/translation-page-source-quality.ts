@@ -67,14 +67,40 @@ export function resolveParsePreviewKind(text: string, markdown?: string): ParseP
   if (hasGfmTableMarkup(body)) return 'markdown'
   if (/^#{1,6}\s/m.test(body)) return 'markdown'
   if (/^\s*[-*+]\s+/m.test(body)) return 'markdown'
-  if (/^\s*\d+\.\s+/m.test(body)) return 'markdown'
   return 'plain'
+}
+
+/**
+ * Tables keep the HTML/markdown renderer. Letters and prose use the same
+ * paragraph layout as the translation pane.
+ */
+export function usesRichDocumentPagePreview(text: string, markdown?: string): boolean {
+  const body = (markdown ?? text).trim()
+  if (!body) return false
+  if (hasHtmlMarkup(body)) return /<table\b/i.test(body) || /<img\b/i.test(body)
+  if (hasGfmTableMarkup(body)) return true
+  if (/^#{1,6}\s/m.test(body)) return true
+  if (/^\s*[-*+]\s+/m.test(body)) return true
+  return false
+}
+
+/** Tables start from a lower 字号 cap so a full grid can still fit the PDF page. */
+export function usesDocumentPageTableFit(text: string, markdown?: string): boolean {
+  const body = (markdown ?? text).trim()
+  if (!body) return false
+  return /<table\b/i.test(body) || hasGfmTableMarkup(body)
+}
+
+export function resolveDocumentPageDisplayText(raw: string, rich: boolean): string {
+  const body = raw.trim()
+  if (!body) return ''
+  if (rich) return body
+  return hasHtmlMarkup(body) ? htmlPreviewToVisibleText(body) : body
 }
 
 /** ODL HTML/markdown needs a rich preview; glm-ocr plain text uses lightweight paragraphs. */
 export function isRichMarkdownPreview(text: string, markdown?: string): boolean {
-  const kind = resolveParsePreviewKind(text, markdown)
-  return kind === 'html' || kind === 'markdown'
+  return usesRichDocumentPagePreview(text, markdown) || resolveParsePreviewKind(text, markdown) === 'html'
 }
 
 /** True when there is something to show, without re-running OCR collapse strip. */
@@ -89,7 +115,10 @@ export function hasVisibleParsePreviewBody(text: string, markdown?: string): boo
 /** Strip active content from saved ODL HTML before innerHTML. */
 function stripPreviewStyleHints(style: string): string {
   return style
-    .replace(/(?:^|;)\s*(?:font-size|width|min-width|max-width|white-space)\s*:[^;]*/gi, '')
+    .replace(
+      /(?:^|;)\s*(?:font(?:-size|-family|-weight|-style)?|line-height|width|min-width|max-width|white-space|zoom)\s*:[^;]*/gi,
+      '',
+    )
     .replace(/^;+|;+$/g, '')
     .trim()
 }
@@ -99,9 +128,10 @@ export function sanitizeDocumentPreviewHtml(html: string): string {
     .replace(/<script\b[\s\S]*?<\/script>/gi, '')
     .replace(/<style\b[\s\S]*?<\/style>/gi, '')
     .replace(/<\/?(iframe|object|embed|link|meta)\b[^>]*>/gi, '')
+    .replace(/<\/?font\b[^>]*>/gi, '')
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/\s(?:href|src)\s*=\s*(['"]?)\s*javascript:[^'">\s]*/gi, '')
-    .replace(/\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s(?:width|size|face)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (_match, style: string) => {
       const next = stripPreviewStyleHints(style)
       return next ? ` style="${next}"` : ''
@@ -147,7 +177,21 @@ function isPdfExtractedTextInsufficient(text: string, pageCount = 1): boolean {
   const suspicious = normalized.match(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)?.length ?? 0
   if (suspicious > 0 && suspicious / normalized.length > 0.02) return true
 
+  if (isGappyCjkExtractedText(normalized)) return true
+
   return false
+}
+
+function isGappyCjkExtractedText(text: string): boolean {
+  const runs = text.match(/[\u4e00-\u9fff]+/g) ?? []
+  const cjkCount = runs.reduce((count, run) => count + run.length, 0)
+  if (cjkCount < 80) return false
+  const latinCount = text.match(/[A-Za-z]/g)?.length ?? 0
+  if (latinCount > 0 && cjkCount / (cjkCount + latinCount) < 0.45) return false
+  const averageRun = cjkCount / runs.length
+  if (averageRun >= 3.5) return false
+  const longRunChars = runs.reduce((count, run) => (run.length >= 4 ? count + run.length : count), 0)
+  return longRunChars / cjkCount < 0.45
 }
 
 /** Reject OCR/parse noise before sending a page to the translation model. */

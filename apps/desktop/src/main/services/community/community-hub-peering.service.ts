@@ -7,6 +7,8 @@ import {
   FederationCatalogPageSchema,
   FederationLibp2pBootstrapSchema,
   FederatedResourceCatalogEntrySchema,
+  hostnameOfBaseUrl,
+  isOfficialCommunityHubHost,
   normalizeCommunityHubBaseUrl,
   type FederatedResourceCatalogEntry,
   type FederationPeerSyncState,
@@ -67,10 +69,17 @@ function getPeerState(store: FederationSyncStateStore, peerUrl: string): Federat
   )
 }
 
+function isFederatedPeerUrl(url: string): boolean {
+  return !isOfficialCommunityHubHost(hostnameOfBaseUrl(url))
+}
+
 function resolvePeerUrls(): string[] {
   const config = readCommunityHubConfig()
-  const peers = (config.peers ?? []).map(normalizeCommunityHubBaseUrl)
-  const upstream = config.upstream ? normalizeCommunityHubBaseUrl(config.upstream) : null
+  const peers = (config.peers ?? []).map(normalizeCommunityHubBaseUrl).filter(isFederatedPeerUrl)
+  const upstream =
+    config.upstream && isFederatedPeerUrl(config.upstream)
+      ? normalizeCommunityHubBaseUrl(config.upstream)
+      : null
   const ordered = upstream ? [upstream, ...peers.filter((item) => item !== upstream)] : peers
   return [...new Set(ordered)]
 }

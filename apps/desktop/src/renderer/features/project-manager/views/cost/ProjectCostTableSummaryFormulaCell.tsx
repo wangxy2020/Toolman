@@ -36,7 +36,7 @@ export const ProjectCostTableSummaryFormulaCell: FC<{
     <td
       className={[
         'tm-pm-resource-table-cell--center',
-        'tm-pm-resource-table-col-price',
+        'tm-pm-resource-table-col-price tm-pm-resource-table-col-total-price',
         canPick ? 'tm-pm-cost-table-summary-formula-pickable' : '',
       ]
         .filter(Boolean)

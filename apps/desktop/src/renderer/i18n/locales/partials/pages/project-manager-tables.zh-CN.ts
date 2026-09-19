@@ -130,4 +130,12 @@ export const projectManagerTablesZhCN = {
       investmentIndicator: '估算指标',
     },
   },
+  costDatabase: {
+    views: {
+      constructionQuota: '价格表',
+      budgetQuota: '中期计量',
+      estimateQuota: '进度款统计',
+      estimateIndicator: '支付统计',
+    },
+  },
 } as const

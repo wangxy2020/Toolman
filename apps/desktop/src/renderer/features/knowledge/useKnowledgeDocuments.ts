@@ -38,11 +38,32 @@ export function useKnowledgeDocuments(workspaceId: string | null, kbId: string |
 
     const data = result.data as { items: KnowledgeDocument[] }
     setItems(data.items)
+    setIngestProgressById((current) => {
+      const next = { ...current }
+      for (const [id] of Object.entries(next)) {
+        const doc = data.items.find((item) => item.id === id)
+        if (!doc || !isKnowledgeDocProcessing(doc.status)) delete next[id]
+      }
+      return next
+    })
+    setIngestDetailById((current) => {
+      const next = { ...current }
+      for (const [id] of Object.entries(next)) {
+        const doc = data.items.find((item) => item.id === id)
+        if (!doc || !isKnowledgeDocProcessing(doc.status)) delete next[id]
+      }
+      return next
+    })
   }, [workspaceId, kbId])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    setIngestProgressById({})
+    setIngestDetailById({})
+  }, [workspaceId, kbId])
 
   useEffect(() => {
     if (!workspaceId || !kbId) return
@@ -202,28 +223,32 @@ export function useKnowledgeDocuments(workspaceId: string | null, kbId: string |
     [workspaceId, kbId, load],
   )
 
-  const reindexAll = useCallback(async () => {
-    if (!workspaceId || !kbId) return null
+  const reindexAll = useCallback(
+    async (documentIds?: string[]) => {
+      if (!workspaceId || !kbId) return null
 
-    setError(null)
-    const result = await window.api.invoke(IpcChannel.KnowledgeKbReindex, {
-      workspaceId,
-      kbId,
-    })
+      setError(null)
+      const result = await window.api.invoke(IpcChannel.KnowledgeKbReindex, {
+        workspaceId,
+        kbId,
+        ...(documentIds?.length ? { documentIds } : {}),
+      })
 
-    if (!result.ok) {
-      setError(result.error.message)
-      return null
-    }
+      if (!result.ok) {
+        setError(result.error.message)
+        return null
+      }
 
-    await load()
-    return result.data as {
-      ingested: number
-      skipped: number
-      failed: Array<{ path: string; message: string }>
-      total: number
-    }
-  }, [workspaceId, kbId, load])
+      await load()
+      return result.data as {
+        ingested: number
+        skipped: number
+        failed: Array<{ path: string; message: string }>
+        total: number
+      }
+    },
+    [workspaceId, kbId, load],
+  )
 
   const cancelIngest = useCallback(
     async (documentId: string) => {

@@ -1,13 +1,20 @@
 import { memo, useCallback } from 'react'
 import { useI18n } from '../../i18n/useI18n'
-import type { DocumentPageFitRecord } from './document-page-fit'
+import {
+  DOCUMENT_PAGE_FIT_TABLE_CAPS,
+  type DocumentPageFitRecord,
+} from './document-page-fit'
 import { useFitDocumentPageContent } from './useFitDocumentPageContent'
 import { TranslationDocumentMarkdown } from './TranslationDocumentMarkdown'
+import { TranslationDocumentTranslatedText } from './TranslationDocumentTranslatedText'
+import { looksLikeTranslationTable } from './translation-display-table'
 import {
   emptyPageMessageKey,
   HYBRID_UNAVAILABLE_ERROR,
   hasVisibleParsePreviewBody,
-  resolveParsePreviewKind,
+  resolveDocumentPageDisplayText,
+  usesDocumentPageTableFit,
+  usesRichDocumentPagePreview,
 } from './translation-page-source-quality'
 import type { DocumentPageState } from './useDocumentPageTranslation'
 
@@ -19,6 +26,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   fitToPage = false,
   savedFit = null,
   onFitPersist,
+  deferFit = false,
 }: {
   page: DocumentPageState
   totalPages: number
@@ -30,29 +38,33 @@ const DocumentPageCard = memo(function DocumentPageCard({
   fitToPage?: boolean
   savedFit?: DocumentPageFitRecord | null
   onFitPersist?: (pageNumber: number, fit: DocumentPageFitRecord) => void
+  /** Neighbor rows wait a frame so the current page paints first. */
+  deferFit?: boolean
 }) {
   const { t } = useI18n()
+  const isTranslated = page.status === 'done' && Boolean(page.translatedText.trim())
+  const rawText = (
+    isTranslated ? page.translatedText : (page.parsedMarkdown ?? page.translatedText)
+  ).trim()
   const plainText = page.translatedText.trim()
-  const markdownText = (page.parsedMarkdown ?? page.translatedText).trim()
-  const hasPreview = hasVisibleParsePreviewBody(plainText, page.parsedMarkdown)
+  const hasPreview = hasVisibleParsePreviewBody(plainText, isTranslated ? undefined : page.parsedMarkdown)
   const previewMode =
     hasPreview &&
     (page.status === 'parsed' || page.status === 'parsing' || page.status === 'done' || parseArmed)
-  const kind = resolveParsePreviewKind(
-    page.parsedMarkdown?.trim() ? page.parsedMarkdown : plainText,
-    page.parsedMarkdown,
-  )
-  const showRich = Boolean(markdownText) && previewMode && kind !== 'plain'
-  const displayText = showRich ? markdownText : plainText
+  const showRich = previewMode && usesRichDocumentPagePreview(rawText)
+  const displayText = previewMode ? resolveDocumentPageDisplayText(rawText, showRich) : plainText
+  const fitTable = usesDocumentPageTableFit(rawText) || looksLikeTranslationTable(displayText)
   const persistFit = useCallback(
     (fit: DocumentPageFitRecord) => onFitPersist?.(page.pageNumber, fit),
     [onFitPersist, page.pageNumber],
   )
   const fitBoxRef = useFitDocumentPageContent(
     fitToPage && Boolean(displayText),
-    `${page.pageNumber}:${displayText.length}:${showRich}:${kind}`,
+    `${page.pageNumber}:${displayText.length}:${showRich ? 'rich' : 'plain'}:${fitTable ? 'table' : 'prose'}`,
     savedFit,
     persistFit,
+    fitTable ? DOCUMENT_PAGE_FIT_TABLE_CAPS : undefined,
+    deferFit,
   )
 
   return (
@@ -82,20 +94,20 @@ const DocumentPageCard = memo(function DocumentPageCard({
       </header>
       <div
         ref={fitBoxRef}
-        className={
-          fitToPage
-            ? 'tm-translation-doc-page-card-body tm-translation-doc-page-card-body--fit'
-            : 'tm-translation-doc-page-card-body'
-        }
+        className={[
+          'tm-translation-doc-page-card-body',
+          fitToPage ? 'tm-translation-doc-page-card-body--fit' : '',
+          fitToPage && fitTable ? 'tm-translation-doc-page-card-body--fit-table' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         <div className={fitToPage ? 'tm-translation-doc-fit' : undefined}>
           {displayText ? (
             showRich ? (
               <TranslationDocumentMarkdown text={displayText} />
             ) : (
-              <div className="tm-translation-doc-page-card-text tm-translation-doc-page-card-text--plain">
-                {displayText}
-              </div>
+              <TranslationDocumentTranslatedText text={displayText} />
             )
           ) : page.status === 'error' ? (
             <p className="tm-translation-doc-page-card-placeholder tm-translation-doc-page-card-placeholder--error">

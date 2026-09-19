@@ -15,6 +15,9 @@ export interface IngestFileAtPathOptions {
   sourceId?: string | null
   documentId?: string
   skipP2pSync?: boolean
+  indexVersion?: number
+  /** User-triggered rebuild must re-parse even when file bytes are unchanged. */
+  force?: boolean
 }
 
 export interface IngestFileAtPathResult {

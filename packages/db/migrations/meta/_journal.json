@@ -106,6 +106,13 @@
       "when": 1781346000000,
       "tag": "0014_pm_execution",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1781347000000,
+      "tag": "0015_knowledge_infrastructure",
+      "breakpoints": true
     }
   ]
 }

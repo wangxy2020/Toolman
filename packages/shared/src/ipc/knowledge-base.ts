@@ -4,6 +4,11 @@ import {
   buildDefaultKnowledgeWatchExcludePatterns,
   buildDefaultKnowledgeWatchIncludePatterns,
 } from '../knowledge-watch-config.js'
+import {
+  DEFAULT_KNOWLEDGE_RETRIEVAL_CONFIG,
+  KnowledgeRetrievalConfigSchema,
+} from '../knowledge-retrieval-config.js'
+import { KnowledgeVisibilitySchema } from '../knowledge-infrastructure.js'
 
 export const KnowledgeBaseStatusSchema = z.enum(['idle', 'indexing', 'reindexing', 'error'])
 
@@ -48,6 +53,10 @@ export const KnowledgeBaseSchema = z.object({
   embedConfig: KnowledgeEmbedConfigSchema,
   chunkConfig: KnowledgeChunkConfigSchema,
   watchConfig: KnowledgeWatchConfigSchema,
+  retrievalConfig: KnowledgeRetrievalConfigSchema.default(DEFAULT_KNOWLEDGE_RETRIEVAL_CONFIG),
+  activeIndexVersion: z.number().int().positive().default(1),
+  visibility: KnowledgeVisibilitySchema.default('private'),
+  ownerId: UuidSchema.nullable().optional(),
   status: KnowledgeBaseStatusSchema,
   documentCount: z.number().int().nonnegative(),
   chunkCount: z.number().int().nonnegative(),
@@ -78,6 +87,7 @@ export const KnowledgeBaseCreateInputSchema = z.object({
   embedConfig: KnowledgeEmbedConfigSchema.partial().optional(),
   chunkConfig: KnowledgeChunkConfigSchema.partial().optional(),
   watchConfig: KnowledgeWatchConfigSchema.partial().optional(),
+  retrievalConfig: KnowledgeRetrievalConfigSchema.partial().optional(),
 })
 
 export const KnowledgeBaseUpdateInputSchema = z.object({
@@ -88,6 +98,7 @@ export const KnowledgeBaseUpdateInputSchema = z.object({
   embedConfig: KnowledgeEmbedConfigSchema.partial().optional(),
   chunkConfig: KnowledgeChunkConfigSchema.partial().optional(),
   watchConfig: KnowledgeWatchConfigSchema.partial().optional(),
+  retrievalConfig: KnowledgeRetrievalConfigSchema.partial().optional(),
 })
 
 export const KnowledgeBaseDeleteInputSchema = z.object({

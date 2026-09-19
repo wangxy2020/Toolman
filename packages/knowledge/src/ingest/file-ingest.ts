@@ -21,11 +21,13 @@ export interface IngestFileInput {
   vectorsDir: string
   parseOptions?: ParseFileOptions
   vectorBackend?: VectorBackend
+  indexVersion?: number
 }
 
 export interface IngestFileResult {
   title: string
   contentHash: string
+  parsedHash?: string
   mimeType: string
   chunks: Array<{
     id: string
@@ -59,6 +61,7 @@ export async function ingestFile(input: IngestFileInput): Promise<IngestFileResu
     embedModel: input.embedModel,
     vectorsDir: input.vectorsDir,
     vectorBackend: input.vectorBackend,
+    indexVersion: input.indexVersion,
   })
 }
 
@@ -67,8 +70,14 @@ export async function removeDocumentVectors(
   kbId: string,
   documentId: string,
   vectorBackend?: VectorBackend,
+  indexVersion?: number,
 ): Promise<void> {
-  const store = await openKbVectorStore({ vectorsDir, kbId, backend: vectorBackend })
+  const store = await openKbVectorStore({
+    vectorsDir,
+    kbId,
+    backend: vectorBackend,
+    indexVersion,
+  })
   await store.deleteByDocumentId(documentId)
 }
 
@@ -76,10 +85,16 @@ export async function removeKbVectors(
   vectorsDir: string,
   kbId: string,
   vectorBackend?: VectorBackend,
+  indexVersion?: number,
 ): Promise<void> {
-  const store = await openKbVectorStore({ vectorsDir, kbId, backend: vectorBackend })
+  const store = await openKbVectorStore({
+    vectorsDir,
+    kbId,
+    backend: vectorBackend,
+    indexVersion,
+  })
   await store.deleteByKbId()
-  const jsonPath = getKbVectorStorePath(vectorsDir, kbId)
+  const jsonPath = getKbVectorStorePath(vectorsDir, kbId, indexVersion ?? 1)
   if (existsSync(jsonPath)) {
     unlinkSync(jsonPath)
   }
@@ -94,11 +109,14 @@ export async function moveDocumentVectors(options: {
   sourceBackend?: VectorBackend
   destBackend?: VectorBackend
   embedModel: string
+  sourceIndexVersion?: number
+  destIndexVersion?: number
 }): Promise<number> {
   const source = await openKbVectorStore({
     vectorsDir: options.vectorsDir,
     kbId: options.sourceKbId,
     backend: options.sourceBackend,
+    indexVersion: options.sourceIndexVersion,
   })
   const records = await source.listByDocumentId(options.documentId)
   if (records.length === 0) return 0
@@ -116,6 +134,7 @@ export async function moveDocumentVectors(options: {
     vectorsDir: options.vectorsDir,
     kbId: options.destKbId,
     backend: options.destBackend,
+    indexVersion: options.destIndexVersion,
   })
   await dest.upsert(remapped, {
     dimension: remapped[0]?.vector.length ?? 0,
@@ -140,6 +159,7 @@ export async function ingestUrlContent(input: {
   embedModel: string
   vectorsDir: string
   vectorBackend?: VectorBackend
+  indexVersion?: number
   onEmbedProgress?: EmbedProgressCallback
   onIndexedChunkBatch?: IngestContentInput['onIndexedChunkBatch']
 }): Promise<IngestFileResult> {
@@ -157,6 +177,7 @@ export async function ingestUrlContent(input: {
     embedModel: input.embedModel,
     vectorsDir: input.vectorsDir,
     vectorBackend: input.vectorBackend,
+    indexVersion: input.indexVersion,
     onEmbedProgress: input.onEmbedProgress,
     onIndexedChunkBatch: input.onIndexedChunkBatch,
   })

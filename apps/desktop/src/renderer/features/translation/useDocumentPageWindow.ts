@@ -9,6 +9,7 @@ export function useDocumentPageWindow(
   getRowHeight: (pageNumber: number) => number,
   heightVersion: number,
   fallbackRowHeight: number,
+  batchSize?: number,
 ) {
   const [currentPage, setCurrentPage] = useState(1)
   const getRowHeightRef = useRef(getRowHeight)
@@ -41,7 +42,12 @@ export function useDocumentPageWindow(
     }
   }, [enabled, fallbackRowHeight, heightVersion, scrollRootRef, totalPages])
 
-  const { startPage, endPage } = resolveDocumentPageWindow(currentPage, totalPages)
+  const { startPage, endPage } = resolveDocumentPageWindow(
+    currentPage,
+    totalPages,
+    undefined,
+    batchSize,
+  )
   const topSpacerRef = useRef(0)
   const startPageRef = useRef(startPage)
 

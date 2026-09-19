@@ -41,10 +41,6 @@ export function ensureUserSavedGroupKnowledgeBase(
   _sharedFolderName?: string,
 ): { kbId: string; storagePath: string } {
   const kbRepo = getKnowledgeBaseRepository()
-  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, undefined, p2pWorkspaceId)
-  const displayName = buildP2pGroupSavedKnowledgeDisplayName(savedMeta.groupName)
-  const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
-
   const workspaceRows = kbRepo.listByWorkspace(storageWorkspaceId)
   const existingId = findGroupSavedKnowledgeBaseId(
     workspaceRows,
@@ -54,8 +50,20 @@ export function ensureUserSavedGroupKnowledgeBase(
     },
     { isMirrorDescription: isP2pSharedKnowledgeMirrorDescription },
   )
+  const existingRow = existingId ? kbRepo.findRowById(existingId, storageWorkspaceId) : null
+  const existingMeta = parseP2pGroupSavedKnowledgeMeta(existingRow?.description)
+  const savedMeta = normalizeP2pGroupSavedKnowledgeMeta(groupName, undefined, p2pWorkspaceId, {
+    originGroup: groupName,
+    originPeer: existingMeta?.originPeer,
+    snapshotId: existingMeta?.snapshotId ?? p2pWorkspaceId,
+    sourceHash: existingMeta?.sourceHash,
+    sourceVersion: existingMeta?.sourceVersion,
+    receivedAt: existingMeta?.receivedAt ?? Date.now(),
+  })
+  const displayName = buildP2pGroupSavedKnowledgeDisplayName(savedMeta.groupName)
+  const description = buildP2pGroupSavedKnowledgeDescription(savedMeta)
 
-  let kbRow = existingId ? kbRepo.findRowById(existingId, storageWorkspaceId) : null
+  let kbRow = existingRow
   if (kbRow) {
     const sharedRoot = ensureWorkspaceSharedKnowledgeFolder({ workspaceId: storageWorkspaceId })
     const legacyMeta = parseP2pGroupSavedKnowledgeMeta(kbRow.description)

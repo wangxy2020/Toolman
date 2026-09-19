@@ -19,6 +19,10 @@ export type PmCostCatalogSnapshotRow = {
   unit: string
   quantity: number | null
   unitPrice: number | null
+  periodQuantity?: number | null
+  priorQuantity?: number | null
+  /** Captured 本期 quantities keyed by metering-period / IPC id. */
+  ipcQuantities?: Record<string, number | null>
   applicable: string
   note: string
   /** Sectional / divisional work (分部工程); optional for legacy snapshots. */
@@ -48,6 +52,27 @@ export type PmCostSaveRecord = {
   contentFingerprint?: string
   /** Catalog snapshot at save time; required to switch back to this version. */
   catalog?: PmCostCatalogSnapshotRow[]
+}
+
+function parseSnapshotIpcQuantities(
+  raw: unknown,
+): Record<string, number | null> | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const next: Record<string, number | null> = {}
+  let any = false
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key.trim()) continue
+    if (value == null) {
+      next[key] = null
+      any = true
+      continue
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      next[key] = value
+      any = true
+    }
+  }
+  return any ? next : undefined
 }
 
 function isCostCatalogSnapshotRow(value: unknown): value is PmCostCatalogSnapshotRow {
@@ -85,6 +110,15 @@ export function normalizeCostCatalogSnapshot(
       typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
     unitPrice:
       typeof row.unitPrice === 'number' && Number.isFinite(row.unitPrice) ? row.unitPrice : null,
+    periodQuantity:
+      typeof row.periodQuantity === 'number' && Number.isFinite(row.periodQuantity)
+        ? row.periodQuantity
+        : null,
+    priorQuantity:
+      typeof row.priorQuantity === 'number' && Number.isFinite(row.priorQuantity)
+        ? row.priorQuantity
+        : null,
+    ipcQuantities: parseSnapshotIpcQuantities(row.ipcQuantities),
     applicable: row.applicable,
     note: typeof row.note === 'string' ? row.note : '',
     sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
@@ -117,6 +151,15 @@ export function parseCostCatalogSnapshot(raw: unknown): PmCostCatalogSnapshotRow
         typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null,
       unitPrice:
         typeof row.unitPrice === 'number' && Number.isFinite(row.unitPrice) ? row.unitPrice : null,
+      periodQuantity:
+        typeof record.periodQuantity === 'number' && Number.isFinite(record.periodQuantity)
+          ? record.periodQuantity
+          : null,
+      priorQuantity:
+        typeof record.priorQuantity === 'number' && Number.isFinite(record.priorQuantity)
+          ? record.priorQuantity
+          : null,
+      ipcQuantities: parseSnapshotIpcQuantities(record.ipcQuantities),
       applicable: row.applicable,
       note: typeof record.note === 'string' ? record.note : '',
       sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',

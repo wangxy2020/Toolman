@@ -1,6 +1,6 @@
 /**
- * Mirror the desktop Sync Hub changelog to Community Hub so mobile/web can
- * sync off-LAN (local sidecar first, then official HTTPS Hub).
+ * Mirror the desktop Sync Hub changelog to a configured Community Hub
+ * (local sidecar, or an explicit remote Hub — never hub.toolman.app).
  *
  * Device-sync buckets are keyed by Authing/Firebase identity (`ag-…` / `fb-…`).
  * LAN Sync Hub pairing token remains the full-featured local path (incl. knowledge files).
@@ -10,7 +10,6 @@ import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
-  OFFICIAL_TOOLMAN_HUB_URL,
   hostnameOfBaseUrl,
   isOfficialCommunityHubHost,
   resolveDeviceSyncIdentityId,
@@ -79,20 +78,11 @@ function persistWanCursor(cursor: string | null): void {
   }
 }
 
-/**
- * Prefer configured remote Hub; otherwise try local sidecar then official Hub
- * so `mode: local` desktops still mirror into the public device_sync bucket.
- */
+/** Prefer an explicit remote Hub; otherwise the local sidecar only. */
 export function listCommunityDeviceSyncHubCandidates(): string[] {
   const remote = resolveCommunityHubBaseUrl()
-  if (remote) {
-    const urls = [remote]
-    if (!isOfficialCommunityHubHost(hostnameOfBaseUrl(remote))) {
-      urls.push(OFFICIAL_TOOLMAN_HUB_URL)
-    }
-    return urls
-  }
-  return [DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL, OFFICIAL_TOOLMAN_HUB_URL]
+  if (remote) return [remote]
+  return [DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL]
 }
 
 /**

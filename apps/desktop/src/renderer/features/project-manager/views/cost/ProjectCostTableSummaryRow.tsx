@@ -2,8 +2,13 @@ import type { FC } from 'react'
 
 import { useI18n } from '../../../../i18n/useI18n'
 import { formatCostTotalPrice } from './pm-cost-catalog'
+import { ProjectCostTableFitTotal } from './ProjectCostTableFitTotal'
 import { syncFeatureDescriptionHeight } from './pm-cost-panel-utils'
 import { ProjectCostTableSummaryFormulaCell } from './ProjectCostTableSummaryFormulaCell'
+import { ProjectCostTableIpcSummaryCells } from './ProjectCostTableIpcCells'
+import { ProjectCostTableMeteringSummaryCells } from './ProjectCostTableMeteringCells'
+import { costSectionalWorkKey, costSubprojectKey } from './pm-cost-catalog-sectional'
+import { sumCostIpcStatements } from './pm-cost-ipc-cols'
 import type { ProjectCostTablePanelState } from './useProjectCostTablePanel'
 
 type CostDisplayEntry = ProjectCostTablePanelState['displayEntries'][number]
@@ -24,6 +29,7 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
   const {
     columnVisibility,
     isSummaryView,
+    databaseSectionCurrencies,
     selectedId,
     setSelectedId,
     patchSummaryRow,
@@ -32,10 +38,21 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
     setTotalFormulaFocusId,
     formulaInputRef,
     appendSectionRefToActiveFormula,
+    showMeteringColumns,
+    showIpcStatementColumns,
+    ipcColumns,
+    visibleRows,
   } = state
 
   const isTopSummary = entry.kind === 'summary'
   const sectionKey = isTopSummary ? '' : entry.summary.key
+  const sectionSubproject = isTopSummary ? '' : entry.summary.subproject
+  const sectionMetaScope = { subproject: sectionSubproject }
+  const sectionCurrency =
+    !isTopSummary ? databaseSectionCurrencies[sectionKey] : undefined
+  const sectionRowId = isTopSummary
+    ? entry.row.id
+    : `section:${sectionSubproject || '__empty__'}\u001f${sectionKey || '__empty__'}`
   const sectionLabel = isTopSummary
     ? entry.row.name.trim() || t('projectManagerPage.costTable.views.sectionSummary')
     : entry.summary.key
@@ -59,10 +76,8 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
     : 'totalFormula' in entry.summary
       ? entry.summary.totalFormula
       : ''
-  const formulaFocusKey = isTopSummary
-    ? `summary:${entry.row.id}`
-    : `section:${sectionKey || '__empty__'}`
-  const selectionId = isTopSummary ? entry.row.id : `section:${sectionKey || '__empty__'}`
+  const formulaFocusKey = isTopSummary ? `summary:${entry.row.id}` : sectionRowId
+  const selectionId = sectionRowId
   const isRowSelected = selectedId === selectionId
   const pickRefName = isTopSummary
     ? null
@@ -75,7 +90,7 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
 
   return (
     <tr
-      key={isTopSummary ? `summary:${entry.row.id}` : `section:${entryIndex}:${sectionKey || '__empty__'}`}
+      key={isTopSummary ? `summary:${entry.row.id}` : `${sectionRowId}:${entryIndex}`}
       className={[
         'tm-pm-cost-table-section-summary',
         isTopSummary ? 'tm-pm-cost-table-section-summary--grand' : '',
@@ -91,7 +106,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
         </span>
       </td>
       {columnVisibility.type ? <td /> : null}
-      {columnVisibility.subproject ? <td className="tm-pm-resource-table-col-subproject" /> : null}
+      {columnVisibility.subproject ? (
+        <td className="tm-pm-resource-table-col-subproject">
+          {!isTopSummary && sectionSubproject ? (
+            <span className="tm-pm-cost-table-section-summary-label">{sectionSubproject}</span>
+          ) : null}
+        </td>
+      ) : null}
       {columnVisibility.sectionalWork ? (
         <td className="tm-pm-resource-table-col-sectional">
           <span className="tm-pm-cost-table-section-summary-label">
@@ -114,9 +135,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
                     code: event.target.value,
                   })
                 } else {
-                  patchSectionMeta(sectionKey, {
-                    sectionCode: event.target.value,
-                  })
+                  patchSectionMeta(
+                    sectionKey,
+                    {
+                      sectionCode: event.target.value,
+                    },
+                    sectionMetaScope,
+                  )
                 }
               }}
               onFocus={() => setSelectedId(selectionId)}
@@ -138,9 +163,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
                     name: event.target.value,
                   })
                 } else {
-                  patchSectionMeta(sectionKey, {
-                    sectionName: event.target.value,
-                  })
+                  patchSectionMeta(
+                    sectionKey,
+                    {
+                      sectionName: event.target.value,
+                    },
+                    sectionMetaScope,
+                  )
                 }
               }}
               onFocus={() => setSelectedId(selectionId)}
@@ -168,9 +197,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
                     featureDescription: event.target.value,
                   })
                 } else {
-                  patchSectionMeta(sectionKey, {
-                    sectionFeatureDescription: event.target.value,
-                  })
+                  patchSectionMeta(
+                    sectionKey,
+                    {
+                      sectionFeatureDescription: event.target.value,
+                    },
+                    sectionMetaScope,
+                  )
                 }
               }}
               onInput={(event) => syncFeatureDescriptionHeight(event.currentTarget)}
@@ -183,7 +216,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
           ) : null}
         </td>
       ) : null}
-      {columnVisibility.unit ? <td /> : null}
+      {columnVisibility.unit ? (
+        <td className="tm-pm-resource-table-col-unit">
+          {sectionCurrency ? (
+            <span className="tm-pm-cost-table-section-summary-currency">{sectionCurrency}</span>
+          ) : null}
+        </td>
+      ) : null}
       {columnVisibility.quantity ? <td /> : null}
       {columnVisibility.unitPrice ? <td /> : null}
       {columnVisibility.totalPrice ? (
@@ -200,9 +239,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
               if (isTopSummary) {
                 patchSummaryRow(entry.row.id, { totalFormula: next })
               } else {
-                patchSectionMeta(sectionKey, {
-                  sectionTotalFormula: next,
-                })
+                patchSectionMeta(
+                  sectionKey,
+                  {
+                    sectionTotalFormula: next,
+                  },
+                  sectionMetaScope,
+                )
               }
             }}
             onSelect={() => setSelectedId(selectionId)}
@@ -210,12 +253,30 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
             appendSectionRefToActiveFormula={appendSectionRefToActiveFormula}
           />
         ) : (
-          <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-price">
-            <span className="tm-pm-cost-table-section-summary-total">
-              {formatCostTotalPrice(totalValue)}
-            </span>
+          <td className="tm-pm-resource-table-cell--center tm-pm-resource-table-col-price tm-pm-resource-table-col-total-price">
+            <ProjectCostTableFitTotal
+              className="tm-pm-cost-table-section-summary-total"
+              value={formatCostTotalPrice(totalValue)}
+            />
           </td>
         )
+      ) : null}
+      {showMeteringColumns ? <ProjectCostTableMeteringSummaryCells /> : null}
+      {showIpcStatementColumns ? (
+        <ProjectCostTableIpcSummaryCells
+          ipcColumns={ipcColumns}
+          statement={sumCostIpcStatements(
+            isTopSummary
+              ? visibleRows
+              : visibleRows.filter(
+                  (row) =>
+                    costSectionalWorkKey(row) === sectionKey &&
+                    costSubprojectKey(row) === sectionSubproject,
+                ),
+            ipcColumns,
+            totalValue,
+          )}
+        />
       ) : null}
       {columnVisibility.baseline ? <td /> : null}
       {columnVisibility.note ? (
@@ -226,9 +287,13 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
               value={noteValue}
               placeholder={t('projectManagerPage.costTable.notePlaceholder')}
               onChange={(event) =>
-                patchSectionMeta(sectionKey, {
-                  sectionNote: event.target.value,
-                })
+                patchSectionMeta(
+                  sectionKey,
+                  {
+                    sectionNote: event.target.value,
+                  },
+                  sectionMetaScope,
+                )
               }
               onFocus={() => setSelectedId(selectionId)}
               onClick={(event) => event.stopPropagation()}

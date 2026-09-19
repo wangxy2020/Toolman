@@ -42,6 +42,14 @@ vi.mock('../db/repos', () => ({
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/toolman-test-userdata' },
+  nativeImage: {
+    createFromBuffer: () => ({
+      isEmpty: () => true,
+      getSize: () => ({ width: 0, height: 0 }),
+      resize: () => ({ toJPEG: () => Buffer.alloc(0) }),
+      toJPEG: () => Buffer.alloc(0),
+    }),
+  },
 }))
 
 vi.mock('./agent-runtime.service', async (importOriginal) => {

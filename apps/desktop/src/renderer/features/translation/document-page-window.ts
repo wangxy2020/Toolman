@@ -1,6 +1,8 @@
-export const DOCUMENT_PAGE_OVERSCAN = 1
+export const DOCUMENT_PAGE_OVERSCAN = 2
 /** First page and later pages keep the same mounted row count (current ± overscan, shifted at the ends). */
 export const DOCUMENT_PAGE_WINDOW_SIZE = DOCUMENT_PAGE_OVERSCAN * 2 + 1
+/** Vector PDF left pane: first 10 pages, then the next 10 as the user scrolls. */
+export const PDF_VIEWER_PAGE_BATCH = 10
 export const DOCUMENT_ROW_PANE_PAD_TOP = 12
 export const DOCUMENT_ROW_GAP = 16
 export const MIN_MEASURED_ROW_HEIGHT = 48
@@ -15,11 +17,27 @@ export function estimateDocumentRowHeight(pageBoxWidth: number, pageAspect: numb
   return DOCUMENT_ROW_PANE_PAD_TOP + estimateDocumentPageBodyHeight(pageBoxWidth, pageAspect) + DOCUMENT_ROW_GAP
 }
 
+export function resolvePdfViewerPageBatch(
+  currentPage: number,
+  totalPages: number,
+  batchSize = PDF_VIEWER_PAGE_BATCH,
+): { startPage: number; endPage: number } {
+  const total = Math.max(1, Math.floor(totalPages) || 1)
+  const size = Math.max(1, Math.floor(batchSize) || 1)
+  const current = Math.max(1, Math.min(total, Math.floor(currentPage) || 1))
+  const startPage = Math.floor((current - 1) / size) * size + 1
+  return { startPage, endPage: Math.min(startPage + size - 1, total) }
+}
+
 export function resolveDocumentPageWindow(
   currentPage: number,
   totalPages: number,
   overscan = DOCUMENT_PAGE_OVERSCAN,
+  batchSize?: number,
 ): { startPage: number; endPage: number } {
+  if (batchSize && batchSize > 0) {
+    return resolvePdfViewerPageBatch(currentPage, totalPages, batchSize)
+  }
   const total = Math.max(1, Math.floor(totalPages) || 1)
   const current = Math.max(1, Math.min(total, Math.floor(currentPage) || 1))
   let start = current - overscan

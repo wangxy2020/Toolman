@@ -229,17 +229,32 @@ export function useProjectCostTableSelection(args: {
         setDirty(true)
       } else if (focusKey.startsWith('section:')) {
         const rawKey = focusKey.slice('section:'.length)
-        const sectionKey = rawKey === '__empty__' ? '' : rawKey
+        const sep = rawKey.indexOf('\u001f')
+        const sectionPart = sep >= 0 ? rawKey.slice(sep + 1) : rawKey
+        const sectionKey = sectionPart === '__empty__' ? '' : sectionPart
+        const scopedSubproject =
+          sep >= 0
+            ? rawKey.slice(0, sep) === '__empty__'
+              ? ''
+              : rawKey.slice(0, sep)
+            : undefined
         if (sectionKey === ref) return
-        const peer = rowsRef.current.find(
-          (row) => (row.sectionalWork?.trim() ?? '') === sectionKey,
-        )
+        const peer = rowsRef.current.find((row) => {
+          if ((row.sectionalWork?.trim() ?? '') !== sectionKey) return false
+          if (scopedSubproject == null) return true
+          return (row.subproject?.trim() ?? '') === scopedSubproject
+        })
         const current = peer?.sectionTotalFormula ?? ''
         updateRows(
           (prev) =>
-            patchCostSectionMeta(prev, sectionKey, {
-              sectionTotalFormula: appendCostFormulaRef(current, ref),
-            }),
+            patchCostSectionMeta(
+              prev,
+              sectionKey,
+              {
+                sectionTotalFormula: appendCostFormulaRef(current, ref),
+              },
+              scopedSubproject == null ? undefined : { subproject: scopedSubproject },
+            ),
           { coalesceMs: 500 },
         )
       }

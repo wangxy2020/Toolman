@@ -25,12 +25,26 @@ function yieldToEventLoop(): Promise<void> {
 function buildFtsMatchQuery(query: string): string | null {
   const tokens = query
     .trim()
-    .split(/\s+/)
+    .split(/[\s,，。；;：:？?！!、]+/)
     .map((token) => token.replace(/"/g, '""'))
     .filter((token) => token.length > 0)
 
   if (tokens.length === 0) return null
-  return tokens.map((token) => `"${token}"`).join(' OR ')
+
+  const terms: string[] = []
+  for (const token of tokens) {
+    terms.push(`"${token}"`)
+    const chapterPrefix = token.match(/^第[一二三四五六七八九十百零〇两\d]+章/)
+    if (chapterPrefix?.[0]) {
+      if (chapterPrefix[0] !== token) {
+        terms.push(`"${chapterPrefix[0]}"`)
+      }
+      if (/^[第章一二三四五六七八九十百零〇两\d]+$/.test(chapterPrefix[0])) {
+        terms.push(`${chapterPrefix[0]}*`)
+      }
+    }
+  }
+  return terms.join(' OR ')
 }
 
 export class ChunkFtsRepository {
@@ -102,6 +116,13 @@ export class ChunkFtsRepository {
     return row.count
   }
 
+  countByDocument(documentId: string): number {
+    const row = this.sqlite
+      .prepare('SELECT COUNT(*) as count FROM chunks_fts WHERE document_id = ?')
+      .get(documentId) as { count: number }
+    return row.count
+  }
+
   rebuildAll(rows: ChunkFtsRow[]): void {
     this.clearAll()
     this.insertRowsBatched(rows)
@@ -141,22 +162,26 @@ export class ChunkFtsRepository {
       LIMIT ?
     `
 
-    const rows = this.sqlite.prepare(sql).all(match, ...kbIds, limit) as Array<{
-      chunk_id: string
-      document_id: string
-      kb_id: string
-      rank: number
-    }>
+    try {
+      const rows = this.sqlite.prepare(sql).all(match, ...kbIds, limit) as Array<{
+        chunk_id: string
+        document_id: string
+        kb_id: string
+        rank: number
+      }>
 
-    return rows.map((row) => {
-      const normalized = 1 / (1 + Math.max(0, row.rank))
-      return {
-        chunkId: row.chunk_id,
-        documentId: row.document_id,
-        kbId: row.kb_id,
-        score: normalized,
-      }
-    })
+      return rows.map((row) => {
+        const normalized = 1 / (1 + Math.max(0, row.rank))
+        return {
+          chunkId: row.chunk_id,
+          documentId: row.document_id,
+          kbId: row.kb_id,
+          score: normalized,
+        }
+      })
+    } catch {
+      return []
+    }
   }
 }
 

@@ -38,6 +38,7 @@ export function ProjectManagerPageMain(props: {
   showGanttPanel: boolean
   showResourceTablePanel: boolean
   showCostTablePanel: boolean
+  showCostDatabasePanel: boolean
   showFeaturesPanel: boolean
   showProgressDashboard: boolean
   settingsOpen: boolean
@@ -82,6 +83,7 @@ export function ProjectManagerPageMain(props: {
     showGanttPanel,
     showResourceTablePanel,
     showCostTablePanel,
+    showCostDatabasePanel,
     showFeaturesPanel,
     showProgressDashboard,
     settingsOpen,
@@ -109,6 +111,14 @@ export function ProjectManagerPageMain(props: {
     handleCreateProjectDialogClose,
     handleAgentKickoffConsumed,
   } = props
+
+  const hideShell =
+    showAgentPanel ||
+    showGanttPanel ||
+    showResourceTablePanel ||
+    showCostTablePanel ||
+    showCostDatabasePanel ||
+    showFeaturesPanel
 
   return (
     <main
@@ -229,6 +239,26 @@ export function ProjectManagerPageMain(props: {
         </div>
       ) : null}
 
+      {activeTab === 'cost_management' && workspaceId && mountedViews.has('database') ? (
+        <div
+          className={[
+            'tm-module-content',
+            'tm-pm-gantt-content',
+            showCostDatabasePanel ? '' : 'tm-pm-view-hidden',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!showCostDatabasePanel}>
+          <ProjectCostTablePanel
+            workspaceId={workspaceId}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onProjectsChange={reloadProjectsAndDashboard}
+            variant="database"
+          />
+        </div>
+      ) : null}
+
       {createProjectOpen && createProjectDefaults ? (
         <ProjectInfoDialog
           mode="create"
@@ -242,23 +272,11 @@ export function ProjectManagerPageMain(props: {
         className={[
           'tm-module-content',
           'tm-community-module-content',
-          showAgentPanel ||
-          showGanttPanel ||
-          showResourceTablePanel ||
-          showCostTablePanel ||
-          showFeaturesPanel
-            ? 'tm-pm-view-hidden'
-            : '',
+          hideShell ? 'tm-pm-view-hidden' : '',
         ]
           .filter(Boolean)
           .join(' ')}
-        aria-hidden={
-          showAgentPanel ||
-          showGanttPanel ||
-          showResourceTablePanel ||
-          showCostTablePanel ||
-          showFeaturesPanel
-        }>
+        aria-hidden={hideShell}>
         <ProjectManagerPanelShell
           title={activeMenuLabel}
           subtitle={panelSubtitle}
@@ -275,13 +293,7 @@ export function ProjectManagerPageMain(props: {
         </ProjectManagerPanelShell>
       </div>
 
-      {!showAgentPanel &&
-      !showGanttPanel &&
-      !showResourceTablePanel &&
-      !showCostTablePanel &&
-      !showFeaturesPanel ? (
-        <ModulePageStatusBar />
-      ) : null}
+      {hideShell ? null : <ModulePageStatusBar />}
     </main>
   )
 }

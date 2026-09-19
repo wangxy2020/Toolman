@@ -1,13 +1,30 @@
 /** Types, constants, and domain/tab resolution for `ProjectInfoDialog`. */
 
-import type { PmDomain, PmProject, PmProjectStatus, PmWorkItem } from '@toolman/shared'
+import type {
+  CostDatabaseDriver,
+  CostDatabaseFieldKey,
+  CostDatabaseInspectSnapshot,
+  CostDatabaseViewKey,
+  PmDomain,
+  PmProject,
+  PmProjectStatus,
+  PmWorkItem,
+} from '@toolman/shared'
 
 import type { PmCostRow, PmCostType } from '../cost/pm-cost-catalog'
 import type { PmFeatureRow } from '../files/pm-features-catalog'
 import type { PmResourceRow } from '../resource/pm-resource-catalog'
 
 export type ProjectInfoVariant = 'schedule' | 'resource' | 'cost' | 'features'
-export type InfoTab = 'overview' | 'schedule' | 'resource' | 'cost' | 'domain' | 'statistics' | 'advanced'
+export type InfoTab =
+  | 'overview'
+  | 'schedule'
+  | 'resource'
+  | 'cost'
+  | 'data'
+  | 'domain'
+  | 'statistics'
+  | 'advanced'
 export type DomainTabKind = 'schedule' | 'resource' | 'cost' | 'placeholder'
 
 export function resolveInfoDomain(
@@ -49,6 +66,16 @@ export const PM_COST_ESTIMATE_TYPES = [
 ] as const satisfies readonly PmCostType[]
 export const PM_COST_ESTIMATE_TYPE_SET = new Set<PmCostType>(PM_COST_ESTIMATE_TYPES)
 
+/** 价格 → 成本 cards. Excludes 概预算 types and 资金. */
+export const PM_COST_INFO_COST_CARD_TYPES = [
+  'comprehensive',
+  'management',
+  'fees',
+  'measures',
+  'other',
+  'tax',
+] as const satisfies readonly PmCostType[]
+
 export type ProjectInfoDraft = {
   code: string
   name: string
@@ -71,6 +98,22 @@ export type ProjectInfoDraft = {
   costCurrencies: Record<string, string>
   /** Default for cards without an override (migrates from legacy shared currency). */
   unsetCostCurrency: string
+  costDatabaseDriver: CostDatabaseDriver
+  costDatabaseHost: string
+  costDatabasePort: string
+  costDatabaseUser: string
+  costDatabasePassword: string
+  costDatabaseName: string
+  costDatabaseSchema: string
+  costDatabaseProjectId: string
+  costDatabaseSubstationLot: string
+  costDatabaseSchedule: string
+  costDatabaseCurrency: string
+  costDatabaseViewTables: Record<
+    CostDatabaseViewKey,
+    { tableName: string; columnMap: Record<CostDatabaseFieldKey, string> }
+  >
+  costDatabaseInspect: CostDatabaseInspectSnapshot | null
 }
 
 export type CreateDefaults = {

@@ -102,6 +102,20 @@ describe('parseOpenDataLoaderOutput', () => {
     expect(parsed.pages[0]?.text).toContain('CONTRACT FOR Hamlet Electrification Project')
   })
 
+  it('keeps txt and markdown as separate page channels', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'toolman-odl-dual-'))
+    const sourcePath = join(dir, 'sample.pdf')
+    const gbk = '䆕券ߚ析的范围ߛ局限并不在于预测市场的短期波动Внтр价值 թե չէ կապիտալߜߝߞߟ。'
+    const prose = '证券分析的范围和局限并不在于预测市场的短期波动，而在于衡量证券的内在价值。'
+    writeFileSync(join(dir, 'sample.txt'), `【第 31 页】\n${gbk}`, 'utf8')
+    writeFileSync(join(dir, 'sample.md'), `【第 31 页】\n${prose}`, 'utf8')
+    writeFileSync(join(dir, 'sample.json'), JSON.stringify({ page_count: 31 }), 'utf8')
+
+    const parsed = parseOpenDataLoaderOutput({ sourcePath, outputDir: dir })
+    expect(parsed.pages[0]?.text).toBe(gbk)
+    expect(parsed.pages[0]?.markdown).toBe(prose)
+  })
+
   it('does not assign all page markers to page 1 on full-document parse', () => {
     const dir = mkdtempSync(join(tmpdir(), 'toolman-odl-markers-'))
     const sourcePath = join(dir, 'sample.pdf')

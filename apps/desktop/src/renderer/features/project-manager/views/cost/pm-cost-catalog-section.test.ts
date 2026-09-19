@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildCostSectionalDisplayEntries,
+  uniqueSortedSectionalKeys,
   computeCostRowTotalPrice,
+  formatCostTotalPrice,
   patchCostSectionMeta,
   suggestNextCostCode,
   type PmCostRow,
@@ -59,6 +61,7 @@ describe('buildCostSectionalDisplayEntries', () => {
       kind: 'section',
       summary: {
         key: '土建',
+        subproject: '',
         total: 25,
         rowCount: 2,
         code: 'TJ-01',
@@ -121,6 +124,21 @@ describe('patchCostSectionMeta', () => {
     expect(next[1]).toMatchObject({ sectionCode: 'TJ', sectionNote: '备注' })
     expect(next[2]).toMatchObject({ sectionCode: '', sectionNote: '' })
   })
+
+  it('can limit a section meta patch to one 子项目', () => {
+    const rows = [
+      row({ id: '1', name: 'A', subproject: 'Kisada', sectionalWork: 'Schedule4' }),
+      row({ id: '2', name: 'B', subproject: 'Iringa', sectionalWork: 'Schedule4' }),
+    ]
+    const next = patchCostSectionMeta(
+      rows,
+      'Schedule4',
+      { sectionNote: 'Kisada only' },
+      { subproject: 'Kisada' },
+    )
+    expect(next[0]).toMatchObject({ sectionNote: 'Kisada only' })
+    expect(next[1]).toMatchObject({ sectionNote: '' })
+  })
 })
 describe('suggestNextCostCode', () => {
   it('increments the trailing number and preserves padding / prefix', () => {
@@ -167,5 +185,81 @@ describe('computeCostRowTotalPrice', () => {
       kind: 'section',
       summary: { key: '土建', total: 20 },
     })
+  })
+
+  it('orders 分部工程 groups Schedule1 through Schedule4', () => {
+    const rows = [
+      row({ id: '4', name: 'D', sectionalWork: 'Schedule4' }),
+      row({ id: '1', name: 'A', sectionalWork: 'Schedule1' }),
+      row({ id: '3', name: 'C', sectionalWork: 'Schedule3' }),
+      row({ id: '2', name: 'B', sectionalWork: 'Schedule2' }),
+    ]
+    const entries = buildCostSectionalDisplayEntries(rows, { groupOrder: 'natural' })
+    expect(
+      entries.filter((entry) => entry.kind === 'section').map((entry) => entry.summary.key),
+    ).toEqual(['Schedule1', 'Schedule2', 'Schedule3', 'Schedule4'])
+  })
+
+  it('splits the same 分部工程 by 子项目 when groupBy is subprojectSection', () => {
+    const rows = [
+      row({
+        id: 'k4',
+        name: 'Kisada bay',
+        subproject: 'Kisada',
+        sectionalWork: 'Schedule4',
+        quantity: 1,
+        unitPrice: 100,
+      }),
+      row({
+        id: 'i4',
+        name: 'Iringa bay',
+        subproject: 'Iringa',
+        sectionalWork: 'Schedule4',
+        quantity: 1,
+        unitPrice: 40,
+      }),
+      row({
+        id: 'k1',
+        name: 'Kisada civil',
+        subproject: 'Kisada',
+        sectionalWork: 'Schedule1',
+        quantity: 1,
+        unitPrice: 10,
+      }),
+    ]
+    const entries = buildCostSectionalDisplayEntries(rows, {
+      groupOrder: 'natural',
+      groupBy: 'subprojectSection',
+    })
+    const sections = entries.filter((entry) => entry.kind === 'section')
+    expect(sections.map((entry) => [entry.summary.subproject, entry.summary.key, entry.summary.total])).toEqual([
+      ['Kisada', 'Schedule1', 10],
+      ['Kisada', 'Schedule4', 100],
+      ['Iringa', 'Schedule4', 40],
+    ])
+  })
+})
+
+describe('formatCostTotalPrice', () => {
+  it('leaves zero totals blank and keeps two decimals when fractional', () => {
+    expect(formatCostTotalPrice(0)).toBe('')
+    expect(formatCostTotalPrice(null)).toBe('—')
+    expect(formatCostTotalPrice(12)).toBe('12')
+    expect(formatCostTotalPrice(12.5)).toBe('12.50')
+    expect(formatCostTotalPrice(12.567)).toBe('12.57')
+  })
+})
+
+describe('uniqueSortedSectionalKeys', () => {
+  it('lists 分部工程 from Schedule1 to Schedule4', () => {
+    expect(
+      uniqueSortedSectionalKeys([
+        { sectionalWork: 'Schedule4' },
+        { sectionalWork: 'Schedule2' },
+        { sectionalWork: 'Schedule1' },
+        { sectionalWork: 'Schedule3' },
+        { sectionalWork: 'Schedule1' },
+      ]),
+    ).toEqual(['Schedule1', 'Schedule2', 'Schedule3', 'Schedule4'])
   })
 })

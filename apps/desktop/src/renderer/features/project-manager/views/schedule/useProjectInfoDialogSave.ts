@@ -10,15 +10,18 @@ import {
   readPracticeSaveHistory,
   readPracticeVersion,
 } from '../resource/pm-resource-practice-catalog'
+import { costDatabaseMetaCacheKey, writeCostDatabaseMetaCache } from '../cost/pm-cost-database-meta-cache'
 import { pmApi } from '../../pm-api'
 import {
   buildCostCurrencyMetadata,
+  buildCostDatabaseDraftMetadata,
   buildMetadata,
   type CreateDefaults,
+  type InfoTab,
   type ProjectInfoDraft,
   type Props,
 } from './pm-project-info-dialog-utils'
-import type { PmCostSaveRecord, PmProject, PmResourceSaveRecord } from '@toolman/shared'
+import { COST_DATABASE_META_KEY, type PmCostSaveRecord, type PmProject, type PmResourceSaveRecord } from '@toolman/shared'
 
 export function useProjectInfoDialogSave(args: {
   props: Props
@@ -39,7 +42,7 @@ export function useProjectInfoDialogSave(args: {
   t: (key: string) => string
   setSaving: Dispatch<SetStateAction<boolean>>
   setError: Dispatch<SetStateAction<string | null>>
-  setActiveTab: Dispatch<SetStateAction<'overview' | 'schedule' | 'resource' | 'cost' | 'domain' | 'statistics' | 'advanced'>>
+  setActiveTab: Dispatch<SetStateAction<InfoTab>>
   setResourceHistoryRows: Dispatch<SetStateAction<PmResourceSaveRecord[]>>
   setResourceVersion: Dispatch<SetStateAction<number>>
   setCostHistoryRows: Dispatch<SetStateAction<PmCostSaveRecord[]>>
@@ -136,7 +139,17 @@ export function useProjectInfoDialogSave(args: {
       setSaving(true)
       setError(null)
       try {
-        const currencyMeta = buildCostCurrencyMetadata(draft)
+        const currencyMeta = {
+          ...buildCostCurrencyMetadata(draft),
+          ...buildCostDatabaseDraftMetadata(draft),
+        }
+        writeCostDatabaseMetaCache(
+          costDatabaseMetaCacheKey({
+            workspaceId: workspaceCostId ?? project?.workspaceId,
+            projectId: isWorkspaceCost ? null : project?.id,
+          }),
+          currencyMeta,
+        )
         const result = await onSaveCosts()
         if (result === false) return
         if (isWorkspaceCost && workspaceCostId) {
@@ -251,5 +264,34 @@ export function useProjectInfoDialogSave(args: {
     }
   }
 
-  return { handleSave }
+  const persistCostDatabase = async (override?: Partial<ProjectInfoDraft>) => {
+    const nextDraft = { ...draft, ...override }
+    const metadata = buildCostDatabaseDraftMetadata(nextDraft)
+    const scopeKey = costDatabaseMetaCacheKey({
+      workspaceId: workspaceCostId ?? project?.workspaceId,
+      projectId: isWorkspaceCost ? null : project?.id,
+    })
+    if (metadata[COST_DATABASE_META_KEY] != null) {
+      writeCostDatabaseMetaCache(scopeKey, metadata)
+    }
+    try {
+      if (isWorkspaceCost && workspaceCostId) {
+        const meta = readSharedCostSaveMeta(workspaceCostId)
+        writeSharedCostSaveMeta(workspaceCostId, {
+          ...meta,
+          ...metadata,
+        })
+        return
+      }
+      if (!project) return
+      await pmApi.updateProject({
+        id: project.id,
+        metadata,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  return { handleSave, persistCostDatabase }
 }

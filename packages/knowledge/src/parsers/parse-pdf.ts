@@ -2,11 +2,14 @@ import { readFileSync } from 'node:fs'
 import pdfParse from 'pdf-parse'
 import { loadPdfjsDocument } from './pdfjs-options.js'
 import { formatPdfPageMarker } from './pdf-page-markers.js'
+import { isSkippablePdfOcrPageError } from './pdf-ocr-page-errors.js'
 import { isPdfExtractedTextInsufficient } from './pdf-text-quality.js'
+import { isPdfPageTextUsable } from './pdf-page-quality.js'
 import {
   enqueuePdfDocumentTask,
   getCachedPdfDocument,
   renderPdfPageForOcr,
+  withPdfjsDocumentLock,
 } from './render-pdf-pages.js'
 
 type PdfTextItem = { str?: string; transform?: number[] }
@@ -23,6 +26,7 @@ export interface OcrPageRecognizer {
     pageNumber: number
     totalPages: number
     mimeType?: string
+    retry?: boolean
   }): Promise<string>
 }
 
@@ -148,39 +152,54 @@ export async function extractPdfPageTexts(
     return { totalPages: 0, pages: [], pageWidth: 0, pageHeight: 0 }
   }
 
-  const firstPage = await document.getPage(1)
-  const viewport = firstPage.getViewport({ scale: 1 })
-  const pageWidth = viewport.width
-  const pageHeight = viewport.height
-
   const from = Math.max(1, Math.min(Math.floor(startPage), totalPages))
   const to = Math.max(from, Math.min(Math.floor(endPage), totalPages))
   const pages: PdfPageText[] = []
+  let pageWidth = 0
+  let pageHeight = 0
+  await withPdfjsDocumentLock(filePath, async () => {
+    const locked = await getCachedPdfDocument(filePath)
+    const firstPage = await locked.getPage(1)
+    const viewport = firstPage.getViewport({ scale: 1 })
+    pageWidth = viewport.width
+    pageHeight = viewport.height
+  })
 
   for (let pageNumber = from; pageNumber <= to; pageNumber += 1) {
-    const page = pageNumber === 1 ? firstPage : await document.getPage(pageNumber)
-    const content = await page.getTextContent()
-    let text = normalizePdfText(extractPageTextWithLayout(content.items as PdfTextItem[]))
+    let text = await withPdfjsDocumentLock(filePath, async () => {
+      const locked = await getCachedPdfDocument(filePath)
+      const page = await locked.getPage(pageNumber)
+      const content = await page.getTextContent()
+      return normalizePdfText(extractPageTextWithLayout(content.items as PdfTextItem[]))
+    })
 
-    if (
-      options?.ocr?.recognizePage &&
-      isPdfExtractedTextInsufficient(text, 1)
-    ) {
+    if (options?.ocr?.recognizePage && !isPdfPageTextUsable(text)) {
       const { page: rendered } = await renderPdfPageForOcr(filePath, pageNumber)
-      text = normalizePdfText(
-        await options.ocr.recognizePage({
-          png: rendered.png,
-          mimeType: rendered.mimeType,
-          pageNumber: rendered.pageNumber,
-          totalPages,
-        }),
-      )
+      try {
+        text = normalizePdfText(
+          await options.ocr.recognizePage({
+            png: rendered.png,
+            mimeType: rendered.mimeType,
+            pageNumber: rendered.pageNumber,
+            totalPages,
+          }),
+        )
+      } catch (error) {
+        if (!isSkippablePdfOcrPageError(error)) throw error
+        text = ''
+      }
     }
 
     pages.push({ pageNumber, text })
   }
 
   return { totalPages, pages, pageWidth, pageHeight }
+}
+
+function resolveVisionOcrPageCount(totalPages: number, maxPages?: number): number {
+  if (maxPages == null) return Math.min(totalPages, 40)
+  if (!Number.isFinite(maxPages) || maxPages <= 0) return totalPages
+  return Math.min(totalPages, Math.floor(maxPages))
 }
 
 async function extractWithVisionOcr(
@@ -190,7 +209,7 @@ async function extractWithVisionOcr(
   // Page-by-page: render → OCR → report progress (avoids long silent "render all pages" phase).
   const document = await getCachedPdfDocument(filePath)
   const totalPages = document.numPages
-  const pageCount = Math.min(totalPages, ocr.maxPages ?? 40)
+  const pageCount = resolveVisionOcrPageCount(totalPages, ocr.maxPages)
   if (pageCount < 1) {
     throw new Error('PDF has no pages')
   }
@@ -203,14 +222,20 @@ async function extractWithVisionOcr(
     ocr.onProgress?.(pageNumber - 1, pageCount, true)
 
     const { page } = await renderPdfPageForOcr(filePath, pageNumber)
-    const text = normalizePdfText(
-      await ocr.recognizePage({
-        png: page.png,
-        mimeType: page.mimeType,
-        pageNumber: page.pageNumber,
-        totalPages: pageCount,
-      }),
-    )
+    let text = ''
+    try {
+      text = normalizePdfText(
+        await ocr.recognizePage({
+          png: page.png,
+          mimeType: page.mimeType,
+          pageNumber: page.pageNumber,
+          totalPages: pageCount,
+        }),
+      )
+    } catch (error) {
+      // glm-ocr token-repeat / empty page: keep prior pages instead of failing the PDF.
+      if (!isSkippablePdfOcrPageError(error)) throw error
+    }
     if (text) {
       parts.push(`${formatPdfPageMarker(pageNumber, pageCount)}\n${text}`)
     }

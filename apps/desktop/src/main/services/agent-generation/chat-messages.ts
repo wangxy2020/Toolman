@@ -13,6 +13,7 @@ import {
 } from '@toolman/model-gateway'
 import { getMessageRepository } from '../../db/repos'
 import { getBlobDataUrl } from '../blob.service'
+import { downscaleImageDataUrl } from './chat-vision-image'
 import type { getAssistantRow } from '../assistant.service'
 import type { getProviderConfig } from '../provider.service'
 
@@ -35,7 +36,11 @@ export function assertAttachmentContentResolved(
   }
 }
 
-export function buildUserChatMessage(userContentBlocks: ContentBlock[]): ChatMessage | null {
+export function buildUserChatMessage(
+  userContentBlocks: ContentBlock[],
+  options?: { includeImages?: boolean },
+): ChatMessage | null {
+  const includeImages = options?.includeImages !== false
   const images = userContentBlocks.flatMap((block) => {
     if (block.type === 'image' && block.blobHash?.trim()) {
       return [{ blobHash: block.blobHash, alt: block.alt }]
@@ -64,11 +69,20 @@ export function buildUserChatMessage(userContentBlocks: ContentBlock[]): ChatMes
         `附件「${block.type === 'file' ? block.name : ''}」已作为 ${block.type === 'file' ? block.visionPages!.length : 0} 页图片发送，请直接阅读图片内容作答。`,
     )
 
-  const combinedText = [modelText, ...visionHints].filter((part) => part.trim()).join('\n\n')
+  const historyImageNote =
+    !includeImages && (images.length > 0 || visionPageImages.length > 0)
+      ? images.length + visionPageImages.length === 1
+        ? '[用户曾发送图片，请结合对话上下文理解，不要要求重新上传。]'
+        : `[用户曾发送 ${images.length + visionPageImages.length} 张图片，请结合对话上下文理解，不要要求重新上传。]`
+      : ''
+  const combinedText = [modelText, ...visionHints, historyImageNote].filter((part) => part.trim()).join('\n\n')
+  const attachImages = includeImages
 
-  if (!combinedText.trim() && images.length === 0 && visionPageImages.length === 0) return null
+  if (!combinedText.trim() && (!attachImages || (images.length === 0 && visionPageImages.length === 0))) {
+    return null
+  }
 
-  if (images.length === 0 && visionPageImages.length === 0) {
+  if (!attachImages || (images.length === 0 && visionPageImages.length === 0)) {
     return { role: 'user', content: combinedText }
   }
 
@@ -120,16 +134,32 @@ function buildHistoryChatMessage(blocks: ContentBlock[], role: 'user' | 'assista
     return text ? { role, content: text } : null
   }
 
-  return buildUserChatMessage(blocks)
+  return buildUserChatMessage(blocks, { includeImages: false })
 }
 
-export function buildChatMessages(
+async function materializeChatImageUrls(message: ChatMessage): Promise<ChatMessage> {
+  if (typeof message.content === 'string') return message
+  const parts: ChatContentPart[] = []
+  for (const part of message.content) {
+    if (part.type !== 'image_url' || !part.image_url?.url) {
+      parts.push(part)
+      continue
+    }
+    parts.push({
+      type: 'image_url',
+      image_url: { url: downscaleImageDataUrl(part.image_url.url) },
+    })
+  }
+  return { ...message, content: parts }
+}
+
+export async function buildChatMessages(
   sessionId: string,
   assistant: ReturnType<typeof getAssistantRow>,
   userContentBlocks: ContentBlock[],
   excludeMessageIds: string[],
   extraSystemHint?: string,
-): ChatMessage[] {
+): Promise<ChatMessage[]> {
   const exclude = new Set(excludeMessageIds)
   const history = getMessageRepository()
     .listCompletedRows(sessionId)
@@ -156,7 +186,7 @@ export function buildChatMessages(
 
   const userMessage = buildUserChatMessage(userContentBlocks)
   if (userMessage) {
-    chatMessages.push(userMessage)
+    chatMessages.push(await materializeChatImageUrls(userMessage))
   }
 
   return chatMessages

@@ -132,4 +132,12 @@ export const projectManagerTablesEn = {
       investmentIndicator: 'Investment indicator',
     },
   },
+  costDatabase: {
+    views: {
+      constructionQuota: 'Price list',
+      budgetQuota: 'Interim measurement',
+      estimateQuota: 'Progress payment',
+      estimateIndicator: 'Payment statistics',
+    },
+  },
 } as const

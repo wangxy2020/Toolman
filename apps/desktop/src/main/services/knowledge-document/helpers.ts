@@ -68,8 +68,14 @@ export function toDocument(
     sourceKind: inferSourceKind(row.absolutePath),
     chunkCount,
     sizeBytes: sizeBytes ?? null,
-    // Only surface errors for failed docs — stale cancel text must not appear under "排队中".
-    errorMessage: row.status === 'failed' ? parseErrorJson(row.errorJson) : null,
+    parsedHash: 'parsedHash' in row ? (row.parsedHash as string | null) : null,
+    revisionNumber: 'revisionNumber' in row ? (row.revisionNumber as number | undefined) : undefined,
+    currentRevisionId:
+      'currentRevisionId' in row ? (row.currentRevisionId as string | null) : null,
+    indexVersion: 'indexVersion' in row ? (row.indexVersion as number | undefined) : undefined,
+    // Ready docs may keep a parse warning; queued/parsing must not show stale cancel text.
+    errorMessage:
+      row.status === 'failed' || row.status === 'ready' ? parseErrorJson(row.errorJson) : null,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   })

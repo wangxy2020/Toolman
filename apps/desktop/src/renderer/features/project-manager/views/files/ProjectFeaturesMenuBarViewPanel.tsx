@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom'
 
 import { IconChevronDown } from '../../../../components/icons'
 import {
+  COST_DATABASE_QUOTA_VIEWS,
   COST_PRACTICE_QUOTA_VIEWS,
   RESOURCE_PRACTICE_QUOTA_VIEWS,
   type CostPracticeQuotaView,
+  type CostQuotaViewSet,
   type FeaturesScheduleView,
   type ResourcePracticeQuotaView,
 } from './ProjectFeaturesMenuBarTypes'
@@ -25,6 +27,7 @@ type Props = {
   onQuotaViewChange?: (view: ResourcePracticeQuotaView) => void
   costQuotaView: CostPracticeQuotaView
   onCostQuotaViewChange?: (view: CostPracticeQuotaView) => void
+  costQuotaViewSet: CostQuotaViewSet
   viewLabelByMode: Record<FeaturesScheduleView, string>
   quotaLabelByMode: Record<ResourcePracticeQuotaView, string>
   costQuotaLabelByMode: Record<CostPracticeQuotaView, string>
@@ -48,6 +51,7 @@ export function ProjectFeaturesMenuBarViewPanel({
   onQuotaViewChange,
   costQuotaView,
   onCostQuotaViewChange,
+  costQuotaViewSet,
   viewLabelByMode,
   quotaLabelByMode,
   costQuotaLabelByMode,
@@ -104,7 +108,10 @@ export function ProjectFeaturesMenuBarViewPanel({
                     </button>
                   ))
                 : viewMenuMode === 'costQuota'
-                  ? COST_PRACTICE_QUOTA_VIEWS.map((view) => (
+                  ? (costQuotaViewSet === 'database'
+                      ? COST_DATABASE_QUOTA_VIEWS
+                      : COST_PRACTICE_QUOTA_VIEWS
+                    ).map((view) => (
                       <button
                         key={view}
                         type="button"

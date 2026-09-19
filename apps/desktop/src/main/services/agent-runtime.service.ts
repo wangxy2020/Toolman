@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { isGappyCjkExtractedText } from '@toolman/knowledge'
 import { BUILTIN_SKILLS } from '@toolman/shared'
 import { resolveWorkingDirectory, type PermissionMode } from './permission.service'
 import { getSkillContent, getSkillInfo } from './skill.service'
@@ -112,7 +113,8 @@ export function buildKnowledgeEnabledHint(): string {
     '回答文档内容问题时：',
     '1. **优先**使用下方自动注入的「知识库检索结果」，或调用 `search_local_knowledge` 工具补充检索。',
     '2. **禁止**使用 fs_glob、fs_list、fs_read 在工作目录或「本地知识库」文件夹中查找/读取 PDF、DOCX 等原文件；磁盘上的文件是二进制或未索引副本，无法替代已嵌入的分块。',
-    '3. 询问某一页时，检索 query 应包含文件名与页码，例如「The-Little-Prince.pdf 第6页」。',
+    '3. 询问某一页时，检索 query 应包含文件名与页码，例如「小说写作教程.pdf 第6页」。',
+    '4. 询问某一章时，检索 query 应包含书名与章节，例如「小说写作教程 第五章」；**不要把「第五章」改成「第5页」**。',
   ].join('\n')
 }
 
@@ -120,7 +122,7 @@ export function buildKnowledgeEmptySearchHint(query: string): string {
   return [
     '## 知识库检索',
     `针对「${query}」未自动检索到足够相关的内容。`,
-    '请调用 `search_local_knowledge`，用文件名、页码或关键句再次检索后再回答。',
+    '请调用 `search_local_knowledge`，用文件名、章节（第五章）或页码再次检索后再回答。',
     '**禁止**使用 fs_glob / fs_read 在磁盘上查找 PDF 原文件；正文只能通过知识库分块获取。',
   ].join('\n')
 }
@@ -161,13 +163,27 @@ export function buildKnowledgeSystemHint(
     })
     .join('\n\n')
 
+  const gappyResults = results.filter((item) => isGappyCjkExtractedText(item.text))
+  const gappyHint =
+    gappyResults.length >= Math.ceil(results.length / 2)
+      ? [
+          '以上分块汉字大量缺失（扫描 PDF 的文字层损坏，不是「未索引」）。',
+          '请明确告知用户：文件已入库，但正文提取质量不足，无法据此分析章节标题与内容。',
+          '**禁止**用训练数据中的该书目录或章节梗概代替本地原文。',
+          '建议在知识库中对该文件重新解析/重建索引（需 Hybrid OCR）。',
+        ].join('')
+      : ''
+
   return [
     '## 知识库检索结果',
     `查询：${query}`,
     `找到 ${results.length} 条相关内容：`,
     body,
-    '若用户问题指定了文件名或页码，**只使用标题/来源匹配该文件且页码一致的分块**作答，忽略其他文档的检索结果。',
+    '若用户问题指定了文件名，优先使用该文件的分块。指定了页码时，只使用对应页的分块。指定了章节（如第五章）时，使用该章标题及后续正文，**不要把章号当成页码**。',
     '请**直接基于以上分块内容**回答，不要调用 fs_glob / fs_read 去读取来源 PDF 原文件。',
+    gappyHint,
     '若内容不足以回答，可调用 `search_local_knowledge` 补充检索，或明确说明索引中缺少该内容。',
-  ].join('\n\n')
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }

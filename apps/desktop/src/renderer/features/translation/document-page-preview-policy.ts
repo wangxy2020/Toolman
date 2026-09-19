@@ -3,17 +3,16 @@ export type PdfPreviewDirection = 1 | -1
 /** Hidden decode pool around the current page — do not mount these as extra <img>s. */
 export const PDF_PREVIEW_WARM_RADIUS = 3
 /**
- * Same lookahead on first open and while paging.
- * A first-idle burst of 8 made pages 1–7 feel cached, then page 8+ hit a cold queue.
+ * Same lookahead on first open and while paging so later pages stay warm.
+ * Keep this uniform — a one-shot first-idle burst made page 8+ feel cold.
  */
-export const PDF_PREVIEW_NEAR_AHEAD = 5
-export const PDF_PREVIEW_PREFETCH_AHEAD = 5
-export const PDF_PREVIEW_PREFETCH_BEHIND = 1
-/** Unused: far burst prefetch was removed so first load and page-turn stay the same size. */
-export const PDF_PREVIEW_FAR_PREFETCH_MS = 400
-/** One raster at CSS pane width — no second high-DPR pass that steals the queue. */
+export const PDF_PREVIEW_NEAR_AHEAD = 8
+export const PDF_PREVIEW_PREFETCH_AHEAD = 8
+export const PDF_PREVIEW_PREFETCH_BEHIND = 2
+/** Fast 1x raster — kept for tests / optional low-cost prefetch. */
 export const PDF_PREVIEW_FAST_MAX_WIDTH = 1000
-export const PDF_PREVIEW_MAX_RENDER_WIDTH = 1600
+/** Match the main-process preview cap so Retina panes are not downsampled twice. */
+export const PDF_PREVIEW_MAX_RENDER_WIDTH = 2400
 export const PDF_PREVIEW_MAX_DPR = 2
 export type PdfPreviewPrefetchExtent = 'none' | 'near' | 'far'
 
@@ -31,9 +30,9 @@ export function resolvePdfPreviewSharpWidth(displayWidth: number): number {
   return Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.max(160, Math.round(displayWidth * dpr)))
 }
 
-/** Loading and prefetch use the fast width so the visible page is never queued behind a 2400px job. */
+/** Visible and prefetch rasters use device pixels so the left PDF stays as sharp as the source. */
 export function resolvePdfPreviewRenderWidth(displayWidth: number): number {
-  return resolvePdfPreviewFastWidth(displayWidth)
+  return resolvePdfPreviewSharpWidth(displayWidth)
 }
 
 export function resolvePdfPreviewDirection(previousPage: number, currentPage: number): PdfPreviewDirection {
@@ -63,11 +62,6 @@ export function shouldAttachSavedSnapshotBody(isPdf: boolean, previewUnlocked: b
   return !isPdf || previewUnlocked
 }
 
-/** Wait for scroll to stop before swapping parse text onto a new page. */
-export const PARSE_BODY_SETTLE_MS = 160
-/** Markdown/HTML tables wait longer so they never share a frame with the JPEG. */
-export const PARSE_BODY_RICH_MS = 360
-
 export type ParseBodyAttachFlags = {
   attachPlain: boolean
   attachRich: boolean
@@ -83,9 +77,6 @@ export function resolveParseBodyAttachFlags(options: {
   currentPage: number
   startPage?: number
   endPage?: number
-  settledPage: number | null
-  previewReady: boolean
-  richPage?: number | null
 }): ParseBodyAttachFlags {
   if (!options.isPdf) return { attachPlain: true, attachRich: true }
   const start = Math.max(1, Math.floor(options.startPage ?? options.currentPage) || 1)
@@ -94,30 +85,6 @@ export function resolveParseBodyAttachFlags(options: {
     return { attachPlain: false, attachRich: false }
   }
   return { attachPlain: true, attachRich: true }
-}
-
-/** Keep attached bodies while their row stays in the window. */
-export function resolveKeptParseBodyPages(
-  startPage: number,
-  endPage: number,
-  previous: readonly number[],
-  attachingPage: number | null,
-): number[] {
-  const start = Math.max(1, Math.floor(startPage) || 1)
-  const end = Math.max(start, Math.floor(endPage) || start)
-  const next = previous.filter((page) => page >= start && page <= end)
-  if (
-    attachingPage != null &&
-    attachingPage >= start &&
-    attachingPage <= end &&
-    !next.includes(attachingPage)
-  ) {
-    next.push(attachingPage)
-  }
-  if (next.length === previous.length && next.every((page, index) => page === previous[index])) {
-    return previous as number[]
-  }
-  return next
 }
 
 export function resolvePdfPreviewFetchDeltas(

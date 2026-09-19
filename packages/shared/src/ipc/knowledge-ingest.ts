@@ -5,6 +5,7 @@ import { KnowledgeDocumentIngestOutputSchema } from './knowledge-document.js'
 export const KnowledgeKbReindexInputSchema = z.object({
   workspaceId: UuidSchema,
   kbId: UuidSchema,
+  documentIds: z.array(UuidSchema).min(1).max(500).optional(),
 })
 
 export const KnowledgeKbReindexOutputSchema = z.object({
@@ -42,8 +43,8 @@ export const KnowledgeSearchInputSchema = z.object({
     )
     .optional(),
   hybridEnabled: z.boolean().default(true),
-  vectorWeight: z.number().min(0).max(1).default(0.65),
-  ftsWeight: z.number().min(0).max(1).default(0.35),
+  vectorWeight: z.number().min(0).max(1).optional(),
+  ftsWeight: z.number().min(0).max(1).optional(),
 })
 
 export const KnowledgeSearchResultSchema = z.object({
@@ -55,6 +56,12 @@ export const KnowledgeSearchResultSchema = z.object({
   score: z.number(),
   text: z.string(),
   sourcePath: z.string().nullable().optional(),
+  pageNumber: z.number().int().positive().optional(),
+  heading: z.string().optional(),
+  chunkIndex: z.number().int().nonnegative().optional(),
+  sourceType: z.string().optional(),
+  fileName: z.string().optional(),
+  revisionId: z.string().nullable().optional(),
 })
 
 export type KnowledgeSearchResult = z.infer<typeof KnowledgeSearchResultSchema>
@@ -144,7 +151,17 @@ export const KnowledgeIngestJobSchema = z.object({
   documentId: UuidSchema,
   kbId: UuidSchema,
   workspaceId: UuidSchema,
-  stage: z.enum(['queued', 'parsing', 'chunking', 'embedding', 'indexing', 'done', 'failed']),
+  stage: z.enum([
+    'queued',
+    'parsing',
+    'ocr',
+    'chunking',
+    'embedding',
+    'indexing',
+    'done',
+    'failed',
+    'cancelled',
+  ]),
   progress: z.number().int().nonnegative(),
   title: z.string(),
   absolutePath: z.string().nullable().optional(),

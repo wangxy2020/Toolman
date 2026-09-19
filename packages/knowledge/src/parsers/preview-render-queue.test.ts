@@ -109,9 +109,9 @@ describe('preview render queue', () => {
     })
     const stale = queue.enqueue(async () => 'stale', {
       priority: previewPriorityValue('visible'),
-      key: 'p4',
+      key: 'p2',
       group: 'doc',
-      page: 4,
+      page: 2,
     })
     const current = queue.enqueue(async () => 'current', {
       priority: previewPriorityValue('visible'),

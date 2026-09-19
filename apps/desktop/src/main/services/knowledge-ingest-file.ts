@@ -1,18 +1,19 @@
 import { fireAndForget } from '../lib/fire-and-forget'
 import { statSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { toErrorMessage } from '@toolman/shared'
+import { knowledgeKindAcceptsLocalFiles, toErrorMessage } from '@toolman/shared'
 import {
   hashFileStream,
   isIgnoredKnowledgeIngestFile,
   removeDocumentVectors,
+  toPdfParseReportMetadata,
 } from '@toolman/knowledge'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { getWorkspaceKnowledgeDir } from './knowledge.service'
 import { resolveEmbedConfig } from './knowledge-embed.service'
 import { knowledgeIngestSupportsFile } from './knowledge-parse-options.service'
 import { maybeSyncSharedKnowledgeDocument } from './p2p/knowledge-sync.service'
-import { clearIngestCancel, assertIngestStillActive } from './knowledge-ingest-manager.service'
+import { clearIngestCancel, assertIngestStillActive, markIngestActive, markIngestInactive } from './knowledge-ingest-manager.service'
 import {
   findActiveDocumentById,
   findActiveDocumentByPath,
@@ -29,9 +30,28 @@ import {
 } from './knowledge-ingest-shared'
 import { parseAndEmbedFile } from './knowledge-ingest-file-pipeline'
 import { logStructured } from './structured-log.service'
+import { resolveKnowledgeIndexFingerprint } from './knowledge-index-fingerprint'
+import { resolveActiveIndexVersion } from './knowledge-index-version.service'
+import { recordReadyDocumentRevision } from './knowledge-document-revision.service'
 
 /** Same path can be queued by UI ingest and folder watcher copy — coalesce to one run. */
 const ingestInflightByPath = new Map<string, Promise<IngestFileAtPathResult>>()
+
+function mergeDocumentMetadataJson(
+  existing: string | null | undefined,
+  patch: Record<string, unknown>,
+): string {
+  let base: Record<string, unknown> = {}
+  try {
+    const parsed = existing ? JSON.parse(existing) : {}
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      base = parsed as Record<string, unknown>
+    }
+  } catch {
+    base = {}
+  }
+  return JSON.stringify({ ...base, ...patch })
+}
 
 function ingestCoalesceKey(workspaceId: string, kbId: string, filePath: string): string {
   return `${workspaceId}\0${kbId}\0${filePath}`
@@ -76,8 +96,9 @@ async function ingestFileAtPathOnce(
 
   const repo = getDocumentRepository()
 
-  if (kb && kb.kind === 'network') {
-    const message = '网络知识库仅支持网页 URL，不能导入本地文件'
+  if (kb && !knowledgeKindAcceptsLocalFiles(kb.kind)) {
+    const message =
+      kb.kind === 'network' ? '网络知识库仅支持网页 URL，不能导入本地文件' : '共享知识库不支持直接导入本地文件'
     recordIngestFailure(repo, workspaceId, kbId, filePath, message)
     return { outcome: 'failed', path: filePath, message }
   }
@@ -101,13 +122,40 @@ async function ingestFileAtPathOnce(
     return { outcome: 'failed', path: filePath, message }
   }
 
+  const indexFingerprint = resolveKnowledgeIndexFingerprint(workspaceId, kbId)
+  const indexVersion = options.indexVersion ?? resolveActiveIndexVersion(workspaceId, kbId)
   const existingReady = repo.findByPath(kbId, filePath)
   if (
+    !options.force &&
     existingReady &&
-    shouldSkipReadyDocument(repo, kbId, existingReady.id, contentHash, existingReady)
+    shouldSkipReadyDocument(
+      repo,
+      kbId,
+      existingReady.id,
+      contentHash,
+      existingReady,
+      indexFingerprint,
+    )
   ) {
     return { outcome: 'skipped', path: filePath }
   }
+
+  if (
+    existingReady?.status === 'ready' &&
+    existingReady.contentHash &&
+    existingReady.contentHash !== contentHash
+  ) {
+    updateDocumentStage(repo, {
+      workspaceId,
+      kbId,
+      documentId: existingReady.id,
+      stage: 'stale',
+      errorMessage: null,
+    })
+  }
+
+  const previewId = documentId ?? existingReady?.id
+  if (previewId) markIngestActive(previewId)
 
   const docRow = ensureIngestDocument(
     repo,
@@ -118,12 +166,16 @@ async function ingestFileAtPathOnce(
     sourceId,
     documentId,
   )
+  if (docRow.id !== previewId) {
+    if (previewId) markIngestInactive(previewId)
+    markIngestActive(docRow.id)
+  }
 
   try {
     assertIngestStillActive(repo, docRow.id, kbId)
     const embed = resolveEmbedConfig(workspaceId, kbId)
 
-    await removeDocumentVectors(vectorsDir, kbId, docRow.id, embed.vectorBackend)
+    await removeDocumentVectors(vectorsDir, kbId, docRow.id, embed.vectorBackend, indexVersion)
 
     updateDocumentStage(repo, {
       workspaceId,
@@ -141,6 +193,7 @@ async function ingestFileAtPathOnce(
       kbId,
       documentId: docRow.id,
       vectorsDir,
+      indexVersion,
     })
 
     assertIngestStillActive(repo, docRow.id, kbId)
@@ -152,6 +205,15 @@ async function ingestFileAtPathOnce(
       stage: 'indexing',
     })
 
+    const revisionId = recordReadyDocumentRevision({
+      documentId: docRow.id,
+      kbId,
+      contentHash: result.contentHash,
+      parsedHash: result.parsedHash ?? null,
+      indexFingerprint,
+      indexVersion,
+    })
+
     repo.replaceChunks(
       docRow.id,
       kbId,
@@ -159,19 +221,34 @@ async function ingestFileAtPathOnce(
         ...chunk,
         documentId: docRow.id,
         kbId,
+        revisionId,
+        indexVersion,
       })),
     )
     assertIngestStillActive(repo, docRow.id, kbId)
+    const parseReport = 'parseReport' in result ? result.parseReport : undefined
+    const deferredCount = parseReport?.deferredPages?.length ?? parseReport?.skippedPages?.length ?? 0
     updateDocumentStage(repo, {
       workspaceId,
       kbId,
       documentId: docRow.id,
-      stage: 'ready',
-      errorMessage: null,
+      stage: deferredCount > 0 ? 'failed' : 'ready',
+      errorMessage: parseReport?.warning ?? null,
       patch: {
         title: result.title,
         contentHash: result.contentHash,
+        parsedHash: result.parsedHash ?? null,
         mimeType: result.mimeType,
+        indexFingerprint,
+        indexVersion,
+        currentRevisionId: revisionId,
+        ...(parseReport
+          ? {
+              metadataJson: mergeDocumentMetadataJson(docRow.metadataJson, {
+                pdfParse: toPdfParseReportMetadata(parseReport),
+              }),
+            }
+          : {}),
       },
     })
 
@@ -190,14 +267,44 @@ async function ingestFileAtPathOnce(
     }
 
     refreshKbStats(workspaceId, kbId)
+    if (deferredCount > 0) {
+      return {
+        outcome: 'failed',
+        path: filePath,
+        message: parseReport?.warning ?? '部分页面尚未完成 OCR',
+      }
+    }
     return { outcome: 'ingested', path: filePath }
   } catch (error) {
     const message = toErrorMessage(error, '导入失败')
+    logStructured(
+      'knowledge-ingest',
+      'error',
+      `ingest failed for ${basename(filePath)}: ${message}`,
+      { error },
+    )
     if (message === '索引任务已取消') {
       const current = repo.findById(docRow.id, kbId)
-      if (current?.status === 'failed') {
+      if (current?.status === 'cancelled' || current?.status === 'failed') {
+        if (current.status !== 'cancelled') {
+          updateDocumentStage(repo, {
+            workspaceId,
+            kbId,
+            documentId: docRow.id,
+            stage: 'cancelled',
+            errorMessage: null,
+          })
+        }
         return { outcome: 'failed', path: filePath, message }
       }
+      updateDocumentStage(repo, {
+        workspaceId,
+        kbId,
+        documentId: docRow.id,
+        stage: 'cancelled',
+        errorMessage: null,
+      })
+      return { outcome: 'failed', path: filePath, message }
     }
     updateDocumentStage(repo, {
       workspaceId,
@@ -208,6 +315,7 @@ async function ingestFileAtPathOnce(
     })
     return { outcome: 'failed', path: filePath, message }
   } finally {
+    markIngestInactive(docRow.id)
     clearIngestCancel(docRow.id)
   }
 }
@@ -235,7 +343,11 @@ export async function registerStorageOnlyFileAtPath(
     findActiveDocumentByPath(repo, kbId, filePath) ??
     (documentId ? findActiveDocumentById(repo, kbId, documentId) : undefined)
 
-  if (existing?.contentHash === contentHash && shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)) {
+  if (
+    !options.force &&
+    existing?.contentHash === contentHash &&
+    shouldSkipReadyDocument(repo, kbId, existing.id, contentHash, existing)
+  ) {
     return { outcome: 'skipped', path: filePath }
   }
 

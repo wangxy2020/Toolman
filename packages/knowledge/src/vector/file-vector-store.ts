@@ -90,8 +90,21 @@ export class FileVectorStore {
   }
 }
 
-export function getKbVectorStorePath(vectorsDir: string, kbId: string): string {
-  return `${vectorsDir}/kb_${kbId}.vectors.json`
+export function getKbVectorStorePath(
+  vectorsDir: string,
+  kbId: string,
+  indexVersion = 1,
+): string {
+  const base = `${vectorsDir}/kb_${kbId}.vectors.json`
+  if (!indexVersion || indexVersion <= 1) return base
+  return `${vectorsDir}/kb_${kbId}.v${indexVersion}.vectors.json`
+}
+
+export function getKbLanceDir(vectorsDir: string, indexVersion = 1): string {
+  if (!indexVersion || indexVersion <= 1) {
+    return `${vectorsDir}/lance`.replace(/\/+/g, '/')
+  }
+  return `${vectorsDir}/lance-v${indexVersion}`.replace(/\/+/g, '/')
 }
 
 export function getMemoryVectorStorePath(vectorsDir: string): string {

@@ -108,6 +108,10 @@ export function useProjectManagerPage({ activeTab, agentContext }: UseProjectMan
     panelView === 'cost_table' &&
     activeTab === 'cost_management' &&
     workspaceId != null
+  const showCostDatabasePanel =
+    panelView === 'database' &&
+    activeTab === 'cost_management' &&
+    workspaceId != null
   const showFeaturesPanel =
     panelView === 'files' &&
     workspaceId != null &&
@@ -167,6 +171,7 @@ export function useProjectManagerPage({ activeTab, agentContext }: UseProjectMan
     showGanttPanel,
     showResourceTablePanel,
     showCostTablePanel,
+    showCostDatabasePanel,
     showFeaturesPanel,
     toolbarActiveView,
 

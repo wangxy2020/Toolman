@@ -7,7 +7,7 @@ import { isPmCostType, type PmCostRow, type PmCostType } from './pm-cost-catalog
 /** Grow feature-description textareas to fit wrapped content (Excel-like row height). */
 export function syncFeatureDescriptionHeight(textarea: HTMLTextAreaElement) {
   textarea.style.height = '0px'
-  textarea.style.height = `${Math.max(textarea.scrollHeight, 36)}px`
+  textarea.style.height = `${Math.max(textarea.scrollHeight, 26)}px`
 }
 
 /** Map a saved-version snapshot back into editable cost rows. */
@@ -25,6 +25,9 @@ export function snapshotToRows(
       unit: row.unit,
       quantity: row.quantity,
       unitPrice: row.unitPrice,
+      periodQuantity: row.periodQuantity ?? null,
+      priorQuantity: row.priorQuantity ?? null,
+      ipcQuantities: row.ipcQuantities,
       applicable: row.applicable,
       note: row.note ?? '',
       sectionalWork: row.sectionalWork ?? '',

@@ -1,6 +1,7 @@
 import { difyListKnowledges, difySearchKnowledge } from '../dify-knowledge.service'
 import {
   formatLocalKnowledgeList,
+  formatSearchLocalKnowledgeHits,
   listKnowledgeBasesForTool,
   resolveEffectiveKbIds,
   searchKnowledgeForTool,
@@ -179,12 +180,7 @@ export async function executeSearchLocalKnowledge(
 
   if (results.length === 0) return '未找到相关内容。'
 
-  return results
-    .map(
-      (item, index) =>
-        `${index + 1}. [${item.kbName}] ${item.documentTitle} (${(item.score * 100).toFixed(1)}%)\n${item.text.trim()}`,
-    )
-    .join('\n\n')
+  return formatSearchLocalKnowledgeHits(results)
 }
 
 export function executeSearchNotes(args: Record<string, unknown>): string {

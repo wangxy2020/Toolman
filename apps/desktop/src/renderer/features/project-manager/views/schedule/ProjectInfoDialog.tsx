@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import type { Props } from './pm-project-info-dialog-utils'
 import { ProjectInfoDialogAdvancedTab } from './ProjectInfoDialogAdvancedTab'
 import { ProjectInfoDialogCostTab } from './ProjectInfoDialogCostTab'
+import { ProjectInfoDialogDataTab } from './ProjectInfoDialogDataTab'
 import { ProjectInfoDialogDomainTab } from './ProjectInfoDialogDomainTab'
 import { ProjectInfoDialogFooter } from './ProjectInfoDialogFooter'
 import { ProjectInfoDialogOverviewTab } from './ProjectInfoDialogOverviewTab'
@@ -70,6 +71,7 @@ const ProjectInfoDialog: FC<Props> = (props) => {
             {activeTab === 'domain' ? <ProjectInfoDialogDomainTab {...state} /> : null}
             {activeTab === 'resource' ? <ProjectInfoDialogResourceTab {...state} /> : null}
             {activeTab === 'cost' ? <ProjectInfoDialogCostTab {...state} /> : null}
+            {activeTab === 'data' ? <ProjectInfoDialogDataTab {...state} /> : null}
             {activeTab === 'schedule' ? <ProjectInfoDialogScheduleTab {...state} /> : null}
             {activeTab === 'statistics' ? <ProjectInfoDialogStatisticsTab {...state} /> : null}
             {activeTab === 'advanced' ? <ProjectInfoDialogAdvancedTab {...state} /> : null}

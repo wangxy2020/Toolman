@@ -3,9 +3,15 @@
 import type { PmWorkItem } from '@toolman/shared'
 
 import {
+  costSectionCurrencyKey,
+  DEFAULT_COST_CURRENCY,
+  getCostCardCurrency,
+} from '../cost/pm-cost-currency'
+import {
   costSectionalWorkKey,
   PM_COST_TYPES,
   sumCostRowsTotalPrice,
+  uniqueSortedSectionalKeys,
   type PmCostRow,
   type PmCostType,
 } from '../cost/pm-cost-catalog'
@@ -75,9 +81,59 @@ export function computeResourceStats(rows: PmResourceRow[]) {
   }
 }
 
-export function computeCostStats(rows: PmCostRow[]) {
+export type CostStatsCurrencyContext = {
+  costCurrencies: Record<string, string>
+  unsetCostCurrency: string
+}
+
+export type CostAmountByCurrency = {
+  currency: string
+  amount: number | null
+}
+
+export function resolveCostSectionCurrency(
+  sectionKey: string,
+  currency?: CostStatsCurrencyContext,
+): string {
+  if (!currency) return DEFAULT_COST_CURRENCY
+  return (
+    getCostCardCurrency(
+      currency.costCurrencies,
+      currency.unsetCostCurrency,
+      costSectionCurrencyKey(sectionKey),
+    ).trim() || DEFAULT_COST_CURRENCY
+  )
+}
+
+/** Sum 综合单价 合价 by each row's 分部工程 currency. */
+export function groupComprehensiveAmountsByCurrency(
+  rows: readonly PmCostRow[],
+  currency?: CostStatsCurrencyContext,
+): CostAmountByCurrency[] {
+  const comprehensive = rows.filter((row) => row.type === 'comprehensive')
+  if (comprehensive.length === 0) return []
+  const groups = new Map<string, PmCostRow[]>()
+  const order: string[] = []
+  for (const key of uniqueSortedSectionalKeys(comprehensive)) {
+    const code = resolveCostSectionCurrency(key, currency)
+    if (!groups.has(code)) {
+      groups.set(code, [])
+      order.push(code)
+    }
+  }
+  for (const row of comprehensive) {
+    const code = resolveCostSectionCurrency(costSectionalWorkKey(row), currency)
+    groups.get(code)?.push(row)
+  }
+  return order.map((code) => ({
+    currency: code,
+    amount: sumCostRowsTotalPrice(groups.get(code) ?? []),
+  }))
+}
+
+export function computeCostStats(rows: PmCostRow[], currency?: CostStatsCurrencyContext) {
+  const sectionOrder = uniqueSortedSectionalKeys(rows)
   const sectionTotals = new Map<string, number | null>()
-  const sectionOrder: string[] = []
   const rowsByType = Object.fromEntries(PM_COST_TYPES.map((type) => [type, [] as PmCostRow[]])) as Record<
     PmCostType,
     PmCostRow[]
@@ -87,11 +143,6 @@ export function computeCostStats(rows: PmCostRow[]) {
   let minPrice: number | null = null
   let maxPrice: number | null = null
   for (const row of rows) {
-    const sectionKey = costSectionalWorkKey(row)
-    if (!sectionTotals.has(sectionKey)) {
-      sectionTotals.set(sectionKey, null)
-      sectionOrder.push(sectionKey)
-    }
     rowsByType[row.type].push(row)
     if (row.unitPrice != null && Number.isFinite(row.unitPrice)) {
       priced += 1
@@ -113,7 +164,7 @@ export function computeCostStats(rows: PmCostRow[]) {
     totalPriceSum,
     minPrice,
     maxPrice,
-    /** 分部工程 cards: name + 合价 (first-appearance order). */
+    /** 分部工程 cards: name + 合价 (Schedule1 → Schedule4). */
     sections: sectionOrder.map((key) => ({
       key,
       amount: sectionTotals.get(key) ?? null,
@@ -122,5 +173,7 @@ export function computeCostStats(rows: PmCostRow[]) {
     amountByType: Object.fromEntries(
       PM_COST_TYPES.map((type) => [type, sumCostRowsTotalPrice(rowsByType[type])]),
     ) as Record<PmCostType, number | null>,
+    /** 综合单价 card: one total per 分部工程 currency. */
+    comprehensiveByCurrency: groupComprehensiveAmountsByCurrency(rows, currency),
   }
 }

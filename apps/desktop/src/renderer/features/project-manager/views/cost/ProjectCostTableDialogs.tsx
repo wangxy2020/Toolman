@@ -141,7 +141,7 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
           variant="cost"
           costRows={rows}
           practiceScopeId={isPractice ? practiceScopeId : undefined}
-          onSaveCosts={handleSave}
+          onSaveCosts={async () => handleSave()}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {
             void onProjectsChange?.()
@@ -155,7 +155,7 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
           workspaceId={workspaceId}
           costRows={rows}
           practiceScopeId={isPractice ? practiceScopeId : undefined}
-          onSaveCosts={handleSave}
+          onSaveCosts={async () => handleSave()}
           onClose={() => setProjectInfoOpen(false)}
           onSaved={() => {
             void onProjectsChange?.()
@@ -163,7 +163,7 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
         />
       ) : null}
 
-      {meteringCaptureBaselineOpen && !isPractice ? (
+      {meteringCaptureBaselineOpen ? (
         <MeteringBaselineCaptureDialog
           mode="capture"
           initialName={nextMeteringCaptureBaselineName}
@@ -174,7 +174,7 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
         />
       ) : null}
 
-      {meteringEditBaselineOpen && !isPractice && selectedMeteringBaseline ? (
+      {meteringEditBaselineOpen && selectedMeteringBaseline ? (
         <MeteringBaselineCaptureDialog
           mode="edit"
           initialName={selectedMeteringBaseline.name}
@@ -185,7 +185,7 @@ export const ProjectCostTableDialogs: FC<ProjectCostTableDialogsProps> = ({
         />
       ) : null}
 
-      {pendingMeteringDeleteBaseline && !isPractice && selectedMeteringBaseline ? (
+      {pendingMeteringDeleteBaseline && selectedMeteringBaseline ? (
         <ConfirmDialog
           title={t('projectManagerPage.costTable.meteringBaselineDelete.title')}
           message={t('projectManagerPage.costTable.meteringBaselineDelete.confirm', {

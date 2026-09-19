@@ -1,7 +1,7 @@
 import type { KnowledgeDocument, KnowledgeIngestProgressDetail } from '@toolman/shared'
 import type { TranslateFn } from '../../i18n/I18nProvider'
 
-export type KnowledgeDocumentDisplayStatus = KnowledgeDocument['status'] | 'pending'
+export type KnowledgeDocumentDisplayStatus = KnowledgeDocument['status'] | 'pending' | 'readyPartial'
 
 export function formatKnowledgeFileSize(sizeBytes: number | null | undefined): string {
   if (sizeBytes == null || sizeBytes < 0) return '—'
@@ -66,6 +66,7 @@ export function isKnowledgeDocProcessing(status: KnowledgeDocumentDisplayStatus)
     status === 'pending' ||
     status === 'queued' ||
     status === 'parsing' ||
+    status === 'ocr' ||
     status === 'chunking' ||
     status === 'embedding' ||
     status === 'indexing'
@@ -93,20 +94,25 @@ const DOC_STATUS_KEYS = {
   pending: 'pending',
   queued: 'queued',
   parsing: 'parsing',
+  ocr: 'ocr',
   chunking: 'chunking',
   embedding: 'embedding',
   indexing: 'indexing',
   ready: 'ready',
+  readyPartial: 'readyPartial',
   failed: 'failed',
+  cancelled: 'cancelled',
+  stale: 'stale',
 } as const satisfies Partial<Record<KnowledgeDocumentDisplayStatus, string>>
 
 const INGEST_STAGE_RANK: Record<string, number> = {
   indexing: 0,
   embedding: 1,
   chunking: 2,
-  parsing: 3,
-  queued: 4,
-  pending: 5,
+  ocr: 3,
+  parsing: 4,
+  queued: 5,
+  pending: 6,
 }
 
 /** Shorten long titles for the bottom status bar. */

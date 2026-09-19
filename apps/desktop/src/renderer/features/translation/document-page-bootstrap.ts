@@ -1,6 +1,7 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { TranslationDocumentParsePagesOutputSchema, type PdfParserBackend, type TranslationLanguage } from '@toolman/shared'
 import { hydratePagesFromCache } from './document-page-cache'
+import { getPdfViewerDocumentInfo } from './document-pdf-viewer'
 import {
   invokeParsePages,
   isPdfPath,
@@ -120,6 +121,42 @@ export function useDocumentPageBootstrap({
           // Saved docs already know page count. Re-opening the PDF for metadata
           // shares the one-at-a-time raster queue and stalls the left preview.
           return
+        }
+
+        if (isPdfPath(filePath)) {
+          try {
+            const info = await getPdfViewerDocumentInfo(filePath)
+            if (cancelled || generation !== refs.generationRef.current) return
+            const count = Math.max(1, info.numPages)
+            commitTotalPages(count)
+            if (info.pageWidth > 0 && info.pageHeight > 0) {
+              setPageAspect(info.pageHeight / info.pageWidth)
+            }
+            const initialPages = applySavedPageSnapshots(
+              hydratePagesFromCache({
+                documentId,
+                filePath,
+                totalPages: count,
+                modelId: translationParamsRef.current.modelId,
+                languages: translationParamsRef.current.languages,
+                autoDetectSource: translationParamsRef.current.autoDetectSource,
+                seedPages: [],
+              }),
+              snapshotsForRestore ?? savedPageSnapshotsRef.current,
+              {
+                documentId,
+                filePath,
+                modelId: translationParamsRef.current.modelId,
+                languages: translationParamsRef.current.languages,
+                autoDetectSource: translationParamsRef.current.autoDetectSource,
+              },
+            )
+            setPages(initialPages)
+            refs.pagesRef.current = initialPages
+            return
+          } catch {
+            // Fall through to main-process metadata if the vector viewer cannot open the file.
+          }
         }
 
         const metadataOnly = isPdfPath(filePath)

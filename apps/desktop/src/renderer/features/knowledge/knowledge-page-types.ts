@@ -11,6 +11,11 @@ export interface PendingFileDelete {
   message: string
 }
 
+export interface PendingFileReindex {
+  ids: string[]
+  message: string
+}
+
 export interface KnowledgePageProps {
   workspaceId: string | null
   section: KnowledgeSidebarSection

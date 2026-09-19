@@ -8,6 +8,7 @@ import {
   type PmCostRow,
   type PmCostType,
 } from './pm-cost-catalog-types'
+import { parseCostIpcQuantities } from './pm-cost-ipc-cols'
 
 export function createEmptyCostRow(
   sortOrder: number,
@@ -24,6 +25,8 @@ export function createEmptyCostRow(
     unit: '',
     quantity: null,
     unitPrice: null,
+    periodQuantity: null,
+    priorQuantity: null,
     applicable,
     note: '',
     sectionalWork: '',
@@ -59,6 +62,14 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
       typeof row.quantity === 'number' && Number.isFinite(row.quantity) ? row.quantity : null
     const unitPrice =
       typeof row.unitPrice === 'number' && Number.isFinite(row.unitPrice) ? row.unitPrice : null
+    const periodQuantity =
+      typeof row.periodQuantity === 'number' && Number.isFinite(row.periodQuantity)
+        ? row.periodQuantity
+        : null
+    const priorQuantity =
+      typeof row.priorQuantity === 'number' && Number.isFinite(row.priorQuantity)
+        ? row.priorQuantity
+        : null
     const applicable =
       typeof row.applicable === 'string' && row.applicable.trim()
         ? row.applicable
@@ -83,6 +94,7 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
         : typeof row.parentId === 'string'
           ? row.parentId
           : undefined
+    const ipcQuantities = parseCostIpcQuantities(row.ipcQuantities)
     rows.push({
       id,
       type,
@@ -92,6 +104,8 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
       unit,
       quantity,
       unitPrice,
+      periodQuantity,
+      priorQuantity,
       applicable,
       note,
       sectionalWork,
@@ -103,6 +117,7 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
       sectionTotalFormula,
       sortOrder,
       ...(parentId !== undefined ? { parentId } : {}),
+      ...(ipcQuantities ? { ipcQuantities } : {}),
     })
   }
   return reindexCostRows(rows)
@@ -119,6 +134,9 @@ export function fingerprintCostCatalog(rows: readonly PmCostRow[]): string {
       unit: row.unit,
       quantity: row.quantity,
       unitPrice: row.unitPrice,
+      periodQuantity: row.periodQuantity ?? null,
+      priorQuantity: row.priorQuantity ?? null,
+      ipcQuantities: row.ipcQuantities ?? null,
       applicable: row.applicable,
       note: row.note,
       sectionalWork: row.sectionalWork,

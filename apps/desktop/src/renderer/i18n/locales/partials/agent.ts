@@ -139,6 +139,9 @@ export const agentZhCN = {
     thresholdOverride: '匹配度阈值覆盖',
     useGlobalDefault: '使用全局默认',
     useGlobalOrKb: '使用全局或库设置',
+    sectionEmpty: '暂无知识库',
+    sectionCount: '{{selected}}/{{total}}',
+    selectSection: '全选{{name}}',
   },
   languages: { zh: '中文', en: 'English' },
 } as const
@@ -286,6 +289,9 @@ export const agentEn = {
     thresholdOverride: 'Threshold override',
     useGlobalDefault: 'Use global default',
     useGlobalOrKb: 'Use global or KB setting',
+    sectionEmpty: 'No knowledge bases',
+    sectionCount: '{{selected}}/{{total}}',
+    selectSection: 'Select all in {{name}}',
   },
   languages: { zh: 'Chinese', en: 'English' },
 } as const

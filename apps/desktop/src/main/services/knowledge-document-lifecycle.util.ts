@@ -1,16 +1,39 @@
 import type { DocumentRepository, DocumentRow } from '@toolman/db'
 import type { KnowledgeDocument } from '@toolman/shared'
 
-/** Skip re-ingest only when content is unchanged and chunk rows still exist. */
+/** Previously indexed docs should not look like they are still parsing after leaving the KB. */
+export function shouldRestoreIndexedDocumentStatus(options: {
+  status: string | null | undefined
+  chunkCount: number
+  ingestInFlight: boolean
+}): boolean {
+  if (options.status === 'ready' || options.status === 'stale') return false
+  if (options.status === 'failed' || options.status === 'cancelled') return false
+  if (options.ingestInFlight) return false
+  if (options.chunkCount <= 0) return false
+  return true
+}
+
+/** Skip re-ingest only when content is unchanged, index config matches, and chunk rows still exist. */
 export function shouldSkipReadyDocument(
   repo: DocumentRepository,
   kbId: string,
   documentId: string,
   contentHash: string,
-  existing: Pick<KnowledgeDocument, 'contentHash' | 'status'>,
+  existing: Pick<KnowledgeDocument, 'contentHash' | 'status'> & {
+    indexFingerprint?: string | null
+  },
+  indexFingerprint?: string | null,
 ): boolean {
   if (existing.status !== 'ready') return false
   if (existing.contentHash !== contentHash) return false
+  if (
+    indexFingerprint &&
+    existing.indexFingerprint &&
+    existing.indexFingerprint !== indexFingerprint
+  ) {
+    return false
+  }
   return repo.countChunksByDocument(documentId, kbId) > 0
 }
 

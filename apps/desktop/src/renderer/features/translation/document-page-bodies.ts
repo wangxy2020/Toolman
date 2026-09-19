@@ -111,6 +111,12 @@ export function resolvePageForDisplay(
     }
   }
   if (!body) return page
+  if (page.status === 'done' && page.translatedText.trim()) {
+    return {
+      ...page,
+      parsedMarkdown: undefined,
+    }
+  }
   return {
     ...page,
     translatedText: body.plain,

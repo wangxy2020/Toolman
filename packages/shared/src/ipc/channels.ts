@@ -442,6 +442,9 @@ export enum IpcChannel {
   Pm_SharedCostCatalogGet = 'pm:shared-cost-catalog:get',
   Pm_SharedCostCatalogSet = 'pm:shared-cost-catalog:set',
   Pm_SharedCostCatalogUpsert = 'pm:shared-cost-catalog:upsert',
+  Pm_CostDatabaseInspect = 'pm:cost-database:inspect',
+  Pm_CostDatabaseQuery = 'pm:cost-database:query',
+  Pm_CostDatabaseGetSynced = 'pm:cost-database:get-synced',
   Pm_WorkItemSmartAssign = 'pm:work-item:smart-assign',
 }
 

@@ -27,6 +27,13 @@ describe('sanitizeOdlPreviewContent', () => {
     ).toBe('# CONTRACT FOR Hamlet Electrification Project')
   })
 
+  it('prefers a usable OCR body over a longer GBK text layer', () => {
+    const prose =
+      '证券分析的范围和局限并不在于预测市场的短期波动，而在于衡量证券的内在价值，并据此判断当前价格是否提供了足够的安全边际。'
+    const gbk = `${'䆕券ߚ析Внтрթե չէ կապիտալߜߝߞߟ'.repeat(8)} extra`
+    expect(pickLongestUsableOdlBody(gbk, prose)).toBe(prose)
+  })
+
   it('relocates page footer lines out of the last table row', () => {
     const html = [
       '<table>',

@@ -12,11 +12,18 @@ import {
 } from './document-page-window'
 
 describe('document-page-window', () => {
-  it('keeps the same three-page window on the first page and later pages', () => {
-    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 3 })
-    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 3 })
-    expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 9, endPage: 11 })
-    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 38, endPage: 40 })
+  it('keeps the same five-page window on the first page and later pages', () => {
+    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 5 })
+    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 5 })
+    expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 8, endPage: 12 })
+    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 36, endPage: 40 })
+  })
+
+  it('loads PDF pages in batches of ten', () => {
+    expect(resolveDocumentPageWindow(1, 48, 2, 10)).toEqual({ startPage: 1, endPage: 10 })
+    expect(resolveDocumentPageWindow(10, 48, 2, 10)).toEqual({ startPage: 1, endPage: 10 })
+    expect(resolveDocumentPageWindow(11, 48, 2, 10)).toEqual({ startPage: 11, endPage: 20 })
+    expect(resolveDocumentPageWindow(48, 48, 2, 10)).toEqual({ startPage: 41, endPage: 48 })
   })
 
   it('maps scroll offset to a page number', () => {

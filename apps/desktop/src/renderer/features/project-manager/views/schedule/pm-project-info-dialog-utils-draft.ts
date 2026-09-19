@@ -1,6 +1,13 @@
 /** Draft builders and metadata helpers for `ProjectInfoDialog`. */
 
-import type { PmProject } from '@toolman/shared'
+import {
+  buildCostDatabaseMetadata,
+  defaultCostDatabasePort,
+  emptyCostDatabaseViewTables,
+  normalizeCostDatabaseViewTables,
+  readCostDatabaseConnection,
+  type PmProject,
+} from '@toolman/shared'
 
 import {
   COST_CURRENCIES_META_KEY,
@@ -20,6 +27,64 @@ export function buildCostCurrencyMetadata(draft: ProjectInfoDraft): Record<strin
     [COST_CURRENCIES_META_KEY]: normalizeCostCurrencies(draft.costCurrencies),
     [COST_CURRENCY_META_KEY]: draft.unsetCostCurrency.trim() || DEFAULT_COST_CURRENCY,
   }
+}
+
+export function readCostDatabaseDraft(
+  metadata: Record<string, unknown> | null | undefined,
+): Pick<
+  ProjectInfoDraft,
+  | 'costDatabaseDriver'
+  | 'costDatabaseHost'
+  | 'costDatabasePort'
+  | 'costDatabaseUser'
+  | 'costDatabasePassword'
+  | 'costDatabaseName'
+  | 'costDatabaseSchema'
+  | 'costDatabaseProjectId'
+  | 'costDatabaseSubstationLot'
+  | 'costDatabaseSchedule'
+  | 'costDatabaseCurrency'
+  | 'costDatabaseViewTables'
+  | 'costDatabaseInspect'
+> {
+  const connection = readCostDatabaseConnection(metadata)
+  const driver = connection?.driver ?? 'postgres'
+  return {
+    costDatabaseDriver: driver,
+    costDatabaseHost: connection?.host ?? 'localhost',
+    costDatabasePort: String(connection?.port ?? defaultCostDatabasePort(driver)),
+    costDatabaseUser: connection?.user ?? (driver === 'mysql' ? 'root' : 'postgres'),
+    costDatabasePassword: connection?.password ?? '',
+    costDatabaseName: connection?.database ?? '',
+    costDatabaseSchema: connection?.schema ?? (driver === 'postgres' ? 'public' : ''),
+    costDatabaseProjectId: connection?.projectId ?? '',
+    costDatabaseSubstationLot: connection?.substationLot ?? '',
+    costDatabaseSchedule: connection?.schedule ?? '',
+    costDatabaseCurrency: connection?.currency ?? '',
+    costDatabaseViewTables: normalizeCostDatabaseViewTables(connection?.viewTables, {
+      tableName: connection?.tableName,
+      columnMap: connection?.columnMap,
+    }),
+    costDatabaseInspect: connection?.inspect ?? null,
+  }
+}
+
+export function buildCostDatabaseDraftMetadata(draft: ProjectInfoDraft): Record<string, unknown> {
+  return buildCostDatabaseMetadata({
+    driver: draft.costDatabaseDriver,
+    host: draft.costDatabaseHost,
+    port: draft.costDatabasePort,
+    user: draft.costDatabaseUser,
+    password: draft.costDatabasePassword,
+    database: draft.costDatabaseName,
+    schema: draft.costDatabaseSchema,
+    projectId: draft.costDatabaseProjectId,
+    substationLot: draft.costDatabaseSubstationLot,
+    schedule: draft.costDatabaseSchedule,
+    currency: draft.costDatabaseCurrency,
+    viewTables: draft.costDatabaseViewTables,
+    inspect: draft.costDatabaseInspect,
+  })
 }
 
 function readMetaString(metadata: Record<string, unknown>, key: string): string {
@@ -57,6 +122,19 @@ export function emptyDraft(defaults?: Pick<CreateDefaults, 'code' | 'name'>): Pr
     progressPercent: '',
     costCurrencies: {},
     unsetCostCurrency: DEFAULT_COST_CURRENCY,
+    costDatabaseDriver: 'postgres',
+    costDatabaseHost: 'localhost',
+    costDatabasePort: '5432',
+    costDatabaseUser: 'postgres',
+    costDatabasePassword: '',
+    costDatabaseName: '',
+    costDatabaseSchema: 'public',
+    costDatabaseProjectId: '',
+    costDatabaseSubstationLot: '',
+    costDatabaseSchedule: '',
+    costDatabaseCurrency: '',
+    costDatabaseViewTables: emptyCostDatabaseViewTables(),
+    costDatabaseInspect: null,
   }
 }
 
@@ -87,6 +165,7 @@ export function toDraft(project: PmProject): ProjectInfoDraft {
     settledAmount: readMetaNumber(metadata, 'settledAmount'),
     progressPercent: readMetaNumber(metadata, 'progressPercent'),
     ...readCostCurrencyState(metadata, project.code),
+    ...readCostDatabaseDraft(metadata),
   }
 }
 
@@ -118,6 +197,6 @@ export function buildMetadata(
   setMeta('contractValue', parseOptionalNumber(draft.contractValue))
   setMeta('settledAmount', parseOptionalNumber(draft.settledAmount))
   setMeta('progressPercent', parseOptionalNumber(draft.progressPercent))
-  Object.assign(metadata, buildCostCurrencyMetadata(draft))
+  Object.assign(metadata, buildCostCurrencyMetadata(draft), buildCostDatabaseDraftMetadata(draft))
   return metadata
 }

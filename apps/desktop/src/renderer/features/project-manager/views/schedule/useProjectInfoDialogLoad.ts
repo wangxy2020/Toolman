@@ -45,7 +45,13 @@ import {
   readPracticeSaveHistory,
   readPracticeVersion,
 } from '../resource/pm-resource-practice-catalog'
-import { emptyDraft, toDraft, type CreateDefaults, type ProjectInfoDraft } from './pm-project-info-dialog-utils'
+import {
+  emptyDraft,
+  readCostDatabaseDraft,
+  toDraft,
+  type CreateDefaults,
+  type ProjectInfoDraft,
+} from './pm-project-info-dialog-utils'
 
 export function useProjectInfoDialogLoad(args: {
   project: PmProject | null
@@ -127,14 +133,14 @@ export function useProjectInfoDialogLoad(args: {
       return
     }
     if (isWorkspaceCost && workspaceCostId) {
+      const sharedMeta = readSharedCostSaveMeta(workspaceCostId)
       setDraft({
         ...emptyDraft({
           code: 'ALL',
           name: t('projectManagerPage.headerProject.allProjects'),
         }),
-        ...readCostCurrencyState(
-          practiceScopeId ? {} : readSharedCostSaveMeta(workspaceCostId),
-        ),
+        ...readCostCurrencyState(practiceScopeId ? {} : sharedMeta),
+        ...readCostDatabaseDraft(sharedMeta),
       })
       if (practiceScopeId) {
         setCostHistoryRows(readCostPracticeSaveHistory(workspaceCostId, practiceScopeId))

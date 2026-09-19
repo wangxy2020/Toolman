@@ -51,6 +51,9 @@ describe('pm-cost-column-prefs labels', () => {
     expect(isStockCostColumnLabel('totalPrice', 'Amount (CNY)')).toBe(true)
     expect(isStockCostColumnLabel('totalPrice', 'Total Price')).toBe(true)
     expect(isStockCostColumnLabel('type', '分类')).toBe(false)
+    expect(isStockCostColumnLabel('priorQuantity', '往期完成工程量')).toBe(true)
+    expect(isStockCostColumnLabel('priorQuantity', '前期完成工程量')).toBe(true)
+    expect(isStockCostColumnLabel('periodQuantity', '本期完成工程量')).toBe(true)
   })
 
   it('does not let a frozen Chinese header override English defaults', () => {

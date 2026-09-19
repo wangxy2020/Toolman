@@ -1,10 +1,15 @@
 import { useCallback, useMemo } from 'react'
 
+import type { CostDatabaseViewKey } from '@toolman/shared'
 import type { FeaturesMenuAction, FeaturesVersionSwitchEntry } from '../files/ProjectFeaturesMenuBar'
-import type { CostMenuAction, CostVersionSwitchEntry } from './ProjectCostMenuBar'
+import {
+  isCostPracticeViewPage,
+  type CostMenuAction,
+  type CostViewFilter,
+  type CostVersionSwitchEntry,
+} from './ProjectCostMenuBar'
 
 export function useProjectCostTableMenu(args: {
-  isPractice: boolean
   selectedMeteringBaselineId: string | null
   versionSwitchEntries: CostVersionSwitchEntry[]
   handleSave: () => void
@@ -22,16 +27,26 @@ export function useProjectCostTableMenu(args: {
   handleOutdent: () => void
   handleMove: (dir: -1 | 1) => void
   setMeteringViewActive: (v: boolean) => void
+  setViewFilter: (v: CostViewFilter) => void
+  viewFilter: CostViewFilter
   setMeteringCaptureBaselineOpen: (v: boolean) => void
   setMeteringEditBaselineOpen: (v: boolean) => void
   setPendingMeteringDeleteBaseline: (v: boolean) => void
+  fetchCostDatabase: (viewKey?: CostDatabaseViewKey) => void
 }) {
   const {
-    isPractice, selectedMeteringBaselineId, versionSwitchEntries, handleSave, setPendingSaveAsNewVersion,
+    selectedMeteringBaselineId, versionSwitchEntries, handleSave, setPendingSaveAsNewVersion,
     handleImport, handlePrint, setProjectInfoOpen, handleUndo, handleRedo, handleAdd, setPendingAddMultiple,
     handleInsert, handleDelete, handleIndent, handleOutdent, handleMove, setMeteringViewActive,
+    setViewFilter, viewFilter,
     setMeteringCaptureBaselineOpen, setMeteringEditBaselineOpen, setPendingMeteringDeleteBaseline,
+    fetchCostDatabase,
   } = args
+
+  const activateMeteringView = useCallback(() => {
+    setMeteringViewActive(true)
+    if (isCostPracticeViewPage(viewFilter)) setViewFilter('all')
+  }, [setMeteringViewActive, setViewFilter, viewFilter])
 
   const handleMenuAction = useCallback(
     (
@@ -44,6 +59,12 @@ export function useProjectCostTableMenu(args: {
           break
         case 'saveAsNewVersion':
           setPendingSaveAsNewVersion(true)
+          break
+        case 'fetch':
+          void fetchCostDatabase()
+          break
+        case 'fetchMetering':
+          void fetchCostDatabase('budgetQuota')
           break
         case 'import':
           void handleImport()
@@ -86,31 +107,28 @@ export function useProjectCostTableMenu(args: {
           handleMove(1)
           break
         case 'metering':
-          if (!isPractice) {
-            setMeteringViewActive(true)
-          }
+          activateMeteringView()
           break
         case 'meteringCaptureBaseline':
-          if (!isPractice) {
-            setMeteringViewActive(true)
-            setMeteringCaptureBaselineOpen(true)
-          }
+          activateMeteringView()
+          setMeteringCaptureBaselineOpen(true)
           break
         case 'meteringEditBaseline':
-          if (!isPractice && selectedMeteringBaselineId) {
-            setMeteringViewActive(true)
+          if (selectedMeteringBaselineId) {
+            activateMeteringView()
             setMeteringEditBaselineOpen(true)
           }
           break
         case 'meteringDeleteBaseline':
-          if (!isPractice && selectedMeteringBaselineId) {
-            setMeteringViewActive(true)
+          if (selectedMeteringBaselineId) {
+            activateMeteringView()
             setPendingMeteringDeleteBaseline(true)
           }
           break
       }
     },
     [
+      fetchCostDatabase,
       handleAdd,
       handleDelete,
       handleImport,
@@ -122,12 +140,16 @@ export function useProjectCostTableMenu(args: {
       handleRedo,
       handleSave,
       handleUndo,
-      isPractice,
       selectedMeteringBaselineId,
+      activateMeteringView,
     ],
   )
   const handleFeaturesMenuAction = useCallback(
     (action: FeaturesMenuAction) => {
+      if (action === 'fetch') {
+        void fetchCostDatabase()
+        return
+      }
       switch (action) {
         case 'save':
         case 'saveAsNewVersion':
@@ -148,7 +170,7 @@ export function useProjectCostTableMenu(args: {
           break
       }
     },
-    [handleMenuAction],
+    [fetchCostDatabase, handleMenuAction],
   )
 
   const practiceVersionEntries = useMemo((): FeaturesVersionSwitchEntry[] => {

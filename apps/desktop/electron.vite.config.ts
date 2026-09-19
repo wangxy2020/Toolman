@@ -71,7 +71,7 @@ export default defineConfig({
       __TOOLMAN_RELEASE_BUILD__: JSON.stringify(isReleaseBuild ? '1' : ''),
     },
     optimizeDeps: {
-      include: ['rehype-raw'],
+      include: ['rehype-raw', 'pdfjs-dist'],
       // Main-process packages; never pre-bundle native .node bindings for the renderer.
       exclude: [
         '@toolman/knowledge',
@@ -79,6 +79,9 @@ export default defineConfig({
         '@lancedb/lancedb',
         '@napi-rs/canvas',
       ],
+    },
+    worker: {
+      format: 'es',
     },
     build: {
       reportCompressedSize: false,

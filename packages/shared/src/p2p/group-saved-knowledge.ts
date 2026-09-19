@@ -2,6 +2,12 @@ export interface P2pGroupSavedKnowledgeMeta {
   groupName: string
   sharedFolderName?: string
   p2pWorkspaceId?: string
+  originPeer?: string
+  originGroup?: string
+  snapshotId?: string
+  sourceHash?: string
+  sourceVersion?: string
+  receivedAt?: number
 }
 
 export interface GroupSavedKnowledgeBaseCandidate {
@@ -24,6 +30,10 @@ export function normalizeP2pGroupSavedKnowledgeMeta(
   groupName: string,
   sharedFolderName?: string,
   p2pWorkspaceId?: string,
+  origin?: Pick<
+    P2pGroupSavedKnowledgeMeta,
+    'originPeer' | 'originGroup' | 'snapshotId' | 'sourceHash' | 'sourceVersion' | 'receivedAt'
+  >,
 ): P2pGroupSavedKnowledgeMeta {
   const normalizedGroupName = sanitizeP2pGroupSavedFolderSegment(groupName, '群组')
   const normalizedSharedFolderName = sharedFolderName?.trim()
@@ -33,6 +43,12 @@ export function normalizeP2pGroupSavedKnowledgeMeta(
     groupName: normalizedGroupName,
     ...(normalizedSharedFolderName ? { sharedFolderName: normalizedSharedFolderName } : {}),
     ...(p2pWorkspaceId ? { p2pWorkspaceId } : {}),
+    ...(origin?.originPeer ? { originPeer: origin.originPeer } : {}),
+    ...(origin?.originGroup ? { originGroup: origin.originGroup } : {}),
+    ...(origin?.snapshotId ? { snapshotId: origin.snapshotId } : {}),
+    ...(origin?.sourceHash ? { sourceHash: origin.sourceHash } : {}),
+    ...(origin?.sourceVersion ? { sourceVersion: origin.sourceVersion } : {}),
+    ...(typeof origin?.receivedAt === 'number' ? { receivedAt: origin.receivedAt } : {}),
   }
 }
 
@@ -144,6 +160,24 @@ export function parseP2pGroupSavedKnowledgeMeta(
           : {}),
         ...(typeof meta.p2pWorkspaceId === 'string' && meta.p2pWorkspaceId.trim()
           ? { p2pWorkspaceId: meta.p2pWorkspaceId.trim() }
+          : {}),
+        ...(typeof meta.originPeer === 'string' && meta.originPeer.trim()
+          ? { originPeer: meta.originPeer.trim() }
+          : {}),
+        ...(typeof meta.originGroup === 'string' && meta.originGroup.trim()
+          ? { originGroup: meta.originGroup.trim() }
+          : {}),
+        ...(typeof meta.snapshotId === 'string' && meta.snapshotId.trim()
+          ? { snapshotId: meta.snapshotId.trim() }
+          : {}),
+        ...(typeof meta.sourceHash === 'string' && meta.sourceHash.trim()
+          ? { sourceHash: meta.sourceHash.trim() }
+          : {}),
+        ...(typeof meta.sourceVersion === 'string' && meta.sourceVersion.trim()
+          ? { sourceVersion: meta.sourceVersion.trim() }
+          : {}),
+        ...(typeof meta.receivedAt === 'number' && Number.isFinite(meta.receivedAt)
+          ? { receivedAt: meta.receivedAt }
           : {}),
       }
     }

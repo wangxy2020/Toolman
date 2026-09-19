@@ -92,6 +92,10 @@ export {
   sliceOdlDocumentResult,
 } from './document-parser-odl-cache'
 
-export { parseIngestDocumentFile, tryParseIngestWithOdl } from './document-parser-ingest'
+export {
+  parseIngestDocumentFile,
+  tryParseIngestWithOdl,
+  isOdlIngestResultInsufficient,
+} from './document-parser-ingest'
 export { parseChatPdfAttachment } from './document-parser-chat'
 export { isPdfExtractedTextInsufficient }

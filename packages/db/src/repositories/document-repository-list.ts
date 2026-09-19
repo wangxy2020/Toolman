@@ -37,7 +37,7 @@ export function listResumableDocuments(
   job: typeof ingestJobs.$inferSelect
   document: DocumentRow
 }> {
-  const pendingStages = ['queued', 'parsing', 'chunking', 'embedding', 'indexing'] as const
+  const pendingStages = ['queued', 'parsing', 'ocr', 'chunking', 'embedding', 'indexing'] as const
   return db
     .select({
       job: ingestJobs,
@@ -67,8 +67,10 @@ export function listPendingIngestJobs(
   job: typeof ingestJobs.$inferSelect
   document: DocumentRow
 }> {
-  const pendingStages = ['queued', 'parsing', 'chunking', 'embedding', 'indexing'] as const
-  const stages = options.includeFailed ? [...pendingStages, 'failed' as const] : [...pendingStages]
+  const pendingStages = ['queued', 'parsing', 'ocr', 'chunking', 'embedding', 'indexing'] as const
+  const stages = options.includeFailed
+    ? [...pendingStages, 'failed' as const, 'cancelled' as const]
+    : [...pendingStages]
   return db
     .select({
       job: ingestJobs,

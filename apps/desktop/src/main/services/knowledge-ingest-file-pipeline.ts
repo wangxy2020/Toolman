@@ -1,9 +1,13 @@
 import { existsSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   ingestContent,
   type IngestFileResult,
+  type ParsedDocument,
+  type PdfIngestParseReport,
 } from '@toolman/knowledge'
 import type { DocumentRepository } from '@toolman/db'
+import { getWorkspaceKnowledgeDir } from './knowledge.service'
 import { resolveChunkConfig, resolveEmbedConfig } from './knowledge-embed.service'
 import { buildKnowledgeParseOptions } from './knowledge-parse-options.service'
 import { parseIngestDocumentFile, tryParseIngestWithOdl, isPdfFilePath } from './document-parser.service'
@@ -12,7 +16,6 @@ import { parseFileInWorker, shouldParseInWorker } from './parse-file-worker.serv
 import { withTimeout } from '../utils/async-timeout'
 import { resolveEmbedTimeoutMs, resolveParseTimeoutMs } from './knowledge-ingest-timeouts'
 import {
-  STAGE_PROGRESS,
   buildIngestProgressHandlers,
   createParsingProgressPulse,
   updateDocumentStage,
@@ -35,6 +38,7 @@ async function runIngestContent(options: {
     kind: string
     contentHash?: string
   }
+  indexVersion?: number
 }): Promise<IngestFileResult> {
   const { repo, filePath, workspaceId, kbId, documentId, vectorsDir, parsed } = options
   const contentHash = parsed.contentHash ?? options.contentHash
@@ -61,6 +65,7 @@ async function runIngestContent(options: {
       embedModel: embed.embedModel,
       vectorsDir,
       vectorBackend: embed.vectorBackend,
+      indexVersion: options.indexVersion,
       onEmbedProgress,
       onIndexedChunkBatch: async (chunks) => {
         assertIngestStillActive(repo, documentId, kbId)
@@ -84,9 +89,10 @@ export async function parseAndEmbedFile(options: {
   kbId: string
   documentId: string
   vectorsDir: string
-}): Promise<IngestFileResult> {
+  indexVersion?: number
+}): Promise<IngestFileResult & { parseReport?: PdfIngestParseReport }> {
   const { repo, filePath, contentHash, workspaceId, kbId, documentId, vectorsDir } = options
-  const parseOptions = buildKnowledgeParseOptions(workspaceId, kbId)
+  const parseOptions = buildKnowledgeParseOptions(workspaceId, kbId, documentId)
   const progressCtx = { workspaceId, kbId, documentId }
   const { onOcrProgress } = buildIngestProgressHandlers(repo, progressCtx)
   const parseOptionsWithProgress = { ...parseOptions, onOcrProgress }
@@ -94,12 +100,7 @@ export async function parseAndEmbedFile(options: {
   const fileSizeBytes = statSync(filePath).size
   const parseTimeoutMs = resolveParseTimeoutMs(fileSizeBytes)
 
-  let parsed: {
-    title: string
-    plainText: string
-    mimeType: string
-    kind: string
-  }
+  let parsed: ParsedDocument
 
   if (!existsSync(filePath)) {
     throw new Error('源文件不存在，无法解析')
@@ -116,42 +117,38 @@ export async function parseAndEmbedFile(options: {
     stopParsingPulse()
   }
   try {
-    const odlParsed = isPdfFilePath(filePath)
-      ? await withTimeout(
-          tryParseIngestWithOdl({
-            filePath,
-            workspaceId,
-            kbId,
-            parseTimeoutMs,
-            documentId,
-            onParseProgress: (currentPage, totalPages, inProgress) => {
-              // Real Hybrid/ODL page progress owns the bar (stop soft 20→60 crawl).
-              stopPulse()
-              onOcrProgress(currentPage, totalPages, inProgress)
-            },
-          }),
+    if (isPdfFilePath(filePath)) {
+      const odlParsed = await withTimeout(
+        tryParseIngestWithOdl({
+          filePath,
+          workspaceId,
+          kbId,
           parseTimeoutMs,
-          '文件解析超时，请检查文件是否损坏或过大',
-        )
-      : null
-
-    if (odlParsed) {
+          documentId,
+          contentHash,
+          parsedDir: join(getWorkspaceKnowledgeDir(workspaceId), 'parsed'),
+          parseOptions: parseOptionsWithProgress,
+          onParseProgress: (currentPage, totalPages, inProgress) => {
+            stopPulse()
+            onOcrProgress(currentPage, totalPages, inProgress)
+          },
+        }),
+        parseTimeoutMs,
+        '文件解析超时，请检查文件是否损坏或过大',
+      )
+      if (!odlParsed) {
+        throw new Error('PDF 页面解析未得到可用正文')
+      }
       parsed = odlParsed
     } else if (shouldParseInWorker(filePath, ocrEnabled)) {
       logStructured(
         'knowledge-ingest',
         'info',
-        `ODL fallback → glm-ocr worker for ${filePath.split(/[/\\]/).pop() ?? filePath}`,
+        `parse worker for ${filePath.split(/[/\\]/).pop() ?? filePath}`,
       )
-      // Stop soft pulse and reset so per-page OCR progress is visible from the start.
       stopPulse()
-      updateDocumentStage(repo, {
-        ...progressCtx,
-        stage: 'parsing',
-        progress: STAGE_PROGRESS.parsing,
-      })
       const workerResult = await withTimeout(
-        parseFileInWorker(filePath, parseOptionsWithProgress, parseTimeoutMs),
+        parseFileInWorker(filePath, parseOptionsWithProgress, parseTimeoutMs, documentId),
         parseTimeoutMs,
         '文件解析超时，请检查文件是否损坏或过大',
       )
@@ -159,7 +156,7 @@ export async function parseAndEmbedFile(options: {
         title: workerResult.title,
         plainText: workerResult.plainText,
         mimeType: workerResult.mimeType,
-        kind: workerResult.kind,
+        kind: workerResult.kind as ParsedDocument['kind'],
       }
     } else {
       const result = await withTimeout(
@@ -169,6 +166,11 @@ export async function parseAndEmbedFile(options: {
           kbId,
           parseOptions: parseOptionsWithProgress,
           parseTimeoutMs,
+          documentId,
+          onParseProgress: (currentPage, totalPages, inProgress) => {
+            stopPulse()
+            onOcrProgress(currentPage, totalPages, inProgress)
+          },
         }),
         parseTimeoutMs,
         '文件解析超时，可能是加密 PDF 或扫描件 OCR 耗时过长',
@@ -182,14 +184,18 @@ export async function parseAndEmbedFile(options: {
   assertIngestStillActive(repo, documentId, kbId)
   updateDocumentStage(repo, { ...progressCtx, stage: 'chunking' })
   updateDocumentStage(repo, { ...progressCtx, stage: 'embedding' })
-  return runIngestContent({
-    repo,
-    filePath,
-    contentHash,
-    workspaceId,
-    kbId,
-    documentId,
-    vectorsDir,
-    parsed,
-  })
+  return {
+    ...(await runIngestContent({
+      repo,
+      filePath,
+      contentHash,
+      workspaceId,
+      kbId,
+      documentId,
+      vectorsDir,
+      parsed,
+      indexVersion: options.indexVersion,
+    })),
+    ...(parsed.parseReport ? { parseReport: parsed.parseReport } : {}),
+  }
 }

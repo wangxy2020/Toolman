@@ -90,9 +90,12 @@ function mapDocumentStageToJobStage(
   stage: DocumentRow['status'],
 ): (typeof ingestJobs.$inferSelect)['stage'] {
   if (stage === 'ready') return 'done'
+  if (stage === 'cancelled') return 'cancelled'
+  if (stage === 'stale') return 'queued'
   if (
     stage === 'queued' ||
     stage === 'parsing' ||
+    stage === 'ocr' ||
     stage === 'chunking' ||
     stage === 'embedding' ||
     stage === 'indexing' ||
@@ -128,7 +131,9 @@ export function upsertIngestJob(
     errorJson: input.errorJson ?? existing?.errorJson ?? null,
     startedAt: existing?.startedAt ?? (jobStage === 'queued' ? null : now),
     finishedAt:
-      jobStage === 'done' || jobStage === 'failed' ? now : (existing?.finishedAt ?? null),
+      jobStage === 'done' || jobStage === 'failed' || jobStage === 'cancelled'
+        ? now
+        : (existing?.finishedAt ?? null),
   }
 
   if (existing) {

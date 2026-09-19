@@ -2,8 +2,12 @@ import type { FC } from 'react'
 import { Fragment } from 'react'
 
 import { DEFAULT_COST_CURRENCY, costSectionCurrencyKey } from '../cost/pm-cost-currency'
-import { PM_COST_PRIMARY_TYPES, PM_COST_RESOURCE_TYPES } from '../cost/pm-cost-catalog'
-import { PM_COST_ESTIMATE_TYPE_SET, PM_COST_ESTIMATE_TYPES, formatMoney } from './pm-project-info-dialog-utils'
+import { PM_COST_RESOURCE_TYPES } from '../cost/pm-cost-catalog'
+import {
+  PM_COST_ESTIMATE_TYPES,
+  PM_COST_INFO_COST_CARD_TYPES,
+  formatMoney,
+} from './pm-project-info-dialog-utils'
 import type { ProjectInfoDialogState } from './useProjectInfoDialog'
 
 type Props = Pick<
@@ -95,7 +99,7 @@ export const ProjectInfoDialogCostTab: FC<Props> = ({
           {t('projectManagerPage.projectInfo.statGroupCost')}
         </div>
         <div className="tm-pm-project-info-stats">
-          {PM_COST_PRIMARY_TYPES.filter((type) => !PM_COST_ESTIMATE_TYPE_SET.has(type)).map((type) => (
+          {PM_COST_INFO_COST_CARD_TYPES.map((type) => (
             <Fragment key={type}>
               <div className="tm-pm-project-info-stat">
                 <div className="tm-pm-project-info-stat-label-row">
@@ -104,14 +108,35 @@ export const ProjectInfoDialogCostTab: FC<Props> = ({
                     {t('projectManagerPage.projectInfo.fieldCurrency')}
                   </span>
                 </div>
-                <div className="tm-pm-project-info-stat-value-row">
-                  <strong>
-                    {costStats.amountByType[type] != null
-                      ? formatMoney(costStats.amountByType[type]!)
-                      : '—'}
-                  </strong>
-                  {renderCostCurrencyInput(type)}
-                </div>
+                {type === 'comprehensive' ? (
+                  <div className="tm-pm-project-info-stat-amounts">
+                    {(costStats.comprehensiveByCurrency.length > 0
+                      ? costStats.comprehensiveByCurrency
+                      : [{ currency: '', amount: null }]
+                    ).map((entry) => (
+                      <div
+                        key={entry.currency || '__empty__'}
+                        className="tm-pm-project-info-stat-value-row"
+                      >
+                        <strong>
+                          {entry.amount != null ? formatMoney(entry.amount) : '—'}
+                        </strong>
+                        {entry.currency ? (
+                          <span className="tm-pm-project-info-stat-currency-text">{entry.currency}</span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="tm-pm-project-info-stat-value-row">
+                    <strong>
+                      {costStats.amountByType[type] != null
+                        ? formatMoney(costStats.amountByType[type]!)
+                        : '—'}
+                    </strong>
+                    {renderCostCurrencyInput(type)}
+                  </div>
+                )}
               </div>
               {type === 'comprehensive'
                 ? costStats.sections.map((section) => {

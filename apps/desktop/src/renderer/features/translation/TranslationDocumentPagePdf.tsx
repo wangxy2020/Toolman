@@ -1,12 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useI18n } from '../../i18n/useI18n'
-import {
-  getCachedPageImage,
-  listCachedPageImageUrls,
-  pageImageCacheKey,
-} from './document-page-cache'
+import { getCachedPageImage, pageImageCacheKey } from './document-page-cache'
+import { isPdfViewerRenderCancelled } from './document-pdf-viewer-scale'
+import { renderPdfPageToCanvas } from './document-pdf-viewer'
 import { ensurePdfPageImage, isPdfPreviewRenderDropped } from './document-page-preview-load'
-import { PDF_PREVIEW_WARM_RADIUS, resolvePdfPreviewRenderWidth } from './document-page-preview-policy'
+import { resolvePdfPreviewRenderWidth } from './document-page-preview-policy'
 import { splitTranslationParagraphs } from './translation-paragraphs'
 import type { PageDisplayBox } from './translation-document-workspace-types'
 import type { DocumentPageState } from './useDocumentPageTranslation'
@@ -18,7 +16,7 @@ function resolvePdfPreviewAspectStyle(pageAspect: number | null): CSSProperties 
   return { aspectRatio: '612 / 792' }
 }
 
-const PdfPageImage = memo(function PdfPageImage({
+const PdfPageRasterImage = memo(function PdfPageRasterImage({
   filePath,
   pageNumber,
   currentPage,
@@ -159,39 +157,141 @@ const PdfPageImage = memo(function PdfPageImage({
   )
 })
 
-function PdfPreviewWarmImages({
+const PdfPageCanvas = memo(function PdfPageCanvas({
   filePath,
-  renderWidth,
+  pageNumber,
   currentPage,
-  totalPages,
-  cacheEpoch,
+  pageBox,
+  pageAspect,
+  active,
+  onReady,
+  onVectorFailure,
 }: {
   filePath: string
-  renderWidth: number
+  pageNumber: number
   currentPage: number
-  totalPages: number
-  cacheEpoch: number
+  pageBox: PageDisplayBox
+  pageAspect: number | null
+  active: boolean
+  onReady?: (pageNumber: number) => void
+  onVectorFailure: () => void
 }) {
-  const urls = useMemo(() => {
-    if (!filePath || renderWidth < 1) return []
-    return listCachedPageImageUrls(
-      filePath,
-      renderWidth,
-      Math.max(1, currentPage - PDF_PREVIEW_WARM_RADIUS),
-      Math.min(totalPages, currentPage + PDF_PREVIEW_WARM_RADIUS),
-    )
-  }, [cacheEpoch, currentPage, filePath, renderWidth, totalPages])
+  const { t } = useI18n()
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const paintedRef = useRef(false)
+  const currentPageRef = useRef(currentPage)
+  currentPageRef.current = currentPage
+  const [painted, setPainted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const aspectStyle = resolvePdfPreviewAspectStyle(pageAspect)
+  const cssWidth = pageBox.width
 
-  if (urls.length === 0) return null
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !filePath || cssWidth < 1) return
+    const controller = new AbortController()
+    const delay = paintedRef.current ? 80 : 0
+    const timer = window.setTimeout(() => {
+      setLoading(true)
+      void renderPdfPageToCanvas({
+        filePath,
+        pageNumber,
+        canvas,
+        cssWidth,
+        currentPage: currentPageRef.current,
+        signal: controller.signal,
+      })
+        .then(() => {
+          if (controller.signal.aborted) return
+          paintedRef.current = true
+          setPainted(true)
+          setLoading(false)
+          onReady?.(pageNumber)
+        })
+        .catch((error) => {
+          if (controller.signal.aborted || isPdfViewerRenderCancelled(error)) return
+          onVectorFailure()
+        })
+    }, delay)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
+  }, [cssWidth, filePath, onReady, onVectorFailure, pageNumber])
 
   return (
-    <div className="tm-translation-doc-preview-warm" aria-hidden="true">
-      {urls.map((url) => (
-        <img key={url} src={url} alt="" />
-      ))}
+    <div className="tm-translation-doc-page-image-slot" style={aspectStyle}>
+      <div className="tm-translation-doc-page-image-wrap">
+        <canvas
+          ref={canvasRef}
+          className="tm-translation-doc-page-image"
+          aria-label={t('translationPage.documents.pageLabel', {
+            page: String(pageNumber),
+            total: '',
+          })}
+        />
+        {!painted ? (
+          <div className="tm-translation-doc-page-image-status tm-translation-doc-page-image-status--overlay" role="status">
+            <p>
+              {loading || (active && cssWidth > 0)
+                ? t('translationPage.documents.loadingPreview')
+                : t('translationPage.documents.pagePending')}
+            </p>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
-}
+})
+
+const PdfPageImage = memo(function PdfPageImage({
+  filePath,
+  pageNumber,
+  currentPage,
+  pageBox,
+  pageAspect,
+  active,
+  cacheEpoch,
+  onReady,
+}: {
+  filePath: string
+  pageNumber: number
+  currentPage: number
+  pageBox: PageDisplayBox
+  pageAspect: number | null
+  active: boolean
+  cacheEpoch: number
+  onReady?: (pageNumber: number) => void
+}) {
+  const [mode, setMode] = useState<'vector' | 'raster'>('vector')
+  const onVectorFailure = useCallback(() => setMode('raster'), [])
+  if (mode === 'raster') {
+    return (
+      <PdfPageRasterImage
+        filePath={filePath}
+        pageNumber={pageNumber}
+        currentPage={currentPage}
+        pageBox={pageBox}
+        pageAspect={pageAspect}
+        active={active}
+        cacheEpoch={cacheEpoch}
+        onReady={onReady}
+      />
+    )
+  }
+  return (
+    <PdfPageCanvas
+      filePath={filePath}
+      pageNumber={pageNumber}
+      currentPage={currentPage}
+      pageBox={pageBox}
+      pageAspect={pageAspect}
+      active={active}
+      onReady={onReady}
+      onVectorFailure={onVectorFailure}
+    />
+  )
+})
 
 function SourceTextPage({ page }: { page: DocumentPageState }) {
   const paragraphs = splitTranslationParagraphs(page.sourceText)
@@ -209,4 +309,4 @@ function SourceTextPage({ page }: { page: DocumentPageState }) {
   )
 }
 
-export { PdfPageImage, PdfPreviewWarmImages, SourceTextPage }
+export { PdfPageImage, SourceTextPage }

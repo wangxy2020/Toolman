@@ -1,6 +1,6 @@
 import { existsSync, unlinkSync } from 'node:fs'
 import type { VectorRecord } from './cosine.js'
-import { FileVectorStore, getKbVectorStorePath } from './file-vector-store.js'
+import { FileVectorStore, getKbLanceDir, getKbVectorStorePath } from './file-vector-store.js'
 import { LanceVectorStore, migrateJsonVectorsToLance } from './lance-vector-store.js'
 import type { OpenKbVectorStoreOptions, VectorStore } from './types.js'
 
@@ -44,17 +44,19 @@ class FileVectorStoreAdapter implements VectorStore {
 
 export async function openKbVectorStore(options: OpenKbVectorStoreOptions): Promise<VectorStore> {
   const backend = options.backend ?? 'file'
+  const indexVersion = options.indexVersion ?? 1
 
   if (backend === 'lance') {
-    const lanceDir = `${options.vectorsDir}/lance`.replace(/\/+/g, '/')
+    const lanceDir = getKbLanceDir(options.vectorsDir, indexVersion)
     await migrateJsonVectorsToLance({
       vectorsDir: options.vectorsDir,
       kbId: options.kbId,
+      indexVersion,
     })
     return new LanceVectorStore(lanceDir, options.kbId)
   }
 
-  const filePath = getKbVectorStorePath(options.vectorsDir, options.kbId)
+  const filePath = getKbVectorStorePath(options.vectorsDir, options.kbId, indexVersion)
   return new FileVectorStoreAdapter(new FileVectorStore(filePath), options.kbId, filePath)
 }
 

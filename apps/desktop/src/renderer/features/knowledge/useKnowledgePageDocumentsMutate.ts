@@ -40,6 +40,8 @@ export function useKnowledgePageDocumentsMutate(
     | 't'
     | 'pendingDelete'
     | 'setPendingDelete'
+    | 'pendingReindex'
+    | 'setPendingReindex'
     | 'showingDefaultLocalFilesFolder'
     | 'localFilesDefaultKb'
     | 'syncDefaultKb'
@@ -52,6 +54,8 @@ export function useKnowledgePageDocumentsMutate(
     t,
     pendingDelete,
     setPendingDelete,
+    pendingReindex,
+    setPendingReindex,
     showingDefaultLocalFilesFolder,
     localFilesDefaultKb,
     syncDefaultKb,
@@ -150,13 +154,36 @@ export function useKnowledgePageDocumentsMutate(
     }
   }
 
-  const handleReindexAll = async () => {
-    if (!importTarget.kbId || panelDocuments.length === 0) return
-    if (!window.confirm(`确定重建当前知识库全部 ${panelDocuments.length} 个文档的索引吗？`)) {
-      return
-    }
+  const requestReindexDocuments = (ids: string[], message: string) => {
+    if (ids.length === 0) return
+    setPendingReindex({ ids, message })
+  }
 
-    const result = await documents.reindexAll()
+  const handleReindexSelected = () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    requestReindexDocuments(
+      ids,
+      t('knowledgePage.contextMenu.reindexSelectedConfirm', { count: String(ids.length) }),
+    )
+  }
+
+  const handleReindexAll = () => {
+    if (!importTarget.kbId || panelDocuments.length === 0) return
+    const ids = panelDocuments.map((item) => item.id)
+    requestReindexDocuments(
+      ids,
+      t('knowledgePage.contextMenu.reindexAllConfirm', { count: String(ids.length) }),
+    )
+  }
+
+  const confirmReindexDocuments = async () => {
+    if (!pendingReindex) return
+    const ids = pendingReindex.ids
+    setPendingReindex(null)
+    setSelectedIds(new Set())
+
+    const result = await documents.reindexAll(ids)
     onKbChanged?.()
 
     if (result) {
@@ -218,7 +245,9 @@ export function useKnowledgePageDocumentsMutate(
     handleAddUrl,
     handleAddSitemap,
     handleReindexAll,
+    handleReindexSelected,
     handleMoveToSync,
     confirmDeleteDocuments,
+    confirmReindexDocuments,
   }
 }

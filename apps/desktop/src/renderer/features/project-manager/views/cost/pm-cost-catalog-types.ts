@@ -87,6 +87,12 @@ export type PmCostRow = {
   unit: string
   quantity: number | null
   unitPrice: number | null
+  /** 本期完成工程量 — used on the 计量 dropdown view. */
+  periodQuantity?: number | null
+  /** 往期完成工程量 — used on the 计量 dropdown view. */
+  priorQuantity?: number | null
+  /** Captured 本期 quantities keyed by metering-period / IPC id. */
+  ipcQuantities?: Record<string, number | null>
   /** `'all'` = 全部项目, otherwise a project id. */
   applicable: string
   note: string
@@ -132,7 +138,12 @@ export function isPmCostType(value: unknown): value is PmCostType {
  * Practice quota types are first-class on the shared catalog.
  */
 export function toSharedCostCatalogType(type: PmCostType): PmCostType {
-  return type
+  return toPriceListCostType(type)
+}
+
+/** 价格表视图只有综合单价等价目类型；施工定额等实务类型并入综合单价. */
+export function toPriceListCostType(type: PmCostType): PmCostType {
+  return isPmCostPracticeQuotaType(type) ? 'comprehensive' : type
 }
 
 /** Menu / table order for price-list types (matches view dropdown). */

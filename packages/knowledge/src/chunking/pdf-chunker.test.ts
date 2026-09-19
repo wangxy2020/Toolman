@@ -27,6 +27,7 @@ describe('pdf-page-markers', () => {
   it('extracts page hints from natural-language queries', () => {
     expect(extractPdfPageQueryHint('这个文件第6页写了什么？')).toBe(6)
     expect(extractPdfPageQueryHint('What is on page 12?')).toBe(12)
+    expect(extractPdfPageQueryHint('小说写作教程中，第五章的标题')).toBeNull()
     expect(enhanceQueryForPdfPageSearch('这个文件第6页写了什么？')).toContain('【第 6 页】')
   })
 })
@@ -35,7 +36,7 @@ describe('chunkPdfText', () => {
   it('keeps chunks within a single page and prefixes page markers', () => {
     const text = [
       `${formatPdfPageMarker(6, 10)}\n${'第六页正文。'.repeat(80)}`,
-      `${formatPdfPageMarker(7, 10)}\n第七页正文。`,
+      `${formatPdfPageMarker(7, 10)}\n## 场景\n第七页正文。`,
     ].join('\n\n')
 
     const chunks = chunkPdfText(text, {
@@ -47,7 +48,7 @@ describe('chunkPdfText', () => {
     expect(chunks.length).toBeGreaterThan(1)
     expect(chunks.every((chunk) => chunk.text.startsWith('【第'))).toBe(true)
     expect(chunks.some((chunk) => chunk.metadata?.pageNumber === 6)).toBe(true)
-    expect(chunks.some((chunk) => chunk.metadata?.pageNumber === 7)).toBe(true)
+    expect(chunks.some((chunk) => chunk.metadata?.heading === '场景')).toBe(true)
     expect(chunks.every((chunk) => !chunk.text.includes('第七页正文') || chunk.metadata?.pageNumber === 7)).toBe(
       true,
     )

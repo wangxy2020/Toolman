@@ -6,6 +6,10 @@ export interface FetchedUrlContent {
   plainText: string
   html: string
   mimeType: string
+  httpStatus: number
+  etag: string | null
+  lastModified: string | null
+  fetchedAt: number
 }
 
 export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
@@ -39,6 +43,12 @@ export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
 
   const contentType = response.headers.get('content-type') ?? 'text/html'
   const body = await response.text()
+  const snapshot = {
+    httpStatus: response.status,
+    etag: response.headers.get('etag'),
+    lastModified: response.headers.get('last-modified'),
+    fetchedAt: Date.now(),
+  }
 
   if (contentType.includes('text/markdown') || parsedUrl.pathname.endsWith('.md')) {
     const title = parsedUrl.pathname.split('/').pop() || parsedUrl.hostname
@@ -48,6 +58,7 @@ export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
       plainText: body.trim(),
       html: body,
       mimeType: 'text/markdown',
+      ...snapshot,
     }
   }
 
@@ -58,6 +69,7 @@ export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
       plainText: body.trim(),
       html: body,
       mimeType: 'text/plain',
+      ...snapshot,
     }
   }
 
@@ -72,5 +84,6 @@ export async function fetchUrlContent(url: string): Promise<FetchedUrlContent> {
     plainText: extracted.plainText,
     html: body,
     mimeType: 'text/html',
+    ...snapshot,
   }
 }

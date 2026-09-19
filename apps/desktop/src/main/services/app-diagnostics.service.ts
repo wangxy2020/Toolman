@@ -34,6 +34,7 @@ import { getLibp2pRestartStatus } from './p2p/p2p-network-manager.service'
 const INGEST_PENDING_STAGES = [
   'queued',
   'parsing',
+  'ocr',
   'chunking',
   'embedding',
   'indexing',

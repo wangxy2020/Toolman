@@ -8,6 +8,7 @@ export { relocateKnowledgeDocuments } from './knowledge-document/relocate'
 export { searchKnowledge } from './knowledge-document/search'
 export {
   formatLocalKnowledgeList,
+  formatSearchLocalKnowledgeHits,
   listKnowledgeBasesForTool,
   searchKnowledgeForTool,
   getAssistantKbIds,

@@ -5,10 +5,13 @@ import {
   detectFileKind,
   hashFileStream,
   parseFile,
+  isSkippablePdfOcrPageError,
   type ParseFileOptions,
 } from '@toolman/knowledge'
 import { INGEST_NO_PROGRESS_MS } from './knowledge-ingest-timeouts'
 import { resolveMainWorkerScript } from '../lib/resolve-main-worker'
+import { isIngestCancelled } from './knowledge-ingest-manager.service'
+import { logStructured } from './structured-log.service'
 
 const LARGE_FILE_BYTES = 512 * 1024
 
@@ -122,6 +125,7 @@ export function parseFileInWorker(
   filePath: string,
   options?: ParseFileOptions,
   timeoutMs?: number,
+  documentId?: string,
 ): Promise<ParsedFileWorkerResult> {
   const workerPath = resolveMainWorkerScript('parse-file.worker.js')
   if (!workerPath) {
@@ -179,6 +183,12 @@ export function parseFileInWorker(
 
       if (message.type === 'ocr-request') {
         touchProgress()
+        if (documentId && isIngestCancelled(documentId)) {
+          finish(() => {
+            reject(new Error('索引任务已取消'))
+          })
+          return
+        }
         void (async () => {
           try {
             let text = ''
@@ -210,6 +220,21 @@ export function parseFileInWorker(
             })
             touchProgress()
           } catch (error) {
+            if (isSkippablePdfOcrPageError(error) && !settled) {
+              logStructured(
+                'parse-file-worker',
+                'warn',
+                'skipping OCR page after glm-ocr failure; continuing remaining pages',
+                { error: error instanceof Error ? error.message : String(error) },
+              )
+              worker.postMessage({
+                type: 'ocr-response',
+                requestId: message.requestId,
+                text: '',
+              })
+              touchProgress()
+              return
+            }
             finish(() => {
               reject(error instanceof Error ? error : new Error(String(error)))
             })

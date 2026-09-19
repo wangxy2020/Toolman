@@ -39,6 +39,7 @@ import {
   softDeleteDocument,
   softDeleteDocumentSource,
   updateDocument,
+  updateDocumentSource,
 } from './document-repository-mutate.js'
 import {
   findRegistryByDocumentId,
@@ -122,12 +123,17 @@ export class DocumentRepository {
     patch: Partial<{
       title: string
       contentHash: string | null
+      parsedHash: string | null
       mimeType: string | null
       status: DocumentRow['status']
       errorJson: string | null
       metadataJson: string
       absolutePath: string | null
       blobHash: string | null
+      revisionNumber: number
+      currentRevisionId: string | null
+      indexVersion: number
+      indexFingerprint: string | null
     }>,
   ) {
     return updateDocument(this.db, id, kbId, patch)
@@ -158,6 +164,14 @@ export class DocumentRepository {
     configJson?: string
   }) {
     return createDocumentSource(this.db, input)
+  }
+
+  updateSource(
+    id: string,
+    kbId: string,
+    patch: Parameters<typeof updateDocumentSource>[3],
+  ) {
+    return updateDocumentSource(this.db, id, kbId, patch)
   }
 
   getSourceById(id: string, kbId: string) {

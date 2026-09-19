@@ -1,7 +1,7 @@
 import { isSupportedKnowledgeFile, type ParseFileOptions } from '@toolman/knowledge'
 import {
   CHAT_OCR_MAX_PAGES,
-  KNOWLEDGE_MAX_OCR_PAGES,
+  KNOWLEDGE_INGEST_OCR_MAX_PAGES,
   createPdfOcrRecognizer,
   ocrImageBuffer,
 } from './document-ocr.service'
@@ -11,6 +11,7 @@ import { isDocumentOcrEnabled } from './runtime-app-settings.service'
 export function buildKnowledgeParseOptions(
   workspaceId: string,
   kbId: string,
+  documentId?: string,
 ): ParseFileOptions {
   const docProcessor = resolveDocProcessorConfig(workspaceId, kbId)
   const options: ParseFileOptions = {
@@ -25,8 +26,8 @@ export function buildKnowledgeParseOptions(
 
   options.ocr = {
     enabled: true,
-    maxPdfPages: KNOWLEDGE_MAX_OCR_PAGES,
-    recognizePage: createPdfOcrRecognizer(workspaceId, { kbId }),
+    maxPdfPages: KNOWLEDGE_INGEST_OCR_MAX_PAGES,
+    recognizePage: createPdfOcrRecognizer(workspaceId, { kbId, documentId }),
     recognizeImage: async ({ buffer, mimeType }) =>
       ocrImageBuffer(buffer, mimeType, workspaceId, kbId),
   }

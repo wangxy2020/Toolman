@@ -9,6 +9,19 @@ export interface RenderedPdfPage {
   pageNumber: number
   png: Buffer
   mimeType: 'image/png' | 'image/jpeg'
+  /** Dark-pixel fraction after OCR contrast; blank header pages are ~0.002. */
+  inkRatio?: number
+}
+
+/** Count pixels darker than near-white after the OCR grayscale pass. */
+export function measureRenderedInkRatio(data: Uint8ClampedArray | Uint8Array): number {
+  const pixels = Math.floor(data.length / 4)
+  if (pixels <= 0) return 0
+  let ink = 0
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index]! < 210) ink += 1
+  }
+  return ink / pixels
 }
 
 export type PdfRenderPurpose = 'ocr' | 'vision' | 'preview'
@@ -22,6 +35,23 @@ function resolveRenderScale(purpose: PdfRenderPurpose, scale?: number): number {
   if (purpose === 'ocr') return OCR_RENDER_SCALE
   if (purpose === 'vision') return VISION_RENDER_SCALE
   return DEFAULT_RENDER_SCALE
+}
+
+const pdfjsDocumentTails = new Map<string, Promise<void>>()
+
+/** pdf.js documents are not safe for concurrent getPage/render on the same file. */
+export function withPdfjsDocumentLock<T>(filePath: string, task: () => Promise<T>): Promise<T> {
+  const previous = pdfjsDocumentTails.get(filePath) ?? Promise.resolve()
+  const current = previous.then(task, task)
+  const settled = current.then(
+    () => undefined,
+    () => undefined,
+  )
+  pdfjsDocumentTails.set(filePath, settled)
+  void settled.then(() => {
+    if (pdfjsDocumentTails.get(filePath) === settled) pdfjsDocumentTails.delete(filePath)
+  })
+  return current
 }
 
 export async function renderPdfPagesToPng(
@@ -43,10 +73,13 @@ export async function renderPdfPagesToPng(
     // glm-ocr rejects oversized images; keep OCR pages within ~1800px on the long side.
     const baseViewport = page.getViewport({ scale: 1 })
     const ocrMaxDim = 1800
+    const visionMaxDim = 1280
     const scale =
       purpose === 'ocr'
         ? Math.min(renderScale, ocrMaxDim / Math.max(baseViewport.width, baseViewport.height, 1))
-        : renderScale
+        : purpose === 'vision'
+          ? Math.min(renderScale, visionMaxDim / Math.max(baseViewport.width, baseViewport.height, 1))
+          : renderScale
     const viewport = page.getViewport({ scale })
     let canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
     const context = canvas.getContext('2d')
@@ -76,10 +109,22 @@ export async function renderPdfPagesToPng(
       }
     }
 
-    const usePng = purpose === 'ocr' || purpose === 'vision' || renderScale >= 2
+    if (purpose === 'vision') {
+      const longSide = Math.max(canvas.width, canvas.height)
+      if (longSide > visionMaxDim) {
+        const resizeScale = visionMaxDim / longSide
+        const width = Math.max(1, Math.round(canvas.width * resizeScale))
+        const height = Math.max(1, Math.round(canvas.height * resizeScale))
+        const resized = createCanvas(width, height)
+        resized.getContext('2d').drawImage(canvas, 0, 0, width, height)
+        canvas = resized
+      }
+    }
+
+    const usePng = purpose === 'ocr' || (purpose !== 'vision' && renderScale >= 2)
     pages.push({
       pageNumber,
-      png: usePng ? canvas.toBuffer('image/png') : canvas.toBuffer('image/jpeg', 90),
+      png: usePng ? canvas.toBuffer('image/png') : canvas.toBuffer('image/jpeg', purpose === 'vision' ? 82 : 90),
       mimeType: usePng ? 'image/png' : 'image/jpeg',
     })
   }
@@ -87,8 +132,15 @@ export async function renderPdfPagesToPng(
   return { totalPages, pages }
 }
 
-/** Render one PDF page for OCR (uses document cache; keeps long side ≤ 1800px). */
+/** Render one PDF page for OCR (uses document cache; keeps long side ≤ 1280px JPEG). */
 export async function renderPdfPageForOcr(
+  filePath: string,
+  pageNumber: number,
+): Promise<{ totalPages: number; page: RenderedPdfPage }> {
+  return withPdfjsDocumentLock(filePath, () => renderPdfPageForOcrLocked(filePath, pageNumber))
+}
+
+async function renderPdfPageForOcrLocked(
   filePath: string,
   pageNumber: number,
 ): Promise<{ totalPages: number; page: RenderedPdfPage }> {
@@ -101,7 +153,7 @@ export async function renderPdfPageForOcr(
   const safePage = Math.max(1, Math.min(Math.floor(pageNumber), totalPages))
   const page = await document.getPage(safePage)
   const renderScale = resolveRenderScale('ocr')
-  const ocrMaxDim = 1800
+  const ocrMaxDim = 1280
   const baseViewport = page.getViewport({ scale: 1 })
   const scale = Math.min(
     renderScale,
@@ -135,12 +187,14 @@ export async function renderPdfPageForOcr(
     canvas = resized
   }
 
+  const inkPixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height)
   return {
     totalPages,
     page: {
       pageNumber: safePage,
-      png: canvas.toBuffer('image/png'),
-      mimeType: 'image/png',
+      png: canvas.toBuffer('image/jpeg', 82),
+      mimeType: 'image/jpeg',
+      inkRatio: measureRenderedInkRatio(inkPixels.data),
     },
   }
 }

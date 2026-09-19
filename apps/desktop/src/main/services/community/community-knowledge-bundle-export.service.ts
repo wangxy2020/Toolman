@@ -18,6 +18,17 @@ function sha256Hex(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
+function safeJsonObject(value: string | null | undefined): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value || '{}') as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 function sanitizeRelativeName(title: string, index: number, absolutePath: string): string {
   const ext = basename(absolutePath).includes('.')
     ? basename(absolutePath).slice(basename(absolutePath).lastIndexOf('.'))
@@ -68,9 +79,28 @@ export async function exportCommunityKnowledgeBundle(input: unknown): Promise<{ 
 
     const manifest = {
       schemaVersion: 1,
+      packageVersion: 1,
       name: kb.name,
       description: kb.description ?? '',
       files: manifestFiles,
+      knowledgeBase: {
+        kind: kb.kind,
+        name: kb.name,
+        description: kb.description ?? '',
+      },
+      documents: fileDocs.map((doc, index) => ({
+        title: doc.title,
+        path: manifestFiles[index],
+        contentHash: doc.contentHash ?? undefined,
+        mimeType: doc.mimeType ?? undefined,
+      })),
+      contentHashes: checksumLines
+        .filter((line) => !line.endsWith(' knowledge-bundle.manifest.json'))
+        .map((line) => line.split(/\s+/)[0])
+        .filter((hash): hash is string => Boolean(hash)),
+      chunkConfig: safeJsonObject(kb.chunkConfigJson),
+      embeddingConfig: safeJsonObject(kb.embedConfigJson),
+      createdAt: new Date().toISOString(),
     }
     const manifestPath = join(bundleRoot, 'knowledge-bundle.manifest.json')
     const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`

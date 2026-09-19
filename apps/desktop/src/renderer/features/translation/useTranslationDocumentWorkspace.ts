@@ -15,7 +15,7 @@ import {
   mergeLiveSnapshotsWithSaved,
   pagesHaveIncompleteSnapshotBodies,
 } from './document-page-snapshots'
-import { estimateDocumentRowHeight, offsetToPage } from './document-page-window'
+import { estimateDocumentRowHeight, offsetToPage, PDF_VIEWER_PAGE_BATCH } from './document-page-window'
 import { useDocumentPageTranslation, type DocumentPageState } from './useDocumentPageTranslation'
 import { useDocumentPageWindow } from './useDocumentPageWindow'
 import { useDocumentRowHeights } from './useDocumentRowHeights'
@@ -140,6 +140,7 @@ export function useTranslationDocumentWorkspace(options: Options) {
     getRowHeight,
     version,
     fallbackRowHeight,
+    isPdfPath(activeDocument?.filePath ?? '') ? PDF_VIEWER_PAGE_BATCH : undefined,
   )
 
   const scrollToPage = useCallback(

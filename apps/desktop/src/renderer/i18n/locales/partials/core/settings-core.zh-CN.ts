@@ -96,7 +96,7 @@ export const settingsCoreZhCN = {
       openDataLoaderParser: 'OpenDataLoader（需 Java 11+）',
       odlHybrid: 'ODL Hybrid OCR',
       odlHybridHint:
-        '扫描件通过本机 ODL Hybrid 自动识别（开启后 Toolman 会自动启动本地服务，默认 http://localhost:5002）',
+        '扫描件通过本机 RapidOCR 中文识别（缺省时回退 EasyOCR 简体中文）。开启后自动启动本地服务，默认 http://localhost:5002',
       odlHybridBackend: 'Hybrid 后端',
       odlHybridBackendDocling: 'docling-fast',
       odlHybridBackendHancom: 'hancom-ai（扫描件推荐）',

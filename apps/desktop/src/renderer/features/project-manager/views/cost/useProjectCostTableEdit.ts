@@ -4,7 +4,6 @@ import type { PmProject } from '@toolman/shared'
 import { useI18n } from '../../../../i18n/useI18n'
 import {
   deriveCostApplicable,
-  isPmCostPracticeQuotaType,
   isPmCostResourceType,
   isPmCostType,
   patchCostSectionMeta,
@@ -16,7 +15,6 @@ import { buildCostSectionalRollupDisplayEntries, type CostSummaryRow } from './p
 type BaselineIndex = Parameters<typeof deriveCostApplicable>[1]
 
 export function useProjectCostTableEdit(args: {
-  isPractice: boolean
   editingProject: PmProject | null
   baselinePriceIndex: BaselineIndex
   updateRows: (updater: (prev: PmCostRow[]) => PmCostRow[], options?: { coalesceMs?: number }) => void
@@ -25,7 +23,7 @@ export function useProjectCostTableEdit(args: {
   rowsRef: { current: PmCostRow[] }
   t: ReturnType<typeof useI18n>['t']
 }) {
-  const { isPractice, editingProject, baselinePriceIndex, updateRows, setSummaryRows, setDirty, rowsRef, t } = args
+  const { editingProject, baselinePriceIndex, updateRows, setSummaryRows, setDirty, rowsRef, t } = args
 
   const patchRow = useCallback(
     (id: string, patch: Partial<PmCostRow>) => {
@@ -39,9 +37,7 @@ export function useProjectCostTableEdit(args: {
 
   const handleRowTypeChange = useCallback(
     (row: PmCostRow, type: PmCostType) => {
-      if (isPractice) {
-        if (!isPmCostPracticeQuotaType(type)) return
-      } else if (!isPmCostType(type) || isPmCostResourceType(type)) {
+      if (!isPmCostType(type) || isPmCostResourceType(type)) {
         return
       }
       const applicable =
@@ -50,7 +46,7 @@ export function useProjectCostTableEdit(args: {
           : row.applicable
       patchRow(row.id, { type, applicable })
     },
-    [baselinePriceIndex, editingProject, isPractice, patchRow],
+    [baselinePriceIndex, editingProject, patchRow],
   )
 
   const handleRowNameChange = useCallback(
@@ -88,8 +84,9 @@ export function useProjectCostTableEdit(args: {
           | 'sectionTotalFormula'
         >
       >,
+      options?: { subproject?: string },
     ) => {
-      updateRows((prev) => patchCostSectionMeta(prev, sectionKey, patch), { coalesceMs: 500 })
+      updateRows((prev) => patchCostSectionMeta(prev, sectionKey, patch, options), { coalesceMs: 500 })
     },
     [updateRows],
   )
