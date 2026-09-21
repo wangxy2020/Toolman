@@ -15,6 +15,14 @@ export function isContrastParagraphEmpty(element: HTMLElement): boolean {
 
 export const TRANSLATION_LINE_LABEL_STEP = 5
 
+/** Hard lines in a contrast block (empty / placeholder still counts as one row). */
+export function countContrastHardLines(text: string): number {
+  const normalized = text.replace(/\u00a0/g, '').replace(/\r\n/g, '\n')
+  if (!normalized.trim()) return 1
+  const withoutTrailingBreak = normalized.replace(/\n$/, '')
+  return Math.max(1, withoutTrailingBreak.split('\n').length)
+}
+
 export function formatContrastLineLabel(lineNumber: number): string | null {
   if (lineNumber <= 0 || lineNumber % TRANSLATION_LINE_LABEL_STEP !== 0) return null
   return String(lineNumber)
@@ -29,7 +37,12 @@ export function applyContrastLineLabel(element: HTMLElement, lineNumber: number)
   }
 }
 
+/**
+ * Number gutters by cumulative hard lines (5, 10, …), not paragraph indices.
+ * The label is attached to the block whose first line is that line number.
+ */
 export function normalizeContrastBlocks(column: HTMLElement, placeholder?: string): void {
+  let lineNumber = 1
   Array.from(column.children).forEach((block, index) => {
     const element = block as HTMLElement
     element.dataset.paraIndex = String(index)
@@ -37,7 +50,9 @@ export function normalizeContrastBlocks(column: HTMLElement, placeholder?: strin
     element.classList.toggle('tm-translation-contrast-para--empty', isContrastParagraphEmpty(element))
     trimPhantomBreaks(element)
     element.classList.toggle('tm-translation-contrast-para--empty', isContrastParagraphEmpty(element))
-    applyContrastLineLabel(element, index + 1)
+    applyContrastLineLabel(element, lineNumber)
+    const text = (element.innerText ?? '').replace(/\u00a0/g, '')
+    lineNumber += countContrastHardLines(text)
     if (index === 0 && isContrastParagraphEmpty(element) && placeholder) {
       element.dataset.placeholder = placeholder
     } else {

@@ -1,5 +1,4 @@
 import { MiddleSidebar } from '../../components/layout/MiddleSidebar'
-import { ModuleSidebar } from '../../components/layout/ModuleSidebar'
 import { KnowledgeSidebar } from '../knowledge/KnowledgeSidebar'
 import { NotesSidebar } from '../notes/NotesSidebar'
 import { CommunitySidebar } from '../community/CommunitySidebar'
@@ -7,6 +6,7 @@ import { GroupSidebar } from '../group/GroupSidebar'
 import { ProjectSidebar } from '../project-manager/ProjectSidebar'
 import { TranslationSidebar } from '../translation/TranslationSidebar'
 import { AssistantLibSidebar } from '../assistant-lib/AssistantLibSidebar'
+import { WorkflowSidebar } from '../workflow/WorkflowSidebar'
 import {
   DEFAULT_KNOWLEDGE_FOLDER_ID,
   DEFAULT_LOCAL_FILES_FOLDER_ID,
@@ -192,7 +192,17 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
   }
 
   if (activeView === 'workflow') {
-    return <ModuleSidebar view={activeView} />
+    return (
+      <WorkflowSidebar
+        assistants={chat.assistants}
+        sessions={chat.sessions}
+        activeSession={chat.activeSession}
+        createSession={chat.createSession}
+        selectSession={chat.selectSession}
+        renameSession={(id, title) => chat.renameSession(id, title)}
+        deleteSession={(id) => chat.deleteSession(id)}
+      />
+    )
   }
 
   if (activeView === 'projects') {

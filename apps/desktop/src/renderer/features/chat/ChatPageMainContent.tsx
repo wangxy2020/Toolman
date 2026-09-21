@@ -9,6 +9,7 @@ import { ChatPageModuleView } from './ChatPageModuleView'
 import { ChatPageTranslateView } from './ChatPageTranslateView'
 import { ChatPageAssistantLibView } from './ChatPageAssistantLibView'
 import { ChatPageSettingsView } from './ChatPageSettingsView'
+import { ChatPageWorkflowView } from './ChatPageWorkflowView'
 
 type ChatPageMainContentProps = Pick<
   ChatPageState,
@@ -75,6 +76,7 @@ type ChatPageMainContentProps = Pick<
   | 'updateMessageSettings'
   | 'resetSettings'
   | 'setShowMessageSettings'
+  | 'setWorkspace'
   | 'isModuleView'
 >
 
@@ -168,6 +170,10 @@ export function ChatPageMainContent(props: ChatPageMainContentProps) {
         knowledgeFolder={props.knowledgeFolder}
       />
     )
+  }
+
+  if (activeView === 'workflow') {
+    return <ChatPageWorkflowView {...props} />
   }
 
   if (isModuleView(activeView)) {

@@ -89,6 +89,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
         sendState.setSending(false)
         setCombinedError(null)
       }
+      return created
     },
     [session, messagesState, sendState, setCombinedError],
   )

@@ -36,6 +36,40 @@ export function compareCostSectionalWorkKeys(left: string, right: string): numbe
   return a.localeCompare(b, 'zh-CN', { numeric: true, sensitivity: 'base' })
 }
 
+/**
+ * Bill-item / WBS-style codes: 1 < 1.1 < 1.2 < 1.10 < 2.
+ * Blank codes sort last.
+ */
+export function compareCostItemCodes(left: string, right: string): number {
+  const a = left.trim()
+  const b = right.trim()
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  const leftParts = a.split('.')
+  const rightParts = b.split('.')
+  const len = Math.max(leftParts.length, rightParts.length)
+  for (let index = 0; index < len; index += 1) {
+    const leftPart = leftParts[index]
+    const rightPart = rightParts[index]
+    if (leftPart == null) return -1
+    if (rightPart == null) return 1
+    const leftNum = Number(leftPart)
+    const rightNum = Number(rightPart)
+    const leftIsNum = leftPart !== '' && Number.isFinite(leftNum)
+    const rightIsNum = rightPart !== '' && Number.isFinite(rightNum)
+    if (leftIsNum && rightIsNum && leftNum !== rightNum) return leftNum - rightNum
+    if (leftIsNum && !rightIsNum) return -1
+    if (!leftIsNum && rightIsNum) return 1
+    const text = leftPart.localeCompare(rightPart, 'en', {
+      numeric: true,
+      sensitivity: 'base',
+    })
+    if (text !== 0) return text
+  }
+  return 0
+}
+
 export function uniqueSortedSectionalKeys(
   rows: readonly Pick<PmCostRow, 'sectionalWork'>[],
 ): string[] {
@@ -58,6 +92,8 @@ export type CostSectionalSummary = {
   rowCount: number
   code: string
   note: string
+  /** Detail rows in this 子项目 + 分部工程 group (same set as 合价). */
+  rows: PmCostRow[]
 }
 
 /** Section-menu value for the rollup view (各分部汇总再汇总). */
@@ -71,6 +107,23 @@ export type CostSectionalDisplayEntry =
   | { kind: 'grand'; summary: CostSectionalSummary }
   | { kind: 'section'; summary: CostSectionalSummary }
   | { kind: 'row'; row: PmCostRow; index: number }
+
+/**
+ * Rows belonging to one 子项目 + 分部工程 group (or 分部工程 only when
+ * `groupBy` is `section`).
+ */
+export function filterCostSectionalGroupRows(
+  rows: readonly PmCostRow[],
+  sectionKey: string,
+  subproject: string,
+  groupBy: CostSectionalGroupBy = 'subprojectSection',
+): PmCostRow[] {
+  return rows.filter((row) => {
+    if (costSectionalWorkKey(row) !== sectionKey) return false
+    if (groupBy === 'section') return true
+    return costSubprojectKey(row) === subproject
+  })
+}
 
 /**
  * Insert a 分部工程合价 summary before the rows of each sectional group.
@@ -123,6 +176,7 @@ export function buildCostSectionalDisplayEntries(
         rowCount: group.rows.length,
         code,
         note,
+        rows: group.rows,
       },
     })
     for (const row of group.rows) {

@@ -59,14 +59,39 @@ export const P2pWorkflowShareOutputSchema = z.object({
   sharedResource: P2pSharedResourceSchema,
 })
 
+export const P2pWorkflowListItemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  engine: z.string().optional(),
+  updatedAt: z.number().int().positive().optional(),
+  parentId: z.string().min(1).optional(),
+  sessionId: z.string().min(1).optional(),
+})
+
 export const P2pWorkflowListLocalOutputSchema = z.object({
-  workflows: z.array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().min(1),
-      description: z.string().optional(),
-    }),
-  ),
+  workflows: z.array(P2pWorkflowListItemSchema),
+})
+
+export const P2pWorkflowUpsertLocalInputSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(128),
+  description: z.string().max(512).optional(),
+  engine: z.string().min(1).max(64).optional(),
+  parentId: z.string().min(1).max(64).nullable().optional(),
+  sessionId: z.string().min(1).max(64).nullable().optional(),
+})
+
+export const P2pWorkflowUpsertLocalOutputSchema = z.object({
+  workflow: P2pWorkflowListItemSchema,
+})
+
+export const P2pWorkflowDeleteLocalInputSchema = z.object({
+  id: z.string().min(1).max(64),
+})
+
+export const P2pWorkflowDeleteLocalOutputSchema = z.object({
+  ok: z.literal(true),
 })
 
 // --- Push event payloads (subscribe) ---

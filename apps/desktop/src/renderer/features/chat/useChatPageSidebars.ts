@@ -31,6 +31,7 @@ export type ChatPageSidebarsProps = Pick<
   | 'activeView'
   | 'setActiveView'
   | 'sidebarAssistants'
+  | 'activeAssistant'
   | 'chat'
   | 'handleDeleteAssistant'
   | 'setShowAssistants'

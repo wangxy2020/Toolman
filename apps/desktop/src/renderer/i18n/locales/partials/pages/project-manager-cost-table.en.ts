@@ -35,6 +35,8 @@ export const projectManagerCostTableEn = {
       totalPricePlain: 'Total Price',
       periodQuantity: 'Period quantity',
       priorQuantity: 'Previous period quantity',
+      ipcNo: 'IPC No',
+      currentTotalPrice: 'Period amount',
       cumulativeQuantity: 'Cumulative quantity',
       periodAmount: 'Period amount',
       cumulativeAmount: 'Cumulative amount',

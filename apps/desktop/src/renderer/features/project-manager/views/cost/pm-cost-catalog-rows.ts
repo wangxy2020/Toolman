@@ -95,6 +95,7 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
           ? row.parentId
           : undefined
     const ipcQuantities = parseCostIpcQuantities(row.ipcQuantities)
+    const ipcAmounts = parseCostIpcQuantities(row.ipcAmounts)
     rows.push({
       id,
       type,
@@ -118,6 +119,7 @@ export function parseCostRows(raw: unknown): PmCostRow[] | null {
       sortOrder,
       ...(parentId !== undefined ? { parentId } : {}),
       ...(ipcQuantities ? { ipcQuantities } : {}),
+      ...(ipcAmounts ? { ipcAmounts } : {}),
     })
   }
   return reindexCostRows(rows)
@@ -137,6 +139,7 @@ export function fingerprintCostCatalog(rows: readonly PmCostRow[]): string {
       periodQuantity: row.periodQuantity ?? null,
       priorQuantity: row.priorQuantity ?? null,
       ipcQuantities: row.ipcQuantities ?? null,
+      ipcAmounts: row.ipcAmounts ?? null,
       applicable: row.applicable,
       note: row.note,
       sectionalWork: row.sectionalWork,

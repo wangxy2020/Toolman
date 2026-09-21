@@ -51,7 +51,7 @@ export const assistantLibPageZhCN = {
   defaultCourse: '默认课程',
   guideCourse: 'Toolman使用说明',
   defaultClassroom: '默认课堂',
-  settingsTitle: '设置',
+  settingsTitle: '课堂设置',
   settingsTitleNamed: '{{name}}设置',
   settingsBasicTab: '基础设置',
   settingsTeachingTab: '教学模式',

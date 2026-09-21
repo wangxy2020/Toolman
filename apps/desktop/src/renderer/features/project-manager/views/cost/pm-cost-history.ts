@@ -6,6 +6,7 @@ export function cloneCostRows(rows: readonly PmCostRow[]): PmCostRow[] {
   return rows.map((row) => ({
     ...row,
     ...(row.ipcQuantities ? { ipcQuantities: { ...row.ipcQuantities } } : {}),
+    ...(row.ipcAmounts ? { ipcAmounts: { ...row.ipcAmounts } } : {}),
   }))
 }
 

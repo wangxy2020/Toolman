@@ -277,6 +277,8 @@ export enum IpcChannel {
 
   P2pWorkflowShare = 'p2p:workflow:share',
   P2pWorkflowListLocal = 'p2p:workflow:list-local',
+  P2pWorkflowUpsertLocal = 'p2p:workflow:upsert-local',
+  P2pWorkflowDeleteLocal = 'p2p:workflow:delete-local',
 
   CommunityHubHealth = 'community:hub:health',
   CommunityHubStatus = 'community:hub:status',

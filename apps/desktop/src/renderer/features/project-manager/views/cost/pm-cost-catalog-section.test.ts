@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildCostSectionalDisplayEntries,
+  compareCostItemCodes,
   uniqueSortedSectionalKeys,
   computeCostRowTotalPrice,
   formatCostTotalPrice,
@@ -237,6 +238,11 @@ describe('computeCostRowTotalPrice', () => {
       ['Kisada', 'Schedule4', 100],
       ['Iringa', 'Schedule4', 40],
     ])
+    expect(sections.map((entry) => entry.summary.rows.map((row) => row.id))).toEqual([
+      ['k1'],
+      ['k4'],
+      ['i4'],
+    ])
   })
 })
 
@@ -247,6 +253,13 @@ describe('formatCostTotalPrice', () => {
     expect(formatCostTotalPrice(12)).toBe('12')
     expect(formatCostTotalPrice(12.5)).toBe('12.50')
     expect(formatCostTotalPrice(12.567)).toBe('12.57')
+  })
+})
+
+describe('compareCostItemCodes', () => {
+  it('orders outline codes 1 < 1.1 < 1.2 < 1.10 < 2', () => {
+    const codes = ['1.10', '2', '1.2', '1', '1.1']
+    expect([...codes].sort(compareCostItemCodes)).toEqual(['1', '1.1', '1.2', '1.10', '2'])
   })
 })
 

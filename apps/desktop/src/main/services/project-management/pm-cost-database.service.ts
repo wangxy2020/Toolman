@@ -3,12 +3,13 @@ import mysql from 'mysql2/promise'
 
 import {
   COST_DATABASE_FIELD_KEYS,
-  fieldKeysForCostDatabaseView,
+  queryFieldKeysForCostDatabaseView,
   defaultCostDatabasePort,
   isAllowedLocalDatabaseHost,
   parseCostDatabaseImportedRows,
   parseCostDatabaseNumber,
   parseCostDatabaseText,
+  pickCostDatabaseRawField,
   PmCostDatabaseGetSyncedInputSchema,
   PmCostDatabaseInspectInputSchema,
   PmCostDatabaseQueryInputSchema,
@@ -24,7 +25,7 @@ import { getSqliteClient } from '@toolman/db'
 
 import { getDatabase } from '../../bootstrap/database'
 
-const ROW_LIMIT = 5000
+const ROW_LIMIT = 100_000
 const IDENT_MAX = 128
 const CONNECT_TIMEOUT_MS = 8000
 
@@ -218,28 +219,62 @@ async function listTableColumns(
 
 function mapImportedRow(raw: Record<string, unknown>): CostDatabaseImportedRow {
   return {
-    code: parseCostDatabaseText(raw.code),
-    name: parseCostDatabaseText(raw.name),
-    featureDescription: parseCostDatabaseText(raw.featureDescription),
-    unit: parseCostDatabaseText(raw.unit),
-    quantity: parseCostDatabaseNumber(raw.quantity),
-    periodQuantity: parseCostDatabaseNumber(raw.periodQuantity),
-    priorQuantity: parseCostDatabaseNumber(raw.priorQuantity),
-    unitPrice: parseCostDatabaseNumber(raw.unitPrice),
-    sectionalWork: parseCostDatabaseText(raw.sectionalWork),
-    subproject: parseCostDatabaseText(raw.subproject),
-    type: parseCostDatabaseText(raw.type),
-    note: parseCostDatabaseText(raw.note),
-    currency: parseCostDatabaseText(raw.currency),
-    billingPeriod: parseCostDatabaseText(raw.billingPeriod),
-    priceAdjustment: parseCostDatabaseNumber(raw.priceAdjustment),
-    priceCorrection: parseCostDatabaseNumber(raw.priceCorrection),
-    applicationDate: parseCostDatabaseText(raw.applicationDate),
-    effectiveDate: parseCostDatabaseText(raw.effectiveDate),
-    actualPaymentDate1: parseCostDatabaseText(raw.actualPaymentDate1),
-    actualPaymentDate2: parseCostDatabaseText(raw.actualPaymentDate2),
-    periodClaimAmount: parseCostDatabaseNumber(raw.periodClaimAmount),
-    payableAmount: parseCostDatabaseNumber(raw.payableAmount),
+    code: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'code', 'item')),
+    name: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'name')),
+    featureDescription: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'featureDescription', 'description'),
+    ),
+    unit: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'unit')),
+    quantity: parseCostDatabaseNumber(pickCostDatabaseRawField(raw, 'quantity')),
+    periodQuantity: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'periodQuantity', 'current_qty'),
+    ),
+    priorQuantity: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'priorQuantity', 'previous_qty'),
+    ),
+    ipcNo: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'ipcNo', 'ipc_no')),
+    currentTotalPrice: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'currentTotalPrice', 'current_total_price'),
+    ),
+    unitPrice: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'unitPrice', 'unit_price'),
+    ),
+    sectionalWork: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'sectionalWork', 'schedule'),
+    ),
+    subproject: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'subproject', 'substation_lot'),
+    ),
+    type: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'type')),
+    note: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'note')),
+    currency: parseCostDatabaseText(pickCostDatabaseRawField(raw, 'currency')),
+    billingPeriod: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'billingPeriod', 'period'),
+    ),
+    priceAdjustment: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'priceAdjustment', 'price_adjustment'),
+    ),
+    priceCorrection: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'priceCorrection', 'price_correction'),
+    ),
+    applicationDate: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'applicationDate', 'application_date'),
+    ),
+    effectiveDate: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'effectiveDate', 'effective_date'),
+    ),
+    actualPaymentDate1: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'actualPaymentDate1', 'actual_payment_date_1'),
+    ),
+    actualPaymentDate2: parseCostDatabaseText(
+      pickCostDatabaseRawField(raw, 'actualPaymentDate2', 'actual_payment_date_2'),
+    ),
+    periodClaimAmount: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'periodClaimAmount', 'period_claim_amount'),
+    ),
+    payableAmount: parseCostDatabaseNumber(
+      pickCostDatabaseRawField(raw, 'payableAmount', 'payable_amount'),
+    ),
   }
 }
 
@@ -396,7 +431,7 @@ export async function queryCostDatabaseIpc(
     )
     const { ref, columns } = resolved
     const fieldKeys = input.viewKey
-      ? fieldKeysForCostDatabaseView(input.viewKey)
+      ? queryFieldKeysForCostDatabaseView(input.viewKey)
       : COST_DATABASE_FIELD_KEYS
     const columnMap = resolveCostDatabaseColumnMap(input.columnMap, columns, fieldKeys)
     const selected = fieldKeys.filter((key) => columnMap[key])

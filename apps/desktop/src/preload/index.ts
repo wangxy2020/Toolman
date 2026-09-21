@@ -3,6 +3,9 @@
  * Copyright (C) 2024–2026 Toolman Contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * Source: https://github.com/wangxy2020/Toolman
+ *
+ * Note: preload bundles @toolman/shared invoke allowlist. After adding IpcChannel
+ * values, restart electron-vite so out/preload picks them up (e.g. workflow upsert).
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {

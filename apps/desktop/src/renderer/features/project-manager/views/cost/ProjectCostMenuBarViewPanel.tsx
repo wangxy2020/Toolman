@@ -26,87 +26,100 @@ export const ProjectCostMenuBarViewPanel: FC<ProjectCostMenuBarViewPanelProps> =
 }) => {
   const { t } = useI18n()
   if (!pos) return null
+
+  const allOption = (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={viewFilter === 'all'}
+      className={[
+        'tm-pm-gantt-view-option',
+        viewFilter === 'all' ? 'tm-pm-gantt-view-option--active' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onClick={() => onSelect('all')}
+    >
+      {t(
+        viewMenuVariant === 'practice'
+          ? 'projectManagerPage.costTable.views.priceList'
+          : 'projectManagerPage.costTable.views.allTypes',
+      )}
+    </button>
+  )
+
+  const reservedPages = COST_PRACTICE_VIEW_PAGES.map((page) => (
+    <button
+      key={page}
+      type="button"
+      role="menuitemradio"
+      aria-checked={viewFilter === page}
+      className={[
+        'tm-pm-gantt-view-option',
+        viewFilter === page ? 'tm-pm-gantt-view-option--active' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onClick={() => onSelect(page)}
+    >
+      {t(`projectManagerPage.costTable.views.${page}`)}
+    </button>
+  ))
+
   return createPortal(
     <div
       className="tm-pm-gantt-view-panel tm-pm-resource-view-panel"
       role="menu"
       style={{ top: pos.top, left: pos.left }}
     >
-      <button
-        type="button"
-        role="menuitemradio"
-        aria-checked={viewFilter === 'all'}
-        className={[
-          'tm-pm-gantt-view-option',
-          viewFilter === 'all' ? 'tm-pm-gantt-view-option--active' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        onClick={() => onSelect('all')}
-      >
-        {t(
-          viewMenuVariant === 'practice'
-            ? 'projectManagerPage.costTable.views.priceList'
-            : 'projectManagerPage.costTable.views.allTypes',
-        )}
-      </button>
-      {viewMenuVariant === 'catalog'
-        ? (
-          <>
-            {PM_COST_PRIMARY_TYPES.map((type) => (
+      {viewMenuVariant === 'practice' ? (
+        <>
+          {reservedPages}
+          {allOption}
+        </>
+      ) : (
+        <>
+          {allOption}
+          {viewMenuVariant === 'catalog' ? (
+            <>
+              {PM_COST_PRIMARY_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={viewFilter === type}
+                  className={[
+                    'tm-pm-gantt-view-option',
+                    viewFilter === type ? 'tm-pm-gantt-view-option--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => onSelect(type)}
+                >
+                  {t(`projectManagerPage.costTable.types.${type}`)}
+                </button>
+              ))}
               <button
-                key={type}
                 type="button"
-                role="menuitemradio"
-                aria-checked={viewFilter === type}
+                role="menuitem"
+                aria-disabled="true"
+                title={t('projectManagerPage.costTable.views.resourceCostsReserved')}
                 className={[
                   'tm-pm-gantt-view-option',
-                  viewFilter === type ? 'tm-pm-gantt-view-option--active' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => onSelect(type)}
+                  'tm-pm-gantt-view-option--group',
+                  'tm-pm-gantt-view-option--disabled',
+                ].join(' ')}
+                onClick={(event) => event.preventDefault()}
               >
-                {t(`projectManagerPage.costTable.types.${type}`)}
+                <span>{t('projectManagerPage.costTable.views.resourceCosts')}</span>
+                <IconChevronDown size={14} className="tm-pm-gantt-view-option-chevron" />
               </button>
-            ))}
-            <button
-              type="button"
-              role="menuitem"
-              aria-disabled="true"
-              title={t('projectManagerPage.costTable.views.resourceCostsReserved')}
-              className={[
-                'tm-pm-gantt-view-option',
-                'tm-pm-gantt-view-option--group',
-                'tm-pm-gantt-view-option--disabled',
-              ].join(' ')}
-              onClick={(event) => event.preventDefault()}
-            >
-              <span>{t('projectManagerPage.costTable.views.resourceCosts')}</span>
-              <IconChevronDown size={14} className="tm-pm-gantt-view-option-chevron" />
-            </button>
-          </>
-        )
-        : null}
-      {viewMenuVariant === 'practice' || viewMenuVariant === 'database'
-        ? COST_PRACTICE_VIEW_PAGES.map((page) => (
-            <button
-              key={page}
-              type="button"
-              role="menuitemradio"
-              aria-checked={viewFilter === page}
-              className={[
-                'tm-pm-gantt-view-option',
-                viewFilter === page ? 'tm-pm-gantt-view-option--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => onSelect(page)}
-            >
-              {t(`projectManagerPage.costTable.views.${page}`)}
-            </button>
-          ))
-        : null}
+            </>
+          ) : (
+            reservedPages
+          )}
+        </>
+      )}
     </div>,
     document.body,
   )

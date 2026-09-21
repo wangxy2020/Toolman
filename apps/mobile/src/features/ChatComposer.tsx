@@ -57,6 +57,7 @@ export function ChatComposer({
     isGroup,
     closePopups,
     trySend,
+    composerFocusedRef,
     insertEmoji,
     applySlashCommand,
     applyPhrase,
@@ -132,7 +133,13 @@ export function ChatComposer({
           style={[styles.field, { height: fieldHeight }]}
           value={value}
           onChangeText={onChangeText}
-          onFocus={closePopups}
+          onFocus={() => {
+            composerFocusedRef.current = true
+            closePopups()
+          }}
+          onBlur={() => {
+            composerFocusedRef.current = false
+          }}
           placeholder={
             Platform.OS === 'web'
               ? webComposerSendPlaceholder(isGroup)

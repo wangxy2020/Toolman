@@ -18,6 +18,10 @@ import {
   toCostCatalogSnapshot,
   type PmCostRow,
 } from './pm-cost-catalog'
+import {
+  costPracticeRowsNeedSanitize,
+  sanitizeCostPracticeRows,
+} from './pm-cost-practice-sanitize'
 
 function practiceCatalogStorageKey(workspaceId: string, scopeId: string): string {
   return `toolman.pm.costPractice.catalog.${workspaceId}.${scopeId}`
@@ -56,7 +60,13 @@ export function readCostPracticeCatalog(workspaceId: string, scopeId: string): P
     const raw = localStorage.getItem(practiceCatalogStorageKey(workspaceId, scopeId))
     if (!raw) return []
     const parsed = parseCostRows(JSON.parse(raw) as unknown)
-    return parsed ? reindexCostRows(parsed) : []
+    if (!parsed) return []
+    const original = reindexCostRows(parsed)
+    const sanitized = sanitizeCostPracticeRows(original)
+    if (costPracticeRowsNeedSanitize(original, sanitized)) {
+      writeCostPracticeCatalog(workspaceId, scopeId, sanitized)
+    }
+    return sanitized
   } catch {
     return []
   }
@@ -69,7 +79,7 @@ export function writeCostPracticeCatalog(
 ): void {
   localStorage.setItem(
     practiceCatalogStorageKey(workspaceId, scopeId),
-    JSON.stringify(reindexCostRows([...rows])),
+    JSON.stringify(sanitizeCostPracticeRows(rows)),
   )
 }
 

@@ -2,22 +2,41 @@ import type { KeyboardEvent } from 'react'
 import type { SendShortcut } from './message-settings'
 import type { TranslateFn } from '../../i18n/I18nProvider'
 
+function isEnterKey(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+  const key = event.key || event.nativeEvent.key
+  if (key === 'Enter' || key === 'NumpadEnter') return true
+  const code = event.keyCode || event.nativeEvent.keyCode || event.which
+  return code === 13
+}
+
+function hasModKey(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+  return Boolean(
+    event.metaKey ||
+      event.ctrlKey ||
+      event.getModifierState?.('Meta') ||
+      event.getModifierState?.('Control') ||
+      event.nativeEvent.metaKey ||
+      event.nativeEvent.ctrlKey,
+  )
+}
+
 export function shouldSubmitOnEnter(
   event: KeyboardEvent<HTMLTextAreaElement>,
   sendShortcut: SendShortcut,
 ): boolean {
-  // Avoid submitting while IME/dictation is still composing (keyCode 229 = processing).
+  const enter = isEnterKey(event)
+  const shift = event.shiftKey || event.nativeEvent.shiftKey
+  const mod = hasModKey(event)
+  // ⌘/Ctrl+Enter always sends (settings shortcut list). Skip IME 229 while a
+  // modifier is held — CJK IMEs on macOS otherwise swallow Command+Enter.
+  if (enter && mod && !shift) return true
   if (event.nativeEvent.isComposing || event.keyCode === 229) return false
-
-  const enter = event.key === 'Enter'
-  const shift = event.shiftKey
-  const ctrl = event.metaKey || event.ctrlKey
 
   if (sendShortcut === 'enter') {
     return enter && !shift
   }
   if (sendShortcut === 'ctrl+enter') {
-    return enter && ctrl
+    return enter && mod
   }
   return enter && shift
 }

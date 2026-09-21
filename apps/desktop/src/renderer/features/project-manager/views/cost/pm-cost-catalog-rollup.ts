@@ -81,6 +81,34 @@ export function sumCostRowsTotalPrice(rows: readonly PmCostRow[]): number | null
 }
 
 /**
+ * Leaf rows used for 计量 / 中期计量 section rollups.
+ * Matches 合价: walk each in-group root and keep deepest children so parent
+ * headers are not mixed with child quantities.
+ */
+export function collectCostRollupLeafRows(rows: readonly PmCostRow[]): PmCostRow[] {
+  if (rows.length === 0) return []
+  const idSet = new Set(rows.map((row) => row.id))
+  const childIndex = buildCostChildrenIndex(rows)
+  const leaves: PmCostRow[] = []
+
+  const walk = (row: PmCostRow) => {
+    const children = (childIndex.get(row.id) ?? []).filter((child) => idSet.has(child.id))
+    if (children.length === 0) {
+      leaves.push(row)
+      return
+    }
+    for (const child of children) walk(child)
+  }
+
+  for (const row of rows) {
+    const parentId = row.parentId ?? null
+    if (parentId && idSet.has(parentId)) continue
+    walk(row)
+  }
+  return leaves
+}
+
+/**
  * Suggest the next 编码 from the previous row: increment the trailing number
  * while preserving prefix and zero-padding (e.g. `1.01` → `1.02`, `A-9` → `A-10`).
  */

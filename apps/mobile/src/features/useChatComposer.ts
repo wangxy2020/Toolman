@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PanResponder, Platform } from 'react-native'
 import { loadQuickPhrases, type QuickPhrase } from '../storage/quickPhrases'
 import { GROUP_SLASH_COMMANDS } from './group-slash-commands'
+import { isWebComposerSendHotkey } from './composerSendHotkey'
 
 const FIELD_MIN = 56
 const FIELD_MAX = 200
@@ -148,10 +149,27 @@ export function useChatComposer(props: {
     }),
   ).current
 
+  const composerFocusedRef = useRef(false)
+  const trySendRef = useRef(() => {})
+
   const trySend = () => {
     if (!canSendRef.current) return
     onSend()
   }
+  trySendRef.current = trySend
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!composerFocusedRef.current) return
+      if (!isWebComposerSendHotkey(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      trySendRef.current()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [])
 
   const insertEmoji = (emoji: string) => {
     onChangeText(`${value}${emoji}`)
@@ -204,6 +222,7 @@ export function useChatComposer(props: {
     popupOpen,
     closePopups,
     trySend,
+    composerFocusedRef,
     insertEmoji,
     applySlashCommand,
     applyPhrase,

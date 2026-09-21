@@ -34,6 +34,8 @@ export const projectManagerCostTableZhCN = {
       totalPricePlain: '合价',
       periodQuantity: '本期完成工程量',
       priorQuantity: '往期完成工程量',
+      ipcNo: '期数编号',
+      currentTotalPrice: '本期金额',
       cumulativeQuantity: '累计完成工程量',
       periodAmount: '本期完成金额',
       cumulativeAmount: '累计完成金额',

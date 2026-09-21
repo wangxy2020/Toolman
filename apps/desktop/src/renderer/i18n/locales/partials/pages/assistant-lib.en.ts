@@ -51,7 +51,7 @@ export const assistantLibPageEn = {
   defaultCourse: 'Default course',
   guideCourse: 'Toolman user guide',
   defaultClassroom: 'Default classroom',
-  settingsTitle: 'Settings',
+  settingsTitle: 'Classroom settings',
   settingsTitleNamed: '{{name}} Settings',
   settingsBasicTab: 'Basic',
   settingsTeachingTab: 'Teaching mode',

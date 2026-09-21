@@ -56,6 +56,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               activeView={page.activeView}
               setActiveView={page.setActiveView}
               sidebarAssistants={page.sidebarAssistants}
+              activeAssistant={page.activeAssistant}
               chat={page.chat}
               handleDeleteAssistant={page.handleDeleteAssistant}
               setShowAssistants={page.setShowAssistants}
@@ -146,6 +147,7 @@ export function ChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
               updateMessageSettings={page.updateMessageSettings}
               resetSettings={page.resetSettings}
               setShowMessageSettings={page.setShowMessageSettings}
+              setWorkspace={page.setWorkspace}
               isModuleView={page.isModuleView}
             />
           </div>

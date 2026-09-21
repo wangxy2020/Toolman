@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, type CSSProperties } from 'react'
-import { isLegacyPerCourseTeachingAssistant, type Assistant } from '@toolman/shared'
+import { isAutomationAssistantName, isLegacyPerCourseTeachingAssistant, type Assistant } from '@toolman/shared'
 import { messageFontSizePx } from './message-settings'
 import {
   isGroupProxyReadOnlySession,
@@ -30,7 +30,9 @@ export function useChatPageAssistant(
       chat.assistants.filter(
         (assistant) =>
           !isGroupSharedMirrorAssistant(assistant) &&
-          !isLegacyPerCourseTeachingAssistant(assistant),
+          !isLegacyPerCourseTeachingAssistant(assistant) &&
+          // 自动化 has its own module sidebar; keep its topics out of 智能体.
+          !isAutomationAssistantName(assistant.name),
       ),
     [chat.assistants],
   )

@@ -11,7 +11,7 @@ import {
 import { useI18n } from '../../../../i18n/useI18n'
 import { usePmStatusFeedback } from '../../usePmStatusFeedback'
 import type { FeaturesScheduleView } from '../files/ProjectFeaturesMenuBar'
-import type { CostViewFilter } from './ProjectCostMenuBar'
+import { DEFAULT_COST_PRACTICE_VIEW_FILTER, type CostViewFilter } from './ProjectCostMenuBar'
 import {
   PM_COST_APPLICABLE_ALL,
   readSharedCostSaveMeta,
@@ -37,7 +37,7 @@ import {
   readCostPracticeSaveMeta,
   readCostPracticeVersion,
 } from './pm-cost-practice-catalog'
-import { costIpcColumns } from './pm-cost-ipc-cols'
+import { resolveCostIpcColumns } from './pm-cost-ipc-cols'
 import { type MeteringBaseline, type MeteringRollupMode } from './pm-metering-baselines'
 import { useProjectCostTableEdit } from './useProjectCostTableEdit'
 import { useProjectCostTableHistory } from './useProjectCostTableHistory'
@@ -158,7 +158,9 @@ export function useProjectCostTablePanel({
   const [statusFeedback, setStatusFeedback] = usePmStatusFeedback()
   const [saving, setSaving] = useState(false)
   const [projectInfoOpen, setProjectInfoOpen] = useState(false)
-  const [viewFilter, setViewFilter] = useState<CostViewFilter>('all')
+  const defaultViewFilter: CostViewFilter =
+    variant === 'practice' ? DEFAULT_COST_PRACTICE_VIEW_FILTER : 'all'
+  const [viewFilter, setViewFilter] = useState<CostViewFilter>(defaultViewFilter)
   const [sectionFilter, setSectionFilter] = useState<string>('all')
   const [historyEpoch, setHistoryEpoch] = useState(0)
   const historyStackRef = useRef(new CostHistoryStack())
@@ -175,7 +177,7 @@ export function useProjectCostTablePanel({
     tableScrollRef, headerPinInnerRef, hTrackRef, rowCount: rows.length, selectionMode,
   })
   const load = useProjectCostTableLoad({
-    workspaceId, isPractice, isAllScope, practiceScopeId, scopeKey, viewApplicable,
+    workspaceId, isPractice, defaultViewFilter, isAllScope, practiceScopeId, scopeKey, viewApplicable,
     editingProject, dirty, setDirty,
     setRows, rowsRef, cleanFingerprintRef, historyStackRef, historyApplyingRef, setHistoryEpoch,
     setSelectedId, setCheckedIds, setSelectionMode, setContextMenu, setColumnMenu, setProjectInfoOpen,
@@ -361,7 +363,9 @@ export function useProjectCostTablePanel({
     viewFilter,
     showMeteringColumns: meteringViewActive && viewFilter !== 'meteringTable',
     showIpcStatementColumns: viewFilter === 'meteringTable',
-    ipcColumns: costIpcColumns(meteringBaselines),
+    ipcColumns: resolveCostIpcColumns(rows, meteringBaselines, {
+      allowBaselineFallback: viewFilter !== 'meteringTable',
+    }),
     handleViewFilterChange: view.handleViewFilterChange,
     sectionFilter, handleSectionFilterChange: view.handleSectionFilterChange,
     isSummaryView: isCostSectionSummaryFilter(sectionFilter), canUndo, canRedo, saving, fetching: load.fetching, statusFeedback,

@@ -19,6 +19,8 @@ export const COST_DATABASE_FIELD_KEYS = [
   'quantity',
   'periodQuantity',
   'priorQuantity',
+  'ipcNo',
+  'currentTotalPrice',
   'unitPrice',
   'sectionalWork',
   'subproject',
@@ -54,13 +56,21 @@ export const COST_DATABASE_DEFAULT_VIEW_FIELD_KEYS = [
 
 /** 中期计量 column-map rows in 项目信息 · 数据. */
 export const COST_DATABASE_METERING_VIEW_FIELD_KEYS = [
-  'code',
+  'ipcNo',
   'periodQuantity',
   'priorQuantity',
   'unitPrice',
+  'currentTotalPrice',
   'sectionalWork',
   'subproject',
   'note',
+] as const satisfies readonly CostDatabaseFieldKey[]
+
+/** Extra columns fetched for 中期计量 join / overlay (not shown in the mapping UI). */
+export const COST_DATABASE_METERING_QUERY_FIELD_KEYS = [
+  ...COST_DATABASE_METERING_VIEW_FIELD_KEYS,
+  'code',
+  'name',
 ] as const satisfies readonly CostDatabaseFieldKey[]
 
 /** 进度款统计 column-map rows in 项目信息 · 数据. */
@@ -100,6 +110,13 @@ export function fieldKeysForCostDatabaseView(
   if (viewKey === 'budgetQuota') return COST_DATABASE_METERING_VIEW_FIELD_KEYS
   if (viewKey === 'estimateQuota') return COST_DATABASE_PROGRESS_PAYMENT_VIEW_FIELD_KEYS
   return COST_DATABASE_DEFAULT_VIEW_FIELD_KEYS
+}
+
+export function queryFieldKeysForCostDatabaseView(
+  viewKey: CostDatabaseViewKey,
+): readonly CostDatabaseFieldKey[] {
+  if (viewKey === 'budgetQuota') return COST_DATABASE_METERING_QUERY_FIELD_KEYS
+  return fieldKeysForCostDatabaseView(viewKey)
 }
 
 /** 数据页四个视图默认对应的本地库表。 */
@@ -152,6 +169,8 @@ export type CostDatabaseImportedRow = {
   quantity: number | null
   periodQuantity?: number | null
   priorQuantity?: number | null
+  ipcNo?: string
+  currentTotalPrice?: number | null
   unitPrice: number | null
   sectionalWork: string
   subproject: string
@@ -170,7 +189,19 @@ export type CostDatabaseImportedRow = {
 }
 
 const COLUMN_ALIASES: Record<CostDatabaseFieldKey, readonly string[]> = {
-  code: ['编码', '项目编码', '清单编码', '定额编码', 'code', 'itemcode', 'item_code', 'item', 'item_no', 'itemno', 'no'],
+  code: [
+    'item',
+    'item_code',
+    'itemcode',
+    'item_no',
+    'itemno',
+    '编码',
+    '项目编码',
+    '清单编码',
+    '定额编码',
+    'code',
+    'no',
+  ],
   name: ['名称', '工作名称', '项目名称', '清单名称', '定额名称', 'name', 'itemname', 'item_name'],
   featureDescription: ['特征描述', '项目特征', '描述', 'featuredescription', 'description', 'spec'],
   unit: ['单位', '计量单位', 'unit'],
@@ -195,6 +226,24 @@ const COLUMN_ALIASES: Record<CostDatabaseFieldKey, readonly string[]> = {
     'priorqty',
     'previous_qty',
     'prev_qty',
+  ],
+  ipcNo: [
+    'ipc_no',
+    'ipcno',
+    '期数编号',
+    '期数',
+    'ipc_number',
+    'ipcnumber',
+    'period_no',
+    'periodno',
+  ],
+  currentTotalPrice: [
+    'current_total_price',
+    'currenttotalprice',
+    '本期金额',
+    '本期完成金额',
+    'current_total',
+    'currenttotal',
   ],
   unitPrice: ['单价', '综合单价', 'unitprice', 'unit_price', 'price', 'rate'],
   sectionalWork: ['分部工程', '分部', '章节', 'sectionalwork', 'section', 'schedule'],
@@ -278,6 +327,8 @@ const CostDatabaseColumnMapSchema = z.object({
   quantity: z.string().optional(),
   periodQuantity: z.string().optional(),
   priorQuantity: z.string().optional(),
+  ipcNo: z.string().optional(),
+  currentTotalPrice: z.string().optional(),
   unitPrice: z.string().optional(),
   sectionalWork: z.string().optional(),
   subproject: z.string().optional(),
@@ -391,6 +442,8 @@ export function emptyCostDatabaseColumnMap(): Record<CostDatabaseFieldKey, strin
     quantity: '',
     periodQuantity: '',
     priorQuantity: '',
+    ipcNo: '',
+    currentTotalPrice: '',
     unitPrice: '',
     sectionalWork: '',
     subproject: '',
@@ -866,11 +919,42 @@ export function resolveCostDatabaseColumnMap(
 
 export function parseCostDatabaseNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim().replace(/,/g, '')
-  if (!trimmed) return null
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : null
+  if (typeof value === 'bigint') {
+    const asNumber = Number(value)
+    return Number.isFinite(asNumber) ? asNumber : null
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim().replace(/,/g, '')
+    if (!trimmed) return null
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  // node-pg / mysql2 may surface DECIMAL as object with toString().
+  if (value != null && typeof value === 'object' && 'toString' in value) {
+    const text = String(value).trim().replace(/,/g, '')
+    if (!text || text === '[object Object]') return null
+    const parsed = Number(text)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+/** Read a driver row field, tolerating case differences on aliases. */
+export function pickCostDatabaseRawField(
+  raw: Record<string, unknown>,
+  ...keys: string[]
+): unknown {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(raw, key)) return raw[key]
+  }
+  const lowerMap = new Map<string, unknown>()
+  for (const [key, value] of Object.entries(raw)) {
+    lowerMap.set(key.toLowerCase(), value)
+  }
+  for (const key of keys) {
+    if (lowerMap.has(key.toLowerCase())) return lowerMap.get(key.toLowerCase())
+  }
+  return undefined
 }
 
 export function parseCostDatabaseText(value: unknown): string {
@@ -885,28 +969,60 @@ export function parseCostDatabaseImportedRows(raw: unknown): CostDatabaseImporte
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null
     const row = item as Record<string, unknown>
     rows.push({
-      code: parseCostDatabaseText(row.code),
-      name: parseCostDatabaseText(row.name),
-      featureDescription: parseCostDatabaseText(row.featureDescription),
-      unit: parseCostDatabaseText(row.unit),
-      quantity: parseCostDatabaseNumber(row.quantity),
-      periodQuantity: parseCostDatabaseNumber(row.periodQuantity),
-      priorQuantity: parseCostDatabaseNumber(row.priorQuantity),
-      unitPrice: parseCostDatabaseNumber(row.unitPrice),
-      sectionalWork: parseCostDatabaseText(row.sectionalWork),
-      subproject: parseCostDatabaseText(row.subproject),
-      type: parseCostDatabaseText(row.type),
-      note: parseCostDatabaseText(row.note),
-      currency: parseCostDatabaseText(row.currency),
-      billingPeriod: parseCostDatabaseText(row.billingPeriod),
-      priceAdjustment: parseCostDatabaseNumber(row.priceAdjustment),
-      priceCorrection: parseCostDatabaseNumber(row.priceCorrection),
-      applicationDate: parseCostDatabaseText(row.applicationDate),
-      effectiveDate: parseCostDatabaseText(row.effectiveDate),
-      actualPaymentDate1: parseCostDatabaseText(row.actualPaymentDate1),
-      actualPaymentDate2: parseCostDatabaseText(row.actualPaymentDate2),
-      periodClaimAmount: parseCostDatabaseNumber(row.periodClaimAmount),
-      payableAmount: parseCostDatabaseNumber(row.payableAmount),
+      code: parseCostDatabaseText(pickCostDatabaseRawField(row, 'code', 'item')),
+      name: parseCostDatabaseText(pickCostDatabaseRawField(row, 'name')),
+      featureDescription: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'featureDescription', 'description'),
+      ),
+      unit: parseCostDatabaseText(pickCostDatabaseRawField(row, 'unit')),
+      quantity: parseCostDatabaseNumber(pickCostDatabaseRawField(row, 'quantity')),
+      periodQuantity: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'periodQuantity', 'current_qty'),
+      ),
+      priorQuantity: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'priorQuantity', 'previous_qty'),
+      ),
+      ipcNo: parseCostDatabaseText(pickCostDatabaseRawField(row, 'ipcNo', 'ipc_no')),
+      currentTotalPrice: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'currentTotalPrice', 'current_total_price'),
+      ),
+      unitPrice: parseCostDatabaseNumber(pickCostDatabaseRawField(row, 'unitPrice', 'unit_price')),
+      sectionalWork: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'sectionalWork', 'schedule'),
+      ),
+      subproject: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'subproject', 'substation_lot'),
+      ),
+      type: parseCostDatabaseText(pickCostDatabaseRawField(row, 'type')),
+      note: parseCostDatabaseText(pickCostDatabaseRawField(row, 'note')),
+      currency: parseCostDatabaseText(pickCostDatabaseRawField(row, 'currency')),
+      billingPeriod: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'billingPeriod', 'period'),
+      ),
+      priceAdjustment: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'priceAdjustment', 'price_adjustment'),
+      ),
+      priceCorrection: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'priceCorrection', 'price_correction'),
+      ),
+      applicationDate: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'applicationDate', 'application_date'),
+      ),
+      effectiveDate: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'effectiveDate', 'effective_date'),
+      ),
+      actualPaymentDate1: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'actualPaymentDate1', 'actual_payment_date_1'),
+      ),
+      actualPaymentDate2: parseCostDatabaseText(
+        pickCostDatabaseRawField(row, 'actualPaymentDate2', 'actual_payment_date_2'),
+      ),
+      periodClaimAmount: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'periodClaimAmount', 'period_claim_amount'),
+      ),
+      payableAmount: parseCostDatabaseNumber(
+        pickCostDatabaseRawField(row, 'payableAmount', 'payable_amount'),
+      ),
     })
   }
   return rows

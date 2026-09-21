@@ -23,6 +23,8 @@ export type PmCostCatalogSnapshotRow = {
   priorQuantity?: number | null
   /** Captured 本期 quantities keyed by metering-period / IPC id. */
   ipcQuantities?: Record<string, number | null>
+  /** Fetched 本期金额 (current_total_price) keyed by ipc_no. */
+  ipcAmounts?: Record<string, number | null>
   applicable: string
   note: string
   /** Sectional / divisional work (分部工程); optional for legacy snapshots. */
@@ -119,6 +121,7 @@ export function normalizeCostCatalogSnapshot(
         ? row.priorQuantity
         : null,
     ipcQuantities: parseSnapshotIpcQuantities(row.ipcQuantities),
+    ipcAmounts: parseSnapshotIpcQuantities(row.ipcAmounts),
     applicable: row.applicable,
     note: typeof row.note === 'string' ? row.note : '',
     sectionalWork: typeof row.sectionalWork === 'string' ? row.sectionalWork : '',
@@ -160,6 +163,7 @@ export function parseCostCatalogSnapshot(raw: unknown): PmCostCatalogSnapshotRow
           ? record.priorQuantity
           : null,
       ipcQuantities: parseSnapshotIpcQuantities(record.ipcQuantities),
+      ipcAmounts: parseSnapshotIpcQuantities(record.ipcAmounts),
       applicable: row.applicable,
       note: typeof record.note === 'string' ? record.note : '',
       sectionalWork: typeof record.sectionalWork === 'string' ? record.sectionalWork : '',

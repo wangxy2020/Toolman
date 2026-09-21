@@ -28,6 +28,7 @@ export function snapshotToRows(
       periodQuantity: row.periodQuantity ?? null,
       priorQuantity: row.priorQuantity ?? null,
       ipcQuantities: row.ipcQuantities,
+      ipcAmounts: row.ipcAmounts,
       applicable: row.applicable,
       note: row.note ?? '',
       sectionalWork: row.sectionalWork ?? '',

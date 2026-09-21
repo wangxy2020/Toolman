@@ -83,6 +83,7 @@ export function translateGroupFormattedAgentName(name: string, t: TranslateFn): 
 
 function translateBuiltinAssistantName(name: string, t: TranslateFn): string {
   if (BUILTIN_ASSISTANT_NAMES.has(name)) return t('system.defaultAssistant')
+  if (name === '助手库' || name === '助手课堂') return t('modules.assistant-lib.title')
   return name
 }
 

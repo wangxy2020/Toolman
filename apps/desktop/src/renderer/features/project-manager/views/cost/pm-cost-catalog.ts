@@ -24,6 +24,7 @@ export {
 export {
   buildBaselinePriceIndex,
   buildCostChildrenIndex,
+  collectCostRollupLeafRows,
   computeCostBaselineRatio,
   computeCostRowTotalPrice,
   computeCostTotalPrice,
@@ -42,10 +43,12 @@ export {
 export {
   COST_SECTION_FILTER_SUMMARY,
   buildCostSectionalDisplayEntries,
+  compareCostItemCodes,
   compareCostSectionalWorkKeys,
   costSectionalGroupMapKey,
   costSectionalWorkKey,
   costSubprojectKey,
+  filterCostSectionalGroupRows,
   isCostSectionSummaryFilter,
   patchCostSectionMeta,
   uniqueSortedSectionalKeys,

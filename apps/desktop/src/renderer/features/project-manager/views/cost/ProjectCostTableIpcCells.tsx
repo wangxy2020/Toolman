@@ -18,11 +18,11 @@ export const ProjectCostTableIpcColGroup: FC<{
   ipcColumns: readonly CostIpcColumn[]
 }> = ({ ipcColumns }) => (
   <>
+    <col className={IPC_TOTAL_CLASS} />
+    <col className={IPC_TOTAL_CLASS} />
     {ipcColumns.map((column) => (
       <col key={column.id} className={IPC_COL_CLASS} />
     ))}
-    <col className={IPC_TOTAL_CLASS} />
-    <col className={IPC_TOTAL_CLASS} />
   </>
 )
 
@@ -32,13 +32,13 @@ export const ProjectCostTableIpcHeaderCells: FC<{
   cumulativePercentLabel: string
 }> = ({ ipcColumns, cumulativeAmountLabel, cumulativePercentLabel }) => (
   <>
+    <th className={IPC_TOTAL_CLASS}>{cumulativeAmountLabel}</th>
+    <th className={IPC_TOTAL_CLASS}>{cumulativePercentLabel}</th>
     {ipcColumns.map((column) => (
       <th key={column.id} className={IPC_COL_CLASS}>
         {column.label}
       </th>
     ))}
-    <th className={IPC_TOTAL_CLASS}>{cumulativeAmountLabel}</th>
-    <th className={IPC_TOTAL_CLASS}>{cumulativePercentLabel}</th>
   </>
 )
 
@@ -51,16 +51,6 @@ function IpcStatementCells({
 }) {
   return (
     <>
-      {ipcColumns.map((column, index) => (
-        <td
-          key={column.id}
-          className={`tm-pm-resource-table-cell--center ${IPC_COL_CLASS}`}
-        >
-          <span className="tm-pm-resource-table-baseline-text">
-            {formatCostMeteringAmount(statement.amounts[index] ?? null)}
-          </span>
-        </td>
-      ))}
       <td className={`tm-pm-resource-table-cell--center ${IPC_TOTAL_CLASS}`}>
         <span className="tm-pm-resource-table-baseline-text">
           {formatCostMeteringAmount(statement.cumulativeAmount)}
@@ -71,6 +61,16 @@ function IpcStatementCells({
           {formatCostMeteringPercent(statement.cumulativePercent)}
         </span>
       </td>
+      {ipcColumns.map((column, index) => (
+        <td
+          key={column.id}
+          className={`tm-pm-resource-table-cell--center ${IPC_COL_CLASS}`}
+        >
+          <span className="tm-pm-resource-table-baseline-text">
+            {formatCostMeteringAmount(statement.amounts[index] ?? null)}
+          </span>
+        </td>
+      ))}
     </>
   )
 }

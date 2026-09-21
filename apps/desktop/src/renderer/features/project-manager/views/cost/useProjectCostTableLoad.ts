@@ -101,6 +101,7 @@ async function queryCostDatabaseViews(
 export function useProjectCostTableLoad(args: {
   workspaceId: string
   isPractice: boolean
+  defaultViewFilter: CostViewFilter
   isAllScope: boolean
   practiceScopeId: string
   scopeKey: string
@@ -135,7 +136,7 @@ export function useProjectCostTableLoad(args: {
   t: ReturnType<typeof useI18n>['t']
 }) {
   const {
-    workspaceId, isPractice, isAllScope, practiceScopeId, scopeKey, viewApplicable,
+    workspaceId, isPractice, defaultViewFilter, isAllScope, practiceScopeId, scopeKey, viewApplicable,
     editingProject, dirty,
     setDirty, setRows, rowsRef, cleanFingerprintRef, historyStackRef, historyApplyingRef,
     setHistoryEpoch, setSelectedId, setCheckedIds, setSelectionMode, setContextMenu, setColumnMenu,
@@ -187,7 +188,7 @@ export function useProjectCostTableLoad(args: {
     setContextMenu(null)
     setColumnMenu(null)
     setProjectInfoOpen(false)
-    setViewFilter('all')
+    setViewFilter(defaultViewFilter)
     setSectionFilter('all')
     setSummaryRows([])
     setMeteringViewActive(false)
@@ -202,7 +203,7 @@ export function useProjectCostTableLoad(args: {
     cleanFingerprintRef.current = ''
     rowsRef.current = []
     setRows([])
-  }, [scopeKey])
+  }, [defaultViewFilter, scopeKey])
 
   useEffect(() => {
     if (dirty) return
@@ -404,14 +405,47 @@ export function useProjectCostTableLoad(args: {
         })
         return
       }
-      const next =
-        viewKey === 'budgetQuota'
-          ? mergeMeteringFetchRows(rowsRef.current, catalog)
-          : sortCostRowsByTypeMenu(catalog)
+      let next: PmCostRow[]
+      if (viewKey === 'budgetQuota') {
+        // Repair 单价 / 工程数量 from the price list (BOQ) by the same
+        // 子项目+分部工程+编码 triple — IPC money must not redefine contract rates.
+        let priceList: PmCostRow[] = []
+        if (persistScopeId) {
+          try {
+            const synced = await pmApi.getSyncedCostDatabase({
+              workspaceId,
+              scopeId: costDatabasePersistScopeId(persistScopeId, 'constructionQuota'),
+            })
+            priceList = costDatabaseRowsToCatalog(synced.rows, viewApplicable, 'comprehensive')
+          } catch {
+            priceList = []
+          }
+        }
+        if (priceList.length === 0) {
+          try {
+            const priceByView = await queryCostDatabaseViews(
+              connection,
+              workspaceId,
+              persistScopeId,
+              'constructionQuota',
+            )
+            priceList = costDatabaseRowsToCatalog(
+              priceByView.constructionQuota ?? [],
+              viewApplicable,
+              'comprehensive',
+            )
+          } catch {
+            priceList = []
+          }
+        }
+        next = mergeMeteringFetchRows(rowsRef.current, catalog, priceList)
+      } else {
+        next = sortCostRowsByTypeMenu(catalog)
+      }
       applyCatalogRows(next, { dirty: true, clearHistory: true })
       if (viewKey === 'budgetQuota') {
         setMeteringViewActive(true)
-        if (isPractice) setViewFilter('all')
+        if (isPractice) setViewFilter(defaultViewFilter)
       }
       setStatusFeedback({
         tone: 'success',
@@ -434,6 +468,7 @@ export function useProjectCostTableLoad(args: {
     }
   }, [
     applyCatalogRows,
+    defaultViewFilter,
     editingProject,
     fetching,
     isAllScope,

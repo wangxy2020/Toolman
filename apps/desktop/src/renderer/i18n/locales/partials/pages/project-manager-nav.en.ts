@@ -18,7 +18,7 @@ export const projectManagerNavEn = {
     agent: 'Agent',
     files: 'Practice',
     database: 'Data',
-    settings: 'Settings',
+    settings: 'Project settings',
     gantt: 'Gantt chart',
     calendar: 'Calendar',
     timeEntries: 'Time',

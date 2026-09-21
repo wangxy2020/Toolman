@@ -14,6 +14,8 @@ export const StoredWorkflowSchema = z.object({
   communityResourceId: z.string().uuid().optional(),
   requiredMcpIds: z.array(z.string()).default([]),
   requiredSkillIds: z.array(z.string()).default([]),
+  parentId: z.string().min(1).max(64).optional(),
+  sessionId: z.string().min(1).max(64).optional(),
   installedAt: z.number().int().positive(),
   updatedAt: z.number().int().positive(),
 })
@@ -31,6 +33,8 @@ export const WorkflowUpsertInputSchema = z.object({
   communityResourceId: z.string().uuid().optional(),
   requiredMcpIds: z.array(z.string()).optional(),
   requiredSkillIds: z.array(z.string()).optional(),
+  parentId: z.string().min(1).max(64).nullable().optional(),
+  sessionId: z.string().min(1).max(64).nullable().optional(),
 })
 
 const WORKFLOWS_FILE = 'workflows.json'
@@ -85,8 +89,10 @@ export function upsertStoredWorkflow(input: unknown): StoredWorkflow {
 
   const next = StoredWorkflowSchema.parse({
     ...data,
-    requiredMcpIds: data.requiredMcpIds ?? [],
-    requiredSkillIds: data.requiredSkillIds ?? [],
+    parentId: data.parentId === null ? undefined : (data.parentId ?? existing?.parentId),
+    sessionId: data.sessionId === null ? undefined : (data.sessionId ?? existing?.sessionId),
+    requiredMcpIds: data.requiredMcpIds ?? existing?.requiredMcpIds ?? [],
+    requiredSkillIds: data.requiredSkillIds ?? existing?.requiredSkillIds ?? [],
     installedAt: existing?.installedAt ?? now,
     updatedAt: now,
   })
@@ -99,4 +105,14 @@ export function upsertStoredWorkflow(input: unknown): StoredWorkflow {
 
   saveWorkflows(workflows)
   return next
+}
+
+export function deleteStoredWorkflow(id: string): boolean {
+  const workflows = getWorkflows()
+  const toRemove = new Set(
+    workflows.filter((workflow) => workflow.id === id || workflow.parentId === id).map((w) => w.id),
+  )
+  if (toRemove.size === 0) return false
+  saveWorkflows(workflows.filter((workflow) => !toRemove.has(workflow.id)))
+  return true
 }

@@ -75,7 +75,7 @@ export const NAV_MODULE_DEFS: Record<NavModuleId, NavModuleDef> = {
     icon: IconWorkflow,
     view: 'workflow',
     tier: 'extension',
-    available: false,
+    available: true,
     closable: true,
   },
   group: {

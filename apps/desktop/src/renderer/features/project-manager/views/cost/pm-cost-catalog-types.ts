@@ -93,6 +93,8 @@ export type PmCostRow = {
   priorQuantity?: number | null
   /** Captured 本期 quantities keyed by metering-period / IPC id. */
   ipcQuantities?: Record<string, number | null>
+  /** Fetched 本期金额 (current_total_price) keyed by ipc_no. */
+  ipcAmounts?: Record<string, number | null>
   /** `'all'` = 全部项目, otherwise a project id. */
   applicable: string
   note: string

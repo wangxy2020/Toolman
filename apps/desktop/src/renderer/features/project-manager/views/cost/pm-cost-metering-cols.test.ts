@@ -5,6 +5,7 @@ import {
   formatCostMeteringAmount,
   formatCostMeteringPercent,
   rollCostMeteringPeriodIntoPrior,
+  sumCostMeteringProgress,
 } from './pm-cost-metering-cols'
 import type { PmCostRow } from './pm-cost-catalog'
 
@@ -33,7 +34,7 @@ function row(
     sectionFeatureDescription: '',
     sectionTotalFormula: '',
     sortOrder: 0,
-    parentId: null,
+    parentId: partial.parentId ?? null,
   }
 }
 
@@ -144,6 +145,46 @@ describe('computeCostMeteringProgress', () => {
       cumulativeAmount: null,
       cumulativePercent: 50,
     })
+  })
+
+  it('caps cumulative percent at 100 when quantity progress overflows', () => {
+    expect(
+      computeCostMeteringProgress({
+        quantity: 10,
+        unitPrice: 5,
+        periodQuantity: 20,
+        priorQuantity: 5,
+      }).cumulativePercent,
+    ).toBe(100)
+  })
+})
+
+describe('sumCostMeteringProgress', () => {
+  it('amount-weights section percent from leaf rows under a parent header', () => {
+    const progress = sumCostMeteringProgress(
+      [
+        row({ id: 'parent', quantity: null, unitPrice: null }),
+        row({
+          id: 'child-a',
+          parentId: 'parent',
+          quantity: 100,
+          unitPrice: 10,
+          periodQuantity: 20,
+          priorQuantity: 30,
+        }),
+        row({
+          id: 'child-b',
+          parentId: 'parent',
+          quantity: 50,
+          unitPrice: 20,
+          periodQuantity: 10,
+          priorQuantity: 15,
+        }),
+      ],
+      2000,
+    )
+    expect(progress.cumulativeAmount).toBe(1000)
+    expect(progress.cumulativePercent).toBe(50)
   })
 })
 

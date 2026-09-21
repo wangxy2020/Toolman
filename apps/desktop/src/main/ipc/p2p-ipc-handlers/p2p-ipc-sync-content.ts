@@ -27,6 +27,10 @@ import {
   P2pWorkflowShareInputSchema,
   P2pWorkflowShareOutputSchema,
   P2pWorkflowListLocalOutputSchema,
+  P2pWorkflowUpsertLocalInputSchema,
+  P2pWorkflowUpsertLocalOutputSchema,
+  P2pWorkflowDeleteLocalInputSchema,
+  P2pWorkflowDeleteLocalOutputSchema,
 } from '@toolman/shared'
 import { P2pSharedResourceRepository } from '@toolman/db'
 import { getDatabase } from '../../bootstrap/database'
@@ -269,6 +273,29 @@ export const p2pIpcSyncContentHandlers: P2pIpcHandlerMap = {
     } catch (error) {
       const errMessage = toErrorMessage(error, 'Failed to list local workflows')
       return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pWorkflowUpsertLocal]: async (input) => {
+    try {
+      P2pWorkflowUpsertLocalInputSchema.parse(input)
+      const result = p2pWorkflowSyncService.upsertLocalP2pWorkflow(input)
+      return ipcOk(P2pWorkflowUpsertLocalOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage = toErrorMessage(error, 'Failed to save local workflow')
+      return ipcErr({ code: 'INTERNAL_ERROR', message: errMessage, retryable: false })
+    }
+  },
+
+  [IpcChannel.P2pWorkflowDeleteLocal]: async (input) => {
+    try {
+      P2pWorkflowDeleteLocalInputSchema.parse(input)
+      const result = p2pWorkflowSyncService.deleteLocalP2pWorkflow(input)
+      return ipcOk(P2pWorkflowDeleteLocalOutputSchema.parse(result))
+    } catch (error) {
+      const errMessage = toErrorMessage(error, 'Failed to delete local workflow')
+      const code = errMessage.includes('不存在') ? 'NOT_FOUND' : 'INTERNAL_ERROR'
+      return ipcErr({ code, message: errMessage, retryable: false })
     }
   },
 }

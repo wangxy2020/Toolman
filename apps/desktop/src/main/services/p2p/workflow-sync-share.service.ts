@@ -1,7 +1,9 @@
 import type { P2pSharedResource } from '@toolman/shared'
 import {
   P2pResourceUnshareInputSchema,
+  P2pWorkflowDeleteLocalInputSchema,
   P2pWorkflowShareInputSchema,
+  P2pWorkflowUpsertLocalInputSchema,
 } from '@toolman/shared'
 import { appendP2pEvent } from './p2p-event.service'
 import { getSharedResourceRepo, mapSharedResourceRow } from './knowledge-sync-shared-resource'
@@ -14,7 +16,7 @@ import {
   resolveSharedResourceId,
 } from './p2p-shared-resource-id'
 import { serializeWorkflowShareMetadata } from './p2p-workflow-share-metadata'
-import { listStoredWorkflows, getStoredWorkflow } from '../community/workflow-store.service'
+import { listStoredWorkflows, getStoredWorkflow, upsertStoredWorkflow, deleteStoredWorkflow } from '../community/workflow-store.service'
 
 function buildWorkflowShareJson(workflow: ReturnType<typeof getStoredWorkflow>): string {
   if (!workflow) {
@@ -30,16 +32,70 @@ function buildWorkflowShareJson(workflow: ReturnType<typeof getStoredWorkflow>):
   })
 }
 
+function toListItem(workflow: NonNullable<ReturnType<typeof getStoredWorkflow>>) {
+  return {
+    id: workflow.id,
+    name: workflow.name,
+    description: workflow.description,
+    engine: workflow.engine,
+    updatedAt: workflow.updatedAt,
+    parentId: workflow.parentId,
+    sessionId: workflow.sessionId,
+  }
+}
+
 export function listLocalP2pWorkflowShareTargets(): {
-  workflows: Array<{ id: string; name: string; description?: string }>
+  workflows: Array<{
+    id: string
+    name: string
+    description?: string
+    engine?: string
+    updatedAt?: number
+    parentId?: string
+    sessionId?: string
+  }>
 } {
   return {
-    workflows: listStoredWorkflows().map((workflow) => ({
-      id: workflow.id,
-      name: workflow.name,
-      description: workflow.description,
-    })),
+    workflows: listStoredWorkflows().map(toListItem),
   }
+}
+
+export function upsertLocalP2pWorkflow(rawInput: unknown): {
+  workflow: {
+    id: string
+    name: string
+    description?: string
+    engine?: string
+    updatedAt?: number
+    parentId?: string
+    sessionId?: string
+  }
+} {
+  const input = P2pWorkflowUpsertLocalInputSchema.parse(rawInput)
+  const existing = getStoredWorkflow(input.id)
+  const saved = upsertStoredWorkflow({
+    id: input.id,
+    name: input.name,
+    description: input.description,
+    engine: input.engine ?? existing?.engine ?? 'langgraph',
+    graph: existing?.graph ?? { nodes: [], edges: [] },
+    graphPath: existing?.graphPath ?? 'workflow.json',
+    sourcePackagePath: existing?.sourcePackagePath,
+    communityResourceId: existing?.communityResourceId,
+    requiredMcpIds: existing?.requiredMcpIds,
+    requiredSkillIds: existing?.requiredSkillIds,
+    parentId: input.parentId === undefined ? existing?.parentId : input.parentId,
+    sessionId: input.sessionId === undefined ? existing?.sessionId : input.sessionId,
+  })
+  return { workflow: toListItem(saved) }
+}
+
+export function deleteLocalP2pWorkflow(rawInput: unknown): { ok: true } {
+  const input = P2pWorkflowDeleteLocalInputSchema.parse(rawInput)
+  if (!deleteStoredWorkflow(input.id)) {
+    throw new Error('工作流不存在')
+  }
+  return { ok: true }
 }
 
 export async function shareP2pWorkflow(rawInput: unknown): Promise<{ sharedResource: P2pSharedResource }> {

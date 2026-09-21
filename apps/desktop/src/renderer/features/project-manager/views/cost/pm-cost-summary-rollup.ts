@@ -1,10 +1,7 @@
 /** Cost sectional rollup summaries and display entries. */
 
 import type { PmCostRow } from './pm-cost-catalog'
-import {
-  buildCostSectionalDisplayEntries,
-  costSectionalWorkKey,
-} from './pm-cost-catalog'
+import { buildCostSectionalDisplayEntries } from './pm-cost-catalog'
 import { addFormulaRefs, evaluateCostFormula } from './pm-cost-summary-formula'
 import {
   ensureCostSummaryRows,
@@ -21,12 +18,12 @@ function buildSectionRollupSummaries(
   metadata: Record<string, unknown> | null | undefined,
   projectCode?: string,
 ): CostSectionRollupSummary[] {
-  const sections = buildCostSectionalDisplayEntries(rows).flatMap((entry) =>
-    entry.kind === 'section' ? [entry.summary] : [],
-  )
+  const sections = buildCostSectionalDisplayEntries(rows, {
+    groupBy: 'subprojectSection',
+  }).flatMap((entry) => (entry.kind === 'section' ? [entry.summary] : []))
 
   const withMeta: CostSectionRollupSummary[] = sections.map((summary) => {
-    const groupRows = rows.filter((row) => costSectionalWorkKey(row) === summary.key)
+    const groupRows = summary.rows
     const head = groupRows[0]
     const name =
       groupRows.map((row) => row.sectionName?.trim() ?? '').find((value) => value) ||

@@ -19,7 +19,9 @@ export type {
   ProjectCostMenuBarProps,
 } from './project-cost-menu-bar-types'
 export {
+  COST_PRACTICE_VIEW_MENU_FILTERS,
   COST_PRACTICE_VIEW_PAGES,
+  DEFAULT_COST_PRACTICE_VIEW_FILTER,
   isCostPracticeViewPage,
 } from './project-cost-menu-bar-types'
 

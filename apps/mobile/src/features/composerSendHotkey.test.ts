@@ -7,6 +7,13 @@ describe('isWebComposerSendHotkey', () => {
     expect(isWebComposerSendHotkey({ key: 'Enter' }, true)).toBe(false)
     expect(isWebComposerSendHotkey({ key: 'Enter', altKey: true }, true)).toBe(false)
     expect(isWebComposerSendHotkey({ key: 'Enter', shiftKey: true, metaKey: true }, true)).toBe(false)
+    expect(
+      isWebComposerSendHotkey(
+        { key: 'Enter', getModifierState: (name) => name === 'Meta' },
+        true,
+      ),
+    ).toBe(true)
+    expect(isWebComposerSendHotkey({ keyCode: 13, metaKey: true }, true)).toBe(true)
   })
 
   it('sends with Alt+Enter or Ctrl+Enter on Windows', () => {

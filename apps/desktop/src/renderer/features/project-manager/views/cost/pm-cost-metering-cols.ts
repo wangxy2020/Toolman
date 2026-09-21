@@ -1,5 +1,10 @@
 import { formatPmDecimalDisplay } from '../../PmDecimalTableInput'
-import { computeCostTotalPrice, formatCostFixed2IfDecimal, type PmCostRow } from './pm-cost-catalog'
+import {
+  collectCostRollupLeafRows,
+  computeCostTotalPrice,
+  formatCostFixed2IfDecimal,
+  type PmCostRow,
+} from './pm-cost-catalog'
 
 export const COST_METERING_COLUMNS = [
   'periodQuantity',
@@ -59,14 +64,69 @@ export function computeCostMeteringProgress(
   const cumulativeQuantity = priorQuantity + periodForSum
   const periodAmount = computeCostMeteringProduct(periodQuantity, row.unitPrice)
   const cumulativeAmount = computeCostMeteringProduct(cumulativeQuantity, row.unitPrice)
-  const cumulativePercent =
+  const rawPercent =
     isCostMeteringFactor(cumulativeQuantity) && isCostMeteringFactor(row.quantity)
       ? (cumulativeQuantity / row.quantity) * 100
       : null
+  const cumulativePercent =
+    rawPercent == null ? null : Math.min(100, rawPercent)
   return {
     periodQuantity,
     priorQuantity,
     cumulativeQuantity,
+    periodAmount,
+    cumulativeAmount,
+    cumulativePercent,
+  }
+}
+
+/**
+ * Section / grand-total metering rollup.
+ * Uses leaf rows (same as 合价) and amount-weighted 累计完成百分比:
+ * sum(累计完成金额) / sum(合价).
+ */
+export function sumCostMeteringProgress(
+  rows: readonly PmCostRow[],
+  contractAmount?: number | null,
+): CostMeteringProgress {
+  const leaves = collectCostRollupLeafRows(rows)
+  let periodAmount: number | null = null
+  let cumulativeAmount: number | null = null
+  let leafContractAmount: number | null = null
+  let quantityPercent: number | null = null
+
+  for (const row of leaves) {
+    const progress = computeCostMeteringProgress(row)
+    if (progress.periodAmount != null) {
+      periodAmount = (periodAmount ?? 0) + progress.periodAmount
+    }
+    if (progress.cumulativeAmount != null) {
+      cumulativeAmount = (cumulativeAmount ?? 0) + progress.cumulativeAmount
+    }
+    const rowContract = computeCostTotalPrice(row.quantity, row.unitPrice)
+    if (rowContract != null) {
+      leafContractAmount = (leafContractAmount ?? 0) + rowContract
+    }
+    if (quantityPercent == null && progress.cumulativePercent != null) {
+      quantityPercent = progress.cumulativePercent
+    }
+  }
+
+  if (leaves.length > 1) quantityPercent = null
+  const denominator =
+    contractAmount != null && Number.isFinite(contractAmount)
+      ? contractAmount
+      : leafContractAmount
+  const cumulativePercent =
+    quantityPercent ??
+    (isCostMeteringFactor(cumulativeAmount) && isCostMeteringFactor(denominator)
+      ? Math.min(100, (cumulativeAmount / denominator) * 100)
+      : null)
+
+  return {
+    periodQuantity: null,
+    priorQuantity: 0,
+    cumulativeQuantity: 0,
     periodAmount,
     cumulativeAmount,
     cumulativePercent,

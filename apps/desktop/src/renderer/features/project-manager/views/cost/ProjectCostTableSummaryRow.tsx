@@ -71,6 +71,16 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
       : ''
   const noteValue = isTopSummary ? '' : entry.summary.note
   const totalValue = isTopSummary ? entry.total : entry.summary.total
+  // Prefer the exact group rows used for 合价 (子项目 + 分部工程).
+  const sectionRows = isTopSummary
+    ? visibleRows
+    : 'rows' in entry.summary && entry.summary.rows.length > 0
+      ? entry.summary.rows
+      : visibleRows.filter(
+          (row) =>
+            costSectionalWorkKey(row) === sectionKey &&
+            costSubprojectKey(row) === sectionSubproject,
+        )
   const formulaValue = isTopSummary
     ? entry.row.totalFormula
     : 'totalFormula' in entry.summary
@@ -261,21 +271,16 @@ export const ProjectCostTableSummaryRow: FC<ProjectCostTableSummaryRowProps> = (
           </td>
         )
       ) : null}
-      {showMeteringColumns ? <ProjectCostTableMeteringSummaryCells /> : null}
+      {showMeteringColumns ? (
+        <ProjectCostTableMeteringSummaryCells
+          rows={sectionRows}
+          contractAmount={totalValue}
+        />
+      ) : null}
       {showIpcStatementColumns ? (
         <ProjectCostTableIpcSummaryCells
           ipcColumns={ipcColumns}
-          statement={sumCostIpcStatements(
-            isTopSummary
-              ? visibleRows
-              : visibleRows.filter(
-                  (row) =>
-                    costSectionalWorkKey(row) === sectionKey &&
-                    costSubprojectKey(row) === sectionSubproject,
-                ),
-            ipcColumns,
-            totalValue,
-          )}
+          statement={sumCostIpcStatements(sectionRows, ipcColumns, totalValue)}
         />
       ) : null}
       {columnVisibility.baseline ? <td /> : null}

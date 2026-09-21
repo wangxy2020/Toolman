@@ -36,6 +36,18 @@ describe('shouldSubmitOnEnter', () => {
   it('allows plain Enter when not composing', () => {
     expect(shouldSubmitOnEnter(keyEvent({ key: 'Enter' }), 'enter')).toBe(true)
   })
+
+  it('always sends on ⌘/Ctrl+Enter even while IME reports composing', () => {
+    expect(
+      shouldSubmitOnEnter(
+        keyEvent({ key: 'Enter', metaKey: true, isComposing: true }),
+        'enter',
+      ),
+    ).toBe(true)
+    expect(
+      shouldSubmitOnEnter(keyEvent({ key: 'Enter', ctrlKey: true, keyCode: 229 }), 'enter'),
+    ).toBe(true)
+  })
 })
 
 describe('readComposerText', () => {

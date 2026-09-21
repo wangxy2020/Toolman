@@ -18,7 +18,7 @@ export const projectManagerNavZhCN = {
     agent: '智能体',
     files: '实务',
     database: '数据',
-    settings: '设置',
+    settings: '项目设置',
     gantt: '甘特图',
     calendar: '日历',
     timeEntries: '工时',

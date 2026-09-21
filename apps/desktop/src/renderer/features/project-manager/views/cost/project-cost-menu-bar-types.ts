@@ -15,6 +15,14 @@ export type CostViewMenuVariant = 'catalog' | 'practice' | 'database'
 
 export type CostViewFilter = 'all' | PmCostType | CostPracticeViewPage
 
+/** 成本管理-实务「视图」：中期计量表为首项，价格表垫底。 */
+export const COST_PRACTICE_VIEW_MENU_FILTERS = [
+  ...COST_PRACTICE_VIEW_PAGES,
+  'all',
+] as const satisfies readonly CostViewFilter[]
+
+export const DEFAULT_COST_PRACTICE_VIEW_FILTER: CostViewFilter = 'meteringTable'
+
 export function isCostPracticeViewPage(value: string): value is CostPracticeViewPage {
   return (COST_PRACTICE_VIEW_PAGES as readonly string[]).includes(value)
 }

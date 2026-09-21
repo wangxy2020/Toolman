@@ -19,12 +19,11 @@ export const modulesEn = {
     },
     workflow: {
       title: 'Automation',
-      addLabel: 'New automation',
+      addLabel: 'New task',
       headerAll: 'All automations',
-      sidebarEmptyHint: 'No automations yet. Click above to create one.',
+      sidebarEmptyHint: 'No tasks yet. Click above to create one.',
       contentEmptyTitle: 'Automation',
-      contentEmptyHint:
-        'Automation and workflows are coming soon. Enable the nav entry under Settings → Display → Hidden icons.',
+      contentEmptyHint: 'Create tasks and subtasks on the left, then chat on the right like Agents.',
     },
     group: {
       title: 'Groups',

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  deleteStoredWorkflow,
   getStoredWorkflow,
   listStoredWorkflows,
   upsertStoredWorkflow,
@@ -42,5 +43,39 @@ describe('workflow-store.service', () => {
     expect(items).toHaveLength(1)
     expect(items[0]?.id).toBe('agent-flow')
     expect(getStoredWorkflow('agent-flow')?.name).toBe('Agent Flow')
+  })
+
+  it('deletes stored workflows', () => {
+    upsertStoredWorkflow({
+      id: 'to-delete',
+      name: 'Temp Flow',
+      engine: 'langgraph',
+      graphPath: 'workflow.json',
+      graph: { nodes: [], edges: [] },
+    })
+    expect(deleteStoredWorkflow('to-delete')).toBe(true)
+    expect(getStoredWorkflow('to-delete')).toBeNull()
+    expect(deleteStoredWorkflow('missing')).toBe(false)
+  })
+
+  it('cascade-deletes child workflows with parent', () => {
+    upsertStoredWorkflow({
+      id: 'parent-task',
+      name: 'Parent',
+      engine: 'langgraph',
+      graphPath: 'workflow.json',
+      graph: { nodes: [], edges: [] },
+    })
+    upsertStoredWorkflow({
+      id: 'child-task',
+      name: 'Child',
+      engine: 'langgraph',
+      graphPath: 'workflow.json',
+      graph: { nodes: [], edges: [] },
+      parentId: 'parent-task',
+    })
+    expect(deleteStoredWorkflow('parent-task')).toBe(true)
+    expect(getStoredWorkflow('parent-task')).toBeNull()
+    expect(getStoredWorkflow('child-task')).toBeNull()
   })
 })

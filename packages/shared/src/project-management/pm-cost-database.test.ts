@@ -24,6 +24,7 @@ import {
   resolveProjectIdColumn,
   suggestCostDatabaseColumnMap,
   fieldKeysForCostDatabaseView,
+  queryFieldKeysForCostDatabaseView,
   COST_DATABASE_METERING_VIEW_FIELD_KEYS,
   COST_DATABASE_PROGRESS_PAYMENT_VIEW_FIELD_KEYS,
   COST_DATABASE_CURRENCY_ALIASES,
@@ -320,13 +321,18 @@ describe('pm-cost-database', () => {
     expect(resolveAliasColumn(['货币', '单价'], COST_DATABASE_CURRENCY_ALIASES)).toBe('货币')
   })
 
-  it('uses 中期计量 field keys without name / unit / type / quantity', () => {
+  it('uses 中期计量 field keys without code / name / unit / type / quantity', () => {
     expect(fieldKeysForCostDatabaseView('budgetQuota')).toEqual([
       ...COST_DATABASE_METERING_VIEW_FIELD_KEYS,
     ])
     expect(fieldKeysForCostDatabaseView('constructionQuota')).not.toContain('periodQuantity')
+    expect(fieldKeysForCostDatabaseView('budgetQuota')).not.toContain('code')
     expect(fieldKeysForCostDatabaseView('budgetQuota')).not.toContain('name')
     expect(fieldKeysForCostDatabaseView('budgetQuota')).not.toContain('quantity')
+    expect(fieldKeysForCostDatabaseView('budgetQuota')).toContain('ipcNo')
+    expect(fieldKeysForCostDatabaseView('budgetQuota')).toContain('currentTotalPrice')
+    expect(queryFieldKeysForCostDatabaseView('budgetQuota')).toContain('code')
+    expect(queryFieldKeysForCostDatabaseView('budgetQuota')).toContain('ipcNo')
   })
 
   it('uses 进度款统计 field keys without name / unit / quantity / unitPrice', () => {
@@ -375,7 +381,15 @@ describe('pm-cost-database', () => {
       fieldKeysForCostDatabaseView('budgetQuota'),
     )
     expect(fallback.periodQuantity).toBe('工程量')
-    expect(fallback.code).toBe('item')
+    expect(fallback.code).toBe('')
+
+    const ipc = suggestCostDatabaseColumnMap(
+      ['ipc_no', 'current_total_price', 'current_qty'],
+      fieldKeysForCostDatabaseView('budgetQuota'),
+    )
+    expect(ipc.ipcNo).toBe('ipc_no')
+    expect(ipc.currentTotalPrice).toBe('current_total_price')
+    expect(ipc.periodQuantity).toBe('current_qty')
   })
 
   it('resolves a legacy 工程数量 map onto 本期完成工程量 for 中期计量', () => {
@@ -392,5 +406,6 @@ describe('pm-cost-database', () => {
     expect(parseCostDatabaseNumber('1,234.50')).toBe(1234.5)
     expect(parseCostDatabaseNumber('')).toBeNull()
     expect(parseCostDatabaseNumber(8)).toBe(8)
+    expect(parseCostDatabaseNumber(10n)).toBe(10)
   })
 })

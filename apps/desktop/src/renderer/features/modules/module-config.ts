@@ -30,12 +30,11 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
   },
   workflow: {
     title: '自动化',
-    addLabel: '新建自动化',
+    addLabel: '新建任务',
     headerSegments: ['全部自动化'],
-    sidebarEmptyHint: '暂无自动化，点击上方新建',
+    sidebarEmptyHint: '暂无任务，点击上方新建',
     contentEmptyTitle: '自动化',
-    contentEmptyHint:
-      '自动化与工作流功能即将上线。可在 设置 → 显示 → 隐藏的图标 中预先启用导航入口。',
+    contentEmptyHint: '在左侧新建任务与子任务，在右侧与智能体对话完成自动化。',
   },
   group: {
     title: '群组',

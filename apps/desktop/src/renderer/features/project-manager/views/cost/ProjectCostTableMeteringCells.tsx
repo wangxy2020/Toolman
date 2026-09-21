@@ -10,6 +10,7 @@ import {
   formatCostMeteringAmount,
   formatCostMeteringPercent,
   formatCostMeteringQuantity,
+  sumCostMeteringProgress,
 } from './pm-cost-metering-cols'
 
 export const ProjectCostTableMeteringColGroup: FC = () => (
@@ -68,13 +69,34 @@ export const ProjectCostTableMeteringHeaderCells: FC<{
   </>
 )
 
-export const ProjectCostTableMeteringSummaryCells: FC = () => (
-  <>
-    {COST_METERING_COLUMNS.map((column) => (
-      <td key={column} className={costMeteringColClass(column)} />
-    ))}
-  </>
-)
+export const ProjectCostTableMeteringSummaryCells: FC<{
+  rows: readonly PmCostRow[]
+  contractAmount: number | null
+}> = ({ rows, contractAmount }) => {
+  const progress = sumCostMeteringProgress(rows, contractAmount)
+  return (
+    <>
+      <td className={costMeteringColClass('periodQuantity')} />
+      <td className={costMeteringColClass('priorQuantity')} />
+      <td className={costMeteringColClass('cumulativeQuantity')} />
+      <td className={`tm-pm-resource-table-cell--center ${costMeteringColClass('periodAmount')}`}>
+        <span className="tm-pm-resource-table-baseline-text">
+          {formatCostMeteringAmount(progress.periodAmount)}
+        </span>
+      </td>
+      <td className={`tm-pm-resource-table-cell--center ${costMeteringColClass('cumulativeAmount')}`}>
+        <span className="tm-pm-resource-table-baseline-text">
+          {formatCostMeteringAmount(progress.cumulativeAmount)}
+        </span>
+      </td>
+      <td className={`tm-pm-resource-table-cell--center ${costMeteringColClass('cumulativePercent')}`}>
+        <span className="tm-pm-resource-table-baseline-text">
+          {formatCostMeteringPercent(progress.cumulativePercent)}
+        </span>
+      </td>
+    </>
+  )
+}
 
 export const ProjectCostTableMeteringDataCells: FC<{
   row: PmCostRow

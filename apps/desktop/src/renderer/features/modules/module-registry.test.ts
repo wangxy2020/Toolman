@@ -40,8 +40,14 @@ describe('module-registry', () => {
     expect(canAccessAppView('settings', [])).toBe(true)
   })
 
-  it('blocks unavailable workflow view', () => {
+  it('allows workflow when enabled in nav', () => {
     const visible = [...DEFAULT_VISIBLE_NAV_MODULES, 'workflow'] as const
-    expect(canAccessAppView('workflow', visible)).toBe(false)
+    expect(canAccessAppView('workflow', visible)).toBe(true)
+    expect(guardAppView('workflow', visible)).toBe('workflow')
+  })
+
+  it('blocks workflow when not enabled in nav', () => {
+    expect(canAccessAppView('workflow', DEFAULT_VISIBLE_NAV_MODULES)).toBe(false)
+    expect(guardAppView('workflow', DEFAULT_VISIBLE_NAV_MODULES)).toBe('agent')
   })
 })
