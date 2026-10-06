@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { app } from 'electron'
 
@@ -38,13 +38,70 @@ export const WorkflowUpsertInputSchema = z.object({
 })
 
 const WORKFLOWS_FILE = 'workflows.json'
+const WORKFLOWS_BY_ACCOUNT_DIR = 'workflows-by-account'
 
 let cache: StoredWorkflow[] | null = null
+let boundSlug: string | null = null
 
-function workflowsFilePath(): string {
+function userDataDir(): string {
   const dir = app.getPath('userData')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  return join(dir, WORKFLOWS_FILE)
+  return dir
+}
+
+function legacyWorkflowsFilePath(): string {
+  return join(userDataDir(), WORKFLOWS_FILE)
+}
+
+function workflowsFilePathForSlug(slug: string): string {
+  return join(userDataDir(), WORKFLOWS_BY_ACCOUNT_DIR, `${slug}.json`)
+}
+
+function workflowsFilePath(): string {
+  if (boundSlug) return workflowsFilePathForSlug(boundSlug)
+  return legacyWorkflowsFilePath()
+}
+
+export function readLegacyWorkflowSessionIds(): string[] {
+  const path = legacyWorkflowsFilePath()
+  if (!existsSync(path)) return []
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item) => {
+        const parsedItem = StoredWorkflowSchema.safeParse(item)
+        return parsedItem.success ? parsedItem.data.sessionId : undefined
+      })
+      .filter((id): id is string => Boolean(id))
+  } catch {
+    return []
+  }
+}
+
+/** Move the unscoped workflows.json onto the account that already owned those topics. */
+export function adoptLegacyWorkflowsForSlug(slug: string): void {
+  const next = slug.trim()
+  if (!next) return
+  const target = workflowsFilePathForSlug(next)
+  if (existsSync(target)) return
+  const legacy = legacyWorkflowsFilePath()
+  if (!existsSync(legacy)) return
+  mkdirSync(dirname(target), { recursive: true })
+  renameSync(legacy, target)
+  cache = null
+}
+
+export function bindWorkflowAccount(slug: string): void {
+  const next = slug.trim()
+  if (!next || boundSlug === next) return
+  boundSlug = next
+  cache = null
+}
+
+export function resetWorkflowAccountBindingForTests(): void {
+  boundSlug = null
+  cache = null
 }
 
 function loadWorkflows(): StoredWorkflow[] {

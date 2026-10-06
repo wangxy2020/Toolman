@@ -37,11 +37,13 @@ export async function ensureAutomationAssistant(options: {
     const desiredSystemPrompt = buildAutomationAssistantSystemPrompt()
     const existing = findAutomationAssistant(chat.assistants)
     if (existing) {
-      if (existing.systemPrompt === desiredSystemPrompt && existing.isPinned) {
+      const nameOk = existing.name.trim() === AUTOMATION_ASSISTANT_NAME
+      if (existing.systemPrompt === desiredSystemPrompt && existing.isPinned && nameOk) {
         return existing
       }
       const updated = await window.api.invoke(IpcChannel.AssistantUpdate, {
         id: existing.id,
+        name: AUTOMATION_ASSISTANT_NAME,
         systemPrompt: desiredSystemPrompt,
         isPinned: true,
       })

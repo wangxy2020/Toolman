@@ -9,7 +9,7 @@ import {
 } from '@toolman/shared'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../../db/repos'
 import { deleteKnowledgeBase } from '../knowledge.service'
-import { ensureWorkspaceSharedKnowledgeFolder } from '../knowledge-folder.service'
+import { ensureWorkspaceSharedKnowledgeFolder } from '../knowledge-folder/workspace-folders'
 import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 import {
   collectLegacyStoragePaths,

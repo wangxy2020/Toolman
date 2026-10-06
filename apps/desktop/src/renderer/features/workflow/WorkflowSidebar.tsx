@@ -60,7 +60,7 @@ export function WorkflowSidebar({
   const [renameId, setRenameId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<LocalWorkflowItem | null>(null)
   const [creating, setCreating] = useState(false)
-  const prunedAssistantsRef = useRef(new Set<string>())
+  const prunedOrphansRef = useRef('')
 
   const chatLike = useMemo(
     () => ({
@@ -86,20 +86,29 @@ export function WorkflowSidebar({
 
   useEffect(() => {
     if (!assistantId || loading) return
-    if (prunedAssistantsRef.current.has(assistantId)) return
-    prunedAssistantsRef.current.add(assistantId)
     const linked = new Set(
       items
         .map((item) => item.sessionId)
         .filter((id): id is string => Boolean(id)),
     )
+    const orphanKey = sessions
+      .filter(
+        (session) =>
+          session.assistantId === assistantId &&
+          !linked.has(session.id) &&
+          session.id !== activeSession?.id,
+      )
+      .map((session) => session.id)
+      .sort()
+      .join(',')
+    if (!orphanKey || prunedOrphansRef.current === orphanKey) return
+    prunedOrphansRef.current = orphanKey
     void pruneOrphanAutomationSessions({
       automationAssistantId: assistantId,
       linkedSessionIds: linked,
       sessions,
       deleteSession,
       activeSessionId: activeSession?.id,
-      defaultSubTaskTitles: [t('workflowPage.newSubTaskName')],
     })
   }, [
     assistantId,
@@ -108,7 +117,6 @@ export function WorkflowSidebar({
     sessions,
     deleteSession,
     activeSession?.id,
-    t,
   ])
 
   const ensureSubTaskSession = useCallback(
@@ -182,7 +190,9 @@ export function WorkflowSidebar({
           value={item.name}
           className="tm-sidebar-rename-input tm-sidebar-rename-input--note"
           onCommit={(next) => {
-            void rename(item.id, normalizeName(next, item.name))
+            const name = normalizeName(next, item.name)
+            void rename(item.id, name)
+            if (item.sessionId) void renameSession(item.sessionId, name)
             setRenameId(null)
           }}
           onCancel={() => setRenameId(null)}
@@ -345,7 +355,18 @@ export function WorkflowSidebar({
           danger
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
-            void remove(deleteTarget.id)
+            const doomed = deleteTarget.parentId
+              ? [deleteTarget]
+              : [deleteTarget, ...(childrenByParent.get(deleteTarget.id) ?? [])]
+            const sessionIds = doomed
+              .map((item) => item.sessionId)
+              .filter((id): id is string => Boolean(id))
+            void (async () => {
+              await remove(deleteTarget.id)
+              for (const sessionId of sessionIds) {
+                await deleteSession(sessionId)
+              }
+            })()
             setDeleteTarget(null)
           }}
         />

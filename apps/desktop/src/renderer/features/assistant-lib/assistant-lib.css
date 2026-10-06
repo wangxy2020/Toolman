@@ -197,9 +197,18 @@
   overflow: visible;
 }
 
+.tm-alib-lesson-plan-body:has(.tm-alib-lesson-plan-editor) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .tm-alib-lesson-plan-editor {
   display: block;
+  flex: 1 1 auto;
   width: 100%;
+  min-height: 280px;
+  max-height: 100%;
   margin: 0;
   padding: 0;
   border: none;
@@ -207,7 +216,7 @@
   background: transparent;
   box-shadow: none;
   resize: none;
-  overflow: hidden;
+  overflow: auto;
   color: var(--tm-text);
   font-size: 14px;
   font-family: inherit;

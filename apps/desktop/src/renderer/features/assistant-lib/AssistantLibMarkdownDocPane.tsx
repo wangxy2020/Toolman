@@ -58,7 +58,6 @@ export function AssistantLibMarkdownDocPane({
         {editing ? (
           <textarea
             className="tm-alib-lesson-plan-editor"
-            rows={Math.max(16, value.split('\n').length + 2)}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             aria-label={ariaLabel}

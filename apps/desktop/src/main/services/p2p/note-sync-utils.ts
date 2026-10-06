@@ -5,7 +5,8 @@ import {
 import type { P2pSharedResource } from '@toolman/shared'
 import { parseP2pNoteShareMetadata } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
-import { getNoteById, getNotesData, noteToMarkdown } from '../notes-data.service'
+import { getNoteById, getNotesData } from '../notes-data/storage'
+import { noteToMarkdown } from '../notes-data/search'
 
 export function getSharedResourceRepo(): P2pSharedResourceRepository {
   return new P2pSharedResourceRepository(getDatabase())

@@ -121,8 +121,8 @@ export async function ensureActiveAutomationChatSession(options: {
 }
 
 /**
- * Drop duplicate / leftover automation chat topics not linked to a workflow subtask.
- * Only removes clear ghosts: same title as a linked session, or unlinked「新子任务」.
+ * Drop automation chat topics that are not linked to a workflow task or subtask.
+ * The agent sidebar lists these sessions, so leftovers show as extra topics.
  */
 export async function pruneOrphanAutomationSessions(options: {
   automationAssistantId: string
@@ -130,7 +130,6 @@ export async function pruneOrphanAutomationSessions(options: {
   sessions: readonly Session[]
   deleteSession: (id: string) => Promise<unknown>
   activeSessionId?: string | null
-  defaultSubTaskTitles?: readonly string[]
 }): Promise<number> {
   const {
     automationAssistantId,
@@ -138,22 +137,12 @@ export async function pruneOrphanAutomationSessions(options: {
     sessions,
     deleteSession,
     activeSessionId,
-    defaultSubTaskTitles = ['新子任务', 'New subtask'],
   } = options
-  const linkedTitles = new Set(
-    sessions
-      .filter((session) => linkedSessionIds.has(session.id))
-      .map((session) => session.title.trim())
-      .filter(Boolean),
-  )
-  const defaultTitles = new Set(defaultSubTaskTitles.map((title) => title.trim()))
   const orphans = sessions.filter((session) => {
     if (session.assistantId !== automationAssistantId) return false
     if (linkedSessionIds.has(session.id)) return false
     if (session.id === activeSessionId) return false
-    const title = session.title.trim()
-    if (linkedTitles.has(title)) return true
-    return defaultTitles.has(title)
+    return true
   })
   for (const session of orphans) {
     await deleteSession(session.id)

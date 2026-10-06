@@ -6,13 +6,14 @@ import {
   identities,
   type AuthBindingMetadata,
 } from '@toolman/db'
-import type { AuthProvider, AuthRegion, AuthSession } from '@toolman/shared'
+import { toErrorMessage, type AuthProvider, type AuthRegion, type AuthSession } from '@toolman/shared'
 
 import { getDatabase } from '../../bootstrap/database'
 import { invalidateHubTokenCache } from '../community/community-hub-auth.service'
 import { encryptSecret } from '../secret-store'
 import { getAuthSession } from '../auth-session.service'
 import { getLocalIdentityId } from '../local-identity'
+import { logStructured } from '../structured-log.service'
 import { bindP2pDeviceToIdentity, refreshP2pDeviceIdentityBinding } from '../p2p/p2p-device-identity.service'
 import { AuthLoginError } from './auth-login.error.js'
 import { applyDocumentsFolderSlugAccountSync, bootstrapToolmanUserDocumentLayout } from '../knowledge-folder.service'
@@ -112,8 +113,27 @@ export function persistAuthLogin(input: PersistAuthLoginInput): AuthSession {
   invalidateHubTokenCache()
   bindP2pDeviceToIdentity(identityId)
   const session = getAuthSession()
-  if (applyDocumentsFolderSlugAccountSync()) {
-    bootstrapToolmanUserDocumentLayout()
+  let switchedAccount = false
+  try {
+    switchedAccount = applyDocumentsFolderSlugAccountSync()
+  } catch (error) {
+    switchedAccount = true
+    logStructured(
+      'auth',
+      'error',
+      `account folder sync skipped: ${toErrorMessage(error, String(error))}`,
+    )
+  }
+  if (switchedAccount) {
+    try {
+      bootstrapToolmanUserDocumentLayout()
+    } catch (error) {
+      logStructured(
+        'auth',
+        'error',
+        `account folder layout skipped: ${toErrorMessage(error, String(error))}`,
+      )
+    }
   }
   return session
 }

@@ -95,15 +95,29 @@ export const TOOLMAN_USER_DOCUMENT_SUBFOLDERS = [
   '本地文件',
 ] as const
 
-/** Create the active user document root and standard subfolders (never the alternate root). */
-export function ensureToolmanUserDocumentFolders(): string {
+/** Knowledge roots that always contain a 默认文件夹, including 同步知识库. */
+export const TOOLMAN_DEFAULT_FOLDER_PARENTS = [
+  '本地知识库',
+  '网络知识库',
+  '同步知识库',
+  '本地文件',
+] as const
+
+export function ensureToolmanUserDocumentFoldersAt(root: string): string {
   ensureDirectoryExists(getToolmanDocumentsRootPath())
-  const root = getToolmanUserRootPath()
   ensureDirectoryExists(root)
   for (const subfolder of TOOLMAN_USER_DOCUMENT_SUBFOLDERS) {
     ensureDirectoryExists(join(root, subfolder))
   }
+  for (const parent of TOOLMAN_DEFAULT_FOLDER_PARENTS) {
+    ensureDirectoryExists(join(root, parent, '默认文件夹'))
+  }
   return root
+}
+
+/** Create the active user document root and standard subfolders (never the alternate root). */
+export function ensureToolmanUserDocumentFolders(): string {
+  return ensureToolmanUserDocumentFoldersAt(getToolmanUserRootPath())
 }
 
 export function normalizeFolderPath(path: string): string {
@@ -121,6 +135,18 @@ export function getUserFolderFromToolmanUserPath(path: string): string | null {
     return rest.slice(0, slashIndex)
   }
   return null
+}
+
+/** True for ~/Documents/ToolmanData/<账号> itself, not a folder inside it. */
+export function isToolmanAccountRootPath(path: string): boolean {
+  const normalized = normalizeFolderPath(path)
+  for (const root of listAllToolmanDocumentsRoots()) {
+    const normalizedRoot = normalizeFolderPath(root)
+    if (!normalized.startsWith(`${normalizedRoot}/`)) continue
+    const rest = normalized.slice(normalizedRoot.length + 1)
+    if (rest.length > 0 && !rest.includes('/')) return true
+  }
+  return false
 }
 
 export function isStoredPathUnderDifferentUserFolder(

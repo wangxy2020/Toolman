@@ -54,9 +54,12 @@ export function useDataSettingsPanel() {
   const handleBackup = async (t: TranslateFn) => {
     setBusy(true)
     setMessage(null)
-    const notesData = loadNotesData()
+    const notesLoad = await window.api.invoke(IpcChannel.NotesDataLoad, {})
+    const notesDataJson = notesLoad.ok
+      ? (notesLoad.data as { dataJson: string }).dataJson
+      : JSON.stringify(loadNotesData())
     const result = await window.api.invoke(IpcChannel.AppBackupData, {
-      notesDataJson: JSON.stringify(notesData),
+      notesDataJson,
     })
     setBusy(false)
     if (!result.ok) {

@@ -6,7 +6,7 @@ import { parseTranslationDocumentPages } from '../../../services/translation-doc
 import { renderTranslationDocumentPage } from '../../../services/translation-document-render.service'
 import { stageChatAttachments } from '../../../services/chat-attachment-stage.service'
 import { exportNotesSyncFile, importNotesAttachment } from '../../../services/notes-files.service'
-import { ingestNotesToKnowledgeBase, getNoteById, getNotesDataJson, syncNotesData } from '../../../services/notes-data.service'
+import { ingestNotesToKnowledgeBase, getNoteById, getBoundNotesAccountSlug, getNotesDataJson, syncNotesData } from '../../../services/notes-data.service'
 import { agentIpcHandlers } from '../../agent-ipc-handlers'
 import { taskIpcHandlers } from '../../task-ipc-handlers'
 import type { HandlerFn } from './types'
@@ -24,7 +24,8 @@ export const dialogNotesIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
   [IpcChannel.NotesAttachmentImport]: async (input) => importNotesAttachment(input),
   [IpcChannel.NotesSyncExport]: async (input) => exportNotesSyncFile(input),
   [IpcChannel.NotesDataSync]: async (input) => ipcOk(syncNotesData(input)),
-  [IpcChannel.NotesDataLoad]: async () => ipcOk({ dataJson: getNotesDataJson() }),
+  [IpcChannel.NotesDataLoad]: async () =>
+    ipcOk({ dataJson: getNotesDataJson(), accountSlug: getBoundNotesAccountSlug() }),
   [IpcChannel.NotesGetById]: async (input) => {
     const noteId = typeof (input as { noteId?: unknown }).noteId === 'string'
       ? (input as { noteId: string }).noteId

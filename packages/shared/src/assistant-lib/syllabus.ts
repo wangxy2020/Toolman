@@ -88,6 +88,64 @@ export function formatSyllabusMarkdown(syllabus: CourseSyllabus): string {
   return lines.join('\n').trim()
 }
 
+const CHAPTER_HEADING = /^##\s+(\d+)\.\s+(.+)$/
+const CHAPTER_STATUS_SUFFIX = /\s*·\s*[^\s·]+$/
+const CHAPTER_HOURS_SUFFIX = /（[^）]*课时[^）]*）/g
+const CHAPTER_BULLET = /[●⚫⬤•]/g
+
+/** Sidebar chapter label: one leading hyphen, without the filled bullet. */
+export function formatClassroomChapterLabel(title: string): string {
+  const cleaned = title.replace(CHAPTER_BULLET, ' ').replace(/\s+/g, ' ').trim()
+  const body = cleaned.replace(/^[-–—]\s*/, '').trim()
+  return body ? `- ${body}` : '-'
+}
+
+export function chapterTitleFromSyllabusHeading(headingBody: string): string {
+  return headingBody
+    .replace(CHAPTER_HOURS_SUFFIX, '')
+    .replace(CHAPTER_STATUS_SUFFIX, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Copy `## n. title` lines back onto the syllabus.
+ * A renamed heading updates that chapter. A removed heading drops that chapter.
+ * Markdown with no numbered headings leaves the syllabus unchanged.
+ */
+export function applySyllabusTitlesFromMarkdown(
+  syllabus: CourseSyllabus,
+  markdown: string,
+): CourseSyllabus {
+  const titles = new Map<number, string>()
+  for (const line of markdown.split('\n')) {
+    const match = CHAPTER_HEADING.exec(line.trim())
+    if (!match) continue
+    const index = Number(match[1])
+    const title = chapterTitleFromSyllabusHeading(match[2] ?? '')
+    if (!Number.isInteger(index) || index < 1 || !title) continue
+    titles.set(index, title)
+  }
+  if (titles.size === 0) return syllabus
+  let changed = false
+  const chapters: CourseSyllabusChapter[] = []
+  for (const [index, chapter] of syllabus.chapters.entries()) {
+    const next = titles.get(index + 1)
+    if (!next) {
+      changed = true
+      continue
+    }
+    if (next === chapter.title) {
+      chapters.push(chapter)
+      continue
+    }
+    changed = true
+    chapters.push({ ...chapter, title: next })
+  }
+  if (!changed) return syllabus
+  return { ...syllabus, chapters, updatedAt: Date.now() }
+}
+
 export function seedSyllabusFromCatalog(
   entries: Array<{ id: string; title: string }>,
 ): CourseSyllabus {

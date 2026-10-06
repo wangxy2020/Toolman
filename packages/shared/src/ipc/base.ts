@@ -113,6 +113,14 @@ export const AppPrintWindowOutputSchema = z.object({
   error: z.string().optional(),
 })
 
+export const AppSetWindowChromeInputSchema = z.object({
+  theme: z.enum(['light', 'dark']),
+})
+
+export const AppSetWindowChromeOutputSchema = z.object({
+  applied: z.boolean(),
+})
+
 export const AppGetStorageStatsOutputSchema = z.object({
   cacheBytes: z.number().int().nonnegative(),
   userData: z.string(),

@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import { NotesDataSyncInputSchema } from '@toolman/shared'
 import { logStructured } from '../structured-log.service'
@@ -14,9 +14,106 @@ import { publishNoteDeleteSyncChange, publishNoteSyncChange } from '../mobile-sy
 import { reconcileNotesDataGroupPlacement } from './reconcile-group-placement'
 import type { NoteItem, NotesData } from './types'
 
-const NOTES_DATA_PATH = () => join(app.getPath('userData'), 'notes-data.json')
+const LEGACY_NOTES_FILE = 'notes-data.json'
 
+let boundSlug: string | null = null
+let cacheSlug: string | null = null
+let cacheReady = false
 let cachedData: NotesData = { notebooks: [], notes: [], syncFolderPath: null, deletedNotes: [] }
+
+function legacyNotesPath(): string {
+  return join(app.getPath('userData'), LEGACY_NOTES_FILE)
+}
+
+export function notesDataPathForSlug(slug: string): string {
+  return join(app.getPath('userData'), 'notes-by-account', `${slug}.json`)
+}
+
+function notesDataPath(): string {
+  if (boundSlug) return notesDataPathForSlug(boundSlug)
+  return legacyNotesPath()
+}
+
+function flushNotesCache(): void {
+  if (!boundSlug || cacheSlug !== boundSlug) return
+  const path = notesDataPathForSlug(boundSlug)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(cachedData), 'utf8')
+}
+
+/** Point notes at one login. The legacy notes-data.json is adopted only by the account that already owned it. */
+export function bindNotesDataAccount(slug: string, options?: { adoptLegacy?: boolean }): void {
+  const nextSlug = slug.trim()
+  const adopting = Boolean(options?.adoptLegacy)
+  if (!nextSlug) return
+  if (boundSlug === nextSlug && !adopting && cacheReady && cacheSlug === nextSlug) {
+    dropNotesCopiedFromOlderAccounts()
+    return
+  }
+  if (boundSlug && boundSlug !== nextSlug) flushNotesCache()
+  if (boundSlug === nextSlug && adopting) flushNotesCache()
+
+  boundSlug = nextSlug
+  const target = notesDataPathForSlug(nextSlug)
+  if (adopting && !existsSync(target)) {
+    const legacy = legacyNotesPath()
+    if (existsSync(legacy)) {
+      mkdirSync(dirname(target), { recursive: true })
+      renameSync(legacy, target)
+    }
+  }
+  cachedData = reconcileNotesDataGroupPlacement(loadFromDisk())
+  cacheSlug = nextSlug
+  cacheReady = true
+  dropNotesCopiedFromOlderAccounts()
+}
+
+function noteIdsInAccountFile(path: string): Set<string> {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { notes?: Array<{ id?: unknown }> }
+    const ids = new Set<string>()
+    if (!Array.isArray(parsed.notes)) return ids
+    for (const note of parsed.notes) {
+      if (note && typeof note.id === 'string' && note.id) ids.add(note.id)
+    }
+    return ids
+  } catch {
+    return new Set()
+  }
+}
+
+/** A newer account file that only repeats an older account's notes is a switch-time copy. */
+function dropNotesCopiedFromOlderAccounts(): void {
+  if (!boundSlug || cacheSlug !== boundSlug) return
+  const minePath = notesDataPathForSlug(boundSlug)
+  if (!existsSync(minePath)) return
+  const mineMtime = statSync(minePath).mtimeMs
+  const dir = dirname(minePath)
+  if (!existsSync(dir)) return
+  const olderIds = new Set<string>()
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.json') || name === `${boundSlug}.json`) continue
+    const path = join(dir, name)
+    if (statSync(path).mtimeMs >= mineMtime) continue
+    for (const id of noteIdsInAccountFile(path)) olderIds.add(id)
+  }
+  if (olderIds.size === 0) return
+  const notes = cachedData.notes.filter((note) => !olderIds.has(note.id))
+  if (notes.length === cachedData.notes.length) return
+  const removed = cachedData.notes.length - notes.length
+  const notebookIds = new Set(notes.map((note) => note.notebookId))
+  cachedData = {
+    ...cachedData,
+    notes,
+    notebooks: cachedData.notebooks.filter((notebook) => notebookIds.has(notebook.id)),
+  }
+  flushNotesCache()
+  logStructured('notes', 'info', `removed ${removed} notes copied from an older account for ${boundSlug}`)
+}
+
+export function getBoundNotesAccountSlug(): string {
+  return boundSlug ?? ''
+}
 
 function createEmptyData(): NotesData {
   return { notebooks: [], notes: [], syncFolderPath: null, deletedNotes: [] }
@@ -44,7 +141,7 @@ function rememberTombstone(
 }
 
 function loadFromDisk(): NotesData {
-  const path = NOTES_DATA_PATH()
+  const path = notesDataPath()
   if (!existsSync(path)) return createEmptyData()
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<NotesData>
@@ -61,8 +158,10 @@ function loadFromDisk(): NotesData {
 }
 
 export function getNotesData(): NotesData {
-  if (cachedData.notes.length === 0 && cachedData.notebooks.length === 0) {
+  if (!cacheReady || cacheSlug !== boundSlug) {
     cachedData = reconcileNotesDataGroupPlacement(loadFromDisk())
+    cacheSlug = boundSlug
+    cacheReady = true
   }
   return cachedData
 }
@@ -101,7 +200,10 @@ export function syncNotesData(input: unknown): { synced: boolean } {
       syncFolderPath: parsed.syncFolderPath ?? null,
       deletedNotes: Array.from(tombstones.entries()).map(([id, deletedAt]) => ({ id, deletedAt })),
     })
-    writeFileSync(NOTES_DATA_PATH(), JSON.stringify(cachedData), 'utf8')
+    cacheSlug = boundSlug
+    cacheReady = true
+    writeFileSync(notesDataPath(), JSON.stringify(cachedData), 'utf8')
+    dropNotesCopiedFromOlderAccounts()
     publishNotesForMobileSync(cachedData.notes)
     return { synced: true }
   } catch {
@@ -162,7 +264,9 @@ export function upsertNoteItem(
   nextData = reconcileNotesDataGroupPlacement(nextData)
 
   cachedData = nextData
-  writeFileSync(NOTES_DATA_PATH(), JSON.stringify(cachedData), 'utf8')
+  cacheSlug = boundSlug
+  cacheReady = true
+  writeFileSync(notesDataPath(), JSON.stringify(cachedData), 'utf8')
   if (!options?.skipSyncPublish) {
     publishNotesForMobileSync([nextNote])
   }
@@ -180,7 +284,9 @@ export function deleteNoteItem(
     notes: nextNotes,
     deletedNotes: rememberTombstone(data.deletedNotes ?? [], noteId, deletedAt),
   }
-  writeFileSync(NOTES_DATA_PATH(), JSON.stringify(cachedData), 'utf8')
+  cacheSlug = boundSlug
+  cacheReady = true
+  writeFileSync(notesDataPath(), JSON.stringify(cachedData), 'utf8')
   if (!options?.skipSyncPublish) {
     publishNoteDeleteSyncChange(noteId, deletedAt)
   }

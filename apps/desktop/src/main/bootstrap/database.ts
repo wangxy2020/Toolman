@@ -102,6 +102,15 @@ export function bootstrapDatabase(): void {
     const message = toErrorMessage(error, String(error))
     logStructured('knowledge', 'error', `folder bootstrap failed: ${message}`)
   }
+  try {
+    ensureAssistantLibGuideClassroomSeed()
+  } catch (error) {
+    logStructured(
+      'classroom',
+      'warn',
+      `guide course seed skipped: ${toErrorMessage(error, String(error))}`,
+    )
+  }
   void migrateAllLegacyGroupSavedKnowledgeBases()
     .then((result) => {
       if (result.migratedKbCount > 0 || result.upgradedKbCount > 0 || result.recoveredDocCount > 0) {

@@ -22,7 +22,7 @@ export {
   type NotesData,
 } from './notes-storage-types'
 
-function createDefaultData(): NotesData {
+export function createDefaultData(): NotesData {
   return {
     notebooks: [{ id: DEFAULT_NOTEBOOK_ID, name: '默认笔记本', isDefault: true }],
     notes: [],
@@ -185,9 +185,33 @@ export function mergeNotesData(local: NotesData, remote: NotesData): NotesData {
   })
 }
 
+let activeNotesAccountSlug: string | null = null
+
+export function notesStorageKeyForSlug(slug: string): string {
+  return `${NOTES_STORAGE_KEY}:${slug}`
+}
+
+export function activateNotesAccount(slug: string): void {
+  const next = slug.trim()
+  activeNotesAccountSlug = next || null
+}
+
+export function hasScopedNotesCache(slug: string): boolean {
+  const next = slug.trim()
+  if (!next) return false
+  return localStorage.getItem(notesStorageKeyForSlug(next)) != null
+}
+
+function currentNotesStorageKey(): string | null {
+  if (!activeNotesAccountSlug) return null
+  return notesStorageKeyForSlug(activeNotesAccountSlug)
+}
+
 export function loadNotesData(): NotesData {
   try {
-    const raw = localStorage.getItem(NOTES_STORAGE_KEY)
+    const key = currentNotesStorageKey()
+    if (!key) return createDefaultData()
+    const raw = localStorage.getItem(key)
     if (!raw) return createDefaultData()
     return normalizeData(JSON.parse(raw) as Partial<NotesData>)
   } catch {
@@ -196,7 +220,8 @@ export function loadNotesData(): NotesData {
 }
 
 export function saveNotesData(data: NotesData): void {
-  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(data))
+  const key = currentNotesStorageKey()
+  if (key) localStorage.setItem(key, JSON.stringify(data))
   void syncNotesDataToMain(data)
 }
 

@@ -1,0 +1,80 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 2b01b22c9a5d394d5a4c956d9cd83469d05c1c5b..f1a380a2c9b7722add1fe2f4dd1d93afaa987405 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs	
+@@ -150,9 +150,16 @@ function* splitTextByByteLength(text, byteLength) {
+     yield Buffer.from(remainingChunk, "utf-8");
+   }
+ }
++function ssmlLangFromVoice(voice) {
++  const full = /Speech Text to Speech Voice \(([a-zA-Z]{2,}-[a-zA-Z]{2,})/.exec(voice || "");
++  if (full) return full[1];
++  const short = /^([a-z]{2,}-[A-Z]{2,})-/.exec(voice || "");
++  if (short) return short[1];
++  return "zh-CN";
++}
+ function mkssml(tc, escapedText) {
+   const text = Buffer.isBuffer(escapedText) ? escapedText.toString("utf-8") : escapedText;
+-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
++  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${ssmlLangFromVoice(tc.voice)}'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
+ }
+ function dateToString() {
+   return (/* @__PURE__ */ new Date()).toUTCString().replace("GMT", "GMT+0000 (Coordinated Universal Time)");
+@@ -832,7 +839,7 @@ function removeIncompatibleCharacters2(str) {
+ }
+ function mkssml2(tc, escapedText) {
+   const text = escapedText instanceof Uint8Array ? new TextDecoder().decode(escapedText) : escapedText;
+-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
++  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${ssmlLangFromVoice(tc.voice)}'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
+ }
+ function splitTextByByteLength2(text, byteLength) {
+   const encoder = new TextEncoder();
+@@ -1630,7 +1637,7 @@ ${JSON.stringify(config)}`;
+    * Creates the SSML (Speech Synthesis Markup Language) message.
+    */
+   createSSML() {
+-    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
++    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${ssmlLangFromVoice(this.voice)}'>
+       <voice name='${this.voice}'>
+         <prosody pitch='${this.pitch}' rate='${this.rate}' volume='${this.volume}'>
+           ${this.escapeXml(this.text)}
+diff --git a/dist/index.js b/dist/index.js
+index 57650af17b7c3a513c2e770dde9ede5168a9fce6..bddc114d3af84ab486facf5183fd6b83854897fd 100644
+--- a/dist/index.js
++++ b/dist/index.js	
+@@ -142,9 +142,16 @@ function* splitTextByByteLength(text, byteLength) {
+     yield Buffer.from(remainingChunk, "utf-8");
+   }
+ }
++function ssmlLangFromVoice(voice) {
++  const full = /Speech Text to Speech Voice \(([a-zA-Z]{2,}-[a-zA-Z]{2,})/.exec(voice || "");
++  if (full) return full[1];
++  const short = /^([a-z]{2,}-[A-Z]{2,})-/.exec(voice || "");
++  if (short) return short[1];
++  return "zh-CN";
++}
+ function mkssml(tc, escapedText) {
+   const text = Buffer.isBuffer(escapedText) ? escapedText.toString("utf-8") : escapedText;
+-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
++  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${ssmlLangFromVoice(tc.voice)}'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
+ }
+ function dateToString() {
+   return (/* @__PURE__ */ new Date()).toUTCString().replace("GMT", "GMT+0000 (Coordinated Universal Time)");
+@@ -824,7 +831,7 @@ function removeIncompatibleCharacters2(str) {
+ }
+ function mkssml2(tc, escapedText) {
+   const text = escapedText instanceof Uint8Array ? new TextDecoder().decode(escapedText) : escapedText;
+-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
++  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${ssmlLangFromVoice(tc.voice)}'><voice name='${tc.voice}'><prosody pitch='${tc.pitch}' rate='${tc.rate}' volume='${tc.volume}'>${text}</prosody></voice></speak>`;
+ }
+ function splitTextByByteLength2(text, byteLength) {
+   const encoder = new TextEncoder();
+@@ -1622,7 +1629,7 @@ ${JSON.stringify(config)}`;
+    * Creates the SSML (Speech Synthesis Markup Language) message.
+    */
+   createSSML() {
+-    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
++    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${ssmlLangFromVoice(this.voice)}'>
+       <voice name='${this.voice}'>
+         <prosody pitch='${this.pitch}' rate='${this.rate}' volume='${this.volume}'>
+           ${this.escapeXml(this.text)}

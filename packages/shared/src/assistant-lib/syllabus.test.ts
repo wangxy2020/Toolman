@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   applySyllabusLearningProgress,
+  applySyllabusTitlesFromMarkdown,
   currentSyllabusChapterIndex,
+  formatClassroomChapterLabel,
   formatSyllabusMarkdown,
   isSyllabusChapterLocked,
   seedSyllabusFromCatalog,
@@ -80,5 +82,48 @@ describe('formatSyllabusMarkdown', () => {
     expect(markdown).toContain('第一章')
     expect(markdown).toContain('讲冲突')
     expect(markdown).toContain('冲突从哪来？')
+  })
+})
+
+describe('formatClassroomChapterLabel', () => {
+  it('drops the filled bullet and keeps a single hyphen', () => {
+    expect(formatClassroomChapterLabel('- ● 检验食品中的铁元素')).toBe('- 检验食品中的铁元素')
+    expect(formatClassroomChapterLabel('品中的铁元素')).toBe('- 品中的铁元素')
+    expect(formatClassroomChapterLabel('绪言')).toBe('- 绪言')
+  })
+})
+
+describe('applySyllabusTitlesFromMarkdown', () => {
+  it('renames a chapter from its heading and keeps the other chapters', () => {
+    const syllabus = sampleSyllabus()
+    const markdown = formatSyllabusMarkdown(syllabus).replace('第二章', '人物篇')
+    const next = applySyllabusTitlesFromMarkdown(syllabus, markdown)
+    expect(next.chapters).toHaveLength(2)
+    expect(next.chapters[0]?.title).toBe('第一章')
+    expect(next.chapters[1]?.title).toBe('人物篇')
+  })
+
+  it('drops a chapter whose heading was deleted and keeps the rest', () => {
+    const syllabus = sampleSyllabus()
+    syllabus.chapters.push({
+      id: 'c3',
+      title: '科技考古研究人员',
+      hours: 2,
+      lessonPlan: '重复章节',
+      assessmentQuestions: [],
+      status: 'ready',
+    })
+    const markdown = formatSyllabusMarkdown(syllabus).replace(
+      /\n## 3\. 科技考古研究人员[\s\S]*$/,
+      '',
+    )
+    const next = applySyllabusTitlesFromMarkdown(syllabus, markdown)
+    expect(next.chapters.map((chapter) => chapter.id)).toEqual(['c1', 'c2'])
+  })
+
+  it('keeps every chapter when the markdown has no numbered headings', () => {
+    const syllabus = sampleSyllabus()
+    const next = applySyllabusTitlesFromMarkdown(syllabus, '正在编辑，还没有章节标题')
+    expect(next.chapters).toHaveLength(2)
   })
 })

@@ -103,27 +103,27 @@ const ProjectCostTablePanel: FC<Props> = (props) => {
         .filter(Boolean)
         .join(' ')}
     >
-      <ProjectCostMenuBar
+        <ProjectCostMenuBar
         disabled={saving || state.fetching}
         showFetch
         fetching={state.fetching}
-        hasSelection={selectedId != null}
-        hasProject
-        canEdit={canEdit}
-        canUndo={canUndo}
-        canRedo={canRedo}
+          hasSelection={selectedId != null}
+          hasProject
+          canEdit={canEdit}
+          canUndo={canUndo}
+          canRedo={canRedo}
         showMetering={viewMenuVariant !== 'catalog'}
         viewMenuVariant={viewMenuVariant}
-        viewFilter={viewFilter}
+          viewFilter={viewFilter}
         onViewFilterChange={onViewFilterChange}
-        sectionFilter={sectionFilter}
+          sectionFilter={sectionFilter}
         onSectionFilterChange={onSectionFilterChange}
         databaseRowFilter={state.databaseRowFilter}
         onDatabaseRowFilterChange={onDatabaseRowFilterChange}
         subprojectOptions={state.subprojectOptions}
-        sectionalOptions={sectionalOptions}
-        versionSwitchEntries={versionSwitchEntries}
-        onRestoreVersion={handleRestoreVersion}
+          sectionalOptions={sectionalOptions}
+          versionSwitchEntries={versionSwitchEntries}
+          onRestoreVersion={handleRestoreVersion}
         meteringActive={showMeteringColumns}
         meteringBaselines={meteringBaselines}
         selectedMeteringBaselineId={selectedMeteringBaselineId}

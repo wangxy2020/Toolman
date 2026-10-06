@@ -6,6 +6,8 @@ import {
   AppGetPathsOutputSchema,
   AppPrintWindowInputSchema,
   AppPrintWindowOutputSchema,
+  AppSetWindowChromeInputSchema,
+  AppSetWindowChromeOutputSchema,
   AppProvenanceBeaconInputSchema,
   AppProvenanceBeaconOutputSchema,
   AppRestoreDataInputSchema,
@@ -26,6 +28,7 @@ import {
 } from '@toolman/shared'
 import { BrowserWindow } from 'electron'
 import { getAppInfo, getAppPaths } from '../../app'
+import { applyWindowsTitleBarOverlay } from '../../../index-window'
 import { syncRuntimeAppSettings } from '../../../services/runtime-app-settings.service'
 import {
   backupAppData,
@@ -240,6 +243,15 @@ export const appIpcHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
       )
     })
     return ipcOk(AppPrintWindowOutputSchema.parse({ printed }))
+  },
+
+  [IpcChannel.AppSetWindowChrome]: async (input) => {
+    const { theme } = AppSetWindowChromeInputSchema.parse(input)
+    return ipcOk(
+      AppSetWindowChromeOutputSchema.parse({
+        applied: applyWindowsTitleBarOverlay(theme),
+      }),
+    )
   },
 
   [IpcChannel.AppGetStorageStats]: async () => ipcOk(getStorageStats()),

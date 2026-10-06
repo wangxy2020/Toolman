@@ -58,7 +58,7 @@ export function AssistantLibPage(props: AssistantLibPageProps) {
         <div className="tm-chat-header-end">
           <AssistantLibToolbar
             activeView={panelView}
-            shareDisabled={!activeLearningSession}
+            shareDisabled
             classLive={classLive}
             classToggleDisabled={!activeLearningSession}
             onToggleClass={() => void handleToggleClass()}

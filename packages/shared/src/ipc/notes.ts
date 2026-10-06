@@ -36,6 +36,7 @@ export const NotesDataLoadInputSchema = z.object({})
 
 export const NotesDataLoadOutputSchema = z.object({
   dataJson: z.string(),
+  accountSlug: z.string().default(''),
 })
 
 export const NotesGetByIdInputSchema = z.object({

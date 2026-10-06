@@ -2,6 +2,7 @@ import { AuthLoginError, readAuthServiceErrorMessage } from './auth-login.error.
 import { isAuthingConfigured, isAuthingDevMode } from './authing-auth.config.js'
 import { formatAuthingServiceError } from './authing-error-utils.js'
 import { getAuthingClient } from './authing-client.service.js'
+import { getAuthingManagementClient } from './authing-management-client.service.js'
 import { assertMatchingPasswords, assertValidPasswordLength } from './authing-password-utils.js'
 import { assertAuthingRegisterAccountAvailable } from './authing-user-exists.service.js'
 import { maskCnAuthAccount, type ParsedCnAuthAccount } from './cn-account-utils.js'
@@ -18,6 +19,14 @@ function phoneDigits(phone: string): string {
 function formatRegisterError(error: unknown): string {
   const message = readAuthServiceErrorMessage(error)
   return formatAuthingServiceError(message, '注册失败，请重试')
+}
+
+async function setInitialPassword(userId: string | undefined, password: string): Promise<void> {
+  const management = getAuthingManagementClient()
+  if (!management || !userId) {
+    throw new AuthLoginError('邮箱注册需要配置用户池密钥（TOOLMAN_AUTHING_USER_POOL_SECRET）后才能设置登录密码')
+  }
+  await management.users.update(userId, { password })
 }
 
 export async function registerCnAccountWithOtp(
@@ -57,21 +66,23 @@ export async function registerCnAccountWithOtp(
     let user
     if (account.channel === 'email' && account.email) {
       user = await client.registerByEmailCode(account.email, code, undefined, { generateToken: true })
+      if (!user.token) {
+        throw new AuthLoginError('Authing 注册未返回 token')
+      }
+      client.setCurrentUser(user)
+      await setInitialPassword(user.id, password)
     } else if (account.channel === 'phone' && account.phone) {
-      user = await client.registerByPhoneCode(phoneDigits(account.phone), code, undefined, undefined, {
+      user = await client.registerByPhoneCode(phoneDigits(account.phone), code, password, undefined, {
         phoneCountryCode: phoneCountryCode(account.phone),
         generateToken: true,
       })
+      if (!user.token) {
+        throw new AuthLoginError('Authing 注册未返回 token')
+      }
+      client.setCurrentUser(user)
     } else {
       throw new AuthLoginError('请输入有效手机或邮箱')
     }
-
-    if (!user.token) {
-      throw new AuthLoginError('Authing 注册未返回 token')
-    }
-
-    client.setCurrentUser(user)
-    await client.updatePassword(password)
 
     const label =
       account.channel === 'email'

@@ -17,7 +17,10 @@ import {
 import { getWorkspace, listWorkspaces, updateWorkspace } from '../workspace.service'
 import { syncDocumentsFolderSlugWithAccount } from '../documents-folder-slug.service'
 import {
-  migrateToolmanUserFolderBetweenSlugs,
+  reconcileAccountDataScope,
+  switchAccountDataScope,
+} from '../account-data-scope.service'
+import {
   migrateToolmanUserFolderPaths,
   migrateToolmanUserFolderPathsForWorkspace,
 } from './migration'
@@ -36,8 +39,10 @@ export function applyDocumentsFolderSlugAccountSync(): boolean {
     sync.nextSlug &&
     sync.previousSlug !== sync.nextSlug
   ) {
-    migrateToolmanUserFolderBetweenSlugs(sync.previousSlug, sync.nextSlug)
+    switchAccountDataScope(sync.previousSlug, sync.nextSlug)
+    return true
   }
+  reconcileAccountDataScope()
   return sync.changed
 }
 
@@ -46,7 +51,12 @@ export function bootstrapToolmanUserDocumentLayout(): {
   migratedWorkspaces: number
   userRoot: string
 } {
-  applyDocumentsFolderSlugAccountSync()
+  try {
+    applyDocumentsFolderSlugAccountSync()
+  } catch (error) {
+    const message = toErrorMessage(error, String(error))
+    logStructured('knowledge', 'warn', `account folder sync skipped: ${message}`)
+  }
 
   const userRoot = ensureToolmanUserDocumentFolders()
   const migratedWorkspaces = migrateToolmanUserFolderPaths()

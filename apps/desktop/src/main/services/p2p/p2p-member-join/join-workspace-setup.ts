@@ -12,6 +12,7 @@ import {
   membershipFromIdentitySibling,
 } from '../p2p-member-shared'
 import type { decodeInviteToken } from '../p2p-invite.token'
+import { assignGroupToCurrentAccount } from '../../account-group-scope'
 
 type InvitePayload = ReturnType<typeof decodeInviteToken>
 
@@ -142,7 +143,7 @@ export function ensureWorkspaceFromInvite(payload: InvitePayload): P2pWorkspaceR
   const workspaceRepo = getWorkspaceRepo()
   let workspace = workspaceRepo.findById(payload.workspaceId)
   if (!workspace) {
-    return workspaceRepo.create({
+    const created = workspaceRepo.create({
       id: payload.workspaceId,
       name: payload.workspaceName,
       description: payload.workspaceDescription ?? undefined,
@@ -150,6 +151,8 @@ export function ensureWorkspaceFromInvite(payload: InvitePayload): P2pWorkspaceR
       ownerIdentityId: payload.ownerIdentityId,
       workspaceKeyHash: hashWorkspaceKey(payload.workspaceKeyB64),
     })
+    assignGroupToCurrentAccount(created.id)
+    return created
   }
 
   const nextName = workspace.name.trim() ? workspace.name : payload.workspaceName

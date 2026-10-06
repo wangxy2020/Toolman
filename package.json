@@ -105,7 +105,8 @@
       ]
     },
     "patchedDependencies": {
-      "lazystream@1.0.1": "patches/lazystream@1.0.1.patch"
+      "lazystream@1.0.1": "patches/lazystream@1.0.1.patch",
+      "edge-tts-universal@1.4.0": "patches/edge-tts-universal@1.4.0.patch"
     }
   }
 }

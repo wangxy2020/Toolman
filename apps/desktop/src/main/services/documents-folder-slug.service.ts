@@ -198,8 +198,8 @@ export function getDocumentsFolderSlugRecord(): DocumentsFolderSlugRecord {
     return expected
   }
 
-  // Slug changes are persisted only via syncDocumentsFolderSlugWithAccount;
-  // folder migration runs in applyDocumentsFolderSlugAccountSync (knowledge-folder.service).
+  // Slug changes are persisted only via syncDocumentsFolderSlugWithAccount.
+  // Each login keeps its own ToolmanData folder and workspace.
   if (persisted.slug !== expected.slug || persisted.source !== expected.source) {
     return expected
   }

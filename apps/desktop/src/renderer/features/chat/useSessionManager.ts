@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { IpcChannel, type Session } from '@toolman/shared'
 
 const lastSessionKey = (workspaceId: string) => `toolman:last-session-${workspaceId}`
@@ -12,15 +12,18 @@ export function useSessionManager(
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [initialized, setInitialized] = useState(false)
+  const loadSessionsRequest = useRef(0)
 
   const loadSessions = useCallback(async () => {
     if (!workspaceId) return [] as Session[]
 
+    const requestId = ++loadSessionsRequest.current
     setLoading(true)
     const result = await window.api.invoke(IpcChannel.SessionList, {
       workspaceId,
       pagination: { limit: 50 },
     })
+    if (requestId !== loadSessionsRequest.current) return [] as Session[]
     setLoading(false)
 
     if (!result.ok) {
@@ -88,8 +91,11 @@ export function useSessionManager(
         return null
       }
 
-      const remaining = sessions.filter((s) => s.id !== sessionId)
-      setSessions(remaining)
+      let remaining: Session[] = []
+      setSessions((prev) => {
+        remaining = prev.filter((item) => item.id !== sessionId)
+        return remaining
+      })
 
       if (activeSessionId !== sessionId) {
         return { deletedId: sessionId, nextSessionId: activeSessionId }
@@ -104,7 +110,7 @@ export function useSessionManager(
       const created = await createSession()
       return { deletedId: sessionId, nextSessionId: created?.id ?? null }
     },
-    [sessions, activeSessionId, createSession],
+    [activeSessionId, createSession],
   )
 
   useEffect(() => {

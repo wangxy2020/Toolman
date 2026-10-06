@@ -9,10 +9,10 @@ import { fetchGroupNotePlacements } from './fetch-group-note-placements'
 import { reconcileGroupSharedNotesInData } from './notes-group-placement'
 import { resolveNotesWorkingDirectory } from './notes-path-utils'
 import {
+  activateNotesAccount,
+  createDefaultData,
   DEFAULT_NOTEBOOK_ID,
   getFirstNoteInNotebook,
-  loadNotesData,
-  mergeNotesData,
   normalizeData,
   normalizeNote,
   saveNotesData,
@@ -30,19 +30,17 @@ type UseNotesSyncParams = {
   importNotesBackup: (raw: string) => void
 }
 
-async function mergeNotesFromMain(localData: NotesData): Promise<NotesData> {
+async function loadAccountNotes(): Promise<NotesData> {
   const loadResult = await window.api.invoke(IpcChannel.NotesDataLoad, {})
-  let nextData = localData
-  if (loadResult.ok) {
-    const payload = loadResult.data as { dataJson: string }
-    try {
-      const mainData = normalizeData(JSON.parse(payload.dataJson) as Partial<NotesData>)
-      nextData = mergeNotesData(localData, mainData)
-    } catch {
-      nextData = localData
-    }
+  if (!loadResult.ok) return createDefaultData()
+  const payload = loadResult.data as { dataJson: string; accountSlug?: string }
+  const slug = payload.accountSlug?.trim() ?? ''
+  if (slug) activateNotesAccount(slug)
+  try {
+    return normalizeData(JSON.parse(payload.dataJson) as Partial<NotesData>)
+  } catch {
+    return createDefaultData()
   }
-  return nextData
 }
 
 async function reconcileNotesPlacement(data: NotesData): Promise<NotesData> {
@@ -79,8 +77,7 @@ export function useNotesSync({
 
       if (event.eventType === 'Shared' || event.eventType === 'Created') {
         void (async () => {
-          const localData = loadNotesData()
-          let nextData = await mergeNotesFromMain(localData)
+          let nextData = await loadAccountNotes()
           nextData = await reconcileNotesPlacement(nextData)
           nextData = await syncAndReloadNotes(nextData)
           setData(nextData)
@@ -187,10 +184,7 @@ export function useNotesSync({
     let cancelled = false
 
     void (async () => {
-      const localData = loadNotesData()
-      if (cancelled) return
-
-      let nextData = await mergeNotesFromMain(localData)
+      let nextData = await loadAccountNotes()
       nextData = await reconcileNotesPlacement(nextData)
       nextData = await syncAndReloadNotes(nextData)
       if (cancelled) return
@@ -222,8 +216,7 @@ export function useNotesSync({
   useEffect(() => {
     const reloadFromMain = () => {
       void (async () => {
-        const localData = loadNotesData()
-        let nextData = await mergeNotesFromMain(localData)
+        let nextData = await loadAccountNotes()
         nextData = await reconcileNotesPlacement(nextData)
         nextData = await syncAndReloadNotes(nextData)
         setData(nextData)

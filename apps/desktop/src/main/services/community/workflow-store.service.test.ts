@@ -3,9 +3,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  adoptLegacyWorkflowsForSlug,
+  bindWorkflowAccount,
   deleteStoredWorkflow,
   getStoredWorkflow,
   listStoredWorkflows,
+  resetWorkflowAccountBindingForTests,
   upsertStoredWorkflow,
 } from './workflow-store.service'
 
@@ -20,6 +23,7 @@ vi.mock('electron', () => ({
 describe('workflow-store.service', () => {
   beforeEach(() => {
     mkdirSync(tempRoot, { recursive: true })
+    resetWorkflowAccountBindingForTests()
   })
 
   afterEach(() => {
@@ -77,5 +81,21 @@ describe('workflow-store.service', () => {
     expect(deleteStoredWorkflow('parent-task')).toBe(true)
     expect(getStoredWorkflow('parent-task')).toBeNull()
     expect(getStoredWorkflow('child-task')).toBeNull()
+  })
+
+  it('keeps another account from reading the previous account workflows', () => {
+    upsertStoredWorkflow({
+      id: 'parent-task',
+      name: 'Parent',
+      engine: 'langgraph',
+      graphPath: 'workflow.json',
+      graph: { nodes: [], edges: [] },
+    })
+    bindWorkflowAccount('wangxq2008')
+    expect(listStoredWorkflows()).toHaveLength(0)
+    resetWorkflowAccountBindingForTests()
+    adoptLegacyWorkflowsForSlug('wxymale')
+    bindWorkflowAccount('wxymale')
+    expect(listStoredWorkflows().map((item) => item.id)).toEqual(['parent-task'])
   })
 })

@@ -1,3 +1,5 @@
+import { IpcChannel } from '@toolman/shared'
+
 import type { AppSettings } from './app-settings'
 
 function resolveTheme(theme: AppSettings['theme']): 'light' | 'dark' {
@@ -43,6 +45,11 @@ export function applyDisplaySettings(settings: AppSettings): void {
   root.classList.remove('tm-font-serif', 'tm-font-mono')
   if (settings.fontFamily === 'serif') root.classList.add('tm-font-serif')
   if (settings.fontFamily === 'mono') root.classList.add('tm-font-mono')
+
+  // Windows caption buttons are a native overlay; CSS theme classes do not paint them.
+  void window.api
+    ?.invoke(IpcChannel.AppSetWindowChrome, { theme: resolved })
+    .catch(() => {})
 }
 
 export function watchSystemTheme(onChange: () => void): () => void {

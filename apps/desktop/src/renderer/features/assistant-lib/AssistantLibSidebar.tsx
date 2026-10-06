@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   findAssistantLibGuideCourseSession,
+  formatClassroomChapterLabel,
   isSyllabusChapterLocked,
   looksLikeAssistantLibDefaultClassroom,
   looksLikeAssistantLibGuideCourse,
@@ -240,7 +241,7 @@ export function AssistantLibSidebar({
                             title={
                               locked
                                 ? t('assistantLibPage.records.chapterLocked')
-                                : chapter.title
+                                : formatClassroomChapterLabel(chapter.label)
                             }
                             onClick={() => {
                               if (locked) return
@@ -255,7 +256,9 @@ export function AssistantLibSidebar({
                             <span className="tm-session-item-icon" aria-hidden="true">
                               <IconTopic size={14} />
                             </span>
-                            <span className="tm-session-item-label">{chapter.label}</span>
+                            <span className="tm-session-item-label">
+                              {formatClassroomChapterLabel(chapter.label)}
+                            </span>
                           </button>
                         )
                       })

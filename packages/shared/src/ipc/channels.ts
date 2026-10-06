@@ -5,6 +5,8 @@ export enum IpcChannel {
   AppShellRevealPath = 'app:shell:reveal-path',
   /** Open system print dialog (defaults to landscape for Gantt / PDF). */
   AppPrintWindow = 'app:window:print',
+  /** Sync Windows caption buttons (min / max / close) to the in-app theme. */
+  AppSetWindowChrome = 'app:window:chrome',
   AppGetStorageStats = 'app:storage:stats',
   AppGetDiagnostics = 'app:diagnostics:get',
   MobileSyncSetEnabled = 'mobile:sync:set-enabled',

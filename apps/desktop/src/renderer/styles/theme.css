@@ -1785,6 +1785,40 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   transform: translateX(-50%) translateY(0);
 }
 
+.tm-input-tool[aria-label]::after,
+.tm-input-resize-handle[aria-label]::after,
+.tm-input-toolbar .tm-header-icon-tooltip-wrap[data-tooltip]::after {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+}
+
+.tm-input-tool[aria-label]:hover::after,
+.tm-input-tool[aria-label]:focus-visible::after,
+.tm-input-resize-handle[aria-label]:hover::after,
+.tm-input-resize-handle[aria-label]:focus-visible::after,
+.tm-input-toolbar .tm-header-icon-tooltip-wrap[data-tooltip]:hover::after,
+.tm-input-toolbar .tm-header-icon-tooltip-wrap[data-tooltip]:focus-within::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+.tm-input-toolbar > .tm-input-tool:first-child[aria-label]::after,
+.tm-input-toolbar > .tm-header-icon-tooltip-wrap:first-child[data-tooltip]::after {
+  left: 0;
+  transform: translateX(0) translateY(4px);
+}
+
+.tm-input-toolbar > .tm-input-tool:first-child[aria-label]:hover::after,
+.tm-input-toolbar > .tm-input-tool:first-child[aria-label]:focus-visible::after,
+.tm-input-toolbar > .tm-header-icon-tooltip-wrap:first-child[data-tooltip]:hover::after,
+.tm-input-toolbar > .tm-header-icon-tooltip-wrap:first-child[data-tooltip]:focus-within::after {
+  transform: translateX(0) translateY(0);
+}
+
+.tm-header-icon-tooltip-wrap > .tm-input-tool[aria-label]::after {
+  content: none;
+}
+
 .tm-header-icon-tooltip-wrap {
   position: relative;
   display: inline-flex;
@@ -10226,6 +10260,8 @@ html.theme-dark .tm-dedup-error {
 
 /* Input area */
 .tm-input-area {
+  position: relative;
+  z-index: 2;
   padding: 12px 24px 20px;
   background: var(--tm-bg);
 }
@@ -10234,7 +10270,7 @@ html.theme-dark .tm-dedup-error {
   border: 1px solid var(--tm-border);
   border-radius: var(--tm-radius-lg);
   background: var(--tm-input-bg);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 

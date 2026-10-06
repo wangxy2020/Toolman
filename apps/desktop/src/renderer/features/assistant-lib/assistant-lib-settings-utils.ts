@@ -1,10 +1,12 @@
 import {
+  applySyllabusTitlesFromMarkdown,
   assistantLibSessionMetadataPatch,
   formatSyllabusMarkdown,
   getAssistantLibPreset,
   isAssistantLibDefaultClassroomSession,
   isAssistantLibGuideCourseSession,
   parseAssistantLibSessionMeta,
+  parseSocraticState,
   type AssistantLibPresetDef,
   type AssistantLibPresetId,
   type CourseSyllabus,
@@ -164,7 +166,10 @@ export function buildClassroomSettingsMetadata(
 ) {
   const preset = getAssistantLibPreset(draft.presetId)
   const meta = parseAssistantLibSessionMeta(session.metadata)
-  return assistantLibSessionMetadataPatch(session.metadata, {
+  const syllabus = meta?.syllabus
+    ? applySyllabusTitlesFromMarkdown(meta.syllabus, draft.lessonPlan)
+    : undefined
+  const metadata = assistantLibSessionMetadataPatch(session.metadata, {
     presetId: draft.presetId,
     roleplayId: preset?.roleplayId ?? meta?.roleplayId,
     learningLabel: meta?.learningLabel ?? '学习',
@@ -185,7 +190,28 @@ export function buildClassroomSettingsMetadata(
     ttsEngine: draft.ttsEngine,
     ttsVoice: draft.ttsEngine === 'edge' ? resolveCuratedEdgeTtsVoice(draft.ttsVoice) : undefined,
     modelId: draft.modelId.trim(),
+    ...(syllabus ? { syllabus } : {}),
   })
+  if (!syllabus) return metadata
+  const state = parseSocraticState(metadata)
+  const previousChapters = meta?.syllabus?.chapters ?? []
+  const previousIndex = state.pathIndex ?? 0
+  const currentId = state.currentChapterId || previousChapters[previousIndex]?.id
+  let pathIndex = currentId
+    ? syllabus.chapters.findIndex((chapter) => chapter.id === currentId)
+    : -1
+  if (pathIndex < 0) {
+    pathIndex = Math.min(previousIndex, Math.max(syllabus.chapters.length - 1, 0))
+  }
+  return {
+    ...metadata,
+    socraticState: {
+      ...state,
+      pathIndex,
+      currentChapterId: syllabus.chapters[pathIndex]?.id,
+      pathNodes: syllabus.chapters.map((chapter) => chapter.title),
+    },
+  }
 }
 
 export function formatSyllabusStatusText(syllabus: CourseSyllabus, t: TranslateFn): string {

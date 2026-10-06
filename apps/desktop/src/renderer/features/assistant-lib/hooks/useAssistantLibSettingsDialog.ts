@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   IpcChannel,
   getAssistantLibPreset,
@@ -77,6 +77,7 @@ export function useAssistantLibSettingsDialog({
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingDoc, setEditingDoc] = useState(false)
+  const lessonPlanEditedRef = useRef(false)
   const isDefaultClassroom = Boolean(
     targetSession && isAssistantLibDefaultClassroomSession(targetSession.metadata),
   )
@@ -92,6 +93,7 @@ export function useAssistantLibSettingsDialog({
       setEditingDoc(false)
       return
     }
+    lessonPlanEditedRef.current = false
     setDraft(draftFromSession(targetSession, knowledgeBases, defaultLocalFolderPath))
     setActiveTab('basic')
     setEditingDoc(false)
@@ -109,7 +111,7 @@ export function useAssistantLibSettingsDialog({
   }, [knowledgeBases, defaultLocalFolderPath])
 
   useEffect(() => {
-    if (!targetSession || editingDoc) return
+    if (!targetSession || editingDoc || lessonPlanEditedRef.current) return
     const markdown = resolveLessonPlanMarkdown(targetSession)
     setDraft((prev) => {
       if (!prev || prev.lessonPlan === markdown) return prev
@@ -177,6 +179,9 @@ export function useAssistantLibSettingsDialog({
   const textbookSelected = Boolean(draft && hasTextbookSelection(draft))
 
   const updateDraft = (patch: Partial<AssistantLibClassroomDraft>) => {
+    if (Object.prototype.hasOwnProperty.call(patch, 'lessonPlan')) {
+      lessonPlanEditedRef.current = true
+    }
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
     setError(null)
   }
@@ -273,12 +278,40 @@ export function useAssistantLibSettingsDialog({
       if (!result.ok) {
         throw new Error(result.error.message || t('assistantLibPage.settingsSaveFailed'))
       }
+      lessonPlanEditedRef.current = false
       await onSaved?.()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const commitLessonPlanEdits = async () => {
+    if (!targetSession || !draft) return
+    const courseName = isDefaultClassroom
+      ? t('assistantLibPage.defaultCourse')
+      : draft.courseName.trim() || targetSession.title
+    const meta = parseAssistantLibSessionMeta(targetSession.metadata)
+    setError(null)
+    try {
+      const result = await window.api.invoke(IpcChannel.SessionUpdate, {
+        id: targetSession.id,
+        metadata: buildClassroomSettingsMetadata(targetSession, draft, {
+          courseName,
+          kbIds: resolveInitialSaveKbIds(draft, meta?.kbIds),
+          isDefaultClassroom,
+          isGuideClassroom,
+        }),
+      })
+      if (!result.ok) {
+        throw new Error(result.error.message || t('assistantLibPage.settingsSaveFailed'))
+      }
+      lessonPlanEditedRef.current = false
+      await onSaved?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -312,6 +345,7 @@ export function useAssistantLibSettingsDialog({
     handleClearTextbook,
     handleDeleteCourse,
     handleSave,
+    commitLessonPlanEdits,
     handleGenerateSyllabus,
     modelOptions,
     syllabusModelId,

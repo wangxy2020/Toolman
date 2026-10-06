@@ -29,6 +29,9 @@ overrides:
   protobufjs: '>=7.6.5'
 
 patchedDependencies:
+  edge-tts-universal@1.4.0:
+    hash: 4bc7wcsf4kfahkpikrpipco2ei
+    path: patches/edge-tts-universal@1.4.0.patch
   lazystream@1.0.1:
     hash: tlhbsljpudz26e6cuzrxzv6tx4
     path: patches/lazystream@1.0.1.patch
@@ -108,7 +111,7 @@ importers:
         version: 4.0.3
       edge-tts-universal:
         specifier: ^1.4.0
-        version: 1.4.0
+        version: 1.4.0(patch_hash=4bc7wcsf4kfahkpikrpipco2ei)
       electron-updater:
         specifier: ^6.6.2
         version: 6.8.9
@@ -244,7 +247,7 @@ importers:
         version: 4.23.55
       edge-tts-universal:
         specifier: ^1.4.0
-        version: 1.4.0
+        version: 1.4.0(patch_hash=4bc7wcsf4kfahkpikrpipco2ei)
       expo:
         specifier: ~57.0.9
         version: 57.0.9(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.8)(expo-router@57.0.9)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.11.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@5.8.3)
@@ -2001,7 +2004,6 @@ packages:
   '@lancedb/lancedb@0.17.0':
     resolution: {integrity: sha512-AgQ4dqHBjoEpVdND5tmzhy0OJxwP4gJnEjOz3jVh7ip+8EYhR44wO6XbEhpxvvGfXyyepDrulo3bpL1323eNSg==}
     engines: {node: '>= 18'}
-    cpu: [x64, arm64]
     os: [darwin, linux, win32]
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
@@ -11124,7 +11126,7 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
-  edge-tts-universal@1.4.0:
+  edge-tts-universal@1.4.0(patch_hash=4bc7wcsf4kfahkpikrpipco2ei):
     dependencies:
       axios: 1.18.1
       cross-fetch: 4.1.0

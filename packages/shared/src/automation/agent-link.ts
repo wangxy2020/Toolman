@@ -1,7 +1,13 @@
 export const AUTOMATION_ASSISTANT_NAME = '自动化'
 
+const AUTOMATION_ASSISTANT_NAME_ALIASES = new Set([
+  AUTOMATION_ASSISTANT_NAME,
+  'Automation',
+  '自动化智能体',
+])
+
 export function isAutomationAssistantName(name: string | null | undefined): boolean {
-  return (name ?? '').trim() === AUTOMATION_ASSISTANT_NAME
+  return AUTOMATION_ASSISTANT_NAME_ALIASES.has((name ?? '').trim())
 }
 
 export function buildAutomationAssistantSystemPrompt(): string {

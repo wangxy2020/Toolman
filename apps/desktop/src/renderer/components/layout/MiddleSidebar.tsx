@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Assistant, Session } from '@toolman/shared'
 import {
+  isAutomationAssistantName,
   PROJECT_MANAGEMENT_ASSISTANT_NAME,
   sortProjectManagementSessionsByMenuOrder,
 } from '@toolman/shared'
@@ -14,6 +15,7 @@ import {
 } from '../../features/project-manager/projectSidebarMenuConfig'
 import { useI18n } from '../../i18n/useI18n'
 import { translateAssistantName, translateSessionTitle } from '../../i18n/system-labels'
+import { useWorkflows } from '../../features/workflow/useWorkflows'
 
 interface Props {
   assistants: Assistant[]
@@ -31,6 +33,9 @@ interface Props {
 function resolveAssistantSidebarName(assistant: Assistant, t: ReturnType<typeof useI18n>['t']): string {
   if (isGroupProxyAssistant(assistant)) {
     return resolveGroupProxyAssistantDisplayName(assistant)
+  }
+  if (isAutomationAssistantName(assistant.name)) {
+    return t('modules.workflow.title')
   }
   return translateAssistantName(assistant.name, t)
 }
@@ -58,7 +63,15 @@ function groupSessions(sessions: Session[], assistants: Assistant[]) {
   return { map, unassigned }
 }
 
-function sessionsForAssistant(assistant: Assistant, sessions: Session[]): Session[] {
+function sessionsForAssistant(
+  assistant: Assistant,
+  sessions: Session[],
+  linkedAutomationSessionIds: ReadonlySet<string> | null,
+): Session[] {
+  if (isAutomationAssistantName(assistant.name)) {
+    if (!linkedAutomationSessionIds) return []
+    return sessions.filter((session) => linkedAutomationSessionIds.has(session.id))
+  }
   if (assistant.name !== PROJECT_MANAGEMENT_ASSISTANT_NAME) return sessions
   const menuOrder = readProjectSidebarMenuPreferences().order
   const order = menuOrder.length > 0 ? menuOrder : DEFAULT_SIDEBAR_MENU_ORDER
@@ -78,6 +91,15 @@ export function MiddleSidebar({
   onAddAssistant,
 }: Props) {
   const { t } = useI18n()
+  const { items: workflowItems, loading: workflowsLoading } = useWorkflows()
+  const linkedAutomationSessionIds = useMemo(() => {
+    if (workflowsLoading && workflowItems.length === 0) return null
+    const ids = new Set<string>()
+    for (const item of workflowItems) {
+      if (item.sessionId) ids.add(item.sessionId)
+    }
+    return ids
+  }, [workflowItems, workflowsLoading])
   const { map, unassigned } = useMemo(
     () => groupSessions(sessions, assistants),
     [sessions, assistants],
@@ -179,7 +201,11 @@ export function MiddleSidebar({
           )}
 
           {assistants.map((assistant) => {
-            const assistantSessions = sessionsForAssistant(assistant, map.get(assistant.id) ?? [])
+            const assistantSessions = sessionsForAssistant(
+              assistant,
+              map.get(assistant.id) ?? [],
+              linkedAutomationSessionIds,
+            )
             const isOpen = expanded.has(assistant.id)
             const isActive = assistant.id === activeAssistantId
 
@@ -221,7 +247,8 @@ export function MiddleSidebar({
                     {resolveAssistantSidebarName(assistant, t)}
                   </button>
                   <div className="tm-assistant-actions">
-                    {!isGroupProxyAssistant(assistant) ? (
+                    {!isGroupProxyAssistant(assistant) &&
+                    !isAutomationAssistantName(assistant.name) ? (
                       <button
                         type="button"
                         className="tm-assistant-action-btn"

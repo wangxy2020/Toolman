@@ -20,7 +20,7 @@ import { assertWorkspaceMemberAccess } from './p2p-permission.guard'
 import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source.service'
 import { restartKnowledgeWatchersForKb } from '../knowledge-watcher.service'
-import { ensureWorkspaceSharedKnowledgeFolder } from '../knowledge-folder.service'
+import { ensureWorkspaceSharedKnowledgeFolder } from '../knowledge-folder/workspace-folders'
 import {
   migrateDocumentsInKbToStoragePath,
   moveRootLevelFiles,

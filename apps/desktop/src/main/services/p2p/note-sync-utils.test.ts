@@ -5,11 +5,14 @@ vi.mock('../../bootstrap/database', () => ({
   getDatabase: vi.fn(() => ({})),
 }))
 
-vi.mock('../notes-data.service', () => ({
+vi.mock('../notes-data/storage', () => ({
   getNotesData: vi.fn(() => ({
     notebooks: [{ id: 'nb-1', name: '工作笔记' }],
   })),
   getNoteById: vi.fn(),
+}))
+
+vi.mock('../notes-data/search', () => ({
   noteToMarkdown: vi.fn(() => '# Title\n\nblock body'),
 }))
 

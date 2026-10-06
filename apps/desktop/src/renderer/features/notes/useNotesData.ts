@@ -5,9 +5,9 @@ import { importNotesDataFromJson } from './notes-import-export'
 import { appendNoteVersion } from './notes-versions'
 import {
   createAttachmentId,
+  createDefaultData,
   DEFAULT_NOTEBOOK_ID,
   getFirstNoteInNotebook,
-  loadNotesData,
   normalizeData,
   normalizeNote,
   normalizeTag,
@@ -16,7 +16,7 @@ import {
 } from './notes-storage'
 
 export function useNotesData() {
-  const [data, setData] = useState<NotesData>(() => loadNotesData())
+  const [data, setData] = useState<NotesData>(() => createDefaultData())
   const [hydrated, setHydrated] = useState(false)
   const versionTimerRef = useRef<Map<string, number>>(new Map())
 

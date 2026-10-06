@@ -2,6 +2,7 @@ export type { NotesSearchHit } from './notes-data/types'
 export {
   getNotesData,
   getNotesDataJson,
+  getBoundNotesAccountSlug,
   syncNotesData,
   upsertNoteItem,
   getNoteById,

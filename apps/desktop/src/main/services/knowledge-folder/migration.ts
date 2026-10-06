@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
 import { logStructured } from '../structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { documentSources, fileRegistry } from '@toolman/db'
 import { KnowledgeWatchConfigSchema } from '@toolman/shared'
@@ -12,12 +12,12 @@ import { ensureKnowledgeBaseStorageSource } from '../knowledge-kb-storage-source
 import { resolveKnowledgeBaseStoragePath } from '../knowledge-kb-storage-path.service'
 import {
   getAlternateToolmanDocumentsRoot,
-  getToolmanDocumentsRootPath,
   getToolmanUserFolderName,
   isAlternateToolmanDocumentsPath,
   isNonMigratableFolderPath,
   isPathUnderToolmanDocumentsRoot,
   isStoredPathUnderDifferentUserFolder,
+  isToolmanAccountRootPath,
   isUserScopedToolmanPath,
   listFlatToolmanPathCandidates,
   normalizeFolderPath,
@@ -132,7 +132,11 @@ export function migrateKnowledgePathReferences(
 
 export function moveFolderIfNeeded(oldPath: string, newPath: string): void {
   if (normalizeFolderPath(oldPath) === normalizeFolderPath(newPath)) return
-  if (isNonMigratableFolderPath(oldPath)) {
+  if (
+    isNonMigratableFolderPath(oldPath) ||
+    isToolmanAccountRootPath(oldPath) ||
+    isToolmanAccountRootPath(newPath)
+  ) {
     if (!existsSync(newPath)) {
       mkdirSync(newPath, { recursive: true })
     }
@@ -149,6 +153,21 @@ export function moveFolderIfNeeded(oldPath: string, newPath: string): void {
     try {
       renameSync(oldPath, newPath)
     } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: string }).code)
+          : ''
+      if (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY' || code === 'EXDEV') {
+        if (!existsSync(newPath)) {
+          mkdirSync(newPath, { recursive: true })
+        }
+        logStructured(
+          'knowledge',
+          'warn',
+          `left folder in place after rename was denied ${oldPath} -> ${newPath}: ${toErrorMessage(error, String(error))}`,
+        )
+        return
+      }
       const message = toErrorMessage(error, String(error))
       logStructured('knowledge', 'error', `failed to rename folder ${oldPath} -> ${newPath}: ${message}`)
       throw error
@@ -171,8 +190,9 @@ function shouldMigrateResolvedFolderPath(
   subfolder: string,
   resolvedPath: string,
 ): boolean {
+  // A path already stored under another login stays with that account.
   if (isStoredPathUnderDifferentUserFolder(resolvedPath, getToolmanUserFolderName())) {
-    return true
+    return false
   }
   if (isUserScopedToolmanPath(resolvedPath)) return false
   if (isAlternateToolmanDocumentsPath(resolvedPath)) return true
@@ -234,47 +254,15 @@ export function migrateToolmanUserFolderPaths(): number {
   return migrated
 }
 
-/** Move workspace folder settings and on-disk tree when the user folder slug changes. */
+/**
+ * Account switches do not move ToolmanData trees.
+ * Each login keeps the folder it already has; a new login gets an empty layout.
+ */
 export function migrateToolmanUserFolderBetweenSlugs(
   previousSlug: string,
   nextSlug: string,
 ): number {
-  if (!previousSlug.trim() || !nextSlug.trim() || previousSlug === nextSlug) {
-    return 0
-  }
-
-  const oldRoot = join(getToolmanDocumentsRootPath(), previousSlug)
-  const newRoot = join(getToolmanDocumentsRootPath(), nextSlug)
-  moveFolderIfNeeded(oldRoot, newRoot)
-
-  let migratedWorkspaces = 0
-  for (const workspace of listWorkspaces()) {
-    const settings = getWorkspace({ id: workspace.id })?.settings ?? {}
-    let workspaceMigrated = false
-
-    for (const spec of WORKSPACE_FOLDER_SETTINGS) {
-      const stored = readWorkspaceSettingString(settings, spec.key)
-      if (!stored?.trim()) continue
-
-      const resolvedPath = resolveStoredFolderPath(stored, spec.defaultPath)
-      const rewritten = replaceFolderPathPrefix(resolvedPath, oldRoot, newRoot)
-      if (!rewritten || rewritten === resolvedPath) continue
-
-      moveFolderIfNeeded(resolvedPath, rewritten)
-      updateWorkspace({
-        id: workspace.id,
-        settings: { [spec.key]: rewritten },
-      })
-      if (!isNonMigratableFolderPath(resolvedPath)) {
-        migrateKnowledgePathReferences(workspace.id, resolvedPath, rewritten)
-      }
-      workspaceMigrated = true
-    }
-
-    if (workspaceMigrated) {
-      migratedWorkspaces += 1
-    }
-  }
-
-  return migratedWorkspaces
+  void previousSlug
+  void nextSlug
+  return 0
 }

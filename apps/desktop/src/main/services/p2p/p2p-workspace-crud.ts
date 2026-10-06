@@ -30,6 +30,10 @@ import {
   getWorkspaceRepo,
   toWorkspaceDto,
 } from './p2p-workspace-access'
+import {
+  assignGroupToCurrentAccount,
+  groupVisibleForCurrentAccount,
+} from '../account-group-scope'
 
 export function bootstrapP2pWorkspaceKeys(): void {
   loadAllWorkspaceKeys()
@@ -59,6 +63,7 @@ export async function createP2pWorkspace(rawInput: unknown): Promise<{
   })
 
   saveWorkspaceKey(row.id, workspaceKey)
+  assignGroupToCurrentAccount(row.id)
   ensureWorkspaceDir(row.id)
 
   const now = new Date()
@@ -164,6 +169,7 @@ export function listP2pWorkspaces(filter: P2pWorkspaceListFilter = 'all'): P2pWo
 
   return rows
     .filter((row) => activeMembershipIds.has(row.id) && !isBuiltinDefaultP2pGroupName(row.name))
+    .filter((row) => groupVisibleForCurrentAccount(row.id))
     .map((row) => toWorkspaceDto(row))
 }
 

@@ -13,7 +13,7 @@ function session(partial: Partial<Session> & Pick<Session, 'id' | 'title' | 'ass
 }
 
 describe('pruneOrphanAutomationSessions', () => {
-  it('removes twin topics and leftover 新子任务, keeps linked sessions', async () => {
+  it('removes every automation topic that is not linked to a workflow item', async () => {
     const deleted: string[] = []
     const sessions = [
       session({ id: 'linked', title: '1 测试', assistantId: 'auto' }),
@@ -30,7 +30,7 @@ describe('pruneOrphanAutomationSessions', () => {
         deleted.push(id)
       },
     })
-    expect(count).toBe(2)
-    expect(deleted.sort()).toEqual(['orphan-new', 'twin'])
+    expect(count).toBe(3)
+    expect(deleted.sort()).toEqual(['orphan-new', 'other', 'twin'])
   })
 })

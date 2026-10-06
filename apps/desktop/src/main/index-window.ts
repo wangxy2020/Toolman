@@ -12,6 +12,19 @@ export const ELECTRON_CHROME_USER_AGENT =
 
 let mainWindow: BrowserWindow | null = null
 
+/** Matches renderer `--tm-nav-bg` / `--tm-text` so caption buttons sit on the chrome. */
+const WINDOWS_TITLE_BAR_OVERLAY = {
+  light: { color: '#f5f5f5', symbolColor: '#1f2328', height: 40 },
+  dark: { color: '#1c1c21', symbolColor: '#ececef', height: 40 },
+} as const
+
+export function applyWindowsTitleBarOverlay(theme: 'light' | 'dark'): boolean {
+  if (process.platform !== 'win32') return false
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  mainWindow.setTitleBarOverlay(WINDOWS_TITLE_BAR_OVERLAY[theme])
+  return true
+}
+
 function shouldBlockInAppNavigation(url: string): boolean {
   const isDev = !app.isPackaged
 
@@ -49,11 +62,7 @@ export function createWindow(): void {
       : process.platform === 'win32'
         ? {
             titleBarStyle: 'hidden' as const,
-            titleBarOverlay: {
-              color: '#f5f5f5',
-              symbolColor: '#1f2328',
-              height: 40,
-            },
+            titleBarOverlay: WINDOWS_TITLE_BAR_OVERLAY.light,
           }
         : {}),
     webPreferences: {

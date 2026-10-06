@@ -72,6 +72,7 @@ export function AssistantLibSettingsDialog({
     handleClearTextbook,
     handleDeleteCourse,
     handleSave,
+    commitLessonPlanEdits,
     handleGenerateSyllabus,
     modelOptions,
     syllabusModelId,
@@ -224,7 +225,10 @@ export function AssistantLibSettingsDialog({
                         </div>
                       ) : null
                     }
-                    onEditingChange={setEditingDoc}
+                    onEditingChange={(editing) => {
+                      setEditingDoc(editing)
+                      if (!editing) void commitLessonPlanEdits()
+                    }}
                     onChange={(value) => updateDraft({ lessonPlan: value })}
                   />
                 ) : null}
