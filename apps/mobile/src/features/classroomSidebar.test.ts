@@ -64,12 +64,35 @@ describe('classroom sidebar', () => {
     ])
     expect(entries.map((item) => item.id)).toEqual(['rust'])
     expect(entries[0]?.chapters.map((chapter) => chapter.title)).toEqual([
-      '所有权',
-      '生命周期',
-      '并发',
+      '- 所有权',
+      '- 生命周期',
+      '- 并发',
     ])
     expect(entries[0]?.chapters[1]?.locked).toBe(false)
     expect(entries[0]?.chapters[2]?.locked).toBe(true)
+  })
+
+  it('drops the filled bullet from sidebar chapter labels', () => {
+    const entries = classroomSidebarEntries([
+      course({
+        id: 'chem',
+        courseName: '化学',
+        syllabus: {
+          generation: 'ready',
+          generatedCount: 1,
+          chapters: [
+            {
+              id: 'c1',
+              title: '- ● 检验食品中的铁元素',
+              assessmentQuestions: [],
+              status: 'ready',
+            },
+          ],
+        },
+      }),
+    ])
+    expect(entries[0]?.chapters[0]?.title).toBe('- 检验食品中的铁元素')
+    expect(entries[0]?.chapters[0]?.title).not.toContain('●')
   })
 
   it('defaults sidebar focus to the live course chapter', () => {

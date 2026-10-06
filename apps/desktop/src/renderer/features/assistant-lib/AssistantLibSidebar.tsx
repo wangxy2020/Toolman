@@ -7,6 +7,7 @@ import {
   looksLikeAssistantLibGuideCourse,
   parseAssistantLibSessionMeta,
   parseCourseSyllabus,
+  syllabusMenuGroupTitles,
   resolveOngoingClassroomFocus,
   type Session,
 } from '@toolman/shared'
@@ -134,12 +135,17 @@ export function AssistantLibSidebar({
                 parseAssistantLibSessionMeta(session.metadata)?.syllabus,
               )
               const catalogChapters = chaptersForSession(session)
+              const menuGroups =
+                syllabus && syllabus.chapters.length > 0
+                  ? syllabusMenuGroupTitles(syllabus.chapters)
+                  : []
               const chapters =
                 syllabus && syllabus.chapters.length > 0
-                  ? syllabus.chapters.map((chapter) => ({
+                  ? syllabus.chapters.map((chapter, index) => ({
                       id: chapter.id,
                       title: chapter.title,
                       label: chapter.title,
+                      groupTitle: menuGroups[index],
                       status: chapter.status,
                     }))
                   : catalogChapters.map((chapter) => ({
@@ -215,22 +221,32 @@ export function AssistantLibSidebar({
                         {t('assistantLibPage.emptyCatalogNoKb')}
                       </div>
                     ) : (
-                      chapters.map((chapter) => {
+                      chapters.map((chapter, chapterIndex) => {
                         const chapterActive =
                           isActive && selectedChapterId === chapter.id
                         const locked = Boolean(
                           syllabus && isSyllabusChapterLocked(syllabus, chapter.id),
                         )
                         const level = 'level' in chapter ? (chapter.level ?? 1) : 1
+                        const groupTitle =
+                          'groupTitle' in chapter ? chapter.groupTitle : undefined
+                        const previous = chapterIndex > 0 ? chapters[chapterIndex - 1] : undefined
+                        const previousGroup =
+                          previous && 'groupTitle' in previous ? previous.groupTitle : undefined
+                        const showGroup = Boolean(groupTitle) && groupTitle !== previousGroup
                         return (
+                          <div key={chapter.id}>
+                          {showGroup ? (
+                            <div className="tm-alib-sidebar-group">{groupTitle}</div>
+                          ) : null}
                           <button
-                            key={chapter.id}
                             type="button"
                             disabled={locked}
                             className={[
                               'tm-session-item',
                               'tm-session-item--with-icon',
                               level > 1 ? 'tm-session-item--nested' : '',
+                              groupTitle ? 'tm-alib-sidebar-grouped' : '',
                               chapterActive ? 'tm-session-item--active' : '',
                               locked ? 'tm-session-item--locked' : '',
                               chapter.status === 'passed' ? 'tm-session-item--passed' : '',
@@ -260,6 +276,7 @@ export function AssistantLibSidebar({
                               {formatClassroomChapterLabel(chapter.label)}
                             </span>
                           </button>
+                          </div>
                         )
                       })
                     )

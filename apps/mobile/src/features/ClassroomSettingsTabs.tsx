@@ -191,7 +191,7 @@ export function ClassroomDocTab(props: {
         />
       ) : props.value.trim() ? (
         <View style={styles.preview}>
-          <MessageMarkdown text={props.value} />
+          <MessageMarkdown text={props.value} plainLists={props.kind === 'lesson'} />
         </View>
       ) : (
         <Text style={styles.hint}>

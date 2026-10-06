@@ -1,19 +1,27 @@
 import { Text, View } from 'react-native'
 import { parseBlocks, renderInline } from './messageMarkdownParse'
 import { noteStyles, styles } from './messageMarkdownStyles'
+import { replaceLatexMath } from './plainLatexMath'
 
 type Props = {
   text: string
   align?: 'left' | 'right'
   /** `note` matches desktop `.tm-notes-editor-body` (16px / 1.7). */
   variant?: 'chat' | 'note'
+  /** Syllabus view: keep list text, omit the unordered disc marker. */
+  plainLists?: boolean
 }
 
 /**
  * Lightweight Markdown renderer for chat bubbles (RN + web).
  * Covers the common assistant patterns: headings, lists, bold, code.
  */
-export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Props) {
+export function MessageMarkdown({
+  text,
+  align = 'left',
+  variant = 'chat',
+  plainLists = false,
+}: Props) {
   const source = text.replace(/\r\n/g, '\n').trimEnd()
   if (!source.trim()) return null
 
@@ -21,6 +29,7 @@ export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Prop
   const alignStyle = align === 'right' ? styles.alignRight : null
   const s = variant === 'note' ? noteStyles : styles
   const selectable = variant === 'note'
+  const rich = (value: string, key: string) => renderInline(replaceLatexMath(value), key)
 
   return (
     <View style={s.root}>
@@ -38,7 +47,7 @@ export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Prop
                   alignStyle,
                 ]}
               >
-                {renderInline(block.text, key)}
+                {rich(block.text, key)}
               </Text>
             )
           case 'list':
@@ -46,14 +55,16 @@ export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Prop
               <View key={key} style={s.list}>
                 {block.items.map((item, itemIndex) => (
                   <View key={`${key}-${itemIndex}`} style={s.listItem}>
-                    <Text selectable={selectable} style={s.listBullet}>
-                      {item.marker}
-                    </Text>
+                    {plainLists && item.marker === '•' ? null : (
+                      <Text selectable={selectable} style={s.listBullet}>
+                        {item.marker}
+                      </Text>
+                    )}
                     <Text
                       selectable={selectable}
                       style={[s.paragraph, s.listText, alignStyle]}
                     >
-                      {renderInline(item.text, `${key}-${itemIndex}`)}
+                      {rich(item.text, `${key}-${itemIndex}`)}
                     </Text>
                   </View>
                 ))}
@@ -72,7 +83,7 @@ export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Prop
             return (
               <View key={key} style={s.quote}>
                 <Text selectable={selectable} style={[s.paragraph, s.quoteText, alignStyle]}>
-                  {renderInline(block.text, key)}
+                  {rich(block.text, key)}
                 </Text>
               </View>
             )
@@ -82,7 +93,7 @@ export function MessageMarkdown({ text, align = 'left', variant = 'chat' }: Prop
           default:
             return (
               <Text key={key} selectable={selectable} style={[s.paragraph, alignStyle]}>
-                {renderInline(block.text, key)}
+                {rich(block.text, key)}
               </Text>
             )
         }

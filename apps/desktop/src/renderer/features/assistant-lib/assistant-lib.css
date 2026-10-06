@@ -162,6 +162,19 @@
   color: var(--tm-text-secondary);
 }
 
+.tm-session-item.tm-alib-sidebar-grouped {
+  width: calc(100% - 48px);
+  margin-left: 48px;
+}
+
+.tm-alib-sidebar-group {
+  margin: 8px 12px 2px 28px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--tm-text-secondary);
+}
+
 .tm-session-item--locked {
   opacity: 0.45;
   cursor: not-allowed;
@@ -191,6 +204,15 @@
 
 .tm-alib-lesson-plan-preview {
   min-width: 0;
+}
+
+.tm-alib-lesson-plan-preview--plain .tm-md ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tm-alib-lesson-plan-preview--plain .tm-md ul li::marker {
+  content: '';
 }
 
 .tm-alib-lesson-plan-preview .tm-md-pre {
@@ -287,6 +309,7 @@
 .tm-alib-records-chapter-item,
 .tm-alib-records-meta-list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
   min-width: 0;
@@ -295,6 +318,13 @@
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.tm-alib-records-chapter-group {
+  flex: 1 0 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tm-text-secondary);
 }
 
 .tm-alib-records-chapter-index {

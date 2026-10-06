@@ -1,4 +1,8 @@
-import { resolveCuratedEdgeTtsVoice, type VoiceTtsEngine } from '@toolman/shared'
+import {
+  prepareSpokenSentence,
+  resolveCuratedEdgeTtsVoice,
+  type VoiceTtsEngine,
+} from '@toolman/shared'
 import { EdgeTtsEngine } from './edgeTts'
 import { sanitizeSpeakableText } from './sanitizeSpeakableText'
 import type { MobileTtsConfig, TtsPlaybackState } from './types'
@@ -68,7 +72,7 @@ export class MobileTtsController {
 
   /** Manual play / replay — same contract as desktop `speakMessage`. */
   speakMessage(messageId: string, text: string): void {
-    const trimmed = sanitizeSpeakableText(text)
+    const trimmed = prepareSpokenSentence(sanitizeSpeakableText(text))
     if (!trimmed) return
     this.stop()
     const abort = new AbortController()
@@ -149,7 +153,7 @@ export class MobileTtsController {
   }
 }
 
-const GLOBAL_TTS_KEY = '__toolmanMobileTtsController_v1'
+const GLOBAL_TTS_KEY = '__toolmanMobileTtsController_v2'
 
 type GlobalTtsHost = {
   [GLOBAL_TTS_KEY]?: MobileTtsController

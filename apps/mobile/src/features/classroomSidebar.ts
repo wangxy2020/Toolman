@@ -1,5 +1,7 @@
 import {
   currentSyllabusChapter,
+  formatClassroomChapterLabel,
+  syllabusMenuGroupTitles,
   isClassroomLive,
   isSyllabusChapterLocked,
   resolveOngoingClassroomFocus,
@@ -25,6 +27,8 @@ export const CLASSROOM_PRESET_DESCS: Record<string, string> = {
 export type ClassroomSidebarChapter = {
   id: string
   title: string
+  /** Parent 章 shown above the first 节 of that chapter. */
+  groupTitle?: string
   status?: string
   locked: boolean
 }
@@ -67,9 +71,11 @@ export function classroomChaptersForCourse(
 ): ClassroomSidebarChapter[] {
   const syllabus = course?.syllabus
   if (!syllabus || syllabus.chapters.length === 0) return []
-  return syllabus.chapters.map((chapter) => ({
+  const groups = syllabusMenuGroupTitles(syllabus.chapters)
+  return syllabus.chapters.map((chapter, index) => ({
     id: chapter.id,
-    title: chapter.title,
+    title: formatClassroomChapterLabel(chapter.title),
+    groupTitle: groups[index],
     status: chapter.status,
     locked: isSyllabusChapterLocked(syllabus, chapter.id),
   }))

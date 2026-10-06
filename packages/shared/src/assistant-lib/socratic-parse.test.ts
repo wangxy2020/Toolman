@@ -22,6 +22,16 @@ describe('stripSocraticMachineBlocks', () => {
     const text = '先确认主题。\n\n```socratic-card\nconfirmed: 还在写'
     expect(stripSocraticMachineBlocks(text)).toBe('先确认主题。')
   })
+
+  it('drops the first letters of a socratic fence so they are not spoken', () => {
+    expect(stripSocraticMachineBlocks('要让这笔账刚好不剩不欠？\n\n```s')).toBe(
+      '要让这笔账刚好不剩不欠？',
+    )
+    expect(stripSocraticMachineBlocks('要让这笔账刚好不剩不欠？\n\n```socratic-st')).toBe(
+      '要让这笔账刚好不剩不欠？',
+    )
+    expect(stripSocraticMachineBlocks('看这段代码。\n\n```python')).toBe('看这段代码。\n\n```python')
+  })
 })
 
 describe('parseThoughtChainCard', () => {

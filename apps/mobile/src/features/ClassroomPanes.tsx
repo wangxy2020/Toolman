@@ -80,15 +80,22 @@ export function ClassroomLeftPane() {
                   entry.chapters.length === 0 ? (
                     <Text style={styles.emptyChapters}>暂无目录</Text>
                   ) : (
-                    entry.chapters.map((chapter) => {
+                    entry.chapters.map((chapter, chapterIndex) => {
                       const chapterActive = isActive && chapterId === chapter.id
+                      const showGroup =
+                        Boolean(chapter.groupTitle) &&
+                        chapter.groupTitle !== entry.chapters[chapterIndex - 1]?.groupTitle
                       return (
+                        <View key={chapter.id}>
+                          {showGroup ? (
+                            <Text style={styles.chapterGroup}>{chapter.groupTitle}</Text>
+                          ) : null}
                         <Pressable
-                          key={chapter.id}
                           disabled={chapter.locked}
                           onPress={() => selectChapter(entry.id, chapter.id, chapter.locked)}
                           style={({ pressed }) => [
                             styles.chapterItem,
+                            chapter.groupTitle ? styles.chapterItemGrouped : null,
                             chapterActive ? styles.chapterItemActive : null,
                             chapter.locked ? styles.chapterItemLocked : null,
                             pressed && !chapterActive && !chapter.locked
@@ -113,6 +120,7 @@ export function ClassroomLeftPane() {
                             {chapter.title}
                           </Text>
                         </Pressable>
+                        </View>
                       )
                     })
                   )
@@ -208,6 +216,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.textSecondary,
   },
+  chapterItemGrouped: {
+    marginLeft: 48,
+  },
   chapterItem: {
     marginLeft: 32,
     minHeight: 30,
@@ -231,6 +242,15 @@ const styles = StyleSheet.create({
     height: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  chapterGroup: {
+    marginLeft: 32,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+    color: colors.textSecondary,
   },
   chapterLabel: {
     flex: 1,

@@ -1,3 +1,4 @@
+import { classroomChapterTitle } from '@toolman/shared'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { GroupPanelHeader } from './GroupPagePanels'
 import { chapterStatusLabel } from './classroomRecordsUtils'
@@ -52,8 +53,12 @@ export function ClassroomRecordsPane(props: { onOpenClassroom: () => void }) {
               ) : (
                 chapters.map((chapter, index) => (
                   <View key={chapter.id} style={styles.chapterRow}>
+                    {chapter.groupTitle &&
+                    chapter.groupTitle !== chapters[index - 1]?.groupTitle ? (
+                      <Text style={styles.chapterGroup}>{chapter.groupTitle}</Text>
+                    ) : null}
                     <Text style={styles.chapterIndex}>{index + 1}</Text>
-                    <Text style={styles.chapterTitle}>{chapter.title}</Text>
+                    <Text style={styles.chapterTitle}>{classroomChapterTitle(chapter.title)}</Text>
                     <Text
                       style={[
                         styles.chapterStatus,

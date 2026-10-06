@@ -63,6 +63,11 @@ const OUTLINE_NOISE_KEYS = new Set([
   '序',
   '跋',
   '内封',
+  '绪言',
+  '绪论',
+  '引言',
+  '导言',
+  '导论',
 ])
 
 /** True for front-matter titles that must never become sidebar chapters. */
@@ -77,6 +82,8 @@ export function isCourseOutlineNoiseTitle(title: string): boolean {
   // e.g. "封面 1", "目录i", "Cover", "Table of Contents"
   if (/^(封面|封底|目录|目次|版权页?)(\d+|[ivxlc]+|页|图)?$/i.test(key)) return true
   if (/^(cover|contents?|tableofcontents|toc)$/i.test(key)) return true
+  // 绪言 is front matter, not a teachable chapter, even with a subtitle.
+  if (/^(绪言|绪论|引言|导言|导论)/.test(key)) return true
   return false
 }
 
@@ -85,18 +92,68 @@ function isNoiseTitle(title: string): boolean {
   return title.length < MIN_TITLE_LEN || title.length > MAX_TITLE_LEN
 }
 
+const EMBEDDED_UNIT = /第[一二三四五六七八九十百千零〇两0-9]+\s*[章节篇讲课部回]/g
+const REVIEW_TAIL =
+  /^(.*?)\s+\d{1,4}\s+(整理与提升|本章小结|本章复习|复习与提高|实验活动|实践活动|本章测评|复习题)(.*)$/
+
+function stripTrailingPage(part: string): string {
+  return part.replace(/\s+\d{1,4}\s*$/, '').trim()
+}
+
+/** Split a TOC row that glued several 节 (and a trailing 整理与提升) into one title. */
+export function splitGluedTocTitle(raw: string): string[] {
+  const text = raw
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return []
+
+  const indexes: number[] = []
+  for (const match of text.matchAll(EMBEDDED_UNIT)) {
+    if (match.index != null) indexes.push(match.index)
+  }
+  const hasReview = REVIEW_TAIL.test(text)
+  // A single heading in the middle of a sentence is not a glued TOC row.
+  if (indexes.length < 2 && !hasReview) return [text]
+
+  const chunks: string[] =
+    indexes.length < 2
+      ? [text]
+      : [
+          ...(indexes[0]! > 0 ? [text.slice(0, indexes[0])] : []),
+          ...indexes.map((start, index) => text.slice(start, indexes[index + 1] ?? text.length)),
+        ]
+
+  const pieces: string[] = []
+  for (const chunk of chunks) {
+    const review = chunk.trim().match(REVIEW_TAIL)
+    if (review) {
+      pieces.push(stripTrailingPage(review[1] ?? ''), `${review[2] ?? ''}${review[3] ?? ''}`.trim())
+    } else {
+      pieces.push(stripTrailingPage(chunk))
+    }
+  }
+  return pieces.map((piece) => piece.trim()).filter((piece) => piece.length >= MIN_TITLE_LEN)
+}
+
 function pushUnique(
   entries: CourseOutlineEntry[],
   seen: Set<string>,
   title: string,
   level: number,
 ): void {
-  const cleaned = cleanTitle(title)
-  if (isNoiseTitle(cleaned)) return
-  const key = cleaned.toLowerCase()
-  if (seen.has(key)) return
-  seen.add(key)
-  entries.push({ title: cleaned, level: Math.max(1, Math.min(3, level)) })
+  const pieces = splitGluedTocTitle(title)
+  const units = pieces.length > 0 ? pieces : [title]
+  for (const piece of units) {
+    const cleaned = cleanTitle(piece)
+    if (isNoiseTitle(cleaned)) continue
+    const key = cleaned.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const pieceLevel = units.length > 1 ? inferLevel(cleaned) : level
+    entries.push({ title: cleaned, level: Math.max(1, Math.min(3, pieceLevel)) })
+  }
 }
 
 function inferLevel(title: string): number {
@@ -185,6 +242,13 @@ export function extractOutlineFromTocSection(plainText: string): CourseOutlineEn
       break
     }
 
+    const glued = splitGluedTocTitle(raw)
+    if (glued.length > 1) {
+      misses = 0
+      for (const piece of glued) pushUnique(entries, seen, piece, inferLevel(piece))
+      continue
+    }
+
     const title = parseTocEntryTitle(raw)
     if (!title) {
       misses += 1
@@ -223,6 +287,12 @@ export function extractCourseOutlineFromText(plainText: string): CourseOutlineEn
 
     const line = cleanTitle(trimmed)
     if (!line) continue
+
+    const glued = splitGluedTocTitle(line)
+    if (glued.length > 1) {
+      for (const piece of glued) pushUnique(entries, seen, piece, inferLevel(piece))
+      continue
+    }
 
     if (CN_CHAPTER.test(line)) {
       pushUnique(entries, seen, line, inferLevel(line))

@@ -28,6 +28,7 @@ export function isSidebarChapterNoise(title: string): boolean {
     .replace(/\s+/g, '')
     .toLowerCase()
   if (!cleaned) return true
+  if (/^(绪言|绪论|引言|导言|导论)/.test(cleaned)) return true
   return /^(封面|封面页|封面图|封底|封底页|版权页?|目录|目录页|目次|contents|tableofcontents|toc|索引|前言|序言|序|跋|内封|cover)$/i.test(
     cleaned,
   )

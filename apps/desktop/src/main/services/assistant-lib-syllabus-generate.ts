@@ -108,6 +108,7 @@ async function generateOneChapter(options: {
   kbIds: string[]
   courseName: string
   chapterTitle: string
+  groupTitle?: string
   model: string
   providerConfig: NonNullable<ReturnType<typeof getProviderConfig>>
 }): Promise<Pick<CourseSyllabusChapter, 'hours' | 'lessonPlan' | 'assessmentQuestions'>> {
@@ -127,15 +128,19 @@ async function generateOneChapter(options: {
   }
 
   const prompt = [
-    '你是课程设计师。请根据教材片段为「这一章」编写教学大纲条目。',
+    '你是课程设计师。请根据教材片段为「这一课时」编写教学大纲条目。',
+    '只写这一课时的内容。如果给出了所属章，章只是范围，不要把整章写成这一课时。',
     '只输出 JSON，不要 markdown 围栏或说明：',
     '{"hours":2,"lessonPlan":"markdown 教案（学习目标/重点/步骤/练习）","assessmentQuestions":["验收问题1","验收问题2","验收问题3"]}',
-    'hours 为建议课时（1-4 的整数）。验收问题用于判断学生是否掌握本章，3 题左右。',
+    'hours 为建议课时（1-4 的整数）。验收问题用于判断学生是否掌握这一课时，3 题左右。',
     '',
     `课程：${options.courseName}`,
-    `章节：${options.chapterTitle}`,
-    passages ? `教材片段：\n${passages.slice(0, 8000)}` : '教材片段：暂无检索结果，请按章节标题合理编写。',
-  ].join('\n')
+    options.groupTitle ? `所属章：${options.groupTitle}` : '',
+    `课时：${options.chapterTitle}`,
+    passages ? `教材片段：\n${passages.slice(0, 8000)}` : '教材片段：暂无检索结果，请按课时标题合理编写。',
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   const completion = await gateway.chatComplete(options.providerConfig, {
     model: options.model,
@@ -236,6 +241,7 @@ export async function runSyllabusGeneration(options: {
           kbIds: [kbId],
           courseName,
           chapterTitle: chapter.title,
+          groupTitle: chapter.groupTitle,
           model,
           providerConfig,
         })

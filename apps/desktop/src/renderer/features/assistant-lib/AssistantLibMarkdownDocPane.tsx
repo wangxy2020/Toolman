@@ -19,6 +19,7 @@ export function AssistantLibMarkdownDocPane({
   busy,
   banner,
   headerActions,
+  plainLists,
   onEditingChange,
   onChange,
 }: {
@@ -32,6 +33,8 @@ export function AssistantLibMarkdownDocPane({
   busy: boolean
   banner?: ReactNode
   headerActions?: ReactNode
+  /** Syllabus preview: unordered lists stay as lines, without a disc marker. */
+  plainLists?: boolean
   onEditingChange: (editing: boolean) => void
   onChange: (value: string) => void
 }) {
@@ -63,7 +66,13 @@ export function AssistantLibMarkdownDocPane({
             aria-label={ariaLabel}
           />
         ) : value.trim() ? (
-          <div className="tm-alib-lesson-plan-preview">
+          <div
+            className={
+              plainLists
+                ? 'tm-alib-lesson-plan-preview tm-alib-lesson-plan-preview--plain'
+                : 'tm-alib-lesson-plan-preview'
+            }
+          >
             <MessageMarkdown text={value} settings={LESSON_PLAN_MARKDOWN_SETTINGS} />
           </div>
         ) : (

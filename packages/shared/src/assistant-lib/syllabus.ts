@@ -66,11 +66,20 @@ export function formatSyllabusMarkdown(syllabus: CourseSyllabus): string {
     lines.push('', `> ${syllabus.generationError}`)
   }
 
+  let previousGroup = ''
   for (const [index, chapter] of syllabus.chapters.entries()) {
+    const groupTitle = chapter.groupTitle ? classroomChapterTitle(chapter.groupTitle) : ''
+    if (groupTitle && groupTitle !== previousGroup) {
+      lines.push('', `## ${groupTitle}`)
+      previousGroup = groupTitle
+    } else if (!groupTitle) {
+      previousGroup = ''
+    }
     const hoursLabel = chapter.hours ? `${chapter.hours} 课时` : '课时待定'
+    const title = classroomChapterTitle(chapter.title) || chapter.title.trim()
     lines.push(
       '',
-      `## ${index + 1}. ${chapter.title}（${hoursLabel}） · ${STATUS_LABEL[chapter.status]}`,
+      `## ${index + 1}. ${title}（${hoursLabel}） · ${STATUS_LABEL[chapter.status]}`,
     )
     if (chapter.lessonPlan?.trim()) {
       lines.push('', '### 教案', '', chapter.lessonPlan.trim())
@@ -85,7 +94,7 @@ export function formatSyllabusMarkdown(syllabus: CourseSyllabus): string {
     }
   }
 
-  return lines.join('\n').trim()
+  return stripSyllabusHeadingBullets(lines.join('\n').trim())
 }
 
 const CHAPTER_HEADING = /^##\s+(\d+)\.\s+(.+)$/
@@ -93,19 +102,62 @@ const CHAPTER_STATUS_SUFFIX = /\s*·\s*[^\s·]+$/
 const CHAPTER_HOURS_SUFFIX = /（[^）]*课时[^）]*）/g
 const CHAPTER_BULLET = /[●⚫⬤•]/g
 
+/** Chapter name without the filled bullet or a leftover leading hyphen. */
+export function classroomChapterTitle(title: string): string {
+  const cleaned = title.replace(CHAPTER_BULLET, ' ').replace(/\s+/g, ' ').trim()
+  return cleaned.replace(/^[-–—]\s*/, '').trim()
+}
+
 /** Sidebar chapter label: one leading hyphen, without the filled bullet. */
 export function formatClassroomChapterLabel(title: string): string {
-  const cleaned = title.replace(CHAPTER_BULLET, ' ').replace(/\s+/g, ' ').trim()
-  const body = cleaned.replace(/^[-–—]\s*/, '').trim()
+  const body = classroomChapterTitle(title)
   return body ? `- ${body}` : '-'
 }
 
 export function chapterTitleFromSyllabusHeading(headingBody: string): string {
-  return headingBody
-    .replace(CHAPTER_HOURS_SUFFIX, '')
-    .replace(CHAPTER_STATUS_SUFFIX, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  const title = classroomChapterTitle(
+    headingBody
+      .replace(CHAPTER_HOURS_SUFFIX, '')
+      .replace(CHAPTER_STATUS_SUFFIX, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+  return title
+}
+
+const SYLLABUS_HEADING_LINE = /^(##\s+)(?:(\d+)\.\s+)?(.+)$/
+
+function stripBulletChars(line: string): string {
+  return line
+    .replace(/^[ \t]*[●⚫⬤•]+[ \t]*/g, '')
+    .replace(CHAPTER_BULLET, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+$/g, '')
+}
+
+/** Drop filled bullets from a saved syllabus, including lesson-plan body text. */
+export function stripSyllabusHeadingBullets(markdown: string): string {
+  if (!/[●⚫⬤•]/.test(markdown)) return markdown
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (!/[●⚫⬤•]/.test(line)) return line
+      const match = SYLLABUS_HEADING_LINE.exec(line)
+      if (!match?.[3]) return stripBulletChars(line)
+      const prefix = match[1] ?? '## '
+      const number = match[2]
+      let body = match[3]
+      const status = CHAPTER_STATUS_SUFFIX.exec(body)
+      if (status && status.index > 0) body = body.slice(0, status.index)
+      const hours = body.match(CHAPTER_HOURS_SUFFIX)?.[0] ?? ''
+      body = body.replace(CHAPTER_HOURS_SUFFIX, '')
+      const title = classroomChapterTitle(body)
+      if (!title) return stripBulletChars(line)
+      const statusText = status?.[0] ?? ''
+      if (number) return `${prefix}${number}. ${title}${hours}${statusText}`
+      return `${prefix}${title}`
+    })
+    .join('\n')
 }
 
 /**
@@ -146,15 +198,100 @@ export function applySyllabusTitlesFromMarkdown(
   return { ...syllabus, chapters, updatedAt: Date.now() }
 }
 
+const CN_VOLUME = /^第[一二三四五六七八九十百千零〇两0-9]+\s*章/
+const BACK_MATTER = /^(附录|附表|索引|后记|参考文献|名词索引|元素周期表|中英文名词对照|部分中英文)/
+
+/** 绪言 / 绪论 stay out of the lesson list even if the outline still contains them. */
+export function isPrefaceOutlineTitle(title: string): boolean {
+  const key = title.replace(/[\s·・]/g, '')
+  return /^(绪言|绪论|引言|导言|导论)/.test(key)
+}
+
+/** 附录 and the back matter after the last 实验活动 are not lessons of the previous 章. */
+export function isBackMatterOutlineTitle(title: string): boolean {
+  const key = title.replace(/[\s·・.．]/g, '')
+  return BACK_MATTER.test(key)
+}
+
+function isVolumeHeading(title: string): boolean {
+  return CN_VOLUME.test(title.trim())
+}
+
+/**
+ * A 章 that is followed by 节 (or 整理与提升) is only a heading.
+ * Those following rows are the lessons. A 章 with nothing under it stays a lesson.
+ */
+export function teachableSyllabusEntries(
+  entries: Array<{ id: string; title: string }>,
+): Array<{ id: string; title: string; groupTitle?: string }> {
+  const visible = entries.filter((entry) => entry.title.trim() && !isPrefaceOutlineTitle(entry.title))
+  const volumeHasLessons = new Set<number>()
+  for (let index = 0; index < visible.length; index += 1) {
+    if (!isVolumeHeading(visible[index]?.title ?? '')) continue
+    for (let nextIndex = index + 1; nextIndex < visible.length; nextIndex += 1) {
+      const nextTitle = visible[nextIndex]?.title ?? ''
+      if (isVolumeHeading(nextTitle) || isBackMatterOutlineTitle(nextTitle)) break
+      volumeHasLessons.add(index)
+      break
+    }
+  }
+
+  let groupTitle: string | undefined
+  const lessons: Array<{ id: string; title: string; groupTitle?: string }> = []
+  for (let index = 0; index < visible.length; index += 1) {
+    const entry = visible[index]
+    if (!entry) continue
+    if (isVolumeHeading(entry.title) && volumeHasLessons.has(index)) {
+      groupTitle = entry.title.trim()
+      continue
+    }
+    if (isVolumeHeading(entry.title) || isBackMatterOutlineTitle(entry.title)) {
+      groupTitle = undefined
+    }
+    lessons.push({
+      id: entry.id,
+      title: entry.title.trim(),
+      ...(groupTitle ? { groupTitle } : {}),
+    })
+  }
+  return lessons
+}
+
+/**
+ * Group labels for the sidebar. A 章 stops at 附录 / 后记, even when an older
+ * syllabus still stored that back matter under the chapter.
+ */
+export function syllabusMenuGroupTitles(
+  chapters: Array<{ title: string; groupTitle?: string }>,
+): Array<string | undefined> {
+  let blockedGroup: string | undefined
+  return chapters.map((chapter) => {
+    const group = chapter.groupTitle?.trim() || undefined
+    if (!group) {
+      blockedGroup = undefined
+      return undefined
+    }
+    if (blockedGroup && blockedGroup !== group) blockedGroup = undefined
+    if (isBackMatterOutlineTitle(chapter.title) || blockedGroup === group) {
+      blockedGroup = group
+      return undefined
+    }
+    return group
+  })
+}
+
 export function seedSyllabusFromCatalog(
   entries: Array<{ id: string; title: string }>,
 ): CourseSyllabus {
-  const chapters: CourseSyllabusChapter[] = entries.map((entry, index) => ({
-    id: entry.id,
-    title: entry.title,
-    assessmentQuestions: [],
-    status: index === 0 ? 'generating' : 'pending',
-  }))
+  const chapters: CourseSyllabusChapter[] = teachableSyllabusEntries(entries).map(
+    (entry, index) => ({
+      id: entry.id,
+      title: entry.title,
+      ...(entry.groupTitle ? { groupTitle: entry.groupTitle } : {}),
+      assessmentQuestions: [],
+      status: index === 0 ? 'generating' : 'pending',
+    }),
+  )
   return {
     generation: 'generating',
     generatedCount: 0,

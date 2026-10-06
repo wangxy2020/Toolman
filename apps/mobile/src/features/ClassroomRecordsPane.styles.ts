@@ -82,6 +82,7 @@ export const classroomRecordsStyles = StyleSheet.create({
   },
   chapterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     gap: 10,
     paddingHorizontal: 10,
@@ -89,6 +90,13 @@ export const classroomRecordsStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
+  },
+  chapterGroup: {
+    width: '100%',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+    color: colors.textSecondary,
   },
   chapterIndex: {
     width: 18,

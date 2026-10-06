@@ -1,4 +1,5 @@
 import {
+  classroomChapterTitle,
   looksLikeAssistantLibDefaultClassroom,
   looksLikeAssistantLibGuideCourse,
   parseAssistantLibSessionMeta,
@@ -156,8 +157,11 @@ export function AssistantLibClassroomRecords({ session, onOpenSession }: Props) 
                   <ol className="tm-alib-records-chapter-list">
                     {chapters.map((chapter, index) => (
                       <li key={chapter.id} className="tm-alib-records-chapter-item">
+                        {chapter.groupTitle && chapter.groupTitle !== chapters[index - 1]?.groupTitle ? (
+                          <span className="tm-alib-records-chapter-group">{chapter.groupTitle}</span>
+                        ) : null}
                         <span className="tm-alib-records-chapter-index">{index + 1}</span>
-                        <span className="tm-alib-records-chapter-title">{chapter.title}</span>
+                        <span className="tm-alib-records-chapter-title">{classroomChapterTitle(chapter.title)}</span>
                         <span
                           className={`tm-alib-records-chapter-status tm-alib-records-chapter-status--${chapter.status}`}
                         >

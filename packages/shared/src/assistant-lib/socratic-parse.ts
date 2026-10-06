@@ -31,17 +31,29 @@ export function parseSocraticStateFromText(text: string): Partial<SocraticState>
   }
 }
 
+const SOCRATIC_FENCE_NAMES = ['socratic-card', 'socratic-state']
+
+/** A trailing ```s / ```socratic-… that is not yet a complete fence name. */
+function stripTrailingSocraticOpener(text: string): string {
+  const match = /```[^\n]*$/.exec(text)
+  if (!match) return text
+  const label = match[0].slice(3).trim().toLowerCase()
+  const partial = label === '' || SOCRATIC_FENCE_NAMES.some((name) => name.startsWith(label))
+  if (!partial) return text
+  return text.slice(0, match.index).trimEnd()
+}
+
 /**
  * Remove machine-only Socratic fences from user-facing text (chat bubble / TTS).
- * Also drops a trailing incomplete fence while the model is still streaming.
+ * Also drops a trailing incomplete fence while the model is still streaming,
+ * including the first letters of ```socratic- before the name is complete.
  */
 export function stripSocraticMachineBlocks(text: string): string {
-  return text
+  const stripped = text
     .replace(CARD_RE, '')
     .replace(STATE_RE, '')
     .replace(/```socratic-(?:card|state)\s*[\s\S]*$/i, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return stripTrailingSocraticOpener(stripped).replace(/\n{3,}/g, '\n\n').trim()
 }
 
 export function applySocraticStateFromAssistantText(

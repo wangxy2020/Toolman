@@ -5,6 +5,7 @@ import {
   flattenPdfOutline,
   isCourseOutlineNoiseTitle,
   resolveCourseOutline,
+  splitGluedTocTitle,
 } from './extract-course-outline'
 
 describe('isCourseOutlineNoiseTitle', () => {
@@ -16,6 +17,8 @@ describe('isCourseOutlineNoiseTitle', () => {
     expect(isCourseOutlineNoiseTitle('目 录')).toBe(true)
     expect(isCourseOutlineNoiseTitle('Contents')).toBe(true)
     expect(isCourseOutlineNoiseTitle('第一章 写作规律')).toBe(false)
+    expect(isCourseOutlineNoiseTitle('绪言')).toBe(true)
+    expect(isCourseOutlineNoiseTitle('绪言 化学科学与实验探究')).toBe(true)
   })
 
   it('strips PDF.js NUL suffixes on bookmark titles', () => {
@@ -103,6 +106,21 @@ describe('extractOutlineFromTocSection', () => {
       '第二章 人物塑造',
       '一、角色小传',
       '第三节 对话技巧',
+    ])
+  })
+})
+
+describe('splitGluedTocTitle', () => {
+  it('splits a glued chapter-1 row into sections and 整理与提升', () => {
+    expect(
+      splitGluedTocTitle(
+        '第一节 物质的分类及转化 6 第二节 离子反应 14 第三节 氧化还原反应 22 整理与提升',
+      ),
+    ).toEqual([
+      '第一节 物质的分类及转化',
+      '第二节 离子反应',
+      '第三节 氧化还原反应',
+      '整理与提升',
     ])
   })
 })

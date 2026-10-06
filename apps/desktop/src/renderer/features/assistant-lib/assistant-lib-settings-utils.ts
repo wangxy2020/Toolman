@@ -2,6 +2,7 @@ import {
   applySyllabusTitlesFromMarkdown,
   assistantLibSessionMetadataPatch,
   formatSyllabusMarkdown,
+  stripSyllabusHeadingBullets,
   getAssistantLibPreset,
   isAssistantLibDefaultClassroomSession,
   isAssistantLibGuideCourseSession,
@@ -87,10 +88,11 @@ export function draftFromSession(
     kbPath: kb ? resolveTextbookKbDisplayPath(kb, defaultLocalFolderPath) : '',
     filePaths: [],
     customSystemPrompt: meta?.customSystemPrompt?.trim() || preset?.systemPrompt || '',
-    lessonPlan:
+    lessonPlan: stripSyllabusHeadingBullets(
       meta?.lessonPlan?.trim() ||
-      (meta?.syllabus ? formatSyllabusMarkdown(meta.syllabus) : '') ||
-      '',
+        (meta?.syllabus ? formatSyllabusMarkdown(meta.syllabus) : '') ||
+        '',
+    ),
     autoSpeak: meta?.autoSpeak ?? true,
     ttsEngine: meta?.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
     ttsVoice: resolveCuratedEdgeTtsVoice(meta?.ttsVoice),
@@ -100,9 +102,9 @@ export function draftFromSession(
 
 export function resolveLessonPlanMarkdown(session: Session): string {
   const meta = parseAssistantLibSessionMeta(session.metadata)
-  return (
+  return stripSyllabusHeadingBullets(
     meta?.lessonPlan?.trim() ||
-    (meta?.syllabus ? formatSyllabusMarkdown(meta.syllabus) : '')
+      (meta?.syllabus ? formatSyllabusMarkdown(meta.syllabus) : ''),
   )
 }
 

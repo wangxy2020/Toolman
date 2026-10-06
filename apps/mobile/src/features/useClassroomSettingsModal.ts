@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   formatSyllabusMarkdown,
+  stripSyllabusHeadingBullets,
   getAssistantLibPreset,
   listSelectableAssistantLibPresets,
   type AssistantLibPresetId,
@@ -68,9 +69,10 @@ export function draftFromCourse(
     presetId,
     refereeEnabled: course.refereeEnabled,
     customSystemPrompt: course.customSystemPrompt.trim() || preset?.systemPrompt || '',
-    lessonPlan:
+    lessonPlan: stripSyllabusHeadingBullets(
       course.lessonPlan.trim() ||
-      (course.syllabus ? formatSyllabusMarkdown(course.syllabus) : ''),
+        (course.syllabus ? formatSyllabusMarkdown(course.syllabus) : ''),
+    ),
     autoSpeak: course.autoSpeak !== false,
     ttsEngine: course.ttsEngine === 'web-speech' ? 'web-speech' : 'edge',
     ttsVoice: resolveCuratedEdgeTtsVoice(course.ttsVoice || DEFAULT_EDGE_TTS_VOICE),

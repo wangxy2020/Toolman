@@ -202,6 +202,7 @@ export function AssistantLibSettingsDialog({
                     emptyLabel={t('assistantLibPage.lessonPlanEmpty')}
                     ariaLabel={t('assistantLibPage.settingsLessonTab')}
                     value={draft.lessonPlan}
+                    plainLists
                     editing={editingDoc && !syllabusGenerating}
                     busy={busy || syllabusGenerating}
                     headerActions={

@@ -17,6 +17,8 @@ export type CourseSyllabusChapterStatus = z.infer<typeof CourseSyllabusChapterSt
 export const CourseSyllabusChapterSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
+  /** Parent 章 title when this row is a 节 / 课时, not the chapter itself. */
+  groupTitle: z.string().min(1).optional(),
   hours: z.number().positive().optional(),
   lessonPlan: z.string().optional(),
   assessmentQuestions: z.array(z.string()).default([]),
