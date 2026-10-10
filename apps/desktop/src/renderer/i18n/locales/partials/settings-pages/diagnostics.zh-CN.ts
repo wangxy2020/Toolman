@@ -123,7 +123,7 @@ export const settingsPagesDiagnosticsZhCN = {
       lanDiscovery: '局域网发现',
       iceTurn: 'ICE / TURN',
       iceTurnHint:
-        '跨网个人同步与群组共用 ICE/TURN。TURN 就绪时，网页/手机配对后走 WebRTC 直连。未配置 TURN 时，托管网页可改填 HTTPS 桌面地址作为兜底。',
+        '跨网网页同步在配对后走点到点 WebRTC。信令令牌由桌面端签发，不经过 hub.toolman.app；笔记和课堂数据在两端的数据通道里传输。知识库正文仍只在局域网同步。',
       wanReady: 'WAN 就绪',
       wanLanConnections: 'WAN / LAN 连接',
       wanLanCount: '{{wan}} WAN · {{lan}} LAN',

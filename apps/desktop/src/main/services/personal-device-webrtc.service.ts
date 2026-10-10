@@ -1,8 +1,7 @@
 /**
- * Answer personal device-sync WebRTC offers deposited into the local Sync Hub mailbox,
- * then push recent SyncChange batches over the native `device-sync` channel.
- * Also applies inbound `device.sync.changes` from the encrypted personal mailbox.
- * Signaling/mailbox stay on the desktop Sync Hub (P2P) — no official Hub.
+ * Answer personal device-sync offers from the local mailbox or the Xirsys
+ * signaling room. The answer itself is a hidden Chromium RTCPeerConnection
+ * that speaks the browser `device-sync` JSON channel. No official Hub.
  */
 import {
   DEVICE_SYNC_DATA_CHANNEL,
@@ -23,6 +22,15 @@ import {
 import { P2pBridge } from './p2p/p2p-bridge'
 import { pullMailboxRecords, putMailboxRecord } from './p2p/p2p-mailbox-store'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
+import { ensureFreshP2pIceServers } from './p2p/p2p-network.config'
+import {
+  ensurePersonalSignalConnected,
+  sendPersonalSignalCiphertext,
+  setPersonalSignalHandler,
+  startPersonalSignalLink,
+  stopPersonalSignalLink,
+} from './p2p/personal-signal-link'
+import { answerPersonalSyncOffer } from './personal-sync-rtc'
 import { logStructured } from './structured-log.service'
 import { toErrorMessage } from '@toolman/shared'
 
@@ -37,6 +45,7 @@ const PERSONAL_ENTITY_KINDS = new Set([
 let timer: ReturnType<typeof setInterval> | null = null
 let sinceSeq = 0
 let answering = false
+const inFlightOffers = new Set<string>()
 
 function recentPersonalChanges(): SyncChange[] {
   return listSyncChangelog()
@@ -71,6 +80,12 @@ async function depositAnswer(input: {
     ciphertextB64,
     depositedAt: Date.now(),
   })
+  try {
+    await ensurePersonalSignalConnected()
+    sendPersonalSignalCiphertext(input.recipientDeviceId, ciphertextB64)
+  } catch {
+    // The local mailbox copy still serves a peer on the same network.
+  }
 }
 
 async function pushChangesToPeer(peerDeviceId: string): Promise<void> {
@@ -93,32 +108,63 @@ async function handleOffer(plain: {
 }): Promise<void> {
   const inviteId = typeof plain.payload.inviteId === 'string' ? plain.payload.inviteId : ''
   const offerSdp = typeof plain.payload.sdp === 'string' ? plain.payload.sdp : ''
-  if (!inviteId || !offerSdp) return
+  if (!inviteId || !offerSdp || inFlightOffers.has(inviteId)) return
+  inFlightOffers.add(inviteId)
 
+  try {
+    const store = getOrCreatePersonalPairingStore()
+    const workspaceId = personalSyncWorkspaceId(store.identityId)
+    const local = getP2pDeviceInfo()
+    const inbound = await answerPersonalSyncOffer({
+      offerSdp,
+      iceServers: (await ensureFreshP2pIceServers()).slice(0, 8),
+      localDeviceId: local.deviceId,
+      changes: recentPersonalChanges(),
+      onAnswer: (answerSdp) =>
+        depositAnswer({
+          workspaceId,
+          workspaceKeyB64: store.workspaceKeyB64,
+          recipientDeviceId: plain.senderDeviceId,
+          inviteId,
+          answerSdp,
+        }),
+    })
+    applyChannelTexts(inbound)
+  } finally {
+    inFlightOffers.delete(inviteId)
+  }
+}
+
+function applyChannelTexts(texts: string[]): void {
+  const localId = getP2pDeviceInfo().deviceId
+  const changes: SyncChange[] = []
+  for (const text of texts) {
+    try {
+      const parsed = DeviceSyncChannelMessageSchema.safeParse(JSON.parse(text) as unknown)
+      if (!parsed.success || parsed.data.type !== 'sync.changes') continue
+      if (parsed.data.senderDeviceId === localId) continue
+      for (const raw of parsed.data.changes) {
+        const item = SyncChangeSchema.safeParse(raw)
+        if (item.success) changes.push(item.data)
+      }
+    } catch {
+      // ignore malformed channel text
+    }
+  }
+  applyPersonalMailboxChanges(changes)
+}
+
+function ingestPersonalCiphertext(ciphertextB64: string): void {
   const store = getOrCreatePersonalPairingStore()
   const workspaceId = personalSyncWorkspaceId(store.identityId)
-  P2pBridge.cryptoSetWorkspaceKey(workspaceId, store.workspaceKeyB64, 1)
-
-  const joined = await P2pBridge.inviteConnectAsJoiner(
-    plain.senderDeviceId,
-    workspaceId,
-    offerSdp,
-    inviteId,
-  )
-  if (!joined.answerSdp) {
-    throw new Error('native invite returned empty answer')
-  }
-
-  await depositAnswer({
-    workspaceId,
-    workspaceKeyB64: store.workspaceKeyB64,
-    recipientDeviceId: plain.senderDeviceId,
-    inviteId,
-    answerSdp: joined.answerSdp,
+  const workspaceKey = workspaceKeyFromB64(store.workspaceKeyB64)
+  void handlePersonalEnvelope({ workspaceId, workspaceKey, ciphertextB64 }).catch((error) => {
+    logStructured(
+      'mobile-sync',
+      'warn',
+      `personal signal apply failed: ${toErrorMessage(error, String(error))}`,
+    )
   })
-
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  await pushChangesToPeer(plain.senderDeviceId)
 }
 
 function applyPersonalMailboxChanges(changes: SyncChange[]): void {
@@ -219,6 +265,8 @@ export async function handlePersonalDeviceSyncChannelMessage(
 
 export function startPersonalDeviceWebrtcLoop(): void {
   if (timer) return
+  setPersonalSignalHandler(ingestPersonalCiphertext)
+  startPersonalSignalLink()
   void pollPersonalDeviceSyncOffers()
   timer = setInterval(() => {
     void pollPersonalDeviceSyncOffers()
@@ -226,6 +274,7 @@ export function startPersonalDeviceWebrtcLoop(): void {
 }
 
 export function stopPersonalDeviceWebrtcLoop(): void {
+  stopPersonalSignalLink()
   if (timer) {
     clearInterval(timer)
     timer = null

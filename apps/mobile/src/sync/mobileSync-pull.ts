@@ -37,6 +37,7 @@ import {
 } from './mobileSync-pull-helpers'
 import { pullPersonalMailboxChanges } from './personalMailboxSync'
 import { tryDeviceSyncWebrtc } from './deviceSyncWebrtc'
+import { refreshPersonalSignalTicket } from './personalSignalTicket'
 import { loadDevicePairing } from '../storage/devicePairing'
 import { shouldDiscardForeignPrivateWorkspace } from './syncIdentity'
 
@@ -134,6 +135,7 @@ export async function pullAndApplySync(options: {
 
   const pulledChanges: SyncChange[] = []
   let cursor = options.cursor
+  let lanPullOk = false
   if (client) {
     try {
       for (let page = 0; page < 50; page += 1) {
@@ -155,7 +157,10 @@ export async function pullAndApplySync(options: {
         const nextCursor = pull.nextCursor ?? cursor
         const hasMore = pull.hasMore === true || pull.changes.length >= 100
         cursor = nextCursor
-        if (!hasMore || pull.changes.length === 0) break
+        if (!hasMore || pull.changes.length === 0) {
+          lanPullOk = true
+          break
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -164,6 +169,9 @@ export async function pullAndApplySync(options: {
       }
       if (!pairing) throw error
     }
+  }
+  if (lanPullOk && client) {
+    void refreshPersonalSignalTicket(client.getBaseUrl())
   }
 
   let effectiveTransport: MobileSyncTransport = transport
@@ -192,7 +200,9 @@ export async function pullAndApplySync(options: {
       throw (
         hubUnavailable ??
         new Error(
-          '已配对但未能拉取变更。请确认桌面在线：localhost/局域网走 Sync Hub；托管网页需点到点 WebRTC 或 HTTPS 桌面地址（不依赖官方 Hub）。',
+          pairing?.signalToken
+            ? '已配对但未能拉取变更。请确认桌面端在线，且两端都能连上 TURN。知识库正文仍只在局域网同步。'
+            : '已配对但还没有跨网信令。请先在能访问桌面的网络上同步一次，或重新输入 4 位配对码。',
         )
       )
     }

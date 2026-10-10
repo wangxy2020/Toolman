@@ -33,6 +33,8 @@ describe('isHostedPublicWebPage', () => {
     expect(isHostedPublicWebPage('www.toolman.work')).toBe(true)
     expect(isHostedPublicWebPage('localhost')).toBe(false)
     expect(isHostedPublicWebPage('127.0.0.1')).toBe(false)
+    expect(isHostedPublicWebPage('192.168.1.8')).toBe(false)
+    expect(isHostedPublicWebPage('mac.local')).toBe(false)
     expect(isHostedPublicWebPage('')).toBe(false)
   })
 })
@@ -43,6 +45,8 @@ describe('localNetworkRequestTimeoutMs', () => {
   })
 
   it('waits for the browser permission prompt only on hosted web', () => {
+    expect(localNetworkRequestTimeoutMs('http://127.0.0.1:17890/health')).toBe(2500)
+    vi.stubGlobal('location', { hostname: '192.168.1.8' })
     expect(localNetworkRequestTimeoutMs('http://127.0.0.1:17890/health')).toBe(2500)
     vi.stubGlobal('location', { hostname: 'www.toolman.work' })
     expect(localNetworkRequestTimeoutMs('http://127.0.0.1:17890/health')).toBe(25_000)

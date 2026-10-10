@@ -8,6 +8,7 @@ import {
   P2P_MAILBOX_WORKSPACES_PATH,
   SYNC_HUB_SERVICE_NAME,
   SYNC_PAIRING_REDEEM_PATH,
+  SYNC_SIGNAL_TICKET_PATH,
   SyncPushInputSchema,
   isAccountSyncIdentityId,
   isShortPairingCode,
@@ -50,7 +51,9 @@ import {
   sendSse,
   tokensMatch,
 } from './mobile-sync-hub-http'
-import { getP2pPersonIdentityId } from './p2p/p2p-device-identity.service'
+import { getP2pDeviceInfo, getP2pPersonIdentityId } from './p2p/p2p-device-identity.service'
+import { ensureFreshP2pIceServers } from './p2p/p2p-network.config'
+import { mintXirsysSignalAccess, withPersonalSignalTicket } from './p2p/p2p-xirsys-signal.service'
 
 function advertisedSyncHubIdentityId(): string | null {
   try {
@@ -127,7 +130,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       const localDeviceId = typeof body.localDeviceId === 'string' ? body.localDeviceId.trim() : ''
       const role = body.role === 'web' || body.role === 'mobile' ? body.role : 'mobile'
       if (localDeviceId) rememberPairedDevice({ deviceId: localDeviceId, role })
-      sendJson(res, 200, { offer }, req)
+      const ticketed = localDeviceId ? await withPersonalSignalTicket(offer, localDeviceId) : offer
+      sendJson(res, 200, { offer: ticketed }, req)
     } catch (error) {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) }, req)
     }
@@ -232,6 +236,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       return
     }
     sendJson(res, 200, result.data, req)
+    return
+  }
+
+  if (method === 'POST' && url.pathname === SYNC_SIGNAL_TICKET_PATH) {
+    if (!requireHubAuth(req, res)) return
+    if (!requireHubAccountMatch(req, res)) return
+    const parsed = parseJsonBody(await readBody(req))
+    const body =
+      parsed.ok && parsed.value && typeof parsed.value === 'object'
+        ? (parsed.value as { deviceId?: unknown; role?: unknown })
+        : {}
+    const deviceId = typeof body.deviceId === 'string' ? body.deviceId.trim() : ''
+    if (!deviceId || deviceId.length > 80) {
+      sendJson(res, 400, { error: 'invalid device id' }, req)
+      return
+    }
+    try {
+      const ticket = await mintXirsysSignalAccess(deviceId)
+      if (!ticket) {
+        sendJson(res, 503, { error: 'signal ticket unavailable' }, req)
+        return
+      }
+      const role = body.role === 'mobile' || body.role === 'web' ? body.role : 'web'
+      rememberPairedDevice({ deviceId, role })
+      const iceServers = (await ensureFreshP2pIceServers()).slice(0, 8)
+      sendJson(
+        res,
+        200,
+        {
+          signalHost: ticket.host,
+          signalToken: ticket.token,
+          signalPeerId: ticket.peerId,
+          desktopPeerId: getP2pDeviceInfo().deviceId,
+          iceServers,
+        },
+        req,
+      )
+    } catch {
+      sendJson(res, 503, { error: 'signal ticket failed' }, req)
+    }
     return
   }
 

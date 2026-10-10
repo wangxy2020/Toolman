@@ -34,7 +34,7 @@ export async function startMobileSyncHub(): Promise<{ baseUrl: string } | null> 
   if (!isMobileSyncEnabled()) return null
   const host = resolveMobileSyncListenHost()
   const port = getMobileSyncHubPort()
-  if (server && listenHost === host && listenPort === port) {
+  if (server?.listening && listenHost === host && listenPort === port) {
     return { baseUrl: `http://127.0.0.1:${listenPort}` }
   }
   if (server) await stopMobileSyncHub()
@@ -50,9 +50,16 @@ export async function startMobileSyncHub(): Promise<{ baseUrl: string } | null> 
     })
   })
 
+  const current = server
+  current.on('close', () => {
+    if (server !== current) return
+    server = null
+    listenPort = null
+    listenHost = null
+  })
   await new Promise<void>((resolve, reject) => {
-    server!.once('error', reject)
-    server!.listen(port, host, () => resolve())
+    current.once('error', reject)
+    current.listen(port, host, () => resolve())
   })
   listenPort = port
   listenHost = host

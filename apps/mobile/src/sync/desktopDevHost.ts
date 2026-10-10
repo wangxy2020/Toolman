@@ -13,9 +13,10 @@ export function pageHostname(): string {
   return (globalThis as { location?: { hostname?: string } }).location?.hostname ?? ''
 }
 
-/** Hosted HTTPS web (Vercel) is not the desktop under test. */
+/** Public site (`www.toolman.work`), not Expo on localhost or a LAN IP. */
 export function isHostedWebPage(hostname: string = pageHostname()): boolean {
-  return Platform.OS === 'web' && Boolean(hostname) && !isLoopbackHostname(hostname)
+  const host = hostname.trim()
+  return Platform.OS === 'web' && Boolean(host) && !isPrivateOrLoopbackHostname(host)
 }
 
 /** Hostnames of the machine serving this Expo bundle — usually the desktop under test. */

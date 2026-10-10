@@ -11,6 +11,7 @@ import {
 import type { MobileClassroomCourse } from './classroomSyncMerge'
 import { createReachableMobileSyncClient, isForeignSyncHubError } from './mobileSync-client'
 import { pushPersonalMailboxChanges } from './personalMailboxSync'
+import { tryDeviceSyncWebrtc } from './deviceSyncWebrtc'
 
 async function tryCreateHubClient(client?: ToolmanSyncClient): Promise<ToolmanSyncClient | null> {
   if (client) return client
@@ -20,6 +21,32 @@ async function tryCreateHubClient(client?: ToolmanSyncClient): Promise<ToolmanSy
     if (isForeignSyncHubError(error)) throw error
     return null
   }
+}
+
+async function pushViaPersonalWebRtc(changes: import('@toolman/shared').SyncChange[]): Promise<boolean> {
+  if (changes.length === 0) return true
+  const pairing = await loadDevicePairing()
+  if (!pairing?.signalToken) return false
+  try {
+    const result = await tryDeviceSyncWebrtc(pairing, { outboundChanges: changes, pull: false })
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+function personalTransportError(hasClient: boolean, hasSignalTicket: boolean): Error {
+  if (!hasSignalTicket) {
+    return new Error(
+      '无法连接桌面 Sync Hub。跨网同步需要先在能访问桌面的网络上完成一次配对，或重新输入 4 位配对码，以取得点到点信令。',
+    )
+  }
+  if (!hasClient) {
+    return new Error(
+      '无法连接 Sync Hub，且点到点同步未完成。请确认桌面端在线；两端都需能访问 TURN。知识库正文仍只在局域网同步。',
+    )
+  }
+  return new Error('同步未授权。请填写局域网配对令牌，或在可访问桌面的网络上重新配对后再跨网同步。')
 }
 
 async function pushViaPersonalMailbox(changes: import('@toolman/shared').SyncChange[]): Promise<boolean> {
@@ -66,20 +93,14 @@ export async function pushNoteChanges(
     }
   }
 
-  if (await pushViaPersonalMailbox(changes)) {
+  if (await pushViaPersonalMailbox(changes) || (await pushViaPersonalWebRtc(changes))) {
     const next = applyNotePushStamps(syncState, notes, deletedNotes, changes)
     await saveMobileSyncState(next)
     return next
   }
 
-  if (!client) {
-    throw new Error(
-      '无法连接 Sync Hub，且个人投递失败。请完成设备配对；localhost/真机局域网可直连桌面，托管网页需 HTTPS 桌面地址或点到点 WebRTC（不依赖官方 Hub）。',
-    )
-  }
-  throw new Error(
-    '同步未授权。请填写局域网配对令牌，或依赖已配对的点到点 / 投递（桌面 Sync Hub 需对端可达）。',
-  )
+  const pairing = await loadDevicePairing()
+  throw personalTransportError(Boolean(client), Boolean(pairing?.signalToken))
 }
 
 export async function pushClassroomChanges(
@@ -105,18 +126,12 @@ export async function pushClassroomChanges(
     }
   }
 
-  if (await pushViaPersonalMailbox(changes)) {
+  if (await pushViaPersonalMailbox(changes) || (await pushViaPersonalWebRtc(changes))) {
     const next = applyClassroomPushStamps(syncState, courses, changes)
     await saveMobileSyncState(next)
     return next
   }
 
-  if (!client) {
-    throw new Error(
-      '无法连接 Sync Hub，且个人投递失败。请完成设备配对；localhost/真机局域网可直连桌面，托管网页需 HTTPS 桌面地址或点到点 WebRTC（不依赖官方 Hub）。',
-    )
-  }
-  throw new Error(
-    '同步未授权。请填写局域网配对令牌，或依赖已配对的点到点 / 投递（桌面 Sync Hub 需对端可达）。',
-  )
+  const pairing = await loadDevicePairing()
+  throw personalTransportError(Boolean(client), Boolean(pairing?.signalToken))
 }

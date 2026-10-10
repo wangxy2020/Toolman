@@ -104,6 +104,7 @@ export function useMobileAppSync(input: {
 
     syncingRef.current = true
     setSyncStatus('syncing')
+    let pushError: unknown = null
     try {
       try {
         if (includeNotes) {
@@ -132,8 +133,8 @@ export function useMobileAppSync(input: {
           setSyncStatus('offline')
           return formatSyncFailureMessage(error)
         }
-        setSyncStatus(classifySyncFailure(error))
-        return formatSyncFailureMessage(error)
+        // A failed upload must not block pulling desktop changes.
+        pushError = error
       }
       const applied = await pullAndApplySync({
         cursor: snapshot.syncCursor,
@@ -176,12 +177,16 @@ export function useMobileAppSync(input: {
               ? '已通过加密个人投递盒同步'
               : '已通过局域网 Sync Hub 同步'
       const summary = `${transportLabel}：笔记 ${applied.notes.length} 篇，知识库 ${applied.knowledgeMeta.length} 个（${applied.documentCount} 篇文档），课程 ${applied.classroomCourses.length} 门，群组 ${applied.groups.length} 个`
+      const withPush = (text: string) =>
+        pushError ? `${text}。本机改动尚未上传：${formatSyncFailureMessage(pushError)}` : text
       if (applied.knowledgeWanSkipped && includeKnowledge) {
-        return `${summary}。${applied.knowledgeError ?? '知识库文件需同局域网补拉'}`
+        return withPush(`${summary}。${applied.knowledgeError ?? '知识库文件需同局域网补拉'}`)
       }
-      return applied.knowledgeError && includeKnowledge
-        ? `${summary}。知识库文件稍后再试：${applied.knowledgeError}`
-        : summary
+      return withPush(
+        applied.knowledgeError && includeKnowledge
+          ? `${summary}。知识库文件稍后再试：${applied.knowledgeError}`
+          : summary,
+      )
     } catch (error) {
       if (isForeignSyncHubError(error)) {
         const discarded = await discardForeignPrivateWorkspace(syncStateRef.current)

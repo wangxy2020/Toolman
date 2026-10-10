@@ -16,6 +16,13 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 /** Deferred — never call `net.isOnline()` at module load (breaks under some Electron boot paths). */
 let lastOnline: boolean | null = null
 let recoveryInFlight = false
+let recoveryFailed = false
+/** Sync Hub (and similar) rebind after the machine comes back online. */
+let onNetworkOnline: (() => void) | null = null
+
+export function setP2pNetworkOnlineHandler(handler: (() => void) | null): void {
+  onNetworkOnline = handler
+}
 
 async function recoverAfterNetworkChange(online: boolean): Promise<void> {
   if (recoveryInFlight) return
@@ -32,6 +39,7 @@ async function recoverAfterNetworkChange(online: boolean): Promise<void> {
         connections.map((item) => disconnectP2pPeer(item.peerDeviceId).catch(() => undefined)),
       )
       stopP2pDiscovery()
+      recoveryFailed = false
       return
     }
 
@@ -45,18 +53,31 @@ async function recoverAfterNetworkChange(online: boolean): Promise<void> {
         reconcileOwnerWorkspaceMembers(workspace.id, { immediate: true }),
       )
     }
+    recoveryFailed = false
   } catch (error) {
-    logStructured('p2p.network_change', 'warn', 'network change recovery failed', {
-      message: toErrorMessage(error, 'network change recovery failed'),
-    })
+    if (!recoveryFailed) {
+      logStructured('p2p.network_change', 'warn', 'network change recovery failed', {
+        message: toErrorMessage(error, 'network change recovery failed'),
+      })
+    }
+    recoveryFailed = true
   } finally {
     recoveryInFlight = false
+    if (online) {
+      try {
+        onNetworkOnline?.()
+      } catch (error) {
+        logStructured('p2p.network_change', 'warn', 'network online handler failed', {
+          message: toErrorMessage(error, 'network online handler failed'),
+        })
+      }
+    }
   }
 }
 
 function pollNetworkState(): void {
   const online = net.isOnline()
-  if (lastOnline !== null && online === lastOnline) return
+  if (lastOnline !== null && online === lastOnline && !recoveryFailed) return
   lastOnline = online
   fireAndForget('p2p.network_change', recoverAfterNetworkChange(online))
 }
@@ -71,4 +92,6 @@ export function stopP2pNetworkChangeMonitor(): void {
   if (!pollTimer) return
   clearInterval(pollTimer)
   pollTimer = null
+  lastOnline = null
+  recoveryFailed = false
 }

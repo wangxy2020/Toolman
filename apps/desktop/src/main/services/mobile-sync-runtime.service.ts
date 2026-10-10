@@ -50,6 +50,24 @@ import {
 } from './personal-device-webrtc.service'
 import { getP2pDeviceInfo } from './p2p/p2p-device-identity.service'
 import { logStructured } from './structured-log.service'
+import { setP2pNetworkOnlineHandler } from './p2p/p2p-network-change.service'
+
+let networkRestartHooked = false
+
+function hookSyncHubNetworkRestart(): void {
+  if (networkRestartHooked) return
+  networkRestartHooked = true
+  setP2pNetworkOnlineHandler(() => {
+    if (!isMobileSyncEnabled()) return
+    void startMobileSyncHub().catch((error) => {
+      logStructured(
+        'mobile-sync',
+        'warn',
+        `hub restart after network change failed: ${toErrorMessage(error, String(error))}`,
+      )
+    })
+  })
+}
 
 function seedMobileSyncChangelog(): void {
   try {
@@ -107,6 +125,7 @@ export function getMobileSyncDiagnostics(): AppDiagnosticsMobileSync {
 }
 
 export async function ensureMobileSyncRuntime(): Promise<AppDiagnosticsMobileSync> {
+  hookSyncHubNetworkRestart()
   if (!isMobileSyncEnabled()) {
     stopCommunityDeviceSyncLoop()
     stopPersonalDeviceWebrtcLoop()

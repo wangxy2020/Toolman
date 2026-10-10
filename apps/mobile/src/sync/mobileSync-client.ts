@@ -7,6 +7,7 @@ import {
   isReachableSyncEndpointHealth,
   hostnameOfBaseUrl,
   listSyncBaseUrlCandidates,
+  preferLoopbackSyncBaseUrls,
   syncHubHealthIdentityId,
 } from '@toolman/shared'
 import { COMMUNITY_HUB_PROXY_PREFIX } from '../features/communityHubProxy'
@@ -236,15 +237,20 @@ export async function resolveReachableMobileSyncBaseUrl(
     communityHubBaseUrl === undefined ? prefs.community.hubBaseUrl : communityHubBaseUrl
   const packagerHostnames = listDesktopDevHostnames()
   const localIdentityId = await loadSyncIdentityId()
+  const includeLoopback = shouldProbeLoopbackSyncHub(packagerHostnames)
   const candidates = listSyncBaseUrlCandidates({
     configuredSyncBaseUrl: prefs.sync?.hubBaseUrl,
     envSyncBaseUrl: process.env.EXPO_PUBLIC_SYNC_BASE_URL,
     communityHubBaseUrl: resolveCommunityHubBaseUrl(configuredCommunity),
     packagerHostnames,
-    includeLoopback: shouldProbeLoopbackSyncHub(packagerHostnames),
+    includeLoopback,
   }).map(rewriteSyncBaseUrlForClient)
   // De-dupe after hosted-web rewrite collapses official hub → proxy.
-  const uniqueCandidates = Array.from(new Set(candidates))
+  // Web (including a page opened at a LAN IP) tries 127.0.0.1 before that LAN
+  // address so same-computer sync does not require the pairing code.
+  const uniqueCandidates = includeLoopback
+    ? preferLoopbackSyncBaseUrls(Array.from(new Set(candidates)))
+    : Array.from(new Set(candidates))
   await primeLocalNetworkAccess()
   if (
     cachedSyncBaseUrl &&

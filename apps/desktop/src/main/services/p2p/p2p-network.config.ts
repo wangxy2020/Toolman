@@ -17,6 +17,8 @@ import { recordDiagnosticEvent } from '../diagnostics-log'
 import { fetchXirsysIceServers } from './p2p-xirsys.service'
 
 let runtimeIceServersOverride: P2pIceServer[] | null = null
+let iceFetchedAt = 0
+const ICE_CACHE_MS = 5 * 60 * 1000
 
 function getConfigPath(): string {
   const dir = join(app.getPath('userData'), 'p2p')
@@ -105,6 +107,11 @@ function resolveXirsysConfig(): P2pXirsysConfig | null {
   return readXirsysConfigFromEnv() ?? readXirsysConfigFromFile()
 }
 
+/** Xirsys account used to mint signaling tokens. The secret stays in the main process. */
+export function getConfiguredXirsys(): P2pXirsysConfig | null {
+  return resolveXirsysConfig()
+}
+
 export function seedP2pNetworkConfigFromEnvIfNeeded(): void {
   if (!app.isPackaged) return
 
@@ -137,6 +144,7 @@ export async function bootstrapP2pIceServers(): Promise<boolean> {
 
   const servers = await fetchXirsysIceServers(xirsys)
   runtimeIceServersOverride = servers
+  iceFetchedAt = Date.now()
   writeNetworkConfig(servers, xirsys)
   resetWanReadinessLogDedup()
   logStructured(
@@ -149,6 +157,25 @@ export async function bootstrapP2pIceServers(): Promise<boolean> {
 
 export function getP2pIceServers(): P2pIceServer[] {
   return sanitizeIceServersForWebRtc(getRawP2pIceServers())
+}
+
+/** Dynamic TURN credentials expire. Refresh them before a pairing ticket or an answer. */
+export async function ensureFreshP2pIceServers(): Promise<P2pIceServer[]> {
+  const xirsys = resolveXirsysConfig()
+  if (!xirsys) return getP2pIceServers()
+  if (runtimeIceServersOverride && Date.now() - iceFetchedAt < ICE_CACHE_MS) {
+    return getP2pIceServers()
+  }
+  try {
+    const servers = await fetchXirsysIceServers(xirsys)
+    runtimeIceServersOverride = servers
+    iceFetchedAt = Date.now()
+    writeNetworkConfig(servers, xirsys)
+    return sanitizeIceServersForWebRtc(servers)
+  } catch (error) {
+    logStructured('p2p', 'warn', `Xirsys ICE refresh failed: ${toErrorMessage(error, String(error))}`)
+    return getP2pIceServers()
+  }
 }
 
 function getRawP2pIceServers(): P2pIceServer[] {

@@ -31,6 +31,29 @@ describe('device-pairing', () => {
     expect(record.peerDeviceId).toBe('desk-1')
   })
 
+  it('keeps the signaling ticket on the pairing record', () => {
+    const secrets = createDevicePairingSecrets()
+    const record = pairingRecordFromOffer({
+      offer: {
+        v: 1,
+        identityId: 'ag-abcdef0123456789abcdef01',
+        desktopDeviceId: 'desk-1',
+        workspaceKeyB64: secrets.workspaceKeyB64,
+        grant: secrets.grant,
+        signalHost: 'wss://signal.example/ws',
+        signalToken: 'phone-token',
+        signalPeerId: 'phone-1',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      },
+      localDeviceId: 'phone-1',
+      role: 'web',
+    })
+    expect(record.signalHost).toBe('wss://signal.example/ws')
+    expect(record.signalToken).toBe('phone-token')
+    expect(record.signalPeerId).toBe('phone-1')
+  })
+
   it('rejects expired offers', () => {
     const secrets = createDevicePairingSecrets()
     const code = encodeDevicePairingOffer({

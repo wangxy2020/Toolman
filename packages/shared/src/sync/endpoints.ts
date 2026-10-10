@@ -9,6 +9,8 @@ export const SYNC_HUB_SERVICE_NAME = 'toolman-sync-hub'
 export const SYNC_HUB_TOKEN_HEADER = 'X-Toolman-Sync-Token'
 /** Exchange the 4-character pairing code for a personal device-pairing offer. */
 export const SYNC_PAIRING_REDEEM_PATH = '/api/v1/sync/pairing/redeem'
+/** Refresh the browser's Xirsys signaling token while the desktop hub is reachable. */
+export const SYNC_SIGNAL_TICKET_PATH = '/api/v1/sync/signal-ticket'
 export const DEFAULT_LOCAL_COMMUNITY_HUB_PORT = 3721
 export const DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL = `http://127.0.0.1:${DEFAULT_LOCAL_COMMUNITY_HUB_PORT}`
 /** Matches desktop `DEFAULT_LOCAL_IDENTITY_ID` / hub seed identity. */
@@ -271,6 +273,22 @@ export function listSyncBaseUrlCandidates(options?: {
     includeLoopback ? DEFAULT_LOCAL_SYNC_BASE_URL : null,
     wanCommunityHub,
   ])
+}
+
+/**
+ * Put loopback Sync Hub URLs first.
+ * A page opened at `http://192.168.x.x:8081` on the same computer otherwise
+ * locks onto the LAN address, and that path requires the pairing code.
+ * Native clients that omit loopback are unchanged.
+ */
+export function preferLoopbackSyncBaseUrls(urls: readonly string[]): string[] {
+  const loopback: string[] = []
+  const rest: string[] = []
+  for (const url of urls) {
+    if (isLoopbackHostname(hostnameOfBaseUrl(url))) loopback.push(url)
+    else rest.push(url)
+  }
+  return [...loopback, ...rest]
 }
 
 /**

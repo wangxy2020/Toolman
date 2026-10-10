@@ -23,9 +23,10 @@ function pageHostname(): string {
   return (globalThis as { location?: { hostname?: string } }).location?.hostname ?? ''
 }
 
-/** Public HTTPS origin (not localhost). Kept free of react-native so Vitest can import this helper. */
+/** Public HTTPS origin. LAN IPs and `.local` are the desktop under test, not the public site. */
 export function isHostedPublicWebPage(hostname: string = pageHostname()): boolean {
-  return Boolean(hostname) && !isLoopbackHostname(hostname)
+  const host = hostname.trim()
+  return Boolean(host) && !isPrivateOrLoopbackHostname(host)
 }
 
 /**

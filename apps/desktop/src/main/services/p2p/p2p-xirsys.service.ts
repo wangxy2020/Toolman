@@ -8,14 +8,19 @@ import {
   type P2pXirsysConfig,
 } from '@toolman/shared'
 
+/** Xirsys caps dynamic TURN credentials at six hours. */
+const XIRSYS_TURN_TTL_SEC = 21_600
+
+interface XirsysIceEntry {
+  username?: string
+  credential?: string
+  urls?: string | string[]
+}
+
 interface XirsysTurnResponse {
   s?: string
   v?: {
-    iceServers?: {
-      username?: string
-      credential?: string
-      urls?: string | string[]
-    }
+    iceServers?: XirsysIceEntry | XirsysIceEntry[]
   }
 }
 
@@ -65,24 +70,31 @@ export function parseXirsysIceServers(payload: unknown): P2pIceServer[] {
     throw new Error('Xirsys API returned an unexpected response')
   }
 
-  const entry = data.v.iceServers
-  const urls = Array.isArray(entry.urls) ? entry.urls : entry.urls ? [entry.urls] : []
-  if (urls.length === 0 || !entry.username || !entry.credential) {
+  const entries = Array.isArray(data.v.iceServers) ? data.v.iceServers : [data.v.iceServers]
+  const servers: P2pIceServer[] = []
+  for (const entry of entries) {
+    const urls = Array.isArray(entry.urls) ? entry.urls : entry.urls ? [entry.urls] : []
+    if (urls.length === 0) continue
+    const needsCredential = urls.some((url) => /^turns?:/i.test(url))
+    if (needsCredential && (!entry.username || !entry.credential)) continue
+    servers.push(
+      P2pIceServerSchema.parse({
+        urls,
+        ...(entry.username && entry.credential
+          ? { username: entry.username, credential: entry.credential }
+          : {}),
+      }),
+    )
+  }
+  if (servers.length === 0) {
     throw new Error('Xirsys ICE payload is missing urls or credentials')
   }
-
-  return [
-    P2pIceServerSchema.parse({
-      urls,
-      username: entry.username,
-      credential: entry.credential,
-    }),
-  ]
+  return servers
 }
 
 export async function fetchXirsysIceServers(config: P2pXirsysConfig): Promise<P2pIceServer[]> {
   const base = config.path.replace(/\/$/, '')
-  const url = `${base}/_turn/${encodeURIComponent(config.channel)}`
+  const url = `${base}/_turn/${encodeURIComponent(config.channel)}?webrtc=1&expire=${XIRSYS_TURN_TTL_SEC}`
   const auth = `Basic ${Buffer.from(`${config.ident}:${config.secret}`).toString('base64')}`
   const payload = await httpPutJson(url, auth, JSON.stringify({ format: 'urls' }))
   return parseXirsysIceServers(payload)

@@ -15,6 +15,7 @@ import {
   listCommunityHubProbeCandidates,
   listPairingRedeemBaseUrlCandidates,
   listSyncBaseUrlCandidates,
+  preferLoopbackSyncBaseUrls,
   siblingHttpOrigin,
 } from './endpoints.js'
 
@@ -103,6 +104,20 @@ describe('sync endpoint candidates', () => {
       'http://192.168.1.8:17890',
       'http://localhost:17890',
       DEFAULT_LOCAL_SYNC_BASE_URL,
+    ])
+  })
+
+  it('tries loopback before a LAN address when the page can reach this computer', () => {
+    expect(
+      preferLoopbackSyncBaseUrls([
+        'http://192.168.1.8:17890',
+        'http://localhost:17890',
+        DEFAULT_LOCAL_SYNC_BASE_URL,
+      ]),
+    ).toEqual([
+      'http://localhost:17890',
+      DEFAULT_LOCAL_SYNC_BASE_URL,
+      'http://192.168.1.8:17890',
     ])
   })
 

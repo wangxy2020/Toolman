@@ -23,4 +23,21 @@ describe('p2p-xirsys.service', () => {
       'turn:jb-turn1.xirsys.com:80?transport=udp',
     ])
   })
+
+  it('parses the webrtc=1 iceServers array', () => {
+    const servers = parseXirsysIceServers({
+      s: 'ok',
+      v: {
+        iceServers: [
+          {
+            username: 'user',
+            credential: 'pass',
+            urls: ['turns:jb-turn1.xirsys.com:443?transport=tcp'],
+          },
+        ],
+      },
+    })
+    expect(servers).toHaveLength(1)
+    expect(servers[0]?.urls).toEqual(['turns:jb-turn1.xirsys.com:443?transport=tcp'])
+  })
 })

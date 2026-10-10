@@ -41,6 +41,13 @@ export const DevicePairingOfferSchema = z.object({
     )
     .max(16)
     .optional(),
+  /**
+   * Xirsys signaling room for this browser. The account secret stays on the
+   * desktop; the token only admits `signalPeerId` into the room.
+   */
+  signalHost: z.string().min(1).max(300).optional(),
+  signalToken: z.string().min(1).max(8192).optional(),
+  signalPeerId: z.string().min(1).max(80).optional(),
   createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
 })
@@ -65,6 +72,9 @@ export const DevicePairingRecordSchema = z.object({
     )
     .max(16)
     .optional(),
+  signalHost: z.string().min(1).max(300).optional(),
+  signalToken: z.string().min(1).max(8192).optional(),
+  signalPeerId: z.string().min(1).max(80).optional(),
   pairedAt: z.number().int().nonnegative(),
   role: z.enum(['mobile', 'web', 'desktop']),
 })
@@ -153,6 +163,9 @@ export function pairingRecordFromOffer(input: {
     hubBaseUrlHint: offer.hubBaseUrlHint,
     reachableHubUrls: offer.reachableHubUrls,
     iceServers: offer.iceServers,
+    signalHost: offer.signalHost,
+    signalToken: offer.signalToken,
+    signalPeerId: offer.signalPeerId,
     pairedAt: Date.now(),
     role,
   })

@@ -19,9 +19,14 @@ import {
   listPersonalMailboxBaseUrls,
   mailboxSeqKey,
 } from './personalMailboxHubs'
+import {
+  drainPersonalSignalCiphertexts,
+  sendPersonalSignalCiphertext,
+} from './personalSignalSocket'
 
 const ICE_GATHER_TIMEOUT_MS = 6_000
 const ANSWER_WAIT_MS = 8_000
+const SIGNAL_ANSWER_WAIT_MS = 20_000
 const CHANNEL_WAIT_MS = 8_000
 const signalSeqByHub = new Map<string, number>()
 
@@ -91,23 +96,37 @@ export async function depositDeviceSyncSignal(input: {
         depositedAt: Date.now(),
       },
     })
-    let deposited = false
-    for (const baseUrl of listPersonalMailboxBaseUrls(input.pairing)) {
-      try {
-        const client = createPersonalMailboxClient(baseUrl)
-        await client.putMailbox({
-          workspaceId: input.pairing.workspaceId,
-          deviceId: input.pairing.localDeviceId,
-          recipientDeviceId: input.recipientDeviceId,
-          grant,
-          ciphertextB64,
-        })
-        deposited = true
-      } catch {
-        // try next hub
+    const httpDeposit = (async () => {
+      for (const baseUrl of listPersonalMailboxBaseUrls(input.pairing)) {
+        try {
+          const client = createPersonalMailboxClient(baseUrl)
+          await client.putMailbox({
+            workspaceId: input.pairing.workspaceId,
+            deviceId: input.pairing.localDeviceId,
+            recipientDeviceId: input.recipientDeviceId,
+            grant,
+            ciphertextB64,
+          })
+          return true
+        } catch {
+          // try next hub
+        }
       }
+      return false
+    })()
+    const signaled = await sendPersonalSignalCiphertext(
+      input.pairing,
+      input.recipientDeviceId,
+      ciphertextB64,
+    )
+    if (signaled) {
+      void httpDeposit.then(
+        () => undefined,
+        () => undefined,
+      )
+      return true
     }
-    return deposited
+    return httpDeposit
   } catch {
     return false
   }
@@ -167,20 +186,68 @@ export async function pullDeviceSyncSignals(
   return { signals }
 }
 
+function answerSdpFromSignals(signals: DeviceSyncSignal[], inviteId: string): string | null {
+  for (const signal of signals) {
+    if (signal.kind !== 'answer') continue
+    if (signal.payload.inviteId !== inviteId) continue
+    const sdp = signal.payload.sdp
+    if (typeof sdp === 'string' && sdp.length > 0) return sdp
+  }
+  return null
+}
+
+async function takeQueuedDeviceSyncSignals(pairing: DevicePairingRecord): Promise<DeviceSyncSignal[]> {
+  const ciphertexts = drainPersonalSignalCiphertexts()
+  if (ciphertexts.length === 0) return []
+  const workspaceKey = decodeWorkspaceKeyB64(pairing.workspaceKeyB64)
+  const signals: DeviceSyncSignal[] = []
+  for (const ciphertextB64 of ciphertexts) {
+    try {
+      const plain = await openMailboxPlaintext({
+        workspaceKey,
+        workspaceId: pairing.workspaceId,
+        ciphertextB64,
+      })
+      if (plain.type !== 'device.sync.signal') continue
+      if (plain.senderDeviceId === pairing.localDeviceId) continue
+      signals.push({
+        kind: plain.kind,
+        payload: plain.payload,
+        senderDeviceId: plain.senderDeviceId,
+      })
+    } catch {
+      // skip
+    }
+  }
+  return signals
+}
+
 async function waitForAnswerSdp(
   pairing: DevicePairingRecord,
   inviteId: string,
+  timeoutMs = ANSWER_WAIT_MS,
 ): Promise<string | null> {
-  const deadline = Date.now() + ANSWER_WAIT_MS
+  const deadline = Date.now() + timeoutMs
+  let httpPull: Promise<void> | null = null
+  let httpSignals: DeviceSyncSignal[] | null = null
   while (Date.now() < deadline) {
-    const pulled = await pullDeviceSyncSignals(pairing)
-    for (const signal of pulled.signals) {
-      if (signal.kind !== 'answer') continue
-      if (signal.payload.inviteId !== inviteId) continue
-      const sdp = signal.payload.sdp
-      if (typeof sdp === 'string' && sdp.length > 0) return sdp
+    const queued = answerSdpFromSignals(await takeQueuedDeviceSyncSignals(pairing), inviteId)
+    if (queued) return queued
+    if (httpSignals) {
+      const httpAnswer = answerSdpFromSignals(httpSignals, inviteId)
+      httpSignals = null
+      if (httpAnswer) return httpAnswer
     }
-    await sleep(800)
+    if (!httpPull) {
+      httpPull = pullDeviceSyncSignals(pairing)
+        .then((result) => {
+          httpSignals = result.signals
+        })
+        .finally(() => {
+          httpPull = null
+        })
+    }
+    await sleep(400)
   }
   return null
 }
@@ -207,11 +274,11 @@ function waitForChannelOpen(channel: RTCDataChannel, timeoutMs: number): Promise
 function waitForSyncChanges(
   channel: RTCDataChannel,
   timeoutMs: number,
-): Promise<SyncChange[]> {
+): Promise<SyncChange[] | null> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       cleanup()
-      resolve([])
+      resolve(null)
     }, timeoutMs)
     const onMessage = (event: MessageEvent) => {
       try {
@@ -244,12 +311,15 @@ function waitForSyncChanges(
  */
 export async function tryDeviceSyncWebrtc(
   pairing: DevicePairingRecord,
+  options?: { outboundChanges?: SyncChange[]; pull?: boolean },
 ): Promise<DeviceSyncWebrtcResult> {
   if (typeof RTCPeerConnection === 'undefined') return { ok: false }
 
   const inviteId = `psync-${pairing.localDeviceId}-${Date.now()}`
   const pc = new RTCPeerConnection({ iceServers: toRtcIceServers(pairing) })
   const channel = pc.createDataChannel(DEVICE_SYNC_DATA_CHANNEL, { ordered: true })
+  const pull = options?.pull !== false
+  const outbound = options?.outboundChanges ?? []
 
   try {
     const offer = await pc.createOffer()
@@ -266,12 +336,31 @@ export async function tryDeviceSyncWebrtc(
     })
     if (!deposited) return { ok: false }
 
-    const answerSdp = await waitForAnswerSdp(pairing, inviteId)
+    const answerSdp = await waitForAnswerSdp(
+      pairing,
+      inviteId,
+      pairing.signalToken ? SIGNAL_ANSWER_WAIT_MS : ANSWER_WAIT_MS,
+    )
     if (!answerSdp) return { ok: false }
 
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp })
     const opened = await waitForChannelOpen(channel, CHANNEL_WAIT_MS)
     if (!opened) return { ok: false }
+
+    const incoming = waitForSyncChanges(channel, CHANNEL_WAIT_MS)
+    if (outbound.length > 0) {
+      channel.send(
+        JSON.stringify({
+          type: 'sync.changes',
+          senderDeviceId: pairing.localDeviceId,
+          changes: outbound,
+        }),
+      )
+    }
+    if (!pull) {
+      const ack = await incoming
+      return ack !== null ? { ok: true, changes: [], transport: 'webrtc' } : { ok: false }
+    }
 
     channel.send(
       JSON.stringify({
@@ -280,8 +369,8 @@ export async function tryDeviceSyncWebrtc(
         cursor: null,
       }),
     )
-    const changes = await waitForSyncChanges(channel, CHANNEL_WAIT_MS)
-    if (changes.length === 0) {
+    const changes = await incoming
+    if (!changes || changes.length === 0) {
       // Peer may push without waiting for pull; still count as webrtc success if channel opened.
       return { ok: true, changes: [], transport: 'webrtc' }
     }
