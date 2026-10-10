@@ -77,7 +77,7 @@ function convertLatex(source: string): string {
       const named = /^\\([a-zA-Z]+)/.exec(source.slice(index))
       if (named?.[1]) {
         const command = named[1]
-        let next = index + 1 + command.length
+        const next = index + 1 + command.length
         if (WRAPPERS.has(command)) {
           const group = readGroup(source, next)
           if (group) {

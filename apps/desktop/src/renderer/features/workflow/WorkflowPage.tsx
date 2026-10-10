@@ -121,7 +121,6 @@ export function WorkflowPage(props: WorkflowPageProps) {
       cancelled = true
     }
     // chat methods are stable enough; assistants list / active subtask drive rebind
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid looping on chat identity
   }, [
     workspaceId,
     defaultModelId,
