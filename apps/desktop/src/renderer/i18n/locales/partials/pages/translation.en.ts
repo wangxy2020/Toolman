@@ -105,7 +105,7 @@ export const translationPageEn = {
     modalTitle: 'Translation settings',
     save: 'Save settings',
     model: 'Translation model',
-    modelHint: 'Model used for translation; defaults to gemma4:latest, then qwen3.5:9b',
+    modelHint: 'Model used for translation; when unset, prefer network models, then local installed models',
     modelNone: 'Not configured',
     languages: 'Default language pair',
     languagesHint: 'Default source and target languages for new sessions; Swap reverses both sides',

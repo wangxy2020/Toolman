@@ -139,7 +139,8 @@ vi.mock('./executor/tool-runner', () => ({
     if (harness.toolCallCount === 1) {
       throw new Error('simulated tool failure')
     }
-    return { output: 'tool ok' }
+    // Reflection evidence requires substantial output.text after markStepCompleted.
+    return { output: 'wrote step artifact successfully to workspace' }
   }),
 }))
 

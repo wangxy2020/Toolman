@@ -6,7 +6,7 @@
   "description": "Toolman desktop AI client",
   "main": "./out/main/index.js",
   "scripts": {
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 --version 39.8.10",
     "build:p2p": "bash ../../scripts/build-p2p-native.sh",
     "build:libp2p": "bash ../../scripts/build-libp2p-native.sh",
     "build:community-hub": "bash ../../scripts/build-community-hub.sh",

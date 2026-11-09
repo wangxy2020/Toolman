@@ -6,8 +6,7 @@
  * LAN Sync Hub pairing token remains the full-featured local path (incl. knowledge files).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { app } from 'electron'
+import { dirname } from 'node:path'
 import {
   DEFAULT_LOCAL_COMMUNITY_HUB_BASE_URL,
   hostnameOfBaseUrl,
@@ -16,6 +15,7 @@ import {
   toErrorMessage,
   type SyncChange,
 } from '@toolman/shared'
+import { resolveAccountScopedFileWithLegacyAdopt } from './account-scope.service'
 import { applyInboundSyncChanges } from './mobile-sync-apply'
 import {
   appendSyncChanges,
@@ -41,7 +41,15 @@ let nextHubProbeAt = 0
 let skipLogged = false
 
 function wanCursorPath(): string {
-  return join(app.getPath('userData'), 'mobile-sync', 'wan-cursor.json')
+  return resolveAccountScopedFileWithLegacyAdopt(
+    ['mobile-sync', 'wan-cursor.json'],
+    ['mobile-sync', 'wan-cursor.json'],
+  )
+}
+
+export function rebindWanCursorForAccount(): void {
+  wanCursor = null
+  wanCursorLoaded = false
 }
 
 function loadWanCursor(): string | null {

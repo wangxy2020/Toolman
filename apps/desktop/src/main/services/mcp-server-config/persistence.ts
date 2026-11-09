@@ -1,16 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
+import { dirname } from 'node:path'
 import { McpServerConfigSchema, type McpServerConfig } from '@toolman/shared'
+import { resolveAccountScopedFileWithLegacyAdopt } from '../account-scope.service'
 import { defaultAllServers } from './defaults'
 import { mergeWithDefaultServers } from './merge'
 
 const CONFIG_FILE = 'mcp-servers.json'
 
 export function configPath(): string {
-  const dir = app.getPath('userData')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  return join(dir, CONFIG_FILE)
+  const path = resolveAccountScopedFileWithLegacyAdopt([CONFIG_FILE], [CONFIG_FILE])
+  mkdirSync(dirname(path), { recursive: true })
+  return path
 }
 
 function shouldPersistMergedConfig(before: McpServerConfig[], after: McpServerConfig[]): boolean {

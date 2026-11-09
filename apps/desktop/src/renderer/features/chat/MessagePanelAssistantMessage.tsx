@@ -141,32 +141,25 @@ export function MessagePanelAssistantMessage({
           <div className="tm-stream-footer">
             <div className="tm-stream-actions">
               {onSpeak ? (
-                speaking && ttsPlaybackState === 'playing' ? (
+                speaking ? (
                   <>
-                    <MessagePanelActionButton
-                      title="暂停"
-                      active
-                      onClick={() => onPauseTts?.()}
-                    >
-                      <IconPause size={15} />
-                    </MessagePanelActionButton>
-                    <MessagePanelActionButton
-                      title="停止"
-                      active
-                      onClick={() => onStopTts?.()}
-                    >
-                      <IconStop size={15} />
-                    </MessagePanelActionButton>
-                  </>
-                ) : speaking && ttsPlaybackState === 'paused' ? (
-                  <>
-                    <MessagePanelActionButton
-                      title="继续播放"
-                      active
-                      onClick={() => onResumeTts?.()}
-                    >
-                      <IconPlay size={15} />
-                    </MessagePanelActionButton>
+                    {ttsPlaybackState === 'paused' ? (
+                      <MessagePanelActionButton
+                        title="继续播放"
+                        active
+                        onClick={() => onResumeTts?.()}
+                      >
+                        <IconPlay size={15} />
+                      </MessagePanelActionButton>
+                    ) : (
+                      <MessagePanelActionButton
+                        title="暂停"
+                        active
+                        onClick={() => onPauseTts?.()}
+                      >
+                        <IconPause size={15} />
+                      </MessagePanelActionButton>
+                    )}
                     <MessagePanelActionButton
                       title="停止"
                       active

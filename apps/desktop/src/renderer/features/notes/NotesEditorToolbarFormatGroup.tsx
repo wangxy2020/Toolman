@@ -88,6 +88,12 @@ function buildToolbarItems(
       title: titles.ordered,
       label: <IconListOrdered size={ICON_SIZE} />,
       variant: 'icon',
+    },
+    {
+      key: 'task',
+      title: titles.task,
+      label: <IconTaskList size={ICON_SIZE} />,
+      variant: 'icon',
       dividerAfter: true,
     },
     {
@@ -104,7 +110,6 @@ function buildToolbarItems(
       variant: 'icon',
     },
     { key: 'quote', title: titles.quote, label: <IconQuote size={ICON_SIZE} />, variant: 'icon' },
-    { key: 'task', title: titles.task, label: <IconTaskList size={ICON_SIZE} />, variant: 'icon' },
     { key: 'math', title: titles.math, label: <IconFormula size={ICON_SIZE} />, variant: 'icon' },
     {
       key: 'table',

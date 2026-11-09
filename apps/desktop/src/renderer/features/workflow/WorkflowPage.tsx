@@ -109,7 +109,7 @@ export function WorkflowPage(props: WorkflowPageProps) {
         return
       }
 
-      // Task-level / empty: still leave any non-automation active session.
+      // Task-level / empty: leave any 课堂 (or other) active session.
       if (cancelled) return
       await ensureActiveAutomationChatSession({
         automationAssistant: assistant,
@@ -120,12 +120,13 @@ export function WorkflowPage(props: WorkflowPageProps) {
     return () => {
       cancelled = true
     }
-    // chat methods are stable enough; assistants list / active subtask drive rebind
   }, [
     workspaceId,
     defaultModelId,
     chat.assistants.length,
     chat.loadAssistants,
+    chat.activeSession?.id,
+    chat.activeSession?.assistantId,
     active?.id,
     active?.sessionId,
     active?.parentId,

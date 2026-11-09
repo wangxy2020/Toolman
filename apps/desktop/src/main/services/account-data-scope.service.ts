@@ -43,6 +43,10 @@ import {
   writeAccountDataScope,
   type AccountDataScopeFile,
 } from './account-group-scope'
+import {
+  quiesceAccountScopedServices,
+  rebindAccountScopedServices,
+} from './account-switch-runtime.service'
 
 const FOLDER_KEYS = [
   'folderPath',
@@ -435,6 +439,9 @@ export function reconcileAccountDataScope(): void {
 function reconcileAccountDataScopeBody(): void {
   const currentSlug = getDocumentsFolderSlug()
   const scope = readAccountDataScope()
+  // Claim any still-unassigned groups for the active account (legacy installs).
+  stampMissingGroups(scope, listGroupIds(), currentSlug)
+  writeAccountDataScope(scope)
   const boundId = scope.workspaces[currentSlug]
   if (boundId && getWorkspace({ id: boundId })) {
     setOnlyDefaultWorkspace(boundId)
@@ -487,6 +494,8 @@ function reconcileAccountDataScopeBody(): void {
 export function switchAccountDataScope(previousSlug: string, nextSlug: string): void {
   if (!previousSlug.trim() || !nextSlug.trim() || previousSlug === nextSlug) return
 
+  quiesceAccountScopedServices()
+
   const scope = readAccountDataScope()
   const current = getDefaultWorkspace()
   if (current && !scope.workspaces[previousSlug]) {
@@ -499,6 +508,7 @@ export function switchAccountDataScope(previousSlug: string, nextSlug: string): 
   bindAccountContentAdoptingLegacy(previousSlug)
   bindAccountContent(nextSlug)
   ensureExistingAccountLayouts()
+  rebindAccountScopedServices()
   requestAccountSwitchReload()
   logStructured('auth', 'info', `switched account data from ${previousSlug} to ${nextSlug}`)
 }

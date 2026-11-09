@@ -1,7 +1,11 @@
-import { existsSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { join, resolve, sep } from 'node:path'
 import type { KnowledgeBaseRow } from '@toolman/db'
-import { parseP2pGroupSavedKnowledgeMeta, type KnowledgeFolderKind } from '@toolman/shared'
+import {
+  isP2pSharedKnowledgeMirrorDescription,
+  parseP2pGroupSavedKnowledgeMeta,
+  type KnowledgeFolderKind,
+} from '@toolman/shared'
 import {
   ensureWorkspaceKnowledgeFolder,
   ensureWorkspaceLocalFilesFolder,
@@ -127,4 +131,35 @@ export function resolveKnowledgeBaseStoragePath(
   }
 
   return storagePath
+}
+
+/** True when storagePath is a real subdirectory of the knowledge kind root (never the root itself). */
+export function canRemoveKnowledgeStoragePath(storagePath: string, rootPath: string): boolean {
+  const storage = resolve(storagePath)
+  const root = resolve(rootPath)
+  if (!storage || !root || storage === root) return false
+  return storage.startsWith(`${root}${sep}`)
+}
+
+/**
+ * Delete the managed on-disk folder for a knowledge base after sidebar/DB delete.
+ * Covers sync/local/shared/local_files/network folder KBs; skips P2P mirror copies.
+ */
+export function removeKnowledgeBaseStorageDirectory(
+  kb: Pick<KnowledgeBaseRow, 'workspaceId' | 'name' | 'kind' | 'description'>,
+): void {
+  if (isP2pSharedKnowledgeMirrorDescription(kb.description)) return
+
+  const storagePath = resolveKnowledgeBaseStoragePath(kb, { ensure: false })
+  if (!storagePath || !existsSync(storagePath)) return
+
+  const kind = resolveKnowledgeStorageKind(kb.kind)
+  const rootPath = resolveWorkspaceRootFolder(kb.workspaceId, kind, false)
+  if (!rootPath || !canRemoveKnowledgeStoragePath(storagePath, rootPath)) return
+
+  try {
+    rmSync(resolve(storagePath), { recursive: true, force: true })
+  } catch {
+    // ignore cleanup failure; DB soft-delete still proceeds
+  }
 }

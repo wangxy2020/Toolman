@@ -24,7 +24,14 @@ export function useNotesEditorHistory({
   }, [])
 
   const pushHistorySnapshot = useCallback(() => {
-    setPast((prev) => [...prev.slice(-49), { title: noteTitle, content: noteContent }])
+    setPast((prev) => {
+      const snapshot = { title: noteTitle, content: noteContent }
+      const last = prev[prev.length - 1]
+      if (last && last.title === snapshot.title && last.content === snapshot.content) {
+        return prev
+      }
+      return [...prev.slice(-49), snapshot]
+    })
     setFuture([])
   }, [noteContent, noteTitle])
 
@@ -68,7 +75,7 @@ export function useNotesEditorHistory({
 
   const handleUndo = useCallback(() => {
     const previous = past[past.length - 1]
-    if (!previous) return
+    if (!previous) return false
     setPast((items) => items.slice(0, -1))
     setFuture((items) => [{ title: noteTitle, content: noteContent }, ...items])
     applySnapshot(previous)
@@ -77,7 +84,7 @@ export function useNotesEditorHistory({
 
   const handleRedo = useCallback(() => {
     const next = future[0]
-    if (!next) return
+    if (!next) return false
     setFuture((items) => items.slice(1))
     setPast((items) => [...items, { title: noteTitle, content: noteContent }])
     applySnapshot(next)

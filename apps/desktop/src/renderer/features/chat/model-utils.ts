@@ -3,6 +3,9 @@ import { isChatModelEntry } from '@toolman/shared'
 
 export const MAX_PARALLEL_MODELS = 4
 
+/** Seed / unset marker — never send this name to a model provider. */
+export const UNCONFIGURED_MODEL_NAME = 'unconfigured'
+
 /** 从 providerId:modelName 取出模型名（支持 gemma4:26b 等含冒号的名称） */
 export function modelNameFromId(modelId: string | null | undefined): string {
   if (!modelId) return ''
@@ -14,29 +17,50 @@ export function formatModelId(providerId: string, model: string): string {
   return `${providerId}:${model}`
 }
 
-export function buildModelOptions(providers: Provider[]) {
-  return providers.flatMap((provider) => {
-    const chatModels = provider.models.filter((m) => isChatModelEntry(m))
-    const models = chatModels.length > 0 ? chatModels : provider.models.filter((m) => isChatModel(m.id))
-    return models.length > 0
-      ? models.map((m) => ({
-          modelId: formatModelId(provider.id, m.id),
-          label: `${provider.name} / ${m.name}`,
-        }))
-      : [
-          {
-            modelId: formatModelId(
-              provider.id,
-              provider.type === 'ollama' ? 'gemma4:latest' : 'gpt-4o-mini',
-            ),
-            label: `${provider.name}（默认）`,
-          },
-        ]
-  })
+export function isNetworkProvider(provider: Pick<Provider, 'type'>): boolean {
+  return provider.type !== 'ollama'
 }
 
 function isChatModel(modelId: string): boolean {
-  return !/bge|embed|nomic/i.test(modelId)
+  return !/bge|embed|nomic/i.test(modelId) && modelId !== UNCONFIGURED_MODEL_NAME
+}
+
+function isSelectableChatModel(model: Provider['models'][number]): boolean {
+  if (model.id === UNCONFIGURED_MODEL_NAME) return false
+  return isChatModelEntry(model) || isChatModel(model.id)
+}
+
+/** Network providers first, then local Ollama — only models actually listed on the provider. */
+export function listAvailableChatModelIds(
+  providers: Provider[],
+  options?: { networkOnly?: boolean },
+): string[] {
+  const enabled = providers.filter((provider) => provider.isEnabled !== false)
+  const ordered = options?.networkOnly
+    ? enabled.filter((provider) => isNetworkProvider(provider))
+    : [
+        ...enabled.filter((provider) => isNetworkProvider(provider)),
+        ...enabled.filter((provider) => !isNetworkProvider(provider)),
+      ]
+
+  const out: string[] = []
+  for (const provider of ordered) {
+    for (const model of provider.models) {
+      if (!isSelectableChatModel(model)) continue
+      out.push(formatModelId(provider.id, model.id))
+    }
+  }
+  return out
+}
+
+export function buildModelOptions(providers: Provider[]) {
+  return providers.flatMap((provider) => {
+    const chatModels = provider.models.filter((m) => isSelectableChatModel(m))
+    return chatModels.map((m) => ({
+      modelId: formatModelId(provider.id, m.id),
+      label: `${provider.name} / ${m.name}`,
+    }))
+  })
 }
 
 /** Pinned assistant first — matches chat session default selection. */
@@ -44,6 +68,10 @@ export function resolvePrimaryAssistant(assistants: Assistant[]): Assistant | un
   return assistants.find((assistant) => assistant.isPinned) ?? assistants[0]
 }
 
+/**
+ * Resolve a chat model without inventing tags like gemma4:latest.
+ * Prefer settings → available assistant model → network models → local models.
+ */
 export function pickDefaultModelId(
   assistants: Assistant[],
   providers: Provider[],
@@ -55,26 +83,22 @@ export function pickDefaultModelId(
     return fromSettings
   }
 
-  const fromAssistant = resolvePrimaryAssistant(assistants)?.modelId
+  const fromAssistant = resolvePrimaryAssistant(assistants)?.modelId?.trim()
   if (fromAssistant && isModelIdAvailable(fromAssistant, providers)) {
     return fromAssistant
   }
-  if (fromAssistant) return fromAssistant
 
   if (preferredModel) {
     for (const provider of providers) {
-      const match = provider.models.find((m) => m.id === preferredModel)
+      if (provider.isEnabled === false) continue
+      const match = provider.models.find(
+        (m) => m.id === preferredModel && isSelectableChatModel(m),
+      )
       if (match) return formatModelId(provider.id, match.id)
     }
   }
 
-  for (const provider of providers) {
-    if (provider.models.length > 0) {
-      return formatModelId(provider.id, provider.models[0].id)
-    }
-  }
-
-  return null
+  return listAvailableChatModelIds(providers)[0] ?? null
 }
 
 export function pickDefaultModelIds(
@@ -91,12 +115,12 @@ export function isModelIdAvailable(modelId: string, providers: Provider[]): bool
   if (sep === -1) return false
   const providerId = modelId.slice(0, sep)
   const model = modelId.slice(sep + 1)
+  if (!model || model === UNCONFIGURED_MODEL_NAME) return false
   const provider = providers.find((p) => p.id === providerId)
-  if (!provider) return false
-  const match = provider.models.some((m) => m.id === model)
-  if (!match) return false
+  if (!provider || provider.isEnabled === false) return false
   const entry = provider.models.find((m) => m.id === model)
-  return entry ? isChatModelEntry(entry) : isChatModel(model)
+  if (!entry) return false
+  return isSelectableChatModel(entry)
 }
 
 export function providerNameFromModelId(modelId: string, providers: Provider[]): string {
@@ -111,7 +135,7 @@ export function formatModelDisplayLabel(
   providers: Provider[],
 ): string {
   const modelName = modelNameFromId(modelId)
-  if (!modelName) return ''
+  if (!modelName || modelName === UNCONFIGURED_MODEL_NAME) return ''
   const providerName = modelId ? providerNameFromModelId(modelId, providers) : ''
   return providerName ? `${modelName} | ${providerName}` : modelName
 }

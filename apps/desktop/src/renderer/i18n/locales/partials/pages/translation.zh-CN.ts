@@ -104,7 +104,7 @@ export const translationPageZhCN = {
     modalTitle: '翻译设置',
     save: '保存设置',
     model: '翻译模型',
-    modelHint: '翻译使用的模型；默认优先 gemma4:latest，其次 qwen3.5:9b',
+    modelHint: '翻译使用的模型；未指定时优先网络模型，其次本地已安装模型',
     modelNone: '未配置',
     languages: '默认语言对',
     languagesHint: '新建对照时的默认原文与译文语言；交换语言按钮会互换两侧',

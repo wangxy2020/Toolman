@@ -86,6 +86,10 @@ export function WorkflowSidebar({
 
   useEffect(() => {
     if (!assistantId || loading) return
+    // Wait until the main pane has switched off 课堂 / other assistants.
+    // Otherwise mount-time prune deletes automation topics while activeSession
+    // is still the classroom session, and the page keeps showing classroom chat.
+    if (activeSession?.assistantId !== assistantId) return
     const linked = new Set(
       items
         .map((item) => item.sessionId)
@@ -117,6 +121,7 @@ export function WorkflowSidebar({
     sessions,
     deleteSession,
     activeSession?.id,
+    activeSession?.assistantId,
   ])
 
   const ensureSubTaskSession = useCallback(

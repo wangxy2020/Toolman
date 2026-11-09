@@ -119,4 +119,29 @@ describe('buildStartClassUserMessage', () => {
     expect(text).toContain('小说课')
     expect(text).toContain('本课尚无课堂记录')
   })
+
+  it('anchors the opening to the current syllabus chapter and lesson plan', () => {
+    const text = buildStartClassUserMessage({
+      courseName: '化学',
+      syllabus: {
+        generation: 'ready',
+        generatedCount: 1,
+        chapters: [
+          {
+            id: 'c1',
+            title: '第一节 物质的分类及转化',
+            groupTitle: '物质及其变化',
+            lessonPlan: '区分物理变化与化学变化；理解电离与导电。',
+            assessmentQuestions: ['什么是电离？'],
+            status: 'in_progress',
+          },
+        ],
+      },
+      state: EMPTY_SOCRATIC_STATE,
+    })
+    expect(text).toContain('第一节 物质的分类及转化')
+    expect(text).toContain('所属章：物质及其变化')
+    expect(text).toContain('本章教案要点')
+    expect(text).toContain('先点明本章要讨论的概念')
+  })
 })

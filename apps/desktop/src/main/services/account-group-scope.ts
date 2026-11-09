@@ -59,11 +59,12 @@ export function stampMissingGroups(
 
 export function groupVisibleForCurrentAccount(groupId: string): boolean {
   const assigned = readAccountDataScope().groups[groupId]
-  if (!assigned) return true
+  // Unassigned groups stay hidden so another account cannot see them after switch.
+  if (!assigned) return false
   try {
     return assigned === getDocumentsFolderSlug()
   } catch {
-    return true
+    return false
   }
 }
 

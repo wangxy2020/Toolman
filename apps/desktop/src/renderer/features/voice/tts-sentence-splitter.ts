@@ -2,7 +2,8 @@
 const SENTENCE_END =
   /([。！？；…]+|[!?]+(?=\s|$)|(?:\.(?=\s|$)))/
 
-const FORCE_BREAK_CHARS = 80
+/** Larger chunks → fewer Edge WSS handshakes → less HTTP 429 mid-playback. */
+const FORCE_BREAK_CHARS = 140
 
 /**
  * Streaming sentence splitter: buffer LLM text deltas and emit complete sentences.

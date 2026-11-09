@@ -20,6 +20,8 @@ type Options = {
   activeDocumentId: string | null
   setActiveDocumentId: Dispatch<SetStateAction<string | null>>
   setRenameDocumentId: Dispatch<SetStateAction<string | null>>
+  setActiveContrastId: Dispatch<SetStateAction<string | null>>
+  setRenameContrastId: Dispatch<SetStateAction<string | null>>
   resolveDefaultLanguages: () => [TranslationLanguage, TranslationLanguage]
   documents: TranslationDocumentItem[]
 }
@@ -33,6 +35,8 @@ export function useTranslationRecordsDocuments(options: Options) {
     activeDocumentId,
     setActiveDocumentId,
     setRenameDocumentId,
+    setActiveContrastId,
+    setRenameContrastId,
     resolveDefaultLanguages,
     documents,
   } = options
@@ -89,6 +93,19 @@ export function useTranslationRecordsDocuments(options: Options) {
     setActiveDocumentId(null)
     setRenameDocumentId(null)
   }, [setActiveDocumentId, setRenameDocumentId])
+
+  const enterDocumentsSection = useCallback(() => {
+    setRenameContrastId(null)
+    setRenameDocumentId(null)
+    setActiveContrastId(null)
+    setActiveDocumentId(documents[0]?.id ?? null)
+  }, [
+    documents,
+    setActiveContrastId,
+    setActiveDocumentId,
+    setRenameContrastId,
+    setRenameDocumentId,
+  ])
 
   const startRenameDocument = useCallback(
     (documentId: string) => {
@@ -222,6 +239,7 @@ export function useTranslationRecordsDocuments(options: Options) {
     openDocument,
     selectDocument,
     clearActiveDocument,
+    enterDocumentsSection,
     startRenameDocument,
     cancelRenameDocument,
     renameDocument,

@@ -3,9 +3,9 @@
  * Last-write-wins per entityId; cursor is a monotonic sequence number string.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { app } from 'electron'
+import { dirname } from 'node:path'
 import type { SyncChange } from '@toolman/shared'
+import { resolveAccountScopedFileWithLegacyAdopt } from './account-scope.service'
 import { logStructured } from './structured-log.service'
 
 type StoredChange = SyncChange & { seq: number }
@@ -15,20 +15,35 @@ type SyncStoreFile = {
   changes: StoredChange[]
 }
 
-const STORE_PATH = () => join(app.getPath('userData'), 'mobile-sync', 'changelog.json')
+function storePath(): string {
+  return resolveAccountScopedFileWithLegacyAdopt(
+    ['mobile-sync', 'changelog.json'],
+    ['mobile-sync', 'changelog.json'],
+  )
+}
 
 let memory: SyncStoreFile = { seq: 0, changes: [] }
 let loaded = false
+let loadedPath: string | null = null
 
 export function resetMobileSyncStoreForTests(): void {
   memory = { seq: 0, changes: [] }
   loaded = false
+  loadedPath = null
+}
+
+/** Drop in-memory cache so the next read uses the newly active account file. */
+export function rebindMobileSyncStoreForAccount(): void {
+  memory = { seq: 0, changes: [] }
+  loaded = false
+  loadedPath = null
 }
 
 function load(): SyncStoreFile {
-  if (loaded) return memory
+  const path = storePath()
+  if (loaded && loadedPath === path) return memory
   loaded = true
-  const path = STORE_PATH()
+  loadedPath = path
   try {
     if (!existsSync(path)) {
       memory = { seq: 0, changes: [] }
@@ -47,9 +62,10 @@ function load(): SyncStoreFile {
 }
 
 function persist(): void {
-  const path = STORE_PATH()
+  const path = storePath()
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify(memory), 'utf8')
+  loadedPath = path
 }
 
 function samePayload(left: SyncChange['payload'], right: SyncChange['payload']): boolean {

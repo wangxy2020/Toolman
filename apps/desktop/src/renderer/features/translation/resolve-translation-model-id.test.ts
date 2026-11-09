@@ -5,19 +5,28 @@ import {
   resolveTranslationModelId,
 } from './resolve-translation-model-id'
 
-function providerWithModels(models: string[]): Provider {
+function providerWithModels(
+  id: string,
+  type: Provider['type'],
+  models: string[],
+): Provider {
   return {
-    id: 'ollama',
-    name: 'Ollama',
-    type: 'ollama',
-    baseUrl: 'http://127.0.0.1:11434',
-    models: models.map((id) => ({ id, name: id })),
-  } as Provider
+    id,
+    name: id,
+    type,
+    baseUrl: type === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.deepseek.com/v1',
+    models: models.map((modelId) => ({ id: modelId, name: modelId })),
+    isEnabled: true,
+    hasApiKey: true,
+    workspaceId: 'ws',
+    createdAt: 0,
+    updatedAt: 0,
+  }
 }
 
 describe('resolveTranslationModelId', () => {
   it('uses explicit translation model when available', () => {
-    const providers = [providerWithModels(['gemma4:latest', 'qwen3.5:9b', 'llama3:8b'])]
+    const providers = [providerWithModels('ollama', 'ollama', ['gemma4:latest', 'qwen3.5:9b', 'llama3:8b'])]
     expect(
       resolveTranslationModelId({
         settingsModelId: 'ollama:llama3:8b',
@@ -26,18 +35,21 @@ describe('resolveTranslationModelId', () => {
     ).toBe('ollama:llama3:8b')
   })
 
-  it('defaults to gemma4:latest when settings model is unset', () => {
-    const providers = [providerWithModels(['qwen3.5:9b', 'gemma4:latest'])]
+  it('prefers network models when settings model is unset', () => {
+    const providers = [
+      providerWithModels('ollama', 'ollama', ['qwen3.5:9b', 'gemma4:latest']),
+      providerWithModels('deepseek', 'openai_compatible', ['deepseek-v4-flash']),
+    ]
     expect(
       resolveTranslationModelId({
         settingsModelId: null,
         providers,
       }),
-    ).toBe('ollama:gemma4:latest')
+    ).toBe('deepseek:deepseek-v4-flash')
   })
 
-  it('falls back to qwen3.5:9b when gemma4 is unavailable', () => {
-    const providers = [providerWithModels(['qwen3.5:9b', 'llama3:8b'])]
+  it('falls back to the first available local model', () => {
+    const providers = [providerWithModels('ollama', 'ollama', ['qwen3.5:9b', 'llama3:8b'])]
     expect(
       resolveTranslationModelId({
         settingsModelId: null,
@@ -46,14 +58,17 @@ describe('resolveTranslationModelId', () => {
     ).toBe('ollama:qwen3.5:9b')
   })
 
-  it('ignores stale explicit model and uses preferred default', () => {
-    const providers = [providerWithModels(['gemma4:latest', 'qwen3.5:9b'])]
+  it('ignores stale explicit model and uses network preference', () => {
+    const providers = [
+      providerWithModels('ollama', 'ollama', ['gemma4:latest', 'qwen3.5:9b']),
+      providerWithModels('deepseek', 'openai_compatible', ['deepseek-v4-flash']),
+    ]
     expect(
       resolveTranslationModelId({
         settingsModelId: 'missing:ghost-model',
         providers,
       }),
-    ).toBe('ollama:gemma4:latest')
+    ).toBe('deepseek:deepseek-v4-flash')
   })
 
   it('returns null when no models are configured', () => {
@@ -67,11 +82,12 @@ describe('resolveTranslationModelId', () => {
 })
 
 describe('pickPreferredTranslationModelId', () => {
-  it('prefers gemma4 over qwen', () => {
+  it('prefers network over local', () => {
     expect(
-      pickPreferredTranslationModelId(
-        [providerWithModels(['qwen3.5:9b', 'gemma4:latest'])],
-      ),
-    ).toBe('ollama:gemma4:latest')
+      pickPreferredTranslationModelId([
+        providerWithModels('ollama', 'ollama', ['qwen3.5:9b', 'gemma4:latest']),
+        providerWithModels('deepseek', 'openai_compatible', ['deepseek-v4-flash']),
+      ]),
+    ).toBe('deepseek:deepseek-v4-flash')
   })
 })

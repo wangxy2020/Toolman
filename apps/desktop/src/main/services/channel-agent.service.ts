@@ -4,23 +4,30 @@ import { getMessageRepository } from '../db/repos'
 import { createSession } from './session.service'
 import { sendMessage } from './agent.service'
 import { getAssistantRow } from './assistant.service'
+import {
+  getActiveWorkspaceId,
+  resolveAccountScopedFileWithLegacyAdopt,
+} from './account-scope.service'
 import { readJsonFile, writeJsonFileAtomic } from '../utils/atomic-json-file'
-import { app } from 'electron'
-import { join } from 'node:path'
-
-const SESSION_MAP_FILE = 'im-channel-sessions.json'
-const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000002'
+import { DEFAULT_WORKSPACE_ID } from '../bootstrap/database-defaults'
 
 type SessionMap = Record<string, string>
 
 const sessionCreationLocks = new Map<string, Promise<string>>()
 
 function sessionMapPath(): string {
-  return join(app.getPath('userData'), SESSION_MAP_FILE)
+  return resolveAccountScopedFileWithLegacyAdopt(
+    ['im-channel-sessions.json'],
+    ['im-channel-sessions.json'],
+  )
+}
+
+function resolveChannelWorkspaceId(): string {
+  return getActiveWorkspaceId() ?? DEFAULT_WORKSPACE_ID
 }
 
 function sessionKey(platform: ChannelPlatformId, chatId: string): string {
-  return `${platform}:${chatId}`
+  return `${resolveChannelWorkspaceId()}:${platform}:${chatId}`
 }
 
 function isChatAllowed(allowedChatIds: string, chatId: string): boolean {
@@ -50,7 +57,7 @@ async function getOrCreateSession(
     if (latest[key]) return latest[key]
 
     const session = createSession({
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId: resolveChannelWorkspaceId(),
       assistantId,
       title: `${platform} · ${chatId.slice(0, 12)}`,
       type: 'chat',

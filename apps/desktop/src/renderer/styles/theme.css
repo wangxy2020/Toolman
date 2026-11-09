@@ -17558,6 +17558,138 @@ html.theme-dark .tm-mcp-package-source-group {
   padding-left: 1.4em;
 }
 
+/* Standalone task list (no bullet/number) — match plain paragraph spacing. */
+.tm-notes-rich-body .tm-notes-task-list {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.tm-notes-rich-body .tm-notes-task-list > .tm-notes-task-item {
+  list-style: none;
+  margin: 0;
+  display: flex;
+  /* Align to first text line — center would drift when contenteditable keeps a trailing <br>. */
+  align-items: flex-start;
+  gap: 8px;
+  line-height: inherit;
+  min-height: 1.7em;
+}
+
+.tm-notes-rich-body .tm-notes-task-list > .tm-notes-task-item > .tm-notes-task-check {
+  margin-right: 0;
+  margin-top: calc((1lh - 16px) / 2);
+}
+
+.tm-notes-rich-body .tm-notes-task-list > .tm-notes-task-item > .tm-notes-task-text {
+  flex: 1;
+  min-width: 0;
+  line-height: inherit;
+}
+
+.tm-notes-rich-body .tm-notes-task-check {
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  border: 1.5px solid #8b8f96;
+  border-radius: 3px;
+  background: #fff;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  appearance: none;
+  vertical-align: middle;
+}
+
+.tm-notes-rich-body .tm-notes-task-item[data-checked='true'] .tm-notes-task-check {
+  background: #007aff;
+  border-color: #007aff;
+}
+
+.tm-notes-rich-body .tm-notes-task-item[data-checked='true'] .tm-notes-task-check::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -58%) rotate(45deg);
+}
+
+/*
+ * Task + ol/ul: keep native markers (digits/bullets unchanged).
+ * Extra padding shifts markers right; checkbox sits to their left.
+ * Visual: ☐ 1. text / ☐ • text
+ */
+.tm-notes-rich-body ol:has(> .tm-notes-task-item),
+.tm-notes-rich-body ul:not([data-task-list='true']):has(> .tm-notes-task-item) {
+  padding-left: 2.75em;
+}
+
+.tm-notes-rich-body ol > li.tm-notes-task-item,
+.tm-notes-rich-body ul:not([data-task-list='true']) > li.tm-notes-task-item {
+  position: relative;
+  display: list-item;
+  line-height: inherit;
+}
+
+.tm-notes-rich-body ol > li.tm-notes-task-item > .tm-notes-task-check,
+.tm-notes-rich-body ul:not([data-task-list='true']) > li.tm-notes-task-item > .tm-notes-task-check {
+  position: absolute;
+  left: -2.45em;
+  top: calc((1lh - 16px) / 2);
+  margin: 0;
+}
+
+.tm-notes-rich-body ol > li.tm-notes-task-item > .tm-notes-task-text,
+.tm-notes-rich-body ul:not([data-task-list='true']) > li.tm-notes-task-item > .tm-notes-task-text {
+  display: inline;
+}
+
+.tm-notes-rich-body .tm-notes-task-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.tm-notes-rich-body .tm-notes-task-label input[type='checkbox'] {
+  margin: calc((1lh - 16px) / 2) 0 0;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: #007aff;
+}
+
+.tm-notes-rich-body .tm-notes-rich-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.55em 0;
+  table-layout: fixed;
+}
+
+.tm-notes-rich-body .tm-notes-rich-table th,
+.tm-notes-rich-body .tm-notes-rich-table td {
+  border: 1px solid var(--tm-border);
+  padding: 6px 10px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.tm-notes-rich-body .tm-notes-rich-table th {
+  background: var(--tm-surface-raised);
+  font-weight: 600;
+  text-align: left;
+}
+
 .tm-notes-rich-body a {
   color: var(--tm-accent);
   text-decoration: underline;
@@ -18107,6 +18239,14 @@ html.theme-dark .tm-mcp-package-source-group {
   flex: 1;
 }
 
+.tm-notes-block-task > input[type='checkbox'] {
+  margin: calc((1.6em - 16px) / 2) 0 0;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: #007aff;
+}
+
 .tm-notes-block-divider {
   flex: 1;
   color: var(--tm-text-muted);
@@ -18244,6 +18384,14 @@ html.theme-dark .tm-mcp-package-source-group {
   align-items: flex-start;
   gap: 8px;
   cursor: pointer;
+}
+
+.tm-notes-task-label input[type='checkbox'] {
+  margin: calc((1lh - 16px) / 2) 0 0;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: #007aff;
 }
 
 .tm-notes-version-modal {

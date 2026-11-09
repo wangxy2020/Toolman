@@ -25,7 +25,7 @@ describe('TtsSentenceSplitter', () => {
 
   it('force-splits long text without punctuation', () => {
     const splitter = new TtsSentenceSplitter()
-    const long = `${'词'.repeat(40)}，${'续'.repeat(50)}`
+    const long = `${'词'.repeat(80)}，${'续'.repeat(90)}`
     const parts = splitter.append(long)
     expect(parts.length).toBeGreaterThan(0)
     const remainder = splitter.flush()

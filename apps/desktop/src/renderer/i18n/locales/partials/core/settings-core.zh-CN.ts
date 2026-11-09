@@ -35,7 +35,7 @@ export const settingsCoreZhCN = {
         ocr: 'OCR',
         ocrHint: '扫描版 PDF 与图片识别，推荐 glm-ocr。',
         defaultModel: '默认大模型',
-        defaultModelHint: '对话功能使用的默认模型，中文推荐 DeepSeek V3，英语推荐 gemma4。',
+        defaultModelHint: '对话功能使用的默认模型；未指定时优先使用已配置的网络模型，其次本地模型。',
         install: '安装',
         installing: '安装中…',
         installed: '已安装',

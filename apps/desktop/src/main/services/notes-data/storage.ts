@@ -11,6 +11,7 @@ import {
 import { getSharedResourceRepo, readMetadataNotebookId } from '../p2p/note-sync-utils'
 import { isMobileSyncPreferenceEnabled } from '../mobile-sync.config'
 import { publishNoteDeleteSyncChange, publishNoteSyncChange } from '../mobile-sync-store'
+import { broadcastNotesAccountChanged } from '../notes-account-broadcast'
 import { reconcileNotesDataGroupPlacement } from './reconcile-group-placement'
 import type { NoteItem, NotesData } from './types'
 
@@ -50,6 +51,7 @@ export function bindNotesDataAccount(slug: string, options?: { adoptLegacy?: boo
     dropNotesCopiedFromOlderAccounts()
     return
   }
+  const previousSlug = boundSlug
   if (boundSlug && boundSlug !== nextSlug) flushNotesCache()
   if (boundSlug === nextSlug && adopting) flushNotesCache()
 
@@ -66,6 +68,9 @@ export function bindNotesDataAccount(slug: string, options?: { adoptLegacy?: boo
   cacheSlug = nextSlug
   cacheReady = true
   dropNotesCopiedFromOlderAccounts()
+  if (previousSlug !== nextSlug) {
+    broadcastNotesAccountChanged(nextSlug)
+  }
 }
 
 function noteIdsInAccountFile(path: string): Set<string> {
@@ -172,7 +177,18 @@ export function getNotesDataJson(): string {
 }
 
 export function syncNotesData(input: unknown): { synced: boolean } {
-  const { dataJson } = NotesDataSyncInputSchema.parse(input)
+  const { dataJson, accountSlug } = NotesDataSyncInputSchema.parse(input)
+  if (boundSlug) {
+    const incomingSlug = (accountSlug ?? '').trim()
+    if (!incomingSlug || incomingSlug !== boundSlug) {
+      logStructured(
+        'notes',
+        'warn',
+        `notes sync rejected: renderer=${incomingSlug || '(none)'} bound=${boundSlug}`,
+      )
+      return { synced: false }
+    }
+  }
   try {
     const parsed = JSON.parse(dataJson) as Partial<NotesData>
     const previous = getNotesData()

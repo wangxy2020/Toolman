@@ -9,7 +9,7 @@ export const TRANSLATION_SETTINGS_STORAGE_KEY = 'toolman:translation-settings'
 export interface TranslationSettings {
   /**
    * Translation model id (`providerId:modelName`).
-   * Null means “not chosen yet”; runtime resolves to gemma4:latest, then qwen3.5:9b.
+   * Null means “not chosen yet”; runtime prefers network models, then local installed models.
    */
   modelId: string | null
   languages: [TranslationLanguage, TranslationLanguage]

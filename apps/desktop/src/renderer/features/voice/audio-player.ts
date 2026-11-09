@@ -19,16 +19,25 @@ export class ControllableAudioPlayback {
   }
 
   play(blob: Blob, signal: AbortSignal): Promise<void> {
+    const url = URL.createObjectURL(blob)
+    return this.playUrl(url, signal, true)
+  }
+
+  /** Play a data: or http(s) URL without creating an object URL. */
+  playDataUrl(url: string, signal: AbortSignal): Promise<void> {
+    return this.playUrl(url, signal, false)
+  }
+
+  private playUrl(url: string, signal: AbortSignal, revokeObjectUrl: boolean): Promise<void> {
     this.cleanup(false)
     this.closed = false
     if (signal.aborted) return Promise.resolve()
 
     return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audio.preload = 'auto'
       this.audio = audio
-      this.objectUrl = url
+      this.objectUrl = revokeObjectUrl ? url : null
       this.signal = signal
       this.resolveWait = resolve
 

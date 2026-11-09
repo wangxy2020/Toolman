@@ -25,13 +25,15 @@ import type { KnowledgeBaseRow } from '@toolman/db'
 import { getDocumentRepository, getKnowledgeBaseRepository } from '../db/repos'
 import { resolveDefaultDocProcessorProviderId } from './provider.service'
 import { ensureKnowledgeBaseStorageSource } from './knowledge-kb-storage-source.service'
-import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
+import {
+  removeKnowledgeBaseStorageDirectory,
+  resolveKnowledgeBaseStoragePath,
+} from './knowledge-kb-storage-path.service'
 import { renameKnowledgeStorageFolder } from './knowledge-folder.service'
 import { normalizeFolderPath } from './toolman-user-documents.service'
 import { removeKbFts } from './knowledge-fts.service'
 import { restartKnowledgeWatchersForKb, stopKnowledgeWatchersForKb } from './knowledge-watcher.service'
 import { deleteManagedKnowledgeFileFromDisk } from './knowledge-document/helpers'
-import { removeEmptyDirectory } from './p2p/p2p-group-saved-knowledge-migration-fs'
 
 export function getWorkspaceKnowledgeDir(workspaceId: string): string {
   const dir = join(app.getPath('userData'), 'knowledge', workspaceId)
@@ -255,12 +257,8 @@ export async function deleteKnowledgeBase(input: unknown): Promise<boolean> {
   docRepo.softDeleteAllSourcesByKb(data.id)
   docRepo.softDeleteAllByKb(data.id)
 
-  if (existing.kind === 'shared' && !isP2pSharedKnowledgeMirrorDescription(existing.description)) {
-    const storagePath = resolveKnowledgeBaseStoragePath(existing, { ensure: false })
-    if (storagePath) {
-      removeEmptyDirectory(storagePath)
-    }
-  }
+  // Sidebar delete must also remove the managed folder under 同步/本地/共享/网络知识库 etc.
+  removeKnowledgeBaseStorageDirectory(existing)
 
   return kbRepo.softDelete(data.id, data.workspaceId)
 }

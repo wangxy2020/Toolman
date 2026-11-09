@@ -1,6 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { app } from 'electron'
 import {
   NotesAttachmentImportInputSchema,
   NotesAttachmentImportOutputSchema,
@@ -8,10 +7,11 @@ import {
   NotesSyncExportOutputSchema,
   ipcOk,
 } from '@toolman/shared'
+import { accountScopedUserDataPath, getActiveAccountSlug } from './account-scope.service'
 import { assertUserAccessiblePath } from './path-sandbox.service'
 
 function getNotesAttachmentsDir(noteId: string): string {
-  const dir = join(app.getPath('userData'), 'notes-attachments', noteId)
+  const dir = accountScopedUserDataPath('notes-attachments', noteId)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return dir
 }
@@ -24,9 +24,10 @@ export function importNotesAttachment(input: unknown) {
   const fileName = `${Date.now()}-${name}`
   const dest = join(dir, fileName)
   copyFileSync(sourcePath, dest)
+  const slug = getActiveAccountSlug()
   return ipcOk(
     NotesAttachmentImportOutputSchema.parse({
-      relativePath: join('notes-attachments', data.noteId, fileName),
+      relativePath: join('by-account', slug, 'notes-attachments', data.noteId, fileName),
       absolutePath: dest,
       name,
     }),

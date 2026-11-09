@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { IpcChannel } from '@toolman/shared'
+import { getActiveNotesAccountSlug } from '../notes/notes-storage'
 import type { GroupNoteAction } from './GroupNoteActionMenu'
 import type { OpenGroupNoteRequest } from './group-note-open'
 import type { GroupNotesPanelProps } from './group-notes-panel-types'
@@ -83,8 +84,13 @@ export function useGroupNotesPanelActions(
         throw new Error('请先选择要添加的笔记')
       }
 
+      const accountSlug = getActiveNotesAccountSlug()
+      if (!accountSlug) {
+        throw new Error('当前账户笔记尚未就绪')
+      }
       const syncResult = await window.api.invoke(IpcChannel.NotesDataSync, {
         dataJson: JSON.stringify({ notebooks, notes, syncFolderPath }),
+        accountSlug,
       })
       if (!syncResult.ok) {
         throw new Error(syncResult.error.message)

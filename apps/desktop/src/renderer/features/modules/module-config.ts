@@ -64,11 +64,11 @@ export const MODULE_PAGE_CONFIG: Record<ModuleView, ModulePageConfig> = {
   },
   translate: {
     title: '翻译',
-    addLabel: '新建对照',
-    headerSegments: ['对照翻译'],
-    sidebarEmptyHint: '暂无对照记录，点击上方新建',
+    addLabel: '打开文档',
+    headerSegments: ['文档翻译'],
+    sidebarEmptyHint: '暂无文档记录，点击上方打开',
     contentEmptyTitle: '翻译',
-    contentEmptyHint: '在左侧选择对照翻译，在右侧编辑原文与译文。',
+    contentEmptyHint: '在左侧打开文档，在右侧查看原文与译文。',
   },
   'assistant-lib': {
     title: '课堂',

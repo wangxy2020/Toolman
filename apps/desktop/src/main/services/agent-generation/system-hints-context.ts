@@ -2,7 +2,9 @@ import { toErrorMessage } from '@toolman/shared'
 import {
   buildAssistantLibCourseRuntimeHint,
   buildSocraticKnowledgeHint,
+  buildSocraticKnowledgeSearchQuery,
   buildSocraticModeRuntimeHint,
+  currentSyllabusChapter,
   isSocraticTeachingMode,
   resolveAssistantLibTeachingRuntime,
 } from '@toolman/shared'
@@ -131,6 +133,17 @@ export async function appendRuntimeContextHints(
     assistantParameters: assistantParams,
   })
   const socraticMode = isSocraticTeachingMode(teachingRuntime.teachingMode)
+  const currentChapter = teachingRuntime.syllabus
+    ? currentSyllabusChapter(teachingRuntime.syllabus)
+    : null
+  const socraticChapter = currentChapter
+    ? {
+        courseName: teachingRuntime.courseName,
+        title: currentChapter.title,
+        groupTitle: currentChapter.groupTitle,
+        lessonPlan: currentChapter.lessonPlan,
+      }
+    : null
 
   if (socraticMode) {
     hints.push(buildSocraticModeRuntimeHint(teachingRuntime.roleplayId ?? ''))
@@ -155,7 +168,9 @@ export async function appendRuntimeContextHints(
         const results = await searchKnowledgeForChat({
           workspaceId: options.runtime.workspaceId,
           kbIds,
-          query: options.userText,
+          query: socraticMode
+            ? buildSocraticKnowledgeSearchQuery(options.userText, socraticChapter)
+            : options.userText,
           topK:
             options.sendOptions?.kbTopK ??
             (assistantParams.kbTopK as number | undefined),
@@ -169,7 +184,7 @@ export async function appendRuntimeContextHints(
         kbResults = results
         if (socraticMode) {
           if (results.length > 0) {
-            hints.push(buildSocraticKnowledgeHint(results, options.userText))
+            hints.push(buildSocraticKnowledgeHint(results, options.userText, socraticChapter))
           } else {
             hints.push(buildKnowledgeEmptySearchHint(options.userText))
           }

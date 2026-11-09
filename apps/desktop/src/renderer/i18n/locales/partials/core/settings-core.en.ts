@@ -35,7 +35,7 @@ export const settingsCoreEn = {
         ocr: 'OCR',
         ocrHint: 'Vision model for scanned PDFs and images. glm-ocr is recommended.',
         defaultModel: 'Default LLM',
-        defaultModelHint: 'Default chat model. DeepSeek V3 for Chinese, gemma4 for English.',
+        defaultModelHint: 'Default chat model. When unset, prefer configured network models, then local models.',
         install: 'Install',
         installing: 'Installing…',
         installed: 'Installed',

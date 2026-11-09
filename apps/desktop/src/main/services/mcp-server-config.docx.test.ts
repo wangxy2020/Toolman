@@ -11,6 +11,11 @@ vi.mock('electron', () => ({
   },
 }))
 
+vi.mock('./documents-folder-slug.service', () => ({
+  getDocumentsFolderSlug: () => 'test-user',
+  GUEST_DOCUMENTS_FOLDER_SLUG: '本地用户',
+}))
+
 vi.mock('./docx-mcp-paths', () => ({
   resolveDocxMcpServerEntryPath: () => '/tmp/mcp-docx/dist/docxServer.js',
 }))
@@ -58,7 +63,8 @@ describe('mcp-server-config docx preset', () => {
     expect(docx?.command).toBe('/Applications/Toolman.app/Contents/MacOS/Toolman')
     expect(docx?.args).toEqual(['/tmp/mcp-docx/dist/docxServer.js'])
 
-    const persisted = JSON.parse(readFileSync(join(userDataDir, 'mcp-servers.json'), 'utf8'))
+    const persistedPath = join(userDataDir, 'by-account', 'test-user', 'mcp-servers.json')
+    const persisted = JSON.parse(readFileSync(persistedPath, 'utf8'))
     const savedDocx = persisted.find((server: { id: string }) => server.id === 'docx-mcp-server')
     expect(savedDocx.args).toEqual(['/tmp/mcp-docx/dist/docxServer.js'])
   })

@@ -52,15 +52,10 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
     handleSelectKnowledge,
     handleSelectKnowledgeSection,
     handleSelectCommunitySection,
-    handleSelectContrast,
     handleSelectDocument,
-    handleDeleteContrast,
     handleDeleteDocument,
-    handleAddContrastToNotes,
     handleAddDocumentToNotes,
-    handleAddContrastToKnowledge,
     handleAddDocumentToKnowledge,
-    handleCreateContrast,
     handleOpenDocument,
   } = useChatPageSidebars(props)
 
@@ -165,27 +160,16 @@ export function ChatPageSidebars(props: ChatPageSidebarsProps) {
       <TranslationSidebar
         activeSection={translationSection}
         onSelectSection={setTranslationSection}
-        contrasts={translation.contrasts}
         documents={translation.documents}
-        activeContrastId={translation.activeContrastId}
         activeDocumentId={translation.activeDocumentId}
-        renameContrastId={translation.renameContrastId}
         renameDocumentId={translation.renameDocumentId}
-        onSelectContrast={handleSelectContrast}
         onSelectDocument={handleSelectDocument}
-        onStartRenameContrast={translation.startRenameContrast}
         onStartRenameDocument={translation.startRenameDocument}
-        onRenameContrast={translation.renameContrast}
         onRenameDocument={translation.renameDocument}
-        onCancelRenameContrast={translation.cancelRenameContrast}
         onCancelRenameDocument={translation.cancelRenameDocument}
-        onDeleteContrast={handleDeleteContrast}
         onDeleteDocument={handleDeleteDocument}
-        onAddContrastToNotes={handleAddContrastToNotes}
         onAddDocumentToNotes={handleAddDocumentToNotes}
-        onAddContrastToKnowledge={handleAddContrastToKnowledge}
         onAddDocumentToKnowledge={handleAddDocumentToKnowledge}
-        onCreateContrast={handleCreateContrast}
         onOpenDocument={handleOpenDocument}
       />
     )

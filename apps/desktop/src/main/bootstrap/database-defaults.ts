@@ -118,7 +118,9 @@ export function ensureWorkspaceDefaults(database: ToolmanDatabase) {
     assistant &&
     (assistant.modelId.includes('gpt-4') ||
       assistant.modelId.includes('gpt-3') ||
-      !assistant.modelId.includes(':'))
+      !assistant.modelId.includes(':') ||
+      // Drop seeded gemma4:latest so chat prefers configured network models.
+      (assistant.isBuiltin && /:(?:gemma4:latest|gemma:latest)$/i.test(assistant.modelId)))
 
   if (needsAssistantMigration) {
     database

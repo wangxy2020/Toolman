@@ -196,6 +196,10 @@ export function activateNotesAccount(slug: string): void {
   activeNotesAccountSlug = next || null
 }
 
+export function getActiveNotesAccountSlug(): string {
+  return activeNotesAccountSlug?.trim() ?? ''
+}
+
 export function hasScopedNotesCache(slug: string): boolean {
   const next = slug.trim()
   if (!next) return false
@@ -220,15 +224,18 @@ export function loadNotesData(): NotesData {
 }
 
 export function saveNotesData(data: NotesData): void {
-  const key = currentNotesStorageKey()
-  if (key) localStorage.setItem(key, JSON.stringify(data))
-  void syncNotesDataToMain(data)
+  const slug = activeNotesAccountSlug?.trim()
+  if (!slug) return
+  const key = notesStorageKeyForSlug(slug)
+  localStorage.setItem(key, JSON.stringify(data))
+  void syncNotesDataToMain(data, slug)
 }
 
-async function syncNotesDataToMain(data: NotesData): Promise<void> {
+async function syncNotesDataToMain(data: NotesData, accountSlug: string): Promise<void> {
   try {
     const result = await window.api.invoke(IpcChannel.NotesDataSync, {
       dataJson: JSON.stringify(data),
+      accountSlug,
     })
     if (!result.ok) {
       window.dispatchEvent(

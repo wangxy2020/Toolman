@@ -11,6 +11,11 @@ vi.mock('electron', () => ({
   },
 }))
 
+vi.mock('./documents-folder-slug.service', () => ({
+  getDocumentsFolderSlug: () => 'test-user',
+  GUEST_DOCUMENTS_FOLDER_SLUG: '本地用户',
+}))
+
 afterEach(() => {
   if (existsSync(userDataDir)) {
     rmSync(userDataDir, { recursive: true, force: true })
@@ -58,7 +63,8 @@ describe('mcp-server-config python preset', () => {
     const python = listMcpServers().find((server) => server.id === 'python')
     expect(python?.args).toEqual(['mcp-python-interpreter'])
 
-    const persisted = JSON.parse(readFileSync(join(userDataDir, 'mcp-servers.json'), 'utf8')) as Array<{
+    const persistedPath = join(userDataDir, 'by-account', 'test-user', 'mcp-servers.json')
+    const persisted = JSON.parse(readFileSync(persistedPath, 'utf8')) as Array<{
       id: string
       args: string[]
     }>

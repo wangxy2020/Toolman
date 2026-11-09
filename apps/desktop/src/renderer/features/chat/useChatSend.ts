@@ -6,7 +6,9 @@ import {
   type Assistant,
   type ContentBlock,
   type Message,
+  type Provider,
 } from '@toolman/shared'
+import { isModelIdAvailable } from './model-utils'
 import { getBlocksText } from './message-utils'
 import {
   isGroupProxySession,
@@ -87,6 +89,7 @@ export function useChatSend(
   streamingRefs: ChatStreamingRefs,
   deps: {
     assistants: Assistant[]
+    providers: Provider[]
     selectedModelIds: string[]
     appSettings?: AppSettings
     messages: Message[]
@@ -99,6 +102,7 @@ export function useChatSend(
 ) {
   const {
     assistants,
+    providers,
     selectedModelIds,
     appSettings,
     messages,
@@ -133,11 +137,15 @@ export function useChatSend(
     const courseModelId = resolveAssistantLibSessionModelId(session.activeSession?.metadata)
     if (courseModelId) return [courseModelId]
     const assistantModelId = activeAssistant?.modelId?.trim()
-    if (assistantModelId && selectedModelIds.length <= 1) {
+    if (
+      assistantModelId &&
+      isModelIdAvailable(assistantModelId, providers) &&
+      selectedModelIds.length <= 1
+    ) {
       return [assistantModelId]
     }
     return selectedModelIds
-  }, [activeAssistant, groupProxyMode, selectedModelIds, session.activeSession])
+  }, [activeAssistant, groupProxyMode, providers, selectedModelIds, session.activeSession])
 
   const buildSendOptionsForSession = useCallback(
     (contentBlocks?: ContentBlock[]) =>

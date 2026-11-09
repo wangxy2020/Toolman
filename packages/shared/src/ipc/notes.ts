@@ -26,6 +26,8 @@ export const NotesSyncExportOutputSchema = z.object({
 
 export const NotesDataSyncInputSchema = z.object({
   dataJson: z.string(),
+  /** Must match the main-process bound account; rejects cross-account overwrite on switch. */
+  accountSlug: z.string().optional(),
 })
 
 export const NotesDataSyncOutputSchema = z.object({

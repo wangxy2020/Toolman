@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
-import { join } from 'node:path'
+
+const userDataDir = '/tmp/toolman-mobile-sync-store-test'
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/toolman-mobile-sync-store-test',
+    getPath: () => userDataDir,
     getName: () => 'Toolman',
   },
+}))
+
+vi.mock('./documents-folder-slug.service', () => ({
+  getDocumentsFolderSlug: () => 'test-user',
+  GUEST_DOCUMENTS_FOLDER_SLUG: '本地用户',
 }))
 
 import {
@@ -18,7 +24,7 @@ import {
 describe('mobile-sync-store pull cursor', () => {
   afterEach(() => {
     resetMobileSyncStoreForTests()
-    rmSync(join('/tmp/toolman-mobile-sync-store-test', 'mobile-sync'), {
+    rmSync(userDataDir, {
       recursive: true,
       force: true,
     })

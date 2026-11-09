@@ -12,6 +12,7 @@ import {
   activateNotesAccount,
   createDefaultData,
   DEFAULT_NOTEBOOK_ID,
+  getActiveNotesAccountSlug,
   getFirstNoteInNotebook,
   normalizeData,
   normalizeNote,
@@ -49,16 +50,31 @@ async function reconcileNotesPlacement(data: NotesData): Promise<NotesData> {
 }
 
 async function syncAndReloadNotes(data: NotesData): Promise<NotesData> {
-  await window.api.invoke(IpcChannel.NotesDataSync, {
-    dataJson: JSON.stringify(data),
-  })
-  const loadResult = await window.api.invoke(IpcChannel.NotesDataLoad, {})
-  if (!loadResult.ok) return data
-  try {
-    return normalizeData(JSON.parse((loadResult.data as { dataJson: string }).dataJson) as Partial<NotesData>)
-  } catch {
-    return data
+  const accountSlug = getActiveNotesAccountSlug()
+  if (accountSlug) {
+    await window.api.invoke(IpcChannel.NotesDataSync, {
+      dataJson: JSON.stringify(data),
+      accountSlug,
+    })
   }
+  return loadAccountNotes()
+}
+
+async function reloadBoundAccountNotes(
+  setData: Dispatch<SetStateAction<NotesData>>,
+  setActiveNoteId: Dispatch<SetStateAction<string | null>>,
+  setHydrated?: Dispatch<SetStateAction<boolean>>,
+): Promise<void> {
+  setHydrated?.(false)
+  let nextData = await loadAccountNotes()
+  nextData = await reconcileNotesPlacement(nextData)
+  nextData = await syncAndReloadNotes(nextData)
+  setData(nextData)
+  setActiveNoteId((prev) => {
+    if (prev && nextData.notes.some((item) => item.id === prev)) return prev
+    return getFirstNoteInNotebook(nextData.notes, DEFAULT_NOTEBOOK_ID)?.id ?? null
+  })
+  setHydrated?.(true)
 }
 
 export function useNotesSync({
@@ -215,17 +231,16 @@ export function useNotesSync({
 
   useEffect(() => {
     const reloadFromMain = () => {
-      void (async () => {
-        let nextData = await loadAccountNotes()
-        nextData = await reconcileNotesPlacement(nextData)
-        nextData = await syncAndReloadNotes(nextData)
-        setData(nextData)
-        setActiveNoteId((prev) => {
-          if (prev && nextData.notes.some((item) => item.id === prev)) return prev
-          return getFirstNoteInNotebook(nextData.notes, DEFAULT_NOTEBOOK_ID)?.id ?? null
-        })
-      })()
+      void reloadBoundAccountNotes(setData, setActiveNoteId)
     }
-    return window.api.subscribe('notes:mobile-sync', reloadFromMain)
-  }, [setActiveNoteId, setData])
+    const reloadOnAccountSwitch = () => {
+      void reloadBoundAccountNotes(setData, setActiveNoteId, setHydrated)
+    }
+    const unsubscribeMobile = window.api.subscribe('notes:mobile-sync', reloadFromMain)
+    const unsubscribeAccount = window.api.subscribe('notes:account-changed', reloadOnAccountSwitch)
+    return () => {
+      unsubscribeMobile()
+      unsubscribeAccount()
+    }
+  }, [setActiveNoteId, setData, setHydrated])
 }

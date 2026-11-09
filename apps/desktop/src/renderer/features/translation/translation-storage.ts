@@ -10,6 +10,36 @@ import { normalizePageRemarks } from './document-page-remarks'
 
 export const TRANSLATION_STORAGE_KEY = 'toolman:translation-data'
 
+export function translationStorageKeyForWorkspace(workspaceId: string): string {
+  return `${TRANSLATION_STORAGE_KEY}:${workspaceId}`
+}
+
+function migrateLegacyTranslationData(workspaceId: string): TranslationData | null {
+  try {
+    const raw = localStorage.getItem(TRANSLATION_STORAGE_KEY)
+    if (!raw) return null
+    const legacy = normalizeTranslationData(JSON.parse(raw) as Partial<TranslationData>)
+    const scoped: TranslationData = {
+      contrasts: legacy.contrasts.filter((item) => item.workspaceId === workspaceId),
+      documents: legacy.documents.filter((item) => item.workspaceId === workspaceId),
+    }
+    if (scoped.contrasts.length === 0 && scoped.documents.length === 0) return null
+    localStorage.setItem(translationStorageKeyForWorkspace(workspaceId), JSON.stringify(scoped))
+    const remaining: TranslationData = {
+      contrasts: legacy.contrasts.filter((item) => item.workspaceId !== workspaceId),
+      documents: legacy.documents.filter((item) => item.workspaceId !== workspaceId),
+    }
+    if (remaining.contrasts.length === 0 && remaining.documents.length === 0) {
+      localStorage.removeItem(TRANSLATION_STORAGE_KEY)
+    } else {
+      localStorage.setItem(TRANSLATION_STORAGE_KEY, JSON.stringify(remaining))
+    }
+    return scoped
+  } catch {
+    return null
+  }
+}
+
 export type TranslationDocumentPageSnapshotStatus = 'idle' | 'parsed' | 'done' | 'empty'
 
 export interface TranslationDocumentPageSnapshot {
@@ -183,8 +213,16 @@ export function normalizeTranslationData(
   }
 }
 
-export function loadTranslationData(): TranslationData {
+export function loadTranslationData(workspaceId?: string | null): TranslationData {
   try {
+    if (workspaceId) {
+      const key = translationStorageKeyForWorkspace(workspaceId)
+      const raw = localStorage.getItem(key)
+      if (raw) return normalizeTranslationData(JSON.parse(raw) as Partial<TranslationData>)
+      const migrated = migrateLegacyTranslationData(workspaceId)
+      if (migrated) return migrated
+      return { contrasts: [], documents: [] }
+    }
     const raw = localStorage.getItem(TRANSLATION_STORAGE_KEY)
     if (!raw) return { contrasts: [], documents: [] }
     return normalizeTranslationData(JSON.parse(raw) as Partial<TranslationData>)
@@ -193,9 +231,18 @@ export function loadTranslationData(): TranslationData {
   }
 }
 
-export function saveTranslationData(data: TranslationData): void {
+export function saveTranslationData(data: TranslationData, workspaceId?: string | null): void {
   try {
-    localStorage.setItem(TRANSLATION_STORAGE_KEY, JSON.stringify(normalizeTranslationData(data)))
+    const normalized = normalizeTranslationData(data)
+    if (workspaceId) {
+      const scoped: TranslationData = {
+        contrasts: normalized.contrasts.filter((item) => item.workspaceId === workspaceId),
+        documents: normalized.documents.filter((item) => item.workspaceId === workspaceId),
+      }
+      localStorage.setItem(translationStorageKeyForWorkspace(workspaceId), JSON.stringify(scoped))
+      return
+    }
+    localStorage.setItem(TRANSLATION_STORAGE_KEY, JSON.stringify(normalized))
   } catch (error) {
     clientLog.error('[translation-storage] failed to persist translation data', error)
   }

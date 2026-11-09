@@ -3,14 +3,14 @@
  * Env `TOOLMAN_MOBILE_*` still overrides when set (CI / forced enable).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { app } from 'electron'
+import { dirname } from 'node:path'
 import { z } from 'zod'
 import {
   generateShortPairingCode,
   isShortPairingCode,
   normalizePairingCode,
 } from '@toolman/shared'
+import { resolveAccountScopedFileWithLegacyAdopt } from './account-scope.service'
 
 const MobileSyncPreferencesSchema = z.object({
   syncEnabled: z.boolean().default(true),
@@ -40,7 +40,10 @@ const DEFAULT_PREFS: MobileSyncPreferences = {
 }
 
 function getConfigPath(): string {
-  return join(app.getPath('userData'), 'mobile-sync', 'preferences.json')
+  return resolveAccountScopedFileWithLegacyAdopt(
+    ['mobile-sync', 'preferences.json'],
+    ['mobile-sync', 'preferences.json'],
+  )
 }
 
 export function readMobileSyncPreferences(): MobileSyncPreferences {

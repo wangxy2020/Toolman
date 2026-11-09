@@ -155,8 +155,13 @@ export function buildAssistantLibCourseRuntimeHint(
     ? [
         '## 学习进度（必须按目录从上到下）',
         `当前章节：第 ${chapterIndex + 1}/${total} 章「${chapter.title}」`,
+        chapter.groupTitle ? `所属章：${chapter.groupTitle}` : '',
         chapter.hours ? `本章课时：${chapter.hours}` : '',
         '未完成本章验收前，禁止进入下一章；不要提前讲解未解锁章节。',
+        '### 本章提问约束（必须遵守）',
+        '- 每一轮只推进本章的一个知识点；问题须让用户听得出「在考本章哪个概念」。',
+        '- 优先依据下方教案与验收问题出题；用户跑题时先点名本章概念再拉回，不要跟着偏题。',
+        '- 不要用与本章无关的生活隐喻、跨章概念或空泛「你怎么看」式提问掩盖考点。',
         chapter.lessonPlan?.trim() ? `### 本章教案\n${chapter.lessonPlan.trim()}` : '',
         chapter.assessmentQuestions.length > 0
           ? [

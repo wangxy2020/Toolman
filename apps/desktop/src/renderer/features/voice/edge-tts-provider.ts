@@ -50,9 +50,11 @@ export class EdgeTtsProvider implements TtsProvider {
     }
 
     const data = result.data as VoiceSynthesizeOutput
-    const binary = Uint8Array.from(atob(data.audioBase64), (char) => char.charCodeAt(0))
-    const blob = new Blob([binary], { type: data.mimeType || 'audio/mpeg' })
-    await this.playback.play(blob, signal)
+    // Prefer data URL: Blob([Uint8Array]) can fail decode in some Chromium builds
+    // and silently fall back to Web Speech (system voice).
+    const mimeType = data.mimeType?.trim() || 'audio/mpeg'
+    const dataUrl = `data:${mimeType};base64,${data.audioBase64}`
+    await this.playback.playDataUrl(dataUrl, signal)
   }
 
   pause(): void {

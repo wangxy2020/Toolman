@@ -112,11 +112,14 @@ export async function ensureActiveAutomationChatSession(options: {
     .sort((a, b) => b.updatedAt - a.updatedAt)[0]
 
   if (existing) {
-    await chat.selectSession(existing.id)
-    return existing
+    try {
+      await chat.selectSession(existing.id)
+      return existing
+    } catch {
+      // Session may have been pruned while switching from 课堂; create a fresh one.
+    }
   }
 
-  // Prefer listing by assistant so we don't miss sessions outside the default 50.
   return chat.createSession(assistantId)
 }
 

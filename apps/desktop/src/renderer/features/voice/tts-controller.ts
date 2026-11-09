@@ -174,7 +174,7 @@ export class TtsController {
       if (result) {
         this.activeEngine = result.engine
         // Only surface fallback warnings while actively playing — never on idle/stop.
-        if (state === 'playing') {
+        if (state === 'playing' || state === 'paused') {
           this.lastError = result.fellBack
             ? (result.error ??
               'Edge 语音合成失败，已回退到系统语音（音色设置不会生效，请检查网络）')
@@ -183,8 +183,10 @@ export class TtsController {
       } else {
         this.activeEngine = provider.id
       }
+      // Keep message controls visible through brief synth gaps; clear only on idle.
       if (state === 'idle') {
         this.playingMessageId = null
+        this.lastError = null
       }
       this.emit()
     })

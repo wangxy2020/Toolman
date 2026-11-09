@@ -93,7 +93,7 @@ export function useNoteEditorActions({
     const imagePath = payload?.absolutePath ?? filePath
     const imageName = payload?.name
     editor.focus()
-    editor.insertImage(imagePath, imageName)
+    await editor.insertImage(imagePath, imageName)
   }, [bodyRef, disabled, importAttachment])
 
   const promptLink = useCallback(() => {

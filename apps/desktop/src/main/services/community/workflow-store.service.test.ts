@@ -98,4 +98,18 @@ describe('workflow-store.service', () => {
     bindWorkflowAccount('wxymale')
     expect(listStoredWorkflows().map((item) => item.id)).toEqual(['parent-task'])
   })
+
+  it('creates the per-account workflows directory on first save', () => {
+    bindWorkflowAccount('wangxq2008')
+    expect(() =>
+      upsertStoredWorkflow({
+        id: 'first-task',
+        name: 'First',
+        engine: 'langgraph',
+        graphPath: 'workflow.json',
+        graph: { nodes: [], edges: [] },
+      }),
+    ).not.toThrow()
+    expect(listStoredWorkflows().map((item) => item.id)).toEqual(['first-task'])
+  })
 })

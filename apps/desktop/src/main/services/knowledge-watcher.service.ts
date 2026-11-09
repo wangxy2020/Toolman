@@ -8,6 +8,7 @@ import { knowledgeIngestSupportsFile } from './knowledge-parse-options.service'
 import { resolveKnowledgeWatchConfig } from './knowledge-watch-config.service'
 import { getDatabase } from '../bootstrap/database'
 import { getKnowledgeBaseRepository } from '../db/repos'
+import { getActiveWorkspaceId } from './account-scope.service'
 import { ensureKnowledgeBaseStorageSource } from './knowledge-kb-storage-source.service'
 import { resolveKnowledgeBaseStoragePath } from './knowledge-kb-storage-path.service'
 import {
@@ -200,6 +201,9 @@ export function registerKnowledgeWatchTarget(target: WatchTarget) {
 export function bootstrapKnowledgeWatchers() {
   stopAllKnowledgeWatchers()
 
+  // Only watch the active account workspace so background ingest cannot cross accounts.
+  const activeWorkspaceId = getActiveWorkspaceId()
+
   const db = getDatabase()
   const rows = db
     .select({
@@ -211,6 +215,7 @@ export function bootstrapKnowledgeWatchers() {
     .all()
 
   for (const row of rows) {
+    if (activeWorkspaceId && row.workspaceId !== activeWorkspaceId) continue
     restartKnowledgeWatchersForKb(row.workspaceId, row.id)
   }
 }

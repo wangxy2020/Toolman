@@ -26,6 +26,19 @@ function mimeTypeForPath(filePath: string): string {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     case '.csv':
       return 'text/csv'
+    case '.png':
+      return 'image/png'
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.gif':
+      return 'image/gif'
+    case '.webp':
+      return 'image/webp'
+    case '.svg':
+      return 'image/svg+xml'
+    case '.bmp':
+      return 'image/bmp'
     default:
       return 'application/octet-stream'
   }

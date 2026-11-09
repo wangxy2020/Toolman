@@ -18,6 +18,7 @@ import { assistants } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { getMessageRepository, getSessionRepository } from '../db/repos'
 import { toIpcSession } from '../mappers/chat'
+import { isWorkspaceActive } from './account-scope.service'
 import { inheritGroupProxySessionMetadata } from './p2p/p2p-group-agent-proxy.service'
 import {
   publishClassroomSessionDeleteSyncChange,
@@ -89,12 +90,15 @@ export function listSessions(input: unknown) {
 export function getSession(input: unknown): Session | null {
   const { id } = SessionGetInputSchema.parse(input)
   const row = getSessionRepository().findRowById(id)
-  return row ? toIpcSession(row) : null
+  if (!row || !isWorkspaceActive(row.workspaceId)) return null
+  return toIpcSession(row)
 }
 
 export function updateSession(input: unknown): Session | null {
   const data = SessionUpdateInputSchema.parse(input)
   const sessions = getSessionRepository()
+  const existingRow = sessions.findRowById(data.id)
+  if (!existingRow || !isWorkspaceActive(existingRow.workspaceId)) return null
 
   sessions.update(data.id, {
     title: data.title,
@@ -117,8 +121,9 @@ export function updateSession(input: unknown): Session | null {
 export function deleteSession(input: unknown): boolean {
   const data = SessionDeleteInputSchema.parse(input)
   const existing = getSession(data)
+  if (!existing) return false
   const deleted = getSessionRepository().delete(data.id)
-  if (deleted && existing && isAssistantLibSession(existing.metadata)) {
+  if (deleted && isAssistantLibSession(existing.metadata)) {
     try {
       publishClassroomSessionDeleteSyncChange(existing.id)
     } catch {

@@ -53,11 +53,11 @@ export const modulesEn = {
     },
     translate: {
       title: 'Translate',
-      addLabel: 'New session',
-      headerAll: 'Side-by-side',
-      sidebarEmptyHint: 'No translation sessions yet. Click above to create one.',
+      addLabel: 'Open document',
+      headerAll: 'Documents',
+      sidebarEmptyHint: 'No documents yet. Click above to open one.',
       contentEmptyTitle: 'Translate',
-      contentEmptyHint: 'Select side-by-side translation on the left, then edit source and target text.',
+      contentEmptyHint: 'Open a document on the left to view source and translation.',
     },
     'assistant-lib': {
       title: 'Classroom',

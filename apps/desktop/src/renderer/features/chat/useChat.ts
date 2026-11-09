@@ -47,6 +47,7 @@ export function useChat(workspaceId: string | null, appSettings?: AppSettings) {
 
   const sendState = useChatSend(session, streamingRefs, {
     assistants: providersState.assistants,
+    providers: providersState.providers,
     selectedModelIds: providersState.selectedModelIds,
     appSettings,
     messages: messagesState.messages,

@@ -9,7 +9,6 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, join } from 'node:path'
-import { app } from 'electron'
 import {
   BUILTIN_SKILLS,
   BUILTIN_SKILL_IDS,
@@ -19,6 +18,7 @@ import {
   SkillInstallInputSchema,
   type SkillInfo,
 } from '@toolman/shared'
+import { accountScopedUserDataPath } from './account-scope.service'
 
 const SKILL_FILE = 'SKILL.md'
 
@@ -97,7 +97,7 @@ function getBuiltinSkillMarkdown(skillId: string): string {
 }
 
 function skillsRoot(): string {
-  const dir = join(app.getPath('userData'), 'skills')
+  const dir = accountScopedUserDataPath('skills')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return dir
 }

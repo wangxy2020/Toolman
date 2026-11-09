@@ -2,7 +2,6 @@ import {
   IconAgent,
   IconDownload,
   IconKnowledge,
-  IconLock,
   IconPrint,
   IconSliders,
   IconStar,
@@ -15,7 +14,6 @@ import type { NoteItem } from './notes-storage'
 interface Props {
   note: NoteItem
   onToggleStarred: (noteId: string) => void
-  onToggleLocked: (noteId: string) => void
   onOpenSettings: () => void
   onChatWithNote?: (noteId: string) => void
   onIngestNote?: (noteId: string, noteTitle: string) => void
@@ -24,7 +22,6 @@ interface Props {
 export function NotesHeaderActions({
   note,
   onToggleStarred,
-  onToggleLocked,
   onOpenSettings,
   onChatWithNote,
   onIngestNote,
@@ -65,15 +62,6 @@ export function NotesHeaderActions({
       >
         <IconStar size={16} filled={note.starred} />
       </HeaderIconButton>
-      {note.groupPermissionLocked ? null : (
-        <HeaderIconButton
-          label={note.locked ? t('notesPage.header.unlock') : t('notesPage.header.lock')}
-          active={note.locked}
-          onClick={() => onToggleLocked(note.id)}
-        >
-          <IconLock size={16} locked={note.locked} />
-        </HeaderIconButton>
-      )}
       <HeaderIconButton label={t('notesPage.header.noteSettings')} onClick={onOpenSettings}>
         <IconSliders size={16} />
       </HeaderIconButton>

@@ -24,7 +24,6 @@ export function ChatPageNotesView({
       messageSettings={messageSettings}
       onUpdateNote={notes.updateNote}
       onToggleStarred={notes.toggleNoteStarred}
-      onToggleLocked={notes.toggleNoteLocked}
       onAddNoteTag={notes.addNoteTag}
       onRemoveNoteTag={notes.removeNoteTag}
       onExportBackup={() => notes.exportNotesBackup()}

@@ -10,6 +10,7 @@ import {
 import type { MessageSettings } from './message-settings'
 import type { useChat } from './useChat'
 import { updateAssistantModel } from './chat-page-handlers'
+import { isModelIdAvailable } from './model-utils'
 
 type ChatApi = ReturnType<typeof useChat>
 
@@ -47,8 +48,11 @@ export function useChatPageAssistant(
 
   const activeAssistantModelId = useMemo(() => {
     if (!activeAssistant) return null
-    return resolveGroupProxyAssistantModelId(activeAssistant, chat.activeSession)
-  }, [activeAssistant, chat.activeSession])
+    const resolved = resolveGroupProxyAssistantModelId(activeAssistant, chat.activeSession)
+    if (!resolved) return null
+    if (groupProxyMode) return resolved
+    return isModelIdAvailable(resolved, chat.providers) ? resolved : null
+  }, [activeAssistant, chat.activeSession, chat.providers, groupProxyMode])
 
   const headerModelIds = useMemo(() => {
     if (groupProxyMode && activeAssistantModelId) {
@@ -107,7 +111,9 @@ export function useChatPageAssistant(
   const handleAssistantCreated = useCallback(
     async (assistant: Assistant) => {
       await chat.loadAssistants()
-      chat.setSelectedModelIds([assistant.modelId])
+      if (isModelIdAvailable(assistant.modelId, chat.providers)) {
+        chat.setSelectedModelIds([assistant.modelId])
+      }
       await chat.createSession(assistant.id)
     },
     [chat],

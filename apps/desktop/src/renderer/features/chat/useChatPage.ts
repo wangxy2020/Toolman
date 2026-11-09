@@ -62,13 +62,13 @@ export function useChatPage({ appSettings, updateAppSettings }: ChatPageProps) {
     if (navigation.activeView !== 'translate' || previous === 'translate') return
 
     navigation.setTranslationSection(DEFAULT_TRANSLATION_SECTION)
-    translation.enterContrastSection()
+    translation.enterDocumentsSection()
     navigation.setTranslationWorkspaceKey((value) => value + 1)
   }, [
     navigation.activeView,
     navigation.setTranslationSection,
     navigation.setTranslationWorkspaceKey,
-    translation.enterContrastSection,
+    translation.enterDocumentsSection,
   ])
 
   return {

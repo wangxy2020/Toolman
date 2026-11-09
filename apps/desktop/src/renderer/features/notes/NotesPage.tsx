@@ -27,7 +27,6 @@ interface Props {
   messageSettings: MessageSettings
   onUpdateNote: (noteId: string, patch: Partial<NoteItem>) => void
   onToggleStarred: (noteId: string) => void
-  onToggleLocked: (noteId: string) => void
   onAddNoteTag: (noteId: string, tag: string) => void
   onRemoveNoteTag: (noteId: string, tag: string) => void
   onExportBackup: () => NotesData
@@ -47,7 +46,6 @@ export function NotesPage({
   messageSettings,
   onUpdateNote,
   onToggleStarred,
-  onToggleLocked,
   onAddNoteTag,
   onRemoveNoteTag,
   onExportBackup,
@@ -112,7 +110,6 @@ export function NotesPage({
             <NotesHeaderActions
               note={note}
               onToggleStarred={onToggleStarred}
-              onToggleLocked={onToggleLocked}
               onOpenSettings={() => setSettingsOpen(true)}
               onChatWithNote={onChatWithNote}
               onIngestNote={onIngestNote}
@@ -134,7 +131,7 @@ export function NotesPage({
             key={note.id}
             note={note}
             notes={notes}
-            locked={note.locked || Boolean(note.groupPermissionLocked)}
+            locked={Boolean(note.groupPermissionLocked)}
             editorSettings={editorSettings}
             messageSettings={messageSettings}
             onUpdate={(patch) => onUpdateNote(note.id, patch)}

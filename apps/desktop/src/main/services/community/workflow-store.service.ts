@@ -97,6 +97,7 @@ export function bindWorkflowAccount(slug: string): void {
   if (!next || boundSlug === next) return
   boundSlug = next
   cache = null
+  mkdirSync(join(userDataDir(), WORKFLOWS_BY_ACCOUNT_DIR), { recursive: true })
 }
 
 export function resetWorkflowAccountBindingForTests(): void {
@@ -120,7 +121,9 @@ function loadWorkflows(): StoredWorkflow[] {
 }
 
 function saveWorkflows(workflows: StoredWorkflow[]): void {
-  writeFileSync(workflowsFilePath(), JSON.stringify(workflows, null, 2), 'utf8')
+  const path = workflowsFilePath()
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(workflows, null, 2), 'utf8')
   cache = workflows
 }
 

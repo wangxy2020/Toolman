@@ -13,6 +13,7 @@ import {
 import { assistants } from '@toolman/db'
 import { getDatabase } from '../bootstrap/database'
 import { getSessionRepository } from '../db/repos'
+import { isWorkspaceActive } from './account-scope.service'
 
 function parseAssistantParameters(raw: Record<string, unknown>) {
   const result = AssistantParametersSchema.safeParse(raw)
@@ -186,7 +187,7 @@ export function updateAssistant(input: unknown): Assistant | null {
   const data = AssistantUpdateInputSchema.parse(input)
   const db = getDatabase()
   const existing = getAssistantRow(data.id)
-  if (!existing) return null
+  if (!existing || !isWorkspaceActive(existing.workspaceId)) return null
 
   const params = JSON.parse(existing.parametersJson) as Record<string, unknown>
   const nextParams = mergeParameters(params, data.parameters as Record<string, unknown> | undefined)
@@ -218,7 +219,9 @@ export function deleteAssistant(input: unknown): {
   const data = AssistantDeleteInputSchema.parse(input)
   const db = getDatabase()
   const existing = getAssistantRow(data.id)
-  if (!existing) return { deleted: false, deletedSessionIds: [] }
+  if (!existing || !isWorkspaceActive(existing.workspaceId)) {
+    return { deleted: false, deletedSessionIds: [] }
+  }
 
   if (existing.isBuiltin) {
     throw new Error('内置助手不可删除')
@@ -243,7 +246,7 @@ export function deleteAssistant(input: unknown): {
 export function duplicateAssistant(input: unknown): Assistant | null {
   const data = AssistantDuplicateInputSchema.parse(input)
   const existing = getAssistantRow(data.id)
-  if (!existing) return null
+  if (!existing || !isWorkspaceActive(existing.workspaceId)) return null
 
   const now = new Date()
   const id = randomUUID()

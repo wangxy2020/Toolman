@@ -2,9 +2,6 @@ import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { ModulePageStatusBar } from '../../components/ModulePageStatusBar'
 import { ModulePageStatusProvider } from '../../components/module-page-status'
 import {
-  TranslationContrastView,
-} from './TranslationContrastView'
-import {
   TranslationDocumentWorkspace,
   DOCUMENT_PAGE_ZOOM_DEFAULT,
 } from './TranslationDocumentWorkspace'
@@ -21,11 +18,8 @@ export function TranslationPage(props: TranslationPageProps) {
     settings,
     settingsOpen,
     setSettingsOpen,
-    isDocuments,
     languages,
-    sourceText,
     setSourceText,
-    targetText,
     setTargetText,
     documentBusy,
     setDocumentBusy,
@@ -35,14 +29,12 @@ export function TranslationPage(props: TranslationPageProps) {
     setDocumentError,
     documentTotalPages,
     documentCurrentPage,
-    contrastViewRef,
     documentWorkspaceRef,
     registerDocumentActions,
     handlePageSnapshotsChange,
     handlePageMetaChange,
     sectionLabel,
     modelId,
-    translating,
     canTranslate,
     canParse,
     canSave,
@@ -68,8 +60,8 @@ export function TranslationPage(props: TranslationPageProps) {
         <TranslationPageHeader
           section={section}
           sectionLabel={sectionLabel}
-          translating={isDocuments ? documentBusy : translating}
-          parsing={isDocuments ? documentParsing : false}
+          translating={documentBusy}
+          parsing={documentParsing}
           canTranslate={canTranslate}
           canParse={canParse}
           canSave={canSave}
@@ -79,7 +71,7 @@ export function TranslationPage(props: TranslationPageProps) {
           documentTotalPages={documentTotalPages}
           documentCurrentPage={documentCurrentPage}
           onSave={handleSave}
-          onAddRemark={isDocuments ? handleToggleRemark : undefined}
+          onAddRemark={handleToggleRemark}
           onSwapLanguages={handleSwapLanguages}
           onParse={() => void handleParse()}
           onTranslate={() => void handleTranslate()}
@@ -96,7 +88,7 @@ export function TranslationPage(props: TranslationPageProps) {
                 <h2 className="tm-module-empty-title">{sectionLabel}</h2>
                 <p className="tm-module-empty-hint">{t('translationPage.selectWorkspace')}</p>
               </div>
-            ) : isDocuments ? (
+            ) : (
               <TranslationDocumentWorkspace
                 ref={documentWorkspaceRef}
                 workspaceId={workspaceId}
@@ -119,14 +111,6 @@ export function TranslationPage(props: TranslationPageProps) {
                 onRemarkOpenPageChange={setRemarkOpenPage}
                 onPageRemarkChange={handlePageRemarkChange}
                 onRegisterActions={registerDocumentActions}
-              />
-            ) : (
-              <TranslationContrastView
-                ref={contrastViewRef}
-                sourceText={sourceText}
-                targetText={targetText}
-                modelId={modelId}
-                onSourceTextChange={setSourceText}
               />
             )}
           </div>

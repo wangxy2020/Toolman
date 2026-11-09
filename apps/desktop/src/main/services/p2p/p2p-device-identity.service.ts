@@ -15,6 +15,7 @@ import {
   type P2pDeviceGetInfoOutput,
 } from '@toolman/shared'
 import { getDatabase } from '../../bootstrap/database'
+import { groupVisibleForCurrentAccount } from '../account-group-scope'
 import { getLocalIdentityId } from '../local-identity'
 import { decryptSecret } from '../secret-store'
 import { resolveAuthingUserIdFromAccessToken } from '../auth/authing-token-utils'
@@ -66,12 +67,15 @@ function rebindLocalMemberPersonIdentity(deviceId: string, personIdentityId: str
     const db = getDatabase()
     const memberRepo = new P2pMemberRepository(db)
     for (const row of memberRepo.listVisibleMembershipsByDevice(deviceId)) {
+      // Only rewrite memberships for groups owned by the active account.
+      if (!groupVisibleForCurrentAccount(row.workspaceId)) continue
       if (row.identityId !== personIdentityId) {
         memberRepo.update({ id: row.id, identityId: personIdentityId })
       }
     }
     const workspaceRepo = new P2pWorkspaceRepository(db)
     for (const workspace of workspaceRepo.listByOwnerDevice(deviceId)) {
+      if (!groupVisibleForCurrentAccount(workspace.id)) continue
       if (workspace.ownerIdentityId !== personIdentityId) {
         workspaceRepo.update({ id: workspace.id, ownerIdentityId: personIdentityId })
       }
@@ -135,6 +139,8 @@ export function bindP2pDeviceToIdentity(identityId?: string): P2pDeviceGetInfoOu
   const resolvedIdentityId = identityId ?? resolveIdentityIdForDevice()
   const current = cachedDeviceInfo ?? bootstrapNativeDevice()
   if (current.identityId === resolvedIdentityId) {
+    // Still refresh person-identity on groups owned by the active account.
+    rebindLocalMemberPersonIdentity(current.deviceId, getP2pPersonIdentityId())
     return current
   }
 

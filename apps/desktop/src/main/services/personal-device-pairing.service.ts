@@ -3,8 +3,7 @@
  * Secrets live on desktop; mobile/web redeem a short-lived offer code.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { app } from 'electron'
+import { dirname } from 'node:path'
 import {
   createDevicePairingSecrets,
   encodeDevicePairingOffer,
@@ -13,6 +12,7 @@ import {
   type DevicePairingOffer,
   type DevicePairingRecord,
 } from '@toolman/shared'
+import { resolveAccountScopedFileWithLegacyAdopt } from './account-scope.service'
 import { resolveDeviceSyncIdentityIdDesktop } from './community-device-sync'
 import { getMobileSyncHubBaseUrl, getMobileSyncHubPort } from './mobile-sync-hub'
 import { isMobileSyncLanAccessEnabled } from './mobile-sync.config'
@@ -37,7 +37,10 @@ type PersonalPairingStore = {
 const OFFER_TTL_MS = 30 * 60 * 1000
 
 function storePath(): string {
-  return join(app.getPath('userData'), 'mobile-sync', 'personal-pairing.json')
+  return resolveAccountScopedFileWithLegacyAdopt(
+    ['mobile-sync', 'personal-pairing.json'],
+    ['mobile-sync', 'personal-pairing.json'],
+  )
 }
 
 function readStore(): PersonalPairingStore | null {

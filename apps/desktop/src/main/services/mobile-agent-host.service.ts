@@ -26,6 +26,7 @@ import { getDefaultWorkspace } from './workspace.service'
 import { publishKnowledgeMetaChanges } from './mobile-sync-store'
 import { logStructured } from './structured-log.service'
 import { startAssistantLibSyllabusGeneration } from './assistant-lib-syllabus.service'
+import { listAssistants } from './assistant.service'
 import { getSession } from './session.service'
 import { DEFAULT_LOCAL_MODEL } from '@toolman/db'
 import { DEFAULT_PROVIDER_ID } from '../bootstrap/database-defaults'
@@ -153,7 +154,14 @@ async function handleKnowledgeHostMessage(message: string): Promise<{ ok: boolea
         text: '桌面端尚未找到该课程会话。请先开启课堂同步并等待同步完成后再生成大纲。',
       }
     }
-    const modelId = request.modelId?.trim() || `${DEFAULT_PROVIDER_ID}:${DEFAULT_LOCAL_MODEL}`
+    const assistants = listAssistants({ workspaceId })
+    const configuredAssistant = assistants.find(
+      (item) => item.modelId && !item.modelId.endsWith(`:${DEFAULT_LOCAL_MODEL}`),
+    )
+    const modelId =
+      request.modelId?.trim() ||
+      configuredAssistant?.modelId ||
+      `${DEFAULT_PROVIDER_ID}:${DEFAULT_LOCAL_MODEL}`
     const result = await startAssistantLibSyllabusGeneration({
       workspaceId,
       sessionId: request.sessionId,

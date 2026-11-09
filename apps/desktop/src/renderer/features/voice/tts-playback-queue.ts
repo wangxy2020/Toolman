@@ -89,6 +89,7 @@ export class TtsPlaybackQueue {
           await this.provider.speak(sentence, signal)
         } catch {
           if (signal.aborted) break
+          // Keep going — one failed sentence must not wipe the rest of the message UI.
         }
         if (signal.aborted) break
         this.abortController = null
@@ -102,6 +103,9 @@ export class TtsPlaybackQueue {
         this.onIdle?.()
       } else if (this.paused) {
         this.onStateChange?.('paused')
+      } else {
+        // Items may have been enqueued while pumping=true (enqueue's pump() no-op'd).
+        void this.pump()
       }
     }
   }

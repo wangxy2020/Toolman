@@ -20,7 +20,7 @@ export function useTranslationRecords(
   untitledLabel: string,
   translationLanguages?: [TranslationLanguage, TranslationLanguage],
 ) {
-  const [data, setData] = useState<TranslationData>(() => loadTranslationData())
+  const [data, setData] = useState<TranslationData>(() => loadTranslationData(workspaceId))
   const [activeContrastId, setActiveContrastId] = useState<string | null>(null)
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null)
   const [renameContrastId, setRenameContrastId] = useState<string | null>(null)
@@ -35,13 +35,16 @@ export function useTranslationRecords(
   )
 
   useEffect(() => {
-    saveTranslationData(data)
-  }, [data])
-
-  useEffect(() => {
+    setData(loadTranslationData(workspaceId))
+    setActiveContrastId(null)
     setActiveDocumentId(null)
+    setRenameContrastId(null)
     setRenameDocumentId(null)
   }, [workspaceId])
+
+  useEffect(() => {
+    saveTranslationData(data, workspaceId)
+  }, [data, workspaceId])
 
   const contrasts = useMemo(() => {
     if (!workspaceId) return []
@@ -79,6 +82,8 @@ export function useTranslationRecords(
     activeDocumentId,
     setActiveDocumentId,
     setRenameDocumentId,
+    setActiveContrastId,
+    setRenameContrastId,
     resolveDefaultLanguages,
     documents,
   })
@@ -92,23 +97,17 @@ export function useTranslationRecords(
     activeDocument: documentApi.activeDocument,
     renameContrastId,
     renameDocumentId,
-    createNewContrast: contrastApi.createNewContrast,
     openDocument: documentApi.openDocument,
-    selectContrast: contrastApi.selectContrast,
     selectDocument: documentApi.selectDocument,
     clearActiveDocument: documentApi.clearActiveDocument,
-    enterContrastSection: contrastApi.enterContrastSection,
-    startRenameContrast: contrastApi.startRenameContrast,
+    enterDocumentsSection: documentApi.enterDocumentsSection,
     startRenameDocument: documentApi.startRenameDocument,
-    cancelRenameContrast: contrastApi.cancelRenameContrast,
     cancelRenameDocument: documentApi.cancelRenameDocument,
-    renameContrast: contrastApi.renameContrast,
     renameDocument: documentApi.renameDocument,
     saveContrast: contrastApi.saveContrast,
     saveDocument: documentApi.saveDocument,
     updateDocumentSourceText: documentApi.updateDocumentSourceText,
     updateDocumentPageRemark: documentApi.updateDocumentPageRemark,
-    deleteContrast: contrastApi.deleteContrast,
     deleteDocument: documentApi.deleteDocument,
   }
 }

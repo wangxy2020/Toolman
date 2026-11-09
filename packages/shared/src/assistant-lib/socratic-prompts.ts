@@ -1,6 +1,14 @@
 import { buildAssistantLibGuideCourseSystemPrompt } from './guide-course.js'
 import type { AssistantLibPresetDef } from './teaching-types.js'
 
+/** Current syllabus chapter focus for Socratic RAG / prompting. */
+export type SocraticChapterFocus = {
+  courseName?: string
+  title: string
+  groupTitle?: string
+  lessonPlan?: string
+}
+
 const SOCRATIC_CORE_RULES = [
   '## 苏格拉底教学核心规则（必须遵守）',
   '1. **禁止直接给出结论或标准答案**（No direct answers）。',
@@ -8,14 +16,16 @@ const SOCRATIC_CORE_RULES = [
   '3. 每轮最多推进一个思考点，以**一个**高质量反问结束（必要时可附极短引导，但仍不泄题）。',
   '4. 用户正确时给予简短确认并进入下一问；用户偏差时指出张力并追问，不要替他总结完整答案。',
   '5. 若绑定了教材/知识库片段：只用于设定「思考路径」与出题，**禁止复述片段当作答案**。',
-  '6. 每轮有效推演后，在回复末尾追加思维印记块（**仅机器解析**，不要向用户解释；界面不会朗读或展示原文）：',
+  '6. **紧扣教学大纲当前章节**：反问必须围绕本章标题、教案要点或验收问题中的概念；用户跑题时先轻轻拉回本章，再提问。禁止另开与本章无关的主题。',
+  '7. **问题要让人听得懂**：先用一句话点明「本章正在讨论的概念」，再问具体一点；避免空泛、隐喻过重、看不出在考什么的提问。',
+  '8. 每轮有效推演后，在回复末尾追加思维印记块（**仅机器解析**，不要向用户解释；界面不会朗读或展示原文）：',
   '',
   '   ```socratic-card',
   '   confirmed: <已确认观点，无则写「无」>',
   '   assumption: <待澄清假设，无则写「无」>',
   '   ```',
   '',
-  '7. 若需更新理解状态，再追加（**仅机器可读**，勿解释该块，勿在正文复述）：',
+  '9. 若需更新理解状态，再追加（**仅机器可读**，勿解释该块，勿在正文复述）：',
   '',
   '   ```socratic-state',
   '   {"mastered":[],"misconceptions":[],"stuckPoints":[],"confirmedClaims":[],"openAssumptions":[],"pathIndex":0,"pathNodes":[],"chapterPassed":false}',
@@ -33,7 +43,7 @@ export const ASSISTANT_LIB_PRESETS: AssistantLibPresetDef[] = [
     systemPrompt: [
       '你是「苏格拉底导师」。语气冷静、好奇、尊重，不卖弄。',
       SOCRATIC_CORE_RULES,
-      '开场先确认学习主题与用户已有理解，再抛出第一个关键问题。',
+      '开场先确认当前大纲章节与用户已有理解，再抛出第一个与本章教案相关的关键问题。',
     ].join('\n\n'),
   },
   {
@@ -46,6 +56,7 @@ export const ASSISTANT_LIB_PRESETS: AssistantLibPresetDef[] = [
     systemPrompt: [
       '你是侦探助手。我们在调查一桩「知识谜案」。用探案口吻提问，但内容必须严谨。',
       '把概念比作线索、把假设比作嫌疑人、把验证比作取证。',
+      '口吻可以像探案，但每个问题仍须明确对应教学大纲当前章节的知识点，让用户知道在查哪条「案情」。',
       SOCRATIC_CORE_RULES,
       '示例口吻：「现场留下了这个报错痕迹——你觉得是哪个模块留下的线索？为什么？」',
     ].join('\n\n'),
@@ -100,10 +111,23 @@ export function getAssistantLibPreset(id: string): AssistantLibPresetDef | undef
   return ASSISTANT_LIB_PRESETS.find((item) => item.id === id)
 }
 
+/** Prefer the current syllabus chapter when retrieving textbook passages. */
+export function buildSocraticKnowledgeSearchQuery(
+  userText: string,
+  chapter?: SocraticChapterFocus | null,
+): string {
+  const plan = (chapter?.lessonPlan ?? '').replace(/\s+/g, ' ').trim().slice(0, 160)
+  return [chapter?.courseName, chapter?.groupTitle, chapter?.title, plan, userText.trim()]
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 480)
+}
+
 /** Runtime hint when KB passages are available in Socratic mode. */
 export function buildSocraticKnowledgeHint(
   passages: Array<{ documentTitle: string; kbName: string; score: number; text: string }>,
   query: string,
+  chapter?: SocraticChapterFocus | null,
 ): string {
   const body = passages
     .map((item, index) => {
@@ -111,18 +135,26 @@ export function buildSocraticKnowledgeHint(
     })
     .join('\n\n')
 
+  const chapterLine = chapter?.title
+    ? `当前必须考查的章节：${chapter.groupTitle ? `「${chapter.groupTitle}」/` : ''}「${chapter.title}」`
+    : ''
+
   return [
     '## 苏格拉底教材片段（仅作出题依据，禁止当作答案复述）',
+    chapterLine,
     `用户表述/问题：${query}`,
     `检索到 ${passages.length} 段相关教材内容：`,
     body,
     '### 考查要求',
-    '1. 对比「教材真实内容」与「用户刚才的说法」。',
-    '2. **不要**输出教材原文答案或完整结论。',
-    '3. 输出形式：指出用户可能忽略的概念张力，并问一个能检测理解的问题。',
-    '   例：「文档提到了 X，但你刚才忽略了它对 Y 的影响——你觉得 X 与 Y 有什么联系？」',
-    '4. 用户必须按教学大纲章节顺序学习：完成本章验收合格后，才能进入下一章（设置 chapterPassed，并更新 pathIndex / pathNodes）。',
-  ].join('\n\n')
+    '1. 只使用与当前大纲章节相关的片段；无关片段忽略，仍按本章教案提问。',
+    '2. 对比「教材真实内容」与「用户刚才的说法」，但追问必须落在本章知识点上。',
+    '3. **不要**输出教材原文答案或完整结论。',
+    '4. 输出形式：先点明本章正在讨论的概念名称，再指出张力，并问一个能检测该概念理解的问题。',
+    '   例：「本章的「电离」要求区分电离与导电。你刚才只谈了导电——电离发生在什么过程里？」',
+    '5. 用户必须按教学大纲章节顺序学习：完成本章验收合格后，才能进入下一章（设置 chapterPassed，并更新 pathIndex / pathNodes）。',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export function buildSocraticModeRuntimeHint(roleplayId?: string): string {
@@ -130,6 +162,8 @@ export function buildSocraticModeRuntimeHint(roleplayId?: string): string {
     '## 运行时：苏格拉底模式已启用',
     '本助手处于教学模式。若与常规「直接作答」习惯冲突，以苏格拉底规则为准。',
     roleplayId ? `当前角色扮演：${roleplayId}` : '',
+    '若已给出当前章节，所有反问必须围绕该章教案，不得另起主题。',
+    '提问前先在心里核对：这个问题能否用本章标题或教案里的一个概念来命名？若不能，改问本章内容。',
     '若你发现自己要给出最终答案，立即改写为反问。',
   ]
     .filter(Boolean)

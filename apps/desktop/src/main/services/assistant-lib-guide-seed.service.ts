@@ -20,9 +20,12 @@ import { createSession, updateSession } from './session.service'
 import { listWorkspaces } from './workspace.service'
 
 function fallbackModelId(assistants: ReturnType<typeof listAssistants>): string {
+  const configured = assistants.find(
+    (item) => item.modelId && !item.modelId.endsWith(`:${DEFAULT_LOCAL_MODEL}`),
+  )
   return (
     assistants.find((item) => isAssistantLibAssistantName(item.name))?.modelId ||
-    assistants.find((item) => item.modelId)?.modelId ||
+    configured?.modelId ||
     `${DEFAULT_PROVIDER_ID}:${DEFAULT_LOCAL_MODEL}`
   )
 }

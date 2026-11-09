@@ -126,9 +126,14 @@ export function buildStartClassUserMessage(options: {
     '请根据本课教学大纲与课堂记录，发一条开场白并准备开始上课。',
     '若尚无学习记录，从当前未通过章节开始；若有记录，先简要回顾再继续当前章节。',
     '不要一次讲完整章，也不要进入未解锁章节。',
+    '开场与第一个问题必须紧扣当前章节标题与教案，先点明本章要讨论的概念，再问一个具体问题。',
     '',
     `课程：${options.courseName}`,
     chapter ? `当前章节：${chapter.title}` : '当前章节：尚未生成教学大纲',
+    chapter?.groupTitle ? `所属章：${chapter.groupTitle}` : '',
+    chapter?.lessonPlan?.trim()
+      ? `本章教案要点：${chapter.lessonPlan.replace(/\s+/g, ' ').trim().slice(0, 240)}`
+      : '',
     total > 0 ? `大纲进度：已通过 ${passed}/${total} 章` : '',
     options.state.topic ? `上次主题：${options.state.topic}` : '',
     recent ? `本课近期记录：\n${recent}` : '本课尚无课堂记录。',

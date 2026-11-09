@@ -26,6 +26,12 @@ vi.mock('../group-mobile-sync', () => ({
   publishP2pGroupDeleteSyncChange: vi.fn(),
 }))
 
+vi.mock('../account-group-scope', () => ({
+  assignGroupToCurrentAccount: vi.fn(),
+  groupVisibleForCurrentAccount: () => true,
+  stampMissingGroups: vi.fn(),
+}))
+
 vi.mock('@toolman/db', () => {
   const workspaceRow = {
     id: 'ws-1',

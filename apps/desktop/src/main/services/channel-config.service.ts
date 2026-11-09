@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
+import { dirname } from 'node:path'
 import {
   CHANNEL_PLATFORMS,
   DEFAULT_CHANNEL_WEBHOOK_PORT,
@@ -10,6 +9,7 @@ import {
   type ImChannelConfig,
   type ImChannelConfigPublic,
 } from '@toolman/shared'
+import { resolveAccountScopedFileWithLegacyAdopt } from './account-scope.service'
 import { decryptSecret, encryptSecret } from './secret-store'
 
 const CONFIG_FILE = 'im-channels.json'
@@ -33,9 +33,9 @@ interface StoredConfigFile {
 }
 
 function configPath(): string {
-  const dir = app.getPath('userData')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  return join(dir, CONFIG_FILE)
+  const path = resolveAccountScopedFileWithLegacyAdopt([CONFIG_FILE], [CONFIG_FILE])
+  mkdirSync(dirname(path), { recursive: true })
+  return path
 }
 
 function defaultPlatformConfig(platform: ChannelPlatformId): StoredChannelConfig {

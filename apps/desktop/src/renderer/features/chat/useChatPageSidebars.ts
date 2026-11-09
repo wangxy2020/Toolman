@@ -10,14 +10,11 @@ import {
   type KnowledgeSidebarSection,
 } from '../knowledge/knowledge-sidebar-types'
 import {
-  buildContrastExportContent,
   buildDocumentExportContent,
-  hasContrastExportContent,
   hasDocumentExportContent,
 } from '../translation/translation-export'
 import { isTranslationDocumentPath } from '../translation/translation-document-utils'
-import { DEFAULT_TRANSLATION_SECTION } from '../translation/translation-sidebar-types'
-import type { TranslationContrastItem, TranslationDocumentItem } from '../translation/translation-storage'
+import type { TranslationDocumentItem } from '../translation/translation-storage'
 import {
   listAssistantLibSidebarSessions,
   resolveAssistantLibSidebarWorkspaceId,
@@ -116,15 +113,6 @@ export function useChatPageSidebars({
     setTranslationWorkspaceKey((value) => value + 1)
   }, [setTranslationWorkspaceKey])
 
-  const handleSelectContrast = useCallback(
-    (contrastId: string) => {
-      translation.selectContrast(contrastId)
-      setTranslationSection(DEFAULT_TRANSLATION_SECTION)
-      bumpTranslationWorkspace()
-    },
-    [bumpTranslationWorkspace, setTranslationSection, translation],
-  )
-
   const handleSelectDocument = useCallback(
     (documentId: string) => {
       translation.selectDocument(documentId)
@@ -134,34 +122,12 @@ export function useChatPageSidebars({
     [bumpTranslationWorkspace, setTranslationSection, translation],
   )
 
-  const handleDeleteContrast = useCallback(
-    (contrastId: string) => {
-      translation.deleteContrast(contrastId)
-      bumpTranslationWorkspace()
-    },
-    [bumpTranslationWorkspace, translation],
-  )
-
   const handleDeleteDocument = useCallback(
     (documentId: string) => {
       translation.deleteDocument(documentId)
       bumpTranslationWorkspace()
     },
     [bumpTranslationWorkspace, translation],
-  )
-
-  const handleAddContrastToNotes = useCallback(
-    (contrast: TranslationContrastItem) => {
-      if (!hasContrastExportContent(contrast)) {
-        setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-        return
-      }
-      const title = contrast.title || t('translationPage.sidebar.untitledContrast')
-      notes.createNoteFromMessage(title, buildContrastExportContent(contrast))
-      setActiveView('notes')
-      setStatusMessage(t('translationPage.sidebar.addedToNotes', { title }))
-    },
-    [notes, setActiveView, setStatusMessage, t],
   )
 
   const handleAddDocumentToNotes = useCallback(
@@ -178,19 +144,6 @@ export function useChatPageSidebars({
     [notes, setActiveView, setStatusMessage, t],
   )
 
-  const handleAddContrastToKnowledge = useCallback(
-    (contrast: TranslationContrastItem) => {
-      if (!hasContrastExportContent(contrast)) {
-        setStatusMessage(t('translationPage.sidebar.exportEmpty'))
-        return
-      }
-      const title = contrast.title || t('translationPage.sidebar.untitledContrast')
-      const noteId = notes.createNoteFromMessage(title, buildContrastExportContent(contrast))
-      setNotesIngestTarget({ noteIds: [noteId], noteTitle: title })
-    },
-    [notes, setNotesIngestTarget, setStatusMessage, t],
-  )
-
   const handleAddDocumentToKnowledge = useCallback(
     (document: TranslationDocumentItem) => {
       if (!hasDocumentExportContent(document)) {
@@ -203,12 +156,6 @@ export function useChatPageSidebars({
     },
     [notes, setNotesIngestTarget, setStatusMessage, t],
   )
-
-  const handleCreateContrast = useCallback(() => {
-    translation.createNewContrast()
-    setTranslationSection(DEFAULT_TRANSLATION_SECTION)
-    bumpTranslationWorkspace()
-  }, [bumpTranslationWorkspace, setTranslationSection, translation])
 
   const handleOpenDocument = useCallback(() => {
     setTranslationSection('documents')
@@ -232,15 +179,10 @@ export function useChatPageSidebars({
     handleSelectKnowledge,
     handleSelectKnowledgeSection,
     handleSelectCommunitySection,
-    handleSelectContrast,
     handleSelectDocument,
-    handleDeleteContrast,
     handleDeleteDocument,
-    handleAddContrastToNotes,
     handleAddDocumentToNotes,
-    handleAddContrastToKnowledge,
     handleAddDocumentToKnowledge,
-    handleCreateContrast,
     handleOpenDocument,
   }
 }

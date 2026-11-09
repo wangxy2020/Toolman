@@ -17,6 +17,8 @@ export {
 } from './notes-rich-editor-toolbar-state'
 
 export {
+  ensureEditorSelection,
+  handleTaskListKeyDown,
   insertRichImage,
   insertRichLink,
   richEditorIsEmpty,
@@ -24,3 +26,5 @@ export {
   scrollRichEditorToLine,
   shouldRerenderEditorAfterAction,
 } from './notes-rich-editor-actions'
+
+export { hydrateNoteEditorImages } from './notes-rich-editor-media'

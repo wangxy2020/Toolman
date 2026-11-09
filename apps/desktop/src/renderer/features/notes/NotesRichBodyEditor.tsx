@@ -5,11 +5,15 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ClipboardEvent,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react'
 import {
   editorHtmlToMarkdown,
   getMarkdownSelectionOffset,
+  handleTaskListKeyDown,
+  hydrateNoteEditorImages,
   insertRichImage,
   insertRichLink,
   markdownToEditorHtml,
@@ -30,7 +34,7 @@ export interface NotesBodyEditorHandle {
   scrollToLine: (lineIndex: number) => void
   runAction: (key: NoteToolbarActionKey, options?: { fontSizePx?: number }) => boolean
   getRootElement: () => HTMLElement | null
-  insertImage: (filePath: string, alt?: string) => void
+  insertImage: (filePath: string, alt?: string) => Promise<void>
   insertLink: (url: string) => void
 }
 
@@ -69,6 +73,7 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
       lastRenderedRef.current = normalized
       root.innerHTML = markdownToEditorHtml(normalized)
       setIsEmpty(richEditorIsEmpty(root))
+      void hydrateNoteEditorImages(root)
     }
 
     useLayoutEffect(() => {
@@ -113,10 +118,10 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
         return true
       },
       getRootElement: () => rootRef.current,
-      insertImage: (filePath: string, alt?: string) => {
+      insertImage: async (filePath: string, alt?: string) => {
         const root = rootRef.current
         if (!root) return
-        insertRichImage(root, filePath, alt)
+        await insertRichImage(root, filePath, alt)
         const markdown = editorHtmlToMarkdown(root)
         lastEmittedRef.current = markdown
         lastRenderedRef.current = markdown
@@ -137,6 +142,8 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
 
     useEffect(() => {
       if (value === lastEmittedRef.current) return
+      // External updates (undo/redo/sync) must replace the DOM even while focused.
+      // Only skip when the parent echoes the same markdown we already rendered.
       if (focusedRef.current && value === lastRenderedRef.current) return
       syncFromMarkdown(value)
       lastEmittedRef.current = value
@@ -146,6 +153,66 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
       const root = rootRef.current
       if (!root) return
       emitMarkdown(editorHtmlToMarkdown(root))
+    }
+
+    const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+      if (readOnly) return
+      event.preventDefault()
+      const text = event.clipboardData.getData('text/plain')
+      if (!text) return
+      const root = rootRef.current
+      if (!root) return
+      const selection = window.getSelection()
+      if (!selection?.rangeCount) return
+      const range = selection.getRangeAt(0)
+      range.deleteContents()
+      const node = document.createTextNode(text)
+      range.insertNode(node)
+      range.setStartAfter(node)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      emitMarkdown(editorHtmlToMarkdown(root))
+      onSelectionChange?.()
+    }
+
+    const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (readOnly) {
+        onSelectionChange?.()
+        return
+      }
+      const target = event.target
+      const check =
+        target instanceof HTMLElement
+          ? target.closest('.tm-notes-task-check, input[type="checkbox"]')
+          : null
+      if (check instanceof HTMLElement) {
+        event.preventDefault()
+        const item = check.closest('li.tm-notes-task-item')
+        if (item instanceof HTMLElement) {
+          const nextChecked = item.getAttribute('data-checked') !== 'true'
+          item.setAttribute('data-checked', nextChecked ? 'true' : 'false')
+          if (check.classList.contains('tm-notes-task-check')) {
+            check.setAttribute('aria-checked', nextChecked ? 'true' : 'false')
+          } else if (check instanceof HTMLInputElement) {
+            check.checked = nextChecked
+          }
+          handleInput()
+        }
+      }
+      onSelectionChange?.()
+    }
+
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!readOnly) {
+        const root = rootRef.current
+        if (root && handleTaskListKeyDown(root, event.nativeEvent)) {
+          emitMarkdown(editorHtmlToMarkdown(root))
+          onSelectionChange?.()
+          return
+        }
+      }
+      onKeyDown?.(event)
     }
 
     return (
@@ -165,14 +232,15 @@ export const NotesRichBodyEditor = forwardRef<NotesBodyEditorHandle, Props>(
         aria-multiline="true"
         data-placeholder={placeholder}
         onInput={handleInput}
-        onKeyDown={onKeyDown}
+        onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
         onFocus={() => {
           focusedRef.current = true
         }}
         onBlur={() => {
           focusedRef.current = false
         }}
-        onClick={onSelectionChange}
+        onClick={handleClick}
         onKeyUp={onSelectionChange}
       />
     )
