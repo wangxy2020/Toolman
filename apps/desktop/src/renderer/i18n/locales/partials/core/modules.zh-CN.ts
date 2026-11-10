@@ -39,7 +39,7 @@ export const modulesZhCN = {
       headerAll: '发现',
       sidebarEmptyHint: '暂无订阅，点击上方探索',
       contentEmptyTitle: '社区',
-      contentEmptyHint: '浏览与安装 MCP、技能、工作流与知识资源，参与社区任务、资讯与留言互动。',
+      contentEmptyHint: '浏览与安装 MCP、技能、工作流与知识资源，参与社区任务与留言互动。',
     },
     projects: {
       title: '项目管理',

@@ -8,13 +8,6 @@ export interface CommunityCommentTarget {
   parentId?: string | null
 }
 
-export function buildNewsCommentTarget(articleId: string): CommunityCommentTarget {
-  return {
-    targetType: 'news',
-    targetId: articleId,
-  }
-}
-
 export function buildResourceCommentTarget(resourceId: string): CommunityCommentTarget {
   return {
     targetType: 'resource',

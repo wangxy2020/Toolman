@@ -10,9 +10,8 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use toolman_community_hub::{api, init_pool, services::news_service::NewsService, AppState, HubConfig};
+use toolman_community_hub::{api, init_pool, AppState, HubConfig};
 use toolman_community_hub::services::HUB_MAX_REQUEST_BODY_BYTES;
-use tokio::time::{sleep, Duration};
 
 #[tokio::main]
 async fn main() {
@@ -49,30 +48,6 @@ async fn main() {
     ));
 
     let state = AppState::new(config, db);
-    let bootstrap_pool = state.db.clone();
-    let periodic_pool = state.db.clone();
-    tokio::spawn(async move {
-        let fetched = NewsService::new(bootstrap_pool)
-            .bootstrap_fetch_unfetched_sources()
-            .await;
-        if fetched > 0 {
-            tracing::info!("bootstrapped {fetched} rss source(s)");
-        }
-    });
-
-    // Periodically refresh RSS sources so the list doesn't stay empty after transient failures.
-    // (Eligibility is computed inside `bootstrap_fetch_unfetched_sources` based on last_fetched_at/last_error.)
-    tokio::spawn(async move {
-        // Start after the first bootstrap to avoid bursts.
-        sleep(Duration::from_secs(60 * 5)).await;
-        loop {
-            let _ = NewsService::new(periodic_pool.clone())
-                .bootstrap_fetch_unfetched_sources()
-                .await;
-            sleep(Duration::from_secs(60 * 10)).await;
-        }
-    });
-
     let app = Router::new()
         .merge(api::router(state))
         .layer(DefaultBodyLimit::max(HUB_MAX_REQUEST_BODY_BYTES))

@@ -83,7 +83,7 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
                       ? 'failed'
                       : 'done'
                 }
-                defaultCollapsed={block.status !== 'running'}
+                defaultCollapsed
               />
             )
           }
@@ -158,7 +158,7 @@ export function MessageContent({ contentBlocks, streaming, settings }: Props) {
               arguments={segment.arguments}
               result={segment.result}
               status={segment.status}
-              defaultCollapsed={segment.status === 'done'}
+              defaultCollapsed
             />
           )
         }

@@ -44,18 +44,3 @@ export function validateResourcePublish(title: string, label: string): string | 
   if (!title.trim()) return `请填写${label}标题`
   return null
 }
-
-export function validateNewsFeedUrl(url: string): string | null {
-  if (!url.trim()) return '请填写 Feed URL'
-  return null
-}
-
-export function deriveNewsSourceTitle(title: string, url: string): string {
-  const trimmed = title.trim()
-  if (trimmed) return trimmed
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return 'RSS 订阅'
-  }
-}

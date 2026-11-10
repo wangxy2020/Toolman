@@ -1,6 +1,5 @@
 import type {
   CommunityBoardMessage,
-  CommunityNewsArticle,
   CommunityResourceItem,
 } from '@toolman/shared'
 
@@ -47,11 +46,6 @@ export function getUiMockInteractionDefaults(id: string): UiMockInteractionSnaps
       return normalize(
         {},
         { likeCount: 24, dislikeCount: 2, favoriteCount: 9 },
-      )
-    case COMMUNITY_UI_MOCK_IDS.news:
-      return normalize(
-        { liked: false, disliked: false, favorited: false },
-        { likeCount: 18, dislikeCount: 1, favoriteCount: 6 },
       )
     case COMMUNITY_UI_MOCK_IDS.message:
       return normalize(
@@ -190,29 +184,6 @@ export function toggleUiMockFavorite(
 }
 
 export function applyUiMockInteractionToResource(item: CommunityResourceItem): CommunityResourceItem {
-  const snapshot = readUiMockInteraction(item.id, {
-    liked: item.likedByMe,
-    disliked: item.dislikedByMe,
-    favorited: item.favoritedByMe,
-  }, {
-    likeCount: item.likeCount,
-    dislikeCount: item.dislikeCount,
-    favoriteCount: item.favoriteCount,
-  })
-  if (!snapshot) return item
-
-  return {
-    ...item,
-    likeCount: snapshot.counts.likeCount,
-    dislikeCount: snapshot.counts.dislikeCount,
-    favoriteCount: snapshot.counts.favoriteCount,
-    likedByMe: snapshot.state.liked,
-    dislikedByMe: snapshot.state.disliked,
-    favoritedByMe: snapshot.state.favorited,
-  }
-}
-
-export function applyUiMockInteractionToNews(item: CommunityNewsArticle): CommunityNewsArticle {
   const snapshot = readUiMockInteraction(item.id, {
     liked: item.likedByMe,
     disliked: item.dislikedByMe,

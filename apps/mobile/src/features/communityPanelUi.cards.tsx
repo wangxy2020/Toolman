@@ -7,7 +7,6 @@ import {
   IconKnowledge,
   IconMcp,
   IconMessageBoard,
-  IconNews,
   IconShare,
   IconSkill,
   IconStar,
@@ -203,8 +202,6 @@ function CommunityKindIcon({ kind }: { kind: CommunityCardIconKind }) {
   switch (kind) {
     case 'messages':
       return <IconMessageBoard size={18} color={color} />
-    case 'news':
-      return <IconNews size={18} color={color} />
     case 'tasks':
       return <IconTaskList size={18} color={color} />
     case 'mcp':

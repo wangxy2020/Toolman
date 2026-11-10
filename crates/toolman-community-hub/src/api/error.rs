@@ -274,66 +274,6 @@ impl From<crate::services::ReviewError> for ApiError {
     }
 }
 
-impl From<crate::services::NewsServiceError> for ApiError {
-    fn from(error: crate::services::NewsServiceError) -> Self {
-        match error {
-            crate::services::NewsServiceError::SourceNotFound(value)
-            | crate::services::NewsServiceError::ArticleNotFound(value) => Self::not_found(value),
-            crate::services::NewsServiceError::SourceDisabled => {
-                Self::validation("rss source is disabled")
-            }
-            crate::services::NewsServiceError::FeedUrlConflict => {
-                Self::conflict("feed_url already exists")
-            }
-            crate::services::NewsServiceError::Validation(message) => Self::validation(message),
-            crate::services::NewsServiceError::Fetch(fetch_error) => Self::validation(fetch_error.to_string()),
-            crate::services::NewsServiceError::RssSource(repo_error) => match repo_error {
-                crate::repositories::RssSourceRepositoryError::FeedUrlConflict(url) => {
-                    Self::conflict(format!("feed_url already exists: {url}"))
-                }
-                crate::repositories::RssSourceRepositoryError::NotFound(value) => Self::not_found(value),
-                crate::repositories::RssSourceRepositoryError::Validation(news_error) => {
-                    Self::validation(news_error.to_string())
-                }
-                other => Self::internal(other.to_string()),
-            },
-            crate::services::NewsServiceError::Article(article_error) => match article_error {
-                crate::repositories::NewsArticleRepositoryError::NotFound(value) => Self::not_found(value),
-                other => Self::internal(other.to_string()),
-            },
-            crate::services::NewsServiceError::FetchLog(error) => Self::internal(error.to_string()),
-            crate::services::NewsServiceError::FavoriteConflict => {
-                Self::conflict("favorite already exists for this article")
-            }
-            crate::services::NewsServiceError::LikeConflict => {
-                Self::conflict("like already exists for this article")
-            }
-            crate::services::NewsServiceError::Forbidden => Self::forbidden("permission denied"),
-            crate::services::NewsServiceError::Favorite(error) => match error {
-                crate::repositories::FavoriteRepositoryError::Conflict => {
-                    Self::conflict("favorite already exists for this article")
-                }
-                other => Self::internal(other.to_string()),
-            },
-            crate::services::NewsServiceError::Like(error) => match error {
-                crate::repositories::LikeRepositoryError::Conflict => {
-                    Self::conflict("like already exists for this article")
-                }
-                other => Self::internal(other.to_string()),
-            },
-            crate::services::NewsServiceError::Comment(error) => match error {
-                crate::repositories::CommentRepositoryError::Validation(social_error) => {
-                    Self::validation(social_error.to_string())
-                }
-                crate::repositories::CommentRepositoryError::NotFound(value) => Self::not_found(value),
-                other => Self::internal(other.to_string()),
-            },
-            crate::services::NewsServiceError::UserRepository(error) => error.into(),
-            crate::services::NewsServiceError::Search(error) => Self::validation(error.to_string()),
-        }
-    }
-}
-
 impl From<crate::services::BoardServiceError> for ApiError {
     fn from(error: crate::services::BoardServiceError) -> Self {
         match error {

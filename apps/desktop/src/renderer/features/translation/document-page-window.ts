@@ -1,7 +1,8 @@
-export const DOCUMENT_PAGE_OVERSCAN = 2
+/** Mount enough neighbors that a normal flip does not remount the previous page. */
+export const DOCUMENT_PAGE_OVERSCAN = 3
 /** First page and later pages keep the same mounted row count (current ± overscan, shifted at the ends). */
 export const DOCUMENT_PAGE_WINDOW_SIZE = DOCUMENT_PAGE_OVERSCAN * 2 + 1
-/** Vector PDF left pane: first 10 pages, then the next 10 as the user scrolls. */
+/** Prefetch/page-object warm batch only — mounted PDF rows use DOCUMENT_PAGE_OVERSCAN. */
 export const PDF_VIEWER_PAGE_BATCH = 10
 export const DOCUMENT_ROW_PANE_PAD_TOP = 12
 export const DOCUMENT_ROW_GAP = 16

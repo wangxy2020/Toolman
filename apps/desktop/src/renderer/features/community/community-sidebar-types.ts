@@ -1,5 +1,4 @@
 export type CommunitySidebarSection =
-  | 'news'
   | 'messages'
   | 'knowledge'
   | 'mcp'
@@ -9,13 +8,12 @@ export type CommunitySidebarSection =
   | 'mine'
   | 'management'
 
-export const DEFAULT_COMMUNITY_SIDEBAR_SECTION: CommunitySidebarSection = 'news'
+export const DEFAULT_COMMUNITY_SIDEBAR_SECTION: CommunitySidebarSection = 'messages'
 
 export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
   id: CommunitySidebarSection
   label: string
 }> = [
-  { id: 'news', label: '资讯' },
   { id: 'messages', label: '留言板' },
   { id: 'knowledge', label: '知识库市场' },
   { id: 'mcp', label: 'MCP市场' },
@@ -27,7 +25,6 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
 ]
 
 export const COMMUNITY_SECTION_TO_ACTION: Record<CommunitySidebarSection, string> = {
-  news: 'news',
   messages: 'messages',
   knowledge: 'knowledge',
   mcp: 'mcp',

@@ -1,6 +1,5 @@
 import type {
   CommunityHubHealth,
-  CommunityNewsSource,
   CommunityResourceType,
   CommunityTaskType,
   FederationPeeringInfo,
@@ -100,83 +99,6 @@ export async function createCommunityResource(
       category: input.category ?? '',
       license: input.license ?? 'MIT',
     },
-  )
-}
-
-export async function listCommunityNewsSources(
-  baseUrl: string,
-  userId?: string | null,
-): Promise<CommunityNewsSource[]> {
-  const base = normalizeBaseUrl(baseUrl)
-  const data = await hubGet(base, '/api/v1/news/sources', { userId })
-  return unwrapItems(data).map((raw, index) => {
-    const item = asRecord(raw) ?? {}
-    return {
-      id: asString(item.id, `src-${index}`),
-      title: asString(item.title, '未命名源'),
-      feedUrl: asString(item.feedUrl),
-      enabled: asBool(item.enabled, true),
-      fetchIntervalMinutes: asNumber(item.fetchIntervalMinutes, 30),
-      lastFetchedAt: asNumber(item.lastFetchedAt) || null,
-      lastError: asString(item.lastError) || null,
-    }
-  })
-}
-
-export async function createCommunityNewsSource(
-  baseUrl: string,
-  input: { title: string; feedUrl: string; fetchIntervalMinutes?: number },
-  userId?: string | null,
-): Promise<CommunityNewsSource> {
-  const base = normalizeBaseUrl(baseUrl)
-  const data = await hubSend<Record<string, unknown>>(
-    base,
-    '/api/v1/news/sources',
-    'POST',
-    { userId: requireUserId(userId) },
-    {
-      title: input.title,
-      feedUrl: input.feedUrl,
-      category: 'general',
-      fetchIntervalMinutes: input.fetchIntervalMinutes ?? 30,
-    },
-  )
-  return {
-    id: asString(data.id),
-    title: asString(data.title, input.title),
-    feedUrl: asString(data.feedUrl, input.feedUrl),
-    enabled: asBool(data.enabled, true),
-    fetchIntervalMinutes: asNumber(data.fetchIntervalMinutes, input.fetchIntervalMinutes ?? 30),
-    lastFetchedAt: asNumber(data.lastFetchedAt) || null,
-    lastError: asString(data.lastError) || null,
-  }
-}
-
-export async function fetchCommunityNewsSource(
-  baseUrl: string,
-  sourceId: string,
-  userId?: string | null,
-): Promise<void> {
-  const base = normalizeBaseUrl(baseUrl)
-  await hubSend(
-    base,
-    `/api/v1/news/sources/${encodeURIComponent(sourceId)}/fetch`,
-    'POST',
-    { userId },
-  )
-}
-
-export async function deleteCommunityNewsSource(
-  baseUrl: string,
-  sourceId: string,
-  userId?: string | null,
-): Promise<void> {
-  const base = normalizeBaseUrl(baseUrl)
-  await hubSend(
-    base,
-    `/api/v1/news/sources/${encodeURIComponent(sourceId)}`,
-    'DELETE',
-    { userId: requireUserId(userId) },
   )
 }
 

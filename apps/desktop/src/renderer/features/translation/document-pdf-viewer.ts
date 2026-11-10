@@ -7,27 +7,117 @@ import {
 } from 'pdfjs-dist'
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDF_VIEWER_PAGE_BATCH, resolvePdfViewerPageBatch } from './document-page-window'
+import { createPdfPaintBuffer } from './document-pdf-paint-buffer'
 import {
+  PDF_VIEWER_PAINT_CACHE_LIMIT,
+  PDF_VIEWER_RANGE_CHUNK_SIZE,
   PDF_VIEWER_RENDER_CONCURRENCY,
   isPdfViewerRenderCancelled,
   parseContentRangeSize,
+  pdfViewerPaintCacheKey,
   pdfjsDocumentUrl,
   resolvePdfjsAssetUrl,
   resolvePdfPageViewportScale,
   resolvePdfViewerBackingWidth,
+  resolvePdfViewerPaintQuality,
   resolvePdfViewerRenderPriority,
+  type PdfViewerPaintQuality,
 } from './document-pdf-viewer-scale'
 
 const documents = new Map<string, Promise<PDFDocumentProxy>>()
 const failedPaths = new Set<string>()
 const canvasTasks = new WeakMap<HTMLCanvasElement, RenderTask>()
+type CachedPdfPaint = {
+  bitmap: ImageBitmap
+  width: number
+  height: number
+  quality: PdfViewerPaintQuality
+}
+const paintCache = new Map<string, CachedPdfPaint>()
 let workerConfigured = false
+
+function rememberPdfPaint(key: string, entry: CachedPdfPaint): void {
+  const previous = paintCache.get(key)
+  if (previous && previous.bitmap !== entry.bitmap) previous.bitmap.close()
+  paintCache.delete(key)
+  paintCache.set(key, entry)
+  while (paintCache.size > PDF_VIEWER_PAINT_CACHE_LIMIT) {
+    const oldestKey = paintCache.keys().next().value
+    if (!oldestKey) break
+    const oldest = paintCache.get(oldestKey)
+    paintCache.delete(oldestKey)
+    oldest?.bitmap.close()
+  }
+}
+
+export function getCachedPdfPaintQuality(
+  filePath: string,
+  pageNumber: number,
+  cssWidth: number,
+): PdfViewerPaintQuality | null {
+  return paintCache.get(pdfViewerPaintCacheKey(filePath, pageNumber, cssWidth))?.quality ?? null
+}
+
+export function restorePdfPagePaintToCanvas(options: {
+  filePath: string
+  pageNumber: number
+  canvas: HTMLCanvasElement
+  cssWidth: number
+  minQuality?: PdfViewerPaintQuality
+}): PdfViewerPaintQuality | null {
+  const cached = paintCache.get(pdfViewerPaintCacheKey(options.filePath, options.pageNumber, options.cssWidth))
+  if (!cached) return null
+  if (options.minQuality === 'sharp' && cached.quality !== 'sharp') return null
+  const { canvas } = options
+  canvas.width = cached.width
+  canvas.height = cached.height
+  const context = canvas.getContext('2d', { alpha: false })
+  if (!context) return null
+  context.drawImage(cached.bitmap, 0, 0)
+  return cached.quality
+}
+
+async function cachePdfPagePaintFromCanvas(
+  filePath: string,
+  pageNumber: number,
+  cssWidth: number,
+  canvas: HTMLCanvasElement,
+  quality: PdfViewerPaintQuality,
+): Promise<void> {
+  if (typeof createImageBitmap !== 'function' || cssWidth < 1 || canvas.width < 1) return
+  try {
+    const bitmap = await createImageBitmap(canvas)
+    rememberPdfPaint(pdfViewerPaintCacheKey(filePath, pageNumber, cssWidth), {
+      bitmap,
+      width: canvas.width,
+      height: canvas.height,
+      quality,
+    })
+  } catch {
+    // Bitmap cache is best-effort; paint already landed on the canvas.
+  }
+}
+
+export function clearPdfPaintCache(filePath?: string): void {
+  if (!filePath) {
+    for (const entry of paintCache.values()) entry.bitmap.close()
+    paintCache.clear()
+    return
+  }
+  for (const key of [...paintCache.keys()]) {
+    if (!key.startsWith(`${filePath}::`)) continue
+    paintCache.get(key)?.bitmap.close()
+    paintCache.delete(key)
+  }
+}
 
 type RenderJob = {
   filePath: string
   pageNumber: number
   canvas: HTMLCanvasElement
   cssWidth: number
+  currentPage: number
+  allowSharp: boolean
   signal: AbortSignal
   priority: number
   resolve: () => void
@@ -103,7 +193,7 @@ async function loadPdfViewerDocument(filePath: string): Promise<PDFDocumentProxy
     range: new PdfFileRangeTransport(length, fileUrl),
     disableAutoFetch: true,
     disableStream: true,
-    rangeChunkSize: 65_536,
+    rangeChunkSize: PDF_VIEWER_RANGE_CHUNK_SIZE,
     ...pdfjsLoadingOptions(),
   })
   return loadingTask.promise
@@ -111,6 +201,7 @@ async function loadPdfViewerDocument(filePath: string): Promise<PDFDocumentProxy
 
 export function evictPdfViewerDocument(filePath: string): void {
   failedPaths.delete(filePath)
+  clearPdfPaintCache(filePath)
   const pending = documents.get(filePath)
   documents.delete(filePath)
   void pending
@@ -173,6 +264,9 @@ export async function prefetchPdfViewerPageRange(
 export function prefetchPdfViewerPageBatch(filePath: string, currentPage: number, totalPages: number): void {
   const current = resolvePdfViewerPageBatch(currentPage, totalPages)
   void prefetchPdfViewerPageRange(filePath, current.startPage, current.endPage).catch(() => undefined)
+  const warmStart = Math.max(1, currentPage - 2)
+  const warmEnd = Math.min(totalPages, currentPage + 4)
+  void prefetchPdfViewerPageRange(filePath, warmStart, warmEnd).catch(() => undefined)
   if (currentPage < current.endPage - 1) return
   const nextStart = current.endPage + 1
   if (nextStart > totalPages) return
@@ -181,7 +275,7 @@ export function prefetchPdfViewerPageBatch(filePath: string, currentPage: number
 }
 
 async function paintPdfPage(job: RenderJob): Promise<void> {
-  const { filePath, pageNumber, canvas, cssWidth, signal } = job
+  const { filePath, pageNumber, canvas, cssWidth, currentPage, allowSharp, signal } = job
   if (cssWidth < 1 || signal.aborted) return
   canvasTasks.get(canvas)?.cancel()
   const doc = await getPdfViewerDocument(filePath)
@@ -189,18 +283,18 @@ async function paintPdfPage(job: RenderJob): Promise<void> {
   const page = await doc.getPage(pageNumber)
   if (signal.aborted) return
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
-  const backingWidth = resolvePdfViewerBackingWidth(cssWidth, dpr)
+  const quality = resolvePdfViewerPaintQuality(pageNumber, currentPage, { allowSharp })
+  const backingWidth = resolvePdfViewerBackingWidth(cssWidth, dpr, quality)
   const unscaled = page.getViewport({ scale: 1 })
   const viewport = page.getViewport({
     scale: resolvePdfPageViewportScale(unscaled.width, backingWidth),
   })
-  canvas.width = Math.floor(viewport.width)
-  canvas.height = Math.floor(viewport.height)
-  const context = canvas.getContext('2d', { alpha: false })
-  if (!context) throw new Error('Canvas is unavailable')
+  // Paint off-DOM / OffscreenCanvas, then blit — keeps the previous frame visible
+  // and avoids in-DOM canvas font metrics thrashing the document style.
+  const buffer = createPdfPaintBuffer(viewport.width, viewport.height)
   const task = page.render({
-    canvas,
-    canvasContext: context,
+    canvas: buffer.canvas as HTMLCanvasElement,
+    canvasContext: buffer.context as CanvasRenderingContext2D,
     viewport,
   })
   canvasTasks.set(canvas, task)
@@ -208,12 +302,26 @@ async function paintPdfPage(job: RenderJob): Promise<void> {
   signal.addEventListener('abort', onAbort)
   try {
     await task.promise
+    if (signal.aborted) return
+    buffer.blitTo(canvas)
+    const bitmap = await buffer.toImageBitmap()
+    if (bitmap) {
+      rememberPdfPaint(pdfViewerPaintCacheKey(filePath, pageNumber, cssWidth), {
+        bitmap,
+        width: buffer.width,
+        height: buffer.height,
+        quality,
+      })
+    } else {
+      void cachePdfPagePaintFromCanvas(filePath, pageNumber, cssWidth, canvas, quality)
+    }
   } catch (error) {
     if (isPdfViewerRenderCancelled(error) || signal.aborted) return
     throw error
   } finally {
     signal.removeEventListener('abort', onAbort)
     if (canvasTasks.get(canvas) === task) canvasTasks.delete(canvas)
+    buffer.dispose()
   }
 }
 
@@ -242,6 +350,7 @@ export function schedulePdfPageRender(options: {
   canvas: HTMLCanvasElement
   cssWidth: number
   currentPage: number
+  allowSharp?: boolean
   signal: AbortSignal
 }): Promise<void> {
   const { signal } = options
@@ -252,6 +361,8 @@ export function schedulePdfPageRender(options: {
       pageNumber: options.pageNumber,
       canvas: options.canvas,
       cssWidth: options.cssWidth,
+      currentPage: options.currentPage,
+      allowSharp: options.allowSharp !== false,
       signal,
       priority: resolvePdfViewerRenderPriority(options.pageNumber, options.currentPage),
       resolve,
@@ -280,6 +391,7 @@ export async function renderPdfPageToCanvas(options: {
   canvas: HTMLCanvasElement
   cssWidth: number
   currentPage?: number
+  allowSharp?: boolean
   signal?: AbortSignal
 }): Promise<void> {
   const signal = options.signal ?? new AbortController().signal
@@ -289,6 +401,7 @@ export async function renderPdfPageToCanvas(options: {
     canvas: options.canvas,
     cssWidth: options.cssWidth,
     currentPage: options.currentPage ?? options.pageNumber,
+    allowSharp: options.allowSharp,
     signal,
   })
 }

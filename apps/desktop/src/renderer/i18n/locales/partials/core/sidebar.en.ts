@@ -76,7 +76,6 @@ export const sidebarEn = {
     },
     community: {
       sections: {
-        news: 'News',
         messages: 'Messages',
         knowledge: 'Knowledge market',
         mcp: 'MCP market',

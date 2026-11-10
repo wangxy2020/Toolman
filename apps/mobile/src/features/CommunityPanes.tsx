@@ -56,7 +56,6 @@ export function CommunityRightPane() {
       return <MinePanel />
     case 'management':
       return <ManagementPanel />
-    case 'news':
     case 'messages':
     case 'knowledge':
     case 'mcp':

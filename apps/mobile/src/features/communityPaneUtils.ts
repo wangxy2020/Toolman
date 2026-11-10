@@ -71,8 +71,8 @@ export function communityListPageStatus(input: {
     return {
       tone: 'warning',
       message: input.hostedWeb
-        ? '无法连接本机社区目录。资讯可直连 RSS；留言与市场请允许访问本地网络（连接已启动的桌面端），或在社区设置填写电脑地址。'
-        : '无法连接社区 Hub。资讯可直连 RSS；留言与市场请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
+        ? '无法连接本机社区目录。留言与市场请允许访问本地网络（连接已启动的桌面端），或在社区设置填写电脑地址。'
+        : '无法连接社区 Hub。留言与市场请确认桌面端已启动，或在社区设置填写电脑局域网地址。',
       meta:
         formatTriedCommunityHubUrls(input.triedHubUrls) ||
         (input.hostedWeb ? undefined : input.hubBaseUrl),
@@ -82,9 +82,7 @@ export function communityListPageStatus(input: {
   return {
     tone: 'muted',
     message: '就绪',
-    meta: input.offline
-      ? `资讯 ${input.itemCount} 条 · 直连 RSS`
-      : `共 ${input.itemCount} 条`,
+    meta: `共 ${input.itemCount} 条`,
   }
 }
 

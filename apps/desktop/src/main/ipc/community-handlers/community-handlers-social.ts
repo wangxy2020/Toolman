@@ -5,26 +5,14 @@ import {
 import {
   createBoardMessage,
   createComment,
-  createNewsComment,
-  createNewsSource,
   countComments,
   deleteBoardMessage,
   deleteComment,
-  deleteNewsSource,
   dislikeBoardMessage,
-  dislikeNewsArticle,
   favoriteBoardMessage,
-  favoriteNewsArticle,
-  fetchNewsSource,
-  getNewsArticle,
   likeBoardMessage,
-  likeNewsArticle,
   listBoardMessages,
   listComments,
-  listNewsArticles,
-  listNewsComments,
-  listNewsSources,
-  listRecommendedNews,
   patchBoardMessage,
 } from '../../services/community/community-ipc.facade'
 import {
@@ -35,19 +23,6 @@ import { communityHandler } from './community-handlers-utils'
 import type { HandlerFn } from './community-handlers-utils'
 
 export const communitySocialHandlers: Partial<Record<IpcChannel, HandlerFn>> = {
-  [IpcChannel.CommunityNewsSourceList]: communityHandler(() => listNewsSources()),
-  [IpcChannel.CommunityNewsSourceCreate]: communityHandler((input) => createNewsSource(input)),
-  [IpcChannel.CommunityNewsSourceDelete]: communityHandler((input) => deleteNewsSource(input)),
-  [IpcChannel.CommunityNewsSourceFetch]: communityHandler((input) => fetchNewsSource(input)),
-  [IpcChannel.CommunityNewsList]: communityHandler((input) => listNewsArticles(input)),
-  [IpcChannel.CommunityNewsGet]: communityHandler((input) => getNewsArticle(input)),
-  [IpcChannel.CommunityNewsRecommended]: communityHandler(() => listRecommendedNews()),
-  [IpcChannel.CommunityNewsFavorite]: communityHandler((input) => favoriteNewsArticle(input)),
-  [IpcChannel.CommunityNewsLike]: communityHandler((input) => likeNewsArticle(input)),
-  [IpcChannel.CommunityNewsDislike]: communityHandler((input) => dislikeNewsArticle(input)),
-  [IpcChannel.CommunityNewsCommentList]: communityHandler((input) => listNewsComments(input)),
-  [IpcChannel.CommunityNewsCommentCreate]: communityHandler((input) => createNewsComment(input)),
-
   [IpcChannel.CommunityCommentList]: communityHandler((input) => listComments(input)),
   [IpcChannel.CommunityCommentCreate]: communityHandler((input) => createComment(input)),
   [IpcChannel.CommunityCommentDelete]: communityHandler((input) => deleteComment(input)),

@@ -15,10 +15,11 @@ import {
   mergeLiveSnapshotsWithSaved,
   pagesHaveIncompleteSnapshotBodies,
 } from './document-page-snapshots'
-import { estimateDocumentRowHeight, offsetToPage, PDF_VIEWER_PAGE_BATCH } from './document-page-window'
+import { estimateDocumentRowHeight, offsetToPage } from './document-page-window'
 import { useDocumentPageTranslation, type DocumentPageState } from './useDocumentPageTranslation'
 import { useDocumentPageWindow } from './useDocumentPageWindow'
 import { useDocumentRowHeights } from './useDocumentRowHeights'
+import { useDocumentScrollSettled } from './useDocumentScrollSettled'
 import type { TranslationDocumentItem, TranslationDocumentPageSnapshot } from './translation-storage'
 import {
   DOCUMENT_PAGE_ZOOM_DEFAULT,
@@ -123,7 +124,12 @@ export function useTranslationDocumentWorkspace(options: Options) {
   )
 
   useEffect(() => {
-    onPageSnapshotsChange?.(collectPageSnapshots())
+    // Debounce live snapshot sync so parse/translate page ticks do not rebuild
+    // snapshot payloads on every status transition while the user is flipping pages.
+    const timer = window.setTimeout(() => {
+      onPageSnapshotsChange?.(collectPageSnapshots())
+    }, 180)
+    return () => window.clearTimeout(timer)
   }, [collectPageSnapshots, onPageSnapshotsChange, pages])
 
   const resolvedTotalPages = Math.max(totalPages, pages.length)
@@ -133,15 +139,19 @@ export function useTranslationDocumentWorkspace(options: Options) {
     fallbackRowHeight,
     isPdfPath(activeDocument?.filePath ?? ''),
   )
+  // PDF and text docs share the centered ±overscan window — avoid 10-page PDF batches
+  // that remount and re-paint whole slabs at page boundaries. Overscan keeps neighbors
+  // mounted so flips reuse painted canvases and parsed bodies instead of blank-reloading.
+  const windowEnabled = Boolean(activeDocument) && !bootstrapping
   const { currentPage, startPage, endPage } = useDocumentPageWindow(
     scrollRef,
-    Boolean(activeDocument) && !bootstrapping,
+    windowEnabled,
     resolvedTotalPages,
     getRowHeight,
     version,
     fallbackRowHeight,
-    isPdfPath(activeDocument?.filePath ?? '') ? PDF_VIEWER_PAGE_BATCH : undefined,
   )
+  const scrollSettled = useDocumentScrollSettled(scrollRef, windowEnabled)
 
   const scrollToPage = useCallback(
     (pageNumber: number) => {
@@ -321,6 +331,7 @@ export function useTranslationDocumentWorkspace(options: Options) {
     currentPage,
     startPage,
     endPage,
+    scrollSettled,
     getRowHeight,
     reportHeight,
     handleEnsurePage,

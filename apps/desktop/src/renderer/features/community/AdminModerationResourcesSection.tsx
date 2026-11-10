@@ -1,5 +1,5 @@
 import { formatCommunityDate } from './community-market-utils'
-import { formatBoardMessageTitle, formatNewsPreview } from './community-news-utils'
+import { formatBoardMessageTitle, formatNewsPreview } from './community-text-utils'
 import { ModerationList } from './ModerationList'
 import { filterResourcesByType, isResourceSubTab } from './admin-moderation-panel-utils'
 import type { AdminModerationPanelState } from './useAdminModerationPanel'

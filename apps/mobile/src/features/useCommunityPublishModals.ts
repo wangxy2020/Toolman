@@ -3,7 +3,4 @@ export {
   useCommunityMessagePublish,
   useCommunityTaskPublish,
 } from './useCommunityPublishModals.message'
-export {
-  useCommunityResourcePublish,
-  useCommunityNewsSources,
-} from './useCommunityPublishModals.resource'
+export { useCommunityResourcePublish } from './useCommunityPublishModals.resource'

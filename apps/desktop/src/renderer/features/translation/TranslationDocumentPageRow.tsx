@@ -23,6 +23,7 @@ interface Props {
   attachBody: boolean
   heavyContent: boolean
   currentPage: number
+  scrollSettled: boolean
   cacheEpoch: number
   onPreviewReady: (pageNumber: number) => void
   onEnsurePage: (pageNumber: number) => void
@@ -50,6 +51,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   attachBody,
   heavyContent,
   currentPage,
+  scrollSettled,
   cacheEpoch,
   onPreviewReady,
   onEnsurePage,
@@ -62,6 +64,11 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
   onFitPersist,
 }: Props) {
   const rowRef = useRef<HTMLDivElement>(null)
+  // Once rich content mounts for this row, keep it for the row lifetime so flips
+  // do not tear down markdown/HTML and re-fit on every currentPage change.
+  const stickyRichRef = useRef(heavyContent)
+  if (heavyContent) stickyRichRef.current = true
+  const showHeavyContent = heavyContent || stickyRichRef.current
   const displayPage = useMemo(
     () => resolvePageForDisplay(page, body, attachBody),
     [attachBody, body, page],
@@ -105,6 +112,7 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
                 pageBox={pageBox}
                 pageAspect={pageAspect}
                 active={previewActive}
+                scrollSettled={scrollSettled}
                 cacheEpoch={cacheEpoch}
                 onReady={onPreviewReady}
               />
@@ -134,11 +142,11 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
             totalPages={totalPages}
             hasModel={hasModel}
             parseArmed={parseArmed}
-            heavyContent={heavyContent}
+            heavyContent={showHeavyContent}
             fitToPage={isPdf && attachBody}
             savedFit={body?.fit ?? null}
             onFitPersist={onFitPersist}
-            deferFit={page.pageNumber !== currentPage}
+            deferFit={!scrollSettled || page.pageNumber !== currentPage}
           />
         </div>
       </section>

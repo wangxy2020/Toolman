@@ -12,18 +12,24 @@ import {
 } from './document-page-window'
 
 describe('document-page-window', () => {
-  it('keeps the same five-page window on the first page and later pages', () => {
-    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 5 })
-    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 5 })
-    expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 8, endPage: 12 })
-    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 36, endPage: 40 })
+  it('keeps the same seven-page window on the first page and later pages', () => {
+    expect(resolveDocumentPageWindow(1, 40)).toEqual({ startPage: 1, endPage: 7 })
+    expect(resolveDocumentPageWindow(2, 40)).toEqual({ startPage: 1, endPage: 7 })
+    expect(resolveDocumentPageWindow(10, 40)).toEqual({ startPage: 7, endPage: 13 })
+    expect(resolveDocumentPageWindow(40, 40)).toEqual({ startPage: 34, endPage: 40 })
   })
 
-  it('loads PDF pages in batches of ten', () => {
+  it('can still resolve prefetch batches of ten when requested', () => {
     expect(resolveDocumentPageWindow(1, 48, 2, 10)).toEqual({ startPage: 1, endPage: 10 })
     expect(resolveDocumentPageWindow(10, 48, 2, 10)).toEqual({ startPage: 1, endPage: 10 })
     expect(resolveDocumentPageWindow(11, 48, 2, 10)).toEqual({ startPage: 11, endPage: 20 })
     expect(resolveDocumentPageWindow(48, 48, 2, 10)).toEqual({ startPage: 41, endPage: 48 })
+  })
+
+  it('mounts a centered overscan window for the live PDF viewer', () => {
+    expect(resolveDocumentPageWindow(1, 48)).toEqual({ startPage: 1, endPage: 7 })
+    expect(resolveDocumentPageWindow(11, 48)).toEqual({ startPage: 8, endPage: 14 })
+    expect(resolveDocumentPageWindow(48, 48)).toEqual({ startPage: 42, endPage: 48 })
   })
 
   it('maps scroll offset to a page number', () => {

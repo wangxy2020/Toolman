@@ -31,7 +31,7 @@ export function usePdfPreviewPolicy(
     if (previous !== currentPage) {
       setDirection(resolvePdfPreviewDirection(previous, currentPage))
       previousPageRef.current = currentPage
-      setReadyPage(null)
+      // Keep readyPage sticky across flips so prefetch does not stall on every tick.
     }
   }, [currentPage])
 
@@ -43,9 +43,8 @@ export function usePdfPreviewPolicy(
 
   useEffect(() => {
     if (!filePath || totalPages < 1) return
-    if (readyPage !== currentPage) return
     prefetchPdfViewerPageBatch(filePath, currentPage, totalPages)
-  }, [currentPage, filePath, readyPage, totalPages])
+  }, [currentPage, filePath, totalPages])
 
   const markPageReady = useCallback(
     (pageNumber: number) => {

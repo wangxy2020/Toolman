@@ -57,27 +57,6 @@ vi.mock('../services/community/community-ipc.facade', () => ({
       },
     ],
   })),
-  listNewsArticles: vi.fn(async () => ({
-    items: [
-      {
-        id: '00000000-0000-0000-0000-000000000020',
-        title: 'News headline',
-        summary: 'Summary',
-        sourceId: '00000000-0000-0000-0000-000000000021',
-        sourceTitle: 'RSS',
-        publishedAt: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        likeCount: 0,
-        dislikeCount: 0,
-        favoriteCount: 0,
-        commentCount: 0,
-        liked: false,
-        disliked: false,
-        favorited: false,
-      },
-    ],
-  })),
 }))
 
 import { IpcChannel, ipcOk } from '@toolman/shared'
@@ -111,19 +90,4 @@ describe('community IPC handlers', () => {
     expect(communityHandlers[IpcChannel.CommunityTaskDelete]).toBeTypeOf('function')
   })
 
-  it('exposes community:news:list handler for renderer invoke', async () => {
-    const handler = communityHandlers[IpcChannel.CommunityNewsList]
-    expect(handler).toBeTypeOf('function')
-
-    const result = await handler?.({ limit: 10 })
-    expect(result).toEqual(
-      ipcOk({
-        items: [
-          expect.objectContaining({
-            title: 'News headline',
-          }),
-        ],
-      }),
-    )
-  })
 })

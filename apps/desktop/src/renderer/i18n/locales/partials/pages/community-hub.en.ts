@@ -1,9 +1,9 @@
 export const communityPageHubEn = {
   settings: 'Community settings',
-  settingsSubtitle: 'Local Hub, RSS news, and federation peering',
+  settingsSubtitle: 'Local Hub and federation peering',
   settingsNavAria: 'Community settings sections',
   refresh: 'Refresh',
-  tabs: { hub: 'Hub service', federation: 'Federation peering', news: 'News sources' },
+  tabs: { hub: 'Hub service', federation: 'Federation peering' },
   hub: {
     statusSection: 'Hub status',
     connectionMode: 'Connection mode',
@@ -21,8 +21,8 @@ export const communityPageHubEn = {
     unavailable: 'Unavailable',
     disconnected: 'Disconnected',
     loadFailed: 'Failed to load Hub status',
-    remoteHint: 'RSS news is fetched by this Hub locally, not via federation. Posts and the market catalog sync over desktop P2P.',
-    localHint: 'RSS is local to this Hub. Posts and listings federate from the desktop; web/phone publish by writing to this Hub.',
+    remoteHint: 'Posts and the market catalog sync over desktop P2P.',
+    localHint: 'Posts and listings federate from the desktop; web/phone publish by writing to this Hub.',
   },
   panelRefresh: 'Refresh',
   sort: { createdAt: 'Created', size: 'Size', name: 'Name' },
@@ -47,7 +47,6 @@ export const communityPageHubEn = {
     report: 'Report',
   },
   panels: {
-    news: { title: 'News', subtitle: 'RSS articles fetched by this Hub, not federation', publish: 'Publish news', rss: 'RSS sources', empty: 'No news articles yet', loading: 'Loading news…' },
     messages: { title: 'Messages', subtitle: 'Web/phone write the desktop Hub; desktop P2P federates posts', publish: 'Post message', empty: 'No messages yet. Publish the first one.' },
     mcp: { title: 'MCP market', subtitle: 'Explore recommended MCP servers and integrations', publish: 'Publish MCP' },
     skills: { title: 'Skills market', subtitle: 'Discover and install community Agent Skills', publish: 'Publish Skill' },

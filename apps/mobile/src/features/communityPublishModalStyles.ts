@@ -124,53 +124,6 @@ export const communityPublishModalStyles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '600',
   },
-  listHeader: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  listTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  sourceCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    gap: 4,
-    backgroundColor: colors.surface,
-  },
-  sourceTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  sourceUrl: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  sourceActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  sourceBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: colors.hover,
-  },
-  sourceBtnText: {
-    fontSize: 12,
-    color: colors.accent,
-    fontWeight: '500',
-  },
-  sourceBtnDanger: {
-    color: colors.danger,
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

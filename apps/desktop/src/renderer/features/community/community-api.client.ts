@@ -1,7 +1,6 @@
 export { invokeIpc } from './community-api-ipc'
 export * from './community-api-hub.client'
 export * from './community-api-resources.client'
-export * from './community-api-news.client'
 export * from './community-api-comments.client'
 export * from './community-api-board.client'
 export * from './community-api-moderation.client'

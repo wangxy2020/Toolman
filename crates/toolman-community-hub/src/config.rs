@@ -21,7 +21,6 @@ pub const DEFAULT_HOST: &str = "0.0.0.0";
 pub const DEFAULT_RATE_LIMIT_RPM: u64 = 600;
 
 const HUB_CONFIG_FILE: &str = "hub.json";
-const RSS_SOURCES_FILE: &str = "rss-sources.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HubConfigFile {
@@ -51,28 +50,10 @@ pub struct HubConfig {
     pub covers_dir: PathBuf,
     pub deliveries_dir: PathBuf,
     pub db_path: PathBuf,
-    pub rss_sources_path: PathBuf,
     /// Requests per minute for `/api/v1/*`. `0` disables rate limiting.
     pub rate_limit_rpm: u64,
     pub semantic_search_enabled: bool,
     pub embedding_provider_url: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RssSourceSeed {
-    pub id: String,
-    pub title: String,
-    pub feed_url: String,
-    pub site_url: String,
-    pub category: String,
-    pub language: String,
-    pub enabled: bool,
-    pub fetch_interval_minutes: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RssSourcesFile {
-    pub sources: Vec<RssSourceSeed>,
 }
 
 impl HubConfig {
@@ -91,7 +72,6 @@ impl HubConfig {
         let covers_dir = data_dir.join("covers");
         let deliveries_dir = data_dir.join("deliveries");
         let db_path = data_dir.join("community.db");
-        let rss_sources_path = data_dir.join(RSS_SOURCES_FILE);
 
         Ok(Self {
             data_dir,
@@ -103,7 +83,6 @@ impl HubConfig {
             covers_dir,
             deliveries_dir,
             db_path,
-            rss_sources_path,
             rate_limit_rpm,
             semantic_search_enabled,
             embedding_provider_url,
@@ -121,7 +100,6 @@ impl HubConfig {
             covers_dir: data_dir.join("covers"),
             deliveries_dir: data_dir.join("deliveries"),
             db_path: data_dir.join("community.db"),
-            rss_sources_path: data_dir.join(RSS_SOURCES_FILE),
             rate_limit_rpm: DEFAULT_RATE_LIMIT_RPM,
             semantic_search_enabled: false,
             embedding_provider_url: None,
@@ -142,7 +120,6 @@ impl HubConfig {
         }
 
         write_hub_config_if_missing(&self.data_dir, self.port, self.require_review)?;
-        seed_rss_sources(&self.rss_sources_path)?;
 
         info!(
             data_dir = %self.data_dir.display(),
@@ -295,86 +272,6 @@ fn resolve_embedding_provider_url() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-pub fn default_rss_sources() -> Vec<RssSourceSeed> {
-    vec![
-        RssSourceSeed {
-            id: "openai-news".into(),
-            title: "OpenAI News".into(),
-            feed_url: "https://openai.com/news/rss.xml".into(),
-            site_url: "https://openai.com/news".into(),
-            category: "ai".into(),
-            language: "en".into(),
-            enabled: true,
-            fetch_interval_minutes: 60,
-        },
-        RssSourceSeed {
-            id: "36kr".into(),
-            title: "36氪".into(),
-            feed_url: "https://36kr.com/feed".into(),
-            site_url: "https://36kr.com".into(),
-            category: "industry".into(),
-            language: "zh".into(),
-            enabled: true,
-            fetch_interval_minutes: 30,
-        },
-        // xinhua-news was HTTP-only and often unreachable; replaced with SSPAI (少数派)
-        // which supports HTTPS and is reliably accessible.
-        RssSourceSeed {
-            id: "sspai".into(),
-            title: "少数派".into(),
-            feed_url: "https://sspai.com/feed".into(),
-            site_url: "https://sspai.com".into(),
-            category: "tech".into(),
-            language: "zh".into(),
-            enabled: true,
-            fetch_interval_minutes: 60,
-        },
-        RssSourceSeed {
-            id: "infoq-cn".into(),
-            title: "InfoQ 中文".into(),
-            feed_url: "https://www.infoq.cn/feed".into(),
-            site_url: "https://www.infoq.cn".into(),
-            category: "tech".into(),
-            language: "zh".into(),
-            enabled: true,
-            fetch_interval_minutes: 60,
-        },
-    ]
-}
-
-pub const DEPRECATED_RSS_SOURCE_IDS: &[&str] = &[
-    "google-ai-blog",
-    "huggingface-blog",
-    "hacker-news",
-    "zaobao",
-    "wallstreetcn",
-    "yicai",
-    // Replaced: HTTP-only, frequently unreachable.
-    "xinhua-news",
-];
-
-fn seed_rss_sources(path: &Path) -> Result<(), ConfigError> {
-    if path.is_file() {
-        return Ok(());
-    }
-
-    let payload = RssSourcesFile {
-        sources: default_rss_sources(),
-    };
-
-    let json = serde_json::to_string_pretty(&payload).map_err(|error| ConfigError::Serialize {
-        source: error,
-    })?;
-
-    fs::write(path, json).map_err(|error| ConfigError::Io {
-        path: path.to_path_buf(),
-        source: error,
-    })?;
-
-    info!(path = %path.display(), count = payload.sources.len(), "seeded default RSS sources");
-    Ok(())
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("failed to access {path}: {source}")]
@@ -409,12 +306,6 @@ mod tests {
         assert!(config.packages_dir.is_dir());
         assert!(config.covers_dir.is_dir());
         assert!(config.deliveries_dir.is_dir());
-        assert!(config.rss_sources_path.is_file());
-
-        let raw = fs::read_to_string(&config.rss_sources_path).expect("read rss");
-        let parsed: RssSourcesFile = serde_json::from_str(&raw).expect("parse rss");
-        // OpenAI + 36kr + sspai + infoq-cn = 4 (xinhua-news replaced)
-        assert_eq!(parsed.sources.len(), 4);
 
         let _ = fs::remove_dir_all(&base);
     }

@@ -1,17 +1,67 @@
-export const PDF_VIEWER_MAX_BACKING_WIDTH = 3200
-export const PDF_VIEWER_MAX_DPR = 3
+/** Settled current page: Retina-sharp without oversized GPU allocations. */
+export const PDF_VIEWER_MAX_BACKING_WIDTH = 2560
+export const PDF_VIEWER_MAX_DPR = 2
+/** Neighbor / in-scroll pages: cheaper paint while keeping layout stable. */
+export const PDF_VIEWER_PREVIEW_BACKING_WIDTH = 1400
+export const PDF_VIEWER_PREVIEW_DPR = 1.25
 export const PDF_VIEWER_PAGE_BATCH = 10
-export const PDF_VIEWER_RENDER_CONCURRENCY = 1
+/** Current sharp + one neighbor preview can paint without serializing every flip. */
+export const PDF_VIEWER_RENDER_CONCURRENCY = 2
+/** Keep recently painted pages so scrolling back does not blank-reload. */
+export const PDF_VIEWER_PAINT_CACHE_LIMIT = 48
+/** Local/range reads: larger chunks cut round-trips while paging. */
+export const PDF_VIEWER_RANGE_CHUNK_SIZE = 262_144
+
+export type PdfViewerPaintQuality = 'sharp' | 'preview'
 
 export function decodeBase64ToUint8Array(base64: string): Uint8Array {
   const binary = atob(base64)
   return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
 
-export function resolvePdfViewerBackingWidth(cssWidth: number, devicePixelRatio: number): number {
+export function resolvePdfViewerBackingWidth(
+  cssWidth: number,
+  devicePixelRatio: number,
+  quality: PdfViewerPaintQuality = 'sharp',
+): number {
   if (cssWidth <= 0) return 0
-  const dpr = Math.min(PDF_VIEWER_MAX_DPR, Math.max(1, devicePixelRatio || 1))
-  return Math.min(PDF_VIEWER_MAX_BACKING_WIDTH, Math.max(1, Math.round(cssWidth * dpr)))
+  const maxDpr = quality === 'sharp' ? PDF_VIEWER_MAX_DPR : PDF_VIEWER_PREVIEW_DPR
+  const maxWidth = quality === 'sharp' ? PDF_VIEWER_MAX_BACKING_WIDTH : PDF_VIEWER_PREVIEW_BACKING_WIDTH
+  const dpr = Math.min(maxDpr, Math.max(1, devicePixelRatio || 1))
+  return Math.min(maxWidth, Math.max(1, Math.round(cssWidth * dpr)))
+}
+
+export function resolvePdfViewerPaintQuality(
+  pageNumber: number,
+  currentPage: number,
+  options?: { allowSharp?: boolean },
+): PdfViewerPaintQuality {
+  if (options?.allowSharp === false) return 'preview'
+  return pageNumber === currentPage ? 'sharp' : 'preview'
+}
+
+/**
+ * Avoid abort/repaint storms on every currentPage tick.
+ * Keep an existing bitmap; only schedule first paint or preview→sharp when settled.
+ */
+export function shouldSchedulePdfPagePaint(options: {
+  active: boolean
+  painted: boolean
+  paintedQuality: PdfViewerPaintQuality | null
+  pageNumber: number
+  currentPage: number
+  allowSharp?: boolean
+}): boolean {
+  if (!options.active) return false
+  if (!options.painted || !options.paintedQuality) return true
+  const want = resolvePdfViewerPaintQuality(options.pageNumber, options.currentPage, {
+    allowSharp: options.allowSharp,
+  })
+  return want === 'sharp' && options.paintedQuality !== 'sharp'
+}
+
+export function pdfViewerPaintCacheKey(filePath: string, pageNumber: number, cssWidth: number): string {
+  return `${filePath}::${pageNumber}::${Math.round(cssWidth)}`
 }
 
 export function resolvePdfPageViewportScale(pageWidth: number, backingWidth: number): number {

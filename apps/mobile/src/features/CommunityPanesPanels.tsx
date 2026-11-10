@@ -8,7 +8,6 @@ import { useCallback } from 'react'
 import { colors } from '../theme'
 import {
   CommunityMessagePublishModal,
-  CommunityNewsSourcesModal,
   CommunityResourcePublishModal,
   CommunityTaskPublishModal,
 } from './CommunityPublishModals'
@@ -22,7 +21,6 @@ import {
   CommunityPanelHeader,
   CommunityPublishButton,
   CommunityRefreshButton,
-  CommunitySecondaryButton,
   CommunityStatGrid,
 } from './communityPanelUi'
 import { CommunityListDetailPane } from './CommunityListDetailPane'
@@ -61,10 +59,7 @@ export function CommunityListSectionPanel({
     setSelectedId,
     publishOpen,
     setPublishOpen,
-    rssOpen,
-    setRssOpen,
     openPublish,
-    openRss,
     resourceType,
     interactions,
     commentItem,
@@ -145,12 +140,6 @@ export function CommunityListSectionPanel({
                 onPress={openPublish}
               />
             ) : null}
-            {section.showRss ? (
-              <CommunitySecondaryButton
-                label="RSS 源"
-                onPress={openRss}
-              />
-            ) : null}
             <CommunityRefreshButton loading={loading} onPress={reload} />
           </>
         }
@@ -162,7 +151,7 @@ export function CommunityListSectionPanel({
         showsHorizontalScrollIndicator={false}
       >
         <Text style={styles.readonlyHint}>
-          未登录也可浏览全部资讯与留言。登录后可点赞、评论、收藏、转发与举报；发布需登录。
+          未登录也可浏览全部留言与市场内容。登录后可点赞、评论、收藏、转发与举报；发布需登录。
         </Text>
         {loading && sorted.length === 0 ? (
           <View style={styles.loadingWrap}>
@@ -218,15 +207,6 @@ export function CommunityListSectionPanel({
           userId={userId}
           resourceType={resourceType}
           onClose={() => setPublishOpen(false)}
-          onPublished={reload}
-        />
-      ) : null}
-      {section.showRss ? (
-        <CommunityNewsSourcesModal
-          visible={rssOpen}
-          hubBaseUrl={hubBaseUrl}
-          userId={userId}
-          onClose={() => setRssOpen(false)}
           onPublished={reload}
         />
       ) : null}

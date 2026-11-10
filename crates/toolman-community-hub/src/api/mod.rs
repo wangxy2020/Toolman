@@ -11,7 +11,6 @@ mod install;
 mod jwt;
 mod marketplace;
 mod moderation;
-mod news;
 mod orders;
 mod presence;
 mod response;
@@ -79,7 +78,6 @@ pub fn router(state: AppState) -> Router {
             users::router()
                 .merge(marketplace::router())
                 .merge(reviews::router())
-                .merge(news::router())
                 .merge(board::router())
                 .merge(comments::router())
                 .merge(tasks::router())
@@ -432,218 +430,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(data_dir);
     }
 
-    #[tokio::test]
-    async fn get_news_sources_returns_seeded_feeds() {
-        let (app, pool, data_dir) = test_app().await;
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/v1/news/sources")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("response");
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body");
-        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
-        let sources = payload["data"]
-            .as_array()
-            .expect("sources array");
-        assert!(sources.len() >= 4);
-
-        let ids: Vec<_> = sources
-            .iter()
-            .filter_map(|item| item["id"].as_str())
-            .collect();
-        assert!(ids.contains(&"openai-news"));
-        assert!(ids.contains(&"36kr"));
-        assert!(ids.contains(&"sspai"));
-        assert!(ids.contains(&"infoq-cn"));
-        assert!(!ids.contains(&"xinhua-news"));
-        assert!(!ids.contains(&"hacker-news"));
-
-        pool.close().await;
-        let _ = std::fs::remove_dir_all(data_dir);
-    }
-
-    #[tokio::test]
-    async fn post_news_source_fetch_ingests_fixture_feed() {
-        let (app, pool, data_dir) = test_app().await;
-        let news_service = crate::services::NewsService::new(pool.clone());
-
-        let source = news_service
-            .create_source(crate::domain::CreateRssSourceInput {
-                id: Some("fixture-source".into()),
-                title: "Fixture Feed".into(),
-                feed_url: format!("https://example.com/feed/{}", Uuid::new_v4()),
-                site_url: Some("https://example.com".into()),
-                category: Some("ai".into()),
-                language: Some("en".into()),
-                enabled: Some(true),
-                fetch_interval_minutes: Some(60),
-            })
-            .await
-            .expect("create source");
-
-        const SAMPLE_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>Feed</title><item>
-<title>HN Story</title><link>https://example.com/1</link><guid>hn-1</guid>
-<description>Story</description></item></channel></rss>"#;
-
-        let ingest = news_service
-            .ingest_feed_bytes(&source.id, SAMPLE_RSS.as_bytes())
-            .await
-            .expect("ingest");
-        assert_eq!(ingest.articles_added, 1);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/api/v1/news/articles?source_id={}", source.id))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("response");
-        assert_eq!(response.status(), StatusCode::OK);
-
-        pool.close().await;
-        let _ = std::fs::remove_dir_all(data_dir);
-    }
-
-    #[tokio::test]
-    async fn post_news_source_fetch_does_not_require_bearer_token() {
-        let (app, pool, data_dir) = test_app().await;
-        let news_service = crate::services::NewsService::new(pool.clone());
-
-        let source = news_service
-            .create_source(crate::domain::CreateRssSourceInput {
-                id: Some("anon-fetch-source".into()),
-                title: "Anon Fetch".into(),
-                feed_url: "http://127.0.0.1:1/missing.xml".into(),
-                site_url: Some("https://example.com".into()),
-                category: Some("ai".into()),
-                language: Some("en".into()),
-                enabled: Some(true),
-                fetch_interval_minutes: Some(60),
-            })
-            .await
-            .expect("create source");
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri(format!("/api/v1/news/sources/{}/fetch", source.id))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("response");
-
-        assert_ne!(
-            response.status(),
-            StatusCode::UNAUTHORIZED,
-            "RSS fetch must stay anonymous even when JWT secret is configured"
-        );
-
-        pool.close().await;
-        let _ = std::fs::remove_dir_all(data_dir);
-    }
-
-    #[tokio::test]
-    async fn list_news_articles_returns_liked_by_me_with_bearer_token() {
-        let secret = "test-hub-jwt-secret";
-        let (app, pool, data_dir) = test_app_with_jwt(secret).await;
-        let token = sign_test_hub_token(secret, DEFAULT_IDENTITY_ID, "registered");
-        let news_service = crate::services::NewsService::new(pool.clone());
-
-        let source = news_service
-            .create_source(crate::domain::CreateRssSourceInput {
-                id: Some("like-viewer-source".into()),
-                title: "Like Viewer Feed".into(),
-                feed_url: format!("https://example.com/feed/{}", Uuid::new_v4()),
-                site_url: None,
-                category: Some("ai".into()),
-                language: None,
-                enabled: Some(true),
-                fetch_interval_minutes: None,
-            })
-            .await
-            .expect("create source");
-
-        const SAMPLE_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>Feed</title><item>
-<title>Like Test Story</title><link>https://example.com/like-test</link><guid>like-test-1</guid>
-<description>Story</description></item></channel></rss>"#;
-
-        news_service
-            .ingest_feed_bytes(&source.id, SAMPLE_RSS.as_bytes())
-            .await
-            .expect("ingest");
-
-        let articles = news_service
-            .list_articles(
-                &crate::services::news_service::NewsArticleQuery {
-                    source_id: Some(source.id.clone()),
-                    limit: 1,
-                    offset: 0,
-                    ..Default::default()
-                },
-                None,
-            )
-            .await
-            .expect("list articles");
-        let article_id = articles[0].id.clone();
-
-        let like_response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri(format!("/api/v1/news/articles/{article_id}/like"))
-                    .header("authorization", format!("Bearer {token}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("like response");
-        assert_eq!(like_response.status(), StatusCode::OK);
-
-        let list_response = app
-            .oneshot(
-                Request::builder()
-                    .uri(format!(
-                        "/api/v1/news/articles?source_id={}&limit=10",
-                        source.id
-                    ))
-                    .header("authorization", format!("Bearer {token}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("list response");
-        assert_eq!(list_response.status(), StatusCode::OK);
-
-        let body = axum::body::to_bytes(list_response.into_body(), usize::MAX)
-            .await
-            .expect("body");
-        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
-        let liked_by_me = payload["data"][0]["liked_by_me"]
-            .as_bool()
-            .expect("liked_by_me boolean");
-        assert!(liked_by_me);
-
-        pool.close().await;
-        let _ = std::fs::remove_dir_all(data_dir);
-    }
-
     async fn test_app_with_rate_limit(rpm: u64) -> (Router, sqlx::SqlitePool, PathBuf) {
         let data_dir = temp_data_dir();
         std::fs::create_dir_all(&data_dir).expect("data dir");
@@ -723,7 +509,7 @@ mod tests {
                 .clone()
                 .oneshot(
                     Request::builder()
-                        .uri("/api/v1/news/sources")
+                        .uri("/api/v1/search/semantic?q=toolman")
                         .body(Body::empty())
                         .unwrap(),
                 )
@@ -735,7 +521,7 @@ mod tests {
         let limited = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/v1/news/sources")
+                    .uri("/api/v1/search/semantic?q=toolman")
                     .body(Body::empty())
                     .unwrap(),
             )

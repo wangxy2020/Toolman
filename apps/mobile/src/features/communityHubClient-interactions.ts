@@ -20,16 +20,12 @@ import {
 } from './communityHubClient-http'
 
 export type CommunityCommentTarget = {
-  targetType: 'news' | 'resource' | 'board' | 'task'
+  targetType: 'resource' | 'board' | 'task'
   targetId: string
   parentId?: string | null
 }
 
 export const COMMUNITY_BOARD_MAIN_ID = 'main'
-
-export function buildNewsCommentTarget(articleId: string): CommunityCommentTarget {
-  return { targetType: 'news', targetId: articleId }
-}
 
 export function buildBoardReplyTarget(messageId: string): CommunityCommentTarget {
   return {
@@ -68,7 +64,6 @@ function interactionPath(
   kind: CommunityInteractionKind,
 ): string {
   const id = encodeURIComponent(itemId)
-  if (listKind === 'news') return `/api/v1/news/articles/${id}/${kind}`
   if (listKind === 'messages') return `/api/v1/board/messages/${id}/${kind}`
   if (listKind === 'market') return `/api/v1/marketplace/resources/${id}/${kind}`
   throw new Error('当前栏目暂不支持该互动')
@@ -186,7 +181,6 @@ export function resolveCommentTarget(
   listKind: string,
   itemId: string,
 ): CommunityCommentTarget | null {
-  if (listKind === 'news') return buildNewsCommentTarget(itemId)
   if (listKind === 'messages') return buildBoardReplyTarget(itemId)
   if (listKind === 'market') return buildResourceCommentTarget(itemId)
   return null
@@ -196,7 +190,6 @@ export function resolveReportTarget(
   listKind: string,
   itemId: string,
 ): { targetType: CommunityReportTargetType; targetId: string } | null {
-  if (listKind === 'news') return { targetType: 'news', targetId: itemId }
   if (listKind === 'messages') return { targetType: 'comment', targetId: itemId }
   if (listKind === 'market') return { targetType: 'resource', targetId: itemId }
   if (listKind === 'tasks') return { targetType: 'task', targetId: itemId }

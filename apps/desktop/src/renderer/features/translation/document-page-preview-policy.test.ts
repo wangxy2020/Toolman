@@ -56,10 +56,19 @@ describe('document-page-preview-policy', () => {
     ])
   })
 
-  it('prefetches both neighbors after the current page is ready', () => {
+  it('paints the full mounted overscan window around the current page', () => {
     expect(
       resolvePdfPreviewActive({
         pageNumber: 2,
+        currentPage: 1,
+        readyPage: 1,
+        totalPages: 20,
+        direction: 1,
+      }),
+    ).toBe(true)
+    expect(
+      resolvePdfPreviewActive({
+        pageNumber: 4,
         currentPage: 1,
         readyPage: 1,
         totalPages: 20,
@@ -77,7 +86,7 @@ describe('document-page-preview-policy', () => {
     ).toBe(true)
     expect(
       resolvePdfPreviewActive({
-        pageNumber: 8,
+        pageNumber: 10,
         currentPage: 7,
         readyPage: 7,
         totalPages: 20,
@@ -86,9 +95,9 @@ describe('document-page-preview-policy', () => {
     ).toBe(true)
     expect(
       resolvePdfPreviewActive({
-        pageNumber: 3,
-        currentPage: 1,
-        readyPage: 1,
+        pageNumber: 11,
+        currentPage: 7,
+        readyPage: 7,
         totalPages: 20,
         direction: 1,
       }),
@@ -182,32 +191,32 @@ describe('document-page-preview-policy', () => {
     expect(shouldAttachSavedSnapshotBody(false, false)).toBe(true)
   })
 
-  it('attaches saved bodies on every windowed page so the next page is not blank', () => {
+  it('attaches plain bodies in the window and rich fit only near the current page', () => {
     expect(
       resolveParseBodyAttachFlags({
         isPdf: true,
         pageNumber: 1,
         currentPage: 2,
         startPage: 1,
-        endPage: 3,
+        endPage: 5,
       }),
     ).toEqual({ attachPlain: true, attachRich: true })
     expect(
       resolveParseBodyAttachFlags({
         isPdf: true,
-        pageNumber: 3,
+        pageNumber: 5,
         currentPage: 2,
         startPage: 1,
-        endPage: 3,
+        endPage: 5,
       }),
-    ).toEqual({ attachPlain: true, attachRich: true })
+    ).toEqual({ attachPlain: true, attachRich: false })
     expect(
       resolveParseBodyAttachFlags({
         isPdf: true,
-        pageNumber: 4,
+        pageNumber: 6,
         currentPage: 2,
         startPage: 1,
-        endPage: 3,
+        endPage: 5,
       }),
     ).toEqual({ attachPlain: false, attachRich: false })
     expect(

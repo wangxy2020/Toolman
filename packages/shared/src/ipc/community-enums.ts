@@ -64,7 +64,6 @@ export type CommunityOrderStatus = z.infer<typeof CommunityOrderStatusSchema>
 
 export const CommunityReportTargetTypeSchema = z.enum([
   'resource',
-  'news',
   'comment',
   'user',
   'task',
@@ -84,9 +83,6 @@ export const CommunityMarketplaceSortSchema = z.enum([
   'installs',
 ])
 export type CommunityMarketplaceSort = z.infer<typeof CommunityMarketplaceSortSchema>
-
-export const CommunityNewsSortSchema = z.enum(['newest', 'popular', 'diverse'])
-export type CommunityNewsSort = z.infer<typeof CommunityNewsSortSchema>
 
 export const CommunityApiErrorCodeSchema = z.enum([
   'VALIDATION_ERROR',

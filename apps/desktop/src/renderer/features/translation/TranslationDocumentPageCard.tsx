@@ -23,6 +23,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   totalPages,
   hasModel,
   parseArmed,
+  heavyContent,
   fitToPage = false,
   savedFit = null,
   onFitPersist,
@@ -32,7 +33,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   totalPages: number
   hasModel: boolean
   parseArmed: boolean
-  /** Rich markdown/HTML waits until the current PDF preview has painted. */
+  /** Rich markdown/HTML for near pages; far window rows stay plain until sticky. */
   heavyContent: boolean
   /** Lock text into the PDF page box — shrink type, never scroll. */
   fitToPage?: boolean
@@ -51,7 +52,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   const previewMode =
     hasPreview &&
     (page.status === 'parsed' || page.status === 'parsing' || page.status === 'done' || parseArmed)
-  const showRich = previewMode && usesRichDocumentPagePreview(rawText)
+  const showRich = heavyContent && previewMode && usesRichDocumentPagePreview(rawText)
   const displayText = previewMode ? resolveDocumentPageDisplayText(rawText, showRich) : plainText
   const fitTable = usesDocumentPageTableFit(rawText) || looksLikeTranslationTable(displayText)
   const persistFit = useCallback(

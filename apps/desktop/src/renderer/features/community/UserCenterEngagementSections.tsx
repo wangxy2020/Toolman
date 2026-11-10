@@ -41,22 +41,6 @@ export function UserCenterLikesSection({ panel }: { panel: UserCenterSectionPane
   const likedResourceGroups = groupUserCenterResources(center.likes.resources)
   return (
     <div className="tm-user-center-feed-groups">
-      {center.likes.news.length > 0 ? (
-        <UserCenterFeedGroup label={t('communityPage.mine.tags.news')}>
-          {center.likes.news.map((item) => (
-            <UserCenterFeedCard
-              key={`news-${item.id}`}
-              tag={t('communityPage.mine.tags.news')}
-              date={formatUserCenterDateTime(item.publishedAt)}
-              title={item.title}
-              description={item.summary}
-              stats={[
-                { kind: 'like', label: t('communityPage.mine.likesCount', { count: item.likeCount }) },
-              ]}
-            />
-          ))}
-        </UserCenterFeedGroup>
-      ) : null}
       {center.likes.messages.length > 0 ? (
         <UserCenterFeedGroup label={t('communityPage.mine.tags.message')}>
           {center.likes.messages.map((item) => (
@@ -106,25 +90,6 @@ export function UserCenterFavoritesSection({ panel }: { panel: UserCenterSection
   const favoriteResourceGroups = groupUserCenterResources(center.favorites.resources)
   return (
     <div className="tm-user-center-feed-groups">
-      {center.favorites.news.length > 0 ? (
-        <UserCenterFeedGroup label={t('communityPage.mine.tags.news')}>
-          {center.favorites.news.map((item) => (
-            <UserCenterFeedCard
-              key={`news-${item.id}`}
-              tag={t('communityPage.mine.tags.news')}
-              date={formatUserCenterDateTime(item.publishedAt)}
-              title={item.title}
-              description={item.summary}
-              stats={[
-                {
-                  kind: 'favorite',
-                  label: t('communityPage.mine.favoritesCount', { count: item.favoriteCount }),
-                },
-              ]}
-            />
-          ))}
-        </UserCenterFeedGroup>
-      ) : null}
       {center.favorites.messages.length > 0 ? (
         <UserCenterFeedGroup label={t('communityPage.mine.tags.message')}>
           {center.favorites.messages.map((item) => (

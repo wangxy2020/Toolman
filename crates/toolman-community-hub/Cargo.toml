@@ -2,7 +2,7 @@
 name = "toolman-community-hub"
 version = "0.1.0"
 edition = "2021"
-description = "Toolman Community Hub — local sidecar for marketplace, news, and tasks"
+description = "Toolman Community Hub — local sidecar for marketplace and tasks"
 license = "AGPL-3.0-or-later"
 
 [[bin]]
@@ -16,7 +16,6 @@ path = "src/lib.rs"
 axum = { version = "0.8", features = ["multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
 directories = "6"
-feed-rs = "2"
 hex = "0.4"
 jsonwebtoken = "9"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

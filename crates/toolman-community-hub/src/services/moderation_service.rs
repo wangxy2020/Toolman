@@ -1070,9 +1070,6 @@ impl ModerationService {
                     })?;
                 Ok(task.publisher_id)
             }
-            ReportTargetType::News => Err(ModerationServiceError::Validation(
-                "ban_user is not supported for news targets".to_string(),
-            )),
         }
     }
 

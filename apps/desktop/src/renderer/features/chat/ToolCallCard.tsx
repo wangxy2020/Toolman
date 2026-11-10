@@ -29,7 +29,8 @@ function SimpleToolCard({
   const summary =
     status === 'done' && result.trim() ? summarizeToolResult(parsed, result) : null
   const detail = meta.buildCommand(args)
-  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false)
+  // Always start collapsed so long tool/KB output does not expand the thinking stream.
+  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? true)
   const hasResult = result.trim().length > 0
 
   return (
@@ -151,7 +152,8 @@ function CommandToolCard({ name, arguments: argsRaw, result, status, defaultColl
     status === 'done' && result.trim()
       ? summarizeToolResult(parsed, result)
       : null
-  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? status === 'done')
+  // Command cards used to auto-expand while running and stay open after done.
+  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? true)
   const hasResult = result.trim().length > 0
 
   return (

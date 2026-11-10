@@ -1,4 +1,3 @@
-import { Platform } from 'react-native'
 import {
   formatBoardMessageTitle,
   formatCommunityDate,
@@ -18,16 +17,6 @@ import {
   normalizeBaseUrl,
   unwrapItems,
 } from './communityHubClient-http'
-import {
-  fetchCommunityNewsSource,
-  listCommunityNewsSources,
-} from './communityHubClient-mutate'
-import {
-  fetchDirectCommunityNewsFromFeeds,
-  fetchDirectCommunityNewsViaApi,
-  readCachedDirectNews,
-  writeCachedDirectNews,
-} from './communityNewsDirect'
 
 function mapEngagement(item: Record<string, unknown>) {
   return {
@@ -39,109 +28,6 @@ function mapEngagement(item: Record<string, unknown>) {
     dislikedByMe: typeof item.dislikedByMe === 'boolean' ? item.dislikedByMe : undefined,
     favoritedByMe: typeof item.favoritedByMe === 'boolean' ? item.favoritedByMe : undefined,
   }
-}
-
-export async function fetchCommunityNews(
-  baseUrl: string,
-  userId?: string | null,
-): Promise<CommunityListItem[]> {
-  const base = normalizeBaseUrl(baseUrl)
-  const data = await hubGet(base, '/api/v1/news/articles?sort=diverse&limit=30', { userId })
-  return unwrapItems(data).map((raw, index) => {
-    const item = asRecord(raw) ?? {}
-    const publishedAt = asNumber(item.publishedAt, Date.now() - index)
-    const title = asString(item.title, '未命名资讯')
-    const summary = asString(item.summary)
-    const contentHtml = asString(item.contentHtml)
-    const link = asString(item.link) || null
-    return {
-      id: asString(item.id, `news-${index}`),
-      title,
-      meta: joinCommunityMeta([asString(item.sourceTitle), formatCommunityDateTime(publishedAt)]),
-      description: formatNewsPreview(contentHtml || summary || title),
-      createdAt: publishedAt,
-      ...mapEngagement(item),
-      coverUrl: typeof item.coverUrl === 'string' ? item.coverUrl : null,
-      iconKind: 'news' as const,
-      summary: summary || undefined,
-      contentHtml: contentHtml || undefined,
-      link,
-    }
-  })
-}
-
-export async function fetchCommunityNewsArticle(
-  baseUrl: string,
-  articleId: string,
-  userId?: string | null,
-): Promise<CommunityListItem> {
-  const base = normalizeBaseUrl(baseUrl)
-  const data = await hubGet<unknown>(
-    base,
-    `/api/v1/news/articles/${encodeURIComponent(articleId)}`,
-    { userId },
-  )
-  const item = asRecord(data) ?? {}
-  const publishedAt = asNumber(item.publishedAt, Date.now())
-  const title = asString(item.title, '未命名资讯')
-  const summary = asString(item.summary)
-  const contentHtml = asString(item.contentHtml)
-  const link = asString(item.link) || null
-  const author = asString(item.author)
-  return {
-    id: asString(item.id, articleId),
-    title,
-    meta: joinCommunityMeta([
-      asString(item.sourceTitle),
-      author,
-      formatCommunityDateTime(publishedAt),
-    ]),
-    description: formatNewsPreview(contentHtml || summary || title),
-    createdAt: publishedAt,
-    ...mapEngagement(item),
-    coverUrl: typeof item.coverUrl === 'string' ? item.coverUrl : null,
-    iconKind: 'news',
-    summary: summary || undefined,
-    contentHtml: contentHtml || undefined,
-    body: contentHtml ? undefined : summary || undefined,
-    link,
-  }
-}
-
-/** If the Hub cache is empty, trigger RSS fetches (no login required) and list again. */
-export async function loadCommunityNewsWithRefresh(
-  baseUrl: string,
-  userId?: string | null,
-): Promise<{ items: CommunityListItem[]; feedErrors: string[] }> {
-  const first = await fetchCommunityNews(baseUrl, userId)
-  if (first.length > 0) return { items: first, feedErrors: [] }
-
-  const sources = await listCommunityNewsSources(baseUrl)
-  const feedErrors: string[] = []
-  for (const source of sources.filter((item) => item.enabled)) {
-    try {
-      await fetchCommunityNewsSource(baseUrl, source.id)
-    } catch (error) {
-      feedErrors.push(error instanceof Error ? error.message : String(error))
-    }
-  }
-  return { items: await fetchCommunityNews(baseUrl, userId), feedErrors }
-}
-
-/** Public RSS when no desktop Hub is reachable. Web uses same-origin API (CORS). */
-export async function loadDirectCommunityNews(options?: {
-  force?: boolean
-}): Promise<CommunityListItem[]> {
-  if (!options?.force) {
-    const cached = readCachedDirectNews()
-    if (cached && cached.length > 0) return cached
-  }
-  const items =
-    Platform.OS === 'web'
-      ? await fetchDirectCommunityNewsViaApi()
-      : await fetchDirectCommunityNewsFromFeeds()
-  if (items.length > 0) writeCachedDirectNews(items)
-  return items
 }
 
 export async function fetchCommunityMessages(

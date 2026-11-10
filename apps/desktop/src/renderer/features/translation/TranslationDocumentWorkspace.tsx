@@ -51,6 +51,7 @@ export const TranslationDocumentWorkspace = forwardRef<
     currentPage,
     startPage,
     endPage,
+    scrollSettled,
     getRowHeight,
     reportHeight,
     handleEnsurePage,
@@ -165,6 +166,7 @@ export const TranslationDocumentWorkspace = forwardRef<
             attachBody={attachBody}
             heavyContent={heavyContent}
             currentPage={currentPage}
+            scrollSettled={scrollSettled}
             cacheEpoch={cacheEpoch}
             onPreviewReady={markPageReady}
             onEnsurePage={handleEnsurePage}

@@ -1,7 +1,6 @@
 import type {
   CommunityBoardMessage,
   CommunityInstallItem,
-  CommunityNewsArticle,
   CommunityResourceItem,
   CommunityResourceType,
   CommunityTaskItem,
@@ -22,7 +21,6 @@ const MOCK_PUBLISHER = {
 
 export const COMMUNITY_UI_MOCK_IDS = {
   resource: '00000000-0000-4000-8000-000000000201',
-  news: '00000000-0000-4000-8000-000000000202',
   message: '00000000-0000-4000-8000-000000000203',
   task: '00000000-0000-4000-8000-000000000204',
   install: '00000000-0000-4000-8000-000000000205',
@@ -76,32 +74,6 @@ function mockResource(resourceType: CommunityResourceType): CommunityResourceIte
 
 export function getUiMockResource(resourceType: CommunityResourceType): CommunityResourceItem {
   return mockResource(resourceType)
-}
-
-export function getUiMockNewsArticle(): CommunityNewsArticle {
-  return {
-    id: COMMUNITY_UI_MOCK_IDS.news,
-    sourceId: '00000000-0000-4000-8000-000000000301',
-    sourceTitle: 'UI 预览源',
-    guid: 'ui-preview-news',
-    title: '[UI 预览] Toolman 社区资讯示例',
-    summary: '用于检查资讯列表标题、来源、时间与互动数据的展示效果。',
-    contentHtml: null,
-    link: 'https://example.com/ui-preview-news',
-    author: 'UI 预览',
-    tags: ['ui-preview'],
-    coverUrl: null,
-    publishedAt: MOCK_NOW,
-    fetchedAt: MOCK_NOW,
-    likeCount: 18,
-    favoriteCount: 6,
-    dislikeCount: 1,
-    commentCount: 0,
-    viewCount: 128,
-    likedByMe: false,
-    dislikedByMe: false,
-    favoritedByMe: false,
-  }
 }
 
 export function getUiMockBoardMessage(): CommunityBoardMessage {

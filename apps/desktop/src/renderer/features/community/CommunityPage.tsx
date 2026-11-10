@@ -20,7 +20,6 @@ import { CommunityHubOfflineBanner } from './CommunityHubOfflineBanner'
 import { KnowledgeMarketPanel } from './KnowledgeMarketPanel'
 import { McpMarketPanel } from './McpMarketPanel'
 import { MessageBoardPanel } from './MessageBoardPanel'
-import { NewsCenterPanel } from './NewsCenterPanel'
 import { SkillsMarketPanel } from './SkillsMarketPanel'
 import { WorkflowMarketPanel } from './WorkflowMarketPanel'
 import { TaskMarketPanel } from './TaskMarketPanel'
@@ -29,10 +28,9 @@ import { CommunitySettingsModal } from './CommunitySettingsModal'
 import { useCommunityPresence } from './useCommunityPresence'
 import { isCommunitySessionActive } from '../user/community-session'
 
-const DEFAULT_COMMUNITY_ACTION = 'news'
+const DEFAULT_COMMUNITY_ACTION = 'messages'
 
 const SORTABLE_ACTIONS = new Set([
-  'news',
   'messages',
   'knowledge',
   'mcp',
@@ -48,7 +46,6 @@ const PANEL_TITLE_ACTIONS = new Set([
   'mcp',
   'knowledge',
   'tasks',
-  'news',
   'messages',
   'management',
 ])
@@ -103,7 +100,7 @@ function CommunityPageStatusArea({ children }: { children: ReactNode }) {
 
 export function CommunityPage({
   activeAction = DEFAULT_COMMUNITY_ACTION,
-  sidebarSection = 'news',
+  sidebarSection = 'messages',
 }: Props) {
   const { t } = useI18n()
   const [showSettingsModal, setShowSettingsModal] = useState(false)
@@ -150,7 +147,6 @@ export function CommunityPage({
         <CommunityPageStatusArea>
           <div className="tm-module-content tm-community-module-content">
             {effectiveAction === 'mcp' ? <McpMarketPanel /> : null}
-            {effectiveAction === 'news' ? <NewsCenterPanel /> : null}
             {effectiveAction === 'messages' ? <MessageBoardPanel /> : null}
             {effectiveAction === 'skills' ? <SkillsMarketPanel /> : null}
             {effectiveAction === 'workflow' ? <WorkflowMarketPanel /> : null}

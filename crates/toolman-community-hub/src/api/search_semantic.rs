@@ -62,7 +62,6 @@ pub async fn semantic_search(
         .search_unified(&UnifiedSearchQuery {
             q: trimmed.to_string(),
             include_resources: true,
-            include_news: true,
             resource_type: None,
             category: None,
             limit: query.limit as i64,
@@ -76,7 +75,6 @@ pub async fn semantic_search(
         .map(|hit| SemanticSearchResultItem {
             target_type: match hit.target_type {
                 SearchTargetType::Resource => "resource".to_string(),
-                SearchTargetType::News => "news".to_string(),
             },
             target_id: hit.target_id,
             title: hit.title,

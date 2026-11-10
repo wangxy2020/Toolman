@@ -3,7 +3,6 @@
  */
 
 export type CommunityCardIconKind =
-  | 'news'
   | 'messages'
   | 'knowledge'
   | 'mcp'
@@ -26,7 +25,7 @@ export type CommunityListItem = {
   iconKind: CommunityCardIconKind
   /** Full text for message / resource detail (not truncated). */
   body?: string
-  /** News article original URL. */
+  /** Original URL when available. */
   link?: string | null
   /** Raw HTML body when available from Hub list/detail. */
   contentHtml?: string
@@ -46,7 +45,7 @@ export type CommunityCommentItem = {
 
 export type CommunityReportReason = 'spam' | 'illegal' | 'copyright' | 'other'
 
-export type CommunityReportTargetType = 'resource' | 'news' | 'comment' | 'user' | 'task'
+export type CommunityReportTargetType = 'resource' | 'comment' | 'user' | 'task'
 
 export type CommunityInteractionKind = 'like' | 'dislike' | 'favorite'
 
@@ -57,17 +56,6 @@ export type CommunityInteractionResult = {
   likedByMe?: boolean
   dislikedByMe?: boolean
   favoritedByMe?: boolean
-}
-
-
-export type CommunityNewsSource = {
-  id: string
-  title: string
-  feedUrl: string
-  enabled: boolean
-  fetchIntervalMinutes: number
-  lastFetchedAt: number | null
-  lastError: string | null
 }
 
 export type CommunityTaskType = 'development' | 'design' | 'translation' | 'tender' | 'other'

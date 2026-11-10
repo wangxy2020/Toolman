@@ -29,7 +29,7 @@ export const communityPageUserEn = {
     likesCount: '{{count}} likes',
     favoritesCount: '{{count}} favorites',
     replyCount: '{{count}} replies',
-    tags: { message: 'Message', news: 'News' },
+    tags: { message: 'Message' },
     resourceTitle: 'Resource {{id}}',
     dataSectionAria: 'My data sections',
     listCount: '{{count}} records in current list',
@@ -155,7 +155,6 @@ export const communityPageUserEn = {
     },
     reportTargets: {
       resource: 'Resource',
-      news: 'News',
       comment: 'Message',
       user: 'User',
       task: 'Task',
@@ -238,7 +237,6 @@ export const communityPageUserEn = {
     },
     logTargetTypes: {
       resource: 'Resource',
-      news: 'News',
       comment: 'Message',
       user: 'User',
       task: 'Task',

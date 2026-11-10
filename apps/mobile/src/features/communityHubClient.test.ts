@@ -28,8 +28,8 @@ describe('communityHubRequestUrl', () => {
       '/api/community-hub?u=%2Fapi%2Fv1%2Fhealth',
     )
     expect(
-      communityHubRequestUrl('http://127.0.0.1:3721', '/api/v1/news/articles?sort=diverse&limit=1'),
-    ).toBe('/api/community-hub?u=%2Fapi%2Fv1%2Fnews%2Farticles%3Fsort%3Ddiverse%26limit%3D1')
+      communityHubRequestUrl('http://127.0.0.1:3721', '/api/v1/marketplace/resources?limit=1'),
+    ).toBe('/api/community-hub?u=%2Fapi%2Fv1%2Fmarketplace%2Fresources%3Flimit%3D1')
   })
 
   it('keeps remote hubs on their own origin', () => {
@@ -69,11 +69,11 @@ describe('isCommunityHubHealthBody', () => {
 })
 
 describe('probeCommunityHub', () => {
-  it('treats a reachable news catalog as online when /health is down', async () => {
+  it('treats a reachable marketplace catalog as online when /health is down', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/health')) return new Response('error', { status: 500 })
-      if (url.includes('/news/articles')) {
+      if (url.includes('/marketplace/resources')) {
         return new Response('{"ok":true,"data":{"items":[]}}', {
           status: 200,
           headers: { 'content-type': 'application/json' },
@@ -93,7 +93,7 @@ describe('probeCommunityHub', () => {
       if (url.startsWith('https://hub.toolman.app')) {
         throw new TypeError('Failed to fetch')
       }
-      if (url.startsWith('/api/community-hub') && url.includes('news')) {
+      if (url.startsWith('/api/community-hub') && url.includes('marketplace')) {
         return new Response('{"ok":true,"data":{"items":[]}}', {
           status: 200,
           headers: { 'content-type': 'application/json' },

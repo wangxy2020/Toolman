@@ -9,7 +9,7 @@ import { notifyCommunityUserDataChanged } from './community-events'
 import { isUiMockCommunityId } from './community-ui-mock'
 import { getUiMockInteractionDefaults } from './community-ui-mock-interactions'
 import { buildTaskCommentTarget } from './community-comment-utils'
-import { formatNewsDate } from './community-news-utils'
+import { formatNewsDate } from './community-text-utils'
 import { sortCommunityListItems } from './community-list-sort'
 import {
   formatTaskBudget,

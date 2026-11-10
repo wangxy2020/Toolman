@@ -10,7 +10,6 @@ export type {
   CommunityInteractionKind,
   CommunityInteractionResult,
   CommunityListItem,
-  CommunityNewsSource,
   CommunityReportReason,
   CommunityReportTargetType,
   CommunityResourceType,
@@ -27,18 +26,13 @@ export {
 
 export {
   fetchCommunityMessages,
-  fetchCommunityNews,
-  fetchCommunityNewsArticle,
   fetchCommunityResources,
   fetchCommunityTasks,
-  loadCommunityNewsWithRefresh,
-  loadDirectCommunityNews,
 } from './communityHubClient-fetch'
 
 export {
   applyInteractionToItem,
   buildBoardReplyTarget,
-  buildNewsCommentTarget,
   buildResourceCommentTarget,
   createCommunityComment,
   createCommunityModerationReport,
@@ -52,14 +46,10 @@ export {
 
 export {
   createCommunityBoardMessage,
-  createCommunityNewsSource,
   createCommunityResource,
   createCommunityTask,
-  deleteCommunityNewsSource,
   fetchCommunityHubHealth,
-  fetchCommunityNewsSource,
   fetchFederationCatalogCount,
   fetchFederationPeering,
-  listCommunityNewsSources,
   publishCommunityTask,
 } from './communityHubClient-mutate'

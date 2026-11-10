@@ -1,3 +1,5 @@
+import { DOCUMENT_PAGE_OVERSCAN } from './document-page-window'
+
 /** Visible page renders first; window neighbors start immediately at lower priority. */
 export type PdfPreviewDirection = 1 | -1
 /** Hidden decode pool around the current page — do not mount these as extra <img>s. */
@@ -9,6 +11,8 @@ export const PDF_PREVIEW_WARM_RADIUS = 3
 export const PDF_PREVIEW_NEAR_AHEAD = 8
 export const PDF_PREVIEW_PREFETCH_AHEAD = 8
 export const PDF_PREVIEW_PREFETCH_BEHIND = 2
+/** Paint every mounted window row so flips do not wait for ±1 activation. */
+export const PDF_PREVIEW_ACTIVE_RADIUS = DOCUMENT_PAGE_OVERSCAN
 /** Fast 1x raster — kept for tests / optional low-cost prefetch. */
 export const PDF_PREVIEW_FAST_MAX_WIDTH = 1000
 /** Match the main-process preview cap so Retina panes are not downsampled twice. */
@@ -45,12 +49,14 @@ export function resolvePdfPreviewActive(options: {
   readyPage: number | null
   totalPages: number
   direction: PdfPreviewDirection
+  radius?: number
 }): boolean {
   const current = Math.max(1, Math.floor(options.currentPage) || 1)
   const pageNumber = Math.max(1, Math.floor(options.pageNumber) || 1)
   const total = Math.max(1, Math.floor(options.totalPages) || 1)
+  const radius = Math.max(0, Math.floor(options.radius ?? PDF_PREVIEW_ACTIVE_RADIUS) || 0)
   if (pageNumber < 1 || pageNumber > total) return false
-  return Math.abs(pageNumber - current) <= 1
+  return Math.abs(pageNumber - current) <= radius
 }
 
 export function resolvePdfPreviewPriority(pageNumber: number, currentPage: number): 'visible' | 'prefetch' {
@@ -68,8 +74,9 @@ export type ParseBodyAttachFlags = {
 }
 
 /**
- * Every mounted window row gets its saved body. Waiting for the JPEG or the
- * current page only left neighbors as empty「已解析」cards.
+ * Mounted window rows keep plain text so neighbors are not blank cards.
+ * Rich markdown starts on current ±1; rows may stick rich once shown so flips
+ * do not tear down parsed HTML. Fit work for non-current rows stays deferred.
  */
 export function resolveParseBodyAttachFlags(options: {
   isPdf: boolean
@@ -84,7 +91,9 @@ export function resolveParseBodyAttachFlags(options: {
   if (options.pageNumber < start || options.pageNumber > end) {
     return { attachPlain: false, attachRich: false }
   }
-  return { attachPlain: true, attachRich: true }
+  const current = Math.max(1, Math.floor(options.currentPage) || 1)
+  const near = Math.abs(options.pageNumber - current) <= 1
+  return { attachPlain: true, attachRich: near }
 }
 
 export function resolvePdfPreviewFetchDeltas(

@@ -7,8 +7,6 @@ import {
   getCommunityHubHealth,
   getCommunityHubStatus,
 } from './community-api.client'
-import { notifyCommunityNewsSourcesChanged } from './community-events'
-import { NewsSourcesPanel } from './NewsSourcesPanel'
 import { CommunityFederationSettingsPanel } from './CommunityFederationSettingsPanel'
 import { useI18n } from '../../i18n/useI18n'
 
@@ -16,7 +14,7 @@ interface Props {
   onClose: () => void
 }
 
-type SettingsTab = 'hub' | 'federation' | 'rss'
+type SettingsTab = 'hub' | 'federation'
 
 export function CommunitySettingsModal({ onClose }: Props) {
   const { t } = useI18n()
@@ -61,7 +59,6 @@ export function CommunitySettingsModal({ onClose }: Props) {
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'hub', label: t('communityPage.tabs.hub') },
     { id: 'federation', label: t('communityPage.tabs.federation') },
-    { id: 'rss', label: t('communityPage.tabs.news') },
   ]
 
   const hubStatusText = !hubStatus
@@ -205,10 +202,8 @@ export function CommunitySettingsModal({ onClose }: Props) {
                     : t('communityPage.hub.localHint')}
                 </p>
               </div>
-            ) : activeTab === 'federation' ? (
-              <CommunityFederationSettingsPanel embedded />
             ) : (
-              <NewsSourcesPanel onChanged={() => notifyCommunityNewsSourcesChanged()} embedded />
+              <CommunityFederationSettingsPanel embedded />
             )}
           </div>
         </div>

@@ -9,8 +9,6 @@ const ENV_DEFAULT_IDENTITY_ID: &str = "COMMUNITY_HUB_DEFAULT_IDENTITY_ID";
 pub enum SeedError {
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
-    #[error("rss source seed error: {0}")]
-    RssSource(#[from] crate::repositories::RssSourceRepositoryError),
 }
 
 pub fn resolve_default_identity_id() -> String {
@@ -79,24 +77,4 @@ pub async fn admin_user_for_tests(
         return Ok(user);
     }
     repo.set_role(&user.id, UserRole::Founder).await
-}
-
-pub async fn seed_default_rss_sources(pool: &SqlitePool) -> Result<(), SeedError> {
-    use crate::config::{default_rss_sources, DEPRECATED_RSS_SOURCE_IDS};
-    use crate::repositories::RssSourceRepository;
-
-    let repo = RssSourceRepository::new(pool.clone());
-    for source in default_rss_sources() {
-        repo.upsert_seed(&source).await?;
-    }
-
-    for source_id in DEPRECATED_RSS_SOURCE_IDS {
-        sqlx::query("DELETE FROM community_news_articles WHERE source_id = ?1")
-            .bind(source_id)
-            .execute(pool)
-            .await?;
-        let _ = repo.delete(source_id).await?;
-    }
-
-    Ok(())
 }

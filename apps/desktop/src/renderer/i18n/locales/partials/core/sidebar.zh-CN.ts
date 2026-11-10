@@ -74,7 +74,6 @@ export const sidebarZhCN = {
     },
     community: {
       sections: {
-        news: '资讯',
         messages: '留言板',
         knowledge: '知识库市场',
         mcp: 'MCP市场',

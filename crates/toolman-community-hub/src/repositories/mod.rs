@@ -5,16 +5,13 @@ pub mod device_sync_repository;
 pub mod workspace_mailbox_repository;
 pub mod dislike_repository;
 pub mod favorite_repository;
-pub mod fetch_log_repository;
 pub mod install_repository;
 pub mod like_repository;
 pub mod moderation_log_repository;
-pub mod news_article_repository;
 pub mod order_repository;
 pub mod report_repository;
 pub mod resource_repository;
 pub mod review_repository;
-pub mod rss_source_repository;
 pub mod task_application_repository;
 pub mod task_delivery_repository;
 pub mod task_review_repository;
@@ -45,16 +42,10 @@ pub use dislike_repository::{
 pub use favorite_repository::{
     CreateFavoriteInput, FavoriteRepository, FavoriteRepositoryError,
 };
-pub use fetch_log_repository::{
-    FetchLogEntry, FetchLogRepository, FetchLogRepositoryError, FetchLogStatus,
-};
 pub use install_repository::{InstallListFilter, InstallRepository, InstallRepositoryError};
 pub use like_repository::{CreateLikeInput, LikeRepository, LikeRepositoryError};
 pub use moderation_log_repository::{
     ModerationLogListFilter, ModerationLogRepository, ModerationLogRepositoryError,
-};
-pub use news_article_repository::{
-    CreateNewsArticleInput, NewsArticleRepository, NewsArticleRepositoryError,
 };
 pub use order_repository::{OrderRepository, OrderRepositoryError};
 pub use report_repository::{ReportListFilter, ReportRepository, ReportRepositoryError};
@@ -63,7 +54,6 @@ pub use review_repository::{
     CommunityReview, CreateReviewInput, RatingAggregate, ReviewListFilter, ReviewRepository,
     ReviewRepositoryError, UpdateReviewInput,
 };
-pub use rss_source_repository::{RssSourceRepository, RssSourceRepositoryError};
 pub use task_application_repository::{
     TaskApplicationRepository, TaskApplicationRepositoryError,
 };

@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum ReportTargetType {
     Resource,
-    News,
     Comment,
     User,
     Task,
@@ -14,7 +13,6 @@ impl ReportTargetType {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Resource => "resource",
-            Self::News => "news",
             Self::Comment => "comment",
             Self::User => "user",
             Self::Task => "task",
@@ -24,7 +22,6 @@ impl ReportTargetType {
     pub fn parse(value: &str) -> Result<Self, ModerationError> {
         match value {
             "resource" => Ok(Self::Resource),
-            "news" => Ok(Self::News),
             "comment" => Ok(Self::Comment),
             "user" => Ok(Self::User),
             "task" => Ok(Self::Task),

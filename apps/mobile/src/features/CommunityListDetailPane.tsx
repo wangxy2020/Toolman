@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
   Image,
   Linking,
   Pressable,
@@ -8,12 +7,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { colors } from '../theme'
-import {
-  fetchCommunityNewsArticle,
-  type CommunityListItem,
-} from './communityHubClient'
-import { isDirectNewsItemId } from './communityNewsDirect'
+import type { CommunityListItem } from './communityHubClient'
 import { CommunityListCard } from './communityPanelUi.cards'
 import { formatCommunityCount, resolveCommunityItemBody } from './communityListFormat'
 import { communityPaneStyles as styles } from './CommunityPanes.styles'
@@ -62,10 +56,7 @@ export function CommunityListDetailPane(props: {
   const {
     item,
     listKind,
-    hubBaseUrl,
-    userId,
     onBack,
-    onPatchItem,
     onOpenComments,
     onOpenReport,
     commentsExpanded,
@@ -76,18 +67,10 @@ export function CommunityListDetailPane(props: {
     onShare,
   } = props
   const [detail, setDetail] = useState<CommunityListItem>(item)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const onPatchItemRef = useRef(onPatchItem)
-  onPatchItemRef.current = onPatchItem
-  const fetchedIdRef = useRef<string | null>(null)
 
   // Reset local detail only when navigating to a different list item.
   useEffect(() => {
     setDetail(item)
-    setError(null)
-    setRefreshing(false)
-    fetchedIdRef.current = null
   }, [item.id])
 
   // Keep engagement counts in sync when parent patches after like/comment.
@@ -104,54 +87,8 @@ export function CommunityListDetailPane(props: {
     item.favoritedByMe,
   ])
 
-  useEffect(() => {
-    if (listKind !== 'news' || !hubBaseUrl || isDirectNewsItemId(item.id)) return
-    if (fetchedIdRef.current === item.id) return
-    fetchedIdRef.current = item.id
-
-    let cancelled = false
-    setRefreshing(true)
-    setError(null)
-    void fetchCommunityNewsArticle(hubBaseUrl, item.id, userId)
-      .then((next) => {
-        if (cancelled) return
-        setDetail((prev) => ({
-          ...prev,
-          ...next,
-          // Prefer already-visible list title/meta if fetch briefly lags.
-          title: next.title || prev.title,
-        }))
-        onPatchItemRef.current?.(item.id, {
-          likeCount: next.likeCount,
-          dislikeCount: next.dislikeCount,
-          favoriteCount: next.favoriteCount,
-          commentCount: next.commentCount,
-          likedByMe: next.likedByMe,
-          dislikedByMe: next.dislikedByMe,
-          favoritedByMe: next.favoritedByMe,
-          contentHtml: next.contentHtml,
-          summary: next.summary,
-          body: next.body,
-          link: next.link,
-          coverUrl: next.coverUrl,
-        })
-      })
-      .catch((loadError) => {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : '加载详情失败')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setRefreshing(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [hubBaseUrl, item.id, listKind, userId])
-
   const body = resolveCommunityItemBody(detail)
-  const heading =
-    listKind === 'news' ? '资讯详情' : listKind === 'messages' ? '留言详情' : '内容详情'
+  const heading = listKind === 'messages' ? '留言详情' : '内容详情'
 
   const openLink = () => {
     const link = detail.link?.trim()
@@ -188,8 +125,6 @@ export function CommunityListDetailPane(props: {
           <Text style={styles.detailStat}>评论 {formatCommunityCount(detail.commentCount)}</Text>
         </View>
 
-        {error ? <Text style={styles.detailError}>{error}</Text> : null}
-
         {detail.coverUrl ? (
           <Image
             source={{ uri: detail.coverUrl }}
@@ -199,12 +134,6 @@ export function CommunityListDetailPane(props: {
           />
         ) : null}
         <Text style={styles.detailBody}>{body || '暂无正文'}</Text>
-        {refreshing ? (
-          <View style={styles.detailLoadingInline}>
-            <ActivityIndicator size="small" color={colors.accent} />
-            <Text style={styles.loadingText}>正在更新全文…</Text>
-          </View>
-        ) : null}
 
         {detail.link ? (
           <Pressable

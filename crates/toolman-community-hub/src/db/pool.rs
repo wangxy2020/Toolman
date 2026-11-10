@@ -39,7 +39,6 @@ pub async fn init_pool(db_path: &Path) -> Result<SqlitePool, DbError> {
 
     run_migrations(&pool).await?;
     seed::seed_default_admin_user(&pool).await?;
-    seed::seed_default_rss_sources(&pool).await?;
 
     info!(path = %db_path.display(), "community database ready");
     Ok(pool)

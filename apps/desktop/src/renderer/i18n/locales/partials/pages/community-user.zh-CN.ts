@@ -29,7 +29,7 @@ export const communityPageUserZhCN = {
     likesCount: '{{count}} 赞',
     favoritesCount: '{{count}} 收藏',
     replyCount: '{{count}} 回复',
-    tags: { message: '留言', news: '资讯' },
+    tags: { message: '留言' },
     resourceTitle: '资源 {{id}}',
     dataSectionAria: '我的数据分区',
     listCount: '当前列表共 {{count}} 条记录',
@@ -155,7 +155,6 @@ export const communityPageUserZhCN = {
     },
     reportTargets: {
       resource: '资源',
-      news: '资讯',
       comment: '留言',
       user: '用户',
       task: '任务',
@@ -238,7 +237,6 @@ export const communityPageUserZhCN = {
     },
     logTargetTypes: {
       resource: '资源',
-      news: '资讯',
       comment: '留言',
       user: '用户',
       task: '任务',

@@ -5,7 +5,7 @@ import { type CommunityBoardMessage } from '@toolman/shared'
 
 import { translateCommunityDisplayName } from '../../i18n/community-user-labels'
 import { useI18n } from '../../i18n/useI18n'
-import { formatBoardMessageTitle, formatNewsDate } from './community-news-utils'
+import { formatBoardMessageTitle, formatNewsDate } from './community-text-utils'
 
 interface Props {
   message: CommunityBoardMessage

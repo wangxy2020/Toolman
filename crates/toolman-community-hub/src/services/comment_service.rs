@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 
 use crate::domain::{CommunityUser, InteractionTargetType};
 use crate::repositories::{
-    CommentListFilter, CommentRepository, CreateCommentInput, NewsArticleRepository,
+    CommentListFilter, CommentRepository, CreateCommentInput,
     ResourceRepository, TaskRepository, UserRepository,
 };
 use crate::services::board_service::{BoardService, BOARD_MAIN_ID};
@@ -67,8 +67,6 @@ pub enum CommentServiceError {
     ResourceRepository(#[from] crate::repositories::RepositoryError),
     #[error("task repository error: {0}")]
     TaskRepository(#[from] crate::repositories::TaskRepositoryError),
-    #[error("news article repository error: {0}")]
-    NewsArticleRepository(#[from] crate::repositories::NewsArticleRepositoryError),
     #[error("board service error: {0}")]
     Board(#[from] crate::services::BoardServiceError),
 }
@@ -220,12 +218,6 @@ impl CommentService {
         parent_id: Option<&str>,
     ) -> Result<(), CommentServiceError> {
         match target_type {
-            InteractionTargetType::News => {
-                NewsArticleRepository::new(self.pool.clone())
-                    .find_by_id(target_id)
-                    .await?
-                    .ok_or_else(|| CommentServiceError::NotFound(target_id.to_string()))?;
-            }
             InteractionTargetType::Resource => {
                 let resource = ResourceRepository::new(self.pool.clone())
                     .find_by_id(target_id)

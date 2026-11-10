@@ -7,7 +7,6 @@ pub mod knowledge_market_service;
 pub mod marketplace_service;
 pub mod mcp_market_service;
 pub mod moderation_service;
-pub mod news_service;
 pub mod order_service;
 pub mod presence_service;
 pub mod rating_service;
@@ -53,10 +52,6 @@ pub use moderation_service::{
     ModerationService, ModerationServiceError, ReportItem, ReportListQuery, ResolveReportRequest,
     ResourceModerationItem, SuspendResourceRequest,
 };
-pub use news_service::{
-    CreateNewsCommentRequest, FetchSourceResult, NewsArticleItem, NewsArticleQuery,
-    NewsCommentItem, NewsInteractionResult, NewsService, NewsServiceError, RssSourceItem,
-};
 pub use order_service::{
     CreateOrderRequest, OrderItem, OrderService, OrderServiceError, UpdateOrderStatusRequest,
 };
@@ -84,7 +79,7 @@ pub use workflow_market_service::{
 };
 
 pub use search_service::{
-    build_fts_match_query, NewsSearchFilter, NewsSearchHit, RankedResource, SearchError,
+    build_fts_match_query, RankedResource, SearchError,
     SearchHit, SearchService, SearchSort, SearchTargetType, UnifiedSearchQuery,
     ResourceSearchFilter,
 };

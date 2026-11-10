@@ -1,7 +1,6 @@
 /** Mirrors desktop `community-sidebar-types` + panel / admin copy (zh). */
 
 export type CommunitySidebarSection =
-  | 'news'
   | 'messages'
   | 'knowledge'
   | 'mcp'
@@ -11,7 +10,7 @@ export type CommunitySidebarSection =
   | 'mine'
   | 'management'
 
-export type CommunityListKind = 'news' | 'messages' | 'market' | 'tasks'
+export type CommunityListKind = 'messages' | 'market' | 'tasks'
 
 export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
   id: CommunitySidebarSection
@@ -21,22 +20,10 @@ export const COMMUNITY_SIDEBAR_SECTIONS: Array<{
   emptyHint: string
   publishLabel?: string
   showPublish?: boolean
-  showRss?: boolean
   showInstall?: boolean
   listKind?: CommunityListKind
   resourceType?: 'knowledge' | 'mcp' | 'skill' | 'workflow'
 }> = [
-  {
-    id: 'news',
-    label: '资讯',
-    title: '资讯',
-    subtitle: '本机 Hub 拉取的 RSS 文章，不走联邦中心',
-    emptyHint: '暂无资讯文章',
-    publishLabel: '发布资讯',
-    showPublish: false,
-    showRss: true,
-    listKind: 'news',
-  },
   {
     id: 'messages',
     label: '留言板',

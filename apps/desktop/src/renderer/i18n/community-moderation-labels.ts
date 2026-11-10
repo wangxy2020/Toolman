@@ -48,7 +48,6 @@ export function getAdminSubTabLabels(t: TranslateFn) {
 export function getModerationTargetTypeLabels(t: TranslateFn): Record<CommunityReportTargetType, string> {
   return {
     resource: t('communityPage.admin.reportTargets.resource'),
-    news: t('communityPage.admin.reportTargets.news'),
     comment: t('communityPage.admin.reportTargets.comment'),
     user: t('communityPage.admin.reportTargets.user'),
     task: t('communityPage.admin.reportTargets.task'),

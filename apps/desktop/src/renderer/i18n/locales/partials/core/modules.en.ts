@@ -41,7 +41,7 @@ export const modulesEn = {
       sidebarEmptyHint: 'No subscriptions yet. Click above to explore.',
       contentEmptyTitle: 'Community',
       contentEmptyHint:
-        'Browse and install MCP, skills, workflows, and knowledge resources; join tasks, news, and discussions.',
+        'Browse and install MCP, skills, workflows, and knowledge resources; join tasks and discussions.',
     },
     projects: {
       title: 'Projects',

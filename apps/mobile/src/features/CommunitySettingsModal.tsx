@@ -13,7 +13,6 @@ import {
   type CommunityHubHealth,
   type FederationPeeringInfo,
 } from './communityHubClient'
-import { CommunityNewsSourcesModal } from './CommunityPublishModals'
 import { SettingsDialogFrame } from './SettingsDialogFrame'
 import { SettingsInfoRow, SettingsSectionTitle } from './settingsModalFields'
 import { Field, Toggle, settingsUiStyles as styles } from './settingsUi'
@@ -23,7 +22,7 @@ type Props = {
   onClose: () => void
 }
 
-type SettingsTab = 'hub' | 'federation' | 'rss'
+type SettingsTab = 'hub' | 'federation'
 
 function portFromUrl(url: string): string {
   try {
@@ -36,7 +35,7 @@ function portFromUrl(url: string): string {
 }
 
 export function CommunitySettingsModal({ visible, onClose }: Props) {
-  const { modulePrefs, setModulePrefs, auth } = useMobileApp()
+  const { modulePrefs, setModulePrefs } = useMobileApp()
   const [activeTab, setActiveTab] = useState<SettingsTab>('hub')
   const [hubBaseUrl, setHubBaseUrl] = useState('')
   const [guestReadOnly, setGuestReadOnly] = useState(true)
@@ -122,11 +121,10 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
     <SettingsDialogFrame
       visible={visible}
       title="社区设置"
-      subtitle="Community Hub 连接与资讯源配置"
+      subtitle="Community Hub 连接与联邦配置"
       tabs={[
         { id: 'hub', label: 'Hub 服务' },
         { id: 'federation', label: '联邦 Peering' },
-        { id: 'rss', label: '资讯源' },
       ]}
       activeTab={activeTab}
       onTabChange={(id) => setActiveTab(id as SettingsTab)}
@@ -134,7 +132,7 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
       onSave={() => void handleSave()}
       saveLabel="保存"
     >
-      {error && activeTab !== 'rss' ? <Text style={styles.hintError}>{error}</Text> : null}
+      {error ? <Text style={styles.hintError}>{error}</Text> : null}
 
       {activeTab === 'hub' ? (
         <>
@@ -176,8 +174,8 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
           <Toggle label="未登录时只读" value={guestReadOnly} onChange={setGuestReadOnly} />
           <Text style={styles.hint}>
             {hubBaseUrl.trim()
-              ? '已填写 Hub 地址。资讯 RSS 由该 Hub 本地拉取，不走联邦。留言与市场目录由桌面端 P2P 联邦同步；网页/手机写入该 Hub 后由桌面对外共享。'
-              : '资讯 RSS 由本机桌面 Hub 拉取，不依赖联邦。留言与资源共享走桌面 P2P 联邦；网页/手机连上该 Hub 即可发布。'}
+              ? '已填写 Hub 地址。留言与市场目录由桌面端 P2P 联邦同步；网页/手机写入该 Hub 后由桌面对外共享。'
+              : '留言与资源共享走桌面 P2P 联邦；网页/手机连上该 Hub 即可发布。'}
           </Text>
         </>
       ) : null}
@@ -224,17 +222,6 @@ export function CommunitySettingsModal({ visible, onClose }: Props) {
             Peer Hub 地址保存在 Community 数据目录的 hub.json 中，请在桌面端社区设置里编辑。移动端只读查看当前 Hub 的联邦状态。
           </Text>
         </>
-      ) : null}
-
-      {activeTab === 'rss' ? (
-        <CommunityNewsSourcesModal
-          visible={visible}
-          embedded
-          hubBaseUrl={resolvedUrl}
-          userId={auth?.identityId ?? null}
-          onClose={onClose}
-          onPublished={() => undefined}
-        />
       ) : null}
     </SettingsDialogFrame>
   )

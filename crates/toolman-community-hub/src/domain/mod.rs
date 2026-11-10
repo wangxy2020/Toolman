@@ -1,6 +1,5 @@
 pub mod install;
 pub mod moderation;
-pub mod news;
 pub mod order;
 pub mod resource;
 pub mod social;
@@ -12,16 +11,12 @@ pub use moderation::{
     CommunityReport, CreateModerationLogInput, CreateReportInput, ModerationError, ModerationLog,
     ReportReason, ReportStatus, ReportTargetType,
 };
-pub use news::{
-    CommunityNewsArticle, CommunityRssSource, CreateRssSourceInput, NewsArticleListFilter,
-    NewsCategory, NewsError,
-};
 pub use order::{
     CommunityOrder, CreateOrderInput, OrderError, OrderStatus,
 };
 pub use social::{
     CommentStatus, CommunityComment, CommunityDislike, CommunityFavorite, CommunityLike,
-    InteractionTargetType, NewsArticleSort, SocialError,
+    InteractionTargetType, SocialError,
 };
 pub use task::{
     ApplicationStatus, CommunityTask, CommunityTaskApplication, CommunityTaskDelivery,

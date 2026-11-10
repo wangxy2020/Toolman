@@ -1,8 +1,16 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { getCachedPageImage, pageImageCacheKey } from './document-page-cache'
-import { isPdfViewerRenderCancelled } from './document-pdf-viewer-scale'
-import { renderPdfPageToCanvas } from './document-pdf-viewer'
+import {
+  isPdfViewerRenderCancelled,
+  shouldSchedulePdfPagePaint,
+  type PdfViewerPaintQuality,
+} from './document-pdf-viewer-scale'
+import {
+  getCachedPdfPaintQuality,
+  renderPdfPageToCanvas,
+  restorePdfPagePaintToCanvas,
+} from './document-pdf-viewer'
 import { ensurePdfPageImage, isPdfPreviewRenderDropped } from './document-page-preview-load'
 import { resolvePdfPreviewRenderWidth } from './document-page-preview-policy'
 import { splitTranslationParagraphs } from './translation-paragraphs'
@@ -66,7 +74,7 @@ const PdfPageRasterImage = memo(function PdfPageRasterImage({
   }, [onReady, pageNumber, src])
 
   useEffect(() => {
-    if (!filePath || !cacheKey || renderWidth < 1) return
+    if (!active || !filePath || !cacheKey || renderWidth < 1) return
     const cached = getCachedPageImage(cacheKey)
     if (cached) {
       setSrc(cached)
@@ -109,7 +117,7 @@ const PdfPageRasterImage = memo(function PdfPageRasterImage({
       .finally(() => {
         if (requestId === requestIdRef.current) setLoading(false)
       })
-  }, [cacheKey, filePath, pageNumber, renderWidth, t])
+  }, [active, cacheKey, filePath, pageNumber, renderWidth, t])
 
   if (error) {
     return (
@@ -164,6 +172,7 @@ const PdfPageCanvas = memo(function PdfPageCanvas({
   pageBox,
   pageAspect,
   active,
+  scrollSettled,
   onReady,
   onVectorFailure,
 }: {
@@ -173,37 +182,106 @@ const PdfPageCanvas = memo(function PdfPageCanvas({
   pageBox: PageDisplayBox
   pageAspect: number | null
   active: boolean
+  scrollSettled: boolean
   onReady?: (pageNumber: number) => void
   onVectorFailure: () => void
 }) {
   const { t } = useI18n()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const paintedRef = useRef(false)
-  const currentPageRef = useRef(currentPage)
-  currentPageRef.current = currentPage
+  const paintedQualityRef = useRef<PdfViewerPaintQuality | null>(null)
+  const paintedCssWidthRef = useRef(0)
   const [painted, setPainted] = useState(false)
   const [loading, setLoading] = useState(true)
   const aspectStyle = resolvePdfPreviewAspectStyle(pageAspect)
   const cssWidth = pageBox.width
+  // While scrolling keep preview; after settle the current page upgrades to sharp.
+  const allowSharp = scrollSettled
 
   useEffect(() => {
+    // Mounted window rows paint once and keep the bitmap across flips.
+    // Sharp upgrades wait until scroll settles so the left pane stays clear and smooth.
+    if (!active && paintedRef.current) return
+    if (!active) return
     const canvas = canvasRef.current
     if (!canvas || !filePath || cssWidth < 1) return
+
+    if (paintedCssWidthRef.current > 0 && Math.abs(paintedCssWidthRef.current - cssWidth) >= 48) {
+      paintedRef.current = false
+      paintedQualityRef.current = null
+      setPainted(false)
+    }
+
+    if (!paintedRef.current) {
+      const restored = restorePdfPagePaintToCanvas({
+        filePath,
+        pageNumber,
+        canvas,
+        cssWidth,
+        minQuality: allowSharp && pageNumber === currentPage ? 'sharp' : undefined,
+      })
+      if (restored) {
+        paintedRef.current = true
+        paintedQualityRef.current = restored
+        paintedCssWidthRef.current = cssWidth
+        setPainted(true)
+        setLoading(false)
+        onReady?.(pageNumber)
+      } else if (allowSharp && pageNumber === currentPage) {
+        // Prefer any cached frame immediately, then upgrade to sharp below.
+        const preview = restorePdfPagePaintToCanvas({
+          filePath,
+          pageNumber,
+          canvas,
+          cssWidth,
+        })
+        if (preview) {
+          paintedRef.current = true
+          paintedQualityRef.current = preview
+          paintedCssWidthRef.current = cssWidth
+          setPainted(true)
+          setLoading(false)
+          onReady?.(pageNumber)
+        }
+      }
+    } else if (!paintedQualityRef.current) {
+      paintedQualityRef.current = getCachedPdfPaintQuality(filePath, pageNumber, cssWidth)
+    }
+
+    if (
+      !shouldSchedulePdfPagePaint({
+        active,
+        painted: paintedRef.current,
+        paintedQuality: paintedQualityRef.current,
+        pageNumber,
+        currentPage,
+        allowSharp,
+      })
+    ) {
+      return
+    }
+
     const controller = new AbortController()
-    const delay = paintedRef.current ? 80 : 0
+    const upgrading = paintedRef.current
+    const delay = upgrading ? (allowSharp ? 32 : 80) : 0
     const timer = window.setTimeout(() => {
-      setLoading(true)
+      if (!upgrading) setLoading(true)
       void renderPdfPageToCanvas({
         filePath,
         pageNumber,
         canvas,
         cssWidth,
-        currentPage: currentPageRef.current,
+        currentPage,
+        allowSharp,
         signal: controller.signal,
       })
         .then(() => {
           if (controller.signal.aborted) return
+          const quality =
+            allowSharp && pageNumber === currentPage ? 'sharp' : 'preview'
           paintedRef.current = true
+          paintedQualityRef.current = quality
+          paintedCssWidthRef.current = cssWidth
           setPainted(true)
           setLoading(false)
           onReady?.(pageNumber)
@@ -217,19 +295,30 @@ const PdfPageCanvas = memo(function PdfPageCanvas({
       controller.abort()
       window.clearTimeout(timer)
     }
-  }, [cssWidth, filePath, onReady, onVectorFailure, pageNumber])
+  }, [
+    active,
+    allowSharp,
+    cssWidth,
+    currentPage,
+    filePath,
+    onReady,
+    onVectorFailure,
+    pageNumber,
+  ])
 
   return (
     <div className="tm-translation-doc-page-image-slot" style={aspectStyle}>
       <div className="tm-translation-doc-page-image-wrap">
-        <canvas
-          ref={canvasRef}
-          className="tm-translation-doc-page-image"
-          aria-label={t('translationPage.documents.pageLabel', {
-            page: String(pageNumber),
-            total: '',
-          })}
-        />
+        {active || painted ? (
+          <canvas
+            ref={canvasRef}
+            className="tm-translation-doc-page-image"
+            aria-label={t('translationPage.documents.pageLabel', {
+              page: String(pageNumber),
+              total: '',
+            })}
+          />
+        ) : null}
         {!painted ? (
           <div className="tm-translation-doc-page-image-status tm-translation-doc-page-image-status--overlay" role="status">
             <p>
@@ -251,6 +340,7 @@ const PdfPageImage = memo(function PdfPageImage({
   pageBox,
   pageAspect,
   active,
+  scrollSettled,
   cacheEpoch,
   onReady,
 }: {
@@ -260,6 +350,7 @@ const PdfPageImage = memo(function PdfPageImage({
   pageBox: PageDisplayBox
   pageAspect: number | null
   active: boolean
+  scrollSettled: boolean
   cacheEpoch: number
   onReady?: (pageNumber: number) => void
 }) {
@@ -287,6 +378,7 @@ const PdfPageImage = memo(function PdfPageImage({
       pageBox={pageBox}
       pageAspect={pageAspect}
       active={active}
+      scrollSettled={scrollSettled}
       onReady={onReady}
       onVectorFailure={onVectorFailure}
     />

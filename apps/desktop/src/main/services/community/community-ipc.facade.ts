@@ -36,21 +36,6 @@ export {
 } from './community-ipc.marketplace.facade'
 
 export {
-  listNewsSources,
-  createNewsSource,
-  deleteNewsSource,
-  fetchNewsSource,
-  listNewsArticles,
-  getNewsArticle,
-  listRecommendedNews,
-  favoriteNewsArticle,
-  likeNewsArticle,
-  dislikeNewsArticle,
-  listNewsComments,
-  createNewsComment,
-} from './community-ipc.news.facade'
-
-export {
   listComments,
   createComment,
   deleteComment,

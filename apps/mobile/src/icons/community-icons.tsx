@@ -22,20 +22,6 @@ export function IconMessageBoard({ size = 18, color = '#8b8f96' }: IconProps) {
   )
 }
 
-export function IconNews({ size = 18, color = '#8b8f96' }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"
-        {...stroke(color)}
-      />
-      <Path d="M18 14h-8" {...stroke(color)} />
-      <Path d="M15 18h-5" {...stroke(color)} />
-      <Path d="M10 6h8v4h-8V6Z" {...stroke(color)} />
-    </Svg>
-  )
-}
-
 export function IconTaskList({ size = 18, color = '#8b8f96' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">

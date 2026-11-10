@@ -9,7 +9,7 @@ test.describe('GA critical path', () => {
     await expect(window.getByRole('button', { name: '添加知识库' })).toBeVisible()
 
     await navigateTo(window, '社区')
-    await expect(window.getByRole('heading', { name: '资讯' })).toBeVisible()
+    await expect(window.getByRole('heading', { name: '留言板' })).toBeVisible()
 
     await navigateTo(window, '群组')
     await expect(window.getByText('我创建的群组')).toBeVisible()
