@@ -72,7 +72,7 @@ export default defineConfig({
       __TOOLMAN_RELEASE_BUILD__: JSON.stringify(isReleaseBuild ? '1' : ''),
     },
     optimizeDeps: {
-      include: ['rehype-raw', 'pdfjs-dist'],
+      include: ['rehype-raw'],
       // Main-process packages; never pre-bundle native .node bindings for the renderer.
       exclude: [
         '@toolman/knowledge',

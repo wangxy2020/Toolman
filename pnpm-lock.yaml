@@ -142,9 +142,6 @@ importers:
       mysql2:
         specifier: ^3.24.3
         version: 3.24.3(@types/node@25.9.3)
-      pdfjs-dist:
-        specifier: '>=6.2.108 <7'
-        version: 6.2.108
       pg:
         specifier: ^8.23.0
         version: 8.23.0

@@ -8,15 +8,12 @@
  */
 
 export type PdfPreviewDirection = 1 | -1
-export const PDF_PREVIEW_WARM_RADIUS = 2
 export const PDF_PREVIEW_NEAR_AHEAD = 1
 export const PDF_PREVIEW_PREFETCH_AHEAD = 1
 export const PDF_PREVIEW_PREFETCH_BEHIND = 0
 export const PDF_PREVIEW_ACTIVE_RADIUS = 1
-/** First paint = readable frame (text + scan). Same as immediate. */
+/** First paint = readable frame (text + scan). */
 export const PDF_PREVIEW_FAST_MAX_WIDTH = 720
-/** Alias: immediate first frame is the readable ≥720 paint. */
-export const PDF_PREVIEW_IMMEDIATE_MAX_WIDTH = PDF_PREVIEW_FAST_MAX_WIDTH
 /** Settled / focused upgrade (device pixels). */
 export const PDF_PREVIEW_MAX_RENDER_WIDTH = 1440
 export const PDF_PREVIEW_MAX_DPR = 2
@@ -36,11 +33,6 @@ export function resolvePdfPreviewFastWidth(displayWidth: number): number {
   )
 }
 
-/** Immediate first frame — same width as readable (≥720). */
-export function resolvePdfPreviewImmediateWidth(displayWidth: number): number {
-  return resolvePdfPreviewFastWidth(displayWidth)
-}
-
 export function resolvePdfPreviewSharpWidth(displayWidth: number): number {
   if (displayWidth <= 0) return 0
   const dpr =
@@ -53,10 +45,6 @@ export function resolvePdfPreviewSharpWidth(displayWidth: number): number {
   return bucketPreviewWidth(
     Math.min(PDF_PREVIEW_MAX_RENDER_WIDTH, Math.max(fast + 200, ideal, boosted)),
   )
-}
-
-export function resolvePdfPreviewRenderWidth(displayWidth: number): number {
-  return resolvePdfPreviewFastWidth(displayWidth)
 }
 
 export function resolvePdfPreviewDirection(previousPage: number, currentPage: number): PdfPreviewDirection {
@@ -81,10 +69,6 @@ export function resolvePdfPreviewActive(options: {
 
 export function resolvePdfPreviewPriority(pageNumber: number, currentPage: number): 'visible' | 'prefetch' {
   return pageNumber === currentPage ? 'visible' : 'prefetch'
-}
-
-export function shouldAttachSavedSnapshotBody(isPdf: boolean, previewUnlocked: boolean): boolean {
-  return !isPdf || previewUnlocked
 }
 
 export type ParseBodyAttachFlags = {

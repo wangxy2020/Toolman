@@ -7,8 +7,6 @@ import {
 import { useFitDocumentPageContent } from './useFitDocumentPageContent'
 import { TranslationDocumentMarkdown } from './TranslationDocumentMarkdown'
 import { TranslationDocumentTranslatedText } from './TranslationDocumentTranslatedText'
-import { TranslationLayoutPreservePane } from './TranslationLayoutPreservePane'
-import type { TranslationLayoutBlock } from './translation-layout-blocks'
 import { looksLikeTranslationTable } from './translation-display-table'
 import {
   emptyPageMessageKey,
@@ -42,7 +40,6 @@ const DocumentPageCard = memo(function DocumentPageCard({
   savedFit = null,
   onFitPersist,
   deferFit = false,
-  layoutBlocks = null,
   onRetryTranslate,
   documentId = null,
 }: {
@@ -60,8 +57,6 @@ const DocumentPageCard = memo(function DocumentPageCard({
   onFitPersist?: (pageNumber: number, fit: DocumentPageFitRecord) => void
   /** Neighbor / mid-fling rows wait so the focused page paints first. */
   deferFit?: boolean
-  /** Optional bbox-aligned blocks for layout-preserving dual pane (P4). */
-  layoutBlocks?: TranslationLayoutBlock[] | null
   onRetryTranslate?: (pageNumber: number) => void
   /** Document id for shared 字号 across pages. */
   documentId?: string | null
@@ -106,11 +101,7 @@ const DocumentPageCard = memo(function DocumentPageCard({
   )
   const fitBoxRef = useFitDocumentPageContent(
     // Fit only after scroll settles on the focused page — never mid-fling.
-    fitToPage &&
-      heavyContent &&
-      !deferFit &&
-      Boolean(displayText) &&
-      !(layoutBlocks && layoutBlocks.length > 0),
+    fitToPage && heavyContent && !deferFit && Boolean(displayText),
     `${page.pageNumber}:${displayText.length}:${showRich ? 'rich' : 'plain'}:${fitTable ? 'table' : 'prose'}`,
     savedFit,
     persistFit,
@@ -168,18 +159,12 @@ const DocumentPageCard = memo(function DocumentPageCard({
           'tm-translation-doc-page-card-body',
           pageClip ? 'tm-translation-doc-page-card-body--fit' : '',
           pageClip && fitTable ? 'tm-translation-doc-page-card-body--fit-table' : '',
-          layoutBlocks && layoutBlocks.length > 0 ? 'tm-translation-doc-page-card-body--layout' : '',
         ]
           .filter(Boolean)
           .join(' ')}
       >
         <div className={pageClip ? 'tm-translation-doc-fit' : undefined}>
-          {layoutBlocks && layoutBlocks.length > 0 && (isTranslated || previewMode) ? (
-            <TranslationLayoutPreservePane
-              blocks={layoutBlocks}
-              preferTranslated={isTranslated}
-            />
-          ) : displayText ? (
+          {displayText ? (
             showRich ? (
               <TranslationDocumentMarkdown text={displayText} />
             ) : (

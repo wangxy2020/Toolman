@@ -14,7 +14,6 @@ import {
   resolvePdfPreviewSharpWidth,
   type PdfPreviewDirection,
 } from './document-page-preview-policy'
-import { evictOtherPdfViewerDocuments, evictPdfViewerDocument } from './document-pdf-viewer'
 
 /**
  * Single scheduler for image/scan PDFs:
@@ -47,12 +46,6 @@ export function usePdfPreviewPolicy(
       previousPageRef.current = currentPage
     }
   }, [currentPage])
-
-  useEffect(() => {
-    if (!filePath) return
-    evictOtherPdfViewerDocuments(filePath)
-    evictPdfViewerDocument(filePath)
-  }, [filePath])
 
   useEffect(() => {
     return subscribePageImageCache(() => {

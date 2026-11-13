@@ -1,6 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { PdfParserBackend, TranslationLanguage } from '@toolman/shared'
-import type { TranslationLayoutBlock } from './translation-layout-blocks'
 import type { TranslationDocumentPageSnapshot } from './translation-storage'
 
 export type DocumentPageStatus =
@@ -18,8 +17,6 @@ export interface DocumentPageState {
   sourceText: string
   translatedText: string
   parsedMarkdown?: string
-  /** Optional block geometry for layout-preserving right pane (P4). */
-  layoutBlocks?: TranslationLayoutBlock[]
   status: DocumentPageStatus
   error?: string
 }

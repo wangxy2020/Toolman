@@ -20,9 +20,6 @@ import { ELECTRON_CHROME_USER_AGENT, createWindow, showMainWindow } from './inde
 import { attachEditableContextMenus } from './services/editable-context-menu'
 import { bootstrapCommunityHubAsync, bootstrapMainProcessServices } from './index-bootstrap'
 import { runGracefulShutdown } from './index-shutdown'
-import { registerPdfjsAssetProtocol, registerPdfjsAssetScheme } from './services/pdfjs-asset-protocol'
-
-registerPdfjsAssetScheme()
 registerProcessCrashHandlers()
 assertProductionAuthProfile()
 
@@ -38,7 +35,6 @@ if (e2eUserDataDir) {
 }
 
 app.whenReady().then(() => {
-  registerPdfjsAssetProtocol()
   bootstrapLocalOperations()
 
   if (process.platform === 'win32') {

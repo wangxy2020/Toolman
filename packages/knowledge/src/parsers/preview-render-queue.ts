@@ -10,13 +10,6 @@ export class PreviewRenderDroppedError extends Error {
   }
 }
 
-export function isPreviewRenderDropped(error: unknown): boolean {
-  return (
-    error instanceof PreviewRenderDroppedError ||
-    (error instanceof Error && error.message === PREVIEW_RENDER_DROPPED)
-  )
-}
-
 export type PreviewQueueJobOptions = {
   priority?: number
   key?: string

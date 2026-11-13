@@ -194,22 +194,6 @@ export function setCachedPageImage(key: string, objectUrl: string): void {
   notifyPageImageCacheListeners()
 }
 
-export function listCachedPageImageUrls(
-  filePath: string,
-  renderWidth: number,
-  startPage: number,
-  endPage: number,
-): string[] {
-  const urls: string[] = []
-  const start = Math.max(1, Math.floor(startPage) || 1)
-  const end = Math.max(start, Math.floor(endPage) || start)
-  for (let page = start; page <= end; page += 1) {
-    const url = getCachedPageImage(pageImageCacheKey(filePath, page, renderWidth))
-    if (url) urls.push(url)
-  }
-  return urls
-}
-
 export function rememberPageImageInflight(key: string, factory: () => Promise<string>): Promise<string> {
   const existing = previewImageInflight.get(key)
   if (existing) return existing

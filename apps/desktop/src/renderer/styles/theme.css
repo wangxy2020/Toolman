@@ -2046,13 +2046,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   overflow: hidden;
 }
 
-.tm-translation-split {
-  flex: 1 1 0;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 0 minmax(0, 1fr);
-  align-items: stretch;
-}
 
 /* Scroll on the outer shell so the scrollbar sits outside the pane frames. */
 .tm-translation-contrast {
@@ -2216,13 +2209,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   position: relative;
 }
 
-.tm-translation-doc-preview-warm {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
 
 .tm-translation-documents--empty {
   display: flex;
@@ -2340,48 +2326,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 
 .tm-translation-doc-page-card-retry:hover {
   color: var(--tm-text);
-}
-
-.tm-translation-doc-page-card-body--layout {
-  position: relative;
-  padding: 0;
-}
-
-.tm-translation-doc-layout-pane {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-  box-sizing: border-box;
-}
-
-.tm-translation-doc-layout-block {
-  position: absolute;
-  box-sizing: border-box;
-  overflow: hidden;
-  padding: 0.15em 0.25em;
-  font-family: Georgia, 'Times New Roman', 'Songti SC', 'SimSun', serif;
-  font-size: 0.92em;
-  line-height: 1.35;
-  color: var(--tm-text);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.tm-translation-doc-layout-block--title {
-  font-weight: 700;
-  text-align: center;
-  letter-spacing: 0.03em;
-}
-
-.tm-translation-doc-layout-block--field {
-  font-size: 0.88em;
-}
-
-.tm-translation-doc-layout-block--table {
-  font-size: 0.82em;
-  line-height: 1.25;
 }
 
 .tm-translation-doc-page-card-body--fit {
@@ -2666,17 +2610,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   overflow: visible;
 }
 
-.tm-translation-doc-page-card-deferred {
-  margin: 0;
-  max-height: 720px;
-  overflow: hidden;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: Georgia, 'Times New Roman', 'Songti SC', 'SimSun', serif;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--tm-text);
-}
 
 .tm-translation-doc-page-card-text {
   margin: 0;
@@ -3017,19 +2950,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   font-weight: 600;
 }
 
-.tm-translation-doc-odl-raw {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--tm-text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
 
 .tm-translation-doc-page-card-placeholder {
   margin: 0;
@@ -3100,102 +3020,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
   filter: brightness(0.96);
 }
 
-.tm-translation-doc-viewer {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  background: var(--tm-bg);
-  overflow: hidden;
-}
-
-.tm-translation-doc-frame {
-  display: block;
-  width: 100%;
-  border: none;
-  background: var(--tm-bg);
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-.tm-translation-doc-status {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px;
-  color: var(--tm-text-secondary);
-  font-size: 13px;
-  text-align: center;
-}
-
-.tm-translation-doc-status--error {
-  color: var(--tm-text);
-}
-
-.tm-translation-doc-status--error p,
-.tm-translation-doc-status p {
-  margin: 0;
-  max-width: 28rem;
-  line-height: 1.5;
-}
-
-.tm-translation-doc-status--error p {
-  color: #b42318;
-}
-
-.tm-translation-doc-toolbar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--tm-border-light);
-  background: var(--tm-bg);
-}
-
-.tm-translation-doc-toolbar-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.tm-translation-doc-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.tm-translation-doc-toolbar-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--tm-border);
-  border-radius: 6px;
-  background: var(--tm-bg);
-  color: var(--tm-text-secondary);
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.tm-translation-doc-toolbar-btn:hover {
-  color: var(--tm-text);
-  border-color: color-mix(in srgb, var(--tm-accent) 35%, var(--tm-border));
-}
-
-.tm-translation-doc-filename {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tm-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .tm-translation-doc-badge {
   display: inline-flex;
   align-items: center;
@@ -3227,114 +3051,6 @@ html.theme-dark .tm-user-account-device-details-toggle:hover {
 .tm-translation-doc-badge--unknown {
   color: var(--tm-text-secondary);
   background: var(--tm-hover);
-}
-
-.tm-translation-doc-canvas {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 20px 18px 24px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-}
-
-.tm-translation-doc-page {
-  width: min(100%, 420px);
-  min-height: 520px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--tm-border);
-  border-radius: 8px;
-  background: var(--tm-bg);
-  box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.08),
-    0 2px 6px rgba(15, 23, 42, 0.04);
-  overflow: hidden;
-}
-
-.tm-translation-doc-page--pdf {
-  border-top: 3px solid #f04438;
-}
-
-.tm-translation-doc-page--word {
-  border-top: 3px solid #2e90fa;
-}
-
-.tm-translation-doc-page--excel {
-  border-top: 3px solid #12b76a;
-}
-
-.tm-translation-doc-page-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--tm-border-light);
-  color: var(--tm-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.tm-translation-doc-page-header span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tm-translation-doc-page-body {
-  flex: 1;
-  padding: 18px 16px;
-}
-
-.tm-translation-doc-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.tm-translation-doc-line {
-  display: block;
-  height: 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tm-border) 80%, transparent);
-}
-
-.tm-translation-doc-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.tm-translation-doc-sheet-row {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.tm-translation-doc-sheet-cell {
-  height: 22px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--tm-border) 70%, transparent);
-}
-
-.tm-translation-doc-sheet-cell--head {
-  background: color-mix(in srgb, #12b76a 22%, var(--tm-bg));
-}
-
-.tm-translation-doc-page-footer {
-  padding: 10px 14px 12px;
-  border-top: 1px solid var(--tm-border-light);
-}
-
-.tm-translation-doc-path {
-  display: block;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--tm-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .tm-translation-sidebar-empty {

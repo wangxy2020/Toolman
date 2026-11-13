@@ -202,7 +202,6 @@ export const TranslationDocumentPageRow = memo(function TranslationDocumentPageR
             savedFit={body?.fit ?? null}
             onFitPersist={onFitPersist}
             deferFit={!scrollSettled || page.pageNumber !== currentPage}
-            layoutBlocks={attachBody ? (cardPage.layoutBlocks ?? null) : null}
             onRetryTranslate={onRetryTranslate}
             documentId={documentId}
           />

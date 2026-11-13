@@ -2,21 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   PDF_PREVIEW_ACTIVE_RADIUS,
   PDF_PREVIEW_FAST_MAX_WIDTH,
-  PDF_PREVIEW_IMMEDIATE_MAX_WIDTH,
   PDF_PREVIEW_MAX_RENDER_WIDTH,
   PDF_PREVIEW_PREFETCH_AHEAD,
   PDF_PREVIEW_PREFETCH_BEHIND,
-  PDF_PREVIEW_WARM_RADIUS,
   resolvePdfPreviewActive,
   resolvePdfPreviewDirection,
   resolvePdfPreviewFetchPages,
   resolvePdfPreviewPriority,
   resolvePdfPreviewFastWidth,
-  resolvePdfPreviewImmediateWidth,
-  resolvePdfPreviewRenderWidth,
   resolvePdfPreviewSharpWidth,
   resolveParseBodyAttachFlags,
-  shouldAttachSavedSnapshotBody,
 } from './document-page-preview-policy'
 
 describe('document-page-preview-policy', () => {
@@ -114,29 +109,15 @@ describe('document-page-preview-policy', () => {
     expect(resolvePdfPreviewPriority(5, 4)).toBe('prefetch')
   })
 
-  it('uses immediate = readable ≥720 then sharp ≤1440', () => {
-    expect(PDF_PREVIEW_IMMEDIATE_MAX_WIDTH).toBe(720)
+  it('uses readable ≤720 then sharp ≤1440', () => {
     expect(PDF_PREVIEW_FAST_MAX_WIDTH).toBe(720)
     expect(PDF_PREVIEW_MAX_RENDER_WIDTH).toBe(1440)
-    expect(resolvePdfPreviewRenderWidth(0)).toBe(0)
-    expect(resolvePdfPreviewImmediateWidth(800)).toBe(720)
-    expect(resolvePdfPreviewImmediateWidth(800)).toBe(resolvePdfPreviewFastWidth(800))
     expect(resolvePdfPreviewFastWidth(800)).toBe(720)
     expect(resolvePdfPreviewFastWidth(400)).toBe(400)
     expect(resolvePdfPreviewSharpWidth(400)).toBeGreaterThan(resolvePdfPreviewFastWidth(400))
     expect(resolvePdfPreviewSharpWidth(800)).toBeGreaterThan(resolvePdfPreviewFastWidth(800))
     expect(resolvePdfPreviewSharpWidth(800)).toBeLessThanOrEqual(PDF_PREVIEW_MAX_RENDER_WIDTH)
     expect(resolvePdfPreviewSharpWidth(3000)).toBe(PDF_PREVIEW_MAX_RENDER_WIDTH)
-  })
-
-  it('keeps the hidden decode pool small enough to scroll past page 14', () => {
-    expect(PDF_PREVIEW_WARM_RADIUS).toBeLessThanOrEqual(3)
-  })
-
-  it('keeps saved parse bodies off a PDF until the current preview is unlocked', () => {
-    expect(shouldAttachSavedSnapshotBody(true, false)).toBe(false)
-    expect(shouldAttachSavedSnapshotBody(true, true)).toBe(true)
-    expect(shouldAttachSavedSnapshotBody(false, false)).toBe(true)
   })
 
   it('keeps the same final layout for every mounted PDF window row', () => {

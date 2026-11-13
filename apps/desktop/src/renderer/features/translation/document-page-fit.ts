@@ -115,14 +115,6 @@ export function tightenDocumentPageFit(
   }
 }
 
-export function usesFixedDocumentPageType(fit: Pick<DocumentPageFitStyle, 'fontSize' | 'lineHeight' | 'padding'>): boolean {
-  return (
-    fit.fontSize === DOCUMENT_FIT_FONT_MAX &&
-    fit.lineHeight === DOCUMENT_FIT_LINE_MAX &&
-    fit.padding === DOCUMENT_FIT_PAD_MAX
-  )
-}
-
 /**
  * Mild uniform scale when the smallest type still slightly overflows.
  * If the page would need more than ~15% shrink, return 1 and let the card scroll.
@@ -192,19 +184,6 @@ const FIT_ATTR_RE = /([a-zA-Z]+)\s*=\s*"([^"]*)"/g
 function readFinite(value: string | undefined, fallback: number): number {
   const next = Number.parseFloat(value ?? '')
   return Number.isFinite(next) ? next : fallback
-}
-
-export function isDocumentPageFitRecord(value: unknown): value is DocumentPageFitRecord {
-  if (!value || typeof value !== 'object') return false
-  const record = value as Partial<DocumentPageFitRecord>
-  return (
-    Number.isFinite(record.fontSize) &&
-    Number.isFinite(record.lineHeight) &&
-    Number.isFinite(record.padding) &&
-    Number.isFinite(record.scale) &&
-    Number.isFinite(record.boxWidth) &&
-    Number.isFinite(record.boxHeight)
-  )
 }
 
 export function splitDocumentPageFitMarkdown(text: string): {

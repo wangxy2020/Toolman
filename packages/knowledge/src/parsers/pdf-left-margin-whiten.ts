@@ -47,27 +47,6 @@ export function whitenCanvasLeftMargin(
 }
 
 /**
- * Whiten the left margin on raw RGBA image data (in-place).
- */
-export function whitenImageDataLeftMargin(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  options?: LeftMarginWhitenOptions,
-): void {
-  const marginWidth = resolveLeftMarginWidth(width, options)
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < marginWidth; x += 1) {
-      const index = (y * width + x) * 4
-      data[index] = 255
-      data[index + 1] = 255
-      data[index + 2] = 255
-      data[index + 3] = 255
-    }
-  }
-}
-
-/**
  * Apply left-margin whitening to a rendered page canvas (used by OCR render path).
  */
 export function whitenRenderedPageCanvas(
